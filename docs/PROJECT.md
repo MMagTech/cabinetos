@@ -752,6 +752,105 @@ button can mean two things at once is the same bug.
 
 ---
 
+## Controls: what CabinetOS inherits, and what it cannot
+
+Raised 2026-09-13. The input *model* in *What CabinetOS is* does not change —
+the controller is required, keyboard and mouse are supported and never needed.
+What changes is the machinery underneath, and it is not a port of Cabinet's.
+
+Checked on the running image rather than assumed.
+
+### The rules that carry over unchanged
+
+- **The controller belongs to the core, or to the UI, never both.** On tvOS this
+  was forced: the focus engine kept consuming presses, so B read as "go back"
+  and dismissed the player instead of reaching the core. On Linux nothing fights
+  us — but the rule stands, because the same button still has to mean two things
+  at two times, and any design where it means both at once is the same bug.
+- **Mapping is ours, not the user's**, per *Emulation*.
+- **The libretro device type is per PLATFORM, not per core** — a 3-button versus
+  6-button Genesis pad is `retro_set_controller_port_device`, not a core option.
+  See *Cores and platforms are not the same list*.
+
+### What Linux gives us that tvOS could not
+
+**Verified present in the image**, all of it from Bazzite and none of it ours to
+maintain:
+
+| | |
+|---|---|
+| `gcadapter_oc` | The official **GameCube adapter** — four real GC pads. Dolphin's native input, on the machine that runs Dolphin. |
+| `hid-playstation`, `hid-nintendo`, `hid-sony`, `hid-steam` | DualSense, DualShock, Switch Pro, Steam Controller, in-kernel |
+| `xone_*`, `xpad` | Xbox wired and wireless, including the dongle |
+| `hid-fanatec`, `hid-t150`, `hid-tmff-new`, `hid-logitech-new` | Four force-feedback **wheel** drivers |
+| `psxpad-spi` | Real PlayStation pads over SPI |
+
+And the one that matters most for a cabinet: **real spinners, trackballs, dials
+and light guns are just input devices here.** MAME 2003-Plus is in the set
+specifically for the early-80s boards whose controls were exactly those, and
+Cabinet can only offer them as a touchscreen approximation. CabinetOS can take
+the real thing. That is a capability the reference implementation does not have
+and cannot get.
+
+Also: **Steam is gone, so Steam Input is not in the way.** Pads arrive raw and
+the mapping is entirely ours.
+
+### What is harder here, and none of it is optional
+
+1. **One controller can appear as several devices.** A DualSense over Bluetooth
+   presents its gamepad, its motion sensors and its touchpad as separate evdev
+   nodes. Enumerate naively and a console with one pad says three are connected.
+   SDL's gamepad layer collapses most of this; it does not collapse all of it,
+   and the settings screen must show what a person recognises as *their
+   controller*, not a device list.
+2. **Unknown controllers exist.** tvOS took a curated list. Linux takes anything
+   that speaks HID. SDL3 carries a large built-in mapping database, but a pad it
+   has never seen produces a working device with meaningless buttons. **Cabinet
+   never needed a remapping screen; CabinetOS does** — and it has to be usable
+   with the very controller whose buttons are wrong, which means driving it by
+   position ("press the button below the others") rather than by name.
+3. **Player assignment is ours.** Apple hands out `playerIndex`. Here, which pad
+   is player one is a decision, it has to be visible, and it has to survive a
+   controller sleeping and reconnecting mid-session. Four-player arcade and
+   GameCube make this real rather than theoretical.
+4. **Bluetooth pairing is ours to build.** tvOS had Apple's own Settings; bluez
+   over D-Bus is the equivalent and there is no UI for it in the image. It has a
+   chicken-and-egg at the centre: **the first controller cannot be paired using
+   a controller.** The answer is that a pad connected over USB works
+   immediately, and pairing is reachable from there — which must be *said* in
+   first-run setup rather than left to be discovered.
+5. **Rumble quality varies by driver**, and there is no Taptic Engine to fall
+   back to the way Cabinet has on a phone.
+
+### The permission detail, and a Phase 2 decision that paid for itself
+
+Gamepads are the one input the frontend reads **directly from `/dev/input`**;
+keyboard and mouse arrive through Wayland from the compositor. Different path,
+different failure mode, and it is worth knowing which is which when something
+does not respond.
+
+`/dev/input/event*` is `root:input` mode `0660`, and the session user is **not**
+in the `input` group. Access comes from an ACL instead:
+
+```
+SUBSYSTEM=="input", ENV{ID_INPUT_JOYSTICK}=="?*", TAG+="uaccess"
+```
+
+systemd-logind applies that ACL **to the active session on the seat**. The
+CabinetOS session is `Seat=seat0`, `Active=yes` — verified — because Phase 2
+gave it `PAMName=login` and a real logind session rather than running it as a
+bare service.
+
+**So a Phase 2 decision is what makes controllers work at all in Phase 5.** Had
+the session been a plain unit with no PAM session, every gamepad would be
+unreadable and it would present as a controller bug rather than a session bug.
+Recorded here so that nobody "simplifies" the unit later and spends a week on it.
+
+*Not yet verified:* no gamepad has been attached to the VM. The rule and the
+seat are confirmed; the ACL actually appearing on a real pad is not.
+
+---
+
 ## Developer mode
 
 CabinetOS has no terminal, no file browser and no package manager. That makes it
@@ -1950,6 +2049,19 @@ than its author.
 Also verify the input model on real hardware: a Bluetooth controller must pair
 and wake the machine, and a USB keyboard must work if plugged in without being
 required for anything.
+
+**Controls are a bigger piece of work here than they were in Cabinet** — see
+*Controls*. Three things in this phase have no equivalent in the reference
+implementation and cannot be ported from it:
+
+1. **A remapping screen**, because Linux accepts controllers SDL has never seen.
+   It has to be drivable with the very pad whose buttons are wrong, so it must
+   ask by position — "press the button below the others" — not by name.
+2. **Bluetooth pairing**, over bluez and D-Bus. The first controller cannot be
+   paired using a controller, so USB-first has to work and first-run setup has
+   to say so.
+3. **Player assignment** that is visible and survives a pad sleeping and
+   reconnecting. Four-player arcade and the GameCube adapter make this real.
 
 *Done when* the machine is usable from the sofa with a controller alone, and
 reachable over SSH when developer mode is on.
