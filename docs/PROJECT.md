@@ -111,8 +111,10 @@ CabinetOS stores nothing the server does not already know, with two exceptions:
 1. the local cache of downloaded games
 2. emulator configuration
 
-Games are downloaded on demand and cached locally. The user can see what is
-cached and how much space is free, and can evict things.
+Games are downloaded on demand and cached locally, and can additionally be
+**kept** — pinned to the internal drive so they are never re-fetched or evicted.
+The user can see what is cached, what is kept, and how much space is free, and
+can move games between the two. See *Emulation* for why the distinction matters.
 
 Saves and save states sync back to the server, so a game started on Apple TV
 can be continued on CabinetOS and vice versa. This bidirectional continuity is
@@ -150,7 +152,8 @@ Future sessions should look here before inventing anything.
 
 | What | Where | Why it matters |
 |---|---|---|
-| **Cabinet** (iOS/tvOS, Swift) | https://github.com/MMagTech/cabinet | **The reference implementation.** Source of truth for both the frontend design language and for correct RomM client behaviour. When in doubt about how a screen should look or how an API call should be made, read Cabinet. |
+| **Cabinet** (iOS/tvOS, Swift) | https://github.com/MMagTech/cabinet | **The reference implementation.** Source of truth for the frontend design language, for correct RomM client behaviour, and for how cores are hosted in-process. When in doubt about how a screen should look or how an API call should be made, read Cabinet. |
+| **Cabinet for macOS** | *repository not yet recorded* | The persistent-local-library half of the model CabinetOS is a hybrid of. Record the location here when known. |
 | **RomM** | https://github.com/rommapp/romm | The server. |
 | RomM docs — Client API Tokens | https://docs.romm.app/latest/developers/client-api-tokens/ | Device pairing flow for keyboard-less auth. Phase 4. |
 | RomM docs — Device Sync Protocol | https://docs.romm.app/latest/developers/device-sync-protocol/ | Wire format for syncing saves, states and play sessions. Phase 4. |
@@ -194,6 +197,49 @@ Native emulators running locally. Not streaming, not browser-based.
 The reference machine's Vega integrated graphics is the performance floor that
 matters here. Phase 8 exists because those four systems will need tuning rather
 than defaults on hardware of that class.
+
+### How Cabinet does it today
+
+**Cabinet on tvOS runs native cores in-process.** You select a game, Cabinet
+pulls the ROM from RomM, and injects it into an emulator core running inside the
+app. There is no handoff to a second application and no separate launcher step.
+
+**This is the single most important fact about the frontend**, and it has a
+consequence that the Phase 0 and Phase 3 toolkit decision must be made in full
+knowledge of:
+
+> The CabinetOS frontend is not a launcher. It is an emulator host with a UI on
+> top — a program that owns the frame loop, loads cores as libraries, feeds them
+> ROM data and controller input, and presents their output.
+
+That is a substantially larger and more constrained program than a menu that
+shells out to other binaries. It rules out toolkits that cannot cheaply embed a
+C library and put its frames on screen at a stable 60fps. It is also what makes
+the in-game overlay tractable: when you own the frame loop, drawing over it is
+natural. See open question 12, which is about what happens for the systems where
+in-process is not viable.
+
+### CabinetOS is a hybrid of the two Cabinet apps
+
+| | Cabinet tvOS | Cabinet macOS | CabinetOS |
+|---|---|---|---|
+| Library | RomM, pulled on demand | local | RomM, pulled on demand |
+| ROM storage | transient | persistent local | **both** |
+
+CabinetOS takes the tvOS model — RomM as the source of truth, games pulled when
+you want them — and adds the macOS model's persistence: a game can be **kept**
+on the internal drive instead of re-fetched every time.
+
+Those are two different things and the UI must treat them as such:
+
+- **Cached** — a side effect of playing something. Evictable without asking.
+  The system may reclaim it when space runs low.
+- **Kept** — a deliberate choice by the user. Never evicted automatically.
+  Survives regardless of free space, and if space runs out the system says so
+  rather than quietly deleting a game someone asked it to hold.
+
+The Settings storage screen shows both, and lets a cached game be promoted to
+kept and a kept game released back to cached.
 
 ---
 
@@ -325,6 +371,12 @@ Extract from Cabinet: colours, typography, spacing, corner radii, focus and
 selection behaviour, motion curves and durations, navigation model, and a
 component inventory. Write it as a toolkit-agnostic document.
 
+While reading Cabinet for this, also record **how it hosts cores** — how a ROM
+gets from RomM into a running core, where save states live, and how the overlay
+is drawn over a running game. Phase 3 needs that as much as it needs the colour
+palette, because the frontend is an emulator host rather than a launcher (see
+*Emulation*), and that is the constraint that decides the toolkit.
+
 *Done when* a developer who has never read a line of Swift could reproduce the
 look and feel of Cabinet from the document alone.
 
@@ -374,19 +426,28 @@ left with a controller alone.
 **Status: not started.**
 
 Device pairing and auth, library sync, artwork and metadata, on-demand
-downloads with a queue and cache management, firmware and BIOS retrieval, save
-and save state sync.
+downloads with a queue, firmware and BIOS retrieval, save and save state sync.
 
-*Done when* the real library is browsable and a game downloads.
+Storage management distinguishes **cached** from **kept** (see *Emulation*):
+cached games are evictable, kept games are not, and the user moves games between
+the two.
+
+*Done when* the real library is browsable, a game downloads and plays, and a
+kept game survives a cache eviction.
 
 ### Phase 5 — Emulators and launching
 **Status: not started.**
 
-Emulators bundled into the image. Games launch and return cleanly with no
-visible desktop. Controller mapping per system, per-system configuration, save
+Cores and emulators bundled into the image. Games launch and return cleanly with
+no visible desktop. Controller mapping per system, per-system configuration, save
 states wired to the sync layer.
 
-*Done when* several systems are playable end to end.
+Resolve open question 12 first — in-process cores where they are good enough,
+standalone emulators where they are not — because the answer decides whether the
+overlay and the save state sync layer need one implementation or two.
+
+*Done when* several systems are playable end to end, including at least one
+in-process and one standalone, with the same overlay behaviour in both.
 
 ### Phase 6 — Real hardware
 **Status: not started.**
@@ -493,9 +554,18 @@ decision is: adapt `gamescope-session-plus` from `bazzite-deck`, or write our
 own minimal session on plain `bazzite`.
 
 ### 4. Bundle libretro cores directly, or build on RetroDECK?
-**Raised in the brief. Deliberately unresolved — do not resolve this now.**
+**Raised in the brief. Still open, but narrowed.**
 
-To be answered no earlier than Phase 5.
+What we now know (see *Emulation*): Cabinet already runs native cores
+**in-process**. That is the libretro shape, and it points strongly at CabinetOS
+bundling cores directly rather than building on RetroDECK, which is a curated
+set of *standalone* emulators behind ES-DE — someone else's frontend, which
+constraint 4 rules out anyway.
+
+What is not settled is whether in-process works for everything. See open
+question 12, which is now the question that actually matters here.
+
+Do not resolve before Phase 5.
 
 ### 5. Anaconda ISO vs. a plain disk image for installing to real hardware
 **Raised: Phase 1. Both are built; neither is tested.**
@@ -593,3 +663,42 @@ breakage is the single largest maintenance tax on custom Bazzite images.
 Not doing it now. If the hardware changes to something NVIDIA-based, the work is
 to parameterise the base image in the `Containerfile` and matrix the build
 workflow over both variants — not to restructure anything.
+
+### 12. In-process cores for the heavy systems, or separate processes?
+**Raised: Phase 1, after learning how Cabinet tvOS works. Phase 5 owns it.**
+
+Cabinet runs cores in-process, and CabinetOS should match that wherever it can:
+it is the model the product is already built around, it makes the in-game
+overlay natural, and it keeps save states under the frontend's control.
+
+The problem is the four heavy targets. In-process means a libretro core, and the
+libretro cores for those systems are not uniformly good:
+
+| System | Likely approach | Note |
+|---|---|---|
+| Dreamcast, Naomi | Flycast libretro | Strong core, in-process should be fine. |
+| PS2 | Standalone PCSX2 | The libretro core has long been unmaintained. Verify before assuming. |
+| GameCube | Standalone Dolphin, probably | The libretro core lags standalone significantly. Verify. |
+| Everything lighter | libretro in-process | Matches Cabinet directly. |
+
+**Verify all of this in Phase 5 rather than trusting the table.** It is written
+from general knowledge of the emulator landscape, not from testing on the
+reference hardware, and the situation moves.
+
+If the answer is "both", which it probably is, two things follow and neither is
+cosmetic:
+
+1. **The in-game overlay needs two implementations.** In-process, the frontend
+   owns the frame loop and drawing over it is natural. For a standalone emulator
+   in its own process, it is not — the options are compositing the overlay in
+   gamescope, or driving the emulator's own overlay, and they will not look or
+   feel the same. The product requirement is that the user cannot tell which one
+   they are in.
+2. **Save state sync needs two paths.** In-process, the frontend owns the state
+   and hands it to the RomM sync layer. Standalone, the state is a file in an
+   emulator-specific location and format, written on the emulator's schedule,
+   and something has to watch for it.
+
+Design the overlay and the sync layer against the harder case from the start.
+Retrofitting a process boundary into a design that assumed in-process is the
+kind of rework that eats a phase.
