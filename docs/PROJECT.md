@@ -728,6 +728,76 @@ Dreamcast scene — two thirds of the whole frame.
 > not a cost — and it removes the single largest per-frame cost the Apple build
 > has on its three heaviest cores.
 
+### Shaders, and the glow around the picture
+
+Missed on the first Phase 0 read and added 2026-09-13 at Marcus's prompt. Not
+needed to get a core running, and very much part of what the product looks like.
+
+**Eleven shaders**, one Metal fragment function each, with one pipeline built
+per shader at attach — *"picking a shader in the pause menu is a dictionary
+lookup, not a recompile."*
+
+| | |
+|---|---|
+| `sharp` | "None" — unfiltered, the default |
+| `sabr` | a scaler, offered everywhere |
+| `crtAperture`, `crtEasymode`, `crtMattias`, `crtBeam`, `crtCaligari`, `crtGeom` | six CRT looks |
+| `lcd` | a generic LCD grid |
+| `gameBoy` | the dot-matrix look, built for that specific screen |
+| `vmuLCD` | offered in **no** menu; set directly by the VMU player |
+
+**They are gated per platform, and that gating is the interesting part.** The CRT
+shaders simulate a television, and a Game Boy was never displayed on one — so
+handhelds (GB, GBC, GBA, Game Gear, NGPC, DS) drop all six CRTs and get one
+real-screen shader instead. It cuts both ways: consoles drop the handheld
+shaders, *"since a PS1 game offering a Game Boy dot-matrix was the same mismatch
+in the other direction."*
+
+**And the choice is stored per PLATFORM, not per core** — with the source calling
+out exactly the bug this document already records: Genesis Plus GX serves four
+platforms, and a shader picked for Genesis was silently carrying into Sega CD,
+Master System and Game Gear. That is the third independent confirmation of the
+platform-keying rule, and it should settle it.
+
+A stored value for a shader a platform no longer offers falls back to None
+rather than being trusted.
+
+**The history is worth keeping, because it is a warning.** The original six came
+from RomM/EmulatorJS's own bundled set. Two ScaleHQ scalers and a `crt-geom`
+slang port *"looked bad enough in this Metal port that Marcus dropped them on
+sight"*. A shader that is well regarded elsewhere is not automatically good once
+reimplemented — judge each on the panel.
+
+#### The letterbox glow
+
+Separate from shaders, and **a television feature specifically**: tvOS and Mac
+compile it, iOS does not, because *"the phone's screen has no dead space worth
+lighting."*
+
+It lights the dead area around the picture, ramping out from the game's edge to
+the physical edge of the screen. Three settings, and the numbers are not round:
+
+| | Peak white opacity at the picture's edge |
+|---|---|
+| Off | 0 |
+| Subtle | **0.025** |
+| Strong | **0.04** |
+
+Reach is fixed at 100% — the ramp always travels the whole dead space. A
+separate reach control was built and then dropped once 100% proved to be the
+only value worth having.
+
+**CabinetOS needs this more than Cabinet does, not less.** An integer-scaled
+Game Boy picture on a 4K television is a small bright rectangle in a very large
+black field — which is precisely the case the glow exists for, and it is the
+normal case here rather than an edge one.
+
+**And the tuning lesson is the one this project keeps relearning.** Two sets of
+preset values guessed from a mockup were both wrong on real hardware — bleeding
+into the picture, banding, not reaching the edge. A continuous slider on a real
+panel found the numbers, and only then were presets chosen. Do not guess these;
+build the slider.
+
 ### The in-game overlay, and the input-mode rule
 
 The overlay is not composited by anything clever. **The frontend owns the frame
@@ -1990,8 +2060,31 @@ enough, so the accumulator discards the time it cannot use and the game runs in
 slow motion rather than sprinting to catch up. That is the designed behaviour
 and the right one; it will not happen on a GPU.
 
-**Not there yet, and each is its own piece of work:** save states, the on-screen
-keyboard, and the remaining screens.
+**Seeing it on the actual screen.** The frontend runs as the session's app via
+`CABINETOS_APP`, which is the hook Phase 2 left for exactly this, so the VM now
+boots to the frontend rather than to a placeholder.
+
+It can also **photograph itself on demand, without stopping**:
+
+```
+kill -USR1 $(pgrep -f cabinetos-frontend)   # writes /tmp/cabinetos-frame.bmp
+```
+
+That is not a debugging convenience. The test VM has no way to show a person a
+picture, and the machines that matter later are in other people's living rooms,
+where "send me a photo of the telly" is the whole bug-report channel — see
+*HDMI-CEC will not be tested by the author*, which has this problem already.
+
+A latent bug found on the way: the session expands `CABINETOS_APP` **unquoted**,
+so a path containing a space is word-split. RomM filenames contain spaces
+constantly. Worked around with a wrapper script for now; the session should stop
+word-splitting.
+
+**Not there yet, and each is its own piece of work:** save states, shaders and
+the letterbox glow (see *Shaders, and the glow around the picture* — the glow
+matters more here than in Cabinet, because an integer-scaled handheld picture on
+a 4K set is mostly dead space), the on-screen keyboard, and the remaining
+screens.
 
 **Known gap worth recording now:** there is no text *shaping*, only advance and
 kerning from FreeType. That is correct for Latin and adequate for CJK, and wrong

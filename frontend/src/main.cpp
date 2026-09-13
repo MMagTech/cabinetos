@@ -20,6 +20,8 @@
 
 #include <SDL3/SDL.h>
 
+#include <csignal>
+
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -33,6 +35,21 @@
 #include "ui.h"
 
 namespace {
+
+// Photograph the running console on demand, without stopping it.
+//
+//   kill -USR1 $(pgrep -f cabinetos-frontend)
+//
+// This is not a debugging convenience, it is how anyone ever finds out what a
+// CabinetOS machine actually has on its screen. The test VM has no way to show
+// a person a picture, and later the machines that matter are in other people's
+// living rooms — where "send me a photo of the telly" is the whole bug report
+// channel (see *HDMI-CEC*, which has exactly this problem).
+//
+// A signal handler may do almost nothing safely, so it sets a flag and the
+// frame loop does the work, on the thread that owns the GL context.
+volatile std::sig_atomic_t gCaptureRequested = 0;
+void requestCapture(int) { gCaptureRequested = 1; }
 
 // --- The design system, as numbers -----------------------------------------
 // Every value here is quoted from docs/PROJECT.md. If one of them changes
@@ -163,6 +180,8 @@ int main(int argc, char** argv) {
             initialFocus = SDL_atoi(argv[++i]);
         }
     }
+
+    std::signal(SIGUSR1, requestCapture);
 
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD | SDL_INIT_AUDIO)) {
         std::fprintf(stderr, "[frontend] SDL_Init failed: %s\n", SDL_GetError());
@@ -579,6 +598,10 @@ int main(int argc, char** argv) {
         if (shotMode && frame >= shotAfterFrames) {
             renderer.saveFrame(shotPath, dw, dh);
             running = false;
+        }
+        if (gCaptureRequested) {
+            gCaptureRequested = 0;
+            renderer.saveFrame("/tmp/cabinetos-frame.bmp", dw, dh);
         }
 
         if (offscreen) {
