@@ -136,7 +136,8 @@ Screens:
 - **Game detail** — artwork and metadata.
 - **In-game overlay** — reachable from a controller button without leaving the
   game. Offers save states, resume, and exit.
-- **Settings** — account, storage, controllers, display, system update.
+- **Settings** — account, storage, controllers, display, system update, and
+  **About**, which carries the version and the credits (see *Branding*).
 - **First run setup** — pairs with a RomM server. On-screen keyboard is the
   baseline; a physical keyboard types into the same field if one is attached.
 
@@ -478,6 +479,76 @@ would suppress it, but removing the unit is cleaner — CabinetOS owns first run
 - The hostname is `bazzite`. Branding, Phase 8.
 - `systemd-udev-settle.service` costs 4.3s at boot and is deprecated upstream.
   Worth investigating what still pulls it in.
+
+---
+
+## Branding and the boot experience
+
+### The palette
+
+Taken from Cabinet's own icon generator, `tools/make_icon.swift`. These are the
+product's colours, not an approximation, and the frontend (Phase 3) should be
+built from the same set.
+
+| Role | Value |
+|---|---|
+| Backdrop | `#3A2268` → `#120C26` → `#090614`, vertical |
+| Cabinet body | `#EEEAE2` |
+| Marquee | `#FF7AC7` → `#FFC457`, horizontal |
+| Screen | `#58E8F6` → `#2484D6`, vertical, with a white sheen at 26% fading out |
+| Control panel / base | `#CEC7BC` |
+| Joystick | `#3A3444` |
+| Buttons | `#EC405C`, `#FFC457` |
+
+### The boot splash
+
+**The icon is an arcade cabinet, so the splash is an arcade cabinet powering
+on.** It appears the moment the firmware hands over, dark; the marquee lights,
+then the screen glows; it holds until the frontend has drawn its first frame.
+
+It covers the three things that otherwise show Linux to the user: the scrolling
+kernel text, Bazzite's first-boot hardware setup job, and the gap before the
+frontend is ready.
+
+The handoff from splash to frontend must have no black flash in it. That is the
+fiddly part, and it is what separates a console from a Linux box with a nice
+wallpaper.
+
+**Text on the splash: the wordmark "CabinetOS" and nothing else.** A boot screen
+names the machine; it does not explain it.
+
+**Development builds may show a version string**, small, in a corner — genuinely
+useful when a VM and a mini PC are both running different builds. Off for
+release builds.
+
+### Attribution belongs in Settings → About, not on the boot screen
+
+Considered and rejected: putting "a fork of Bazzite" on the splash. It breaks
+the product's own rule — that line tells the user they are looking at a Linux
+distribution, which is exactly what the rest of the design works to avoid. No
+console does it: a PS5 does not say "built on FreeBSD", an Apple TV does not say
+"based on Darwin". And the audience is wrong, because the people who care are
+reading this repository, not squinting at a television.
+
+Credit instead goes where Sony and Apple put it: **Settings → About**, with full
+acknowledgement of Bazzite, Universal Blue, ChimeraOS, and the emulator projects
+whose work this is built on. Also in the README, where it already is.
+
+This is not a licensing question — Bazzite's licence is satisfied by crediting in
+the documentation. It is a question of what the product should feel like.
+
+### What the boot chain actually looks like
+
+| Stage | Ours? |
+|---|---|
+| Firmware logo | No. Vendor's, in the motherboard's own chip. Usually *disableable* in firmware settings, which is worth doing — black is cleaner than someone else's logo. |
+| Boot menu | Ours. Hidden. |
+| Kernel text | Ours. Hidden — needs `quiet` and `loglevel=0`, neither of which is set today. |
+| Splash | **Ours.** |
+| Frontend | Ours. |
+
+Any PC-based console has the firmware seam; SteamOS and Batocera included. Real
+consoles avoid it only by making the firmware too.
 
 ---
 
