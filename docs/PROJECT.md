@@ -968,37 +968,74 @@ failed build rather than a save state that silently will not load.
   need attention here.
 
 ### 14. User-selectable game storage
-**Raised: Phase 1, as a roadmap item. Design in Phase 4, UI in Phase 6/8.**
+**Raised: Phase 1. Mostly DECIDED. Design in Phase 4, UI in Phase 6/8.**
 
-The user picks where games are stored — the internal drive, a second SSD, or a
-USB drive. The requirement is settled; the details are not.
+The user picks where games are stored — internal drive, second SSD, or USB.
 
-**What has to be true regardless, and therefore constrains Phase 4:**
+**Binds Phase 4 immediately:** the storage path is configuration from the first
+line of code, never a constant, and the cached/kept distinction applies per
+location rather than globally.
 
-- The storage path is configuration, never a constant. Phase 4 must read it,
-  not assume it.
-- The cached/kept distinction applies per location, not globally.
+#### Decided
 
-**Open:**
+**One active location, with migration between them.** Upgrading to a larger
+drive is a normal thing to want, so moving the library is a first-class
+operation rather than something the user does by hand. It must survive being
+interrupted — power cut, unplugged cable — and resume, without losing a kept
+game or leaving two half-copies.
 
-- **One active location, or several at once?** One is far simpler and probably
-  right; several means every screen showing a game has to say where it lives.
-  If it is one, moving between drives needs a migration that can be interrupted
-  and resumed without losing a kept game.
-- **What happens when the drive is not there?** A USB drive gets unplugged, a
-  second SSD fails. The console must start normally, say plainly that the game
-  drive is missing, and still be usable for anything that does not need it.
-  Under no circumstances an error the user cannot get past — that is the
-  "stuck at a terminal" rule in a different costume.
-- **Claiming a drive is destructive.** Formatting a disk on a machine driven by
-  a controller needs a confirmation flow that cannot be stumbled through, and
-  must never be the default action. Prefer using a drive as it is where
-  possible.
-- **Should a game drive be portable?** A USB drive carrying a library that
-  works in another CabinetOS machine is an appealing property, and it argues
-  for a documented on-disk layout rather than something implementation-defined.
-- **Hot-plug behaviour.** A drive appearing while the console is running should
-  be noticed; one disappearing mid-game must not take the system down with it.
+**A missing drive degrades; it never errors.** If the game drive is absent,
+games simply come from RomM again. That falls straight out of RomM being the
+source of truth: the local copy is a cache, and a cache that has gone away is
+re-fetched, not mourned. The console starts normally and stays fully usable.
 
-The natural hardware shape this serves: small system drive, large game drive —
-which is also how the reference SER5 is laid out.
+The UI must still *say* so — plainly, once, somewhere visible — because
+silently re-downloading a library over Wi-Fi is its own kind of rude. Kept games
+whose drive is missing should be listed as such, since the kept flag lives in
+configuration rather than on the drive itself.
+
+**Unresolved within this:** save states written since the last sync live only on
+that drive. Losing the drive is harmless for ROMs and not harmless for those.
+Phase 4 should sync saves aggressively enough that the window is small, and the
+warning should be honest about it.
+
+**Formatting: not decided, not ruled out.** There is console precedent — the
+PS5 formats an internal M.2, the Xbox formats external drives — so it is not
+inherently un-console-like. If it happens: never the default action, a
+confirmation that cannot be fumbled through on a controller, and prefer adopting
+a drive as-is wherever possible.
+
+#### Portable drives, and the problem with them
+
+**Decided: a drive should move between CabinetOS machines.** The obvious case is
+two boxes in one house sharing a RomM server, and there the drive should simply
+work.
+
+**The tension, raised by Marcus:** CabinetOS is tied to a RomM login. Move the
+drive to a machine paired with a *different* server and the ROM files are
+present but the library describing them is not — names, artwork, metadata,
+collections and save history all live server-side, and game identifiers are
+specific to a server instance.
+
+Candidate answer, to be tested in Phase 4: **identify cached games by file hash,
+not by server-assigned ID.** RomM already stores hashes. A drive plugged into a
+machine paired with a different server can then have its contents matched
+against that server's library, and anything present in both is adopted as a
+valid cache entry rather than re-downloaded. Content the new server does not
+have is simply ignored — visible as used space, not as playable games.
+
+That gives three sensible tiers instead of a binary:
+
+| Situation | Result |
+|---|---|
+| Same RomM server | Everything works. The common case. |
+| Different server, same games | Games adopted by hash. No re-download. |
+| Different server, unknown games | Files ignored. Nothing breaks. |
+
+It also argues for a **documented on-disk layout** rather than an
+implementation-defined one, since the drive is now a thing other software has to
+understand.
+
+What it does **not** solve is saves: those are server-side, so a game continued
+on a different server starts from that server's save history. That is correct
+behaviour rather than a bug, but the UI should not pretend otherwise.
