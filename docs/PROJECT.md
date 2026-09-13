@@ -29,9 +29,17 @@ Its two findings that change the plan:
    ported. Open question 13 is largely resolved.
 2. **The risk is not "can it be built", it is "will it be the same".** The
    same core built for Linux defaults to a *different CPU backend* than the
-   Apple build, and Cabinet's own build system cannot currently be run by
-   anyone but its author on the machine that last ran it. Both are fixable
-   this week, and both must be fixed before a save state crosses.
+   Apple build, and Cabinet's own build system could not be run by anyone but
+   its author on the machine that last ran it.
+
+**The recovery ran the same day, and found a live bug.** `core-manifest.json`
+now exists in Cabinet. **Eleven of twenty-three cores are shipping different
+revisions to iOS and macOS today**, and eleven of the twenty-one tvOS revisions
+are gone for good — so for those cores, whether a save state crosses between
+Cabinet's *own* apps is unknown and now unknowable. The manifest pins each core
+forward onto one revision, which is the right fix and is far cheaper now, in
+alpha, than once anyone has a save history. One reproducibility hole remains and
+it is in Flycast. See open question 13.
 
 Running infrastructure:
 
@@ -2250,18 +2258,109 @@ one Mac. If that machine is lost, parity cannot be established against what
 Cabinet ships today — only re-established from a fresh pin, which invalidates
 every save state made so far.
 
-**Do this before anything else, and it takes minutes:**
+##### RECOVERED, 2026-09-13 — and it found a live bug
+
+The recovery was run on the build Mac the same day. `core-manifest.json` now
+exists in Cabinet (not yet pushed at the time of writing). CabinetOS consumes it
+once it lands; do not keep a copy here, it would drift.
+
+It did not merely record what was there. **It found that Cabinet is shipping
+different revisions of the same core to different apps, right now.**
+
+**Eleven of twenty-three cores diverge between iOS and macOS.** In every case
+macOS is newer, by between one day and eleven weeks:
+
+| Core | iOS | macOS | Drift |
+|---|---|---|---|
+| prosystem | 2026-06-04 | 2026-08-22 | **11 weeks** |
+| picodrive | 2026-07-29 | 2026-08-20 | 3 weeks |
+| beetle_vb | 2026-07-29 | 2026-08-23 | 3.5 weeks |
+| fceumm | 2026-07-28 | 2026-08-22 | 3.5 weeks |
+| gambatte | 2026-07-31 | 2026-08-21 | 3 weeks |
+| beetle_pce_fast | 2026-07-31 | 2026-08-28 | 4 weeks |
+| pcsx_rearmed | 2026-08-02 | 2026-08-27 | 3.5 weeks |
+| genesis_plus_gx | 2026-08-07 | 2026-08-28 | 3 weeks |
+| snes9x | 2026-08-08 | 2026-08-16 | 1 week |
+| mame2003_plus | 2026-08-19 | 2026-08-28 | 1 week |
+| beetle_saturn | 2026-08-10 | 2026-08-11 | 1 day |
+
+The other twelve are aligned across every platform they ship to: beetle_ngp,
+Dolphin, FBNeo, Flycast, GW, melonDS, mGBA, Mupen64Plus, Opera, PCSX2,
+PPSSPP, Stella2014, vecx, VeMUlator.
+
+The cause is visible in `build-core.sh` and is exactly the mechanism this
+document predicted: a separate checkout per platform, each cloned `--depth 1`
+whenever that platform was *first* built. macOS support landed most recently, so
+its trees are the freshest.
+
+**And eleven of the twenty-one tvOS revisions are gone.** Those per-platform
+checkouts no longer exist on the machine, and the archives embed nothing:
+beetle_ngp, beetle_pce_fast, beetle_saturn, fceumm, gambatte, genesis_plus_gx,
+mGBA, pcsx_rearmed, picodrive, prosystem, snes9x.
+
+Put those two facts together and the live consequence is this:
+
+> **For eleven cores, the compatibility of a save state between Cabinet's Mac
+> and its Apple TV is unknown today and cannot be made known**, because the
+> revision one side was built from no longer exists anywhere.
+
+##### What the manifest decided, and the cost it commits to
+
+`core-manifest.json` chooses a `pinned_commit` per core — the macOS revision
+wherever there was a choice, on the grounds that it is the newer of the two in
+use and has been play-tested there. **That is the right call**, and it makes the
+lost tvOS revisions stop mattering, because they are being replaced rather than
+matched.
+
+It is not free, and the cost should be taken deliberately rather than
+discovered:
+
+- **Eleven cores get rebuilt for iOS and tvOS at revisions never run on those
+  platforms.** That is a real regression surface arriving all at once. It wants
+  its own release, not a change mixed in with others, and it wants
+  `docs/core-quality-pass` re-run afterwards.
+- **Existing Apple TV and iPhone save states for those eleven cores may not
+  survive it**, and nobody can check in advance. That is acceptable *now* —
+  alpha, one user — and will not be acceptable once there are people with save
+  histories. **This is the last cheap moment to do it.**
+
+##### The hole that is still open, and it is in the worst possible core
+
+The manifest records, in Flycast's own patch entry:
+
+> `"where": "tools/build-flycast.sh, and UNSCRIPTED edits in the working tree"`
+
+**So the pin does not reproduce the shipping Flycast.** Commit `a172e000` plus
+`build-flycast.sh` gives something, but not what is in the app, because there
+are hand edits in that tree that no script applies.
+
+Flycast is the worst core for this to be true of. It is Dreamcast *and* Naomi,
+it is the heaviest system that is not PS2 or GameCube, and it is one of only two
+cores that can answer the save-state parity question cleanly.
+
+The Flycast patch inventory is also the thinnest in the manifest — one vague
+entry covering `CPU_RATIO=2` *"plus recompiler/W^X and SH4 changes"*, with
+`build-flycast.sh`'s own `first_run` and VMU-screen-callback patches not listed
+separately at all.
+
+**Before anything else touches that tree:**
 
 ```
-for d in spikes/cores/*/src spikes/dolphin/src spikes/*/src; do
-  [ -d "$d/.git" ] && echo "$d $(git -C "$d" rev-parse HEAD)"
-done
+git -C spikes/cores/flycast/src diff > tools/patches/flycast-unscripted.patch
+git -C spikes/cores/flycast/src status --porcelain
 ```
 
-Commit the output. That is the manifest's first row set, recovered. Then
-reconstruct `bsat_wrapper.c` into the repository — `build-flycast.sh` already
-carries a complete equivalent inline as a heredoc, so it is a copy, not a
-rewrite.
+Commit the patch file, then either fold it into `build-flycast.sh` or apply it
+from the file. Until that exists, Flycast cannot be rebuilt — on any platform,
+including the ones that ship today.
+
+##### And `bsat_wrapper.c` is still not in the repository
+
+`build-core.sh` derives every core's wrapper by `sed`-ing
+`spikes/BeetleSaturnStatic/bsat_wrapper.c`, which is gitignored and
+hand-written. `build-flycast.sh` carries a complete equivalent inline as a
+heredoc, so this is a copy rather than a rewrite — but until it is done,
+`build-core.sh` cannot run on a fresh clone.
 
 #### The core manifest, revised
 
@@ -2285,18 +2384,34 @@ rather than a save state that silently will not load.
 #### The test that answers the whole question, and can be run this week
 
 The parity risk is not theoretical and it does not need CabinetOS to exist to
-measure. **Cabinet already ships two different configurations of the same core**:
+measure. **Cabinet already ships two different configurations of the same core.**
 
-| Core | tvOS | macOS |
-|---|---|---|
-| pcsx_rearmed | interpreter | `ari64` recompiler |
-| melonDS | interpreter | `aarch64` recompiler |
-| Flycast | `TARGET_NO_REC` | full recompiler |
+For the experiment to mean anything the two builds must differ *only* in the CPU
+backend — same commit, same patches. The recovered manifest says which cores
+qualify, and it narrows the field:
 
-> **Write a save state on the Mac and load it on the Apple TV, for those three
-> cores.** If it loads, CPU backend does not affect state format, and CabinetOS
-> can take the faster Linux defaults. If it does not, every core must be built
-> with Cabinet's exact backend, and that becomes a hard line in the manifest.
+| Core | Same commit everywhere? | tvOS | macOS | Usable? |
+|---|---|---|---|---|
+| **melonDS** | yes — `66b5d263` | interpreter | `JIT_ARCH=aarch64` | **clean** |
+| **Flycast** | yes — `a172e000` | `-DTARGET_NO_REC` | recompilers on | **caveat** |
+| pcsx_rearmed | **no** — and tvOS revision lost | interpreter | `DYNAREC=ari64` | confounded, drop it |
+
+> **Write a save state on the Mac and load it on the Apple TV, for melonDS and
+> Flycast.** If it loads, CPU backend does not affect state format, and
+> CabinetOS can take the faster Linux defaults — proper recompilers for
+> Dreamcast, DS and PS1 rather than interpreters, which on Vega integrated
+> graphics is the difference between comfortable and marginal. If it does not,
+> every core must be built with Cabinet's exact backend, and that becomes a hard
+> line in the manifest.
+
+**melonDS is the clean experiment.** One tree, one revision, all four patches
+applied to every platform, and the only difference is the recompiler.
+
+**Flycast carries a caveat** and it is the unscripted-edits problem above: both
+platforms build from one shared checkout, so if a hand edit was made *between*
+the tvOS build and the Mac build, the two came from different tree states and
+the result means nothing. Capture that diff first. If the answer from melonDS
+and Flycast disagree, believe melonDS.
 
 That is a one-evening test on hardware the project already owns, it needs no
 Linux toolchain, and it is the highest-value thing anyone can do for Phase 5
@@ -2305,8 +2420,22 @@ Cabinet's flags exactly.**
 
 #### Still open after Phase 0
 
+- **Flycast's unscripted working-tree edits.** The most urgent item on the
+  project, and it is Cabinet-side. Until that diff is captured, Flycast cannot
+  be reproduced on any platform, CabinetOS included.
+- **The manifest has no `linux` row, and several `build_args` are null.** The
+  nulls are honest — `build-core.sh` passes no extra make arguments for those
+  cores, so the core's own Makefile platform case decides. **But the Linux case
+  decides differently**, and picodrive and Mupen64Plus are exactly the two where
+  a null reads as "nothing to match" while the Linux default quietly turns on a
+  recompiler (`use_sh2drc`, `WITH_DYNAREC=x86_64`). When CabinetOS adds its
+  rows, every one of them must be explicit — never null — even where the value
+  is "the default".
 - **The save-state backend question above.** Untested. Blocks nothing until
   Phase 5, but shapes the manifest.
+- **Realigning the eleven diverged cores.** Cabinet-side, its own release, with
+  the core quality pass re-run. Best done before there are users with save
+  histories.
 - **The `emulator` tag carries no version.** See *How Cabinet hosts cores*. A
   state written by a mismatched build is offered as loadable, because the tag
   cannot tell. Either the builds are genuinely identical, or the tag grows a
