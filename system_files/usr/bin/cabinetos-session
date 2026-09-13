@@ -31,39 +31,62 @@ if [[ -n "${CABINETOS_BACKEND:-}" ]]; then
     run_gamescope "${CABINETOS_BACKEND}"
 fi
 
-# Otherwise: try to drive the display directly, and fall back to headless.
+# Otherwise: work down a ladder of compositors, best first.
 #
-# This runs the real thing rather than probing. A probe is unreliable here —
-# an earlier version ran a throwaway gamescope and inspected its output, which
-# passed over SSH and then failed under the service, because what gamescope can
-# do depends on the seat it is started from. And inspecting /dev/dri is worse
-# still: a device node existing does not mean gamescope can use it. gamescope
-# needs a working Vulkan device, and a VM's virtual GPU typically offers only
-# Mesa's software renderer, which it rejects with "not a valid physical device".
+#   1. gamescope on drm  — production. VRR, HDR, scaling, the lot.
+#   2. cage              — a minimal kiosk compositor, software rendered.
+#                          Visible, but none of gamescope's display features.
+#   3. gamescope headless — nothing on screen, but the session stays alive.
 #
-# So start it for real. If it survives the first few seconds it is working, and
-# this script waits on it for the life of the session. If it dies immediately,
-# that is the answer, and we fall through.
-if ls /dev/dri/card* >/dev/null 2>&1; then
-    echo "cabinetos-session: trying the drm backend"
-    # shellcheck disable=SC2086
-    gamescope --backend drm --output-width 1920 --output-height 1080 -- ${APP} &
-    gs_pid=$!
+# Why the middle rung exists: gamescope requires a Vulkan device it accepts. A
+# VM's virtual GPU typically offers OpenGL but not Vulkan — Mesa falls back to
+# its software renderer and gamescope rejects it with "not a valid physical
+# device". cage runs happily on software rendering, so a machine with no usable
+# GPU still gets a real, visible session. That makes a GPU-less VM a usable
+# development target for the frontend itself, not just for the plumbing.
+#
+# The frontend does not care which of these is hosting it — it is a Wayland
+# client either way.
+#
+# Detection is by running the thing, not by inspecting /dev/dri. A device node
+# existing does not mean a compositor can use it, and an earlier version that
+# probed with a throwaway gamescope passed over SSH and still failed under the
+# service, because what a compositor can do depends on the seat it starts from.
 
+try_compositor() {
+    local label="$1"
+    shift
+    echo "cabinetos-session: trying ${label}"
+    "$@" &
+    local pid=$!
     sleep 5
-
-    if kill -0 "${gs_pid}" 2>/dev/null; then
-        echo "cabinetos-session: drm backend is up"
-        wait "${gs_pid}"
+    if kill -0 "${pid}" 2>/dev/null; then
+        echo "cabinetos-session: ${label} is up"
+        wait "${pid}"
         exit $?
     fi
+    echo "cabinetos-session: ${label} died on startup"
+    return 1
+}
 
-    echo "cabinetos-session: drm backend died on startup, falling back to headless"
+if ls /dev/dri/card* >/dev/null 2>&1; then
+    # shellcheck disable=SC2086
+    try_compositor "gamescope (drm)" \
+        gamescope --backend drm --output-width 1920 --output-height 1080 -- ${APP}
+
+    # Degraded, and loudly so. A console that works without VRR beats a black
+    # screen, but this should never be the state on real hardware — if it is,
+    # something is wrong with the GPU or its driver, and the About screen should
+    # say which compositor is running so it is visible rather than mysterious.
+    echo "cabinetos-session: WARNING — no Vulkan-capable GPU. Falling back to cage."
+    echo "cabinetos-session: display features (VRR, HDR, scaling) are unavailable."
+    # shellcheck disable=SC2086
+    WLR_RENDERER=pixman try_compositor "cage (software rendering)" \
+        cage -d -- ${APP}
 else
     echo "cabinetos-session: no drm device present"
 fi
 
-# Headless. Nothing is drawn, but the session and everything above it still run
-# — which is what makes a GPU-less VM a usable development target for everything
-# except what is actually on screen.
+# Last resort: no display at all. Nothing is drawn, but the session stays up so
+# the machine is reachable and the service does not flap.
 run_gamescope headless
