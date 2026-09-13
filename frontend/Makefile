@@ -14,7 +14,7 @@ LDFLAGS  ?=
 
 PKGS     := sdl3 egl glesv2 freetype2 libjpeg libpng
 CXXFLAGS += $(shell pkg-config --cflags $(PKGS))
-LIBS     := $(shell pkg-config --libs $(PKGS)) -lpthread
+LIBS     := $(shell pkg-config --libs $(PKGS)) -lpthread -ldl
 
 SRC      := $(wildcard src/*.cpp)
 OBJ      := $(SRC:.cpp=.o)

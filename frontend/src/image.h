@@ -136,4 +136,9 @@ bool decodeImage(const std::vector<uint8_t>& encoded, std::vector<uint8_t>& rgba
 void drawImage(Renderer& r, const Image& img, float x, float y, float w, float h,
                Fit fit, float alpha, float cornerRadius = 0.0f);
 
+// A raw texture straight to the screen, with none of the cache's machinery.
+// The running core's frame goes through here: it is not cached, not faded in,
+// and its size is decided by the core rather than by a layout.
+void drawImageTexture(Renderer& r, GLuint texture, float x, float y, float w, float h);
+
 }  // namespace ui
