@@ -119,10 +119,42 @@ public:
 
     void setPad(int port, const PadState& pad);
 
+    // --- Save states ---------------------------------------------------------
+    //
+    // The whole product rests on these. A state written on an Apple TV has to
+    // load on this machine, which is what core parity is for (docs/PROJECT.md,
+    // "Core parity is a hard constraint").
+    //
+    // THREADING: both must run on the thread that drives runFor. A snapshot
+    // taken part-way through a retro_run is corrupt by definition.
+    size_t stateSize() const;
+    bool saveState(std::vector<uint8_t>& out);
+    // Returns false when the core rejects the bytes, which is the expected
+    // failure for a state written by a different build of the same core — the
+    // exact thing the manifest exists to prevent.
+    bool loadState(const std::vector<uint8_t>& data);
+
+    // --- In-game saves -------------------------------------------------------
+    //
+    // A different mechanism from save states, and the one people assume is
+    // safe once the game says it saved. Most cores expose the cartridge
+    // battery here; some write their own files into the save directory
+    // instead and this returns nothing for them.
+    bool saveRAM(std::vector<uint8_t>& out) const;
+    bool loadSaveRAM(const std::vector<uint8_t>& data);
+    // Game Boy keeps its real-time clock in a region of its own. Saving only
+    // the save RAM loses the clock that Pokemon Gold and Silver depend on.
+    bool memoryRegion(unsigned id, std::vector<uint8_t>& out) const;
+    bool loadMemoryRegion(unsigned id, const std::vector<uint8_t>& data);
+
     const AVInfo& avInfo() const { return av_; }
     const std::string& coreName() const { return coreName_; }
     const std::string& coreVersion() const { return coreVersion_; }
     const std::string& error() const { return error_; }
+
+    // A hash of the current picture, for determinism checks. Cheap, and it
+    // catches a divergence that audio alone would not.
+    uint64_t frameDigest() const;
 
     // Emulated frames run since the game loaded, and audio frames produced.
     // Audio against the core's own sample rate is the only direct read on
