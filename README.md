@@ -151,7 +151,7 @@ uploads both as workflow artifacts with a 7-day retention.
 
 ## Getting the first build running
 
-Four things to do on GitHub, in order.
+Three things to do on GitHub, plus one you can skip for now.
 
 ### 1. Create the repository
 
@@ -165,9 +165,20 @@ git commit -m "Phase 1: base image"
 git push -u origin main
 ```
 
-### 2. Generate a signing key
+### 2. Generate a signing key — optional, and skippable for now
 
-Install cosign (`brew install cosign`), then, in the repository root:
+**The build works without this.** If no `SIGNING_SECRET` is set, the image is
+built and published unsigned and the run summary says so. Signing matters for
+Phase 7, when an installed machine needs to verify that an update really came
+from this repository. Skip it until then if you like.
+
+Cosign, without Homebrew:
+
+```bash
+curl -sSLo /tmp/cosign https://github.com/sigstore/cosign/releases/latest/download/cosign-darwin-arm64 && chmod +x /tmp/cosign && sudo mv /tmp/cosign /usr/local/bin/cosign
+```
+
+Then, in the repository root:
 
 ```bash
 cosign generate-key-pair
@@ -196,6 +207,8 @@ gh secret set SIGNING_SECRET < cosign.key
 
 **Settings → Actions → General → Workflow permissions** must be set to
 **Read and write permissions**, or the push to GHCR fails with a 403.
+
+This one is not optional — it is the most common reason a first build fails.
 
 Then push, or trigger **Actions → Build CabinetOS image → Run workflow**.
 

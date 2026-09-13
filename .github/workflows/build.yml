@@ -126,17 +126,35 @@ jobs:
           done
           echo "digest=$(< /tmp/digestfile)" >> "${GITHUB_OUTPUT}"
 
-      - name: Install cosign
+      # Signing is what lets an installed machine verify that an update really
+      # came from this repository before it reboots into it. Phase 7 depends on
+      # it, so it is wired up now rather than retrofitted.
+      #
+      # It is optional, and deliberately so: the image builds and publishes
+      # without a signing key, so the first build can go green before anyone has
+      # generated one. The job summary says loudly when an image went out
+      # unsigned. Set the SIGNING_SECRET repository secret to turn it on.
+      - name: Check for a signing key
+        id: signing
         if: github.event_name != 'pull_request'
+        env:
+          SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
+        run: |
+          if [[ -n "${SIGNING_SECRET}" ]]; then
+            echo "enabled=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "enabled=false" >> "${GITHUB_OUTPUT}"
+            echo "::warning::No SIGNING_SECRET set — this image is UNSIGNED. See README, 'Generate a signing key'."
+          fi
+
+      - name: Install cosign
+        if: steps.signing.outputs.enabled == 'true'
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6  # v4.1.2
         with:
           cosign-release: 'v3.1.2'
 
-      # Signing is what lets the installed system verify that an update actually
-      # came from this repository before it reboots into it. Phase 7 depends on
-      # this, so it is set up now rather than retrofitted.
       - name: Sign image
-        if: github.event_name != 'pull_request'
+        if: steps.signing.outputs.enabled == 'true'
         env:
           COSIGN_EXPERIMENTAL: false
           COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
@@ -149,3 +167,17 @@ jobs:
             --use-signing-config=false \
             --key env://COSIGN_PRIVATE_KEY \
             "${IMAGE_REGISTRY}/${IMAGE_NAME}@${DIGEST}"
+
+      - name: Summary
+        if: always() && github.event_name != 'pull_request'
+        run: |
+          {
+            echo "## CabinetOS image"
+            echo
+            echo "- Image: \`${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}\`"
+            if [[ "${{ steps.signing.outputs.enabled }}" == "true" ]]; then
+              echo "- Signed: yes"
+            else
+              echo "- Signed: **no — set the \`SIGNING_SECRET\` secret**"
+            fi
+          } >> "${GITHUB_STEP_SUMMARY}"
