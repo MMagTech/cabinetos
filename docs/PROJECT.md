@@ -472,9 +472,30 @@ GHCR, and produces a bootable disk image.
 strip scripts, SSH enabled for development, build/sign/push workflow, disk image
 workflow, and the Bazzite base-update watcher.
 
-*Not yet verified:* nothing in this repo has been built or booted. The first CI
-run is the first time any of it executes. See Open questions 1 and 2 — the
-removal lists are deliberately conservative and partly unproven.
+*First green build: 2026-09-13.* `ghcr.io/mmagtech/cabinetos:latest`, public and
+pullable, unsigned (no `SIGNING_SECRET` set yet).
+
+What the build proved:
+
+- Controller support survives the Steam removal — open question 2, now resolved.
+- `gamescope` is present, at `/usr/sbin/gamescope` rather than `/usr/bin`.
+- The default target is `multi-user.target`, so the image boots to a console.
+- `openssh-server` was already in the base; `sshd.service` is enabled.
+
+What it also showed, which is worth knowing before anyone reads too much into
+the strip scripts: **the base went from 2745 packages to 2705.** Forty packages.
+Most of the desktop application list was never installed on this base at all —
+no Firefox, no Discover, no Okular, no GNOME anything — and Plasma itself is
+untouched by design. The desktop is *unreachable*, not absent. See open
+question 1.
+
+The display manager here is `plasma-login-manager`, not `sddm`. Listing both was
+the right call.
+
+*Not yet verified:* the image has never been booted. Everything above is from
+the build log.
+
+*Remaining before Phase 1 is done:* build a disk image and boot it.
 
 ### Phase 2 — Boot to frontend
 **Status: not started.**
@@ -594,24 +615,38 @@ Reasons for the caution:
   that builds but does not boot — and we currently have no way to notice that
   before the first VM test.
 
-Resolve in Phase 2, once there is a VM boot test to validate against and once
-the frontend toolkit is chosen (Phase 3) so we know what Qt/Wayland libraries
-are actually needed. `build_files/strip-desktop.sh` contains a commented-out
-candidate list to start from.
+**What the first build showed:** stripping removed 40 packages out of 2745. The
+desktop applications this base was assumed to carry were mostly not there in the
+first place. So the size argument for removing Plasma is weaker than it looked —
+the remaining weight is Plasma and Qt themselves, and taking those out is the
+risky part, not the part with obvious payoff.
+
+Which reframes the question. It is not "how do we make the image smaller"; it is
+"does leaving Plasma installed cost us anything real?" Candidate answers: attack
+surface, confusion for contributors, and the chance that something in it starts
+on boot and fights the CabinetOS session. The third is the only one that would
+actually break the product, and Phase 2 will find out.
+
+Resolve in Phase 2, once there is a booted image to validate against and once
+the frontend toolkit is chosen (Phase 3) so we know what Qt and Wayland
+libraries are actually needed. `build_files/strip-desktop.sh` contains a
+commented-out candidate list to start from.
 
 ### 2. Does removing `steam` also remove the controller udev rules?
-**Raised: Phase 1. Mitigated, not verified.**
+**Raised: Phase 1. RESOLVED by the first build — no, controller support is intact.**
 
-The `steam` package ships (or depends on a subpackage that ships) udev rules
-covering a wide range of gamepads. Those rules are exactly what CabinetOS needs
-and Steam itself is exactly what it does not.
+`dnf5 remove --no-autoremove` did what it was meant to. The first green build
+(2026-09-13) removed `steam` itself and left everything around it:
 
-Mitigation applied: all removals use `dnf5 remove --no-autoremove`, so
-dependencies are not swept up with the named packages. The strip script also
-logs the udev rules present in the final image.
+- `kmod-xone` — Xbox wireless — present.
+- `kmod-gcadapter_oc` — GameCube adapter — present.
+- `kmod-new-lg4ff`, `kmod-hid-tmff2`, `kmod-hid-fanatecff`, `kmod-t150-driver` —
+  force-feedback wheels — present.
+- `50-steam-horipad-controller.rules` and the rest of the udev input rules —
+  present.
 
-**To verify:** check the CI build log for the `steam-devices` / udev rule
-listing, and confirm gamepads still enumerate in the Phase 1 VM test.
+Still to confirm on real hardware: that a controller actually enumerates and is
+usable. The packages being there is necessary, not sufficient.
 
 ### 3. `bazzite` or `bazzite-deck` as the base?
 **Raised: Phase 1. Decided provisionally, revisit in Phase 2.**
@@ -724,6 +759,11 @@ machine, and whether it is achievable depends on hardware:
 - The reference SER5 has no HDMI-CEC, so a TV remote cannot drive it and it will
   not wake when the TV does. Other machines may have it, which is exactly the
   kind of capability that must be detected rather than assumed.
+- **The software side is already in the image.** The first build shows
+  `60-cec-uaccess.rules`, `60-cecd-uinput.rules` and `60-inputattach-cec.rules`
+  present, so Bazzite ships CEC plumbing. On hardware that has a CEC adapter it
+  should work with no packaging effort — which makes runtime detection the right
+  design rather than a hedge.
 - Waking from suspend over Bluetooth depends on the controller, the adapter and
   the firmware, and is unreliable in general.
 
