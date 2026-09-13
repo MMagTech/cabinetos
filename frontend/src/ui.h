@@ -88,6 +88,17 @@ public:
     void drawBackdrop(const Gradient& g);
     void draw(const Rect& r);
 
+    // A textured quad in design points. Glyphs use it; cover art and a running
+    // core's frame will use it too, which is the point of it existing rather
+    // than a text-only path.
+    void drawTextured(float x, float y, float w, float h, GLuint texture, float u0,
+                      float v0, float u1, float v1, const Color& tint,
+                      bool singleChannel = true);
+
+    // Device pixels per design point for the frame in progress. Text has to
+    // rasterise at device resolution to be crisp on a 4K set, so it needs this.
+    float scale() const { return scale_; }
+
     // Reads the frame back and writes a BMP. The VM has no way to show a
     // screenshot to anyone, and "it looked right on my machine" is not a thing
     // this project can say, so the frontend can always photograph itself.
@@ -104,6 +115,8 @@ public:
 private:
     GLuint program_ = 0;
     GLuint backdropProgram_ = 0;
+    GLuint texturedProgram_ = 0;
+    float scale_ = 1.0f;
     GLuint vao_ = 0;
     GLuint vbo_ = 0;
     GLuint offscreenFBO_ = 0;
@@ -117,6 +130,9 @@ private:
     struct {
         GLint top, mid, bottom, midStop;
     } bloc_{};
+    struct {
+        GLint canvas, rect, uv, tint, tex, single;
+    } tloc_{};
 };
 
 }  // namespace ui

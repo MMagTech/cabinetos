@@ -24,8 +24,10 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <string>
 #include <vector>
 
+#include "text.h"
 #include "ui.h"
 
 namespace {
@@ -90,15 +92,22 @@ struct Animated {
 
 struct Card {
     ui::Color art;  // stands in for cover art until there is an image layer
+    const char* title;
     Animated focus;
     Animated press;
 };
 
-// Placeholder "cover art". Real covers arrive with the RomM client in Phase 4;
-// until then these are just distinguishable rectangles so focus is legible.
-const ui::Color kPlaceholderArt[] = {
-    ui::Color::rgb(0x2484D6), ui::Color::rgb(0xEC405C), ui::Color::rgb(0x58E8F6),
-    ui::Color::rgb(0xFFC457), ui::Color::rgb(0xFF7AC7), ui::Color::rgb(0x7A6BC4),
+// Stand-in library. Real covers and names arrive with the RomM client in Phase
+// 4; these exist so the layout is exercised against the shapes real data has —
+// a long title that has to truncate, and a Japanese one, which a ROM library is
+// full of and which is the reason the font stack has a CJK fallback at all.
+const Card kSampleLibrary[] = {
+    {ui::Color::rgb(0x2484D6), "Sonic the Hedgehog 2", {}, {}},
+    {ui::Color::rgb(0xEC405C), "Super Metroid", {}, {}},
+    {ui::Color::rgb(0x58E8F6), "Castlevania: Symphony of the Night", {}, {}},
+    {ui::Color::rgb(0xFFC457), "\xE3\x83\x89\xE3\x83\xA9\xE3\x82\xAD\xE3\x83\xA5\xE3\x83\xBC\xE3\x82\xB7\xE3\x83\xA5", {}, {}},
+    {ui::Color::rgb(0xFF7AC7), "Streets of Rage 2", {}, {}},
+    {ui::Color::rgb(0x7A6BC4), "Chrono Trigger", {}, {}},
 };
 
 }  // namespace
@@ -177,8 +186,19 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    std::vector<Card> cards;
-    for (const auto& c : kPlaceholderArt) cards.push_back(Card{c, {}, {}});
+    ui::TextRenderer text;
+    // Regular, Medium, SemiBold, Bold, then the CJK fallback. All five are
+    // already in the Bazzite base, so the type costs the image nothing.
+    if (!text.init({"/usr/share/fonts/google-noto/NotoSans-Regular.ttf",
+                    "/usr/share/fonts/google-noto/NotoSans-Medium.ttf",
+                    "/usr/share/fonts/google-noto/NotoSans-SemiBold.ttf",
+                    "/usr/share/fonts/google-noto/NotoSans-Bold.ttf",
+                    "/usr/share/fonts/google-noto-sans-cjk-fonts/NotoSansCJK-Regular.ttc"})) {
+        std::fprintf(stderr, "[frontend] text init failed\n");
+        return 1;
+    }
+
+    std::vector<Card> cards(std::begin(kSampleLibrary), std::end(kSampleLibrary));
 
     int focused = initialFocus >= 0 ? initialFocus : 0;
     focused = std::clamp(focused, 0, static_cast<int>(cards.size()) - 1);
@@ -271,12 +291,22 @@ int main(int argc, char** argv) {
                                            ui::palette::kBackdropMid,
                                            ui::palette::kBackdropBottom, 0.55f});
 
-        // The shelf header. A placeholder bar until there is a text layer —
-        // its size is the space "Recent ›" will occupy at Title 2.
-        renderer.draw(ui::Rect{kContentInset, 300.0f, 240.0f, 44.0f, 8.0f,
-                               ui::Color::white(0.22f)});
+        // The shelf header: Title 2 bold, with the chevron that says the row
+        // continues into a screen of its own.
+        const float sc = renderer.scale();
+        const float headerBaseline = 300.0f + text.ascent(ui::TextStyle::Title2, sc);
+        text.draw(renderer, "Recent", kContentInset, headerBaseline,
+                  ui::TextStyle::Title2, ui::Color::white(1.0f), sc);
+        const float headerWidth =
+            text.measure("Recent", ui::TextStyle::Title2, sc);
+        // Title 3 semibold at tertiary, not Title 2: the chevron says "this row
+        // continues", it is not part of the heading, and at heading weight it
+        // competes with it.
+        text.draw(renderer, "\xE2\x80\xBA", kContentInset + headerWidth + 10.0f,
+                  headerBaseline, ui::TextStyle::Title3, ui::Color::white(0.30f), sc);
 
-        const float shelfTop = 300.0f + 44.0f + 12.0f + kShelfHeadroom;
+        const float shelfTop =
+            300.0f + text.lineHeight(ui::TextStyle::Title2, sc) + 12.0f + kShelfHeadroom;
 
         // Unfocused cards first, so a focused card's shadow and rim land on top
         // of its neighbours rather than under them.
@@ -311,11 +341,17 @@ int main(int argc, char** argv) {
                 renderer.draw(cover);
 
                 // The caption, riding down with the lift so the grown card
-                // cannot bury it. A placeholder bar until there is text.
-                const float capY = shelfTop + kShelfCoverHeight + kCaptionGap +
-                                   captionSlide(f);
-                renderer.draw(ui::Rect{baseX, capY, kShelfCoverWidth * 0.8f, 26.0f, 6.0f,
-                                       ui::Color::white(isFocused ? 0.85f : 0.45f)});
+                // cannot bury it. One line, truncated with a real ellipsis:
+                // game titles are long and at this width most of them are.
+                const float capBaseline = shelfTop + kShelfCoverHeight + kCaptionGap +
+                                          text.ascent(ui::TextStyle::Callout, sc) +
+                                          captionSlide(f);
+                const std::string caption = text.truncate(
+                    card.title, ui::TextStyle::Callout, sc, kShelfCoverWidth);
+                // Focused is primary, everything else is secondary — the same
+                // way the reference implementation dims what you are not on.
+                text.draw(renderer, caption, baseX, capBaseline, ui::TextStyle::Callout,
+                          ui::Color::white(isFocused ? 1.0f : 0.60f), sc);
             }
         }
 
@@ -334,6 +370,7 @@ int main(int argc, char** argv) {
         }
     }
 
+    text.shutdown();
     renderer.shutdown();
     SDL_GL_DestroyContext(gl);
     SDL_DestroyWindow(window);
