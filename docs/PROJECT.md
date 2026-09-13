@@ -14,6 +14,36 @@
 
 ---
 
+## Where the project is — 2026-09-13
+
+**Phase 1 complete. Phase 2 mostly done. Phase 0 is the next piece of work.**
+
+Running infrastructure:
+
+| | |
+|---|---|
+| Repository | https://github.com/MMagTech/cabinetos |
+| Image | `ghcr.io/mmagtech/cabinetos:latest` — public, unsigned |
+| Test machine | Unraid VM at `192.168.1.250`, 4 GB, VirtIO-GPU, SSH key installed |
+| Reference hardware | Beelink SER5 — **not yet installed**, awaiting a spare NVMe |
+
+Everything in the pipeline has run green at least once: image build → GHCR →
+signing (skipped, no key) → qcow2 → VM boot → `bootc upgrade` in place →
+installer ISO. The one untested link is **booting that ISO** and installing to
+real hardware.
+
+Known gaps, none blocking:
+
+- **Unsigned images.** No `SIGNING_SECRET` set. Optional until Phase 7, when an
+  installed machine needs to verify an update before rebooting into it.
+- **SSH is on by default with password auth.** Deliberate for Phases 1–5, and a
+  debt Phase 6 must pay — see open question 8.
+- **The ISO has never been booted.**
+- **HDMI-CEC is specified and protected but unverified.** Nobody on the project
+  has an adapter.
+
+---
+
 ## What CabinetOS is
 
 CabinetOS is a console operating system for generic x86-64 hardware.
@@ -714,7 +744,17 @@ invisible to anyone who has not deliberately turned it on.
 ## Phase plan
 
 ### Phase 0 — Design system spec
-**Status: not started.**
+**Status: not started. THIS IS THE NEXT PIECE OF WORK.**
+
+It is now the only thing blocking Phase 3, because cage made the VM a viable
+target for building the frontend — hardware is no longer in the way. And it
+carries the project's biggest unknown: whether the same emulator cores can be
+built for Linux at matching versions. If they cannot, save-state continuity —
+the thing that justifies CabinetOS existing rather than running Batocera — is in
+trouble, and that should be known before a UI is built on top of it.
+
+Give it its own session. Reading Cabinet properly is a lot of context and does
+not mix well with system work.
 
 Extract from Cabinet: colours, typography, spacing, corner radii, focus and
 selection behaviour, motion curves and durations, navigation model, and a
@@ -735,7 +775,7 @@ and it is knowable now.
 look and feel of Cabinet from the document alone.
 
 ### Phase 1 — Base image
-**Status: in progress.**
+**Status: COMPLETE, 2026-09-13.**
 
 A `Containerfile` from a pinned Bazzite tag, with the desktop and Steam removed
 and the gaming stack retained. GitHub Actions builds, signs and publishes to
@@ -769,13 +809,17 @@ question 1.
 The display manager here is `plasma-login-manager`, not `sddm`. Listing both was
 the right call.
 
-*Not yet verified:* the image has never been booted. Everything above is from
-the build log.
+**Status changed to COMPLETE 2026-09-13.** A qcow2 was built, booted in an
+Unraid VM, and reached a console prompt. SSH works. The machine has since been
+upgraded in place with `bootc upgrade`, which pulled 1.0 GB of a 5.0 GB image
+because only changed layers moved — the Phase 7 update mechanism working, months
+early.
 
-*Remaining before Phase 1 is done:* build a disk image and boot it.
+An `anaconda-iso` also builds. It has **not** been booted; installing to real
+hardware is the one step in the chain never exercised.
 
 ### Phase 2 — Boot to frontend
-**Status: not started.**
+**Status: in progress. The session works; splash and power button remain.**
 
 Autologin, no display manager, a custom session launching a fullscreen
 placeholder application. Every route to a desktop, file manager or terminal
@@ -786,6 +830,25 @@ needed. Closing "every route to a terminal" means the UI offers none, not that
 input devices are blocked.
 
 *Done when* power on leads to the placeholder with no keyboard involved.
+
+**Shipped:** `cabinetos-session.service` takes tty1 via
+`Conflicts=getty@tty1.service`, so there is no login prompt to fall back to.
+`PAMName=login` gives it a real logind session on seat0. `StartLimitIntervalSec=0`,
+because a console that has given up retrying is a support call.
+`/usr/bin/cabinetos-session` works down the compositor ladder (gamescope/drm →
+cage → headless). The session user is created by the image via `sysusers.d`.
+`plasma-setup` and the `plasma.desktop` session are gone. Seven dead-weight
+services disabled — 91 MB and 5 seconds of boot.
+
+Verified on the VM: session active, zero restarts, correct fallback chosen.
+
+**Remaining:**
+
+1. **Boot splash.** Design settled — see *Branding*. Needs `quiet loglevel=0` on
+   the kernel command line, a Plymouth theme, and a handoff to the frontend with
+   no black flash. Testable in the VM; Plymouth's renderers do not need Vulkan.
+2. **Power button → clean shutdown.**
+3. **Re-verify on a freshly installed image**, rather than one upgraded in place.
 
 ### Phase 3 — Frontend shell
 **Status: not started.**
