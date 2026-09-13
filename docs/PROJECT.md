@@ -1732,9 +1732,37 @@ Running and verified on the VM:
   than jumping — the reference implementation's own animation behaviour.
 - Controller and keyboard both driving focus, neither required.
 
-**Not there yet, and each is its own piece of work:** text (there is no font
-layer, so captions are placeholder bars sized to the real type's space), images,
-and cores.
+**Text, added the same day.** FreeType rasterises glyphs on first sight into one
+greyscale atlas; strings are drawn as textured quads on the same path cover art
+and a running core's frame will use.
+
+- **The font is Noto Sans**, Regular / Medium / SemiBold / Bold, **already in
+  the Bazzite base**, so the type ramp costs the image nothing. `ci/base-watch.txt`
+  should gain `google-noto-sans-fonts`, since the frontend now depends on it.
+- **Noto Sans CJK is the fallback**, also already present. A ROM library is full
+  of Japanese titles and Noto Sans has no CJK coverage; a missing glyph walks
+  the fallback list rather than drawing a box. Verified with a Japanese title in
+  the shelf.
+- **Glyphs are rasterised at device pixels and laid out in design points.** A
+  31pt caption is 31 pixels tall at 1080p and 62 at 4K, and the atlas is keyed
+  by device size, so the same label at two scales is two entries. Rasterising at
+  the design size and letting the GPU scale would make 4K text a blurry upscale
+  of 1080p text, which is exactly what a console must not look like. **Verified:
+  1.0 design point of edge softness at both 4K and 1080p** — an upscale would
+  show two.
+- **Baselines snap to a device pixel.** A baseline landing on a half pixel makes
+  a whole line slightly soft, which on a television reads as cheap rather than
+  as antialiasing.
+- Long titles truncate with a real ellipsis (U+2026, one glyph).
+
+**Not there yet, and each is its own piece of work:** images, cores, and the
+on-screen keyboard.
+
+**Known gap worth recording now:** there is no text *shaping*, only advance and
+kerning from FreeType. That is correct for Latin and adequate for CJK, and wrong
+for Arabic, Hebrew and the Indic scripts, which need HarfBuzz. No game library
+seen so far needs it; if one does, HarfBuzz is already in the image as a
+FreeType dependency.
 
 The real frontend, built against the Phase 0 spec, running on fake data. Home,
 browse, game detail, settings, in-game overlay. Full controller navigation, plus

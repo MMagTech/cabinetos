@@ -8,7 +8,7 @@ CXX      ?= g++
 CXXFLAGS ?= -std=c++20 -O2 -Wall -Wextra -Wno-unused-parameter
 LDFLAGS  ?=
 
-PKGS     := sdl3 egl glesv2
+PKGS     := sdl3 egl glesv2 freetype2
 CXXFLAGS += $(shell pkg-config --cflags $(PKGS))
 LIBS     := $(shell pkg-config --libs $(PKGS))
 

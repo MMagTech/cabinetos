@@ -126,6 +126,44 @@ void main() {
 }
 )";
 
+// One textured quad. The same shader serves glyphs and pictures: a glyph atlas
+// is a single-channel coverage mask that tints, a cover or a core's frame is
+// full colour that does not. One flag decides which, rather than two shaders
+// that would drift apart.
+const char* kTexturedVS = R"(#version 300 es
+precision highp float;
+uniform vec2 uCanvas;
+uniform vec4 uRect;
+uniform vec4 uUV;
+out vec2 vUV;
+void main() {
+    vec2 corner = vec2(float(gl_VertexID & 1), float((gl_VertexID >> 1) & 1));
+    vec2 p = uRect.xy + corner * uRect.zw;
+    vUV = mix(uUV.xy, uUV.zw, corner);
+    vec2 ndc = vec2(p.x / uCanvas.x * 2.0 - 1.0, 1.0 - p.y / uCanvas.y * 2.0);
+    gl_Position = vec4(ndc, 0.0, 1.0);
+}
+)";
+
+const char* kTexturedFS = R"(#version 300 es
+precision highp float;
+in vec2 vUV;
+uniform sampler2D uTex;
+uniform vec4 uTint;
+uniform int uSingleChannel;
+out vec4 fragColor;
+void main() {
+    vec4 t = texture(uTex, vUV);
+    if (uSingleChannel == 1) {
+        // Coverage in red, colour from the tint. Straight alpha, to be
+        // composited by the same blend function everything else uses.
+        fragColor = vec4(uTint.rgb, uTint.a * t.r);
+    } else {
+        fragColor = vec4(t.rgb * uTint.rgb, t.a * uTint.a);
+    }
+}
+)";
+
 GLuint compile(GLenum type, const char* src) {
     GLuint s = glCreateShader(type);
     glShaderSource(s, 1, &src, nullptr);
@@ -169,7 +207,8 @@ GLuint link(const char* vs, const char* fs) {
 bool Renderer::init() {
     program_ = link(kQuadVS, kQuadFS);
     backdropProgram_ = link(kBackdropVS, kBackdropFS);
-    if (!program_ || !backdropProgram_) return false;
+    texturedProgram_ = link(kTexturedVS, kTexturedFS);
+    if (!program_ || !backdropProgram_ || !texturedProgram_) return false;
 
     loc_.canvas = glGetUniformLocation(program_, "uCanvas");
     loc_.rect = glGetUniformLocation(program_, "uRect");
@@ -186,11 +225,33 @@ bool Renderer::init() {
     bloc_.bottom = glGetUniformLocation(backdropProgram_, "uBottom");
     bloc_.midStop = glGetUniformLocation(backdropProgram_, "uMidStop");
 
+    tloc_.canvas = glGetUniformLocation(texturedProgram_, "uCanvas");
+    tloc_.rect = glGetUniformLocation(texturedProgram_, "uRect");
+    tloc_.uv = glGetUniformLocation(texturedProgram_, "uUV");
+    tloc_.tint = glGetUniformLocation(texturedProgram_, "uTint");
+    tloc_.tex = glGetUniformLocation(texturedProgram_, "uTex");
+    tloc_.single = glGetUniformLocation(texturedProgram_, "uSingleChannel");
+
     // GLES 3 still requires a bound vertex array even when every attribute is
     // derived from gl_VertexID and nothing is read from a buffer.
     glGenVertexArrays(1, &vao_);
     glBindVertexArray(vao_);
     return true;
+}
+
+void Renderer::drawTextured(float x, float y, float w, float h, GLuint texture,
+                            float u0, float v0, float u1, float v1, const Color& tint,
+                            bool singleChannel) {
+    glUseProgram(texturedProgram_);
+    glUniform2f(tloc_.canvas, kCanvasWidth, kCanvasHeight);
+    glUniform4f(tloc_.rect, x, y, w, h);
+    glUniform4f(tloc_.uv, u0, v0, u1, v1);
+    glUniform4f(tloc_.tint, tint.r, tint.g, tint.b, tint.a);
+    glUniform1i(tloc_.single, singleChannel ? 1 : 0);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glUniform1i(tloc_.tex, 0);
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 }
 
 bool Renderer::beginOffscreen(int width, int height) {
@@ -232,7 +293,8 @@ void Renderer::shutdown() {
     if (vao_) glDeleteVertexArrays(1, &vao_);
     if (program_) glDeleteProgram(program_);
     if (backdropProgram_) glDeleteProgram(backdropProgram_);
-    vbo_ = vao_ = program_ = backdropProgram_ = 0;
+    if (texturedProgram_) glDeleteProgram(texturedProgram_);
+    vbo_ = vao_ = program_ = backdropProgram_ = texturedProgram_ = 0;
 }
 
 void Renderer::beginFrame(int drawableWidth, int drawableHeight) {
@@ -241,6 +303,7 @@ void Renderer::beginFrame(int drawableWidth, int drawableHeight) {
     // slack in bars, which is what a console does.
     float scale = std::min(static_cast<float>(drawableWidth) / kCanvasWidth,
                            static_cast<float>(drawableHeight) / kCanvasHeight);
+    scale_ = scale;
     int vw = static_cast<int>(kCanvasWidth * scale);
     int vh = static_cast<int>(kCanvasHeight * scale);
     glViewport((drawableWidth - vw) / 2, (drawableHeight - vh) / 2, vw, vh);
