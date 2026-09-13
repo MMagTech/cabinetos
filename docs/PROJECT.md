@@ -1755,8 +1755,38 @@ and a running core's frame will use.
   as antialiasing.
 - Long titles truncate with a real ellipsis (U+2026, one glyph).
 
-**Not there yet, and each is its own piece of work:** images, cores, and the
-on-screen keyboard.
+**Cover art, added the same day.** libjpeg and libpng — both already in the
+base, so still nothing bundled and nothing vendored.
+
+- **Decoding never touches the frame thread.** Four worker threads decode; the
+  GL upload happens on the frame thread because GL is not thread-safe; a cover
+  that is not ready simply is not drawn yet. A shelf is dozens of JPEGs and
+  decoding one on the thread that drives a core is how a console stutters.
+- **There is a memory budget, and it is tested.** 192 MB by default, evicted
+  least-recently-used. **Verified**: with a 1 MB budget the covers scrolled past
+  are evicted and the ones on screen are kept, so resident settles at the
+  working set rather than at the budget. That is deliberate — **the budget is a
+  target, not a hard cap**, because flashing a blank card to honour a number is
+  the wrong trade.
+- **Where the bytes come from is one `std::function`.** Files today,
+  authenticated RomM requests in Phase 4, and the cache never learns what a
+  server is. Keys are not paths — everything after `#` is stripped — so a real
+  URL with a query string is already the shape it expects.
+- **Odd-shaped covers are fitted over a blurred echo of themselves**, never
+  cropped, with a black 18% scrim between. That is the reference
+  implementation's own rule and its own threshold: more than 0.06 away from 3:4.
+  The echo is a high mip level sampled back up and scaled 1.3, which is a box
+  blur for the price of a texture fetch rather than a blur pass.
+- **Everything is clipped to the card's rounded corners** — the echo included,
+  which is why the clip rectangle is a separate thing from the drawn rectangle.
+- Format is detected from magic bytes, never a file extension: a server hands
+  you a content type and a body, not a filename. WebP is next when something
+  needs it; libwebp is already there.
+- A malformed image cannot take the console down. libjpeg's default error
+  handler calls `exit()`; this one does not.
+
+**Not there yet, and each is its own piece of work:** cores, the on-screen
+keyboard, and the remaining screens.
 
 **Known gap worth recording now:** there is no text *shaping*, only advance and
 kerning from FreeType. That is correct for Latin and adequate for CJK, and wrong

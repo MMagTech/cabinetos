@@ -5,15 +5,20 @@
 # See README.md for the loop.
 
 CXX      ?= g++
-CXXFLAGS ?= -std=c++20 -O2 -Wall -Wextra -Wno-unused-parameter
+# -MMD -MP writes a .d file per object listing the headers it included, so
+# editing a header rebuilds everything that uses it. Without this, changing a
+# signature in ui.h left stale objects linking against the old one, which
+# surfaces as an undefined reference rather than as a compile error.
+CXXFLAGS ?= -std=c++20 -O2 -Wall -Wextra -Wno-unused-parameter -MMD -MP
 LDFLAGS  ?=
 
-PKGS     := sdl3 egl glesv2 freetype2
+PKGS     := sdl3 egl glesv2 freetype2 libjpeg libpng
 CXXFLAGS += $(shell pkg-config --cflags $(PKGS))
-LIBS     := $(shell pkg-config --libs $(PKGS))
+LIBS     := $(shell pkg-config --libs $(PKGS)) -lpthread
 
 SRC      := $(wildcard src/*.cpp)
 OBJ      := $(SRC:.cpp=.o)
+DEP      := $(OBJ:.o=.d)
 BIN      := build/cabinetos-frontend
 
 all: $(BIN)
@@ -27,7 +32,9 @@ $(BIN): $(OBJ)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 clean:
-	rm -f $(OBJ)
+	rm -f $(OBJ) $(DEP)
 	rm -rf build
+
+-include $(DEP)
 
 .PHONY: all clean

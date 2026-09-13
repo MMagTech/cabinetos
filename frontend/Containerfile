@@ -14,7 +14,7 @@ RUN dnf install -y --setopt=install_weak_deps=False \
         SDL3-devel \
         mesa-libEGL-devel \
         mesa-libGLES-devel \
-        wayland-devel freetype-devel \
+        wayland-devel freetype-devel libjpeg-turbo-devel libpng-devel \
     && dnf clean all
 
 WORKDIR /src
