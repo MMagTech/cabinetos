@@ -59,6 +59,15 @@ log "base image has $(wc -l < /usr/share/cabinetos/packages-before-strip.txt) pa
 /ctx/enable-ssh.sh
 
 # ---------------------------------------------------------------------------
+# Repair repository definitions.
+# ---------------------------------------------------------------------------
+#
+# Last, so it sees the final state. A repo whose GPG key was never shipped
+# breaks any operation that reads all repos — which is what building an
+# installer ISO does. See the script for the full reasoning.
+/ctx/fix-repos.sh
+
+# ---------------------------------------------------------------------------
 # Record the result.
 # ---------------------------------------------------------------------------
 rpm -qa | sort > /usr/share/cabinetos/packages-after-strip.txt
