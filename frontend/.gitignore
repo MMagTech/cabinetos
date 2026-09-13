@@ -1,2 +1,6 @@
 build/
 *.o
+cores/build/
+roms/
+saves/
+covers/

@@ -27,6 +27,7 @@
 #include <string>
 #include <vector>
 
+#include "core.h"
 #include "image.h"
 #include "text.h"
 #include "ui.h"
@@ -137,12 +138,19 @@ int main(int argc, char** argv) {
     // leaves the covers behind it. That is the only situation in which anything
     // is evictable at all, so it is the only way to test that eviction works.
     bool evictTest = false;
+    // Running a core. Both are needed: a core without a ROM has nothing to do.
+    const char* corePath = nullptr;
+    const char* romPath = nullptr;
     for (int i = 1; i < argc; ++i) {
         if (SDL_strcmp(argv[i], "--screenshot") == 0 && i + 1 < argc) {
             shotMode = true;
             shotPath = argv[++i];
         } else if (SDL_strcmp(argv[i], "--frames") == 0 && i + 1 < argc) {
             shotAfterFrames = SDL_atoi(argv[++i]);
+        } else if (SDL_strcmp(argv[i], "--core") == 0 && i + 1 < argc) {
+            corePath = argv[++i];
+        } else if (SDL_strcmp(argv[i], "--rom") == 0 && i + 1 < argc) {
+            romPath = argv[++i];
         } else if (SDL_strcmp(argv[i], "--evict-test") == 0) {
             evictTest = true;
         } else if (SDL_strcmp(argv[i], "--image-budget-mb") == 0 && i + 1 < argc) {
@@ -156,7 +164,7 @@ int main(int argc, char** argv) {
         }
     }
 
-    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD)) {
+    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD | SDL_INIT_AUDIO)) {
         std::fprintf(stderr, "[frontend] SDL_Init failed: %s\n", SDL_GetError());
         return 1;
     }
@@ -233,6 +241,43 @@ int main(int argc, char** argv) {
     });
 
     std::vector<Card> cards(std::begin(kSampleLibrary), std::end(kSampleLibrary));
+
+    // --- The core, if one was asked for --------------------------------------
+    bool playing = false;
+    SDL_AudioStream* audioStream = nullptr;
+    if (corePath && romPath) {
+        cab::Core& core = cab::Core::shared();
+        if (!core.load(corePath)) {
+            std::fprintf(stderr, "[frontend] core: %s\n", core.error().c_str());
+            return 1;
+        }
+        // The save directory must outlive the session. Per-game, alongside the
+        // ROM for now; Phase 4 moves it under the chosen storage location.
+        const std::string saveDir = "saves";
+        SDL_CreateDirectory(saveDir.c_str());
+        if (!core.loadGame(romPath, "system", saveDir)) {
+            std::fprintf(stderr, "[frontend] %s\n", core.error().c_str());
+            return 1;
+        }
+        playing = true;
+
+        // Audio: SDL owns the device thread and we push from the frame loop.
+        // The rule from the reference implementation is that the callback must
+        // never block — so there is no callback, and nothing to block.
+        SDL_AudioSpec src{};
+        src.format = SDL_AUDIO_S16;
+        src.channels = 2;
+        src.freq = static_cast<int>(core.avInfo().sampleRate);
+        audioStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &src,
+                                                nullptr, nullptr);
+        if (audioStream) {
+            SDL_ResumeAudioStreamDevice(audioStream);
+            std::fprintf(stderr, "[frontend] audio out at %d Hz\n", src.freq);
+        } else {
+            // A console with no sound card is still a console. Say so and play on.
+            std::fprintf(stderr, "[frontend] no audio device: %s\n", SDL_GetError());
+        }
+    }
 
     int focused = initialFocus >= 0 ? initialFocus : 0;
     focused = std::clamp(focused, 0, static_cast<int>(cards.size()) - 1);
@@ -311,6 +356,70 @@ int main(int argc, char** argv) {
                 images.get("covers/b-3x4.png#scrolled-past-" + std::to_string(i));
             }
         }
+        if (playing) {
+            cab::Core& core = cab::Core::shared();
+            // Buttons first, then run: a core samples input inside retro_run,
+            // so anything set afterwards is a frame late.
+            cab::PadState pad;
+            const bool* keys = SDL_GetKeyboardState(nullptr);
+            auto held = [&](SDL_Scancode k) { return keys && keys[k]; };
+            pad.buttons = 0;
+            // The RetroPad, which every core speaks whatever the real hardware
+            // had. Keyboard here; a real pad is wired the same way below.
+            using cab::bit;
+            if (held(SDL_SCANCODE_UP)) pad.buttons |= bit(cab::Up);
+            if (held(SDL_SCANCODE_DOWN)) pad.buttons |= bit(cab::Down);
+            if (held(SDL_SCANCODE_LEFT)) pad.buttons |= bit(cab::Left);
+            if (held(SDL_SCANCODE_RIGHT)) pad.buttons |= bit(cab::Right);
+            if (held(SDL_SCANCODE_X)) pad.buttons |= bit(cab::A);
+            if (held(SDL_SCANCODE_Z)) pad.buttons |= bit(cab::B);
+            if (held(SDL_SCANCODE_RETURN)) pad.buttons |= bit(cab::Start);
+            if (held(SDL_SCANCODE_RSHIFT)) pad.buttons |= bit(cab::Select);
+
+            // A real pad, mapped by SDL's own gamepad abstraction so the
+            // hundreds of controllers in its database all arrive the same way.
+            // Both paths OR together: neither is required, both work.
+            int padCountNow = 0;
+            if (SDL_JoystickID* ids = SDL_GetGamepads(&padCountNow)) {
+                if (padCountNow > 0) {
+                    if (SDL_Gamepad* gp = SDL_GetGamepadFromID(ids[0])) {
+                        auto down = [&](SDL_GamepadButton b) {
+                            return SDL_GetGamepadButton(gp, b);
+                        };
+                        if (down(SDL_GAMEPAD_BUTTON_DPAD_UP)) pad.buttons |= bit(cab::Up);
+                        if (down(SDL_GAMEPAD_BUTTON_DPAD_DOWN)) pad.buttons |= bit(cab::Down);
+                        if (down(SDL_GAMEPAD_BUTTON_DPAD_LEFT)) pad.buttons |= bit(cab::Left);
+                        if (down(SDL_GAMEPAD_BUTTON_DPAD_RIGHT)) pad.buttons |= bit(cab::Right);
+                        // South is the bottom face button whatever it is
+                        // labelled: A on Xbox, B on Nintendo, Cross on
+                        // PlayStation. SDL normalises by POSITION, which is the
+                        // only thing that is actually the same across pads.
+                        if (down(SDL_GAMEPAD_BUTTON_SOUTH)) pad.buttons |= bit(cab::B);
+                        if (down(SDL_GAMEPAD_BUTTON_EAST)) pad.buttons |= bit(cab::A);
+                        if (down(SDL_GAMEPAD_BUTTON_WEST)) pad.buttons |= bit(cab::Y);
+                        if (down(SDL_GAMEPAD_BUTTON_NORTH)) pad.buttons |= bit(cab::X);
+                        if (down(SDL_GAMEPAD_BUTTON_START)) pad.buttons |= bit(cab::Start);
+                        if (down(SDL_GAMEPAD_BUTTON_BACK)) pad.buttons |= bit(cab::Select);
+                        pad.leftX = SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_LEFTX) / 32767.0f;
+                        pad.leftY = SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_LEFTY) / 32767.0f;
+                    }
+                }
+                SDL_free(ids);
+            }
+            core.setPad(0, pad);
+
+            core.runFor(dt);
+            core.uploadFrame();
+
+            if (audioStream) {
+                const std::vector<int16_t>& samples = core.drainAudio();
+                if (!samples.empty()) {
+                    SDL_PutAudioStreamData(audioStream, samples.data(),
+                                           static_cast<int>(samples.size() * sizeof(int16_t)));
+                }
+            }
+        }
+
         images.pump(dt);
         for (auto& c : cards) {
             c.focus.tick(dt);
@@ -332,6 +441,54 @@ int main(int argc, char** argv) {
         renderer.drawBackdrop(ui::Gradient{ui::palette::kBackdropTop,
                                            ui::palette::kBackdropMid,
                                            ui::palette::kBackdropBottom, 0.55f});
+
+        if (playing) {
+            cab::Core& core = cab::Core::shared();
+            if (core.texture() && core.frameWidth() > 0) {
+                // Integer-scaled and centred. A Game Boy is 160x144 and its
+                // pixels were each a deliberate choice; scaling by 6.4 makes
+                // some of them twice the size of their neighbours, which is
+                // visible from a sofa and looks like a fault. Phase 8 can offer
+                // the non-integer option; the default should be honest.
+                const float srcW = static_cast<float>(core.frameWidth());
+                const float srcH = static_cast<float>(core.frameHeight());
+                const float aspect = core.avInfo().aspectRatio > 0
+                                         ? core.avInfo().aspectRatio
+                                         : srcW / srcH;
+                float scale = std::floor(
+                    std::min(ui::kCanvasWidth / (srcH * aspect), ui::kCanvasHeight / srcH));
+                if (scale < 1.0f) scale = 1.0f;
+                const float dh = srcH * scale;
+                const float dw = dh * aspect;
+                ui::drawImageTexture(renderer, core.texture(),
+                                     (ui::kCanvasWidth - dw) * 0.5f,
+                                     (ui::kCanvasHeight - dh) * 0.5f, dw, dh);
+            }
+
+            // The overlay is not composited by anything clever: the frontend
+            // owns the frame loop, so the pause menu is simply drawn over the
+            // game. That is the payoff of hosting cores in process rather than
+            // launching them.
+            if (pressing) {
+                renderer.draw(ui::Rect{0, 0, ui::kCanvasWidth, ui::kCanvasHeight, 0,
+                                       ui::Color::black(0.55f)});
+                const float panelW = 560, panelH = 260;
+                renderer.draw(ui::Rect{(ui::kCanvasWidth - panelW) * 0.5f,
+                                       (ui::kCanvasHeight - panelH) * 0.5f, panelW, panelH,
+                                       32, ui::Color::white(0.14f)});
+                const float sc2 = renderer.scale();
+                const char* title = core.coreName().c_str();
+                const float tw = text.measure(title, ui::TextStyle::Title2, sc2);
+                text.draw(renderer, title, (ui::kCanvasWidth - tw) * 0.5f,
+                          ui::kCanvasHeight * 0.5f - 40,
+                          ui::TextStyle::Title2, ui::Color::white(1.0f), sc2);
+                const char* sub = "Paused";
+                const float sw = text.measure(sub, ui::TextStyle::Callout, sc2);
+                text.draw(renderer, sub, (ui::kCanvasWidth - sw) * 0.5f,
+                          ui::kCanvasHeight * 0.5f + 10, ui::TextStyle::Callout,
+                          ui::Color::white(0.60f), sc2);
+            }
+        } else {
 
         // The shelf header: Title 2 bold, with the chevron that says the row
         // continues into a screen of its own.
@@ -414,6 +571,7 @@ int main(int argc, char** argv) {
                           ui::Color::white(isFocused ? 1.0f : 0.60f), sc);
             }
         }
+        }  // end of the shelf branch
 
         ++frame;
         // Capture before the swap. After a swap the back buffer's contents are
@@ -430,6 +588,16 @@ int main(int argc, char** argv) {
         }
     }
 
+    if (playing) {
+        cab::Core& core = cab::Core::shared();
+        const double realtime = core.audioFramesTotal() / core.avInfo().sampleRate;
+        std::fprintf(stderr,
+                     "[core] %llu frames, %llu audio frames = %.2fs of emulated time\n",
+                     static_cast<unsigned long long>(core.framesRun()),
+                     static_cast<unsigned long long>(core.audioFramesTotal()), realtime);
+        core.unload();
+    }
+    if (audioStream) SDL_DestroyAudioStream(audioStream);
     std::fprintf(stderr, "[image] resident %.1f MB, %d still pending\n",
                  images.bytesResident() / (1024.0 * 1024.0), images.pendingCount());
     images.shutdown();

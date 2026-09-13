@@ -1942,7 +1942,55 @@ base, so still nothing bundled and nothing vendored.
 - A malformed image cannot take the console down. libjpeg's default error
   handler calls `exit()`; this one does not.
 
-**Not there yet, and each is its own piece of work:** cores, the on-screen
+**The first core runs, 2026-09-13.** Gambatte, and **Dr. Mario boots**.
+
+This is the first empirical evidence for anything in open question 13, which
+until now was entirely read rather than run:
+
+- **Built at the manifest's pinned commit, `platform=unix`, first attempt, zero
+  patches.** No source edits, no flags beyond the default, no workarounds. The
+  Linux path is as easy as the Makefiles said it was.
+- **The prefix-and-merge apparatus really is unnecessary.** `dlopen` with
+  `RTLD_LOCAL`, resolve the `retro_*` entry points, done. No wrapper, no
+  `ld -r`, no exported-symbol list, no `-fno-common`.
+- **`cores/build-core.sh` is reproducible and was proved so** — the checkout was
+  deleted and the whole thing re-run from nothing. git runs on the host, the
+  compile runs in the builder container, and the pinned commit is checked out
+  and then **asserted**, which is the discipline Cabinet's own scripts lack.
+
+Reported by the core itself: `Gambatte v0.5.0-netlink`, 160x144, **59.7275 fps**,
+32768 Hz, aspect 1.1111.
+
+- **Frame pacing is wall-clock, not per-draw**, with at most two catch-up frames
+  and the accumulator capped at four intervals. **Verified**: 96 emulated frames
+  against 59.7275 fps is 1.607s, and 53,087 audio frames against 32,768 Hz is
+  1.620s — the two agree to within 1%, which is the check that says emulated
+  time is advancing at the rate the core asked for.
+- **Audio goes to PipeWire through SDL3**, pushed from the frame loop. There is
+  no audio callback at all, so there is nothing that can block — which is the
+  rule the reference implementation had to work to keep.
+- **The picture is integer-scaled and nearest-neighbour.** A Game Boy is 160x144
+  and every pixel was somebody's deliberate choice in 1989; scaling by 6.4 makes
+  some of them twice the size of their neighbours, which is visible from a sofa.
+  Phase 8 can offer the smooth option; the default should be honest.
+- **The overlay is drawn straight over the game** — a scrim, a panel, text. No
+  compositing trick, no second surface. That is the payoff of hosting cores in
+  process, exactly as *How Cabinet hosts cores* predicted.
+- **`SET_HW_RENDER` is refused, deliberately and out loud.** Three cores in the
+  set want it and none of them is this one; pretending would hand a core a
+  context that does not exist.
+
+**A bug worth remembering**, because it cost the first run: `dlerror()` clears
+itself on read, so `dlerror() ? dlerror() : "..."` returns null the second time,
+and assigning null to a `std::string` segfaults. A perfectly clear "file not
+found" became a crash with no message. Read it once.
+
+**One VM artefact, not a fault:** on llvmpipe the frontend cannot draw fast
+enough, so the accumulator discards the time it cannot use and the game runs in
+slow motion rather than sprinting to catch up. That is the designed behaviour
+and the right one; it will not happen on a GPU.
+
+**Not there yet, and each is its own piece of work:** save states, the on-screen
 keyboard, and the remaining screens.
 
 **Known gap worth recording now:** there is no text *shaping*, only advance and
@@ -2009,12 +2057,11 @@ revisions for Linux x86-64 — not choosing an architecture.
 **Order, from Phase 0's scoping.** The instinct is to build all twenty-one cores
 and then find out. Do the opposite:
 
-1. **One core, in CI, at a pinned SHA.** Gambatte — the smallest, pure C,
-   software-rendered, **no recompiler at all** (so no `DYNAREC`/`JIT_ARCH` flag
-   to match, which sidesteps the parity question entirely for the first
-   attempt), and no firmware. `make platform=unix`. This proves the whole
-   pipeline: pin, build, package, load, run. It covers two platforms, Game Boy
-   and Game Boy Color.
+1. ~~**One core, at a pinned SHA.**~~ **DONE 2026-09-13, on the VM rather than
+   in CI.** Gambatte: pinned, built, loaded, run, with Dr. Mario on screen and
+   audio out. It covers two platforms, Game Boy and Game Boy Color. **Still
+   owed: the same thing in CI**, so it is not a thing that works on one
+   machine — which is the exact failure this whole open question is about.
 2. **One hardware-rendered core.** Flycast, because it is also Dreamcast and
    Naomi, and because it is the one that proves the GL context and the
    no-readback path.
@@ -2722,10 +2769,11 @@ Cabinet's flags exactly.**
   cannot tell. Either the builds are genuinely identical, or the tag grows a
   build identity — and that is a **Cabinet-side change**, since Cabinet writes
   the tag today.
-- **Nothing has been compiled.** Everything above is read from source. The first
-  real signal is a CI job that builds one core — Gambatte, the smallest — with
-  `make platform=unix` at a pinned SHA. Do that in Phase 5 before the other
-  twenty.
+- ~~**Nothing has been compiled.**~~ **DONE, 2026-09-13.** Gambatte built for
+  Linux x86-64 at its pinned commit with `make platform=unix`, **first attempt,
+  zero patches**, and Dr. Mario runs on it. See Phase 3. The remaining twenty
+  are now a loop rather than a question — but they are still twenty, and the
+  backend-sensitive ones still need their flags set explicitly.
 - **Firmware.** Cabinet fetches every firmware file a platform lists from RomM.
   CabinetOS inherits that, but PSP is a special case: PPSSPP's system files ship
   *inside the app bundle*, not from RomM. In a bootc image they become a path in
