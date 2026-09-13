@@ -1,0 +1,20 @@
+# The CabinetOS frontend build environment.
+#
+# The OS image itself carries no compiler and no headers, deliberately: it is a
+# console, not a build machine. So the frontend is built in here and the binary
+# is copied out.
+#
+# Fedora 44 because that is what Bazzite 44 is built from, so glibc and every
+# runtime library the binary links against match the image it will run on. If
+# the base image's Fedora release moves, move this with it.
+FROM registry.fedoraproject.org/fedora:44
+
+RUN dnf install -y --setopt=install_weak_deps=False \
+        gcc gcc-c++ make pkgconf-pkg-config \
+        SDL3-devel \
+        mesa-libEGL-devel \
+        mesa-libGLES-devel \
+        wayland-devel \
+    && dnf clean all
+
+WORKDIR /src

@@ -1014,6 +1014,30 @@ It makes every number here directly usable, it matches what the reference
 implementation was tuned against, and it means a 4K panel is a rendering
 decision rather than a layout one.
 
+**VERIFIED on the VM, 2026-09-13.** The frontend renders the same frame at
+3840×2160, 1920×1080 and 1280×720 and the layout is identical to within a pixel
+in design points — a focused cover measures 277.0, 278.0 and 277.5 design points
+of visible fill against a predicted 277.2. It is rendered *natively* at each
+size rather than upscaled: the UI's shapes are signed-distance fields, so a 4pt
+rim is exactly 4pt and an edge is exact at any resolution.
+
+**Most televisions this lands on will be 4K, and plenty will not be, and neither
+may be assumed.** So the frontend can render offscreen at any size and read the
+frame back (`--render-size`), which is how a 1280×800 development VM proves its
+layout on a 4K set nobody here owns. Do that for any layout change; it costs
+seconds.
+
+Two consequences worth holding on to:
+
+- **Non-16:9 panels letterbox rather than stretch.** Verified: the VM's own
+  1280×800 output produces correct bars. A console puts the slack in bars; it
+  does not distort the picture.
+- **4K costs real fill rate.** Drawing rectangles at 3840×2160 is free, but
+  Phase 8 should decide deliberately whether the *game* is upscaled by gamescope
+  from its native resolution or rendered larger. That is a performance decision
+  on Vega integrated graphics, not a layout one, and this canvas keeps the two
+  separable.
+
 **Overscan is real and the simulator lies about it.** Home's hero was sized
 three times before it fit: 0.42/460 cut the shelf caption off, 0.34/380 still cut
 it off *on real hardware although the simulator showed it fitting*, 0.28/300 fit
@@ -1688,7 +1712,29 @@ Verified on the VM: session active, zero restarts, correct fallback chosen.
 3. **Re-verify on a freshly installed image**, rather than one upgraded in place.
 
 ### Phase 3 — Frontend shell
-**Status: not started. Unblocked — the Phase 0 spec exists.**
+**Status: in progress. The foundation runs on the VM, 2026-09-13.**
+
+**Shipped:** `frontend/` — C++20, SDL3, one EGL/GLES 3 context, and a UI layer
+of our own, built in a pinned Fedora 44 container (the image carries no
+compiler, deliberately) and run as an ordinary Wayland client of the session's
+existing `cage`. No toolkit, no Qt, no spike needed — see *The frontend
+toolkit* for why that argument resolved without one.
+
+Running and verified on the VM:
+
+- A real GLES 3.2 context under cage, on llvmpipe, 1280×800.
+- The design canvas, letterboxing correctly on a 16:10 panel, and **identical
+  layout at 4K, 1080p and 720p** — measured, see *The canvas*.
+- The **artwork focus treatment, to the point**: 1.10 scale, a 4pt inset white
+  rim at 85%, a black 55% shadow blurred 26 and offset 14 down, the press state
+  pushing back to 1.02, and the caption sliding clear of the grown card.
+- 180 ms ease-out, retargeting from the current value on interruption rather
+  than jumping — the reference implementation's own animation behaviour.
+- Controller and keyboard both driving focus, neither required.
+
+**Not there yet, and each is its own piece of work:** text (there is no font
+layer, so captions are placeholder bars sized to the real type's space), images,
+and cores.
 
 The real frontend, built against the Phase 0 spec, running on fake data. Home,
 browse, game detail, settings, in-game overlay. Full controller navigation, plus
