@@ -88,7 +88,11 @@ jobs:
           image: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ inputs.tag }}
           chown: ${{ env.USER_UID }}:${{ env.USER_GID }}
           types: ${{ matrix.disk-type }}
-          additional-args: --use-librepo=True
+          # --rootfs is required unless the image declares a root filesystem.
+          # CabinetOS declares one in /usr/lib/bootc/install/20-cabinetos.toml,
+          # but passing it explicitly means disk builds also work against an
+          # image built before that file existed.
+          additional-args: --use-librepo=True --rootfs=btrfs
 
       - name: Upload disk image
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1

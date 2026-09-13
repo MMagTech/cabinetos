@@ -1,0 +1,17 @@
+# Tell bootc what filesystem to put on the root partition.
+#
+# Without this, `bootc-image-builder` fails with:
+#   error: cannot build manifest: failed to initialize bootc distro:
+#          missing required info: DefaultRootFs
+#
+# It can also be passed as `--rootfs=btrfs` on the builder command line, and
+# .github/workflows/build-disk.yml does that too. Declaring it here as well
+# makes the image self-describing: anyone building a disk from it gets the right
+# filesystem without having to know to pass a flag.
+#
+# btrfs to match Bazzite's own installs, and because Bazzite's snapshot layer
+# (snapper) is built on it — which is worth keeping for a machine that is
+# supposed to be able to undo a bad update.
+
+[install]
+root-fs-type = "btrfs"
