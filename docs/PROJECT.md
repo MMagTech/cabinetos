@@ -967,6 +967,72 @@ failed build rather than a save state that silently will not load.
   `pcsx_rearmed` most obviously, given its name. Expect at least one core to
   need attention here.
 
+### Prior art: how Cabinet and Grout already do this
+
+Read 2026-09-13. **Cabinet has already solved most of the storage problem, and
+CabinetOS should inherit its model rather than invent one.**
+
+#### Cabinet — `docs/scope-native-offline.md`, `scope-download-all.md`
+
+- **"Keep on device" already exists**, and the cached/kept distinction in this
+  document matches Cabinet's exactly: a per-game toggle, permanent storage shown
+  with its size, removable where it was added, and explicitly *not* a cache —
+  "caches serve speed, kept games serve a promise". Keeping a game pulls its ROM
+  **and its platform's firmware**. Keyed by rom id.
+- **The kept-game manifest embeds the whole `Rom` object**, not a hand-picked
+  subset, which is what makes offline navigation work: cover art, platform
+  label and metadata are all present with no server. This matters enormously for
+  portable drives — see below.
+- **Saves are written locally first**, into a per-game `pending-states`
+  directory, before any attempt to reach RomM. Conflicts are *designed out*
+  rather than resolved: each queued file carries RomM's own timestamped name, so
+  an upload lands exactly as if it had happened online and nothing overwrites
+  anything. Sync is only "finish the uploads", and is safe to run often.
+- **Save state caching is opportunistic, not queued.** A state is cached when a
+  game is kept and refreshed on ordinary online visits. The reasoning, reached
+  before building: Cabinet already fetches live whenever online, so the only gap
+  is between the last check and losing signal — closed by refreshing on ordinary
+  use rather than by a background job.
+- **Offline is one signal, not two.** `NetworkMonitor` combines real
+  disconnection with a deliberate Offline Mode toggle into a single `isOffline`
+  that every screen asks, so both drive identical code paths.
+- **States are never exposed to other apps**; ROMs are. A state blob is
+  core-format-specific and useless elsewhere, a ROM is not.
+- **Download All exists on Mac and iOS but deliberately not tvOS**, on the
+  grounds that "a television keeps a handful of games and has the disk for
+  that". **CabinetOS should reverse that call.** It is television-shaped but has
+  a large dedicated drive and a user who explicitly chose where games live —
+  which is the case Download All is for.
+
+#### Grout — RomM's own Linux handheld client
+
+- Pulls ROMs to the device in **the host frontend's expected folder layout**
+  (muOS/NextUI), not a layout of its own. Pushes on session end, on idle, or on
+  a schedule. Fully playable offline between syncs.
+- Matches saves to games by **platform plus filename**, case-insensitively, with
+  PSP's directory saves matched by Game ID instead. Not by hash, and not by
+  RomM id.
+- Conflicts are surfaced, not resolved automatically: a per-game screen
+  defaulting to Skip, where the user picks Keep Local or Keep Remote.
+
+#### The finding that matters most
+
+**Grout syncs save files only. It explicitly refuses to sync save states**,
+because states "require both sides to use the same emulator and sometimes even
+the same version".
+
+That is RomM's own first-party client independently confirming the core-parity
+constraint in *Emulation* above — and it draws the opposite conclusion, because
+it cannot control what emulator the handheld runs.
+
+Cabinet **can** sync states, and does, precisely because it controls both ends
+and ships identical cores. That is not a minor feature difference; it is the
+thing Cabinet does that the rest of the ecosystem cannot.
+
+**So core parity is not a nice-to-have that makes saves more convenient. It is
+the entire reason CabinetOS can offer continuity at all.** Get it wrong and the
+product degrades to what Grout already does for free.
+
 ### 14. User-selectable game storage
 **Raised: Phase 1. Mostly DECIDED. Design in Phase 4, UI in Phase 6/8.**
 
@@ -1017,20 +1083,30 @@ present but the library describing them is not — names, artwork, metadata,
 collections and save history all live server-side, and game identifiers are
 specific to a server instance.
 
-Candidate answer, to be tested in Phase 4: **identify cached games by file hash,
-not by server-assigned ID.** RomM already stores hashes. A drive plugged into a
-machine paired with a different server can then have its contents matched
-against that server's library, and anything present in both is adopted as a
-valid cache entry rather than re-downloaded. Content the new server does not
-have is simply ignored — visible as used space, not as playable games.
+**Better answer, from Cabinet rather than invented:** I proposed matching by
+file hash. Cabinet already does something more useful — **its kept-game manifest
+embeds the whole `Rom` object**, which is what lets it navigate a library
+offline with real cover art and platform labels and no server at all.
+
+Carry that onto the drive and the drive becomes **self-describing**. Plugged
+into a machine paired with a different server, the games are still browsable and
+playable, because everything needed to present them travelled with them. No hash
+lookup, no dependency on the new server having the same content.
+
+Neither Cabinet nor Grout uses hashes, incidentally: Cabinet keys on RomM's rom
+id, Grout matches on platform plus filename. A hash index may still be worth
+adding for *adoption* — recognising that a file on the drive is the same game
+the new server already knows about, so it links up rather than sitting as a
+duplicate — but it is an optimisation on top of a self-describing drive, not the
+mechanism itself.
 
 That gives three sensible tiers instead of a binary:
 
 | Situation | Result |
 |---|---|
 | Same RomM server | Everything works. The common case. |
-| Different server, same games | Games adopted by hash. No re-download. |
-| Different server, unknown games | Files ignored. Nothing breaks. |
+| Different server, same games | Browsable and playable from the drive's own manifest; adoption links them to the new server's library. |
+| Different server, unknown games | Still browsable and playable from the manifest. Saves have nowhere to go. |
 
 It also argues for a **documented on-disk layout** rather than an
 implementation-defined one, since the drive is now a thing other software has to
@@ -1039,3 +1115,11 @@ understand.
 What it does **not** solve is saves: those are server-side, so a game continued
 on a different server starts from that server's save history. That is correct
 behaviour rather than a bug, but the UI should not pretend otherwise.
+
+**Follow Cabinet's save model rather than designing one.** Saves write locally
+first, into a pending queue, and upload afterwards — losing signal mid-save
+never loses the save. Conflicts are designed out by giving each queued file
+RomM's own timestamped name, so uploads never overwrite and syncing is only
+"finish the uploads". Grout instead surfaces conflicts for the user to resolve,
+which is the right call for a client that cannot write the filename — and the
+wrong one here, since we can.
