@@ -22,12 +22,39 @@ log "base: $(grep '^PRETTY_NAME=' /usr/lib/os-release | cut -d= -f2-)"
 #
 # Empty in Phase 1. Phase 2 uses this for the session units and autologin
 # configuration.
-if [[ -d /system_files ]]; then
-    log "overlaying system_files/"
-    # .gitkeep files exist only to keep empty directories in git.
-    find /system_files -name .gitkeep -delete
-    cp -avf /system_files/. / >/dev/null
+# NOTE THE PATH. The Containerfile's ctx stage does `COPY system_files
+# /system_files`, and that whole stage is bind-mounted at /ctx — so the files
+# land at /ctx/system_files, not /system_files.
+#
+# This was originally written as /system_files guarded by `if [[ -d ... ]]`,
+# which meant it silently copied nothing for several builds. Nobody noticed
+# until a unit file was expected to be there. No guard now: if the directory is
+# missing the build fails, loudly, here.
+if [[ ! -d /ctx/system_files ]]; then
+    log "ERROR: /ctx/system_files is missing — the Containerfile ctx stage is wrong"
+    exit 1
 fi
+
+log "overlaying system_files/"
+# .gitkeep files exist only to keep empty directories in git.
+find /ctx/system_files -name .gitkeep -delete
+cp -avf /ctx/system_files/. / >/dev/null
+
+# Prove it landed, rather than trusting cp's exit code. This is the check that
+# would have caught the silent no-op above.
+for expected in \
+    /usr/bin/cabinetos-session \
+    /usr/lib/systemd/system/cabinetos-session.service \
+    /usr/lib/sysusers.d/cabinetos.conf \
+    /usr/lib/bootc/install/20-cabinetos.toml
+do
+    if [[ -e "${expected}" ]]; then
+        log "  overlaid: ${expected}"
+    else
+        log "  ERROR: ${expected} did not land"
+        exit 1
+    fi
+done
 
 # ---------------------------------------------------------------------------
 # Record the starting package set.
