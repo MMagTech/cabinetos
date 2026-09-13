@@ -50,6 +50,15 @@ log "base image has $(wc -l < /usr/share/cabinetos/packages-before-strip.txt) pa
 /ctx/strip-desktop.sh
 
 # ---------------------------------------------------------------------------
+# Enable SSH.
+# ---------------------------------------------------------------------------
+#
+# Runs after the strip scripts, so it can assert that nothing they removed took
+# openssh-server with it. See the warning at the top of enable-ssh.sh: this is a
+# development affordance that Phase 6 must take away again.
+/ctx/enable-ssh.sh
+
+# ---------------------------------------------------------------------------
 # Record the result.
 # ---------------------------------------------------------------------------
 rpm -qa | sort > /usr/share/cabinetos/packages-after-strip.txt
@@ -65,7 +74,7 @@ group_end
 # ---------------------------------------------------------------------------
 #
 # These are the things whose absence would make the image useless but would not
-# fail the build. Better to fail loudly here than to find out on the SER5.
+# fail the build. Better to fail loudly here than to find out on real hardware.
 group_start "Sanity checks"
 
 check_present() {
@@ -94,6 +103,17 @@ fi
 # The kernel. bootc container lint would also catch this, but the error here is
 # more legible.
 check_present "kernel modules directory" /usr/lib/modules || failed=1
+
+# SSH must be enabled — Phases 2 to 5 are developed over it. See open question 8.
+# Either the classic service or socket activation counts.
+if systemctl is-enabled sshd.service >/dev/null 2>&1; then
+    log "  ok: sshd.service is enabled"
+elif systemctl is-enabled sshd.socket >/dev/null 2>&1; then
+    log "  ok: sshd.socket is enabled (socket activation)"
+else
+    log "  MISSING: sshd is not enabled by either service or socket"
+    failed=1
+fi
 
 # The default target must be multi-user, or Phase 1's done-criterion (boots to a
 # console prompt) is not met.

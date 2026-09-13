@@ -1,6 +1,6 @@
 # CabinetOS
 
-A console operating system for a Beelink SER5, built on [Bazzite](https://github.com/ublue-os/bazzite).
+A console operating system for x86-64 PC hardware, built on [Bazzite](https://github.com/ublue-os/bazzite).
 
 Power on, the frontend appears, everything from there is driven with a
 controller. The library comes from a self-hosted [RomM](https://github.com/rommapp/romm)
@@ -22,6 +22,23 @@ development and contribution; it is off by default and lands in Phase 6.
 > **Current status: Phase 1 — base image.** Nothing has been built or booted
 > yet. The frontend does not exist.
 
+> [!WARNING]
+> **These images have SSH enabled by default with password authentication.**
+> That is deliberate for Phases 1–5, which are developed by booting images and
+> inspecting them, but it is not the shipping configuration. Phase 6 moves SSH
+> behind the hidden developer mode toggle and turns it off by default. Until
+> then, do not install CabinetOS on a machine exposed to an untrusted network.
+
+### Hardware
+
+The reference machine is a Beelink SER5 (AMD Ryzen 5, Vega graphics), because
+that is the box available. **It is not the product's definition.** The target is
+generic x86-64 PC hardware: the reference machine sets the performance floor,
+nothing machine-specific goes in the image, and hardware capabilities that may or
+may not be present — HDMI-CEC, for instance — are detected at runtime rather than
+designed around. NVIDIA is out of scope until there is hardware that needs it;
+Bazzite publishes NVIDIA variants, so it is a base-image change, not a rewrite.
+
 ---
 
 ## How it is built
@@ -42,13 +59,14 @@ ghcr.io/ublue-os/bazzite:stable-44.20260908   (pinned by digest)
                 ├── build_files/strip-steam.sh     Steam, Lutris, Proton/umu
                 ├── build_files/strip-desktop.sh   display manager, KDE apps,
                 │                                  browser, terminal, app store
+                ├── build_files/enable-ssh.sh      sshd + sftp (development only)
                 └── bootc container lint
                         │
                         ▼
         ghcr.io/mmagtech/cabinetos:latest
                         │
                         ├── qcow2          → VM boot test
-                        └── anaconda-iso   → USB stick → SER5
+                        └── anaconda-iso   → USB stick → real hardware
 ```
 
 ### Repository layout
@@ -61,6 +79,7 @@ ghcr.io/ublue-os/bazzite:stable-44.20260908   (pinned by digest)
 | `build_files/lib.sh` | `remove_pkgs` and friends. Every removal goes through here. |
 | `build_files/strip-steam.sh` | Removes Steam and the PC-gaming layer. |
 | `build_files/strip-desktop.sh` | Removes the display manager and desktop applications. |
+| `build_files/enable-ssh.sh` | Enables SSH and SFTP for development. **Phase 6 must undo this.** |
 | `system_files/` | Files overlaid onto the image. Empty in Phase 1; Phase 2 puts the session units here. |
 | `disk_config/` | `bootc-image-builder` configuration for the qcow2 and the ISO. |
 | `cabinetos.env` | Image name, owner, tags. |
@@ -162,8 +181,8 @@ The GHCR package is created **private** by default. Make it public at
 visibility**.
 
 This matters because the installer ISO's kickstart runs `bootc switch` against
-`ghcr.io/mmagtech/cabinetos:latest`. A private package means the installed SER5
-cannot pull updates without credentials.
+`ghcr.io/mmagtech/cabinetos:latest`. A private package means the installed
+machine cannot pull updates without credentials.
 
 ---
 
@@ -199,20 +218,30 @@ diskutil eject /dev/diskN
 
 ---
 
-## Installing to the SER5
+## Installing to real hardware
 
 1. Plug in the USB stick, plus a keyboard and mouse. The installer is the one
    part of CabinetOS that *requires* them. Afterwards a keyboard still works if
    you leave one attached — it is just never necessary, and any CabinetOS screen
    that cannot be completed with a controller alone is a bug.
-2. Power on and press **Delete** or **F7** during the Beelink splash for the
-   boot menu. Select the USB device.
+2. Power on and press **Delete** or **F7** during the firmware splash for the
+   boot menu (those are the Beelink keys; other machines differ). Select the
+   USB device.
 3. Anaconda starts. Set the destination to the internal NVMe, create a user, and
    install.
 4. Reboot and remove the stick.
 
 Phase 1 boots to a console login prompt. That is the expected result and the
 proof that Phase 1 is done — the frontend arrives in Phase 2.
+
+SSH is enabled, so from that point you can work on the machine remotely:
+
+```bash
+ssh cabinet@cabinetos.local
+```
+
+If mDNS does not resolve, find the address from the console with `ip addr`. Push
+a build over SFTP with `sftp` or `scp` to the same host.
 
 While you are in the firmware, two settings worth changing now:
 

@@ -19,7 +19,7 @@
 #   kmod-xone, kmod-gcadapter,    Controller drivers. xone is Xbox wireless;
 #   kmod-new-lg4ff, kmod-hid-*    gcadapter is the GameCube adapter, which is
 #                                 directly relevant to this project.
-#   tuned / power-profiles-daemon Power and thermal handling on the SER5.
+#   tuned / power-profiles-daemon Power and thermal handling.
 #   ds-inhibit                    Stops controllers being treated as keyboards
 #                                 for idle purposes.
 

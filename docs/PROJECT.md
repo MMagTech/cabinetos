@@ -16,8 +16,7 @@
 
 ## What CabinetOS is
 
-CabinetOS is a console operating system for a Beelink SER5 mini PC
-(AMD Ryzen 5, Radeon Vega integrated graphics).
+CabinetOS is a console operating system for generic x86-64 hardware.
 
 The user experience target is a PlayStation or an Xbox, not a Linux PC. You
 press the power button, the frontend appears, and everything from that point on
@@ -58,6 +57,36 @@ The distinction that matters:
 Concretely: the on-screen keyboard is the baseline for all text entry and is
 always reachable. A physical keyboard types into the same field when present.
 Neither implementation may be the only one.
+
+---
+
+## Hardware
+
+**The target is x86-64 PC hardware, not one specific machine.**
+
+The development and reference machine is a Beelink SER5 mini PC (AMD Ryzen 5,
+Radeon Vega integrated graphics) because that is the spare box available. It is
+not the product's definition. If the project works out, the hardware may change,
+and CabinetOS must not have quietly grown dependencies on this particular box in
+the meantime.
+
+What follows from that:
+
+- **The reference machine sets the performance floor, not the ceiling.** Phase 8
+  tunes PS2, GameCube, Dreamcast and Naomi to run acceptably on Vega integrated
+  graphics. Anything faster is a bonus, and nothing may *require* a specific GPU.
+- **No machine-specific quirks in the image.** No SER5 firmware workarounds, no
+  hard-coded device paths, no assumptions about a particular audio or network
+  chip. If the SER5 needs something unusual, that is a strong signal the fix
+  belongs upstream in Bazzite, not here.
+- **Hardware capability is discovered, not assumed.** The SER5 has no HDMI-CEC;
+  a future machine might. Features that depend on hardware that may or may not
+  be present are detected at runtime and degrade gracefully, rather than being
+  designed out because the current box lacks them.
+- **AMD for now.** Bazzite publishes NVIDIA variants of its images, so an NVIDIA
+  machine is a base-image change rather than a rewrite — but it doubles the
+  images to build and test, so it stays out of scope until there is hardware
+  that needs it. See open question 11.
 
 ---
 
@@ -162,8 +191,9 @@ Native emulators running locally. Not streaming, not browser-based.
 - Target systems are everything currently emulated on the existing setup,
   including the heavy ones: **PS2, GameCube, Dreamcast and Naomi.**
 
-The SER5's Vega integrated graphics is the constraint that matters here. Phase 8
-exists because those four systems will need tuning rather than defaults.
+The reference machine's Vega integrated graphics is the performance floor that
+matters here. Phase 8 exists because those four systems will need tuning rather
+than defaults on hardware of that class.
 
 ---
 
@@ -261,7 +291,8 @@ GHCR, and produces a bootable disk image.
 *Shipped so far:* repository scaffold, `Containerfile` pinned to
 `ghcr.io/ublue-os/bazzite:stable-44.20260908`
 (`sha256:437920bae6935fd70719c1e0109f3469b1215a788330b0de924d0c7ac8aaa84c`),
-strip scripts, build/sign/push workflow, disk image workflow.
+strip scripts, SSH enabled for development, build/sign/push workflow, disk image
+workflow.
 
 *Not yet verified:* nothing in this repo has been built or booted. The first CI
 run is the first time any of it executes. See Open questions 1 and 2 — the
@@ -311,8 +342,9 @@ states wired to the sync layer.
 ### Phase 6 — Real hardware
 **Status: not started.**
 
-Install on the SER5. Performance tuning, Bluetooth controller pairing, audio
-output, display and resolution handling.
+Install on real hardware — the SER5 is the reference machine. Performance
+tuning, Bluetooth controller pairing, audio output, display and resolution
+handling.
 
 Ship **developer mode** as specified above: hidden, opt-in from Settings,
 enabling SSH and SFTP, visibly indicated while active, and genuinely stopped
@@ -416,7 +448,7 @@ own minimal session on plain `bazzite`.
 
 To be answered no earlier than Phase 5.
 
-### 5. Anaconda ISO vs. a plain disk image for installing to the SER5
+### 5. Anaconda ISO vs. a plain disk image for installing to real hardware
 **Raised: Phase 1. Both are built; neither is tested.**
 
 CI produces both a `qcow2` (for the Phase 1 VM boot test) and an `anaconda-iso`
@@ -426,8 +458,8 @@ principles — but it only happens once, at install time, on a machine that has
 not been set up yet.
 
 If a keyboard-free install becomes a requirement, the alternative is a `raw`
-image written directly to the SER5's NVMe from another machine. Decide in
-Phase 6.
+image written directly to the target machine's drive from another computer.
+Decide in Phase 6.
 
 ### 6. `/opt` mutability
 **Raised: Phase 1. Left at Bazzite's default.**
@@ -444,31 +476,28 @@ Changing `NAME` and `PRETTY_NAME` is cosmetic and safe. Changing `ID` is not —
 Phase 8 owns branding; when it happens, change the cosmetic fields only.
 
 ### 8. How do we get a shell before Phase 6 ships developer mode?
-**Raised: Phase 1. Unresolved.**
+**Raised: Phase 1. RESOLVED: SSH is on from the start.**
 
-Developer mode as specified needs a working Settings screen to turn it on, which
-means it cannot exist before Phase 3. But Phase 2 onwards involves booting real
-images and finding out why they did not do what was expected, which is
-significantly harder with no way in.
+**Decision:** `openssh-server` is installed and `sshd` is enabled from Phase 1
+onward. Developer mode (Phase 6) is about *closing* SSH by default and gating it
+behind the toggle — not about opening it.
 
-Options, none chosen:
+Reasoning: Phases 2 through 5 consist of booting images and finding out why they
+did not behave as expected. Doing that without a shell is not a hardship, it is
+a different and much worse project. Contribution has the same requirement.
 
-- A build-time flag that produces a separate debug image tag with `sshd` enabled
-  and a key baked in. Clean separation, but two images to keep in step.
-- `sshd` enabled unconditionally until Phase 6, then closed. Simple, and easy to
-  forget to close — which would ship a console listening on port 22.
-- Serial or a physical keyboard on a VT for development only, with no network
-  service at all. Safest, most tedious.
+**This creates a debt that Phase 6 must pay.** An image that boots with SSH
+listening is correct for a development tool and wrong for a console handed to
+someone else. The tracked obligations are:
 
-**Check first:** Fedora Atomic desktops generally ship `openssh-server` enabled,
-and Phase 1 does not remove or disable it. If that holds, the Phase 1 image
-already accepts SSH logins and the real question is inverted — developer mode is
-about *closing* SSH by default and gating it behind the toggle, not about opening
-it. Confirm this in the first VM boot test before designing anything.
+1. Phase 6 must flip the default to off and put SSH behind developer mode.
+2. Until then, CabinetOS is a development artifact. It should not be installed
+   on a machine exposed to an untrusted network, and the README says so.
+3. Password authentication is the interim mechanism because it is the only one
+   that works before there is a UI to enrol a key. It is not the shipping
+   answer — see open question 9.
 
-Decide at the start of Phase 2. Whatever is chosen, it needs a tracked task to
-remove it, because an accidentally-shipped debug door is the worst possible
-outcome here.
+`build_files/enable-ssh.sh` carries the same warning next to the code.
 
 ### 9. How is developer mode revealed, and how does it authenticate?
 **Raised: Phase 1. Unresolved. Phase 6 owns it.**
@@ -491,14 +520,27 @@ itself over mDNS so a developer can find it without knowing its IP.
 **Raised: Phase 1. Unresolved. Phase 6 owns it.**
 
 The input model says a controller must be sufficient. That includes waking the
-machine, and it is not obviously achievable:
+machine, and whether it is achievable depends on hardware:
 
-- Most mini PCs, the SER5 included, have no HDMI-CEC, so a TV remote cannot
-  drive it and it will not wake when the TV does.
+- The reference SER5 has no HDMI-CEC, so a TV remote cannot drive it and it will
+  not wake when the TV does. Other machines may have it, which is exactly the
+  kind of capability that must be detected rather than assumed.
 - Waking from suspend over Bluetooth depends on the controller, the adapter and
   the firmware, and is unreliable in general.
 
-The fallback is to never suspend and blank the display instead, trading idle
-power for a machine that is always ready. That is a defensible choice for a
-console, but it should be a choice, not an accident. Decide in Phase 6 with the
-real hardware in front of you.
+The portable fallback is to never suspend and blank the display instead, trading
+idle power for a machine that is always ready. That is a defensible default for
+a console and works on any hardware. If CEC is present, use it; if not, fall
+back. Decide the mechanism in Phase 6 with real hardware in front of you.
+
+### 11. NVIDIA hardware
+**Raised: Phase 1. Out of scope until there is hardware that needs it.**
+
+Bazzite publishes `bazzite-nvidia` alongside `bazzite`, so supporting an NVIDIA
+machine is a base-image change rather than a rewrite. The cost is real though: a
+second image to build, sign, test and boot on every change, and NVIDIA driver
+breakage is the single largest maintenance tax on custom Bazzite images.
+
+Not doing it now. If the hardware changes to something NVIDIA-based, the work is
+to parameterise the base image in the `Containerfile` and matrix the build
+workflow over both variants — not to restructure anything.

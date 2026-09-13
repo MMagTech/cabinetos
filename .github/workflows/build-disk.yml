@@ -9,7 +9,7 @@
 #   qcow2        A virtual machine disk. This is what proves Phase 1 is done —
 #                boot it and confirm you reach a console prompt.
 #   anaconda-iso An installer ISO. Write it to a USB stick and install to the
-#                SER5. See README.md.
+#                target machine. See README.md.
 #
 # Run manually. It is deliberately not on a push trigger: disk builds are slow
 # and you only want one when you are about to install something.

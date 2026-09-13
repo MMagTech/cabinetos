@@ -1,7 +1,8 @@
 # CabinetOS
 #
-# A console operating system for a Beelink SER5, built as a bootc image on top
-# of Bazzite.
+# A console operating system for x86-64 PC hardware, built as a bootc image on
+# top of Bazzite. The reference machine is a Beelink SER5, but nothing here may
+# assume it.
 #
 # Bazzite is used for its kernel, graphics stack, controller drivers and power
 # handling. Its desktop and its Steam integration are removed. See

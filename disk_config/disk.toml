@@ -1,18 +1,19 @@
 # Disk layout for the qcow2 VM image used to test Phase 1.
 #
-# 20 GiB is enough for the OS with room to spare. The real machine gets far more,
-# and the game cache is sized at install time on the SER5's own NVMe.
+# 20 GiB is enough for the OS with room to spare. Real hardware gets far more,
+# and the game cache is sized at install time on the target machine's own drive.
 
 [[customizations.filesystem]]
 mountpoint = "/"
 minsize = "20 GiB"
 
-# A user exists only so the VM test is possible at all. Phase 1's done-criterion
-# is "boots to a console prompt", and a console prompt you cannot log into
-# proves less than one you can.
+# A user exists so the VM test is possible at all: Phase 1's done-criterion is
+# "boots to a console prompt", and a prompt you cannot log into proves less than
+# one you can. It is also the account used to SSH into the test VM.
 #
-# This account does NOT belong on the SER5. Phase 2 replaces it with an
-# autologin session account, and the installer ISO creates its own user.
+# This is a throwaway development credential for a local VM, not a machine
+# credential. It does NOT belong on real hardware — the installer ISO creates
+# its own user, and Phase 2 replaces this with an autologin session account.
 [[customizations.user]]
 name = "cabinet"
 password = "cabinet"

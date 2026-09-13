@@ -1,9 +1,9 @@
 # Installer ISO configuration.
 #
-# This produces an Anaconda installer that writes CabinetOS to the SER5's
-# internal drive. It is a keyboard-and-mouse experience, which contradicts the
-# product's principles — but it happens exactly once, on a machine that has not
-# been set up yet. See docs/PROJECT.md open question 5.
+# This produces an Anaconda installer that writes CabinetOS to the target
+# machine's internal drive. It is a keyboard-and-mouse experience, which
+# contradicts the product's principles — but it happens exactly once, on a
+# machine that has not been set up yet. See docs/PROJECT.md open question 5.
 
 # After installation, point the installed system at the CabinetOS image on GHCR
 # rather than at whatever was baked into the ISO. From that moment on, the
