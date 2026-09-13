@@ -105,6 +105,15 @@ log "base image has $(wc -l < /usr/share/cabinetos/packages-before-strip.txt) pa
 /ctx/configure-session.sh
 
 # ---------------------------------------------------------------------------
+# HDMI-CEC.
+# ---------------------------------------------------------------------------
+#
+# Runs last, after everything that could remove a package. CEC is a hard
+# requirement and every package it needs looks like cruft in a package list —
+# this fails the build rather than letting one quietly disappear.
+/ctx/require-cec.sh
+
+# ---------------------------------------------------------------------------
 # Record the result.
 # ---------------------------------------------------------------------------
 rpm -qa | sort > /usr/share/cabinetos/packages-after-strip.txt
