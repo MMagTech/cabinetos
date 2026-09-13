@@ -245,10 +245,24 @@ What follows:
    that version.
 2. **Core versions move in lockstep across all Cabinet platforms.** Bumping a
    core is a coordinated release, not a CabinetOS-local change.
-3. **There should be one shared source of truth** for which core at which
-   revision handles which system. Cabinet has `tools/generate_cores_map.py` and
-   per-core build scripts already; CabinetOS should consume that rather than
-   maintain a parallel list. See open question 13.
+3. **There is no shared source of truth for core revisions yet, and there needs
+   to be.** `tools/build-core.sh` clones each core's upstream repository with
+   `git clone --depth 1` and builds whatever `HEAD` happened to be that day. No
+   commit is recorded. The committed `.a` archives are the only artifact, and
+   nothing says what source produced them.
+
+   That makes core parity currently unachievable by construction: CabinetOS
+   cannot build "the same revision" because the revision was never written down.
+   It is also a latent problem inside Cabinet itself — rebuilding one core
+   months after another means the two platforms carry different revisions of it.
+
+   The fix is small and it belongs in Cabinet: a **core manifest** recording,
+   per core, the upstream repository and an exact commit SHA. See open
+   question 13.
+
+   (`tools/generate_cores_map.py` is a different thing despite the name — it
+   maps RomM platforms to *EmulatorJS* cores, generated from RomM's frontend
+   source. Not a native core version manifest.)
 
 ### What Cabinet actually ships
 
@@ -759,28 +773,63 @@ The remaining work is open question 13 — producing Linux builds of the same
 cores — not an architectural choice.
 
 ### 13. Building the same cores for Linux x86-64
-**Raised: Phase 1. Unresolved. Phase 5 owns it, but Phase 0 should scope it.**
+**Raised: Phase 1. Repo layout DECIDED. The rest is Phase 5, scoped in Phase 0.**
 
-Core parity is a hard constraint (see *Emulation*), so CabinetOS needs the same
-cores, at the same revisions, built for Linux x86-64. Cabinet builds them per
-platform — `_ios`, `_tvos`, `_mac` — with `tools/build-core.sh` and per-core
-scripts. CabinetOS adds a `_linux` target.
+**Decision: CabinetOS stays a separate repository from Cabinet.**
 
-Open:
+Reasons:
 
-- **Where does the Linux build live?** In the Cabinet repository next to the
-  existing targets, so all platforms move together and there is one source of
-  truth — or in CabinetOS, so the console's build is self-contained. The first
-  serves core parity better and is probably right, but it means CabinetOS
-  depends on a repository it does not own the release cadence of.
-- **Static archives or shared objects?** Cabinet links `.a` archives into one
-  binary. On Linux, `.so` per core is the more natural shape and allows loading
-  cores lazily, but it weakens the version-lockstep guarantee unless the shared
-  objects ship inside the image and nothing else can replace them.
-- **How is the core revision recorded and verified?** `tools/generate_cores_map.py`
-  exists; find out what it produces and whether CabinetOS can consume it. A
-  build-time assertion that CabinetOS and Cabinet are on the same core revisions
-  would turn a silent save-state incompatibility into a failed build.
-- **How much do the Mac patch scripts carry over?** `patch-pcsx2-mac.py` and
-  `patch-dolphin-mac.py` are presumably working around Apple-specific problems.
-  Phase 0 should read them and find out how much is macOS-specific.
+- Nothing is shared at the CI level. Cabinet builds with Xcode on macOS;
+  CabinetOS builds a container image on Linux. A monorepo would mean path
+  filters on every workflow to stop each toolchain running on the other's
+  commits.
+- Cabinet is roughly 270 MB because it commits built `.a` archives. Anyone
+  cloning CabinetOS to work on the OS would pull a quarter of a gigabyte of
+  Apple binaries they cannot use.
+- Different release cadences — App Store submissions against OS images — and
+  different contributors. Someone who wants to help with the console is not
+  necessarily an iOS developer.
+- Blast radius. A mistake in OS work should not be able to break the CI of the
+  app that ships today.
+
+A third repository holding just the cores was considered and rejected as
+premature: it is real work, it disrupts a shipping app, and it leaves three
+things to keep in step instead of two. Revisit only if the coupling actually
+starts to hurt.
+
+**The repo layout is not what guarantees core parity — a manifest is.** With one,
+parity is enforced by data and the directory structure stops mattering. Without
+one, a monorepo would not save it either.
+
+#### The core manifest
+
+Needed in **Cabinet**, because Cabinet is the app that ships and the source of
+the constraint. Per core: upstream repository, exact commit SHA, which systems it
+serves, and which platforms it is built for. `build-core.sh` should check out
+that SHA instead of cloning `HEAD`, and record it on any bump.
+
+CabinetOS then reads the manifest, builds the same revisions for Linux x86-64,
+and asserts at build time that what it produced matches. A mismatch becomes a
+failed build rather than a save state that silently will not load.
+
+#### Still open
+
+- **Shared objects, not static archives — probably.** Cabinet merges each core
+  into a single relocatable object exporting only `<prefix>_retro_*` forwarders,
+  so many cores can link into one binary without their `retro_*` symbols
+  colliding. That is a neat solution to an Apple-platform constraint. On Linux
+  the constraint does not exist: one `.so` per core, `dlopen`ed with
+  `RTLD_LOCAL`, gets namespace isolation for free — so the symbol-prefixing work
+  disappears rather than being ported. Separate `.so` files also rechunk into
+  smaller image layers, which the update model cares about. Confirm in Phase 0.
+- **How much of the Mac patch scripts carry over.** `patch-pcsx2-mac.py` and
+  `patch-dolphin-mac.py` are presumably working around Apple-specific problems;
+  both emulators target Linux x86-64 first-class, so the answer may be "none".
+- **Which cores have a Linux build path at all.** `build-core.sh` selects a
+  `MAKE_PLATFORM` per core and the script's own comments note that tvOS support
+  was only verified for one core rather than assumed. Do the same checking for
+  Linux rather than assuming every core's Makefile has a usable case.
+- **x86-64 versus the ARM assumption.** Every existing Cabinet target is arm64.
+  Some libretro cores carry hand-written ARM assembly paths with C fallbacks —
+  `pcsx_rearmed` most obviously, given its name. Expect at least one core to
+  need attention here.
