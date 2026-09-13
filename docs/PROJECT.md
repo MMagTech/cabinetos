@@ -399,6 +399,68 @@ reopen the PR to kick CI off by hand.
 
 ---
 
+## Measured behaviour
+
+Numbers from the first booted image, a 1GB Unraid VM, 2026-09-13. Replace these
+when they are measured again on real hardware — a VM has no GPU, so nothing here
+says anything about graphics or emulation.
+
+### Resource use is about services, not packages
+
+**Installed packages that never run cost nothing.** Plasma is still installed and
+contributes zero: the default target is `multi-user.target`, both display
+managers are masked, and there are no Plasma processes. Removing another
+thousand packages would shrink the image and free no memory at all.
+
+What costs memory is **services that run**. At idle: **629 MB used, 32 running
+services, 18.7s boot** (14s of it userspace).
+
+Stopping seven services that a console has no use for recovered **91 MB, 14% of
+idle memory**, and took the service count to 24:
+
+| Service | Why it has no place here |
+|---|---|
+| `input-remapper` | 84 MB across two processes, the single largest consumer. CabinetOS owns controller mapping itself (Phase 5). |
+| `cardwired` | 38 MB, and **6.8s of the 14s boot** — the slowest unit on the system. |
+| `ModemManager` | Cellular modems. |
+| `displaylink` | USB display adapters. |
+| `gssproxy` | Kerberos/NFS credentials. |
+| `systemd-homed` | Portable home directories. |
+| `upower` | Battery monitoring on a mains-powered console. |
+
+Deliberately left alone, and why: `tuned` (41 MB) is the power and thermal
+management the project depends on; `firewalld` (50 MB) is a security posture
+decision, not a performance one; `uresourced` and `dmemcg-booster` are Bazzite's
+game process-priority layer; `ds-inhibit` stops controllers being treated as
+keyboards for idle purposes.
+
+**So the Phase 8 performance lever is the service list, not the package list.**
+Worth ~90 MB and ~7s of boot before touching anything contentious. Emulation
+performance itself will be bound by GPU throughput and single-thread CPU speed,
+neither of which any of this affects.
+
+### First boot shows Linux
+
+`bazzite-hardware-setup.service` runs visibly on first boot and takes long
+enough to notice. `plasma-setup.service` — Plasma's out-of-box wizard — is
+present and inactive only because nothing starts a graphical session.
+
+Both are "the user sees Linux" moments, which the product rules out. Phase 2
+should remove `plasma-setup` outright and either own the hardware-setup step or
+hide it behind a splash.
+
+### Other facts worth keeping
+
+- The installed system is **7.9 GB**. `/` is a 43 MB read-only composefs; all
+  real storage is `/var`.
+- `sshd.service` is enabled, `sshd.socket` disabled — the classic always-listening
+  form, not socket activation.
+- The hostname is `bazzite`. Branding, Phase 8.
+- `systemd-udev-settle.service` costs 4.3s at boot and is deprecated upstream.
+  Worth investigating what still pulls it in.
+
+---
+
 ## Non goals
 
 - Not a Steam machine.
