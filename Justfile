@@ -179,4 +179,4 @@ lint:
     set -eou pipefail
     # SC1091: shellcheck cannot follow `source /ctx/lib.sh`, because /ctx only
     # exists inside the container build.
-    find build_files -iname "*.sh" -type f -exec shellcheck -e SC1091 "{}" ';'
+    find build_files ci -iname "*.sh" -type f -exec shellcheck -e SC1091 "{}" ';'

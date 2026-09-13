@@ -80,6 +80,9 @@ ghcr.io/ublue-os/bazzite:stable-44.20260908   (pinned by digest)
 | `build_files/strip-steam.sh` | Removes Steam and the PC-gaming layer. |
 | `build_files/strip-desktop.sh` | Removes the display manager and desktop applications. |
 | `build_files/enable-ssh.sh` | Enables SSH and SFTP for development. **Phase 6 must undo this.** |
+| `ci/check-base-update.sh` | Detects and classifies Bazzite base updates. |
+| `ci/base-watch.txt` | Packages CabinetOS depends on. Grows with the project. |
+| `base-manifest.txt` | The base's package list as of the current pin. Generated. |
 | `system_files/` | Files overlaid onto the image. Empty in Phase 1; Phase 2 puts the session units here. |
 | `disk_config/` | `bootc-image-builder` configuration for the qcow2 and the ISO. |
 | `cabinetos.env` | Image name, owner, tags. |
@@ -113,6 +116,28 @@ Runs on every push to `main`, on pull requests, and manually.
 
 Pull requests stop after step 3. They prove the image builds; they cannot
 publish or sign anything.
+
+### `base-update.yml` — keeping up with Bazzite
+
+Weekly, and manually. Bazzite rebuilds daily, so this does not just watch the
+digest — it pulls the new base, diffs its package manifest against
+`base-manifest.txt`, and classifies the result against `ci/base-watch.txt`:
+
+- **ROUTINE** — nothing CabinetOS depends on moved. Most weeks.
+- **RELEVANT** — the kernel, Mesa, gamescope, a controller driver, bluez,
+  PipeWire or similar changed. Read it.
+
+It also flags *strip-list drift*: a package the strip scripts remove that
+upstream has dropped or renamed, which would silently turn a removal into a
+no-op and let a desktop application back into the image.
+
+It opens a pull request and never merges one. Build a qcow2 from the branch and
+boot it before merging.
+
+> **Note:** pull requests opened with the default `GITHUB_TOKEN` do not trigger
+> other workflows, so the image build will not run on them automatically. Add a
+> fine-grained PAT as a `BASE_UPDATE_TOKEN` secret (contents + pull-requests
+> write) and the workflow will use it, or just close and reopen the PR.
 
 ### `build-disk.yml` — the disk images
 

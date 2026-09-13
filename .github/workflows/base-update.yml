@@ -1,0 +1,116 @@
+---
+# Watch the Bazzite base image and open a pull request when it moves.
+#
+# Bazzite rebuilds daily. A plain dependency bot would therefore open a pull
+# request every day saying "digest changed", which is not information — it is
+# noise that trains you to merge without reading.
+#
+# So this workflow does the work a bot cannot: it diffs the new base's package
+# manifest against the one committed at the last bump, classifies the result
+# against ci/base-watch.txt, and labels the pull request RELEVANT or ROUTINE.
+# The reasoning lives in ci/check-base-update.sh.
+#
+# It never merges anything. Per docs/PROJECT.md constraint 2, the base moves
+# deliberately, and an image that builds is not the same as an image that boots.
+
+name: Check Bazzite base update
+
+on:
+  schedule:
+    # Weekly, Monday 09:00 UTC. Bazzite builds daily, but CabinetOS has no
+    # reason to chase every one — a weekly bump carries a week of changes in a
+    # single reviewable diff. Change to daily if that turns out to be too coarse.
+    - cron: '0 9 * * 1'
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: "Bazzite channel to track"
+        required: false
+        default: "stable"
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: base-update
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Check for a base update
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+
+      # The digest check is cheap. The package diff is not — it pulls a ten
+      # gigabyte image — so make room before finding out whether it is needed.
+      - name: Maximize build space
+        uses: ublue-os/remove-unwanted-software@695eb75bc387dbcd9685a8e72d23439d8686cba6
+        with:
+          remove-codeql: true
+
+      - name: Install skopeo
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq skopeo
+
+      - name: Check the base image
+        id: check
+        env:
+          BASE_CHANNEL: ${{ inputs.channel || 'stable' }}
+        run: ./ci/check-base-update.sh
+
+      - name: Open a pull request
+        if: steps.check.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.BASE_UPDATE_TOKEN || secrets.GITHUB_TOKEN }}
+          NEW_VERSION: ${{ steps.check.outputs.new_version }}
+          SUMMARY: ${{ steps.check.outputs.summary }}
+          RELEVANT: ${{ steps.check.outputs.relevant }}
+        run: |
+          set -euo pipefail
+
+          BRANCH="base-update/${NEW_VERSION}"
+
+          # Nothing to do if this bump already has a branch — the previous run
+          # opened the PR and it has not been dealt with yet.
+          if git ls-remote --exit-code --heads origin "${BRANCH}" >/dev/null 2>&1; then
+            echo "Branch ${BRANCH} already exists; leaving the open PR alone."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git checkout -b "${BRANCH}"
+          git add Containerfile base-manifest.txt
+          git commit -m "Bump Bazzite base to ${NEW_VERSION}" -m "${SUMMARY}"
+          git push origin "${BRANCH}"
+
+          LABEL="routine"
+          if [[ "${RELEVANT}" == "true" ]]; then LABEL="relevant"; fi
+
+          gh pr create \
+            --title "Bazzite base → ${NEW_VERSION} (${LABEL})" \
+            --body-file /tmp/pr-body.md \
+            --base "${{ github.event.repository.default_branch }}" \
+            --head "${BRANCH}"
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Base update check"
+            echo
+            if [[ "${{ steps.check.outputs.changed }}" == "true" ]]; then
+              echo "Base moved to \`${{ steps.check.outputs.new_version }}\`."
+              echo
+              echo "**${{ steps.check.outputs.summary }}**"
+            else
+              echo "No change — still on the pinned digest."
+            fi
+          } >> "${GITHUB_STEP_SUMMARY}"

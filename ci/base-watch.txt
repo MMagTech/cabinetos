@@ -1,0 +1,100 @@
+# Packages CabinetOS actually cares about in the Bazzite base.
+#
+# Used by ci/check-base-update.sh to decide whether a Bazzite update is
+# RELEVANT (a human should look at it before merging) or ROUTINE (it is almost
+# certainly fine and can be merged on the strength of a green build).
+#
+# Bazzite rebuilds daily. Most of those rebuilds move packages CabinetOS has no
+# opinion about — desktop applications, fonts, translations, Windows
+# compatibility. Without this filter, base bumps become a stream of noise and
+# stop being read, which is worse than not having them at all.
+#
+# One shell glob per line. Matched against the package NAME only.
+#
+# ---------------------------------------------------------------------------
+# ADD TO THIS FILE AS THE PROJECT GROWS.
+# Phase 5 should add the emulators. Phase 2 should add whatever the session
+# turns out to depend on. A package CabinetOS relies on that is not listed here
+# can break silently in a base bump that looked routine.
+# ---------------------------------------------------------------------------
+
+# --- Kernel and boot -------------------------------------------------------
+# A kernel change can take out controller drivers or graphics. Always look.
+kernel
+kernel-*
+bootc
+ostree
+rpm-ostree
+dracut*
+systemd
+systemd-*
+grub2-*
+plymouth*
+
+# --- Graphics --------------------------------------------------------------
+# Phase 2 runs the frontend inside gamescope and Phase 5 runs emulators inside
+# it. A gamescope or Mesa regression is a project-stopping event.
+gamescope
+terra-gamescope*
+mesa-*
+vulkan-*
+libdrm
+libva*
+xorg-x11-server-Xwayland
+wayland*
+libinput
+libglvnd*
+
+# --- Controllers -----------------------------------------------------------
+# The primary input device. Anything here changing deserves a look.
+kmod-*
+akmod-*
+steam-devices*
+libevdev
+inputplumber
+ds-inhibit
+bluez
+bluez-*
+libratbag
+
+# --- Audio -----------------------------------------------------------------
+pipewire*
+wireplumber*
+alsa-*
+
+# --- Power and thermal -----------------------------------------------------
+tuned
+tuned-*
+power-profiles-daemon
+upower
+thermald
+
+# --- Network ---------------------------------------------------------------
+NetworkManager
+NetworkManager-*
+wpa_supplicant
+avahi
+avahi-*
+
+# --- Developer access (see PROJECT.md open question 8) ---------------------
+openssh
+openssh-server
+openssh-clients
+
+# --- Things CabinetOS removes ----------------------------------------------
+# Listed so that a base bump which renames, splits or drops a removal target
+# shows up as relevant. A strip list that has silently become a no-op is a
+# desktop application quietly returning to the image.
+steam
+lutris
+sddm
+sddm-*
+plasma-login-manager
+plasma-discover*
+waydroid
+firefox
+konsole
+dolphin
+cockpit*
+uupd
+bazzite-portal

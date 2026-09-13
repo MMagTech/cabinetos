@@ -234,6 +234,53 @@ build-time escape hatch will be wanted earlier — see open question 8.
 
 ---
 
+## Staying current with Bazzite
+
+The base is pinned by digest, so CabinetOS never changes underneath itself. The
+cost of that is somebody has to move the pin, and a pin nobody moves is how a
+project ends up two years behind its base with an unreviewable upgrade ahead of
+it.
+
+`.github/workflows/base-update.yml` runs weekly and opens a pull request when the
+pinned digest has moved.
+
+**Why not Renovate or Dependabot.** Bazzite rebuilds daily. A dependency bot
+would open a pull request every day that said "digest changed" and nothing more.
+A pull request that arrives every day and carries no information is worse than
+no automation at all, because it trains you to merge without reading.
+
+So `ci/check-base-update.sh` does the part a bot cannot:
+
+1. **Diffs the package manifests.** `base-manifest.txt` is the base's package
+   list as of the last bump, committed alongside the pin. The PR shows what
+   actually changed — added, removed, and version bumps — instead of a digest.
+2. **Classifies it.** Changes are matched against `ci/base-watch.txt`, the list
+   of packages CabinetOS actually depends on: kernel, Mesa, gamescope,
+   controller kmods, bluez, PipeWire, tuned, NetworkManager, sshd. The PR is
+   labelled **RELEVANT** (read it) or **ROUTINE** (a green build is probably
+   enough). Most weeks are routine.
+3. **Flags strip-list drift.** A package the strip scripts remove which existed
+   in the old base and is gone from the new one. `remove_pkgs` skips missing
+   packages by design, so nothing breaks — but if upstream *renamed* it rather
+   than dropping it, the real package is still in the image and the removal has
+   silently become a no-op. That is how a desktop application comes back.
+
+**`ci/base-watch.txt` must grow with the project.** Phase 2 adds whatever the
+session depends on; Phase 5 adds the emulators. A package CabinetOS relies on
+that is not on that list can break in an update that looked routine.
+
+**Nothing is merged automatically, ever.** An image that builds is not an image
+that boots. Build a qcow2 from the branch and boot it first — constraint 2 above
+is the rule this automation serves, not one it replaces.
+
+**Known limitation:** pull requests created with the default `GITHUB_TOKEN` do
+not trigger other workflows, so the image build will not run on them by itself.
+Either supply a `BASE_UPDATE_TOKEN` secret (a fine-grained PAT with contents and
+pull-request write), which the workflow prefers when present, or close and
+reopen the PR to kick CI off by hand.
+
+---
+
 ## Non goals
 
 - Not a Steam machine.
@@ -253,7 +300,9 @@ invisible to anyone who has not deliberately turned it on.
    hacks. Those are what make upstream changes dangerous, and the whole point of
    basing on Bazzite is to let someone else own the kernel and driver problem.
 2. **The Bazzite base is pinned to a specific tag and digest**, and only moved
-   deliberately, as its own commit, with a VM boot test.
+   deliberately, as its own commit, with a VM boot test. Automation proposes
+   base bumps and explains what changed; it never merges one. See *Staying
+   current with Bazzite*.
 3. **Anything that could leave the user stuck at a terminal is a bug.**
 4. **The frontend is owned, not a skin** on someone else's frontend.
 5. **Removals are conservative.** When it is not clear that a Bazzite package is
@@ -292,7 +341,7 @@ GHCR, and produces a bootable disk image.
 `ghcr.io/ublue-os/bazzite:stable-44.20260908`
 (`sha256:437920bae6935fd70719c1e0109f3469b1215a788330b0de924d0c7ac8aaa84c`),
 strip scripts, SSH enabled for development, build/sign/push workflow, disk image
-workflow.
+workflow, and the Bazzite base-update watcher.
 
 *Not yet verified:* nothing in this repo has been built or booted. The first CI
 run is the first time any of it executes. See Open questions 1 and 2 — the
