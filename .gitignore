@@ -1,0 +1,18 @@
+# Cosign private signing key. If this is ever committed, rotate it immediately:
+# anyone holding it can sign an image that your console will accept as an update.
+cosign.key
+
+# Disk image build output
+output/
+_build_*
+_build-*/**
+*_chunkah_*
+*_rpm-ostree_*
+
+# Build artefacts
+previous.manifest.json
+changelog.md
+output.env
+
+# macOS
+.DS_Store

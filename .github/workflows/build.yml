@@ -1,0 +1,151 @@
+---
+# Build, sign and publish the CabinetOS container image to GHCR.
+#
+# Derived from the Universal Blue image-template (Apache-2.0):
+#   https://github.com/ublue-os/image-template
+#
+# Pull requests build the image but do not push or sign it, so a PR from anyone
+# can never publish a package under your account.
+
+name: Build CabinetOS image
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+  workflow_dispatch:
+
+env:
+  IMAGE_REGISTRY: "ghcr.io/${{ github.repository_owner }}"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  # Cheap checks first. A shell typo in a strip script should fail in ten
+  # seconds, not after a twenty minute image build.
+  lint:
+    name: Lint build scripts
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+
+      - name: Shellcheck
+        run: |
+          # SC1091: shellcheck cannot follow `source /ctx/lib.sh`, since /ctx
+          # only exists inside the container build.
+          find build_files -name '*.sh' -print0 \
+            | xargs -0 shellcheck -e SC1091
+
+  build_push:
+    name: Build and push image
+    needs: lint
+    runs-on: ubuntu-24.04
+
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+
+      # Bazzite is a large base image. Without this the runner runs out of disk
+      # partway through the pull.
+      - name: Maximize build space
+        uses: ublue-os/remove-unwanted-software@695eb75bc387dbcd9685a8e72d23439d8686cba6
+        with:
+          remove-codeql: true
+
+      - name: Install just
+        uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3  # v4.0.0
+
+      - name: Check Justfile
+        run: just check
+
+      - name: Prepare environment
+        run: |
+          IMAGE_NAME=$(just image_name)
+          DEFAULT_TAG=$(just generate-default-tag)
+          echo "IMAGE_NAME=${IMAGE_NAME,,}" >> "${GITHUB_ENV}"
+          echo "DEFAULT_TAG=${DEFAULT_TAG}" >> "${GITHUB_ENV}"
+          echo "IMAGE_REGISTRY=${IMAGE_REGISTRY,,}" >> "${GITHUB_ENV}"
+
+      - name: Build image
+        id: build-image
+        run: just build "${IMAGE_NAME}" "${DEFAULT_TAG}"
+
+      # Splits the image into many layers so that a CabinetOS update downloads
+      # only what changed. This matters for the Phase 7 update model: a console
+      # update should not be a multi-gigabyte download every time.
+      - name: Rechunk
+        run: just ostree-rechunk "${IMAGE_NAME}" "${DEFAULT_TAG}"
+
+      - name: Generate tags
+        id: gen-build-tags
+        run: |
+          alias_tags="$(just generate-build-tags "${IMAGE_NAME}" "${DEFAULT_TAG}")"
+          echo "Tags: ${alias_tags}"
+          echo "alias_tags=${alias_tags}" >> "${GITHUB_OUTPUT}"
+
+      - name: Tag image
+        env:
+          ALIAS_TAGS: ${{ steps.gen-build-tags.outputs.alias_tags }}
+        run: just tag-images "${IMAGE_NAME}" "${DEFAULT_TAG}" "${ALIAS_TAGS}"
+
+      # Everything below only runs on main. Pull requests stop here, having
+      # proved the image builds.
+      - name: Login to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@abd2ef45e78c5afb21d64d4ca52ee8550d9572c7  # v4.5.1
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push to GHCR
+        if: github.event_name != 'pull_request'
+        id: push-image
+        env:
+          ALIAS_TAGS: ${{ steps.gen-build-tags.outputs.alias_tags }}
+        run: |
+          set -euo pipefail
+          for tag in ${ALIAS_TAGS}; do
+            podman push --digestfile=/tmp/digestfile \
+              "${IMAGE_NAME}:${tag}" \
+              "${IMAGE_REGISTRY}/${IMAGE_NAME}:${tag}"
+          done
+          echo "digest=$(< /tmp/digestfile)" >> "${GITHUB_OUTPUT}"
+
+      - name: Install cosign
+        if: github.event_name != 'pull_request'
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6  # v4.1.2
+        with:
+          cosign-release: 'v3.1.2'
+
+      # Signing is what lets the installed system verify that an update actually
+      # came from this repository before it reboots into it. Phase 7 depends on
+      # this, so it is set up now rather than retrofitted.
+      - name: Sign image
+        if: github.event_name != 'pull_request'
+        env:
+          COSIGN_EXPERIMENTAL: false
+          COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
+          DIGEST: ${{ steps.push-image.outputs.digest }}
+        run: |
+          # The old bundle format is required for rpm-ostree/bootc policy
+          # verification to accept the signature.
+          cosign sign -y \
+            --new-bundle-format=false \
+            --use-signing-config=false \
+            --key env://COSIGN_PRIVATE_KEY \
+            "${IMAGE_REGISTRY}/${IMAGE_NAME}@${DIGEST}"

@@ -1,0 +1,110 @@
+---
+# Turn the published CabinetOS container image into bootable disk images.
+#
+# Derived from the Universal Blue image-template (Apache-2.0):
+#   https://github.com/ublue-os/image-template
+#
+# Two outputs:
+#
+#   qcow2        A virtual machine disk. This is what proves Phase 1 is done —
+#                boot it and confirm you reach a console prompt.
+#   anaconda-iso An installer ISO. Write it to a USB stick and install to the
+#                SER5. See README.md.
+#
+# Run manually. It is deliberately not on a push trigger: disk builds are slow
+# and you only want one when you are about to install something.
+
+name: Build disk images
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Image tag to build from"
+        required: true
+        default: "latest"
+        type: string
+      disk-type:
+        description: "What to build"
+        required: true
+        default: "both"
+        type: choice
+        options:
+          - both
+          - qcow2
+          - anaconda-iso
+
+env:
+  IMAGE_NAME: ${{ github.event.repository.name }}  # must match build.yml
+  IMAGE_REGISTRY: "ghcr.io/${{ github.repository_owner }}"
+  BIB_IMAGE: "quay.io/centos-bootc/bootc-image-builder:latest"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build ${{ matrix.disk-type }}
+    runs-on: ubuntu-24.04
+    # A static matrix with a per-job condition, rather than a computed matrix.
+    # Computing a matrix from an input works, but it fails in ways that are
+    # tedious to debug from a YAML error message.
+    if: inputs.disk-type == 'both' || inputs.disk-type == matrix.disk-type
+    strategy:
+      fail-fast: false
+      matrix:
+        disk-type: ["qcow2", "anaconda-iso"]
+
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+
+    steps:
+      - name: Prepare environment
+        run: |
+          echo "IMAGE_REGISTRY=${IMAGE_REGISTRY,,}" >> "${GITHUB_ENV}"
+          echo "IMAGE_NAME=${IMAGE_NAME,,}" >> "${GITHUB_ENV}"
+          echo "USER_UID=$(id -u)" >> "${GITHUB_ENV}"
+          echo "USER_GID=$(id -g)" >> "${GITHUB_ENV}"
+
+      - name: Maximize build space
+        uses: ublue-os/remove-unwanted-software@695eb75bc387dbcd9685a8e72d23439d8686cba6
+        with:
+          remove-codeql: true
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+
+      # The upstream template omits this, because its example images are public.
+      # A newly created GHCR package is private by default, and bootc-image-builder
+      # cannot pull a private image anonymously. Logging in means the disk build
+      # works whether or not you have made the package public yet.
+      - name: Login to GHCR
+        uses: docker/login-action@abd2ef45e78c5afb21d64d4ca52ee8550d9572c7  # v4.5.1
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build disk image
+        id: build
+        uses: osbuild/bootc-image-builder-action@8661cd3832544ad68c12dcde8681b13ab0f56a8d  # main
+        with:
+          builder-image: ${{ env.BIB_IMAGE }}
+          config-file: ${{ matrix.disk-type == 'anaconda-iso' && './disk_config/iso.toml' || './disk_config/disk.toml' }}
+          image: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ inputs.tag }}
+          chown: ${{ env.USER_UID }}:${{ env.USER_GID }}
+          types: ${{ matrix.disk-type }}
+          additional-args: --use-librepo=True
+
+      - name: Upload disk image
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: cabinetos-${{ matrix.disk-type }}
+          path: ${{ steps.build.outputs.output-directory }}
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+          overwrite: true

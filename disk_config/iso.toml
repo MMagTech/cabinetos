@@ -1,0 +1,41 @@
+# Installer ISO configuration.
+#
+# This produces an Anaconda installer that writes CabinetOS to the SER5's
+# internal drive. It is a keyboard-and-mouse experience, which contradicts the
+# product's principles — but it happens exactly once, on a machine that has not
+# been set up yet. See docs/PROJECT.md open question 5.
+
+# After installation, point the installed system at the CabinetOS image on GHCR
+# rather than at whatever was baked into the ISO. From that moment on, the
+# machine updates by pulling this reference.
+#
+# IMPORTANT: this must be lowercase and must match the published package. If the
+# GHCR package is private, the installed machine cannot pull updates — make it
+# public, or configure a pull secret in Phase 7.
+[customizations.installer.kickstart]
+contents = """
+%post
+bootc switch --mutate-in-place --transport registry ghcr.io/mmagtech/cabinetos:latest
+%end
+"""
+
+# Trim the installer to the screens that are actually needed. Every module left
+# enabled is another page the installer shows.
+#
+# Users is enabled because the installed system needs an account to exist before
+# Phase 2's autologin session is built. Once Phase 2 lands, revisit whether the
+# installer can create it silently instead.
+[customizations.installer.modules]
+enable = [
+  "org.fedoraproject.Anaconda.Modules.Storage",
+  "org.fedoraproject.Anaconda.Modules.Runtime",
+  "org.fedoraproject.Anaconda.Modules.Network",
+  "org.fedoraproject.Anaconda.Modules.Security",
+  "org.fedoraproject.Anaconda.Modules.Services",
+  "org.fedoraproject.Anaconda.Modules.Users",
+  "org.fedoraproject.Anaconda.Modules.Timezone",
+]
+
+disable = [
+  "org.fedoraproject.Anaconda.Modules.Subscription",
+]
