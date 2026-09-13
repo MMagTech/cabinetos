@@ -439,6 +439,12 @@ Worth ~90 MB and ~7s of boot before touching anything contentious. Emulation
 performance itself will be bound by GPU throughput and single-thread CPU speed,
 neither of which any of this affects.
 
+### Session infrastructure present
+
+`gamescope` is in the image and runs. `gamescope-session-plus` is not — see open
+question 3. The only Wayland session defined is `plasma.desktop`, which Phase 2
+removes.
+
 ### First boot shows Linux
 
 `bazzite-hardware-setup.service` runs visibly on first boot and takes long
@@ -448,6 +454,10 @@ present and inactive only because nothing starts a graphical session.
 Both are "the user sees Linux" moments, which the product rules out. Phase 2
 should remove `plasma-setup` outright and either own the hardware-setup step or
 hide it behind a splash.
+
+`plasma-setup.service` runs a `bootutil` binary that decides whether to show the
+wizard based on a `plasma-setup-done` flag file. Dropping the flag file in place
+would suppress it, but removing the unit is cleaner — CabinetOS owns first run.
 
 ### Other facts worth keeping
 
@@ -711,24 +721,35 @@ Still to confirm on real hardware: that a controller actually enumerates and is
 usable. The packages being there is necessary, not sufficient.
 
 ### 3. `bazzite` or `bazzite-deck` as the base?
-**Raised: Phase 1. Decided provisionally, revisit in Phase 2.**
+**Raised: Phase 1. RESOLVED: stay on plain `bazzite` and write our own session.**
 
-Phase 1 uses plain `bazzite` (Kinoite/KDE based), per the brief.
+Checked on the booted image. Plain `bazzite` has **gamescope** —
+`/usr/bin/gamescope`, plus `gamescopectl`, `gamescopereaper` and
+`gamescopestream` — which is the part that matters and the part that would have
+taken months to build.
 
-But `bazzite-deck` ships infrastructure that Phase 2 will otherwise have to
-build from scratch:
+What it does **not** have is `gamescope-session-plus`: no
+`/usr/share/gamescope-session-plus/`, no `gamescope-session*` binary, and the
+only Wayland session offered is `plasma.desktop`. That harness is
+`bazzite-deck`-only.
 
-- `gamescope-session-plus` — the session harness that launches a fullscreen
-  application under gamescope, which is precisely the Phase 2 requirement
-- `inputplumber` — controller input remapping daemon
-- `steamos-powerbuttond` — power button handling, which is a Phase 2 requirement
-  ("shutdown and suspend reachable from a controller")
+So the choice is real, and the answer is to write our own. `gamescope-session-plus`
+is a shell harness whose substance is Steam bootstrapping, `steamos-manager`
+integration and Steam Deck hardware handling — all of which CabinetOS would be
+unpicking rather than using. Switching to `bazzite-deck` to get it would drag in
+Steam, `inputplumber` and the SteamOS management layer, and constraint 4 says
+the frontend is owned rather than skinned.
 
-The cost is that all of it is Steam-coupled and would need untangling.
+What CabinetOS actually needs is small: autologin, then gamescope, then the
+frontend inside it. The pieces of `bazzite-deck` worth borrowing are its power
+button handling and possibly `inputplumber`, and those can be taken
+individually if Phase 6 wants them.
 
-Revisit at the start of Phase 2, before writing a session from scratch. The
-decision is: adapt `gamescope-session-plus` from `bazzite-deck`, or write our
-own minimal session on plain `bazzite`.
+**gamescope runs in the Unraid VM.** `gamescope --backend headless` starts,
+runs its child and exits cleanly, so the session plumbing is developable without
+the SER5. Note the VM's virtual GPU is QXL — fine for the headless backend;
+switching the VM to VirtIO-GPU would be worth doing before testing the DRM
+backend.
 
 ### 4. Bundle libretro cores directly, or build on RetroDECK?
 **Raised in the brief. Still open, but narrowed.**
