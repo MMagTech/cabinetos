@@ -1,5 +1,11 @@
 [Unit]
 Description=CabinetOS session
+
+# Never stop trying. systemd's default is to give up after 5 starts in 10
+# seconds, which on a console means a black screen that stays black — the exact
+# failure the product cannot have. A machine that retries forever is recoverable;
+# one that has given up is a support call.
+StartLimitIntervalSec=0
 Documentation=https://github.com/MMagTech/cabinetos
 After=systemd-user-sessions.service systemd-logind.service
 Wants=systemd-logind.service
