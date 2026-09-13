@@ -154,21 +154,26 @@ matches_watchlist() {
 : > /tmp/relevant-removed.txt
 : > /tmp/relevant-changed.txt
 
-# The `|| true` on each loop body matters: without it, `set -e` exits the script
-# the first time a package does not match the watchlist, which is most of them.
+# Written as `if` rather than `A && B || true`. The latter is not if-then-else —
+# the `|| true` also fires when the echo fails — and under `set -e` the bare
+# `A && B` form would exit the script the first time a package does not match,
+# which is most of them.
 while read -r name; do
-    [[ -n "${name}" ]] && matches_watchlist "${name}" \
-        && echo "${name}" >> /tmp/relevant-added.txt || true
+    if [[ -n "${name}" ]] && matches_watchlist "${name}"; then
+        echo "${name}" >> /tmp/relevant-added.txt
+    fi
 done < /tmp/added.txt
 
 while read -r name; do
-    [[ -n "${name}" ]] && matches_watchlist "${name}" \
-        && echo "${name}" >> /tmp/relevant-removed.txt || true
+    if [[ -n "${name}" ]] && matches_watchlist "${name}"; then
+        echo "${name}" >> /tmp/relevant-removed.txt
+    fi
 done < /tmp/removed.txt
 
 while read -r name rest; do
-    [[ -n "${name}" ]] && matches_watchlist "${name}" \
-        && echo "${name} ${rest}" >> /tmp/relevant-changed.txt || true
+    if [[ -n "${name}" ]] && matches_watchlist "${name}"; then
+        echo "${name} ${rest}" >> /tmp/relevant-changed.txt
+    fi
 done < /tmp/changed.txt
 
 relevant_count=$(( $(count /tmp/relevant-added.txt) \
@@ -193,7 +198,7 @@ relevant_count=$(( $(count /tmp/relevant-added.txt) \
 # are filtered out — a false positive here is only noise in the report, but
 # noise is what this whole script exists to avoid.
 grep -hoE '^[[:space:]]+[a-zA-Z0-9][a-zA-Z0-9._+-]*[[:space:]]*\\?$' build_files/strip-*.sh \
-    | tr -d ' \\' \
+    | awk '{print $1}' \
     | grep -vxE 'fi|done|else|esac|then|do|exit|true|false|return|group_end|group_start' \
     | sort -u > /tmp/strip-targets.txt || true
 

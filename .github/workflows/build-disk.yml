@@ -24,15 +24,6 @@ on:
         required: true
         default: "latest"
         type: string
-      disk-type:
-        description: "What to build"
-        required: true
-        default: "both"
-        type: choice
-        options:
-          - both
-          - qcow2
-          - anaconda-iso
 
 env:
   IMAGE_NAME: ${{ github.event.repository.name }}  # must match build.yml
@@ -47,10 +38,10 @@ jobs:
   build:
     name: Build ${{ matrix.disk-type }}
     runs-on: ubuntu-24.04
-    # A static matrix with a per-job condition, rather than a computed matrix.
-    # Computing a matrix from an input works, but it fails in ways that are
-    # tedious to debug from a YAML error message.
-    if: inputs.disk-type == 'both' || inputs.disk-type == matrix.disk-type
+    # Both types, always. They run as parallel matrix jobs, so building both
+    # costs no more wall-clock time than building one, and it avoids selecting
+    # between them — `matrix` is not available in a job-level `if`, and a
+    # computed matrix is fiddly to get right for no benefit here.
     strategy:
       fail-fast: false
       matrix:
