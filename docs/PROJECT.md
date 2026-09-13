@@ -794,8 +794,17 @@ The real frontend, built against the Phase 0 spec, running on fake data. Home,
 browse, game detail, settings, in-game overlay. Full controller navigation, plus
 the on-screen keyboard, which everything else that needs text entry depends on.
 
+**Nearly all of this can be built in a VM**, via cage — see *Measured
+behaviour*. Layout, colour, typography, artwork grids, navigation, focus, every
+settings screen, first-run setup. Controllers too, passed through over USB.
+
+**Except motion.** Software rendering is choppy, so an animation that feels
+wrong in the VM may be fine on hardware — and worse, an animation *tuned* in the
+VM is tuned against the wrong feedback. Cabinet's design language is
+substantially about how things move. Build the motion, do not judge it there.
+
 *Done when* it looks and feels like Cabinet, and every screen can be reached and
-left with a controller alone.
+left with a controller alone. The "feels" half is answerable only on the SER5.
 
 ### Phase 4 — RomM integration
 **Status: not started.**
