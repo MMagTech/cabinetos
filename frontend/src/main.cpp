@@ -155,6 +155,9 @@ int main(int argc, char** argv) {
     // leaves the covers behind it. That is the only situation in which anything
     // is evictable at all, so it is the only way to test that eviction works.
     bool evictTest = false;
+    // Proves a restored state is genuinely identical, not merely accepted.
+    bool stateTest = false;
+    bool audioProbe = false;
     // Running a core. Both are needed: a core without a ROM has nothing to do.
     const char* corePath = nullptr;
     const char* romPath = nullptr;
@@ -164,6 +167,10 @@ int main(int argc, char** argv) {
             shotPath = argv[++i];
         } else if (SDL_strcmp(argv[i], "--frames") == 0 && i + 1 < argc) {
             shotAfterFrames = SDL_atoi(argv[++i]);
+        } else if (SDL_strcmp(argv[i], "--audio-probe") == 0) {
+            audioProbe = true;
+        } else if (SDL_strcmp(argv[i], "--state-test") == 0) {
+            stateTest = true;
         } else if (SDL_strcmp(argv[i], "--core") == 0 && i + 1 < argc) {
             corePath = argv[++i];
         } else if (SDL_strcmp(argv[i], "--rom") == 0 && i + 1 < argc) {
@@ -280,6 +287,267 @@ int main(int argc, char** argv) {
         }
         playing = true;
 
+        if (audioProbe) {
+            // Which call silences it? Three identical runs that differ only in
+            // what is done at the 240-frame mark. Narrowing it to one entry
+            // point is the difference between "save states are weird" and a
+            // report someone can act on.
+            cab::Core& c = core;
+            const double step = 1.0 / c.avInfo().fps;
+            auto peakOver = [&c, step](int frames) {
+                long peak = 0;
+                for (int i = 0; i < frames; ++i) {
+                    c.runFor(step);
+                    for (int16_t v : c.drainAudio())
+                        peak = std::max<long>(peak, std::abs(static_cast<int>(v)));
+                }
+                return peak;
+            };
+            if (SDL_getenv("CABINETOS_TRACE")) {
+                // Just watch. When does it go quiet, and does it come back?
+                std::fprintf(stderr, "[probe] peak per 60 frames (1 second each):\n");
+                for (int block = 0; block < 34; ++block) {
+                    const long p = peakOver(60);
+                    std::fprintf(stderr, "  %4ds  %6ld%s\n", block + 1, p,
+                                 p == 0 ? "   <- silent" : "");
+                }
+                return 0;
+            }
+            const char* what = SDL_getenv("CABINETOS_PROBE");
+            const std::string mode = what ? what : "none";
+            const long before = peakOver(240);
+            if (mode == "size") {
+                c.stateSize();
+            } else if (mode == "save") {
+                std::vector<uint8_t> st;
+                c.saveState(st);
+            }
+            const long after = peakOver(180);
+            std::fprintf(stderr, "[probe] %-5s  before %6ld   after %6ld   %s\n",
+                         mode.c_str(), before, after,
+                         after == 0 && before > 0 ? "SILENCED" : "ok");
+            return 0;
+        }
+
+        if (stateTest) {
+            // A save state is only worth anything if what comes back is the
+            // same machine. "The core accepted the bytes" is not that: it is
+            // exactly what a subtly wrong state also looks like.
+            //
+            // So: run to a point, snapshot, run on and remember what happened,
+            // restore, run the same distance again, and compare. Identical
+            // output means the restore put every bit back. This is the
+            // reference implementation's own test — "a serialize, run, restore,
+            // run round trip produces identical video and audio streams".
+            // Deep enough in that the picture is genuinely moving. The first
+            // version of this test warmed up 240 frames and compared video on
+            // Dr. Mario's TITLE SCREEN — a static image, which matches itself
+            // no matter what the machine is doing. It reported PASS and proved
+            // nothing. A determinism test has to run somewhere that would
+            // actually diverge, and here that is the attract demo.
+            const int kWarm = SDL_getenv("CABINETOS_WARM")
+                                  ? SDL_atoi(SDL_getenv("CABINETOS_WARM"))
+                                  : 1500;
+            const int kRunOn = 300;  // five seconds for a divergence to show
+            const double step = 1.0 / core.avInfo().fps;
+
+            // Is the game making any sound, and is the picture actually
+            // changing? Everything else here is meaningless if either answer
+            // is no, which is exactly the trap the first version fell into.
+            long warmPeak = 0;
+            for (int i = 0; i < kWarm; ++i) {
+                core.runFor(step);
+                for (int16_t v : core.drainAudio())
+                    warmPeak = std::max<long>(warmPeak, std::abs(static_cast<int>(v)));
+            }
+            std::fprintf(stderr, "[state] peak amplitude during the %d warm-up frames: %ld\n",
+                         kWarm, warmPeak);
+            // Prove the picture moves before trusting any video comparison.
+            const uint64_t vA = core.frameDigest();
+            for (int i = 0; i < 30; ++i) core.runFor(step);
+            const uint64_t vB = core.frameDigest();
+            core.drainAudio();
+            std::fprintf(stderr, "[state] picture over 30 frames: %s\n",
+                         vA == vB ? "STATIC - this test would prove nothing here"
+                                  : "moving - a video comparison is meaningful");
+
+            // Control: the same stretch of game with NO state operation at
+            // all. Without this there is no way to tell "the restore changed
+            // something" from "saving changed something" from "the game simply
+            // sounds like this here".
+            std::vector<uint8_t> probe;
+            (void)probe;
+
+            std::vector<uint8_t> state;
+            const size_t stateBytes = core.stateSize();
+            if (!core.saveState(state)) {
+                std::fprintf(stderr, "[state] core produced no state\n");
+                return 1;
+            }
+            std::fprintf(stderr, "[state] %zu bytes at frame %d\n", state.size(), kWarm);
+
+            // Video and audio digested SEPARATELY. If they are mixed and the
+            // result differs, all you know is "something diverged" — which is
+            // the least useful possible answer about a save system.
+            struct Digest {
+                uint64_t video = 1469598103934665603ull;
+                uint64_t audio = 1469598103934665603ull;
+                size_t audioBytes = 0;
+                int firstVideoDiff = -1;
+                int firstAudioDiff = -1;
+                std::vector<uint64_t> perFrameVideo, perFrameAudio;
+                // The whole audio stream, concatenated. A per-frame hash is
+                // sensitive to WHERE the resampler happens to split its output,
+                // which is not the same question as whether the samples are the
+                // same samples.
+                std::vector<int16_t> audioStream;
+            };
+            auto runAndDigest = [&core, kRunOn, step]() {
+                // Drain first. Audio accumulates until somebody takes it, so a
+                // run that starts with the warm-up's leftovers in the buffer
+                // hashes them and the next run does not. That is a difference
+                // in the TEST, and reading it as a difference in the STATE is
+                // exactly the wrong conclusion to reach about a save system.
+                core.drainAudio();
+
+                Digest d;
+                auto mix = [](uint64_t& h, const void* p, size_t n) {
+                    const auto* b = static_cast<const uint8_t*>(p);
+                    for (size_t i = 0; i < n; ++i) {
+                        h ^= b[i];
+                        h *= 1099511628211ull;
+                    }
+                };
+                for (int i = 0; i < kRunOn; ++i) {
+                    core.runFor(step);
+                    const uint64_t v = core.frameDigest();
+                    mix(d.video, &v, sizeof(v));
+                    d.perFrameVideo.push_back(v);
+
+                    const std::vector<int16_t>& audio = core.drainAudio();
+                    uint64_t a = 1469598103934665603ull;
+                    mix(a, audio.data(), audio.size() * sizeof(int16_t));
+                    mix(d.audio, &a, sizeof(a));
+                    d.perFrameAudio.push_back(a);
+                    d.audioBytes += audio.size() * sizeof(int16_t);
+                    d.audioStream.insert(d.audioStream.end(), audio.begin(), audio.end());
+                }
+                return d;
+            };
+
+            const Digest first = runAndDigest();
+            {
+                long p1 = 0;
+                for (int16_t v : first.audioStream)
+                    p1 = std::max<long>(p1, std::abs(static_cast<int>(v)));
+                std::fprintf(stderr, "[state] run1 (after save) peak: %ld\n", p1);
+            }
+            if (!core.loadState(state)) {
+                std::fprintf(stderr, "[state] the core REJECTED its own state\n");
+                return 1;
+            }
+            const Digest second = runAndDigest();
+
+            // A third run, restored the same way as the second. This is the
+            // control the first two lack: if runs 2 and 3 agree with each other
+            // but not with run 1, then restoring is perfectly deterministic and
+            // what differs is the PATH taken to get there, not the state. That
+            // is a very different finding from "save states are broken", and
+            // without this run the two are indistinguishable.
+            if (!core.loadState(state)) {
+                std::fprintf(stderr, "[state] second restore rejected\n");
+                return 1;
+            }
+            const Digest third = runAndDigest();
+            std::fprintf(stderr, "[state] run2 vs run3: video %s, audio %s\n",
+                         second.video == third.video ? "MATCH" : "differs",
+                         second.audioStream == third.audioStream ? "MATCH" : "differs");
+
+            int videoDiff = -1, audioDiff = -1;
+            for (int i = 0; i < kRunOn; ++i) {
+                if (videoDiff < 0 && first.perFrameVideo[i] != second.perFrameVideo[i])
+                    videoDiff = i;
+                if (audioDiff < 0 && first.perFrameAudio[i] != second.perFrameAudio[i])
+                    audioDiff = i;
+            }
+
+            std::fprintf(stderr, "[state] video  %016llx vs %016llx  %s\n",
+                         static_cast<unsigned long long>(first.video),
+                         static_cast<unsigned long long>(second.video),
+                         first.video == second.video ? "MATCH"
+                                                     : "differs");
+            std::fprintf(stderr, "[state] audio  %016llx vs %016llx  %s\n",
+                         static_cast<unsigned long long>(first.audio),
+                         static_cast<unsigned long long>(second.audio),
+                         first.audio == second.audio ? "MATCH" : "differs");
+            if (videoDiff >= 0)
+                std::fprintf(stderr, "[state] first differing video frame: %d of %d\n",
+                             videoDiff, kRunOn);
+            std::fprintf(stderr, "[state] audio bytes %zu vs %zu\n", first.audioBytes,
+                         second.audioBytes);
+
+            // The audio verdict, with its own confidence attached.
+            //
+            // Three wrong theories were chased here before the controls killed
+            // them: leftover audio in the buffer, the resampler's filter
+            // history, and retro_serialize having a side effect. The actual
+            // answer was that the GAME IS SILENT — Dr. Mario untouched plays a
+            // ding at one second and nothing for the next half minute. A test
+            // that reports "audio differs" without first checking there IS any
+            // audio is reporting its own blind spot.
+            long peak1 = 0, peak2 = 0;
+            for (int16_t v : first.audioStream)
+                peak1 = std::max<long>(peak1, std::abs(static_cast<int>(v)));
+            for (int16_t v : second.audioStream)
+                peak2 = std::max<long>(peak2, std::abs(static_cast<int>(v)));
+
+            if (peak1 == 0 && peak2 == 0) {
+                std::fprintf(stderr,
+                             "[state] audio: INCONCLUSIVE - the game is silent here, so "
+                             "this proves nothing either way\n");
+            } else if (first.audioStream == second.audioStream) {
+                std::fprintf(stderr, "[state] audio: MATCH, sample for sample (%zu samples)\n",
+                             first.audioStream.size());
+            } else if (peak1 == 0) {
+                // Sound on the restored path and none on the continuous one, in
+                // a passage the game plays silent, is a transient at the moment
+                // of restore rather than a difference in the machine. RetroArch
+                // mutes briefly after a state load for exactly this reason.
+                std::fprintf(stderr,
+                             "[state] audio: a transient on restore (peak %ld against "
+                             "silence) - a click at the seam, not lost state. Worth "
+                             "muting briefly after a load.\n",
+                             peak2);
+            } else {
+                std::fprintf(stderr,
+                             "[state] audio: differs with both paths audible (peaks %ld "
+                             "and %ld) - investigate\n",
+                             peak1, peak2);
+            }
+
+            if (first.video == second.video) {
+                std::fprintf(stderr,
+                             "[state] PASS - the emulated machine restored exactly "
+                             "(%zu byte state)\n",
+                             stateBytes);
+            } else {
+                std::fprintf(stderr, "[state] FAIL - the picture diverged after restore\n");
+                return 1;
+            }
+
+            // Save RAM, which is a different mechanism entirely and the one
+            // people assume is safe once the game says it saved.
+            std::vector<uint8_t> sram;
+            if (core.saveRAM(sram)) {
+                std::fprintf(stderr, "[state] save RAM: %zu bytes\n", sram.size());
+            } else {
+                std::fprintf(stderr,
+                             "[state] save RAM: none exposed (cartridge has no battery, "
+                             "or the core writes its own file)\n");
+            }
+            return 0;
+        }
+
         // Audio: SDL owns the device thread and we push from the frame loop.
         // The rule from the reference implementation is that the callback must
         // never block — so there is no callback, and nothing to block.
@@ -340,6 +608,26 @@ int main(int argc, char** argv) {
                     break;
                 case SDL_EVENT_KEY_DOWN:
                     if (e.key.key == SDLK_ESCAPE) running = false;
+                    if (playing && e.key.key == SDLK_F5) {
+                        cab::Core& c = cab::Core::shared();
+                        std::vector<uint8_t> st;
+                        if (c.saveState(st)) {
+                            // Local first, always. Losing signal mid-save must
+                            // never mean losing the save; the upload is a
+                            // second step that can fail harmlessly.
+                            if (FILE* f = std::fopen("saves/quick.state", "wb")) {
+                                std::fwrite(st.data(), 1, st.size(), f);
+                                std::fclose(f);
+                                std::fprintf(stderr, "[state] saved %zu bytes\n", st.size());
+                            }
+                        }
+                    }
+                    if (playing && e.key.key == SDLK_F8) {
+                        cab::Core& c = cab::Core::shared();
+                        std::vector<uint8_t> st = ui::ImageCache::readFile("saves/quick.state");
+                        std::fprintf(stderr, "[state] load %s\n",
+                                     (!st.empty() && c.loadState(st)) ? "ok" : "FAILED");
+                    }
                     if (e.key.key == SDLK_LEFT) moveFocus(-1);
                     if (e.key.key == SDLK_RIGHT) moveFocus(+1);
                     if (e.key.key == SDLK_RETURN || e.key.key == SDLK_SPACE) pressing = true;

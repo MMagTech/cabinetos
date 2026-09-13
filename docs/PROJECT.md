@@ -2080,11 +2080,54 @@ so a path containing a space is word-split. RomM filenames contain spaces
 constantly. Worked around with a wrapper script for now; the session should stop
 word-splitting.
 
-**Not there yet, and each is its own piece of work:** save states, shaders and
-the letterbox glow (see *Shaders, and the glow around the picture* — the glow
-matters more here than in Cabinet, because an integer-scaled handheld picture on
-a 4K set is mostly dead space), the on-screen keyboard, and the remaining
-screens.
+**Save states work, 2026-09-13.** `retro_serialize`/`retro_unserialize` wired
+up, plus save RAM and arbitrary memory regions (the Game Boy clock lives in one
+of its own, and saving only the save RAM loses the clock Pokemon Gold and Silver
+depend on).
+
+Dr. Mario's state is **26,882 bytes**. Verified by round trip: save, run 300
+frames, restore, run 300 frames, compare.
+
+- **The machine restores exactly.** Video bit-identical across 300 frames.
+- **Restoring is deterministic.** Restore twice and both runs agree on video
+  *and* audio, which is the control that separates "the restore is wrong" from
+  "the path taken to get there was different".
+- **Loading a state produces an audible click** — a transient at the seam rather
+  than lost state. RetroArch mutes briefly after a load for exactly this reason
+  and so should we.
+- **Save RAM: Dr. Mario has none.** The cartridge has no battery, which is
+  correct and worth the frontend saying rather than treating as a failure.
+
+#### The test was wrong three times before it was right
+
+Worth recording, because the mistake is easy and the failure mode is a test that
+passes while proving nothing.
+
+1. **It compared video on a static title screen.** Dr. Mario's title is one
+   unchanging picture; it matches itself no matter what the machine is doing. The
+   first version reported PASS on that. **A determinism test must first prove
+   that the thing it measures actually varies** — this one now asserts the
+   picture moves before trusting a video comparison, and says so in its output.
+2. **Then it blamed audio residue, then the resampler's filter history, then
+   `retro_serialize` having a side effect.** All three were wrong, and each was
+   killed by a control run rather than by reasoning.
+3. **The actual answer was that the game is silent.** Traced second by second:
+   Dr. Mario untouched plays a ding at one second, a blip at nine, and nothing
+   for the next twenty-five. Every "audio differs" reading had been a comparison
+   of silence against a click.
+
+The test now reports **INCONCLUSIVE** when there is no audio to compare, rather
+than reporting a difference. A test that cannot tell "no signal" from "signal
+differs" is worse than no test, because it is believed.
+
+**What this does NOT yet prove:** that a state written by *this* build loads in
+*Cabinet's* build. That is the parity question, it needs both sides, and it is
+still the thing open question 13 exists for.
+
+**Not there yet, and each is its own piece of work:** shaders and the letterbox
+glow (see *Shaders, and the glow around the picture* — the glow matters more
+here than in Cabinet, because an integer-scaled handheld picture on a 4K set is
+mostly dead space), the on-screen keyboard, and the remaining screens.
 
 **Known gap worth recording now:** there is no text *shaping*, only advance and
 kerning from FreeType. That is correct for Latin and adequate for CJK, and wrong

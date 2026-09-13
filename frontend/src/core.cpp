@@ -485,6 +485,71 @@ void Core::setPad(int port, const PadState& pad) {
     gPads[port] = pad;
 }
 
+size_t Core::stateSize() const {
+    return (gameLoaded_ && g.serialize_size) ? g.serialize_size() : 0;
+}
+
+bool Core::saveState(std::vector<uint8_t>& out) {
+    if (!gameLoaded_ || !g.serialize_size || !g.serialize) return false;
+    const size_t n = g.serialize_size();
+    if (n == 0) return false;  // some cores genuinely cannot; that is not an error
+    out.resize(n);
+    return g.serialize(out.data(), n);
+}
+
+bool Core::loadState(const std::vector<uint8_t>& data) {
+    if (!gameLoaded_ || !g.unserialize || data.empty()) return false;
+    return g.unserialize(data.data(), data.size());
+}
+
+bool Core::saveRAM(std::vector<uint8_t>& out) const {
+    return memoryRegion(RETRO_MEMORY_SAVE_RAM, out);
+}
+
+bool Core::loadSaveRAM(const std::vector<uint8_t>& data) {
+    return loadMemoryRegion(RETRO_MEMORY_SAVE_RAM, data);
+}
+
+bool Core::memoryRegion(unsigned id, std::vector<uint8_t>& out) const {
+    if (!gameLoaded_ || !g.get_memory_data || !g.get_memory_size) return false;
+    const size_t n = g.get_memory_size(id);
+    const void* p = g.get_memory_data(id);
+    if (!p || n == 0) return false;
+    out.assign(static_cast<const uint8_t*>(p), static_cast<const uint8_t*>(p) + n);
+    return true;
+}
+
+bool Core::loadMemoryRegion(unsigned id, const std::vector<uint8_t>& data) {
+    if (!gameLoaded_ || !g.get_memory_data || !g.get_memory_size) return false;
+    void* p = g.get_memory_data(id);
+    const size_t n = g.get_memory_size(id);
+    if (!p || n == 0) return false;
+    // Copy the SMALLER of the two rather than demanding they match. Two cores
+    // in this set genuinely report a different size at restore time than at
+    // capture time: Genesis Plus GX trims to the bytes actually written once
+    // the game is running, and mGBA reports the 128KB flash maximum until it
+    // has autodetected the real save type. RetroArch does the same thing when
+    // it reads an .srm back in.
+    std::memcpy(p, data.data(), std::min(n, data.size()));
+    return true;
+}
+
+uint64_t Core::frameDigest() const {
+    uint64_t h = 1469598103934665603ull;  // FNV-1a
+    for (unsigned y = 0; y < gFrameH; ++y) {
+        const uint8_t* row = gFrame.data() + static_cast<size_t>(y) * gFramePitch;
+        const size_t bytes = static_cast<size_t>(gFrameW) *
+                             (gPixelFormat == RETRO_PIXEL_FORMAT_XRGB8888 ? 4 : 2);
+        // The visible pixels only. Padding between rows is whatever the core
+        // left there and is not part of the picture.
+        for (size_t i = 0; i < bytes; ++i) {
+            h ^= row[i];
+            h *= 1099511628211ull;
+        }
+    }
+    return h;
+}
+
 uint64_t Core::framesRun() const { return gFramesRun; }
 uint64_t Core::audioFramesTotal() const { return gAudioFrames; }
 
