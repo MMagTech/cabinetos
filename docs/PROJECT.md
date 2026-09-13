@@ -551,6 +551,35 @@ neither of which any of this affects.
 question 3. The only Wayland session defined is `plasma.desktop`, which Phase 2
 removes.
 
+### A GPU-less VM *can* show the frontend, via cage
+
+Established 2026-09-13, correcting an earlier claim in this document that
+nothing visual could be developed without real hardware.
+
+**gamescope requires a Vulkan device it accepts**, and a VM's virtual GPU does
+not provide one. The image ships the Venus driver (`virtio_icd`), but the host
+must expose Vulkan over VirtIO-GPU for it to do anything, and Unraid's QEMU does
+not — the guest reports `+virgl` but Vulkan enumeration finds no devices at all.
+So gamescope falls to Mesa's software renderer and rejects it outright:
+`vulkan: selecting physical device 'llvmpipe' ... not a valid physical device`.
+
+**But `cage` is already in the image and renders in software.** Confirmed
+running under the real session service, with a test application visible on the
+VM's console. cage is a minimal kiosk compositor — one fullscreen app, the same
+basic job as gamescope, without the display features.
+
+The session script therefore works down a ladder: gamescope on drm, then cage,
+then gamescope headless. **The frontend does not care which is hosting it** — it
+is a Wayland client either way.
+
+What this changes: **Phase 3 can be built and looked at in a VM.** Only
+performance, display features and final integration need the SER5.
+
+What it does not change: cage has no VRR, no HDR and no scaling, so it is a
+development convenience, never the production path. Falling back to it on real
+hardware means something is wrong with the GPU, and the About screen should name
+the running compositor so that state is visible rather than mysterious.
+
 ### First boot shows Linux
 
 `bazzite-hardware-setup.service` runs visibly on first boot and takes long

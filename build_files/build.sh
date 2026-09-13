@@ -145,6 +145,16 @@ check_present() {
 
 failed=0
 
+# cage is the middle rung of the session's compositor ladder — the one that
+# makes a GPU-less VM a usable development target, because it renders in
+# software where gamescope refuses to. Looks like desktop cruft; is not.
+if command -v cage >/dev/null 2>&1; then
+    log "  ok: cage ($(command -v cage))"
+else
+    log "  MISSING: cage — the software-rendering session fallback"
+    failed=1
+fi
+
 # gamescope is the compositor Phase 2 and Phase 5 are built on. If a removal
 # ever takes it out, the project stops. Checked via PATH rather than a fixed
 # location, because Bazzite sources it from the terra repo and may move it.
