@@ -441,6 +441,64 @@ limitation: tiny canvases that belong in a hand rather than on a television.
 Both have `_ios.a` and `_mac.a` and no `_tvos.a`. CabinetOS should inherit that
 decision and carry **21 cores**, not 23.
 
+#### Cores and platforms are not the same list
+
+Read from `NativeCore.swift` 2026-09-13, after this document got it wrong once.
+**26 platforms, 22 cores**, and the mapping runs both ways:
+
+| Core | Platforms it serves | |
+|---|---|---|
+| **Genesis Plus GX** | Genesis, Sega CD, Master System, Game Gear | **4 for one build** |
+| **Gambatte** | Game Boy, Game Boy Color | 2 |
+| **Beetle PCE Fast** | TurboGrafx-16, TurboGrafx-CD | 2 |
+| **FBNeo** *and* **MAME 2003-Plus** | Arcade | **2 cores, 1 platform** |
+| every other core | one platform each | |
+
+Note what PicoDrive does *not* cover: it is Sega 32X alone. Genesis, Master
+System and Game Gear are Genesis Plus GX. Reading the core list as a platform
+list gets that backwards.
+
+Three consequences, and the third shapes the code:
+
+1. **One build can light up four platforms.** Genesis Plus GX is the best value
+   per build in the set, which matters when ordering Phase 5.
+2. **Wiring a core once does not mean every platform under it works.** The
+   reference implementation's own rule, learned by losing saves: *wire it per
+   core, confirm it per platform.* Genesis Plus GX exposes cartridge save RAM
+   through the standard call for Genesis, Master System and Game Gear — but Sega
+   CD's internal backup RAM is a separate file the core writes itself. Beetle
+   PCE Fast does something for CD games and nothing at all for HuCards, which
+   have no save hardware.
+3. **Configuration is keyed by PLATFORM, not by core.** Verified:
+   `NativeCoreOptionsStore.dictionary(for: platform)`,
+   `padDevice(for: platform)`, `platform.supportsSecondPlayer`. The same core
+   binary gets a different option table and a different controller device type
+   depending on which system it is being asked to be — Sega CD forces
+   `cart_size`, Saturn forces its save method, 32X gets its own pad type.
+
+   **CabinetOS must key its own configuration the same way.** A
+   `core -> settings` map would be wrong by construction, and expensive to
+   unpick once a settings UI exists on top of it.
+
+So the Phase 5 target is **21 libretro cores plus Dolphin and PCSX2 — 23 builds
+— covering 27 platforms.**
+
+#### And only three of them need a GPU
+
+Also verified from the frontend's own source: exactly **three cores ever ask for
+a graphics context** via `RETRO_ENVIRONMENT_SET_HW_RENDER` — **Flycast**,
+**Mupen64Plus** and **PPSSPP**. The frontend's own comment calls the rest "the
+twelve software-rendered cores", counting the set it had at the time.
+
+Everything else hands over a finished pixel buffer, including several that look
+like they should not: melonDS does its 3D on the CPU with a threaded rasteriser,
+Opera is fully software, and vecx is deliberately built with its GLES path
+compiled out (`HAS_GPU=0`).
+
+That is why the first core to build is a software one: it needs no hardware
+render callback, no shared context, no FBO, and no readback. Those exist only
+for three cores and can wait until one of them is the target.
+
 And, **macOS only**, the two heavy ones — also as static archives, also
 in-process:
 
@@ -1852,9 +1910,12 @@ revisions for Linux x86-64 — not choosing an architecture.
 **Order, from Phase 0's scoping.** The instinct is to build all twenty-one cores
 and then find out. Do the opposite:
 
-1. **One core, in CI, at a pinned SHA.** Gambatte — the smallest, pure C, no
-   recompiler, no firmware. `make platform=unix`. This proves the whole
-   pipeline: pin, build, package, load, run.
+1. **One core, in CI, at a pinned SHA.** Gambatte — the smallest, pure C,
+   software-rendered, **no recompiler at all** (so no `DYNAREC`/`JIT_ARCH` flag
+   to match, which sidesteps the parity question entirely for the first
+   attempt), and no firmware. `make platform=unix`. This proves the whole
+   pipeline: pin, build, package, load, run. It covers two platforms, Game Boy
+   and Game Boy Color.
 2. **One hardware-rendered core.** Flycast, because it is also Dreamcast and
    Naomi, and because it is the one that proves the GL context and the
    no-readback path.
@@ -1862,8 +1923,12 @@ and then find out. Do the opposite:
    the Linux default — with a state written by each loaded by the other. That
    answers the parity question locally even if the Mac↔Apple TV test never
    happens.
-4. **The other eighteen**, which by then are a loop.
-5. **Dolphin and PCSX2 last**, as their own `.so` files, against upstream PCSX2
+4. **Genesis Plus GX next**, before the rest: software, no recompiler, and the
+   best coverage in the set — one build is Genesis, Sega CD, Master System and
+   Game Gear. Confirm each of those four separately, per the rule above; Sega CD
+   in particular writes its saves by a different mechanism than the other three.
+5. **The rest**, which by then are a loop.
+6. **Dolphin and PCSX2 last**, as their own `.so` files, against upstream PCSX2
    rather than the ARM64 fork.
 
 *Done when* several systems are playable end to end, and a save state written on
