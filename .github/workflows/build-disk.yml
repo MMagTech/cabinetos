@@ -100,6 +100,10 @@ jobs:
           name: cabinetos-${{ matrix.disk-type }}
           path: ${{ steps.build.outputs.output-directory }}
           if-no-files-found: error
-          retention-days: 7
+          # 90 days, the maximum for a public repository and free at that.
+          # The artifact is only a convenience: the image it is built from lives
+          # on GHCR permanently, and a fresh disk build takes about 5 minutes.
+          # But there is no reason to make anyone re-run one unnecessarily.
+          retention-days: 90
           compression-level: 0
           overwrite: true
