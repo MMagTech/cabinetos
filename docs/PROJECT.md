@@ -153,7 +153,12 @@ Future sessions should look here before inventing anything.
 | What | Where | Why it matters |
 |---|---|---|
 | **Cabinet** (iOS/tvOS, Swift) | https://github.com/MMagTech/cabinet | **The reference implementation.** Source of truth for the frontend design language, for correct RomM client behaviour, and for how cores are hosted in-process. When in doubt about how a screen should look or how an API call should be made, read Cabinet. |
-| **Cabinet for macOS** | *repository not yet recorded* | The persistent-local-library half of the model CabinetOS is a hybrid of. Record the location here when known. |
+| Cabinet — `RommApp/RommApp/Native/` | same repo | The core inventory and the libretro frontend. Read `Libretro/LibretroFrontend.mm` before writing ours. |
+| Cabinet — `RommApp/RommAppMac/` | same repo | The macOS app: the persistent-local-library half of the model CabinetOS is a hybrid of, and the only platform with Dolphin and PCSX2. |
+| Cabinet — `tools/build-core.sh` et al | same repo | Per-platform core builds. CabinetOS adds a Linux target — open question 13. |
+| Cabinet — `docs/native-in-game-saves.md` | same repo | How saves and save states work today. Phase 4 must match it. |
+| Cabinet — `docs/core-quality-pass-2026-08-17.md` | same repo | Which cores are good and why they were chosen. |
+| Cabinet — `CLAUDE.md`, `ROADMAP.md`, `docs/settled.md` | same repo | Conventions and decisions already made. Read before proposing anything. |
 | **RomM** | https://github.com/rommapp/romm | The server. |
 | RomM docs — Client API Tokens | https://docs.romm.app/latest/developers/client-api-tokens/ | Device pairing flow for keyboard-less auth. Phase 4. |
 | RomM docs — Device Sync Protocol | https://docs.romm.app/latest/developers/device-sync-protocol/ | Wire format for syncing saves, states and play sessions. Phase 4. |
@@ -218,6 +223,59 @@ C library and put its frames on screen at a stable 60fps. It is also what makes
 the in-game overlay tractable: when you own the frame loop, drawing over it is
 natural. See open question 12, which is about what happens for the systems where
 in-process is not viable.
+
+### Core parity is a hard constraint
+
+**CabinetOS must use the same cores as Cabinet, at the same versions.**
+
+Save states are core-specific. A state written by one core is not readable by a
+different core for the same system, and frequently not by a different *version*
+of the same core — libretro cores break their own state format between releases
+routinely. Since the entire point of the RomM sync layer is that a game started
+on Apple TV continues on CabinetOS, a core mismatch silently destroys the
+product's best feature. The game will boot; the save state will not load.
+
+So core selection is not a CabinetOS decision. It is inherited.
+
+What follows:
+
+1. **Cores are bundled in the image and pinned**, never pulled from a package
+   manager that can update them independently. This is consistent with the
+   update model: one version number for the whole system, and cores are part of
+   that version.
+2. **Core versions move in lockstep across all Cabinet platforms.** Bumping a
+   core is a coordinated release, not a CabinetOS-local change.
+3. **There should be one shared source of truth** for which core at which
+   revision handles which system. Cabinet has `tools/generate_cores_map.py` and
+   per-core build scripts already; CabinetOS should consume that rather than
+   maintain a parallel list. See open question 13.
+
+### What Cabinet actually ships
+
+From the repository tree (read the code in Phase 0 — this is the shape, not the
+detail):
+
+Cabinet is its own **libretro frontend** — `Native/Libretro/LibretroFrontend.mm`,
+`LibretroCoreAPI.h`, `libretro.h`, plus Metal shaders. Cores are compiled to
+static archives per platform and linked in: `libflycast_ios.a`,
+`libflycast_tvos.a`, `libflycast_mac.a` and so on, built by `tools/build-core.sh`
+and per-core scripts.
+
+25 core directories, covering the light and mid-weight systems:
+
+> BeetleNGP, BeetlePCEFast, BeetleVB, FBNeo, FCEUmm, Flycast, GW, Gambatte,
+> GenesisPlusGX, MAME2003Plus, MGBA, MelonDS, Mupen64Plus, Opera, PCSXReARMed,
+> PPSSPP, PicoDrive, ProSystem, Saturn (Beetle), Snes9x, Stella2014, VeMUlator,
+> Vecx
+
+And, **macOS only**, the two heavy ones — also as static archives, also
+in-process:
+
+> `RommAppMac/Dolphin/libdolphin_mac.a`, `RommAppMac/PCSX2/libpcsx2_mac.a`,
+> built by `tools/build-dolphin-mac.sh` and `tools/build-pcsx2-mac.sh` with
+> `tools/patch-dolphin-mac.py` and `tools/patch-pcsx2-mac.py`.
+
+Dreamcast and Naomi are Flycast, which is present on every platform already.
 
 ### CabinetOS is a hybrid of the two Cabinet apps
 
@@ -377,6 +435,11 @@ is drawn over a running game. Phase 3 needs that as much as it needs the colour
 palette, because the frontend is an emulator host rather than a launcher (see
 *Emulation*), and that is the constraint that decides the toolkit.
 
+Scope open question 13 at the same time: read `tools/build-core.sh`, the
+per-core build scripts, `tools/generate_cores_map.py`, and the two Mac patch
+scripts, and work out what a Linux target costs. It is the long pole in Phase 5
+and it is knowable now.
+
 *Done when* a developer who has never read a line of Swift could reproduce the
 look and feel of Cabinet from the document alone.
 
@@ -442,12 +505,15 @@ Cores and emulators bundled into the image. Games launch and return cleanly with
 no visible desktop. Controller mapping per system, per-system configuration, save
 states wired to the sync layer.
 
-Resolve open question 12 first — in-process cores where they are good enough,
-standalone emulators where they are not — because the answer decides whether the
-overlay and the save state sync layer need one implementation or two.
+Every system runs in-process, matching Cabinet — including PS2 and GameCube,
+which Cabinet embeds as real PCSX2 and Dolphin rather than as libretro cores
+(open question 12). One overlay implementation, one save state path.
 
-*Done when* several systems are playable end to end, including at least one
-in-process and one standalone, with the same overlay behaviour in both.
+The work here is open question 13 — building the same cores at the same
+revisions for Linux x86-64 — not choosing an architecture.
+
+*Done when* several systems are playable end to end, and a save state written on
+Apple TV loads on CabinetOS.
 
 ### Phase 6 — Real hardware
 **Status: not started.**
@@ -665,40 +731,56 @@ to parameterise the base image in the `Containerfile` and matrix the build
 workflow over both variants — not to restructure anything.
 
 ### 12. In-process cores for the heavy systems, or separate processes?
-**Raised: Phase 1, after learning how Cabinet tvOS works. Phase 5 owns it.**
+**Raised: Phase 1. RESOLVED by reading the Cabinet repository: in-process, all of them.**
 
-Cabinet runs cores in-process, and CabinetOS should match that wherever it can:
-it is the model the product is already built around, it makes the in-game
-overlay natural, and it keeps save states under the frontend's control.
+I had assumed the heavy systems would need standalone PCSX2 and Dolphin in their
+own processes, because their libretro cores lag the standalone emulators badly.
 
-The problem is the four heavy targets. In-process means a libretro core, and the
-libretro cores for those systems are not uniformly good:
+That was wrong, and the answer Cabinet already uses is better than either option
+I had considered. **Cabinet embeds the real PCSX2 and Dolphin as static
+archives** — `libpcsx2_mac.a`, `libdolphin_mac.a`, built from source with
+`tools/build-pcsx2-mac.sh` and `tools/build-dolphin-mac.sh` plus patch scripts —
+rather than using their libretro cores. Full emulator quality, still in-process.
 
-| System | Likely approach | Note |
-|---|---|---|
-| Dreamcast, Naomi | Flycast libretro | Strong core, in-process should be fine. |
-| PS2 | Standalone PCSX2 | The libretro core has long been unmaintained. Verify before assuming. |
-| GameCube | Standalone Dolphin, probably | The libretro core lags standalone significantly. Verify. |
-| Everything lighter | libretro in-process | Matches Cabinet directly. |
+**Consequences, all good:**
 
-**Verify all of this in Phase 5 rather than trusting the table.** It is written
-from general knowledge of the emulator landscape, not from testing on the
-reference hardware, and the situation moves.
+- **One overlay implementation, not two.** The frontend owns the frame loop for
+  every system. No gamescope compositing tricks, no per-emulator overlay.
+- **One save state path.** The frontend owns state for every system, and hands
+  it to the RomM sync layer the same way each time.
+- **No process launching at all**, which removes an entire category of "returned
+  to a desktop for half a second" bugs from Phase 5.
 
-If the answer is "both", which it probably is, two things follow and neither is
-cosmetic:
+**And the work is easier here than it was on macOS.** Dolphin and PCSX2 both
+target Linux x86-64 as a first-class platform. The Mac build needed patch
+scripts to get there; the Linux build should need fewer, or none.
 
-1. **The in-game overlay needs two implementations.** In-process, the frontend
-   owns the frame loop and drawing over it is natural. For a standalone emulator
-   in its own process, it is not — the options are compositing the overlay in
-   gamescope, or driving the emulator's own overlay, and they will not look or
-   feel the same. The product requirement is that the user cannot tell which one
-   they are in.
-2. **Save state sync needs two paths.** In-process, the frontend owns the state
-   and hands it to the RomM sync layer. Standalone, the state is a file in an
-   emulator-specific location and format, written on the emulator's schedule,
-   and something has to watch for it.
+The remaining work is open question 13 — producing Linux builds of the same
+cores — not an architectural choice.
 
-Design the overlay and the sync layer against the harder case from the start.
-Retrofitting a process boundary into a design that assumed in-process is the
-kind of rework that eats a phase.
+### 13. Building the same cores for Linux x86-64
+**Raised: Phase 1. Unresolved. Phase 5 owns it, but Phase 0 should scope it.**
+
+Core parity is a hard constraint (see *Emulation*), so CabinetOS needs the same
+cores, at the same revisions, built for Linux x86-64. Cabinet builds them per
+platform — `_ios`, `_tvos`, `_mac` — with `tools/build-core.sh` and per-core
+scripts. CabinetOS adds a `_linux` target.
+
+Open:
+
+- **Where does the Linux build live?** In the Cabinet repository next to the
+  existing targets, so all platforms move together and there is one source of
+  truth — or in CabinetOS, so the console's build is self-contained. The first
+  serves core parity better and is probably right, but it means CabinetOS
+  depends on a repository it does not own the release cadence of.
+- **Static archives or shared objects?** Cabinet links `.a` archives into one
+  binary. On Linux, `.so` per core is the more natural shape and allows loading
+  cores lazily, but it weakens the version-lockstep guarantee unless the shared
+  objects ship inside the image and nothing else can replace them.
+- **How is the core revision recorded and verified?** `tools/generate_cores_map.py`
+  exists; find out what it produces and whether CabinetOS can consume it. A
+  build-time assertion that CabinetOS and Cabinet are on the same core revisions
+  would turn a silent save-state incompatibility into a failed build.
+- **How much do the Mac patch scripts carry over?** `patch-pcsx2-mac.py` and
+  `patch-dolphin-mac.py` are presumably working around Apple-specific problems.
+  Phase 0 should read them and find out how much is macOS-specific.
