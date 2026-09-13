@@ -24,6 +24,23 @@
 # Phase 2 owns the decision about actually deleting Plasma. A candidate list is
 # at the bottom of this file, commented out.
 
+# ===========================================================================
+#  DO NOT REMOVE — HDMI-CEC
+# ===========================================================================
+#
+# These look like desktop or HTPC cruft and are not:
+#
+#   libcec, v4l-utils, linux-cec, linuxconsoletools
+#   60-cec-*.rules, 60-inputattach-cec.rules, 99-cec-bluetooth.rules
+#   cec-onboot/onsleep/onpoweroff/poweroff-tv/active-source units
+#   pulse8-cec-inputattach@, rainshadow-cec-inputattach@
+#
+# HDMI-CEC is a hard requirement: the console turns the television on and is
+# woken by it. v4l-utils reads as a webcam package, linuxconsoletools as a
+# joystick utility. Both are load-bearing. build_files/require-cec.sh fails the
+# build if any of them go missing — see it for the full reasoning, and
+# docs/PROJECT.md under Hardware.
+
 source /ctx/lib.sh
 
 group_start "Removing the display manager and graphical login"

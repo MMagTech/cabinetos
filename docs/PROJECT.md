@@ -79,14 +79,81 @@ What follows from that:
   hard-coded device paths, no assumptions about a particular audio or network
   chip. If the SER5 needs something unusual, that is a strong signal the fix
   belongs upstream in Bazzite, not here.
-- **Hardware capability is discovered, not assumed.** The SER5 has no HDMI-CEC;
-  a future machine might. Features that depend on hardware that may or may not
-  be present are detected at runtime and degrade gracefully, rather than being
-  designed out because the current box lacks them.
+- **Hardware capability is discovered, not assumed** — with one exception, HDMI-CEC,
+  which is a requirement rather than a capability. See below.
 - **AMD for now.** Bazzite publishes NVIDIA variants of its images, so an NVIDIA
   machine is a base-image change rather than a rewrite — but it doubles the
   images to build and test, so it stays out of scope until there is hardware
   that needs it. See open question 11.
+
+### HDMI-CEC is a hard requirement
+
+**The console must be able to turn the television on, and be woken by it.** That
+is not a nicety. It is a large part of what separates a console from a computer
+sitting under the telly, and this product is defined by that difference.
+
+Treat it like the controller: a thing the design may assume exists.
+
+#### A USB adapter is required, on essentially any mini PC
+
+**The Beelink SER5 has no wired CEC pin. Neither does the GMKtec K11.** Nor do
+almost any x86 mini PCs — the HDMI connector carries the CEC line, but the board
+does not wire it to anything. This is close to universal and should be planned
+for rather than checked hopefully.
+
+So the hardware requirement is a **USB CEC adapter**, and it is part of the
+bill of materials for any CabinetOS machine.
+
+| Adapter | Verdict |
+|---|---|
+| **Pulse-Eight** | The known good choice. Has a dedicated `inputattach` unit in the image. |
+| RainShadow | Also has a unit present; untested here. |
+| Ugreen | **Behaves inconsistently in native mode.** Avoid, or use legacy mode. |
+
+#### Two modes, and they behave differently
+
+Bazzite ships both CEC stacks, switched with `ujust cec-mode` or the Bazzite
+Portal:
+
+- **Legacy** — `libcec` and `cec-ctl`, driving the `cec-onboot`, `cec-onsleep`
+  and `cec-onpoweroff` services. This is the mode for external USB adapters,
+  and therefore **the mode that matters on x86**.
+- **Native** — Valve's `linux-cec`/`cecd`, for devices with CEC wired into the
+  kernel. **`cecd` is known to interfere with wakeup on HTPC setups using
+  dongles**, which is exactly our configuration, so native is not the default
+  to reach for here.
+
+Native mode is also **incomplete in this image**: Bazzite's native mode enables
+`steamos-manager-configure-cecd.service` alongside `cecd`, and `steamos-manager`
+is `bazzite-deck`-only. Pulling it in would drag the SteamOS management layer
+into the image, which constraint 4 rules out. Legacy adapter mode is the
+supported path; this is recorded rather than fixed.
+
+#### The packages are protected, by an assertion rather than a comment
+
+Every package CEC needs looks like cruft in a package list — `v4l-utils` reads
+as a webcam package, `linuxconsoletools` as a joystick utility — and both are
+load-bearing. `build_files/require-cec.sh` names each one with its reason and
+**fails the build** if any goes missing, whether by our hand or an upstream
+change. Audited and confirmed present on the running image: `libcec`,
+`v4l-utils`, `linux-cec`, `linuxconsoletools`, the four udev rules, and all
+seven CEC systemd units.
+
+#### CabinetOS must surface the mode switch itself
+
+**CabinetOS removes the terminal, and with it `ujust` and the Bazzite Portal** —
+both mechanisms Bazzite provides for choosing a CEC mode. Verified: `ujust` is
+gone from the built image.
+
+So mode selection has to exist in CabinetOS's own settings, or the choice is
+unreachable on a finished machine. **Phase 7 task**, recorded there.
+
+The reference implementation is `/usr/share/ublue-os/just/81-bazzite-fixes.just`,
+which survives in the image even though `ujust` does not. It writes `CEC_MODE`
+to `/etc/default/cec-control`, toggles the three legacy units against
+`cecd.service`, handles the two `inputattach` templates, and writes a `cecd`
+config with `logical_address = "playback"`, `suspend_tv = true` and
+`allow_standby = false`.
 
 ---
 
@@ -729,7 +796,15 @@ reachable over SSH when developer mode is on.
 A release manifest carrying one version number for the whole system. The UI
 checks, shows a console-style update screen, pulls, and reboots.
 
-*Done when* a full system update happens without a keyboard.
+**Also in this phase: HDMI-CEC mode selection in Settings.** CabinetOS removes
+the terminal, and with it `ujust` and the Bazzite Portal — both of Bazzite's
+mechanisms for choosing between legacy and native CEC. Without a CabinetOS
+setting, the choice is unreachable on a finished machine, and CEC is a hard
+requirement (see *Hardware*). The reference implementation is
+`/usr/share/ublue-os/just/81-bazzite-fixes.just`, which survives in the image.
+
+*Done when* a full system update happens without a keyboard, and the CEC mode
+can be changed with a controller.
 
 ### Phase 8 — Heavy systems and polish
 **Status: not started.**
@@ -914,27 +989,26 @@ key only, with the key supplied through the UI or fetched from a GitHub username
 binds to all interfaces or only the LAN, and whether the machine advertises
 itself over mDNS so a developer can find it without knowing its IP.
 
-### 10. Waking the machine with a controller
-**Raised: Phase 1. Unresolved. Phase 6 owns it.**
+### 10. Waking the machine, and turning the TV on
+**Raised: Phase 1. Largely DECIDED — HDMI-CEC is a requirement. Phase 6 tunes it.**
 
-The input model says a controller must be sufficient. That includes waking the
-machine, and whether it is achievable depends on hardware:
+Superseded by the hardware requirement above. CEC is no longer "use it if the
+machine happens to have it"; the console turns the television on and is woken by
+it, and a USB adapter is part of the bill of materials because essentially no
+x86 mini PC wires the CEC pin.
 
-- The reference SER5 has no HDMI-CEC, so a TV remote cannot drive it and it will
-  not wake when the TV does. Other machines may have it, which is exactly the
-  kind of capability that must be detected rather than assumed.
-- **The software side is already in the image.** The first build shows
-  `60-cec-uaccess.rules`, `60-cecd-uinput.rules` and `60-inputattach-cec.rules`
-  present, so Bazzite ships CEC plumbing. On hardware that has a CEC adapter it
-  should work with no packaging effort — which makes runtime detection the right
-  design rather than a hedge.
-- Waking from suspend over Bluetooth depends on the controller, the adapter and
-  the firmware, and is unreliable in general.
+What remains for Phase 6, with real hardware and a Pulse-Eight adapter present:
 
-The portable fallback is to never suspend and blank the display instead, trading
-idle power for a machine that is always ready. That is a defensible default for
-a console and works on any hardware. If CEC is present, use it; if not, fall
-back. Decide the mechanism in Phase 6 with real hardware in front of you.
+- **Legacy or native mode in practice.** Legacy is the expected answer — it is
+  the adapter path, and `cecd` is known to interfere with wakeup on exactly this
+  kind of dongle setup. Confirm rather than assume.
+- **Suspend versus display-blank.** `cecd`'s config carries `suspend_tv` and
+  `allow_standby`; the legacy path uses the `cec-onsleep` and `cec-onpoweroff`
+  services. Which combination gives a clean "press the button, everything wakes"
+  is an empirical question.
+- **The controller path is still separate.** CEC handles the television.
+  Bluetooth wake-from-suspend for a controller remains unreliable in general, so
+  a machine that stays awake and blanks its display is still the likely default.
 
 ### 11. NVIDIA hardware
 **Raised: Phase 1. Out of scope until there is hardware that needs it.**
