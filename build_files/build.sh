@@ -68,6 +68,14 @@ log "base image has $(wc -l < /usr/share/cabinetos/packages-before-strip.txt) pa
 /ctx/fix-repos.sh
 
 # ---------------------------------------------------------------------------
+# Phase 2: the session.
+# ---------------------------------------------------------------------------
+#
+# Makes the machine boot into gamescope instead of a console, and closes the
+# routes to a desktop that the strip pass left behind.
+/ctx/configure-session.sh
+
+# ---------------------------------------------------------------------------
 # Record the result.
 # ---------------------------------------------------------------------------
 rpm -qa | sort > /usr/share/cabinetos/packages-after-strip.txt
@@ -124,8 +132,22 @@ else
     failed=1
 fi
 
-# The default target must be multi-user, or Phase 1's done-criterion (boots to a
-# console prompt) is not met.
+# The session must be enabled, or the machine boots to a console — which is
+# Phase 1 behaviour, not Phase 2.
+if systemctl is-enabled cabinetos-session.service >/dev/null 2>&1; then
+    log "  ok: cabinetos-session.service is enabled"
+else
+    log "  MISSING: cabinetos-session.service is not enabled"
+    failed=1
+fi
+
+# SELinux will refuse to execute the session script from the wrong place — this
+# cost a debugging round on the VM (203/EXEC from /etc). /usr/bin is correct and
+# gets labelled bin_t automatically.
+check_present "session script" /usr/bin/cabinetos-session || failed=1
+
+# The default target must be multi-user. The session is pulled in by it; a
+# graphical.target default would try to start a desktop.
 if [[ "$(readlink -f /usr/lib/systemd/system/default.target)" == *multi-user.target ]]; then
     log "  ok: default target is multi-user.target"
 else

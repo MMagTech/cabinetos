@@ -1,0 +1,35 @@
+[Unit]
+Description=CabinetOS session
+Documentation=https://github.com/MMagTech/cabinetos
+After=systemd-user-sessions.service systemd-logind.service
+Wants=systemd-logind.service
+
+# Takes tty1 instead of a login prompt. This is what makes the machine boot into
+# CabinetOS rather than into a console — there is no getty to fall back to, and
+# that is the point.
+Conflicts=getty@tty1.service
+After=getty@tty1.service
+
+[Service]
+Type=simple
+User=cabinet
+
+# PAMName=login gives the process a real logind session on seat0, which
+# gamescope needs to take the display and the input devices.
+PAMName=login
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+StandardInput=tty-fail
+StandardOutput=journal
+StandardError=journal
+
+ExecStart=/usr/bin/cabinetos-session
+
+# A console that has crashed back to a black screen is indistinguishable from a
+# broken one. Always come back.
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

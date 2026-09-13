@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+#
+# The CabinetOS session.
+#
+# Phase 2: launches gamescope with a placeholder. Phase 3 replaces the
+# placeholder with the real frontend; nothing else here should need to change.
+#
+# This is deliberately not gamescope-session-plus. That harness is bazzite-deck
+# only, and its substance is Steam bootstrapping and SteamOS management, which
+# CabinetOS would be unpicking rather than using. See docs/PROJECT.md open
+# question 3.
+
+set -euo pipefail
+
+# Pick a backend. gamescope's drm backend drives the display directly, which is
+# what real hardware wants. A VM with no usable GPU has to fall back to headless
+# — the session plumbing is then still testable even though nothing is drawn.
+BACKEND="drm"
+if [[ -n "${CABINETOS_BACKEND:-}" ]]; then
+    BACKEND="${CABINETOS_BACKEND}"
+elif ! ls /dev/dri/card* >/dev/null 2>&1; then
+    BACKEND="headless"
+fi
+
+echo "cabinetos-session: starting gamescope (backend=${BACKEND})"
+
+# The placeholder. Phase 3 swaps this for the frontend binary.
+PLACEHOLDER="${CABINETOS_APP:-/usr/bin/sleep infinity}"
+
+# shellcheck disable=SC2086  # PLACEHOLDER is a command plus arguments
+exec gamescope \
+    --backend "${BACKEND}" \
+    --output-width 1920 \
+    --output-height 1080 \
+    -- ${PLACEHOLDER}
