@@ -16,7 +16,22 @@
 
 ## Where the project is — 2026-09-13
 
-**Phase 1 complete. Phase 2 mostly done. Phase 0 is the next piece of work.**
+**Phase 1 complete. Phase 2 mostly done. Phase 0 done — see *The design
+system*, *How Cabinet hosts cores* and *The frontend toolkit*.**
+
+The Phase 0 session read Cabinet's source rather than its documentation.
+Its two findings that change the plan:
+
+1. **A Linux x86-64 core build is small, not large.** Every one of the 23
+   cores has a working Linux path, the host layer is 95% portable C++ with
+   the GL path already written, and the Apple-only apparatus (symbol
+   prefixing, static merges, JIT walls) **disappears** rather than being
+   ported. Open question 13 is largely resolved.
+2. **The risk is not "can it be built", it is "will it be the same".** The
+   same core built for Linux defaults to a *different CPU backend* than the
+   Apple build, and Cabinet's own build system cannot currently be run by
+   anyone but its author on the machine that last ran it. Both are fixable
+   this week, and both must be fixed before a save state crosses.
 
 Running infrastructure:
 
@@ -284,7 +299,11 @@ Future sessions should look here before inventing anything.
 | Cabinet — `tools/build-core.sh` et al | same repo | Per-platform core builds. CabinetOS adds a Linux target — open question 13. |
 | Cabinet — `docs/native-in-game-saves.md` | same repo | How saves and save states work today. Phase 4 must match it. |
 | Cabinet — `docs/core-quality-pass-2026-08-17.md` | same repo | Which cores are good and why they were chosen. |
-| Cabinet — `CLAUDE.md`, `ROADMAP.md`, `docs/settled.md` | same repo | Conventions and decisions already made. Read before proposing anything. |
+| Cabinet — `RommAppTV/TVCoverFocus.swift` | same repo | **The three focus treatments, in 200 lines.** The single most useful file in the repository for Phase 3; its comments record why each system default was rejected. |
+| Cabinet — `RommApp/RommApp/UI/TenFootMetrics.swift` | same repo | Every ten-foot size in one place. |
+| Cabinet — `RommApp/RommApp/Native/NativeLauncher.swift` | same repo | The ROM's path from RomM into a running core, and the three directories. |
+| Cabinet — `RommApp/RommApp/Native/NativePlayerRenderer.swift` | same repo | The frame loop, the accumulator and the audio governor. |
+| Cabinet — `CLAUDE.md`, `ROADMAP.md`, `docs/settled.md` | same repo | Conventions and decisions already made. Read before proposing anything. Its **tvOS conventions** section is short and every line of it is a mistake already paid for. |
 | **RomM** | https://github.com/rommapp/romm | The server. |
 | RomM docs — Client API Tokens | https://docs.romm.app/latest/developers/client-api-tokens/ | Device pairing flow for keyboard-less auth. Phase 4. |
 | RomM docs — Device Sync Protocol | https://docs.romm.app/latest/developers/device-sync-protocol/ | Wire format for syncing saves, states and play sessions. Phase 4. |
@@ -392,8 +411,7 @@ What follows:
 
 ### What Cabinet actually ships
 
-From the repository tree (read the code in Phase 0 — this is the shape, not the
-detail):
+Read in Phase 0, from the source rather than the tree.
 
 Cabinet is its own **libretro frontend** — `Native/Libretro/LibretroFrontend.mm`,
 `LibretroCoreAPI.h`, `libretro.h`, plus Metal shaders. Cores are compiled to
@@ -401,12 +419,19 @@ static archives per platform and linked in: `libflycast_ios.a`,
 `libflycast_tvos.a`, `libflycast_mac.a` and so on, built by `tools/build-core.sh`
 and per-core scripts.
 
-25 core directories, covering the light and mid-weight systems:
+**23 cores, not 25** — this document previously counted the `Libretro` and
+`Archive` directories, which are the frontend and a vendored 7-Zip/zlib, not
+cores. The 23:
 
 > BeetleNGP, BeetlePCEFast, BeetleVB, FBNeo, FCEUmm, Flycast, GW, Gambatte,
 > GenesisPlusGX, MAME2003Plus, MGBA, MelonDS, Mupen64Plus, Opera, PCSXReARMed,
 > PPSSPP, PicoDrive, ProSystem, Saturn (Beetle), Snes9x, Stella2014, VeMUlator,
 > Vecx
+
+Two of them — **GW and VeMUlator — are iOS-only by decision**, not by
+limitation: tiny canvases that belong in a hand rather than on a television.
+Both have `_ios.a` and `_mac.a` and no `_tvos.a`. CabinetOS should inherit that
+decision and carry **21 cores**, not 23.
 
 And, **macOS only**, the two heavy ones — also as static archives, also
 in-process:
@@ -448,6 +473,216 @@ Those are two different things and the UI must treat them as such:
 
 The Settings storage screen shows both, and lets a cached game be promoted to
 kept and a kept game released back to cached.
+
+---
+
+## How Cabinet hosts cores
+
+Read from the source 2026-09-13. This is the Phase 0 deliverable that matters
+as much as the colour palette, because it is what decides the toolkit.
+
+### The shape: one C++ frontend, cores as data
+
+`LibretroFrontend` is a **process-global singleton**, deliberately. Libretro's
+callbacks are plain C function pointers with no context argument, so there is
+exactly one frontend's worth of state no matter how the wrapper is shaped, and
+exactly one core active at a time. Cores are not re-entrant and the app never
+runs two games at once.
+
+Each core is described to the frontend by a **`LibretroCoreAPI` struct** — 21
+function pointers covering the libretro entry points the frontend actually uses
+(`init`, `load_game`, `run`, `serialize`, `get_memory_data`, and so on). The
+frontend never names a core's symbols. That indirection exists purely because
+only one core can carry the standard `retro_*` names when they are all statically
+linked into one binary, so every other core's archive gets its symbols renamed
+with a per-core prefix first.
+
+**On Linux that entire mechanism is unnecessary.** One `.so` per core, `dlopen`ed
+with `RTLD_LOCAL`, gives namespace isolation for free. The struct stays — it is a
+good shape — but it gets filled by `dlsym` instead of by a generated wiring file.
+See open question 13.
+
+### A ROM's journey from RomM to a running core
+
+`NativeLauncher.prepare(rom:session:)`, in order:
+
+1. **Resolve the platform and core.** RomM's platform slug is canonicalised,
+   mapped to a `NativePlatform`, which names one core (or several, where the
+   user gets a picker — arcade only).
+2. **Reject formats the core cannot take.** Saturn, PS1 and Dreamcast are
+   `.chd`-only and single-file, deliberately, matching RomM's own recommended
+   format for CD platforms. A multi-file cue/bin is refused with an explanation
+   rather than attempted.
+3. **Find the bytes.** Three tiers, checked in this order:
+   - a **kept** game's directory (iOS/Mac), which already holds ROM and
+     firmware — zero network;
+   - a **cache** directory keyed by rom id (tvOS), left in place between
+     launches so a replay costs no download;
+   - otherwise **download** the ROM and *every* firmware file the platform
+     lists. Not the one the board needs — all of them. A core looks BIOS files
+     up by name in the system directory and ignores what it does not want, so
+     extra files are harmless and a missing one is the only failure that
+     matters.
+4. **Extract if archived** (the vendored 7-Zip/zlib in `Native/Archive`).
+5. **Restore saves before boot**, not after: any core-written save file is
+   placed at the exact name the core will look for, which is the loaded
+   content's basename.
+6. **Activate the core**, apply core options, set the controller port device
+   type, then `loadGame(romPath, systemDirectory:, saveDirectory:)`.
+
+Three directories, and they are three different things — a lesson Cabinet
+learned by losing saves:
+
+| | What it is | Lifetime |
+|---|---|---|
+| **work directory** | where the ROM and firmware sit | per launch, or the kept/cache directory |
+| **system directory** | where the core looks up BIOS by name | usually the work directory; the app bundle for PSP, whose "firmware" ships with the app |
+| **save directory** | where a core writes its own save files | **must outlive the session** — `CoreSaves/<rom id>/`, namespaced by core on multi-core platforms |
+
+**Pointing the save directory at the per-launch temp directory is how those
+saves used to vanish.** CabinetOS must not repeat it: the save directory is
+persistent storage from the first line of code, and on a multi-core platform it
+is namespaced by core so two arcade emulators cannot overwrite each other's
+NVRAM.
+
+### Saves and save states are two different mechanisms
+
+**In-game saves** (the cartridge battery, the memory card) arrive two ways, and
+a core uses one or the other:
+
+- `RETRO_MEMORY_SAVE_RAM` — the frontend reads and writes the core's buffer
+  directly. Most cores.
+- **A real file the core writes itself** into the save directory. Neo Geo
+  Pocket, Sega CD, Dreamcast's VMU, FBNeo's NVRAM, melonDS's `.sav`.
+
+The file-writing class has a sharp edge: **`retro_unload_game` is the one moment
+those cores flush.** Cabinet's `unloadGame` exists precisely to force it at quit,
+in RetroArch's own order — SRAM save, then unload, then deinit. A session killed
+by the OS loses everything since launch on those platforms. CabinetOS owns its
+own shutdown, so it can do better here than Cabinet can.
+
+Three sizing traps, all confirmed on hardware, all of which CabinetOS inherits:
+
+- **mGBA** reports a placeholder 128 KB until it has autodetected the save type,
+  then re-initialises its buffer. Poll the size; a restore seated before that
+  moment has to be applied again.
+- **Genesis Plus GX** trims its reported size once the game is running.
+- **Restore copies the smaller of blob and region** rather than demanding an
+  exact match, because of the two above.
+- **Game Boy's real-time clock is a separate region** (`RETRO_MEMORY_RTC`).
+  Saving only the save RAM silently loses the clock Pokémon Gold and Silver
+  depend on. It travels as its own `.rtc` file.
+
+**Save states** are `retro_serialize`/`retro_unserialize`, taken on the thread
+that drives `runFrame` — a snapshot taken mid-`retro_run` is corrupt by
+definition. They are written only when the user picks Save state; nothing
+autosaves them. Two cores (GW, VeMUlator) cannot serialize at all and their slot
+UI hides.
+
+### Where a save state lives, and how it reaches RomM
+
+Local first, always. A kept game's state is written into a **`pending-states`
+queue** inside its own directory before any upload is attempted, so losing
+signal mid-save never loses the save.
+
+The filename is the conflict resolution. Each state is
+`<rom basename> [<ISO timestamp>]` with colons, dots and `T` flattened — RomM's
+own naming — so an upload lands exactly as if it had happened online and can
+never overwrite anything. **Syncing is only "finish the uploads."**
+
+Upload is `POST /api/states?rom_id=&emulator=`, multipart, with the state and an
+optional screenshot captured on the paused frame.
+
+> **The `emulator` tag is the only thing standing between a good state and a
+> corrupt one, and it does not carry a version.** It is a bare slug —
+> `flycast-native`, `mgba-native`, `pcsx-rearmed-native` — and the launch screen
+> uses it to grey out states the running core cannot restore. A CabinetOS build
+> of a *different revision* of the same core would upload under the same tag, and
+> Cabinet would offer the state as loadable. This is the failure mode *Core
+> parity is a hard constraint* describes, and the tag cannot detect it. Either
+> the builds are genuinely identical, or the tag has to grow a build identity.
+> See open question 13.
+
+### The frame loop, and why it is not trivial
+
+This is the part that decides the toolkit, so it is worth stating exactly.
+
+The renderer is driven by a **display link at the panel's refresh rate**, which
+is *not* the rate the core wants. An NTSC core asks for 59.94; an Apple TV's
+display link can run far above that. So each draw:
+
+1. Accumulates wall-clock time against `1 / core.targetFPS`.
+2. Runs `retro_run` while the accumulator has a whole interval in it, **at most
+   twice per draw**, so a stall cannot bank a debt and repay it as a stutter.
+   The accumulator itself is capped at four intervals — time beyond that is
+   simply gone.
+3. Presents the latest frame whether or not a core frame was produced, so the
+   picture holds steady while the core is not yet due.
+
+Running the core once per display tick instead was measured wrong on hardware:
+Dreamcast produced 65,000–85,000 audio frames a second against 44,100 of
+realtime, ~1.5× too fast, with the surplus discarded — which is what made music
+play back sped up.
+
+**One core needs a second brake.** Flycast's threaded renderer free-runs its
+emulation thread as far ahead as its render queue allows — measured at up to
+five times realtime. RetroArch's backpressure is a blocking audio callback;
+Cabinet's callback must never block (it feeds a realtime ring), so the brake is
+an **audio governor**: when the core's own audio output is ahead of the wall
+clock by more than a 20 ms cushion, it is not due, whatever the accumulator says.
+Skipping the run leaves the render queue unconsumed, which is what actually
+stalls the emulation thread.
+
+The cushion is felt latency: the lead the governor permits *is* input lag, at
+10 ms per hundredth of a second. It was 50 ms, was reported as bad input lag on
+Dreamcast, and is now 20 ms. **This is a number CabinetOS will have to tune
+again**, because the display path is different.
+
+Applied to every core the governor made things worse (it slowed N64 down). It is
+Flycast-only, by measurement.
+
+### Video: two paths, and one of them is free on Linux
+
+**Software-rendered cores** (most of them) hand the frontend a pixel buffer in
+one of three libretro formats — RGB1555, XRGB8888, RGB565 — which is copied out
+per frame because cores reuse their buffer.
+
+**Hardware-rendered cores** (Flycast, Mupen64Plus, PPSSPP) ask for a GL context
+via `RETRO_ENVIRONMENT_SET_HW_RENDER` and render into an FBO the frontend owns.
+The frontend then has to get those pixels *back* to draw them, and on Apple that
+means `glReadPixels` into a pixel-pack double buffer, publishing the previous
+frame while the current one copies. It costs a frame of latency and was worth it:
+the synchronous version measured 12.7 ms inside `glReadPixels` on a heavy
+Dreamcast scene — two thirds of the whole frame.
+
+> **On Linux that readback should not exist.** It is there because the core
+> renders in GL and the display path is Metal, so the pixels must cross an API
+> boundary on the CPU. A Linux frontend that draws with GL or Vulkan can sample
+> the core's FBO texture directly. This is a performance *gain* from porting,
+> not a cost — and it removes the single largest per-frame cost the Apple build
+> has on its three heaviest cores.
+
+### The in-game overlay, and the input-mode rule
+
+The overlay is not composited by anything clever. **The frontend owns the frame
+loop, so the pause menu is simply a view drawn over the game surface** — a
+scrim, a panel, and buttons. That is the whole mechanism, and it is the direct
+payoff of hosting cores in-process rather than launching them.
+
+The one hard rule is about input, and it is architectural:
+
+> **While a game runs, the controller belongs to the core exclusively. While the
+> overlay is open, it belongs to the UI.** Never both.
+
+On tvOS this is `controllerUserInteractionEnabled`, flipped by whether the menu
+is visible. Without it the focus engine kept consuming presses, so B read as "go
+back" and dismissed the player instead of reaching the core as a face button —
+reported from real hardware as *"controllers work on the homescreen but in game
+b exits the game"*.
+
+CabinetOS has no focus engine handed to it, so it must implement both halves —
+but it must implement the *rule*, not just the routing. Any design where a
+button can mean two things at once is the same bug.
 
 ---
 
@@ -640,19 +875,60 @@ would suppress it, but removing the unit is cleaner — CabinetOS owns first run
 
 ### The palette
 
-Taken from Cabinet's own icon generator, `tools/make_icon.swift`. These are the
-product's colours, not an approximation, and the frontend (Phase 3) should be
-built from the same set.
+Taken from Cabinet's own icon generator, `tools/make_icon.swift`.
+
+**Verified against the source 2026-09-13: every value below is correct.** One
+detail was missing and is added — the backdrop's middle stop sits at 0.55, not
+at the midpoint.
 
 | Role | Value |
 |---|---|
-| Backdrop | `#3A2268` → `#120C26` → `#090614`, vertical |
+| Backdrop | `#3A2268` (0.0) → `#120C26` (**0.55**) → `#090614` (1.0), vertical, top to bottom |
 | Cabinet body | `#EEEAE2` |
 | Marquee | `#FF7AC7` → `#FFC457`, horizontal |
 | Screen | `#58E8F6` → `#2484D6`, vertical, with a white sheen at 26% fading out |
 | Control panel / base | `#CEC7BC` |
 | Joystick | `#3A3444` |
 | Buttons | `#EC405C`, `#FFC457` |
+
+**But this is the icon's palette, and the app does not use it.** That is worth
+saying plainly, because this document previously implied otherwise.
+
+Cabinet has **no colour assets and no design tokens at all** — checked: the
+asset catalogues hold app icons and nothing else, and there is not one
+`.colorset` in the repository. What the app actually looks like comes from three
+places, none of which is the icon:
+
+1. **Black, white and system semantic colours.** `Color.black` (57 uses),
+   `Color.white` (41), `.primary`, `.secondary`, `.tertiary`. Everything is
+   dark; `colorScheme` is forced to `.dark` where the platform would otherwise
+   have a say.
+2. **System materials** — `.regularMaterial`, `.ultraThinMaterial`, and on
+   tvOS 26 real Liquid Glass. This is the single largest contributor to the
+   look, and it is the thing CabinetOS gets none of for free.
+3. **The artwork itself.** Cover art is the brightest thing on every screen, by
+   explicit design, and backgrounds are almost always a blurred, desaturated,
+   darkened copy of the art in front of them.
+
+There are exactly **two** deliberate colours in the whole app:
+
+| | Value | Where |
+|---|---|---|
+| Platform tile panel | `#241A3D` | `TVLibraryView.panel`, the library's tile background |
+| Accent | **unset** — Apple's default | the prominent pause-menu button, progress tints |
+
+The panel colour carries a note worth keeping: it is *"deliberately darker and
+less saturated than it looks in a browser mockup: the same sRGB values render
+far more vividly on a wide-gamut TV, and the first build of this tile came out a
+loud electric purple on real hardware."* CabinetOS ships to televisions. Tune on
+one.
+
+**The accent colour is a decision CabinetOS has to make and Cabinet never did.**
+Nothing sets one, so `Color.accentColor` is whatever Apple's default tint is on
+the platform. A Linux frontend has no such default. The icon offers the obvious
+candidates: the screen cyan `#58E8F6` reads as "powered on" and has the contrast
+for a focus tint against a dark ground; the marquee pair `#FF7AC7`/`#FFC457` is
+warmer and more arcade. Pick one in Phase 3 and put it in the token table below.
 
 ### The boot splash
 
@@ -706,6 +982,552 @@ consoles avoid it only by making the firmware too.
 
 ---
 
+## The design system
+
+The Phase 0 deliverable. Extracted from Cabinet's source 2026-09-13, written so
+that someone who has never read Swift can reproduce it.
+
+**Read the caveat first.** Cabinet is a SwiftUI app on a platform that hands it a
+focus engine, a type ramp, a materials system and a navigation container. A large
+part of "what Cabinet looks like" is tvOS behaviour that Cabinet never wrote
+down, because it never had to. This section writes it down. Where a value comes
+from Cabinet's own source it is stated as such; where it comes from the platform
+it says so, and those are the places CabinetOS has to *build* something rather
+than *match* something.
+
+### The canvas
+
+tvOS lays out in a **1920×1080 point space regardless of panel resolution** — a
+4K television renders the same layout at 2×. Every number in this section is in
+those points.
+
+CabinetOS should adopt the same convention: **design at 1920×1080 and scale**.
+It makes every number here directly usable, it matches what the reference
+implementation was tuned against, and it means a 4K panel is a rendering
+decision rather than a layout one.
+
+**Overscan is real and the simulator lies about it.** Home's hero was sized
+three times before it fit: 0.42/460 cut the shelf caption off, 0.34/380 still cut
+it off *on real hardware although the simulator showed it fitting*, 0.28/300 fit
+with room to spare, and it finally settled at 0.40/420. Budget a safe area and
+verify it on a television, not on a screenshot.
+
+### Colour tokens
+
+Cabinet has none, so these are named here for CabinetOS to implement.
+
+Two kinds of value below, and the difference matters. **Literal** values are read
+straight out of Cabinet's source and are exact. **Semantic** values are what
+Cabinet asks the platform for — `.secondary`, `.tertiary`, `Color.red` — so the
+number given is Apple's documented dark-mode value, not something measured here.
+Treat the semantic ones as the intended relationship and settle the exact numbers
+when there is something on a television.
+
+| Token | Value | Kind | What it is |
+|---|---|---|---|
+| `bg` | `#000000` | literal | The ground. Genuinely black, not near-black. |
+| `bg-modal` | `#212121` → `#141414` vertical | literal | Full-screen covers with no artwork to blur (account, PIN, setup) |
+| `surface` | `#241A3D` | literal | The one solid panel colour — library tiles. Source is `rgb(0.14, 0.10, 0.24)`; use those floats rather than the hex if there is any doubt. |
+| `text-primary` | `#FFFFFF` | literal | |
+| `text-secondary` | white @ ~60% | semantic | Platform labels, counts, captions under a title |
+| `text-tertiary` | white @ ~30% | semantic | Chevrons, disclosure marks |
+| `scrim-overlay` | black @ 55% | literal | Behind the pause menu, and over blurred backdrops |
+| `focus-rim` | white @ 85% | literal | The 4pt ring on focused artwork |
+| `accent` | **to be chosen** | — | Prominent action fills |
+| `destructive` | system red | semantic | Quit, sign out, delete |
+
+**Materials are the hard part.** Cabinet leans on four surface treatments that
+Linux gives you nothing for:
+
+| Cabinet's name | What it does | Linux equivalent |
+|---|---|---|
+| `.ultraThinMaterial` | heavy blur, very light tint | backdrop blur, ~30px, white @ 10% |
+| `.regularMaterial` | heavy blur, mid tint | backdrop blur, ~40px, white @ 18% |
+| Liquid Glass `.regular` | the above plus edge refraction and specular highlight | **no equivalent** |
+| Liquid Glass tinted | as above, tinted white @ 22–35% | **no equivalent** |
+
+CabinetOS should implement the first two as a real backdrop blur and **not
+attempt the last two.** Liquid Glass is a system effect with per-frame cost that
+Apple absorbs; an imitation of it is both expensive and recognisably not it. The
+honest translation is a tinted blur, which is what Cabinet itself falls back to
+on tvOS 18 and which the source describes as adequate.
+
+### Type
+
+The ramp is Apple's tvOS text styles. Cabinet names styles, never sizes, with
+two exceptions. **These sizes are Apple's published tvOS ramp, not measured on
+the device** — treat them as the intended proportions and verify once there is
+something on a screen.
+
+| Cabinet's name | Size / weight | Used for |
+|---|---|---|
+| Large Title | 76 bold | Game detail title; settings page titles |
+| Title 1 | 57 | — |
+| Title 2 | 48 bold | Shelf headers ("Recent", "Favorites"); pause-menu game name (semibold) |
+| Title 3 | 38 semibold | Settings rows, tile titles, switcher pills, pause-menu buttons |
+| Headline | 38 semibold | Hero card game title |
+| Callout | 31 | Cover captions; secondary detail under a settings row |
+| Body | 29 | |
+| Footnote | 29 | Game counts on tiles |
+| Caption 1 | 25 | Hero card platform label |
+
+**One hardcoded size exists** in the whole tvOS UI — **40 bold**, the rom grid's
+own screen title inside its glass chip. It sits between Title 2 and Large Title
+because a grid title should not shout as loudly as a game's name does. Everything
+else names a style.
+
+One rule is recorded as a mistake already made: **shelf captions and grid
+captions must be the same style.** Home's shelves ran at Title 3 while the
+library grid ran at Callout, "not a deliberate size difference." Both are
+Callout now.
+
+### Spacing and sizing
+
+Everything below is from `TenFoot` and the tvOS views, in points.
+
+| | Value |
+|---|---|
+| **Content inset**, horizontal | 60 (Home) / 80 (Library, grid, detail, settings) |
+| **Shelf cover** | 260 × 347 (3:4) |
+| **Shelf spacing** | 40 |
+| **Shelf vertical padding** | 24 — headroom for the focus scale, not decoration |
+| **Caption gap** below a shelf cover | 6 |
+| **Grid cover** | adaptive, minimum 260 |
+| **Grid column spacing** | 48 |
+| **Grid row spacing** | 44 |
+| **Caption gap** below a grid cover | 10 |
+| **Platform tile** | adaptive minimum 380 wide, **200 tall**, spacing 36 both axes |
+| **Settings column** | max width **1100**, rows 16 apart |
+| **Settings row padding** | 32 horizontal, 22 vertical |
+| **Hero card** | full content width, height `min(screenHeight × 0.40, 420)` |
+| **Detail cover** | 340 × 460 |
+| **Pause panel** | max width 560, padding 40 |
+
+`TenFoot` declares `gridCoverMinimum = 240` but the grid that uses it hardcodes
+260. **Take 260** — the hardcoded value is the one that shipped and was looked at.
+
+### Corner radii
+
+There is a real system here and it is worth keeping: **radius tracks the size and
+the seriousness of the thing.**
+
+| Radius | Applied to |
+|---|---|
+| 8 | A cover thumbnail inside another element |
+| 10 | Shelf cover art |
+| 12 | Grid cover art |
+| 16 | Detail-screen cover; settings rows |
+| 18 | Hero card; platform tiles; pause-menu buttons |
+| 32 | The pause-menu panel |
+| capsule | Pills, chips, the Resume button, the library switcher |
+
+### Focus and selection
+
+**This is the most important part of the document.** On tvOS the focus engine is
+free; on Linux it is the single biggest thing CabinetOS has to build. Cabinet's
+own rule sits in its conventions file, put there after the same mistake was made
+at least twice. In summary — the original is longer and names specific SwiftUI
+styles:
+
+> Never use the system's default focus treatment. It paints a solid plate over
+> whatever the element already has, and it reserves no headroom for its own
+> scale growth, so a focused row grows into its neighbour.
+
+Cabinet therefore defines **three** focus treatments, and everything focusable
+uses one of them.
+
+**Reserved headroom is the other half of that rule**, and it is a layout
+obligation rather than a style one: a shelf carries 24pt of vertical padding for
+no reason except that its cards grow by 10% when focused, and without it the
+grown card is clipped against the rail's bounds. Every container holding
+focusable elements has to budget for their focused size.
+
+#### 1. Artwork — lift, shadow, rim
+
+For anything whose content is a picture.
+
+| | Rest | Focused | Pressed |
+|---|---|---|---|
+| Scale | 1.00 | **1.10** | 1.02 |
+| Shadow | none | black @ 55%, blur 26, offset y +14 | |
+| Rim | none | white @ 85%, **4pt, inset** | |
+| Duration | | 180 ms ease-out | 120 ms ease-out |
+
+Two details that are not obvious and both came from real bugs:
+
+- **Pressed scales *down* from focused**, to 1.02. The card is already raised, so
+  a click has to read as a push *into* the screen or it does not read at all.
+- **The caption slides down** by `coverHeight × 0.05 + 2` when its card is
+  focused. A 1.10 scale about the centre advances the bottom edge by 5% of the
+  height, which buries the caption underneath it. The 0.05 is half of
+  `1.10 − 1`; if the scale changes, this changes with it.
+
+The rim is **suppressed on composite elements** — anything whose label mixes art
+with its own text, like a platform tile. A rectangle drawn around the whole
+button always crosses the text somewhere. The scale and shadow carry focus
+perfectly well alone.
+
+#### 2. Text controls — tint, lift, a shape behind
+
+For a short label or a pill: a shelf's "Recent ›" header, the Platforms /
+Collections switcher, a save-state entry.
+
+| | Rest | Focused |
+|---|---|---|
+| Text | secondary | white |
+| Background | none | tinted blur, white @ 25% |
+| Scale | 1.00 | **1.06** |
+| Padding | 14 horizontal, 8 vertical | |
+| Duration | | 180 ms ease-out |
+
+#### 3. Rows — a surface that is always there
+
+For a full-width settings-style row.
+
+| | Rest | Focused |
+|---|---|---|
+| Background | blur, untinted | blur, white @ 22% |
+| Scale | 1.00 | **1.03** |
+| Radius | 16 | |
+| Duration | | 180 ms ease-out |
+
+The scale shrinks as the element grows: **1.10 for a cover, 1.06 for a pill,
+1.03 for a full-width row.** That is not arbitrary — a full-width row growing
+10% would collide with its neighbours, and a small pill growing 3% would not
+read at all.
+
+#### Where focus lands
+
+- **Home puts focus on the hero** on arrival, explicitly, arbitrated against the
+  account chip that sits above it in reading order.
+- **Library puts focus on the switcher** on first arrival — but *only* the first
+  time. Re-entering from a pushed screen must leave focus where back-navigation
+  put it. Cabinet got this wrong first: forcing focus on every appearance yanked
+  it away whenever the user came back from another tab.
+- The primary action on a screen should be reachable without travelling
+  through secondary ones.
+
+#### Selection is not focus
+
+A selected library switcher pill is tinted **white @ 35%**; a focused one is
+tinted **white @ 25%** and scaled. The two states are independent and both are
+visible at once. This matters: a controller-driven UI where the user can move
+focus away from the current selection has to show both, or they lose their place.
+
+### Motion
+
+Cabinet's motion vocabulary is small and almost entirely ease-out. That is the
+system, and it should be kept.
+
+| Duration | Curve | What |
+|---|---|---|
+| **60–80 ms** | ease-out | Button press feedback; an LED changing |
+| **120 ms** | ease-out | Press state on a focused card |
+| **150 ms** | ease-out | Pause-menu button focus; menu appear/dismiss |
+| **180 ms** | ease-out | **The focus transition. The most-used value in the app.** |
+| **220 ms** | snappy | A segmented choice changing |
+| **250 ms** | ease-in-out | A pairing code appearing; a progress bar |
+| **280 ms** | ease-out | Launch transition, secondary elements |
+| **350 ms** | ease-out | Artwork arriving asynchronously — a cover mosaic filling in |
+| **350 ms** | ease-in-out | The in-game overlay appearing and dismissing |
+| **600 ms** | ease-in-out | A deliberate state change the user should watch |
+| **1400 ms** | ease-in-out, repeating | Boot-curtain shimmer |
+
+Springs appear **four** times in the whole app, always for something with
+physical character. Two are tuned; two use the platform default to snap a
+dragged element back:
+
+| Response | Damping | What |
+|---|---|---|
+| 0.34 | 0.55 | A control pad element settling |
+| 0.40 | 0.42 | The launch transition's lead element — deliberately loose, so it overshoots |
+| default | default | A dragged sheet returning to rest (twice) |
+
+**Rules that fall out of this:**
+
+1. **Ease-out is the default.** Things arrive quickly and settle. Ease-in-out is
+   for a change of state the user asked for; ease-in is used nowhere.
+2. **180 ms is the focus tempo**, and nothing about focus should be slower. A
+   controller user crosses a shelf faster than that, and the animations must not
+   queue up behind them.
+3. **Asynchronous content fades in at 350 ms**, never snaps. Cover art arriving
+   over a network is the common case.
+4. **Springs are rare and mean something.** Everything else is a curve.
+
+> **Phase 3 warning, already recorded:** software rendering in the VM makes
+> motion choppy. **Build the motion from these numbers; do not judge it there.**
+> An animation tuned against software rendering is tuned against the wrong
+> feedback.
+
+### Navigation model
+
+**Four destinations, always reachable, in a bar across the top:**
+
+> Home · Library · Search · Settings
+
+Search is drawn apart from the other three — it is not just a fourth tab. Library
+is **hidden entirely** when the machine is offline, rather than shown empty:
+its only honest content offline is exactly what Home already shows, and *"if both
+tabs are the same why two."*
+
+Settings is a real destination on a television, not a corner button. On a phone
+that placement is about thumb reach; a controller has no thumb reach and every
+destination costs the same number of clicks.
+
+Within that:
+
+- **Each tab owns a navigation stack.** Library pushes to a platform's grid.
+- **Game detail is a full-screen cover, not a push.** It replaces the screen
+  entirely, with the artwork as its own backdrop.
+- **The player is a full-screen cover over the detail screen.** So quitting a
+  game returns to the detail screen, and backing out again returns to where the
+  user was browsing.
+- **No screen titles that repeat the tab.** Library has no "Library" heading;
+  Settings has no "Settings" heading. The bar already says it.
+- **A pushed page carries its title as ordinary content at the top of its own
+  scroll view**, never as system chrome. On tvOS the system version painted over
+  the artwork.
+
+#### Home is resume-first
+
+Home is not a menu. Its structure is fixed:
+
+1. **The hero** — what you were playing. Focused on arrival.
+2. **Recent** — everything else recently played, as a horizontal shelf.
+3. **Favorites** — a second shelf, only if there are any.
+
+The hero carries **two** actions and the distinction is load-bearing:
+
+- **Resume** (a pill in its top-right corner) goes *straight into the game*,
+  with the previous choices already made and the newest state loaded, wherever
+  that state was written. Resume means resume; stopping at a screen with a Play
+  button on it is two actions, not one.
+- **The artwork itself** opens the detail screen, which is where you go to pick a
+  different state, change the core, or export.
+
+When there is nothing to resume, Home says so in its own words and points at the
+Library — it does not show an empty shelf.
+
+### Component inventory
+
+Everything CabinetOS's frontend needs to draw, with the treatment it uses.
+
+| Component | Shape | Focus treatment |
+|---|---|---|
+| **Cover card** | 3:4 art, radius 10–12, caption below | Artwork |
+| **Hero card** | wide, radius 18, art fitted over a blurred copy of itself, frosted title band at the bottom | Artwork (no rim) |
+| **Resume pill** | capsule, blurred fill, icon + label | Text control |
+| **Shelf** | header row (title + chevron) then a horizontal rail | header is a Text control; cards are Artwork |
+| **Rail edge fade** | the rail is masked to transparent over its outer 4% at each end | — |
+| **Platform tile** | 380×200, radius 18, label left, cover right, blurred art behind | Artwork (no rim) |
+| **Cover grid** | adaptive columns, two-line captions with reserved space | Artwork |
+| **Switcher** | a row of capsule pills, one selected | Text control |
+| **Screen-title chip** | a static glass capsule, not a button | — |
+| **Settings row** | full width, title + detail + optional value + chevron | Row |
+| **Settings page** | plain large title, then rows, max 1100 wide | — |
+| **Pause menu** | scrim, centred panel radius 32, full-width buttons | its own — scale 1.04, 150 ms |
+| **Primary action button** | the one place a solid opaque fill is right | platform default |
+| **Badges** | small overlays on a cover: incompatible, favourite, downloaded | — |
+| **On-screen keyboard** | *does not exist in Cabinet* — tvOS provides one | **CabinetOS must build this** |
+| **Progress** | a determinate bar for downloads; the label carries the percentage | — |
+| **Toast / banner** | capsule, blurred, slides in from the top edge, self-dismissing | — |
+
+Two rules about lists worth carrying:
+
+- **A list of covers gets two caption lines with reserved space**, so rows stay
+  aligned whether a title wraps or not. One line truncated almost every real
+  title at these widths.
+- **A wide screen does not get a full-width row.** A row stretched to 1920
+  points leaves a name at the far left and a count at the far right with a third
+  of the screen empty between them. Use a tile grid, which also gives the focus
+  engine a real two-dimensional field to move in.
+
+### What CabinetOS has to build that Cabinet got for free
+
+Stated plainly, because it is the honest cost of "owned, not skinned":
+
+1. **A focus engine.** Spatial navigation between arbitrary rectangles, with
+   remembered focus per container, and the three treatments above.
+2. **An on-screen keyboard.** The baseline for all text entry, per the input
+   model. Cabinet never wrote one.
+3. **Backdrop blur** as a real, cheap effect, since it is load-bearing in almost
+   every component.
+4. **Asynchronous image loading** with the 350 ms fade, placeholder handling and
+   a memory budget.
+5. **Safe-area handling** for overscan.
+6. **The text ramp**, as actual numbers, with a font chosen and shipped in the
+   image.
+
+None of these is research. All of them are work, and they are the reason Phase 3
+is a phase.
+
+---
+
+## The frontend toolkit
+
+**Recommendation: C++20, SDL3 for platform and input, one EGL / OpenGL ES 3.x
+context, and a hand-written retained UI layer. Evaluate RmlUi for the UI layer
+before writing one.**
+
+Decided in Phase 0 with Part 1's findings in hand. Record a reversal here rather
+than editing this, if it is reversed.
+
+### What the program actually is
+
+The constraint that decides this is in *Emulation*, and Part 1 sharpened it:
+
+> The frontend is not a launcher. It owns the frame loop, loads cores as
+> libraries, feeds them ROM data and controller input, presents their output,
+> and draws its own UI over the top — **in the same graphics context**, at a
+> stable 60 Hz, while a PS2 is being emulated underneath.
+
+Six hard requirements fall out, and each one eliminates candidates:
+
+1. **Cheap C FFI, called per frame.** `retro_run` is called up to twice per
+   draw; `retro_serialize` moves megabytes. Any toolkit whose foreign-function
+   boundary has per-call overhead or a marshalling step is disqualified.
+2. **A real GL context the frontend owns and hands to cores.** Flycast,
+   Mupen64Plus and PPSSPP render through
+   `RETRO_ENVIRONMENT_SET_HW_RENDER` into an FBO. The toolkit must let the
+   frontend create that context, not create one for it and hide it.
+3. **The UI must draw into the same context.** This is what deletes the
+   `glReadPixels` readback — the largest per-frame cost on Apple's three
+   heaviest cores. A toolkit that composites the game as a separate surface or
+   texture handoff gives that cost straight back.
+4. **Frame pacing under the frontend's control**, to the precision the
+   accumulator and the audio governor need. A toolkit that owns the render
+   thread and decides when frames happen is fighting the one thing this program
+   must get right.
+5. **A Wayland client**, with no X11 assumption, since the session is gamescope
+   or cage.
+6. **Embeds two large C++ emulators.** Dolphin and PCSX2 are not libretro cores;
+   they are whole emulators with host layers Cabinet has already written —
+   `CabinetDolphinHost.cpp` (574 lines) and `CabinetPS2Host.cpp` (811 lines),
+   plus their bridges. **Both are plain, portable C++ today.**
+
+### Why C++
+
+Because it is the language the program is already written in.
+
+Cabinet's frontend is Objective-C++ whose Objective-C surface is a thin veneer:
+of `LibretroFrontend.mm`'s 2,281 lines, **125 touch an Apple type, and 60 of
+those are in the wrapper at the bottom.** The C++ underneath — environment
+callback, video refresh, readback ladder, input state, option handling, the
+core-tolerates-deinit table — ports substantially unchanged. The GL path is
+**already EGL and GLES3**, behind the `CABINET_ANGLE` flag, because the Mac
+build reaches GLES through ANGLE. On Linux that is the native path.
+
+The two heavy emulators' host layers compile as they are. Every core is C or
+C++. Every other emulator project that hosts cores in-process — RetroArch,
+Dolphin, PCSX2, Flycast — is C++ with a hand-written renderer. Choosing anything
+else means writing and maintaining a binding layer across the hottest boundary
+in the program, forever, for a UI convenience.
+
+The counter-argument is real and should be stated: **the UI is the majority of
+Phase 3's work, and C++ gives you none of it.** That is true. It is also true in
+every other candidate, because the thing that would have saved the most work —
+tvOS's focus engine — has no equivalent anywhere. See the alternatives below.
+
+### The shape to build
+
+**One process. One EGL context. Cores as `.so` files.**
+
+```
+cabinetos-frontend  (C++20, SDL3, EGL/GLES3)
+  ├── libretro host      — the ported LibretroFrontend, dlopen + RTLD_LOCAL
+  ├── UI layer           — focus engine, layout, text, blur, OSK
+  ├── RomM client        — REST + WebSocket
+  └── session            — storage, saves, sync queue
+
+/usr/lib/cabinetos/cores/
+  ├── flycast_libretro.so
+  ├── mgba_libretro.so
+  ├── … 21 cores
+  ├── dolphin.so         — Dolphin + CabinetDolphinHost, behind the same struct
+  └── pcsx2.so           — PCSX2 + CabinetPS2Host, likewise
+```
+
+Three consequences, all good:
+
+- **The symbol-prefixing apparatus disappears.** `RTLD_LOCAL` gives namespace
+  isolation for free, so `bsat_wrapper.c`, the `ld -r` merges, the exported
+  symbol lists and `-fno-common` all go. See open question 13.
+- **Dolphin and PCSX2 need not be linked into the frontend.** Put each behind the
+  same struct-of-function-pointers the libretro cores use, compile its host layer
+  into its own `.so`, and the frontend binary stays small and fast to rebuild —
+  which is what makes the SFTP development loop bearable.
+- **Separate `.so` files rechunk into smaller image layers**, which the update
+  model cares about: a core bump moves one layer, not the whole image.
+
+`SDL3` covers Wayland, gamepads (including hotplug and the Steam-style mappings
+Bazzite already ships udev rules for), and audio. It is already in the base
+image. Use it for platform, input and audio; **do not** use its renderer — the
+frontend needs the raw GL context.
+
+Audio goes to PipeWire through SDL3, with the same rule as Cabinet: **the
+callback never blocks.** It drains a ring the draw loop fills. That rule is what
+made the audio governor necessary, and it is the right rule.
+
+### The UI layer
+
+The design system section is the specification for this. Before writing it from
+nothing, **evaluate RmlUi**: it gives layout, text shaping, and a CSS-like
+styling system, and — decisively — it renders through a backend *you* supply, so
+it shares the frontend's GL context rather than owning one. That is the property
+that matters, and most UI libraries do not have it.
+
+Dear ImGui is the other option and has direct precedent: **PCSX2's own
+`FullscreenUI` is a controller-driven, cover-art, ten-foot console UI built on
+ImGui, running over a live emulator.** Cabinet's PCSX2 patch #13 disables it
+precisely because Cabinet has its own — which is a demonstration that the
+approach works, from inside this project's own dependencies. The reservation is
+that immediate mode makes remembered focus, caption slides and interruptible
+transitions awkward enough that a retained layer tends to get built on top
+anyway.
+
+Either way, **the focus engine is ours.** Nothing provides it.
+
+### The alternatives, and why not
+
+| | Why it was considered | Why not |
+|---|---|---|
+| **Qt 6 / QML** | The strongest alternative. Gives layout, text, a focus and key-navigation model, shader effects for blur, and animation declared exactly as the design system states it (`easing.type: Easing.OutQuad; duration: 180` maps one to one). Qt 6 is **already in the base image** — see open question 1. | Qt Quick's scene graph owns the render thread and its vsync cadence, which is the one thing requirement 4 says must be ours. It is injectable (`QSGRenderNode`, `beforeRendering`) but you are then fighting the framework at the hottest point in the program. Qt Virtual Keyboard is GPL-or-commercial. **Worth a spike before committing against it** — see below. |
+| **Rust + wgpu** | Good FFI to C, strong tooling, memory safety where it is genuinely useful. | `wgpu` abstracts away the GL context the cores require, so you would run raw EGL beside it and share textures across two graphics abstractions. C++ interop (Dolphin, PCSX2) needs a C shim — smaller than it sounds, since Cabinet already wrote those bridges, but real. And this project has one developer, who is not a Rust developer. |
+| **Godot** | Owns a frame loop, has a UI system with focus neighbours, exports to Linux/Wayland. | Owns the frame loop *its* way. Embedding a core's GL FBO into its renderer, and embedding Dolphin and PCSX2 at all, is fighting the engine. Ships a large runtime to draw ten screens. |
+| **GTK4** | In the image already. | A desktop application toolkit. No ten-foot story, no focus model of the kind needed, and the same render-loop ownership problem without Qt's compensating strengths. |
+| **Flutter** | Real Linux embedder, decent FFI. | The game reaches the screen through the texture registry — a handoff, which is requirement 3 given straight back. Desktop-oriented. |
+| **Electron / web** | — | A browser is a non-goal, and this is the frame loop of an emulator. |
+| **RetroArch, EmulationStation, ES-DE** | Solve much of this already. | Constraint 4: the frontend is owned, not skinned. Also none of them hosts real PCSX2 and Dolphin in-process, which is the thing that makes one overlay and one save-state path possible. |
+
+### The one spike worth running before Phase 3 starts
+
+Qt is the only alternative strong enough to be worth an hour of doubt, and the
+question between it and C++ is narrow and testable:
+
+> **Can a Qt Quick scene draw over a libretro core's FBO, in the same GL
+> context, with the frame loop paced by us rather than by the scene graph?**
+
+Build one screen — a shelf of covers with the three focus treatments — over
+Flycast, in the VM, under cage. If the pacing is ours and the readback is gone,
+Qt buys a great deal of Phase 3 for free and the base image already carries it.
+If it is not, the answer is C++ and the hour was worth it.
+
+Do not run this spike for Godot, Flutter or Rust. Their objections are
+structural, not empirical.
+
+### What this decides about the image
+
+- **Runtime dependencies stay small**: SDL3, Mesa (EGL/GLES), PipeWire, and
+  whatever the UI layer needs for text. All already present.
+- **Open question 1 reopens slightly.** If the spike chooses Qt, Plasma's Qt 6
+  is load-bearing rather than dead weight and the question answers itself. If it
+  chooses C++, Qt has no user in the image and the removal argument gets its
+  first real reason beyond tidiness.
+- **`ci/base-watch.txt` gains** SDL3, Mesa and PipeWire, per *Staying current
+  with Bazzite*'s own instruction that the list must grow with the project.
+
+---
+
 ## Non goals
 
 - Not a Steam machine.
@@ -744,35 +1566,42 @@ invisible to anyone who has not deliberately turned it on.
 ## Phase plan
 
 ### Phase 0 — Design system spec
-**Status: not started. THIS IS THE NEXT PIECE OF WORK.**
-
-It is now the only thing blocking Phase 3, because cage made the VM a viable
-target for building the frontend — hardware is no longer in the way. And it
-carries the project's biggest unknown: whether the same emulator cores can be
-built for Linux at matching versions. If they cannot, save-state continuity —
-the thing that justifies CabinetOS existing rather than running Batocera — is in
-trouble, and that should be known before a UI is built on top of it.
-
-Give it its own session. Reading Cabinet properly is a lot of context and does
-not mix well with system work.
-
-Extract from Cabinet: colours, typography, spacing, corner radii, focus and
-selection behaviour, motion curves and durations, navigation model, and a
-component inventory. Write it as a toolkit-agnostic document.
-
-While reading Cabinet for this, also record **how it hosts cores** — how a ROM
-gets from RomM into a running core, where save states live, and how the overlay
-is drawn over a running game. Phase 3 needs that as much as it needs the colour
-palette, because the frontend is an emulator host rather than a launcher (see
-*Emulation*), and that is the constraint that decides the toolkit.
-
-Scope open question 13 at the same time: read `tools/build-core.sh`, the
-per-core build scripts, `tools/generate_cores_map.py`, and the two Mac patch
-scripts, and work out what a Linux target costs. It is the long pole in Phase 5
-and it is knowable now.
+**Status: COMPLETE, 2026-09-13.**
 
 *Done when* a developer who has never read a line of Swift could reproduce the
 look and feel of Cabinet from the document alone.
+
+**Shipped, all from reading Cabinet's source rather than its documentation:**
+
+- ***The design system*** — the canvas, colour tokens, the type ramp, spacing,
+  corner radii, the three focus treatments, the motion vocabulary, the
+  navigation model, and a component inventory. It ends with an explicit list of
+  the six things tvOS provided free that CabinetOS has to build.
+- ***How Cabinet hosts cores*** — the ROM's path from RomM into a running core,
+  the three directories and why confusing them lost saves, how in-game saves
+  differ from save states, where a state lives before and after upload, the
+  frame loop and the audio governor, the two video paths, and the overlay's
+  input-mode rule.
+- ***The frontend toolkit*** — the recommendation, the requirements that produce
+  it, the alternatives, and the one spike worth running before Phase 3 starts.
+- **Open question 13, scoped** — every core checked rather than assumed.
+
+**What it changed:**
+
+- **The palette was verified and is correct**, with one missing gradient stop
+  added — but this document's claim that it is what the app looks like was
+  wrong. Cabinet has no colour assets at all. Corrected in *Branding*.
+- **The core count was wrong.** 23, not 25, and two of those are iOS-only by
+  decision, so CabinetOS carries 21.
+- **A Linux core build is much cheaper than feared**, and the Apple-only
+  apparatus disappears rather than being ported.
+- **The parity risk moved.** It is not "can the cores be built" — it is that a
+  plain Linux build silently selects a *different CPU backend*, and that
+  Cabinet's build system cannot currently be run by anyone. Both have concrete
+  fixes, recorded in open question 13.
+- **There is a one-evening test that answers the save-state question** on
+  hardware the project already owns, with no Linux toolchain. It is the highest
+  value work available right now. See open question 13.
 
 ### Phase 1 — Base image
 **Status: COMPLETE, 2026-09-13.**
@@ -851,11 +1680,23 @@ Verified on the VM: session active, zero restarts, correct fallback chosen.
 3. **Re-verify on a freshly installed image**, rather than one upgraded in place.
 
 ### Phase 3 — Frontend shell
-**Status: not started.**
+**Status: not started. Unblocked — the Phase 0 spec exists.**
 
 The real frontend, built against the Phase 0 spec, running on fake data. Home,
 browse, game detail, settings, in-game overlay. Full controller navigation, plus
 the on-screen keyboard, which everything else that needs text entry depends on.
+
+**Start with the Qt spike** in *The frontend toolkit*, not with a screen. It is
+the only toolkit question left worth an hour, and it is cheap. Then:
+
+1. **The focus engine before any screen**, because every screen depends on it
+   and it is the thing tvOS gave Cabinet free. Three treatments, remembered
+   focus per container, spatial navigation.
+2. **One shelf of covers over a black background**, to get the 180 ms focus
+   tempo, the 1.10 lift and the caption slide right. Everything else is that
+   component in different arrangements.
+3. **The on-screen keyboard early**, not last. First-run setup cannot be reached
+   without it, and it is the gate on Phase 4 being testable at all.
 
 **Nearly all of this can be built in a VM**, via cage — see *Measured
 behaviour*. Layout, colour, typography, artwork grids, navigation, focus, every
@@ -895,6 +1736,23 @@ which Cabinet embeds as real PCSX2 and Dolphin rather than as libretro cores
 
 The work here is open question 13 — building the same cores at the same
 revisions for Linux x86-64 — not choosing an architecture.
+
+**Order, from Phase 0's scoping.** The instinct is to build all twenty-one cores
+and then find out. Do the opposite:
+
+1. **One core, in CI, at a pinned SHA.** Gambatte — the smallest, pure C, no
+   recompiler, no firmware. `make platform=unix`. This proves the whole
+   pipeline: pin, build, package, load, run.
+2. **One hardware-rendered core.** Flycast, because it is also Dreamcast and
+   Naomi, and because it is the one that proves the GL context and the
+   no-readback path.
+3. **One backend-sensitive core.** pcsx_rearmed, built twice — `DYNAREC=0` and
+   the Linux default — with a state written by each loaded by the other. That
+   answers the parity question locally even if the Mac↔Apple TV test never
+   happens.
+4. **The other eighteen**, which by then are a loop.
+5. **Dolphin and PCSX2 last**, as their own `.so` files, against upstream PCSX2
+   rather than the ARM64 fork.
 
 *Done when* several systems are playable end to end, and a save state written on
 Apple TV loads on CabinetOS.
@@ -1037,18 +1895,19 @@ switching the VM to VirtIO-GPU would be worth doing before testing the DRM
 backend.
 
 ### 4. Bundle libretro cores directly, or build on RetroDECK?
-**Raised in the brief. Still open, but narrowed.**
+**Raised in the brief. RESOLVED in Phase 0: bundle directly, as `.so` files.**
 
-What we now know (see *Emulation*): Cabinet already runs native cores
-**in-process**. That is the libretro shape, and it points strongly at CabinetOS
-bundling cores directly rather than building on RetroDECK, which is a curated
-set of *standalone* emulators behind ES-DE — someone else's frontend, which
-constraint 4 rules out anyway.
+Cabinet runs native cores **in-process**, which is the libretro shape.
+RetroDECK is a curated set of *standalone* emulators behind ES-DE — someone
+else's frontend, which constraint 4 rules out on its own, and a process-launching
+model, which throws away the single overlay and single save-state path that
+in-process buys (open question 12).
 
-What is not settled is whether in-process works for everything. See open
-question 12, which is now the question that actually matters here.
-
-Do not resolve before Phase 5.
+Phase 0 closed the remaining doubt. Every core has a working `platform=unix`
+path producing `<core>_libretro.so` directly, so bundling is not merely
+preferable, it is **less work than any alternative** — the Apple-only merge and
+symbol-renaming apparatus disappears and nothing replaces it. See open question
+13 and *The frontend toolkit* for the layout.
 
 ### 5. Anaconda ISO vs. a plain disk image for installing to real hardware
 **Raised: Phase 1. Both are built; neither is tested.**
@@ -1176,11 +2035,28 @@ rather than using their libretro cores. Full emulator quality, still in-process.
 target Linux x86-64 as a first-class platform. The Mac build needed patch
 scripts to get there; the Linux build should need fewer, or none.
 
+**Phase 0 confirmed that, with a number.** Reading both patch scripts: roughly
+five of Dolphin's eight edit groups and nine of PCSX2's seventeen are Apple or
+Metal walls that simply do not exist on Linux. The remainder are not port work at
+all — they are the frontend claiming the audio, the input, the on-screen messages
+and the present path, which it has to do on any platform. And the host layers
+Cabinet wrote are already plain portable C++: 574 lines for Dolphin, 811 for
+PCSX2, with only 155 and 681 lines of Objective-C++ beside them.
+
+**One correction to this entry.** It says "in-process, all of them", and that
+remains right about *who owns the frame loop* — but on Linux "in-process" should
+not mean "statically linked". Each emulator becomes its own `.so`, loaded behind
+the same struct of function pointers the libretro cores use, so the frontend
+binary stays small and a core bump moves one image layer instead of all of them.
+Same process, same frame loop, same overlay; different linkage. See *The frontend
+toolkit*.
+
 The remaining work is open question 13 — producing Linux builds of the same
 cores — not an architectural choice.
 
 ### 13. Building the same cores for Linux x86-64
-**Raised: Phase 1. Repo layout DECIDED. The rest is Phase 5, scoped in Phase 0.**
+**Raised: Phase 1. Repo layout DECIDED. SCOPED IN PHASE 0, 2026-09-13 — most of
+this is now answered. What remains is listed at the end and is small.**
 
 **Decision: CabinetOS stays a separate repository from Cabinet.**
 
@@ -1219,27 +2095,231 @@ CabinetOS then reads the manifest, builds the same revisions for Linux x86-64,
 and asserts at build time that what it produced matches. A mismatch becomes a
 failed build rather than a save state that silently will not load.
 
-#### Still open
+#### Scoped in Phase 0 — what the code actually says
 
-- **Shared objects, not static archives — probably.** Cabinet merges each core
-  into a single relocatable object exporting only `<prefix>_retro_*` forwarders,
-  so many cores can link into one binary without their `retro_*` symbols
-  colliding. That is a neat solution to an Apple-platform constraint. On Linux
-  the constraint does not exist: one `.so` per core, `dlopen`ed with
-  `RTLD_LOCAL`, gets namespace isolation for free — so the symbol-prefixing work
-  disappears rather than being ported. Separate `.so` files also rechunk into
-  smaller image layers, which the update model cares about. Confirm in Phase 0.
-- **How much of the Mac patch scripts carry over.** `patch-pcsx2-mac.py` and
-  `patch-dolphin-mac.py` are presumably working around Apple-specific problems;
-  both emulators target Linux x86-64 first-class, so the answer may be "none".
-- **Which cores have a Linux build path at all.** `build-core.sh` selects a
-  `MAKE_PLATFORM` per core and the script's own comments note that tvOS support
-  was only verified for one core rather than assumed. Do the same checking for
-  Linux rather than assuming every core's Makefile has a usable case.
-- **x86-64 versus the ARM assumption.** Every existing Cabinet target is arm64.
-  Some libretro cores carry hand-written ARM assembly paths with C fallbacks —
-  `pcsx_rearmed` most obviously, given its name. Expect at least one core to
-  need attention here.
+Checked 2026-09-13 by reading Cabinet's build scripts and fetching all twenty
+upstream libretro Makefiles. **Verified** means read from the source;
+**assumed** means reasoned and not run. Nothing here has been built — no Linux
+toolchain has touched any of it, because nothing builds on this Mac.
+
+##### Every core has a Linux path, and it is the best-tested path they have
+
+**VERIFIED, all twenty Makefile-based cores.** Each one has a `unix` branch, and
+each one **defaults to `platform = unix` when `uname` says Linux**. This is the
+standard libretro Makefile preamble, and it is the configuration RetroArch's own
+Linux builds ship — far more exercised than the `ios-arm64` and `tvos-arm64`
+cases Cabinet uses.
+
+Every `unix` branch produces `<core>_libretro.so`. **So the Linux build is not
+just possible, it is the simplest target Cabinet has**: `make platform=unix`
+yields the artifact directly, with no merge step, no symbol renaming and no
+wrapper.
+
+The three CMake cores — mGBA, Flycast, PPSSPP — all carry a `LIBRETRO` option
+and Linux handling, and all three ship official Linux libretro cores upstream.
+**Assumed** to build; not compiled here.
+
+##### The ARM-assembly worry is inverted
+
+**VERIFIED.** Five cores touch assembly at all: FBNeo, GW, pcsx_rearmed,
+mupen64plus and picodrive. In every case the assembly is gated behind ARM
+architecture detection and **is simply not compiled on x86-64**. FBNeo's is Vita
+only. GW's `linux_x86_64` is an explicitly supported upstream platform.
+picodrive's ARM cores (Cyclone, DrZ80) are selected by `ARCH` and give way to
+their C equivalents (FAME, CZ80).
+
+So no core is blocked by ARM assembly. **The real risk runs the other way**, and
+it is the important finding of Part 1:
+
+> **On Linux x86-64, several cores turn ON a recompiler that the Apple build has
+> OFF.** A build that just says `platform=unix` inherits a different CPU
+> emulation backend than the one Cabinet ships — silently, with no warning, and
+> producing a core that is *better* but not *the same*.
+
+**VERIFIED**, per core, from the Makefiles:
+
+| Core | Cabinet on tvOS | Plain Linux x86-64 build | Lever |
+|---|---|---|---|
+| **pcsx_rearmed** | `DYNAREC=0`, pure interpreter | `DYNAREC=lightrec` — a real recompiler, plus `LIGHTREC_CUSTOM_MAP=1` | `DYNAREC=0` |
+| **melonDS** | no `JIT_ARCH`, interpreter | `JIT_ARCH=x64` — the x86-64 recompiler | `JIT_ARCH=` |
+| **mupen64plus** | `WITH_DYNAREC=` (empty), `-DNO_ASM`, GLES3 | `WITH_DYNAREC=x86_64` (needs **nasm**) and desktop `-lGL`, not GLES | `WITH_DYNAREC= FORCE_GLES3=1` |
+| **picodrive** | `APPLE=1` forces `use_sh2drc=0` | SH2 recompiler **on** (32X, Sega CD) | `use_sh2drc=0` |
+| **Flycast** | `-DTARGET_NO_REC`, interpreter | full x64 SH4 dynarec | omit / keep |
+
+Cabinet's Mac build already pulls several of these levers the other way
+(`DYNAREC=ari64`, `JIT_ARCH=aarch64`), so the mechanism is proven; only the
+values differ.
+
+**This is why the manifest as previously specified is not enough.** Repository
+plus commit SHA does not describe a build. It must also record **the make
+arguments and CMake flags**, or two builds of the same revision will differ in
+the one dimension that matters.
+
+##### And the source-level patches are part of the build too
+
+**VERIFIED.** `build-core.sh` and `build-flycast.sh` patch upstream source
+in-flight, and not all of those patches are Apple workarounds. Three change
+behaviour and **must travel to Linux**:
+
+- **Flycast `CPU_RATIO = 2`.** Upstream charges every interpreted SH4
+  instruction 8 cycles, an effective 25 MHz, which is the direct cause of heavy
+  scenes slowing down *inside the emulated machine*. Cabinet changes it to 2, an
+  effective 100 MHz. Both neighbouring values were measured on device and
+  rejected. **On a Linux build with the dynarec on, this constant is not used at
+  all** — which is a behaviour difference between platforms that nobody has
+  reasoned about yet.
+- **melonDS's missing unload flush.** Upstream's `retro_unload_game` never
+  flushes, so a save made less than two seconds before quitting is dropped —
+  and save-then-quit is exactly how people leave a game. Cabinet inserts the
+  flush. Linux needs it identically.
+- **VeMUlator's `strchr` → `strrchr`.** Finds the extension at the last dot
+  rather than the first, so a dot anywhere in a parent directory name does not
+  silently load the card as nothing. (VeMUlator is iOS-only, so this one does not
+  travel — but it is the same class of patch.)
+
+The Apple-only patches — melonDS's `MAP_JIT` W^X and fastmem bracketing,
+pcsx_rearmed's 16 KB page-size fix, Flycast's `JITWriteProtect` dlsym bypass,
+the Beetle PCE `zutil.h` `fdopen` fix — **all disappear.**
+
+##### The prefix-and-merge apparatus disappears entirely
+
+**VERIFIED, and confirming what this question guessed.** Cabinet merges each
+core into one relocatable object exporting only `<prefix>_retro_*` forwarders,
+because Apple's toolchain ships no object-file symbol renamer and only one core
+can carry the standard names. On Linux, one `.so` per core `dlopen`ed with
+`RTLD_LOCAL` gives that isolation for free.
+
+Gone with it: `bsat_wrapper.c` and its eighteen `sed`-derived copies, the
+`ld -r` merges, `-exported_symbols_list`, `ar rcs`, and the `-fno-common`
+compiler shim that exists only because Apple's linker cannot localise common
+symbols. That is most of `build-core.sh`'s length and nearly all of its
+subtlety.
+
+##### The two heavy emulators are the easy half, not the hard half
+
+This document assumed Dolphin and PCSX2 would be the long pole. **They are the
+only two things already solved.**
+
+**VERIFIED:** both are **pinned to an exact commit and asserted at build time** —
+Dolphin at `a1e636d`, PCSX2 at `c89cb8ae`. `build-dolphin-mac.sh` re-reads
+`git rev-parse` and fails if the tree has moved. That is precisely what the core
+manifest is supposed to do, already implemented, for the two cases it was assumed
+would be hardest.
+
+Their patch scripts classify cleanly:
+
+| | Apple walls that vanish | Seats for the frontend that must be re-cut |
+|---|---|---|
+| **Dolphin** (8 groups, 19 edits) | Catalyst JIT W^X; libusb `IOServiceAuthorize`; AGL/NSOpenGL; the Quartz input backend; `NSScreen` HDR headroom | where `Sys` lives; audio out; `Pad::GetStatus` input |
+| **PCSX2** (17 groups) | Catalyst JIT; CocoaTools AppKit; the Metal renderer's AppKit corners; the Metal present path (3 groups); EyeToy/AVFoundation; the Homebrew/FFmpeg leak; libwebp archive split | the host layer itself; audio; input; on-screen messages; the present guard, in whatever form Vulkan needs |
+
+Roughly **five of Dolphin's eight** and **nine of PCSX2's seventeen** are Apple
+or Metal walls that do not exist on Linux. The rest are the frontend claiming
+the loop, the audio, the input and the OSD — which it must do on any platform,
+and which is *the same work* rather than a port.
+
+And the host layers themselves are already portable: `CabinetDolphinHost.cpp`
+(574 lines) and `CabinetPS2Host.cpp` (811), plus their C bridges, are plain C++.
+Only the `.mm` files — 155 lines for Dolphin, 681 for PCSX2 — are Apple-specific,
+and they are audio, Cocoa shims and the Metal drawable probe.
+
+> **One deliberate divergence from "the same source".** PCSX2 is pinned to the
+> **isztldav fork**, which exists solely to add ARM64 JIT recompilers that
+> upstream stubs out on Apple Silicon — about 23,000 lines of new arm64 emitter,
+> which the fork's own README says was translated with LLM help. **On x86-64
+> that fork buys nothing**, and upstream PCSX2's x86-64 recompiler is the
+> original, first-class one. CabinetOS should track **upstream PCSX2**, not the
+> fork. Record it as an exception in the manifest with this reasoning next to
+> it, rather than letting it look like drift.
+
+##### The urgent finding: Cabinet's core build is not reproducible by anyone
+
+**VERIFIED, and this is more serious than the missing SHAs.**
+
+1. `spikes/` is **gitignored**. The per-core source checkouts live only on the
+   machine that built the shipping archives.
+2. `build-core.sh` derives every core's wrapper by `sed`-ing
+   `spikes/BeetleSaturnStatic/bsat_wrapper.c` — a file its own comment describes
+   as *"hand-written, not part of the cloned repo."* It is not in the
+   repository. **`tools/build-core.sh` cannot run on a fresh clone of Cabinet.**
+3. The committed `.a` archives embed no revision. Checked with `strings` across
+   several: nothing. The revisions are **not recoverable from the artifacts.**
+
+So the current core revisions exist in exactly one place: the working trees on
+one Mac. If that machine is lost, parity cannot be established against what
+Cabinet ships today — only re-established from a fresh pin, which invalidates
+every save state made so far.
+
+**Do this before anything else, and it takes minutes:**
+
+```
+for d in spikes/cores/*/src spikes/dolphin/src spikes/*/src; do
+  [ -d "$d/.git" ] && echo "$d $(git -C "$d" rev-parse HEAD)"
+done
+```
+
+Commit the output. That is the manifest's first row set, recovered. Then
+reconstruct `bsat_wrapper.c` into the repository — `build-flycast.sh` already
+carries a complete equivalent inline as a heredoc, so it is a copy, not a
+rewrite.
+
+#### The core manifest, revised
+
+Supersedes the sketch above. Per core:
+
+| Field | Why |
+|---|---|
+| `repo` | upstream URL |
+| `commit` | exact SHA, **checked out and asserted**, never `--depth 1` of `HEAD` |
+| `systems` | which RomM platforms it serves |
+| `platforms` | which targets it is built for |
+| `build.<platform>` | **the make arguments or CMake flags**, per platform — this is the new field, and the table above is why |
+| `patches` | which in-flight source patches apply, and to which platforms |
+| `notes` | deliberate divergences, like PCSX2's fork |
+
+It belongs in **Cabinet**, because Cabinet is the app that ships and the source
+of the constraint. CabinetOS reads it, builds the same revisions with the
+recorded flags, and asserts at build time. A mismatch becomes a failed build
+rather than a save state that silently will not load.
+
+#### The test that answers the whole question, and can be run this week
+
+The parity risk is not theoretical and it does not need CabinetOS to exist to
+measure. **Cabinet already ships two different configurations of the same core**:
+
+| Core | tvOS | macOS |
+|---|---|---|
+| pcsx_rearmed | interpreter | `ari64` recompiler |
+| melonDS | interpreter | `aarch64` recompiler |
+| Flycast | `TARGET_NO_REC` | full recompiler |
+
+> **Write a save state on the Mac and load it on the Apple TV, for those three
+> cores.** If it loads, CPU backend does not affect state format, and CabinetOS
+> can take the faster Linux defaults. If it does not, every core must be built
+> with Cabinet's exact backend, and that becomes a hard line in the manifest.
+
+That is a one-evening test on hardware the project already owns, it needs no
+Linux toolchain, and it is the highest-value thing anyone can do for Phase 5
+right now. **Until it is run, assume states are backend-sensitive and match
+Cabinet's flags exactly.**
+
+#### Still open after Phase 0
+
+- **The save-state backend question above.** Untested. Blocks nothing until
+  Phase 5, but shapes the manifest.
+- **The `emulator` tag carries no version.** See *How Cabinet hosts cores*. A
+  state written by a mismatched build is offered as loadable, because the tag
+  cannot tell. Either the builds are genuinely identical, or the tag grows a
+  build identity — and that is a **Cabinet-side change**, since Cabinet writes
+  the tag today.
+- **Nothing has been compiled.** Everything above is read from source. The first
+  real signal is a CI job that builds one core — Gambatte, the smallest — with
+  `make platform=unix` at a pinned SHA. Do that in Phase 5 before the other
+  twenty.
+- **Firmware.** Cabinet fetches every firmware file a platform lists from RomM.
+  CabinetOS inherits that, but PSP is a special case: PPSSPP's system files ship
+  *inside the app bundle*, not from RomM. In a bootc image they become a path in
+  `/usr`, which is fine, but it is a thing to remember rather than discover.
 
 ### Prior art: how Cabinet and Grout already do this
 
