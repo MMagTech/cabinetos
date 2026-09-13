@@ -36,8 +36,10 @@ if [[ ! -d /ctx/system_files ]]; then
 fi
 
 log "overlaying system_files/"
-# .gitkeep files exist only to keep empty directories in git.
-find /ctx/system_files -name .gitkeep -delete
+# /ctx is a read-only bind mount, so nothing here may modify the source. An
+# earlier version tried to delete .gitkeep placeholders from it and failed.
+# There are no placeholders now — every directory under system_files/ holds a
+# real file — so there is nothing to exclude.
 cp -avf /ctx/system_files/. / >/dev/null
 
 # Prove it landed, rather than trusting cp's exit code. This is the check that
