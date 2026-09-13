@@ -91,9 +91,14 @@ public:
     // A textured quad in design points. Glyphs use it; cover art and a running
     // core's frame will use it too, which is the point of it existing rather
     // than a text-only path.
+    // lodBias forces sampling from a coarser mip level. That is how the
+    // blurred echo under an odd-shaped cover is drawn: a box blur that costs a
+    // texture fetch rather than a blur pass.
     void drawTextured(float x, float y, float w, float h, GLuint texture, float u0,
                       float v0, float u1, float v1, const Color& tint,
-                      bool singleChannel = true);
+                      bool singleChannel = true, float lodBias = 0.0f, float clipX = 0,
+                      float clipY = 0, float clipW = 0, float clipH = 0,
+                      float clipRadius = 0);
 
     // Device pixels per design point for the frame in progress. Text has to
     // rasterise at device resolution to be crisp on a 4K set, so it needs this.
@@ -131,7 +136,7 @@ private:
         GLint top, mid, bottom, midStop;
     } bloc_{};
     struct {
-        GLint canvas, rect, uv, tint, tex, single;
+        GLint canvas, rect, uv, tint, tex, single, lod, clip, clipRadius;
     } tloc_{};
 };
 

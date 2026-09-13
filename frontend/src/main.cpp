@@ -27,6 +27,7 @@
 #include <string>
 #include <vector>
 
+#include "image.h"
 #include "text.h"
 #include "ui.h"
 
@@ -91,8 +92,9 @@ struct Animated {
 };
 
 struct Card {
-    ui::Color art;  // stands in for cover art until there is an image layer
+    ui::Color art;      // shown until the cover arrives, and if it never does
     const char* title;
+    const char* cover;  // a path today, a RomM URL in Phase 4
     Animated focus;
     Animated press;
 };
@@ -102,12 +104,18 @@ struct Card {
 // a long title that has to truncate, and a Japanese one, which a ROM library is
 // full of and which is the reason the font stack has a CJK fallback at all.
 const Card kSampleLibrary[] = {
-    {ui::Color::rgb(0x2484D6), "Sonic the Hedgehog 2", {}, {}},
-    {ui::Color::rgb(0xEC405C), "Super Metroid", {}, {}},
-    {ui::Color::rgb(0x58E8F6), "Castlevania: Symphony of the Night", {}, {}},
-    {ui::Color::rgb(0xFFC457), "\xE3\x83\x89\xE3\x83\xA9\xE3\x82\xAD\xE3\x83\xA5\xE3\x83\xBC\xE3\x82\xB7\xE3\x83\xA5", {}, {}},
-    {ui::Color::rgb(0xFF7AC7), "Streets of Rage 2", {}, {}},
-    {ui::Color::rgb(0x7A6BC4), "Chrono Trigger", {}, {}},
+    {ui::Color::rgb(0x2484D6), "Sonic the Hedgehog 2", "covers/a-3x4.jpg", {}, {}},
+    {ui::Color::rgb(0xEC405C), "Super Metroid", "covers/b-3x4.png", {}, {}},
+    {ui::Color::rgb(0x58E8F6), "Castlevania: Symphony of the Night", "covers/c-3x4.jpg", {}, {}},
+    // Deliberately the wrong shape: a squarish arcade flyer. This is the
+    // odd-aspect case, and it must letterbox onto a blurred echo of itself
+    // rather than crop the title off the top of the art.
+    {ui::Color::rgb(0xFFC457), "\xE3\x83\x89\xE3\x83\xA9\xE3\x82\xAD\xE3\x83\xA5\xE3\x83\xBC\xE3\x82\xB7\xE3\x83\xA5", "covers/d-square.png", {}, {}},
+    // A wide one, for the same reason in the other direction.
+    {ui::Color::rgb(0xFF7AC7), "Streets of Rage 2", "covers/e-wide.jpg", {}, {}},
+    // No cover at all. Arcade sets often have none, and the coloured panel with
+    // the title under it is the honest answer rather than a grey box.
+    {ui::Color::rgb(0x7A6BC4), "Chrono Trigger", nullptr, {}, {}},
 };
 
 }  // namespace
@@ -121,12 +129,24 @@ int main(int argc, char** argv) {
     // are 4K; plenty are not; the design canvas scales to both and this is how
     // that gets checked rather than assumed.
     int renderW = 0, renderH = 0;
+    // Deliberately settable, so eviction can be exercised on a machine with
+    // plenty of memory. An unbounded texture cache on a 4 GB console is a real
+    // failure mode and it must be testable, not merely intended.
+    size_t imageBudget = 192u * 1024 * 1024;
+    // Loads covers that are then never drawn again, the way scrolling a shelf
+    // leaves the covers behind it. That is the only situation in which anything
+    // is evictable at all, so it is the only way to test that eviction works.
+    bool evictTest = false;
     for (int i = 1; i < argc; ++i) {
         if (SDL_strcmp(argv[i], "--screenshot") == 0 && i + 1 < argc) {
             shotMode = true;
             shotPath = argv[++i];
         } else if (SDL_strcmp(argv[i], "--frames") == 0 && i + 1 < argc) {
             shotAfterFrames = SDL_atoi(argv[++i]);
+        } else if (SDL_strcmp(argv[i], "--evict-test") == 0) {
+            evictTest = true;
+        } else if (SDL_strcmp(argv[i], "--image-budget-mb") == 0 && i + 1 < argc) {
+            imageBudget = static_cast<size_t>(SDL_atoi(argv[++i])) * 1024 * 1024;
         } else if (SDL_strcmp(argv[i], "--render-size") == 0 && i + 1 < argc) {
             SDL_sscanf(argv[++i], "%dx%d", &renderW, &renderH);
         } else if (SDL_strcmp(argv[i], "--focus") == 0 && i + 1 < argc) {
@@ -197,6 +217,20 @@ int main(int argc, char** argv) {
         std::fprintf(stderr, "[frontend] text init failed\n");
         return 1;
     }
+
+    // 192 MB of covers resident. A shelf holds a handful; a library grid holds
+    // a screenful; anything past that is re-decoded on the way back, which is
+    // cheap and bounded. Four workers, so a fast scroll keeps up without
+    // starving the frame thread on a four-core box.
+    ui::ImageCache images;
+    // A key is not a path. Everything after '#' is stripped before reading, so
+    // one file can stand in for many distinct entries here — and so a real RomM
+    // URL with a query string is already the shape this expects.
+    images.init(imageBudget, 4, [](const std::string& key) {
+        const size_t hash = key.find('#');
+        return ui::ImageCache::readFile(hash == std::string::npos ? key
+                                                                 : key.substr(0, hash));
+    });
 
     std::vector<Card> cards(std::begin(kSampleLibrary), std::end(kSampleLibrary));
 
@@ -270,6 +304,14 @@ int main(int argc, char** argv) {
         // caps its own accumulator for the same reason.
         dt = std::min(dt, 0.1f);
 
+        if (evictTest && frame == 5) {
+            // Five covers requested once and never asked for again: the shelf
+            // has scrolled past them.
+            for (int i = 0; i < 5; ++i) {
+                images.get("covers/b-3x4.png#scrolled-past-" + std::to_string(i));
+            }
+        }
+        images.pump(dt);
         for (auto& c : cards) {
             c.focus.tick(dt);
             c.press.tick(dt);
@@ -332,6 +374,9 @@ int main(int argc, char** argv) {
                 const float x = baseX - (w - kShelfCoverWidth) * 0.5f;
                 const float y = shelfTop - (h - kShelfCoverHeight) * 0.5f;
 
+                // The coloured panel under the art: it is what shows while a
+                // cover is still decoding, what stays if there is none, and
+                // what the art fades in over.
                 ui::Rect cover{x, y, w, h, kCoverRadius * scale, card.art};
                 cover.border = f * kFocusRimWidth;
                 cover.borderColor = ui::palette::kFocusRim;
@@ -339,6 +384,21 @@ int main(int argc, char** argv) {
                 cover.shadowOffsetY = f * kFocusShadowOffsetY;
                 cover.shadowColor = ui::Color::black(0.55f * f);
                 renderer.draw(cover);
+
+                if (card.cover) {
+                    // Fill, which the drawing code turns into fit-over-a-
+                    // blurred-echo by itself when the cover is the wrong shape.
+                    ui::drawImage(renderer, images.get(card.cover), x, y, w, h,
+                                  ui::Fit::Fill, 1.0f, kCoverRadius * scale);
+                    // The rim again, over the art: it is the focus indicator and
+                    // nothing may sit on top of it.
+                    if (f > 0.0f) {
+                        ui::Rect rim{x, y, w, h, kCoverRadius * scale, ui::Color::white(0)};
+                        rim.border = f * kFocusRimWidth;
+                        rim.borderColor = ui::palette::kFocusRim;
+                        renderer.draw(rim);
+                    }
+                }
 
                 // The caption, riding down with the lift so the grown card
                 // cannot bury it. One line, truncated with a real ellipsis:
@@ -370,6 +430,9 @@ int main(int argc, char** argv) {
         }
     }
 
+    std::fprintf(stderr, "[image] resident %.1f MB, %d still pending\n",
+                 images.bytesResident() / (1024.0 * 1024.0), images.pendingCount());
+    images.shutdown();
     text.shutdown();
     renderer.shutdown();
     SDL_GL_DestroyContext(gl);

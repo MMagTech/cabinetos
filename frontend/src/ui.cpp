@@ -136,10 +136,12 @@ uniform vec2 uCanvas;
 uniform vec4 uRect;
 uniform vec4 uUV;
 out vec2 vUV;
+out vec2 vPoint;
 void main() {
     vec2 corner = vec2(float(gl_VertexID & 1), float((gl_VertexID >> 1) & 1));
     vec2 p = uRect.xy + corner * uRect.zw;
     vUV = mix(uUV.xy, uUV.zw, corner);
+    vPoint = p;
     vec2 ndc = vec2(p.x / uCanvas.x * 2.0 - 1.0, 1.0 - p.y / uCanvas.y * 2.0);
     gl_Position = vec4(ndc, 0.0, 1.0);
 }
@@ -148,19 +150,39 @@ void main() {
 const char* kTexturedFS = R"(#version 300 es
 precision highp float;
 in vec2 vUV;
+in vec2 vPoint;
 uniform sampler2D uTex;
 uniform vec4 uTint;
 uniform int uSingleChannel;
+uniform float uLod;
+// The rounded box this draw is clipped to, which is NOT the same rectangle as
+// the one being drawn: a cover is fitted or overflowed inside a card, and both
+// have to stop at the card's rounded edge. Zero size means no clip.
+uniform vec4 uClip;
+uniform float uClipRadius;
 out vec4 fragColor;
+
+float clipSDF(vec2 p, vec2 halfSize, float r) {
+    vec2 q = abs(p) - halfSize + r;
+    return min(max(q.x, q.y), 0.0) + length(max(q, 0.0)) - r;
+}
+
 void main() {
-    vec4 t = texture(uTex, vUV);
-    if (uSingleChannel == 1) {
-        // Coverage in red, colour from the tint. Straight alpha, to be
-        // composited by the same blend function everything else uses.
-        fragColor = vec4(uTint.rgb, uTint.a * t.r);
-    } else {
-        fragColor = vec4(t.rgb * uTint.rgb, t.a * uTint.a);
+    vec4 t = uLod > 0.0 ? textureLod(uTex, vUV, uLod) : texture(uTex, vUV);
+    vec4 c = uSingleChannel == 1
+        // Coverage in red, colour from the tint. Straight alpha, composited by
+        // the same blend function everything else uses.
+        ? vec4(uTint.rgb, uTint.a * t.r)
+        : vec4(t.rgb * uTint.rgb, t.a * uTint.a);
+
+    if (uClip.z > 0.0) {
+        vec2 center = uClip.xy + uClip.zw * 0.5;
+        vec2 halfSize = uClip.zw * 0.5;
+        float r = min(uClipRadius, min(halfSize.x, halfSize.y));
+        float d = clipSDF(vPoint - center, halfSize, r);
+        c.a *= 1.0 - smoothstep(-1.0, 1.0, d);
     }
+    fragColor = c;
 }
 )";
 
@@ -231,6 +253,9 @@ bool Renderer::init() {
     tloc_.tint = glGetUniformLocation(texturedProgram_, "uTint");
     tloc_.tex = glGetUniformLocation(texturedProgram_, "uTex");
     tloc_.single = glGetUniformLocation(texturedProgram_, "uSingleChannel");
+    tloc_.lod = glGetUniformLocation(texturedProgram_, "uLod");
+    tloc_.clip = glGetUniformLocation(texturedProgram_, "uClip");
+    tloc_.clipRadius = glGetUniformLocation(texturedProgram_, "uClipRadius");
 
     // GLES 3 still requires a bound vertex array even when every attribute is
     // derived from gl_VertexID and nothing is read from a buffer.
@@ -241,13 +266,17 @@ bool Renderer::init() {
 
 void Renderer::drawTextured(float x, float y, float w, float h, GLuint texture,
                             float u0, float v0, float u1, float v1, const Color& tint,
-                            bool singleChannel) {
+                            bool singleChannel, float lodBias, float clipX, float clipY,
+                            float clipW, float clipH, float clipRadius) {
     glUseProgram(texturedProgram_);
     glUniform2f(tloc_.canvas, kCanvasWidth, kCanvasHeight);
     glUniform4f(tloc_.rect, x, y, w, h);
     glUniform4f(tloc_.uv, u0, v0, u1, v1);
     glUniform4f(tloc_.tint, tint.r, tint.g, tint.b, tint.a);
     glUniform1i(tloc_.single, singleChannel ? 1 : 0);
+    glUniform1f(tloc_.lod, lodBias);
+    glUniform4f(tloc_.clip, clipX, clipY, clipW, clipH);
+    glUniform1f(tloc_.clipRadius, clipRadius);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, texture);
     glUniform1i(tloc_.tex, 0);
