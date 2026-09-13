@@ -31,9 +31,33 @@ The user never sees:
 - a file browser
 - a Linux error message
 
-There is no keyboard and no mouse in the intended setup. Any state the machine
-can reach where a controller is not sufficient to continue is a bug, not a
-limitation.
+### The input model
+
+**The controller is the primary input device, and the only one the design may
+assume exists.**
+
+Every screen, every flow, and every recoverable error state must be fully
+navigable with a controller alone. Any state the machine can reach where a
+controller is not sufficient to continue is a bug, not a limitation. This is the
+single constraint that most shapes the frontend: it rules out designs that are
+only tolerable with a pointer, and it is why text entry gets an on-screen
+keyboard rather than a text field and a shrug.
+
+**A keyboard and mouse are supported, but never required.** If one is plugged
+in, it should work — typing a RomM server address, a Wi-Fi password or a search
+query is genuinely faster on a keyboard, and there is no reason to refuse it.
+
+The distinction that matters:
+
+| | |
+|---|---|
+| **Required** | Controller. Everything must work with one. |
+| **Supported** | Keyboard and mouse. A convenience, never a dependency. |
+| **Never** | A flow that *only* works with a keyboard or mouse. |
+
+Concretely: the on-screen keyboard is the baseline for all text entry and is
+always reachable. A physical keyboard types into the same field when present.
+Neither implementation may be the only one.
 
 ---
 
@@ -82,7 +106,8 @@ Screens:
 - **In-game overlay** — reachable from a controller button without leaving the
   game. Offers save states, resume, and exit.
 - **Settings** — account, storage, controllers, display, system update.
-- **First run setup** — pairs with a RomM server using an on-screen keyboard.
+- **First run setup** — pairs with a RomM server. On-screen keyboard is the
+  baseline; a physical keyboard types into the same field if one is attached.
 
 The frontend is **owned, not skinned**. CabinetOS does not ship someone else's
 frontend with a theme applied, because that makes the product's identity
@@ -142,6 +167,43 @@ exists because those four systems will need tuning rather than defaults.
 
 ---
 
+## Developer mode
+
+CabinetOS has no terminal, no file browser and no package manager. That makes it
+a console, and it also makes it very hard to work on — and hard for anyone else
+to contribute to.
+
+**Developer mode is the single sanctioned exception.** It is hidden, off by
+default, and explicitly opted into from Settings. When enabled it provides:
+
+- **SSH** — shell access to the machine.
+- **SFTP** — file transfer, so a new frontend build can be pushed to a running
+  console without reflashing it. This is the thing that makes the Phase 3 to
+  Phase 5 development loop bearable.
+
+Rules it must follow:
+
+1. **Hidden by default.** A normal user browsing Settings must not stumble into
+   it. It is not a visible toggle with a scary label; it is somewhere you have
+   to know to look.
+2. **Off until deliberately enabled**, and the state survives reboots and system
+   updates.
+3. **Visibly on when it is on.** If SSH is listening, the UI says so somewhere
+   the user will see it. A console that is quietly accepting remote logins is
+   not acceptable, even on a home LAN.
+4. **Enabling and disabling it is controller-driven**, like everything else. The
+   person turning it on does not yet have a shell.
+5. **It does not change the rest of the product.** No terminal appears in the
+   UI, no desktop becomes reachable, nothing about the console experience
+   changes. It opens a door from outside; it does not put one inside.
+6. **Turning it off actually stops the service**, rather than only hiding the
+   toggle.
+
+The shipping, user-facing version of this lands in **Phase 6**. A cruder
+build-time escape hatch will be wanted earlier — see open question 8.
+
+---
+
 ## Non goals
 
 - Not a Steam machine.
@@ -149,6 +211,9 @@ exists because those four systems will need tuning rather than defaults.
 - No app store.
 - No browser.
 - Nothing that makes it a computer instead of a console.
+
+The one sanctioned exception is **developer mode**, above: hidden, opt-in, and
+invisible to anyone who has not deliberately turned it on.
 
 ---
 
@@ -209,15 +274,21 @@ Autologin, no display manager, a custom session launching a fullscreen
 placeholder application. Every route to a desktop, file manager or terminal
 closed. Shutdown and suspend reachable from a controller.
 
+A keyboard and mouse attached to the session must work — they simply must not be
+needed. Closing "every route to a terminal" means the UI offers none, not that
+input devices are blocked.
+
 *Done when* power on leads to the placeholder with no keyboard involved.
 
 ### Phase 3 — Frontend shell
 **Status: not started.**
 
 The real frontend, built against the Phase 0 spec, running on fake data. Home,
-browse, game detail, settings, in-game overlay. Full controller navigation.
+browse, game detail, settings, in-game overlay. Full controller navigation, plus
+the on-screen keyboard, which everything else that needs text entry depends on.
 
-*Done when* it looks and feels like Cabinet.
+*Done when* it looks and feels like Cabinet, and every screen can be reached and
+left with a controller alone.
 
 ### Phase 4 — RomM integration
 **Status: not started.**
@@ -241,10 +312,20 @@ states wired to the sync layer.
 **Status: not started.**
 
 Install on the SER5. Performance tuning, Bluetooth controller pairing, audio
-output, display and resolution handling. Add a developer mode toggle in settings
-that enables SSH, so builds can be pushed without reflashing.
+output, display and resolution handling.
 
-*Done when* the machine is usable from the sofa.
+Ship **developer mode** as specified above: hidden, opt-in from Settings,
+enabling SSH and SFTP, visibly indicated while active, and genuinely stopped
+when switched off. This is what lets builds be pushed to a running console
+without reflashing it, and what makes the project contributable by anyone other
+than its author.
+
+Also verify the input model on real hardware: a Bluetooth controller must pair
+and wake the machine, and a USB keyboard must work if plugged in without being
+required for anything.
+
+*Done when* the machine is usable from the sofa with a controller alone, and
+reachable over SSH when developer mode is on.
 
 ### Phase 7 — Unified updates
 **Status: not started.**
@@ -361,3 +442,63 @@ know how emulators are packaged.
 Changing `NAME` and `PRETTY_NAME` is cosmetic and safe. Changing `ID` is not —
 `dnf` and the repo definitions resolve `$releasever` and repo paths from it.
 Phase 8 owns branding; when it happens, change the cosmetic fields only.
+
+### 8. How do we get a shell before Phase 6 ships developer mode?
+**Raised: Phase 1. Unresolved.**
+
+Developer mode as specified needs a working Settings screen to turn it on, which
+means it cannot exist before Phase 3. But Phase 2 onwards involves booting real
+images and finding out why they did not do what was expected, which is
+significantly harder with no way in.
+
+Options, none chosen:
+
+- A build-time flag that produces a separate debug image tag with `sshd` enabled
+  and a key baked in. Clean separation, but two images to keep in step.
+- `sshd` enabled unconditionally until Phase 6, then closed. Simple, and easy to
+  forget to close — which would ship a console listening on port 22.
+- Serial or a physical keyboard on a VT for development only, with no network
+  service at all. Safest, most tedious.
+
+**Check first:** Fedora Atomic desktops generally ship `openssh-server` enabled,
+and Phase 1 does not remove or disable it. If that holds, the Phase 1 image
+already accepts SSH logins and the real question is inverted — developer mode is
+about *closing* SSH by default and gating it behind the toggle, not about opening
+it. Confirm this in the first VM boot test before designing anything.
+
+Decide at the start of Phase 2. Whatever is chosen, it needs a tracked task to
+remove it, because an accidentally-shipped debug door is the worst possible
+outcome here.
+
+### 9. How is developer mode revealed, and how does it authenticate?
+**Raised: Phase 1. Unresolved. Phase 6 owns it.**
+
+Two separate questions:
+
+**Discovery.** How does a developer turn it on without a normal user finding it?
+Prior art ranges from a version-number press count (Android), to a hidden entry
+in an About screen, to a controller input sequence. It needs to be discoverable
+from documentation and not by accident.
+
+**Authentication.** Password auth on a home LAN console is weak, and there is no
+good way to type a strong password with a controller. Likely answer is public
+key only, with the key supplied through the UI or fetched from a GitHub username
+— but that needs deciding rather than assuming. Also unresolved: whether SSH
+binds to all interfaces or only the LAN, and whether the machine advertises
+itself over mDNS so a developer can find it without knowing its IP.
+
+### 10. Waking the machine with a controller
+**Raised: Phase 1. Unresolved. Phase 6 owns it.**
+
+The input model says a controller must be sufficient. That includes waking the
+machine, and it is not obviously achievable:
+
+- Most mini PCs, the SER5 included, have no HDMI-CEC, so a TV remote cannot
+  drive it and it will not wake when the TV does.
+- Waking from suspend over Bluetooth depends on the controller, the adapter and
+  the firmware, and is unreliable in general.
+
+The fallback is to never suspend and blank the display instead, trading idle
+power for a machine that is always ready. That is a defensible choice for a
+console, but it should be a choice, not an accident. Decide in Phase 6 with the
+real hardware in front of you.

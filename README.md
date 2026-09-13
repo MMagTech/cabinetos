@@ -10,6 +10,12 @@ continued on the television it's plugged into.
 
 No desktop. No terminal. No package manager. No browser. No app store.
 
+The controller is the primary input device and the only one the design assumes
+exists — every screen must be navigable with one alone. A keyboard and mouse work
+if attached, for things like typing a RomM server address, but nothing may
+*require* them. A hidden, opt-in developer mode enables SSH and SFTP for
+development and contribution; it is off by default and lands in Phase 6.
+
 > **Start here:** [`docs/PROJECT.md`](docs/PROJECT.md) is the specification and
 > the phase plan. Read it before changing anything in this repository.
 >
@@ -196,8 +202,9 @@ diskutil eject /dev/diskN
 ## Installing to the SER5
 
 1. Plug in the USB stick, plus a keyboard and mouse. The installer is the one
-   part of CabinetOS that needs them — after this you should never need them
-   again, and if you do, that is a bug.
+   part of CabinetOS that *requires* them. Afterwards a keyboard still works if
+   you leave one attached — it is just never necessary, and any CabinetOS screen
+   that cannot be completed with a controller alone is a bug.
 2. Power on and press **Delete** or **F7** during the Beelink splash for the
    boot menu. Select the USB device.
 3. Anaconda starts. Set the destination to the internal NVMe, create a user, and
