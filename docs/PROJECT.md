@@ -302,6 +302,16 @@ CabinetOS takes the tvOS model — RomM as the source of truth, games pulled whe
 you want them — and adds the macOS model's persistence: a game can be **kept**
 on the internal drive instead of re-fetched every time.
 
+**Where** games live is the user's choice, not a fixed path. A console with a
+small system drive and a big second drive is the normal shape, and a USB drive
+should work too. Settings offers a storage location; the rest of the system
+follows it.
+
+That has a consequence for anyone building Phase 4: **do not hard-code the game
+storage path.** It is configuration from the first line of code. Retrofitting
+multiple locations into something that assumed one is expensive; designing for
+it now costs nothing. See open question 14 for what still has to be decided.
+
 Those are two different things and the UI must treat them as such:
 
 - **Cached** — a side effect of playing something. Evictable without asking.
@@ -956,3 +966,39 @@ failed build rather than a save state that silently will not load.
   Some libretro cores carry hand-written ARM assembly paths with C fallbacks —
   `pcsx_rearmed` most obviously, given its name. Expect at least one core to
   need attention here.
+
+### 14. User-selectable game storage
+**Raised: Phase 1, as a roadmap item. Design in Phase 4, UI in Phase 6/8.**
+
+The user picks where games are stored — the internal drive, a second SSD, or a
+USB drive. The requirement is settled; the details are not.
+
+**What has to be true regardless, and therefore constrains Phase 4:**
+
+- The storage path is configuration, never a constant. Phase 4 must read it,
+  not assume it.
+- The cached/kept distinction applies per location, not globally.
+
+**Open:**
+
+- **One active location, or several at once?** One is far simpler and probably
+  right; several means every screen showing a game has to say where it lives.
+  If it is one, moving between drives needs a migration that can be interrupted
+  and resumed without losing a kept game.
+- **What happens when the drive is not there?** A USB drive gets unplugged, a
+  second SSD fails. The console must start normally, say plainly that the game
+  drive is missing, and still be usable for anything that does not need it.
+  Under no circumstances an error the user cannot get past — that is the
+  "stuck at a terminal" rule in a different costume.
+- **Claiming a drive is destructive.** Formatting a disk on a machine driven by
+  a controller needs a confirmation flow that cannot be stumbled through, and
+  must never be the default action. Prefer using a drive as it is where
+  possible.
+- **Should a game drive be portable?** A USB drive carrying a library that
+  works in another CabinetOS machine is an appealing property, and it argues
+  for a documented on-disk layout rather than something implementation-defined.
+- **Hot-plug behaviour.** A drive appearing while the console is running should
+  be noticed; one disappearing mid-game must not take the system down with it.
+
+The natural hardware shape this serves: small system drive, large game drive —
+which is also how the reference SER5 is laid out.
