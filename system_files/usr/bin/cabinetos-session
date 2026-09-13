@@ -10,26 +10,60 @@
 # CabinetOS would be unpicking rather than using. See docs/PROJECT.md open
 # question 3.
 
-set -euo pipefail
+set -uo pipefail
 
-# Pick a backend. gamescope's drm backend drives the display directly, which is
-# what real hardware wants. A VM with no usable GPU has to fall back to headless
-# — the session plumbing is then still testable even though nothing is drawn.
-BACKEND="drm"
+# The app to run inside gamescope. Phase 3 swaps this for the frontend binary.
+APP="${CABINETOS_APP:-/usr/bin/sleep infinity}"
+
+run_gamescope() {
+    local backend="$1"
+    echo "cabinetos-session: starting gamescope (backend=${backend})"
+    # shellcheck disable=SC2086  # APP is a command plus arguments
+    exec gamescope \
+        --backend "${backend}" \
+        --output-width 1920 \
+        --output-height 1080 \
+        -- ${APP}
+}
+
+# An explicit choice always wins.
 if [[ -n "${CABINETOS_BACKEND:-}" ]]; then
-    BACKEND="${CABINETOS_BACKEND}"
-elif ! ls /dev/dri/card* >/dev/null 2>&1; then
-    BACKEND="headless"
+    run_gamescope "${CABINETOS_BACKEND}"
 fi
 
-echo "cabinetos-session: starting gamescope (backend=${BACKEND})"
+# Otherwise: try to drive the display directly, and fall back to headless.
+#
+# This runs the real thing rather than probing. A probe is unreliable here —
+# an earlier version ran a throwaway gamescope and inspected its output, which
+# passed over SSH and then failed under the service, because what gamescope can
+# do depends on the seat it is started from. And inspecting /dev/dri is worse
+# still: a device node existing does not mean gamescope can use it. gamescope
+# needs a working Vulkan device, and a VM's virtual GPU typically offers only
+# Mesa's software renderer, which it rejects with "not a valid physical device".
+#
+# So start it for real. If it survives the first few seconds it is working, and
+# this script waits on it for the life of the session. If it dies immediately,
+# that is the answer, and we fall through.
+if ls /dev/dri/card* >/dev/null 2>&1; then
+    echo "cabinetos-session: trying the drm backend"
+    # shellcheck disable=SC2086
+    gamescope --backend drm --output-width 1920 --output-height 1080 -- ${APP} &
+    gs_pid=$!
 
-# The placeholder. Phase 3 swaps this for the frontend binary.
-PLACEHOLDER="${CABINETOS_APP:-/usr/bin/sleep infinity}"
+    sleep 5
 
-# shellcheck disable=SC2086  # PLACEHOLDER is a command plus arguments
-exec gamescope \
-    --backend "${BACKEND}" \
-    --output-width 1920 \
-    --output-height 1080 \
-    -- ${PLACEHOLDER}
+    if kill -0 "${gs_pid}" 2>/dev/null; then
+        echo "cabinetos-session: drm backend is up"
+        wait "${gs_pid}"
+        exit $?
+    fi
+
+    echo "cabinetos-session: drm backend died on startup, falling back to headless"
+else
+    echo "cabinetos-session: no drm device present"
+fi
+
+# Headless. Nothing is drawn, but the session and everything above it still run
+# — which is what makes a GPU-less VM a usable development target for everything
+# except what is actually on screen.
+run_gamescope headless
