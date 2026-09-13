@@ -139,6 +139,34 @@ change. Audited and confirmed present on the running image: `libcec`,
 `v4l-utils`, `linux-cec`, `linuxconsoletools`, the four udev rules, and all
 seven CEC systemd units.
 
+#### CEC will not be tested by the author
+
+**Marcus is not buying a CEC adapter. Testing will come from other people.**
+That is a fine arrangement and it has consequences worth stating plainly,
+because they shape how the feature must be built:
+
+- **The no-adapter path is the one that gets exercised daily**, on every machine
+  the author owns. That is lucky — it is also the common case for anyone who
+  has not bought an adapter yet — but it means the with-adapter path only ever
+  runs on someone else's television.
+- **CEC must never be able to break boot or the session.** A missing, unplugged
+  or misbehaving adapter has to be a quiet no-op. If CEC code can hang startup
+  when no adapter is present, the author will not see it; if it can hang startup
+  when one *is* present, the author will not see that either.
+- **The settings UI has to be self-explanatory**, because the person switching
+  modes will be debugging their own television without the author watching. A
+  mode switch that needs explaining is a mode switch that will be reported as
+  broken.
+- **There must be a way to get a useful report back.** Which adapter, which
+  mode, which television, what happened. Developer mode's SSH is the obvious
+  channel for anyone technical; for everyone else the UI should show enough
+  state — adapter detected, mode, last CEC event — that a photograph of the
+  screen is a useful bug report.
+- **Be honest in the status.** A hard requirement nobody on the project can test
+  is a hard requirement in name only until someone confirms it. Until then it is
+  specified and implemented, not verified, and the phase notes should say so
+  rather than implying otherwise.
+
 #### CabinetOS must surface the mode switch itself
 
 **CabinetOS removes the terminal, and with it `ujust` and the Bazzite Portal** —
