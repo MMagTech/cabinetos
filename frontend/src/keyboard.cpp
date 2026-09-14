@@ -46,44 +46,85 @@ void Keyboard::open(const Config& config) {
     col_ = 0;
     open_ = true;
 
-    // Digits on their own row rather than behind a shift layer. A Wi-Fi
-    // passphrase is usually being read off the underside of a router and is
-    // mostly digits and symbols; burying them costs more than the row does.
+    // A FIXED 12-COLUMN GRID, every row totalling exactly 12 units.
+    //
+    // The first version sized the panel to its widest row — a long function
+    // row — and left the letter rows short, so a third of the panel was empty
+    // to the right of the letters. It looked unfinished, and it wasted the
+    // one thing a ten-foot keyboard is short of: reach.
+    //
+    // The layout follows what PlayStation, Xbox and Steam all converge on,
+    // which is a REAL KEYBOARD's own geography rather than an invented one:
+    //
+    //   * digits across the top, with BACKSPACE at their right end, where the
+    //     backspace key has always been;
+    //   * SHIFT at the bottom-left of the letter block, where it has always
+    //     been;
+    //   * SPACE spanning the bottom, with the commit key at its right.
+    //
+    // None of that is decoration. Somebody looking for backspace looks
+    // top-right before they read anything, and a layout that rewards the
+    // guess is faster than one that has to be read.
+    //
+    // Digits get their own row rather than living behind a shift layer,
+    // because a Wi-Fi passphrase is usually being read off the underside of a
+    // router and is mostly digits and symbols. Burying them costs more than
+    // the row does.
+    constexpr float kCols = 12.0f;
+
     auto build = [&](bool upper) {
         std::vector<std::vector<Key>> rows;
-        rows.push_back({k("1", "1"), k("2", "2"), k("3", "3"), k("4", "4"), k("5", "5"),
-                        k("6", "6"), k("7", "7"), k("8", "8"), k("9", "9"), k("0", "0")});
+        auto wide = [](Key key, float w) {
+            key.width = w;
+            return key;
+        };
+
+        std::vector<Key> digits;
+        for (const char* p = "1234567890"; *p; ++p)
+            digits.push_back(k(std::string(1, *p).c_str(), std::string(1, *p).c_str()));
+        digits.push_back(wide(action("del", Key::Backspace), 2.0f));   // 10 + 2 = 12
+        rows.push_back(digits);
+
         const char* r1 = upper ? "QWERTYUIOP" : "qwertyuiop";
         const char* r2 = upper ? "ASDFGHJKL" : "asdfghjkl";
         const char* r3 = upper ? "ZXCVBNM" : "zxcvbnm";
-        std::vector<Key> a, b, c;
-        for (const char* p = r1; *p; ++p) a.push_back(k(std::string(1, *p).c_str(),
-                                                        std::string(1, *p).c_str()));
-        for (const char* p = r2; *p; ++p) b.push_back(k(std::string(1, *p).c_str(),
-                                                        std::string(1, *p).c_str()));
-        b.push_back(k(":", ":"));
-        for (const char* p = r3; *p; ++p) c.push_back(k(std::string(1, *p).c_str(),
-                                                        std::string(1, *p).c_str()));
-        // The symbols a server address and a passphrase actually need, in
-        // reach rather than behind a layer.
-        c.push_back(k(".", "."));
-        c.push_back(k("-", "-"));
-        c.push_back(k("_", "_"));
-        rows.push_back(a);
-        rows.push_back(b);
-        rows.push_back(c);
 
+        std::vector<Key> a;
+        for (const char* p = r1; *p; ++p)
+            a.push_back(k(std::string(1, *p).c_str(), std::string(1, *p).c_str()));
+        a.push_back(k("/", "/"));
+        a.push_back(k(":", ":"));                                       // 10 + 2 = 12
+        rows.push_back(a);
+
+        std::vector<Key> b;
+        for (const char* p = r2; *p; ++p)
+            b.push_back(k(std::string(1, *p).c_str(), std::string(1, *p).c_str()));
+        b.push_back(k(".", "."));
+        b.push_back(k("-", "-"));
+        b.push_back(k("_", "_"));                                       // 9 + 3 = 12
+        rows.push_back(b);
+
+        std::vector<Key> c;
+        c.push_back(wide(action(upper ? "abc" : "ABC", Key::Shift), 2.0f));
+        for (const char* p = r3; *p; ++p)
+            c.push_back(k(std::string(1, *p).c_str(), std::string(1, *p).c_str()));
+        c.push_back(k("@", "@"));
+        c.push_back(wide(action(conceal_ ? "show" : "hide", Key::Conceal), 2.0f));
+        rows.push_back(c);                                              // 2 + 7 + 1 + 2 = 12
+
+        // The bottom row absorbs whatever is left, so it fits the grid
+        // whatever the field asked for. A password field passes no shortcuts
+        // and simply gets a longer space bar.
         std::vector<Key> fn;
-        fn.push_back(action(upper ? "abc" : "ABC", Key::Shift, 1.6f));
-        fn.push_back(action("space", Key::Space, 3.0f));
-        for (const auto& s : config_.shortcuts) {
-            Key sk = k(s.c_str(), s.c_str());
-            sk.width = 1.6f;
-            fn.push_back(sk);
+        float used = 0;
+        for (const auto& sc : config_.shortcuts) {
+            fn.push_back(wide(k(sc.c_str(), sc.c_str()), 2.5f));
+            used += 2.5f;
         }
-        fn.push_back(action("del", Key::Backspace, 1.4f));
-        fn.push_back(action(conceal_ ? "show" : "hide", Key::Conceal, 1.4f));
-        fn.push_back(action("done", Key::Done, 1.8f));
+        const float doneW = 3.0f;
+        const float spaceW = std::max(2.0f, kCols - used - doneW);
+        fn.push_back(wide(action("space", Key::Space), spaceW));
+        fn.push_back(wide(action("done", Key::Done), doneW));
         rows.push_back(fn);
         return rows;
     };

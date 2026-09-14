@@ -299,7 +299,7 @@ int main(int argc, char** argv) {
         cfg.title = "Connect to RomM";
         cfg.hint = "The same address you open in a browser.";
         cfg.placeholder = "romm.local:8080";
-        cfg.shortcuts = {".local", ".com", "/"};
+        cfg.shortcuts = {".local", ".com"};
         keyboard.open(cfg);
     }
 
