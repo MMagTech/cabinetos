@@ -23,13 +23,13 @@ COPY system_files /system_files
 # the digest is the actual pin. Moving this is a deliberate act: bump it in its
 # own commit and re-run the VM boot test.
 #
-# Resolved 2026-09-13:
-#   ghcr.io/ublue-os/bazzite:stable == stable-44.20260908
+# Resolved 2026-09-14:
+#   ghcr.io/ublue-os/bazzite:stable == 44.20260914
 #
 # Variant choice: plain `bazzite` (Fedora 44 / Kinoite base), not `bazzite-deck`.
 # See docs/PROJECT.md open question 3 — `bazzite-deck` carries session and
 # power-button infrastructure we may want in Phase 2.
-FROM ghcr.io/ublue-os/bazzite:stable-44.20260908@sha256:437920bae6935fd70719c1e0109f3469b1215a788330b0de924d0c7ac8aaa84c
+FROM ghcr.io/ublue-os/bazzite:44.20260914@sha256:0055d15b31338fed47d7aca53a6fd759c2ca5cda8b95718ce6527e16550fa8a4
 
 ARG IMAGE_NAME="${IMAGE_NAME:-cabinetos}"
 ARG IMAGE_VENDOR="${IMAGE_VENDOR:-mmagtech}"
