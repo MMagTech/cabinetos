@@ -409,20 +409,29 @@ bool Client::fetchGames(int platformId, std::vector<Game>* out, std::string* err
     return true;
 }
 
+bool Client::fetchFavorites(int limit, std::vector<Game>* out, std::string* err) {
+    return fetchFiltered("&favorite=true", limit, out, err);
+}
+
 bool Client::fetchRecent(int limit, std::vector<Game>* out, std::string* err) {
+    return fetchFiltered("&order_by=last_played&order_dir=desc&last_played=true",
+                         limit, out, err);
+}
+
+bool Client::fetchFiltered(const char* filter, int limit, std::vector<Game>* out,
+                           std::string* err) {
     out->clear();
-    const std::string path = "/api/roms?order_by=last_played&order_dir=desc"
-                             "&last_played=true&limit=" + std::to_string(limit);
+    const std::string path = "/api/roms?limit=" + std::to_string(limit) + filter;
     std::string body;
     if (!get(path, &body, err)) return false;
 
     json_object* root = json_tokener_parse(body.c_str());
-    if (!root) { if (err) *err = "recent response was not JSON"; return false; }
+    if (!root) { if (err) *err = "response was not JSON"; return false; }
     json_object* items = nullptr;
     if (!json_object_object_get_ex(root, "items", &items) ||
         json_object_get_type(items) != json_type_array) {
         json_object_put(root);
-        if (err) *err = "recent response had no items array";
+        if (err) *err = "response had no items array";
         return false;
     }
     const size_t n = json_object_array_length(items);

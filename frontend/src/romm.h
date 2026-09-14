@@ -119,11 +119,17 @@ public:
     // makes a hero possible on a machine that has never launched anything.
     bool fetchRecent(int limit, std::vector<Game>* out, std::string* err);
 
+    // The games marked favourite, newest first. Home's second shelf, and only
+    // drawn when there are any — an empty Favorites row is worse than none.
+    bool fetchFavorites(int limit, std::vector<Game>* out, std::string* err);
+
     // For ImageCache::Loader. Returns empty on any failure, because a cover
     // that will not load is not an error the frame loop can do anything about.
     std::vector<uint8_t> fetchBytes(const std::string& path) const;
 
 private:
+    bool fetchFiltered(const char* filter, int limit, std::vector<Game>* out,
+                       std::string* err);
     bool get(const std::string& path, std::string* body, std::string* err) const;
     bool postJson(const std::string& path, const std::string& json,
                   std::string* body, long* status, std::string* err) const;

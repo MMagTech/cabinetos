@@ -72,6 +72,10 @@ constexpr float kHeroBandPadX = 12.0f;
 constexpr float kHeroBandPadY = 10.0f;
 constexpr float kHeroGapBelow = 20.0f;
 // A pill, so blur 4 — the "thin material" tier. The band is a panel at 6.
+// The design system's own tiers: 1.10 for a cover, 1.06 for a pill, 1.03 for a
+// full-width row. The hero is full-width, so it takes the row tier.
+constexpr float kRowFocusScale = 1.03f;
+constexpr float kPillFocusScale = 1.06f;
 constexpr float kHeroPillBlur = 4.0f;
 constexpr float kHeroBandBlur = 6.0f;
 constexpr float kShelfCoverWidth = 260.0f;
@@ -207,6 +211,9 @@ struct Library {
     // shelf never shows the same cover twice and never loses one. Home shows
     // THIS, not the whole library: the library belongs to the Library screen.
     std::vector<int> shelf;
+    // The second shelf. Drawn only when there are any: an empty Favorites row
+    // is worse than no Favorites row.
+    std::vector<int> favorites;
 };
 
 static Library loadLibrary(romm::Client& client) {
@@ -282,6 +289,17 @@ static Library loadLibrary(romm::Client& client) {
         }
     } else {
         std::fprintf(stderr, "[library] no play history: %s\n", err.c_str());
+    }
+
+    std::vector<romm::Game> favs;
+    if (client.fetchFavorites(40, &favs, &err)) {
+        for (const auto& g : favs) {
+            if (!catalog::playable(g)) continue;
+            for (size_t i = 0; i < cards.size(); ++i) {
+                if (cards[i].id == g.id) { lib.favorites.push_back(static_cast<int>(i)); break; }
+            }
+        }
+        std::fprintf(stderr, "[library] %zu favourites\n", lib.favorites.size());
     }
     if (lib.heroIndex >= 0)
         std::fprintf(stderr, "[library] hero: %s (%s), %zu more on the Recent shelf\n",
@@ -465,6 +483,9 @@ int main(int argc, char** argv) {
     const char* shotPath = "/tmp/cabinetos-frame.bmp";
     int shotAfterFrames = 30;
     int initialFocus = -1;
+    // Which row to start on, so each of Home's rows can be photographed without
+    // a controller. 0 hero, 1 Recent, 2 Favorites.
+    int initialRow = -1;
     // Verify the layout at a panel size this machine does not have. Most sets
     // are 4K; plenty are not; the design canvas scales to both and this is how
     // that gets checked rather than assumed.
@@ -535,6 +556,8 @@ int main(int argc, char** argv) {
             imageBudget = static_cast<size_t>(SDL_atoi(argv[++i])) * 1024 * 1024;
         } else if (SDL_strcmp(argv[i], "--render-size") == 0 && i + 1 < argc) {
             SDL_sscanf(argv[++i], "%dx%d", &renderW, &renderH);
+        } else if (SDL_strcmp(argv[i], "--focus-row") == 0 && i + 1 < argc) {
+            initialRow = SDL_atoi(argv[++i]);
         } else if (SDL_strcmp(argv[i], "--focus") == 0 && i + 1 < argc) {
             // Lets a screenshot capture a chosen card already focused, so the
             // focus treatment can be checked without a controller attached.
@@ -630,6 +653,7 @@ int main(int argc, char** argv) {
     // Which cards the Recent row shows. Empty means "everything", which is what
     // the stand-in library wants — it has no play history to order by.
     std::vector<int> shelf;
+    std::vector<int> favorites;
 
     if (rommAddress) {
         std::string err;
@@ -647,6 +671,7 @@ int main(int argc, char** argv) {
         heroIndex = lib.heroIndex;
         heroPlatform = lib.heroPlatform;
         shelf = std::move(lib.shelf);
+        favorites = std::move(lib.favorites);
         if (cards.empty()) {
             std::fprintf(stderr, "[romm] the library came back empty\n");
             return 1;
@@ -990,20 +1015,77 @@ int main(int argc, char** argv) {
         }
     }
 
-    int focused = initialFocus >= 0 ? initialFocus : 0;
-    // `focused` indexes the SHELF, not the library. They are the same thing only
-    // when there is no play history to order by; conflating them focuses the
-    // wrong game the moment there is.
+    // ---- Focus -------------------------------------------------------------
+    //
+    // Home is rows, not one list. Focus is therefore a ROW and a SLOT within it,
+    // never a single index: `focused` used to index the shelf, and that is only
+    // the same number while the shelf is the only thing on screen.
+    //
+    //   row 0   the hero      slot 0 the card, slot 1 the Resume pill
+    //   row 1   Recent
+    //   row 2   Favorites, when there are any
+    //
+    // The hero takes focus on arrival, which is what "resume-first" means: the
+    // thing you were playing is already under the cursor.
+    enum Row { RowHero = 0, RowRecent = 1, RowFavorites = 2 };
+
     const size_t shelfSlots = shelf.empty() ? cards.size() : shelf.size();
-    auto slotCard = [&](int slot) -> Card& {
-        return cards[shelf.empty() ? static_cast<size_t>(slot)
-                                   : static_cast<size_t>(shelf[slot])];
+    const bool haveHero = heroIndex >= 0;
+    const bool haveFavorites = !favorites.empty();
+
+    auto rowSlots = [&](int row) -> size_t {
+        if (row == RowHero) return haveHero ? 2u : 0u;
+        if (row == RowRecent) return shelfSlots;
+        return favorites.size();
     };
-    focused = std::clamp(focused, 0, static_cast<int>(shelfSlots) - 1);
+    auto rowExists = [&](int row) { return rowSlots(row) > 0; };
+
+    // The card a (row, slot) points at, or nullptr for the Resume pill, which
+    // is a control rather than a card.
+    auto cardAt = [&](int row, int slot) -> Card* {
+        if (row == RowHero) return slot == 0 ? &cards[heroIndex] : nullptr;
+        if (row == RowRecent) {
+            if (slot < 0 || static_cast<size_t>(slot) >= shelfSlots) return nullptr;
+            return &cards[shelf.empty() ? static_cast<size_t>(slot)
+                                        : static_cast<size_t>(shelf[slot])];
+        }
+        if (slot < 0 || static_cast<size_t>(slot) >= favorites.size()) return nullptr;
+        return &cards[favorites[slot]];
+    };
+
+    int focusRow = haveHero ? RowHero : RowRecent;
+    int focusSlot = 0;
+    // --focus N still means "start on card N of Recent", which is what every
+    // existing capture script passes it for.
+    if (initialFocus >= 0) {
+        focusRow = RowRecent;
+        focusSlot = std::clamp(initialFocus, 0, static_cast<int>(shelfSlots) - 1);
+    }
+    if (initialRow >= 0) {
+        focusRow = std::clamp(initialRow, 0, 2);
+        if (!rowExists(focusRow)) focusRow = RowRecent;
+        focusSlot = std::clamp(focusSlot, 0, static_cast<int>(rowSlots(focusRow)) - 1);
+    }
+    // Focus of the pill is not a Card, so it has its own animation.
+    Animated resumeFocus;
+    // Home is taller than the screen once there are two shelves, so it scrolls
+    // to follow focus — the same as tvOS, which puts Home in a ScrollView. The
+    // hero alone is 420 of a 1080 canvas; Recent and Favorites do not both fit
+    // under it.
+    Animated scrollY;
+    scrollY.from = scrollY.to = 0.0f;
     // Settled, not animating: a screenshot should show the resting focused
     // state, not a frame part-way through the transition into it.
-    slotCard(focused).focus.retarget(1.0f, kFocusDuration);
-    slotCard(focused).focus.elapsed = kFocusDuration;
+    auto settleFocus = [&]() {
+        if (Card* c = cardAt(focusRow, focusSlot)) {
+            c->focus.retarget(1.0f, kFocusDuration);
+            c->focus.elapsed = kFocusDuration;
+        } else {
+            resumeFocus.retarget(1.0f, kFocusDuration);
+            resumeFocus.elapsed = kFocusDuration;
+        }
+    };
+    settleFocus();
 
     // Any pad that is already plugged in. Hotplug is handled in the event loop,
     // so a controller connected later works without restarting anything.
@@ -1019,12 +1101,49 @@ int main(int argc, char** argv) {
     int frame = 0;
     bool pressing = false;
 
+    // Remembered focus per row, which is the behaviour tvOS gives free and the
+    // one people notice missing: leaving Recent at the sixth cover and coming
+    // back to the first is the kind of thing that feels broken without anyone
+    // being able to say why.
+    int rememberedSlot[3] = {0, 0, 0};
+
+    auto leaveFocus = [&]() {
+        if (Card* c = cardAt(focusRow, focusSlot)) c->focus.retarget(0.0f, kFocusDuration);
+        else resumeFocus.retarget(0.0f, kFocusDuration);
+    };
+    auto enterFocus = [&]() {
+        if (Card* c = cardAt(focusRow, focusSlot)) c->focus.retarget(1.0f, kFocusDuration);
+        else resumeFocus.retarget(1.0f, kFocusDuration);
+    };
+
     auto moveFocus = [&](int delta) {
-        int next = std::clamp(focused + delta, 0, static_cast<int>(shelfSlots) - 1);
-        if (next == focused) return;
-        slotCard(focused).focus.retarget(0.0f, kFocusDuration);
-        focused = next;
-        slotCard(focused).focus.retarget(1.0f, kFocusDuration);
+        const int slots = static_cast<int>(rowSlots(focusRow));
+        if (slots <= 0) return;
+        const int next = std::clamp(focusSlot + delta, 0, slots - 1);
+        if (next == focusSlot) return;
+        leaveFocus();
+        focusSlot = next;
+        rememberedSlot[focusRow] = focusSlot;
+        enterFocus();
+    };
+
+    auto moveRow = [&](int delta) {
+        int row = focusRow;
+        // Step over a row that is not there — no Favorites, or no hero —
+        // rather than stopping on nothing.
+        for (int i = 0; i < 3; ++i) {
+            const int candidate = row + delta;
+            if (candidate < RowHero || candidate > RowFavorites) return;
+            row = candidate;
+            if (rowExists(row)) break;
+            if (row == RowHero || row == RowFavorites) return;
+        }
+        if (row == focusRow || !rowExists(row)) return;
+        leaveFocus();
+        focusRow = row;
+        focusSlot = std::clamp(rememberedSlot[row], 0,
+                               static_cast<int>(rowSlots(row)) - 1);
+        enterFocus();
     };
 
     while (running) {
@@ -1087,6 +1206,8 @@ int main(int argc, char** argv) {
                     }
                     if (e.key.key == SDLK_LEFT) moveFocus(-1);
                     if (e.key.key == SDLK_RIGHT) moveFocus(+1);
+                    if (e.key.key == SDLK_UP) moveRow(-1);
+                    if (e.key.key == SDLK_DOWN) moveRow(+1);
                     if (e.key.key == SDLK_RETURN || e.key.key == SDLK_SPACE) pressing = true;
                     break;
                 case SDL_EVENT_KEY_UP:
@@ -1114,6 +1235,8 @@ int main(int argc, char** argv) {
                     }
                     if (e.gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_LEFT) moveFocus(-1);
                     if (e.gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_RIGHT) moveFocus(+1);
+                    if (e.gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_UP) moveRow(-1);
+                    if (e.gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_DOWN) moveRow(+1);
                     if (e.gbutton.button == SDL_GAMEPAD_BUTTON_SOUTH) pressing = true;
                     if (e.gbutton.button == SDL_GAMEPAD_BUTTON_START) running = false;
                     break;
@@ -1208,7 +1331,14 @@ int main(int argc, char** argv) {
             c.focus.tick(dt);
             c.press.tick(dt);
         }
-        slotCard(focused).press.retarget(pressing ? 1.0f : 0.0f, kPressDuration);
+        // These two are not Cards and so are not in the loop above. Forgetting
+        // them cost a debugging pass: the scroll target was computed correctly
+        // every frame and then discarded, because an Animated whose elapsed
+        // never advances returns its start value forever.
+        resumeFocus.tick(dt);
+        scrollY.tick(dt);
+        if (Card* pc = cardAt(focusRow, focusSlot))
+            pc->press.retarget(pressing ? 1.0f : 0.0f, kPressDuration);
 
         int dw = 0, dh = 0;
         SDL_GetWindowSizeInPixels(window, &dw, &dh);
@@ -1296,6 +1426,34 @@ int main(int argc, char** argv) {
             }
         } else {
 
+        // The height a shelf will occupy, known before it is drawn so the
+        // scroll target can be computed this frame rather than one frame late.
+        const float shelfBlockHeight =
+            text.lineHeight(ui::TextStyle::Title2, sc) + 12.0f + kShelfHeadroom +
+            kShelfCoverHeight + kCaptionGap +
+            text.lineHeight(ui::TextStyle::Callout, sc) + kShelfHeadroom;
+
+        const float heroHeight = haveHero ? std::min(ui::kCanvasHeight * 0.40f, 420.0f) : 0.0f;
+        const float recentTop = haveHero ? kHeroTop + heroHeight + kHeroGapBelow : kHeroTop;
+        const float favoritesTop = recentTop + shelfBlockHeight;
+
+        // Scroll only as far as the focused row needs. On the hero or Recent
+        // that is not at all — Home should not drift under the cursor.
+        //
+        // And never past the end of the content. Pinning the last row to the
+        // top of the screen leaves half a screen of nothing under it, which is
+        // not what a scroll view does and reads as the layout having broken.
+        const float contentHeight =
+            (haveFavorites ? favoritesTop + shelfBlockHeight : recentTop + shelfBlockHeight) +
+            kHeroTop;
+        const float maxScroll = std::max(0.0f, contentHeight - ui::kCanvasHeight);
+        float wantScroll = 0.0f;
+        if (focusRow == RowFavorites)
+            wantScroll = std::min(favoritesTop - kHeroTop, maxScroll);
+        if (std::fabs(wantScroll - scrollY.to) > 0.5f)
+            scrollY.retarget(wantScroll, kFocusDuration);
+        const float scroll = scrollY.value();
+
         // ---- The hero -------------------------------------------------------
         //
         // Home is resume-first: the hero is what you were playing, and it is
@@ -1304,13 +1462,21 @@ int main(int argc, char** argv) {
         // warning that the height was settled on real hardware after four
         // rejected values, because a television's overscan eats more vertical
         // room than a framebuffer capture shows. DO NOT tune this on the VM.
-        float shelfHeaderY = 300.0f;
+        float shelfHeaderY = kHeroTop - scroll;
         if (heroIndex >= 0 && heroIndex < static_cast<int>(cards.size())) {
             const Card& hero = cards[heroIndex];
-            const float heroH = std::min(ui::kCanvasHeight * 0.40f, 420.0f);
-            const float heroW = ui::kCanvasWidth - kContentInset * 2.0f;
-            const float heroX = kContentInset;
-            const float heroY = kHeroTop;
+            const float heroH = heroHeight;
+            // RESERVED HEADROOM, which the design system calls a layout
+            // obligation rather than a style one: "every container holding
+            // focusable elements has to budget for their focused size." The
+            // hero grows by 3% when focused, so its resting width is the
+            // content width DIVIDED by that — otherwise the focused card is
+            // 1854 wide in an 1800 space and runs under the overscan of a real
+            // television, which is precisely where nobody can see it.
+            const float heroW = (ui::kCanvasWidth - kContentInset * 2.0f) / kRowFocusScale;
+            const float heroX = kContentInset +
+                                ((ui::kCanvasWidth - kContentInset * 2.0f) - heroW) * 0.5f;
+            const float heroY = kHeroTop - scroll;
 
             // Computed from the two line heights rather than hardcoded, so the
             // band grows with the type ramp instead of clipping it.
@@ -1319,9 +1485,31 @@ int main(int argc, char** argv) {
                                 2.0f + kHeroBandPadY * 2.0f;
             const float artH = std::max(0.0f, heroH - bandH);
 
+            // The hero's focus treatment, and both halves of it are the design
+            // system's rather than invented:
+            //
+            //  - SCALE 1.03, not a cover's 1.10. "The scale shrinks as the
+            //    element grows", and a full-width card growing 10% would run
+            //    off the screen it sits on.
+            //  - NO RIM. The rim is suppressed on composite elements — anything
+            //    whose label mixes art with its own text — and the hero's band
+            //    is exactly that.
+            //
+            // The shadow stays: it is what lifts the card off the canvas.
+            const float hf = (focusRow == RowHero && focusSlot == 0)
+                                 ? hero.focus.value() : 0.0f;
+            const float hs = 1.0f + hf * (kRowFocusScale - 1.0f);
+            const float hw = heroW * hs, hh = heroH * hs;
+            const float hx = heroX - (hw - heroW) * 0.5f;
+            const float hy = heroY - (hh - heroH) * 0.5f;
+
             // The card's own ground, so a hero whose art has not arrived is a
             // card rather than a hole.
-            renderer.draw(ui::Rect{heroX, heroY, heroW, heroH, kHeroRadius, hero.art});
+            ui::Rect heroPlate{hx, hy, hw, hh, kHeroRadius, hero.art};
+            heroPlate.shadowBlur = hf * kFocusShadowBlur;
+            heroPlate.shadowOffsetY = hf * kFocusShadowOffsetY;
+            heroPlate.shadowColor = ui::Color::black(0.55f * hf);
+            renderer.draw(heroPlate);
 
             if (!hero.cover.empty() && images.get(hero.cover).ready) {
                 const ui::Image& art = images.get(hero.cover);
@@ -1336,7 +1524,7 @@ int main(int argc, char** argv) {
                 // which is the whole point of the backdrop. So the source rect
                 // is cropped to the card's aspect instead, taking a horizontal
                 // slice through the middle of the cover.
-                const float boxAspect = heroW / heroH;
+                const float boxAspect = hw / hh;
                 const float imgAspect = art.aspect();
                 float u0 = 0.0f, v0 = 0.0f, u1 = 1.0f, v1 = 1.0f;
                 if (imgAspect < boxAspect) {
@@ -1349,68 +1537,72 @@ int main(int argc, char** argv) {
                     u0 = (1.0f - span) * 0.5f;
                     u1 = u0 + span;
                 }
-                renderer.drawTextured(heroX, heroY, heroW, heroH, art.texture, u0, v0, u1, v1,
+                renderer.drawTextured(hx, hy, hw, hh, art.texture, u0, v0, u1, v1,
                                       ui::Color{1, 1, 1, art.fade}, false, 5.0f,
-                                      heroX, heroY, heroW, heroH, kHeroRadius);
-                renderer.draw(ui::Rect{heroX, heroY, heroW, heroH, kHeroRadius,
+                                      hx, hy, hw, hh, kHeroRadius);
+                renderer.draw(ui::Rect{hx, hy, hw, hh, kHeroRadius,
                                        ui::Color::black(0.15f * art.fade)});
 
                 // FITTED, not filled. Box art is tall and the hero is wide, so
                 // filling slices the art to a strip of its middle. The top
                 // inset keeps it off the card's rounded corners, which
                 // otherwise clip a sliver from flush art.
-                ui::drawImage(renderer, art, heroX, heroY + kHeroArtInsetTop, heroW,
-                              artH - kHeroArtInsetTop, ui::Fit::Contain, 1.0f, 0.0f);
+                ui::drawImage(renderer, art, hx, hy + kHeroArtInsetTop, hw,
+                              artH * hs - kHeroArtInsetTop, ui::Fit::Contain, 1.0f, 0.0f);
             }
-            heroBand = ui::Rect{heroX, heroY + heroH - bandH, heroW, bandH, 0, ui::Color::white(0)};
-            heroCardRect = ui::Rect{heroX, heroY, heroW, heroH, kHeroRadius, ui::Color::white(0)};
+            heroBand = ui::Rect{hx, hy + hh - bandH * hs, hw, bandH * hs, 0, ui::Color::white(0)};
+            heroCardRect = ui::Rect{hx, hy, hw, hh, kHeroRadius, ui::Color::white(0)};
             heroDrawn = true;
             shelfHeaderY = heroY + heroH + kHeroGapBelow;
         }
 
-        // The shelf header: Title 2 bold, with the chevron that says the row
-        // continues into a screen of its own.
-        const float headerBaseline = shelfHeaderY + text.ascent(ui::TextStyle::Title2, sc);
-        text.draw(renderer, "Recent", kContentInset, headerBaseline,
-                  ui::TextStyle::Title2, ui::Color::white(1.0f), sc);
-        const float headerWidth =
-            text.measure("Recent", ui::TextStyle::Title2, sc);
-        // Title 3 semibold at tertiary, not Title 2: the chevron says "this row
-        // continues", it is not part of the heading, and at heading weight it
-        // competes with it.
-        text.draw(renderer, "\xE2\x80\xBA", kContentInset + headerWidth + 10.0f,
-                  headerBaseline, ui::TextStyle::Title3, ui::Color::white(0.30f), sc);
+        // One shelf, drawn twice: Recent and Favorites are the same component in
+        // different arrangements, which is what the design system says every
+        // row on this screen is. Returns the height it used, so the caller can
+        // stack the next one under it without either knowing the other's size.
+        auto drawShelf = [&](const char* label, const std::vector<int>& indices,
+                             int rowId, float top) -> float {
+            const bool rowFocused = (focusRow == rowId);
+            const size_t count = indices.empty() ? cards.size() : indices.size();
+            if (count == 0) return 0.0f;
+            auto at = [&](size_t slot) -> size_t {
+                return indices.empty() ? slot : static_cast<size_t>(indices[slot]);
+            };
 
-        const float shelfTop =
-            shelfHeaderY + text.lineHeight(ui::TextStyle::Title2, sc) + 12.0f + kShelfHeadroom;
+            // The shelf header: Title 2 bold, with the chevron that says the row
+            // continues into a screen of its own.
+            const float headerBaseline = top + text.ascent(ui::TextStyle::Title2, sc);
+            text.draw(renderer, label, kContentInset, headerBaseline,
+                      ui::TextStyle::Title2, ui::Color::white(1.0f), sc);
+            const float headerWidth = text.measure(label, ui::TextStyle::Title2, sc);
+            // Title 3 semibold at tertiary, not Title 2: the chevron says "this
+            // row continues", it is not part of the heading, and at heading
+            // weight it competes with it.
+            text.draw(renderer, "\xE2\x80\xBA", kContentInset + headerWidth + 10.0f,
+                      headerBaseline, ui::TextStyle::Title3, ui::Color::white(0.30f), sc);
 
-        // CULL TO WHAT IS ON SCREEN, and do it before touching the cover cache.
-        //
-        // This loop used to run over every card. With the six-entry stand-in
-        // library that was invisible; against a real library of 1232 it queues
-        // a download for every cover in the collection, overruns the texture
-        // budget, and issues twelve hundred draw calls a frame to show seven
-        // cards. A shelf is a window onto a list, not a drawing of the list.
-        //
-        // The margin keeps a card's art loading just before it slides in, so
-        // the fade has somewhere to start.
-        const float kCullMargin = (kShelfCoverWidth + kShelfSpacing) * 2.0f;
-        auto cardBaseX = [&](size_t slot) {
-            return kContentInset + static_cast<float>(slot) * (kShelfCoverWidth + kShelfSpacing);
-        };
-        // The shelf is a list of indices into `cards` when there is play
-        // history to order by, and simply every card when there is not.
-        const size_t shelfCount = shelf.empty() ? cards.size() : shelf.size();
-        auto shelfAt = [&](size_t slot) -> size_t {
-            return shelf.empty() ? slot : static_cast<size_t>(shelf[slot]);
-        };
+            const float shelfTop =
+                top + text.lineHeight(ui::TextStyle::Title2, sc) + 12.0f + kShelfHeadroom;
+
+            // CULL TO WHAT IS ON SCREEN, and do it before touching the cover
+            // cache. This loop used to run over every card: invisible with a
+            // six-entry stand-in library, and against a real 1232 it queued a
+            // download for every cover in the collection and overran the
+            // texture budget. A shelf is a window onto a list, not a drawing of
+            // the list. The margin keeps a card's art loading just before it
+            // slides in, so the fade has somewhere to start.
+            const float kCullMargin = (kShelfCoverWidth + kShelfSpacing) * 2.0f;
+            auto cardBaseX = [&](size_t slot) {
+                return kContentInset +
+                       static_cast<float>(slot) * (kShelfCoverWidth + kShelfSpacing);
+            };
 
         // Unfocused cards first, so a focused card's shadow and rim land on top
         // of its neighbours rather than under them.
         for (int pass = 0; pass < 2; ++pass) {
-            for (size_t slot = 0; slot < shelfCount; ++slot) {
-                const size_t i = shelfAt(slot);
-                const bool isFocused = (static_cast<int>(slot) == focused);
+            for (size_t slot = 0; slot < count; ++slot) {
+                const size_t i = at(slot);
+                const bool isFocused = rowFocused && (static_cast<int>(slot) == focusSlot);
                 if ((pass == 0) == isFocused) continue;
 
                 const float cullX = cardBaseX(slot);
@@ -1473,10 +1665,18 @@ int main(int argc, char** argv) {
                           ui::Color::white(isFocused ? 1.0f : 0.60f), sc);
             }
         }
+            // Header, headroom, cover, caption — and the caption's own slide,
+            // which is reserved headroom rather than slack.
+            return (shelfTop - top) + kShelfCoverHeight + kCaptionGap +
+                   text.lineHeight(ui::TextStyle::Callout, sc) + kShelfHeadroom;
+        };
+
+        float rowY = shelfHeaderY;
+        rowY += drawShelf("Recent", shelf, RowRecent, rowY);
+        // Only when there are any. An empty Favorites row is worse than none.
+        if (haveFavorites) drawShelf("Favorites", favorites, RowFavorites, rowY);
         }  // end of the shelf branch
 
-        // Everything above this line is the world; everything below it can
-        // blur what the world drew. See Renderer::presentScene.
         renderer.presentScene();
 
         // ---- The hero's glass, which can only be drawn now ------------------
@@ -1508,16 +1708,26 @@ int main(int argc, char** argv) {
             // actions, not one, and Home promises one.
             const char* kResume = "\xE2\x96\xB6  Resume";
             const float pillTextW = text.measure(kResume, ui::TextStyle::Title3, sc);
-            const float pillW = std::max(pillTextW + 28.0f, 180.0f);
-            const float pillH = text.lineHeight(ui::TextStyle::Title3, sc) + 16.0f;
-            const float pillX = heroCardRect.x + heroCardRect.w - pillW - 12.0f;
-            const float pillY = heroCardRect.y + 12.0f;
+            // Treatment 2, the text-control one: tinted blur at white 25%,
+            // scale 1.06, text to full white. A pill growing a cover's 10%
+            // would read as a bug; 3% on something this small would not read
+            // at all.
+            const float rf = (focusRow == RowHero && focusSlot == 1)
+                                 ? resumeFocus.value() : 0.0f;
+            const float rs = 1.0f + rf * (kPillFocusScale - 1.0f);
+            const float pillW0 = std::max(pillTextW + 28.0f, 180.0f);
+            const float pillH0 = text.lineHeight(ui::TextStyle::Title3, sc) + 16.0f;
+            const float pillW = pillW0 * rs, pillH = pillH0 * rs;
+            const float pillX = heroCardRect.x + heroCardRect.w - pillW0 - 12.0f -
+                                (pillW - pillW0) * 0.5f;
+            const float pillY = heroCardRect.y + 12.0f - (pillH - pillH0) * 0.5f;
             renderer.drawGlass(ui::Rect{pillX, pillY, pillW, pillH, pillH * 0.5f,
                                         ui::Color::white(0)},
-                               kHeroPillBlur, ui::Color::white(0.18f));
+                               kHeroPillBlur,
+                               ui::Color::white(0.18f + 0.07f * rf));
             text.draw(renderer, kResume, pillX + (pillW - pillTextW) * 0.5f,
-                      pillY + 8.0f + text.ascent(ui::TextStyle::Title3, sc),
-                      ui::TextStyle::Title3, ui::Color::white(1.0f), sc);
+                      pillY + 8.0f * rs + text.ascent(ui::TextStyle::Title3, sc),
+                      ui::TextStyle::Title3, ui::Color::white(0.75f + 0.25f * rf), sc);
         }
         keyboard.draw(renderer, text, renderer.scale());
         if (safeGuides) renderer.drawSafeAreaGuides();
