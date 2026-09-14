@@ -32,29 +32,31 @@ between Cabinet and CabinetOS**, proved by building Gambatte for Linux at the
 commit Cabinet's Mac build is pinned to and cross-loading states both ways with
 a control run.
 
+**Gambatte also builds in CI now**, on a GitHub runner from a bare checkout, so
+that core is no longer a property of one machine. The workflow asserts the
+finished `.so` reports the pinned revision as its own version string, not just
+that the checkout was at it — `tools/core-info.c`, and open question 13 for why
+that distinction matters. Adding a core is a matrix entry plus a `case` arm in
+`cores/build-core.sh`.
+
 ## Pick up with one of these
 
 They are independent. Do not try to do them all.
 
-**1. The same core build in CI.** Everything works on one machine, which is
-precisely the failure open question 13 exists to prevent. `cores/build-core.sh`
-is reproducible and was proved so from a clean checkout; it needs a GitHub
-Actions job around it. Small, and it closes a stated gap.
-
-**2. The second core, then the backend-sensitive ones.** Genesis Plus GX next,
+**1. The second core, then the backend-sensitive ones.** Genesis Plus GX next,
 because one build covers four platforms — but confirm each of the four
 separately, since Sega CD saves by a different mechanism than the other three.
 Then pcsx_rearmed, melonDS or Flycast, where the Linux default turns on a
 recompiler Cabinet's build has off. **That is where the remaining parity risk
 lives**, and `tools/state-probe.c` is the instrument for it.
 
-**3. Phase 4, the RomM client.** The keyboard exists now, so first-run setup is
+**2. Phase 4, the RomM client.** The keyboard exists now, so first-run setup is
 reachable. Copy Cabinet's two-screen flow rather than inventing one — address,
 then a QR code to approve. Read `RommApp/RommApp/Auth/RommClient.swift` in the
 Cabinet checkout before writing anything. **Note the HTTP requirement recorded
 in Phase 4**: accept a bare host, probe the scheme, never refuse plain HTTP.
 
-**4. More screens.** Home's hero and shelves, the library grid, game detail,
+**3. More screens.** Home's hero and shelves, the library grid, game detail,
 settings. The design system has exact numbers for all of them and the
 components exist.
 
