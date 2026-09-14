@@ -2260,6 +2260,33 @@ is designed from the input model rather than ported.
   explore with.
 - Per-field shortcut keys, because reducing typing beats speeding it up.
 
+**The layout is a fixed 12-column grid**, every row totalling exactly twelve
+units. The first version sized the panel to its widest row — a long function row
+— and left the letter rows short, so a third of the panel sat empty beside the
+letters. It looked unfinished and it wasted the one thing a ten-foot keyboard is
+short of, which is reach.
+
+**Consulted rather than invented.** PlayStation, Xbox and Steam all converge on
+the same thing, and it is not a clever layout: it is a **real keyboard's own
+geography**.
+
+| | |
+|---|---|
+| Backspace | right end of the number row, where a real keyboard's backspace is |
+| Shift | bottom-left of the letter block, where a real keyboard's shift is |
+| Space | spanning the bottom, with the commit key at its right |
+
+None of that is decoration. Somebody hunting for backspace looks top-right
+*before* they read anything, and a layout that rewards the guess is faster than
+one that has to be read first. The familiar arrangement is the optimisation.
+
+The bottom row absorbs whatever is left over, so the grid stays square whatever
+a field asked for — a password field passes no shortcut keys and simply gets a
+longer space bar.
+
+**Verified** inside the 60pt safe area at 1920x1080: margins 62 left, 360 right,
+168 top, 140 bottom.
+
 **And backdrop blur, finally.** It was on the list of six things tvOS gave
 Cabinet for free and it is the largest of them. The keyboard is what forced it:
 a translucent panel over cover art without blur is not "less pretty", it is
