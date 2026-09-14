@@ -16,30 +16,59 @@
 
 ## Where the project is — 2026-09-13
 
-**Phase 1 complete. Phase 2 mostly done. Phase 0 done — see *The design
-system*, *How Cabinet hosts cores* and *The frontend toolkit*.**
+**Phase 0 complete. Phase 1 complete. Phase 2 mostly done. Phase 3 well under
+way and running. Phase 5 started early and the hardest question in it is
+answered.**
 
-The Phase 0 session read Cabinet's source rather than its documentation.
-Its two findings that change the plan:
+### The thing that matters most
 
-1. **A Linux x86-64 core build is small, not large.** Every one of the 23
-   cores has a working Linux path, the host layer is 95% portable C++ with
-   the GL path already written, and the Apple-only apparatus (symbol
-   prefixing, static merges, JIT walls) **disappears** rather than being
-   ported. Open question 13 is largely resolved.
-2. **The risk is not "can it be built", it is "will it be the same".** The
-   same core built for Linux defaults to a *different CPU backend* than the
-   Apple build, and Cabinet's own build system could not be run by anyone but
-   its author on the machine that last ran it.
+**Save states are portable between Cabinet and CabinetOS.** Proved, not
+reasoned about: Gambatte built for Linux x86-64 at the same commit Cabinet's
+macOS build is pinned to, then each platform loading the other's state and
+producing an identical digest — with a same-platform control run to make it a
+result rather than a coincidence. The emulation is bit-identical across
+architectures for twenty-five seconds of video and audio.
 
-**The recovery ran the same day, and found a live bug.** `core-manifest.json`
-now exists in Cabinet. **Eleven of twenty-three cores are shipping different
-revisions to iOS and macOS today**, and eleven of the twenty-one tvOS revisions
-are gone for good — so for those cores, whether a save state crosses between
-Cabinet's *own* apps is unknown and now unknowable. The manifest pins each core
-forward onto one revision, which is the right fix and is far cheaper now, in
-alpha, than once anyone has a save history. One reproducibility hole remains and
-it is in Flycast. See open question 13.
+That is the premise the whole product rests on, and it was the largest unknown.
+See Phase 3's notes and open question 13.
+
+### What runs today
+
+The frontend is a real program on the test VM, booted into by the session
+rather than launched by hand:
+
+- C++20, SDL3, one EGL/GLES 3 context. No toolkit. `frontend/`.
+- The design system's focus treatment, motion, canvas and type ramp, verified
+  identical at 4K, 1080p and 720p.
+- Text (Noto Sans, with CJK fallback), cover art (async, budgeted, evicting),
+  and **frosted glass**.
+- **An on-screen keyboard**, which was the gate on everything downstream.
+- **A libretro core host** that loads a `.so`, paces it against the wall clock,
+  plays its audio, draws its picture, and saves and restores its state.
+  **Dr. Mario runs.**
+
+### What is still unknown, honestly
+
+- **Nothing has been judged on a television.** Motion, the letterbox glow and
+  the safe area are all recorded as needing the SER5, which is not yet
+  installed. A software-rendered VM cannot answer any of them.
+- **One core of twenty-one is built**, and it is the easiest: Gambatte has no
+  recompiler, so no CPU-backend variable. The backend-sensitive cores —
+  pcsx_rearmed, melonDS, Flycast, picodrive — remain the real risk.
+- **Nothing has been built in CI.** All of it works on one machine, which is
+  the exact failure mode open question 13 exists to prevent.
+- **No controller has ever been attached.** The permissions chain is verified
+  by reading; a real pad is not.
+
+### The two Cabinet-side debts this session found
+
+1. **Flycast carries unscripted edits** in its working tree, so its pin does not
+   reproduce what ships — for Dreamcast and Naomi. Capture that diff before
+   anything touches the tree.
+2. **Eleven of twenty-three cores ship different revisions to iOS and macOS**,
+   and eleven of the twenty-one tvOS revisions are unrecoverable.
+   `core-manifest.json` pins each forward, which is right and far cheaper now,
+   in alpha, than once anyone has a save history.
 
 Running infrastructure:
 
