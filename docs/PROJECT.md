@@ -2247,8 +2247,16 @@ is designed from the input model rather than ported.
 - **Vertical movement keeps the horizontal POSITION, not the index.** Rows have
   different key counts and widths, so moving down from `p` lands near `l`
   rather than on whatever happens to be ninth.
-- **No wrapping at the edges.** Moving off the right does nothing. Wrapping
-  reads as a glitch when you are holding a direction.
+- **Horizontal movement wraps; vertical clamps.** This reverses an earlier
+  decision recorded here, and the earlier one was wrong. "No wrapping" is right
+  for a shelf, where the next item is a different game and landing somewhere
+  unexpected loses your place. It is wrong for a keyboard, where the grid is
+  twelve wide and every key is equally somewhere you might have meant: without
+  it, `1` to `del` is eleven presses instead of one. **PlayStation and Xbox both
+  wrap their keyboards**, and that is the reason. Vertical still clamps — five
+  rows is short enough to cross directly, and wrapping from the space bar up to
+  the digits would skip the letters, which is where somebody pressing up is
+  almost always going.
 - Shift is one-shot, the way a phone keyboard behaves.
 - Backspace steps over a whole UTF-8 code point, not a byte.
 - The field shows the **tail** when it overflows: what you are typing is at the

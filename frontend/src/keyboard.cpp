@@ -169,9 +169,24 @@ void Keyboard::moveFocus(int dx, int dy) {
         }
         col_ = bestCol;
     }
-    // No wrapping. Moving off the edge does nothing, which is what a person
-    // holding a direction expects.
-    if (dx != 0) col_ = std::clamp(col_ + dx, 0, static_cast<int>(rows[row_].size()) - 1);
+    // HORIZONTAL MOVEMENT WRAPS. This reverses an earlier decision here, and
+    // the earlier one was wrong.
+    //
+    // The argument against wrapping was that it reads as a glitch when you are
+    // holding a direction. That holds for a shelf, where the next item is a
+    // different game and landing somewhere unexpected loses your place. It does
+    // not hold for a keyboard, where the grid is twelve columns wide and every
+    // key is equally "where you meant to be": without wrapping, getting from
+    // "1" to "del" is eleven presses when it should be one. PlayStation and
+    // Xbox both wrap their keyboards for exactly this reason.
+    //
+    // Vertical movement still clamps. Five rows is short enough to cross
+    // directly, and wrapping from the space bar up to the digits skips the
+    // letters — which is where somebody pressing up is almost always going.
+    if (dx != 0) {
+        const int n = static_cast<int>(rows[row_].size());
+        col_ = (col_ + dx % n + n) % n;
+    }
     clampFocus();
 }
 
@@ -257,9 +272,10 @@ void Keyboard::draw(Renderer& r, TextRenderer& text, float scale) {
 
     const float fieldH = 96.0f;
     const float titleH = 70.0f;
+    const float hintH = config_.hint.empty() ? 0.0f : 34.0f;
     const float gridH = rows.size() * kKeyUnit + (rows.size() - 1) * kKeyGap;
     const float panelW = widest + kPanelPad * 2;
-    const float panelH = titleH + fieldH + 28.0f + gridH + kPanelPad * 2 + 56.0f;
+    const float panelH = titleH + hintH + fieldH + 28.0f + gridH + kPanelPad * 2 + 56.0f;
     const float panelX = (kCanvasWidth - panelW) * 0.5f;
     const float panelY = (kCanvasHeight - panelH) * 0.5f;
 
@@ -283,6 +299,15 @@ void Keyboard::draw(Renderer& r, TextRenderer& text, float scale) {
     text.draw(r, config_.title, panelX + kPanelPad,
               y + text.ascent(TextStyle::Title2, scale), TextStyle::Title2,
               Color::white(1.0f), scale);
+    if (!config_.hint.empty()) {
+        // Set by every caller and drawn by none until now. A field whose title
+        // is "Connect to RomM" genuinely needs the line that says WHICH
+        // address, and it was being silently dropped.
+        text.draw(r, config_.hint, panelX + kPanelPad,
+                  y + titleH + text.ascent(TextStyle::Callout, scale) - 10.0f,
+                  TextStyle::Callout, Color::white(0.55f), scale);
+        y += 34.0f;
+    }
     y += titleH;
 
     // The field.
