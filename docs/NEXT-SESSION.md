@@ -32,7 +32,10 @@ commit Cabinet's Mac build is pinned to and cross-loading states both ways with
 a control run.
 
 **Two cores now build in CI** — `gambatte` and `genesis_plus_gx` — on a GitHub
-runner from a bare checkout, in about a minute each. The workflow asserts the
+runner from a bare checkout, in about a minute each. **The builds are
+reproducible across machines**: the VM and the GitHub runner produce
+byte-identical artifacts, so the sha256 in a CI log is a fact about the revision
+and flags rather than about the machine, and a mismatch is a real signal. The workflow asserts the
 finished `.so` reports its pinned revision as its own version string, not merely
 that the checkout was at it (`tools/core-info.c`). Adding a core is a `case` arm
 in `cores/build-core.sh` plus a name in the matrix in
@@ -48,20 +51,13 @@ own token rather than a copy, so they revoke independently.
 
 They are independent. Do not try to do them all.
 
-**1. Measure the Sega CD save-state question.** `genesis_plus_gx` is built with
-`HAVE_CDROM=0` to match Cabinet, and **that is a decision made from reading, not
-a measurement**. The library has 22 Sega CD titles, so it is now testable:
-`tools/state-probe.c` on the VM, a state written by each build, cross-loaded. If
-the flag turns out not to touch the state format, say so in PROJECT.md and stop
-carrying the caveat.
-
-**2. The backend-sensitive cores.** pcsx_rearmed, melonDS, Flycast, picodrive,
+**1. The backend-sensitive cores.** pcsx_rearmed, melonDS, Flycast, picodrive,
 where the Linux default turns on a recompiler Cabinet's build has off. **That is
 where the remaining parity risk lives.** The lever for each is in PROJECT.md's
 table under open question 13; the pin and the build arguments are in the
 manifest.
 
-**3. Phase 4, the RomM client.** The keyboard exists, the server is reachable,
+**2. Phase 4, the RomM client.** The keyboard exists, the server is reachable,
 and the auth flow has now been walked end to end by hand — so the shape is
 known. Copy Cabinet's two-screen flow rather than inventing one: address, then a
 QR code to approve. Read `RommApp/RommApp/Auth/RommClient.swift` in the Cabinet
@@ -69,7 +65,7 @@ checkout before writing anything. **Note the HTTP requirement** recorded in
 Phase 4: accept a bare host, probe the scheme, never refuse plain HTTP. **And
 the platform-identity rule**, also in Phase 4 — key by `id`, not by `slug`.
 
-**4. More screens.** Home's hero and shelves, the library grid, game detail,
+**3. More screens.** Home's hero and shelves, the library grid, game detail,
 settings. The design system has exact numbers for all of them and the components
 exist.
 
@@ -96,7 +92,9 @@ exist.
   Three divergences are known and only one class is recompilers:
   `genesis_plus_gx` needs `HAVE_CDROM=0` and `vecx` needs `HAS_GPU=0`, both
   because the `unix` branch asks `uname` what machine it is on and changes the
-  build.
+  build. **`HAVE_CDROM` is settled** — measured, it changes three of 115 object
+  files and none of them under `core/`, so it cannot affect save states. Keep it
+  off because the console has no optical drive, not out of caution.
 - **Configuration is keyed by PLATFORM, not by core** — Genesis Plus GX serves
   four platforms with different option tables and pad types. And the converse:
   **two platforms can share a name and a slug**. "Arcade" is two platforms in
@@ -110,6 +108,12 @@ exist.
   was written down as a blanket rule before anyone noticed. Consult what
   PlayStation, Xbox and Steam actually do before inventing an interaction.
 - **`dlerror()` clears itself when read.** Read it once.
+- **Comparing object files can answer a parity question without a ROM.** The
+  `HAVE_CDROM` question looked like it needed a Sega CD image and a cross-loaded
+  save state. Building both variants and diffing the 115 `.o` files answered it
+  exhaustively in two minutes, with no download — and proved more, since it
+  covers every title rather than the one that was tested. Reach for it before
+  moving hundreds of megabytes.
 - **A test must first prove the thing it measures actually varies.** The save
   state test passed while proving nothing, because it compared video on a static
   title screen. It now asserts the picture is moving and reports INCONCLUSIVE
