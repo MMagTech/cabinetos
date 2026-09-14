@@ -2503,6 +2503,38 @@ It also sharpens the rule recorded under *Controls*: configuration is keyed by
 name and a slug and must not share a core. Neither the core nor the slug
 identifies anything on its own.
 
+#### Cover paths are not URLs until they are encoded
+
+**Found 2026-09-14, against the live server.** RomM returns cover paths with a
+cache-busting query appended, and the timestamp in it contains a space:
+
+```
+/assets/romm/resources/roms/8/230/cover/small.png?ts=2026-02-08 21:13:30
+```
+
+curl rejects that outright — *"Malformed input to a URL function"* — so handing
+the path straight to a fetch fails for **every cover in the library**. The
+failure mode is what makes it worth writing down: an empty result reads as "this
+cover failed", `ImageCache` draws nothing for a cover that failed, and the whole
+library renders with no art and **not one error message anywhere**. A silent
+total failure costs more to diagnose than a loud partial one.
+
+`romm.cpp` encodes conservatively before fetching: anything already legal in a
+URL is left alone — including a `%` that begins a valid escape, so an
+already-encoded path is not encoded twice — and everything else becomes `%XX`.
+
+**The general lesson, which is the reason this is in the specification rather
+than only in a commit message: counting is not fetching.** The probe reported
+`covers: 0 of 171 have art` and that number was *correct* — Game & Watch has no
+art — while every cover on every other platform was broken. Two different
+questions, and only one of them was being asked. The probe now fetches a real
+cover and checks the bytes are actually a PNG or JPEG, because a 200 carrying an
+HTML error page is equally useless to a texture upload.
+
+**Not every platform has cover art**, and that is normal rather than a fault.
+Game & Watch has none of 171. Any "no art" state in the UI has to look
+deliberate, not broken.
+
 #### Plain HTTP must work. This is a bug CabinetOS can simply not have
 
 **Apple's App Transport Security refuses plain HTTP**, so a tvOS app talking to

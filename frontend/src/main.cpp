@@ -252,6 +252,36 @@ static int rommProbe(const char* address, bool allowPairing) {
         if (!games.empty())
             std::printf("first       %s\n", games.front().name.c_str());
     }
+
+    // Actually FETCH a cover, rather than counting the ones that claim to have
+    // one. Those are different questions, and the difference hid a real bug:
+    // RomM appends "?ts=<datetime with a space>" to cover paths, which curl
+    // rejects outright, so every cover failed while the count looked healthy.
+    // A library with no art and no error is the worst kind of broken.
+    for (const auto& p : platforms) {
+        if (p.romCount == 0) continue;
+        std::vector<romm::Game> games;
+        if (!client.fetchGames(p.id, &games, &err)) continue;
+        const romm::Game* withArt = nullptr;
+        for (const auto& g : games)
+            if (!g.coverPath.empty()) { withArt = &g; break; }
+        if (!withArt) continue;
+
+        std::vector<uint8_t> bytes = client.fetchBytes(withArt->coverPath);
+        std::printf("\ncover test  %s — %s\n", withArt->name.c_str(),
+                    bytes.empty() ? "FAILED, fetched 0 bytes" : "ok");
+        if (!bytes.empty()) {
+            // Say what it actually is. A 200 carrying an HTML error page is
+            // still zero use to a texture upload.
+            const bool png = bytes.size() > 8 && bytes[0] == 0x89 && bytes[1] == 'P';
+            const bool jpg = bytes.size() > 3 && bytes[0] == 0xFF && bytes[1] == 0xD8;
+            std::printf("            %zu bytes, %s\n", bytes.size(),
+                        png ? "PNG" : jpg ? "JPEG" : "NOT AN IMAGE");
+        } else {
+            return 1;
+        }
+        break;
+    }
     return 0;
 }
 

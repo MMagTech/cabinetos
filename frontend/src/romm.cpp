@@ -53,6 +53,49 @@ int64_t jint(json_object* o, const char* key) {
     return json_object_get_int64(v);
 }
 
+
+// RomM hands back cover paths with a cache-busting query appended:
+//
+//   /assets/.../cover/small.png?ts=2026-02-08 21:13:30
+//                                              ^ a space, inside a URL
+//
+// curl rejects that outright — "Malformed input to a URL function" — so
+// without this EVERY cover fails, fetchBytes returns empty, ImageCache reads
+// empty as failure, and the library renders with no art and no error anywhere.
+// A silent total failure is worth more care than a loud partial one.
+//
+// Encoding conservatively: anything already legal in a URL is left alone,
+// including a % that begins a valid escape, so a path that is already encoded
+// is not encoded twice. Everything else — the space, and any non-ASCII byte —
+// becomes %XX.
+std::string encodeUrl(const std::string& in) {
+    static const char* kHex = "0123456789ABCDEF";
+    auto isHex = [](unsigned char c) {
+        return (c >= '0' && c <= '9') || (c >= 'A' && c <= 'F') || (c >= 'a' && c <= 'f');
+    };
+    std::string out;
+    out.reserve(in.size() + 16);
+    for (size_t i = 0; i < in.size(); ++i) {
+        const unsigned char c = static_cast<unsigned char>(in[i]);
+        const bool unreserved = (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+                                (c >= '0' && c <= '9') ||
+                                c == '-' || c == '.' || c == '_' || c == '~';
+        // Delimiters that are meaningful where they sit and must survive.
+        const bool delimiter = strchr("/?=&:@+$,;#!*'()[]", c) != nullptr;
+        const bool liveEscape = c == '%' && i + 2 < in.size() &&
+                                isHex(static_cast<unsigned char>(in[i + 1])) &&
+                                isHex(static_cast<unsigned char>(in[i + 2]));
+        if (unreserved || delimiter || liveEscape) {
+            out.push_back(static_cast<char>(c));
+        } else {
+            out.push_back('%');
+            out.push_back(kHex[c >> 4]);
+            out.push_back(kHex[c & 0x0F]);
+        }
+    }
+    return out;
+}
+
 }  // namespace
 
 bool looksLocal(const std::string& host) {
@@ -361,7 +404,9 @@ std::vector<uint8_t> Client::fetchBytes(const std::string& path) const {
     std::vector<uint8_t> data;
     CURL* c = curl_easy_init();
     if (!c) return data;
-    const std::string url = (path.compare(0, 4, "http") == 0) ? path : base_ + "/" + path;
+    // The path comes from the server and may carry anything; see encodeUrl.
+    const std::string raw = (path.compare(0, 4, "http") == 0) ? path : base_ + path;
+    const std::string url = encodeUrl(raw);
     curl_slist* hdrs = nullptr;
     if (!token_.empty())
         hdrs = curl_slist_append(hdrs, ("Authorization: Bearer " + token_).c_str());
