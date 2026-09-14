@@ -3279,3 +3279,93 @@ built for it, because that is a promise the product does not keep.
 **Keyboard is not in question** and is settled: every screen must be fully
 operable by directional input plus confirm and back, from whatever device
 supplies them. That is already an architectural rule rather than a feature.
+
+### 17. Wi-Fi credentials on a controller-only console
+**Raised 2026-09-13. The mechanism is DECIDED; the UI is Phase 6.**
+
+The hard case in first-run setup, and the one the companion page (open question
+15) cannot solve: a page served by the console is unreachable from a phone when
+the console is not on the network yet.
+
+#### The permissions question, answered first, because it is the blocker
+
+Checked on the running image. **The frontend can do the entire Wi-Fi flow
+without a password prompt**, which a console has no way to answer anyway:
+
+| polkit action | `allow_active` | needed for |
+|---|---|---|
+| `wifi.scan` | **yes** | listing networks |
+| `network-control` | **yes** | activating a connection |
+| `enable-disable-wifi` | **yes** | turning the radio on |
+| `settings.modify.own` | **yes** | saving a user-scoped connection |
+| `settings.modify.system` | `auth_admin_keep` — **but see below** | saving a connection that comes up at boot |
+
+The system-wide case is granted by a rule Bazzite already ships:
+
+```js
+if (action.id == "org.freedesktop.NetworkManager.settings.modify.system" &&
+    subject.isInGroup("wheel") && subject.local) return polkit.Result.YES;
+```
+
+**The session user is in `wheel`, so this works today — by inheritance, not by
+design.** `wheel` also means sudo, and Phase 6 tightening security around
+developer mode is exactly the change that would remove the session user from it
+— **silently breaking Wi-Fi configuration**, presenting as a network bug rather
+than a permissions one. Same class of trap as the controller ACL in *Controls*.
+
+**So CabinetOS should ship its own polkit rule** granting that one action to the
+session user directly, rather than depending on `wheel`. Cheap, and it decouples
+"can configure the network" from "can become root", which are not the same
+privilege and should not be the same grant.
+
+#### The ladder, in the order the UI should offer it
+
+1. **Ethernet — and skip the screen entirely when it is already up.** Do not ask
+   someone to confirm a network they are already on. A console under a
+   television is very often within reach of a cable, and this path involves no
+   typing at all.
+2. **The on-screen keyboard.** The baseline, and **this is what every console
+   does** — PlayStation, Xbox, Apple TV and Switch all make you type the
+   passphrase with a controller. It is not a product failure, it is the normal
+   experience, and the keyboard has to exist for the RomM address regardless.
+3. **A USB keyboard.** Thirty seconds, and people have one in a drawer. The
+   input model already requires that one works wherever text is entered, so this
+   costs nothing beyond saying it on screen.
+4. **A phone on a USB cable.** Enable tethering and the console is online
+   immediately — NetworkManager picks it up as an ordinary ethernet device with
+   no configuration at all. **This already works and needs no code.** It is
+   worth naming on the screen because nobody thinks of it, and it turns an
+   unreachable console into a connected one in seconds.
+
+#### Against the console running its own access point
+
+The "proper" IoT answer — broadcast a setup network, have the phone join it,
+serve the page there. **Decided against for now**, on four counts:
+
+- **Hardware-dependent.** Plenty of cheap combo cards do AP mode badly or not at
+  all, and this project's hardware rule is that capability is discovered rather
+  than assumed.
+- **It is a mode switch, not an addition.** While acting as an access point the
+  radio generally cannot also scan for the network it is meant to join.
+- **The phone loses internet** while attached to it, which reliably confuses
+  people and makes them abandon the flow.
+- `wifi.share.open` is **denied** even to an active session in this image, so it
+  needs a polkit change too.
+
+Revisit only if the on-screen keyboard turns out to be genuinely unusable on a
+television, which is a thing to find out rather than assume.
+
+#### Three decisions that matter more than the mechanism
+
+1. **Show the password by default.** Every console hides it and every console is
+   wrong: there is nobody shoulder-surfing a living room, and not being able to
+   see what you typed *is* the entire difficulty. This one choice removes most
+   of the pain for free.
+2. **Skip the screen when already online.**
+3. **Remember networks.** NetworkManager does this for nothing.
+
+And three details that will otherwise be discovered late: **hidden SSIDs** need
+a "join another network" path where the name is typed too; **the passphrase is
+usually being read off the underside of a router**, so digits and symbols must
+not be buried behind a shift layer; and **802.1X enterprise is a different form
+entirely** — out of scope, and better refused plainly than half-supported.
