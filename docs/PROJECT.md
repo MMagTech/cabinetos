@@ -2255,6 +2255,22 @@ Storage management distinguishes **cached** from **kept** (see *Emulation*):
 cached games are evictable, kept games are not, and the user moves games between
 the two.
 
+**First run copies Cabinet's flow rather than inventing one.** Read from the
+source 2026-09-13: tvOS already solves this problem and has shipped the answer.
+
+1. **`ServerSetupView`** — one field, the RomM address, and nothing else. Its
+   own note explains the copy: *"the one thing someone genuinely wonders here:
+   no password is coming."*
+2. **`PairingView`** — the app asks the server to start a device authorisation,
+   shows a short code, and **displays the approval URL as a QR code**, because
+   *"tvOS has no comfortable way to type into a browser with a remote."* The
+   person scans it with the phone already signed in to RomM and approves there.
+   The app never sees the password, and the token can be revoked server-side.
+
+**So the whole typing burden on a television today is one hostname.** No
+password, ever. That number matters, because it is the size of the problem any
+first-run convenience is competing against.
+
 *Done when* the real library is browsable, a game downloads and plays, and a
 kept game survives a cache eviction.
 
@@ -2327,6 +2343,30 @@ implementation and cannot be ported from it:
    to say so.
 3. **Player assignment** that is visible and survives a pad sleeping and
    reconnecting. Four-player arcade and the GameCube adapter make this real.
+
+**Wired is the bootstrap, not the fallback.** A first-run screen should offer
+USB as the thing that simply works and Bluetooth as the convenience, not the
+other way round. USB is deterministic; Bluetooth on a cheap mini PC is the part
+that might not come up at all, since some combo cards need firmware blobs.
+Three first-run states, not two: searching, found, and **no adapter — plug
+something in**.
+
+**Do NOT auto-pair the first gamepad discovered.** It is the obvious design and
+it is wrong: the first advertisement in range may be a neighbour's pad, the
+user's own second controller, or one belonging to the console beside it, and
+pairing it silently gives no clue what happened.
+
+> **Pair on a button press, not on discovery.** Show what was found, and let the
+> pad that sends the first input become player one. The confirmation is the very
+> input being established, which is why it costs the user nothing and cannot
+> pick the wrong device.
+
+And the discovery filter is less clean than it sounds. Class-of-Device
+peripheral/gamepad catches DualSense, DualShock and most 8BitDo pads.
+**Xbox controllers are the awkward case** — a proprietary Bluetooth profile
+rather than plain HID, historically finicky under BlueZ. Several pads also only
+enter pairing mode on a held button combination the user has to know, so the
+screen has to name it per brand or at least say "hold the pairing button".
 
 *Done when* the machine is usable from the sofa with a controller alone, and
 reachable over SSH when developer mode is on.
@@ -3155,3 +3195,87 @@ RomM's own timestamped name, so uploads never overwrite and syncing is only
 "finish the uploads". Grout instead surfaces conflicts for the user to resolve,
 which is the right call for a client that cannot write the filename — and the
 wrong one here, since we can.
+
+### 15. A phone companion page for first run
+**Raised 2026-09-13 as a design proposal. NOT ADOPTED YET — deferred, with
+reasons. Revisit after the on-screen keyboard exists.**
+
+The proposal: CabinetOS serves a small web page during first run and shows a QR
+code pointing at itself, so the RomM address, credentials and Wi-Fi details can
+be typed on a phone instead of with a D-pad. Off afterwards, with a toggle.
+
+**The parts that are right, and are recorded elsewhere rather than here:**
+directional navigation as an architectural rule, the on-screen keyboard as a
+properly designed screen rather than an afterthought, showing every platform the
+server exposes and marking the unsupported ones, and USB as the input bootstrap.
+Those are in Phases 3, 4 and 6 already.
+
+**Why the companion page is deferred.** Three reasons, in order of weight.
+
+1. **It is a fix for a pain nobody has felt yet.** The on-screen keyboard does
+   not exist. Until it does, and until somebody has typed on it from a sofa,
+   there is no measurement of how bad the problem is — only an assumption that
+   it is bad. Build the thing that might make the companion unnecessary first.
+
+2. **The problem is one hostname, not "a URL and credentials."** Cabinet's tvOS
+   flow, read from the source: `ServerSetupView` takes the address and nothing
+   else, then `PairingView` shows the approval URL **as a QR code** for the
+   phone that is already signed in to RomM. The password is never typed on the
+   television at all. CabinetOS should copy that flow, and when it does, the
+   entire D-pad typing burden is a hostname, once. A whole second interface is a
+   lot of machinery to save twenty characters.
+
+3. **It cannot solve the case that would justify it.** Wi-Fi credentials are the
+   genuinely painful typing, and a page served by the console is unreachable
+   from a phone when the console is not on the network yet. Solving that needs
+   the console to bring up its own access point — a large piece of work, and
+   often impossible while the same radio is also meant to be a client. So the
+   companion addresses the small problem and not the big one.
+
+**If it is built anyway, the security surface is the part to get right**, and
+"it is only a home LAN" is not a mitigation: a home LAN contains guests, IoT
+devices and a television with an advertising SDK in it.
+
+| | |
+|---|---|
+| **A one-time code shown on the screen**, carried in the QR and required by the page | The one that matters. Turns "anyone on the LAN" into "anyone who can see the television". |
+| **Time-limited, not merely "off after first run"** | A setup abandoned half way otherwise leaves it listening forever. |
+| **Write-only** | Never echo a stored credential back to the page. |
+| **Guard the address field itself** | The real attack is not reading the page, it is pointing the console at an attacker's "RomM" and harvesting the token it then goes and fetches. |
+| **Not HTTPS** | A self-signed certificate on a LAN teaches the user to click through certificate warnings, which is worse than the thing it fixes. |
+
+**And the question the proposal already identifies is the right one to settle
+first: rescue tool, or companion product?** The answer should be *rescue tool*,
+and it should be enforced structurally rather than by intention — one page, no
+navigation, time-limited, off by default. **If it ever grows a menu, it has
+become a product**, with a second design language and a second set of bugs, and
+nobody decided to build that.
+
+*Do not resolve before the on-screen keyboard has been used on a television.*
+
+### 16. Is a mouse supported, or not?
+**Raised 2026-09-13. Two documents currently disagree. Needs a decision, not a
+default.**
+
+*The input model* in this document says: **Supported — keyboard and mouse. A
+convenience, never a dependency.**
+
+The first-run design proposal says the opposite, and gives a good reason:
+*"pointer input pulls the design toward hover states and click targets, which is
+a different interaction model."* That is true, and it is the reason tvOS has no
+pointer.
+
+Both cannot stand. The honest options:
+
+1. **Mouse is not supported.** Amend the input-model table. Cleanest, and it
+   matches how the design is actually being built.
+2. **A mouse moves focus and clicks the focused thing, and nothing else** — no
+   hover states, no pointer, no cursor. Cheap to keep true, and it means a
+   plugged-in mouse does something sensible rather than nothing.
+
+What must not happen is leaving the table saying "supported" while no screen is
+built for it, because that is a promise the product does not keep.
+
+**Keyboard is not in question** and is settled: every screen must be fully
+operable by directional input plus confirm and back, from whatever device
+supplies them. That is already an architectural rule rather than a feature.
