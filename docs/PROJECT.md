@@ -5,6 +5,11 @@
 > repository should read it before touching anything else, and should update it
 > when decisions are made, phases change status, or new uncertainty appears.
 >
+> **Starting a session?** `docs/NEXT-SESSION.md` is the short version — what
+> state things are in, what to pick up, and the things that waste a day if
+> nobody says them. This file is the specification and is authoritative; that
+> one is the handover. Rewrite it at the end of a session.
+>
 > Rules for maintaining this document:
 > - When a phase is finished, change its status and say what actually shipped,
 >   not what was planned.
