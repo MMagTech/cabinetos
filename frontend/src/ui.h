@@ -22,6 +22,16 @@ namespace ui {
 constexpr float kCanvasWidth = 1920.0f;
 constexpr float kCanvasHeight = 1080.0f;
 
+// The ten-foot safe area. Not a number invented here: it is the reference
+// implementation's own `contentInset` for a television, and it exists because a
+// physical set crops the edges of the picture. docs/PROJECT.md records the
+// hero being resized three times over exactly this, including once where the
+// simulator showed it fitting and real hardware did not.
+//
+// Nothing a person needs to read or reach may sit outside it. Backgrounds and
+// artwork may, and should, run to the edge.
+constexpr float kSafeInset = 60.0f;
+
 struct Color {
     float r, g, b, a;
 
@@ -121,6 +131,10 @@ public:
     //
     // Callers that never use glass can ignore all of it; presentScene is a
     // no-op then.
+    // Draws the safe area and a 5% overscan allowance, for checking on a real
+    // television where the picture actually stops.
+    void drawSafeAreaGuides();
+
     void presentScene();
     bool sceneCaptured() const { return scenePresented_; }
 
@@ -158,6 +172,7 @@ private:
     int sceneW_ = 0, sceneH_ = 0;
     bool scenePresented_ = false;
     int vx_ = 0, vy_ = 0, vw_ = 0, vh_ = 0;
+    int drawableW_ = 0, drawableH_ = 0;
     GLuint blurProgram_ = 0;
     struct {
         GLint canvas, rect, radius, tint, tex, lod;

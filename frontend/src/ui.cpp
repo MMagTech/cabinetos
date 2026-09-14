@@ -390,12 +390,39 @@ void Renderer::presentScene() {
     glGenerateMipmap(GL_TEXTURE_2D);
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    // Clear the WHOLE drawable first, not just the viewport. The letterbox
+    // bars are outside the canvas, so nothing ever draws into them — and
+    // without this they keep whatever the previous frame left there, which
+    // showed as a ghost strip of the last frame across the top of the screen.
+    glViewport(0, 0, drawableW_, drawableH_);
+    glDisable(GL_SCISSOR_TEST);
+    glClearColor(0, 0, 0, 1);
+    glClear(GL_COLOR_BUFFER_BIT);
     glViewport(vx_, vy_, vw_, vh_);
     glDisable(GL_BLEND);
     drawTextured(0, 0, kCanvasWidth, kCanvasHeight, sceneTex_, 0, 1, 1, 0,
                  Color{1, 1, 1, 1}, false);
     glEnable(GL_BLEND);
     scenePresented_ = true;
+}
+
+void Renderer::drawSafeAreaGuides() {
+    // Two boxes: the design system's own content inset, and a 5% overscan
+    // allowance. On a monitor both are decoration; on a television the outer
+    // one is roughly where a panel starts eating the picture, and anything
+    // important outside it will be cropped on somebody's set.
+    const Color inner = Color::rgb(0x58E8F6, 0.55f);
+    const Color outer = Color::rgb(0xEC405C, 0.55f);
+    auto box = [&](float inset, const Color& c) {
+        const float t = 2.0f;
+        const float w = kCanvasWidth - inset * 2, h = kCanvasHeight - inset * 2;
+        draw(Rect{inset, inset, w, t, 0, c});
+        draw(Rect{inset, inset + h - t, w, t, 0, c});
+        draw(Rect{inset, inset, t, h, 0, c});
+        draw(Rect{inset + w - t, inset, t, h, 0, c});
+    };
+    box(kSafeInset, inner);
+    box(kCanvasWidth * 0.05f, outer);
 }
 
 void Renderer::drawGlass(const Rect& r, float blur, const Color& tint) {
@@ -432,6 +459,8 @@ void Renderer::beginFrame(int drawableWidth, int drawableHeight) {
     scale_ = scale;
     int vw = static_cast<int>(kCanvasWidth * scale);
     int vh = static_cast<int>(kCanvasHeight * scale);
+    drawableW_ = drawableWidth;
+    drawableH_ = drawableHeight;
     vx_ = (drawableWidth - vw) / 2;
     vy_ = (drawableHeight - vh) / 2;
     vw_ = vw;

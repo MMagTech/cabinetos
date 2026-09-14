@@ -304,10 +304,14 @@ void Keyboard::draw(Renderer& r, TextRenderer& text, float scale) {
 
     // What the buttons do. A controller-only UI has to say, because there is
     // no convention to fall back on and no pointer to explore with.
+    // Callout, not Caption. 25pt is inside Apple's ten-foot ramp but it is the
+    // size for something glanceable, and this is a line someone has to actually
+    // READ to know what the buttons do. Anything a person must read sits at
+    // Callout or above.
     const char* legend = "A select     X delete     Y shift     Start done     B back";
-    const float lw = text.measure(legend, TextStyle::Caption1, scale);
+    const float lw = text.measure(legend, TextStyle::Callout, scale);
     text.draw(r, legend, panelX + (panelW - lw) * 0.5f,
-              panelY + panelH - kPanelPad + 8.0f, TextStyle::Caption1, Color::white(0.45f),
+              panelY + panelH - kPanelPad + 12.0f, TextStyle::Callout, Color::white(0.55f),
               scale);
 }
 
