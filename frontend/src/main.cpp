@@ -34,6 +34,7 @@
 #include "core.h"
 #include "image.h"
 #include "keyboard.h"
+#include "catalog.h"
 #include "romm.h"
 #include "text.h"
 #include "ui.h"
@@ -114,33 +115,114 @@ struct Animated {
 };
 
 struct Card {
-    ui::Color art;      // shown until the cover arrives, and if it never does
-    const char* title;
-    const char* cover;  // a path today, a RomM URL in Phase 4
+    ui::Color art;        // shown until the cover arrives, and if it never does
+    std::string title;
+    // A local path in the sample library, a RomM cover path with live data.
+    // Empty means there is no art, which is a normal state and not a failure:
+    // arcade sets often have none, and Game & Watch has none at all.
+    std::string cover;
     Animated focus;
     Animated press;
 };
+
+// A stable colour for a card with no art, from its title. Better than one grey
+// for everything: a shelf of coverless games stays distinguishable, and the
+// same game is the same colour every time the library is opened.
+ui::Color colorForTitle(const std::string& title) {
+    uint32_t h = 2166136261u;
+    for (unsigned char c : title) { h ^= c; h *= 16777619u; }
+    // Fixed saturation and value, hue from the hash: keeps every generated
+    // colour inside the design system's range instead of producing mud.
+    const float hue = static_cast<float>(h % 360u);
+    const float s = 0.45f, v = 0.62f;
+    const float c2 = v * s;
+    const float x = c2 * (1.0f - std::fabs(std::fmod(hue / 60.0f, 2.0f) - 1.0f));
+    const float m = v - c2;
+    float r = 0, g = 0, b = 0;
+    if (hue < 60)       { r = c2; g = x; }
+    else if (hue < 120) { r = x; g = c2; }
+    else if (hue < 180) { g = c2; b = x; }
+    else if (hue < 240) { g = x; b = c2; }
+    else if (hue < 300) { r = x; b = c2; }
+    else                { r = c2; b = x; }
+    return ui::Color{r + m, g + m, b + m, 1.0f};
+}
 
 // Stand-in library. Real covers and names arrive with the RomM client in Phase
 // 4; these exist so the layout is exercised against the shapes real data has —
 // a long title that has to truncate, and a Japanese one, which a ROM library is
 // full of and which is the reason the font stack has a CJK fallback at all.
-const Card kSampleLibrary[] = {
-    {ui::Color::rgb(0x2484D6), "Sonic the Hedgehog 2", "covers/a-3x4.jpg", {}, {}},
-    {ui::Color::rgb(0xEC405C), "Super Metroid", "covers/b-3x4.png", {}, {}},
-    {ui::Color::rgb(0x58E8F6), "Castlevania: Symphony of the Night", "covers/c-3x4.jpg", {}, {}},
+struct SampleEntry { uint32_t art; const char* title; const char* cover; };
+const SampleEntry kSampleLibrary[] = {
+    {0x2484D6, "Sonic the Hedgehog 2", "covers/a-3x4.jpg"},
+    {0xEC405C, "Super Metroid", "covers/b-3x4.png"},
+    {0x58E8F6, "Castlevania: Symphony of the Night", "covers/c-3x4.jpg"},
     // Deliberately the wrong shape: a squarish arcade flyer. This is the
     // odd-aspect case, and it must letterbox onto a blurred echo of itself
     // rather than crop the title off the top of the art.
-    {ui::Color::rgb(0xFFC457), "\xE3\x83\x89\xE3\x83\xA9\xE3\x82\xAD\xE3\x83\xA5\xE3\x83\xBC\xE3\x82\xB7\xE3\x83\xA5", "covers/d-square.png", {}, {}},
+    {0xFFC457, "\xE3\x83\x89\xE3\x83\xA9\xE3\x82\xAD\xE3\x83\xA5\xE3\x83\xBC\xE3\x82\xB7\xE3\x83\xA5", "covers/d-square.png"},
     // A wide one, for the same reason in the other direction.
-    {ui::Color::rgb(0xFF7AC7), "Streets of Rage 2", "covers/e-wide.jpg", {}, {}},
+    {0xFF7AC7, "Streets of Rage 2", "covers/e-wide.jpg"},
     // No cover at all. Arcade sets often have none, and the coloured panel with
     // the title under it is the honest answer rather than a grey box.
-    {ui::Color::rgb(0x7A6BC4), "Chrono Trigger", nullptr, {}, {}},
+    {0x7A6BC4, "Chrono Trigger", nullptr},
 };
 
 }  // namespace
+
+// Builds the shelf from a real library.
+//
+// THE PLATFORMS THIS CONSOLE CANNOT PLAY ARE LEFT OUT, and that is a decision
+// rather than an oversight — see catalog.h. A console must not offer a game it
+// cannot run; the moment to discover that is not after someone has chosen it.
+// What it must not do is drop them silently, so every exclusion is reported on
+// stderr with its reason. The screen that tells the person the same thing is
+// still to build; this is the part that knows.
+static std::vector<Card> loadLibrary(romm::Client& client) {
+    std::vector<Card> cards;
+    std::string err;
+
+    std::vector<romm::Platform> platforms;
+    if (!client.fetchPlatforms(&platforms, &err)) {
+        std::fprintf(stderr, "[romm] platforms: %s\n", err.c_str());
+        return cards;
+    }
+
+    int skippedGames = 0;
+    for (const auto& p : platforms) {
+        const catalog::Coverage cov = catalog::coverageFor(p);
+        if (cov.support != catalog::Support::Playable) {
+            skippedGames += p.romCount;
+            std::fprintf(stderr, "[library] skipping %s (%d games) — %s\n",
+                         p.name.c_str(), p.romCount,
+                         cov.reason ? cov.reason : "not playable");
+            continue;
+        }
+
+        std::vector<romm::Game> games;
+        if (!client.fetchGames(p.id, &games, &err)) {
+            // One platform failing is not the library failing. Say so and go on.
+            std::fprintf(stderr, "[library] %s: %s\n", p.name.c_str(), err.c_str());
+            continue;
+        }
+        for (auto& g : games) {
+            Card c;
+            c.title = g.name.empty() ? g.fsName : g.name;
+            c.cover = g.coverPath;
+            c.art = colorForTitle(c.title);
+            cards.push_back(std::move(c));
+        }
+    }
+
+    std::sort(cards.begin(), cards.end(),
+              [](const Card& a, const Card& b) { return a.title < b.title; });
+
+    int withArt = 0;
+    for (const auto& c : cards) if (!c.cover.empty()) ++withArt;
+    std::fprintf(stderr, "[library] %zu playable games, %d with art; %d games skipped\n",
+                 cards.size(), withArt, skippedGames);
+    return cards;
+}
 
 // Talks to a RomM server and reports, without opening a window.
 //
@@ -320,6 +402,10 @@ int main(int argc, char** argv) {
     // their own, and finding that out through a UI is the slow way.
     const char* rommAddress = nullptr;
     bool rommPair = false;
+    // --romm alone runs the UI against the server. --romm-probe reports and
+    // exits without opening a window, which is what a headless machine and a
+    // CI job can do.
+    bool rommProbeMode = false;
     for (int i = 1; i < argc; ++i) {
         if (SDL_strcmp(argv[i], "--screenshot") == 0 && i + 1 < argc) {
             shotMode = true;
@@ -343,8 +429,11 @@ int main(int argc, char** argv) {
             corePath = argv[++i];
         } else if (SDL_strcmp(argv[i], "--romm") == 0 && i + 1 < argc) {
             rommAddress = argv[++i];
+        } else if (SDL_strcmp(argv[i], "--romm-probe") == 0) {
+            rommProbeMode = true;
         } else if (SDL_strcmp(argv[i], "--romm-pair") == 0) {
             rommPair = true;
+            rommProbeMode = true;   // pairing is inherently a headless errand
         } else if (SDL_strcmp(argv[i], "--rom") == 0 && i + 1 < argc) {
             romPath = argv[++i];
         } else if (SDL_strcmp(argv[i], "--evict-test") == 0) {
@@ -363,7 +452,7 @@ int main(int argc, char** argv) {
     // Runs before SDL, deliberately. This needs no window, no GL and no
     // controller, and on a headless machine it must work anyway — the whole
     // point is to test the server conversation on its own.
-    if (rommAddress) return rommProbe(rommAddress, rommPair);
+    if (rommAddress && rommProbeMode) return rommProbe(rommAddress, rommPair);
 
     std::signal(SIGUSR1, requestCapture);
 
@@ -437,13 +526,50 @@ int main(int argc, char** argv) {
     // A key is not a path. Everything after '#' is stripped before reading, so
     // one file can stand in for many distinct entries here — and so a real RomM
     // URL with a query string is already the shape this expects.
-    images.init(imageBudget, 4, [](const std::string& key) {
-        const size_t hash = key.find('#');
-        return ui::ImageCache::readFile(hash == std::string::npos ? key
-                                                                 : key.substr(0, hash));
-    });
+    // The client outlives the cache deliberately: ImageCache calls the loader
+    // from its worker threads, so whatever it captures must still be alive when
+    // a cover arrives. romm::Client is safe to call concurrently — each request
+    // builds its own CURL handle, and nothing else mutates after setup.
+    static romm::Client liveClient;
+    std::vector<Card> cards;
 
-    std::vector<Card> cards(std::begin(kSampleLibrary), std::end(kSampleLibrary));
+    if (rommAddress) {
+        std::string err;
+        if (!liveClient.setAddress(rommAddress, &err)) {
+            std::fprintf(stderr, "[romm] %s\n", err.c_str());
+            return 1;
+        }
+        if (!liveClient.loadToken(rommTokenPath())) {
+            std::fprintf(stderr, "[romm] no token at %s — pair first with --romm-probe --romm-pair\n",
+                         rommTokenPath().c_str());
+            return 1;
+        }
+        cards = loadLibrary(liveClient);
+        if (cards.empty()) {
+            std::fprintf(stderr, "[romm] the library came back empty\n");
+            return 1;
+        }
+        // Covers come from the server, authenticated. The cache never learns
+        // what a server is — it was built to take exactly this.
+        images.init(imageBudget, 4, [](const std::string& key) {
+            return liveClient.fetchBytes(key);
+        });
+    } else {
+        // A key is not a path. Everything after '#' is stripped before reading,
+        // so one file can stand in for many distinct entries here.
+        images.init(imageBudget, 4, [](const std::string& key) {
+            const size_t hash = key.find('#');
+            return ui::ImageCache::readFile(hash == std::string::npos ? key
+                                                                     : key.substr(0, hash));
+        });
+        for (const SampleEntry& e : kSampleLibrary) {
+            Card c;
+            c.art = ui::Color::rgb(e.art);
+            c.title = e.title;
+            c.cover = e.cover ? e.cover : "";
+            cards.push_back(std::move(c));
+        }
+    }
 
     ui::Keyboard keyboard;
     if (keyboardDemo) {
@@ -1072,12 +1198,31 @@ int main(int argc, char** argv) {
         const float shelfTop =
             300.0f + text.lineHeight(ui::TextStyle::Title2, sc) + 12.0f + kShelfHeadroom;
 
+        // CULL TO WHAT IS ON SCREEN, and do it before touching the cover cache.
+        //
+        // This loop used to run over every card. With the six-entry stand-in
+        // library that was invisible; against a real library of 1232 it queues
+        // a download for every cover in the collection, overruns the texture
+        // budget, and issues twelve hundred draw calls a frame to show seven
+        // cards. A shelf is a window onto a list, not a drawing of the list.
+        //
+        // The margin keeps a card's art loading just before it slides in, so
+        // the fade has somewhere to start.
+        const float kCullMargin = (kShelfCoverWidth + kShelfSpacing) * 2.0f;
+        auto cardBaseX = [&](size_t i) {
+            return kContentInset + static_cast<float>(i) * (kShelfCoverWidth + kShelfSpacing);
+        };
+
         // Unfocused cards first, so a focused card's shadow and rim land on top
         // of its neighbours rather than under them.
         for (int pass = 0; pass < 2; ++pass) {
             for (size_t i = 0; i < cards.size(); ++i) {
                 const bool isFocused = (static_cast<int>(i) == focused);
                 if ((pass == 0) == isFocused) continue;
+
+                const float cullX = cardBaseX(i);
+                if (cullX + kShelfCoverWidth < -kCullMargin) continue;
+                if (cullX > ui::kCanvasWidth + kCullMargin) break;
 
                 Card& card = cards[i];
                 const float f = card.focus.value();
@@ -1089,8 +1234,7 @@ int main(int argc, char** argv) {
                 const float scale = 1.0f + f * (kFocusScale - 1.0f) -
                                     p * (kFocusScale - kPressScale);
 
-                const float baseX = kContentInset +
-                                    static_cast<float>(i) * (kShelfCoverWidth + kShelfSpacing);
+                const float baseX = cullX;
                 const float w = kShelfCoverWidth * scale;
                 const float h = kShelfCoverHeight * scale;
                 const float x = baseX - (w - kShelfCoverWidth) * 0.5f;
@@ -1107,7 +1251,7 @@ int main(int argc, char** argv) {
                 cover.shadowColor = ui::Color::black(0.55f * f);
                 renderer.draw(cover);
 
-                if (card.cover) {
+                if (!card.cover.empty()) {
                     // Fill, which the drawing code turns into fit-over-a-
                     // blurred-echo by itself when the cover is the wrong shape.
                     ui::drawImage(renderer, images.get(card.cover), x, y, w, h,
