@@ -2545,6 +2545,39 @@ source 2026-09-13: tvOS already solves this problem and has shipped the answer.
 password, ever. That number matters, because it is the size of the problem any
 first-run convenience is competing against.
 
+#### Getting a ROM out of RomM, measured
+
+**Tested against the live server 2026-09-14** by downloading one, because the
+path from a library entry to a running game had never been walked.
+
+**ROMs arrive zipped.** `fs_name` is `Tetris.zip`; the archive holds
+`Tetris (World) (Rev 1).gb`. Nothing hands a libretro core a zip, so the
+frontend unzips. Endpoints:
+
+| | |
+|---|---|
+| `GET /api/roms/{id}/files` | the files a ROM is made of — multi-disc, or a `cue` beside its `bin` |
+| `GET /api/roms/{id}/content/{file_name}` | the bytes |
+
+**And the cores want opposite things, which decides the design:**
+
+| Core | `need_fullpath` | Wants |
+|---|---|---|
+| gambatte | no | the ROM as a **buffer in memory** |
+| genesis_plus_gx | **yes** | a **real path on disk** |
+
+`retro_get_system_info` reports this per core, so **ask the core, never the
+platform**. The launch path therefore needs both halves — unzip to memory for a
+buffer core, unzip to a file for a fullpath core — and a fullpath core with a
+multi-file game needs every file beside it, not just the one that was asked for.
+
+**What is NOT yet proven**, and was wrongly implied before this was checked:
+Dr. Mario ran from a **hand-placed local file** with `--core` and `--rom` as
+command-line paths. The core host loading a `.so` and a ROM *from disk* and
+running it with save states is real. Everything between RomM and that point —
+downloading, unzipping, where a downloaded ROM lives, what evicts it, choosing
+the core from the platform, and reaching any of it from the UI — does not exist.
+
 #### A platform is not its slug, and "Arcade" is two platforms
 
 **Measured against the live server 2026-09-14**, on RomM 5.1.0 with read-only
