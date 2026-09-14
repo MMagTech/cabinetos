@@ -14,5 +14,10 @@ previous.manifest.json
 changelog.md
 output.env
 
+# Core builds. The source checkouts are clones of upstream at a pinned commit,
+# reproducible from cores/build-core.sh, so they are cache and not history.
+.core-src/
+cores/build/
+
 # macOS
 .DS_Store

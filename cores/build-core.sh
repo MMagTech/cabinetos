@@ -77,7 +77,19 @@ echo "$CORE @ $COMMIT"
 # best-tested path these cores have; the ios-arm64 case Cabinet uses is the
 # unusual one.
 BUILDER="${CABINETOS_BUILDER:-cabinetos-builder}"
-podman run --rm -v "$SRC":/src:Z -w /src "$BUILDER" \
+
+# safe.directory is not paranoia about this checkout, it is about the core's
+# own Makefile. Every Makefile-based core in the set does
+#   GIT_VERSION := $(shell git rev-parse --short HEAD || echo unknown)
+# and compiles the answer into the version string it reports. If git refuses
+# the bind-mounted tree as dubiously owned it fails QUIETLY into "unknown", the
+# `||` swallows it, and the core ships not knowing what revision it is. Passing
+# it through the environment avoids writing a gitconfig into the mounted tree.
+podman run --rm -v "$SRC":/src:Z -w /src \
+    -e GIT_CONFIG_COUNT=1 \
+    -e GIT_CONFIG_KEY_0=safe.directory \
+    -e GIT_CONFIG_VALUE_0=/src \
+    "$BUILDER" \
     make -C "$MAKEDIR" -f "$MAKEFILE" platform=unix "${MAKEARGS[@]}" -j"$(nproc)"
 
 mkdir -p "$OUT"
@@ -85,3 +97,15 @@ FOUND=$(find "$SRC" -name "$SO" -print -quit)
 [ -n "$FOUND" ] || { echo "no $SO produced" >&2; exit 1; }
 cp "$FOUND" "$OUT/$SO"
 echo "wrote $OUT/$SO ($(du -h "$OUT/$SO" | cut -f1))"
+
+# Asserting the CHECKOUT is at the pinned commit proves what went in. This
+# reads the revision back out of the finished artifact and proves what came
+# out, which is the assertion open question 13 actually asks for. It runs
+# inside the builder because the binary is linked against Fedora 44's glibc and
+# the host running this script need not have it.
+echo "verifying $SO"
+podman run --rm -v "$ROOT":/repo:Z -v "$OUT":/out:Z -w /repo "$BUILDER" \
+    sh -c 'gcc -O2 -Wall -Wextra -o /tmp/core-info tools/core-info.c -ldl \
+           && exec /tmp/core-info "/out/$1" "$2"' _ "$SO" "$COMMIT"
+
+echo "sha256      $(sha256sum "$OUT/$SO" | cut -d' ' -f1)"
