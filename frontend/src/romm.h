@@ -47,6 +47,12 @@ struct Platform {
 struct Game {
     int id = 0;
     int platformId = 0;
+    // The ROM payload carries its own platform, so a game knows what it runs on
+    // without a second lookup. Home needs this: the hero is the most recently
+    // played game THIS CONSOLE CAN PLAY, which cannot be decided without it.
+    std::string platformSlug;    // "dc"
+    std::string platformFsSlug;  // "Sega Dreamcast"
+    std::string platformName;    // "Dreamcast" — for the hero's band
     std::string name;
     std::string fsName;
     // Path on the server, not a URL: the cover fetch goes through the same
@@ -103,6 +109,15 @@ public:
     // caps a response and a library of thousands would otherwise arrive
     // truncated, silently.
     bool fetchGames(int platformId, std::vector<Game>* out, std::string* err);
+
+    // The games with play history, most recent first — the same query RomM's
+    // own web home screen makes, so CabinetOS agrees with the web UI and with
+    // Cabinet about what you were last playing.
+    //
+    // PLAY HISTORY LIVES ON THE SERVER, not on the console. A game played on an
+    // Apple TV is recent here the moment this console is paired, which is what
+    // makes a hero possible on a machine that has never launched anything.
+    bool fetchRecent(int limit, std::vector<Game>* out, std::string* err);
 
     // For ImageCache::Loader. Returns empty on any failure, because a cover
     // that will not load is not an error the frame loop can do anything about.

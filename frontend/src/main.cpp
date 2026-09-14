@@ -61,6 +61,19 @@ void requestCapture(int) { gCaptureRequested = 1; }
 // there, it changes here, and nowhere else.
 
 constexpr float kContentInset = 60.0f;
+
+// The hero, from Cabinet's tvOS Home. See docs/PROJECT.md — the height is
+// min(canvasHeight * 0.40, 420) and was settled on a real television after four
+// rejected values, so it is not a number to adjust from a VM screenshot.
+constexpr float kHeroTop = 40.0f;
+constexpr float kHeroRadius = 18.0f;
+constexpr float kHeroArtInsetTop = 14.0f;
+constexpr float kHeroBandPadX = 12.0f;
+constexpr float kHeroBandPadY = 10.0f;
+constexpr float kHeroGapBelow = 20.0f;
+// A pill, so blur 4 — the "thin material" tier. The band is a panel at 6.
+constexpr float kHeroPillBlur = 4.0f;
+constexpr float kHeroBandBlur = 6.0f;
 constexpr float kShelfCoverWidth = 260.0f;
 constexpr float kShelfCoverHeight = 347.0f;  // 3:4
 constexpr float kShelfSpacing = 40.0f;
@@ -115,6 +128,11 @@ struct Animated {
 };
 
 struct Card {
+    // The RomM ROM id, and the only safe way to match a card to anything else.
+    // Titles collide: "Altered Beast" is a Game & Watch entry AND a Genesis
+    // one in the reference library, so matching Recent to the library by name
+    // can show the wrong platform's cover for the game you actually played.
+    int id = 0;
     ui::Color art;        // shown until the cover arrives, and if it never does
     std::string title;
     // A local path in the sample library, a RomM cover path with live data.
@@ -178,14 +196,28 @@ const SampleEntry kSampleLibrary[] = {
 // What it must not do is drop them silently, so every exclusion is reported on
 // stderr with its reason. The screen that tells the person the same thing is
 // still to build; this is the part that knows.
-static std::vector<Card> loadLibrary(romm::Client& client) {
+struct Library {
     std::vector<Card> cards;
+    // Index into `cards`, or -1. The hero is the most recently played game THIS
+    // CONSOLE CAN PLAY — not simply the most recent, because a Resume that
+    // cannot run is worse than no hero at all.
+    int heroIndex = -1;
+    std::string heroPlatform;
+    // Indices into `cards`, in recency order, with the hero removed — so the
+    // shelf never shows the same cover twice and never loses one. Home shows
+    // THIS, not the whole library: the library belongs to the Library screen.
+    std::vector<int> shelf;
+};
+
+static Library loadLibrary(romm::Client& client) {
+    Library lib;
+    std::vector<Card>& cards = lib.cards;
     std::string err;
 
     std::vector<romm::Platform> platforms;
     if (!client.fetchPlatforms(&platforms, &err)) {
         std::fprintf(stderr, "[romm] platforms: %s\n", err.c_str());
-        return cards;
+        return lib;
     }
 
     int skippedGames = 0;
@@ -207,6 +239,7 @@ static std::vector<Card> loadLibrary(romm::Client& client) {
         }
         for (auto& g : games) {
             Card c;
+            c.id = g.id;
             c.title = g.name.empty() ? g.fsName : g.name;
             c.cover = g.coverPath;
             c.art = colorForTitle(c.title);
@@ -221,7 +254,42 @@ static std::vector<Card> loadLibrary(romm::Client& client) {
     for (const auto& c : cards) if (!c.cover.empty()) ++withArt;
     std::fprintf(stderr, "[library] %zu playable games, %d with art; %d games skipped\n",
                  cards.size(), withArt, skippedGames);
-    return cards;
+
+    // The hero, from the server's play history rather than from anything this
+    // console remembers. A game played on an Apple TV is recent here the moment
+    // this console is paired, which is what lets a machine that has never
+    // launched anything still open on the right game.
+    std::vector<romm::Game> recent;
+    if (client.fetchRecent(16, &recent, &err)) {
+        for (const auto& g : recent) {
+            // A recent game on a platform this console cannot play is skipped,
+            // not shown greyed: Home must not offer a Resume that cannot run.
+            // The reference library exercises this — the most recent "Altered
+            // Beast" is the Game & Watch one, which Cabinet does not ship.
+            if (!catalog::playable(g)) continue;
+            int idx = -1;
+            for (size_t i = 0; i < cards.size(); ++i) {
+                if (cards[i].id == g.id) { idx = static_cast<int>(i); break; }
+            }
+            if (idx < 0) continue;
+            // The first playable one is the hero; the rest are the shelf.
+            if (lib.heroIndex < 0) {
+                lib.heroIndex = idx;
+                lib.heroPlatform = g.platformName;
+            } else {
+                lib.shelf.push_back(idx);
+            }
+        }
+    } else {
+        std::fprintf(stderr, "[library] no play history: %s\n", err.c_str());
+    }
+    if (lib.heroIndex >= 0)
+        std::fprintf(stderr, "[library] hero: %s (%s), %zu more on the Recent shelf\n",
+                     cards[lib.heroIndex].title.c_str(), lib.heroPlatform.c_str(),
+                     lib.shelf.size());
+    else
+        std::fprintf(stderr, "[library] no hero — nothing recent is playable here\n");
+    return lib;
 }
 
 // Talks to a RomM server and reports, without opening a window.
@@ -333,6 +401,31 @@ static int rommProbe(const char* address, bool allowPairing) {
         std::printf("covers      %d of %zu have art\n", withCover, games.size());
         if (!games.empty())
             std::printf("first       %s\n", games.front().name.c_str());
+    }
+
+    // What Home will actually show. The hero is the most recently played game
+    // this console can play — not simply the most recent, because offering a
+    // Resume that cannot run is worse than offering nothing.
+    std::vector<romm::Game> recent;
+    if (client.fetchRecent(16, &recent, &err)) {
+        std::printf("\nrecent      %zu games with play history\n", recent.size());
+        const romm::Game* hero = nullptr;
+        for (const auto& g : recent)
+            if (catalog::playable(g)) { hero = &g; break; }
+        if (hero) {
+            std::printf("hero        %s (%s)\n", hero->name.c_str(),
+                        hero->platformName.c_str());
+        } else {
+            std::printf("hero        none — nothing recent is playable here\n");
+        }
+        for (const auto& g : recent) {
+            const catalog::Coverage c = catalog::coverageFor(g);
+            std::printf("            %-40s %-14s %s\n", g.name.substr(0, 39).c_str(),
+                        g.platformName.c_str(),
+                        c.support == catalog::Support::Playable ? c.core : "— not playable here");
+        }
+    } else {
+        std::printf("\nrecent      failed: %s\n", err.c_str());
     }
 
     // Actually FETCH a cover, rather than counting the ones that claim to have
@@ -532,6 +625,11 @@ int main(int argc, char** argv) {
     // builds its own CURL handle, and nothing else mutates after setup.
     static romm::Client liveClient;
     std::vector<Card> cards;
+    int heroIndex = -1;
+    std::string heroPlatform;
+    // Which cards the Recent row shows. Empty means "everything", which is what
+    // the stand-in library wants — it has no play history to order by.
+    std::vector<int> shelf;
 
     if (rommAddress) {
         std::string err;
@@ -544,7 +642,11 @@ int main(int argc, char** argv) {
                          rommTokenPath().c_str());
             return 1;
         }
-        cards = loadLibrary(liveClient);
+        Library lib = loadLibrary(liveClient);
+        cards = std::move(lib.cards);
+        heroIndex = lib.heroIndex;
+        heroPlatform = lib.heroPlatform;
+        shelf = std::move(lib.shelf);
         if (cards.empty()) {
             std::fprintf(stderr, "[romm] the library came back empty\n");
             return 1;
@@ -889,11 +991,19 @@ int main(int argc, char** argv) {
     }
 
     int focused = initialFocus >= 0 ? initialFocus : 0;
-    focused = std::clamp(focused, 0, static_cast<int>(cards.size()) - 1);
+    // `focused` indexes the SHELF, not the library. They are the same thing only
+    // when there is no play history to order by; conflating them focuses the
+    // wrong game the moment there is.
+    const size_t shelfSlots = shelf.empty() ? cards.size() : shelf.size();
+    auto slotCard = [&](int slot) -> Card& {
+        return cards[shelf.empty() ? static_cast<size_t>(slot)
+                                   : static_cast<size_t>(shelf[slot])];
+    };
+    focused = std::clamp(focused, 0, static_cast<int>(shelfSlots) - 1);
     // Settled, not animating: a screenshot should show the resting focused
     // state, not a frame part-way through the transition into it.
-    cards[focused].focus.retarget(1.0f, kFocusDuration);
-    cards[focused].focus.elapsed = kFocusDuration;
+    slotCard(focused).focus.retarget(1.0f, kFocusDuration);
+    slotCard(focused).focus.elapsed = kFocusDuration;
 
     // Any pad that is already plugged in. Hotplug is handled in the event loop,
     // so a controller connected later works without restarting anything.
@@ -910,11 +1020,11 @@ int main(int argc, char** argv) {
     bool pressing = false;
 
     auto moveFocus = [&](int delta) {
-        int next = std::clamp(focused + delta, 0, static_cast<int>(cards.size()) - 1);
+        int next = std::clamp(focused + delta, 0, static_cast<int>(shelfSlots) - 1);
         if (next == focused) return;
-        cards[focused].focus.retarget(0.0f, kFocusDuration);
+        slotCard(focused).focus.retarget(0.0f, kFocusDuration);
         focused = next;
-        cards[focused].focus.retarget(1.0f, kFocusDuration);
+        slotCard(focused).focus.retarget(1.0f, kFocusDuration);
     };
 
     while (running) {
@@ -1098,7 +1208,7 @@ int main(int argc, char** argv) {
             c.focus.tick(dt);
             c.press.tick(dt);
         }
-        cards[focused].press.retarget(pressing ? 1.0f : 0.0f, kPressDuration);
+        slotCard(focused).press.retarget(pressing ? 1.0f : 0.0f, kPressDuration);
 
         int dw = 0, dh = 0;
         SDL_GetWindowSizeInPixels(window, &dw, &dh);
@@ -1111,6 +1221,11 @@ int main(int argc, char** argv) {
             }
         }
         renderer.beginFrame(dw, dh);
+        // Declared here rather than inside the Home branch: the hero's glass
+        // cannot be drawn until after presentScene, which is outside it.
+        ui::Rect heroBand{}, heroCardRect{};
+        bool heroDrawn = false;
+        const float sc = renderer.scale();
         if (playing) {
             // BLACK behind a running game, not the menu's backdrop. The
             // reference implementation's player clears to black, and it is
@@ -1181,10 +1296,81 @@ int main(int argc, char** argv) {
             }
         } else {
 
+        // ---- The hero -------------------------------------------------------
+        //
+        // Home is resume-first: the hero is what you were playing, and it is
+        // focused on arrival. Numbers are tvOS's, read from Cabinet's
+        // HomeView.swift and recorded in docs/PROJECT.md — including the
+        // warning that the height was settled on real hardware after four
+        // rejected values, because a television's overscan eats more vertical
+        // room than a framebuffer capture shows. DO NOT tune this on the VM.
+        float shelfHeaderY = 300.0f;
+        if (heroIndex >= 0 && heroIndex < static_cast<int>(cards.size())) {
+            const Card& hero = cards[heroIndex];
+            const float heroH = std::min(ui::kCanvasHeight * 0.40f, 420.0f);
+            const float heroW = ui::kCanvasWidth - kContentInset * 2.0f;
+            const float heroX = kContentInset;
+            const float heroY = kHeroTop;
+
+            // Computed from the two line heights rather than hardcoded, so the
+            // band grows with the type ramp instead of clipping it.
+            const float bandH = text.lineHeight(ui::TextStyle::Headline, sc) +
+                                text.lineHeight(ui::TextStyle::Caption1, sc) +
+                                2.0f + kHeroBandPadY * 2.0f;
+            const float artH = std::max(0.0f, heroH - bandH);
+
+            // The card's own ground, so a hero whose art has not arrived is a
+            // card rather than a hole.
+            renderer.draw(ui::Rect{heroX, heroY, heroW, heroH, kHeroRadius, hero.art});
+
+            if (!hero.cover.empty() && images.get(hero.cover).ready) {
+                const ui::Image& art = images.get(hero.cover);
+                // The backdrop: the SAME artwork, FILLED and blurred, so the
+                // space the fitted art does not cover is the art's own colours
+                // rather than letterbox bars. A high mip sampled back up — a
+                // box blur the GPU already built, not a blur pass.
+                //
+                // Filled means CROPPED, not stretched. Mapping a 3:4 cover
+                // across an 1800x420 card by UV 0..1 smears it horizontally
+                // into a grey band that is no longer the art's colours at all —
+                // which is the whole point of the backdrop. So the source rect
+                // is cropped to the card's aspect instead, taking a horizontal
+                // slice through the middle of the cover.
+                const float boxAspect = heroW / heroH;
+                const float imgAspect = art.aspect();
+                float u0 = 0.0f, v0 = 0.0f, u1 = 1.0f, v1 = 1.0f;
+                if (imgAspect < boxAspect) {
+                    // Taller than the box: keep full width, crop top and bottom.
+                    const float span = imgAspect / boxAspect;
+                    v0 = (1.0f - span) * 0.5f;
+                    v1 = v0 + span;
+                } else {
+                    const float span = boxAspect / imgAspect;
+                    u0 = (1.0f - span) * 0.5f;
+                    u1 = u0 + span;
+                }
+                renderer.drawTextured(heroX, heroY, heroW, heroH, art.texture, u0, v0, u1, v1,
+                                      ui::Color{1, 1, 1, art.fade}, false, 5.0f,
+                                      heroX, heroY, heroW, heroH, kHeroRadius);
+                renderer.draw(ui::Rect{heroX, heroY, heroW, heroH, kHeroRadius,
+                                       ui::Color::black(0.15f * art.fade)});
+
+                // FITTED, not filled. Box art is tall and the hero is wide, so
+                // filling slices the art to a strip of its middle. The top
+                // inset keeps it off the card's rounded corners, which
+                // otherwise clip a sliver from flush art.
+                ui::drawImage(renderer, art, heroX, heroY + kHeroArtInsetTop, heroW,
+                              artH - kHeroArtInsetTop, ui::Fit::Contain, 1.0f, 0.0f);
+            }
+            heroBand = ui::Rect{heroX, heroY + heroH - bandH, heroW, bandH, 0, ui::Color::white(0)};
+            heroCardRect = ui::Rect{heroX, heroY, heroW, heroH, kHeroRadius, ui::Color::white(0)};
+            heroDrawn = true;
+            shelfHeaderY = heroY + heroH + kHeroGapBelow;
+        }
+
         // The shelf header: Title 2 bold, with the chevron that says the row
         // continues into a screen of its own.
-        const float sc = renderer.scale();
-        const float headerBaseline = 300.0f + text.ascent(ui::TextStyle::Title2, sc);
+        const float headerBaseline = shelfHeaderY + text.ascent(ui::TextStyle::Title2, sc);
         text.draw(renderer, "Recent", kContentInset, headerBaseline,
                   ui::TextStyle::Title2, ui::Color::white(1.0f), sc);
         const float headerWidth =
@@ -1196,7 +1382,7 @@ int main(int argc, char** argv) {
                   headerBaseline, ui::TextStyle::Title3, ui::Color::white(0.30f), sc);
 
         const float shelfTop =
-            300.0f + text.lineHeight(ui::TextStyle::Title2, sc) + 12.0f + kShelfHeadroom;
+            shelfHeaderY + text.lineHeight(ui::TextStyle::Title2, sc) + 12.0f + kShelfHeadroom;
 
         // CULL TO WHAT IS ON SCREEN, and do it before touching the cover cache.
         //
@@ -1209,18 +1395,25 @@ int main(int argc, char** argv) {
         // The margin keeps a card's art loading just before it slides in, so
         // the fade has somewhere to start.
         const float kCullMargin = (kShelfCoverWidth + kShelfSpacing) * 2.0f;
-        auto cardBaseX = [&](size_t i) {
-            return kContentInset + static_cast<float>(i) * (kShelfCoverWidth + kShelfSpacing);
+        auto cardBaseX = [&](size_t slot) {
+            return kContentInset + static_cast<float>(slot) * (kShelfCoverWidth + kShelfSpacing);
+        };
+        // The shelf is a list of indices into `cards` when there is play
+        // history to order by, and simply every card when there is not.
+        const size_t shelfCount = shelf.empty() ? cards.size() : shelf.size();
+        auto shelfAt = [&](size_t slot) -> size_t {
+            return shelf.empty() ? slot : static_cast<size_t>(shelf[slot]);
         };
 
         // Unfocused cards first, so a focused card's shadow and rim land on top
         // of its neighbours rather than under them.
         for (int pass = 0; pass < 2; ++pass) {
-            for (size_t i = 0; i < cards.size(); ++i) {
-                const bool isFocused = (static_cast<int>(i) == focused);
+            for (size_t slot = 0; slot < shelfCount; ++slot) {
+                const size_t i = shelfAt(slot);
+                const bool isFocused = (static_cast<int>(slot) == focused);
                 if ((pass == 0) == isFocused) continue;
 
-                const float cullX = cardBaseX(i);
+                const float cullX = cardBaseX(slot);
                 if (cullX + kShelfCoverWidth < -kCullMargin) continue;
                 if (cullX > ui::kCanvasWidth + kCullMargin) break;
 
@@ -1285,6 +1478,47 @@ int main(int argc, char** argv) {
         // Everything above this line is the world; everything below it can
         // blur what the world drew. See Renderer::presentScene.
         renderer.presentScene();
+
+        // ---- The hero's glass, which can only be drawn now ------------------
+        //
+        // A frosted band, NOT a black gradient. The gradient paints over the
+        // very backdrop that makes the card worth looking at, leaving a slab of
+        // black under the artwork; a material keeps the game's colours showing
+        // through while still giving the text a surface to be read against.
+        // Cabinet learned this on tvOS and the note is in its source.
+        if (heroDrawn) {
+            const Card& hero = cards[heroIndex];
+            ui::Rect band = heroBand;
+            band.radius = 0.0f;
+            renderer.drawGlass(band, kHeroBandBlur, ui::Color::black(0.18f));
+
+            const float titleBaseline =
+                band.y + kHeroBandPadY + text.ascent(ui::TextStyle::Headline, sc);
+            text.draw(renderer, hero.title, band.x + kHeroBandPadX, titleBaseline,
+                      ui::TextStyle::Headline, ui::Color::white(1.0f), sc);
+            const float subBaseline = titleBaseline +
+                                      text.lineHeight(ui::TextStyle::Headline, sc) * 0.0f +
+                                      text.lineHeight(ui::TextStyle::Caption1, sc);
+            text.draw(renderer, heroPlatform, band.x + kHeroBandPadX, subBaseline,
+                      ui::TextStyle::Caption1, ui::Color::white(0.60f), sc);
+
+            // Resume is a SECOND REAL BUTTON, not decoration inside the first.
+            // It goes straight into the game; the artwork opens the detail
+            // screen. Stopping at a screen with a Play button on it is two
+            // actions, not one, and Home promises one.
+            const char* kResume = "\xE2\x96\xB6  Resume";
+            const float pillTextW = text.measure(kResume, ui::TextStyle::Title3, sc);
+            const float pillW = std::max(pillTextW + 28.0f, 180.0f);
+            const float pillH = text.lineHeight(ui::TextStyle::Title3, sc) + 16.0f;
+            const float pillX = heroCardRect.x + heroCardRect.w - pillW - 12.0f;
+            const float pillY = heroCardRect.y + 12.0f;
+            renderer.drawGlass(ui::Rect{pillX, pillY, pillW, pillH, pillH * 0.5f,
+                                        ui::Color::white(0)},
+                               kHeroPillBlur, ui::Color::white(0.18f));
+            text.draw(renderer, kResume, pillX + (pillW - pillTextW) * 0.5f,
+                      pillY + 8.0f + text.ascent(ui::TextStyle::Title3, sc),
+                      ui::TextStyle::Title3, ui::Color::white(1.0f), sc);
+        }
         keyboard.draw(renderer, text, renderer.scale());
         if (safeGuides) renderer.drawSafeAreaGuides();
 

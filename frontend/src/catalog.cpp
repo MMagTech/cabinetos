@@ -64,12 +64,14 @@ bool eq(const char* a, const std::string& b) { return b == a; }
 
 }  // namespace
 
-Coverage coverageFor(const romm::Platform& p) {
+namespace {
+
+Coverage lookup(const std::string& slug, const std::string& fsSlug) {
     const Entry* slugOnly = nullptr;
     for (const Entry& e : kTable) {
-        if (!eq(e.slug, p.slug)) continue;
+        if (!eq(e.slug, slug)) continue;
         if (e.fsSlug) {
-            if (eq(e.fsSlug, p.fsSlug)) return {e.support, e.core, e.reason};
+            if (eq(e.fsSlug, fsSlug)) return {e.support, e.core, e.reason};
             continue;   // right slug, wrong core — keep looking
         }
         slugOnly = &e;
@@ -82,5 +84,10 @@ Coverage coverageFor(const romm::Platform& p) {
     // core to hand it to.
     return {Support::NoCore, nullptr, "no core in the manifest serves this system"};
 }
+
+}  // namespace
+
+Coverage coverageFor(const romm::Platform& p) { return lookup(p.slug, p.fsSlug); }
+Coverage coverageFor(const romm::Game& g) { return lookup(g.platformSlug, g.platformFsSlug); }
 
 }  // namespace catalog
