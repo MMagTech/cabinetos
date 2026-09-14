@@ -1,0 +1,104 @@
+---
+# Build the libretro cores for Linux x86-64, on a machine nobody owns.
+#
+# Until this existed, every core had been built on exactly one box — the test
+# VM — which is the precise failure docs/PROJECT.md open question 13 was raised
+# to prevent. "It builds here" is not a property of the build, it is a property
+# of that machine, and the difference only shows up on the day the machine is
+# gone.
+#
+# What this asserts, beyond "make exited 0":
+#
+#   * the source is at the pinned commit, not at HEAD (build-core.sh);
+#   * the finished .so reports that same revision as its own version string
+#     (tools/core-info.c), so a core that was built without git — and therefore
+#     does not know what it is — fails the build instead of shipping;
+#   * the .so loads with RTLD_LOCAL and speaks the libretro API version the
+#     frontend was compiled against.
+#
+# What it does NOT assert, and cannot here: that a save state from this build
+# loads in Cabinet's. That needs a ROM, and no ROM belongs in this repository.
+# tools/state-probe.c is the instrument for it and it runs on the test machine.
+
+name: Build cores
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'cores/**'
+      - 'tools/core-info.c'
+      - 'frontend/src/libretro.h'
+      - 'frontend/Containerfile'
+      - '.github/workflows/build-core.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'cores/**'
+      - 'tools/core-info.c'
+      - 'frontend/src/libretro.h'
+      - 'frontend/Containerfile'
+      - '.github/workflows/build-core.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build ${{ matrix.core }}
+    runs-on: ubuntu-24.04
+
+    strategy:
+      # One core's failure should not hide another's. When the
+      # backend-sensitive cores land — pcsx_rearmed, melonDS, Flycast,
+      # picodrive — knowing which of them broke is most of the diagnosis.
+      fail-fast: false
+      matrix:
+        core:
+          - gambatte
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+
+      # The same container the frontend is built in, and the same one the test
+      # VM uses, so CI and the development loop are not two different builds
+      # wearing the same name. Fedora 44 because Bazzite 44 is.
+      - name: Build the builder container
+        run: |
+          podman build -t cabinetos-builder -f frontend/Containerfile frontend
+
+      - name: Build the core
+        run: |
+          set -euo pipefail
+          cores/build-core.sh "${{ matrix.core }}" | tee /tmp/build.log
+
+      - name: Upload the core
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: ${{ matrix.core }}-linux-x86_64
+          path: cores/build/*.so
+          if-no-files-found: error
+          # Long enough to bisect a parity problem against, short enough that
+          # these do not accumulate. Phase 5 decides how cores actually ship;
+          # this is not that.
+          retention-days: 30
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## ${{ matrix.core }} — Linux x86-64"
+            echo
+            if [[ -f /tmp/build.log ]]; then
+              echo '```'
+              cat /tmp/build.log
+              echo '```'
+            else
+              echo "The build produced no log, so it failed before starting."
+            fi
+          } >> "${GITHUB_STEP_SUMMARY}"
