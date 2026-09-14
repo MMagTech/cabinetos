@@ -11,10 +11,17 @@ FROM registry.fedoraproject.org/fedora:44
 
 RUN dnf install -y --setopt=install_weak_deps=False \
         gcc gcc-c++ make pkgconf-pkg-config \
+        git \
         SDL3-devel \
         mesa-libEGL-devel \
         mesa-libGLES-devel \
         wayland-devel freetype-devel libjpeg-turbo-devel libpng-devel \
     && dnf clean all
 
+# git is here for the CORES, not for us. Several libretro Makefiles do
+#   GIT_VERSION := $(shell git rev-parse --short HEAD)
+# and compile it into the string the core reports as its own version. Build
+# without git and the core forgets which revision it is — which is exactly the
+# fact the whole core-parity problem is about. See docs/PROJECT.md, open
+# question 13.
 WORKDIR /src

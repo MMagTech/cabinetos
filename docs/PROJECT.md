@@ -2095,8 +2095,11 @@ frames, restore, run 300 frames, compare.
 - **Loading a state produces an audible click** — a transient at the seam rather
   than lost state. RetroArch mutes briefly after a load for exactly this reason
   and so should we.
-- **Save RAM: Dr. Mario has none.** The cartridge has no battery, which is
-  correct and worth the frontend saying rather than treating as a failure.
+- **Save RAM: Dr. Mario has none**, and that is unremarkable — its cartridge
+  has no battery. **Save states are a separate mechanism and do not depend on
+  it**: Cabinet offers them from the pause menu for these games exactly as it
+  does for any other, and so must CabinetOS. This document briefly framed the
+  absence as a finding; it is not one.
 
 #### The test was wrong three times before it was right
 
@@ -2120,9 +2123,88 @@ The test now reports **INCONCLUSIVE** when there is no audio to compare, rather
 than reporting a difference. A test that cannot tell "no signal" from "signal
 differs" is worse than no test, because it is believed.
 
-**What this does NOT yet prove:** that a state written by *this* build loads in
-*Cabinet's* build. That is the parity question, it needs both sides, and it is
-still the thing open question 13 exists for.
+#### And then it was proved against Cabinet's own build
+
+Run the same day, at Marcus's insistence that reasoning about this was not
+enough. **The headline result of the project so far.**
+
+Cabinet's macOS Gambatte is pinned to `d9d6cd06` — **the same commit CabinetOS
+built for Linux**. So the comparison is clean: one revision, two architectures,
+two operating systems.
+
+`tools/state-probe.c` is the instrument. One C file, no dependencies beyond
+`dlfcn` and `libretro.h`, **compiled from identical source on both machines** so
+that the harness cannot be the variable. It runs a core from boot with no input,
+serializes, and can load a state from the other side and run on.
+
+| | |
+|---|---|
+| macOS **arm64**, 1500 frames | video `dbaef6ffc1e259e7`  audio `a279cfa152a8a553` |
+| Linux **x86-64**, 1500 frames | video `dbaef6ffc1e259e7`  audio `a279cfa152a8a553` |
+
+**The emulation is bit-identical across architectures** — every pixel and every
+sample, for twenty-five seconds. That was not a foregone conclusion and it is
+the foundation everything else rests on.
+
+Then the cross-load, which is the actual question:
+
+| | 300 frames after loading |
+|---|---|
+| Linux x86-64 loading the **Mac** state | `e2cf3f73bd7379b1` |
+| macOS arm64 loading the **Linux** state | `e2cf3f73bd7379b1` |
+| macOS loading its **own** state (control) | `e2cf3f73bd7379b1` |
+
+> **Save states are portable between Cabinet and CabinetOS.** Loading the other
+> platform's state is indistinguishable from loading your own. The control run
+> is what makes that a result rather than a coincidence.
+
+One curiosity, harmless: the two state files are the same size but **23 of
+26,882 bytes differ** — raw pointer values Gambatte writes into the state
+(`0x000188d0cc30` on Mac against `0x04ab1c48` on Linux, right after the `dmgpal`
+label). They are written and never meaningfully read, so they change nothing.
+Worth knowing because **a byte-comparison of two states is NOT a valid parity
+check** — these would fail it while being perfectly compatible.
+
+#### The cores know their own revision, if you let them
+
+Found while comparing the two builds. The Mac core reported itself as
+`Gambatte v0.5.0-netlink d9d6cd0`; the Linux one, built in the container, said
+only `Gambatte v0.5.0-netlink`.
+
+The Makefile does:
+
+```
+GIT_VERSION := " $(shell git rev-parse --short HEAD || echo unknown)"
+```
+
+and compiles it into the string the core returns from `retro_get_system_info`.
+**Build without git on PATH and the core forgets which revision it is.** The
+builder container had no git; it does now, and the Linux core reports `d9d6cd0`
+like the Mac one.
+
+**This is the answer to "the `emulator` tag carries no version."** A core that
+self-identifies can be checked at load time against the manifest, and a mismatch
+becomes a refusal rather than a save state that silently will not load. Two
+things follow, both cheap:
+
+1. **The frontend should assert** the loaded core's reported version against the
+   manifest, and say so loudly when it does not match.
+2. **Cabinet should put the revision in the RomM `emulator` tag**, so a state
+   carries the identity of the thing that wrote it. That is a Cabinet-side
+   change, since Cabinet writes the tag.
+
+Not every core does this — it needs checking per core, the same way everything
+else in this question did.
+
+#### What this still does not prove
+
+- **One core of twenty-one**, and the easiest one: Gambatte has no recompiler at
+  all, so there is no CPU-backend variable to get wrong. **The backend-sensitive
+  cores are untested** — pcsx_rearmed, melonDS, Flycast and picodrive, where the
+  Linux default differs from Cabinet's build. That is still the real risk.
+- **macOS arm64 against Linux x86-64.** Cabinet's *tvOS* build is a third thing,
+  and its Gambatte revision is one of the eleven that are unrecoverable.
+- Same flags on both sides, every core option left at its default.
 
 **Not there yet, and each is its own piece of work:** shaders and the letterbox
 glow (see *Shaders, and the glow around the picture* — the glow matters more
@@ -2902,9 +2984,11 @@ Cabinet's flags exactly.**
   histories.
 - **The `emulator` tag carries no version.** See *How Cabinet hosts cores*. A
   state written by a mismatched build is offered as loadable, because the tag
-  cannot tell. Either the builds are genuinely identical, or the tag grows a
-  build identity — and that is a **Cabinet-side change**, since Cabinet writes
-  the tag today.
+  cannot tell. **There is now a cheap fix**: several cores compile their own git
+  revision into the version string they report, so the frontend can assert the
+  loaded core against the manifest and Cabinet can put the revision in the tag.
+  Verified on Gambatte — see Phase 3. Needs checking per core, and the Cabinet
+  half is a Cabinet-side change.
 - ~~**Nothing has been compiled.**~~ **DONE, 2026-09-13.** Gambatte built for
   Linux x86-64 at its pinned commit with `make platform=unix`, **first attempt,
   zero patches**, and Dr. Mario runs on it. See Phase 3. The remaining twenty
