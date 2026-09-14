@@ -96,6 +96,22 @@ std::string encodeUrl(const std::string& in) {
     return out;
 }
 
+bool parseGame(json_object* o, Game* g) {
+    g->id = static_cast<int>(jint(o, "id"));
+    if (g->id == 0) return false;
+    g->platformId = static_cast<int>(jint(o, "platform_id"));
+    g->platformSlug = jstr(o, "platform_slug");
+    g->platformFsSlug = jstr(o, "platform_fs_slug");
+    g->platformName = jstr(o, "platform_display_name");
+    if (g->platformName.empty()) g->platformName = jstr(o, "platform_name");
+    g->name = jstr(o, "name");
+    g->fsName = jstr(o, "fs_name");
+    g->sizeBytes = jint(o, "fs_size_bytes");
+    g->coverPath = jstr(o, "path_cover_small");
+    if (g->coverPath.empty()) g->coverPath = jstr(o, "path_cover_large");
+    return true;
+}
+
 }  // namespace
 
 bool looksLocal(const std::string& host) {
@@ -381,22 +397,41 @@ bool Client::fetchGames(int platformId, std::vector<Game>* out, std::string* err
 
         const size_t n = json_object_array_length(items);
         for (size_t i = 0; i < n; ++i) {
-            json_object* o = json_object_array_get_idx(items, i);
             Game g;
-            g.id = static_cast<int>(jint(o, "id"));
-            g.platformId = static_cast<int>(jint(o, "platform_id"));
-            g.name = jstr(o, "name");
-            g.fsName = jstr(o, "fs_name");
-            g.sizeBytes = jint(o, "fs_size_bytes");
-            g.coverPath = jstr(o, "path_cover_small");
-            if (g.coverPath.empty()) g.coverPath = jstr(o, "path_cover_large");
-            if (g.id != 0) out->push_back(std::move(g));
+            if (parseGame(json_object_array_get_idx(items, i), &g))
+                out->push_back(std::move(g));
         }
         json_object_put(root);
 
         if (n < static_cast<size_t>(kPage)) break;
         offset += kPage;
     }
+    return true;
+}
+
+bool Client::fetchRecent(int limit, std::vector<Game>* out, std::string* err) {
+    out->clear();
+    const std::string path = "/api/roms?order_by=last_played&order_dir=desc"
+                             "&last_played=true&limit=" + std::to_string(limit);
+    std::string body;
+    if (!get(path, &body, err)) return false;
+
+    json_object* root = json_tokener_parse(body.c_str());
+    if (!root) { if (err) *err = "recent response was not JSON"; return false; }
+    json_object* items = nullptr;
+    if (!json_object_object_get_ex(root, "items", &items) ||
+        json_object_get_type(items) != json_type_array) {
+        json_object_put(root);
+        if (err) *err = "recent response had no items array";
+        return false;
+    }
+    const size_t n = json_object_array_length(items);
+    for (size_t i = 0; i < n; ++i) {
+        Game g;
+        if (parseGame(json_object_array_get_idx(items, i), &g))
+            out->push_back(std::move(g));
+    }
+    json_object_put(root);
     return true;
 }
 

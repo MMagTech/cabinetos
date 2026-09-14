@@ -44,8 +44,17 @@ struct Coverage {
 
 Coverage coverageFor(const romm::Platform& p);
 
+// The same question asked of a game. A ROM payload carries its own platform
+// slug and fs_slug, so Home can decide whether the most recently played game is
+// one this console can resume without fetching the platform list first.
+Coverage coverageFor(const romm::Game& g);
+
 inline bool playable(const romm::Platform& p) {
     return coverageFor(p).support == Support::Playable;
+}
+
+inline bool playable(const romm::Game& g) {
+    return coverageFor(g).support == Support::Playable;
 }
 
 }  // namespace catalog
