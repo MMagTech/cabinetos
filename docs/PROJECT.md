@@ -47,6 +47,15 @@ rather than launched by hand:
   plays its audio, draws its picture, and saves and restores its state.
   **Dr. Mario runs.**
 
+### Open against the frontend right now
+
+- **A white line reported under the keyboard's title, not reproduced.** Every
+  row between the title and the field was scanned in the captured framebuffer
+  for a bright horizontal run and there is none; the strongest edge there is the
+  field's own top boundary, which can only darken. So it is either a VNC scaling
+  artefact or something the capture does not see. **Ask before chasing it.**
+- **Horizontal wrapping is in, vertical is not.** Judge it with a pad.
+
 ### What is still unknown, honestly
 
 - **Nothing has been judged on a television.** Motion, the letterbox glow and
