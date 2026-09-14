@@ -162,6 +162,7 @@ int main(int argc, char** argv) {
     // Opens the keyboard immediately, so it can be worked on without walking
     // through a first-run flow that does not exist yet.
     bool keyboardDemo = false;
+    bool safeGuides = false;
     // Running a core. Both are needed: a core without a ROM has nothing to do.
     const char* corePath = nullptr;
     const char* romPath = nullptr;
@@ -171,6 +172,8 @@ int main(int argc, char** argv) {
             shotPath = argv[++i];
         } else if (SDL_strcmp(argv[i], "--frames") == 0 && i + 1 < argc) {
             shotAfterFrames = SDL_atoi(argv[++i]);
+        } else if (SDL_strcmp(argv[i], "--safe-area") == 0) {
+            safeGuides = true;
         } else if (SDL_strcmp(argv[i], "--keyboard") == 0) {
             keyboardDemo = true;
         } else if (SDL_strcmp(argv[i], "--audio-probe") == 0) {
@@ -953,6 +956,7 @@ int main(int argc, char** argv) {
         // blur what the world drew. See Renderer::presentScene.
         renderer.presentScene();
         keyboard.draw(renderer, text, renderer.scale());
+        if (safeGuides) renderer.drawSafeAreaGuides();
 
         ++frame;
         // Capture before the swap. After a swap the back buffer's contents are

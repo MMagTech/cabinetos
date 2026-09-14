@@ -2252,6 +2252,47 @@ Two rules learned immediately, both the hard way:
    dark interface. What makes a material read as a material here is that it
    *dims* what is behind it as well as softening it.
 
+#### The safe area, and whether any of this is really ten-foot
+
+Asked directly, and checked rather than asserted.
+
+**What holds up.** The 1920x1080 canvas, verified identical at 4K, 1080p and
+720p. Type from the ten-foot ramp throughout — keys at Title 3, labels at
+Callout, the screen title at Title 2. Focus unmistakable at a glance. Every
+control reachable by direction plus confirm.
+
+**What did not, and was fixed on the spot.** The keyboard's button legend was
+**Caption 1, 25pt**. That size is inside Apple's ten-foot ramp, but it is the
+size for something *glanceable* — and a legend telling you what the buttons do
+is a line you have to **read**. Now Callout. The rule worth keeping: **anything
+a person must read sits at Callout or above; Caption is for things they merely
+glance at.**
+
+**What still is not enforced.** The safe area was the last of the six things
+tvOS gave Cabinet for free, and it was being met **by inheritance rather than by
+design** — the design system's `contentInset` of 60 happens to equal tvOS's own
+safe area, because it was copied from there. It is now a named constant
+(`kSafeInset`) with a `--safe-area` overlay that draws it, plus a 5% overscan
+allowance, so it can be checked on a television rather than reasoned about.
+
+Measured on the running frame:
+
+| | |
+|---|---|
+| Content bounding box | left **63pt**, right 297pt, top 171pt, bottom 141pt |
+| Inside the 60pt safe area | **yes** |
+| Inside a 5% overscan allowance (96pt) | **no** — the shelf's own content inset is 60 |
+
+That failure is expected rather than alarming: **60pt is Apple's judgement of
+what survives on the televisions people actually own**, and 5% is the analog-era
+worst case. Modern sets mostly present 1:1 over HDMI. But it is exactly the
+question a monitor cannot answer, and this document already records the hero
+being resized three times over it — including once where the simulator showed it
+fitting and real hardware did not.
+
+**So: run with `--safe-area` on the SER5, on a real television, before trusting
+any of it.**
+
 **Not there yet:** shaders and the letterbox glow (see *Shaders, and the glow
 around the picture* — the glow matters more here than in Cabinet, because an
 integer-scaled handheld picture on a 4K set is mostly dead space), and the
