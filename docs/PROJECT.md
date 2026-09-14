@@ -1612,6 +1612,81 @@ The hero carries **two** actions and the distinction is load-bearing:
 When there is nothing to resume, Home says so in its own words and points at the
 Library — it does not show an empty shelf.
 
+#### The hero card, read from Cabinet's tvOS source
+
+**Read 2026-09-14 from `RommApp/RommApp/Home/HomeView.swift`.** tvOS has shipped
+this and CabinetOS should inherit it rather than re-derive it. The numbers below
+are that file's, and the reasoning next to them is its own.
+
+**The tvOS composition** (`tvContent`) — this is the one to follow, not the Mac
+variant:
+
+```
+VStack(spacing: 16), padding: horizontal 60, top 0, bottom 16
+    hero          height = min(screenHeight * 0.40, 420), wide, padding-bottom 20
+    Recent        a shelf, only when there are recents besides the hero
+                  else, when loaded and there are none: the empty state
+    Favorites     a second shelf, only when there are any
+```
+
+**The hero card itself:**
+
+| Part | Treatment |
+|---|---|
+| Artwork | **Fitted, not filled** — box art is tall and the hero is wide, so filling slices the art to a strip of its middle |
+| Backdrop | The *same* artwork, filled, **blurred 20**, with black at 15% over it — so the leftovers are the art's own colours rather than letterbox bars |
+| Art inset | `padding-top 14`, keeping the fit image off the card's rounded top corners, which otherwise clip a sliver |
+| Band | A **frosted material**, not a black gradient — the gradient painted over the very backdrop that makes the card worth looking at |
+| Band content | Title (headline) over platform label (caption), spacing 2, padding h12 v10 |
+| Band height | Computed from the two line heights + 2 + vertical padding, not hardcoded |
+| Corner radius | 18 |
+| Resume pill | Overlaid **top-trailing**, inset 12; capsule, ultra-thin material, play glyph + "Resume", min-width 92, padding h14 v8 |
+
+**The two actions are load-bearing and must not collapse into one.** The pill
+goes *straight into the game*, with the previous choices made and the newest
+state loaded. The artwork opens the detail screen, which is where a different
+state, a different core or an export is chosen. Cabinet's own comment: stopping
+at a screen with a Play button on it is two actions, not one.
+
+##### The hero height is a hard-won number, and it carries a warning
+
+The comment above `min(height * 0.40, 420)` records the iteration, and it is
+worth reading before anyone "tidies" it:
+
+- **0.42 / 460** pushed Recent's caption past the bottom edge on a 1080pt screen.
+- **0.34 / 380** *still* cut it off on real hardware.
+- **0.28 / 300** fit with margin to spare.
+- **0.34 / 360** left a visible gap below Recent's caption.
+- **0.40 / 420** is where it landed.
+
+The reason the second attempt failed is the part CabinetOS must take seriously:
+
+> *"a physical TV's overscan safe area eats more vertical room than the
+> simulator's raw framebuffer capture shows."*
+
+**That is exactly the trap this project's VM is set up to fall into.** The
+standing rule is "judge no motion on the VM"; this widens it. A `--screenshot`
+from a software-rendered VM will overstate the vertical room available on a real
+television in the same way the tvOS simulator did. **Vertical fit is not
+answerable on the VM either** — only on the SER5, on a real panel.
+
+##### The empty state is the first thing to build, because it is today's truth
+
+Home is resume-first and nothing has ever been played, so there is nothing to
+resume. Cabinet's tvOS copy, written for a television rather than reused from
+the phone — its own comment notes that "on the go" means nothing on a TV:
+
+> **Nothing to resume yet**
+> Pick something from Library and it'll be here next time.
+
+Centred, title2 bold over title3 secondary, minimum height 300. This is the
+honest Home until a play history exists, and it is buildable now.
+
+**The Mac variant differs and is not the model**: hero `min(h * 0.34, 320)`,
+spacing 14, top padding 24. Cabinet's own note asks that the two be kept
+structurally in step while the scale differs. CabinetOS is a ten-foot interface,
+so it follows tvOS.
+
 ### Component inventory
 
 Everything CabinetOS's frontend needs to draw, with the treatment it uses.
