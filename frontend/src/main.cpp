@@ -163,6 +163,8 @@ int main(int argc, char** argv) {
     // through a first-run flow that does not exist yet.
     bool keyboardDemo = false;
     bool safeGuides = false;
+    // Off / subtle / strong, the reference implementation's own three levels.
+    float glowPeak = 0.025f;
     // Running a core. Both are needed: a core without a ROM has nothing to do.
     const char* corePath = nullptr;
     const char* romPath = nullptr;
@@ -172,6 +174,11 @@ int main(int argc, char** argv) {
             shotPath = argv[++i];
         } else if (SDL_strcmp(argv[i], "--frames") == 0 && i + 1 < argc) {
             shotAfterFrames = SDL_atoi(argv[++i]);
+        } else if (SDL_strcmp(argv[i], "--glow") == 0 && i + 1 < argc) {
+            const char* g = argv[++i];
+            glowPeak = SDL_strcmp(g, "off") == 0      ? 0.0f
+                       : SDL_strcmp(g, "strong") == 0 ? 0.04f
+                                                      : 0.025f;
         } else if (SDL_strcmp(argv[i], "--safe-area") == 0) {
             safeGuides = true;
         } else if (SDL_strcmp(argv[i], "--keyboard") == 0) {
@@ -817,9 +824,20 @@ int main(int argc, char** argv) {
             }
         }
         renderer.beginFrame(dw, dh);
-        renderer.drawBackdrop(ui::Gradient{ui::palette::kBackdropTop,
-                                           ui::palette::kBackdropMid,
-                                           ui::palette::kBackdropBottom, 0.55f});
+        if (playing) {
+            // BLACK behind a running game, not the menu's backdrop. The
+            // reference implementation's player clears to black, and it is
+            // right: a gradient around a game picture is decoration competing
+            // with the thing you are looking at, and the letterbox glow is
+            // bias lighting, which means light against black. On a purple
+            // backdrop it is neither.
+            renderer.draw(ui::Rect{0, 0, ui::kCanvasWidth, ui::kCanvasHeight, 0,
+                                   ui::Color::black(1.0f)});
+        } else {
+            renderer.drawBackdrop(ui::Gradient{ui::palette::kBackdropTop,
+                                               ui::palette::kBackdropMid,
+                                               ui::palette::kBackdropBottom, 0.55f});
+        }
 
         if (playing) {
             cab::Core& core = cab::Core::shared();
@@ -839,9 +857,16 @@ int main(int argc, char** argv) {
                 if (scale < 1.0f) scale = 1.0f;
                 const float dh = srcH * scale;
                 const float dw = dh * aspect;
-                ui::drawImageTexture(renderer, core.texture(),
-                                     (ui::kCanvasWidth - dw) * 0.5f,
-                                     (ui::kCanvasHeight - dh) * 0.5f, dw, dh);
+                const float px = (ui::kCanvasWidth - dw) * 0.5f;
+                const float py = (ui::kCanvasHeight - dh) * 0.5f;
+                ui::drawImageTexture(renderer, core.texture(), px, py, dw, dh);
+
+                // The glow goes over the bars, not under the picture: it is
+                // drawn after, and its shader discards inside the picture rect,
+                // so no game pixel is ever covered. An integer-scaled handheld
+                // on a 4K set is mostly dead space, which is exactly the case
+                // this exists for.
+                renderer.drawBiasGlow(px, py, dw, dh, glowPeak);
             }
 
             // The overlay is not composited by anything clever: the frontend

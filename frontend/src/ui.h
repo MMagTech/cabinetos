@@ -133,6 +133,12 @@ public:
     // no-op then.
     // Draws the safe area and a 5% overscan allowance, for checking on a real
     // television where the picture actually stops.
+    // In-software bias lighting for the dead space around a letterboxed game
+    // picture. `peak` is the white opacity right at the picture's edge:
+    // 0.025 subtle, 0.04 strong, both measured on a real panel with a slider
+    // after two sets guessed from a mockup were wrong.
+    void drawBiasGlow(float x, float y, float w, float h, float peak);
+
     void drawSafeAreaGuides();
 
     void presentScene();
@@ -174,9 +180,13 @@ private:
     int vx_ = 0, vy_ = 0, vw_ = 0, vh_ = 0;
     int drawableW_ = 0, drawableH_ = 0;
     GLuint blurProgram_ = 0;
+    GLuint glowProgram_ = 0;
     struct {
         GLint canvas, rect, radius, tint, tex, lod;
     } gloc_{};
+    struct {
+        GLint canvas, picture, peak, shadow, rect;
+    } wloc_{};
 
     struct {
         GLint canvas, rect, radius, fill, border, borderColor, shadow, shadowColor,
