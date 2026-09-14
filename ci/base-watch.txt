@@ -13,9 +13,9 @@
 #
 # ---------------------------------------------------------------------------
 # ADD TO THIS FILE AS THE PROJECT GROWS.
-# Phase 5 should add the emulators. Phase 2 should add whatever the session
-# turns out to depend on. A package CabinetOS relies on that is not listed here
-# can break silently in a base bump that looked routine.
+# Phase 3 added the frontend's runtime libraries and fonts. Phase 5 should add
+# the emulators. A package CabinetOS relies on that is not listed here can break
+# silently in a base bump that looked routine.
 # ---------------------------------------------------------------------------
 
 # --- Kernel and boot -------------------------------------------------------
@@ -56,6 +56,27 @@ ds-inhibit
 bluez
 bluez-*
 libratbag
+
+# --- The frontend's own runtime ---------------------------------------------
+# Phase 3 links against these and the OS image is the only place they come
+# from: there is no bundling and no vendoring, deliberately, so a security fix
+# in the base is a security fix in the frontend. Every one of them was already
+# present in Bazzite, which is why the frontend adds nothing to the image — and
+# exactly why a base bump that drops one would be silent and fatal.
+SDL3
+SDL3-*
+freetype
+freetype-*
+libjpeg-turbo
+libpng
+libwebp
+# The type ramp. The design system names Noto Sans, and Noto Sans CJK is not
+# optional: a ROM library is full of Japanese titles and Noto Sans has no
+# coverage for them, so losing the CJK package turns every one of them into a
+# row of boxes.
+google-noto-sans-fonts
+google-noto-sans-cjk-fonts
+google-noto-fonts-common
 
 # --- Audio -----------------------------------------------------------------
 pipewire*
