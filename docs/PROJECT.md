@@ -69,8 +69,10 @@ rather than launched by hand:
 - **One core of twenty-one is built**, and it is the easiest: Gambatte has no
   recompiler, so no CPU-backend variable. The backend-sensitive cores —
   pcsx_rearmed, melonDS, Flycast, picodrive — remain the real risk.
-- **Nothing has been built in CI.** All of it works on one machine, which is
-  the exact failure mode open question 13 exists to prevent.
+- **One core builds in CI; the rest have only ever built on one machine.**
+  Gambatte now builds on a GitHub runner from a bare checkout and the finished
+  `.so` is asserted to report the pinned revision as its own version string —
+  see open question 13. Every other core is still a property of the test VM.
 - **No controller has ever been attached.** The permissions chain is verified
   by reading; a real pad is not.
 
@@ -3173,6 +3175,61 @@ including the ones that ship today.
 hand-written. `build-flycast.sh` carries a complete equivalent inline as a
 heredoc, so this is a copy rather than a rewrite — but until it is done,
 `build-core.sh` cannot run on a fresh clone.
+
+##### BUILT IN CI, 2026-09-13 — and the build-time assertion now exists
+
+`.github/workflows/build-core.yml` builds the core matrix on a GitHub runner,
+in the same Fedora 44 builder container the frontend and the test VM use. The
+first green run took about 45 seconds from a bare checkout.
+
+More importantly, the assertion this question asks for — *"asserts at build
+time that what it produced matches"* — is implemented, and it checks the
+artifact rather than the checkout:
+
+> `build-core.sh` asserted the **checkout** was at the pinned commit. That
+> proves what went in, not what came out.
+
+Every Makefile-based core in the set compiles its own revision into the string
+it reports through `retro_get_system_info`:
+
+```
+GIT_VERSION := " $(shell git rev-parse --short HEAD || echo unknown)"
+```
+
+`tools/core-info.c` reads that back out of the finished `.so`, and fails the
+build if it is not the pinned revision. It `dlopen`s with `RTLD_LOCAL` the way
+the frontend does, and checks the libretro API version against the header the
+frontend was compiled against. **No ROM is needed** — `retro_get_system_info`
+is documented as callable before `retro_init`, which is the only reason any of
+this is runnable in CI, where there is no game to give it.
+
+What gambatte reports, from the first CI run:
+
+```
+name        Gambatte
+version     v0.5.0-netlink d9d6cd0
+extensions  gb|gbc|dmg
+api         1
+revision    d9d6cd0, as pinned
+sha256      b2ee839c226af409765b083e17b211265a44ca184f5ef85763fe003ad63ca582
+```
+
+**The `-netlink` suffix was checked, not assumed.** A Linux build quietly
+turning on what the Apple build has off is the entire subject of this question,
+so `HAVE_NETWORK` was read from the Makefile: it is set in the `unix` branch and
+in both the `ios-arm64` and `tvos-arm64` branches. All three agree. This is
+parity holding, not drift.
+
+**One live failure mode was found and closed while writing the assertion.** Git
+refuses a bind-mounted tree it considers dubiously owned; the core's own
+`|| echo unknown` swallows that silently; and the result is a core that does not
+know what revision it is — which is exactly the fact this question is about.
+`build-core.sh` now passes `safe.directory` in through `GIT_CONFIG_*` rather
+than writing a gitconfig into the mounted tree.
+
+**What CI still cannot answer.** Save-state parity needs a ROM, and no ROM
+belongs in this repository. `tools/state-probe.c` remains the instrument and the
+test machine remains where it runs.
 
 #### The core manifest, revised
 
