@@ -2470,6 +2470,39 @@ source 2026-09-13: tvOS already solves this problem and has shipped the answer.
 password, ever. That number matters, because it is the size of the problem any
 first-run convenience is competing against.
 
+#### A platform is not its slug, and "Arcade" is two platforms
+
+**Measured against the live server 2026-09-14**, on RomM 5.1.0 with read-only
+device-token access — 35 platforms, about 1,600 ROMs. The library contains two
+platforms that are identical in every field a client would naively key on:
+
+| `id` | `name` | `slug` | `fs_slug` | ROMs |
+|---|---|---|---|---|
+| 22 | Arcade | `arcade` | **FBNEO** | 141 |
+| 45 | Arcade | `arcade` | **MAME2003** | 82 |
+
+Same `slug`, same `name`, different `id` and `fs_slug`. **A client keying
+platforms by `slug` silently loses 82 games**, and one keyed by `name` shows the
+user two entries called "Arcade" with no way to tell them apart.
+
+- **Key by `id`.** It is the only field that is actually unique.
+- **Route to a core by `fs_slug`**, which is what carries the intent.
+- **Take the display name from the manifest's `systems` field**, which already
+  disambiguates them: *"Arcade (FinalBurn Neo)"* and *"Arcade (MAME 2003-Plus)"*.
+
+**This is deliberate on the server, not a scan artefact.** The split exists
+because mame2003_plus was what ran on iOS, and FBNeo serves the companion
+controller and light-gun cases. So the two arcade platforms are a real
+distinction the library already makes, and **CabinetOS should surface them as
+two arcade systems rather than merging them.** Both cores are pinned in the
+manifest — `fbneo_libretro` at `2444fbe3`, `mame2003_plus` at `21256d24` — and
+neither takes build arguments on any Apple platform.
+
+It also sharpens the rule recorded under *Controls*: configuration is keyed by
+**platform**, not by core. Here is the converse — two platforms that share a
+name and a slug and must not share a core. Neither the core nor the slug
+identifies anything on its own.
+
 #### Plain HTTP must work. This is a bug CabinetOS can simply not have
 
 **Apple's App Transport Security refuses plain HTTP**, so a tvOS app talking to
