@@ -3019,9 +3019,59 @@ endif
 which reaches the compiler as `-DHAVE_CDROM`. It is the libretro **physical
 CD-ROM drive** interface, and it lands on Sega CD — the one platform of the four
 this core serves that the handover already flagged as saving by a different
-mechanism than the other three. Whether it perturbs the save state format is
-**not established**, and this document's standing rule applies: assume states are
-sensitive and match Cabinet's configuration until proven otherwise.
+mechanism than the other three.
+
+##### MEASURED 2026-09-14: it does not touch the save state format
+
+Both variants were compiled on the test VM and their object files compared.
+**Of 115 object files, exactly three differ**, and all three are libretro's
+VFS/CD-ROM plumbing:
+
+```
+libretro/libretro-common/cdrom/cdrom.o
+libretro/libretro-common/vfs/vfs_implementation.o
+libretro/libretro-common/vfs/vfs_implementation_cdrom.o
+```
+
+**Nothing under `core/` differs.** `core/state.c` is byte-identical, and so is
+every `core/cd_hw/*` object — `cdc`, `cdd`, `scd`, `pcm`, `gfx`, `cd_cart`. The
+save state is produced entirely by `core/`, so the flag cannot affect it. The
+source agrees: `HAVE_CDROM` appears in exactly two files in the whole tree, both
+under `libretro/libretro-common/`, and in none under `core/`.
+
+**This is stronger than the cross-load test that was planned**, and it cost no
+ROM transfer. A state written by one build and loaded by the other would have
+proved that one game's state survives. Comparing the objects proves the entire
+emulation core is the same machine code — for all 22 Sega CD titles in the
+library, and for the three cartridge systems as well.
+
+**The test is not vacuous.** The standing rule is that a test must first show
+the thing it measures actually varies, and it does: the `HAVE_CDROM=1` build is
+`b217941923…` against the pinned build's `78a2522871…`. The flag changes the
+binary. It just changes none of the binary that matters here.
+
+**The decision stands and the reason narrows.** Keep `HAVE_CDROM=0`, but no
+longer out of save-state caution — that is answered. It stays because the
+console has no optical drive, so `=1` compiles in three objects of physical-CD
+access that can never run, and because matching Cabinet is free. **Stop carrying
+the caveat.**
+
+##### And the build turns out to be reproducible across machines
+
+The same commit built on a GitHub `ubuntu-24.04` runner and on the Fedora test
+VM produced **byte-identical** artifacts:
+
+| | |
+|---|---|
+| gambatte | `b2ee839c226af409765b083e17b211265a44ca184f5ef85763fe003ad63ca582` |
+| genesis_plus_gx | `78a252287120173a8acc65c6d345dbdecb2fd7b0805a28f7df48c05baed3699b` |
+
+Found incidentally while setting up the comparison above, and worth more than it
+looks. *"Both machines can build it"* is a weaker claim than *"both machines
+produce the same bytes"*. The second means a sha256 in a CI log is a fact about
+the revision and the flags rather than about the machine, so a core can be
+checked against it anywhere — and it means a future mismatch is a real signal
+rather than noise to be explained away.
 
 **Decision: build with `HAVE_CDROM=0`.** The conservative choice is free here.
 The console has no optical drive and never will — ROMs arrive from RomM as
