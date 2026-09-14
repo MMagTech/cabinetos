@@ -2967,6 +2967,33 @@ it is the important finding of Part 1:
 | **mupen64plus** | `WITH_DYNAREC=` (empty), `-DNO_ASM`, GLES3 | `WITH_DYNAREC=x86_64` (needs **nasm**) and desktop `-lGL`, not GLES | `WITH_DYNAREC= FORCE_GLES3=1` |
 | **picodrive** | `APPLE=1` forces `use_sh2drc=0` | SH2 recompiler **on** (32X, Sega CD) | `use_sh2drc=0` |
 | **Flycast** | `-DTARGET_NO_REC`, interpreter | full x64 SH4 dynarec | omit / keep |
+| **genesis_plus_gx** | `HAVE_CDROM` left at its default of 0 | `HAVE_CDROM=1`, set by a `uname -s` test inside the `unix` branch | `HAVE_CDROM=0` |
+
+**genesis_plus_gx was added 2026-09-13, and it is not a recompiler.** It was
+found while preparing the second core, and it matters because it shows the
+divergence is not only about CPU backends — the shape of the problem is wider
+than the table's first five rows suggested.
+
+`Makefile.libretro` defaults `HAVE_CDROM = 0` at line 7. The `unix` branch then
+does this, and no Apple branch does anything equivalent:
+
+```make
+ifneq ($(findstring Linux,$(shell uname -s)),)
+  HAVE_CDROM = 1
+endif
+```
+
+which reaches the compiler as `-DHAVE_CDROM`. It is the libretro **physical
+CD-ROM drive** interface, and it lands on Sega CD — the one platform of the four
+this core serves that the handover already flagged as saving by a different
+mechanism than the other three. Whether it perturbs the save state format is
+**not established**, and this document's standing rule applies: assume states are
+sensitive and match Cabinet's configuration until proven otherwise.
+
+**Decision: build with `HAVE_CDROM=0`.** The conservative choice is free here.
+The console has no optical drive and never will — ROMs arrive from RomM as
+files — so the lever disables a feature the hardware cannot use, and matching
+Apple costs nothing to get it.
 
 Cabinet's Mac build already pulls several of these levers the other way
 (`DYNAREC=ari64`, `JIT_ARCH=aarch64`), so the mechanism is proven; only the
