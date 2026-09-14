@@ -60,6 +60,7 @@ jobs:
       matrix:
         core:
           - gambatte
+          - genesis_plus_gx
 
     steps:
       - name: Checkout

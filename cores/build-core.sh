@@ -46,6 +46,26 @@ gambatte)
     MAKEARGS=()
     SO=gambatte_libretro.so
     ;;
+genesis_plus_gx)
+    REPO=https://github.com/libretro/Genesis-Plus-GX.git
+    COMMIT=a7985a9c4278ac352f8ca7bb4d3cc6b36e9e3e7d
+    MAKEDIR=.
+    MAKEFILE=Makefile.libretro
+    # HAVE_CDROM is the lever here, and it is not a recompiler — see
+    # docs/PROJECT.md, open question 13. Makefile.libretro line 7 defaults it to
+    # 0; the unix branch then turns it on from a `uname -s` test, and no Apple
+    # branch does anything equivalent. The manifest agrees: build_args is null
+    # for ios, tvos and mac, so nothing overrides the default there.
+    #
+    # It is the libretro PHYSICAL CD-ROM DRIVE interface, so it lands on Sega
+    # CD, the one system of this core's four that saves by a different
+    # mechanism. Whether it perturbs the state format is not established, and
+    # the standing rule is to match Cabinet until it is. Free to obey: the
+    # console has no optical drive and never will, so this turns off a feature
+    # the hardware cannot use.
+    MAKEARGS=(HAVE_CDROM=0)
+    SO=genesis_plus_gx_libretro.so
+    ;;
 *)
     echo "unknown core: $CORE" >&2
     exit 1
