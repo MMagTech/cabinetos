@@ -2322,10 +2322,42 @@ fitting and real hardware did not.
 **So: run with `--safe-area` on the SER5, on a real television, before trusting
 any of it.**
 
-**Not there yet:** shaders and the letterbox glow (see *Shaders, and the glow
-around the picture* — the glow matters more here than in Cabinet, because an
-integer-scaled handheld picture on a 4K set is mostly dead space), and the
-remaining screens.
+#### The letterbox glow, built 2026-09-13
+
+Every number taken from `BiasGlow.swift` rather than invented, including one
+that would have been missed.
+
+- **The ramp is `peak * (1 - t^1.7)`, not linear.** The shallow exponent gives a
+  flat start so the brightness carries toward the physical edge instead of
+  collapsing early. **Verified on the rendered frame**: flat for the first ~60
+  points, then rolling off to nothing at the screen edge.
+- **White, deliberately.** It adds luminance without hue, so it can never clash
+  with whatever the game is rendering.
+- **The side bars span the full height; top and bottom only the picture's
+  width**, so the corners belong to the sides.
+- **A static noise dither is composited in**, masked by the same ramp. This is
+  the one that would have been missed: **a long near-black ramp bands visibly on
+  an 8-bit panel**, and the dither is what stops it. Static, never animated — a
+  moving dither in a dark room is a shimmer, which is worse than the banding.
+- **It never covers a game pixel.** The shader discards inside the picture rect.
+  **Verified**: the darkest pixel inside the picture measures 0.0 with the glow
+  at full strength.
+
+**And the background behind a running game is now BLACK**, not the menu's
+backdrop gradient. The reference implementation's player clears to black and it
+is right for two reasons: a gradient around a game picture is decoration
+competing with the thing being looked at, and bias lighting means light against
+black — on a purple backdrop it is neither. Caught only by rendering the glow
+and seeing it sit on the wrong thing.
+
+Measured on black, outward from the picture edge, at Strong: 12, 12, 12, 11, 8,
+4, 0. Subtle by design — this is bias lighting, not an effect.
+
+**Still to judge on a television.** The two peak values, 0.025 and 0.04, were
+found with a slider on a real panel after two sets guessed from a mockup were
+both wrong. Nothing about a software-rendered VM can confirm them.
+
+**Not there yet:** shaders, and the remaining screens.
 
 **Known gap worth recording now:** there is no text *shaping*, only advance and
 kerning from FreeType. That is correct for Latin and adequate for CJK, and wrong

@@ -227,6 +227,73 @@ void main() {
 }
 )";
 
+// The letterbox glow: in-software bias lighting for the dead space a retro
+// aspect ratio leaves inside a modern panel, where a physical strip behind the
+// television cannot reach.
+//
+// Every number here is the reference implementation's, not invented:
+//
+//   * WHITE, deliberately. It "adds luminance without hue, so it can never
+//     clash with whatever the game is rendering", and the panel's own
+//     calibration keeps it matched to the picture's white point for free.
+//   * The ramp is `peak * (1 - t^1.7)`, not linear. The shallow exponent gives
+//     a flat start so brightness carries further toward the physical edge
+//     instead of collapsing early.
+//   * The side bars span the FULL height and the top and bottom bars only the
+//     picture's width, so the corners belong to the sides.
+//   * It starts exactly at the fitted picture edge with no blur, so not one
+//     game pixel is ever covered.
+//
+// And the part that would have been missed: A LONG NEAR-BLACK RAMP BANDS on an
+// 8-bit panel, visibly. A static noise dither is composited into the glow,
+// masked by the same ramp so it fades with it — a quiet dither rather than a
+// texture of its own. Static, never animated.
+const char* kGlowFS = R"(#version 300 es
+precision highp float;
+in vec2 vPoint;
+uniform vec2 uCanvas;
+uniform vec4 uPicture;   // the fitted game rect, in design points
+uniform float uPeak;
+out vec4 fragColor;
+
+void main() {
+    vec2 p = vPoint;
+    float left = uPicture.x;
+    float right = uPicture.x + uPicture.z;
+    float top = uPicture.y;
+    float bottom = uPicture.y + uPicture.w;
+
+    // t is 0 at the picture's edge and 1 at the screen's, per direction, so
+    // each bar ramps across whatever dead space it actually has.
+    float t = -1.0;
+    if (p.x < left) {
+        t = left > 0.0 ? (left - p.x) / left : 1.0;
+    } else if (p.x > right) {
+        float room = uCanvas.x - right;
+        t = room > 0.0 ? (p.x - right) / room : 1.0;
+    } else if (p.y < top) {
+        t = top > 0.0 ? (top - p.y) / top : 1.0;
+    } else if (p.y > bottom) {
+        float room = uCanvas.y - bottom;
+        t = room > 0.0 ? (p.y - bottom) / room : 1.0;
+    } else {
+        discard;  // inside the picture; never cover a game pixel
+    }
+
+    float ramp = 1.0 - pow(clamp(t, 0.0, 1.0), 1.7);
+
+    // Static hash on the fragment position. Not time-varying: an animated
+    // dither in the corner of a dark room is a shimmer, which is worse than
+    // the banding it fixes.
+    float n = fract(sin(dot(floor(gl_FragCoord.xy), vec2(12.9898, 78.233))) * 43758.5453);
+
+    // Additive, scaled by the peak and masked by the same ramp, so it stays a
+    // dither rather than becoming visible texture.
+    float a = uPeak * ramp * (1.0 + 0.25 * n);
+    fragColor = vec4(1.0, 1.0, 1.0, a);
+}
+)";
+
 GLuint compile(GLenum type, const char* src) {
     GLuint s = glCreateShader(type);
     glShaderSource(s, 1, &src, nullptr);
@@ -274,7 +341,16 @@ bool Renderer::init() {
     // Reuses the solid path's vertex shader: same geometry, same rounding,
     // same edges.
     blurProgram_ = link(kQuadVS, kGlassFS);
-    if (!program_ || !backdropProgram_ || !texturedProgram_ || !blurProgram_) return false;
+    glowProgram_ = link(kQuadVS, kGlowFS);
+    if (!program_ || !backdropProgram_ || !texturedProgram_ || !blurProgram_ ||
+        !glowProgram_)
+        return false;
+
+    wloc_.canvas = glGetUniformLocation(glowProgram_, "uCanvas");
+    wloc_.picture = glGetUniformLocation(glowProgram_, "uPicture");
+    wloc_.peak = glGetUniformLocation(glowProgram_, "uPeak");
+    wloc_.shadow = glGetUniformLocation(glowProgram_, "uShadow");
+    wloc_.rect = glGetUniformLocation(glowProgram_, "uRect");
 
     gloc_.canvas = glGetUniformLocation(blurProgram_, "uCanvas");
     gloc_.rect = glGetUniformLocation(blurProgram_, "uRect");
@@ -375,6 +451,7 @@ void Renderer::shutdown() {
     if (backdropProgram_) glDeleteProgram(backdropProgram_);
     if (texturedProgram_) glDeleteProgram(texturedProgram_);
     if (blurProgram_) glDeleteProgram(blurProgram_);
+    if (glowProgram_) glDeleteProgram(glowProgram_);
     if (sceneFBO_) glDeleteFramebuffers(1, &sceneFBO_);
     if (sceneTex_) glDeleteTextures(1, &sceneTex_);
     sceneFBO_ = sceneTex_ = 0;
@@ -404,6 +481,19 @@ void Renderer::presentScene() {
                  Color{1, 1, 1, 1}, false);
     glEnable(GL_BLEND);
     scenePresented_ = true;
+}
+
+void Renderer::drawBiasGlow(float x, float y, float w, float h, float peak) {
+    if (peak <= 0.0f) return;
+    glUseProgram(glowProgram_);
+    // The vertex shader is the shared one, so it needs a rect to cover — the
+    // whole canvas here, since the glow lives everywhere the picture is not.
+    glUniform4f(wloc_.rect, 0, 0, kCanvasWidth, kCanvasHeight);
+    if (wloc_.shadow >= 0) glUniform1f(wloc_.shadow, 0.0f);
+    glUniform2f(wloc_.canvas, kCanvasWidth, kCanvasHeight);
+    glUniform4f(wloc_.picture, x, y, w, h);
+    glUniform1f(wloc_.peak, peak);
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 }
 
 void Renderer::drawSafeAreaGuides() {
