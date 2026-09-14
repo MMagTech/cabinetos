@@ -31,6 +31,7 @@
 
 #include "core.h"
 #include "image.h"
+#include "keyboard.h"
 #include "text.h"
 #include "ui.h"
 
@@ -158,6 +159,9 @@ int main(int argc, char** argv) {
     // Proves a restored state is genuinely identical, not merely accepted.
     bool stateTest = false;
     bool audioProbe = false;
+    // Opens the keyboard immediately, so it can be worked on without walking
+    // through a first-run flow that does not exist yet.
+    bool keyboardDemo = false;
     // Running a core. Both are needed: a core without a ROM has nothing to do.
     const char* corePath = nullptr;
     const char* romPath = nullptr;
@@ -167,6 +171,8 @@ int main(int argc, char** argv) {
             shotPath = argv[++i];
         } else if (SDL_strcmp(argv[i], "--frames") == 0 && i + 1 < argc) {
             shotAfterFrames = SDL_atoi(argv[++i]);
+        } else if (SDL_strcmp(argv[i], "--keyboard") == 0) {
+            keyboardDemo = true;
         } else if (SDL_strcmp(argv[i], "--audio-probe") == 0) {
             audioProbe = true;
         } else if (SDL_strcmp(argv[i], "--state-test") == 0) {
@@ -267,6 +273,25 @@ int main(int argc, char** argv) {
     });
 
     std::vector<Card> cards(std::begin(kSampleLibrary), std::end(kSampleLibrary));
+
+    ui::Keyboard keyboard;
+    if (keyboardDemo) {
+        // The real first field: a RomM address.
+        //
+        // NO PREFILLED SCHEME, deliberately. A self-hosted RomM on a home LAN
+        // is very often plain HTTP on a port, and prefilling "https://" pushes
+        // people toward a scheme their server does not speak — which is the
+        // shape of the problem tvOS has, where App Transport Security refuses
+        // plain HTTP outright. That is an Apple constraint and CabinetOS does
+        // not inherit it, but only if it is not designed back in. The
+        // placeholder shows the common case instead: a host and a port.
+        ui::Keyboard::Config cfg;
+        cfg.title = "Connect to RomM";
+        cfg.hint = "The same address you open in a browser.";
+        cfg.placeholder = "romm.local:8080";
+        cfg.shortcuts = {".local", ".com", "/"};
+        keyboard.open(cfg);
+    }
 
     // --- The core, if one was asked for --------------------------------------
     bool playing = false;
@@ -606,7 +631,32 @@ int main(int argc, char** argv) {
                     SDL_OpenGamepad(e.gdevice.which);
                     std::fprintf(stderr, "[frontend] gamepad connected\n");
                     break;
+                case SDL_EVENT_TEXT_INPUT:
+                    // A physical keyboard types into the same field. Not a
+                    // separate path — the same string and the same commit.
+                    if (keyboard.isOpen()) keyboard.typeText(e.text.text);
+                    break;
                 case SDL_EVENT_KEY_DOWN:
+                    if (keyboard.isOpen()) {
+                        // While it is open it owns every key, the same way the
+                        // core owns the pad while a game runs. A control that
+                        // means two things at once is the bug.
+                        switch (e.key.key) {
+                            case SDLK_LEFT: keyboard.moveFocus(-1, 0); break;
+                            case SDLK_RIGHT: keyboard.moveFocus(+1, 0); break;
+                            case SDLK_UP: keyboard.moveFocus(0, -1); break;
+                            case SDLK_DOWN: keyboard.moveFocus(0, +1); break;
+                            case SDLK_BACKSPACE: keyboard.backspace(); break;
+                            case SDLK_RETURN:
+                                std::fprintf(stderr, "[keyboard] committed: %s\n",
+                                             keyboard.value().c_str());
+                                keyboard.commit();
+                                break;
+                            case SDLK_ESCAPE: keyboard.cancel(); break;
+                            default: break;
+                        }
+                        break;
+                    }
                     if (e.key.key == SDLK_ESCAPE) running = false;
                     if (playing && e.key.key == SDLK_F5) {
                         cab::Core& c = cab::Core::shared();
@@ -636,6 +686,25 @@ int main(int argc, char** argv) {
                     if (e.key.key == SDLK_RETURN || e.key.key == SDLK_SPACE) pressing = false;
                     break;
                 case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+                    if (keyboard.isOpen()) {
+                        switch (e.gbutton.button) {
+                            case SDL_GAMEPAD_BUTTON_DPAD_LEFT: keyboard.moveFocus(-1, 0); break;
+                            case SDL_GAMEPAD_BUTTON_DPAD_RIGHT: keyboard.moveFocus(+1, 0); break;
+                            case SDL_GAMEPAD_BUTTON_DPAD_UP: keyboard.moveFocus(0, -1); break;
+                            case SDL_GAMEPAD_BUTTON_DPAD_DOWN: keyboard.moveFocus(0, +1); break;
+                            case SDL_GAMEPAD_BUTTON_SOUTH: keyboard.pressKey(); break;
+                            case SDL_GAMEPAD_BUTTON_WEST: keyboard.backspace(); break;
+                            case SDL_GAMEPAD_BUTTON_NORTH: keyboard.toggleShift(); break;
+                            case SDL_GAMEPAD_BUTTON_START:
+                                std::fprintf(stderr, "[keyboard] committed: %s\n",
+                                             keyboard.value().c_str());
+                                keyboard.commit();
+                                break;
+                            case SDL_GAMEPAD_BUTTON_EAST: keyboard.cancel(); break;
+                            default: break;
+                        }
+                        break;
+                    }
                     if (e.gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_LEFT) moveFocus(-1);
                     if (e.gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_RIGHT) moveFocus(+1);
                     if (e.gbutton.button == SDL_GAMEPAD_BUTTON_SOUTH) pressing = true;
@@ -879,6 +948,11 @@ int main(int argc, char** argv) {
             }
         }
         }  // end of the shelf branch
+
+        // Everything above this line is the world; everything below it can
+        // blur what the world drew. See Renderer::presentScene.
+        renderer.presentScene();
+        keyboard.draw(renderer, text, renderer.scale());
 
         ++frame;
         // Capture before the swap. After a swap the back buffer's contents are

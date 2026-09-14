@@ -104,6 +104,31 @@ public:
     // rasterise at device resolution to be crisp on a 4K set, so it needs this.
     float scale() const { return scale_; }
 
+    // --- Frosted glass -------------------------------------------------------
+    //
+    // The single largest contributor to what the reference implementation
+    // actually looks like, and the one thing on its list that Linux supplies
+    // nothing for. A panel over cover art without it is not "less pretty", it
+    // is unreadable — the art shows through and competes with the text.
+    //
+    // The mechanism: the scene is drawn into an offscreen texture, mipmapped,
+    // and a glass panel samples that texture at a coarse level under itself.
+    // A mip chain is a box blur that the GPU already had to build, so this is
+    // a texture fetch rather than a blur pass — which matters on integrated
+    // graphics that also has a PS2 to emulate.
+    //
+    //   beginFrame -> draw the world -> presentScene -> drawGlass/draw/text
+    //
+    // Callers that never use glass can ignore all of it; presentScene is a
+    // no-op then.
+    void presentScene();
+    bool sceneCaptured() const { return scenePresented_; }
+
+    // A rounded panel that blurs what is behind it. `blur` is a mip level:
+    // roughly 4 is the "thin material" of a pill, 6 the "regular material" of
+    // a panel. `tint` is composited over the blur.
+    void drawGlass(const Rect& r, float blur, const Color& tint);
+
     // Reads the frame back and writes a BMP. The VM has no way to show a
     // screenshot to anyone, and "it looked right on my machine" is not a thing
     // this project can say, so the frontend can always photograph itself.
@@ -127,6 +152,16 @@ private:
     GLuint offscreenFBO_ = 0;
     GLuint offscreenTex_ = 0;
     int offscreenW_ = 0, offscreenH_ = 0;
+
+    // The scene, captured so panels can blur it.
+    GLuint sceneFBO_ = 0, sceneTex_ = 0;
+    int sceneW_ = 0, sceneH_ = 0;
+    bool scenePresented_ = false;
+    int vx_ = 0, vy_ = 0, vw_ = 0, vh_ = 0;
+    GLuint blurProgram_ = 0;
+    struct {
+        GLint canvas, rect, radius, tint, tex, lod;
+    } gloc_{};
 
     struct {
         GLint canvas, rect, radius, fill, border, borderColor, shadow, shadowColor,

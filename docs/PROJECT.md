@@ -2206,10 +2206,56 @@ else in this question did.
   and its Gambatte revision is one of the eleven that are unrecoverable.
 - Same flags on both sides, every core option left at its default.
 
-**Not there yet, and each is its own piece of work:** shaders and the letterbox
-glow (see *Shaders, and the glow around the picture* — the glow matters more
-here than in Cabinet, because an integer-scaled handheld picture on a 4K set is
-mostly dead space), the on-screen keyboard, and the remaining screens.
+**The on-screen keyboard, and frosted glass with it, 2026-09-13.**
+
+The keyboard is the gate on everything downstream: first-run setup cannot be
+reached without it, and it is also the answer to the Wi-Fi question (open
+question 17). **There was nothing to copy** — tvOS supplied Cabinet's, so this
+is designed from the input model rather than ported.
+
+- Digits on their own row rather than behind a shift layer, because a Wi-Fi
+  passphrase is usually being read off the underside of a router.
+- **Vertical movement keeps the horizontal POSITION, not the index.** Rows have
+  different key counts and widths, so moving down from `p` lands near `l`
+  rather than on whatever happens to be ninth.
+- **No wrapping at the edges.** Moving off the right does nothing. Wrapping
+  reads as a glitch when you are holding a direction.
+- Shift is one-shot, the way a phone keyboard behaves.
+- Backspace steps over a whole UTF-8 code point, not a byte.
+- The field shows the **tail** when it overflows: what you are typing is at the
+  end, and a field that scrolls off the right hides the character just pressed.
+- **A physical keyboard types into the same field**, through the same string and
+  the same commit. Not a second path.
+- The button legend is on screen. A controller-only UI has to say what the
+  buttons do, because there is no convention to fall back on and no pointer to
+  explore with.
+- Per-field shortcut keys, because reducing typing beats speeding it up.
+
+**And backdrop blur, finally.** It was on the list of six things tvOS gave
+Cabinet for free and it is the largest of them. The keyboard is what forced it:
+a translucent panel over cover art without blur is not "less pretty", it is
+**unreadable** — the art shows through and competes with the text. First version
+proved it.
+
+The mechanism: the scene is drawn into an offscreen texture, mipmapped, and a
+panel samples that texture at a coarse level under itself. **A mip chain is a
+box blur the GPU already built**, so this costs a texture fetch rather than a
+blur pass — which matters on integrated graphics that also has a PS2 to run.
+
+Two rules learned immediately, both the hard way:
+
+1. **Glass does not nest.** Every glass surface samples the same captured scene,
+   so a key drawn as its own glass re-samples the bright cover art and ignores
+   the darkening of the panel it sits on. It looked like stained glass. **One
+   glass layer per modal**; everything on it is an ordinary surface.
+2. **The tint must be dark.** A white tint over a blur lightens, and this is a
+   dark interface. What makes a material read as a material here is that it
+   *dims* what is behind it as well as softening it.
+
+**Not there yet:** shaders and the letterbox glow (see *Shaders, and the glow
+around the picture* — the glow matters more here than in Cabinet, because an
+integer-scaled handheld picture on a 4K set is mostly dead space), and the
+remaining screens.
 
 **Known gap worth recording now:** there is no text *shaping*, only advance and
 kerning from FreeType. That is correct for Latin and adequate for CJK, and wrong
@@ -2270,6 +2316,35 @@ source 2026-09-13: tvOS already solves this problem and has shipped the answer.
 **So the whole typing burden on a television today is one hostname.** No
 password, ever. That number matters, because it is the size of the problem any
 first-run convenience is competing against.
+
+#### Plain HTTP must work. This is a bug CabinetOS can simply not have
+
+**Apple's App Transport Security refuses plain HTTP**, so a tvOS app talking to
+`http://romm.local:8080` needs an explicit exception — and a self-hosted RomM on
+a home LAN is *very often* exactly that. **CabinetOS has no ATS**, nothing on
+Linux forbids plain HTTP, and the whole problem is therefore avoidable.
+
+Avoidable, but only if it is not designed back in. Two ways it creeps in:
+
+1. **Prefilling `https://` in the address field.** It reads as helpful and it
+   pushes people toward a scheme their server does not speak. Removed: the
+   field starts empty with `romm.local:8080` as the placeholder.
+2. **Requiring a scheme at all.** The field should accept a bare host and port.
+
+**What the client must do:**
+
+- **Accept a bare host.** `romm.local:8080`, `192.168.1.50:8080`, `romm.lan`.
+- **Probe rather than assume.** With no scheme given, try both and keep
+  whichever answers — preferring `http` for an address that is obviously local
+  (RFC1918, `.local`, `.lan`, a bare hostname) and `https` otherwise.
+- **Remember which worked**, so the probe happens once.
+- **Never refuse plain HTTP.** Not for a LAN address, not with a warning that
+  cannot be dismissed.
+- **Self-signed certificates: ask once, then remember.** A home server with
+  HTTPS usually has a self-signed or internal-CA certificate, which is the
+  second wall of the same kind. Silently accepting is wrong and silently
+  refusing is worse; asking once about a server the person typed in themselves
+  is the honest middle.
 
 *Done when* the real library is browsable, a game downloads and plays, and a
 kept game survives a cache eviction.

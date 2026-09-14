@@ -186,6 +186,47 @@ void main() {
 }
 )";
 
+// Frosted glass: the scene sampled at a coarse mip level under a rounded
+// panel, tinted. The rounding is the same SDF the solid path uses, so a glass
+// panel and a solid one have identical edges — which matters, because they sit
+// next to each other constantly.
+const char* kGlassFS = R"(#version 300 es
+precision highp float;
+in vec2 vPoint;
+uniform vec2 uCanvas;
+uniform vec4 uRect;
+uniform float uRadius;
+uniform vec4 uTint;
+uniform sampler2D uScene;
+uniform float uLod;
+out vec4 fragColor;
+
+float glassSDF(vec2 p, vec2 halfSize, float r) {
+    vec2 q = abs(p) - halfSize + r;
+    return min(max(q.x, q.y), 0.0) + length(max(q, 0.0)) - r;
+}
+
+void main() {
+    vec2 center = uRect.xy + uRect.zw * 0.5;
+    vec2 halfSize = uRect.zw * 0.5;
+    float r = min(uRadius, min(halfSize.x, halfSize.y));
+    float d = glassSDF(vPoint - center, halfSize, r);
+    float a = 1.0 - smoothstep(-1.0, 1.0, d);
+    if (a <= 0.0) discard;
+
+    // The scene texture covers the whole canvas, so the sample position is
+    // just this fragment's place on it. Y flips: GL's origin is bottom-left
+    // and the canvas is top-left.
+    vec2 uv = vec2(vPoint.x / uCanvas.x, 1.0 - vPoint.y / uCanvas.y);
+    vec3 behind = textureLod(uScene, uv, uLod).rgb;
+
+    // Tint OVER the blur, not mixed into it: the tint is a veil the art shows
+    // through, which is what makes it read as glass rather than as paint.
+    vec3 c = mix(behind, uTint.rgb, uTint.a);
+    fragColor = vec4(c, a);
+}
+)";
+
 GLuint compile(GLenum type, const char* src) {
     GLuint s = glCreateShader(type);
     glShaderSource(s, 1, &src, nullptr);
@@ -230,7 +271,17 @@ bool Renderer::init() {
     program_ = link(kQuadVS, kQuadFS);
     backdropProgram_ = link(kBackdropVS, kBackdropFS);
     texturedProgram_ = link(kTexturedVS, kTexturedFS);
-    if (!program_ || !backdropProgram_ || !texturedProgram_) return false;
+    // Reuses the solid path's vertex shader: same geometry, same rounding,
+    // same edges.
+    blurProgram_ = link(kQuadVS, kGlassFS);
+    if (!program_ || !backdropProgram_ || !texturedProgram_ || !blurProgram_) return false;
+
+    gloc_.canvas = glGetUniformLocation(blurProgram_, "uCanvas");
+    gloc_.rect = glGetUniformLocation(blurProgram_, "uRect");
+    gloc_.radius = glGetUniformLocation(blurProgram_, "uRadius");
+    gloc_.tint = glGetUniformLocation(blurProgram_, "uTint");
+    gloc_.tex = glGetUniformLocation(blurProgram_, "uScene");
+    gloc_.lod = glGetUniformLocation(blurProgram_, "uLod");
 
     loc_.canvas = glGetUniformLocation(program_, "uCanvas");
     loc_.rect = glGetUniformLocation(program_, "uRect");
@@ -323,7 +374,53 @@ void Renderer::shutdown() {
     if (program_) glDeleteProgram(program_);
     if (backdropProgram_) glDeleteProgram(backdropProgram_);
     if (texturedProgram_) glDeleteProgram(texturedProgram_);
-    vbo_ = vao_ = program_ = backdropProgram_ = texturedProgram_ = 0;
+    if (blurProgram_) glDeleteProgram(blurProgram_);
+    if (sceneFBO_) glDeleteFramebuffers(1, &sceneFBO_);
+    if (sceneTex_) glDeleteTextures(1, &sceneTex_);
+    sceneFBO_ = sceneTex_ = 0;
+    vbo_ = vao_ = program_ = backdropProgram_ = texturedProgram_ = blurProgram_ = 0;
+}
+
+void Renderer::presentScene() {
+    if (sceneFBO_ == 0) return;   // nothing captured; solid panels only
+    // Mip the scene. This IS the blur: level 4 is a sixteenth-scale box
+    // average, level 6 a sixty-fourth, and sampling one back up is what a
+    // "material" looks like.
+    glBindTexture(GL_TEXTURE_2D, sceneTex_);
+    glGenerateMipmap(GL_TEXTURE_2D);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glViewport(vx_, vy_, vw_, vh_);
+    glDisable(GL_BLEND);
+    drawTextured(0, 0, kCanvasWidth, kCanvasHeight, sceneTex_, 0, 1, 1, 0,
+                 Color{1, 1, 1, 1}, false);
+    glEnable(GL_BLEND);
+    scenePresented_ = true;
+}
+
+void Renderer::drawGlass(const Rect& r, float blur, const Color& tint) {
+    if (!scenePresented_) {
+        // No scene to blur — fall back to a solid fill of the same shape, so a
+        // caller never has to know whether capture happened.
+        Rect solid = r;
+        solid.fill = Color{tint.r, tint.g, tint.b, 0.92f};
+        draw(solid);
+        return;
+    }
+    glUseProgram(blurProgram_);
+    glUniform2f(gloc_.canvas, kCanvasWidth, kCanvasHeight);
+    glUniform4f(gloc_.rect, r.x, r.y, r.w, r.h);
+    glUniform1f(gloc_.radius, r.radius);
+    glUniform4f(gloc_.tint, tint.r, tint.g, tint.b, tint.a);
+    glUniform1f(gloc_.lod, blur);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, sceneTex_);
+    glUniform1i(gloc_.tex, 0);
+    // The vertex shader sizes its own quad from the shadow radius; glass has
+    // none, so it must be told zero or the panel grows.
+    GLint shadowVS = glGetUniformLocation(blurProgram_, "uShadow");
+    if (shadowVS >= 0) glUniform1f(shadowVS, 0.0f);
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 }
 
 void Renderer::beginFrame(int drawableWidth, int drawableHeight) {
@@ -335,7 +432,47 @@ void Renderer::beginFrame(int drawableWidth, int drawableHeight) {
     scale_ = scale;
     int vw = static_cast<int>(kCanvasWidth * scale);
     int vh = static_cast<int>(kCanvasHeight * scale);
-    glViewport((drawableWidth - vw) / 2, (drawableHeight - vh) / 2, vw, vh);
+    vx_ = (drawableWidth - vw) / 2;
+    vy_ = (drawableHeight - vh) / 2;
+    vw_ = vw;
+    vh_ = vh;
+    scenePresented_ = false;
+
+    // The scene is drawn into a texture so panels can blur it. Sized to the
+    // viewport rather than the drawable, since the letterbox bars have nothing
+    // worth blurring in them.
+    if (sceneW_ != vw || sceneH_ != vh) {
+        if (sceneFBO_) glDeleteFramebuffers(1, &sceneFBO_);
+        if (sceneTex_) glDeleteTextures(1, &sceneTex_);
+        glGenTextures(1, &sceneTex_);
+        glBindTexture(GL_TEXTURE_2D, sceneTex_);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, vw, vh, 0, GL_RGBA, GL_UNSIGNED_BYTE,
+                     nullptr);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        // Clamp, so a blur near an edge repeats the edge rather than wrapping
+        // the opposite side of the screen into it.
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glGenFramebuffers(1, &sceneFBO_);
+        glBindFramebuffer(GL_FRAMEBUFFER, sceneFBO_);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
+                               sceneTex_, 0);
+        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+            std::fprintf(stderr, "[ui] scene target incomplete; glass disabled\n");
+            glDeleteFramebuffers(1, &sceneFBO_);
+            glDeleteTextures(1, &sceneTex_);
+            sceneFBO_ = sceneTex_ = 0;
+        }
+        sceneW_ = vw;
+        sceneH_ = vh;
+    }
+    if (sceneFBO_) {
+        glBindFramebuffer(GL_FRAMEBUFFER, sceneFBO_);
+        glViewport(0, 0, vw, vh);
+    } else {
+        glViewport(vx_, vy_, vw, vh);
+    }
 
     glDisable(GL_DEPTH_TEST);
     glEnable(GL_BLEND);
