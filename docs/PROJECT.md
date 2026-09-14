@@ -2995,6 +2995,21 @@ The console has no optical drive and never will — ROMs arrive from RomM as
 files — so the lever disables a feature the hardware cannot use, and matching
 Apple costs nothing to get it.
 
+**The manifest corroborates it.** `build_args` is `null` for `ios`, `tvos` and
+`mac`, so nothing overrides the line-7 default on any Apple platform. Verified
+at the pinned commit `a7985a9c`, not merely at upstream `master`: the default,
+the `uname` test and the absence of any `HAVE_CDROM` in the Apple branches are
+all identical there.
+
+**And the manifest records a second divergence of the same shape, in vecx:**
+`HAS_GPU=0`, because *"Makefile defaults HAS_GPU=1 off macOS, which builds a
+GLES2 path this frontend cannot drive."* Cabinet already passes that on both
+Apple platforms. It is a third instance of the pattern — the `unix` branch
+asking `uname` what machine it is on and changing the build — and it is the
+reason the `build.<platform>` field exists. **Read `build_args` from the
+manifest before building any core**, rather than assuming an empty
+`MAKEARGS` because the core is not in the recompiler table.
+
 Cabinet's Mac build already pulls several of these levers the other way
 (`DYNAREC=ari64`, `JIT_ARCH=aarch64`), so the mechanism is proven; only the
 values differ.
