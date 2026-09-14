@@ -114,6 +114,15 @@ log "base image has $(wc -l < /usr/share/cabinetos/packages-before-strip.txt) pa
 /ctx/require-cec.sh
 
 # ---------------------------------------------------------------------------
+# Frontend runtime libraries.
+# ---------------------------------------------------------------------------
+#
+# Same reasoning and the same position in the order: last, after anything that
+# could have removed a package. The frontend links against these, and they are
+# in the base image incidentally rather than by declared dependency.
+/ctx/require-frontend-libs.sh
+
+# ---------------------------------------------------------------------------
 # Record the result.
 # ---------------------------------------------------------------------------
 rpm -qa | sort > /usr/share/cabinetos/packages-after-strip.txt
