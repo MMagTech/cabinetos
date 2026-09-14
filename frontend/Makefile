@@ -12,7 +12,7 @@ CXX      ?= g++
 CXXFLAGS ?= -std=c++20 -O2 -Wall -Wextra -Wno-unused-parameter -MMD -MP
 LDFLAGS  ?=
 
-PKGS     := sdl3 egl glesv2 freetype2 libjpeg libpng
+PKGS     := sdl3 egl glesv2 freetype2 libjpeg libpng libcurl json-c
 CXXFLAGS += $(shell pkg-config --cflags $(PKGS))
 LIBS     := $(shell pkg-config --libs $(PKGS)) -lpthread -ldl
 

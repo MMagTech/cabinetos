@@ -22,6 +22,8 @@
 
 #include <csignal>
 
+#include <unistd.h>
+
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -32,6 +34,7 @@
 #include "core.h"
 #include "image.h"
 #include "keyboard.h"
+#include "romm.h"
 #include "text.h"
 #include "ui.h"
 
@@ -139,6 +142,119 @@ const Card kSampleLibrary[] = {
 
 }  // namespace
 
+// Talks to a RomM server and reports, without opening a window.
+//
+//   --romm <address>              connect and list the library
+//   --romm <address> --romm-pair  pair first, if there is no token yet
+//
+// The token lives in ~/.config/cabinetos/romm.json at 0600. It is a credential:
+// it is never printed here, and it does not belong in the repository.
+static std::string rommTokenPath() {
+    const char* home = getenv("HOME");
+    return std::string(home ? home : ".") + "/.config/cabinetos/romm.json";
+}
+
+static int rommProbe(const char* address, bool allowPairing) {
+    romm::Client client;
+    std::string err;
+
+    if (!client.setAddress(address, &err)) {
+        std::fprintf(stderr, "[romm] %s\n", err.c_str());
+        return 1;
+    }
+    std::printf("server      %s (RomM %s)\n", client.baseUrl().c_str(),
+                client.serverVersion().c_str());
+
+    const std::string tokenPath = rommTokenPath();
+    if (!client.loadToken(tokenPath)) {
+        if (!allowPairing) {
+            std::fprintf(stderr,
+                         "[romm] no token at %s — run again with --romm-pair\n",
+                         tokenPath.c_str());
+            return 1;
+        }
+        romm::Pairing p;
+        if (!client.beginPairing(&p, &err)) {
+            std::fprintf(stderr, "[romm] pairing failed: %s\n", err.c_str());
+            return 1;
+        }
+        // This is what the first-run screen will show as a QR code. On a
+        // television it is the only thing anyone has to act on.
+        std::printf("\napprove at  %s\ncode        %s\nexpires in  %d seconds\n\n",
+                    p.verificationUrl.c_str(), p.userCode.c_str(), p.expiresIn);
+        std::fflush(stdout);
+
+        const int deadline = p.expiresIn > 0 ? p.expiresIn : 600;
+        int waited = 0;
+        int state = 0;
+        while (waited < deadline) {
+            SDL_Delay(static_cast<Uint32>(p.intervalSeconds) * 1000);
+            waited += p.intervalSeconds;
+            state = client.pollPairing(p, &err);
+            if (state != 0) break;
+            // \r only makes sense on a terminal. Redirected to a file — which
+            // is how this runs on the console — it concatenates every tick
+            // onto one unreadable line.
+            std::printf("waiting…    %ds%s", waited, isatty(1) ? "\r" : "\n");
+            std::fflush(stdout);
+        }
+        if (state != 1) {
+            std::fprintf(stderr, "\n[romm] not paired: %s\n",
+                         err.empty() ? "timed out" : err.c_str());
+            return 1;
+        }
+        // Best effort: an unwritable config directory should not throw away a
+        // pairing the person has already approved.
+        if (client.saveToken(tokenPath))
+            std::printf("\npaired      token saved to %s\n", tokenPath.c_str());
+        else
+            std::printf("\npaired      (could not write %s)\n", tokenPath.c_str());
+    }
+
+    std::vector<romm::Platform> platforms;
+    if (!client.fetchPlatforms(&platforms, &err)) {
+        std::fprintf(stderr, "[romm] platforms: %s\n", err.c_str());
+        return 1;
+    }
+
+    int total = 0;
+    for (const auto& p : platforms) total += p.romCount;
+    std::printf("\n%zu platforms, %d games\n\n", platforms.size(), total);
+
+    // fs_slug is printed next to the name because it is the field that
+    // distinguishes two platforms the name and the slug cannot — "Arcade" is
+    // FBNeo and MAME 2003-Plus, and a client keying on slug loses one of them.
+    for (const auto& p : platforms) {
+        std::printf("  %5d  %-34s id=%-4d slug=%-22s fs=%s\n", p.romCount,
+                    p.name.c_str(), p.id, p.slug.c_str(), p.fsSlug.c_str());
+    }
+
+    // Page the largest platform in full, because silent truncation is the
+    // failure this has to rule out: a client that quietly returns the first
+    // page looks like it works.
+    const romm::Platform* biggest = nullptr;
+    for (const auto& p : platforms)
+        if (!biggest || p.romCount > biggest->romCount) biggest = &p;
+    if (biggest) {
+        std::vector<romm::Game> games;
+        if (!client.fetchGames(biggest->id, &games, &err)) {
+            std::fprintf(stderr, "\n[romm] games: %s\n", err.c_str());
+            return 1;
+        }
+        std::printf("\npaged %s: fetched %zu, server said %d — %s\n",
+                    biggest->name.c_str(), games.size(), biggest->romCount,
+                    games.size() == static_cast<size_t>(biggest->romCount)
+                        ? "match"
+                        : "MISMATCH, something is truncating");
+        int withCover = 0;
+        for (const auto& g : games) if (!g.coverPath.empty()) ++withCover;
+        std::printf("covers      %d of %zu have art\n", withCover, games.size());
+        if (!games.empty())
+            std::printf("first       %s\n", games.front().name.c_str());
+    }
+    return 0;
+}
+
 int main(int argc, char** argv) {
     bool shotMode = false;
     const char* shotPath = "/tmp/cabinetos-frame.bmp";
@@ -168,6 +284,12 @@ int main(int argc, char** argv) {
     // Running a core. Both are needed: a core without a ROM has nothing to do.
     const char* corePath = nullptr;
     const char* romPath = nullptr;
+    // Talks to a RomM server and prints what it found, without opening a
+    // window. The same reasoning as --state-test and --audio-probe: the
+    // network, the auth and the parsing are all things that can be wrong on
+    // their own, and finding that out through a UI is the slow way.
+    const char* rommAddress = nullptr;
+    bool rommPair = false;
     for (int i = 1; i < argc; ++i) {
         if (SDL_strcmp(argv[i], "--screenshot") == 0 && i + 1 < argc) {
             shotMode = true;
@@ -189,6 +311,10 @@ int main(int argc, char** argv) {
             stateTest = true;
         } else if (SDL_strcmp(argv[i], "--core") == 0 && i + 1 < argc) {
             corePath = argv[++i];
+        } else if (SDL_strcmp(argv[i], "--romm") == 0 && i + 1 < argc) {
+            rommAddress = argv[++i];
+        } else if (SDL_strcmp(argv[i], "--romm-pair") == 0) {
+            rommPair = true;
         } else if (SDL_strcmp(argv[i], "--rom") == 0 && i + 1 < argc) {
             romPath = argv[++i];
         } else if (SDL_strcmp(argv[i], "--evict-test") == 0) {
@@ -203,6 +329,11 @@ int main(int argc, char** argv) {
             initialFocus = SDL_atoi(argv[++i]);
         }
     }
+
+    // Runs before SDL, deliberately. This needs no window, no GL and no
+    // controller, and on a headless machine it must work anyway — the whole
+    // point is to test the server conversation on its own.
+    if (rommAddress) return rommProbe(rommAddress, rommPair);
 
     std::signal(SIGUSR1, requestCapture);
 

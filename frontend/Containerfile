@@ -16,7 +16,13 @@ RUN dnf install -y --setopt=install_weak_deps=False \
         mesa-libEGL-devel \
         mesa-libGLES-devel \
         wayland-devel freetype-devel libjpeg-turbo-devel libpng-devel \
+        libcurl-devel json-c-devel \
     && dnf clean all
+
+# libcurl and json-c are for the RomM client (Phase 4). Both are already present
+# in the OS image, so linking against them adds nothing to what ships — but
+# "already present" is not the same as "guaranteed", which is what
+# build_files/require-frontend-libs.sh is for.
 
 # git is here for the CORES, not for us. Several libretro Makefiles do
 #   GIT_VERSION := $(shell git rev-parse --short HEAD)
