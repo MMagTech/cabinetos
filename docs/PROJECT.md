@@ -2690,6 +2690,33 @@ It also adds a requirement this project had not accounted for: **the console
 must upload, not merely download.** That needs write scope on assets, which the
 first pairing did not request.
 
+#### When a save happens — decided 2026-09-15
+
+Keys currently trigger it: F5 writes a state, F8 restores the newest loadable
+one, F6 pushes the game's own save. **That is the test environment and not the
+product.** The intended triggers, settled rather than deferred:
+
+- **When the game writes its memory card**, so a save that the game itself
+  considers made is a save the console has.
+- **From the in-game menu**, as a deliberate act.
+- **On leaving a game**, always — nobody should lose progress because they
+  quit.
+- **A controller combination**, so a state can be taken without opening
+  anything.
+
+Cabinet's shape for the same thing: *"the views own the* when*, the sync engine
+owns the* what*"* — the triggers belong to the screens, the capture and upload
+belong to one shared type. CabinetOS should keep that split from the start,
+because tvOS once carried its own copy of the *what* and it silently went stale.
+
+**One thing that is not deferred by the above.** The upload still happens on the
+frame thread, so the picture stops while it runs. On a LAN with a 60 KB Game Boy
+state that is imperceptible; on a slow link, or with a PS2 memory card, the game
+visibly hangs, and if the server does not answer, curl's timeout makes the
+console look dead for thirty seconds. It is the same fault the download had this
+morning and it wants the same fix — a worker, with the job structure that
+already exists.
+
 #### Downloads stream, and the console keeps drawing
 
 **Built and measured 2026-09-14.** Two things were wrong with the first working
