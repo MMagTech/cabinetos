@@ -149,6 +149,13 @@ public:
 
     const AVInfo& avInfo() const { return av_; }
     const std::string& coreName() const { return coreName_; }
+    // The core's own answers about what it will open. Both come from
+    // retro_get_system_info and neither is knowable from the platform: a
+    // platform does not have an opinion about archives, and two cores serving
+    // the same platform can differ. See romfile.h.
+    const std::string& validExtensions() const { return validExtensions_; }
+    bool blockExtract() const { return blockExtract_; }
+    bool needFullpath() const { return needFullpath_; }
     const std::string& coreVersion() const { return coreVersion_; }
     const std::string& error() const { return error_; }
 
@@ -169,7 +176,9 @@ private:
     void* handle_ = nullptr;
     bool gameLoaded_ = false;
     std::string error_;
-    std::string coreName_, coreVersion_;
+    std::string coreName_, coreVersion_, validExtensions_;
+    bool blockExtract_ = false;
+    bool needFullpath_ = false;
     AVInfo av_;
 
     GLuint texture_ = 0;
