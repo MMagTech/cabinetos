@@ -11,6 +11,11 @@ Rewrite it at the end of a session. It is meant to be current, not a log.
 
 ---
 
+**Read `docs/CABINET.md` before designing anything.** Cabinet ships on iOS,
+tvOS and macOS and has already solved most of what comes up here — saves and
+memory-card sync, firmware, core options, kept games, the whole launch path. It
+maps where each answer lives. tvOS is the surface to copy, not iOS.
+
 Read `docs/PROJECT.md` first — all of it. It is the specification and it is
 current. Start with "Where the project is", which tells you what runs, what does
 not, and what has never been tested.

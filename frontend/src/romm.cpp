@@ -15,21 +15,30 @@ namespace {
 constexpr long kConnectTimeoutSec = 5;
 constexpr long kTimeoutSec = 30;
 
-// Read-only, and no more than is needed. Anything that writes is a separate
-// request made when something actually needs to write, so a token that leaks
-// cannot modify the library.
+// What the console asks for, and where the line is drawn.
 //
-// firmware.read is NOT optional and was left out of the first pairing by
-// mistake. About half the systems CabinetOS ships cannot start a game without
-// a BIOS — Sega CD, Saturn, PlayStation, Dreamcast, 3DO among them — and
-// without this scope the console cannot fetch one, so those systems fail with
-// a message about a file the person has no way to supply. "Ask again when
-// something needs it" is the right instinct and was the wrong call here: this
-// is a requirement, not an edge case.
+// READ: everything needed to show a library and start a game — the library
+// itself, artwork, collections, and firmware. firmware.read is not optional:
+// about half the systems here cannot start a game without a BIOS, and without
+// it they fail pointing at a file the person has no way to supply.
+//
+// WRITE: only the person's own play data. assets.write uploads saves, memory
+// cards and save states, which is the whole point of the server holding them —
+// a console that could only download would lose progress the moment it
+// reclaimed a game. roms.user.write is favourites and play state.
+//
+// NOT ASKED FOR, deliberately: roms.write, platforms.write and firmware.write
+// (the console must never alter the library it is reading), users.*, tasks.run
+// and logs.read. The line is that this can change YOUR data and never THE
+// library.
+//
+// Two rounds of under-scoping got here. "Ask again when something needs it" is
+// right for genuinely occasional access and wrong for a requirement, and each
+// mistake costs a re-pairing that a person has to walk across a room for.
 const char* kScopes[] = {
-    "me.read", "platforms.read", "roms.read",
-    "assets.read", "roms.user.read", "collections.read",
-    "firmware.read",
+    "me.read", "platforms.read", "roms.read", "assets.read",
+    "roms.user.read", "collections.read", "firmware.read",
+    "assets.write", "roms.user.write",
 };
 
 size_t sink(char* p, size_t sz, size_t n, void* user) {

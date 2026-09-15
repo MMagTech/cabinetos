@@ -10,6 +10,13 @@
 > nobody says them. This file is the specification and is authoritative; that
 > one is the handover. Rewrite it at the end of a session.
 >
+> **`docs/CABINET.md` is the companion to this file.** Cabinet already ships on
+> iOS, tvOS and macOS and has answered most of what CabinetOS runs into. Read it
+> before designing anything, and read Cabinet's own source before inventing an
+> answer — it is not checked out here, so clone it. Doing this piecemeal, a
+> question at a time, produced several half-right answers that had to be
+> corrected.
+>
 > Rules for maintaining this document:
 > - When a phase is finished, change its status and say what actually shipped,
 >   not what was planned.
