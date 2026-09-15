@@ -16,9 +16,12 @@ RUN dnf install -y --setopt=install_weak_deps=False \
         mesa-libEGL-devel \
         mesa-libGLES-devel \
         wayland-devel freetype-devel libjpeg-turbo-devel libpng-devel \
-        libcurl-devel json-c-devel \
+        libcurl-devel json-c-devel libarchive-devel \
     && dnf clean all
 
+# libarchive is for ROMs, which arrive in whatever format their owner has —
+# zip, 7z, plain, or no extension at all. See frontend/src/archive.h.
+#
 # libcurl and json-c are for the RomM client (Phase 4). Both are already present
 # in the OS image, so linking against them adds nothing to what ships — but
 # "already present" is not the same as "guaranteed", which is what

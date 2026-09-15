@@ -27,6 +27,18 @@
 #                       Also brings the TLS stack, so an https RomM works
 #                       without the frontend implementing any of it.
 #
+#   libarchive.so.13    Opens a ROM in whatever format its owner keeps it in —
+#                       zip, 7z, rar, tar and more, through one API. Measured
+#                       on a real library: 801 zip, 84 7z, a long tail of plain
+#                       files and 32 with no extension at all.
+#
+#                       Unlike the other two this one is genuinely load-bearing
+#                       in the base image rather than incidental: ostree, rpm,
+#                       rpm-ostree and flatpak all link it, so it cannot go
+#                       missing without the image losing the ability to update
+#                       itself. Listed anyway, because that is an argument and
+#                       not a guarantee.
+#
 #   libjson-c.so.5      Parses RomM's responses. A hand-rolled JSON parser is
 #                       the wrong thing to own: it is a solved, fiddly problem
 #                       and a bug in it looks like a library that is silently
@@ -38,7 +50,7 @@ set -euo pipefail
 source /ctx/lib.sh 2>/dev/null || true
 
 missing=0
-for lib in libcurl.so.4 libjson-c.so.5; do
+for lib in libcurl.so.4 libjson-c.so.5 libarchive.so.13; do
     if [ -e "/usr/lib64/$lib" ]; then
         printf '  present  %s\n' "$lib"
     else
