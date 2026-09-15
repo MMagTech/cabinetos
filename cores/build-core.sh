@@ -24,6 +24,18 @@
 set -euo pipefail
 
 CORE="${1:-}"
+
+# Whether the finished .so can be asked which revision it is. Almost every core
+# compiles `git rev-parse --short HEAD` into the string it reports, and where it
+# does, that is asserted. A few cannot, through upstream bugs rather than
+# anything we do, and those are marked in their case arm with the reason.
+#
+# NOT patched into working. Adding the missing flag ourselves would change the
+# binary against Cabinet's, which builds the same upstream and has the same
+# blind spot, and diverging from Cabinet to satisfy our own test is exactly
+# backwards. The checkout is still asserted at the pinned commit either way;
+# what is lost is only the ability to read it back out.
+VERIFY_REVISION=1
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SRC_ROOT="${CABINETOS_CORE_SRC:-$ROOT/.core-src}"
 OUT="${CABINETOS_CORE_OUT:-$ROOT/cores/build}"
@@ -65,6 +77,115 @@ genesis_plus_gx)
     # the hardware cannot use.
     MAKEARGS=(HAVE_CDROM=0)
     SO=genesis_plus_gx_libretro.so
+    ;;
+fceumm)
+    REPO=https://github.com/libretro/libretro-fceumm.git
+    COMMIT=236ccdfc911e84c60fea6b9d0699c2d440a8de14
+    MAKEDIR=.
+    MAKEFILE=Makefile
+    # NES.
+    MAKEARGS=()
+    ;;
+snes9x)
+    REPO=https://github.com/libretro/snes9x.git
+    COMMIT=890b5d445538fe790aa3add3d5702c80f551e0ae
+    MAKEDIR=libretro
+    MAKEFILE=Makefile
+    # SNES. Its makefile lives in libretro/, not at the root.
+    MAKEARGS=()
+    ;;
+beetle_pce_fast)
+    REPO=https://github.com/libretro/beetle-pce-fast-libretro.git
+    COMMIT=2f623abd033257b969370b73d9da982dcb0c3fdd
+    # Cannot report its revision, and it is upstream's bug rather than ours:
+    # libretro.c is a C file that uses GIT_VERSION, while the Makefile adds
+    # -DGIT_VERSION to CXXFLAGS only, so the define never reaches it and the
+    # `#ifndef GIT_VERSION / #define GIT_VERSION ""` fallback wins. Cabinet
+    # builds the same upstream and has the same blind spot.
+    VERIFY_REVISION=0
+    MAKEDIR=.
+    MAKEFILE=Makefile
+    # TurboGrafx-16 and TurboGrafx-CD, both.
+    MAKEARGS=()
+    ;;
+beetle_ngp)
+    REPO=https://github.com/libretro/beetle-ngp-libretro.git
+    COMMIT=a50d5ac288a81f2104ddf43195a4efdd15c72227
+    MAKEDIR=.
+    MAKEFILE=Makefile
+    # Neo Geo Pocket Color.
+    MAKEARGS=()
+    ;;
+beetle_vb)
+    REPO=https://github.com/libretro/beetle-vb-libretro.git
+    COMMIT=83ed42608601fb7b01d41e4f8fb2007a37b8c84e
+    MAKEDIR=.
+    MAKEFILE=Makefile
+    # Virtual Boy.
+    MAKEARGS=()
+    ;;
+beetle_saturn)
+    REPO=https://github.com/libretro/beetle-saturn-libretro.git
+    COMMIT=ed549bdac0e1a830bb794fa720e45c225a45355c
+    # Same upstream bug as beetle_pce_fast, and the same family: libretro.c is
+    # a C file using GIT_VERSION while the Makefile puts -DGIT_VERSION in
+    # CXXFLAGS. Verified, not assumed from the symptom.
+    VERIFY_REVISION=0
+    MAKEDIR=.
+    MAKEFILE=Makefile
+    # Saturn. Needs a region BIOS, which the launcher fetches.
+    MAKEARGS=()
+    ;;
+stella2014)
+    REPO=https://github.com/libretro/stella2014-libretro.git
+    COMMIT=4a7da82595d27b8df7af1ecb467a64b642a41bc9
+    MAKEDIR=.
+    MAKEFILE=Makefile
+    # Atari 2600.
+    MAKEARGS=()
+    ;;
+prosystem)
+    REPO=https://github.com/libretro/prosystem-libretro.git
+    COMMIT=8a88014287c7a01cd568067e5a557d0a2b2a051f
+    MAKEDIR=.
+    MAKEFILE=Makefile
+    # Atari 7800.
+    MAKEARGS=()
+    ;;
+opera)
+    REPO=https://github.com/libretro/opera-libretro.git
+    COMMIT=a501a278d057b952d1ad6165549c59ab178ca497
+    MAKEDIR=.
+    MAKEFILE=Makefile
+    # 3DO. Needs a BIOS.
+    MAKEARGS=()
+    ;;
+vecx)
+    REPO=https://github.com/libretro/libretro-vecx.git
+    COMMIT=8f671cc9d737f2890c3ce19e177e2984dcae121f
+    MAKEDIR=.
+    MAKEFILE=Makefile
+    # Vectrex. HAS_GPU=0 is the lever, and it is NOT a recompiler: the
+    # Makefile defaults HAS_GPU=1 off macOS, which builds a GLES2 path this
+    # frontend cannot drive. Cabinet passes it on both Apple platforms, so this
+    # matches rather than diverges.
+    MAKEARGS=("HAS_GPU=0")
+    ;;
+mame2003_plus)
+    REPO=https://github.com/libretro/mame2003-plus-libretro.git
+    COMMIT=21256d24120b04916c5197d95b757635ca880fd9
+    MAKEDIR=.
+    MAKEFILE=Makefile
+    # Arcade, the MAME 2003-Plus half of it.
+    MAKEARGS=()
+    ;;
+fbneo_libretro)
+    REPO=https://github.com/libretro/FBNeo.git
+    COMMIT=2444fbe3ddab193b6c0e6f2d39b6dde041fbee4c
+    MAKEDIR=src/burner/libretro
+    MAKEFILE=Makefile
+    # Arcade, the FinalBurn Neo half. Its makefile is four directories down.
+    MAKEARGS=()
     ;;
 *)
     echo "unknown core: $CORE" >&2
@@ -113,9 +234,33 @@ podman run --rm -v "$SRC":/src:Z -w /src \
     make -C "$MAKEDIR" -f "$MAKEFILE" platform=unix "${MAKEARGS[@]}" -j"$(nproc)"
 
 mkdir -p "$OUT"
-FOUND=$(find "$SRC" -name "$SO" -print -quit)
-[ -n "$FOUND" ] || { echo "no $SO produced" >&2; exit 1; }
-cp "$FOUND" "$OUT/$SO"
+
+# DISCOVER the .so rather than being told its name, and file it under the
+# MANIFEST core name.
+#
+# Upstream output names do not match manifest names and there is no rule to it:
+# beetle_ngp builds mednafen_ngp_libretro.so, beetle_pce_fast builds
+# mednafen_pce_fast_libretro.so. Hand-maintaining that list for twenty-one cores
+# is a table that goes stale, and the frontend would need a second copy of it to
+# find anything.
+#
+# So the artifact is named after the core as the manifest knows it — the same
+# identity the pins, the emulator tags and catalog.cpp already use — and this
+# script finds whatever was actually produced. One rule, no mapping.
+mapfile -t BUILT < <(find "$SRC" -name '*_libretro.so' -newer "$SRC/.git" 2>/dev/null)
+if [ "${#BUILT[@]}" -eq 0 ]; then
+    mapfile -t BUILT < <(find "$SRC" -name '*_libretro.so')
+fi
+[ "${#BUILT[@]}" -ne 0 ] || { echo "no *_libretro.so was produced" >&2; exit 1; }
+if [ "${#BUILT[@]}" -gt 1 ]; then
+    echo "ambiguous: the build produced ${#BUILT[@]} cores" >&2
+    printf '  %s\n' "${BUILT[@]}" >&2
+    exit 1
+fi
+SO="${CORE}_libretro.so"
+UPSTREAM=$(basename "${BUILT[0]}")
+[ "$UPSTREAM" = "$SO" ] || echo "built $UPSTREAM, filing it as $SO"
+cp "${BUILT[0]}" "$OUT/$SO"
 echo "wrote $OUT/$SO ($(du -h "$OUT/$SO" | cut -f1))"
 
 # Asserting the CHECKOUT is at the pinned commit proves what went in. This
@@ -124,8 +269,15 @@ echo "wrote $OUT/$SO ($(du -h "$OUT/$SO" | cut -f1))"
 # inside the builder because the binary is linked against Fedora 44's glibc and
 # the host running this script need not have it.
 echo "verifying $SO"
+if [ "$VERIFY_REVISION" -eq 1 ]; then
+    EXPECT="$COMMIT"
+else
+    EXPECT=""
+    echo "note: this core cannot report its revision — see its case arm"
+fi
 podman run --rm -v "$ROOT":/repo:Z -v "$OUT":/out:Z -w /repo "$BUILDER" \
     sh -c 'gcc -O2 -Wall -Wextra -o /tmp/core-info tools/core-info.c -ldl \
-           && exec /tmp/core-info "/out/$1" "$2"' _ "$SO" "$COMMIT"
+           && if [ -n "$2" ]; then exec /tmp/core-info "/out/$1" "$2"; \
+              else exec /tmp/core-info "/out/$1"; fi' _ "$SO" "$EXPECT"
 
 echo "sha256      $(sha256sum "$OUT/$SO" | cut -d' ' -f1)"

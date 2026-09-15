@@ -61,6 +61,18 @@ jobs:
         core:
           - gambatte
           - genesis_plus_gx
+          - fceumm
+          - snes9x
+          - beetle_pce_fast
+          - beetle_ngp
+          - beetle_vb
+          - beetle_saturn
+          - stella2014
+          - prosystem
+          - opera
+          - vecx
+          - mame2003_plus
+          - fbneo_libretro
 
     steps:
       - name: Checkout
