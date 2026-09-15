@@ -75,7 +75,25 @@ struct Prepared {
 
 // `validExtensions` is the core's own, pipe-separated, as libretro reports it:
 // "gb|gbc|dmg". `blockExtract` is the core's own flag.
+//
+// In-memory, so COVERS-SIZED inputs only. A ROM goes through prepareFile.
 bool prepare(const std::vector<uint8_t>& downloaded, const std::string& validExtensions,
              bool blockExtract, Prepared* out, std::string* err);
+
+// The same decision made about a file already on disk, without reading it into
+// memory. This is the one ROMs use: the reference library holds a 1.78 GB
+// arcade set, and nothing about it should ever be resident.
+Kind sniffFile(const std::string& path, std::string* err = nullptr);
+
+// Unpacks an archive into `outDir`, streaming each member through a buffer, and
+// reports which file the core should be pointed at. Every member is written —
+// a .cue is useless without its .bin.
+//
+// Returns the path to hand the core in `primaryPath`. When the file is not a
+// container, or the core reads it as it stands, `primaryPath` is the input and
+// nothing is written.
+bool prepareFile(const std::string& downloadedPath, const std::string& outDir,
+                 const std::string& validExtensions, bool blockExtract,
+                 std::string* primaryPath, Kind* kindOut, std::string* err);
 
 }  // namespace romfile
