@@ -1359,9 +1359,30 @@ int main(int argc, char** argv) {
         enterFocus();
     };
 
+    // WHO OWNS THE INPUT, asked once per event rather than decided again at
+    // every call site.
+    //
+    // docs/PROJECT.md states the rule architecturally: while a game runs the
+    // controller belongs to the core exclusively; while an overlay is open it
+    // belongs to the UI; never both. It also says to implement the RULE rather
+    // than the routing, because "any design where a button can mean two things
+    // at once is the same bug" — the one reported from real hardware as
+    // "controllers work on the homescreen but in game b exits the game".
+    //
+    // This was exactly that bug: arrow keys moved the Tetris piece AND shifted
+    // focus on the Home screen behind it, so leaving the game landed somewhere
+    // nobody chose. Found by someone actually playing it.
+    enum class InputOwner { Keyboard, Game, UI };
+    auto inputOwner = [&]() {
+        if (keyboard.isOpen()) return InputOwner::Keyboard;   // an overlay wins
+        if (playing) return InputOwner::Game;
+        return InputOwner::UI;
+    };
+
     while (running) {
         SDL_Event e;
         while (SDL_PollEvent(&e)) {
+            const InputOwner owner = inputOwner();
             switch (e.type) {
                 case SDL_EVENT_QUIT:
                     running = false;
@@ -1417,6 +1438,7 @@ int main(int argc, char** argv) {
                         std::fprintf(stderr, "[state] load %s\n",
                                      (!st.empty() && c.loadState(st)) ? "ok" : "FAILED");
                     }
+                    if (owner != InputOwner::UI) break;
                     if (e.key.key == SDLK_LEFT) moveFocus(-1);
                     if (e.key.key == SDLK_RIGHT) moveFocus(+1);
                     if (e.key.key == SDLK_UP) moveRow(-1);
@@ -1458,7 +1480,8 @@ int main(int argc, char** argv) {
                     }
                     if (e.gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_LEFT) moveFocus(-1);
                     if (e.gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_RIGHT) moveFocus(+1);
-                    if (e.gbutton.button == SDL_GAMEPAD_BUTTON_SOUTH && !playing) {
+                    if (owner != InputOwner::UI) break;
+                    if (e.gbutton.button == SDL_GAMEPAD_BUTTON_SOUTH) {
                         if (const Card* c = cardAt(focusRow, focusSlot)) launchById(c->id);
                         else if (heroIndex >= 0) launchById(cards[heroIndex].id);
                     }

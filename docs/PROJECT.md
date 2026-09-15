@@ -865,6 +865,19 @@ CabinetOS has no focus engine handed to it, so it must implement both halves —
 but it must implement the *rule*, not just the routing. Any design where a
 button can mean two things at once is the same bug.
 
+**And CabinetOS made it anyway, 2026-09-14.** The first game launched from the
+library was played with the arrow keys, and those arrows moved the Tetris piece
+*and* shifted focus on the Home screen behind it — so leaving the game would
+have landed on something nobody chose. Same bug, different platform, found the
+same way: by someone actually playing it rather than by reading the code.
+
+The fix is one `InputOwner` asked once per event — Keyboard, Game, or UI — and
+not a `!playing` check added at each call site, which is the shape this section
+warns against. Worth noting *why* the bug survived a careful read: the core's
+input is polled per frame from `SDL_GetKeyboardState`, while the UI's comes from
+the event queue. Two different mechanisms, so nothing in either one looks wrong
+on its own, and only the rule catches it.
+
 ---
 
 ## Controls: what CabinetOS inherits, and what it cannot
