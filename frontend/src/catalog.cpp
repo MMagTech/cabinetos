@@ -1,6 +1,9 @@
 #include "catalog.h"
 
+#include <sys/stat.h>
+
 #include <cstring>
+#include <string>
 
 namespace catalog {
 namespace {
@@ -106,7 +109,30 @@ const char* emulatorTag(const char* core) {
     return nullptr;
 }
 
-Coverage coverageFor(const romm::Platform& p) { return lookup(p.slug, p.fsSlug); }
-Coverage coverageFor(const romm::Game& g) { return lookup(g.platformSlug, g.platformFsSlug); }
+namespace {
+std::string gCoreDir = "cores/build";
+
+// Downgrades a Playable answer to NotInstalled when the .so is not on this
+// machine. Kept separate from the table because the table is a fact about
+// Cabinet's manifest and this is a fact about this console today.
+Coverage withInstalled(Coverage c) {
+    if (c.support != Support::Playable || !c.core) return c;
+    const std::string path = gCoreDir + "/" + c.core + "_libretro.so";
+    struct stat st;
+    if (::stat(path.c_str(), &st) == 0 && st.st_size > 0) return c;
+    c.support = Support::NotInstalled;
+    c.reason = "the core for this system is not built on this console yet";
+    return c;
+}
+}  // namespace
+
+void setCoreDirectory(const char* dir) { if (dir) gCoreDir = dir; }
+
+Coverage coverageFor(const romm::Platform& p) {
+    return withInstalled(lookup(p.slug, p.fsSlug));
+}
+Coverage coverageFor(const romm::Game& g) {
+    return withInstalled(lookup(g.platformSlug, g.platformFsSlug));
+}
 
 }  // namespace catalog
