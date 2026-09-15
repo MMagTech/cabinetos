@@ -35,6 +35,7 @@
 #include "image.h"
 #include "keyboard.h"
 #include "catalog.h"
+#include "romfile.h"
 #include "romm.h"
 #include "text.h"
 #include "ui.h"
@@ -322,6 +323,61 @@ static std::string rommTokenPath() {
     return std::string(home ? home : ".") + "/.config/cabinetos/romm.json";
 }
 
+// Downloads one ROM and says what a core would actually be given.
+static int romProbe(const char* address, int romId, const char* validExts) {
+    romm::Client client;
+    std::string err;
+    if (!client.setAddress(address, &err)) {
+        std::fprintf(stderr, "[romm] %s\n", err.c_str());
+        return 1;
+    }
+    if (!client.loadToken(rommTokenPath())) {
+        std::fprintf(stderr, "[romm] no token\n");
+        return 1;
+    }
+
+    std::vector<romm::Game> all;
+    if (!client.fetchGames(0, &all, &err)) {
+        std::fprintf(stderr, "[romm] %s\n", err.c_str());
+        return 1;
+    }
+    const romm::Game* g = nullptr;
+    for (const auto& x : all) if (x.id == romId) { g = &x; break; }
+    if (!g) { std::fprintf(stderr, "[romm] no rom with id %d\n", romId); return 1; }
+
+    std::printf("game        %s\n", g->name.c_str());
+    std::printf("platform    %s\n", g->platformName.c_str());
+    std::printf("file        %s (%lld bytes)\n", g->fsName.c_str(),
+                static_cast<long long>(g->sizeBytes));
+
+    const std::string path = "/api/roms/" + std::to_string(g->id) + "/content/" + g->fsName;
+    std::vector<uint8_t> bytes = client.fetchBytes(path);
+    if (bytes.empty()) { std::fprintf(stderr, "[romm] download returned nothing\n"); return 1; }
+    std::printf("downloaded  %zu bytes\n", bytes.size());
+
+    // What it IS, from the bytes — not from the name it happens to have.
+    const romfile::Kind k = romfile::sniff(bytes);
+    std::printf("sniffed     %s\n", romfile::kindName(k));
+
+    romfile::Prepared prep;
+    if (!romfile::prepare(bytes, validExts, false, &prep, &err)) {
+        std::fprintf(stderr, "[romfile] %s\n", err.c_str());
+        return 1;
+    }
+    if (prep.passThrough) {
+        std::printf("decision    hand it over untouched\n");
+        return 0;
+    }
+    std::printf("decision    unpacked %zu file(s) from the %s\n",
+                prep.members.size(), romfile::kindName(prep.kind));
+    for (size_t i = 0; i < prep.members.size(); ++i) {
+        std::printf("            %s %-44s %zu bytes\n",
+                    static_cast<int>(i) == prep.primary ? "->" : "  ",
+                    prep.members[i].name.c_str(), prep.members[i].bytes.size());
+    }
+    return 0;
+}
+
 static int rommProbe(const char* address, bool allowPairing) {
     romm::Client client;
     std::string err;
@@ -520,6 +576,11 @@ int main(int argc, char** argv) {
     // exits without opening a window, which is what a headless machine and a
     // CI job can do.
     bool rommProbeMode = false;
+    // Downloads one ROM and reports what came back and what a core would be
+    // handed. The formats people keep ROMs in are not uniform and this is how
+    // that gets checked against a real server rather than assumed.
+    int romProbeId = 0;
+    const char* romProbeExts = "gb|gbc|dmg";
     for (int i = 1; i < argc; ++i) {
         if (SDL_strcmp(argv[i], "--screenshot") == 0 && i + 1 < argc) {
             shotMode = true;
@@ -543,6 +604,11 @@ int main(int argc, char** argv) {
             corePath = argv[++i];
         } else if (SDL_strcmp(argv[i], "--romm") == 0 && i + 1 < argc) {
             rommAddress = argv[++i];
+        } else if (SDL_strcmp(argv[i], "--rom-probe") == 0 && i + 1 < argc) {
+            romProbeId = SDL_atoi(argv[++i]);
+            rommProbeMode = true;
+        } else if (SDL_strcmp(argv[i], "--rom-exts") == 0 && i + 1 < argc) {
+            romProbeExts = argv[++i];
         } else if (SDL_strcmp(argv[i], "--romm-probe") == 0) {
             rommProbeMode = true;
         } else if (SDL_strcmp(argv[i], "--romm-pair") == 0) {
@@ -568,6 +634,8 @@ int main(int argc, char** argv) {
     // Runs before SDL, deliberately. This needs no window, no GL and no
     // controller, and on a headless machine it must work anyway — the whole
     // point is to test the server conversation on its own.
+    if (rommAddress && romProbeId > 0)
+        return romProbe(rommAddress, romProbeId, romProbeExts);
     if (rommAddress && rommProbeMode) return rommProbe(rommAddress, rommPair);
 
     std::signal(SIGUSR1, requestCapture);
