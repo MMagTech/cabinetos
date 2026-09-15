@@ -18,9 +18,18 @@ constexpr long kTimeoutSec = 30;
 // Read-only, and no more than is needed. Anything that writes is a separate
 // request made when something actually needs to write, so a token that leaks
 // cannot modify the library.
+//
+// firmware.read is NOT optional and was left out of the first pairing by
+// mistake. About half the systems CabinetOS ships cannot start a game without
+// a BIOS — Sega CD, Saturn, PlayStation, Dreamcast, 3DO among them — and
+// without this scope the console cannot fetch one, so those systems fail with
+// a message about a file the person has no way to supply. "Ask again when
+// something needs it" is the right instinct and was the wrong call here: this
+// is a requirement, not an edge case.
 const char* kScopes[] = {
     "me.read", "platforms.read", "roms.read",
     "assets.read", "roms.user.read", "collections.read",
+    "firmware.read",
 };
 
 size_t sink(char* p, size_t sz, size_t n, void* user) {
