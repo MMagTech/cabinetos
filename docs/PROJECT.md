@@ -2591,6 +2591,51 @@ running it with save states is real. Everything between RomM and that point —
 downloading, unzipping, where a downloaded ROM lives, what evicts it, choosing
 the core from the platform, and reaching any of it from the UI — does not exist.
 
+#### Downloads stream, and the console keeps drawing
+
+**Built and measured 2026-09-14.** Two things were wrong with the first working
+launch, and only one of them was the obvious one.
+
+**It held the whole ROM in memory.** Fine for a 19 KB Game Boy file; the same
+library holds a 1.78 GB arcade set, and a 4 GB console does not get to keep one
+of those in a `std::vector`. `Client::fetchToFile` streams to disk through a
+buffer and never holds the body.
+
+**And it downloaded on the frame thread**, which is the worse of the two because
+it is the half a person experiences: press a button on a large game and the
+console freezes solid — no animation, no progress, no way to change your mind —
+for as long as a few gigabytes takes. A worker does it now; the frame loop reads
+an atomic snapshot and keeps drawing. `romm::Client` was deliberately built
+synchronous so callers could do this, the same way `ImageCache` already did.
+
+Details that are not incidental:
+
+- **Written to `<name>.part` and renamed only on success**, so an interrupted
+  download can never be mistaken later for a complete ROM.
+- **No whole-transfer timeout.** A deadline is wrong for a file that can
+  legitimately take twenty minutes on a slow link; a *stall* is caught by a
+  low-speed limit instead.
+- **Escape cancels the download rather than quitting.** Three gigabytes is a
+  long time to be unable to change your mind. The progress callback returning
+  false is what reaches a transfer already in flight.
+- **A progress bar only when the server declared a size.** It often does not,
+  and a bar that invents its own total is a lie — the honest fallback is to show
+  what has arrived and draw no bar.
+- **An archive is untrusted input.** A member named `../../etc/thing` is reduced
+  to its last path component, so it lands inside the cache directory or nowhere.
+
+**Measured, streaming a 112 MB Sega CD image:** the file arrived complete, the
+`.chd` was correctly passed through rather than unpacked, Genesis Plus GX loaded
+it, and the refusal was `Unable to open CD BIOS: "system/bios_CD_U.bin"` — a
+clear, actionable message rather than a silent failure. **Sega CD needs firmware
+from RomM**, which is a scope this console's token does not currently hold.
+
+**What this still does not do.** A ROM already on disk at the size RomM reported
+is reused rather than re-fetched, which is the crude half of *cached versus
+kept*. **Nothing evicts anything.** A library of 1644 games at these sizes will
+not fit on a console, so the disk fills and stays full. That is the next thing
+this needs.
+
 #### A platform is not its slug, and "Arcade" is two platforms
 
 **Measured against the live server 2026-09-14**, on RomM 5.1.0 with read-only

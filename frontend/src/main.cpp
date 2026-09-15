@@ -20,7 +20,11 @@
 
 #include <SDL3/SDL.h>
 
+#include <sys/stat.h>
+
+#include <atomic>
 #include <csignal>
+#include <thread>
 
 #include <unistd.h>
 
@@ -193,81 +197,135 @@ const SampleEntry kSampleLibrary[] = {
 
 }  // namespace
 
-// Fetches a game from RomM and gets it into a shape a core can open.
+// A launch in progress, off the frame thread.
 //
-// This is the join everything so far was built either side of, and the reason
-// it is one function is that every step depends on the one before it deciding
-// something: which core, from the platform; whether to unpack, from the core;
-// where the file goes, from whether the core wants a path or a buffer.
+// Downloading on the thread that draws is what the old planLaunch did, and it
+// was fine only because Tetris is 19 KB. Press Enter on the reference library's
+// 1.78 GB arcade set and the console freezes solid — no animation, nothing to
+// look at, no way to cancel — for as long as a few gigabytes takes. That is
+// worse than the memory cost, because it is the part a person experiences.
 //
-// It writes to disk rather than keeping bytes in memory. Partly because a
-// fullpath core needs a real file, and partly because a ROM is not a cover: the
-// reference library holds a 1.78 GB arcade set, and a console with 4 GB of RAM
-// does not get to hold one of those in a std::vector. This still downloads into
-// memory first, which is WRONG for anything large and is the next thing to fix
-// — see the note in docs/PROJECT.md.
-struct LaunchPlan {
-    std::string corePath;   // the .so to load
-    std::string romPath;    // what to hand it
+// So a worker does it, the frame loop reads a snapshot every frame, and the
+// bytes go straight to disk. The client was deliberately built synchronous so
+// that callers could do exactly this, the same way ImageCache already does.
+struct LaunchJob {
+    enum class Stage { Idle, Downloading, Unpacking, Ready, Failed };
+
+    std::atomic<Stage> stage{Stage::Idle};
+    std::atomic<int64_t> got{0};
+    std::atomic<int64_t> total{0};
+    std::atomic<bool> cancel{false};
+
+    // Written by the worker before it sets Ready or Failed, read by the frame
+    // thread only after it observes one of those. The atomic stage is the
+    // handover.
+    std::string romPath;
     std::string coreName;
+    std::string corePath;
+    std::string title;
+    std::string message;
+
+    std::thread worker;
+
+    ~LaunchJob() { stop(); }
+    void stop() {
+        cancel = true;
+        if (worker.joinable()) worker.join();
+    }
+    bool busy() const {
+        const Stage st = stage.load();
+        return st == Stage::Downloading || st == Stage::Unpacking;
+    }
 };
 
-static bool planLaunch(romm::Client& client, const romm::Game& game,
-                       const std::string& coreDir, const std::string& cacheDir,
-                       LaunchPlan* plan, std::string* err) {
+// Starts one. Returns false if the game cannot be played here at all, which is
+// worth saying immediately rather than after a download.
+static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& game,
+                        const std::string& coreDir, const std::string& cacheDir,
+                        std::string* err) {
     const catalog::Coverage cov = catalog::coverageFor(game);
     if (cov.support != catalog::Support::Playable || !cov.core) {
-        *err = std::string(game.platformName) + ": " +
-               (cov.reason ? cov.reason : "not playable here");
+        *err = game.platformName + ": " + (cov.reason ? cov.reason : "not playable here");
         return false;
     }
-    plan->coreName = cov.core;
-    plan->corePath = coreDir + "/" + cov.core + "_libretro.so";
 
-    // Read the core's own answers before deciding anything about the file.
-    // Which extensions it takes and whether it wants archives opened are facts
-    // about the core, and the platform cannot supply either.
+    job.stop();
+    job.cancel = false;
+    job.got = 0;
+    job.total = 0;
+    job.title = game.name.empty() ? game.fsName : game.name;
+    job.coreName = cov.core;
+    job.corePath = coreDir + "/" + cov.core + "_libretro.so";
+    job.romPath.clear();
+    job.message.clear();
+    job.stage = LaunchJob::Stage::Downloading;
+
+    // The core is loaded here, on the frame thread, before the worker starts:
+    // it is cheap, it is the thing that decides whether the archive gets
+    // opened, and a core that will not load should fail now rather than after
+    // three gigabytes have been fetched.
     cab::Core& core = cab::Core::shared();
-    if (!core.load(plan->corePath)) {
-        *err = "core " + plan->coreName + ": " + core.error();
+    if (!core.load(job.corePath)) {
+        *err = "core " + job.coreName + ": " + core.error();
+        job.stage = LaunchJob::Stage::Idle;
         return false;
     }
     const std::string validExts = core.validExtensions();
     const bool blockExtract = core.blockExtract();
 
-    const std::string path =
-        "/api/roms/" + std::to_string(game.id) + "/content/" + game.fsName;
-    std::vector<uint8_t> bytes = client.fetchBytes(path);
-    if (bytes.empty()) { *err = "the download returned nothing"; return false; }
+    const int id = game.id;
+    const std::string fsName = game.fsName;
+    const int64_t expectedSize = game.sizeBytes;
+    job.worker = std::thread([&job, &client, id, fsName, cacheDir, validExts, blockExtract,
+                              expectedSize]() {
+        const std::string dir = cacheDir + "/" + std::to_string(id);
+        SDL_CreateDirectory(cacheDir.c_str());
+        SDL_CreateDirectory(dir.c_str());
+        const std::string dest = dir + "/" + fsName;
 
-    romfile::Prepared prep;
-    if (!romfile::prepare(bytes, validExts, blockExtract, &prep, err)) return false;
+        // Already here and the right size? Then it is the same ROM: RomM told
+        // us how big it is, and a partial download was never renamed into
+        // place. Re-fetching 112 MB to play the same game twice is not a
+        // caching subtlety, it is just wrong.
+        //
+        // This is the crude half of what PROJECT.md calls cached-versus-kept.
+        // Nothing evicts any of it yet, so the disk fills — which is the next
+        // thing this needs and is recorded as such.
+        bool haveIt = false;
+        if (struct stat st; expectedSize > 0 && ::stat(dest.c_str(), &st) == 0)
+            haveIt = st.st_size == expectedSize;
 
-    const std::string dir = cacheDir + "/" + std::to_string(game.id);
-    SDL_CreateDirectory(cacheDir.c_str());
-    SDL_CreateDirectory(dir.c_str());
-
-    auto writeFile = [&](const std::string& name, const std::vector<uint8_t>& data) {
-        const std::string full = dir + "/" + name;
-        FILE* f = std::fopen(full.c_str(), "wb");
-        if (!f) return std::string();
-        const bool ok = std::fwrite(data.data(), 1, data.size(), f) == data.size();
-        std::fclose(f);
-        return ok ? full : std::string();
-    };
-
-    if (prep.passThrough) {
-        plan->romPath = writeFile(game.fsName, bytes);
-    } else {
-        // EVERY member, not just the one the core will be pointed at: a .cue
-        // is useless without the .bin beside it, and an .m3u names discs it
-        // expects to find as siblings.
-        for (size_t i = 0; i < prep.members.size(); ++i) {
-            const std::string written = writeFile(prep.members[i].name, prep.members[i].bytes);
-            if (static_cast<int>(i) == prep.primary) plan->romPath = written;
+        std::string err;
+        if (!haveIt) {
+            const std::string path =
+                "/api/roms/" + std::to_string(id) + "/content/" + fsName;
+            const bool ok = client.fetchToFile(path, dest,
+                [&job](int64_t got, int64_t total) {
+                    job.got = got;
+                    job.total = total;
+                    return !job.cancel.load();
+                }, &err);
+            if (!ok) {
+                job.message = err;
+                job.stage = LaunchJob::Stage::Failed;
+                return;
+            }
+        } else {
+            std::fprintf(stderr, "[launch] already downloaded, %lld bytes\n",
+                         static_cast<long long>(expectedSize));
         }
-    }
-    if (plan->romPath.empty()) { *err = "could not write the ROM to " + dir; return false; }
+
+        job.stage = LaunchJob::Stage::Unpacking;
+        std::string primary;
+        romfile::Kind kind = romfile::Kind::Plain;
+        if (!romfile::prepareFile(dest, dir, validExts, blockExtract, &primary, &kind, &err)) {
+            job.message = err;
+            job.stage = LaunchJob::Stage::Failed;
+            return;
+        }
+        job.romPath = primary;
+        job.stage = LaunchJob::Stage::Ready;
+    });
     return true;
 }
 
@@ -1285,33 +1343,49 @@ int main(int argc, char** argv) {
 
 
     // Starting a game from the UI. Everything it needs was decided elsewhere:
-    // the catalog picks the core, the core decides whether to unpack, and
-    // planLaunch writes what comes out where the core can open it.
+    // the catalog picks the core, the core decides whether its archive gets
+    // opened, and the worker puts what comes out where the core can open it.
+    LaunchJob launchJob;
     auto launchById = [&](int romId) -> bool {
+        if (launchJob.busy()) return false;    // one at a time
         const romm::Game* g = nullptr;
         for (const auto& x : games) if (x.id == romId) { g = &x; break; }
         if (!g) { std::fprintf(stderr, "[launch] no game with id %d\n", romId); return false; }
 
-        std::fprintf(stderr, "[launch] %s (%s)\n", g->name.c_str(), g->platformName.c_str());
-        LaunchPlan plan;
         std::string lerr;
-        if (!planLaunch(liveClient, *g, coreDir, romCacheDir, &plan, &lerr)) {
+        if (!beginLaunch(launchJob, liveClient, *g, coreDir, romCacheDir, &lerr)) {
             std::fprintf(stderr, "[launch] %s\n", lerr.c_str());
             return false;
         }
-        std::fprintf(stderr, "[launch] core %s, rom %s\n", plan.coreName.c_str(),
-                     plan.romPath.c_str());
+        std::fprintf(stderr, "[launch] %s (%s) via %s\n", g->name.c_str(),
+                     g->platformName.c_str(), launchJob.coreName.c_str());
+        return true;
+    };
+
+    // Picks up a finished job. Loading the game happens HERE, on the frame
+    // thread, because the core is not thread-safe and the worker only ever
+    // moved bytes.
+    auto pumpLaunch = [&]() {
+        const LaunchJob::Stage st = launchJob.stage.load();
+        if (st == LaunchJob::Stage::Failed) {
+            std::fprintf(stderr, "[launch] failed: %s\n", launchJob.message.c_str());
+            launchJob.stop();
+            launchJob.stage = LaunchJob::Stage::Idle;
+            return;
+        }
+        if (st != LaunchJob::Stage::Ready) return;
+        launchJob.stop();
+        launchJob.stage = LaunchJob::Stage::Idle;
 
         cab::Core& core = cab::Core::shared();
         const std::string saveDir = std::string(romCacheDir) + "/saves";
         SDL_CreateDirectory(saveDir.c_str());
-        if (!core.loadGame(plan.romPath, "system", saveDir)) {
+        if (!core.loadGame(launchJob.romPath, "system", saveDir)) {
             std::fprintf(stderr, "[launch] %s\n", core.error().c_str());
-            return false;
+            return;
         }
         std::fprintf(stderr, "[launch] running %s\n", core.coreName().c_str());
         playing = true;
-        return true;
     };
 
     // Remembered focus per row, which is the behaviour tvOS gives free and the
@@ -1417,7 +1491,13 @@ int main(int argc, char** argv) {
                         }
                         break;
                     }
-                    if (e.key.key == SDLK_ESCAPE) running = false;
+                    if (e.key.key == SDLK_ESCAPE) {
+                        // A download is the one thing Escape should interrupt
+                        // rather than quit past: three gigabytes is a long time
+                        // to be unable to change your mind.
+                        if (launchJob.busy()) launchJob.cancel = true;
+                        else running = false;
+                    }
                     if (playing && e.key.key == SDLK_F5) {
                         cab::Core& c = cab::Core::shared();
                         std::vector<uint8_t> st;
@@ -1588,6 +1668,7 @@ int main(int argc, char** argv) {
             }
         }
 
+        pumpLaunch();
         images.pump(dt);
         for (auto& c : cards) {
             c.focus.tick(dt);
@@ -1940,6 +2021,59 @@ int main(int argc, char** argv) {
         }  // end of the shelf branch
 
         renderer.presentScene();
+
+        // ---- A download in progress ----------------------------------------
+        //
+        // Drawn after presentScene because it is glass, and over everything
+        // because it is the only thing that matters while it is up. Not a modal
+        // — Home stays visible and animating behind it, which is the difference
+        // between "working" and "hung".
+        if (launchJob.busy()) {
+            const int64_t got = launchJob.got.load();
+            const int64_t total = launchJob.total.load();
+            const bool unpacking = launchJob.stage.load() == LaunchJob::Stage::Unpacking;
+
+            const float panelW = 900.0f, panelH = 190.0f;
+            const float px = (ui::kCanvasWidth - panelW) * 0.5f;
+            const float py = (ui::kCanvasHeight - panelH) * 0.5f;
+            renderer.draw(ui::Rect{0, 0, ui::kCanvasWidth, ui::kCanvasHeight, 0,
+                                   ui::Color::black(0.45f)});
+            renderer.drawGlass(ui::Rect{px, py, panelW, panelH, 24.0f, ui::Color::white(0)},
+                               6.0f, ui::Color::black(0.22f));
+
+            text.draw(renderer, launchJob.title, px + 32.0f,
+                      py + 28.0f + text.ascent(ui::TextStyle::Title3, sc),
+                      ui::TextStyle::Title3, ui::Color::white(1.0f), sc);
+
+            // A bar only when the server said how big it is. It often does not,
+            // and a progress bar that invents its own total is a lie — so the
+            // honest fallback is to show what has arrived and no bar at all.
+            const float barY = py + panelH - 62.0f;
+            const float barW = panelW - 64.0f;
+            if (!unpacking && total > 0) {
+                const float frac = std::clamp(static_cast<float>(got) /
+                                              static_cast<float>(total), 0.0f, 1.0f);
+                renderer.draw(ui::Rect{px + 32.0f, barY, barW, 8.0f, 4.0f,
+                                       ui::Color::white(0.18f)});
+                renderer.draw(ui::Rect{px + 32.0f, barY, barW * frac, 8.0f, 4.0f,
+                                       ui::palette::kFocusRim});
+            }
+
+            char line[160];
+            if (unpacking) {
+                std::snprintf(line, sizeof line, "Unpacking\xE2\x80\xA6");
+            } else if (total > 0) {
+                std::snprintf(line, sizeof line, "%.0f of %.0f MB",
+                              static_cast<double>(got) / 1e6,
+                              static_cast<double>(total) / 1e6);
+            } else {
+                std::snprintf(line, sizeof line, "%.0f MB",
+                              static_cast<double>(got) / 1e6);
+            }
+            text.draw(renderer, line, px + 32.0f,
+                      barY + 28.0f + text.ascent(ui::TextStyle::Callout, sc),
+                      ui::TextStyle::Callout, ui::Color::white(0.60f), sc);
+        }
 
         // ---- The hero's glass, which can only be drawn now ------------------
         //

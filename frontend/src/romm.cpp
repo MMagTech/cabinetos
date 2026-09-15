@@ -444,6 +444,101 @@ bool Client::fetchFiltered(const char* filter, int limit, std::vector<Game>* out
     return true;
 }
 
+namespace {
+struct FileSink {
+    FILE* f = nullptr;
+    const Client::ProgressFn* progress = nullptr;
+    int64_t got = 0;
+    int64_t total = 0;
+    bool aborted = false;
+};
+
+size_t writeToFile(char* p, size_t sz, size_t n, void* user) {
+    auto* s = static_cast<FileSink*>(user);
+    const size_t bytes = sz * n;
+    if (std::fwrite(p, 1, bytes, s->f) != bytes) return 0;   // short write aborts curl
+    s->got += static_cast<int64_t>(bytes);
+    return bytes;
+}
+
+int reportProgress(void* user, curl_off_t dlTotal, curl_off_t dlNow, curl_off_t, curl_off_t) {
+    auto* s = static_cast<FileSink*>(user);
+    s->total = dlTotal;
+    if (s->progress && *s->progress) {
+        // A non-zero return aborts the transfer, which is what makes cancelling
+        // a three gigabyte download possible at all.
+        if (!(*s->progress)(dlNow, dlTotal)) { s->aborted = true; return 1; }
+    }
+    return 0;
+}
+}  // namespace
+
+bool Client::fetchToFile(const std::string& path, const std::string& destPath,
+                         const ProgressFn& onProgress, std::string* err) const {
+    CURL* c = curl_easy_init();
+    if (!c) { if (err) *err = "curl init failed"; return false; }
+
+    // Written to a neighbouring .part and renamed only on success, so an
+    // interrupted download can never be mistaken for a complete ROM by
+    // whatever looks in this directory next.
+    const std::string partPath = destPath + ".part";
+    FileSink sink;
+    sink.f = std::fopen(partPath.c_str(), "wb");
+    if (!sink.f) {
+        if (err) *err = "cannot write " + partPath;
+        curl_easy_cleanup(c);
+        return false;
+    }
+    sink.progress = &onProgress;
+
+    const std::string url = encodeUrl(base_ + path);
+    curl_slist* hdrs = nullptr;
+    if (!token_.empty())
+        hdrs = curl_slist_append(hdrs, ("Authorization: Bearer " + token_).c_str());
+
+    curl_easy_setopt(c, CURLOPT_URL, url.c_str());
+    curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, writeToFile);
+    curl_easy_setopt(c, CURLOPT_WRITEDATA, &sink);
+    curl_easy_setopt(c, CURLOPT_NOPROGRESS, 0L);
+    curl_easy_setopt(c, CURLOPT_XFERINFOFUNCTION, reportProgress);
+    curl_easy_setopt(c, CURLOPT_XFERINFODATA, &sink);
+    curl_easy_setopt(c, CURLOPT_CONNECTTIMEOUT, kConnectTimeoutSec);
+    // NO CURLOPT_TIMEOUT. A whole-transfer deadline is wrong for a file that
+    // can legitimately take twenty minutes on a slow link; a stall is caught by
+    // the low-speed limit below instead.
+    curl_easy_setopt(c, CURLOPT_LOW_SPEED_LIMIT, 1024L);
+    curl_easy_setopt(c, CURLOPT_LOW_SPEED_TIME, 60L);
+    curl_easy_setopt(c, CURLOPT_FOLLOWLOCATION, 1L);
+    if (hdrs) curl_easy_setopt(c, CURLOPT_HTTPHEADER, hdrs);
+
+    const CURLcode rc = curl_easy_perform(c);
+    long status = 0;
+    curl_easy_getinfo(c, CURLINFO_RESPONSE_CODE, &status);
+    std::fclose(sink.f);
+    if (hdrs) curl_slist_free_all(hdrs);
+    curl_easy_cleanup(c);
+
+    if (sink.aborted) {
+        std::remove(partPath.c_str());
+        if (err) *err = "cancelled";
+        return false;
+    }
+    if (rc != CURLE_OK || status >= 400) {
+        std::remove(partPath.c_str());
+        if (err) {
+            *err = rc != CURLE_OK ? curl_easy_strerror(rc)
+                                  : "HTTP " + std::to_string(status);
+        }
+        return false;
+    }
+    if (std::rename(partPath.c_str(), destPath.c_str()) != 0) {
+        std::remove(partPath.c_str());
+        if (err) *err = "cannot rename into place: " + destPath;
+        return false;
+    }
+    return true;
+}
+
 std::vector<uint8_t> Client::fetchBytes(const std::string& path) const {
     std::vector<uint8_t> data;
     CURL* c = curl_easy_init();

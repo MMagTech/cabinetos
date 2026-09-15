@@ -30,6 +30,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -125,7 +126,23 @@ public:
 
     // For ImageCache::Loader. Returns empty on any failure, because a cover
     // that will not load is not an error the frame loop can do anything about.
+    //
+    // For COVERS, not for ROMs: it holds the whole body in memory, which is
+    // right for 50 KB of PNG and catastrophic for the 1.78 GB arcade set in the
+    // reference library. Anything that might be a game goes through
+    // fetchToFile.
     std::vector<uint8_t> fetchBytes(const std::string& path) const;
+
+    // Streams a body straight to disk, never holding more than a buffer of it.
+    //
+    // `onProgress` is called from inside the transfer with bytes-so-far and the
+    // total the server declared, which may be 0 when it declines to say. It
+    // returns false to abort — that is how a cancel reaches a download that is
+    // already running. It is called on whatever thread drove the request, so it
+    // must not touch the UI directly.
+    using ProgressFn = std::function<bool(int64_t got, int64_t total)>;
+    bool fetchToFile(const std::string& path, const std::string& destPath,
+                     const ProgressFn& onProgress, std::string* err) const;
 
 private:
     bool fetchFiltered(const char* filter, int limit, std::vector<Game>* out,

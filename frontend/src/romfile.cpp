@@ -123,6 +123,102 @@ bool extractAll(const std::vector<uint8_t>& in, std::vector<Member>* out,
     return true;
 }
 
+Kind sniffFile(const std::string& path, std::string* err) {
+    // 512 is enough for every signature here, including tar's, which sits 257
+    // bytes in. Reading more of a multi-gigabyte file to identify it would
+    // defeat the point of not holding it.
+    std::vector<uint8_t> head(512);
+    FILE* f = std::fopen(path.c_str(), "rb");
+    if (!f) { if (err) *err = "cannot open " + path; return Kind::Plain; }
+    const size_t n = std::fread(head.data(), 1, head.size(), f);
+    std::fclose(f);
+    head.resize(n);
+    return sniff(head);
+}
+
+bool prepareFile(const std::string& downloadedPath, const std::string& outDir,
+                 const std::string& validExtensions, bool blockExtract,
+                 std::string* primaryPath, Kind* kindOut, std::string* err) {
+    const Kind k = sniffFile(downloadedPath, err);
+    if (kindOut) *kindOut = k;
+
+    // Hand it over as it stands: the core asked to open its own archives, or
+    // it is not a container, or it is one this core reads natively — a .chd
+    // being the case that matters, since unpacking one produces something no
+    // core can load.
+    if (blockExtract || !isContainer(k) || coreAccepts(validExtensions, kindName(k))) {
+        *primaryPath = downloadedPath;
+        return true;
+    }
+
+    struct archive* a = archive_read_new();
+    if (!a) { if (err) *err = "archive_read_new failed"; return false; }
+    archive_read_support_filter_all(a);
+    archive_read_support_format_all(a);
+    if (archive_read_open_filename(a, downloadedPath.c_str(), 256 * 1024) != ARCHIVE_OK) {
+        if (err) *err = archive_error_string(a) ? archive_error_string(a) : "cannot open";
+        archive_read_free(a);
+        return false;
+    }
+
+    std::string best;       // the member the core named
+    std::string biggest;    // fallback, for a set whose members have no extension
+    int64_t biggestSize = -1;
+    bool wroteAny = false;
+
+    struct archive_entry* entry = nullptr;
+    while (archive_read_next_header(a, &entry) == ARCHIVE_OK) {
+        if (archive_entry_filetype(entry) != AE_IFREG) continue;
+        const char* raw = archive_entry_pathname(entry);
+        if (!raw) continue;
+        std::string name = raw;
+
+        // An archive is untrusted input. A member named "../../etc/thing" must
+        // land inside outDir or nowhere: keep the last path component only.
+        const size_t slash = name.find_last_of("/\\");
+        if (slash != std::string::npos) name = name.substr(slash + 1);
+        if (name.empty() || name == "." || name == "..") continue;
+
+        const std::string out = outDir + "/" + name;
+        FILE* f = std::fopen(out.c_str(), "wb");
+        if (!f) { if (err) *err = "cannot write " + out; archive_read_free(a); return false; }
+
+        int64_t written = 0;
+        std::vector<char> buf(256 * 1024);
+        for (;;) {
+            const ssize_t got = archive_read_data(a, buf.data(), buf.size());
+            if (got < 0) {
+                std::fclose(f);
+                if (err) *err = archive_error_string(a) ? archive_error_string(a) : "read failed";
+                archive_read_free(a);
+                return false;
+            }
+            if (got == 0) break;
+            if (std::fwrite(buf.data(), 1, static_cast<size_t>(got), f) !=
+                static_cast<size_t>(got)) {
+                std::fclose(f);
+                if (err) *err = "short write to " + out;
+                archive_read_free(a);
+                return false;
+            }
+            written += got;
+        }
+        std::fclose(f);
+        wroteAny = true;
+
+        if (best.empty() && coreAccepts(validExtensions, extensionOf(name))) best = out;
+        if (written > biggestSize) { biggestSize = written; biggest = out; }
+    }
+    archive_read_free(a);
+
+    if (!wroteAny) {
+        if (err) *err = std::string("the ") + kindName(k) + " held no files";
+        return false;
+    }
+    *primaryPath = best.empty() ? biggest : best;
+    return true;
+}
+
 bool prepare(const std::vector<uint8_t>& downloaded, const std::string& validExtensions,
              bool blockExtract, Prepared* out, std::string* err) {
     out->members.clear();
