@@ -427,6 +427,34 @@ bool Client::fetchGames(int platformId, std::vector<Game>* out, std::string* err
     return true;
 }
 
+bool Client::fetchFirmware(int platformId, std::vector<Firmware>* out, std::string* err) {
+    out->clear();
+    std::string body;
+    if (!get("/api/firmware?platform_id=" + std::to_string(platformId), &body, err))
+        return false;
+    json_object* root = json_tokener_parse(body.c_str());
+    if (!root || json_object_get_type(root) != json_type_array) {
+        if (root) json_object_put(root);
+        if (err) *err = "firmware response was not an array";
+        return false;
+    }
+    const size_t n = json_object_array_length(root);
+    for (size_t i = 0; i < n; ++i) {
+        json_object* o = json_object_array_get_idx(root, i);
+        Firmware f;
+        f.id = static_cast<int>(jint(o, "id"));
+        f.fileName = jstr(o, "file_name");
+        f.sizeBytes = jint(o, "file_size_bytes");
+        f.md5 = jstr(o, "md5_hash");
+        json_object* v = nullptr;
+        if (json_object_object_get_ex(o, "is_verified", &v))
+            f.verified = json_object_get_boolean(v);
+        if (f.id != 0 && !f.fileName.empty()) out->push_back(std::move(f));
+    }
+    json_object_put(root);
+    return true;
+}
+
 bool Client::fetchFavorites(int limit, std::vector<Game>* out, std::string* err) {
     return fetchFiltered("&favorite=true", limit, out, err);
 }

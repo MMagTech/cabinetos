@@ -209,7 +209,7 @@ const SampleEntry kSampleLibrary[] = {
 // bytes go straight to disk. The client was deliberately built synchronous so
 // that callers could do exactly this, the same way ImageCache already does.
 struct LaunchJob {
-    enum class Stage { Idle, Downloading, Unpacking, Ready, Failed };
+    enum class Stage { Idle, Firmware, Downloading, Unpacking, Ready, Failed };
 
     std::atomic<Stage> stage{Stage::Idle};
     std::atomic<int64_t> got{0};
@@ -234,7 +234,7 @@ struct LaunchJob {
     }
     bool busy() const {
         const Stage st = stage.load();
-        return st == Stage::Downloading || st == Stage::Unpacking;
+        return st == Stage::Firmware || st == Stage::Downloading || st == Stage::Unpacking;
     }
 };
 
@@ -274,14 +274,68 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
     const bool blockExtract = core.blockExtract();
 
     const int id = game.id;
+    const int platformId = game.platformId;
     const std::string fsName = game.fsName;
     const int64_t expectedSize = game.sizeBytes;
-    job.worker = std::thread([&job, &client, id, fsName, cacheDir, validExts, blockExtract,
-                              expectedSize]() {
+    job.worker = std::thread([&job, &client, id, platformId, fsName, cacheDir, validExts,
+                              blockExtract, expectedSize]() {
         const std::string dir = cacheDir + "/" + std::to_string(id);
         SDL_CreateDirectory(cacheDir.c_str());
         SDL_CreateDirectory(dir.c_str());
         const std::string dest = dir + "/" + fsName;
+
+        // FIRMWARE FIRST, and EVERY file the platform lists rather than
+        // whichever one this game looks like it needs. A core looks BIOS up by
+        // name in the system directory and ignores what it does not want, so
+        // extra files cost a little disk and a missing one costs the launch.
+        // Cabinet's rule — see docs/CABINET.md.
+        //
+        // Shared by every game on the platform, so it lives beside the cache
+        // rather than inside one game's directory, and a file already present
+        // at the right size is not fetched again.
+        {
+            job.stage = LaunchJob::Stage::Firmware;
+            const std::string systemDir = "system";
+            SDL_CreateDirectory(systemDir.c_str());
+            std::vector<romm::Firmware> firmware;
+            std::string ferr;
+            if (client.fetchFirmware(platformId, &firmware, &ferr)) {
+                for (const auto& f : firmware) {
+                    if (job.cancel.load()) break;
+                    const std::string fdest = systemDir + "/" + f.fileName;
+                    struct stat fst;
+                    if (f.sizeBytes > 0 && ::stat(fdest.c_str(), &fst) == 0 &&
+                        fst.st_size == f.sizeBytes) {
+                        std::fprintf(stderr, "[firmware] %s already here\n",
+                                     f.fileName.c_str());
+                        continue;
+                    }
+                    const std::string fpath = "/api/firmware/" + std::to_string(f.id) +
+                                              "/content/" + f.fileName;
+                    std::string derr;
+                    if (client.fetchToFile(fpath, fdest,
+                            [&job](int64_t got, int64_t total) {
+                                job.got = got;
+                                job.total = total;
+                                return !job.cancel.load();
+                            }, &derr)) {
+                        std::fprintf(stderr, "[firmware] %s (%lld bytes)\n",
+                                     f.fileName.c_str(),
+                                     static_cast<long long>(f.sizeBytes));
+                    } else {
+                        // Not fatal here. WHICH BIOS a core needs is the core's
+                        // business and most platforms need none, so a refusal
+                        // to launch is the honest place to find out.
+                        std::fprintf(stderr, "[firmware] %s: %s\n",
+                                     f.fileName.c_str(), derr.c_str());
+                    }
+                }
+            } else {
+                std::fprintf(stderr, "[firmware] none listed: %s\n", ferr.c_str());
+            }
+            job.got = 0;
+            job.total = 0;
+        }
 
         // Already here and the right size? Then it is the same ROM: RomM told
         // us how big it is, and a partial download was never renamed into
