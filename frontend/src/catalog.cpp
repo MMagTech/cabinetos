@@ -117,7 +117,16 @@ std::string gCoreDir = "cores/build";
 // Cabinet's manifest and this is a fact about this console today.
 Coverage withInstalled(Coverage c) {
     if (c.support != Support::Playable || !c.core) return c;
-    const std::string path = gCoreDir + "/" + c.core + "_libretro.so";
+    // A manifest name that already ends in _libretro does not get a second one:
+    // fbneo_libretro would otherwise be looked up as fbneo_libretro_libretro.so.
+    // cores/build-core.sh applies the same rule when it files the artifact —
+    // the two must agree, and this comment is on both.
+    std::string stem = c.core;
+    const std::string suffix = "_libretro";
+    if (stem.size() > suffix.size() &&
+        stem.compare(stem.size() - suffix.size(), suffix.size(), suffix) == 0)
+        stem.erase(stem.size() - suffix.size());
+    const std::string path = gCoreDir + "/" + stem + "_libretro.so";
     struct stat st;
     if (::stat(path.c_str(), &st) == 0 && st.st_size > 0) return c;
     c.support = Support::NotInstalled;
