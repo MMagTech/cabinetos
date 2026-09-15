@@ -27,6 +27,9 @@
 
 #include <atomic>
 #include <csignal>
+#include <condition_variable>
+#include <deque>
+#include <mutex>
 #include <thread>
 
 #include <unistd.h>
@@ -200,6 +203,92 @@ const SampleEntry kSampleLibrary[] = {
 
 }  // namespace
 
+// Uploads, off the thread that draws.
+//
+// A game must never stop because a file is going to a server. On a LAN with a
+// 60 KB Game Boy state the old blocking version was imperceptible; on a slow
+// link, or with a memory card, it stutters, and a server that does not answer
+// leaves curl waiting thirty seconds with the console looking dead. That is the
+// same fault the download had and it gets the same treatment.
+//
+// THE SPLIT THAT MATTERS: the frame thread reads the core and writes the local
+// copy, and only the network goes to the worker. Reading the core has to happen
+// on the frame thread because a core is not thread-safe, and writing the local
+// copy has to happen before the upload is even queued, or "local first" stops
+// being true the moment the process dies between the two.
+//
+// Sixty kilobytes to a local disk is well under a millisecond. The network is
+// the part that can take thirty seconds, and the network is the part that moves.
+class Uploader {
+public:
+    struct Job {
+        int romId = 0;
+        std::string emulator;
+        std::string fileName;
+        std::vector<uint8_t> data;
+        bool isState = false;
+    };
+
+    void start(romm::Client* client) {
+        client_ = client;
+        worker_ = std::thread([this] { run(); });
+    }
+
+    void shutdown() {
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            stopping_ = true;
+        }
+        wake_.notify_all();
+        if (worker_.joinable()) worker_.join();
+    }
+
+    void push(Job job) {
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            queue_.push_back(std::move(job));
+            ++pending_;
+        }
+        wake_.notify_one();
+    }
+
+    int pending() const { return pending_.load(); }
+
+private:
+    void run() {
+        for (;;) {
+            Job job;
+            {
+                std::unique_lock<std::mutex> lock(mutex_);
+                wake_.wait(lock, [this] { return stopping_ || !queue_.empty(); });
+                // Drain on the way out rather than dropping: a queued upload is
+                // a save someone has already made, and quitting is not a reason
+                // to discard it.
+                if (queue_.empty()) return;
+                job = std::move(queue_.front());
+                queue_.pop_front();
+            }
+
+            std::string err;
+            const bool ok = job.isState
+                ? client_->uploadState(job.romId, job.emulator, job.fileName, job.data, &err)
+                : client_->uploadSave(job.romId, job.emulator, job.fileName, job.data, &err);
+            std::fprintf(stderr, "[%s] %s %s\n", job.isState ? "state" : "save",
+                         ok ? "uploaded" : "upload failed, kept locally:",
+                         ok ? job.emulator.c_str() : err.c_str());
+            --pending_;
+        }
+    }
+
+    romm::Client* client_ = nullptr;
+    std::thread worker_;
+    std::mutex mutex_;
+    std::condition_variable wake_;
+    std::deque<Job> queue_;
+    std::atomic<int> pending_{0};
+    bool stopping_ = false;
+};
+
 // Saves and states, and which way they travel.
 //
 // THE DISK COPY IS WRITTEN FIRST, ALWAYS, before any upload is attempted. That
@@ -251,7 +340,7 @@ static bool writeLocal(const std::string& path, const std::vector<uint8_t>& data
 // Takes a snapshot of the game's own save and sends it, but only when it has
 // actually changed. A cartridge with no battery returns nothing, which is a
 // normal answer and not a failure.
-static void syncSave(GameSession& sess, romm::Client& client) {
+static void syncSave(GameSession& sess, Uploader& up) {
     cab::Core& core = cab::Core::shared();
     std::vector<uint8_t> ram;
     if (!core.readSaveRam(ram) || ram.empty()) return;
@@ -264,17 +353,16 @@ static void syncSave(GameSession& sess, romm::Client& client) {
         return;
     }
     std::fprintf(stderr, "[save] %zu bytes to %s\n", ram.size(), path.c_str());
-    sess.saveAtLaunch = ram;
+    sess.saveAtLaunch = ram;   // copied before the move below
 
     if (sess.emulatorTag.empty()) return;
-    std::string err;
-    if (client.uploadSave(sess.romId, sess.emulatorTag, name, ram, &err))
-        std::fprintf(stderr, "[save] uploaded as %s\n", sess.emulatorTag.c_str());
-    else
-        std::fprintf(stderr, "[save] upload failed, kept locally: %s\n", err.c_str());
+    // Queued, not sent. The local copy above is already safe; the network is
+    // the part that can take thirty seconds and it does not get to stop the
+    // picture.
+    up.push(Uploader::Job{sess.romId, sess.emulatorTag, name, std::move(ram), false});
 }
 
-static void saveStateNow(GameSession& sess, romm::Client& client) {
+static void saveStateNow(GameSession& sess, Uploader& up) {
     cab::Core& core = cab::Core::shared();
     std::vector<uint8_t> st;
     if (!core.saveState(st) || st.empty()) {
@@ -298,42 +386,80 @@ static void saveStateNow(GameSession& sess, romm::Client& client) {
         std::fprintf(stderr, "[state] no settled tag for this core — not uploaded\n");
         return;
     }
-    std::string err;
-    if (client.uploadState(sess.romId, sess.emulatorTag, name, st, &err))
-        std::fprintf(stderr, "[state] uploaded as %s\n", sess.emulatorTag.c_str());
-    else
-        std::fprintf(stderr, "[state] upload failed, kept locally: %s\n", err.c_str());
+    up.push(Uploader::Job{sess.romId, sess.emulatorTag, name, std::move(st), true});
 }
 
 // The newest state RomM holds that THIS build can actually restore. A state
 // from another emulator is skipped rather than attempted: loading one does not
 // fail cleanly, it boots something that looks like the game and is not.
-static void loadLatestState(GameSession& sess, romm::Client& client) {
+// Finding and fetching a state is network work, so it happens on a worker; only
+// applying it touches the core, and that waits for the frame thread. Same split
+// as the upload, same reason: nothing that talks to a server may stop the
+// picture.
+struct StateLoad {
+    std::atomic<bool> running{false};
+    std::atomic<bool> ready{false};
+    std::vector<uint8_t> data;
+    std::string note;
+    std::thread worker;
+    ~StateLoad() { if (worker.joinable()) worker.join(); }
+};
+
+static void beginLoadLatestState(StateLoad& load, GameSession& sess, romm::Client& client) {
+    if (load.running.load()) return;
     if (sess.emulatorTag.empty()) {
         std::fprintf(stderr, "[state] no settled tag for this core — refusing to load\n");
         return;
     }
-    std::vector<romm::Asset> states;
-    std::string err;
-    if (!client.fetchStates(sess.romId, &states, &err)) {
-        std::fprintf(stderr, "[state] %s\n", err.c_str());
+    if (load.worker.joinable()) load.worker.join();
+    load.running = true;
+    load.ready = false;
+    const int romId = sess.romId;
+    const std::string tag = sess.emulatorTag;
+    load.worker = std::thread([&load, &client, romId, tag]() {
+        std::vector<romm::Asset> states;
+        std::string err;
+        if (!client.fetchStates(romId, &states, &err)) {
+            load.note = err;
+            load.running = false;
+            load.ready = true;
+            return;
+        }
+        const romm::Asset* best = nullptr;
+        int skipped = 0;
+        for (const auto& a : states) {
+            // A state from another emulator is SKIPPED, never attempted.
+            // Loading one does not fail cleanly: it boots something that looks
+            // like the game and is not.
+            if (a.emulator != tag) { ++skipped; continue; }
+            if (!best || a.updatedAt > best->updatedAt) best = &a;
+        }
+        if (!best) {
+            load.note = "none for " + tag + " (" + std::to_string(skipped) +
+                        " for other emulators)";
+        } else {
+            load.data = client.fetchAsset("states", best->id);
+            load.note = best->fileName;
+        }
+        load.running = false;
+        load.ready = true;
+    });
+}
+
+// Called once per frame. Applying the state is the only part that touches the
+// core, so it happens here and nowhere else.
+static void pumpStateLoad(StateLoad& load) {
+    if (!load.ready.load()) return;
+    load.ready = false;
+    if (load.worker.joinable()) load.worker.join();
+    if (load.data.empty()) {
+        std::fprintf(stderr, "[state] %s\n", load.note.c_str());
         return;
     }
-    const romm::Asset* best = nullptr;
-    int skipped = 0;
-    for (const auto& a : states) {
-        if (a.emulator != sess.emulatorTag) { ++skipped; continue; }
-        if (!best || a.updatedAt > best->updatedAt) best = &a;
-    }
-    if (!best) {
-        std::fprintf(stderr, "[state] none for %s (%d for other emulators)\n",
-                     sess.emulatorTag.c_str(), skipped);
-        return;
-    }
-    std::vector<uint8_t> data = client.fetchAsset("states", best->id);
-    if (data.empty()) { std::fprintf(stderr, "[state] download was empty\n"); return; }
-    std::fprintf(stderr, "[state] %s (%zu bytes) -> %s\n", best->fileName.c_str(),
-                 data.size(), cab::Core::shared().loadState(data) ? "restored" : "REFUSED");
+    std::fprintf(stderr, "[state] %s (%zu bytes) -> %s\n", load.note.c_str(),
+                 load.data.size(),
+                 cab::Core::shared().loadState(load.data) ? "restored" : "REFUSED");
+    load.data.clear();
 }
 
 // A launch in progress, off the frame thread.
@@ -1552,6 +1678,11 @@ int main(int argc, char** argv) {
     // opened, and the worker puts what comes out where the core can open it.
     LaunchJob launchJob;
     GameSession session;
+    // One worker for every upload. Started here and drained on the way out, so
+    // quitting does not discard a save someone has already made.
+    Uploader uploader;
+    uploader.start(&liveClient);
+    StateLoad stateLoad;
     auto launchById = [&](int romId) -> bool {
         if (launchJob.busy()) return false;    // one at a time
         const romm::Game* g = nullptr;
@@ -1743,9 +1874,9 @@ int main(int argc, char** argv) {
                     // F5 writes a state, F8 restores the newest one THIS build can
                     // load, F6 pushes the game's own save. Quitting syncs the
                     // save by itself; F6 is for testing without quitting.
-                    if (playing && e.key.key == SDLK_F5) saveStateNow(session, liveClient);
-                    if (playing && e.key.key == SDLK_F8) loadLatestState(session, liveClient);
-                    if (playing && e.key.key == SDLK_F6) syncSave(session, liveClient);
+                    if (playing && e.key.key == SDLK_F5) saveStateNow(session, uploader);
+                    if (playing && e.key.key == SDLK_F8) beginLoadLatestState(stateLoad, session, liveClient);
+                    if (playing && e.key.key == SDLK_F6) syncSave(session, uploader);
                     if (owner != InputOwner::UI) break;
                     if (e.key.key == SDLK_LEFT) moveFocus(-1);
                     if (e.key.key == SDLK_RIGHT) moveFocus(+1);
@@ -1897,6 +2028,7 @@ int main(int argc, char** argv) {
         }
 
         pumpLaunch();
+        pumpStateLoad(stateLoad);
 
         // The round trip, once, a couple of seconds into the game so there is
         // something in memory worth snapshotting.
@@ -1904,14 +2036,19 @@ int main(int argc, char** argv) {
             static int sinceStart = 0;
             if (++sinceStart == 150) {
                 std::fprintf(stderr, "[sync-test] --- saving ---\n");
-                saveStateNow(session, liveClient);
+                const uint64_t t0 = SDL_GetTicksNS();
+                saveStateNow(session, uploader);
                 // Forced: at a title screen with no input the battery has not
                 // changed, and "nothing to send" is the correct behaviour but
                 // proves nothing about whether sending works.
                 session.saveAtLaunch.clear();
-                syncSave(session, liveClient);
+                syncSave(session, uploader);
+                // What the game actually paid. Everything after this point is
+                // on the worker, so this is the whole cost to the picture.
+                std::fprintf(stderr, "[sync-test] frame thread blocked %.2f ms\n",
+                             (SDL_GetTicksNS() - t0) / 1e6);
                 std::fprintf(stderr, "[sync-test] --- loading back ---\n");
-                loadLatestState(session, liveClient);
+                beginLoadLatestState(stateLoad, session, liveClient);
                 std::fprintf(stderr, "[sync-test] --- done ---\n");
             }
         }
@@ -2405,6 +2542,14 @@ int main(int argc, char** argv) {
     if (audioStream) SDL_DestroyAudioStream(audioStream);
     std::fprintf(stderr, "[image] resident %.1f MB, %d still pending\n",
                  images.bytesResident() / (1024.0 * 1024.0), images.pendingCount());
+    // Drained rather than abandoned: anything still queued is a save somebody
+    // has already made, and quitting is not a reason to throw it away. This is
+    // the one place a wait for the network is correct, because there is no
+    // picture left to stop.
+    if (uploader.pending() > 0)
+        std::fprintf(stderr, "[sync] finishing %d upload(s)\n", uploader.pending());
+    uploader.shutdown();
+
     images.shutdown();
     text.shutdown();
     renderer.shutdown();
