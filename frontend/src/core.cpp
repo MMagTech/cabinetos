@@ -284,6 +284,9 @@ bool Core::load(const std::string& soPath) {
     retro_system_info info{};
     g.get_system_info(&info);
     coreName_ = info.library_name ? info.library_name : "?";
+    validExtensions_ = info.valid_extensions ? info.valid_extensions : "";
+    blockExtract_ = info.block_extract;
+    needFullpath_ = info.need_fullpath;
     coreVersion_ = info.library_version ? info.library_version : "?";
 
     // Order matters: the environment callback must be installed before

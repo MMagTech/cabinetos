@@ -193,6 +193,84 @@ const SampleEntry kSampleLibrary[] = {
 
 }  // namespace
 
+// Fetches a game from RomM and gets it into a shape a core can open.
+//
+// This is the join everything so far was built either side of, and the reason
+// it is one function is that every step depends on the one before it deciding
+// something: which core, from the platform; whether to unpack, from the core;
+// where the file goes, from whether the core wants a path or a buffer.
+//
+// It writes to disk rather than keeping bytes in memory. Partly because a
+// fullpath core needs a real file, and partly because a ROM is not a cover: the
+// reference library holds a 1.78 GB arcade set, and a console with 4 GB of RAM
+// does not get to hold one of those in a std::vector. This still downloads into
+// memory first, which is WRONG for anything large and is the next thing to fix
+// — see the note in docs/PROJECT.md.
+struct LaunchPlan {
+    std::string corePath;   // the .so to load
+    std::string romPath;    // what to hand it
+    std::string coreName;
+};
+
+static bool planLaunch(romm::Client& client, const romm::Game& game,
+                       const std::string& coreDir, const std::string& cacheDir,
+                       LaunchPlan* plan, std::string* err) {
+    const catalog::Coverage cov = catalog::coverageFor(game);
+    if (cov.support != catalog::Support::Playable || !cov.core) {
+        *err = std::string(game.platformName) + ": " +
+               (cov.reason ? cov.reason : "not playable here");
+        return false;
+    }
+    plan->coreName = cov.core;
+    plan->corePath = coreDir + "/" + cov.core + "_libretro.so";
+
+    // Read the core's own answers before deciding anything about the file.
+    // Which extensions it takes and whether it wants archives opened are facts
+    // about the core, and the platform cannot supply either.
+    cab::Core& core = cab::Core::shared();
+    if (!core.load(plan->corePath)) {
+        *err = "core " + plan->coreName + ": " + core.error();
+        return false;
+    }
+    const std::string validExts = core.validExtensions();
+    const bool blockExtract = core.blockExtract();
+
+    const std::string path =
+        "/api/roms/" + std::to_string(game.id) + "/content/" + game.fsName;
+    std::vector<uint8_t> bytes = client.fetchBytes(path);
+    if (bytes.empty()) { *err = "the download returned nothing"; return false; }
+
+    romfile::Prepared prep;
+    if (!romfile::prepare(bytes, validExts, blockExtract, &prep, err)) return false;
+
+    const std::string dir = cacheDir + "/" + std::to_string(game.id);
+    SDL_CreateDirectory(cacheDir.c_str());
+    SDL_CreateDirectory(dir.c_str());
+
+    auto writeFile = [&](const std::string& name, const std::vector<uint8_t>& data) {
+        const std::string full = dir + "/" + name;
+        FILE* f = std::fopen(full.c_str(), "wb");
+        if (!f) return std::string();
+        const bool ok = std::fwrite(data.data(), 1, data.size(), f) == data.size();
+        std::fclose(f);
+        return ok ? full : std::string();
+    };
+
+    if (prep.passThrough) {
+        plan->romPath = writeFile(game.fsName, bytes);
+    } else {
+        // EVERY member, not just the one the core will be pointed at: a .cue
+        // is useless without the .bin beside it, and an .m3u names discs it
+        // expects to find as siblings.
+        for (size_t i = 0; i < prep.members.size(); ++i) {
+            const std::string written = writeFile(prep.members[i].name, prep.members[i].bytes);
+            if (static_cast<int>(i) == prep.primary) plan->romPath = written;
+        }
+    }
+    if (plan->romPath.empty()) { *err = "could not write the ROM to " + dir; return false; }
+    return true;
+}
+
 // Builds the shelf from a real library.
 //
 // THE PLATFORMS THIS CONSOLE CANNOT PLAY ARE LEFT OUT, and that is a decision
@@ -203,6 +281,9 @@ const SampleEntry kSampleLibrary[] = {
 // still to build; this is the part that knows.
 struct Library {
     std::vector<Card> cards;
+    // The games behind the cards, same order. A card is what is drawn; this is
+    // what is launched, and the launch needs the platform and the file name.
+    std::vector<romm::Game> games;
     // Index into `cards`, or -1. The hero is the most recently played game THIS
     // CONSOLE CAN PLAY — not simply the most recent, because a Resume that
     // cannot run is worse than no hero at all.
@@ -252,11 +333,28 @@ static Library loadLibrary(romm::Client& client) {
             c.cover = g.coverPath;
             c.art = colorForTitle(c.title);
             cards.push_back(std::move(c));
+            lib.games.push_back(g);
         }
     }
 
-    std::sort(cards.begin(), cards.end(),
-              [](const Card& a, const Card& b) { return a.title < b.title; });
+    // Sorted together, so index i of one is index i of the other. Two parallel
+    // vectors sorted independently is a bug waiting for its first duplicate
+    // title, and this library has those.
+    std::vector<size_t> order(cards.size());
+    for (size_t i = 0; i < order.size(); ++i) order[i] = i;
+    std::sort(order.begin(), order.end(), [&](size_t a, size_t b) {
+        return cards[a].title < cards[b].title;
+    });
+    std::vector<Card> sortedCards;
+    std::vector<romm::Game> sortedGames;
+    sortedCards.reserve(order.size());
+    sortedGames.reserve(order.size());
+    for (size_t i : order) {
+        sortedCards.push_back(std::move(cards[i]));
+        sortedGames.push_back(std::move(lib.games[i]));
+    }
+    cards = std::move(sortedCards);
+    lib.games = std::move(sortedGames);
 
     int withArt = 0;
     for (const auto& c : cards) if (!c.cover.empty()) ++withArt;
@@ -581,6 +679,14 @@ int main(int argc, char** argv) {
     // that gets checked against a real server rather than assumed.
     int romProbeId = 0;
     const char* romProbeExts = "gb|gbc|dmg";
+    // Where the built cores are, and where downloaded ROMs are kept.
+    const char* coreDir = "cores/build";
+    const char* romCacheDir = "romcache";
+    // Launch this RomM id without anybody pressing anything, after a delay, so
+    // the whole Home-to-game transition can be watched on a machine with no
+    // controller attached to it.
+    int autoLaunchId = 0;
+    float autoLaunchAfter = 0.0f;
     for (int i = 1; i < argc; ++i) {
         if (SDL_strcmp(argv[i], "--screenshot") == 0 && i + 1 < argc) {
             shotMode = true;
@@ -604,6 +710,12 @@ int main(int argc, char** argv) {
             corePath = argv[++i];
         } else if (SDL_strcmp(argv[i], "--romm") == 0 && i + 1 < argc) {
             rommAddress = argv[++i];
+        } else if (SDL_strcmp(argv[i], "--core-dir") == 0 && i + 1 < argc) {
+            coreDir = argv[++i];
+        } else if (SDL_strcmp(argv[i], "--launch") == 0 && i + 1 < argc) {
+            autoLaunchId = SDL_atoi(argv[++i]);
+        } else if (SDL_strcmp(argv[i], "--launch-after") == 0 && i + 1 < argc) {
+            autoLaunchAfter = static_cast<float>(SDL_atof(argv[++i]));
         } else if (SDL_strcmp(argv[i], "--rom-probe") == 0 && i + 1 < argc) {
             romProbeId = SDL_atoi(argv[++i]);
             rommProbeMode = true;
@@ -722,6 +834,7 @@ int main(int argc, char** argv) {
     // the stand-in library wants — it has no play history to order by.
     std::vector<int> shelf;
     std::vector<int> favorites;
+    std::vector<romm::Game> games;
 
     if (rommAddress) {
         std::string err;
@@ -740,6 +853,7 @@ int main(int argc, char** argv) {
         heroPlatform = lib.heroPlatform;
         shelf = std::move(lib.shelf);
         favorites = std::move(lib.favorites);
+        games = std::move(lib.games);
         if (cards.empty()) {
             std::fprintf(stderr, "[romm] the library came back empty\n");
             return 1;
@@ -1169,6 +1283,37 @@ int main(int argc, char** argv) {
     int frame = 0;
     bool pressing = false;
 
+
+    // Starting a game from the UI. Everything it needs was decided elsewhere:
+    // the catalog picks the core, the core decides whether to unpack, and
+    // planLaunch writes what comes out where the core can open it.
+    auto launchById = [&](int romId) -> bool {
+        const romm::Game* g = nullptr;
+        for (const auto& x : games) if (x.id == romId) { g = &x; break; }
+        if (!g) { std::fprintf(stderr, "[launch] no game with id %d\n", romId); return false; }
+
+        std::fprintf(stderr, "[launch] %s (%s)\n", g->name.c_str(), g->platformName.c_str());
+        LaunchPlan plan;
+        std::string lerr;
+        if (!planLaunch(liveClient, *g, coreDir, romCacheDir, &plan, &lerr)) {
+            std::fprintf(stderr, "[launch] %s\n", lerr.c_str());
+            return false;
+        }
+        std::fprintf(stderr, "[launch] core %s, rom %s\n", plan.coreName.c_str(),
+                     plan.romPath.c_str());
+
+        cab::Core& core = cab::Core::shared();
+        const std::string saveDir = std::string(romCacheDir) + "/saves";
+        SDL_CreateDirectory(saveDir.c_str());
+        if (!core.loadGame(plan.romPath, "system", saveDir)) {
+            std::fprintf(stderr, "[launch] %s\n", core.error().c_str());
+            return false;
+        }
+        std::fprintf(stderr, "[launch] running %s\n", core.coreName().c_str());
+        playing = true;
+        return true;
+    };
+
     // Remembered focus per row, which is the behaviour tvOS gives free and the
     // one people notice missing: leaving Recent at the sixth cover and coming
     // back to the first is the kind of thing that feels broken without anyone
@@ -1276,7 +1421,17 @@ int main(int argc, char** argv) {
                     if (e.key.key == SDLK_RIGHT) moveFocus(+1);
                     if (e.key.key == SDLK_UP) moveRow(-1);
                     if (e.key.key == SDLK_DOWN) moveRow(+1);
-                    if (e.key.key == SDLK_RETURN || e.key.key == SDLK_SPACE) pressing = true;
+                    if (e.key.key == SDLK_RETURN || e.key.key == SDLK_SPACE) {
+                        pressing = true;
+                        // The hero's two actions are deliberately different:
+                        // Resume goes straight into the game, the artwork opens
+                        // the detail screen. Only the first exists yet, so the
+                        // card launches too rather than doing nothing at all.
+                        if (!playing) {
+                            if (const Card* c = cardAt(focusRow, focusSlot)) launchById(c->id);
+                            else if (heroIndex >= 0) launchById(cards[heroIndex].id);
+                        }
+                    }
                     break;
                 case SDL_EVENT_KEY_UP:
                     if (e.key.key == SDLK_RETURN || e.key.key == SDLK_SPACE) pressing = false;
@@ -1303,6 +1458,10 @@ int main(int argc, char** argv) {
                     }
                     if (e.gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_LEFT) moveFocus(-1);
                     if (e.gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_RIGHT) moveFocus(+1);
+                    if (e.gbutton.button == SDL_GAMEPAD_BUTTON_SOUTH && !playing) {
+                        if (const Card* c = cardAt(focusRow, focusSlot)) launchById(c->id);
+                        else if (heroIndex >= 0) launchById(cards[heroIndex].id);
+                    }
                     if (e.gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_UP) moveRow(-1);
                     if (e.gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_DOWN) moveRow(+1);
                     if (e.gbutton.button == SDL_GAMEPAD_BUTTON_SOUTH) pressing = true;
@@ -1391,6 +1550,18 @@ int main(int argc, char** argv) {
                     SDL_PutAudioStreamData(audioStream, samples.data(),
                                            static_cast<int>(samples.size() * sizeof(int16_t)));
                 }
+            }
+        }
+
+        // Launch on a timer when asked to. This exists so the Home-to-game
+        // transition can be watched on the test machine, which has no
+        // controller attached — not as a product behaviour.
+        if (autoLaunchId > 0 && !playing) {
+            autoLaunchAfter -= dt;
+            if (autoLaunchAfter <= 0.0f) {
+                const int id = autoLaunchId;
+                autoLaunchId = 0;
+                launchById(id);
             }
         }
 
