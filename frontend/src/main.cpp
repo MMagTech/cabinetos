@@ -1264,6 +1264,9 @@ int main(int argc, char** argv) {
 
     if (rommAddress) {
         std::string err;
+        // Where the cores are, so the catalog can tell "the manifest has a core
+        // for this" apart from "this console has it built".
+        catalog::setCoreDirectory(coreDir);
         if (!liveClient.setAddress(rommAddress, &err)) {
             std::fprintf(stderr, "[romm] %s\n", err.c_str());
             return 1;

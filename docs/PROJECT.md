@@ -2801,6 +2801,29 @@ user two entries called "Arcade" with no way to tell them apart.
 - **Take the display name from the manifest's `systems` field**, which already
   disambiguates them: *"Arcade (FinalBurn Neo)"* and *"Arcade (MAME 2003-Plus)"*.
 
+##### "A core exists" and "this console has it" are different questions
+
+**Found 2026-09-15 by using it.** After exiting a game, Home's hero was
+*Mushihime-sama Futari* — an arcade game that cannot start, because FBNeo has
+not been built. `catalog::coverageFor` was answering from Cabinet's manifest,
+which says a core exists for arcade, and the console had no such `.so`.
+
+So `Support` now carries **`NotInstalled`** beside `NoCore` and `Excluded`, and
+a Playable answer is downgraded when the core file is not on disk. Three
+distinct reasons a game is absent, and the difference is the whole point:
+
+| | |
+|---|---|
+| `NoCore` | nothing in the manifest serves it — Jaguar, ColecoVision. Permanent. |
+| `Excluded` | a core exists and Cabinet does not ship it — Game & Watch. Deliberate. |
+| `NotInstalled` | **this console has not built it yet.** Temporary, and today it is most of them. |
+
+**With two of twenty-one cores built: 217 playable games of 1644.** That number
+is the honest one and it is the argument for the remaining cores. A console must
+not offer what it cannot run — but collapsing "we haven't built it" into "you
+can't have it" would have hidden how much of the library is waiting on work
+rather than on a decision.
+
 **This is deliberate on the server, not a scan artefact.** The split exists
 because mame2003_plus was what ran on iOS, and FBNeo serves the companion
 controller and light-gun cases. So the two arcade platforms are a real

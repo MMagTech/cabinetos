@@ -24,12 +24,22 @@
 
 namespace catalog {
 
+// Where the core actually has to be for a game to start. Set once at startup;
+// coverageFor answers from the manifest alone, and `installed` is the separate
+// question of whether THIS console has that core built.
+void setCoreDirectory(const char* dir);
+
 enum class Support {
     // A core exists and ships. The game can be launched.
     Playable,
     // Nothing in the manifest serves this system. Switch, PS3, Vita and the
     // rest. Not a defect, just outside what this console is.
     NoCore,
+    // The manifest has a core for this system, and this console does not have
+    // it built. A different thing from NoCore and from Excluded: nothing is
+    // wrong, the core simply has not been built yet — two of twenty-one exist
+    // today. Found by the hero offering an arcade game with no FBNeo on disk.
+    NotInstalled,
     // A core exists but CabinetOS deliberately does not ship it. There is
     // always a reason, and `reason()` gives it, because a decision nobody can
     // recover is indistinguishable from a bug.
