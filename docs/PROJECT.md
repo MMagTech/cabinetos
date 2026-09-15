@@ -3422,6 +3422,42 @@ console has no optical drive, so `=1` compiles in three objects of physical-CD
 access that can never run, and because matching Cabinet is free. **Stop carrying
 the caveat.**
 
+##### FOURTEEN CORES, 2026-09-15 — and what building them taught
+
+Twelve added in one pass, every pin and build argument read from the manifest.
+**217 playable games became 934 of 1644.**
+
+Three things the pipeline had to learn, each found by building rather than by
+reading:
+
+**Upstream output names do not match manifest names, and there is no rule.**
+`beetle_ngp` produces `mednafen_ngp_libretro.so`. A hand-maintained table of
+twenty-one such names goes stale, and the frontend would need a second copy of
+it. So `build-core.sh` discovers whatever `*_libretro.so` the build produced and
+files it under the core as the **manifest** knows it — the identity the pins,
+the emulator tags and `catalog.cpp` already use. The rename is printed, never
+silent. A name already ending in `_libretro` does not get a second one, and
+`catalog.cpp` carries the same rule with a comment on both sides saying so.
+
+**Some cores cannot be asked what revision they are, and that is upstream's
+bug.** `beetle_pce_fast` and `beetle_saturn` both report a bare version: their
+`libretro.c` is a **C** file using `GIT_VERSION`, while their Makefile adds
+`-DGIT_VERSION` to **`CXXFLAGS`** only, so the define never arrives and the
+empty-string fallback wins. Verified on both rather than assumed from the
+matching symptom.
+
+> **Not patched into working.** Adding the missing flag would change our binary
+> against Cabinet's, which builds the same upstream with the same blind spot,
+> and diverging from Cabinet to satisfy our own test is backwards.
+> `VERIFY_REVISION=0` marks such a core with its reason. The *checkout* is still
+> asserted at the pinned commit; only reading it back is lost.
+
+**And FBNeo reads archives itself** — its `valid_extensions` are
+`zip|7z|cue|ccd`. An arcade set must be handed over **unextracted**, which is
+exactly what *ask the core, never the platform* already does. The rule was
+written before anything needed it and turned out to be load-bearing on the
+first core that did.
+
 ##### And the build turns out to be reproducible across machines
 
 The same commit built on a GitHub `ubuntu-24.04` runner and on the Fedora test

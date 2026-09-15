@@ -257,7 +257,11 @@ if [ "${#BUILT[@]}" -gt 1 ]; then
     printf '  %s\n' "${BUILT[@]}" >&2
     exit 1
 fi
-SO="${CORE}_libretro.so"
+# A manifest name that already ends in _libretro does not get a second one:
+# fbneo_libretro would otherwise be filed as fbneo_libretro_libretro.so.
+# catalog.cpp applies the same rule when it looks for the file — the two must
+# agree, and this comment is on both.
+SO="${CORE%_libretro}_libretro.so"
 UPSTREAM=$(basename "${BUILT[0]}")
 [ "$UPSTREAM" = "$SO" ] || echo "built $UPSTREAM, filing it as $SO"
 cp "${BUILT[0]}" "$OUT/$SO"
