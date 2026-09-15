@@ -107,6 +107,17 @@ constexpr float kFocusShadowOffsetY = 14.0f;
 // queue up behind the person driving them.
 constexpr float kFocusDuration = 0.180f;
 constexpr float kPressDuration = 0.120f;
+// The pause menu, from the design system's component inventory: scrim at black
+// 55%, a centred panel at radius 32, full-width buttons, and a focus treatment
+// of its own — 1.04 rather than a cover's 1.10, because a full-width button
+// growing a tenth would collide with its neighbours.
+constexpr float kOverlayFade = 0.350f;
+constexpr float kOverlayFocusScale = 1.04f;
+constexpr float kOverlayFocusDuration = 0.150f;
+constexpr float kOverlayPanelRadius = 32.0f;
+constexpr float kOverlayPanelWidth = 720.0f;
+constexpr float kOverlayButtonHeight = 92.0f;
+constexpr float kOverlayButtonGap = 14.0f;
 
 // The caption rides down by half of (scale - 1) times the cover height, because
 // a scale about the centre advances the bottom edge by exactly that much. The
@@ -114,6 +125,15 @@ constexpr float kPressDuration = 0.120f;
 // changes, this follows it automatically.
 float captionSlide(float focusAmount) {
     return focusAmount * (kShelfCoverHeight * (kFocusScale - 1.0f) * 0.5f + 2.0f);
+}
+
+// The overlay's own curve. The design system gives it 350 ms ease-IN-out, not
+// the ease-out everything else uses: a panel that covers the game should leave
+// as deliberately as it arrives, and an ease-out exit snaps away at the end.
+float easeInOut(float t) {
+    t = std::clamp(t, 0.0f, 1.0f);
+    return t < 0.5f ? 4.0f * t * t * t
+                    : 1.0f - std::pow(-2.0f * t + 2.0f, 3.0f) * 0.5f;
 }
 
 float easeOut(float t) {
@@ -136,9 +156,16 @@ struct Animated {
         elapsed = 0;
     }
     void tick(float dt) { elapsed = std::min(elapsed + dt, duration); }
+    // Ease-out for everything that moves toward you — focus, lifts, scrolls.
+    // The overlay sets `smooth` to get the design system's ease-IN-out instead,
+    // because a panel that covers the game should leave as deliberately as it
+    // arrives, and an ease-out exit snaps away at the end.
+    bool smooth = false;
+
     float value() const {
         if (duration <= 0) return to;
-        return from + (to - from) * easeOut(elapsed / duration);
+        const float t = elapsed / duration;
+        return from + (to - from) * (smooth ? easeInOut(t) : easeOut(t));
     }
 };
 
@@ -1073,6 +1100,12 @@ int main(int argc, char** argv) {
     // upload it, then fetch the newest one back and restore it. Headless, so
     // the sync can be proved on a machine nobody is sitting at.
     bool syncTest = false;
+    // Opens the overlay once the game is up, so it can be looked at on a
+    // machine with nothing attached to it.
+    bool overlayDemo = false;
+    // Opens the overlay and takes Exit to Home, so the whole leave-a-game path
+    // can be proved on a machine with nothing attached.
+    bool overlayExitDemo = false;
     float autoLaunchAfter = 0.0f;
     for (int i = 1; i < argc; ++i) {
         if (SDL_strcmp(argv[i], "--screenshot") == 0 && i + 1 < argc) {
@@ -1101,6 +1134,10 @@ int main(int argc, char** argv) {
             coreDir = argv[++i];
         } else if (SDL_strcmp(argv[i], "--launch") == 0 && i + 1 < argc) {
             autoLaunchId = SDL_atoi(argv[++i]);
+        } else if (SDL_strcmp(argv[i], "--overlay-exit") == 0) {
+            overlayExitDemo = true;
+        } else if (SDL_strcmp(argv[i], "--overlay") == 0) {
+            overlayDemo = true;
         } else if (SDL_strcmp(argv[i], "--sync-test") == 0) {
             syncTest = true;
         } else if (SDL_strcmp(argv[i], "--launch-after") == 0 && i + 1 < argc) {
@@ -1683,6 +1720,20 @@ int main(int argc, char** argv) {
     Uploader uploader;
     uploader.start(&liveClient);
     StateLoad stateLoad;
+
+    // The in-game overlay: a scrim, a panel and buttons drawn over the game
+    // surface. No compositing trick — the frontend owns the frame loop, which
+    // is what makes this simple and is the direct payoff of hosting cores in
+    // process rather than launching them.
+    bool overlayOpen = false;
+    int overlaySlot = 0;
+    Animated overlayFade;
+    overlayFade.smooth = true;    // 350 ms ease-in-out, per the design system
+    Animated overlayFocus;
+    enum OverlayItem { OvResume = 0, OvSaveState, OvLoadState, OvExit, OvCount };
+    const char* kOverlayLabels[OvCount] = {
+        "Resume", "Save state", "Load latest state", "Exit to Home",
+    };
     auto launchById = [&](int romId) -> bool {
         if (launchJob.busy()) return false;    // one at a time
         const romm::Game* g = nullptr;
@@ -1819,11 +1870,49 @@ int main(int argc, char** argv) {
     // This was exactly that bug: arrow keys moved the Tetris piece AND shifted
     // focus on the Home screen behind it, so leaving the game landed somewhere
     // nobody chose. Found by someone actually playing it.
-    enum class InputOwner { Keyboard, Game, UI };
+    enum class InputOwner { Keyboard, Overlay, Game, UI };
     auto inputOwner = [&]() {
-        if (keyboard.isOpen()) return InputOwner::Keyboard;   // an overlay wins
+        if (keyboard.isOpen()) return InputOwner::Keyboard;
+        // The overlay takes the pad FROM the core while it is open, which is
+        // the whole rule: never both. tvOS does this by turning the focus
+        // engine off during play; here it is this one line.
+        if (overlayOpen) return InputOwner::Overlay;
         if (playing) return InputOwner::Game;
         return InputOwner::UI;
+    };
+
+    // Leaving a game. The save goes up FIRST — this is the trigger that matters
+    // most, because nobody should lose progress by quitting — and only then is
+    // the core torn down.
+    auto exitToHome = [&]() {
+        syncSave(session, uploader);
+        cab::Core::shared().unloadGame();
+        playing = false;
+        overlayOpen = false;
+        overlayFade.retarget(0.0f, kOverlayFade);
+        std::fprintf(stderr, "[overlay] exited to Home\n");
+    };
+
+    auto overlayActivate = [&]() {
+        switch (overlaySlot) {
+            case OvResume:
+                overlayOpen = false;
+                overlayFade.retarget(0.0f, kOverlayFade);
+                break;
+            case OvSaveState: saveStateNow(session, uploader); break;
+            case OvLoadState: beginLoadLatestState(stateLoad, session, liveClient); break;
+            case OvExit: exitToHome(); break;
+            default: break;
+        }
+    };
+
+    auto toggleOverlay = [&]() {
+        if (!playing) return;
+        overlayOpen = !overlayOpen;
+        overlaySlot = 0;
+        overlayFade.retarget(overlayOpen ? 1.0f : 0.0f, kOverlayFade);
+        overlayFocus.retarget(1.0f, kOverlayFocusDuration);
+        overlayFocus.elapsed = kOverlayFocusDuration;
     };
 
     while (running) {
@@ -1865,11 +1954,23 @@ int main(int argc, char** argv) {
                         break;
                     }
                     if (e.key.key == SDLK_ESCAPE) {
-                        // A download is the one thing Escape should interrupt
-                        // rather than quit past: three gigabytes is a long time
-                        // to be unable to change your mind.
+                        // In a game, Escape is the overlay — not a quit. A
+                        // download is the one thing it should interrupt.
                         if (launchJob.busy()) launchJob.cancel = true;
+                        else if (playing) toggleOverlay();
                         else running = false;
+                    }
+                    if (owner == InputOwner::Overlay) {
+                        if (e.key.key == SDLK_UP || e.key.key == SDLK_DOWN) {
+                            const int delta = (e.key.key == SDLK_DOWN) ? 1 : -1;
+                            overlaySlot = std::clamp(overlaySlot + delta, 0, OvCount - 1);
+                            overlayFocus.retarget(0.0f, 0.0f);
+                            overlayFocus.elapsed = 0.0f;
+                            overlayFocus.retarget(1.0f, kOverlayFocusDuration);
+                        }
+                        if (e.key.key == SDLK_RETURN || e.key.key == SDLK_SPACE)
+                            overlayActivate();
+                        break;
                     }
                     // F5 writes a state, F8 restores the newest one THIS build can
                     // load, F6 pushes the game's own save. Quitting syncs the
@@ -1919,6 +2020,24 @@ int main(int argc, char** argv) {
                     }
                     if (e.gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_LEFT) moveFocus(-1);
                     if (e.gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_RIGHT) moveFocus(+1);
+                    // Start reaches the overlay from inside a game, which is
+                    // what "reachable from a controller button without leaving
+                    // the game" means.
+                    if (e.gbutton.button == SDL_GAMEPAD_BUTTON_START &&
+                        (playing || overlayOpen)) {
+                        toggleOverlay();
+                        break;
+                    }
+                    if (owner == InputOwner::Overlay) {
+                        if (e.gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_UP)
+                            overlaySlot = std::max(0, overlaySlot - 1);
+                        if (e.gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_DOWN)
+                            overlaySlot = std::min(OvCount - 1, overlaySlot + 1);
+                        if (e.gbutton.button == SDL_GAMEPAD_BUTTON_SOUTH) overlayActivate();
+                        // East is Back, and Back from the overlay is Resume.
+                        if (e.gbutton.button == SDL_GAMEPAD_BUTTON_EAST) toggleOverlay();
+                        break;
+                    }
                     if (owner != InputOwner::UI) break;
                     if (e.gbutton.button == SDL_GAMEPAD_BUTTON_SOUTH) {
                         if (const Card* c = cardAt(focusRow, focusSlot)) launchById(c->id);
@@ -2029,6 +2148,12 @@ int main(int argc, char** argv) {
 
         pumpLaunch();
         pumpStateLoad(stateLoad);
+        if (overlayDemo && playing && !overlayOpen) { overlayDemo = false; toggleOverlay(); }
+        if (overlayExitDemo && playing) {
+            static int t = 0;
+            if (++t == 120) { toggleOverlay(); overlaySlot = OvExit; }
+            if (t == 180) { overlayExitDemo = false; overlayActivate(); }
+        }
 
         // The round trip, once, a couple of seconds into the game so there is
         // something in memory worth snapshotting.
@@ -2063,6 +2188,8 @@ int main(int argc, char** argv) {
         // never advances returns its start value forever.
         resumeFocus.tick(dt);
         scrollY.tick(dt);
+        overlayFade.tick(dt);
+        overlayFocus.tick(dt);
         if (Card* pc = cardAt(focusRow, focusSlot))
             pc->press.retarget(pressing ? 1.0f : 0.0f, kPressDuration);
 
@@ -2403,7 +2530,66 @@ int main(int argc, char** argv) {
         if (haveFavorites) drawShelf("Favorites", favorites, RowFavorites, rowY);
         }  // end of the shelf branch
 
+        // The overlay's scrim belongs to the WORLD, not to the overlay, so it
+        // is drawn before the scene is presented. Put it after and the panel's
+        // glass samples the UN-dimmed picture underneath: over a bright game
+        // the panel comes out milky and its own labels stop being readable,
+        // which is exactly what happened the first time. Dimming the picture is
+        // what a scrim is for; the glass should be blurring the dimmed thing.
+        if (overlayFade.value() > 0.001f) {
+            renderer.draw(ui::Rect{0, 0, ui::kCanvasWidth, ui::kCanvasHeight, 0,
+                                   ui::Color::black(0.55f * overlayFade.value())});
+        }
+
         renderer.presentScene();
+
+        // ---- The in-game overlay -------------------------------------------
+        //
+        // No compositing trick: the frontend owns the frame loop, so this is a
+        // scrim, a panel and some buttons drawn over whatever the game just
+        // rendered. That is the direct payoff of hosting cores in process
+        // rather than launching them.
+        //
+        // Drawn after presentScene because the panel is glass, and it reads the
+        // game's own picture through itself.
+        const float ovl = overlayFade.value();
+        if (ovl > 0.001f) {
+            const float panelH = OvCount * kOverlayButtonHeight +
+                                 (OvCount - 1) * kOverlayButtonGap + 64.0f;
+            const float px = (ui::kCanvasWidth - kOverlayPanelWidth) * 0.5f;
+            // Rises slightly as it arrives rather than only fading: a panel that
+            // just materialises reads as a glitch.
+            const float py = (ui::kCanvasHeight - panelH) * 0.5f + (1.0f - ovl) * 24.0f;
+            renderer.drawGlass(ui::Rect{px, py, kOverlayPanelWidth, panelH,
+                                        kOverlayPanelRadius, ui::Color::white(0)},
+                               6.0f, ui::Color::black(0.30f * ovl));
+
+            for (int i = 0; i < OvCount; ++i) {
+                const bool on = (i == overlaySlot);
+                const float f = on ? overlayFocus.value() : 0.0f;
+                // 1.04, the pause menu's own tier. A full-width button growing
+                // a cover's tenth would run into its neighbours.
+                const float sc2 = 1.0f + f * (kOverlayFocusScale - 1.0f);
+                const float bw = (kOverlayPanelWidth - 64.0f) * sc2;
+                const float bh = kOverlayButtonHeight * sc2;
+                const float bx = px + (kOverlayPanelWidth - bw) * 0.5f;
+                const float by = py + 32.0f +
+                                 i * (kOverlayButtonHeight + kOverlayButtonGap) -
+                                 (bh - kOverlayButtonHeight) * 0.5f;
+
+                ui::Rect btn{bx, by, bw, bh, 16.0f,
+                             ui::Color::white((on ? 0.22f : 0.08f) * ovl)};
+                renderer.draw(btn);
+
+                const char* label = kOverlayLabels[i];
+                const float tw = text.measure(label, ui::TextStyle::Title3, sc);
+                text.draw(renderer, label, bx + (bw - tw) * 0.5f,
+                          by + (bh - text.lineHeight(ui::TextStyle::Title3, sc)) * 0.5f +
+                              text.ascent(ui::TextStyle::Title3, sc),
+                          ui::TextStyle::Title3,
+                          ui::Color::white((on ? 1.0f : 0.60f) * ovl), sc);
+            }
+        }
 
         // ---- A download in progress ----------------------------------------
         //
