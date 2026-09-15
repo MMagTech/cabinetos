@@ -22,6 +22,9 @@
 
 #include <sys/stat.h>
 
+#include <cctype>
+#include <ctime>
+
 #include <atomic>
 #include <csignal>
 #include <thread>
@@ -197,6 +200,142 @@ const SampleEntry kSampleLibrary[] = {
 
 }  // namespace
 
+// Saves and states, and which way they travel.
+//
+// THE DISK COPY IS WRITTEN FIRST, ALWAYS, before any upload is attempted. That
+// is Cabinet's guarantee and the reason is plain: losing signal must never mean
+// losing a save. The upload is a second step that is allowed to fail, and a
+// file that failed to upload is still sitting on disk to try again.
+//
+// A save and a state are different things and are kept apart. The save is the
+// game's own — a cartridge battery, a memory card — it outlives everything, and
+// it uploads with overwrite so a game keeps one card rather than one per
+// session. A state is a snapshot of this exact build and a history of them is
+// the point, so they never overwrite.
+struct GameSession {
+    int romId = 0;
+    std::string title;
+    std::string emulatorTag;    // empty means: do not upload, we cannot vouch for it
+    std::string dir;            // where this game's local copies live
+    std::vector<uint8_t> saveAtLaunch;   // to tell whether it actually changed
+};
+
+static std::string sanitisedStem(const std::string& title) {
+    std::string out;
+    for (char c : title) {
+        const unsigned char u = static_cast<unsigned char>(c);
+        // Anything above ASCII is passed through untouched. This is a UTF-8
+        // string and those bytes are the tail of a multi-byte character: the
+        // first version tested ASCII-only and turned "Pokémon" into "Pok__mon",
+        // which is merely ugly — a Japanese title would have come out as
+        // nothing but underscores, and a ROM library is full of those.
+        if (u >= 0x80 || std::isalnum(u) || c == '-' || c == ' ' || c == '_' ||
+            c == '(' || c == ')' || c == '.' || c == ',' || c == '\'') {
+            out += c;
+        } else {
+            out += '_';
+        }
+    }
+    while (!out.empty() && (out.back() == ' ' || out.back() == '.')) out.pop_back();
+    return out.empty() ? "game" : out;
+}
+
+static bool writeLocal(const std::string& path, const std::vector<uint8_t>& data) {
+    FILE* f = std::fopen(path.c_str(), "wb");
+    if (!f) return false;
+    const bool ok = std::fwrite(data.data(), 1, data.size(), f) == data.size();
+    std::fclose(f);
+    return ok;
+}
+
+// Takes a snapshot of the game's own save and sends it, but only when it has
+// actually changed. A cartridge with no battery returns nothing, which is a
+// normal answer and not a failure.
+static void syncSave(GameSession& sess, romm::Client& client) {
+    cab::Core& core = cab::Core::shared();
+    std::vector<uint8_t> ram;
+    if (!core.readSaveRam(ram) || ram.empty()) return;
+    if (ram == sess.saveAtLaunch) return;     // nothing happened worth sending
+
+    const std::string name = sanitisedStem(sess.title) + ".srm";
+    const std::string path = sess.dir + "/" + name;
+    if (!writeLocal(path, ram)) {
+        std::fprintf(stderr, "[save] could not write %s\n", path.c_str());
+        return;
+    }
+    std::fprintf(stderr, "[save] %zu bytes to %s\n", ram.size(), path.c_str());
+    sess.saveAtLaunch = ram;
+
+    if (sess.emulatorTag.empty()) return;
+    std::string err;
+    if (client.uploadSave(sess.romId, sess.emulatorTag, name, ram, &err))
+        std::fprintf(stderr, "[save] uploaded as %s\n", sess.emulatorTag.c_str());
+    else
+        std::fprintf(stderr, "[save] upload failed, kept locally: %s\n", err.c_str());
+}
+
+static void saveStateNow(GameSession& sess, romm::Client& client) {
+    cab::Core& core = cab::Core::shared();
+    std::vector<uint8_t> st;
+    if (!core.saveState(st) || st.empty()) {
+        std::fprintf(stderr, "[state] this core cannot serialize\n");
+        return;
+    }
+    // Named with a timestamp because states accumulate on purpose; a save
+    // overwrites, a state does not.
+    char stamp[32];
+    const std::time_t now = std::time(nullptr);
+    std::strftime(stamp, sizeof stamp, "%Y-%m-%d %H-%M-%S", std::localtime(&now));
+    const std::string name = sanitisedStem(sess.title) + " [" + stamp + "].state";
+
+    if (!writeLocal(sess.dir + "/" + name, st)) {
+        std::fprintf(stderr, "[state] could not write locally, not uploading\n");
+        return;
+    }
+    std::fprintf(stderr, "[state] %zu bytes saved locally\n", st.size());
+
+    if (sess.emulatorTag.empty()) {
+        std::fprintf(stderr, "[state] no settled tag for this core — not uploaded\n");
+        return;
+    }
+    std::string err;
+    if (client.uploadState(sess.romId, sess.emulatorTag, name, st, &err))
+        std::fprintf(stderr, "[state] uploaded as %s\n", sess.emulatorTag.c_str());
+    else
+        std::fprintf(stderr, "[state] upload failed, kept locally: %s\n", err.c_str());
+}
+
+// The newest state RomM holds that THIS build can actually restore. A state
+// from another emulator is skipped rather than attempted: loading one does not
+// fail cleanly, it boots something that looks like the game and is not.
+static void loadLatestState(GameSession& sess, romm::Client& client) {
+    if (sess.emulatorTag.empty()) {
+        std::fprintf(stderr, "[state] no settled tag for this core — refusing to load\n");
+        return;
+    }
+    std::vector<romm::Asset> states;
+    std::string err;
+    if (!client.fetchStates(sess.romId, &states, &err)) {
+        std::fprintf(stderr, "[state] %s\n", err.c_str());
+        return;
+    }
+    const romm::Asset* best = nullptr;
+    int skipped = 0;
+    for (const auto& a : states) {
+        if (a.emulator != sess.emulatorTag) { ++skipped; continue; }
+        if (!best || a.updatedAt > best->updatedAt) best = &a;
+    }
+    if (!best) {
+        std::fprintf(stderr, "[state] none for %s (%d for other emulators)\n",
+                     sess.emulatorTag.c_str(), skipped);
+        return;
+    }
+    std::vector<uint8_t> data = client.fetchAsset("states", best->id);
+    if (data.empty()) { std::fprintf(stderr, "[state] download was empty\n"); return; }
+    std::fprintf(stderr, "[state] %s (%zu bytes) -> %s\n", best->fileName.c_str(),
+                 data.size(), cab::Core::shared().loadState(data) ? "restored" : "REFUSED");
+}
+
 // A launch in progress, off the frame thread.
 //
 // Downloading on the thread that draws is what the old planLaunch did, and it
@@ -221,6 +360,10 @@ struct LaunchJob {
     // handover.
     std::string romPath;
     std::string coreName;
+    // Carried through so the session can be built when the game loads: which
+    // game it is, and where its local saves and states belong.
+    int romId = 0;
+    std::string gameDir;
     std::string corePath;
     std::string title;
     std::string message;
@@ -254,6 +397,8 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
     job.got = 0;
     job.total = 0;
     job.title = game.name.empty() ? game.fsName : game.name;
+    job.romId = game.id;
+    job.gameDir = cacheDir + "/" + std::to_string(game.id);
     job.coreName = cov.core;
     job.corePath = coreDir + "/" + cov.core + "_libretro.so";
     job.romPath.clear();
@@ -798,6 +943,10 @@ int main(int argc, char** argv) {
     // the whole Home-to-game transition can be watched on a machine with no
     // controller attached to it.
     int autoLaunchId = 0;
+    // Runs the whole save/state round trip once the game is up: write a state,
+    // upload it, then fetch the newest one back and restore it. Headless, so
+    // the sync can be proved on a machine nobody is sitting at.
+    bool syncTest = false;
     float autoLaunchAfter = 0.0f;
     for (int i = 1; i < argc; ++i) {
         if (SDL_strcmp(argv[i], "--screenshot") == 0 && i + 1 < argc) {
@@ -826,6 +975,8 @@ int main(int argc, char** argv) {
             coreDir = argv[++i];
         } else if (SDL_strcmp(argv[i], "--launch") == 0 && i + 1 < argc) {
             autoLaunchId = SDL_atoi(argv[++i]);
+        } else if (SDL_strcmp(argv[i], "--sync-test") == 0) {
+            syncTest = true;
         } else if (SDL_strcmp(argv[i], "--launch-after") == 0 && i + 1 < argc) {
             autoLaunchAfter = static_cast<float>(SDL_atof(argv[++i]));
         } else if (SDL_strcmp(argv[i], "--rom-probe") == 0 && i + 1 < argc) {
@@ -1400,6 +1551,7 @@ int main(int argc, char** argv) {
     // the catalog picks the core, the core decides whether its archive gets
     // opened, and the worker puts what comes out where the core can open it.
     LaunchJob launchJob;
+    GameSession session;
     auto launchById = [&](int romId) -> bool {
         if (launchJob.busy()) return false;    // one at a time
         const romm::Game* g = nullptr;
@@ -1438,6 +1590,42 @@ int main(int argc, char** argv) {
             std::fprintf(stderr, "[launch] %s\n", core.error().c_str());
             return;
         }
+        // The session, and the game's own save restored into it BEFORE the
+        // first frame. A battery save is the game's progress; it has to be in
+        // place when the game boots, not offered as a choice afterwards.
+        session = GameSession{};
+        session.romId = launchJob.romId;
+        session.title = launchJob.title;
+        session.dir = launchJob.gameDir;
+        if (const char* tag = catalog::emulatorTag(launchJob.coreName.c_str())) {
+            session.emulatorTag = tag;
+        } else {
+            std::fprintf(stderr, "[sync] no settled tag for %s — saves stay local\n",
+                         launchJob.coreName.c_str());
+        }
+
+        if (core.saveRamSize() > 0 && !session.emulatorTag.empty()) {
+            std::vector<romm::Asset> saves;
+            std::string serr;
+            if (liveClient.fetchSaves(session.romId, &saves, &serr)) {
+                const romm::Asset* newest = nullptr;
+                for (const auto& a : saves) {
+                    if (a.emulator != session.emulatorTag) continue;
+                    if (!newest || a.updatedAt > newest->updatedAt) newest = &a;
+                }
+                if (newest) {
+                    std::vector<uint8_t> data = liveClient.fetchAsset("saves", newest->id);
+                    if (!data.empty() && core.writeSaveRam(data)) {
+                        session.saveAtLaunch = data;
+                        std::fprintf(stderr, "[save] restored %s (%zu bytes)\n",
+                                     newest->fileName.c_str(), data.size());
+                    }
+                }
+            }
+        }
+        if (session.saveAtLaunch.empty()) core.readSaveRam(session.saveAtLaunch);
+        std::fprintf(stderr, "[save] battery is %zu bytes\n", core.saveRamSize());
+
         std::fprintf(stderr, "[launch] running %s\n", core.coreName().c_str());
         playing = true;
     };
@@ -1552,26 +1740,12 @@ int main(int argc, char** argv) {
                         if (launchJob.busy()) launchJob.cancel = true;
                         else running = false;
                     }
-                    if (playing && e.key.key == SDLK_F5) {
-                        cab::Core& c = cab::Core::shared();
-                        std::vector<uint8_t> st;
-                        if (c.saveState(st)) {
-                            // Local first, always. Losing signal mid-save must
-                            // never mean losing the save; the upload is a
-                            // second step that can fail harmlessly.
-                            if (FILE* f = std::fopen("saves/quick.state", "wb")) {
-                                std::fwrite(st.data(), 1, st.size(), f);
-                                std::fclose(f);
-                                std::fprintf(stderr, "[state] saved %zu bytes\n", st.size());
-                            }
-                        }
-                    }
-                    if (playing && e.key.key == SDLK_F8) {
-                        cab::Core& c = cab::Core::shared();
-                        std::vector<uint8_t> st = ui::ImageCache::readFile("saves/quick.state");
-                        std::fprintf(stderr, "[state] load %s\n",
-                                     (!st.empty() && c.loadState(st)) ? "ok" : "FAILED");
-                    }
+                    // F5 writes a state, F8 restores the newest one THIS build can
+                    // load, F6 pushes the game's own save. Quitting syncs the
+                    // save by itself; F6 is for testing without quitting.
+                    if (playing && e.key.key == SDLK_F5) saveStateNow(session, liveClient);
+                    if (playing && e.key.key == SDLK_F8) loadLatestState(session, liveClient);
+                    if (playing && e.key.key == SDLK_F6) syncSave(session, liveClient);
                     if (owner != InputOwner::UI) break;
                     if (e.key.key == SDLK_LEFT) moveFocus(-1);
                     if (e.key.key == SDLK_RIGHT) moveFocus(+1);
@@ -1723,6 +1897,24 @@ int main(int argc, char** argv) {
         }
 
         pumpLaunch();
+
+        // The round trip, once, a couple of seconds into the game so there is
+        // something in memory worth snapshotting.
+        if (syncTest && playing) {
+            static int sinceStart = 0;
+            if (++sinceStart == 150) {
+                std::fprintf(stderr, "[sync-test] --- saving ---\n");
+                saveStateNow(session, liveClient);
+                // Forced: at a title screen with no input the battery has not
+                // changed, and "nothing to send" is the correct behaviour but
+                // proves nothing about whether sending works.
+                session.saveAtLaunch.clear();
+                syncSave(session, liveClient);
+                std::fprintf(stderr, "[sync-test] --- loading back ---\n");
+                loadLatestState(session, liveClient);
+                std::fprintf(stderr, "[sync-test] --- done ---\n");
+            }
+        }
         images.pump(dt);
         for (auto& c : cards) {
             c.focus.tick(dt);

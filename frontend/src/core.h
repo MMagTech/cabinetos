@@ -134,6 +134,19 @@ public:
     // exact thing the manifest exists to prevent.
     bool loadState(const std::vector<uint8_t>& data);
 
+    // The battery-backed save: a cartridge's save RAM, a PS1 memory card,
+    // Saturn's internal backup. RETRO_MEMORY_SAVE_RAM, which is a DIFFERENT
+    // mechanism from a save state and must not be conflated with one — a state
+    // is a snapshot of the whole machine and only loads in the build that
+    // wrote it, while this is the game's own save and outlives everything.
+    //
+    // The pointer the core hands back is live: it is the core's own memory, so
+    // reading it mid-frame is how a snapshot is taken, and writing into it
+    // before the game boots is how one is restored.
+    bool readSaveRam(std::vector<uint8_t>& out) const;
+    bool writeSaveRam(const std::vector<uint8_t>& data);
+    size_t saveRamSize() const;
+
     // --- In-game saves -------------------------------------------------------
     //
     // A different mechanism from save states, and the one people assume is

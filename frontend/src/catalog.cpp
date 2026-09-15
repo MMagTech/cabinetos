@@ -87,6 +87,25 @@ Coverage lookup(const std::string& slug, const std::string& fsSlug) {
 
 }  // namespace
 
+const char* emulatorTag(const char* core) {
+    if (!core) return nullptr;
+    // Cabinet's own strings, from RommApp/RommApp/Native/NativeCore.swift.
+    // Only cores whose CabinetOS build matches Cabinet's configuration appear
+    // here; see the header.
+    struct { const char* core; const char* tag; } kTags[] = {
+        // Pinned at d9d6cd06, no build arguments on any platform, and the
+        // save-state portability result was proved with this core.
+        {"gambatte", "gambatte-native"},
+        // Pinned at a7985a9c. CabinetOS builds HAVE_CDROM=0, which is what
+        // Cabinet's Apple builds get by default, and the object-file
+        // comparison showed the flag changes nothing under core/.
+        {"genesis_plus_gx", "gpgx-native"},
+    };
+    for (const auto& t : kTags)
+        if (std::strcmp(t.core, core) == 0) return t.tag;
+    return nullptr;
+}
+
 Coverage coverageFor(const romm::Platform& p) { return lookup(p.slug, p.fsSlug); }
 Coverage coverageFor(const romm::Game& g) { return lookup(g.platformSlug, g.platformFsSlug); }
 

@@ -57,4 +57,26 @@ inline bool playable(const romm::Game& g) {
     return coverageFor(g).support == Support::Playable;
 }
 
+// The tag a save or state is filed under on RomM, for a given manifest core
+// name. This is the compatibility marker: Cabinet greys out a state whose tag
+// does not match the core about to run, which is what stops someone being
+// offered a save that cannot load.
+//
+// **CabinetOS shares Cabinet's tags, and only because of work already done.**
+// A Gambatte state is bit-identical between Cabinet's macOS arm64 build and a
+// Linux x86-64 build AT THE SAME COMMIT; core-manifest.json pins that commit,
+// build-core.sh asserts it, and CI proved the artifact reproducible across two
+// machines. Those three together make a shared tag a fact rather than a hope,
+// and they are why a state written on an Apple TV loads on this console.
+//
+// The rule for adding a core: share Cabinet's tag ONLY where the build is
+// provably the same thing — same pinned commit AND the same build arguments.
+// Where CabinetOS pulls a different lever, it must use a different tag, or
+// Cabinet will offer someone a state that cannot load. Wrong in the safe
+// direction costs a greyed-out entry; wrong the other way costs progress.
+//
+// Returns nullptr for a core whose tag has not been settled, which is a refusal
+// to upload rather than a licence to guess.
+const char* emulatorTag(const char* manifestCoreName);
+
 }  // namespace catalog
