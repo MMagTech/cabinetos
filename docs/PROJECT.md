@@ -2709,13 +2709,32 @@ owns the* what*"* — the triggers belong to the screens, the capture and upload
 belong to one shared type. CabinetOS should keep that split from the start,
 because tvOS once carried its own copy of the *what* and it silently went stale.
 
-**One thing that is not deferred by the above.** The upload still happens on the
-frame thread, so the picture stops while it runs. On a LAN with a 60 KB Game Boy
-state that is imperceptible; on a slow link, or with a PS2 memory card, the game
-visibly hangs, and if the server does not answer, curl's timeout makes the
-console look dead for thirty seconds. It is the same fault the download had this
-morning and it wants the same fix — a worker, with the job structure that
-already exists.
+**Nothing that talks to a server may stop the picture. Fixed 2026-09-15.**
+Uploads were on the frame thread, which on a LAN with a 60 KB state was
+imperceptible and on a slow link is a visible hang — and against a server that
+does not answer, curl's timeout would leave the console looking dead for thirty
+seconds.
+
+The split that matters is not "put it on a thread", it is **which** part moves:
+
+- **The frame thread reads the core and writes the local copy.** Reading has to
+  happen there because a core is not thread-safe, and the local write has to
+  happen before the upload is queued, or *local first* stops being true the
+  moment the process dies between the two.
+- **Only the network moves to the worker.** That is the part that can take
+  thirty seconds.
+
+**Measured, saving a state and a memory card together: 3.21 ms on the frame
+thread**, which is a core read and two local writes, inside a single 16.7 ms
+frame. Every upload completed afterwards on the worker.
+
+Loading a state is network work too and got the same treatment: the search and
+fetch happen on a worker, and only applying the state touches the core, which
+waits for the frame thread.
+
+**The queue is drained on the way out, not abandoned.** Anything still pending
+is a save someone has already made. Quitting is the one place waiting for the
+network is correct, because there is no picture left to stop.
 
 #### Downloads stream, and the console keeps drawing
 
