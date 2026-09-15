@@ -427,6 +427,128 @@ bool Client::fetchGames(int platformId, std::vector<Game>* out, std::string* err
     return true;
 }
 
+namespace {
+// One multipart/form-data body with a single file part. Hand-built because the
+// whole client is: no HTTP library, and this is thirty lines.
+std::string multipartBody(const std::string& boundary, const char* partName,
+                          const std::string& fileName, const std::vector<uint8_t>& data) {
+    std::string b;
+    b.reserve(data.size() + fileName.size() + 256);
+    b += "--" + boundary + "\r\n";
+    b += "Content-Disposition: form-data; name=\"";
+    b += partName;
+    b += "\"; filename=\"" + fileName + "\"\r\n";
+    b += "Content-Type: application/octet-stream\r\n\r\n";
+    b.append(reinterpret_cast<const char*>(data.data()), data.size());
+    b += "\r\n--" + boundary + "--\r\n";
+    return b;
+}
+
+bool parseAssets(const std::string& body, std::vector<Asset>* out, std::string* err) {
+    json_object* root = json_tokener_parse(body.c_str());
+    if (!root) { if (err) *err = "response was not JSON"; return false; }
+    json_object* arr = root;
+    if (json_object_get_type(root) != json_type_array) {
+        if (!json_object_object_get_ex(root, "items", &arr) ||
+            json_object_get_type(arr) != json_type_array) {
+            json_object_put(root);
+            if (err) *err = "response was not a list";
+            return false;
+        }
+    }
+    const size_t n = json_object_array_length(arr);
+    for (size_t i = 0; i < n; ++i) {
+        json_object* o = json_object_array_get_idx(arr, i);
+        Asset a;
+        a.id = static_cast<int>(jint(o, "id"));
+        a.fileName = jstr(o, "file_name");
+        a.sizeBytes = jint(o, "file_size_bytes");
+        a.emulator = jstr(o, "emulator");
+        a.updatedAt = jstr(o, "updated_at");
+        if (a.id != 0) out->push_back(std::move(a));
+    }
+    json_object_put(root);
+    return true;
+}
+}  // namespace
+
+bool Client::fetchSaves(int romId, std::vector<Asset>* out, std::string* err) {
+    out->clear();
+    std::string body;
+    if (!get("/api/saves?rom_id=" + std::to_string(romId), &body, err)) return false;
+    return parseAssets(body, out, err);
+}
+
+bool Client::fetchStates(int romId, std::vector<Asset>* out, std::string* err) {
+    out->clear();
+    std::string body;
+    if (!get("/api/states?rom_id=" + std::to_string(romId), &body, err)) return false;
+    return parseAssets(body, out, err);
+}
+
+std::vector<uint8_t> Client::fetchAsset(const char* kind, int assetId) const {
+    return fetchBytes(std::string("/api/") + kind + "/" + std::to_string(assetId) + "/content");
+}
+
+bool Client::uploadSave(int romId, const std::string& emulator, const std::string& fileName,
+                        const std::vector<uint8_t>& data, std::string* err) const {
+    // overwrite=true is load-bearing: it replaces the server's copy of the same
+    // file name instead of stacking a row per upload, which is what keeps a PS1
+    // game at ONE memory card rather than one per session. Cabinet's note.
+    const std::string path = "/api/saves?rom_id=" + std::to_string(romId) +
+                             "&emulator=" + emulator + "&overwrite=true";
+    return postMultipart(path, "saveFile", fileName, data, err);
+}
+
+bool Client::uploadState(int romId, const std::string& emulator, const std::string& fileName,
+                         const std::vector<uint8_t>& data, std::string* err) const {
+    // Deliberately NOT overwrite: a history of states is the point of states.
+    const std::string path = "/api/states?rom_id=" + std::to_string(romId) +
+                             "&emulator=" + emulator;
+    return postMultipart(path, "stateFile", fileName, data, err);
+}
+
+bool Client::postMultipart(const std::string& path, const char* partName,
+                           const std::string& fileName, const std::vector<uint8_t>& data,
+                           std::string* err) const {
+    CURL* c = curl_easy_init();
+    if (!c) { if (err) *err = "curl init failed"; return false; }
+
+    const std::string boundary = "CabinetOSBoundary7f3a91c4";
+    const std::string body = multipartBody(boundary, partName, fileName, data);
+
+    curl_slist* hdrs = curl_slist_append(
+        nullptr, ("Content-Type: multipart/form-data; boundary=" + boundary).c_str());
+    if (!token_.empty())
+        hdrs = curl_slist_append(hdrs, ("Authorization: Bearer " + token_).c_str());
+
+    std::string reply;
+    const std::string url = encodeUrl(base_ + path);
+    curl_easy_setopt(c, CURLOPT_URL, url.c_str());
+    curl_easy_setopt(c, CURLOPT_POST, 1L);
+    curl_easy_setopt(c, CURLOPT_POSTFIELDS, body.data());
+    curl_easy_setopt(c, CURLOPT_POSTFIELDSIZE_LARGE,
+                     static_cast<curl_off_t>(body.size()));
+    curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, sink);
+    curl_easy_setopt(c, CURLOPT_WRITEDATA, &reply);
+    curl_easy_setopt(c, CURLOPT_CONNECTTIMEOUT, kConnectTimeoutSec);
+    curl_easy_setopt(c, CURLOPT_TIMEOUT, kTimeoutSec);
+    curl_easy_setopt(c, CURLOPT_HTTPHEADER, hdrs);
+
+    const CURLcode rc = curl_easy_perform(c);
+    long status = 0;
+    curl_easy_getinfo(c, CURLINFO_RESPONSE_CODE, &status);
+    curl_slist_free_all(hdrs);
+    curl_easy_cleanup(c);
+
+    if (rc != CURLE_OK) { if (err) *err = curl_easy_strerror(rc); return false; }
+    if (status >= 400) {
+        if (err) *err = "HTTP " + std::to_string(status) + ": " + reply.substr(0, 180);
+        return false;
+    }
+    return true;
+}
+
 bool Client::fetchFirmware(int platformId, std::vector<Firmware>* out, std::string* err) {
     out->clear();
     std::string body;

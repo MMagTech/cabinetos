@@ -500,6 +500,36 @@ bool Core::saveState(std::vector<uint8_t>& out) {
     return g.serialize(out.data(), n);
 }
 
+size_t Core::saveRamSize() const {
+    if (!gameLoaded_ || !g.get_memory_size) return 0;
+    return g.get_memory_size(RETRO_MEMORY_SAVE_RAM);
+}
+
+bool Core::readSaveRam(std::vector<uint8_t>& out) const {
+    out.clear();
+    const size_t n = saveRamSize();
+    if (n == 0 || !g.get_memory_data) return false;   // no battery in this cart
+    const void* p = g.get_memory_data(RETRO_MEMORY_SAVE_RAM);
+    if (!p) return false;
+    out.resize(n);
+    std::memcpy(out.data(), p, n);
+    return true;
+}
+
+bool Core::writeSaveRam(const std::vector<uint8_t>& data) {
+    const size_t n = saveRamSize();
+    if (n == 0 || data.empty() || !g.get_memory_data) return false;
+    void* p = g.get_memory_data(RETRO_MEMORY_SAVE_RAM);
+    if (!p) return false;
+    // Sizes can differ between a save written elsewhere and what this core
+    // exposes. Copy what fits rather than refusing: a short save is a smaller
+    // cart image and the remainder is already zeroed, and a long one is not
+    // ours to truncate silently — but dropping the tail is still better than
+    // losing the save entirely.
+    std::memcpy(p, data.data(), std::min(n, data.size()));
+    return true;
+}
+
 bool Core::loadState(const std::vector<uint8_t>& data) {
     if (!gameLoaded_ || !g.unserialize || data.empty()) return false;
     return g.unserialize(data.data(), data.size());

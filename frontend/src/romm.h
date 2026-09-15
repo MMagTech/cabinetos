@@ -77,6 +77,24 @@ struct Firmware {
     bool verified = false;
 };
 
+// A save or a save state held by RomM.
+//
+// They are separate endpoints and separate ideas, and Cabinet keeps them apart
+// on purpose. A SAVE is the game's own — a cartridge battery, a memory card —
+// and it outlives everything; it is uploaded with overwrite so a PS1 game keeps
+// one memory card rather than one per session. A STATE is a snapshot of the
+// whole machine, only loadable by the build that wrote it, and a history of
+// them is the point, so states never overwrite.
+struct Asset {
+    int id = 0;
+    std::string fileName;
+    int64_t sizeBytes = 0;
+    // Which core wrote it. The reason states can be offered or greyed out
+    // rather than failing in front of someone — see docs/CABINET.md.
+    std::string emulator;
+    std::string updatedAt;
+};
+
 // An in-flight pairing. Short-lived: RomM expires these in minutes.
 struct Pairing {
     std::string userCode;          // shown to the person, e.g. "ZHVUCSF4"
@@ -143,6 +161,20 @@ public:
     // platforms need none.
     bool fetchFirmware(int platformId, std::vector<Firmware>* out, std::string* err);
 
+    bool fetchSaves(int romId, std::vector<Asset>* out, std::string* err);
+    bool fetchStates(int romId, std::vector<Asset>* out, std::string* err);
+
+    // `/api/saves/{id}/content` or `/api/states/{id}/content`. Small enough to
+    // hold: a state is hundreds of kilobytes, a memory card is 128.
+    std::vector<uint8_t> fetchAsset(const char* kind, int assetId) const;
+
+    // Both post multipart. `emulator` is the tag that decides whether a state
+    // is offered later, so it must identify the BUILD and not just the core.
+    bool uploadSave(int romId, const std::string& emulator, const std::string& fileName,
+                    const std::vector<uint8_t>& data, std::string* err) const;
+    bool uploadState(int romId, const std::string& emulator, const std::string& fileName,
+                     const std::vector<uint8_t>& data, std::string* err) const;
+
     // For ImageCache::Loader. Returns empty on any failure, because a cover
     // that will not load is not an error the frame loop can do anything about.
     //
@@ -166,6 +198,9 @@ public:
 private:
     bool fetchFiltered(const char* filter, int limit, std::vector<Game>* out,
                        std::string* err);
+    bool postMultipart(const std::string& path, const char* partName,
+                       const std::string& fileName, const std::vector<uint8_t>& data,
+                       std::string* err) const;
     bool get(const std::string& path, std::string* body, std::string* err) const;
     bool postJson(const std::string& path, const std::string& json,
                   std::string* body, long* status, std::string* err) const;
