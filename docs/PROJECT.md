@@ -2591,6 +2591,98 @@ running it with save states is real. Everything between RomM and that point —
 downloading, unzipping, where a downloaded ROM lives, what evicts it, choosing
 the core from the platform, and reaching any of it from the UI — does not exist.
 
+#### How saves, states and firmware actually work, read from Cabinet
+
+**Read 2026-09-14 from `RommApp/RommApp/Auth/RommClient.swift`,
+`Native/NativeLauncher.swift`, `Native/NativeCore.swift` and
+`Native/KeptGames.swift`.** This was being reasoned about from the API surface,
+which was the wrong way round: tvOS and macOS already ship the answer.
+
+**The console is not the home for any of this. RomM is.** Saves, save states and
+memory cards all live on the server and all come back down. The reference server
+holds 80 saves and 54 states already, several of them written by Cabinet.
+
+##### Saves and states are different endpoints, on purpose
+
+| | |
+|---|---|
+| Battery saves, memory cards | `POST /api/saves?rom_id=&emulator=&overwrite=true`, multipart, part `saveFile` |
+| Save states | `POST /api/states?rom_id=&emulator=`, multipart, part `stateFile`, optional `screenshotFile` |
+| Reading either | `GET /api/saves?rom_id=` / `/api/states?rom_id=`, then `/{id}/content` |
+
+**`overwrite=true` on saves is load-bearing**: it replaces the server's copy of
+the same file name instead of stacking a row per upload, which is *"what keeps a
+PS1 game at one memory card rather than one per session."* States deliberately
+do not overwrite — a state history is the point of states.
+
+##### The `emulator` tag is the compatibility mechanism, and CabinetOS must get it right
+
+Every upload carries an `emulator` string. Cabinet's is per **core**, not per
+platform — `gambatte-native`, `gpgx-native`, `pcsx-rearmed-native` — and its own
+comment says why:
+
+> *libretro state formats are core-build-specific, so each player's states are
+> tagged distinctly on purpose: a separate tag keeps each player's launch UI
+> from offering states it cannot actually restore.*
+
+So the tag is what stops a launch screen offering a state that will fail. Which
+raises the decision CabinetOS cannot avoid:
+
+> **Does CabinetOS write `gambatte-native`, or a tag of its own?**
+
+**It should write the same tag — and only because of work already done.** The
+whole point of the Phase 3 result is that a Gambatte state is bit-identical
+between Cabinet's macOS arm64 build and a Linux x86-64 build *at the same
+commit*. `core-manifest.json` pins that commit, `build-core.sh` asserts it, and
+CI proves the artifact is reproducible. Those three together are what make
+sharing a tag safe rather than optimistic.
+
+**The rule, therefore: share Cabinet's tag only where the build is provably the
+same thing** — same pinned commit *and* the same build arguments. Where
+CabinetOS pulls a different lever, it must use a different tag, or Cabinet's UI
+will offer the person a state that cannot load. Today gambatte and
+genesis_plus_gx both match Cabinet's configuration, so both share. The
+recompiler-sensitive cores are exactly the ones where this has not been settled,
+which is one more reason open question 13's remaining half matters.
+
+A tag that is wrong in the safe direction costs a greyed-out state. Wrong in the
+other direction, it costs someone their progress.
+
+##### Firmware: fetch everything the platform lists
+
+From `NativeLauncher`:
+
+> *Fetches every firmware file the platform lists rather than assuming which one
+> the board wants: a core looks BIOS files up by name in the system directory,
+> ignores what it does not need (Beetle Saturn wants one of two region BIOSes;
+> FBNeo boards like CV1000 need none at all), so extra files are harmless and
+> missing ones are the only failure that matters.*
+
+So: `GET /api/firmware?platform_id=`, download all of it into the system
+directory, and let the core pick. Do not try to be clever about which BIOS a
+given game needs.
+
+##### What a kept game is
+
+`KeptGame` embeds **the whole `Rom` captured at keep time**, not a subset, so a
+kept game can be browsed and launched with no network at all — cover paths and
+platform identifiers included. Its directory holds the ROM *and* its firmware,
+so it boots with zero requests. States stay internal to it and are deliberately
+never exposed in the Files mirror, because they are core-build-specific and
+belong to RomM's database rather than its filesystem layout.
+
+##### What this means for eviction
+
+Almost nothing on the console is irreplaceable, which makes reclaiming space
+safe: ROMs, firmware, saves, states and memory cards all come back from RomM.
+**The one thing that cannot be re-fetched is something written locally that has
+not been uploaded yet** — hence "local first, always", and a `pending-states`
+directory that eviction must never touch.
+
+It also adds a requirement this project had not accounted for: **the console
+must upload, not merely download.** That needs write scope on assets, which the
+first pairing did not request.
+
 #### Downloads stream, and the console keeps drawing
 
 **Built and measured 2026-09-14.** Two things were wrong with the first working
