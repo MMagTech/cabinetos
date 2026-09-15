@@ -62,6 +62,21 @@ struct Game {
     int64_t sizeBytes = 0;
 };
 
+// One BIOS file a platform carries.
+//
+// Cabinet's rule, and it is the right one: fetch EVERY file the platform lists
+// rather than working out which one a given game needs. A core looks BIOS up by
+// name in the system directory and ignores what it does not want — Beetle
+// Saturn takes one of two region BIOSes, some FBNeo boards need none — so extra
+// files are harmless and a missing one is the only failure that matters.
+struct Firmware {
+    int id = 0;
+    std::string fileName;
+    int64_t sizeBytes = 0;
+    std::string md5;
+    bool verified = false;
+};
+
 // An in-flight pairing. Short-lived: RomM expires these in minutes.
 struct Pairing {
     std::string userCode;          // shown to the person, e.g. "ZHVUCSF4"
@@ -123,6 +138,10 @@ public:
     // The games marked favourite, newest first. Home's second shelf, and only
     // drawn when there are any — an empty Favorites row is worse than none.
     bool fetchFavorites(int limit, std::vector<Game>* out, std::string* err);
+
+    // Every firmware file a platform carries. Empty is a normal answer: most
+    // platforms need none.
+    bool fetchFirmware(int platformId, std::vector<Firmware>* out, std::string* err);
 
     // For ImageCache::Loader. Returns empty on any failure, because a cover
     // that will not load is not an error the frame loop can do anything about.
