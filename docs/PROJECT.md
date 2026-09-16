@@ -3129,6 +3129,42 @@ keeping.** Keeping is already the one action the console may refuse, for the
 save floor; this is the second and larger reason. The cache itself needs no
 protecting from the system, because it is the system's to take.
 
+##### Partitioning was considered and rejected
+
+**Raised by Marcus in the same breath, and reasoned to the right answer: a
+separate system partition would enforce this in the kernel rather than in our
+code, and the problem is that nobody can say how big it should be.**
+
+Three reasons it stays one filesystem, beyond the sizing guess:
+
+1. **A partition is a wall in BOTH directions.** As things are, an update that
+   turns out larger than expected eats into the game cache and still works. With
+   a system partition, an OS side that fills — a bigger update, logs, anything
+   unforeseen — cannot touch the two hundred gigabytes sitting free on the games
+   side. One filesystem is the more forgiving arrangement, not the riskier one.
+2. **Wrong is recoverable on one side and not the other.** A reserve that turns
+   out too small is a number changed in the next update. A partition that turns
+   out too small is a reflash.
+3. **It is not this project's layer.** Constraint 1 is to stay at the
+   application layer; the disk layout belongs to the base image, and
+   `disk_config/disk.toml` currently declares a single filesystem at `/`.
+
+**The honest argument FOR a partition**, which is why this is recorded rather
+than dismissed: it does not depend on our code being correct. A bug in the
+reserve logic fills the disk; a partition could not be filled by games whatever
+we got wrong. That is real — and the failure it prevents is recoverable (delete
+games, or let the system take the cache) while the failure it introduces is not.
+
+**And the proper separation already exists in the design, one level up.** Open
+question 14 gives the person a choice of where games live — a second SSD, a USB
+drive. Take that and the system disk is untouched by games and none of this
+applies. **That is a real separation, chosen by somebody who knows their own
+hardware**, rather than a number this project picks at install time for a machine
+it has never seen.
+
+So the reserve is the answer for the single-drive case, which is the common one
+rather than the only one.
+
 **A number, and it is the least certain thing here:** enough for a full image
 rather than a typical delta, since the case that matters is the one where the
 cache is already empty and only kept games remain. That is the far side of 5 GB
