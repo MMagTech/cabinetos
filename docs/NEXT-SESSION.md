@@ -3,154 +3,133 @@
 Written at the end of each session for whoever starts the next one, which is
 usually a fresh assistant with no memory of what just happened.
 
-**`docs/PROJECT.md` is the specification and it is authoritative.** This file is
-only the short version: what state things are in, what to do next, and the
-handful of things that will waste a day if nobody says them out loud.
+**`docs/PROJECT.md` is the specification and it is authoritative. `docs/CABINET.md`
+maps what Cabinet already solves.** This file is only the short version: what
+state things are in, what to do next, and the handful of things that will waste
+a day if nobody says them out loud.
 
 Rewrite it at the end of a session. It is meant to be current, not a log.
 
 ---
 
-**Read `docs/CABINET.md` before designing anything.** Cabinet ships on iOS,
-tvOS and macOS and has already solved most of what comes up here — saves and
-memory-card sync, firmware, core options, kept games, the whole launch path. It
-maps where each answer lives. tvOS is the surface to copy, not iOS.
+**Read `docs/CABINET.md` before designing anything.** Cabinet ships on iOS, tvOS
+and macOS and has already answered most of what comes up here. tvOS is the
+surface to copy, not iOS. Cabinet is not checked out on this Mac; clone it:
 
-Read `docs/PROJECT.md` first — all of it. It is the specification and it is
-current. Start with "Where the project is", which tells you what runs, what does
-not, and what has never been tested.
+```
+git clone --filter=blob:none --sparse https://github.com/MMagTech/cabinet.git
+cd cabinet && git sparse-checkout set RommApp docs
+```
 
-Then read `frontend/README.md` for the build and run loop. **Nothing builds on
-this Mac** — the frontend is built in a container on the test VM and run there.
+Then read `docs/PROJECT.md`, and `frontend/README.md` for the build loop.
+**Nothing builds on this Mac** — the frontend and the cores are built in a
+container on the test VM, and in CI.
 
 ## Where things stand
 
-The frontend is real and running on the VM: C++20, SDL3, one EGL/GLES 3 context,
-no toolkit. It has the design system's focus treatment and motion, text with a
-CJK fallback, cover art with an async budgeted cache, frosted glass, an
-on-screen keyboard, and a libretro core host. **Dr. Mario runs on it, with
-save states.**
+**The whole loop works.** Browse the real library, pick a game, watch it
+download with progress, play it, save and load states, and leave — with the save
+syncing on the way out.
 
-The biggest question in the project is answered: **save states are portable
-between Cabinet and CabinetOS**, proved by building Gambatte for Linux at the
-commit Cabinet's Mac build is pinned to and cross-loading states both ways with
-a control run.
-
-**Two cores now build in CI** — `gambatte` and `genesis_plus_gx` — on a GitHub
-runner from a bare checkout, in about a minute each. **The builds are
-reproducible across machines**: the VM and the GitHub runner produce
-byte-identical artifacts, so the sha256 in a CI log is a fact about the revision
-and flags rather than about the machine, and a mismatch is a real signal. The workflow asserts the
-finished `.so` reports its pinned revision as its own version string, not merely
-that the checkout was at it (`tools/core-info.c`). Adding a core is a `case` arm
-in `cores/build-core.sh` plus a name in the matrix in
-`.github/workflows/build-core.yml`.
-
-**There is read-only access to the live RomM server**, obtained through the same
-device-approval flow Phase 4 has to implement. Token at
-`~/.config/cabinetos/romm-token.json`, 0600, on the Mac — **not** on the VM and
-not in the repo. Six read scopes, no writes, no expiry. The VM should get its
-own token rather than a copy, so they revoke independently.
+- **986 of 1644 games playable**, with fifteen cores built.
+- **Home is real**: a hero from RomM's own play history, Recent, Favorites,
+  focus moving between rows, scrolling.
+- **Downloads stream to disk on a worker.** Nothing that talks to a server stops
+  the picture — measured at 3.21 ms on the frame thread for a save.
+- **Saves, memory cards and states sync both ways** with RomM, tagged with
+  Cabinet's own emulator strings so they interchange with the Apple apps.
+- **BIOS comes down with the game**, every file the platform lists.
+- **An in-game overlay**: Start or Escape. Resume, save state, load state, exit.
+- **Fifteen cores build in CI**, each asserting its pinned revision.
 
 ## Pick up with one of these
 
-They are independent. Do not try to do them all.
+**1. The four remaining backend questions, and mGBA.** melonDS, picodrive,
+Flycast and mupen64plus each turn on a recompiler Cabinet has off, and each
+needs the check pcsx_rearmed just had before its emulator tag can be shared —
+see open question 13 for how that went and what the object diff showed. mGBA is
+CMake rather than a Makefile and needs a different path in `build-core.sh`.
+Together they are worth about 260 more games.
 
-**1. The backend-sensitive cores.** pcsx_rearmed, melonDS, Flycast, picodrive,
-where the Linux default turns on a recompiler Cabinet's build has off. **That is
-where the remaining parity risk lives.** The lever for each is in PROJECT.md's
-table under open question 13; the pin and the build arguments are in the
-manifest.
+**2. Nothing evicts anything.** A ROM already on disk at the right size is
+reused, and that is all. 1644 games at these sizes do not fit on a console, so
+the disk fills and stays full. The design is settled in PROJECT.md — cached is
+evictable, kept is not, the person only ever opts *in* to keeping — and none of
+it is built.
 
-**2. Phase 4, the RomM client.** The keyboard exists, the server is reachable,
-and the auth flow has now been walked end to end by hand — so the shape is
-known. Copy Cabinet's two-screen flow rather than inventing one: address, then a
-QR code to approve. Read `RommApp/RommApp/Auth/RommClient.swift` in the Cabinet
-checkout before writing anything. **Note the HTTP requirement** recorded in
-Phase 4: accept a bare host, probe the scheme, never refuse plain HTTP. **And
-the platform-identity rule**, also in Phase 4 — key by `id`, not by `slug`.
+**3. The Library screen.** 986 playable games and only the ~50 on Home can be
+reached. Home already points at a Library that does not exist.
 
-**3. More screens.** Home's hero and shelves, the library grid, game detail,
-settings. The design system has exact numbers for all of them and the components
-exist.
+**4. Saves on the right triggers.** Keys do it today, which is the test
+environment and not the product. The settled triggers are in PROJECT.md: when
+the game writes its memory card, from the overlay, on leaving a game, and a
+controller combination.
 
-## Two small things left open
+## Things that will bite you
 
-- **A white line was reported under the keyboard's title and could not be
-  reproduced.** The captured framebuffer has no bright horizontal run anywhere
-  in that band — the strongest edge is the field's own top boundary, which can
-  only darken. Likely a VNC scaling artefact. **Ask which line before chasing
-  it**; do not go hunting on the strength of this note alone.
-- **The keyboard wraps horizontally but not vertically.** That was a deliberate
-  split — five rows is short enough to cross directly, and wrapping up from the
-  space bar would skip the letters. Worth re-judging with a controller in hand
-  rather than from a screenshot.
-
-## Things that will bite you if nobody says them
-
-- **Judge nothing visual on the VM.** It renders in software on llvmpipe. Motion,
-  the letterbox glow and the safe area are all recorded as needing the SER5 on a
-  real television. An animation tuned in the VM is tuned against the wrong
-  feedback, and the game runs in slow motion there by design.
-- **Read `build_args` from the manifest before building any core.** Do not infer
-  an empty `MAKEARGS` from a core's absence from PROJECT.md's recompiler table.
-  Three divergences are known and only one class is recompilers:
-  `genesis_plus_gx` needs `HAVE_CDROM=0` and `vecx` needs `HAS_GPU=0`, both
-  because the `unix` branch asks `uname` what machine it is on and changes the
-  build. **`HAVE_CDROM` is settled** — measured, it changes three of 115 object
-  files and none of them under `core/`, so it cannot affect save states. Keep it
-  off because the console has no optical drive, not out of caution.
-- **Configuration is keyed by PLATFORM, not by core** — Genesis Plus GX serves
-  four platforms with different option tables and pad types. And the converse:
-  **two platforms can share a name and a slug**. "Arcade" is two platforms in
-  RomM, FBNeo and MAME 2003-Plus, deliberately. Key by `id`.
-- **Glass does not nest.** One glass layer per modal; everything on it is an
-  ordinary surface.
-- **Anything a person must read is Callout (31pt) or above.** Caption is for
-  glancing at.
-- **Design rules are not universal — check which surface they apply to.** "No
-  wrapping at the edges" was right for a shelf and wrong for a keyboard, and it
-  was written down as a blanket rule before anyone noticed. Consult what
-  PlayStation, Xbox and Steam actually do before inventing an interaction.
-- **`dlerror()` clears itself when read.** Read it once.
-- **Comparing object files can answer a parity question without a ROM.** The
-  `HAVE_CDROM` question looked like it needed a Sega CD image and a cross-loaded
-  save state. Building both variants and diffing the 115 `.o` files answered it
-  exhaustively in two minutes, with no download — and proved more, since it
-  covers every title rather than the one that was tested. Reach for it before
-  moving hundreds of megabytes.
-- **A test must first prove the thing it measures actually varies.** The save
-  state test passed while proving nothing, because it compared video on a static
-  title screen. It now asserts the picture is moving and reports INCONCLUSIVE
-  rather than a difference when there is no audio.
+- **Judge nothing visual on the VM.** Software rendering on llvmpipe. And it is
+  not only motion: a television's overscan eats more vertical room than a
+  framebuffer capture shows, which is how Cabinet's hero height needed four
+  attempts on real hardware. **Vertical fit cannot be judged here either.**
+- **Ask the CORE, never the platform**, whether an archive should be opened.
+  `retro_get_system_info` reports the extensions a core takes and
+  `block_extract`. FBNeo reads `zip` and `7z` itself, so an arcade set must be
+  handed over unextracted; `.chd` and `.rvz` are compressed and must never be
+  unpacked.
+- **Never dispatch on a file extension.** Thirty-two files in the reference
+  library have none. Sniff the magic bytes, the way `decodeImage` already did.
+- **An unanswered libretro core option is NOT the default.** The core skips the
+  case and the C global keeps its zero value — silence for a sample rate, black
+  for brightness, off for every toggle whose useful state is on. It fails
+  quietly and it cost Cabinet eight evenings. Our core host must answer every
+  variable a core asks about, and **nobody has checked that it does.**
+- **`catalog::coverageFor` answers three different questions.** No core exists,
+  a core exists and Cabinet does not ship it, and *this console has not built it
+  yet*. Collapsing them hides how much of the library is waiting on work.
+- **Every scripted edit must assert its anchor.** A `python - <<PY` that
+  replaces text it cannot find changes nothing, the build stays green, and the
+  feature silently is not there. That happened twice in one session.
+- **Read the evidence, not just the code.** The filename sanitiser turning
+  "Pokémon" into "Pok__mon" was visible in the server's own listing.
+- **`pgrep -f "some string"` matches your own command line.** Twice mistaken for
+  a still-running process.
 - **Look on disk before concluding a file does not exist.** `core-manifest.json`
-  is at `~/Downloads/core-manifest.json` and is not on GitHub. A whole round trip
-  was wasted searching `raw.githubusercontent` and the GitHub code index and
-  reporting it unavailable, while it sat in Downloads.
+  is at `~/Downloads/core-manifest.json` and is not on GitHub.
 
-## Two Cabinet-side debts, not CabinetOS's to fix but its problem
+## The state that lives on the VM and not in git
 
-1. **Flycast carries unscripted edits in its working tree**, so its pinned commit
-   does not reproduce what ships — for Dreamcast and Naomi, and for one of only
-   two cores that can answer the parity question cleanly. Capture that diff
-   before anything touches the tree.
-2. **`core-manifest.json` is still not pushed to GitHub.** It is now load-bearing
-   for every core after the second, and it is a single unbacked file on one Mac
-   holding revisions that exist nowhere else — the same single-machine failure
-   the recovery exercise was run to fix.
+- `~/frontend/` — the frontend source, built with
+  `podman run --rm -v "$PWD":/src:Z -w /src cabinetos-builder make`
+- `~/frontend/cores/build/` — fifteen built cores, where the frontend looks
+- `~/cabinetos/` — a clone of this repo, where `cores/build-core.sh` runs
+- `~/run-frontend.sh` — the session launcher; points at the live RomM server.
+  The original is `run-frontend.sh.bak`
+- `~/.config/cabinetos/romm.json` — the RomM token, 0600. Nine scopes: read the
+  library, write only the person's own play data
+- `romcache/`, `system/` under `~/frontend` — downloaded ROMs and BIOS
+
+Sudo on the VM needs the password `cabinet`, a throwaway from the public repo's
+`disk_config/disk.toml`.
+
+## Two Cabinet-side debts
+
+1. **Flycast carries unscripted edits in its working tree**, so its pinned
+   commit does not reproduce what ships. Capture that diff before anything
+   touches the tree — and Flycast is one of the four cores whose backend
+   question is still open.
+2. **`core-manifest.json` is still not pushed to GitHub.** It is load-bearing
+   for every core and it is one unbacked file on one Mac.
 
 ## How the user wants this done
 
-Plain answers. Lead with the decision, keep the reasoning in `docs/PROJECT.md`.
+Plain answers. **Lead with what a change does and why it exists, in terms of
+what breaks for the product — not in terms of the subsystem.** This was said
+twice in one session and drifted back both times; a PR came back as "completely
+foreign to me what it did and what it exists for", and a later explanation "went
+way over my head". Keep the dense detail, but put it after the plain statement.
+
 Check the running machine before theorising — most wrong turns come from
 reasoning off an error message instead of looking. Say plainly what is verified
 and what is assumed; they notice and ask. And they push back usefully: "are we
-sure we can't do X?" has repeatedly produced a better answer than the first one.
-
-**Write commit messages and PR bodies so someone can tell what the change does
-and why it exists without already knowing this document.** A PR from this
-session was reviewed and came back as "completely foreign to me what it did and
-what it exists for" — the work was right, the writing assumed too much. Open
-with the problem in product terms, then what was added, then any judgement call
-worth checking. Matching PROJECT.md's dense register is not the same as being
-understood.
+sure we can't do X?" and "you need to read Cabinet" both produced better answers
+than the first one.
