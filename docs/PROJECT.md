@@ -3015,6 +3015,59 @@ on the way out — which is precisely what Cabinet's Mac does today, and it ship
 Keep so many that nothing fits at all and the download refuses and says so,
 which is the one failure this policy ever shows anybody.
 
+##### What counts toward the cache, and what is merely counted
+
+**Asked by Marcus 2026-09-16, and the answer is that everything counts while
+almost nothing is ever deleted.** Measured on the test machine rather than
+estimated:
+
+| | |
+|---|---|
+| ROMs | ~124 MB |
+| Save states | 205,832 bytes |
+| Battery saves and memory cards | 40,960 bytes |
+| Firmware for every platform touched so far | 393,216 bytes |
+
+**ROMs are 99.8% of it, and that ratio is structural rather than a sample.** A
+battery save is tens of kilobytes, so every save for all 1644 games in the
+reference library comes to roughly 33 MB — less than one Dreamcast game. The
+bookkeeping to evict them would cost more than the space it recovered.
+
+**Firmware is the same case with an extra reason.** A few megabytes, shared by
+every game on a platform, and deleting it does not free meaningful space while
+guaranteeing the next launch of that system has to fetch it again.
+
+So both are **counted and never evicted** — they are part of what the disk holds
+and they are not candidates.
+
+##### Save states are the one other thing that can grow, and Cabinet already decided it
+
+A state does not overwrite, because a history is the point, so they accumulate:
+6.5 MB for a DS state means fifty of them is 325 MB for one game.
+
+**Cabinet's rule, from `scope-native-offline`: a state is cached locally when a
+game is KEPT, and refreshed on ordinary online visits.** Not for cached games,
+whose states live on RomM and come down when the launch screen asks for them.
+
+That answers it without inventing anything:
+
+| | |
+|---|---|
+| **Kept** game | ROM, firmware, battery save and state history — it plays with no network at all, which is the entire point of keeping it |
+| **Cached** game | ROM, firmware and battery save. States come from RomM when asked for |
+| **Either** | anything not yet uploaded stays, always |
+
+**So the cache is the ROMs, for every practical purpose**, and the eviction
+order below only ever has ROMs to order.
+
+**Releasing a kept game back to cached** should drop its local state history
+once it has synced, since that is the difference between the two tiers.
+
+**TODAY IT DOES NOT WORK THIS WAY**, and it is worth knowing before the storage
+numbers look wrong: the frontend writes every state into the game's own cache
+directory regardless, because keeping does not exist yet. `romcache/2813/` holds
+three states for a Pokémon Red that nobody has kept.
+
 ##### The eviction unit is a FILE, not a game
 
 **This is the first change to the proposal, and it is structural.** Today a
