@@ -3777,6 +3777,50 @@ of the constraint. CabinetOS reads it, builds the same revisions with the
 recorded flags, and asserts at build time. A mismatch becomes a failed build
 rather than a save state that silently will not load.
 
+#### ANSWERED 2026-09-15, for pcsx_rearmed: the CPU backend does not break states
+
+**The question this section was written to pose.** Read from the source at the
+pinned commit `ba61a4fd`, after an object-file comparison of `DYNAREC=0` against
+`DYNAREC=lightrec` showed `libpcsxcore/misc.o` differing — which is where
+`SaveState` and `LoadState` live, and looked at first like the bad answer.
+
+It is not. `SaveState` and `LoadState` both call `ndrc_freeze`, and that
+function is built to be read by a core with a different backend from the one
+that wrote it:
+
+- **Saving with no recompiler blocks writes nothing.** `new_dynarec_save_blocks`
+  returns 0 and `ndrc_freeze` returns before writing a byte.
+- **Loading tolerates the section being absent**: the 8-byte `"ariblks"` header
+  fails to match, the reader seeks back, and the state continues to parse.
+- **Loading tolerates it being present and useless**: the size is read, the data
+  is consumed, and then `if (psxCpu != &psxInt) new_dynarec_load_blocks(...)`
+  declines to apply it on an interpreter.
+
+And what the section holds is **block addresses** — a recompiler cache hint, not
+emulated machine state. That is why it is optional at all.
+
+**A lightrec build writes no section either.** The real implementation is gated
+`#if !defined(DRC_DISABLE) && !defined(LIGHTREC)`, so LIGHTREC takes the same
+stubs the interpreter does.
+
+##### What this settles
+
+> **Cabinet's single `pcsx-rearmed-native` tag across `DYNAREC=0` on iOS/tvOS
+> and `DYNAREC=ari64` on the Mac is correct, not a latent bug.** It had looked
+> like one: the same tag on two different CPU backends is exactly the
+> configuration this document warned could silently produce unloadable states.
+
+**So CabinetOS can take the faster Linux backend and still share the tag.** On
+Vega integrated graphics that is the difference between comfortable and
+marginal for PS1, and it was the thing this question was holding back.
+
+**Scope, stated precisely.** This is pcsx_rearmed, read from its source rather
+than measured by cross-loading a state. melonDS, picodrive, Flycast and
+mupen64plus each need the same check before their tags are shared — a different
+core may put real machine state behind its dynarec, and nothing here says
+otherwise. The object-file diff is the way in: it took two minutes and pointed
+straight at the one file worth reading.
+
 #### The test that answers the whole question, and can be run this week
 
 The parity risk is not theoretical and it does not need CabinetOS to exist to

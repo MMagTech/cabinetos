@@ -103,6 +103,13 @@ const char* emulatorTag(const char* core) {
         // Cabinet's Apple builds get by default, and the object-file
         // comparison showed the flag changes nothing under core/.
         {"genesis_plus_gx", "gpgx-native"},
+        // Pinned at ba61a4fd. CabinetOS builds DYNAREC=lightrec where Cabinet
+        // runs the interpreter on iOS/tvOS and ari64 on the Mac — and sharing
+        // the tag across that difference is what Cabinet ALREADY does between
+        // its own two. Justified rather than assumed: the state format
+        // tolerates either backend, and the dynarec section is block addresses
+        // rather than machine state. docs/PROJECT.md, open question 13.
+        {"pcsx_rearmed", "pcsx-rearmed-native"},
     };
     for (const auto& t : kTags)
         if (std::strcmp(t.core, core) == 0) return t.tag;
