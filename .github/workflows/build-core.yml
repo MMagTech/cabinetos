@@ -73,6 +73,7 @@ jobs:
           - vecx
           - mame2003_plus
           - fbneo_libretro
+          - pcsx_rearmed
 
     steps:
       - name: Checkout

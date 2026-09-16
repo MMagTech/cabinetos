@@ -187,6 +187,27 @@ fbneo_libretro)
     # Arcade, the FinalBurn Neo half. Its makefile is four directories down.
     MAKEARGS=()
     ;;
+pcsx_rearmed)
+    REPO=https://github.com/libretro/pcsx_rearmed.git
+    COMMIT=ba61a4fdee1f789e8012f205f1b63826667644fa
+    MAKEDIR=.
+    MAKEFILE=Makefile.libretro
+    # PlayStation. THE CPU BACKEND IS THE LEVER and it is the open question:
+    # Cabinet runs DYNAREC=0 on iOS and tvOS and DYNAREC=ari64 on the Mac, and
+    # tags the states from BOTH as pcsx-rearmed-native — so Cabinet already
+    # depends on the state format not caring which backend produced it.
+    # CABINETOS_DYNAREC exists so both can be built and compared; the default
+    # matches Apple mobile until that comparison says otherwise.
+    # lightrec, the real recompiler, and it is safe to differ from Apple here:
+    # the state format tolerates either backend. ndrc_freeze writes nothing
+    # without blocks, skips an absent section on load, and consumes a present
+    # one it cannot use — and the section is block ADDRESSES, a cache hint, not
+    # machine state. A LIGHTREC build takes the same stubs the interpreter does
+    # and writes no section at all. See docs/PROJECT.md, open question 13.
+    #
+    # Override with CABINETOS_DYNAREC=0 to build the interpreter for comparison.
+    MAKEARGS=("DYNAREC=${CABINETOS_DYNAREC:-lightrec}")
+    ;;
 *)
     echo "unknown core: $CORE" >&2
     exit 1
