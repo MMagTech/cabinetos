@@ -3015,58 +3015,72 @@ on the way out — which is precisely what Cabinet's Mac does today, and it ship
 Keep so many that nothing fits at all and the download refuses and says so,
 which is the one failure this policy ever shows anybody.
 
-##### What counts toward the cache, and what is merely counted
+##### Everything on the disk is a copy of RomM. That is the whole rule
 
-**Asked by Marcus 2026-09-16, and the answer is that everything counts while
-almost nothing is ever deleted.** Measured on the test machine rather than
-estimated:
+**Marcus, 2026-09-16, after this section had drifted into categories for the
+third time: saves, BIOS and memory cards are all stored on RomM.** They are, and
+this document has said so twice and then built tiers of protected things on top
+of it anyway.
 
-| | |
-|---|---|
-| ROMs | ~124 MB |
-| Save states | 205,832 bytes |
-| Battery saves and memory cards | 40,960 bytes |
-| Firmware for every platform touched so far | 393,216 bytes |
+> **Everything here is a copy of something on the server. The only exception is
+> what has not been uploaded yet.**
 
-**ROMs are 99.8% of it, and that ratio is structural rather than a sample.** A
-battery save is tens of kilobytes, so every save for all 1644 games in the
-reference library comes to roughly 33 MB — less than one Dreamcast game. The
-bookkeeping to evict them would cost more than the space it recovered.
+So **everything is evictable** — ROMs, save states, battery saves, memory cards,
+firmware. There is no protected tier, because there is nothing to protect. The
+earlier draft's "counted but never evicted" list was inventing a distinction the
+server had already removed.
 
-**Firmware is the same case with an extra reason.** A few megabytes, shared by
-every game on a platform, and deleting it does not free meaningful space while
-guaranteeing the next launch of that system has to fetch it again.
+**Saves and firmware simply never come up**, which is an observation rather than
+a rule. Measured on the test machine: 124 MB of ROMs against 40 KB of battery
+saves and 384 KB of firmware. Every save for all 1644 games in the reference
+library is around 33 MB. They will never be the largest thing in a list sorted
+by size, so nothing needs to say they are special.
 
-So both are **counted and never evicted** — they are part of what the disk holds
-and they are not candidates.
+**And the previous draft's reason for exempting firmware was simply wrong** —
+"deleting it breaks the next launch of that system". It does not. It re-fetches,
+like everything else does.
 
-##### Save states are the one other thing that can grow, and Cabinet already decided it
+##### Save states can be the biggest thing on the machine, not a rounding error
 
-A state does not overwrite, because a history is the point, so they accumulate:
-6.5 MB for a DS state means fifty of them is 325 MB for one game.
+**Corrected 2026-09-16, and the first estimate here was badly wrong.** It assumed
+states are taken at checkpoints and put fifty of them at 325 MB.
 
-**Cabinet's rule, from `scope-native-offline`: a state is cached locally when a
-game is KEPT, and refreshed on ordinary online visits.** Not for cached games,
-whose states live on RomM and come down when the launch screen asks for them.
+**People save-scum.** Grinding through a hard section means a state every twenty
+seconds or so, which is around 360 in a two-hour evening. At the **6.5 MB** a DS
+state measures — a real number from this project's own melonDS build — that is
+**2.3 GB from one session**, more than most ROMs on the disk. PS2 will be larger
+still. States do not overwrite, deliberately, because the history is the point.
 
-That answers it without inventing anything:
+So the conclusion inverts. States are not a small thing to be exempted, they are
+one of the largest things to be managed, and they are on RomM with their
+screenshots like everything else.
 
-| | |
-|---|---|
-| **Kept** game | ROM, firmware, battery save and state history — it plays with no network at all, which is the entire point of keeping it |
-| **Cached** game | ROM, firmware and battery save. States come from RomM when asked for |
-| **Either** | anything not yet uploaded stays, always |
+> **Keep the newest state for a game as long as its ROM is there** — it is the
+> one that gets loaded — **and let older states be ordinary candidates**, fetched
+> back from RomM when somebody actually picks one off the launch screen.
 
-**So the cache is the ROMs, for every practical purpose**, and the eviction
-order below only ever has ROMs to order.
+That is the same principle as the ROM cache, applied one level down, and it
+needs no new machinery: they join the same oldest-first list.
 
-**Releasing a kept game back to cached** should drop its local state history
-once it has synced, since that is the difference between the two tiers.
+##### The case this does not solve: save-scumming while offline
 
-**TODAY IT DOES NOT WORK THIS WAY**, and it is worth knowing before the storage
-numbers look wrong: the frontend writes every state into the game's own cache
-directory regardless, because keeping does not exist yet. `romcache/2813/` holds
-three states for a Pokémon Red that nobody has kept.
+**The upload queue is the one thing that cannot be evicted, and save-scumming is
+exactly what makes it enormous.** An evening of it with no server reachable is
+gigabytes of pending states by morning, and no floor protects against data that
+is itself the thing filling the disk.
+
+This was already recorded as an open problem in a milder form — "a long spell
+offline defeats the floor" — and the realistic magnitude makes it worth solving
+rather than noting. It is a conversation with the person ("this console has not
+reached your server in three days") rather than a storage rule, and **it belongs
+with whatever handles being offline, not here.**
+
+A cheaper half-answer exists and is not chosen: while offline and short of
+space, the oldest *pending* states for a game could be dropped rather than the
+newest, since a save-scummer wants the last one and not the three hundredth from
+the bottom. That trades a promise this document makes — local first, nothing
+written is ever lost — against a disk that stops working, and **that trade needs
+Marcus rather than an assistant.**
 
 ##### The eviction unit is a FILE, not a game
 
@@ -3285,13 +3299,19 @@ is "opportunistic, not queued", refreshed on ordinary online visits.
 > ROM, not the memory card, not the state history. Only what has been written
 > and not yet sent.
 
-That is a pending queue and room to write one more state — hundreds of megabytes
-in the worst case of a long spell offline, not five gigabytes.
+That is a pending queue and room to write one more state — which is small on an
+ordinary evening and **is not small on a bad one**. See *save-scumming while
+offline* above: 360 states in two hours at 6.5 MB each is 2.3 GB of queue, and
+PS2 is worse.
 
-**So the floor is 2 GB, or 5% of the disk, whichever is smaller.** Generous for
-a pending queue, and it does not take a sixth of a 32 GB machine the way five
-gigabytes would. The mechanism matters more than the number: a floor that is
-never crossed, by eviction or by download.
+**So the floor is 2 GB, or 5% of the disk, whichever is smaller** — and it is
+chosen knowing it does not cover that case, because **no floor can.** A reserve
+protects one kind of data from another; it cannot protect data from itself. The
+floor is sized to keep an ordinary session safe and to stop a download filling
+the disk under a save, which are the failures it can actually prevent.
+
+The other one is a conversation rather than a number, and it is recorded above
+as unsolved.
 
 **And keeping a game must respect it too.** Kept games are never evicted, so
 without this check a person can keep enough games to starve the reserve and
