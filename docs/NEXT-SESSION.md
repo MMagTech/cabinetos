@@ -53,6 +53,13 @@ and as of 2026-09-16 the whole policy is written down in PROJECT.md, Phase 4 —
 when to evict, in what order, what is never touched, and what is still open.
 Read it before building any of it.
 
+**And read the first subsection of it before adding a number to anything.** The
+first draft of that policy was tuned to this library — "the cartridge games come
+to under 2 GB" — which is true here and inverts for anyone with a complete set.
+The reference library is a reference the way the SER5 is: an illustration, never
+the definition. Where a rule needs a number, make it a fraction of something the
+machine can measure.
+
 The first move is structural rather than clever: **saves and states currently
 live in the same directory as the ROM**, so "evict a game" would delete the one
 thing that always comes back along with the only things that never do. Split

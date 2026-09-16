@@ -2796,6 +2796,55 @@ this needs.
 anything they would miss.** Everything below serves those two sentences. From
 Marcus's proposal, with four changes argued for rather than accepted.
 
+##### None of this may be tuned to one library, one disk or one connection
+
+**Raised by Marcus against the first draft of this section, and he was right.**
+That draft justified its eviction order with "every cartridge game in the
+library together is under 2 GB", which is a fact about *this* reference library
+— about three hundred cartridge games — and it inverts for anyone with a
+complete set, where the cartridge half is tens of gigabytes. It then closed by
+saying the threshold should be settled against a real library, which bakes in
+whichever library happened to get measured.
+
+*Hardware* already has this rule in this document: the SER5 "sets the
+performance floor, not the ceiling", and CabinetOS "must not have quietly grown
+dependencies on this particular box". **The library is the same kind of
+reference and deserves the same sentence.** The first draft did not give it one.
+
+So the standard for every rule below is that it holds for all four corners, and
+the reference library is an illustration in the margin rather than the basis:
+
+| | |
+|---|---|
+| **A library of one shape** | all cartridges, or all discs, or a mix |
+| **A disk of any size** | a 32 GB eMMC stick and a 4 TB NVMe |
+| **A library far larger than the disk, or far smaller** | permanent pressure, or none ever |
+| **A connection of any speed** | see below — this is the assumption that matters most |
+
+**Where a number is unavoidable, express it as a fraction of something the
+machine can measure**, not as a constant somebody chose while looking at their
+own collection.
+
+##### The assumption underneath all of it: that a re-download is cheap
+
+**Stated because the first draft relied on it silently.** The argument that
+eviction is harmless — "it is still on the server and comes back in minutes" —
+is true against a RomM on the same fast LAN, which is this project's own setup.
+It is false for a server in another building, over WiFi, or across the internet,
+where a 4 GB game is twenty minutes rather than forty seconds.
+
+**That does not change what is safe to delete. It changes whether deleting
+quietly is the right manners.** Where re-fetching is cheap, handling it silently
+is the console-like behaviour this whole section argues for. Where it is
+expensive, the same silence spends twenty minutes of somebody's evening without
+asking, and the PS5's "you choose" starts looking correct after all.
+
+The console can measure this rather than ask: it already knows the throughput of
+every download it has done. **Unresolved, and it should be resolved by someone
+with a slow link rather than here** — but the shape is that below some observed
+throughput the console offers the choice instead of taking it, and the policy
+below is the fast-link default rather than the only behaviour.
+
 ##### Never on a timer. Only under pressure, only at a safe moment
 
 **Nothing is evicted because time has passed.** A cached game on a half-empty
@@ -2860,34 +2909,60 @@ Two exceptions already established elsewhere and worth restating here, because
 they halve the peak where they apply: an arcade set is handed to FBNeo
 unextracted, and `.chd` and `.rvz` are never unpacked at all.
 
-##### Order: least-recently-played, in two passes by size
+##### Order: least-recently-played, but never shred a hundred small things
 
 **Fourth change, and it answers "should size matter" and "should small systems
 be exempt" with one mechanism.**
 
-The arithmetic on the reference library is what decides it. Every NES, SNES,
-Game Boy and Mega Drive game **together** is under 2 GB. One PS2 game is 4 GB.
-So evicting cartridge games to house a disc game means clearing the entire
-retro library and still not having enough, while a single disc game frees more
-than all of them put together.
+The intent is easy to state: **do not delete a hundred things that were cheap to
+keep in order to house one thing that is not.** Freeing 4 GB by removing four
+thousand Game Boy games is a bad trade whatever the library looks like — each
+one is a separate thing somebody may come back to, and together they were
+costing almost nothing.
 
-> **First pass: only ROMs above a size threshold, least-recently-played first.
-> Second pass: everything, same order, and only if the first pass was not
-> enough.**
+**The threshold that expresses this has to scale with the need, not with a
+number somebody picked.**
+
+> **First pass: least-recently-played first, ignoring anything smaller than one
+> percent of the space being freed. Second pass: everything, same order, only if
+> the first pass could not finish the job.**
+
+One percent is arbitrary in the way a rounding is arbitrary rather than in the
+way 300 MB is: it has no units and it belongs to no library. Needing 4 GB, it
+ignores anything under 40 MB, so cartridge games are left alone and disc games
+and big arcade sets are the candidates. Needing 50 MB for a Game Boy Advance
+title, it ignores anything under 500 KB, so cartridge games ARE the candidates.
+**The same rule gives the opposite answer when the library is the opposite
+shape, which is the property the first draft did not have.**
+
+The reference library shows the effect rather than justifying the rule: its
+three hundred cartridge games come to under 2 GB against a 4 GB PS2 title, so
+clearing every one of them would not house a single disc game. A library of
+five thousand cartridge games and no discs never has that problem, and under
+this rule never triggers the first pass at all.
 
 **Exempting small systems outright was considered and rejected**, though the
-instinct behind it is right. A permanently exempt class can grow past the
-budget, and then the disk is full of things nothing is allowed to delete — with
+instinct behind it is right. A permanently exempt class can grow past the budget,
+and then the disk is full of things nothing is allowed to delete — with
 *Download All* (which this document says CabinetOS should offer, reversing
-tvOS's call) that is not a hypothetical. The two-pass version has the same
-practical effect and cannot reach that state.
+tvOS's call) that is not a hypothetical. This version has the same practical
+effect and cannot reach that state.
 
-Keyed on **size**, not on system: it needs no table of platforms to go stale,
-and size is the property that actually matters.
+Keyed on **size relative to the need**, not on system: it needs no table of
+platforms to go stale, and a system's name was never the thing that mattered.
 
-**The threshold is unmeasured.** Somewhere around a few hundred megabytes puts
-disc games and large arcade sets in the first pass and everything cartridge-era
-in the second, which is the intent. Settle it against a real library.
+##### Free a margin, not exactly enough
+
+**Also changed, and it is the difference between eviction being an event and
+eviction being constant.** "Free exactly enough for the incoming game" is the
+obvious rule and on a disk that sits near its budget it means evicting on every
+single launch, forever, until the cache holds nothing but the game currently
+running. The person never sees it, they just never benefit from the cache again.
+
+So free enough for the incoming game **and a margin beyond it**, so that the
+next few launches cost nothing. The margin is a fraction of the budget rather
+than a size — a tenth is a reasonable starting point — which keeps it sensible
+on a 32 GB stick and on a 4 TB drive without being told which one it is on.
 
 ##### "Least recently played" means on THIS console
 
@@ -2918,9 +2993,27 @@ well-played DS game can accumulate hundreds of megabytes on its own, and PS2
 will be worse.
 
 **A fixed reserve rather than a percentage is right**, because saves do not
-scale with disk size. Five gigabytes is a defensible starting figure and it is
-not yet validated. The mechanism matters more than the number: a floor that is
-never crossed, by eviction or by download.
+scale with disk size — a 4 TB drive does not generate more save states than a
+32 GB one, the same person plays the same games. That is the one place in this
+section where a constant is the correct shape.
+
+**But it should be sized for what is actually irreplaceable, which is far less
+than the state history.** Old states live on RomM and the local copy is itself a
+cache; the only data on the machine that cannot be re-fetched is what has been
+written and not yet uploaded. That is a pending queue and room to write one more
+state — hundreds of megabytes in the worst case of a long spell offline, not
+five gigabytes.
+
+Five gigabytes is still a defensible floor and the cost of being generous is
+low. The one place it is not low is a small disk: on a 32 GB machine it is a
+sixth of everything, so **the floor wants a ceiling as a fraction of the disk**,
+whichever is smaller. The mechanism matters more than either number: a floor
+that is never crossed, by eviction or by download.
+
+**A long spell offline is the case that defeats it**, because the pending queue
+grows without bound and no floor can protect against data that is itself the
+thing filling the disk. That is a "you need to get this online" conversation
+rather than a storage rule, and nobody has designed it.
 
 **And keeping a game must respect it too.** Kept games are never evicted, so
 without this check a person can keep enough games to starve the reserve and
@@ -2946,8 +3039,14 @@ vanish. Anything the person cared about was already protected by keeping it.
 
 ##### Still open
 
-- **The size threshold for the first eviction pass.** Unmeasured.
-- **The reserve figure.** Five gigabytes is a starting point, not a result.
+- **Whether a slow connection should change the behaviour**, and how the
+  console decides it is on one. The biggest of these, because it is the
+  assumption the whole policy rests on.
+- **One percent, and a tenth.** The two fractions above are reasoned rather than
+  measured. They are at least unitless, so they can be wrong without being wrong
+  *for one library*.
+- **The reserve figure, and its ceiling on a small disk.** Five gigabytes is a
+  starting point, not a result.
 - **Per location, not global.** Open question 14 already says the cached/kept
   distinction applies per storage location. The budget, the floor and the
   eviction pass are all properties of the active location, and this section is
