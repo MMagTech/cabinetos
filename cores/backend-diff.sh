@@ -148,11 +148,11 @@ echo "objects that differ: $(wc -l < "$WORK/differ.txt")"
 cat "$WORK/differ.txt"
 if [ -n "$ONLY_A" ]; then
     echo "built only with $A:"
-    echo "$ONLY_A" | sed 's/^/  /'
+    awk '{print "  " $0}' <<<"$ONLY_A"
 fi
 if [ -n "$ONLY_B" ]; then
     echo "built only with $B:"
-    echo "$ONLY_B" | sed 's/^/  /'
+    awk '{print "  " $0}' <<<"$ONLY_B"
 fi
 echo
 echo "Now READ those files. A differing object is where to look, not a verdict."

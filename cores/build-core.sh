@@ -40,7 +40,7 @@ VERIFY_REVISION=1
 # make is how nineteen of the twenty-one cores build. Two have no
 # Makefile.libretro at all — mGBA's upstream dropped it, Flycast never had one —
 # and set BUILDSYS=cmake with CMAKEARGS and CMAKE_TARGET instead.
-BUILDSYS=make
+BUILDSYS="make"
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SRC_ROOT="${CABINETOS_CORE_SRC:-$ROOT/.core-src}"
