@@ -2796,6 +2796,44 @@ this needs.
 anything they would miss.** Everything below serves those two sentences. From
 Marcus's proposal, with four changes argued for rather than accepted.
 
+##### What Cabinet already does, on both its platforms
+
+**Read from `NativeLauncher.swift` 2026-09-16 at Marcus's prompt, and it should
+have been read before any of this was designed.** Neither Apple platform has an
+eviction policy, for two different reasons, and the difference is the whole
+reason CabinetOS needs one.
+
+**The Mac has no cache at all.** A game is either *kept* — chosen by the person,
+in a permanent directory, never touched — or it is downloaded into a temporary
+directory that is deleted when the player closes. `cleanUpTempDirectories()`
+runs on the way into a launch as well as out of one, "so temp space holds at
+most the one game about to load". Two states, no middle, nothing to decide.
+
+**The Apple TV has a cache and delegates the deleting.** It writes into the
+system caches directory keyed by rom id and lets tvOS reclaim it whenever it
+likes, system-wide across every app — and when the file has gone, the next
+launch simply downloads again with, in its own words, "no special handling
+needed".
+
+> **CabinetOS is the only one of the three that has to decide for itself, and
+> that is not an oversight in the design — it is what being the operating system
+> costs.** There is no prior art to copy here because neither sibling has the
+> problem.
+
+**Two things do carry over.** The shape is the same one already specified in
+*Emulation*: kept versus transient, with keeping being the deliberate act. And
+the Mac is proof that **"delete it when they stop playing" is shippable** — it
+is what that app does today — so discarding is the safe fallback wherever any of
+the machinery below is uncertain, rather than something to be nervous about.
+
+**And one warning, from tvOS's own history.** It used to behave exactly like the
+Mac, and that is recorded as a mistake: every launch "used to redownload into a
+fresh temp directory deleted unconditionally on exit, so replaying a game
+already on Recent or Favorites cost a full download every single time even
+though nothing about the file had changed." Replaying the same handful of games
+is the living-room pattern, and it is CabinetOS's pattern too. **So the middle
+tier has to exist here, even though the Mac gets away without one.**
+
 ##### None of this may be tuned to one library, one disk or one connection
 
 **Raised by Marcus against the first draft of this section, and he was right.**
