@@ -2723,6 +2723,41 @@ So: `GET /api/firmware?platform_id=`, download all of it into the system
 directory, and let the core pick. Do not try to be clever about which BIOS a
 given game needs.
 
+###### Firmware is per PLATFORM, so fetch the whole lot once and stop thinking about it
+
+**Marcus, 2026-09-16: a BIOS "just needs downloading for that platform one time
+and then the platform uses it for all games on it".** That is already how
+CabinetOS stores it and it is better than the reference implementation here —
+one shared `system/` directory, with a file already present at the right size
+skipped. Cabinet's tvOS stages firmware into each game's own cache directory
+instead, so twenty-seven Dreamcast games mean twenty-seven copies of
+`dc_boot.bin`.
+
+**What is still per-launch is the asking**, and it need not be. Every launch
+calls `fetchFirmware(platformId)` before the ROM, even when every file is
+already on disk: a round trip each time, and offline it fails and logs a
+complaint on a launch that was going to work anyway.
+
+**Measured against the live server, 2026-09-16, which settles it:**
+
+| | |
+|---|---|
+| All firmware, every platform | **212 MB** |
+| PlayStation 3 alone | **197 MB** |
+| **Every platform this console has a core for** | **~15 MB** |
+
+Ninety-three percent of that total is firmware for a system with no core in the
+manifest and no prospect of one. For everything actually playable it is fifteen
+megabytes — the entire BIOS collection, for every system, permanently.
+
+> **Fetch it once at setup, for the platforms `catalog` says are playable, and
+> firmware stops being part of launching a game.** A platform then works the
+> first time it is tried rather than the second, and works offline.
+
+Two details worth keeping: `missing_from_fs` files are skipped, since the server
+lists them and does not have them; and a failure is still not fatal, because
+which BIOS a core needs is the core's business and most platforms need none.
+
 ##### What a kept game is
 
 `KeptGame` embeds **the whole `Rom` captured at keep time**, not a subset, so a
