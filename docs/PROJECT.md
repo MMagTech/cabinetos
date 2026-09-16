@@ -2758,6 +2758,39 @@ Two details worth keeping: `missing_from_fs` files are skipped, since the server
 lists them and does not have them; and a failure is still not fatal, because
 which BIOS a core needs is the core's business and most platforms need none.
 
+**Fetch again when a platform appears that was not there at setup.** A library
+grows; someone adds Saturn games next month. "Once" means once per platform, not
+once per console.
+
+###### Tell the person their server has no BIOS for a system, BEFORE they pick a game
+
+**Marcus, 2026-09-16, and it is a real gap.** Today a platform whose BIOS the
+server does not hold fails at launch with the CORE's error message — measured
+earlier the same day, on Sega CD: `Unable to open CD BIOS:
+"system/bios_CD_U.bin"`. Clear, actionable, and delivered at the worst possible
+moment, after the person chose a game and waited for a download.
+
+**Fetching everything at setup is what makes the better version possible**,
+because that is the moment the console learns what is missing. It can say so
+then, once, about a whole system — rather than per game, after the fact.
+
+It needs one small thing that does not exist: **a list of which platforms cannot
+start without firmware at all.** PlayStation, Saturn, Sega CD, 3DO, Dreamcast,
+PS2 and TurboGrafx-CD; most systems need nothing. That list is stable, short,
+and a property of the hardware rather than of anyone's library.
+
+**The honest limit, and it is why this is a coarse check rather than a precise
+one:** *which* BIOS a given game wants is genuinely not knowable up front — this
+section already records Beetle Saturn taking either of two region BIOSes and
+FBNeo boards needing none — so the console must not try to verify that a
+platform's firmware is *sufficient*. What it can say with certainty is that the
+server offered **nothing** for a system that cannot boot without something, and
+that is the case worth warning about.
+
+Where it belongs is `catalog`, beside the four answers it already gives for why
+a game cannot be played. This is a fifth, and unlike the others it is a fact
+about the person's server rather than about this console or the manifest.
+
 ##### What a kept game is
 
 `KeptGame` embeds **the whole `Rom` captured at keep time**, not a subset, so a

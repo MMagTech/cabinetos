@@ -82,7 +82,13 @@ is 0 bytes` is correct and the file never reaches RomM. Neo Geo Pocket, Sega CD
 and FBNeo's NVRAM are the same class and all three are playable today. Cabinet's
 `MemoryCardSync` is the shape to copy.
 
-**5. Hardware-rendered cores.** Flycast and Mupen64Plus are built and cannot
+**5. Nothing warns that a system's BIOS is missing.** If the server holds no
+Sega CD BIOS, the person finds out from the emulator's own error message after
+choosing a game and waiting for a download. Fetching all firmware at setup —
+15 MB for every playable system — is the moment to learn it and say so instead.
+PROJECT.md, Phase 4, under the firmware section.
+
+**6. Hardware-rendered cores.** Flycast and Mupen64Plus are built and cannot
 run: they want a GL context through `RETRO_ENVIRONMENT_SET_HW_RENDER`, which
 `core.cpp` refuses. That is 43 more games, plus PPSSPP once it is built, and it
 is the one piece of frontend work that is genuinely new rather than more
