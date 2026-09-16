@@ -3323,6 +3323,22 @@ does not add up the sizes while it is there.
 > **peak = the archive + what its index says will come out of it**, known before
 > committing to the extraction, and refused cleanly if it will not fit.
 
+**Which means the space check happens TWICE, at two different moments**, and it
+is the kind of thing that gets built as one check and surprises somebody later:
+
+| | | |
+|---|---|---|
+| **Before the download** | the archive's size, from RomM's `fs_size_bytes`, plus a small percentage | it is all that can be known yet |
+| **After it, before unpacking** | what the archive's own index says comes out of it | the ratio is not a percentage and cannot be guessed — 868 KB of Space Harrier becomes 2 MB |
+
+Either check can trigger eviction; the second usually passes. **And it does not
+apply at all** to `.chd`, `.rvz` or an arcade set handed over unextracted, which
+is most of the large files in a library.
+
+**The small percentage on the first check is not decoration.** Landing on
+exactly zero free bytes is where filesystems start failing in interesting ways,
+and it costs nothing to stay off it.
+
 Same idiom as everywhere else in this document: ask the core what it takes, ask
 the magic bytes what the file is, ask the archive what it holds. The multiplier
 was a guess standing in for a fact that was already on disk.
