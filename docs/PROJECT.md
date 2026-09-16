@@ -5050,7 +5050,7 @@ server — stops needing a solution. It is refused. Every piece of machinery in
 the superseded section below (self-describing manifests, hash matching,
 adoption into a foreign library) existed only to serve that case.
 
-##### RomM will not tell us which server it is, so ask the LIBRARY instead
+##### RomM will not tell us which server it is, and it turns out not to matter
 
 **Checked against the live server rather than assumed.** `/api/heartbeat`
 returns a version and the enabled metadata sources; `/api/stats` returns counts.
@@ -5060,19 +5060,34 @@ write one — the console's token covers assets, not arbitrary storage.
 The address will not stand in for it either: an IP changes, a hostname replaces
 it, someone puts https in front, and the same server reads as a different one.
 
-> **So do not identify the server. Ask whether the drive's contents mean
-> anything here** — which is the real question rather than a proxy for it. Take
-> a sample of the games on the drive, ask the server about them by rom ID, and
-> see whether they come back as the same games. Same library, they resolve.
-> Different library, they do not.
+**Sampling the drive to decide whether it is "ours" was the first answer here
+and Marcus broke it in one sentence: people delete games from the server.** It
+fails in both directions, and the first is severe:
 
-That needs nothing RomM does not already provide, and it fails in the right
-direction: a re-addressed server still matches, because the IDs did not change.
+- **Delete some games and the sample misses.** The drive is condemned as another
+  library's and offered for erasure, when it is the person's own. Four terabytes,
+  on a false negative.
+- **And a rom ID is a database row number.** A library rebuilt from scratch can
+  hand the same ID to a different game, the check passes, and the console
+  launches Tetris and runs Space Harrier.
 
-**When it does not match, ask.** The drive belongs to a different library, and
-the honest options are to leave it alone or erase it. **Never silently** —
-erasing somebody's four terabytes is not a thing to do without a question, and
-it is the one place this design touches data it cannot re-fetch.
+> **So do not reach a verdict about the drive at all. There is no need for one.**
+> Check each GAME: the drive records the rom id, the file name and the size, and
+> a local file is used only when all three still agree with the server.
+
+Everything falls out of that without a decision being made about the drive:
+
+| | |
+|---|---|
+| A game deleted from the server | that one entry stops resolving. Nothing is condemned. |
+| An id reassigned to a different game | the name and size disagree, so it is not used. Nobody gets the wrong game. |
+| A drive from somebody else's server | nothing on it matches, so nothing is used. It is storage with unreadable things on it, and needs no refusal and no prompt. |
+| A server that moved to a new address | everything still matches, because none of the three fields is the address. |
+
+**And never delete what is not recognised.** Report the space on the Storage
+screen and let the person erase it deliberately. This is the one place in the
+whole design where the console would touch data that RomM cannot give back, so
+it does not happen on the console's own initiative.
 
 #### SUPERSEDED — a drive belongs to one console
 
