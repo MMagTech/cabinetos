@@ -48,10 +48,13 @@ syncing on the way out.
 
 **1. Nothing evicts anything.** A ROM already on disk at the right size is
 reused, and that is all. 1644 games at these sizes do not fit on a console, so
-the disk fills and stays full. **This is the biggest hole in the product now**,
-and as of 2026-09-16 the whole policy is written down in PROJECT.md, Phase 4 —
-when to evict, in what order, what is never touched, and what is still open.
-Read it before building any of it.
+the disk fills and stays full. **This is the biggest hole in the product now.**
+
+**The policy is decided and it is ready to build** — PROJECT.md, Phase 4: when
+to evict, in what order, what is never touched, and the four numbers, which are
+decisions rather than proposals. Nothing in it is waiting on a discussion. Two
+things are genuinely open and neither blocks the work, and they are named as
+such at the end of the section.
 
 **And read the first subsection of it before adding a number to anything.** The
 first draft of that policy was tuned to this library — "the cartridge games come

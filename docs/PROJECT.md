@@ -2836,14 +2836,25 @@ where a 4 GB game is twenty minutes rather than forty seconds.
 **That does not change what is safe to delete. It changes whether deleting
 quietly is the right manners.** Where re-fetching is cheap, handling it silently
 is the console-like behaviour this whole section argues for. Where it is
-expensive, the same silence spends twenty minutes of somebody's evening without
-asking, and the PS5's "you choose" starts looking correct after all.
+expensive, the same silence spends twenty minutes of somebody's evening.
 
-The console can measure this rather than ask: it already knows the throughput of
-every download it has done. **Unresolved, and it should be resolved by someone
-with a slow link rather than here** — but the shape is that below some observed
-throughput the console offers the choice instead of taking it, and the policy
-below is the fast-link default rather than the only behaviour.
+**DECIDED: the behaviour does not change, because the answer already exists and
+it is `keep`.** Someone on a slow link marks the games they care about, and the
+console never touches those — that is precisely what keeping is for, and it is
+better than the alternatives on every count:
+
+- **Measuring throughput and switching behaviour** means the console acts
+  differently on Tuesday than it did on Monday, for reasons invisible to the
+  person using it. A console that is unpredictable is worse than one that is
+  occasionally slow.
+- **Asking before each eviction** is a dialog box about storage, which is the
+  exact thing *What CabinetOS is* rules out, and it would fire most often for
+  the person least able to act on it.
+
+So the policy below is the only behaviour, not a fast-link default. What a slow
+link changes is the *advice*: first-run and the Storage screen should say that
+keeping a game means never waiting for it again, which is a sentence worth
+writing regardless.
 
 ##### Never on a timer. Only under pressure, only at a safe moment
 
@@ -2945,7 +2956,8 @@ number somebody picked.**
 > the first pass could not finish the job.**
 
 One percent is arbitrary in the way a rounding is arbitrary rather than in the
-way 300 MB is: it has no units and it belongs to no library. Needing 4 GB, it
+way 300 MB is: it has no units, it belongs to no library, and it is decided
+rather than pending. Needing 4 GB, it
 ignores anything under 40 MB, so cartridge games are left alone and disc games
 and big arcade sets are the candidates. Needing 50 MB for a Game Boy Advance
 title, it ignores anything under 500 KB, so cartridge games ARE the candidates.
@@ -2978,8 +2990,8 @@ running. The person never sees it, they just never benefit from the cache again.
 
 So free enough for the incoming game **and a margin beyond it**, so that the
 next few launches cost nothing. The margin is a fraction of the budget rather
-than a size — a tenth is a reasonable starting point — which keeps it sensible
-on a 32 GB stick and on a 4 TB drive without being told which one it is on.
+than a size — a tenth — which keeps it sensible on a 32 GB stick and on a 4 TB
+drive without being told which one it is on.
 
 ##### "Least recently played" means on THIS console
 
@@ -3027,16 +3039,10 @@ is "opportunistic, not queued", refreshed on ordinary online visits.
 That is a pending queue and room to write one more state — hundreds of megabytes
 in the worst case of a long spell offline, not five gigabytes.
 
-Five gigabytes is still a defensible floor and the cost of being generous is
-low. The one place it is not low is a small disk: on a 32 GB machine it is a
-sixth of everything, so **the floor wants a ceiling as a fraction of the disk**,
-whichever is smaller. The mechanism matters more than either number: a floor
-that is never crossed, by eviction or by download.
-
-**A long spell offline is the case that defeats it**, because the pending queue
-grows without bound and no floor can protect against data that is itself the
-thing filling the disk. That is a "you need to get this online" conversation
-rather than a storage rule, and nobody has designed it.
+**So the floor is 2 GB, or 5% of the disk, whichever is smaller.** Generous for
+a pending queue, and it does not take a sixth of a 32 GB machine the way five
+gigabytes would. The mechanism matters more than the number: a floor that is
+never crossed, by eviction or by download.
 
 **And keeping a game must respect it too.** Kept games are never evicted, so
 without this check a person can keep enough games to starve the reserve and
@@ -3060,27 +3066,46 @@ The Storage screen shows what is cached, what is kept, what is used and what is
 free, and **lists what was cleared to make room** rather than letting things
 vanish. Anything the person cared about was already protected by keeping it.
 
-##### Still open
+##### The numbers, decided
 
-- **Whether a slow connection should change the behaviour**, and how the
-  console decides it is on one. The biggest of these, because it is the
-  assumption the whole policy rests on.
-- **One percent, and a tenth.** The two fractions above are reasoned rather than
-  measured. They are at least unitless, so they can be wrong without being wrong
-  *for one library*.
-- **The reserve figure, and its ceiling on a small disk.** Five gigabytes is a
-  starting point, not a result.
+**These are decisions, not proposals.** They cannot be improved by more
+thinking: settling them properly needs a full disk on real hardware, which does
+not exist yet, and a starting value that gets corrected by a measurement is
+strictly better than an argument that blocks the work. Build with these, change
+them when a machine says otherwise, and record the reversal here when it
+happens.
+
+| | | |
+|---|---|---|
+| Ignore candidates below | **1%** of the space being freed | keeps a hundred small deletions from standing in for one large one |
+| Free beyond what is needed | **10%** of the budget | so eviction is an occasional event rather than every launch |
+| Save floor | **2 GB, or 5% of the disk, whichever is smaller** | it protects the upload queue and room for one more write, not the state history — those are on RomM |
+| Unpacking headroom | **2× the archive**, transient | held only while extracting, and not needed for `.chd`, `.rvz` or an arcade set |
+
+**The floor is smaller than the five gigabytes first proposed** because of what
+it turned out to be protecting. Five was sized for a full local state history,
+and a state history is a cache of RomM like everything else.
+
+##### Genuinely still open, and neither blocks building it
+
+- **A long spell offline defeats the floor**, because the upload queue is itself
+  the thing filling the disk and no reserve can protect data from its own
+  growth. That is a "this needs to reach the server" conversation rather than a
+  storage rule, and it belongs with whatever handles being offline for a week.
 - **Per location, not global.** Open question 14 already says the cached/kept
   distinction applies per storage location. The budget, the floor and the
-  eviction pass are all properties of the active location, and this section is
-  written as though there is one.
-- **Download All must size up front and refuse**, rather than filling the disk
-  and letting eviction sort it out — which would evict what it just fetched.
-  Cabinet's `DownloadAll.swift` already sizes a platform's list and checks the
-  disk before queueing; inherit that rather than rediscover it.
-- **What a failed download should say.** The one case where cache management
-  becomes visible is "the disk is full of kept games", and the wording of that
-  belongs with the Storage screen rather than here.
+  eviction pass are all properties of the *active* location; this section is
+  written as though there is one, and it should be read that way until there
+  are two.
+
+##### Two things to inherit rather than rediscover
+
+- **Download All sizes up front and refuses**, rather than filling the disk and
+  letting eviction sort it out — which would evict what it had just fetched.
+  Cabinet's `DownloadAll.swift` already does exactly this.
+- **The one failure the person ever sees** is "the disk is full of things you
+  asked me to keep". Its wording belongs with the Storage screen, and the screen
+  it points at already exists in the design.
 
 #### A platform is not its slug, and "Arcade" is two platforms
 
