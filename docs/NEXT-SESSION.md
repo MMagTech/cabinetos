@@ -48,9 +48,15 @@ syncing on the way out.
 
 **1. Nothing evicts anything.** A ROM already on disk at the right size is
 reused, and that is all. 1644 games at these sizes do not fit on a console, so
-the disk fills and stays full. The design is settled in PROJECT.md — cached is
-evictable, kept is not, the person only ever opts *in* to keeping — and none of
-it is built. **This is the biggest hole in the product now.**
+the disk fills and stays full. **This is the biggest hole in the product now**,
+and as of 2026-09-16 the whole policy is written down in PROJECT.md, Phase 4 —
+when to evict, in what order, what is never touched, and what is still open.
+Read it before building any of it.
+
+The first move is structural rather than clever: **saves and states currently
+live in the same directory as the ROM**, so "evict a game" would delete the one
+thing that always comes back along with the only things that never do. Split
+them and most of the policy's protection rules stop being needed.
 
 **2. The Library screen.** 1100 playable games and only the ~50 on Home can be
 reached. Home already points at a Library that does not exist.

@@ -2790,6 +2790,176 @@ kept*. **Nothing evicts anything.** A library of 1644 games at these sizes will
 not fit on a console, so the disk fills and stays full. That is the next thing
 this needs.
 
+#### The cache policy — decided 2026-09-16, not yet built
+
+**The rule is that the person never thinks about storage, and never loses
+anything they would miss.** Everything below serves those two sentences. From
+Marcus's proposal, with four changes argued for rather than accepted.
+
+##### Never on a timer. Only under pressure, only at a safe moment
+
+**Nothing is evicted because time has passed.** A cached game on a half-empty
+disk costs nothing and deleting it only buys a re-download. Expiry is the
+intuitive answer and it is the wrong one.
+
+**The safe moment is the start of a download that will not fit.** Free exactly
+enough for the incoming game, least-recently-played first, and stop the moment
+there is room. Nothing is deleted speculatively, in the background, or while a
+game is running.
+
+Pressure is whichever comes first: the cache budget set in Settings, or real
+free space measured against a floor that is never crossed.
+
+##### The eviction unit is a ROM FILE, not a game
+
+**This is the first change to the proposal, and it is structural.** Today a
+game's cache directory holds the ROM *and* its save states *and* its battery
+save together — `romcache/2813/` has three `.state` files and an `.srm` beside a
+1 MB Game Boy ROM. So "evict a game" would delete the one thing that can always
+be fetched again along with the only things that cannot.
+
+The proposal patches this with a rule — never evict a game with unsynced saves.
+That is correct and it should not be necessary. **Separate the ROM from
+everything written locally**, and the ROM becomes unconditionally safe to
+delete while saves and states are never deleted at all. One of the three
+protection rules disappears, and so does the case where a download fails
+because a few kilobytes of old save are in the way, which is a poor trade.
+
+What remains protected, and it is now short:
+
+| | |
+|---|---|
+| The running game's ROM | it is in use |
+| Anything **kept** | the person asked for it; *Emulation* already says this is never automatic |
+
+##### The floor has to be enforced DURING the download, not before it
+
+**Second change.** The failure the reserve exists to prevent is a save that
+cannot write because a download filled the disk — and that happens *while* the
+download runs. Checking once at the start does not prevent it, and the size is
+not always known: this document already records that the server frequently
+declares no length, which is why there is a progress bar only sometimes.
+
+So the streaming writer checks free space as it goes and aborts when the next
+write would cross the floor, deleting its `.part` — which returns the space it
+had taken. A `statvfs` every few megabytes is not a cost worth optimising.
+
+**The expected size is in the LIBRARY record, not the HTTP response.**
+`fs_size_bytes` is present on every ROM and is what makes "free exactly enough
+for this game" possible at all. Do not reach for `Content-Length`.
+
+##### Budget for unpacking, which is where the real peak is
+
+**Third change, and the number most likely to catch someone out.** ROMs arrive
+archived and are unpacked, so for a moment the disk holds both. A 4 GB game can
+need **8 GB** transiently. That is larger than the whole proposed reserve, and
+it is a working requirement rather than a reserve — checked at download time,
+released immediately after.
+
+Two exceptions already established elsewhere and worth restating here, because
+they halve the peak where they apply: an arcade set is handed to FBNeo
+unextracted, and `.chd` and `.rvz` are never unpacked at all.
+
+##### Order: least-recently-played, in two passes by size
+
+**Fourth change, and it answers "should size matter" and "should small systems
+be exempt" with one mechanism.**
+
+The arithmetic on the reference library is what decides it. Every NES, SNES,
+Game Boy and Mega Drive game **together** is under 2 GB. One PS2 game is 4 GB.
+So evicting cartridge games to house a disc game means clearing the entire
+retro library and still not having enough, while a single disc game frees more
+than all of them put together.
+
+> **First pass: only ROMs above a size threshold, least-recently-played first.
+> Second pass: everything, same order, and only if the first pass was not
+> enough.**
+
+**Exempting small systems outright was considered and rejected**, though the
+instinct behind it is right. A permanently exempt class can grow past the
+budget, and then the disk is full of things nothing is allowed to delete — with
+*Download All* (which this document says CabinetOS should offer, reversing
+tvOS's call) that is not a hypothetical. The two-pass version has the same
+practical effect and cannot reach that state.
+
+Keyed on **size**, not on system: it needs no table of platforms to go stale,
+and size is the property that actually matters.
+
+**The threshold is unmeasured.** Somewhere around a few hundred megabytes puts
+disc games and large arcade sets in the first pass and everything cartridge-era
+in the second, which is the intent. Settle it against a real library.
+
+##### "Least recently played" means on THIS console
+
+Play history belongs to RomM and this document says the console should keep no
+local notion of it. **Eviction order is a different question**: not "when did
+this household last play this game" but "when did this machine last use this
+copy". A game played on the Apple TV yesterday is not evidence that the copy on
+this disk is worth keeping.
+
+So the timestamp is a property of the cache, written when a ROM is launched
+from it. Recorded here because it looks like the rule it is not, and because
+depending on RomM would make eviction fail when the server is unreachable —
+which is exactly when the console is least able to re-fetch anything.
+
+##### The reserve, and what it is actually protecting
+
+**Saves are kilobytes. States are the cost, and they are larger than they
+look.** Measured on this project's own cores:
+
+| | |
+|---|---|
+| Game Boy (Gambatte) | 26,882 bytes |
+| Sega 32X (picodrive) | 679,178 bytes |
+| Nintendo DS (melonDS) | **6,526,677 bytes** |
+
+States deliberately do not overwrite — a history is the point — so one
+well-played DS game can accumulate hundreds of megabytes on its own, and PS2
+will be worse.
+
+**A fixed reserve rather than a percentage is right**, because saves do not
+scale with disk size. Five gigabytes is a defensible starting figure and it is
+not yet validated. The mechanism matters more than the number: a floor that is
+never crossed, by eviction or by download.
+
+**And keeping a game must respect it too.** Kept games are never evicted, so
+without this check a person can keep enough games to starve the reserve and
+leave the console with nothing it is permitted to delete. Keeping is the one
+place the console may refuse.
+
+##### Why this differs from a real console, deliberately
+
+A PS5 never evicts. It tells you the disk is full and makes you choose, because
+an installed game is a thing you put there and removing it silently would be
+hostile.
+
+**Ours is a copy of something still sitting on the RomM server.** Evicting is
+not destruction, it is spending bandwidth later. That is the streaming-device
+model rather than the console one, and it is the right one here.
+
+> The console-like property being preserved is **that nobody has to think about
+> storage** — not that deletion must be manual.
+
+The Storage screen shows what is cached, what is kept, what is used and what is
+free, and **lists what was cleared to make room** rather than letting things
+vanish. Anything the person cared about was already protected by keeping it.
+
+##### Still open
+
+- **The size threshold for the first eviction pass.** Unmeasured.
+- **The reserve figure.** Five gigabytes is a starting point, not a result.
+- **Per location, not global.** Open question 14 already says the cached/kept
+  distinction applies per storage location. The budget, the floor and the
+  eviction pass are all properties of the active location, and this section is
+  written as though there is one.
+- **Download All must size up front and refuse**, rather than filling the disk
+  and letting eviction sort it out — which would evict what it just fetched.
+  Cabinet's `DownloadAll.swift` already sizes a platform's list and checks the
+  disk before queueing; inherit that rather than rediscover it.
+- **What a failed download should say.** The one case where cache management
+  becomes visible is "the disk is full of kept games", and the wording of that
+  belongs with the Storage screen rather than here.
+
 #### A platform is not its slug, and "Arcade" is two platforms
 
 **Measured against the live server 2026-09-14**, on RomM 5.1.0 with read-only
