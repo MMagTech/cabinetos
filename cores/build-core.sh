@@ -36,6 +36,12 @@ CORE="${1:-}"
 # backwards. The checkout is still asserted at the pinned commit either way;
 # what is lost is only the ability to read it back out.
 VERIFY_REVISION=1
+
+# make is how nineteen of the twenty-one cores build. Two have no
+# Makefile.libretro at all — mGBA's upstream dropped it, Flycast never had one —
+# and set BUILDSYS=cmake with CMAKEARGS and CMAKE_TARGET instead.
+BUILDSYS=make
+
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SRC_ROOT="${CABINETOS_CORE_SRC:-$ROOT/.core-src}"
 OUT="${CABINETOS_CORE_OUT:-$ROOT/cores/build}"
@@ -196,8 +202,8 @@ pcsx_rearmed)
     # Cabinet runs DYNAREC=0 on iOS and tvOS and DYNAREC=ari64 on the Mac, and
     # tags the states from BOTH as pcsx-rearmed-native — so Cabinet already
     # depends on the state format not caring which backend produced it.
-    # CABINETOS_DYNAREC exists so both can be built and compared; the default
-    # matches Apple mobile until that comparison says otherwise.
+    # CABINETOS_DYNAREC exists so both can be built and compared, and that
+    # comparison has now been made. The default is DYNAREC=lightrec —
     # lightrec, the real recompiler, and it is safe to differ from Apple here:
     # the state format tolerates either backend. ndrc_freeze writes nothing
     # without blocks, skips an absent section on load, and consumes a present
@@ -207,6 +213,223 @@ pcsx_rearmed)
     #
     # Override with CABINETOS_DYNAREC=0 to build the interpreter for comparison.
     MAKEARGS=("DYNAREC=${CABINETOS_DYNAREC:-lightrec}")
+    ;;
+melonds)
+    REPO=https://github.com/libretro/melonDS.git
+    COMMIT=66b5d2634cd0a79030562811e6e05f5532f800ba
+    MAKEDIR=.
+    MAKEFILE=Makefile
+    # Nintendo DS. TWO levers here, and only one of them is a recompiler —
+    # which is the reason this core is not simply "melonDS, like the others".
+    #
+    # JIT_ARCH is the recompiler. The unix branch sets x64 on x86-64; Cabinet's
+    # iOS and tvOS builds set nothing at all and run the interpreter, while its
+    # Mac sets aarch64. So Cabinet ALREADY ships this core with two different
+    # CPU backends under one emulator tag, exactly as it does for pcsx_rearmed.
+    # CABINETOS_MELONDS_JIT builds either side for comparison.
+    #
+    # x64 IS SAFE, AND THIS ONE WAS MEASURED RATHER THAN READ. Both builds were
+    # run against Tetris DS through tools/state-probe.c: identical video and
+    # audio digests over 600 frames, identical state size, and every load
+    # combination — each build's own state and the other's — ending on the same
+    # digest, with the two own-state runs as the control. Upstream intends this:
+    # the only two JIT-conditional lines in any DoSavestate are guarded
+    # `if (!file->Saving)`, so nothing about the recompiler is ever WRITTEN into
+    # a state, and on load a JIT build refills the pipeline and resets its block
+    # cache. melonDS's own comment says why — "we still want JIT save states to
+    # be loaded while running the interpreter". See docs/PROJECT.md, question 13.
+    #
+    # HAVE_OPENGL is not a recompiler and is the easy half: the unix branch
+    # turns it on for x86 and x86-64 because a desktop Linux frontend can hand
+    # the core a GL context. This one cannot yet — the core host refuses
+    # RETRO_ENVIRONMENT_SET_HW_RENDER — and Cabinet's Apple builds leave it off,
+    # so turning it off is matching rather than diverging. Turn it back on when
+    # the frontend can host a hardware-rendered core, and check the objects
+    # again when that happens.
+    MAKEARGS=("JIT_ARCH=${CABINETOS_MELONDS_JIT-x64}" "HAVE_OPENGL=0")
+    ;;
+picodrive)
+    REPO=https://github.com/libretro/picodrive.git
+    COMMIT=733c711a477a642fd2006d5a7a581b2790ec36b4
+    MAKEDIR=.
+    MAKEFILE=Makefile.libretro
+    # Sega 32X, and only 32X — Genesis, Master System and Game Gear are all
+    # Genesis Plus GX. Reading the core list as a platform list gets that
+    # backwards.
+    #
+    # use_sh2drc is the lever: the SH2 recompiler, which the 32X needs two of.
+    # It defaults to 1 on x86-64, and Cabinet gets 0 from the Makefile's own
+    # Apple block — turned off there for code-signing reasons ("It needs
+    # signing and notarizing on the later versions"), which is a constraint
+    # this console does not have. CABINETOS_PICODRIVE_SH2DRC builds either side.
+    #
+    # THE STATE IS SAFE EITHER WAY, AND WE TAKE 0 ANYWAY. Both builds were run
+    # against Space Harrier through tools/state-probe.c, and at frame 600 their
+    # save states are BYTE-IDENTICAL — not merely compatible. The source says
+    # why: sh2_pack copies SH2_REG_SIZE bytes, which stops at `macl`, and every
+    # drc field in the struct sits after it. So the recompiler is never in a
+    # state, and SH2_STATE_SIZE is a compile-time constant that does not move.
+    #
+    # But the same test showed the two backends do NOT produce the same picture:
+    # from an identical boot they diverge in video and audio digest within 60
+    # frames, while converging on that identical machine state. Something
+    # timing-visible lands differently — a raster effect a line out, most
+    # likely — and each build is deterministic on its own, so it is the backend
+    # and not noise.
+    #
+    # Nothing here needs the recompiler. The 32X is two 23 MHz SH2s and this is
+    # an x86-64 console, so the interpreter is not the bottleneck it was on a
+    # phone. Taking it would buy performance nobody is short of and pay for it
+    # with a picture that differs from the Apple TV's. Matching Cabinet exactly
+    # costs nothing and makes the shared tag unarguable.
+    #
+    # Revisit only with a measurement from real hardware showing the interpreter
+    # is short on 32X, and know from the above that the states will survive it.
+    MAKEARGS=("use_sh2drc=${CABINETOS_PICODRIVE_SH2DRC:-0}")
+    ;;
+mgba)
+    REPO=https://github.com/libretro/mgba.git
+    COMMIT=e31759b24e7a4e3899285ff720d7b573ac328ae7
+    # Game Boy Advance, and the only core in the set with no backend question:
+    # mGBA has no recompiler on any platform. What it has instead is a
+    # different BUILD, because upstream dropped Makefile.libretro and left a
+    # CMake target in its place.
+    #
+    # The first group of flags is Cabinet's, from tools/build-core.sh's cmake
+    # branch, minus the four that only name an Apple SDK. They are all "do not
+    # build the parts of mGBA that are not the core": no Qt or SDL front end, no
+    # ffmpeg, sqlite, Discord or editline, and none of the three GL renderers,
+    # which this frontend could not drive anyway.
+    #
+    # THE SECOND GROUP IS WHERE THIS CORE HIDES ITS unix BRANCH. mGBA has no
+    # platform cases; it probes for libraries and switches features on wherever
+    # it finds them. Cabinet builds against an SDK that has libz and none of the
+    # rest, so it gets those features off by accident of the platform. This
+    # container has freetype, json-c, libpng and libzip in it FOR THE FRONTEND,
+    # and mGBA would have silently taken all four.
+    #
+    # One of them is not cosmetic: mGBA's own configure summary calls USE_PNG
+    # "Screenshot/advanced savestate support". A lever that changes what a save
+    # state can contain is exactly the thing this whole question is about.
+    #
+    # Not reasoned about — READ OFF THE SHIPPING ARCHIVES. `nm -u` on
+    # libmgba_tvos.a and libmgba_mac.a lists zlib's inflate/deflate/crc32 and
+    # nothing else: no png_*, no zip, no sqlite, no FT_*, no json_*. So zlib on
+    # and the rest off is what Cabinet actually ships, rather than what it looks
+    # like it should ship.
+    #
+    # CMAKE_BUILD_TYPE is deliberately NOT set, because Cabinet does not set it
+    # either. mGBA's libretro target appends its own -O3, so the build is
+    # optimised regardless; adding Release here would put a second, different
+    # optimisation flag into our binary and not into Cabinet's.
+    BUILDSYS=cmake
+    CMAKE_TARGET=mgba_libretro
+    CMAKEARGS=(
+        -DBUILD_LIBRETRO=ON -DBUILD_QT=OFF -DBUILD_SDL=OFF
+        -DUSE_FFMPEG=OFF -DUSE_SQLITE3=OFF -DUSE_DISCORD_RPC=OFF
+        -DUSE_EDITLINE=OFF -DUSE_ELF=OFF
+        -DBUILD_GLES2=OFF -DBUILD_GLES3=OFF -DBUILD_GL=OFF
+
+        -DUSE_ZLIB=ON
+        -DUSE_PNG=OFF -DUSE_MINIZIP=OFF -DUSE_LIBZIP=OFF
+        -DUSE_FREETYPE=OFF -DUSE_JSON_C=OFF -DUSE_LUA=OFF
+        -DUSE_EPOXY=OFF -DUSE_CMOCKA=OFF -DENABLE_PYTHON=OFF
+    )
+    ;;
+mupen64plus)
+    REPO=https://github.com/libretro/mupen64plus-libretro-nx
+    COMMIT=f275caf4b2bfa1e6d1c51636746ea793f3d80320
+    MAKEDIR=.
+    MAKEFILE=Makefile
+    # Nintendo 64, and one of the three cores that renders through a GL context
+    # the frontend has to own. It builds here; it cannot run here yet, and
+    # catalog.cpp says so rather than offering an N64 game that would fail.
+    #
+    # FOUR levers, which is the most of any core in the set, and the reason
+    # this one is not a one-line diff against Cabinet:
+    #
+    #   WITH_DYNAREC   the unix branch defaults it to the ARCH, so x86_64 — a
+    #                  real recompiler, assembled with nasm. Cabinet's
+    #                  ios-arm64 case forces it EMPTY, because iOS forbids a
+    #                  JIT, and that is the lever in question here.
+    #   DYNAFLAGS      carries -DNO_ASM, and WITHOUT IT THE LINK FAILS. Turning
+    #                  the recompiler off is not enough on its own: cp0.c,
+    #                  interrupt.c and r4300_core.c still call dyna_jump,
+    #                  dyna_stop and dynarec_jump_to, guarded by `#ifndef
+    #                  NO_ASM` rather than by WITH_DYNAREC, so the .so has five
+    #                  undefined references and does not link. Cabinet gets the
+    #                  define from its ios-arm64 case; the unix case has no
+    #                  equivalent. DYNAFLAGS is the one variable the Makefile
+    #                  sets with := and never appends to when WITH_DYNAREC is
+    #                  empty, so it is the only clean way in from the command
+    #                  line — every other flags variable would be REPLACED
+    #                  rather than extended and take the rest of the build with
+    #                  it.
+    #   FORCE_GLES3    Cabinet builds GLES3; a plain unix build links desktop
+    #                  -lGL. This frontend's context is EGL/GLES3, so GLES3 is
+    #                  both what Cabinet has and what we could actually drive.
+    #   LLE, HAVE_PARALLEL_RSP, HAVE_PARALLEL_RDP, HAVE_THR_AL
+    #                  low-level RSP and RDP emulation. Cabinet turns all four
+    #                  on; the unix branch leaves them at 0. Matched here, so
+    #                  that the video path is the same machine as Cabinet's
+    #                  rather than a different plugin wearing the same name.
+    # ONE DIFFERENCE IS RECORDED RATHER THAN MATCHED. Cabinet's ios-arm64 case
+    # also adds -Ofast -funsafe-math-optimizations to three separate flags
+    # variables, and there is no command-line way to extend those without
+    # replacing them. This build gets the unix branch's -O3 -ffast-math
+    # instead. It is a floating-point difference in an emulator whose output is
+    # floating point, so it is not obviously harmless — and it cannot be judged
+    # until an N64 game can actually be run here.
+    #
+    # WHICH IS WHY THE TAG IS NOT SHARED YET. catalog.cpp returns no emulator
+    # tag for this core, so nothing uploads a state that Cabinet might offer
+    # back. Settle it when the frontend can host a hardware-rendered core and
+    # there is something to compare.
+    MAKEARGS=(
+        "WITH_DYNAREC=${CABINETOS_N64_DYNAREC-}"
+        DYNAFLAGS=-DNO_ASM
+        FORCE_GLES3=1 GLES3=1
+        LLE=1 HAVE_PARALLEL_RSP=1 HAVE_PARALLEL_RDP=1 HAVE_THR_AL=1
+    )
+    ;;
+flycast)
+    REPO=https://github.com/flyinghead/flycast.git
+    COMMIT=a172e0001351dfbc49b86860a13d5390b1c493fe
+    # Dreamcast AND Naomi, the second hardware-rendered core, and the one with a
+    # Cabinet-side problem this repository cannot fix.
+    #
+    # CMake, like mGBA, but for the opposite reason: Flycast never had a
+    # Makefile.libretro.
+    #
+    # THE TAG IS NOT SHARED AND CANNOT BE, TODAY. The manifest's own patch entry
+    # says Flycast is built from "tools/build-flycast.sh, and UNSCRIPTED edits in
+    # the working tree", so commit a172e000 plus that script does not reproduce
+    # what Cabinet ships. There is no revision for our build to match, whatever
+    # flags we pass. Until that diff is captured in Cabinet, catalog.cpp returns
+    # no emulator tag for this core. See docs/PROJECT.md, open question 13.
+    #
+    # The recompiler lever is real and is NOT the blocker: Cabinet builds
+    # -DTARGET_NO_REC on iOS and tvOS and turns the recompilers on for the Mac,
+    # so it already ships both. CABINETOS_FLYCAST_REC exists to compare them
+    # when there is a reproducible Cabinet build to compare against.
+    #
+    # CPU_RATIO is a patch Cabinet applies and this build does not, deliberately.
+    # Upstream charges every INTERPRETED SH4 instruction 8 cycles, an effective
+    # 25 MHz, which is what made heavy scenes slow down inside the emulated
+    # machine; Cabinet changes it to 2. With the dynarec on, that constant is
+    # not used at all, so patching it here would change nothing and only look
+    # like parity.
+    BUILDSYS=cmake
+    CMAKE_TARGET=flycast_libretro
+    CMAKEARGS=(
+        -DCMAKE_BUILD_TYPE=Release
+        -DLIBRETRO=ON
+        -DUSE_OPENGL=ON
+        -DUSE_VULKAN=ON
+    )
+    if [ -n "${CABINETOS_FLYCAST_REC:-}" ] && [ "$CABINETOS_FLYCAST_REC" = 0 ]; then
+        CMAKEARGS+=(-DCMAKE_C_FLAGS=-DTARGET_NO_REC -DCMAKE_CXX_FLAGS=-DTARGET_NO_REC)
+    fi
     ;;
 *)
     echo "unknown core: $CORE" >&2
@@ -225,7 +448,16 @@ fi
 
 git -C "$SRC" fetch --quiet origin "$COMMIT" 2>/dev/null || git -C "$SRC" fetch --quiet --all
 git -C "$SRC" checkout --quiet --force "$COMMIT"
-git -C "$SRC" submodule update --init --recursive --quiet
+# Only when there is something to fetch. mupen64plus at its pinned commit has NO
+# .gitmodules and one stray gitlink left in the tree —
+# mupen64plus-rsp-paraLLEl/lightning/gnulib — which git cannot resolve to a URL
+# and refuses outright, failing the build over a directory the build never
+# reads. That is upstream debris rather than a missing dependency. Guarding on
+# the file means a core WITH real submodules still gets them, and still fails
+# loudly if one of those cannot be fetched.
+if [ -f "$SRC/.gitmodules" ]; then
+    git -C "$SRC" submodule update --init --recursive --quiet
+fi
 
 HEAD=$(git -C "$SRC" rev-parse HEAD)
 if [ "$HEAD" != "$COMMIT" ]; then
@@ -233,6 +465,34 @@ if [ "$HEAD" != "$COMMIT" ]; then
     exit 1
 fi
 echo "$CORE @ $COMMIT"
+
+# Source patches that TRAVEL. Most of Cabinet's in-flight patches are Apple
+# walls that simply do not exist on Linux and disappear here; a few change
+# BEHAVIOUR, and those have to be applied identically or the two builds are not
+# the same emulator. docs/PROJECT.md, open question 13.
+#
+# Every one of them asserts its own anchor. A patch that silently matches
+# nothing leaves a green build with the fix absent, which has happened twice on
+# this project and is the reason the assertion is not optional.
+if [ "$CORE" = melonds ]; then
+    # melonDS's libretro build has no background flush thread — __LIBRETRO__
+    # compiles it out — and instead debounce-flushes the .sav two seconds after
+    # the game's last SRAM write, at the end of a retro_run. Its
+    # retro_unload_game is NDS::DeInit() alone, so a save made less than two
+    # seconds before quitting is dropped, and save-then-quit is exactly how
+    # people leave a game.
+    #
+    # FlushSecondaryBuffer() writes only when there is unflushed data, so this
+    # is a no-op otherwise. Cabinet applies it on all three of its platforms.
+    LIBRETRO_CPP="$SRC/src/libretro/libretro.cpp"
+    perl -0pi -e 's/void retro_unload_game\(void\)\n\{\n   NDS::DeInit\(\);/void retro_unload_game(void)\n{\n   NDSCart_SRAMManager::FlushSecondaryBuffer();\n   NDS::DeInit();/' \
+        "$LIBRETRO_CPP"
+    grep -q 'NDSCart_SRAMManager::FlushSecondaryBuffer();' "$LIBRETRO_CPP" || {
+        echo "melonds unload-flush patch did not apply; upstream shape changed" >&2
+        exit 1
+    }
+    echo "patched: final SRAM flush in retro_unload_game"
+fi
 
 # platform=unix is the core's own Linux case, and on every Makefile-based core
 # in the set it is also the default when uname says Linux. It is the
@@ -247,12 +507,27 @@ BUILDER="${CABINETOS_BUILDER:-cabinetos-builder}"
 # the bind-mounted tree as dubiously owned it fails QUIETLY into "unknown", the
 # `||` swallows it, and the core ships not knowing what revision it is. Passing
 # it through the environment avoids writing a gitconfig into the mounted tree.
-podman run --rm -v "$SRC":/src:Z -w /src \
-    -e GIT_CONFIG_COUNT=1 \
-    -e GIT_CONFIG_KEY_0=safe.directory \
-    -e GIT_CONFIG_VALUE_0=/src \
-    "$BUILDER" \
-    make -C "$MAKEDIR" -f "$MAKEFILE" platform=unix "${MAKEARGS[@]}" -j"$(nproc)"
+if [ "$BUILDSYS" = cmake ]; then
+    # Out of tree, into the checkout, so that the .so discovery below and the
+    # `make clean` a rebuild wants both find it in the one place a core's
+    # output ever lives. .cabinetos-build is not a name upstream uses.
+    podman run --rm -v "$SRC":/src:Z -w /src \
+        -e GIT_CONFIG_COUNT=1 \
+        -e GIT_CONFIG_KEY_0=safe.directory \
+        -e GIT_CONFIG_VALUE_0=/src \
+        "$BUILDER" \
+        sh -c 'target=$1; shift
+               cmake -S /src -B /src/.cabinetos-build "$@" \
+               && cmake --build /src/.cabinetos-build --target "$target" -j'"$(nproc)" \
+        _ "$CMAKE_TARGET" "${CMAKEARGS[@]}"
+else
+    podman run --rm -v "$SRC":/src:Z -w /src \
+        -e GIT_CONFIG_COUNT=1 \
+        -e GIT_CONFIG_KEY_0=safe.directory \
+        -e GIT_CONFIG_VALUE_0=/src \
+        "$BUILDER" \
+        make -C "$MAKEDIR" -f "$MAKEFILE" platform=unix "${MAKEARGS[@]}" -j"$(nproc)"
+fi
 
 mkdir -p "$OUT"
 

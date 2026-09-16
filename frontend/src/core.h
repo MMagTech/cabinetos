@@ -78,16 +78,34 @@ class Core {
 public:
     static Core& shared();
 
+    // Where a core looks BIOS files up by name, and where a core that writes
+    // its own save files puts them.
+    //
+    // CALL THIS BEFORE load(), NOT BEFORE loadGame(). A core is allowed to ask
+    // for these directories inside retro_init, and several do: melonDS reads
+    // both there, keeps them in a static buffer, and never asks again. Setting
+    // them at game-load time is too late — the core has already built its save
+    // path out of an empty string, and melonDS was writing `/Tetris DS.sav`, at
+    // the root of the filesystem, where it cannot be written.
+    //
+    // That failure is silent. The game runs, the save simply never lands, and
+    // nothing says so. It hits exactly the cores that write their own save
+    // files rather than exposing RETRO_MEMORY_SAVE_RAM — melonDS, Neo Geo
+    // Pocket, Sega CD, FBNeo's NVRAM — which is the class the reference
+    // implementation already lost saves to once, by a different route.
+    //
+    // saveDir MUST outlive the session: pointing it at a per-launch temp
+    // directory is the other way that same lesson gets learned.
+    void setDirectories(const std::string& systemDir, const std::string& saveDir);
+
     // dlopen, resolve the retro_* entry points, retro_init. Returns false with
     // a reason on `error()`.
     bool load(const std::string& soPath);
     void unload();
     bool loaded() const { return handle_ != nullptr; }
 
-    // systemDir is where a core looks BIOS files up by name. saveDir is where a
-    // core that writes its own save files puts them, and it MUST outlive the
-    // session: pointing it at a per-launch temp directory is how the reference
-    // implementation used to lose saves.
+    // The directories are the ones given to setDirectories, and are re-applied
+    // here for the cores that ask at load-game time instead.
     bool loadGame(const std::string& romPath, const std::string& systemDir,
                   const std::string& saveDir);
     void unloadGame();

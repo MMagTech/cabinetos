@@ -53,9 +53,10 @@ jobs:
     runs-on: ubuntu-24.04
 
     strategy:
-      # One core's failure should not hide another's. When the
-      # backend-sensitive cores land — pcsx_rearmed, melonDS, Flycast,
-      # picodrive — knowing which of them broke is most of the diagnosis.
+      # One core's failure should not hide another's. All four of the
+      # backend-sensitive cores — pcsx_rearmed, melonDS, Flycast, picodrive —
+      # are in this matrix now, and knowing which of them broke is most of the
+      # diagnosis.
       fail-fast: false
       matrix:
         core:
@@ -74,6 +75,11 @@ jobs:
           - mame2003_plus
           - fbneo_libretro
           - pcsx_rearmed
+          - melonds
+          - picodrive
+          - mgba
+          - mupen64plus
+          - flycast
 
     steps:
       - name: Checkout
