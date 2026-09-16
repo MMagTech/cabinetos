@@ -2750,9 +2750,28 @@ Ninety-three percent of that total is firmware for a system with no core in the
 manifest and no prospect of one. For everything actually playable it is fifteen
 megabytes — the entire BIOS collection, for every system, permanently.
 
-> **Fetch it once at setup, for the platforms `catalog` says are playable, and
-> firmware stops being part of launching a game.** A platform then works the
-> first time it is tried rather than the second, and works offline.
+**Fetching the whole 15 MB at setup was proposed and Marcus chose otherwise:
+fetch a platform's firmware the first time a game on that platform is launched.**
+He is right, on two counts. It is less machinery — the launch path already does
+exactly this, and the only change is not asking again afterwards — and it is a
+simpler thing to hold in your head: the console fetches what a game needs when
+that game needs it, with no separate preparation step. Fifteen megabytes is not
+enough saving to justify inventing a setup phase for.
+
+> **Fetch a platform's firmware on the first launch of a game on it, and never
+> ask again. Keeping a game fetches its platform's firmware too.**
+
+**The second sentence is the one that is easy to forget**, and it is Cabinet's
+behaviour already: *"Keeping a game pulls its ROM and its platform's
+firmware."* Without it there is a real hole — download a PlayStation game for
+later, go offline, and it will not start, because the machine has the game and
+not the system file it needs. Keeping is a promise that a game will work later,
+and later may have no network in it.
+
+**Checking is not downloading, and the two should not be confused.** The console
+can ask what firmware a platform *has* without fetching any of it, which is a
+cheap list request and is all the missing-BIOS warning below needs. So: ask
+early, download when first needed.
 
 Two details worth keeping: `missing_from_fs` files are skipped, since the server
 lists them and does not have them; and a failure is still not fatal, because
@@ -2770,9 +2789,11 @@ earlier the same day, on Sega CD: `Unable to open CD BIOS:
 "system/bios_CD_U.bin"`. Clear, actionable, and delivered at the worst possible
 moment, after the person chose a game and waited for a download.
 
-**Fetching everything at setup is what makes the better version possible**,
-because that is the moment the console learns what is missing. It can say so
-then, once, about a whole system — rather than per game, after the fact.
+**Asking what the server holds is what makes the better version possible**, and
+it costs nothing: a firmware list per platform, no downloads. Do that while the
+library is being scanned and the console knows, up front, which systems it
+cannot play — so it can say so once, about a whole system, rather than per game
+and after the fact.
 
 It needs one small thing that does not exist: **a list of which platforms cannot
 start without firmware at all.** PlayStation, Saturn, Sega CD, 3DO, Dreamcast,

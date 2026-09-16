@@ -84,9 +84,10 @@ and FBNeo's NVRAM are the same class and all three are playable today. Cabinet's
 
 **5. Nothing warns that a system's BIOS is missing.** If the server holds no
 Sega CD BIOS, the person finds out from the emulator's own error message after
-choosing a game and waiting for a download. Fetching all firmware at setup —
-15 MB for every playable system — is the moment to learn it and say so instead.
-PROJECT.md, Phase 4, under the firmware section.
+choosing a game and waiting for a download. Asking the server what firmware it
+HAS costs nothing and can happen while the library is scanned, which is the
+moment to say so instead. Downloading stays lazy — first launch of a platform,
+plus whenever a game is kept. PROJECT.md, Phase 4, under the firmware section.
 
 **6. Hardware-rendered cores.** Flycast and Mupen64Plus are built and cannot
 run: they want a GL context through `RETRO_ENVIRONMENT_SET_HW_RENDER`, which
