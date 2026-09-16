@@ -31,7 +31,9 @@ container on the test VM, and in CI.
 download with progress, play it, save and load states, and leave — with the save
 syncing on the way out.
 
-- **986 of 1644 games playable**, with fifteen cores built.
+- **1100 of 1644 games playable**, with twenty cores built.
+- **All four backend questions are answered**, and two of them by running the
+  thing rather than reading it. See open question 13.
 - **Home is real**: a hero from RomM's own play history, Recent, Favorites,
   focus moving between rows, scrolling.
 - **Downloads stream to disk on a worker.** Nothing that talks to a server stops
@@ -40,30 +42,36 @@ syncing on the way out.
   Cabinet's own emulator strings so they interchange with the Apple apps.
 - **BIOS comes down with the game**, every file the platform lists.
 - **An in-game overlay**: Start or Escape. Resume, save state, load state, exit.
-- **Fifteen cores build in CI**, each asserting its pinned revision.
+- **Twenty cores build in CI**, each asserting its pinned revision.
 
 ## Pick up with one of these
 
-**1. The four remaining backend questions, and mGBA.** melonDS, picodrive,
-Flycast and mupen64plus each turn on a recompiler Cabinet has off, and each
-needs the check pcsx_rearmed just had before its emulator tag can be shared —
-see open question 13 for how that went and what the object diff showed. mGBA is
-CMake rather than a Makefile and needs a different path in `build-core.sh`.
-Together they are worth about 260 more games.
-
-**2. Nothing evicts anything.** A ROM already on disk at the right size is
+**1. Nothing evicts anything.** A ROM already on disk at the right size is
 reused, and that is all. 1644 games at these sizes do not fit on a console, so
 the disk fills and stays full. The design is settled in PROJECT.md — cached is
 evictable, kept is not, the person only ever opts *in* to keeping — and none of
-it is built.
+it is built. **This is the biggest hole in the product now.**
 
-**3. The Library screen.** 986 playable games and only the ~50 on Home can be
+**2. The Library screen.** 1100 playable games and only the ~50 on Home can be
 reached. Home already points at a Library that does not exist.
 
-**4. Saves on the right triggers.** Keys do it today, which is the test
+**3. Saves on the right triggers.** Keys do it today, which is the test
 environment and not the product. The settled triggers are in PROJECT.md: when
 the game writes its memory card, from the overlay, on leaving a game, and a
 controller combination.
+
+**4. The file-writing save class is not synced at all.** melonDS writes a `.sav`
+beside the ROM rather than exposing `RETRO_MEMORY_SAVE_RAM`, so `[save] battery
+is 0 bytes` is correct and the file never reaches RomM. Neo Geo Pocket, Sega CD
+and FBNeo's NVRAM are the same class and all three are playable today. Cabinet's
+`MemoryCardSync` is the shape to copy.
+
+**5. Hardware-rendered cores.** Flycast and Mupen64Plus are built and cannot
+run: they want a GL context through `RETRO_ENVIRONMENT_SET_HW_RENDER`, which
+`core.cpp` refuses. That is 43 more games, plus PPSSPP once it is built, and it
+is the one piece of frontend work that is genuinely new rather than more
+screens. On Linux the readback Cabinet needs should not exist at all — the UI
+and the core can share one context.
 
 ## Things that will bite you
 
@@ -71,6 +79,16 @@ controller combination.
   not only motion: a television's overscan eats more vertical room than a
   framebuffer capture shows, which is how Cabinet's hero height needed four
   attempts on real hardware. **Vertical fit cannot be judged here either.**
+- **Build a core, then RUN it.** Every assertion in the build pipeline passed on
+  melonDS — pinned commit, asserted revision, reproducible artifact — while it
+  wrote its save file to `/`, because it reads the save directory in
+  `retro_init` and the frontend set it at game-load time. Silent, and it hits
+  every core that writes its own saves. Fixed; the lesson is the point.
+- **Run the control before believing a comparison.** `cores/backend-diff.sh`
+  first said 102 of picodrive's 103 objects differed, including zlib's. The same
+  setting on both sides said the same thing: the cause was LTO's random
+  per-build id, not the recompiler. The tool takes the same setting twice and
+  calls identical a pass — use it.
 - **Ask the CORE, never the platform**, whether an archive should be opened.
   `retro_get_system_info` reports the extensions a core takes and
   `block_extract`. FBNeo reads `zip` and `7z` itself, so an arcade set must be
@@ -83,25 +101,36 @@ controller combination.
   for brightness, off for every toggle whose useful state is on. It fails
   quietly and it cost Cabinet eight evenings. Our core host must answer every
   variable a core asks about, and **nobody has checked that it does.**
-- **`catalog::coverageFor` answers three different questions.** No core exists,
-  a core exists and Cabinet does not ship it, and *this console has not built it
-  yet*. Collapsing them hides how much of the library is waiting on work.
+  (melonDS's `JIT_Enable` is the exception that proves the rule: a C++
+  initialiser, so its unanswered default is `true`.)
+- **`catalog::coverageFor` answers FOUR different questions now.** No core
+  exists, a core exists and Cabinet does not ship it, this console has not built
+  it, and — new — it is built and cannot be driven. Collapsing any two hides
+  work.
 - **Every scripted edit must assert its anchor.** A `python - <<PY` that
   replaces text it cannot find changes nothing, the build stays green, and the
-  feature silently is not there. That happened twice in one session.
-- **Read the evidence, not just the code.** The filename sanitiser turning
-  "Pokémon" into "Pok__mon" was visible in the server's own listing.
+  feature silently is not there. `build-core.sh`'s melonDS patch does this.
+- **Read the evidence, not just the code.** Cabinet's mGBA feature set was read
+  off its shipping archive with `nm -u`, which corrected a flag choice that
+  reasoning had got wrong.
 - **`pgrep -f "some string"` matches your own command line.** Twice mistaken for
   a still-running process.
 - **Look on disk before concluding a file does not exist.** `core-manifest.json`
   is at `~/Downloads/core-manifest.json` and is not on GitHub.
+- **Stop the session before building on the VM.** The frontend runs at 300% CPU
+  under llvmpipe and it is four cores. `sudo systemctl stop
+  cabinetos-session.service`, build, start it again — and use `--no-block` on
+  the start, or ssh hangs.
 
 ## The state that lives on the VM and not in git
 
 - `~/frontend/` — the frontend source, built with
   `podman run --rm -v "$PWD":/src:Z -w /src cabinetos-builder make`
-- `~/frontend/cores/build/` — fifteen built cores, where the frontend looks
+- `~/frontend/cores/build/` — twenty built cores, where the frontend looks
 - `~/cabinetos/` — a clone of this repo, where `cores/build-core.sh` runs
+- `~/cabinetos/.core-src/` — per-core checkouts, ~8 GB. **Disk is tight**
+  (about 3 GB free). They are a cache: delete any of them to make room and the
+  next build re-clones.
 - `~/run-frontend.sh` — the session launcher; points at the live RomM server.
   The original is `run-frontend.sh.bak`
 - `~/.config/cabinetos/romm.json` — the RomM token, 0600. Nine scopes: read the
@@ -111,13 +140,21 @@ controller combination.
 Sudo on the VM needs the password `cabinet`, a throwaway from the public repo's
 `disk_config/disk.toml`.
 
-## Two Cabinet-side debts
+## Cabinet-side debts
 
 1. **Flycast carries unscripted edits in its working tree**, so its pinned
-   commit does not reproduce what ships. Capture that diff before anything
-   touches the tree — and Flycast is one of the four cores whose backend
-   question is still open.
-2. **`core-manifest.json` is still not pushed to GitHub.** It is load-bearing
+   commit does not reproduce what ships, and **that is the only reason Flycast
+   cannot share its emulator tag.** Capture the diff before anything touches
+   that tree:
+   `git -C spikes/cores/flycast/src diff > tools/patches/flycast-unscripted.patch`
+2. **mGBA's Mac build is `-dirty` too**, and its manifest entry lists no patches
+   at all. Same problem, quieter.
+3. **Two "unrecoverable" tvOS revisions were recovered with `strings`** —
+   picodrive's and mGBA's, both sitting in the shipping archive. Nine more are
+   probably there. An hour of work turns "unknown and unknowable" into facts.
+4. **melonDS's archives carry no revision** while the same upstream built here
+   reports one, so something in Cabinet's build is losing `GIT_VERSION`.
+5. **`core-manifest.json` is still not pushed to GitHub.** It is load-bearing
    for every core and it is one unbacked file on one Mac.
 
 ## How the user wants this done

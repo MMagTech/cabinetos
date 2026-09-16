@@ -44,6 +44,17 @@ enum class Support {
     // always a reason, and `reason()` gives it, because a decision nobody can
     // recover is indistinguishable from a bug.
     Excluded,
+    // The core is built and sitting on this disk, and the console still cannot
+    // run it: it renders through a GL context the frontend has to own and hand
+    // over, and `core.cpp` refuses RETRO_ENVIRONMENT_SET_HW_RENDER. Three cores
+    // in the whole set are like this — Flycast, Mupen64Plus and PPSSPP.
+    //
+    // A FOURTH ANSWER RATHER THAN NotInstalled, because "we have not built it"
+    // and "we cannot drive it" lead to different work, and because the file
+    // being present would otherwise make the console offer a Dreamcast game it
+    // cannot start. That is the exact bug NotInstalled was added for, one layer
+    // further in.
+    NeedsHardwareRender,
 };
 
 struct Coverage {
