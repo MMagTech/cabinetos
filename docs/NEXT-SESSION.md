@@ -12,6 +12,18 @@ Rewrite it at the end of a session. It is meant to be current, not a log.
 
 ---
 
+## Before anything else
+
+**The work is on a branch, not on `main`.** Check what you are standing on:
+
+```
+git log --oneline origin/main..HEAD
+```
+
+As of 2026-09-16 the branch is `screens`, it carries the whole of this file's
+"what runs today", and the pull request for it is open. Nothing below exists on
+`main` yet.
+
 **Read `docs/CABINET.md` before designing anything.** Cabinet ships on iOS, tvOS
 and macOS and has already answered most of what comes up here. tvOS is the
 surface to copy, not iOS. Cabinet is not checked out on this Mac; clone it:
@@ -22,83 +34,76 @@ cd cabinet && git sparse-checkout set RommApp docs
 ```
 
 Then read `docs/PROJECT.md`, and `frontend/README.md` for the build loop.
-**Nothing builds on this Mac** — the frontend and the cores are built in a
-container on the test VM, and in CI.
+
+**The test VM is `cabinet@192.168.1.250`**, key at `~/.ssh/cabinetos`, sudo
+password `cabinet` — a throwaway from the public repo's `disk_config/disk.toml`.
+The RomM server it talks to is `192.168.1.10:6005`.
+
+**Nothing builds on this Mac.** The frontend and the cores build in a container
+on the VM and in CI. The VM loop is eleven seconds:
+
+```
+rsync -az -e "ssh -i ~/.ssh/cabinetos" frontend/src/ cabinet@192.168.1.250:~/frontend/src/
+ssh -i ~/.ssh/cabinetos cabinet@192.168.1.250 \
+  'cd ~/frontend && podman run --rm -v "$PWD":/src:Z -w /src cabinetos-builder make'
+```
 
 ## Where things stand
 
-**The whole loop works.** Browse the real library, pick a game, watch it
-download with progress, play it, save and load states, and leave — with the save
-syncing on the way out.
+**The whole loop works, and the whole library is now reachable.** Browse every
+system and collection, open a game, play it or download it, save and load
+states, and leave — with the save syncing on the way out.
 
 - **1100 of 1644 games playable**, with twenty cores built.
-- **All four backend questions are answered**, and two of them by running the
-  thing rather than reading it. See open question 13.
-- **Home is real**: a hero from RomM's own play history, Recent, Favorites,
-  focus moving between rows, scrolling.
-- **Downloads stream to disk on a worker.** Nothing that talks to a server stops
-  the picture — measured at 3.21 ms on the frame thread for a save.
+- **Home is real**: a hero from RomM's own play history, Recent, Favorites.
+- **Library, a grid, and a launch screen**, built 2026-09-16. Every system
+  including the ones this console cannot play, each saying why.
+- **Download is the one deliberate storage act**, and it keeps the game. The
+  cache stays invisible; Play fetches silently and says nothing.
+- **Both floors are enforced where that button is**, measured by filling the
+  disk rather than by reasoning about it.
 - **Saves, memory cards and states sync both ways** with RomM, tagged with
-  Cabinet's own emulator strings so they interchange with the Apple apps.
+  Cabinet's own emulator strings.
 - **BIOS comes down with the game**, every file the platform lists.
-- **An in-game overlay**: Start or Escape. Resume, save state, load state, exit.
 - **Twenty cores build in CI**, each asserting its pinned revision, and the
   frontend compiles there too.
-- **The disk no longer fills and stays full.** Eviction works, measured.
 
 ## Pick up with these, in this order
 
-**The next block of work is SCREENS**, decided 2026-09-16. The machine underneath
-is in good shape and almost nothing of the library is reachable: 1100 playable
-games and only the fifty on Home can be got at.
+### 1. The navigation bar, which needs a television and not a decision
 
-### 1. Library — platforms and collections
+The Library is reached with a temporary **L** key. That is the only thing
+holding the screens apart from being a product.
 
-Home already points at a Library that does not exist. The design is settled and
-detailed in PROJECT.md: a **tile grid, not a list** (a full-width row on a
-1920pt canvas leaves a name at one end and a count at the other), a **switcher
-between Platforms and Collections** as capsule pills, focus landing on the
-switcher the first time and **only** the first time, and the two arcade
-platforms shown as two systems rather than merged.
+**Home has about 85 points of vertical slack and the bar needs about 85** — the
+arithmetic is in PROJECT.md. A bar at Title 3 plus its gap puts Recent's caption
+on the bottom edge, and **overscan eats more than a capture shows**. So this is
+a measurement on the SER5, not an argument here: either the bar fits, or the
+hero comes down, or the bar goes elsewhere.
 
-`catalog::coverageFor` already answers which platforms are playable and why not,
-in four flavours, so the screen has its content decided for it.
+Everything else on this list can be done without it.
 
-### 2. The game launch screen
+### 2. The rest of the launch screen
 
-A full-screen cover rather than a push, with the artwork as its own backdrop.
-This is where a different save state, a different core and an export are chosen
-— PROJECT.md's own list — and it is the screen Home's hero artwork opens.
+PROJECT.md's own list, and none of it is built: **a different save state, a
+different core, and an export.** The save-state part is the one with a real
+mechanism behind it already — `fetchStates` works, and the emulator tag is what
+decides whether a state is offered or greyed, so the screen can be honest about
+which states this build can actually load.
 
-### 3. Download lives in ONE of those two, and the launch screen is the better home
+### 3. The Storage screen
 
-**Marcus's question, 2026-09-16: a button on the cover, or on the launch
-screen.** Both work; they should not both exist.
+The one place the cache is allowed to be visible, because it is somewhere a
+person goes deliberately. Its data already exists: run
+`./build/cabinetos-frontend --storage` and you get free space, both floors, the
+upload queue, what is kept and what would be evicted, oldest first.
 
-**Recommendation: the launch screen.** It is already the place every other
-per-game decision is made, so Download joins a list rather than starting a
-second mechanism, and it keeps the grid clean — a cover with an action on it
-needs the hero's two-actions-one-card treatment, which is a real focus problem
-to solve for every tile in a grid of hundreds.
+### 4. Download All, at the platform level
 
-**The bulk case already has an answer**, which is what a cover button would
-otherwise be for: *Download All* at the platform level, which PROJECT.md says
-CabinetOS should offer where tvOS deliberately does not.
-
-**It must work on a game that has never been played** — that is the case worth
-building it for. See *Emulation* in PROJECT.md.
-
-### 4. What eviction still has no protection for
-
-Do this when the Download button lands, since that is where it is enforced:
-
-- **Keep**, so there is something eviction may not take. Today the only
-  protection is "the game that is running".
-- **A pending-upload check.** The policy says nothing unsynced is ever deleted,
-  and nothing tracks unsynced. Harmless only because eviction takes ROMs and
-  never save data.
-- **The system reserve**, so kept games cannot grow until the console can no
-  longer update itself.
+PROJECT.md says CabinetOS should offer it where tvOS deliberately does not, and
+Cabinet's `DownloadAll.swift` already sizes the whole list and refuses rather
+than filling the disk and letting eviction sort it out — which would evict what
+it had just fetched.
 
 ### 5. Still owed from before, and none of it blocks the screens
 
@@ -109,86 +114,102 @@ Do this when the Download button lands, since that is where it is enforced:
   the file never reaches RomM. Neo Geo Pocket, Sega CD and FBNeo are the same
   class and all three are playable today.
 - **Nothing warns that a system's BIOS is missing** until a game fails to start.
+  `catalog` is where it belongs — a fifth answer, and the first one that is a
+  fact about the person's server rather than about this console.
 - **Hardware-rendered cores.** Flycast and Mupen64Plus are built and cannot run:
   they want a GL context the frontend does not hand over. 43 more games, plus
   PPSSPP once built.
 
 ## Things that will bite you
 
+### About looking at what you built
+
 - **Judge nothing visual on the VM.** Software rendering on llvmpipe. And it is
   not only motion: a television's overscan eats more vertical room than a
   framebuffer capture shows, which is how Cabinet's hero height needed four
   attempts on real hardware. **Vertical fit cannot be judged here either.**
-- **Build a core, then RUN it.** Every assertion in the build pipeline passed on
-  melonDS — pinned commit, asserted revision, reproducible artifact — while it
-  wrote its save file to `/`, because it reads the save directory in
-  `retro_init` and the frontend set it at game-load time. Silent, and it hits
-  every core that writes its own saves. Fixed; the lesson is the point.
-- **Run the control before believing a comparison.** `cores/backend-diff.sh`
-  first said 102 of picodrive's 103 objects differed, including zlib's. The same
-  setting on both sides said the same thing: the cause was LTO's random
-  per-build id, not the recompiler. The tool takes the same setting twice and
-  calls identical a pass — use it.
-- **Ask the CORE, never the platform**, whether an archive should be opened.
-  `retro_get_system_info` reports the extensions a core takes and
-  `block_extract`. FBNeo reads `zip` and `7z` itself, so an arcade set must be
-  handed over unextracted; `.chd` and `.rvz` are compressed and must never be
-  unpacked.
-- **Never dispatch on a file extension.** Thirty-two files in the reference
-  library have none. Sniff the magic bytes, the way `decodeImage` already did.
-- **An unanswered libretro core option is NOT the default.** The core skips the
-  case and the C global keeps its zero value — silence for a sample rate, black
-  for brightness, off for every toggle whose useful state is on. It fails
-  quietly and it cost Cabinet eight evenings. Our core host must answer every
-  variable a core asks about, and **nobody has checked that it does.**
-  (melonDS's `JIT_Enable` is the exception that proves the rule: a C++
-  initialiser, so its unanswered default is `true`.)
-- **`catalog::coverageFor` answers FOUR different questions now.** No core
-  exists, a core exists and Cabinet does not ship it, this console has not built
-  it, and — new — it is built and cannot be driven. Collapsing any two hides
-  work.
-- **Every scripted edit must assert its anchor.** A `python - <<PY` that
-  replaces text it cannot find changes nothing, the build stays green, and the
-  feature silently is not there. `build-core.sh`'s melonDS patch does this.
-- **Read the evidence, not just the code.** Cabinet's mGBA feature set was read
-  off its shipping archive with `nm -u`, which corrected a flag choice that
-  reasoning had got wrong.
-- **`pgrep -f "some string"` matches your own command line.** Three times now,
-  and the third was the expensive shape: a wait loop,
-  `until ! pgrep -f "git clone.*flycast"; do sleep 30; done`, where the shell
-  running the check has that very text in its own command line, so the pattern
-  matches the searcher and the condition can never come true. It sat there for
-  nine hours waiting for something that had already finished. **Match on
-  something the checker cannot contain** — a pid file, `pgrep -x`, or the exit
-  status of the thing you actually started.
-- **Look on disk before concluding a file does not exist.** `core-manifest.json`
-  is at `~/Downloads/core-manifest.json` and is not on GitHub.
-- **The frontend compiles in CI now**, as of 2026-09-16, and did not before —
-  it had only ever been built on the test VM, which is the single-machine
-  dependency this project called out for cores and then did not apply to the
-  program that loads them. Do not let that slide back.
+- **Every screen photographs itself, headless.** `SDL_VIDEODRIVER=offscreen`
+  needs no compositor, no session and no controller:
+  ```
+  SDL_VIDEODRIVER=offscreen ./build/cabinetos-frontend --romm 192.168.1.10:6005 \
+    --screen library --screenshot /tmp/x.bmp --render-size 1920x1080 --frames 60
+  ```
+  `--screen` opens by walking the route a person walks, so a capture cannot show
+  a state the product cannot reach. `--storage`, `--download` and `--unkeep` do
+  the same for the things with no picture.
+- **`--render-size` was quietly broken** for every screen with a pill or a panel
+  on it: `presentScene` composited to the window while the capture read the
+  offscreen target. Fixed 2026-09-16. The lesson is that **the instrument can be
+  the thing that is wrong**, and it failed in a way that looked like a layout
+  bug.
 - **Stop the session before building on the VM.** The frontend runs at 300% CPU
   under llvmpipe and it is four cores. `sudo systemctl stop
-  cabinetos-session.service`, build, start it again — and use `--no-block` on
-  the start, or ssh hangs.
+  cabinetos-session.service`, build, start it again — with `--no-block` on the
+  start, or ssh hangs. Or skip it entirely and use the offscreen driver.
+
+### About the product
+
+- **A truncated explanation is worse than none.** A tile's second line holds
+  about sixteen characters beside a cover. "No core in the ..." tells a person
+  strictly less than nothing — they can already see the tile is dimmed. Measure
+  the column before writing the string.
+- **Two tiles that read the same are one tile.** "Nintendo 64" and "Nintendo DS"
+  both truncated to "Nintendo ...", and hyphens matter on their own —
+  "TurboGrafx-16" and "TurboGrafx-CD" have no space before the part that
+  distinguishes them.
+- **`catalog::coverageFor` answers FOUR different questions.** No core exists, a
+  core exists and Cabinet does not ship it, this console has not built it, and
+  it is built and cannot be driven. Collapsing any two hides work.
+- **An unanswered libretro core option is NOT the default.** The core skips the
+  case and the C global keeps its zero value — silence for a sample rate, black
+  for brightness, off for every toggle whose useful state is on. It cost Cabinet
+  eight evenings. Our core host must answer every variable a core asks about,
+  and **nobody has checked that it does.**
+- **Ask the CORE, never the platform**, whether an archive should be opened.
+  FBNeo reads `zip` and `7z` itself; `.chd` and `.rvz` must never be unpacked.
+- **Never dispatch on a file extension.** Thirty-two files in the reference
+  library have none. Sniff the magic bytes.
+
+### About the machine and the work
+
+- **Build a core, then RUN it.** Every assertion passed on melonDS while it
+  wrote its save file to `/`, because it reads the save directory in
+  `retro_init` and the frontend set it at game-load time. Silent, and it hits
+  every core that writes its own saves.
+- **Measure rather than reason, where you can.** The keep refusal was checked by
+  filling the disk with a ballast file; the eviction protection by reading back
+  what `--storage` says is a candidate. Both took two minutes and both would
+  have been plausible-looking and wrong on paper.
+- **Every scripted edit must assert its anchor.** A `python - <<PY` that
+  replaces text it cannot find changes nothing, the build stays green, and the
+  feature silently is not there.
+- **A field added to the middle of a positional struct re-assigns the rest of
+  the row.** `catalog.cpp`'s table is positional and three rows end in `true`;
+  the new `system` field went last for exactly that reason.
+- **`pgrep -f "some string"` matches your own command line.** Three times now,
+  the worst being a wait loop whose pattern matched the shell running the check,
+  so it sat for nine hours waiting for something already finished. **Match on
+  something the checker cannot contain** — a pid file, `pgrep -x`, or the exit
+  status of the thing you started.
+- **Look on disk before concluding a file does not exist.** `core-manifest.json`
+  is at `~/Downloads/core-manifest.json` and is not on GitHub.
 
 ## The state that lives on the VM and not in git
 
 - `~/frontend/` — the frontend source, built with
   `podman run --rm -v "$PWD":/src:Z -w /src cabinetos-builder make`
 - `~/frontend/cores/build/` — twenty built cores, where the frontend looks
+- `~/frontend/romcache/` — downloaded ROMs, plus `kept/` and `pending/`
 - `~/cabinetos/` — a clone of this repo, where `cores/build-core.sh` runs
-- `~/cabinetos/.core-src/` — per-core checkouts, ~8 GB. **Disk is tight**
-  (about 3 GB free). They are a cache: delete any of them to make room and the
-  next build re-clones.
-- `~/run-frontend.sh` — the session launcher; points at the live RomM server.
-  The original is `run-frontend.sh.bak`
-- `~/.config/cabinetos/romm.json` — the RomM token, 0600. Nine scopes: read the
-  library, write only the person's own play data
-- `romcache/`, `system/` under `~/frontend` — downloaded ROMs and BIOS
+- `~/cabinetos/.core-src/` — per-core checkouts, ~3.5 GB, of which Flycast is
+  2.2 GB. They are a cache: delete any to make room and the next build re-clones
+- `~/run-frontend.sh` — the session launcher. The original is `run-frontend.sh.bak`
+- `~/.config/cabinetos/romm.json` — the RomM token, 0600
 
-Sudo on the VM needs the password `cabinet`, a throwaway from the public repo's
-`disk_config/disk.toml`.
+**Disk on the VM: about 7.6 GB free.** 4.5 GB came back on 2026-09-16 from
+`podman image prune -f`, which removes untagged builder layers and leaves
+`cabinetos-builder:latest` alone. If it is tight again, that is the first thing
+to try, then `.core-src`.
 
 ## Cabinet-side debts
 
@@ -199,9 +220,9 @@ Sudo on the VM needs the password `cabinet`, a throwaway from the public repo's
    `git -C spikes/cores/flycast/src diff > tools/patches/flycast-unscripted.patch`
 2. **mGBA's Mac build is `-dirty` too**, and its manifest entry lists no patches
    at all. Same problem, quieter.
-3. **Two "unrecoverable" tvOS revisions were recovered with `strings`** —
-   picodrive's and mGBA's, both sitting in the shipping archive. Nine more are
-   probably there. An hour of work turns "unknown and unknowable" into facts.
+3. **Two "unrecoverable" tvOS revisions were recovered with `strings`.** Nine
+   more are probably sitting in the shipping archives. An hour of work turns
+   "unknown and unknowable" into facts.
 4. **melonDS's archives carry no revision** while the same upstream built here
    reports one, so something in Cabinet's build is losing `GIT_VERSION`.
 5. **`core-manifest.json` is still not pushed to GitHub.** It is load-bearing
@@ -220,3 +241,7 @@ reasoning off an error message instead of looking. Say plainly what is verified
 and what is assumed; they notice and ask. And they push back usefully: "are we
 sure we can't do X?" and "you need to read Cabinet" both produced better answers
 than the first one.
+
+**Use the `MMagTech` handle, never the user's personal name** — not in files,
+commits or documents. `docs/PROJECT.md` still carries 26 uses of it from earlier
+sessions and the repo is public; that is worth a find-and-replace.

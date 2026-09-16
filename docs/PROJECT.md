@@ -55,6 +55,9 @@ rather than launched by hand:
 - Text (Noto Sans, with CJK fallback), cover art (async, budgeted, evicting),
   and **frosted glass**.
 - **An on-screen keyboard**, which was the gate on everything downstream.
+- **The library is reachable**, as of 2026-09-16: a Library of every system and
+  every collection, a grid of each one's games, and a launch screen carrying
+  Play and Download. Before it, 1100 playable games had fifty reachable.
 - **A libretro core host** that loads a `.so`, paces it against the wall clock,
   plays its audio, draws its picture, and saves and restores its state.
   **Dr. Mario runs.**
@@ -3727,6 +3730,150 @@ Avoidable, but only if it is not designed back in. Two ways it creeps in:
   second wall of the same kind. Silently accepting is wrong and silently
   refusing is worse; asking once about a server the person typed in themselves
   is the honest middle.
+
+#### The screens, built 2026-09-16
+
+Until this the machine was in good shape and almost none of the library was
+reachable: 1100 playable games, and only the fifty Home happened to show.
+
+##### The Library is a tile grid with a switcher, and it shows EVERY system
+
+Four columns of 413x200 tiles on a 1920 canvas at an 80pt inset, which is what
+"adaptive minimum 380" comes out as — a full-width row would leave a name at one
+end and a count at the other with a third of the screen empty between them.
+Platforms and Collections are capsule pills, selected at white 35% and focused
+at white 25% and 1.06, both visible at once. Focus lands on the switcher the
+first time and only the first time.
+
+**The unplayable systems are on it, dimmed, saying why.** This is the screen
+`catalog::coverageFor` was built for and the reasons had until now only ever
+gone to stderr. All four answers appear: *No core for this system*, *Core not
+built yet*, *Not shipped here*, *Needs a 3D core*.
+
+Two things had to be settled to make that readable, and both are recorded
+because they look like polish and are not:
+
+- **A tile title gets two lines and breaks on hyphens as well as spaces.** On
+  one line, "Nintendo 64" and "Nintendo DS" were both "Nintendo ...", and the
+  two Arcades this project goes to some length to distinguish were both
+  "Arcade (...". Hyphens matter on their own: "TurboGrafx-16" and
+  "TurboGrafx-CD" contain no space at all before the part that tells them apart.
+- **A tile's second line holds about sixteen characters beside a cover**, and
+  twenty-three without one. `Coverage::reason` is a sentence, and a sentence cut
+  to "no core in the ..." tells a person strictly less than nothing. So the tile
+  takes `catalog::shortReason` and the launch screen, which has a column, takes
+  the sentence.
+
+**Playable systems sort first, then alphabetically.** One flat alphabet put
+Atari Jaguar — which this console cannot play — in the first tile on the screen.
+
+##### The launch screen, and Download as the one deliberate storage act
+
+A full-screen cover with the artwork as its own backdrop, filled and blurred
+with the scrim over it. Large Title, the platform and the size, then rows.
+
+**The cache stays invisible and Download is not a cache control.** Pressing Play
+fetches a game that is not here and says nothing about it. The Download row
+means *put this game on the machine and do not take it away again* — which is a
+KEEP, and it is the only place in the product where the console may refuse.
+
+> **A deliberate download IS a kept game.** There are exactly two categories on
+> the disk and the Storage screen names them: kept, which is deliberate and
+> permanent, and the cache, which is automatic and evictable. A download a
+> person asked for by name belongs in the first.
+
+So the row reads **Download and keep**, and on a kept game **Remove download**.
+Un-keeping deletes nothing: the game returns to the cache, where it may sit for
+months before anything needs the room.
+
+##### The two floors, enforced where the button is
+
+Both are checked before a byte moves, because refusing after two gigabytes is
+the same answer at a much higher price.
+
+The question is **not** "is there room right now" — a kept game may already be
+on the disk, in which case keeping it costs nothing today. It is whether, after
+this game stops being evictable, the console can still free its way down to both
+floors:
+
+```
+reclaimable = free + everything still evictable (excluding this game)
+                   - what remains to be fetched for it
+                   - the upload queue
+allowed     = reclaimable >= save floor + system reserve
+```
+
+**Measured on the test VM, 2026-09-16**, by filling the disk rather than by
+reasoning about it: with 5.42 GB free against a 1.16 GB save floor and a 5.37 GB
+reserve, keeping a 5 MB game was refused with 5.78 GB reclaimable against a
+6.53 GB floor — and no directory was created, so nothing was fetched and thrown
+away. The person is told the amount, because *"the disk is full of things you
+asked me to keep"* is a dead end without one.
+
+##### What eviction can and cannot take, now
+
+- **A kept game is not a candidate**, enforced inside `cache::candidates` rather
+  than at each caller, so no future caller can forget it. Verified: a kept
+  game's ROM does not appear in the eviction list, and un-keeping puts both its
+  files straight back into it.
+- **An unsent upload is a fact on disk.** A marker is written before an upload
+  is attempted and removed only on success, so a queue interrupted by a crash is
+  still visible on the next boot and its bytes still count against the save
+  floor. Eviction never took save data, so this is not protecting files from the
+  evictor — it is making "unsynced" something the machine knows.
+
+##### Still owed on the launch screen
+
+A different save state, a different core and an export. The screen is the right
+home for all three and none is built; a row that does nothing is worse than no
+row, so none is drawn.
+
+##### The navigation bar is NOT built, and the reason is a measurement
+
+The design system specifies four destinations in a bar across the top. It is not
+there, and the Library is reached with a temporary key.
+
+**Home has about 85 points of vertical slack and the bar needs about 85.** Hero
+at 40 + 420 + 20, Recent's block at roughly 515, against a 1080 canvas. A bar at
+Title 3 plus its gap consumes very nearly all of it, which would put Recent's
+caption exactly on the bottom edge — and a physical television's overscan eats
+more vertical room than a framebuffer capture shows. That is the trap Cabinet's
+hero fell into three times, once while the simulator showed it fitting.
+
+**So this needs the SER5 and a real panel, not a decision.** Either the bar
+fits, or Home's hero comes down, or the bar lives somewhere else.
+
+#### A bug worth keeping: an offscreen render composited to the window
+
+`Renderer::presentScene` bound framebuffer 0 unconditionally, so with
+`--render-size` the finished frame went to the WINDOW while `saveFrame` read the
+offscreen target. A 1920x1080 capture came back as the 1024x768 window's
+contents in the corner of a black frame.
+
+It only appears when both are in play — an offscreen render AND frosted glass —
+which is why 2026-09-13's three-resolution check did not find it: Home's glass
+is one band at the bottom of the hero, and the failure reads as a layout
+problem rather than a target problem. **The tool this project uses to prove a
+4K layout was quietly broken for every screen with a pill or a panel on it.**
+
+The renderer now remembers where the frame is going.
+
+#### Headless capture, which CI can also run
+
+`SDL_VIDEODRIVER=offscreen` gives the frontend a GL context with no compositor,
+so every screen can be photographed on a machine with nothing running — no cage,
+no session, no controller. Combined with `--screen`, each screen opens by
+walking the route a person would walk rather than by being constructed directly,
+so a capture cannot show a state the product is unable to reach.
+
+```
+--screen library [--tab 1] [--tile N]
+--screen grid --tile N
+--screen detail --game <romId>
+--storage                       what the disk holds, and what may be evicted
+--download <romId>              what the Download row does, guards and all
+--unkeep <romId>
+```
 
 *Done when* the real library is browsable, a game downloads and plays, and a
 kept game survives a cache eviction.

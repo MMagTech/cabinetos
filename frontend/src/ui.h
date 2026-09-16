@@ -169,6 +169,7 @@ private:
     float scale_ = 1.0f;
     GLuint vao_ = 0;
     GLuint vbo_ = 0;
+    GLuint targetFBO_ = 0;    // 0 is the window; an offscreen render redirects it
     GLuint offscreenFBO_ = 0;
     GLuint offscreenTex_ = 0;
     int offscreenW_ = 0, offscreenH_ = 0;

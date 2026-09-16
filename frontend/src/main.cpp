@@ -1,22 +1,22 @@
-// CabinetOS frontend — the foundation.
+// CabinetOS frontend — the program, and the screens it moves between.
 //
-// What this proves, which is the whole point of it existing:
+// This file owns everything a screen is not allowed to: the RomM client, the
+// core, the download worker, the upload worker, the cache, and the navigation
+// between them. The screens themselves are in screens.cpp and return an Action
+// rather than doing anything; the decisions about what an Action costs are all
+// here, which is why a screen can never start a download by accident.
 //
-//   1. A Wayland client with a real GLES 3 context, under cage or gamescope,
-//      with no toolkit between us and the frame.
-//   2. The 1920x1080 design canvas, letterboxed to whatever panel is attached.
-//   3. The design system's focus treatment, to the point: 1.10 scale, a 4pt
-//      inset white rim at 85%, a black 55% shadow blurred 26 and offset 14
-//      down, and the caption sliding clear of the grown card.
-//   4. Motion at the right tempo — 180ms ease-out, the most-used value in the
-//      reference implementation.
-//   5. Controller and keyboard driving focus, with neither required.
+//   Home       resume-first, and the one screen that is not a list. The hero is
+//              what you were playing; its artwork opens the launch screen and
+//              its Resume pill goes straight into the game.
+//   Library    every system and every collection on the server, as a tile grid.
+//   Grid       one system's or one collection's games.
+//   Launch     a full-screen cover over whatever was behind it: play, or
+//              download and keep.
+//   The player a full-screen cover over THAT, so quitting a game returns to the
+//              launch screen and backing out again returns to the browsing.
 //
-// What it deliberately does not do yet: text (there is no font layer), and
-// cores (there is no Linux core built). Both are next, and neither changes
-// anything here.
-//
-// See docs/PROJECT.md, "The design system".
+// See docs/PROJECT.md, "The design system" and "Navigation model".
 
 #include <SDL3/SDL.h>
 
@@ -29,10 +29,13 @@
 #include <csignal>
 #include <condition_variable>
 #include <deque>
+#include <functional>
 #include <mutex>
 #include <thread>
 
 #include <unistd.h>
+
+#include <json-c/json.h>
 
 #include <algorithm>
 #include <cmath>
@@ -42,12 +45,14 @@
 #include <vector>
 
 #include "core.h"
+#include "design.h"
 #include "image.h"
 #include "keyboard.h"
 #include "cache.h"
 #include "catalog.h"
 #include "romfile.h"
 #include "romm.h"
+#include "screens.h"
 #include "text.h"
 #include "ui.h"
 
@@ -68,146 +73,11 @@ namespace {
 volatile std::sig_atomic_t gCaptureRequested = 0;
 void requestCapture(int) { gCaptureRequested = 1; }
 
-// --- The design system, as numbers -----------------------------------------
-// Every value here is quoted from docs/PROJECT.md. If one of them changes
-// there, it changes here, and nowhere else.
-
-constexpr float kContentInset = 60.0f;
-
-// The hero, from Cabinet's tvOS Home. See docs/PROJECT.md — the height is
-// min(canvasHeight * 0.40, 420) and was settled on a real television after four
-// rejected values, so it is not a number to adjust from a VM screenshot.
-constexpr float kHeroTop = 40.0f;
-constexpr float kHeroRadius = 18.0f;
-constexpr float kHeroArtInsetTop = 14.0f;
-constexpr float kHeroBandPadX = 12.0f;
-constexpr float kHeroBandPadY = 10.0f;
-constexpr float kHeroGapBelow = 20.0f;
-// A pill, so blur 4 — the "thin material" tier. The band is a panel at 6.
-// The design system's own tiers: 1.10 for a cover, 1.06 for a pill, 1.03 for a
-// full-width row. The hero is full-width, so it takes the row tier.
-constexpr float kRowFocusScale = 1.03f;
-constexpr float kPillFocusScale = 1.06f;
-constexpr float kHeroPillBlur = 4.0f;
-constexpr float kHeroBandBlur = 6.0f;
-constexpr float kShelfCoverWidth = 260.0f;
-constexpr float kShelfCoverHeight = 347.0f;  // 3:4
-constexpr float kShelfSpacing = 40.0f;
-constexpr float kShelfHeadroom = 24.0f;  // room for the focused card to grow
-constexpr float kCoverRadius = 10.0f;
-constexpr float kCaptionGap = 6.0f;
-
-constexpr float kFocusScale = 1.10f;
-constexpr float kPressScale = 1.02f;
-constexpr float kFocusRimWidth = 4.0f;
-constexpr float kFocusShadowBlur = 26.0f;
-constexpr float kFocusShadowOffsetY = 14.0f;
-
-// 180ms ease-out. The focus tempo, and nothing about focus should be slower:
-// a controller crosses a shelf faster than that and the animations must not
-// queue up behind the person driving them.
-constexpr float kFocusDuration = 0.180f;
-constexpr float kPressDuration = 0.120f;
-// The pause menu, from the design system's component inventory: scrim at black
-// 55%, a centred panel at radius 32, full-width buttons, and a focus treatment
-// of its own — 1.04 rather than a cover's 1.10, because a full-width button
-// growing a tenth would collide with its neighbours.
-constexpr float kOverlayFade = 0.350f;
-constexpr float kOverlayFocusScale = 1.04f;
-constexpr float kOverlayFocusDuration = 0.150f;
-constexpr float kOverlayPanelRadius = 32.0f;
-constexpr float kOverlayPanelWidth = 720.0f;
-constexpr float kOverlayButtonHeight = 92.0f;
-constexpr float kOverlayButtonGap = 14.0f;
-
-// The caption rides down by half of (scale - 1) times the cover height, because
-// a scale about the centre advances the bottom edge by exactly that much. The
-// +2 is the reference implementation's own breathing room. If kFocusScale
-// changes, this follows it automatically.
-float captionSlide(float focusAmount) {
-    return focusAmount * (kShelfCoverHeight * (kFocusScale - 1.0f) * 0.5f + 2.0f);
-}
-
-// The overlay's own curve. The design system gives it 350 ms ease-IN-out, not
-// the ease-out everything else uses: a panel that covers the game should leave
-// as deliberately as it arrives, and an ease-out exit snaps away at the end.
-float easeInOut(float t) {
-    t = std::clamp(t, 0.0f, 1.0f);
-    return t < 0.5f ? 4.0f * t * t * t
-                    : 1.0f - std::pow(-2.0f * t + 2.0f, 3.0f) * 0.5f;
-}
-
-float easeOut(float t) {
-    t = std::clamp(t, 0.0f, 1.0f);
-    float inv = 1.0f - t;
-    return 1.0f - inv * inv * inv;
-}
-
-// One animated scalar that behaves the way the reference implementation's
-// animations do: a change re-targets from wherever the value currently is, so
-// an interruption mid-flight is smooth rather than a jump.
-struct Animated {
-    float from = 0, to = 0, elapsed = 0, duration = kFocusDuration;
-
-    void retarget(float target, float seconds) {
-        if (target == to) return;
-        from = value();
-        to = target;
-        duration = seconds;
-        elapsed = 0;
-    }
-    void tick(float dt) { elapsed = std::min(elapsed + dt, duration); }
-    // Ease-out for everything that moves toward you — focus, lifts, scrolls.
-    // The overlay sets `smooth` to get the design system's ease-IN-out instead,
-    // because a panel that covers the game should leave as deliberately as it
-    // arrives, and an ease-out exit snaps away at the end.
-    bool smooth = false;
-
-    float value() const {
-        if (duration <= 0) return to;
-        const float t = elapsed / duration;
-        return from + (to - from) * (smooth ? easeInOut(t) : easeOut(t));
-    }
-};
-
-struct Card {
-    // The RomM ROM id, and the only safe way to match a card to anything else.
-    // Titles collide: "Altered Beast" is a Game & Watch entry AND a Genesis
-    // one in the reference library, so matching Recent to the library by name
-    // can show the wrong platform's cover for the game you actually played.
-    int id = 0;
-    ui::Color art;        // shown until the cover arrives, and if it never does
-    std::string title;
-    // A local path in the sample library, a RomM cover path with live data.
-    // Empty means there is no art, which is a normal state and not a failure:
-    // arcade sets often have none, and Game & Watch has none at all.
-    std::string cover;
-    Animated focus;
-    Animated press;
-};
-
-// A stable colour for a card with no art, from its title. Better than one grey
-// for everything: a shelf of coverless games stays distinguishable, and the
-// same game is the same colour every time the library is opened.
-ui::Color colorForTitle(const std::string& title) {
-    uint32_t h = 2166136261u;
-    for (unsigned char c : title) { h ^= c; h *= 16777619u; }
-    // Fixed saturation and value, hue from the hash: keeps every generated
-    // colour inside the design system's range instead of producing mud.
-    const float hue = static_cast<float>(h % 360u);
-    const float s = 0.45f, v = 0.62f;
-    const float c2 = v * s;
-    const float x = c2 * (1.0f - std::fabs(std::fmod(hue / 60.0f, 2.0f) - 1.0f));
-    const float m = v - c2;
-    float r = 0, g = 0, b = 0;
-    if (hue < 60)       { r = c2; g = x; }
-    else if (hue < 120) { r = x; g = c2; }
-    else if (hue < 180) { g = c2; b = x; }
-    else if (hue < 240) { g = x; b = c2; }
-    else if (hue < 300) { r = x; b = c2; }
-    else                { r = c2; b = x; }
-    return ui::Color{r + m, g + m, b + m, 1.0f};
-}
+// The design system's numbers, the animation primitive and the card live in
+// design.h now, because the screens are separate translation units and two
+// copies of a focus scale is how a shelf and a grid end up disagreeing about
+// what focus looks like.
+using namespace design;   // NOLINT — every name in it is a design-system value
 
 // Stand-in library. Real covers and names arrive with the RomM client in Phase
 // 4; these exist so the layout is exercised against the shapes real data has —
@@ -257,8 +127,15 @@ public:
         bool isState = false;
     };
 
-    void start(romm::Client* client) {
+    // `cacheDir` is where the pending markers live. An upload that has not
+    // reached the server is the ONE irreplaceable thing on this machine, and
+    // until now nothing recorded that one was outstanding — so a crash between
+    // writing a state and sending it left no trace that anything was owed. The
+    // marker makes it a fact on disk, and its bytes count against the save
+    // floor when somebody asks to keep a game.
+    void start(romm::Client* client, std::string cacheDir) {
         client_ = client;
+        cacheDir_ = std::move(cacheDir);
         worker_ = std::thread([this] { run(); });
     }
 
@@ -272,6 +149,10 @@ public:
     }
 
     void push(Job job) {
+        // Recorded BEFORE it is queued, so the window in which the console owes
+        // the server something and does not know it is zero.
+        cache::markPending(cacheDir_, job.romId, job.fileName,
+                           static_cast<int64_t>(job.data.size()));
         {
             std::lock_guard<std::mutex> lock(mutex_);
             queue_.push_back(std::move(job));
@@ -301,6 +182,10 @@ private:
             const bool ok = job.isState
                 ? client_->uploadState(job.romId, job.emulator, job.fileName, job.data, &err)
                 : client_->uploadSave(job.romId, job.emulator, job.fileName, job.data, &err);
+            // Cleared only on success. A failed upload leaves the marker, which
+            // is the point: the file is still on disk, it still has not reached
+            // RomM, and the console still owes it.
+            if (ok) cache::clearPending(cacheDir_, job.romId, job.fileName);
             std::fprintf(stderr, "[%s] %s %s\n", job.isState ? "state" : "save",
                          ok ? "uploaded" : "upload failed, kept locally:",
                          ok ? job.emulator.c_str() : err.c_str());
@@ -309,6 +194,7 @@ private:
     }
 
     romm::Client* client_ = nullptr;
+    std::string cacheDir_;
     std::thread worker_;
     std::mutex mutex_;
     std::condition_variable wake_;
@@ -509,6 +395,14 @@ struct LaunchJob {
     std::atomic<int64_t> total{0};
     std::atomic<bool> cancel{false};
 
+    // The same fetch serves both things a person can ask for, because they are
+    // the same fetch. Pressing Play on a game that is not here downloads it and
+    // starts it; choosing Download puts it here and keeps it. The only
+    // differences are what happens at the end, so they are two flags rather
+    // than two code paths that would drift.
+    bool playWhenReady = true;
+    bool keepWhenReady = false;
+
     // Written by the worker before it sets Ready or Failed, read by the frame
     // thread only after it observes one of those. The atomic stage is the
     // handover.
@@ -535,11 +429,35 @@ struct LaunchJob {
     }
 };
 
+// A kept game's record: the whole library entry, not a subset.
+//
+// Cabinet's KeptGame embeds the entire Rom captured at keep time so that a kept
+// game can be browsed and launched with NO NETWORK AT ALL — cover path and
+// platform identifiers included. A subset is how that promise gets broken later
+// by a field nobody thought of, so this writes every field this client knows a
+// Rom to have, and the day the struct grows, so does the record.
+static std::string gameRecordJson(const romm::Game& g) {
+    json_object* o = json_object_new_object();
+    json_object_object_add(o, "id", json_object_new_int(g.id));
+    json_object_object_add(o, "platform_id", json_object_new_int(g.platformId));
+    json_object_object_add(o, "platform_slug", json_object_new_string(g.platformSlug.c_str()));
+    json_object_object_add(o, "platform_fs_slug", json_object_new_string(g.platformFsSlug.c_str()));
+    json_object_object_add(o, "platform_name", json_object_new_string(g.platformName.c_str()));
+    json_object_object_add(o, "name", json_object_new_string(g.name.c_str()));
+    json_object_object_add(o, "fs_name", json_object_new_string(g.fsName.c_str()));
+    json_object_object_add(o, "path_cover_small", json_object_new_string(g.coverPath.c_str()));
+    json_object_object_add(o, "fs_size_bytes", json_object_new_int64(g.sizeBytes));
+    const std::string out = json_object_to_json_string_ext(o, JSON_C_TO_STRING_PRETTY);
+    json_object_put(o);
+    return out;
+}
+
 // Starts one. Returns false if the game cannot be played here at all, which is
 // worth saying immediately rather than after a download.
 static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& game,
                         const std::string& coreDir, const std::string& cacheDir,
-                        std::string* err) {
+                        std::string* err, bool playWhenReady = true,
+                        bool keepWhenReady = false) {
     const catalog::Coverage cov = catalog::coverageFor(game);
     if (cov.support != catalog::Support::Playable || !cov.core) {
         *err = game.platformName + ": " + (cov.reason ? cov.reason : "not playable here");
@@ -557,6 +475,8 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
     job.corePath = coreDir + "/" + cov.core + "_libretro.so";
     job.romPath.clear();
     job.message.clear();
+    job.playWhenReady = playWhenReady;
+    job.keepWhenReady = keepWhenReady;
     job.stage = LaunchJob::Stage::Downloading;
 
     // The core is loaded here, on the frame thread, before the worker starts:
@@ -576,6 +496,21 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
     }
     const std::string validExts = core.validExtensions();
     const bool blockExtract = core.blockExtract();
+
+    // THE KEEP IS RECORDED BEFORE THE FIRST BYTE MOVES, for two reasons that
+    // both matter. It makes the in-flight download safe from the eviction its
+    // own size may trigger — candidates() skips kept games — and it means the
+    // console has already decided it can afford the promise rather than
+    // discovering it cannot after fetching two gigabytes. A job that fails
+    // clears the record again, in pumpLaunch.
+    if (keepWhenReady) {
+        std::string kerr;
+        if (!cache::keep(cacheDir, game.id, gameRecordJson(game), &kerr)) {
+            *err = kerr;
+            job.stage = LaunchJob::Stage::Idle;
+            return false;
+        }
+    }
 
     const int id = game.id;
     const int platformId = game.platformId;
@@ -756,6 +691,14 @@ struct Library {
     // The second shelf. Drawn only when there are any: an empty Favorites row
     // is worse than no Favorites row.
     std::vector<int> favorites;
+
+    // What the Library screen shows. EVERY platform the server holds, including
+    // the ones this console cannot play — those carry their reason instead of a
+    // count and cannot be opened. docs/PROJECT.md is explicit that the answer is
+    // neither "show everything" nor "hide quietly": somebody who owns Switch
+    // games and sees nothing will reasonably conclude the scan failed.
+    std::vector<screens::Tile> platformTiles;
+    std::vector<screens::Tile> collectionTiles;
 };
 
 static Library loadLibrary(romm::Client& client) {
@@ -770,20 +713,39 @@ static Library loadLibrary(romm::Client& client) {
     }
 
     int skippedGames = 0;
+    // A tile per platform, built whether or not this console can play it. The
+    // unplayable ones are why `coverageFor` gives four different answers rather
+    // than one boolean: "no core exists", "Cabinet does not ship it", "this
+    // console has not built it yet" and "it is built and cannot be driven" lead
+    // to different work and to different words on the screen.
     for (const auto& p : platforms) {
         const catalog::Coverage cov = catalog::coverageFor(p);
-        if (cov.support != catalog::Support::Playable) {
+        screens::Tile tile;
+        tile.id = p.id;
+        tile.title = catalog::displayName(p);
+        tile.art = colorForTitle(tile.title);
+        tile.enterable = (cov.support == catalog::Support::Playable);
+
+        if (!tile.enterable) {
             skippedGames += p.romCount;
-            std::fprintf(stderr, "[library] skipping %s (%d games) — %s\n",
-                         p.name.c_str(), p.romCount,
-                         cov.reason ? cov.reason : "not playable");
+            // The tile gets the short form, which is all it has room for. The
+            // log keeps the full sentence, because a log is read by somebody
+            // trying to find out why.
+            tile.detail = catalog::shortReason(cov.support);
+            std::fprintf(stderr, "[library] %s (%d games) — %s\n", tile.title.c_str(),
+                         p.romCount, cov.reason ? cov.reason : tile.detail.c_str());
+            lib.platformTiles.push_back(std::move(tile));
             continue;
         }
 
         std::vector<romm::Game> games;
         if (!client.fetchGames(p.id, &games, &err)) {
-            // One platform failing is not the library failing. Say so and go on.
+            // One platform failing is not the library failing. Say so, give the
+            // tile the truth rather than a count it does not have, and go on.
             std::fprintf(stderr, "[library] %s: %s\n", p.name.c_str(), err.c_str());
+            tile.enterable = false;
+            tile.detail = "could not be read from the server";
+            lib.platformTiles.push_back(std::move(tile));
             continue;
         }
         for (auto& g : games) {
@@ -792,9 +754,18 @@ static Library loadLibrary(romm::Client& client) {
             c.title = g.name.empty() ? g.fsName : g.name;
             c.cover = g.coverPath;
             c.art = colorForTitle(c.title);
+            // The tile's own artwork is the first cover in it that exists. Not
+            // every platform has any — Game & Watch has none of 171 — and a
+            // tile with no art is a normal state rather than a fault.
+            if (tile.cover.empty() && !c.cover.empty()) tile.cover = c.cover;
             cards.push_back(std::move(c));
             lib.games.push_back(g);
         }
+        char count[48];
+        std::snprintf(count, sizeof count, "%zu game%s", games.size(),
+                      games.size() == 1 ? "" : "s");
+        tile.detail = count;
+        lib.platformTiles.push_back(std::move(tile));
     }
 
     // Sorted together, so index i of one is index i of the other. Two parallel
@@ -815,6 +786,78 @@ static Library loadLibrary(romm::Client& client) {
     }
     cards = std::move(sortedCards);
     lib.games = std::move(sortedGames);
+
+    // The membership of each tile, filled AFTER the sort because the sort moves
+    // every card and an index taken before it points at the wrong game. Keyed
+    // on platform id, which is the only unique field — two platforms in the
+    // reference library share a name AND a slug.
+    {
+        std::vector<std::pair<int, size_t>> byPlatform;   // platform id -> tile
+        for (size_t t = 0; t < lib.platformTiles.size(); ++t)
+            byPlatform.emplace_back(lib.platformTiles[t].id, t);
+        for (size_t i = 0; i < lib.games.size(); ++i) {
+            for (const auto& [id, t] : byPlatform) {
+                if (id != lib.games[i].platformId) continue;
+                lib.platformTiles[t].cards.push_back(static_cast<int>(i));
+                break;
+            }
+        }
+    }
+
+    // Playable systems first, then alphabetically inside each group. The
+    // alternative — one flat alphabet — puts a system this console cannot play
+    // in the first tile on the screen, which is the wrong thing to lead with on
+    // a console whose whole job is the games it CAN run. The unplayable ones
+    // are still all there, below, saying why.
+    std::stable_sort(lib.platformTiles.begin(), lib.platformTiles.end(),
+                     [](const screens::Tile& a, const screens::Tile& b) {
+                         if (a.enterable != b.enterable) return a.enterable;
+                         return a.title < b.title;
+                     });
+
+    // Collections. A collection is a list of rom ids rather than a property of
+    // each game, so it is resolved by looking those ids up in the library that
+    // is already here — no second request, and a collection containing games
+    // this console cannot play simply comes out shorter.
+    std::vector<romm::Collection> collections;
+    if (client.fetchCollections(&collections, &err)) {
+        for (const auto& col : collections) {
+            screens::Tile tile;
+            tile.id = col.id;
+            tile.title = col.name;
+            tile.cover = col.coverPath;
+            tile.art = colorForTitle(tile.title);
+            for (int romId : col.romIds) {
+                for (size_t i = 0; i < cards.size(); ++i) {
+                    if (cards[i].id != romId) continue;
+                    tile.cards.push_back(static_cast<int>(i));
+                    break;
+                }
+            }
+            const size_t have = tile.cards.size();
+            char count[96];
+            if (have == static_cast<size_t>(col.romCount)) {
+                std::snprintf(count, sizeof count, "%zu game%s", have,
+                              have == 1 ? "" : "s");
+            } else {
+                // Say what is missing rather than quietly showing a shorter
+                // list: a collection of twelve that opens onto four looks like
+                // a bug unless the tile already said why.
+                // Short, because a tile's second line holds about sixteen
+                // characters beside a cover. "26 of 30 playable here" came back
+                // as "26 of 30 playabl...", which says less than "26 of 30".
+                std::snprintf(count, sizeof count, "%zu of %d", have, col.romCount);
+            }
+            tile.detail = count;
+            tile.enterable = have > 0;
+            lib.collectionTiles.push_back(std::move(tile));
+        }
+        std::fprintf(stderr, "[library] %zu collection(s)\n", lib.collectionTiles.size());
+    } else {
+        // Not fatal. A server that will not list collections still has a
+        // library, and the switcher's Collections tab says it is empty.
+        std::fprintf(stderr, "[library] no collections: %s\n", err.c_str());
+    }
 
     int withArt = 0;
     for (const auto& c : cards) if (!c.cover.empty()) ++withArt;
@@ -1133,6 +1176,13 @@ int main(int argc, char** argv) {
     // --romm alone runs the UI against the server. --romm-probe reports and
     // exits without opening a window, which is what a headless machine and a
     // CI job can do.
+    int autoDownloadId = 0;
+    int autoUnkeepId = 0;
+    bool storageReport = false;
+    const char* initialScreen = nullptr;
+    int initialTile = 0;
+    int initialTab = 0;
+    int initialGame = 0;
     bool rommProbeMode = false;
     // Downloads one ROM and reports what came back and what a core would be
     // handed. The formats people keep ROMs in are not uniform and this is how
@@ -1184,6 +1234,14 @@ int main(int argc, char** argv) {
             coreDir = argv[++i];
         } else if (SDL_strcmp(argv[i], "--launch") == 0 && i + 1 < argc) {
             autoLaunchId = SDL_atoi(argv[++i]);
+        } else if (SDL_strcmp(argv[i], "--download") == 0 && i + 1 < argc) {
+            // The same errand as --launch and for the same reason: this machine
+            // has no controller, so the only way to exercise the thing a person
+            // would press is to press it from here. It calls exactly what the
+            // launch screen's row calls, guards and all.
+            autoDownloadId = SDL_atoi(argv[++i]);
+        } else if (SDL_strcmp(argv[i], "--unkeep") == 0 && i + 1 < argc) {
+            autoUnkeepId = SDL_atoi(argv[++i]);
         } else if (SDL_strcmp(argv[i], "--overlay-exit") == 0) {
             overlayExitDemo = true;
         } else if (SDL_strcmp(argv[i], "--overlay") == 0) {
@@ -1216,6 +1274,24 @@ int main(int argc, char** argv) {
             // Lets a screenshot capture a chosen card already focused, so the
             // focus treatment can be checked without a controller attached.
             initialFocus = SDL_atoi(argv[++i]);
+        } else if (SDL_strcmp(argv[i], "--storage") == 0) {
+            storageReport = true;
+        } else if (SDL_strcmp(argv[i], "--tab") == 0 && i + 1 < argc) {
+            initialTab = SDL_atoi(argv[++i]);
+        } else if (SDL_strcmp(argv[i], "--screen") == 0 && i + 1 < argc) {
+            // Opens straight onto a screen, so every one of them can be
+            // photographed from a machine with no controller and no way to show
+            // anyone a picture. "it looked right here" is not something this
+            // project can say, so each screen has to be capturable by itself.
+            //
+            //   --screen library
+            //   --screen grid --tile 3
+            //   --screen detail --game 1234
+            initialScreen = argv[++i];
+        } else if (SDL_strcmp(argv[i], "--tile") == 0 && i + 1 < argc) {
+            initialTile = SDL_atoi(argv[++i]);
+        } else if (SDL_strcmp(argv[i], "--game") == 0 && i + 1 < argc) {
+            initialGame = SDL_atoi(argv[++i]);
         }
     }
 
@@ -1225,6 +1301,39 @@ int main(int argc, char** argv) {
     if (rommAddress && romProbeId > 0)
         return romProbe(rommAddress, romProbeId, romProbeExts);
     if (rommAddress && rommProbeMode) return rommProbe(rommAddress, rommPair);
+
+    // What the disk actually holds, without opening a window.
+    //
+    // This is the Storage screen's data, and the Storage screen is the ONE
+    // exception to the cache being invisible: nobody cares what is cached until
+    // they go looking, and when they do they should find it. Until that screen
+    // exists this is how anyone — or anything in CI — checks that keeping,
+    // eviction and the floors agree with each other.
+    if (storageReport) {
+        const std::string dir = romCacheDir;
+        const int64_t free = cache::freeBytes(dir);
+        const int64_t floor = cache::saveFloorBytes(dir);
+        const std::vector<int> kept = cache::keptRoms(dir);
+        const std::vector<cache::Entry> evictable = cache::candidates(dir);
+        int64_t evictableBytes = 0;
+        for (const auto& e : evictable) evictableBytes += e.bytes;
+
+        std::printf("free            %10.2f GB\n", free / 1e9);
+        std::printf("save floor      %10.2f GB\n", floor / 1e9);
+        std::printf("system reserve  %10.2f GB\n", cache::kSystemReserveBytes / 1e9);
+        std::printf("pending upload  %10.2f GB\n", cache::pendingBytes(dir) / 1e9);
+        std::printf("evictable       %10.2f GB  in %zu file(s)\n", evictableBytes / 1e9,
+                    evictable.size());
+        std::printf("kept            %zu game(s)%s", kept.size(), kept.empty() ? "\n" : ": ");
+        for (size_t i = 0; i < kept.size(); ++i)
+            std::printf("%d%s", kept[i], i + 1 == kept.size() ? "\n" : ", ");
+        // Oldest first is the whole eviction order, so printing it in order is
+        // printing what would go, in the order it would go.
+        for (const auto& e : evictable)
+            std::printf("  evictable  %8.1f MB  rom %d  %s\n", e.bytes / 1e6, e.romId,
+                        e.path.c_str());
+        return 0;
+    }
 
     std::signal(SIGUSR1, requestCapture);
 
@@ -1311,6 +1420,7 @@ int main(int argc, char** argv) {
     std::vector<int> shelf;
     std::vector<int> favorites;
     std::vector<romm::Game> games;
+    std::vector<screens::Tile> platformTiles, collectionTiles;
 
     if (rommAddress) {
         std::string err;
@@ -1333,6 +1443,8 @@ int main(int argc, char** argv) {
         shelf = std::move(lib.shelf);
         favorites = std::move(lib.favorites);
         games = std::move(lib.games);
+        platformTiles = std::move(lib.platformTiles);
+        collectionTiles = std::move(lib.collectionTiles);
         if (cards.empty()) {
             std::fprintf(stderr, "[romm] the library came back empty\n");
             return 1;
@@ -1752,6 +1864,23 @@ int main(int argc, char** argv) {
     };
     settleFocus();
 
+    // ---- Where we are -------------------------------------------------------
+    //
+    // A stack, not a mode flag. Each tab owns a navigation stack and Library
+    // pushes to a grid; backing out has to land where the person came from
+    // rather than at a fixed home. The launch screen is a full-screen COVER
+    // over whatever was behind it, and the player is a cover over that — which
+    // is what makes quitting a game return to the launch screen and backing out
+    // again return to the browsing.
+    enum class Screen { Home, Library, Grid, Detail };
+    std::vector<Screen> stack{Screen::Home};
+    auto here = [&]() { return stack.back(); };
+
+    screens::LibraryScreen libraryScreen;
+    screens::GridScreen gridScreen;
+    screens::DetailScreen detailScreen;
+    libraryScreen.build(platformTiles, collectionTiles);
+
     // Any pad that is already plugged in. Hotplug is handled in the event loop,
     // so a controller connected later works without restarting anything.
     int padCount = 0;
@@ -1775,7 +1904,7 @@ int main(int argc, char** argv) {
     // One worker for every upload. Started here and drained on the way out, so
     // quitting does not discard a save someone has already made.
     Uploader uploader;
-    uploader.start(&liveClient);
+    uploader.start(&liveClient, romCacheDir);
     StateLoad stateLoad;
 
     // The in-game overlay: a scrim, a panel and buttons drawn over the game
@@ -1807,6 +1936,201 @@ int main(int argc, char** argv) {
         return true;
     };
 
+    // Human-readable bytes, for the one refusal a person is ever shown.
+    auto gigabytes = [](int64_t b) {
+        char buf[32];
+        std::snprintf(buf, sizeof buf, "%.1f GB", static_cast<double>(b) / 1e9);
+        return std::string(buf);
+    };
+
+    // DOWNLOAD, WHICH IS THE ONLY DELIBERATE STORAGE ACT IN THE PRODUCT.
+    //
+    // The cache is invisible by decision: pressing Play fetches a game that is
+    // not here and says nothing about it, because the feedback that matters —
+    // a progress bar, and Escape to back out — already exists at the only
+    // moment it is useful. So this row is not "is it cached". It is "put this
+    // game on the machine and do not take it away again", which is a KEEP, and
+    // keeping is the one place the console is allowed to say no.
+    //
+    // Both floors are checked here, before a byte moves, because refusing after
+    // a two-gigabyte download would be the same answer at a much higher price.
+    auto downloadById = [&](int romId) -> void {
+        if (launchJob.busy()) return;    // one at a time
+        const romm::Game* g = nullptr;
+        for (const auto& x : games) if (x.id == romId) { g = &x; break; }
+        if (!g) return;
+
+        const cache::KeepVerdict v = cache::mayKeep(romCacheDir, romId, g->sizeBytes);
+        if (!v.allowed) {
+            // The one failure the person ever sees, and the number is what makes
+            // it actionable: without it "the disk is full" is a dead end.
+            detailScreen.setNotice("Not enough room — the disk is full of things "
+                                   "you asked me to keep. Remove " +
+                                   gigabytes(v.shortfallBytes) + " to keep this one.");
+            std::fprintf(stderr,
+                         "[keep] refused %s: %lld reclaimable against a %lld floor\n",
+                         g->name.c_str(), static_cast<long long>(v.reclaimableBytes),
+                         static_cast<long long>(v.floorBytes));
+            return;
+        }
+
+        std::string derr;
+        if (!beginLaunch(launchJob, liveClient, *g, coreDir, romCacheDir, &derr,
+                         /*playWhenReady=*/false, /*keepWhenReady=*/true)) {
+            detailScreen.setNotice(derr);
+            std::fprintf(stderr, "[download] %s\n", derr.c_str());
+            return;
+        }
+        detailScreen.setNotice("");
+        std::fprintf(stderr, "[download] %s (%.0f MB)\n", g->name.c_str(),
+                     static_cast<double>(g->sizeBytes) / 1e6);
+    };
+
+    // Un-keeping does NOT delete anything. The game returns to the cache, where
+    // it may sit for months before something needs the room; taking the bytes
+    // away immediately would be a deletion nobody asked for, to reclaim space
+    // nobody needed yet.
+    auto removeDownload = [&](int romId) {
+        cache::unkeep(romCacheDir, romId);
+        detailScreen.setKept(false);
+        detailScreen.setNotice("");
+        std::fprintf(stderr, "[keep] %d released to the cache\n", romId);
+    };
+
+    // Opening the launch screen for a card. Everything it shows is decided
+    // here, so the screen holds no opinion about where any of it came from.
+    auto openDetail = [&](int cardIndex) {
+        if (cardIndex < 0 || cardIndex >= static_cast<int>(cards.size())) return;
+        screens::GameDetail d;
+        d.cardIndex = cardIndex;
+        d.romId = cards[cardIndex].id;
+        d.title = cards[cardIndex].title;
+        d.cover = cards[cardIndex].cover;
+        d.art = cards[cardIndex].art;
+        for (const auto& g : games) {
+            if (g.id != d.romId) continue;
+            d.platform = g.platformName;
+            d.sizeBytes = g.sizeBytes;
+            const catalog::Coverage cov = catalog::coverageFor(g);
+            d.playable = cov.support == catalog::Support::Playable;
+            d.reason = cov.reason ? cov.reason : "not playable on this console";
+            break;
+        }
+        d.kept = cache::isKept(romCacheDir, d.romId);
+        detailScreen.open(std::move(d));
+        stack.push_back(Screen::Detail);
+    };
+
+    // What a screen asked for, and whether the app can do it. A screen never
+    // reaches the disk, the network or a core; it returns one of these.
+    // Declared before `apply` because `apply` is what it calls, and defined
+    // after it for the same reason. std::function rather than a lambda, which
+    // is what lets the two refer to each other at all.
+    std::function<bool(screens::Nav)> navigate;
+
+    auto apply = [&](const screens::Result& res) {
+        switch (res.action) {
+            case screens::Action::None:
+                break;
+            case screens::Action::Back:
+                if (stack.size() > 1) stack.pop_back();
+                break;
+            case screens::Action::OpenTile: {
+                const auto& tiles = libraryScreen.visible();
+                if (res.value < 0 || res.value >= static_cast<int>(tiles.size())) break;
+                gridScreen.open(tiles[res.value].title, tiles[res.value].cards);
+                stack.push_back(Screen::Grid);
+                break;
+            }
+            case screens::Action::OpenGame:
+                openDetail(res.value);
+                break;
+            case screens::Action::Play:
+                launchById(res.value);
+                break;
+            case screens::Action::Download:
+                downloadById(res.value);
+                break;
+            case screens::Action::RemoveDownload:
+                removeDownload(res.value);
+                break;
+        }
+    };
+
+    // THE HERO'S TWO ACTIONS, AND THEY MUST NOT COLLAPSE INTO ONE.
+    //
+    // Resume — the pill — goes straight into the game, with the previous
+    // choices already made. The ARTWORK opens the launch screen, which is where
+    // a different state, a different core or an export is chosen. Cabinet's own
+    // comment on this: stopping at a screen with a Play button on it is two
+    // actions, not one, and Home promises one.
+    //
+    // Until this session the artwork launched too, because there was no launch
+    // screen for it to open and doing nothing at all was worse. There is one
+    // now, so the distinction is real.
+    auto activateHome = [&]() {
+        if (focusRow == RowHero && focusSlot == 1) {
+            if (heroIndex >= 0) launchById(cards[heroIndex].id);
+            return;
+        }
+        // Every cover on Home opens the launch screen, the same as a cover
+        // anywhere else. A shelf card that launched directly would be a second
+        // Resume that nothing on the screen says is one.
+        if (const Card* c = cardAt(focusRow, focusSlot)) {
+            for (size_t i = 0; i < cards.size(); ++i) {
+                if (cards[i].id == c->id) { openDetail(static_cast<int>(i)); return; }
+            }
+        }
+    };
+
+    navigate = [&](screens::Nav n) -> bool {
+        switch (here()) {
+            case Screen::Home: return false;
+            case Screen::Library: apply(libraryScreen.key(n)); return true;
+            case Screen::Grid: apply(gridScreen.key(n)); return true;
+            case Screen::Detail: apply(detailScreen.key(n)); return true;
+        }
+        return false;
+    };
+
+    // Opening straight onto a screen, for a capture. This walks the SAME route
+    // a person would: the Library is entered, a tile is opened, the launch
+    // screen is opened from a card. A capture that built a screen some other
+    // way would be photographing something the product cannot reach.
+    if (initialScreen) {
+        libraryScreen.enter();
+        stack.push_back(Screen::Library);
+        if (initialTab > 0) {
+            // Walks the switcher the way a person would, rather than setting a
+            // field: the tab change resets the grid position, and a capture
+            // that skipped that would be photographing a state the product
+            // cannot be in.
+            libraryScreen.key(screens::Nav::Right);
+            libraryScreen.key(screens::Nav::Activate);
+        }
+        if (SDL_strcmp(initialScreen, "library") == 0 && initialTile > 0)
+            libraryScreen.focusTile(initialTile);
+        if (SDL_strcmp(initialScreen, "grid") == 0 ||
+            SDL_strcmp(initialScreen, "detail") == 0) {
+            apply(screens::Result{screens::Action::OpenTile, initialTile});
+        }
+        if (SDL_strcmp(initialScreen, "detail") == 0) {
+            int card = -1;
+            for (size_t i = 0; i < cards.size(); ++i) {
+                if (initialGame > 0 ? cards[i].id == initialGame : false) {
+                    card = static_cast<int>(i);
+                    break;
+                }
+            }
+            // With no --game, the first game of the opened tile, which is what
+            // somebody checking the layout wants and needs no id to hand.
+            if (card < 0 && here() == Screen::Grid)
+                apply(gridScreen.key(screens::Nav::Activate));
+            else if (card >= 0)
+                openDetail(card);
+        }
+    }
+
     // Picks up a finished job. Loading the game happens HERE, on the frame
     // thread, because the core is not thread-safe and the worker only ever
     // moved bytes.
@@ -1814,6 +2138,16 @@ int main(int argc, char** argv) {
         const LaunchJob::Stage st = launchJob.stage.load();
         if (st == LaunchJob::Stage::Failed) {
             std::fprintf(stderr, "[launch] failed: %s\n", launchJob.message.c_str());
+            // A promise the console could not deliver is not a promise. The
+            // record went in before the download so the download would be safe
+            // from eviction; it comes out again if the download never finished,
+            // or the disk fills with reserved space holding nothing.
+            if (launchJob.keepWhenReady) cache::unkeep(romCacheDir, launchJob.romId);
+            if (here() == Screen::Detail &&
+                detailScreen.game().romId == launchJob.romId) {
+                detailScreen.setKept(cache::isKept(romCacheDir, launchJob.romId));
+                detailScreen.setNotice(launchJob.message);
+            }
             launchJob.stop();
             launchJob.stage = LaunchJob::Stage::Idle;
             return;
@@ -1821,6 +2155,19 @@ int main(int argc, char** argv) {
         if (st != LaunchJob::Stage::Ready) return;
         launchJob.stop();
         launchJob.stage = LaunchJob::Stage::Idle;
+
+        // A download that was asked for rather than needed stops here. The game
+        // is on the disk, prepared exactly as a launch would have prepared it,
+        // so playing it later costs nothing — and nothing about it is guessed
+        // at a second time.
+        if (!launchJob.playWhenReady) {
+            std::fprintf(stderr, "[download] %s is here%s\n", launchJob.title.c_str(),
+                         launchJob.keepWhenReady ? " and kept" : "");
+            if (here() == Screen::Detail &&
+                detailScreen.game().romId == launchJob.romId)
+                detailScreen.setKept(cache::isKept(romCacheDir, launchJob.romId));
+            return;
+        }
 
         cab::Core& core = cab::Core::shared();
         const std::string saveDir = std::string(romCacheDir) + "/saves";
@@ -2019,6 +2366,10 @@ int main(int argc, char** argv) {
                         // download is the one thing it should interrupt.
                         if (launchJob.busy()) launchJob.cancel = true;
                         else if (playing) toggleOverlay();
+                        // Back, while there is anywhere to go back to. Quitting
+                        // from the middle of the Library would throw away the
+                        // whole stack the person had walked down.
+                        else if (stack.size() > 1) navigate(screens::Nav::Back);
                         else running = false;
                     }
                     if (owner == InputOwner::Overlay) {
@@ -2040,20 +2391,38 @@ int main(int argc, char** argv) {
                     if (playing && e.key.key == SDLK_F8) beginLoadLatestState(stateLoad, session, liveClient);
                     if (playing && e.key.key == SDLK_F6) syncSave(session, uploader);
                     if (owner != InputOwner::UI) break;
+                    // Anything pushed on top of Home owns its own focus model,
+                    // so the press goes there and this function does not get an
+                    // opinion about it. Home is handled below because it is the
+                    // one screen whose focus lives here.
+                    if (here() != Screen::Home) {
+                        switch (e.key.key) {
+                            case SDLK_LEFT:  navigate(screens::Nav::Left); break;
+                            case SDLK_RIGHT: navigate(screens::Nav::Right); break;
+                            case SDLK_UP:    navigate(screens::Nav::Up); break;
+                            case SDLK_DOWN:  navigate(screens::Nav::Down); break;
+                            case SDLK_RETURN:
+                            case SDLK_SPACE: navigate(screens::Nav::Activate); break;
+                            case SDLK_BACKSPACE: navigate(screens::Nav::Back); break;
+                            default: break;
+                        }
+                        break;
+                    }
                     if (e.key.key == SDLK_LEFT) moveFocus(-1);
                     if (e.key.key == SDLK_RIGHT) moveFocus(+1);
                     if (e.key.key == SDLK_UP) moveRow(-1);
                     if (e.key.key == SDLK_DOWN) moveRow(+1);
+                    // Until the navigation bar exists, this is the door to the
+                    // Library. See docs/NEXT-SESSION.md: the bar the design
+                    // system specifies costs exactly the vertical slack Home has
+                    // left, which is a measurement only a television can settle.
+                    if (e.key.key == SDLK_L) {
+                        libraryScreen.enter();
+                        stack.push_back(Screen::Library);
+                    }
                     if (e.key.key == SDLK_RETURN || e.key.key == SDLK_SPACE) {
                         pressing = true;
-                        // The hero's two actions are deliberately different:
-                        // Resume goes straight into the game, the artwork opens
-                        // the detail screen. Only the first exists yet, so the
-                        // card launches too rather than doing nothing at all.
-                        if (!playing) {
-                            if (const Card* c = cardAt(focusRow, focusSlot)) launchById(c->id);
-                            else if (heroIndex >= 0) launchById(cards[heroIndex].id);
-                        }
+                        if (!playing) activateHome();
                     }
                     break;
                 case SDL_EVENT_KEY_UP:
@@ -2079,8 +2448,19 @@ int main(int argc, char** argv) {
                         }
                         break;
                     }
-                    if (e.gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_LEFT) moveFocus(-1);
-                    if (e.gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_RIGHT) moveFocus(+1);
+                    // Guarded by the owner and by which screen is in front. It
+                    // was neither, which meant a d-pad left moved Home's focus
+                    // while a game was running — the same shape as the bug the
+                    // input-owner rule above exists to prevent.
+                    if (owner == InputOwner::UI && here() == Screen::Home) {
+                        if (e.gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_LEFT) moveFocus(-1);
+                        if (e.gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_RIGHT) moveFocus(+1);
+                    } else if (owner == InputOwner::UI) {
+                        if (e.gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_LEFT)
+                            navigate(screens::Nav::Left);
+                        if (e.gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_RIGHT)
+                            navigate(screens::Nav::Right);
+                    }
                     // Start reaches the overlay from inside a game, which is
                     // what "reachable from a controller button without leaving
                     // the game" means.
@@ -2100,10 +2480,23 @@ int main(int argc, char** argv) {
                         break;
                     }
                     if (owner != InputOwner::UI) break;
-                    if (e.gbutton.button == SDL_GAMEPAD_BUTTON_SOUTH) {
-                        if (const Card* c = cardAt(focusRow, focusSlot)) launchById(c->id);
-                        else if (heroIndex >= 0) launchById(cards[heroIndex].id);
+                    if (here() != Screen::Home) {
+                        switch (e.gbutton.button) {
+                            case SDL_GAMEPAD_BUTTON_DPAD_UP:
+                                navigate(screens::Nav::Up); break;
+                            case SDL_GAMEPAD_BUTTON_DPAD_DOWN:
+                                navigate(screens::Nav::Down); break;
+                            case SDL_GAMEPAD_BUTTON_SOUTH:
+                                navigate(screens::Nav::Activate); break;
+                            // East is Back everywhere in this product, which is
+                            // the rule the in-game overlay already follows.
+                            case SDL_GAMEPAD_BUTTON_EAST:
+                                navigate(screens::Nav::Back); break;
+                            default: break;
+                        }
+                        break;
                     }
+                    if (e.gbutton.button == SDL_GAMEPAD_BUTTON_SOUTH) activateHome();
                     if (e.gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_UP) moveRow(-1);
                     if (e.gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_DOWN) moveRow(+1);
                     if (e.gbutton.button == SDL_GAMEPAD_BUTTON_SOUTH) pressing = true;
@@ -2198,6 +2591,19 @@ int main(int argc, char** argv) {
         // Launch on a timer when asked to. This exists so the Home-to-game
         // transition can be watched on the test machine, which has no
         // controller attached — not as a product behaviour.
+        // The same errand as the launch above, for the action a person takes on
+        // the launch screen. It goes through downloadById, so the floors are
+        // checked exactly as they would be for a press.
+        if (autoDownloadId > 0 && !launchJob.busy()) {
+            const int id = autoDownloadId;
+            autoDownloadId = 0;
+            downloadById(id);
+        }
+        if (autoUnkeepId > 0) {
+            const int id = autoUnkeepId;
+            autoUnkeepId = 0;
+            removeDownload(id);
+        }
         if (autoLaunchId > 0 && !playing) {
             autoLaunchAfter -= dt;
             if (autoLaunchAfter <= 0.0f) {
@@ -2251,6 +2657,15 @@ int main(int argc, char** argv) {
         scrollY.tick(dt);
         overlayFade.tick(dt);
         overlayFocus.tick(dt);
+        {
+            // Every screen ticks, not only the one in front: a screen that is
+            // pushed over keeps its focus animation settled rather than
+            // resuming mid-transition when the person comes back to it.
+            screens::Ctx ctx{renderer, text, images, renderer.scale(), &cards};
+            libraryScreen.tick(dt);
+            gridScreen.tick(dt, ctx);
+            detailScreen.tick(dt);
+        }
         if (Card* pc = cardAt(focusRow, focusSlot))
             pc->press.retarget(pressing ? 1.0f : 0.0f, kPressDuration);
 
@@ -2337,6 +2752,17 @@ int main(int argc, char** argv) {
                 text.draw(renderer, sub, (ui::kCanvasWidth - sw) * 0.5f,
                           ui::kCanvasHeight * 0.5f + 10, ui::TextStyle::Callout,
                           ui::Color::white(0.60f), sc2);
+            }
+        } else if (here() != Screen::Home) {
+            // Everything past Home draws itself. The world half goes here; the
+            // frosted half goes after presentScene, below, because glass reads
+            // the scene through itself.
+            screens::Ctx ctx{renderer, text, images, sc, &cards};
+            switch (here()) {
+                case Screen::Library: libraryScreen.draw(ctx); break;
+                case Screen::Grid: gridScreen.draw(ctx); break;
+                case Screen::Detail: detailScreen.draw(ctx); break;
+                case Screen::Home: break;   // unreachable, and the compiler asks
             }
         } else {
 
@@ -2570,7 +2996,7 @@ int main(int argc, char** argv) {
                 // game titles are long and at this width most of them are.
                 const float capBaseline = shelfTop + kShelfCoverHeight + kCaptionGap +
                                           text.ascent(ui::TextStyle::Callout, sc) +
-                                          captionSlide(f);
+                                          captionSlide(f, kShelfCoverHeight);
                 const std::string caption = text.truncate(
                     card.title, ui::TextStyle::Callout, sc, kShelfCoverWidth);
                 // Focused is primary, everything else is secondary — the same
@@ -2604,6 +3030,16 @@ int main(int argc, char** argv) {
 
         renderer.presentScene();
 
+        if (!playing && here() != Screen::Home) {
+            screens::Ctx ctx{renderer, text, images, sc, &cards};
+            switch (here()) {
+                case Screen::Library: libraryScreen.drawGlass(ctx); break;
+                case Screen::Grid: gridScreen.drawGlass(ctx); break;
+                case Screen::Detail: detailScreen.drawGlass(ctx); break;
+                case Screen::Home: break;
+            }
+        }
+
         // ---- The in-game overlay -------------------------------------------
         //
         // No compositing trick: the frontend owns the frame loop, so this is a
@@ -2615,8 +3051,9 @@ int main(int argc, char** argv) {
         // game's own picture through itself.
         const float ovl = overlayFade.value();
         if (ovl > 0.001f) {
-            const float panelH = OvCount * kOverlayButtonHeight +
-                                 (OvCount - 1) * kOverlayButtonGap + 64.0f;
+            const float panelH = static_cast<float>(OvCount) * kOverlayButtonHeight +
+                                 static_cast<float>(OvCount - 1) * kOverlayButtonGap +
+                                 64.0f;
             const float px = (ui::kCanvasWidth - kOverlayPanelWidth) * 0.5f;
             // Rises slightly as it arrives rather than only fading: a panel that
             // just materialises reads as a glitch.

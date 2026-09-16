@@ -45,6 +45,29 @@ struct Platform {
     int romCount = 0;
 };
 
+// A collection: the person's own grouping of games, held by RomM so it is the
+// same on every device. It is not a platform in one way that decides the code
+// here — its membership is a LIST OF ROM IDS rather than a property of each
+// game, so a collection is resolved by looking its ids up in the library
+// rather than by asking the server for a filtered page.
+//
+// RomM's own "Favorites" is a collection like any other, flagged `is_favorite`.
+// Home already has a Favorites shelf fed by the favourites endpoint, so the
+// Library deliberately shows it here too rather than hiding it: a person who
+// opens Collections looking for the one they made is entitled to see the list
+// their server actually holds.
+struct Collection {
+    int id = 0;
+    std::string name;
+    int romCount = 0;
+    std::vector<int> romIds;
+    // A cover for the tile. RomM keeps a mosaic of member covers for a
+    // collection with no art of its own, and the first of them is a real cover
+    // from a real game inside it, which is all a tile needs.
+    std::string coverPath;
+    bool isFavorite = false;
+};
+
 struct Game {
     int id = 0;
     int platformId = 0;
@@ -138,6 +161,11 @@ public:
     int pollPairing(const Pairing& p, std::string* err);
 
     bool fetchPlatforms(std::vector<Platform>* out, std::string* err);
+
+    // The person's collections, which the Library shows beside the platforms.
+    // Empty is a normal answer — plenty of libraries have none — and the
+    // switcher says so rather than showing a blank grid.
+    bool fetchCollections(std::vector<Collection>* out, std::string* err);
 
     // platformId <= 0 fetches across every platform. Pages internally: RomM
     // caps a response and a library of thousands would otherwise arrive

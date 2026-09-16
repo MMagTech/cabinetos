@@ -432,10 +432,18 @@ bool Renderer::beginOffscreen(int width, int height) {
         offscreenH_ = height;
     }
     glBindFramebuffer(GL_FRAMEBUFFER, offscreenFBO_);
+    // Where the finished frame goes. presentScene used to bind 0 unconditionally
+    // — the WINDOW — so with --render-size the composited frame went to the
+    // window while saveFrame read the offscreen target, and a 1920x1080 capture
+    // came back as the window's contents in one corner of a black frame. It only
+    // shows when both are in play: an offscreen render AND frosted glass, which
+    // is every screen that has a pill or a panel on it.
+    targetFBO_ = offscreenFBO_;
     return true;
 }
 
 void Renderer::endOffscreen() {
+    targetFBO_ = 0;
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     if (offscreenFBO_) glDeleteFramebuffers(1, &offscreenFBO_);
     if (offscreenTex_) glDeleteTextures(1, &offscreenTex_);
@@ -466,7 +474,7 @@ void Renderer::presentScene() {
     glBindTexture(GL_TEXTURE_2D, sceneTex_);
     glGenerateMipmap(GL_TEXTURE_2D);
 
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glBindFramebuffer(GL_FRAMEBUFFER, targetFBO_);
     // Clear the WHOLE drawable first, not just the viewport. The letterbox
     // bars are outside the canvas, so nothing ever draws into them — and
     // without this they keep whatever the previous frame left there, which

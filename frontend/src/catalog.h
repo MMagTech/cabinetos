@@ -20,6 +20,8 @@
 
 #pragma once
 
+#include <string>
+
 #include "romm.h"
 
 namespace catalog {
@@ -64,6 +66,24 @@ struct Coverage {
 };
 
 Coverage coverageFor(const romm::Platform& p);
+
+// The name to put on a tile. RomM's own `name` is not always enough to tell two
+// platforms apart: the reference library holds two called "Arcade", with the
+// same slug, differing only in `fs_slug` and in which core they need. A person
+// looking at two identical tiles has no way to choose, so the ambiguous ones
+// are qualified — "Arcade (FinalBurn Neo)" and "Arcade (MAME 2003-Plus)" — and
+// everything else is left exactly as the server named it.
+std::string displayName(const romm::Platform& p);
+
+// The same answer in a handful of words, for a place that has a handful of
+// words' worth of room — a library tile's second line.
+//
+// `Coverage::reason` is a sentence, and a sentence truncated to "no core in
+// the ..." tells a person strictly less than nothing: they can see the tile is
+// dimmed, and the words that would explain it have been cut off. So the tile
+// gets the short form and the launch screen, which has a column to itself, gets
+// the sentence.
+const char* shortReason(Support s);
 
 // The same question asked of a game. A ROM payload carries its own platform
 // slug and fs_slug, so Home can decide whether the most recently played game is
