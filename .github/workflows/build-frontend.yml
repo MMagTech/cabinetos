@@ -1,0 +1,80 @@
+---
+# Compile the frontend on a machine nobody owns.
+#
+# Every core has built on a clean runner since 2026-09-13, for a reason
+# docs/PROJECT.md states plainly: "it builds here" is not a property of the
+# build, it is a property of that machine, and the difference only shows up on
+# the day the machine is gone.
+#
+# The frontend itself was not held to that standard and should have been. Until
+# this existed, `cabinetos-frontend` had only ever been compiled on the test VM —
+# the same single-machine dependency, in the one program that has to load all
+# twenty cores.
+#
+# What this asserts is modest and worth having: the tree compiles from a bare
+# checkout, in the same Fedora 44 container the cores and the VM use, with the
+# warnings the Makefile asks for. It does not run anything. The frontend needs a
+# Wayland display and a GPU to do anything interesting, and the test machine
+# remains where that happens.
+
+name: Build frontend
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/build-frontend.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/build-frontend.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Compile
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+
+      # The same container the cores are built in and the same one the test VM
+      # uses, so CI and the development loop are not two different builds
+      # wearing one name.
+      - name: Build the builder container
+        run: |
+          podman build -t cabinetos-builder -f frontend/Containerfile frontend
+
+      - name: Compile
+        run: |
+          set -euo pipefail
+          podman run --rm -v "$PWD/frontend":/src:Z -w /src cabinetos-builder \
+            make -j"$(nproc)" 2>&1 | tee /tmp/build.log
+
+      - name: Warnings
+        if: always()
+        run: |
+          # Not a failure, because -Werror on a tree that already carries
+          # warnings would turn this into a chore rather than a signal. Surfaced
+          # instead, so a new one is visible in the summary rather than buried
+          # in a log nobody opens.
+          {
+            echo "## Frontend"
+            echo
+            if grep -q 'warning:' /tmp/build.log; then
+              echo '```'
+              grep 'warning:' /tmp/build.log | sort -u
+              echo '```'
+            else
+              echo "No warnings."
+            fi
+          } >> "${GITHUB_STEP_SUMMARY}"

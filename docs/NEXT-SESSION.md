@@ -42,53 +42,76 @@ syncing on the way out.
   Cabinet's own emulator strings so they interchange with the Apple apps.
 - **BIOS comes down with the game**, every file the platform lists.
 - **An in-game overlay**: Start or Escape. Resume, save state, load state, exit.
-- **Twenty cores build in CI**, each asserting its pinned revision.
+- **Twenty cores build in CI**, each asserting its pinned revision, and the
+  frontend compiles there too.
+- **The disk no longer fills and stays full.** Eviction works, measured.
 
-## Pick up with one of these
+## Pick up with these, in this order
 
-**1. Eviction works; what protects things from it does not exist yet.** The
-disk no longer fills and stays full — `frontend/src/cache.{h,cpp}`, proved by
-squeezing the test machine to 120 MB and launching a 178 MB game, which evicted
-exactly the oldest ROM and played. The policy behind it is in PROJECT.md,
-Phase 4, and it is settled.
+**The next block of work is SCREENS**, decided 2026-09-16. The machine underneath
+is in good shape and almost nothing of the library is reachable: 1100 playable
+games and only the fifty on Home can be got at.
 
-**What it still needs, in order:**
+### 1. Library — platforms and collections
 
-- **Keep**, so there is something eviction may not take. Until it exists, the
-  only protection is "the game that is running".
-- **A pending-upload check.** The policy says nothing unsynced is ever deleted
-  and nothing tracks unsynced, so today that is a comment rather than a rule.
-  Harmless only because eviction currently takes ROMs and never save data.
+Home already points at a Library that does not exist. The design is settled and
+detailed in PROJECT.md: a **tile grid, not a list** (a full-width row on a
+1920pt canvas leaves a name at one end and a count at the other), a **switcher
+between Platforms and Collections** as capsule pills, focus landing on the
+switcher the first time and **only** the first time, and the two arcade
+platforms shown as two systems rather than merged.
+
+`catalog::coverageFor` already answers which platforms are playable and why not,
+in four flavours, so the screen has its content decided for it.
+
+### 2. The game launch screen
+
+A full-screen cover rather than a push, with the artwork as its own backdrop.
+This is where a different save state, a different core and an export are chosen
+— PROJECT.md's own list — and it is the screen Home's hero artwork opens.
+
+### 3. Download lives in ONE of those two, and the launch screen is the better home
+
+**Marcus's question, 2026-09-16: a button on the cover, or on the launch
+screen.** Both work; they should not both exist.
+
+**Recommendation: the launch screen.** It is already the place every other
+per-game decision is made, so Download joins a list rather than starting a
+second mechanism, and it keeps the grid clean — a cover with an action on it
+needs the hero's two-actions-one-card treatment, which is a real focus problem
+to solve for every tile in a grid of hundreds.
+
+**The bulk case already has an answer**, which is what a cover button would
+otherwise be for: *Download All* at the platform level, which PROJECT.md says
+CabinetOS should offer where tvOS deliberately does not.
+
+**It must work on a game that has never been played** — that is the case worth
+building it for. See *Emulation* in PROJECT.md.
+
+### 4. What eviction still has no protection for
+
+Do this when the Download button lands, since that is where it is enforced:
+
+- **Keep**, so there is something eviction may not take. Today the only
+  protection is "the game that is running".
+- **A pending-upload check.** The policy says nothing unsynced is ever deleted,
+  and nothing tracks unsynced. Harmless only because eviction takes ROMs and
+  never save data.
 - **The system reserve**, so kept games cannot grow until the console can no
-  longer update itself. Enforced at the moment of keeping, so it lands with keep.
+  longer update itself.
 
-**2. The Library screen.** 1100 playable games and only the ~50 on Home can be
-reached. Home already points at a Library that does not exist.
+### 5. Still owed from before, and none of it blocks the screens
 
-**3. Saves on the right triggers.** Keys do it today, which is the test
-environment and not the product. The settled triggers are in PROJECT.md: when
-the game writes its memory card, from the overlay, on leaving a game, and a
-controller combination.
-
-**4. The file-writing save class is not synced at all.** melonDS writes a `.sav`
-beside the ROM rather than exposing `RETRO_MEMORY_SAVE_RAM`, so `[save] battery
-is 0 bytes` is correct and the file never reaches RomM. Neo Geo Pocket, Sega CD
-and FBNeo's NVRAM are the same class and all three are playable today. Cabinet's
-`MemoryCardSync` is the shape to copy.
-
-**5. Nothing warns that a system's BIOS is missing.** If the server holds no
-Sega CD BIOS, the person finds out from the emulator's own error message after
-choosing a game and waiting for a download. Asking the server what firmware it
-HAS costs nothing and can happen while the library is scanned, which is the
-moment to say so instead. Downloading stays lazy — first launch of a platform,
-plus whenever a game is kept. PROJECT.md, Phase 4, under the firmware section.
-
-**6. Hardware-rendered cores.** Flycast and Mupen64Plus are built and cannot
-run: they want a GL context through `RETRO_ENVIRONMENT_SET_HW_RENDER`, which
-`core.cpp` refuses. That is 43 more games, plus PPSSPP once it is built, and it
-is the one piece of frontend work that is genuinely new rather than more
-screens. On Linux the readback Cabinet needs should not exist at all — the UI
-and the core can share one context.
+- **Saves on the right triggers.** Keys do it today, which is the test
+  environment and not the product. The settled triggers are in PROJECT.md.
+- **The file-writing save class is not synced at all.** melonDS writes a `.sav`
+  rather than exposing save RAM, so `[save] battery is 0 bytes` is correct and
+  the file never reaches RomM. Neo Geo Pocket, Sega CD and FBNeo are the same
+  class and all three are playable today.
+- **Nothing warns that a system's BIOS is missing** until a game fails to start.
+- **Hardware-rendered cores.** Flycast and Mupen64Plus are built and cannot run:
+  they want a GL context the frontend does not hand over. 43 more games, plus
+  PPSSPP once built.
 
 ## Things that will bite you
 
@@ -140,6 +163,10 @@ and the core can share one context.
   status of the thing you actually started.
 - **Look on disk before concluding a file does not exist.** `core-manifest.json`
   is at `~/Downloads/core-manifest.json` and is not on GitHub.
+- **The frontend compiles in CI now**, as of 2026-09-16, and did not before —
+  it had only ever been built on the test VM, which is the single-machine
+  dependency this project called out for cores and then did not apply to the
+  program that loads them. Do not let that slide back.
 - **Stop the session before building on the VM.** The frontend runs at 300% CPU
   under llvmpipe and it is four cores. `sudo systemctl stop
   cabinetos-session.service`, build, start it again — and use `--no-block` on
