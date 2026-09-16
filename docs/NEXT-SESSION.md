@@ -50,6 +50,12 @@ syncing on the way out.
 reused, and that is all. 1644 games at these sizes do not fit on a console, so
 the disk fills and stays full. **This is the biggest hole in the product now.**
 
+**The games and the OS share one disk**, so a disk full of games is a console
+that cannot update itself. The cache is therefore always the system's to take,
+silently — and the thing that needs guarding is not the cache but KEPT games,
+since those are the ones the console refuses to delete. Keeping is where the
+check belongs.
+
 **The policy is decided and it is ready to build** — PROJECT.md, Phase 4: when
 to evict, in what order, what is never touched, and the four numbers, which are
 decisions rather than proposals. Nothing in it is waiting on a discussion. Two

@@ -3090,13 +3090,50 @@ downloads stay, "and by nature shrink disk space available for cache".
 
 That is the whole sizing rule, and it deletes a setting:
 
-> **The cache is whatever is left.** Kept games take what they take, the save
-> floor is never crossed, and the cache has the remainder.
+> **The cache is whatever is left AFTER the system's own needs.** Kept games
+> take what they take, the save floor and the system reserve are never crossed,
+> and the cache has the remainder.
 
 An earlier draft had a configured budget *and* a free-space limit, whichever
 bound first — two numbers doing one number's job, and the configured one is
 unanswerable anyway. Nobody knows what to set a cache size to, and on a console
 the drive is for games regardless.
+
+##### The games and the operating system share one disk
+
+**Marcus, 2026-09-16, and it is the most serious thing raised about this
+policy.** `/` is a 43 MB read-only composefs and **all real storage is `/var`** —
+which holds the ROM cache, the OS's own storage, and the space a system update
+needs to stage itself. They are not separate.
+
+So a disk full of games is a console that **cannot update itself**, and this
+document's entire update model is a new image pulled and rebooted into. An
+in-place upgrade already measured at 1.0 GB of changed layers against a 5.0 GB
+image; a base bump moves considerably more.
+
+> **The cache is always available to the system, taken silently, without
+> asking.** Nobody should ever see "may I delete a game so I can install an
+> update?" — there is no basis on which to answer it and the answer is always
+> yes. Deleting a cached game costs a re-download; a console that cannot take
+> its own security updates costs rather more.
+
+**This is why the cache cannot simply be "everything left over", which an
+earlier draft of this section said.** The danger is not the cache, which is
+disposable by definition and can always be taken. It is **kept** games, which
+are the one thing this policy refuses to delete: keep enough of them and an
+update becomes impossible, permanently, with nothing the console is allowed to
+do about it.
+
+**So the system reserve is enforced in exactly one place — at the moment of
+keeping.** Keeping is already the one action the console may refuse, for the
+save floor; this is the second and larger reason. The cache itself needs no
+protecting from the system, because it is the system's to take.
+
+**A number, and it is the least certain thing here:** enough for a full image
+rather than a typical delta, since the case that matters is the one where the
+cache is already empty and only kept games remain. That is the far side of 5 GB
+and wants checking against a real update on real hardware rather than guessing
+here.
 
 **It degrades exactly the right way.** Keep enough games and the cache shrinks
 to nothing, at which point every un-kept game downloads, plays, and is dropped
@@ -3405,7 +3442,8 @@ as unsolved.
 **And keeping a game must respect it too.** Kept games are never evicted, so
 without this check a person can keep enough games to starve the reserve and
 leave the console with nothing it is permitted to delete. Keeping is the one
-place the console may refuse.
+place the console may refuse — of two floors now, this one and the system
+reserve above, and the second is the larger.
 
 ##### Why this differs from a real console, deliberately
 
@@ -3437,6 +3475,7 @@ happens.
 |---|---|---|
 | Ignore candidates below | **nothing — deferred**, then 1% of the space being freed if it is ever needed | oldest-first is what ships; the refinement waits for evidence |
 | Free beyond what is needed | **10%** of the budget | so eviction is an occasional event rather than every launch |
+| System reserve | **room for a full image**, past 5 GB — checked when KEEPING a game, never against the cache | the cache is the system's to take; kept games are what can make an update impossible |
 | Save floor | **2 GB, or 5% of the disk, whichever is smaller** | it protects the upload queue and room for one more write, not the state history — those are on RomM |
 | Unpacking headroom | **the archive + what its index declares**, transient | read from the archive, never estimated; not needed at all for `.chd`, `.rvz` or an arcade set |
 
