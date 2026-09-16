@@ -2859,7 +2859,7 @@ game is running.
 Pressure is whichever comes first: the cache budget set in Settings, or real
 free space measured against a floor that is never crossed.
 
-##### The eviction unit is a ROM FILE, not a game
+##### The eviction unit is a FILE, not a game
 
 **This is the first change to the proposal, and it is structural.** Today a
 game's cache directory holds the ROM *and* its save states *and* its battery
@@ -2868,18 +2868,35 @@ save together — `romcache/2813/` has three `.state` files and an `.srm` beside
 be fetched again along with the only things that cannot.
 
 The proposal patches this with a rule — never evict a game with unsynced saves.
-That is correct and it should not be necessary. **Separate the ROM from
-everything written locally**, and the ROM becomes unconditionally safe to
-delete while saves and states are never deleted at all. One of the three
-protection rules disappears, and so does the case where a download fails
-because a few kilobytes of old save are in the way, which is a poor trade.
+That is correct and it should not be necessary. **Separate what the console
+wrote from what it downloaded**, and the ROM becomes unconditionally safe to
+delete rather than conditionally, because there is no longer anything precious
+in the same unit to take with it. The case where a download fails over a few
+kilobytes of old save goes away with it, which is a poor trade to have been
+making.
+
+What the rule protects is then the **upload queue**, not save data in general —
+a distinction that matters, because a save already on RomM is a cache like the
+ROM beside it.
 
 What remains protected, and it is now short:
 
 | | |
 |---|---|
 | The running game's ROM | it is in use |
+| The running game's save data | it is being written |
+| **Anything not yet uploaded** | the only irreplaceable data on the machine |
 | Anything **kept** | the person asked for it; *Emulation* already says this is never automatic |
+
+**And what is evictable is wider than ROMs, for the same reason.** A synced save
+state is a cache of RomM like everything else, and a well-played DS game can
+hold hundreds of megabytes of state history that would cost a few megabytes to
+fetch back on demand. It belongs in the same candidate list, ordered the same
+way — no separate mechanism, and the size rule below already keeps it out of the
+way when it is not worth taking.
+
+The unit is therefore **any local file that RomM can return**, which is a longer
+sentence than "the ROM" and the same idea.
 
 ##### The floor has to be enforced DURING the download, not before it
 
@@ -2998,11 +3015,17 @@ scale with disk size — a 4 TB drive does not generate more save states than a
 section where a constant is the correct shape.
 
 **But it should be sized for what is actually irreplaceable, which is far less
-than the state history.** Old states live on RomM and the local copy is itself a
-cache; the only data on the machine that cannot be re-fetched is what has been
-written and not yet uploaded. That is a pending queue and room to write one more
-state — hundreds of megabytes in the worst case of a long spell offline, not
-five gigabytes.
+than it looks.** Saves, memory cards and save states all live on RomM once they
+have been uploaded, and the local copies are caches of the server exactly as the
+ROMs are. Cabinet already treats them that way — its own note says state caching
+is "opportunistic, not queued", refreshed on ordinary online visits.
+
+> **Nothing on this machine is irreplaceable except the upload queue.** Not the
+> ROM, not the memory card, not the state history. Only what has been written
+> and not yet sent.
+
+That is a pending queue and room to write one more state — hundreds of megabytes
+in the worst case of a long spell offline, not five gigabytes.
 
 Five gigabytes is still a defensible floor and the cost of being generous is
 low. The one place it is not low is a small disk: on a 32 GB machine it is a
