@@ -4965,6 +4965,43 @@ location rather than globally.
 
 #### Decided
 
+**REVISED 2026-09-16: a second drive takes the KEPT games, and the cache stays
+on the internal disk.** Marcus, thinking ahead to testing it. The paragraph below
+said one active location holding everything, and the split is better, because
+the two things are different in kind:
+
+| | |
+|---|---|
+| **Kept games** | deliberate, permanent, and the whole point of a drive that travels |
+| **The cache** | "what this machine happened to play" — meaningless to carry, and better on the disk that is always attached and usually faster than USB |
+
+**And it quietly removes the update hazard.** The system reserve exists because
+kept games are the one thing the console will not delete; put them on a
+different drive and they cannot fill the system disk at all. The reserve stays
+for the single-drive case, which remains the common one.
+
+**What travels on the drive, and what does not.** Everything here is a copy of
+something on RomM, so the drive only earns its keep for things that are slow to
+replace or impossible to:
+
+- **Games: yes.** Hundreds of gigabytes, and re-fetching them on the other
+  console is the cost this avoids.
+- **Synced saves, memory cards and states: no.** Kilobytes, already on the
+  server, and carrying a second copy creates two versions of the truth — which
+  this question has already settled the other way, in *"a game continued on a
+  different server starts from that server's save history"*.
+- **Anything not yet uploaded: yes.** These are the only things on the whole
+  machine the server cannot give back. Without them the drive travels and last
+  night's progress is stranded on the console that wrote it.
+
+> **The drive carries what is slow to replace and what cannot be replaced. Not
+> what the server already has.**
+
+**Still true, and the reason the paragraph below is revised rather than
+deleted:** migration between locations is still a first-class operation, a
+missing drive still degrades rather than errors, and the drive is still
+self-describing so it can be browsed against a different server.
+
 **One active location, with migration between them.** Upgrading to a larger
 drive is a normal thing to want, so moving the library is a first-class
 operation rather than something the user does by hand. It must survive being
