@@ -1641,36 +1641,33 @@ The hero carries **two** actions and the distinction is load-bearing:
 When there is nothing to resume, Home says so in its own words and points at the
 Library — it does not show an empty shelf.
 
-##### Resume cannot always be instant here, and tvOS has the same problem
+##### Resume on a game that is not downloaded — RAISED AND CLOSED, 2026-09-16
 
-**Raised 2026-09-16 by Marcus, about the cache, and it lands on the hero
-instead.** Recent and the hero both come from RomM's `last_played`, which is the
-**household's** history across every device. So the game Home offers to resume
-may be one that was last played on a phone, and that this console has never
-downloaded.
+**Recorded because it looks like a problem and is not, and somebody will raise
+it again.**
 
-Resume then means: fetch several gigabytes, fetch the newest state, and start.
-**That is a four-minute wait behind a button whose entire purpose is that there
-is no wait**, and this document's own rule — "stopping at a screen with a Play
-button on it is two actions, not one" — is about the number of *actions*, not
-about how long the one action takes.
+Recent and the hero come from RomM's `last_played`, which is the household's
+history across every device. So the game Home offers to resume may have been
+last played on a phone and never downloaded on this console, and pressing Resume
+then means fetching several gigabytes and a save state before anything starts.
 
-It is not a CabinetOS bug. tvOS has exactly the same gap, since its cache is
-whatever Apple has not yet reclaimed. It is more visible here because this
-console is meant to be the machine games are played on rather than one of
-several.
+That was argued here as a broken promise — a wait behind a button whose purpose
+is that there is no wait — with three proposed fixes: a progress bar inside the
+pill, pre-fetching the hero while idle, and a badge saying which kind of Resume
+was coming.
 
-**Three ways out, none chosen:**
+**Closed by Marcus, and he is right.** You press Resume, it downloads, it plays.
+The wait is the wait whichever way it is presented, and the download already
+shows progress and already takes Escape to cancel. Warning someone in advance
+does not shorten it and does not change what they would do — they want to play
+that game.
 
-| | |
-|---|---|
-| **Resume becomes its own progress** | the pill fills as the download runs, in place, rather than throwing the person to another screen. Honest, cheap, and keeps it one action. |
-| **Pre-fetch the hero** | one game, the single most likely thing to be resumed, downloaded quietly when the console is idle. This is the "ready to play" behaviour real consoles have, and it makes Resume genuinely instant. Costs bandwidth on a game that may never be played here. |
-| **Say so on the card** | the downloaded badge from the component inventory, so the person knows before pressing which kind of Resume they are about to get. |
+**The rule this section states is about the number of ACTIONS, not the number of
+seconds.** Resume is still one action. It is slower some of the time.
 
-The third is not an alternative to the other two — it is worth doing regardless,
-and it is the smallest. **Decide this when Home is next worked on**, not as part
-of the cache policy, which it is not.
+*Pre-fetching the hero while the console is idle remains available* as an
+optimisation, the way real consoles have it, and it is a performance idea rather
+than a correction to this design. Nothing about Home changes.
 
 #### The hero card, read from Cabinet's tvOS source
 
@@ -2935,38 +2932,36 @@ is sayable.** Everything else in this section is detail underneath it:
 > first. Nothing that is running, nothing you marked as keep, and nothing still
 > waiting to reach RomM is ever touched.**
 
-**Tying the cache to something visible is the part worth having.** It gives the
-cache a meaning a person can picture rather than one only a developer can:
-"least-recently-played is evicted first" describes the behaviour exactly and
-explains nothing to anybody.
+**The cache is invisible, and that is the decision.** Marcus, 2026-09-16,
+ending a long detour: *"No one knows or cares if the game exists in cache on the
+OS. You go to the game and hit play. If it isn't cached it downloads. If it is
+cached it doesn't."*
 
-**But it cannot be the Recent shelf, and that is not a detail.** Marcus again,
-and it is the second time this section has tried to quietly make the reference
-setup into the definition. **Recent comes from RomM** — `order_by=last_played`,
-which this document says explicitly is the server's and never the app's — so it
-is the *household's* history across every device. A game played on a phone this
-morning is on this console's Recent shelf although this console has never
-downloaded it.
+That is right, and the reason it is right is that **the feedback already exists
+at the only moment it is useful**. Pressing play on a game that is not on disk
+already shows a progress bar and already takes Escape to back out. So the person
+finds out immediately, at the point of asking, and can change their mind for the
+cost of one button press.
 
-So "everything on Recent is on the disk" is not a promise that is hard to keep,
-it is one that cannot be true. The shelf and the cache overlap; they are not the
-same list, and they never will be.
+**A badge warning them beforehand does not shorten the download.** They want to
+play that game; the information changes nothing they would do, and it adds a
+thing to think about to a screen whose whole job is that there is nothing to
+think about.
 
-> **Do not promise it. Show it.** The design system's component inventory
-> already carries a **downloaded** badge for exactly this. Mark the shelf
-> entries that are on this disk, and the honest version needs no guarantee at
-> all: what is marked starts instantly, what is not has to fetch first.
+So: no promise about what is cached, no marker on the shelf, nothing in the UI
+at all. **Everything below this line is internal.**
 
-That leaves the cache as *what this console has played*, which is what
-**"Least recently played" means on THIS console** below already required. The
-shelf framing had contradicted it within the same section.
+The one exception is the Storage screen, which stays — because it is somewhere a
+person goes *deliberately*, looking for exactly this. Nobody cares until they go
+looking, and then they should find it.
 
-**Size would have broken the promise anyway**, and it is worth recording as the
-second reason rather than the first: twenty recently-played PS2 games is eighty
-gigabytes, which no policy can guarantee on a 128 GB console. Locally-recent
-games are the **last** thing evicted rather than the thing never evicted —
-otherwise they are one more protected pile that can outgrow the disk, which is
-the failure that already ruled out exempting small systems.
+**Two things this deletes**, both recorded so nobody re-adds them:
+
+- **The downloaded badge on shelf cards**, and with it the whole question of what
+  the shelf promises about the disk.
+- **"Cleared 40 games" as a worry**, which was the main argument for the deferred
+  size rule below. It was a concern about how a list would read, on a screen
+  nobody is watching.
 
 **And "longest since played" means since PLAYED, not since downloaded.** A game
 fetched months ago and played last night stays; a game fetched last night and
@@ -3119,14 +3114,15 @@ number somebody picked.**
 
 The refinement it defers: ignore candidates smaller than one percent of the
 space being freed, so that a single 4 GB download does not take forty Game Boy
-games with it. The effect is real and it is a **presentation** problem more than
-a cost one — those forty come back in a second or two each, and what stings is a
-Storage screen reporting "cleared 40 games", which reads as far more destructive
-than it was.
+games with it.
 
-**It is one line and it can wait for the list to actually look alarming.**
-Shipping the simple rule first is the right order; this is written down so that
-whoever sees that list knows the fix was considered rather than missed.
+**Its reason has since evaporated.** The argument was that "cleared 40 games"
+reads as destructive — a worry about how a list would look, on a screen the
+decision above says nobody is watching. What remains is the actual cost, and the
+actual cost is that forty small games come back in a second or two each.
+
+**So it stays deferred and it may never be needed.** Kept here because the
+arithmetic is done and someone will think of it again.
 
 One percent is recorded rather than left to be re-derived, because it has no
 units and belongs to no library. Needing 4 GB it ignores anything under 40 MB,
