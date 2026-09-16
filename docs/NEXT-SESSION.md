@@ -46,33 +46,21 @@ syncing on the way out.
 
 ## Pick up with one of these
 
-**1. Nothing evicts anything.** A ROM already on disk at the right size is
-reused, and that is all. 1644 games at these sizes do not fit on a console, so
-the disk fills and stays full. **This is the biggest hole in the product now.**
+**1. Eviction works; what protects things from it does not exist yet.** The
+disk no longer fills and stays full — `frontend/src/cache.{h,cpp}`, proved by
+squeezing the test machine to 120 MB and launching a 178 MB game, which evicted
+exactly the oldest ROM and played. The policy behind it is in PROJECT.md,
+Phase 4, and it is settled.
 
-**The games and the OS share one disk**, so a disk full of games is a console
-that cannot update itself. The cache is therefore always the system's to take,
-silently — and the thing that needs guarding is not the cache but KEPT games,
-since those are the ones the console refuses to delete. Keeping is where the
-check belongs.
+**What it still needs, in order:**
 
-**The policy is decided and it is ready to build** — PROJECT.md, Phase 4: when
-to evict, in what order, what is never touched, and the four numbers, which are
-decisions rather than proposals. Nothing in it is waiting on a discussion. Two
-things are genuinely open and neither blocks the work, and they are named as
-such at the end of the section.
-
-**And read the first subsection of it before adding a number to anything.** The
-first draft of that policy was tuned to this library — "the cartridge games come
-to under 2 GB" — which is true here and inverts for anyone with a complete set.
-The reference library is a reference the way the SER5 is: an illustration, never
-the definition. Where a rule needs a number, make it a fraction of something the
-machine can measure.
-
-The first move is structural rather than clever: **saves and states currently
-live in the same directory as the ROM**, so "evict a game" would delete the one
-thing that always comes back along with the only things that never do. Split
-them and most of the policy's protection rules stop being needed.
+- **Keep**, so there is something eviction may not take. Until it exists, the
+  only protection is "the game that is running".
+- **A pending-upload check.** The policy says nothing unsynced is ever deleted
+  and nothing tracks unsynced, so today that is a comment rather than a rule.
+  Harmless only because eviction currently takes ROMs and never save data.
+- **The system reserve**, so kept games cannot grow until the console can no
+  longer update itself. Enforced at the moment of keeping, so it lands with keep.
 
 **2. The Library screen.** 1100 playable games and only the ~50 on Home can be
 reached. Home already points at a Library that does not exist.

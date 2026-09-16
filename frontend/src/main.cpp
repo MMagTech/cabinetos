@@ -44,6 +44,7 @@
 #include "core.h"
 #include "image.h"
 #include "keyboard.h"
+#include "cache.h"
 #include "catalog.h"
 #include "romfile.h"
 #include "romm.h"
@@ -654,6 +655,30 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
 
         std::string err;
         if (!haveIt) {
+            // ROOM FOR IT FIRST, which until now nothing checked: the disk
+            // filled and stayed full. See cache.h for the policy.
+            //
+            // expectedSize is RomM's `fs_size_bytes`, so for an archived game
+            // it is the COMPRESSED size and this is only the first of two
+            // checks. What it unpacks to cannot be known until the archive is
+            // here and its own index has been read — see the second check
+            // below, after the download.
+            if (expectedSize > 0) {
+                const int64_t want =
+                    expectedSize +
+                    static_cast<int64_t>(static_cast<double>(expectedSize) *
+                                         cache::kOverheadFraction);
+                if (cache::freeBytes(cacheDir) < want) {
+                    cache::evictUntilFree(cacheDir, want, /*protectRomId=*/0);
+                    if (cache::freeBytes(cacheDir) < want) {
+                        job.message =
+                            "not enough space for this game, and nothing left "
+                            "that can be cleared";
+                        job.stage = LaunchJob::Stage::Failed;
+                        return;
+                    }
+                }
+            }
             const std::string path =
                 "/api/roms/" + std::to_string(id) + "/content/" + fsName;
             const bool ok = client.fetchToFile(path, dest,
@@ -675,6 +700,26 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
         job.stage = LaunchJob::Stage::Unpacking;
         std::string primary;
         romfile::Kind kind = romfile::Kind::Plain;
+
+        // THE SECOND CHECK, and the compression ratio is why it exists: 868 KB
+        // of Space Harrier becomes 2 MB, and a DS ROM padded with empty space
+        // compresses far harder than that. No multiplier is safe, so the
+        // archive is asked what it holds rather than guessed at.
+        //
+        // Both files exist at once during extraction, so the room needed is
+        // what comes out, on top of the archive already on disk. Nothing to do
+        // for a .chd or an arcade set handed over unextracted, which is most of
+        // the large files in a library.
+        if (const int64_t unpacked = romfile::unpackedSize(dest, validExts, blockExtract);
+            unpacked > 0 && cache::freeBytes(cacheDir) < unpacked) {
+            cache::evictUntilFree(cacheDir, unpacked, id);
+            if (cache::freeBytes(cacheDir) < unpacked) {
+                job.message = "not enough space to unpack this game";
+                job.stage = LaunchJob::Stage::Failed;
+                return;
+            }
+        }
+
         if (!romfile::prepareFile(dest, dir, validExts, blockExtract, &primary, &kind, &err)) {
             job.message = err;
             job.stage = LaunchJob::Stage::Failed;
@@ -1784,6 +1829,10 @@ int main(int argc, char** argv) {
             std::fprintf(stderr, "[launch] %s\n", core.error().c_str());
             return;
         }
+        // Played now, so it is the LAST thing eviction should take rather than
+        // whatever its download time says. The file's own mtime is the record —
+        // see cache.h — so a game downloaded and never started stays oldest.
+        cache::touch(launchJob.romPath);
         // The session, and the game's own save restored into it BEFORE the
         // first frame. A battery save is the game's progress; it has to be in
         // place when the game boots, not offered as a choice afterwards.

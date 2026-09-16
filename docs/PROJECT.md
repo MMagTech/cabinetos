@@ -2924,7 +2924,7 @@ kept*. **Nothing evicts anything.** A library of 1644 games at these sizes will
 not fit on a console, so the disk fills and stays full. That is the next thing
 this needs.
 
-#### The cache policy — decided 2026-09-16, not yet built
+#### The cache policy — decided 2026-09-16, and the core of it now runs
 
 **The rule is that the person never thinks about storage, and never loses
 anything they would miss.** Everything below serves those two sentences. From
@@ -3027,6 +3027,61 @@ So the policy below is the only behaviour, not a fast-link default. What a slow
 link changes is the *advice*: first-run and the Storage screen should say that
 keeping a game means never waiting for it again, which is a sentence worth
 writing regardless.
+
+##### BUILT AND MEASURED, 2026-09-16
+
+**The disk no longer fills and stay full**, which is what this whole section was
+for. `frontend/src/cache.{h,cpp}` holds the eviction, and the download path asks
+it for room at the two moments described below.
+
+Proved by filling the test machine's disk rather than by reasoning:
+
+| | |
+|---|---|
+| Free space squeezed to | 120 MB |
+| Game asked for | Twisted Metal, 178 MB, needing 187 MB with overhead |
+| Evicted | `Mad Dog McCree.chd`, dated 09-10 — **the oldest, and only it** |
+| Left alone | `Colin McRae Rally.chd`, dated 09-14, four save states, an `.srm`, a memory card |
+| Result | downloaded, launched, **34,594 frames of PlayStation** |
+
+It stopped the moment there was room rather than clearing everything it could,
+which is the margin rule working, and nothing irreplaceable was a candidate at
+all.
+
+**What is NOT built**, so that nobody reads the above as more than it is: there
+is no keep, so nothing is protected as kept; nothing tracks pending uploads, so
+that protection is a comment rather than a check; and the system reserve for
+updates is unimplemented. Eviction today protects the running game and nothing
+else, because nothing else exists yet to protect.
+
+###### The bug that only running it could find: deleting a file frees nothing
+
+**CabinetOS runs on btrfs, where `unlink` returns immediately and the space
+stays invisible to `statvfs` until a transaction commits.** So the first version
+deleted exactly the right file, measured again, saw no change, and reported that
+there was nothing left to clear.
+
+Measured on the machine rather than guessed from the symptom:
+
+| | |
+|---|---|
+| Before deleting a 50 MB file | 218,812,416 free |
+| Immediately after | 218,812,416 — **no change** |
+| After three seconds | 218,812,416 — **still no change** |
+| After forcing a commit | 268,816,384 |
+
+Waiting is not a fix, because it is not a race. `evictUntilFree` now calls
+`syncfs` on the cache's own filesystem once, after deleting.
+
+**It is not a btrfs workaround to be removed later.** On ext4 or xfs the space
+is already accounted and the call returns almost immediately, so the code is
+correct everywhere without knowing where it is. Which matters, because **the
+filesystem on real hardware is not established** — the VM is btrfs and Bazzite's
+lineage defaults to it, but the installer ISO has never been booted.
+
+**And it is the second time in one day that a thing passed every check and was
+still wrong until somebody ran it**, after melonDS's save directory. Both were
+invisible to the build and obvious within one launch.
 
 ##### The policy in one paragraph
 
