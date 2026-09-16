@@ -250,6 +250,11 @@ sitting there waiting for exactly that case.
   flip. It is the logo rotating. The test that actually settles orientation is
   text that reads correctly: at frame 1100 the title screen says PUSH START
   BUTTON the right way round.
+- **CI does not run on a stacked branch.** `build-frontend.yml` and the image
+  build trigger on pull requests into `main` only, and this work is three
+  branches deep, so opening a PR ran nothing at all. Dispatch it by hand —
+  `gh workflow run build-frontend.yml --ref <branch>` — or the compile check
+  that exists silently does not apply to the thing you are writing.
 - **`pgrep -f "some string"` matches your own command line.** Three times now,
   the worst being a wait loop whose pattern matched the shell running the check,
   so it sat for nine hours waiting for something already finished. **Match on
