@@ -2,6 +2,8 @@
 
 #include <sys/stat.h>
 
+#include <map>
+
 #include <cstring>
 #include <string>
 
@@ -208,6 +210,16 @@ Coverage coverageFor(const romm::Platform& p) {
 }
 Coverage coverageFor(const romm::Game& g) {
     return answer(lookup(g.platformSlug, g.platformFsSlug));
+}
+
+std::map<std::string, std::string> optionOverrides(const std::string& coreName) {
+    // Nothing yet, deliberately. Every option is answered with the core's own
+    // default, which is the correct baseline and is what was missing. A choice
+    // belongs here only when there is a reason for it, and the reason belongs
+    // beside it — an override with no justification is the thing that goes
+    // stale and that nobody can later tell apart from a mistake.
+    (void)coreName;
+    return {};
 }
 
 const char* shortReason(Support s) {

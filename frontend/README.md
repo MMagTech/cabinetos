@@ -105,6 +105,8 @@ person would press is to press it from here:
 
 ```bash
 ./build/cabinetos-frontend --storage              # free space, floors, kept, evictable
+./build/cabinetos-frontend --core-options         # every option every core declares
+./build/cabinetos-frontend --launch ID --core-options-off   # the control: answer none
 ./build/cabinetos-frontend --romm HOST --download <romId>
 ./build/cabinetos-frontend --romm HOST --unkeep <romId>
 ```

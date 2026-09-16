@@ -59,9 +59,150 @@ std::vector<int16_t> gAudioDrain;
 uint64_t gAudioFrames = 0;
 uint64_t gFramesRun = 0;
 
-// Core options. Answered from here, falling back to the core's own default,
-// which is what an absent key means.
-std::unordered_map<std::string, std::string> gOptions;
+// --- Core options -----------------------------------------------------------
+//
+// AN UNANSWERED OPTION IS NOT THE DEFAULT. It is the worst value in the list,
+// and it fails silently.
+//
+// A core reads its settings by asking the frontend for each variable in turn.
+// When the frontend does not answer, the core does NOT fall back to the default
+// printed in its own option table — the whole case is skipped and the C global
+// keeps whatever it was initialised to, which is zero. Zero means silence for a
+// sample rate, black for brightness, and off for every toggle whose useful
+// state is on. This cost the reference implementation eight separate evenings,
+// one option at a time.
+//
+// This file used to say the opposite, in as many words, above a map that
+// nothing ever wrote to. So every option of every core went unanswered, and
+// twenty cores have been running on zeroes.
+//
+// THE FIX IS TO CAPTURE THE TABLE THE CORE DECLARES and answer every key in it.
+// A core announces its options through one of three generations of the same
+// idea, and a frontend has to take whichever it is offered:
+//
+//   SET_VARIABLES          the original. "Description; first|second|third",
+//                          and the FIRST value is the default by convention.
+//   SET_CORE_OPTIONS       adds an explicit `default_value` rather than relying
+//                          on ordering, plus per-value labels.
+//   SET_CORE_OPTIONS_V2    adds categories. Same defaults.
+//
+// Each has an _INTL variant that wraps a US table and a localised one; the US
+// table is the one with the keys in it, so that is the one read.
+//
+// We report version 2, because the explicit `default_value` is a fact the core
+// states rather than a convention we infer from ordering.
+struct Option {
+    std::string key;
+    std::string desc;
+    std::vector<std::string> values;
+    std::string defaultValue;   // what the core says
+    std::string chosen;         // what we answer, which may be an override
+    bool overridden = false;
+    bool asked = false;         // did the core actually come back for it
+};
+
+std::vector<Option> gDeclared;                              // declaration order
+std::unordered_map<std::string, size_t> gByKey;             // key -> gDeclared
+std::unordered_map<std::string, std::string> gOverrides;    // our deliberate choices
+// Keys a core asked for that it never declared. Not answerable, and worth
+// counting: it means either the core has a bug or we missed a table.
+std::vector<std::string> gUndeclaredAsks;
+
+// THE CONTROL. With this on, GET_VARIABLE answers nothing, which is exactly
+// what this host did before the table was captured — so the difference the fix
+// makes can be measured rather than asserted.
+//
+// docs/PROJECT.md: "Run the control before believing a comparison." The
+// backend-diff tool exists for the same reason, and it earned its keep by
+// showing that a difference everyone believed in was the build id.
+bool gAnswerOptions = true;
+
+void resetOptions() {
+    gDeclared.clear();
+    gByKey.clear();
+    gUndeclaredAsks.clear();
+}
+
+void declareOption(const char* key, const char* desc,
+                   std::vector<std::string> values, const char* defaultValue) {
+    if (!key || !*key) return;
+    // A core may declare its table more than once — the API explicitly allows
+    // re-declaration to update descriptions — so a repeat replaces rather than
+    // duplicates.
+    auto it = gByKey.find(key);
+    const size_t idx = (it == gByKey.end()) ? gDeclared.size() : it->second;
+    if (it == gByKey.end()) {
+        gDeclared.emplace_back();
+        gByKey[key] = idx;
+    }
+    Option& o = gDeclared[idx];
+    o.key = key;
+    o.desc = desc ? desc : "";
+    o.values = std::move(values);
+    // An explicit default wins; otherwise the first listed value, which is what
+    // the original API documents: "First entry should be treated as a default."
+    if (defaultValue && *defaultValue) o.defaultValue = defaultValue;
+    else if (!o.values.empty()) o.defaultValue = o.values.front();
+    else o.defaultValue.clear();
+
+    auto ov = gOverrides.find(o.key);
+    o.overridden = (ov != gOverrides.end());
+    o.chosen = o.overridden ? ov->second : o.defaultValue;
+}
+
+// "Description; first|second|third" — the original format. Everything before
+// the first ';' is prose; the rest is the value list.
+void captureVariables(const retro_variable* vars) {
+    if (!vars) return;
+    for (; vars->key; ++vars) {
+        std::string desc, list;
+        if (vars->value) {
+            const std::string v = vars->value;
+            const size_t semi = v.find(';');
+            if (semi == std::string::npos) {
+                list = v;
+            } else {
+                desc = v.substr(0, semi);
+                list = v.substr(semi + 1);
+                // The spec says the ';' is followed by a space. Trim whatever
+                // whitespace is actually there rather than assuming exactly one.
+                size_t b = list.find_first_not_of(" \t");
+                list = (b == std::string::npos) ? std::string() : list.substr(b);
+            }
+        }
+        std::vector<std::string> values;
+        size_t start = 0;
+        while (start <= list.size() && !list.empty()) {
+            const size_t bar = list.find('|', start);
+            values.push_back(list.substr(start, bar == std::string::npos
+                                                    ? std::string::npos
+                                                    : bar - start));
+            if (bar == std::string::npos) break;
+            start = bar + 1;
+        }
+        declareOption(vars->key, desc.c_str(), std::move(values), nullptr);
+    }
+}
+
+void captureDefinitions(const retro_core_option_definition* defs) {
+    if (!defs) return;
+    for (; defs->key; ++defs) {
+        std::vector<std::string> values;
+        for (const retro_core_option_value* v = defs->values; v && v->value; ++v)
+            values.emplace_back(v->value);
+        declareOption(defs->key, defs->desc, std::move(values), defs->default_value);
+    }
+}
+
+void captureV2(const retro_core_options_v2* opts) {
+    if (!opts || !opts->definitions) return;
+    for (const retro_core_option_v2_definition* d = opts->definitions; d->key; ++d) {
+        std::vector<std::string> values;
+        for (const retro_core_option_value* v = d->values; v && v->value; ++v)
+            values.emplace_back(v->value);
+        declareOption(d->key, d->desc, std::move(values), d->default_value);
+    }
+}
 
 void videoRefresh(const void* data, unsigned width, unsigned height, size_t pitch) {
     if (!data) return;  // "same picture as last time"
@@ -145,24 +286,62 @@ bool environment(unsigned cmd, void* data) {
 
         case RETRO_ENVIRONMENT_GET_VARIABLE: {
             auto* var = static_cast<retro_variable*>(data);
-            auto it = gOptions.find(var->key ? var->key : "");
-            var->value = (it == gOptions.end()) ? nullptr : it->second.c_str();
-            return var->value != nullptr;
+            const std::string key = var->key ? var->key : "";
+            if (!gAnswerOptions) {
+                // The control: the old behaviour, where every option went
+                // unanswered and every core silently ran on zeroes.
+                var->value = nullptr;
+                return false;
+            }
+            auto it = gByKey.find(key);
+            if (it == gByKey.end()) {
+                // A key the core never declared. There is nothing honest to
+                // answer with — we do not know its values, let alone its
+                // default — so it is recorded and reported rather than guessed
+                // at. This is the one case that stays unanswered, and it is a
+                // bug in the core or a table we failed to read.
+                var->value = nullptr;
+                if (!key.empty() &&
+                    std::find(gUndeclaredAsks.begin(), gUndeclaredAsks.end(), key) ==
+                        gUndeclaredAsks.end()) {
+                    gUndeclaredAsks.push_back(key);
+                    std::fprintf(stderr, "[core] asked for an option it never "
+                                         "declared: %s\n", key.c_str());
+                }
+                return false;
+            }
+            Option& o = gDeclared[it->second];
+            o.asked = true;
+            var->value = o.chosen.c_str();
+            return true;
         }
 
         case RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE:
             *static_cast<bool*>(data) = false;
             return true;
 
+        // The core telling us what it can be configured with. Whichever
+        // generation of the API it uses, the table is captured and every key in
+        // it gets an answer — see the note above `struct Option`.
         case RETRO_ENVIRONMENT_SET_VARIABLES:
+            captureVariables(static_cast<const retro_variable*>(data));
+            return true;
         case RETRO_ENVIRONMENT_SET_CORE_OPTIONS:
+            captureDefinitions(
+                static_cast<const retro_core_option_definition*>(data));
+            return true;
         case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_INTL:
+            // The US table is the one carrying the keys; `local` is the same
+            // table translated, and may be absent.
+            if (auto* intl = static_cast<const retro_core_options_intl*>(data))
+                captureDefinitions(intl->us);
+            return true;
         case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2:
+            captureV2(static_cast<const retro_core_options_v2*>(data));
+            return true;
         case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2_INTL:
-            // Accepted and ignored for now. The option TABLE is per platform,
-            // not per core (docs/PROJECT.md: "Cores and platforms are not the
-            // same list"), so it is owned above this layer, not discovered
-            // here.
+            if (auto* intl = static_cast<const retro_core_options_v2_intl*>(data))
+                captureV2(intl->us);
             return true;
 
         case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY:
@@ -174,7 +353,13 @@ bool environment(unsigned cmd, void* data) {
             return true;
 
         case RETRO_ENVIRONMENT_GET_CORE_OPTIONS_VERSION:
-            *static_cast<unsigned*>(data) = 0;  // the plain SET_VARIABLES API
+            // Version 2, not 0. A core told version 0 falls back to the
+            // original API, where the default is "whichever value is listed
+            // first" — a convention we would be inferring. At version 2 the
+            // core states its default outright, which is a fact rather than an
+            // inference, and every core that only speaks the old API still
+            // works because it calls SET_VARIABLES regardless.
+            *static_cast<unsigned*>(data) = 2;
             return true;
 
         case RETRO_ENVIRONMENT_GET_LANGUAGE:
@@ -222,6 +407,10 @@ void Core::setDirectories(const std::string& systemDir, const std::string& saveD
 
 bool Core::load(const std::string& soPath) {
     unload();
+    // Whatever the last core declared is not this one's business. Cleared here
+    // rather than in unload() so a caller that inspects the table after a core
+    // is unloaded still sees what that core actually asked for.
+    resetOptions();
     // RTLD_LOCAL is the whole reason this is simple on Linux: each core's
     // retro_* symbols stay private to it, so many cores can be loaded over a
     // session without colliding, and none of Cabinet's prefix-and-merge
@@ -308,6 +497,34 @@ bool Core::load(const std::string& soPath) {
                  coreVersion_.c_str(), api);
     return true;
 }
+
+void Core::setOptionOverrides(const std::map<std::string, std::string>& overrides) {
+    gOverrides.clear();
+    for (const auto& [k, v] : overrides) gOverrides[k] = v;
+    // Re-apply to anything already declared, so setting these after a load is
+    // not silently a no-op. Before load() is still the correct time to call it,
+    // because a core may read its options inside retro_init.
+    for (Option& o : gDeclared) {
+        auto it = gOverrides.find(o.key);
+        o.overridden = (it != gOverrides.end());
+        o.chosen = o.overridden ? it->second : o.defaultValue;
+    }
+}
+
+std::vector<Core::OptionReport> Core::options() const {
+    std::vector<OptionReport> out;
+    out.reserve(gDeclared.size());
+    for (const Option& o : gDeclared)
+        out.push_back({o.key, o.desc, o.values, o.defaultValue, o.chosen,
+                       o.overridden, o.asked});
+    return out;
+}
+
+std::vector<std::string> Core::undeclaredOptionAsks() const {
+    return gUndeclaredAsks;
+}
+
+void Core::setAnswerOptions(bool on) { gAnswerOptions = on; }
 
 void Core::unload() {
     if (!handle_) return;

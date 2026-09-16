@@ -27,6 +27,7 @@
 #include <GLES3/gl3.h>
 
 #include <cstdint>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -97,6 +98,50 @@ public:
     // saveDir MUST outlive the session: pointing it at a per-launch temp
     // directory is the other way that same lesson gets learned.
     void setDirectories(const std::string& systemDir, const std::string& saveDir);
+
+    // --- Core options --------------------------------------------------------
+    //
+    // AN UNANSWERED OPTION IS NOT THE DEFAULT, it is whatever the core's C
+    // global was initialised to, which is zero — silence for a sample rate,
+    // black for brightness, off for every toggle whose useful state is on. The
+    // core skips the case entirely rather than falling back. So the host
+    // captures the table a core declares and answers every key in it.
+    //
+    // See core.cpp for the three generations of the declaration API and why we
+    // report version 2.
+    struct OptionReport {
+        std::string key;
+        std::string desc;
+        std::vector<std::string> values;
+        std::string defaultValue;   // what the core says its default is
+        std::string chosen;         // what we answered with
+        bool overridden = false;    // chosen because we said so, not the default
+        bool asked = false;         // the core actually came back for it
+    };
+
+    // The control, for measuring what answering options actually changes.
+    // Off means GET_VARIABLE answers nothing, which is what this host did
+    // before the table was captured. Not a product setting — a way to run the
+    // comparison rather than assert it.
+    static void setAnswerOptions(bool on);
+
+    // Deliberate choices, keyed by option. Set BEFORE load(): a core may read
+    // its options during retro_init, and several do.
+    //
+    // Empty is the honest starting point and is not the same as the old
+    // behaviour: with no overrides every option is still answered, with the
+    // core's own stated default. An override is for the cases where CabinetOS
+    // wants something other than what the core ships with.
+    void setOptionOverrides(const std::map<std::string, std::string>& overrides);
+
+    // What the currently loaded core declared, in declaration order, with what
+    // it was answered. This is the audit: it is the only way to see what a core
+    // can be configured with, and what it is actually running on.
+    std::vector<OptionReport> options() const;
+
+    // Keys the core asked for and never declared. Nothing can honestly be
+    // answered for these; an empty list is the expected result.
+    std::vector<std::string> undeclaredOptionAsks() const;
 
     // dlopen, resolve the retro_* entry points, retro_init. Returns false with
     // a reason on `error()`.

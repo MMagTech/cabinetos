@@ -20,6 +20,7 @@
 
 #include <SDL3/SDL.h>
 
+#include <dirent.h>
 #include <sys/stat.h>
 
 #include <cctype>
@@ -1179,6 +1180,7 @@ int main(int argc, char** argv) {
     int autoDownloadId = 0;
     int autoUnkeepId = 0;
     bool storageReport = false;
+    bool coreOptionsAudit = false;
     const char* initialScreen = nullptr;
     int initialTile = 0;
     int initialTab = 0;
@@ -1274,6 +1276,17 @@ int main(int argc, char** argv) {
             // Lets a screenshot capture a chosen card already focused, so the
             // focus treatment can be checked without a controller attached.
             initialFocus = SDL_atoi(argv[++i]);
+        } else if (SDL_strcmp(argv[i], "--core-options-off") == 0) {
+            // The control. See core.h: this is the behaviour this host had
+            // before it captured option tables, kept so the difference can be
+            // measured rather than asserted.
+            cab::Core::setAnswerOptions(false);
+        } else if (SDL_strcmp(argv[i], "--core-options") == 0) {
+            // Every option every built core declares, and what it is answered
+            // with. This is the audit docs/PROJECT.md asked for and nobody had
+            // run: an unanswered option is not the default, it is zero, and
+            // until this existed there was no way to see which were which.
+            coreOptionsAudit = true;
         } else if (SDL_strcmp(argv[i], "--storage") == 0) {
             storageReport = true;
         } else if (SDL_strcmp(argv[i], "--tab") == 0 && i + 1 < argc) {
@@ -1301,6 +1314,65 @@ int main(int argc, char** argv) {
     if (rommAddress && romProbeId > 0)
         return romProbe(rommAddress, romProbeId, romProbeExts);
     if (rommAddress && rommProbeMode) return rommProbe(rommAddress, rommPair);
+
+    // Every option every built core declares, and what it is answered with.
+    //
+    // Runs before SDL, because loading a core and reading its table needs no
+    // window, no GL and no controller — and because the answer has to be
+    // checkable in CI, on a machine with no screen.
+    //
+    // WHAT TO LOOK FOR: a core with ZERO declared options is the suspicious
+    // case, not the clean one. It means either the core genuinely has none, or
+    // it declares them through an API generation this host does not read — and
+    // the second is indistinguishable from the first without going and looking.
+    if (coreOptionsAudit) {
+        DIR* d = opendir(coreDir);
+        if (!d) {
+            std::fprintf(stderr, "[options] no core directory at %s\n", coreDir);
+            return 1;
+        }
+        std::vector<std::string> sos;
+        while (struct dirent* e = readdir(d)) {
+            const std::string name = e->d_name;
+            if (name.size() > 3 && name.compare(name.size() - 3, 3, ".so") == 0)
+                sos.push_back(name);
+        }
+        closedir(d);
+        std::sort(sos.begin(), sos.end());
+
+        int totalOptions = 0, totalOverridden = 0, coresWithNone = 0;
+        for (const std::string& so : sos) {
+            cab::Core& core = cab::Core::shared();
+            // Before load(), because a core may read its options inside
+            // retro_init and several do.
+            core.setOptionOverrides(catalog::optionOverrides(so));
+            if (!core.load(std::string(coreDir) + "/" + so)) {
+                std::printf("%-24s  FAILED TO LOAD: %s\n", so.c_str(),
+                            core.error().c_str());
+                continue;
+            }
+            const std::vector<cab::Core::OptionReport> opts = core.options();
+            std::printf("\n%s  —  %d option(s)\n", so.c_str(),
+                        static_cast<int>(opts.size()));
+            if (opts.empty()) ++coresWithNone;
+            for (const auto& o : opts) {
+                totalOptions++;
+                if (o.overridden) totalOverridden++;
+                std::printf("  %-34s %-18s %s%s\n", o.key.c_str(), o.chosen.c_str(),
+                            o.overridden ? "OURS, core says " : "core default",
+                            o.overridden ? o.defaultValue.c_str() : "");
+            }
+            for (const std::string& k : core.undeclaredOptionAsks())
+                std::printf("  !! asked but never declared: %s\n", k.c_str());
+            core.unload();
+        }
+        std::printf("\n%d core(s), %d option(s) answered, %d of them ours.\n",
+                    static_cast<int>(sos.size()), totalOptions, totalOverridden);
+        if (coresWithNone > 0)
+            std::printf("%d core(s) declared NO options — worth checking by hand.\n",
+                        coresWithNone);
+        return 0;
+    }
 
     // What the disk actually holds, without opening a window.
     //
@@ -2215,6 +2287,22 @@ int main(int argc, char** argv) {
         }
         if (session.saveAtLaunch.empty()) core.readSaveRam(session.saveAtLaunch);
         std::fprintf(stderr, "[save] battery is %zu bytes\n", core.saveRamSize());
+
+        // Options again, AFTER the game is loaded. Some cores declare nothing
+        // until they know what they are running: FBNeo's and MAME's options are
+        // per-driver dipswitches, so their table does not exist until a machine
+        // is chosen. A count taken only at core-load time reports zero for them
+        // and looks like a core with nothing to configure.
+        {
+            const std::vector<cab::Core::OptionReport> opts = core.options();
+            int asked = 0;
+            for (const auto& o : opts) if (o.asked) ++asked;
+            std::fprintf(stderr, "[options] %zu declared, %d asked for so far\n",
+                         opts.size(), asked);
+            for (const std::string& k : core.undeclaredOptionAsks())
+                std::fprintf(stderr, "[options] asked but never declared: %s\n",
+                             k.c_str());
+        }
 
         std::fprintf(stderr, "[launch] running %s\n", core.coreName().c_str());
         playing = true;

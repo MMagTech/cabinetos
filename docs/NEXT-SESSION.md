@@ -70,6 +70,21 @@ states, and leave — with the save syncing on the way out.
 
 ## Pick up with these, in this order
 
+### 0. Finish the core options, which is half done
+
+The host now answers every option a core declares. Two things are left and both
+are small:
+
+- **Bring across Cabinet's per-platform choices.** `catalog::optionOverrides`
+  is empty on purpose — every option gets the core's own default, which is the
+  right baseline. Cabinet hand-picks a subset per platform in
+  `NativeCoreOptions.swift`; port it one platform at a time with a reason
+  recorded beside each choice.
+- **The options MAME asks for and never declares.** Two are constant across
+  every game tried and the rest vary by driver. Their values have to come from
+  the core's source, not from a guess, and they are the first real customers for
+  the override table.
+
 ### 1. The navigation bar, which needs a television and not a decision
 
 The Library is reached with a temporary **L** key. That is the only thing
@@ -163,8 +178,17 @@ it had just fetched.
 - **An unanswered libretro core option is NOT the default.** The core skips the
   case and the C global keeps its zero value — silence for a sample rate, black
   for brightness, off for every toggle whose useful state is on. It cost Cabinet
-  eight evenings. Our core host must answer every variable a core asks about,
-  and **nobody has checked that it does.**
+  eight evenings. **Fixed 2026-09-16: 526 options across twenty cores, every one
+  of them previously unanswered.** Run `--core-options` to see the table and
+  `--core-options-off` for the control.
+- **A core that declares no options is the suspicious case, not the clean one.**
+  FBNeo and MAME declare theirs per driver, so the table does not exist until a
+  game is loaded. MAME also asks for options it never declared, and which ones
+  varies by game — those still go unanswered and must not be guessed at.
+- **`av_info` is a narrow probe.** It reports geometry, frame rate and sample
+  rate. Two of three cores showed no difference there between answered options
+  and none, while MAME's sample rate moved 44100 to 48000. "No difference in
+  av_info" does not mean no difference.
 - **Ask the CORE, never the platform**, whether an archive should be opened.
   FBNeo reads `zip` and `7z` itself; `.chd` and `.rvz` must never be unpacked.
 - **Never dispatch on a file extension.** Thirty-two files in the reference

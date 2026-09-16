@@ -20,6 +20,7 @@
 
 #pragma once
 
+#include <map>
 #include <string>
 
 #include "romm.h"
@@ -84,6 +85,21 @@ std::string displayName(const romm::Platform& p);
 // gets the short form and the launch screen, which has a column to itself, gets
 // the sentence.
 const char* shortReason(Support s);
+
+// Deliberate core-option choices, keyed by the core's file or manifest name.
+//
+// EMPTY IS THE CORRECT STARTING POINT AND IT IS NOT THE OLD BEHAVIOUR. With no
+// overrides at all, every option a core declares is still answered — with the
+// core's own stated default. That alone fixes the thing that was actually
+// broken: an unanswered option is not the default, it is the zero the C global
+// was initialised to. See core.h.
+//
+// This is where a choice goes when CabinetOS wants something OTHER than what a
+// core ships with. Cabinet hand-picks a subset per platform rather than dumping
+// everything a core reports — see docs/CABINET.md, `NativeCoreOptions.swift` —
+// and that list is the obvious thing to bring across, one platform at a time,
+// with a reason recorded for each.
+std::map<std::string, std::string> optionOverrides(const std::string& coreName);
 
 // The same question asked of a game. A ROM payload carries its own platform
 // slug and fs_slug, so Home can decide whether the most recently played game is

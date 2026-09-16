@@ -3843,6 +3843,97 @@ hero fell into three times, once while the simulator showed it fitting.
 **So this needs the SER5 and a real panel, not a decision.** Either the bar
 fits, or Home's hero comes down, or the bar lives somewhere else.
 
+#### Core options: every one of them was unanswered — fixed and measured 2026-09-16
+
+**This is the thing docs/PROJECT.md had warned about twice and said nobody had
+checked. Nobody had, and it was worse than the warning.**
+
+`gOptions` in `core.cpp` was declared, read on every `GET_VARIABLE`, and
+**never written to by anything**. Above it sat a comment saying an absent key
+meant "falling back to the core's own default" — which is the exact belief this
+document says is false. The core does not fall back. It skips the case, and its
+C global keeps whatever it was initialised to.
+
+The tables were being thrown away too: `SET_VARIABLES` and all four
+`SET_CORE_OPTIONS` variants were accepted and ignored, so nothing even knew
+what each core could be asked about.
+
+##### What the audit found
+
+`--core-options` loads every built core and prints what it declares and what it
+is answered with.
+
+> **526 options across twenty cores. All of them previously unanswered.**
+
+| | |
+|---|---|
+| Most options | Flycast 89, Mupen64Plus 83, Genesis Plus GX 62, pcsx_rearmed 54 |
+| Fewest | Beetle NGP 1, prosystem 4, vecx 5 |
+| **Declared none at core-load time** | **FBNeo, fceumm, MAME 2003-Plus** |
+
+**A core declaring zero options is the suspicious case, not the clean one.**
+MAME 2003-Plus declares 23 the moment a game is loaded and none before it — its
+options are per-driver, so the table does not exist until a machine is chosen.
+The audit says so where it used to say nothing.
+
+##### The control, run rather than assumed
+
+`--core-options-off` restores the old behaviour so the difference is measured
+rather than asserted — the same discipline `cores/backend-diff.sh` exists for.
+
+| Core | Answered | Control |
+|---|---|---|
+| MAME 2003-Plus | **48000 Hz** | **44100 Hz** |
+| mGBA | 65536 Hz | 65536 Hz |
+| pcsx_rearmed | 44100 Hz | 44100 Hz |
+
+**MAME was running at a sample rate nobody chose.** The other two are unchanged
+*in this probe*, and that is the part worth keeping: `av_info` reports geometry,
+frame rate and sample rate and nothing else, so it cannot see the other five
+hundred options at all. **The narrowness of the only probe we had is why this
+went unnoticed.** Do not read "no difference in av_info" as "no difference".
+
+##### A second finding: options asked for that were never declared
+
+MAME 2003-Plus queries options that are not in the table it declared for the
+loaded driver, and **which ones varies by game**:
+
+| Game | Asked but never declared |
+|---|---|
+| 280 Zzzap | `nvram_bootstraps`, `four_way_emulation`, `crosshair_enabled` |
+| Lethal Enforcers | `nvram_bootstraps`, `four_way_emulation`, `dialsharexy`, `dial_swap_xy`, `cheat_input_ports` |
+
+`crosshair_enabled` IS declared for the light-gun driver and is not for the
+driving one, which confirms the mechanism. Two are constant across both.
+
+**These cannot be answered honestly from the core**, because it never states
+their values or defaults for that driver — so they still fall through to zero.
+They are the first real customers for `catalog::optionOverrides`, and the value
+has to come from the core's source with a reason recorded beside it. **Do not
+guess them.**
+
+##### What the host does now
+
+- Captures whichever generation of the declaration API a core uses:
+  `SET_VARIABLES`, `SET_CORE_OPTIONS`, `SET_CORE_OPTIONS_V2` and both `_INTL`
+  variants. The US table is the one read; `local` is the same table translated.
+- **Reports core options version 2 rather than 0.** At version 0 a core falls
+  back to the original API where the default is "whichever value is listed
+  first" — a convention we would be inferring. At version 2 the core states its
+  default outright. Cores that only speak the old API still call
+  `SET_VARIABLES` and are handled.
+- Answers every declared key with that default, or with an override.
+- Records and reports any key asked for that was never declared.
+
+##### Overrides are deliberately empty, and that is not the old behaviour
+
+`catalog::optionOverrides` returns nothing today. Every option is still
+answered — with the core's own stated default, which is the correct baseline and
+is precisely what was missing. An override is for when CabinetOS wants something
+*other* than what a core ships with, and Cabinet's hand-picked per-platform
+subset (`NativeCoreOptions.swift`) is the obvious thing to bring across, one
+platform at a time, with a reason beside each.
+
 #### A bug worth keeping: an offscreen render composited to the window
 
 `Renderer::presentScene` bound framebuffer 0 unconditionally, so with
