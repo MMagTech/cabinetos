@@ -5060,34 +5060,45 @@ write one — the console's token covers assets, not arbitrary storage.
 The address will not stand in for it either: an IP changes, a hostname replaces
 it, someone puts https in front, and the same server reads as a different one.
 
-**Sampling the drive to decide whether it is "ours" was the first answer here
-and Marcus broke it in one sentence: people delete games from the server.** It
-fails in both directions, and the first is severe:
+**Two answers were designed here and both were too much.** The first sampled
+the drive's games to decide whether it was "ours", which Marcus broke in one
+sentence — people delete games from the server, so the sample misses and four
+terabytes get condemned as somebody else's. The second checked every game
+against the server on plugging in, with a Storage screen for the leftovers.
 
-- **Delete some games and the sample misses.** The drive is condemned as another
-  library's and offered for erasure, when it is the person's own. Four terabytes,
-  on a false negative.
-- **And a rom ID is a database row number.** A library rebuilt from scratch can
-  hand the same ID to a different game, the check passes, and the console
-  launches Tetris and runs Space Harrier.
+**Marcus's third answer is that none of it needs building, and he is right,
+because the check already exists.** `beginLaunch` will not reuse a downloaded
+file unless it sits at that game's rom-id path, under the name the server gave,
+at the size the server reported:
 
-> **So do not reach a verdict about the drive at all. There is no need for one.**
-> Check each GAME: the drive records the rom id, the file name and the size, and
-> a local file is used only when all three still agree with the server.
+```c
+if (struct stat st; expectedSize > 0 && ::stat(dest.c_str(), &st) == 0)
+    haveIt = st.st_size == expectedSize;
+```
 
-Everything falls out of that without a decision being made about the drive:
+**That test does not care which disk the file is on.** Point it at an external
+drive and everything the elaborate versions were for comes free:
 
 | | |
 |---|---|
-| A game deleted from the server | that one entry stops resolving. Nothing is condemned. |
-| An id reassigned to a different game | the name and size disagree, so it is not used. Nobody gets the wrong game. |
-| A drive from somebody else's server | nothing on it matches, so nothing is used. It is storage with unreadable things on it, and needs no refusal and no prompt. |
-| A server that moved to a new address | everything still matches, because none of the three fields is the address. |
+| A game deleted from the server | never asked for, because it is not in the library |
+| A file that does not match the record | not reused. It re-downloads rather than launching the wrong game |
+| A drive from another server | nothing matches, so nothing is used, and nothing is destroyed |
+| A server that moved address | everything still matches; the address is not part of the test |
 
-**And never delete what is not recognised.** Report the space on the Storage
-screen and let the person erase it deliberately. This is the one place in the
-whole design where the console would touch data that RomM cannot give back, so
-it does not happen on the console's own initiative.
+> **So there is no drive identity, no verdict, no adoption, no erase prompt and
+> no new code.** The expectation — one drive, one server — is a sentence of
+> documentation rather than a mechanism.
+
+**There is nowhere to put that sentence yet**, which is worth saying rather than
+pretending otherwise: the README covers building and installing, and the product
+has no user-facing documentation at all. It goes wherever that ends up, and this
+is the second item waiting on it — *Emulation* already owes the same for what
+keeping a game means.
+
+**And nothing on a drive is ever deleted because it was not recognised.**
+Unrecognised files are simply not used. That keeps the console away from the one
+class of data RomM cannot give back, without needing a rule to say so.
 
 #### SUPERSEDED — a drive belongs to one console
 
