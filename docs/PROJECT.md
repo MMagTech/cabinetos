@@ -5030,7 +5030,51 @@ inherently un-console-like. If it happens: never the default action, a
 confirmation that cannot be fumbled through on a controller, and prefer adopting
 a drive as-is wherever possible.
 
-#### REVERSED 2026-09-16: a drive belongs to one console
+#### REVISED AGAIN, 2026-09-16: a drive belongs to a SERVER, not a console
+
+**Marcus, within the hour, and it is better than binding to a console for a
+reason that is obvious once said: the games on the drive are already
+server-specific.** They are identified by RomM's own rom IDs, which mean nothing
+on any other instance. Binding to the server states what is already true;
+binding to a console invented a second, weaker notion of ownership on top of it.
+
+It fixes both failure cases the console version had:
+
+| | |
+|---|---|
+| **Two consoles, one house, one server** | the drive works on either — which was the original motivation this whole question was raised for |
+| **The console dies and is replaced** | new machine, same server, plug it in, it works. No "this belongs to another console" prompt to design |
+
+And the case that drove all the complexity — a drive meeting a **different**
+server — stops needing a solution. It is refused. Every piece of machinery in
+the superseded section below (self-describing manifests, hash matching,
+adoption into a foreign library) existed only to serve that case.
+
+##### RomM will not tell us which server it is, so ask the LIBRARY instead
+
+**Checked against the live server rather than assumed.** `/api/heartbeat`
+returns a version and the enabled metadata sources; `/api/stats` returns counts.
+**Neither carries an instance identity**, and there is nowhere on the server to
+write one — the console's token covers assets, not arbitrary storage.
+
+The address will not stand in for it either: an IP changes, a hostname replaces
+it, someone puts https in front, and the same server reads as a different one.
+
+> **So do not identify the server. Ask whether the drive's contents mean
+> anything here** — which is the real question rather than a proxy for it. Take
+> a sample of the games on the drive, ask the server about them by rom ID, and
+> see whether they come back as the same games. Same library, they resolve.
+> Different library, they do not.
+
+That needs nothing RomM does not already provide, and it fails in the right
+direction: a re-addressed server still matches, because the IDs did not change.
+
+**When it does not match, ask.** The drive belongs to a different library, and
+the honest options are to leave it alone or erase it. **Never silently** —
+erasing somebody's four terabytes is not a thing to do without a question, and
+it is the one place this design touches data it cannot re-fetch.
+
+#### SUPERSEDED — a drive belongs to one console
 
 **The section below decided a drive should move between CabinetOS machines, and
 built a self-describing drive to make it work. Marcus reversed it the same day
@@ -5045,16 +5089,10 @@ unfinished progress for the same game.
 
 > **A drive is extra storage for the console it was attached to.** One owner.
 
-**It is also what real consoles do.** An external drive is formatted for and
-bound to the machine, on both the PS5 and the Xbox. This is the console-like
-answer as well as the simple one.
-
-**But a drive must not die with its console**, which is the one thing binding
-gets wrong if it is absolute. Replace a failed machine and four terabytes of
-games should not become landfill. So: **bound by default, adopted deliberately**
-— a new console offers "this drive belongs to another console; use it here?",
-takes ownership, and voids the old claim. One owner at a time, always, which is
-precisely what stops two machines diverging.
+**Superseded above**, by binding to the server instead. The paragraph that
+followed here had to invent an adoption prompt so that a drive would not die
+with its console — a problem that does not exist once the drive belongs to the
+library rather than to the machine.
 
 **And it simplifies the split agreed above.** If the drive never travels, save
 data has no reason to be on it: **all saves, memory cards and states stay on the
