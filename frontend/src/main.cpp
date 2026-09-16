@@ -563,6 +563,11 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
     // opened, and a core that will not load should fail now rather than after
     // three gigabytes have been fetched.
     cab::Core& core = cab::Core::shared();
+    // Before load(), because retro_init is inside it and a core may read the
+    // directories there and never ask again. See Core::setDirectories.
+    const std::string saveDir = cacheDir + "/saves";
+    SDL_CreateDirectory(saveDir.c_str());
+    core.setDirectories("system", saveDir);
     if (!core.load(job.corePath)) {
         *err = "core " + job.coreName + ": " + core.error();
         job.stage = LaunchJob::Stage::Idle;
@@ -1333,14 +1338,18 @@ int main(int argc, char** argv) {
     SDL_AudioStream* audioStream = nullptr;
     if (corePath && romPath) {
         cab::Core& core = cab::Core::shared();
+        // The save directory must outlive the session. Per-game, alongside the
+        // ROM for now; Phase 4 moves it under the chosen storage location.
+        //
+        // Set before load(), not before loadGame(): retro_init happens inside
+        // load(), and a core is allowed to read the directories there.
+        const std::string saveDir = "saves";
+        SDL_CreateDirectory(saveDir.c_str());
+        core.setDirectories("system", saveDir);
         if (!core.load(corePath)) {
             std::fprintf(stderr, "[frontend] core: %s\n", core.error().c_str());
             return 1;
         }
-        // The save directory must outlive the session. Per-game, alongside the
-        // ROM for now; Phase 4 moves it under the chosen storage location.
-        const std::string saveDir = "saves";
-        SDL_CreateDirectory(saveDir.c_str());
         if (!core.loadGame(romPath, "system", saveDir)) {
             std::fprintf(stderr, "[frontend] %s\n", core.error().c_str());
             return 1;

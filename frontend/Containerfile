@@ -11,12 +11,15 @@ FROM registry.fedoraproject.org/fedora:44
 
 RUN dnf install -y --setopt=install_weak_deps=False \
         gcc gcc-c++ make pkgconf-pkg-config \
+        cmake nasm \
         git \
         SDL3-devel \
         mesa-libEGL-devel \
         mesa-libGLES-devel \
+        mesa-libGL-devel \
         wayland-devel freetype-devel libjpeg-turbo-devel libpng-devel \
         libcurl-devel json-c-devel libarchive-devel \
+        zlib-ng-compat-devel libzip-devel alsa-lib-devel systemd-devel \
     && dnf clean all
 
 # libarchive is for ROMs, which arrive in whatever format their owner has —
@@ -26,6 +29,20 @@ RUN dnf install -y --setopt=install_weak_deps=False \
 # in the OS image, so linking against them adds nothing to what ships — but
 # "already present" is not the same as "guaranteed", which is what
 # build_files/require-frontend-libs.sh is for.
+
+# cmake, nasm and the three libraries on the last line are for the CORES too,
+# and none of them is reached by the frontend's own build:
+#
+#   * cmake — mGBA and Flycast have no Makefile.libretro. mGBA's upstream
+#     dropped it; Flycast never had one.
+#   * nasm — mupen64plus's x86-64 recompiler assembles with it. Cabinet builds
+#     that core with no recompiler at all, so this exists to build the OTHER
+#     side of that comparison, which is how the question gets settled.
+#   * mesa-libGL — the desktop GL the unix branch of a hardware-rendered core
+#     links against by default, where Apple's build takes GLES.
+#   * zlib-ng-compat, libzip, alsa-lib, systemd(udev) — Flycast's host-side
+#     dependencies. It vendors most of its deps as submodules and expects
+#     these from the system.
 
 # git is here for the CORES, not for us. Several libretro Makefiles do
 #   GIT_VERSION := $(shell git rev-parse --short HEAD)

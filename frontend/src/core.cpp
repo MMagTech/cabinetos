@@ -215,6 +215,11 @@ void* Core::symbol(const char* name) {
     return s;
 }
 
+void Core::setDirectories(const std::string& systemDir, const std::string& saveDir) {
+    gSystemDir = systemDir;
+    gSaveDir = saveDir;
+}
+
 bool Core::load(const std::string& soPath) {
     unload();
     // RTLD_LOCAL is the whole reason this is simple on Linux: each core's

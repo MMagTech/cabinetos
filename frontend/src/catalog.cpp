@@ -14,6 +14,12 @@ struct Entry {
     Support support;
     const char* core;
     const char* reason;
+    // True for the three cores that render through RETRO_ENVIRONMENT_SET_HW_RENDER.
+    // A fact about the CORE rather than about this console, which is why it
+    // lives in the table beside the core name — but it is answered here rather
+    // than by asking the core, because the answer has to be available before
+    // anything is loaded, while a shelf is being drawn.
+    bool hwRender = false;
 };
 
 // Derived from Cabinet's core-manifest.json, 2026-09-14. The manifest is the
@@ -30,19 +36,19 @@ const Entry kTable[] = {
     {"arcade",               "MAME2003",  Support::Playable, "mame2003_plus",   nullptr},
     {"atari2600",            nullptr,     Support::Playable, "stella2014",      nullptr},
     {"atari7800",            nullptr,     Support::Playable, "prosystem",       nullptr},
-    {"dc",                   nullptr,     Support::Playable, "flycast",         nullptr},
+    {"dc",                   nullptr,     Support::Playable, "flycast",         nullptr, true},
     {"gamegear",             nullptr,     Support::Playable, "genesis_plus_gx", nullptr},
     {"gb",                   nullptr,     Support::Playable, "gambatte",        nullptr},
     {"gba",                  nullptr,     Support::Playable, "mgba",            nullptr},
     {"gbc",                  nullptr,     Support::Playable, "gambatte",        nullptr},
     {"genesis",              nullptr,     Support::Playable, "genesis_plus_gx", nullptr},
-    {"n64",                  nullptr,     Support::Playable, "mupen64plus",     nullptr},
+    {"n64",                  nullptr,     Support::Playable, "mupen64plus",     nullptr, true},
     {"nds",                  nullptr,     Support::Playable, "melonds",         nullptr},
     {"neo-geo-pocket-color", nullptr,     Support::Playable, "beetle_ngp",      nullptr},
     {"nes",                  nullptr,     Support::Playable, "fceumm",          nullptr},
     {"ngc",                  nullptr,     Support::Playable, "dolphin",         nullptr},
     {"ps2",                  nullptr,     Support::Playable, "pcsx2",           nullptr},
-    {"psp",                  nullptr,     Support::Playable, "ppsspp",          nullptr},
+    {"psp",                  nullptr,     Support::Playable, "ppsspp",          nullptr, true},
     {"psx",                  nullptr,     Support::Playable, "pcsx_rearmed",    nullptr},
     {"saturn",               nullptr,     Support::Playable, "beetle_saturn",   nullptr},
     {"segacd",               nullptr,     Support::Playable, "genesis_plus_gx", nullptr},
@@ -69,23 +75,23 @@ bool eq(const char* a, const std::string& b) { return b == a; }
 
 namespace {
 
-Coverage lookup(const std::string& slug, const std::string& fsSlug) {
+// Returns the table row, not a Coverage, because the row carries one thing the
+// caller needs that the answer does not: whether the core is hardware-rendered.
+const Entry* lookup(const std::string& slug, const std::string& fsSlug) {
     const Entry* slugOnly = nullptr;
     for (const Entry& e : kTable) {
         if (!eq(e.slug, slug)) continue;
         if (e.fsSlug) {
-            if (eq(e.fsSlug, fsSlug)) return {e.support, e.core, e.reason};
+            if (eq(e.fsSlug, fsSlug)) return &e;
             continue;   // right slug, wrong core — keep looking
         }
         slugOnly = &e;
     }
-    if (slugOnly) return {slugOnly->support, slugOnly->core, slugOnly->reason};
-
     // A slug that matches an entry needing an fsSlug, but whose fsSlug matched
-    // none of them, lands here — correctly. An unrecognised arcade set is not
-    // playable just because it says "arcade", since we would not know which
-    // core to hand it to.
-    return {Support::NoCore, nullptr, "no core in the manifest serves this system"};
+    // none of them, falls through to nullptr — correctly. An unrecognised
+    // arcade set is not playable just because it says "arcade", since we would
+    // not know which core to hand it to.
+    return slugOnly;
 }
 
 }  // namespace
@@ -110,6 +116,29 @@ const char* emulatorTag(const char* core) {
         // tolerates either backend, and the dynarec section is block addresses
         // rather than machine state. docs/PROJECT.md, open question 13.
         {"pcsx_rearmed", "pcsx-rearmed-native"},
+        // Pinned at 66b5d263. CabinetOS builds JIT_ARCH=x64 where Cabinet runs
+        // the interpreter on iOS/tvOS and aarch64 on the Mac — and this one was
+        // MEASURED, not argued: both builds run Tetris DS to an identical video
+        // and audio digest over 600 frames, write states of identical size, and
+        // every cross-load lands on the same digest as the matching control.
+        // Upstream intends it — the only JIT-conditional lines in any
+        // DoSavestate are guarded `if (!file->Saving)`.
+        {"melonds", "melonds-native"},
+        // Pinned at 733c711a, and built with use_sh2drc=0, which is exactly
+        // what Cabinet's Apple builds get. Same commit, same argument, so the
+        // tag needs no argument at all. The states were checked anyway and came
+        // out byte-identical to the recompiler build's.
+        {"picodrive", "picodrive-native"},
+        // Pinned at e31759b2, no CPU backend anywhere in this core, and the
+        // feature set was read off Cabinet's own shipping archives with `nm -u`
+        // rather than guessed: zlib and nothing else.
+        //
+        // One caveat, and it is Cabinet's rather than ours: libmgba_mac.a
+        // reports its revision as `e31759b24-dirty`, so Cabinet's Mac build
+        // carries a modification no script applies — the same class of problem
+        // as Flycast's unscripted edits. The iOS and tvOS archives are clean at
+        // this commit, and tvOS is the platform states travel to and from most.
+        {"mgba", "mgba-native"},
     };
     for (const auto& t : kTags)
         if (std::strcmp(t.core, core) == 0) return t.tag;
@@ -119,11 +148,19 @@ const char* emulatorTag(const char* core) {
 namespace {
 std::string gCoreDir = "cores/build";
 
-// Downgrades a Playable answer to NotInstalled when the .so is not on this
-// machine. Kept separate from the table because the table is a fact about
-// Cabinet's manifest and this is a fact about this console today.
-Coverage withInstalled(Coverage c) {
+// Turns a table row into the answer for THIS console. The table is a fact about
+// Cabinet's manifest; everything here is a fact about the machine it is running
+// on, which is why the two are kept apart.
+//
+// Two ways a Playable row stops being playable, and they are different work:
+// the core has not been built, or it has been built and cannot be driven.
+Coverage answer(const Entry* e) {
+    if (!e) return {Support::NoCore, nullptr,
+                    "no core in the manifest serves this system"};
+
+    Coverage c{e->support, e->core, e->reason};
     if (c.support != Support::Playable || !c.core) return c;
+
     // A manifest name that already ends in _libretro does not get a second one:
     // fbneo_libretro would otherwise be looked up as fbneo_libretro_libretro.so.
     // cores/build-core.sh applies the same rule when it files the artifact —
@@ -135,9 +172,19 @@ Coverage withInstalled(Coverage c) {
         stem.erase(stem.size() - suffix.size());
     const std::string path = gCoreDir + "/" + stem + "_libretro.so";
     struct stat st;
-    if (::stat(path.c_str(), &st) == 0 && st.st_size > 0) return c;
-    c.support = Support::NotInstalled;
-    c.reason = "the core for this system is not built on this console yet";
+    if (::stat(path.c_str(), &st) != 0 || st.st_size == 0) {
+        c.support = Support::NotInstalled;
+        c.reason = "the core for this system is not built on this console yet";
+        return c;
+    }
+
+    // Built, and still not runnable. Asked AFTER the file check so that the
+    // reason names the nearer of the two obstacles.
+    if (e->hwRender) {
+        c.support = Support::NeedsHardwareRender;
+        c.reason = "this system needs a hardware-rendered core, which this "
+                   "console cannot host yet";
+    }
     return c;
 }
 }  // namespace
@@ -145,10 +192,10 @@ Coverage withInstalled(Coverage c) {
 void setCoreDirectory(const char* dir) { if (dir) gCoreDir = dir; }
 
 Coverage coverageFor(const romm::Platform& p) {
-    return withInstalled(lookup(p.slug, p.fsSlug));
+    return answer(lookup(p.slug, p.fsSlug));
 }
 Coverage coverageFor(const romm::Game& g) {
-    return withInstalled(lookup(g.platformSlug, g.platformFsSlug));
+    return answer(lookup(g.platformSlug, g.platformFsSlug));
 }
 
 }  // namespace catalog

@@ -26,7 +26,7 @@
 
 ---
 
-## Where the project is — 2026-09-13
+## Where the project is — 2026-09-16
 
 **Phase 0 complete. Phase 1 complete. Phase 2 mostly done. Phase 3 well under
 way and running. Phase 5 started early and the hardest question in it is
@@ -73,25 +73,34 @@ rather than launched by hand:
 - **Nothing has been judged on a television.** Motion, the letterbox glow and
   the safe area are all recorded as needing the SER5, which is not yet
   installed. A software-rendered VM cannot answer any of them.
-- **One core of twenty-one is built**, and it is the easiest: Gambatte has no
-  recompiler, so no CPU-backend variable. The backend-sensitive cores —
-  pcsx_rearmed, melonDS, Flycast, picodrive — remain the real risk.
-- **One core builds in CI; the rest have only ever built on one machine.**
-  Gambatte now builds on a GitHub runner from a bare checkout and the finished
-  `.so` is asserted to report the pinned revision as its own version string —
-  see open question 13. Every other core is still a property of the test VM.
+- **Twenty cores of twenty-one are built**, and all four backend-sensitive ones
+  are settled: pcsx_rearmed and melonDS take the recompiler and share Cabinet's
+  tag, picodrive matches Cabinet's flags exactly, and Flycast is blocked on
+  Cabinet's own unscripted edits rather than on anything here. **1100 of 1644
+  games are playable.** PPSSPP is the one not built.
+- **Two of the twenty cannot be RUN here**, whatever the build says: Flycast and
+  Mupen64Plus render through a GL context the frontend does not yet hand over.
+  `catalog::coverageFor` says so rather than offering a game that would fail.
+- **Every core builds in CI**, on a GitHub runner from a bare checkout, with the
+  finished `.so` asserted to report the pinned revision as its own version
+  string — see open question 13.
 - **No controller has ever been attached.** The permissions chain is verified
   by reading; a real pad is not.
 
-### The two Cabinet-side debts this session found
+### The Cabinet-side debts this project has found
 
 1. **Flycast carries unscripted edits** in its working tree, so its pin does not
    reproduce what ships — for Dreamcast and Naomi. Capture that diff before
    anything touches the tree.
 2. **Eleven of twenty-three cores ship different revisions to iOS and macOS**,
-   and eleven of the twenty-one tvOS revisions are unrecoverable.
+   and eleven of the twenty-one tvOS revisions were recorded as unrecoverable.
    `core-manifest.json` pins each forward, which is right and far cheaper now,
-   in alpha, than once anyone has a save history.
+   in alpha, than once anyone has a save history. **Two of the eleven have since
+   been recovered straight out of the shipping archives** — see open question 13
+   — and the same trick probably works on several more.
+3. **mGBA's Mac archive reports `e31759b24-dirty`**, so that build carries a
+   working-tree modification no script applies, in a core whose manifest entry
+   lists no patches at all. Same shape as Flycast's, found the same way.
 
 Running infrastructure:
 
@@ -3425,7 +3434,8 @@ the caveat.**
 ##### FOURTEEN CORES, 2026-09-15 — and what building them taught
 
 Twelve added in one pass, every pin and build argument read from the manifest.
-**217 playable games became 934 of 1644.**
+**217 playable games became 934 of 1644.** (Fifteen by the end of that session,
+986 games; twenty and 1100 the next day, when the five below landed.)
 
 Three things the pipeline had to learn, each found by building rather than by
 reading:
@@ -3645,6 +3655,46 @@ Put those two facts together and the live consequence is this:
 > and its Apple TV is unknown today and cannot be made known**, because the
 > revision one side was built from no longer exists anywhere.
 
+##### CORRECTION, 2026-09-16: two of the eleven were recovered from the archives
+
+"The archives embed nothing" was checked with `strings` across several cores and
+it is not true of all of them. It is not true of the two that were looked at
+today, and both were on the unrecoverable list:
+
+| | |
+|---|---|
+| `libpicodrive_tvos.a` | `2.05-733c711` — **the pinned revision**, and the same one the Mac ships |
+| `libmgba_tvos.a` | `e31759b24e7a4e3899285ff720d7b573ac328ae7`, in full |
+
+So tvOS picodrive was never behind; only iOS was, at `6248b51`. The manifest
+records picodrive as diverging across platforms with tvOS unknown, and the
+answer was in the binary the whole time.
+
+**The mechanism is the one this document found later and did not go back and
+apply**: a core that compiles `git rev-parse --short HEAD` into its version
+string carries that string into the archive. The recovery ran before that was
+understood, which is why it concluded unrecoverable.
+
+> **Worth an hour, Cabinet-side: run `strings` over the other nine tvOS
+> archives.** Every Makefile-based core in the set has the same `GIT_VERSION`
+> line, so several more revisions are probably sitting in the artifacts. Each
+> one recovered turns "unknown and unknowable" into a fact, and shrinks the
+> regression surface the realignment release has to carry.
+
+##### And two cores lost their revision on Cabinet's side, in opposite ways
+
+Both found by comparing our builds against the shipping archives:
+
+- **mGBA's Mac archive reports `e31759b24-dirty`.** Cabinet's Mac build carries
+  a working-tree modification that no script applies — the same class of problem
+  as Flycast's unscripted edits, in a core whose manifest entry lists no patches
+  at all. The iOS and tvOS archives are clean at that commit.
+- **melonDS's archives report `melonDS 0.9.3` with no revision**, while the same
+  upstream built here reports `0.9.3 66b5d26`. Its Makefile has the
+  `GIT_VERSION` line and it reached our binary, so something about Cabinet's
+  build is losing it — the same failure `build-core.sh` was taught to prevent by
+  passing `safe.directory` through the environment.
+
 ##### What the manifest decided, and the cost it commits to
 
 `core-manifest.json` chooses a `pinned_commit` per core — the macOS revision
@@ -3820,6 +3870,201 @@ mupen64plus each need the same check before their tags are shared — a differen
 core may put real machine state behind its dynarec, and nothing here says
 otherwise. The object-file diff is the way in: it took two minutes and pointed
 straight at the one file worth reading.
+
+#### ANSWERED 2026-09-16, for melonDS and picodrive — and this time it was measured
+
+The scope note above asked for the same check on four more cores. Two of them
+are now done, and done better than pcsx_rearmed was: not read from the source
+and believed, but **run**, with each build loading the other's state and each
+build loading its own as the control.
+
+`cores/backend-diff.sh` builds a core twice, changing one variable, and reports
+which objects differ. `cores/hash-objects.py` is what makes that answer true.
+Both are new, and between them they are the instrument this question needed.
+
+##### melonDS: take the recompiler, share the tag
+
+**The lever.** The unix branch sets `JIT_ARCH=x64` on x86-64; Cabinet's iOS and
+tvOS builds set nothing and run the interpreter, its Mac sets `aarch64`. Same
+shape as pcsx_rearmed, and Cabinet again ships both under one tag.
+
+**The object diff** put the difference in the machine, not beside it: ten
+objects changed, including `NDS.o`, `DSi.o`, `ARM.o` and `CP15.o`, plus twelve
+that exist only in the recompiler build. That is a much larger footprint than
+pcsx_rearmed's single `misc.o`, and it is why reading was not enough here.
+
+**The source says it is deliberate.** In the whole core there are exactly two
+`#ifdef JIT_ENABLED` blocks inside any `DoSavestate`, both guarded
+`if (!file->Saving)`, and neither writes a byte. Nothing about the recompiler is
+ever stored. On LOAD a JIT build repairs what an interpreter state does not
+carry and throws its block cache away:
+
+```c
+// hack, the JIT doesn't really pipeline
+// but we still want JIT save states to be
+// loaded while running the interpreter
+FillPipeline();
+```
+
+and, at the end of `NDS::DoSavestate`, `ARMJIT::ResetBlockCache()` and
+`ARMJIT_Memory::Reset()`. The interpreter build even keeps the `JIT_Enable`
+variable, with upstream's comment "Needed for savestate".
+
+**And then it was run**, against Tetris DS through `tools/state-probe.c`:
+
+| | |
+|---|---|
+| 600 frames from boot, interpreter | video `f359e84a8fed0383`  audio `675a983465de49b3` |
+| 600 frames from boot, recompiler | video `f359e84a8fed0383`  audio `675a983465de49b3` |
+| state size, both | 6,526,677 bytes |
+
+Every load combination — each build's own state and the other's — ran on to the
+same digest, `41b5c97d81c50383`, with the two own-state runs as the control.
+
+**The trap that would have made this prove nothing**, and it is this document's
+own: an unanswered core option. `state-probe` answers `GET_VARIABLE` with NULL,
+so `melonds_jit_enable` never reaches the core, and if `Config::JIT_Enable` had
+then been zero the "recompiler" build would have run the interpreter and the two
+sides would have been identical for the most boring possible reason. It is
+`int JIT_Enable = true` under `#ifdef JIT_ENABLED` — a C++ initialiser rather
+than a zeroed C global — and the run confirms it, printing "Resetting JIT block
+cache" on that side only.
+
+> **CabinetOS builds melonDS with `JIT_ARCH=x64` and writes `melonds-native`.**
+
+##### picodrive: the states are identical, and we take the interpreter anyway
+
+**The lever** is `use_sh2drc`, the SH2 recompiler the 32X needs two of. It
+defaults to 1 on x86-64; Cabinet gets 0 from the Makefile's own Apple block,
+turned off there for code-signing reasons that do not apply to this console.
+
+**The states are byte-identical.** Both builds run to frame 600 and write states
+that `cmp` reports as not differing at all. The source agrees: `sh2_pack` copies
+`SH2_REG_SIZE` bytes, which is `offsetof(SH2, macl) + sizeof(macl)`, and every
+drc field in the struct sits after `macl`. `SH2_STATE_SIZE` is a compile-time
+constant either way.
+
+**But the two backends do not produce the same picture.** From an identical
+boot they diverge in video and audio digest within 60 frames while converging on
+that identical machine state — something timing-visible lands differently. Each
+build is deterministic on its own (same digests twice), so it is the backend.
+
+So the choice is not about states at all, and it comes down to this: nothing
+here needs the recompiler. The 32X is two 23 MHz SH2s and this is an x86-64
+console. Taking it would buy performance nobody is short of and pay for it with
+a picture that differs from the Apple TV's.
+
+> **CabinetOS builds picodrive with `use_sh2drc=0` — exact flag parity with
+> Cabinet — and writes `picodrive-native`.** Revisit only with a measurement
+> from real hardware, knowing the states will survive the change.
+
+##### The instrument itself needed fixing first, and that is the lesson
+
+The picodrive comparison first reported **102 of 103 objects differing,
+including zlib's** — which no CPU backend can reach. Read as a result, that
+number costs this core its shared tag.
+
+It was not a result. A control run with **the same setting on both sides**
+reported the same thing, and the cause is that picodrive builds with `-flto`:
+GCC writes a random per-invocation id into every LTO section name.
+
+```
+.gnu.lto_.profile.3bda9114828bb356        first build
+.gnu.lto_.profile.ca2804fcf73ae283        second build
+```
+
+`cores/hash-objects.py` replaces that id with sixteen zeroes — length
+preserving, so nothing in the file moves — before hashing. That took the noise
+from 102 objects to about 12, and the remaining 12 are a different set each
+time.
+
+**The deeper point is that on an LTO core the objects are not the emulator.**
+The machine is generated at link time, so the intermediate objects hold compiler
+bytecode and only the artifact is meaningfully reproducible. And it is:
+**four builds of picodrive produced four byte-identical `.so` files** while
+differing in a random handful of objects each time. `backend-diff.sh` now says
+so itself and points at `state-probe` instead when it sees that pattern.
+
+Two things follow for the rest of this document:
+
+1. **"The build is reproducible" is a per-core claim.** It was established for
+   gambatte and genesis_plus_gx, neither of which uses LTO. picodrive is
+   reproducible where it counts and not at the object level, and a future core
+   may be neither.
+2. **Run the control first.** `backend-diff.sh` takes the same setting twice and
+   reports identical-is-a-pass, which costs one pair of builds and is the
+   difference between a measurement and a number.
+
+##### mupen64plus: it builds, and the tag stays unshared
+
+This core has **four** levers rather than one — `WITH_DYNAREC`, `FORCE_GLES3`,
+and the `LLE` / `HAVE_PARALLEL_RSP` / `HAVE_PARALLEL_RDP` / `HAVE_THR_AL` group
+that selects low-level RSP and RDP emulation. Cabinet turns the last four on and
+the unix branch leaves them off, so "match the CPU backend" was never the whole
+job here.
+
+**And matching Cabinet's backend does not link.** With `WITH_DYNAREC=` empty,
+`cp0.c`, `interrupt.c` and `r4300_core.c` still reference `dyna_jump`,
+`dyna_stop` and `dynarec_jump_to`, because those calls are guarded by
+`#ifndef NO_ASM` rather than by `WITH_DYNAREC`. Cabinet's ios-arm64 case adds
+`-DNO_ASM`; the unix case has no equivalent, so the .so fails to link with five
+undefined references. `DYNAFLAGS` is the only variable that can carry the define
+in from the command line without replacing a flags variable wholesale.
+
+**One difference is recorded rather than matched.** Cabinet also adds
+`-Ofast -funsafe-math-optimizations` to three flags variables that cannot be
+extended from the command line, so this build gets the unix branch's
+`-O3 -ffast-math`. That is a floating-point difference in an emulator whose
+output is floating point.
+
+> **No emulator tag for mupen64plus.** It cannot be settled while the core
+> cannot run here, and an unshared tag costs nothing today because nothing can
+> write an N64 state yet.
+
+##### And running one of them found a save bug that building them could not
+
+melonDS is the first core CabinetOS ships that writes its own save file rather
+than exposing `RETRO_MEMORY_SAVE_RAM`. Launching Tetris DS from the real library
+printed:
+
+```
+Save file: /Tetris DS.sav
+```
+
+At the **root of the filesystem**, where it cannot be written. The frontend was
+passing its save directory to `loadGame`, and melonDS reads the directory in
+`retro_init` — inside `Core::load`, which happens first — copies it into a
+static buffer and never asks again. It had been handed an empty string.
+
+**The failure is silent.** The game runs, the save never lands, and nothing says
+so. And it is not a melonDS bug: it hits every core that writes its own save
+file, which is the class Cabinet already lost saves to once by a different
+route — Neo Geo Pocket, Sega CD, FBNeo's NVRAM, Dreamcast's VMU. Two of those
+have been "playable" on this console for days.
+
+`Core::setDirectories` now exists and is called **before** `load`, at both call
+sites. Verified by running it again: `romcache/saves/Tetris DS.sav`.
+
+> **This is the argument for launching a core rather than building it.** Every
+> assertion in the build pipeline passed on that core — pinned commit, asserted
+> revision, reproducible artifact — and none of them could see this.
+
+**Still open, and now concrete:** the sync layer only knows about
+`RETRO_MEMORY_SAVE_RAM`, so `[save] battery is 0 bytes` is correct for melonDS
+and the `.sav` beside the ROM is not uploaded to RomM at all. Phase 4 owes the
+file-writing class its own path, the way `MemoryCardSync` does in Cabinet.
+
+##### A core that is built and still cannot be run is a third thing
+
+Building Flycast and Mupen64Plus would have made `catalog::coverageFor` call
+Dreamcast and N64 **Playable**, because its installed-check is "is the .so on
+disk". They are not: both render through `RETRO_ENVIRONMENT_SET_HW_RENDER`,
+which `core.cpp` refuses. That is the hero-offering-an-arcade-game bug again,
+one layer further in.
+
+So `Support` now carries **`NeedsHardwareRender`** beside `NoCore`, `Excluded`
+and `NotInstalled`. Four answers, and they lead to four different pieces of
+work — which is the whole reason this document warned against collapsing them.
 
 #### The test that answers the whole question, and can be run this week
 
