@@ -48,9 +48,31 @@ syncing on the way out.
 
 **1. Nothing evicts anything.** A ROM already on disk at the right size is
 reused, and that is all. 1644 games at these sizes do not fit on a console, so
-the disk fills and stays full. The design is settled in PROJECT.md — cached is
-evictable, kept is not, the person only ever opts *in* to keeping — and none of
-it is built. **This is the biggest hole in the product now.**
+the disk fills and stays full. **This is the biggest hole in the product now.**
+
+**The games and the OS share one disk**, so a disk full of games is a console
+that cannot update itself. The cache is therefore always the system's to take,
+silently — and the thing that needs guarding is not the cache but KEPT games,
+since those are the ones the console refuses to delete. Keeping is where the
+check belongs.
+
+**The policy is decided and it is ready to build** — PROJECT.md, Phase 4: when
+to evict, in what order, what is never touched, and the four numbers, which are
+decisions rather than proposals. Nothing in it is waiting on a discussion. Two
+things are genuinely open and neither blocks the work, and they are named as
+such at the end of the section.
+
+**And read the first subsection of it before adding a number to anything.** The
+first draft of that policy was tuned to this library — "the cartridge games come
+to under 2 GB" — which is true here and inverts for anyone with a complete set.
+The reference library is a reference the way the SER5 is: an illustration, never
+the definition. Where a rule needs a number, make it a fraction of something the
+machine can measure.
+
+The first move is structural rather than clever: **saves and states currently
+live in the same directory as the ROM**, so "evict a game" would delete the one
+thing that always comes back along with the only things that never do. Split
+them and most of the policy's protection rules stop being needed.
 
 **2. The Library screen.** 1100 playable games and only the ~50 on Home can be
 reached. Home already points at a Library that does not exist.
@@ -66,7 +88,14 @@ is 0 bytes` is correct and the file never reaches RomM. Neo Geo Pocket, Sega CD
 and FBNeo's NVRAM are the same class and all three are playable today. Cabinet's
 `MemoryCardSync` is the shape to copy.
 
-**5. Hardware-rendered cores.** Flycast and Mupen64Plus are built and cannot
+**5. Nothing warns that a system's BIOS is missing.** If the server holds no
+Sega CD BIOS, the person finds out from the emulator's own error message after
+choosing a game and waiting for a download. Asking the server what firmware it
+HAS costs nothing and can happen while the library is scanned, which is the
+moment to say so instead. Downloading stays lazy — first launch of a platform,
+plus whenever a game is kept. PROJECT.md, Phase 4, under the firmware section.
+
+**6. Hardware-rendered cores.** Flycast and Mupen64Plus are built and cannot
 run: they want a GL context through `RETRO_ENVIRONMENT_SET_HW_RENDER`, which
 `core.cpp` refuses. That is 43 more games, plus PPSSPP once it is built, and it
 is the one piece of frontend work that is genuinely new rather than more

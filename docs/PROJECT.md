@@ -601,6 +601,23 @@ Those are two different things and the UI must treat them as such:
 The Settings storage screen shows both, and lets a cached game be promoted to
 kept and a kept game released back to cached.
 
+**And keeping is an action on the GAME, not only a row in Settings.** Added
+2026-09-16 at Marcus's prompt, and it matches what Cabinet already ships — a
+per-game toggle, with the size shown, removable from the same place it was
+added. Settings is where you go to see the whole picture; the game's own screen
+is where the decision is actually made.
+
+**It has to work on a game that has never been played**, which is the case that
+matters most and the one a promote-from-cache model misses entirely: browsing
+the library, picking something for later, and having it there when you come
+back. On a game already in the cache it pins what is there; on one that is not,
+it is a download that stays. Cabinet calls this *Keep on device*; the word on
+the button here should be whichever of **Download** or **Keep** reads better on
+a television, and that is a Phase 4 wording decision rather than a design one.
+
+**Kept games are what shrinks the cache**, since the cache is simply whatever
+space is left over — see the cache policy in Phase 4.
+
 ---
 
 ## How Cabinet hosts cores
@@ -1641,6 +1658,34 @@ The hero carries **two** actions and the distinction is load-bearing:
 When there is nothing to resume, Home says so in its own words and points at the
 Library — it does not show an empty shelf.
 
+##### Resume on a game that is not downloaded — RAISED AND CLOSED, 2026-09-16
+
+**Recorded because it looks like a problem and is not, and somebody will raise
+it again.**
+
+Recent and the hero come from RomM's `last_played`, which is the household's
+history across every device. So the game Home offers to resume may have been
+last played on a phone and never downloaded on this console, and pressing Resume
+then means fetching several gigabytes and a save state before anything starts.
+
+That was argued here as a broken promise — a wait behind a button whose purpose
+is that there is no wait — with three proposed fixes: a progress bar inside the
+pill, pre-fetching the hero while idle, and a badge saying which kind of Resume
+was coming.
+
+**Closed by Marcus, and he is right.** You press Resume, it downloads, it plays.
+The wait is the wait whichever way it is presented, and the download already
+shows progress and already takes Escape to cancel. Warning someone in advance
+does not shorten it and does not change what they would do — they want to play
+that game.
+
+**The rule this section states is about the number of ACTIONS, not the number of
+seconds.** Resume is still one action. It is slower some of the time.
+
+*Pre-fetching the hero while the console is idle remains available* as an
+optimisation, the way real consoles have it, and it is a performance idea rather
+than a correction to this design. Nothing about Home changes.
+
 #### The hero card, read from Cabinet's tvOS source
 
 **Read 2026-09-14 from `RommApp/RommApp/Home/HomeView.swift`.** tvOS has shipped
@@ -2678,6 +2723,95 @@ So: `GET /api/firmware?platform_id=`, download all of it into the system
 directory, and let the core pick. Do not try to be clever about which BIOS a
 given game needs.
 
+###### Firmware is per PLATFORM, so fetch the whole lot once and stop thinking about it
+
+**Marcus, 2026-09-16: a BIOS "just needs downloading for that platform one time
+and then the platform uses it for all games on it".** That is already how
+CabinetOS stores it and it is better than the reference implementation here —
+one shared `system/` directory, with a file already present at the right size
+skipped. Cabinet's tvOS stages firmware into each game's own cache directory
+instead, so twenty-seven Dreamcast games mean twenty-seven copies of
+`dc_boot.bin`.
+
+**What is still per-launch is the asking**, and it need not be. Every launch
+calls `fetchFirmware(platformId)` before the ROM, even when every file is
+already on disk: a round trip each time, and offline it fails and logs a
+complaint on a launch that was going to work anyway.
+
+**Measured against the live server, 2026-09-16, which settles it:**
+
+| | |
+|---|---|
+| All firmware, every platform | **212 MB** |
+| PlayStation 3 alone | **197 MB** |
+| **Every platform this console has a core for** | **~15 MB** |
+
+Ninety-three percent of that total is firmware for a system with no core in the
+manifest and no prospect of one. For everything actually playable it is fifteen
+megabytes — the entire BIOS collection, for every system, permanently.
+
+**Fetching the whole 15 MB at setup was proposed and Marcus chose otherwise:
+fetch a platform's firmware the first time a game on that platform is launched.**
+He is right, on two counts. It is less machinery — the launch path already does
+exactly this, and the only change is not asking again afterwards — and it is a
+simpler thing to hold in your head: the console fetches what a game needs when
+that game needs it, with no separate preparation step. Fifteen megabytes is not
+enough saving to justify inventing a setup phase for.
+
+> **Fetch a platform's firmware on the first launch of a game on it, and never
+> ask again. Keeping a game fetches its platform's firmware too.**
+
+**The second sentence is the one that is easy to forget**, and it is Cabinet's
+behaviour already: *"Keeping a game pulls its ROM and its platform's
+firmware."* Without it there is a real hole — download a PlayStation game for
+later, go offline, and it will not start, because the machine has the game and
+not the system file it needs. Keeping is a promise that a game will work later,
+and later may have no network in it.
+
+**Checking is not downloading, and the two should not be confused.** The console
+can ask what firmware a platform *has* without fetching any of it, which is a
+cheap list request and is all the missing-BIOS warning below needs. So: ask
+early, download when first needed.
+
+Two details worth keeping: `missing_from_fs` files are skipped, since the server
+lists them and does not have them; and a failure is still not fatal, because
+which BIOS a core needs is the core's business and most platforms need none.
+
+**Fetch again when a platform appears that was not there at setup.** A library
+grows; someone adds Saturn games next month. "Once" means once per platform, not
+once per console.
+
+###### Tell the person their server has no BIOS for a system, BEFORE they pick a game
+
+**Marcus, 2026-09-16, and it is a real gap.** Today a platform whose BIOS the
+server does not hold fails at launch with the CORE's error message — measured
+earlier the same day, on Sega CD: `Unable to open CD BIOS:
+"system/bios_CD_U.bin"`. Clear, actionable, and delivered at the worst possible
+moment, after the person chose a game and waited for a download.
+
+**Asking what the server holds is what makes the better version possible**, and
+it costs nothing: a firmware list per platform, no downloads. Do that while the
+library is being scanned and the console knows, up front, which systems it
+cannot play — so it can say so once, about a whole system, rather than per game
+and after the fact.
+
+It needs one small thing that does not exist: **a list of which platforms cannot
+start without firmware at all.** PlayStation, Saturn, Sega CD, 3DO, Dreamcast,
+PS2 and TurboGrafx-CD; most systems need nothing. That list is stable, short,
+and a property of the hardware rather than of anyone's library.
+
+**The honest limit, and it is why this is a coarse check rather than a precise
+one:** *which* BIOS a given game wants is genuinely not knowable up front — this
+section already records Beetle Saturn taking either of two region BIOSes and
+FBNeo boards needing none — so the console must not try to verify that a
+platform's firmware is *sufficient*. What it can say with certainty is that the
+server offered **nothing** for a system that cannot boot without something, and
+that is the case worth warning about.
+
+Where it belongs is `catalog`, beside the four answers it already gives for why
+a game cannot be played. This is a fifth, and unlike the others it is a fact
+about the person's server rather than about this console or the manifest.
+
 ##### What a kept game is
 
 `KeptGame` embeds **the whole `Rom` captured at keep time**, not a subset, so a
@@ -2789,6 +2923,638 @@ is reused rather than re-fetched, which is the crude half of *cached versus
 kept*. **Nothing evicts anything.** A library of 1644 games at these sizes will
 not fit on a console, so the disk fills and stays full. That is the next thing
 this needs.
+
+#### The cache policy — decided 2026-09-16, not yet built
+
+**The rule is that the person never thinks about storage, and never loses
+anything they would miss.** Everything below serves those two sentences. From
+Marcus's proposal, with four changes argued for rather than accepted.
+
+##### What Cabinet already does, on both its platforms
+
+**Read from `NativeLauncher.swift` 2026-09-16 at Marcus's prompt, and it should
+have been read before any of this was designed.** Neither Apple platform has an
+eviction policy, for two different reasons, and the difference is the whole
+reason CabinetOS needs one.
+
+**The Mac has no cache at all.** A game is either *kept* — chosen by the person,
+in a permanent directory, never touched — or it is downloaded into a temporary
+directory that is deleted when the player closes. `cleanUpTempDirectories()`
+runs on the way into a launch as well as out of one, "so temp space holds at
+most the one game about to load". Two states, no middle, nothing to decide.
+
+**The Apple TV has a cache and delegates the deleting.** It writes into the
+system caches directory keyed by rom id and lets tvOS reclaim it whenever it
+likes, system-wide across every app — and when the file has gone, the next
+launch simply downloads again with, in its own words, "no special handling
+needed".
+
+> **CabinetOS is the only one of the three that has to decide for itself, and
+> that is not an oversight in the design — it is what being the operating system
+> costs.** There is no prior art to copy here because neither sibling has the
+> problem.
+
+**Two things do carry over.** The shape is the same one already specified in
+*Emulation*: kept versus transient, with keeping being the deliberate act. And
+the Mac is proof that **"delete it when they stop playing" is shippable** — it
+is what that app does today — so discarding is the safe fallback wherever any of
+the machinery below is uncertain, rather than something to be nervous about.
+
+**And one warning, from tvOS's own history.** It used to behave exactly like the
+Mac, and that is recorded as a mistake: every launch "used to redownload into a
+fresh temp directory deleted unconditionally on exit, so replaying a game
+already on Recent or Favorites cost a full download every single time even
+though nothing about the file had changed." Replaying the same handful of games
+is the living-room pattern, and it is CabinetOS's pattern too. **So the middle
+tier has to exist here, even though the Mac gets away without one.**
+
+##### None of this may be tuned to one library, one disk or one connection
+
+**Raised by Marcus against the first draft of this section, and he was right.**
+That draft justified its eviction order with "every cartridge game in the
+library together is under 2 GB", which is a fact about *this* reference library
+— about three hundred cartridge games — and it inverts for anyone with a
+complete set, where the cartridge half is tens of gigabytes. It then closed by
+saying the threshold should be settled against a real library, which bakes in
+whichever library happened to get measured.
+
+*Hardware* already has this rule in this document: the SER5 "sets the
+performance floor, not the ceiling", and CabinetOS "must not have quietly grown
+dependencies on this particular box". **The library is the same kind of
+reference and deserves the same sentence.** The first draft did not give it one.
+
+So the standard for every rule below is that it holds for all four corners, and
+the reference library is an illustration in the margin rather than the basis:
+
+| | |
+|---|---|
+| **A library of one shape** | all cartridges, or all discs, or a mix |
+| **A disk of any size** | a 32 GB eMMC stick and a 4 TB NVMe |
+| **A library far larger than the disk, or far smaller** | permanent pressure, or none ever |
+| **A connection of any speed** | see below — this is the assumption that matters most |
+
+**Where a number is unavoidable, express it as a fraction of something the
+machine can measure**, not as a constant somebody chose while looking at their
+own collection.
+
+##### The assumption underneath all of it: that a re-download is cheap
+
+**Stated because the first draft relied on it silently.** The argument that
+eviction is harmless — "it is still on the server and comes back in minutes" —
+is true against a RomM on the same fast LAN, which is this project's own setup.
+It is false for a server in another building, over WiFi, or across the internet,
+where a 4 GB game is twenty minutes rather than forty seconds.
+
+**That does not change what is safe to delete. It changes whether deleting
+quietly is the right manners.** Where re-fetching is cheap, handling it silently
+is the console-like behaviour this whole section argues for. Where it is
+expensive, the same silence spends twenty minutes of somebody's evening.
+
+**DECIDED: the behaviour does not change, because the answer already exists and
+it is `keep`.** Someone on a slow link marks the games they care about, and the
+console never touches those — that is precisely what keeping is for, and it is
+better than the alternatives on every count:
+
+- **Measuring throughput and switching behaviour** means the console acts
+  differently on Tuesday than it did on Monday, for reasons invisible to the
+  person using it. A console that is unpredictable is worse than one that is
+  occasionally slow.
+- **Asking before each eviction** is a dialog box about storage, which is the
+  exact thing *What CabinetOS is* rules out, and it would fire most often for
+  the person least able to act on it.
+
+So the policy below is the only behaviour, not a fast-link default. What a slow
+link changes is the *advice*: first-run and the Storage screen should say that
+keeping a game means never waiting for it again, which is a sentence worth
+writing regardless.
+
+##### The policy in one paragraph
+
+**Marcus's, 2026-09-16, and it is better than the version it replaced because it
+is sayable.** Everything else in this section is detail underneath it:
+
+> **The games you have played on this console are on the disk. They stay until
+> the disk needs the room, and then the ones you have not played for longest go
+> first. Nothing that is running, nothing you marked as keep, and nothing still
+> waiting to reach RomM is ever touched.**
+
+**The cache is invisible, and that is the decision.** Marcus, 2026-09-16,
+ending a long detour: *"No one knows or cares if the game exists in cache on the
+OS. You go to the game and hit play. If it isn't cached it downloads. If it is
+cached it doesn't."*
+
+That is right, and the reason it is right is that **the feedback already exists
+at the only moment it is useful**. Pressing play on a game that is not on disk
+already shows a progress bar and already takes Escape to back out. So the person
+finds out immediately, at the point of asking, and can change their mind for the
+cost of one button press.
+
+**A badge warning them beforehand does not shorten the download.** They want to
+play that game; the information changes nothing they would do, and it adds a
+thing to think about to a screen whose whole job is that there is nothing to
+think about.
+
+So: no promise about what is cached, no marker on the shelf, nothing in the UI
+at all. **Everything below this line is internal.**
+
+The one exception is the Storage screen, which stays — because it is somewhere a
+person goes *deliberately*, looking for exactly this. Nobody cares until they go
+looking, and then they should find it.
+
+**Two things this deletes**, both recorded so nobody re-adds them:
+
+- **The downloaded badge on shelf cards**, and with it the whole question of what
+  the shelf promises about the disk.
+- **"Cleared 40 games" as a worry**, which was the main argument for the deferred
+  size rule below. It was a concern about how a list would read, on a screen
+  nobody is watching.
+
+**And "longest since played" means since PLAYED, not since downloaded.** A game
+fetched months ago and played last night stays; a game fetched last night and
+never started goes first. Easy to implement backwards.
+
+##### Never on a timer. Only under pressure, only at a safe moment
+
+**Nothing is evicted because time has passed.** A cached game on a half-empty
+disk costs nothing and deleting it only buys a re-download. Expiry is the
+intuitive answer and it is the wrong one.
+
+**The safe moment is the start of a download that will not fit.** Free exactly
+enough for the incoming game, least-recently-played first, and stop the moment
+there is room. Nothing is deleted speculatively, in the background, or while a
+game is running.
+
+**Pressure is simply the disk being full**, and there is no cache size to
+configure. Marcus, 2026-09-16: a person picks a game and chooses Download, those
+downloads stay, "and by nature shrink disk space available for cache".
+
+That is the whole sizing rule, and it deletes a setting:
+
+> **The cache is whatever is left AFTER the system's own needs.** Kept games
+> take what they take, the save floor and the system reserve are never crossed,
+> and the cache has the remainder.
+
+An earlier draft had a configured budget *and* a free-space limit, whichever
+bound first — two numbers doing one number's job, and the configured one is
+unanswerable anyway. Nobody knows what to set a cache size to, and on a console
+the drive is for games regardless.
+
+##### The games and the operating system share one disk
+
+**Marcus, 2026-09-16, and it is the most serious thing raised about this
+policy.** `/` is a 43 MB read-only composefs and **all real storage is `/var`** —
+which holds the ROM cache, the OS's own storage, and the space a system update
+needs to stage itself. They are not separate.
+
+So a disk full of games is a console that **cannot update itself**, and this
+document's entire update model is a new image pulled and rebooted into. An
+in-place upgrade already measured at 1.0 GB of changed layers against a 5.0 GB
+image; a base bump moves considerably more.
+
+> **The cache is always available to the system, taken silently, without
+> asking.** Nobody should ever see "may I delete a game so I can install an
+> update?" — there is no basis on which to answer it and the answer is always
+> yes. Deleting a cached game costs a re-download; a console that cannot take
+> its own security updates costs rather more.
+
+**This is why the cache cannot simply be "everything left over", which an
+earlier draft of this section said.** The danger is not the cache, which is
+disposable by definition and can always be taken. It is **kept** games, which
+are the one thing this policy refuses to delete: keep enough of them and an
+update becomes impossible, permanently, with nothing the console is allowed to
+do about it.
+
+**So the system reserve is enforced in exactly one place — at the moment of
+keeping.** Keeping is already the one action the console may refuse, for the
+save floor; this is the second and larger reason. The cache itself needs no
+protecting from the system, because it is the system's to take.
+
+##### Partitioning was considered and rejected
+
+**Raised by Marcus in the same breath, and reasoned to the right answer: a
+separate system partition would enforce this in the kernel rather than in our
+code, and the problem is that nobody can say how big it should be.**
+
+Three reasons it stays one filesystem, beyond the sizing guess:
+
+1. **A partition is a wall in BOTH directions.** As things are, an update that
+   turns out larger than expected eats into the game cache and still works. With
+   a system partition, an OS side that fills — a bigger update, logs, anything
+   unforeseen — cannot touch the two hundred gigabytes sitting free on the games
+   side. One filesystem is the more forgiving arrangement, not the riskier one.
+2. **Wrong is recoverable on one side and not the other.** A reserve that turns
+   out too small is a number changed in the next update. A partition that turns
+   out too small is a reflash.
+3. **It is not this project's layer.** Constraint 1 is to stay at the
+   application layer; the disk layout belongs to the base image, and
+   `disk_config/disk.toml` currently declares a single filesystem at `/`.
+
+**The honest argument FOR a partition**, which is why this is recorded rather
+than dismissed: it does not depend on our code being correct. A bug in the
+reserve logic fills the disk; a partition could not be filled by games whatever
+we got wrong. That is real — and the failure it prevents is recoverable (delete
+games, or let the system take the cache) while the failure it introduces is not.
+
+**And the proper separation already exists in the design, one level up.** Open
+question 14 gives the person a choice of where games live — a second SSD, a USB
+drive. Take that and the system disk is untouched by games and none of this
+applies. **That is a real separation, chosen by somebody who knows their own
+hardware**, rather than a number this project picks at install time for a machine
+it has never seen.
+
+So the reserve is the answer for the single-drive case, which is the common one
+rather than the only one.
+
+**A number, and it is the least certain thing here:** enough for a full image
+rather than a typical delta, since the case that matters is the one where the
+cache is already empty and only kept games remain. That is the far side of 5 GB
+and wants checking against a real update on real hardware rather than guessing
+here.
+
+**It degrades exactly the right way.** Keep enough games and the cache shrinks
+to nothing, at which point every un-kept game downloads, plays, and is dropped
+on the way out — which is precisely what Cabinet's Mac does today, and it ships.
+Keep so many that nothing fits at all and the download refuses and says so,
+which is the one failure this policy ever shows anybody.
+
+##### Everything on the disk is a copy of RomM. That is the whole rule
+
+**Marcus, 2026-09-16, after this section had drifted into categories for the
+third time: saves, BIOS and memory cards are all stored on RomM.** They are, and
+this document has said so twice and then built tiers of protected things on top
+of it anyway.
+
+> **Everything here is a copy of something on the server. The only exception is
+> what has not been uploaded yet.**
+
+So **everything is evictable** — ROMs, save states, battery saves, memory cards,
+firmware. There is no protected tier, because there is nothing to protect. The
+earlier draft's "counted but never evicted" list was inventing a distinction the
+server had already removed.
+
+**Saves and firmware simply never come up**, which is an observation rather than
+a rule. Measured on the test machine: 124 MB of ROMs against 40 KB of battery
+saves and 384 KB of firmware. Every save for all 1644 games in the reference
+library is around 33 MB. They will never be the largest thing in a list sorted
+by size, so nothing needs to say they are special.
+
+**And the previous draft's reason for exempting firmware was simply wrong** —
+"deleting it breaks the next launch of that system". It does not. It re-fetches,
+like everything else does.
+
+##### Save states can be the biggest thing on the machine, not a rounding error
+
+**Corrected 2026-09-16, and the first estimate here was badly wrong.** It assumed
+states are taken at checkpoints and put fifty of them at 325 MB.
+
+**People save-scum.** Grinding through a hard section means a state every twenty
+seconds or so, which is around 360 in a two-hour evening. At the **6.5 MB** a DS
+state measures — a real number from this project's own melonDS build — that is
+**2.3 GB from one session**, more than most ROMs on the disk. PS2 will be larger
+still. States do not overwrite, deliberately, because the history is the point.
+
+So the conclusion inverts. States are not a small thing to be exempted, they are
+one of the largest things to be managed, and they are on RomM with their
+screenshots like everything else.
+
+> **Keep the newest state for a game as long as its ROM is there** — it is the
+> one that gets loaded — **and let older states be ordinary candidates**, fetched
+> back from RomM when somebody actually picks one off the launch screen.
+
+That is the same principle as the ROM cache, applied one level down, and it
+needs no new machinery: they join the same oldest-first list.
+
+##### The case this does not solve: save-scumming while offline
+
+**The upload queue is the one thing that cannot be evicted, and save-scumming is
+exactly what makes it enormous.** An evening of it with no server reachable is
+gigabytes of pending states by morning, and no floor protects against data that
+is itself the thing filling the disk.
+
+This was already recorded as an open problem in a milder form — "a long spell
+offline defeats the floor" — and the realistic magnitude makes it worth solving
+rather than noting. It is a conversation with the person ("this console has not
+reached your server in three days") rather than a storage rule, and **it belongs
+with whatever handles being offline, not here.**
+
+A cheaper half-answer exists and is not chosen: while offline and short of
+space, the oldest *pending* states for a game could be dropped rather than the
+newest, since a save-scummer wants the last one and not the three hundredth from
+the bottom. That trades a promise this document makes — local first, nothing
+written is ever lost — against a disk that stops working, and **that trade needs
+Marcus rather than an assistant.**
+
+##### The eviction unit is a FILE, not a game
+
+**This is the first change to the proposal, and it is structural.** Today a
+game's cache directory holds the ROM *and* its save states *and* its battery
+save together — `romcache/2813/` has three `.state` files and an `.srm` beside a
+1 MB Game Boy ROM. So "evict a game" would delete the one thing that can always
+be fetched again along with the only things that cannot.
+
+The proposal patches this with a rule — never evict a game with unsynced saves.
+That is correct and it should not be necessary. **Separate what the console
+wrote from what it downloaded**, and the ROM becomes unconditionally safe to
+delete rather than conditionally, because there is no longer anything precious
+in the same unit to take with it. The case where a download fails over a few
+kilobytes of old save goes away with it, which is a poor trade to have been
+making.
+
+What the rule protects is then the **upload queue**, not save data in general —
+a distinction that matters, because a save already on RomM is a cache like the
+ROM beside it.
+
+What remains protected, and it is now short:
+
+| | |
+|---|---|
+| The running game's ROM | it is in use |
+| The running game's save data | it is being written |
+| **Anything not yet uploaded** | the only irreplaceable data on the machine |
+| Anything **kept** | the person asked for it; *Emulation* already says this is never automatic |
+
+**And what is evictable is wider than ROMs, for the same reason.** A synced save
+state is a cache of RomM like everything else, and a well-played DS game can
+hold hundreds of megabytes of state history that would cost a few megabytes to
+fetch back on demand. It belongs in the same candidate list, ordered the same
+way — no separate mechanism, and the size rule below already keeps it out of the
+way when it is not worth taking.
+
+The unit is therefore **any local file that RomM can return**, which is a longer
+sentence than "the ROM" and the same idea.
+
+##### The floor has to be enforced DURING the download, not before it
+
+**Second change.** The failure the reserve exists to prevent is a save that
+cannot write because a download filled the disk — and that happens *while* the
+download runs. Checking once at the start does not prevent it, and the size is
+not always known: this document already records that the server frequently
+declares no length, which is why there is a progress bar only sometimes.
+
+So the streaming writer checks free space as it goes and aborts when the next
+write would cross the floor, deleting its `.part` — which returns the space it
+had taken. A `statvfs` every few megabytes is not a cost worth optimising.
+
+**The size of the DOWNLOAD is in the library record, not the HTTP response.**
+`fs_size_bytes` is present on every ROM and is what makes room for the transfer
+possible to reserve at all. Do not reach for `Content-Length`.
+
+It is the size of the *archive*, though, so it is what the download needs and
+**not** what the game will cost once unpacked. See below.
+
+##### Unpacking: ask the archive, do not guess a ratio
+
+**Third change. The first draft said "budget twice the archive" and that is
+wrong in the direction that fills the disk**, as Marcus pointed out: an archive
+is *compressed*, so what comes out of it is not the size that went in.
+
+Measured on this library rather than argued: Space Harrier is an **868 KB** zip
+holding a **2 MB** ROM. Extraction holds both, so the peak is 2.9 MB — **3.4×
+the archive**, not 2×. And that is a mild case. DS and N64 ROMs are padded out
+to power-of-two sizes with empty space, which compresses far harder, so no
+multiplier is safe for the set.
+
+**There is no need to estimate at all.** A zip declares each entry's
+uncompressed size in its own index, 7z likewise, and `archive_entry_size()`
+hands it over when the header is read — before a byte is extracted.
+`romfile.cpp` already walks those headers to pick the member to use; it simply
+does not add up the sizes while it is there.
+
+> **peak = the archive + what its index says will come out of it**, known before
+> committing to the extraction, and refused cleanly if it will not fit.
+
+**Which means the space check happens TWICE, at two different moments**, and it
+is the kind of thing that gets built as one check and surprises somebody later:
+
+| | | |
+|---|---|---|
+| **Before the download** | the archive's size, from RomM's `fs_size_bytes`, plus a small percentage | it is all that can be known yet |
+| **After it, before unpacking** | what the archive's own index says comes out of it | the ratio is not a percentage and cannot be guessed — 868 KB of Space Harrier becomes 2 MB |
+
+Either check can trigger eviction; the second usually passes. **And it does not
+apply at all** to `.chd`, `.rvz` or an arcade set handed over unextracted, which
+is most of the large files in a library.
+
+**The small percentage on the first check is not decoration.** Landing on
+exactly zero free bytes is where filesystems start failing in interesting ways,
+and it costs nothing to stay off it.
+
+Same idiom as everywhere else in this document: ask the core what it takes, ask
+the magic bytes what the file is, ask the archive what it holds. The multiplier
+was a guess standing in for a fact that was already on disk.
+
+**A format that declares nothing** — some streamed archives report an unknown
+entry size — is the only case needing a fallback, and the honest fallback is to
+extract into the space available and fail if it runs out, not to invent a ratio.
+
+Two exceptions already established elsewhere, worth restating because they make
+the peak vanish entirely where they apply: an arcade set is handed to FBNeo
+unextracted, and `.chd` and `.rvz` are never unpacked at all.
+
+##### What a game costs is what is ON DISK, not what RomM said it was
+
+**Falls out of the above and is its own accounting error.** The policy's budget
+would naturally use `fs_size_bytes`, since that is what the library record
+carries and what "free exactly enough for this game" was written against. For
+anything archived that is the *compressed* size, and the cache ends up holding
+the larger thing. Budgeting against it under-counts every archived game.
+
+**And today it under-counts twice over, because the archive is never deleted.**
+`romcache/39/` holds `Tetris.zip` and the extracted `Tetris.gb` side by side,
+and that is not an oversight: the "do we already have this?" check `stat`s the
+downloaded archive against the size RomM reported, so deleting it would mean
+re-downloading the game on every launch.
+
+So the unpacking cost is not transient at all as things stand — it is permanent,
+and it is the compressed size of every archived game in the cache, forever.
+
+> **Decided: the archive goes once it has been unpacked, and the reuse check
+> moves to the extracted file.** It costs a small per-game record of what was
+> unpacked and how big it should be — which the cache wants regardless, since
+> the budget has to be computed from real sizes on disk rather than from the
+> server's idea of them.
+
+##### Order: least-recently-played, and that is the whole rule
+
+**Fourth change, and it answers "should size matter" and "should small systems
+be exempt" with one mechanism.**
+
+The intent is easy to state: **do not delete a hundred things that were cheap to
+keep in order to house one thing that is not.** Freeing 4 GB by removing four
+thousand Game Boy games is a bad trade whatever the library looks like — each
+one is a separate thing somebody may come back to, and together they were
+costing almost nothing.
+
+**The threshold that expresses this has to scale with the need, not with a
+number somebody picked.**
+
+> **Shipped rule: least-recently-played, full stop. The size refinement below
+> is DEFERRED until there is evidence it is needed.**
+
+The refinement it defers: ignore candidates smaller than one percent of the
+space being freed, so that a single 4 GB download does not take forty Game Boy
+games with it.
+
+**Its reason has since evaporated.** The argument was that "cleared 40 games"
+reads as destructive — a worry about how a list would look, on a screen the
+decision above says nobody is watching. What remains is the actual cost, and the
+actual cost is that forty small games come back in a second or two each.
+
+**So it stays deferred and it may never be needed.** Kept here because the
+arithmetic is done and someone will think of it again.
+
+One percent is recorded rather than left to be re-derived, because it has no
+units and belongs to no library. Needing 4 GB it ignores anything under 40 MB,
+leaving cartridge games alone. Needing 50 MB for a Game Boy Advance title it
+ignores anything under 500 KB, so cartridge games ARE the candidates. **The same
+rule gives the opposite answer when the library is the opposite shape**, which a
+fixed megabyte threshold could never do.
+
+**Exempting small systems outright was considered and rejected**, though the
+instinct behind it is right. A permanently exempt class can grow past the budget,
+and then the disk is full of things nothing is allowed to delete — with
+*Download All* (which this document says CabinetOS should offer, reversing
+tvOS's call) that is not a hypothetical. This version has the same practical
+effect and cannot reach that state.
+
+When it is added, it is keyed on **size relative to the need**, never on
+system: that needs no table of platforms to go stale, and a system's name was
+never the thing that mattered.
+
+##### Free a margin, not exactly enough
+
+**Also changed, and it is the difference between eviction being an event and
+eviction being constant.** "Free exactly enough for the incoming game" is the
+obvious rule and on a disk that sits near its budget it means evicting on every
+single launch, forever, until the cache holds nothing but the game currently
+running. The person never sees it, they just never benefit from the cache again.
+
+So free enough for the incoming game **and a margin beyond it**, so that the
+next few launches cost nothing. The margin is a fraction of the budget rather
+than a size — a tenth — which keeps it sensible on a 32 GB stick and on a 4 TB
+drive without being told which one it is on.
+
+##### "Least recently played" means on THIS console
+
+Play history belongs to RomM and this document says the console should keep no
+local notion of it. **Eviction order is a different question**: not "when did
+this household last play this game" but "when did this machine last use this
+copy". A game played on the Apple TV yesterday is not evidence that the copy on
+this disk is worth keeping.
+
+So the timestamp is a property of the cache, written when a ROM is launched
+from it. Recorded here because it looks like the rule it is not, and because
+depending on RomM would make eviction fail when the server is unreachable —
+which is exactly when the console is least able to re-fetch anything.
+
+##### The reserve, and what it is actually protecting
+
+**Saves are kilobytes. States are the cost, and they are larger than they
+look.** Measured on this project's own cores:
+
+| | |
+|---|---|
+| Game Boy (Gambatte) | 26,882 bytes |
+| Sega 32X (picodrive) | 679,178 bytes |
+| Nintendo DS (melonDS) | **6,526,677 bytes** |
+
+States deliberately do not overwrite — a history is the point — so one
+well-played DS game can accumulate hundreds of megabytes on its own, and PS2
+will be worse.
+
+**A fixed reserve rather than a percentage is right**, because saves do not
+scale with disk size — a 4 TB drive does not generate more save states than a
+32 GB one, the same person plays the same games. That is the one place in this
+section where a constant is the correct shape.
+
+**But it should be sized for what is actually irreplaceable, which is far less
+than it looks.** Saves, memory cards and save states all live on RomM once they
+have been uploaded, and the local copies are caches of the server exactly as the
+ROMs are. Cabinet already treats them that way — its own note says state caching
+is "opportunistic, not queued", refreshed on ordinary online visits.
+
+> **Nothing on this machine is irreplaceable except the upload queue.** Not the
+> ROM, not the memory card, not the state history. Only what has been written
+> and not yet sent.
+
+That is a pending queue and room to write one more state — which is small on an
+ordinary evening and **is not small on a bad one**. See *save-scumming while
+offline* above: 360 states in two hours at 6.5 MB each is 2.3 GB of queue, and
+PS2 is worse.
+
+**So the floor is 2 GB, or 5% of the disk, whichever is smaller** — and it is
+chosen knowing it does not cover that case, because **no floor can.** A reserve
+protects one kind of data from another; it cannot protect data from itself. The
+floor is sized to keep an ordinary session safe and to stop a download filling
+the disk under a save, which are the failures it can actually prevent.
+
+The other one is a conversation rather than a number, and it is recorded above
+as unsolved.
+
+**And keeping a game must respect it too.** Kept games are never evicted, so
+without this check a person can keep enough games to starve the reserve and
+leave the console with nothing it is permitted to delete. Keeping is the one
+place the console may refuse — of two floors now, this one and the system
+reserve above, and the second is the larger.
+
+##### Why this differs from a real console, deliberately
+
+A PS5 never evicts. It tells you the disk is full and makes you choose, because
+an installed game is a thing you put there and removing it silently would be
+hostile.
+
+**Ours is a copy of something still sitting on the RomM server.** Evicting is
+not destruction, it is spending bandwidth later. That is the streaming-device
+model rather than the console one, and it is the right one here.
+
+> The console-like property being preserved is **that nobody has to think about
+> storage** — not that deletion must be manual.
+
+The Storage screen shows what is cached, what is kept, what is used and what is
+free, and **lists what was cleared to make room** rather than letting things
+vanish. Anything the person cared about was already protected by keeping it.
+
+##### The numbers, decided
+
+**These are decisions, not proposals.** They cannot be improved by more
+thinking: settling them properly needs a full disk on real hardware, which does
+not exist yet, and a starting value that gets corrected by a measurement is
+strictly better than an argument that blocks the work. Build with these, change
+them when a machine says otherwise, and record the reversal here when it
+happens.
+
+| | | |
+|---|---|---|
+| Ignore candidates below | **nothing — deferred**, then 1% of the space being freed if it is ever needed | oldest-first is what ships; the refinement waits for evidence |
+| Free beyond what is needed | **10%** of the budget | so eviction is an occasional event rather than every launch |
+| System reserve | **room for a full image**, past 5 GB — checked when KEEPING a game, never against the cache | the cache is the system's to take; kept games are what can make an update impossible |
+| Save floor | **2 GB, or 5% of the disk, whichever is smaller** | it protects the upload queue and room for one more write, not the state history — those are on RomM |
+| Unpacking headroom | **the archive + what its index declares**, transient | read from the archive, never estimated; not needed at all for `.chd`, `.rvz` or an arcade set |
+
+**The floor is smaller than the five gigabytes first proposed** because of what
+it turned out to be protecting. Five was sized for a full local state history,
+and a state history is a cache of RomM like everything else.
+
+##### Genuinely still open, and neither blocks building it
+
+- **A long spell offline defeats the floor**, because the upload queue is itself
+  the thing filling the disk and no reserve can protect data from its own
+  growth. That is a "this needs to reach the server" conversation rather than a
+  storage rule, and it belongs with whatever handles being offline for a week.
+- **Per location, not global.** Open question 14 already says the cached/kept
+  distinction applies per storage location. The budget, the floor and the
+  eviction pass are all properties of the *active* location; this section is
+  written as though there is one, and it should be read that way until there
+  are two.
+
+##### Two things to inherit rather than rediscover
+
+- **Download All sizes up front and refuses**, rather than filling the disk and
+  letting eviction sort it out — which would evict what it had just fetched.
+  Cabinet's `DownloadAll.swift` already does exactly this.
+- **The one failure the person ever sees** is "the disk is full of things you
+  asked me to keep". Its wording belongs with the Storage screen, and the screen
+  it points at already exists in the design.
 
 #### A platform is not its slug, and "Arcade" is two platforms
 
@@ -4215,6 +4981,44 @@ location rather than globally.
 
 #### Decided
 
+**REVISED 2026-09-16: a second drive takes the KEPT games, and the cache stays
+on the internal disk.** Marcus, thinking ahead to testing it. The paragraph below
+said one active location holding everything, and the split is better, because
+the two things are different in kind:
+
+| | |
+|---|---|
+| **Kept games** | deliberate, permanent, and the whole point of a drive that travels |
+| **The cache** | "what this machine happened to play" — meaningless to carry, and better on the disk that is always attached and usually faster than USB |
+
+**And it quietly removes the update hazard.** The system reserve exists because
+kept games are the one thing the console will not delete; put them on a
+different drive and they cannot fill the system disk at all. The reserve stays
+for the single-drive case, which remains the common one.
+
+**What travels on the drive, and what does not.** Everything here is a copy of
+something on RomM, so the drive only earns its keep for things that are slow to
+replace or impossible to:
+
+- **Games: yes.** Hundreds of gigabytes, and re-fetching them on the other
+  console is the cost this avoids.
+- **Synced saves, memory cards and states: no.** Kilobytes, already on the
+  server, and carrying a second copy creates two versions of the truth — which
+  this question has already settled the other way, in *"a game continued on a
+  different server starts from that server's save history"*.
+- **Anything not yet uploaded: NO, and this changed within the hour.** It was
+  "yes, because the drive travels and progress would be stranded" — and then the
+  drive stopped travelling, see the reversal below. Save data of every kind stays
+  on the internal disk, so unplugging the drive cannot strand anything.
+
+> **The drive carries what is slow to replace and what cannot be replaced. Not
+> what the server already has.**
+
+**Still true, and the reason the paragraph below is revised rather than
+deleted:** migration between locations is still a first-class operation, a
+missing drive still degrades rather than errors, and the drive is still
+self-describing so it can be browsed against a different server.
+
 **One active location, with migration between them.** Upgrading to a larger
 drive is a normal thing to want, so moving the library is a first-class
 operation rather than something the user does by hand. It must survive being
@@ -4242,7 +5046,108 @@ inherently un-console-like. If it happens: never the default action, a
 confirmation that cannot be fumbled through on a controller, and prefer adopting
 a drive as-is wherever possible.
 
-#### Portable drives, and the problem with them
+#### REVISED AGAIN, 2026-09-16: a drive belongs to a SERVER, not a console
+
+**Marcus, within the hour, and it is better than binding to a console for a
+reason that is obvious once said: the games on the drive are already
+server-specific.** They are identified by RomM's own rom IDs, which mean nothing
+on any other instance. Binding to the server states what is already true;
+binding to a console invented a second, weaker notion of ownership on top of it.
+
+It fixes both failure cases the console version had:
+
+| | |
+|---|---|
+| **Two consoles, one house, one server** | the drive works on either — which was the original motivation this whole question was raised for |
+| **The console dies and is replaced** | new machine, same server, plug it in, it works. No "this belongs to another console" prompt to design |
+
+And the case that drove all the complexity — a drive meeting a **different**
+server — stops needing a solution. It is refused. Every piece of machinery in
+the superseded section below (self-describing manifests, hash matching,
+adoption into a foreign library) existed only to serve that case.
+
+##### RomM will not tell us which server it is, and it turns out not to matter
+
+**Checked against the live server rather than assumed.** `/api/heartbeat`
+returns a version and the enabled metadata sources; `/api/stats` returns counts.
+**Neither carries an instance identity**, and there is nowhere on the server to
+write one — the console's token covers assets, not arbitrary storage.
+
+The address will not stand in for it either: an IP changes, a hostname replaces
+it, someone puts https in front, and the same server reads as a different one.
+
+**Two answers were designed here and both were too much.** The first sampled
+the drive's games to decide whether it was "ours", which Marcus broke in one
+sentence — people delete games from the server, so the sample misses and four
+terabytes get condemned as somebody else's. The second checked every game
+against the server on plugging in, with a Storage screen for the leftovers.
+
+**Marcus's third answer is that none of it needs building, and he is right,
+because the check already exists.** `beginLaunch` will not reuse a downloaded
+file unless it sits at that game's rom-id path, under the name the server gave,
+at the size the server reported:
+
+```c
+if (struct stat st; expectedSize > 0 && ::stat(dest.c_str(), &st) == 0)
+    haveIt = st.st_size == expectedSize;
+```
+
+**That test does not care which disk the file is on.** Point it at an external
+drive and everything the elaborate versions were for comes free:
+
+| | |
+|---|---|
+| A game deleted from the server | never asked for, because it is not in the library |
+| A file that does not match the record | not reused. It re-downloads rather than launching the wrong game |
+| A drive from another server | nothing matches, so nothing is used, and nothing is destroyed |
+| A server that moved address | everything still matches; the address is not part of the test |
+
+> **So there is no drive identity, no verdict, no adoption, no erase prompt and
+> no new code.** The expectation — one drive, one server — is a sentence of
+> documentation rather than a mechanism.
+
+**There is nowhere to put that sentence yet**, which is worth saying rather than
+pretending otherwise: the README covers building and installing, and the product
+has no user-facing documentation at all. It goes wherever that ends up, and this
+is the second item waiting on it — *Emulation* already owes the same for what
+keeping a game means.
+
+**And nothing on a drive is ever deleted because it was not recognised.**
+Unrecognised files are simply not used. That keeps the console away from the one
+class of data RomM cannot give back, without needing a rule to say so.
+
+#### SUPERSEDED — a drive belongs to one console
+
+**The section below decided a drive should move between CabinetOS machines, and
+built a self-describing drive to make it work. Marcus reversed it the same day
+the split above was agreed, and the reasoning is short.**
+
+**The only real benefit of a portable drive is not re-downloading the games.**
+Everything else — names, artwork, platform labels, saves, play history — comes
+from RomM regardless. That single benefit does not pay for what portability
+drags in: a drive that must describe itself, games to be matched against a
+different server's library, and two consoles each holding half of somebody's
+unfinished progress for the same game.
+
+> **A drive is extra storage for the console it was attached to.** One owner.
+
+**Superseded above**, by binding to the server instead. The paragraph that
+followed here had to invent an adoption prompt so that a drive would not die
+with its console — a problem that does not exist once the drive belongs to the
+library rather than to the machine.
+
+**And it simplifies the split agreed above.** If the drive never travels, save
+data has no reason to be on it: **all saves, memory cards and states stay on the
+internal disk**, and the external drive is purely game storage. Unplugging it can
+then never strand anyone's progress, which was the fiddliest part of the previous
+answer and is now simply gone.
+
+**What survives from below:** migration between locations is still first-class,
+a missing drive still degrades rather than errors, and a documented on-disk
+layout is still worth having — not so another server can read it, but so that a
+future version of CabinetOS can.
+
+#### Portable drives, and the problem with them — SUPERSEDED, kept for the reasoning
 
 **Decided: a drive should move between CabinetOS machines.** The obvious case is
 two boxes in one house sharing a RomM server, and there the drive should simply
