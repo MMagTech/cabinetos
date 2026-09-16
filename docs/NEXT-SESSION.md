@@ -20,9 +20,9 @@ Rewrite it at the end of a session. It is meant to be current, not a log.
 git log --oneline origin/main..HEAD
 ```
 
-As of 2026-09-16 the branch is `screens`, it carries the whole of this file's
-"what runs today", and the pull request for it is open. Nothing below exists on
-`main` yet.
+As of 2026-09-16 the branch is `hardware-render`, which sits on top of
+`core-options`, which sits on top of `screens`. Between them they carry the
+whole of this file's "what runs today". **Nothing below exists on `main` yet.**
 
 **Read `docs/CABINET.md` before designing anything.** Cabinet ships on iOS, tvOS
 and macOS and has already answered most of what comes up here. tvOS is the
@@ -54,7 +54,8 @@ ssh -i ~/.ssh/cabinetos cabinet@192.168.1.250 \
 system and collection, open a game, play it or download it, save and load
 states, and leave — with the save syncing on the way out.
 
-- **1100 of 1644 games playable**, with twenty cores built.
+- **1143 of 1644 games playable**, with twenty cores built — and every one of
+  those twenty can now be RUN, not just built.
 - **Home is real**: a hero from RomM's own play history, Recent, Favorites.
 - **Library, a grid, and a launch screen**, built 2026-09-16. Every system
   including the ones this console cannot play, each saying why.
@@ -67,6 +68,9 @@ states, and leave — with the save syncing on the way out.
 - **BIOS comes down with the game**, every file the platform lists.
 - **Twenty cores build in CI**, each asserting its pinned revision, and the
   frontend compiles there too.
+- **Dreamcast, Naomi and N64 play**, as of 2026-09-16. The cores that draw for
+  themselves get a framebuffer inside the frontend's own GLES context, so Mario
+  Kart 64 and Ikaruga run with no pixel read back anywhere.
 
 ## Pick up with these, in this order
 
@@ -120,7 +124,21 @@ Cabinet's `DownloadAll.swift` already sizes the whole list and refuses rather
 than filling the disk and letting eviction sort it out — which would evict what
 it had just fetched.
 
-### 5. Still owed from before, and none of it blocks the screens
+### 5. PPSSPP, the twenty-first core
+
+The only core of twenty-one not built, and the reason to build it now is that
+the thing that blocked it is gone: the host serves hardware-rendered cores.
+PSP is four games in the reference library, so build it for the completeness
+rather than the count — and **run it**, because that is the whole lesson of the
+other two. Its firmware is the special case: PPSSPP's system files ship inside
+the app bundle on Apple rather than coming from RomM, which in a bootc image
+becomes a path in `/usr`.
+
+If it asks for desktop GL or Vulkan rather than GLES, the host refuses it by
+name and says so in one line — and `Support::NeedsHardwareRender` is still
+sitting there waiting for exactly that case.
+
+### 6. Still owed from before, and none of it blocks the screens
 
 - **Saves on the right triggers.** Keys do it today, which is the test
   environment and not the product. The settled triggers are in PROJECT.md.
@@ -131,9 +149,18 @@ it had just fetched.
 - **Nothing warns that a system's BIOS is missing** until a game fails to start.
   `catalog` is where it belongs — a fifth answer, and the first one that is a
   fact about the person's server rather than about this console.
-- **Hardware-rendered cores.** Flycast and Mupen64Plus are built and cannot run:
-  they want a GL context the frontend does not hand over. 43 more games, plus
-  PPSSPP once built.
+- **N64 save states do not restore the machine exactly.** Reproducible to the
+  digit on Mario Kart 64, and the instrument was checked — the same test on mGBA
+  with a moving picture passes. It blocks nothing, because mupen64plus has no
+  shared emulator tag and its states never travel. PROJECT.md, *Open against the
+  frontend right now*, lists the three candidate causes and says plainly that
+  none is established.
+- **A game writes to disk in places eviction cannot see.** Mesa's shader cache
+  in `~/.cache`, and two files the cores put in the system directory. Under
+  3 MB today and it arrived with the hardware-rendered cores. PROJECT.md,
+  *The cache is not the only thing a game writes to disk* — and note that one of
+  those files is a Dreamcast's saved flash, so "clean the system directory" is
+  not the answer.
 
 ## Things that will bite you
 
@@ -210,6 +237,19 @@ it had just fetched.
 - **A field added to the middle of a positional struct re-assigns the rest of
   the row.** `catalog.cpp`'s table is positional and three rows end in `true`;
   the new `system` field went last for exactly that reason.
+- **Wall-clock pacing makes a headless capture emulate almost nothing.**
+  `--frames 180` asks for 180 DRAWN frames, and offscreen those take under a
+  tenth of a second, so the core is paced against a tenth of a second and
+  emulates five frames — a black boot screen for every console ever made. The
+  first Mupen64Plus capture came back black and looked exactly like a core that
+  had failed. A capture now steps one emulated frame per drawn frame. **A
+  hardware-rendered console needs about 1100 frames to reach a title screen**,
+  which is 16 seconds on the VM, not minutes.
+- **Do not judge a hardware core by its first screenshot.** Mario Kart 64 at
+  frame 600 shows the Nintendo logo MIRRORED, which looks exactly like a botched
+  flip. It is the logo rotating. The test that actually settles orientation is
+  text that reads correctly: at frame 1100 the title screen says PUSH START
+  BUTTON the right way round.
 - **`pgrep -f "some string"` matches your own command line.** Three times now,
   the worst being a wait loop whose pattern matched the shell running the check,
   so it sat for nine hours waiting for something already finished. **Match on
@@ -234,6 +274,18 @@ it had just fetched.
 `podman image prune -f`, which removes untagged builder layers and leaves
 `cabinetos-builder:latest` alone. If it is tight again, that is the first thing
 to try, then `.core-src`.
+
+## Something the user wants discussed, in its own session
+
+**Account switching.** RomM has users; tvOS already switches between them.
+Raised 2026-09-16 with the words "we would implement it slightly different", and
+explicitly deferred to a session of its own — so do not start building it as a
+side effect of something else. Read Cabinet's tvOS account handling and
+`Auth/Keychain.swift` first (the token is already keyed by server host), then
+ask what the difference is before writing anything. It touches things already
+built: Home is assembled from RomM's play history, and favourites and recents
+are RomM's rather than local, so whose account they come from stops being
+implicit the moment there is more than one.
 
 ## Cabinet-side debts
 

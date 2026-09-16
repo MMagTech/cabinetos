@@ -192,13 +192,19 @@ Coverage answer(const Entry* e) {
         return c;
     }
 
-    // Built, and still not runnable. Asked AFTER the file check so that the
-    // reason names the nearer of the two obstacles.
-    if (e->hwRender) {
-        c.support = Support::NeedsHardwareRender;
-        c.reason = "this system needs a hardware-rendered core, which this "
-                   "console cannot host yet";
-    }
+    // A hardware-rendered core used to stop here: built, on the disk, and
+    // still unrunnable, because the host refused RETRO_ENVIRONMENT_SET_HW_RENDER
+    // and these three cores draw with GL rather than handing back pixels.
+    //
+    // It no longer does. The host owns a GLES context and hands the core a
+    // framebuffer inside it, and this was measured rather than assumed:
+    // Mario Kart 64 reaches its title screen on Mupen64Plus and Ikaruga
+    // reaches its own on Flycast, both from the real library, both with
+    // sound. So `hwRender` no longer changes the answer — it records which
+    // rows take that path, which is the fact PPSSPP will be checked against
+    // when it is built. It is kept in place rather than removed because this
+    // table is positional and every row below a removed field silently
+    // re-assigns; see the struct.
     return c;
 }
 }  // namespace
@@ -232,6 +238,10 @@ const char* shortReason(Support s) {
         case Support::NoCore: return "No core for this system";
         case Support::Excluded: return "Not shipped here";
         case Support::NotInstalled: return "Core not built yet";
+        // Nothing produces this today. Kept because it is the honest answer
+        // for a core that asks for something this context cannot serve —
+        // desktop GL or Vulkan rather than GLES — which the host refuses by
+        // name. Both cores tested asked for GLES 3.0 and got it.
         case Support::NeedsHardwareRender: return "Needs a 3D core";
     }
     return "Not playable here";

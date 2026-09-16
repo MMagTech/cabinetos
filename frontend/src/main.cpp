@@ -2664,7 +2664,23 @@ int main(int argc, char** argv) {
             }
             core.setPad(0, pad);
 
-            core.runFor(dt);
+            // Wall-clock pacing is the product's, and it is wrong for a
+            // capture. `--frames 180` asks for 180 drawn frames, and with
+            // nothing to wait for offscreen those 180 take under a tenth of a
+            // second — so the core is paced against a tenth of a second and
+            // emulates FIVE frames, which is a black boot screen for every
+            // console ever made. The first run of Mupen64Plus reported exactly
+            // that and it looked like the core had failed.
+            //
+            // So a capture steps one emulated frame per drawn frame: `--frames`
+            // then means what it says, and the same command gives the same
+            // picture on a fast machine and a slow one. The instrument being
+            // the thing that is wrong has cost this project a day already.
+            if (shotMode) {
+                core.runFor(1.0 / std::max(core.avInfo().fps, 1.0));
+            } else {
+                core.runFor(dt);
+            }
             core.uploadFrame();
 
             if (audioStream) {
@@ -2801,14 +2817,35 @@ int main(int argc, char** argv) {
                 const float aspect = core.avInfo().aspectRatio > 0
                                          ? core.avInfo().aspectRatio
                                          : srcW / srcH;
-                float scale = std::floor(
-                    std::min(ui::kCanvasWidth / (srcH * aspect), ui::kCanvasHeight / srcH));
-                if (scale < 1.0f) scale = 1.0f;
+                //
+                // EXCEPT for a hardware-rendered core, where integer scaling
+                // is the wrong idea rather than a stricter one. A Dreamcast's
+                // output is already a rendering of a 3D scene at whatever
+                // internal resolution the core was asked for — there is no
+                // grid of deliberate pixels to preserve — and at 3x internal
+                // resolution the frame is 1920x1440, where flooring to an
+                // integer gives zero, clamps to one, and draws 360 rows off
+                // the bottom of the screen.
+                const bool integerScale = !core.hardwareRendered();
+                float scale = std::min(ui::kCanvasWidth / (srcH * aspect),
+                                       ui::kCanvasHeight / srcH);
+                if (integerScale) {
+                    scale = std::floor(scale);
+                    if (scale < 1.0f) scale = 1.0f;
+                }
                 const float dh = srcH * scale;
                 const float dw = dh * aspect;
                 const float px = (ui::kCanvasWidth - dw) * 0.5f;
                 const float py = (ui::kCanvasHeight - dh) * 0.5f;
-                ui::drawImageTexture(renderer, core.texture(), px, py, dw, dh);
+                // Where the picture actually sits in that texture. A
+                // software core answers "all of it, the right way up"; a
+                // hardware core answers a corner of a larger target with its
+                // rows the other way round, and neither the layout above nor
+                // the draw below has to know which.
+                float u0, v0, u1, v1;
+                core.frameUV(u0, v0, u1, v1);
+                ui::drawImageTexture(renderer, core.texture(), px, py, dw, dh, u0, v0, u1,
+                                     v1);
 
                 // The glow goes over the bars, not under the picture: it is
                 // drawn after, and its shader discards inside the picture rect,

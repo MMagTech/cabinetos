@@ -271,8 +271,9 @@ void ImageCache::evictToBudget() {
     }
 }
 
-void drawImageTexture(Renderer& r, GLuint texture, float x, float y, float w, float h) {
-    r.drawTextured(x, y, w, h, texture, 0, 0, 1, 1, Color{1, 1, 1, 1}, false);
+void drawImageTexture(Renderer& r, GLuint texture, float x, float y, float w, float h,
+                      float u0, float v0, float u1, float v1) {
+    r.drawTextured(x, y, w, h, texture, u0, v0, u1, v1, Color{1, 1, 1, 1}, false);
 }
 
 void drawImage(Renderer& r, const Image& img, float x, float y, float w, float h, Fit fit,

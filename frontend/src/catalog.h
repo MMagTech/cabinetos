@@ -48,15 +48,22 @@ enum class Support {
     // recover is indistinguishable from a bug.
     Excluded,
     // The core is built and sitting on this disk, and the console still cannot
-    // run it: it renders through a GL context the frontend has to own and hand
-    // over, and `core.cpp` refuses RETRO_ENVIRONMENT_SET_HW_RENDER. Three cores
-    // in the whole set are like this — Flycast, Mupen64Plus and PPSSPP.
+    // run it, because it renders through a graphics context rather than
+    // handing back pixels and the host cannot serve the one it asks for.
     //
     // A FOURTH ANSWER RATHER THAN NotInstalled, because "we have not built it"
     // and "we cannot drive it" lead to different work, and because the file
     // being present would otherwise make the console offer a Dreamcast game it
     // cannot start. That is the exact bug NotInstalled was added for, one layer
     // further in.
+    //
+    // NOTHING ANSWERS THIS TODAY. It used to cover Flycast, Mupen64Plus and
+    // PPSSPP wholesale; the host now hands a hardware-rendered core a
+    // framebuffer in its own GLES context, and the first two are measured
+    // running real games from the library. What remains is the narrower case
+    // the value was always really about: a core that wants desktop GL or
+    // Vulkan, which this context is not and which `core.cpp` turns down by
+    // name. PPSSPP is not built yet and is the next one to find out about.
     NeedsHardwareRender,
 };
 

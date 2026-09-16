@@ -60,9 +60,34 @@ rather than launched by hand:
   Play and Download. Before it, 1100 playable games had fifty reachable.
 - **A libretro core host** that loads a `.so`, paces it against the wall clock,
   plays its audio, draws its picture, and saves and restores its state.
-  **Dr. Mario runs.**
+  **Dr. Mario runs.** It also hosts the cores that draw for themselves: it owns
+  the GLES context and hands a hardware-rendered core a framebuffer inside it,
+  so **Mario Kart 64 and Ikaruga run too**, with no pixel ever read back.
 
 ### Open against the frontend right now
+
+- **Mupen64Plus save states do not restore the machine exactly**, and it is
+  reproducible to the digit. Found 2026-09-16 the day N64 became runnable; it
+  blocks nothing, because mupen64plus has no shared emulator tag, so its states
+  never travel. What `--state-test` says on Mario Kart 64, twice, with
+  byte-identical digests across two separate processes:
+
+  - The picture is **moving**, so the comparison is meaningful — not the static
+    title screen that once made this test report PASS and prove nothing.
+  - **Restoring is self-consistent**: two restores produce identical video and
+    identical audio.
+  - **Both differ from the uninterrupted run**, from video frame 0 of 300, and
+    the audio differs too — by four bytes of a million, which is one sample.
+
+  Three candidate causes and **none of them is established**: the state may not
+  capture everything; `retro_serialize` may perturb the core, since the run it
+  is compared against is the one taken immediately *after* the save; or the
+  picture may depend on graphics-plugin state that lives outside the state at
+  all — though the audio differing argues against that last one on its own.
+
+  **The instrument is not what is wrong, and that was checked rather than
+  assumed.** The same test on the same build, on mGBA with a moving picture,
+  reports video and audio MATCH and PASS. The failure is this core's.
 
 - **A white line reported under the keyboard's title, not reproduced.** Every
   row between the title and the field was scanned in the captured framebuffer
@@ -79,11 +104,15 @@ rather than launched by hand:
 - **Twenty cores of twenty-one are built**, and all four backend-sensitive ones
   are settled: pcsx_rearmed and melonDS take the recompiler and share Cabinet's
   tag, picodrive matches Cabinet's flags exactly, and Flycast is blocked on
-  Cabinet's own unscripted edits rather than on anything here. **1100 of 1644
+  Cabinet's own unscripted edits rather than on anything here. **1143 of 1644
   games are playable.** PPSSPP is the one not built.
-- **Two of the twenty cannot be RUN here**, whatever the build says: Flycast and
-  Mupen64Plus render through a GL context the frontend does not yet hand over.
-  `catalog::coverageFor` says so rather than offering a game that would fail.
+- ~~**Two of the twenty cannot be RUN here**~~ **— they can, as of 2026-09-16.**
+  Flycast and Mupen64Plus render through a graphics context rather than handing
+  back pixels, and the host now owns one and hands them a framebuffer inside
+  it. Measured, not assumed: **Mario Kart 64 reaches its title screen and
+  Ikaruga reaches its own**, both launched from the real library, both with
+  sound, and Home draws correctly on the way back out. That is Dreamcast, Naomi
+  and N64 — the 43 games that took the count from 1100 to 1143.
 - **Every core builds in CI**, on a GitHub runner from a bare checkout, with the
   finished `.so` asserted to report the pinned revision as its own version
   string — see open question 13.
@@ -809,6 +838,43 @@ Dreamcast scene — two thirds of the whole frame.
 > not a cost — and it removes the single largest per-frame cost the Apple build
 > has on its three heaviest cores.
 
+**BUILT 2026-09-16, and it does not exist.** The host accepts
+`SET_HW_RENDER`, creates the target itself, and the player samples that texture
+in the same context the core drew it in. Nothing is copied and nothing is read
+back. `Core::frameUV` is where the two paths meet: a software core answers
+"the whole texture, the right way up" and a hardware core answers a corner of a
+larger target with its rows the other way round, so no caller above it knows
+which kind of core is running.
+
+Four things were not obvious in advance and each one would have looked like a
+broken game:
+
+- **The target is sized to the core's declared MAXIMUM, not its picture.**
+  Flycast asks for 853x853 and then presents 640x480 into the corner of it.
+  Sampling the whole texture draws a small picture in a large black field.
+- **The picture is upside down**, because GL renders bottom-left origin and
+  every software core hands back a top-down buffer. The core states which
+  convention it used; it is read rather than guessed.
+- **`retro_run` does not give the context back as it found it.** A core
+  emulating a 3D machine leaves depth testing, culling, scissoring, a stencil
+  mask and its own program bound. The UI's `beginFrame` establishes only what
+  it uses, which was correct while nothing else touched the context. The host
+  now restores the context after every `retro_run`, next to the thing that
+  breaks it rather than in the renderer.
+- **Integer scaling is wrong for these cores.** A Game Boy's pixels were each
+  chosen by somebody; a Dreamcast's output is a 3D scene rendered at whatever
+  internal resolution the core was asked for. At 3x internal resolution the
+  frame is 1920x1440, flooring to an integer scale gives zero, clamps to one,
+  and draws 360 rows off the bottom of the screen.
+
+**Only GLES is accepted, and the version is read rather than assumed.** SDL is
+asked for GLES 3.0 and the driver is free to hand back more — the test VM
+returns 3.2 — so refusing a core that wants 3.1 on the basis of what was asked
+for would be turning down something the machine can do. Desktop GL and Vulkan
+are refused by name, because accepting and then failing inside the core reads as
+a broken game rather than as a frontend that cannot do something. Both cores
+tested asked for GLES 3.0 and got it.
+
 ### Shaders, and the glow around the picture
 
 Missed on the first Phase 0 read and added 2026-09-13 at MMagTech's prompt. Not
@@ -1187,6 +1253,47 @@ hide it behind a splash.
 `plasma-setup.service` runs a `bootutil` binary that decides whether to show the
 wizard based on a `plasma-setup-done` flag file. Dropping the flag file in place
 would suppress it, but removing the unit is cleaner — CabinetOS owns first run.
+
+### The cache is not the only thing a game writes to disk
+
+**Measured 2026-09-16, by running Flycast and Mupen64Plus and then looking at
+what appeared**, rather than by reasoning about what a core ought to write.
+Three kinds of file, none of them a ROM, and **eviction sees none of them**:
+
+| What | Where | Size after two games |
+|---|---|---|
+| Mesa's compiled-shader cache | `~/.cache/mesa_shader_cache/` | 2.5 MB |
+| Mupen64Plus's driver database | `system/Mupen64plus/mupen64plus.ini` | 447 KB |
+| Flycast's Dreamcast flash | `system/dc/dc_nvmem.bin` | 131 KB |
+
+`cache::candidates` walks `romcache/<romId>/` and nothing else, on purpose —
+`saves/` sits alongside and is deliberately never a candidate. But that also
+means everything above consumes free space, is counted by the floors as simply
+gone, and **cannot be reclaimed by any code this console has**. Un-keeping every
+game would not shrink it by a byte.
+
+It is small today and the shapes differ, which is why they are listed
+separately rather than as one number:
+
+- **The shader cache is the one that grows with play.** It is the graphics
+  driver's, not the core's, and it is written for every shader a hardware
+  core compiles — so it grows with how many different games have been played
+  and resets whenever Mesa is updated. Mesa evicts it against a **default cap
+  this console inherits rather than sets**, which is the wrong way round for an
+  appliance: the size should be a number CabinetOS chooses, via
+  `MESA_SHADER_CACHE_MAX_SIZE`, and the Storage screen should be able to say
+  what it is.
+- **The system directory is mixed**, and that is the part to be careful with.
+  `mupen64plus.ini` is a database that can be deleted and will come back.
+  `dc_nvmem.bin` is a Dreamcast's saved flash — **console settings, and the
+  thing a VMU lives beside.** Treating the system directory as reclaimable
+  would throw that away. Anything that cleans here has to distinguish the two,
+  which is the same distinction the Storage screen already draws between a
+  cache and a kept game.
+
+Nothing here is urgent — it is under 3 MB against a 5 GB system reserve — but it
+is a category the storage model currently does not have, and it arrived with the
+hardware-rendered cores rather than existing before them.
 
 ### Other facts worth keeping
 
@@ -1846,6 +1953,10 @@ Six hard requirements fall out, and each one eliminates candidates:
    Mupen64Plus and PPSSPP render through
    `RETRO_ENVIRONMENT_SET_HW_RENDER` into an FBO. The toolkit must let the
    frontend create that context, not create one for it and hide it.
+   **Settled 2026-09-16: SDL3 plus one EGL/GLES 3 context does exactly this,
+   and both requirement 2 and requirement 3 are now running rather than
+   argued** — Mario Kart 64 and Ikaruga play in the same context the UI draws
+   in, with no readback anywhere.
 3. **The UI must draw into the same context.** This is what deletes the
    `glReadPixels` readback — the largest per-frame cost on Apple's three
    heaviest cores. A toolkit that composites the game as a separate surface or
@@ -3991,9 +4102,11 @@ and then find out. Do the opposite:
    audio out. It covers two platforms, Game Boy and Game Boy Color. **Still
    owed: the same thing in CI**, so it is not a thing that works on one
    machine — which is the exact failure this whole open question is about.
-2. **One hardware-rendered core.** Flycast, because it is also Dreamcast and
-   Naomi, and because it is the one that proves the GL context and the
-   no-readback path.
+2. ~~**One hardware-rendered core.**~~ **DONE 2026-09-16.** Flycast, because it
+   is also Dreamcast and Naomi, and because it is the one that proves the GL
+   context and the no-readback path — and it did: Ikaruga runs, in the same
+   context the UI draws in, with nothing read back. Mupen64Plus came with it,
+   so N64 runs too. See *Video: two paths* and open question 13.
 3. **One backend-sensitive core.** pcsx_rearmed, built twice — `DYNAREC=0` and
    the Linux default — with a state written by each loaded by the other. That
    answers the parity question locally even if the Mac↔Apple TV test never
@@ -5124,6 +5237,34 @@ one layer further in.
 So `Support` now carries **`NeedsHardwareRender`** beside `NoCore`, `Excluded`
 and `NotInstalled`. Four answers, and they lead to four different pieces of
 work — which is the whole reason this document warned against collapsing them.
+
+**RESOLVED 2026-09-16, and the fourth answer is now empty.** The host owns the
+GLES context and hands a hardware-rendered core a framebuffer inside it, so
+Dreamcast, Naomi and N64 are Playable because they play — Mario Kart 64 and
+Ikaruga were launched from the real library and photographed running. See
+*Video: two paths* for what the mechanism actually turned out to require.
+
+`NeedsHardwareRender` is kept rather than deleted, because it is still the
+honest answer for the narrower case it was always really about: a core that
+wants **desktop GL or Vulkan**, which this context is not. Nothing answers it
+today. PPSSPP is the one core left unbuilt and is the next one to find out
+about — and `catalog.cpp`'s `hwRender` flag is kept in place for it, also
+because that table is positional and removing a field silently re-assigns every
+row below it.
+
+**What running them found that building them could not**, again:
+
+- **Flycast writes its Dreamcast flash to the SYSTEM directory**, not the save
+  directory — `system/dc/dc_nvmem.bin` — and Mupen64Plus writes a 447 KB
+  `system/Mupen64plus/mupen64plus.ini`. Neither is a ROM, so neither is visible
+  to cache eviction. See *Measured behaviour* for the whole of that gap.
+- **Ikaruga opens on "no memory card connected"**, which is the file-writing
+  save class showing its face rather than a fault: Flycast exposes no
+  `RETRO_MEMORY_SAVE_RAM`, `[save] battery is 0 bytes` is correct, and the VMU
+  is a file the sync layer does not yet know about.
+- **Save states work on both.** Flycast serialises 35.9 MB and restores to an
+  identical video digest; the test's own guard reports the scene as static at
+  that point, so it proves the round trip rather than a long divergence.
 
 #### The test that answers the whole question, and can be run this week
 
