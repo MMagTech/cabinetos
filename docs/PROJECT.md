@@ -4990,9 +4990,10 @@ replace or impossible to:
   server, and carrying a second copy creates two versions of the truth — which
   this question has already settled the other way, in *"a game continued on a
   different server starts from that server's save history"*.
-- **Anything not yet uploaded: yes.** These are the only things on the whole
-  machine the server cannot give back. Without them the drive travels and last
-  night's progress is stranded on the console that wrote it.
+- **Anything not yet uploaded: NO, and this changed within the hour.** It was
+  "yes, because the drive travels and progress would be stranded" — and then the
+  drive stopped travelling, see the reversal below. Save data of every kind stays
+  on the internal disk, so unplugging the drive cannot strand anything.
 
 > **The drive carries what is slow to replace and what cannot be replaced. Not
 > what the server already has.**
@@ -5029,7 +5030,44 @@ inherently un-console-like. If it happens: never the default action, a
 confirmation that cannot be fumbled through on a controller, and prefer adopting
 a drive as-is wherever possible.
 
-#### Portable drives, and the problem with them
+#### REVERSED 2026-09-16: a drive belongs to one console
+
+**The section below decided a drive should move between CabinetOS machines, and
+built a self-describing drive to make it work. Marcus reversed it the same day
+the split above was agreed, and the reasoning is short.**
+
+**The only real benefit of a portable drive is not re-downloading the games.**
+Everything else — names, artwork, platform labels, saves, play history — comes
+from RomM regardless. That single benefit does not pay for what portability
+drags in: a drive that must describe itself, games to be matched against a
+different server's library, and two consoles each holding half of somebody's
+unfinished progress for the same game.
+
+> **A drive is extra storage for the console it was attached to.** One owner.
+
+**It is also what real consoles do.** An external drive is formatted for and
+bound to the machine, on both the PS5 and the Xbox. This is the console-like
+answer as well as the simple one.
+
+**But a drive must not die with its console**, which is the one thing binding
+gets wrong if it is absolute. Replace a failed machine and four terabytes of
+games should not become landfill. So: **bound by default, adopted deliberately**
+— a new console offers "this drive belongs to another console; use it here?",
+takes ownership, and voids the old claim. One owner at a time, always, which is
+precisely what stops two machines diverging.
+
+**And it simplifies the split agreed above.** If the drive never travels, save
+data has no reason to be on it: **all saves, memory cards and states stay on the
+internal disk**, and the external drive is purely game storage. Unplugging it can
+then never strand anyone's progress, which was the fiddliest part of the previous
+answer and is now simply gone.
+
+**What survives from below:** migration between locations is still first-class,
+a missing drive still degrades rather than errors, and a documented on-disk
+layout is still worth having — not so another server can read it, but so that a
+future version of CabinetOS can.
+
+#### Portable drives, and the problem with them — SUPERSEDED, kept for the reasoning
 
 **Decided: a drive should move between CabinetOS machines.** The obvious case is
 two boxes in one house sharing a RomM server, and there the drive should simply
