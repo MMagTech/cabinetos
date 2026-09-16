@@ -1641,6 +1641,37 @@ The hero carries **two** actions and the distinction is load-bearing:
 When there is nothing to resume, Home says so in its own words and points at the
 Library — it does not show an empty shelf.
 
+##### Resume cannot always be instant here, and tvOS has the same problem
+
+**Raised 2026-09-16 by Marcus, about the cache, and it lands on the hero
+instead.** Recent and the hero both come from RomM's `last_played`, which is the
+**household's** history across every device. So the game Home offers to resume
+may be one that was last played on a phone, and that this console has never
+downloaded.
+
+Resume then means: fetch several gigabytes, fetch the newest state, and start.
+**That is a four-minute wait behind a button whose entire purpose is that there
+is no wait**, and this document's own rule — "stopping at a screen with a Play
+button on it is two actions, not one" — is about the number of *actions*, not
+about how long the one action takes.
+
+It is not a CabinetOS bug. tvOS has exactly the same gap, since its cache is
+whatever Apple has not yet reclaimed. It is more visible here because this
+console is meant to be the machine games are played on rather than one of
+several.
+
+**Three ways out, none chosen:**
+
+| | |
+|---|---|
+| **Resume becomes its own progress** | the pill fills as the download runs, in place, rather than throwing the person to another screen. Honest, cheap, and keeps it one action. |
+| **Pre-fetch the hero** | one game, the single most likely thing to be resumed, downloaded quietly when the console is idle. This is the "ready to play" behaviour real consoles have, and it makes Resume genuinely instant. Costs bandwidth on a game that may never be played here. |
+| **Say so on the card** | the downloaded badge from the component inventory, so the person knows before pressing which kind of Resume they are about to get. |
+
+The third is not an alternative to the other two — it is worth doing regardless,
+and it is the smallest. **Decide this when Home is next worked on**, not as part
+of the cache policy, which it is not.
+
 #### The hero card, read from Cabinet's tvOS source
 
 **Read 2026-09-14 from `RommApp/RommApp/Home/HomeView.swift`.** tvOS has shipped
@@ -2899,23 +2930,43 @@ writing regardless.
 **Marcus's, 2026-09-16, and it is better than the version it replaced because it
 is sayable.** Everything else in this section is detail underneath it:
 
-> **The games on your Recent shelf are on the disk. Everything else stays until
+> **The games you have played on this console are on the disk. They stay until
 > the disk needs the room, and then the ones you have not played for longest go
 > first. Nothing that is running, nothing you marked as keep, and nothing still
 > waiting to reach RomM is ever touched.**
 
-**Tying the cache to the Recent shelf is the part worth having.** It gives the
-cache a meaning a person can picture — *the games on that shelf start
-instantly* — and the shelf is already on screen in front of them.
-"Least-recently-played is evicted first" describes the same behaviour and
+**Tying the cache to something visible is the part worth having.** It gives the
+cache a meaning a person can picture rather than one only a developer can:
+"least-recently-played is evicted first" describes the behaviour exactly and
 explains nothing to anybody.
 
-**"Always" is a priority, not a guarantee**, and the difference shows up on a
-small machine: twenty recently-played PS2 games is eighty gigabytes, which no
-policy can promise on a 128 GB console. Recent is the **last** thing evicted
-rather than the thing never evicted — otherwise it is one more protected pile
-that can outgrow the disk, which is the failure that already ruled out exempting
-small systems.
+**But it cannot be the Recent shelf, and that is not a detail.** Marcus again,
+and it is the second time this section has tried to quietly make the reference
+setup into the definition. **Recent comes from RomM** — `order_by=last_played`,
+which this document says explicitly is the server's and never the app's — so it
+is the *household's* history across every device. A game played on a phone this
+morning is on this console's Recent shelf although this console has never
+downloaded it.
+
+So "everything on Recent is on the disk" is not a promise that is hard to keep,
+it is one that cannot be true. The shelf and the cache overlap; they are not the
+same list, and they never will be.
+
+> **Do not promise it. Show it.** The design system's component inventory
+> already carries a **downloaded** badge for exactly this. Mark the shelf
+> entries that are on this disk, and the honest version needs no guarantee at
+> all: what is marked starts instantly, what is not has to fetch first.
+
+That leaves the cache as *what this console has played*, which is what
+**"Least recently played" means on THIS console** below already required. The
+shelf framing had contradicted it within the same section.
+
+**Size would have broken the promise anyway**, and it is worth recording as the
+second reason rather than the first: twenty recently-played PS2 games is eighty
+gigabytes, which no policy can guarantee on a 128 GB console. Locally-recent
+games are the **last** thing evicted rather than the thing never evicted —
+otherwise they are one more protected pile that can outgrow the disk, which is
+the failure that already ruled out exempting small systems.
 
 **And "longest since played" means since PLAYED, not since downloaded.** A game
 fetched months ago and played last night stays; a game fetched last night and

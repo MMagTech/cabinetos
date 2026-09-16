@@ -82,7 +82,15 @@ is 0 bytes` is correct and the file never reaches RomM. Neo Geo Pocket, Sega CD
 and FBNeo's NVRAM are the same class and all three are playable today. Cabinet's
 `MemoryCardSync` is the shape to copy.
 
-**5. Hardware-rendered cores.** Flycast and Mupen64Plus are built and cannot
+**5. Resume promises something it cannot always deliver.** Home's hero comes
+from RomM's play history, which is the whole household's — so the game it offers
+to resume may have been last played on a phone and never downloaded here.
+Pressing Resume then means waiting several minutes behind a button whose whole
+point is that there is no wait. PROJECT.md records three ways out under *Resume
+cannot always be instant here*; none is chosen, and the smallest of them is
+worth doing regardless.
+
+**6. Hardware-rendered cores.** Flycast and Mupen64Plus are built and cannot
 run: they want a GL context through `RETRO_ENVIRONMENT_SET_HW_RENDER`, which
 `core.cpp` refuses. That is 43 more games, plus PPSSPP once it is built, and it
 is the one piece of frontend work that is genuinely new rather than more
