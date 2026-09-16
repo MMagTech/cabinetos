@@ -130,8 +130,14 @@ and the core can share one context.
 - **Read the evidence, not just the code.** Cabinet's mGBA feature set was read
   off its shipping archive with `nm -u`, which corrected a flag choice that
   reasoning had got wrong.
-- **`pgrep -f "some string"` matches your own command line.** Twice mistaken for
-  a still-running process.
+- **`pgrep -f "some string"` matches your own command line.** Three times now,
+  and the third was the expensive shape: a wait loop,
+  `until ! pgrep -f "git clone.*flycast"; do sleep 30; done`, where the shell
+  running the check has that very text in its own command line, so the pattern
+  matches the searcher and the condition can never come true. It sat there for
+  nine hours waiting for something that had already finished. **Match on
+  something the checker cannot contain** — a pid file, `pgrep -x`, or the exit
+  status of the thing you actually started.
 - **Look on disk before concluding a file does not exist.** `core-manifest.json`
   is at `~/Downloads/core-manifest.json` and is not on GitHub.
 - **Stop the session before building on the VM.** The frontend runs at 300% CPU
