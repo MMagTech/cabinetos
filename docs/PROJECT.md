@@ -601,6 +601,23 @@ Those are two different things and the UI must treat them as such:
 The Settings storage screen shows both, and lets a cached game be promoted to
 kept and a kept game released back to cached.
 
+**And keeping is an action on the GAME, not only a row in Settings.** Added
+2026-09-16 at Marcus's prompt, and it matches what Cabinet already ships — a
+per-game toggle, with the size shown, removable from the same place it was
+added. Settings is where you go to see the whole picture; the game's own screen
+is where the decision is actually made.
+
+**It has to work on a game that has never been played**, which is the case that
+matters most and the one a promote-from-cache model misses entirely: browsing
+the library, picking something for later, and having it there when you come
+back. On a game already in the cache it pins what is there; on one that is not,
+it is a download that stays. Cabinet calls this *Keep on device*; the word on
+the button here should be whichever of **Download** or **Keep** reads better on
+a television, and that is a Phase 4 wording decision rather than a design one.
+
+**Kept games are what shrinks the cache**, since the cache is simply whatever
+space is left over — see the cache policy in Phase 4.
+
 ---
 
 ## How Cabinet hosts cores
@@ -2978,8 +2995,25 @@ enough for the incoming game, least-recently-played first, and stop the moment
 there is room. Nothing is deleted speculatively, in the background, or while a
 game is running.
 
-Pressure is whichever comes first: the cache budget set in Settings, or real
-free space measured against a floor that is never crossed.
+**Pressure is simply the disk being full**, and there is no cache size to
+configure. Marcus, 2026-09-16: a person picks a game and chooses Download, those
+downloads stay, "and by nature shrink disk space available for cache".
+
+That is the whole sizing rule, and it deletes a setting:
+
+> **The cache is whatever is left.** Kept games take what they take, the save
+> floor is never crossed, and the cache has the remainder.
+
+An earlier draft had a configured budget *and* a free-space limit, whichever
+bound first — two numbers doing one number's job, and the configured one is
+unanswerable anyway. Nobody knows what to set a cache size to, and on a console
+the drive is for games regardless.
+
+**It degrades exactly the right way.** Keep enough games and the cache shrinks
+to nothing, at which point every un-kept game downloads, plays, and is dropped
+on the way out — which is precisely what Cabinet's Mac does today, and it ships.
+Keep so many that nothing fits at all and the download refuses and says so,
+which is the one failure this policy ever shows anybody.
 
 ##### The eviction unit is a FILE, not a game
 
