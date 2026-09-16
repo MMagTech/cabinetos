@@ -258,7 +258,7 @@ seven CEC systemd units.
 
 #### CEC will not be tested by the author
 
-**Marcus is not buying a CEC adapter. Testing will come from other people.**
+**MMagTech is not buying a CEC adapter. Testing will come from other people.**
 That is a fine arrangement and it has consequences worth stating plainly,
 because they shape how the feature must be built:
 
@@ -605,7 +605,7 @@ The Settings storage screen shows both, and lets a cached game be promoted to
 kept and a kept game released back to cached.
 
 **And keeping is an action on the GAME, not only a row in Settings.** Added
-2026-09-16 at Marcus's prompt, and it matches what Cabinet already ships — a
+2026-09-16 at MMagTech's prompt, and it matches what Cabinet already ships — a
 per-game toggle, with the size shown, removable from the same place it was
 added. Settings is where you go to see the whole picture; the game's own screen
 is where the decision is actually made.
@@ -811,7 +811,7 @@ Dreamcast scene — two thirds of the whole frame.
 
 ### Shaders, and the glow around the picture
 
-Missed on the first Phase 0 read and added 2026-09-13 at Marcus's prompt. Not
+Missed on the first Phase 0 read and added 2026-09-13 at MMagTech's prompt. Not
 needed to get a core running, and very much part of what the product looks like.
 
 **Eleven shaders**, one Metal fragment function each, with one pipeline built
@@ -845,7 +845,7 @@ rather than being trusted.
 
 **The history is worth keeping, because it is a warning.** The original six came
 from RomM/EmulatorJS's own bundled set. Two ScaleHQ scalers and a `crt-geom`
-slang port *"looked bad enough in this Metal port that Marcus dropped them on
+slang port *"looked bad enough in this Metal port that MMagTech dropped them on
 sight"*. A shader that is well regarded elsewhere is not automatically good once
 reimplemented — judge each on the panel.
 
@@ -1676,7 +1676,7 @@ is that there is no wait — with three proposed fixes: a progress bar inside th
 pill, pre-fetching the hero while idle, and a badge saying which kind of Resume
 was coming.
 
-**Closed by Marcus, and he is right.** You press Resume, it downloads, it plays.
+**Closed by MMagTech, and he is right.** You press Resume, it downloads, it plays.
 The wait is the wait whichever way it is presented, and the download already
 shows progress and already takes Escape to cancel. Warning someone in advance
 does not shorten it and does not change what they would do — they want to play
@@ -2322,7 +2322,7 @@ differs" is worse than no test, because it is believed.
 
 #### And then it was proved against Cabinet's own build
 
-Run the same day, at Marcus's insistence that reasoning about this was not
+Run the same day, at MMagTech's insistence that reasoning about this was not
 enough. **The headline result of the project so far.**
 
 Cabinet's macOS Gambatte is pinned to `d9d6cd06` — **the same commit CabinetOS
@@ -2728,7 +2728,7 @@ given game needs.
 
 ###### Firmware is per PLATFORM, so fetch the whole lot once and stop thinking about it
 
-**Marcus, 2026-09-16: a BIOS "just needs downloading for that platform one time
+**MMagTech, 2026-09-16: a BIOS "just needs downloading for that platform one time
 and then the platform uses it for all games on it".** That is already how
 CabinetOS stores it and it is better than the reference implementation here —
 one shared `system/` directory, with a file already present at the right size
@@ -2753,7 +2753,7 @@ Ninety-three percent of that total is firmware for a system with no core in the
 manifest and no prospect of one. For everything actually playable it is fifteen
 megabytes — the entire BIOS collection, for every system, permanently.
 
-**Fetching the whole 15 MB at setup was proposed and Marcus chose otherwise:
+**Fetching the whole 15 MB at setup was proposed and MMagTech chose otherwise:
 fetch a platform's firmware the first time a game on that platform is launched.**
 He is right, on two counts. It is less machinery — the launch path already does
 exactly this, and the only change is not asking again afterwards — and it is a
@@ -2786,7 +2786,7 @@ once per console.
 
 ###### Tell the person their server has no BIOS for a system, BEFORE they pick a game
 
-**Marcus, 2026-09-16, and it is a real gap.** Today a platform whose BIOS the
+**MMagTech, 2026-09-16, and it is a real gap.** Today a platform whose BIOS the
 server does not hold fails at launch with the CORE's error message — measured
 earlier the same day, on Sega CD: `Unable to open CD BIOS:
 "system/bios_CD_U.bin"`. Clear, actionable, and delivered at the worst possible
@@ -2931,11 +2931,11 @@ this needs.
 
 **The rule is that the person never thinks about storage, and never loses
 anything they would miss.** Everything below serves those two sentences. From
-Marcus's proposal, with four changes argued for rather than accepted.
+MMagTech's proposal, with four changes argued for rather than accepted.
 
 ##### What Cabinet already does, on both its platforms
 
-**Read from `NativeLauncher.swift` 2026-09-16 at Marcus's prompt, and it should
+**Read from `NativeLauncher.swift` 2026-09-16 at MMagTech's prompt, and it should
 have been read before any of this was designed.** Neither Apple platform has an
 eviction policy, for two different reasons, and the difference is the whole
 reason CabinetOS needs one.
@@ -2973,7 +2973,7 @@ tier has to exist here, even though the Mac gets away without one.**
 
 ##### None of this may be tuned to one library, one disk or one connection
 
-**Raised by Marcus against the first draft of this section, and he was right.**
+**Raised by MMagTech against the first draft of this section, and he was right.**
 That draft justified its eviction order with "every cartridge game in the
 library together is under 2 GB", which is a fact about *this* reference library
 — about three hundred cartridge games — and it inverts for anyone with a
@@ -3088,7 +3088,7 @@ invisible to the build and obvious within one launch.
 
 ##### The policy in one paragraph
 
-**Marcus's, 2026-09-16, and it is better than the version it replaced because it
+**MMagTech's, 2026-09-16, and it is better than the version it replaced because it
 is sayable.** Everything else in this section is detail underneath it:
 
 > **The games you have played on this console are on the disk. They stay until
@@ -3096,7 +3096,7 @@ is sayable.** Everything else in this section is detail underneath it:
 > first. Nothing that is running, nothing you marked as keep, and nothing still
 > waiting to reach RomM is ever touched.**
 
-**The cache is invisible, and that is the decision.** Marcus, 2026-09-16,
+**The cache is invisible, and that is the decision.** MMagTech, 2026-09-16,
 ending a long detour: *"No one knows or cares if the game exists in cache on the
 OS. You go to the game and hit play. If it isn't cached it downloads. If it is
 cached it doesn't."*
@@ -3143,7 +3143,7 @@ there is room. Nothing is deleted speculatively, in the background, or while a
 game is running.
 
 **Pressure is simply the disk being full**, and there is no cache size to
-configure. Marcus, 2026-09-16: a person picks a game and chooses Download, those
+configure. MMagTech, 2026-09-16: a person picks a game and chooses Download, those
 downloads stay, "and by nature shrink disk space available for cache".
 
 That is the whole sizing rule, and it deletes a setting:
@@ -3159,7 +3159,7 @@ the drive is for games regardless.
 
 ##### The games and the operating system share one disk
 
-**Marcus, 2026-09-16, and it is the most serious thing raised about this
+**MMagTech, 2026-09-16, and it is the most serious thing raised about this
 policy.** `/` is a 43 MB read-only composefs and **all real storage is `/var`** —
 which holds the ROM cache, the OS's own storage, and the space a system update
 needs to stage itself. They are not separate.
@@ -3189,7 +3189,7 @@ protecting from the system, because it is the system's to take.
 
 ##### Partitioning was considered and rejected
 
-**Raised by Marcus in the same breath, and reasoned to the right answer: a
+**Raised by MMagTech in the same breath, and reasoned to the right answer: a
 separate system partition would enforce this in the kernel rather than in our
 code, and the problem is that nobody can say how big it should be.**
 
@@ -3237,7 +3237,7 @@ which is the one failure this policy ever shows anybody.
 
 ##### Everything on the disk is a copy of RomM. That is the whole rule
 
-**Marcus, 2026-09-16, after this section had drifted into categories for the
+**MMagTech, 2026-09-16, after this section had drifted into categories for the
 third time: saves, BIOS and memory cards are all stored on RomM.** They are, and
 this document has said so twice and then built tiers of protected things on top
 of it anyway.
@@ -3300,7 +3300,7 @@ space, the oldest *pending* states for a game could be dropped rather than the
 newest, since a save-scummer wants the last one and not the three hundredth from
 the bottom. That trades a promise this document makes — local first, nothing
 written is ever lost — against a disk that stops working, and **that trade needs
-Marcus rather than an assistant.**
+MMagTech rather than an assistant.**
 
 ##### The eviction unit is a FILE, not a game
 
@@ -3363,7 +3363,7 @@ It is the size of the *archive*, though, so it is what the download needs and
 ##### Unpacking: ask the archive, do not guess a ratio
 
 **Third change. The first draft said "budget twice the archive" and that is
-wrong in the direction that fills the disk**, as Marcus pointed out: an archive
+wrong in the direction that fills the disk**, as MMagTech pointed out: an archive
 is *compressed*, so what comes out of it is not the size that went in.
 
 Measured on this library rather than argued: Space Harrier is an **868 KB** zip
@@ -5184,7 +5184,7 @@ location rather than globally.
 #### Decided
 
 **REVISED 2026-09-16: a second drive takes the KEPT games, and the cache stays
-on the internal disk.** Marcus, thinking ahead to testing it. The paragraph below
+on the internal disk.** MMagTech, thinking ahead to testing it. The paragraph below
 said one active location holding everything, and the split is better, because
 the two things are different in kind:
 
@@ -5250,7 +5250,7 @@ a drive as-is wherever possible.
 
 #### REVISED AGAIN, 2026-09-16: a drive belongs to a SERVER, not a console
 
-**Marcus, within the hour, and it is better than binding to a console for a
+**MMagTech, within the hour, and it is better than binding to a console for a
 reason that is obvious once said: the games on the drive are already
 server-specific.** They are identified by RomM's own rom IDs, which mean nothing
 on any other instance. Binding to the server states what is already true;
@@ -5279,12 +5279,12 @@ The address will not stand in for it either: an IP changes, a hostname replaces
 it, someone puts https in front, and the same server reads as a different one.
 
 **Two answers were designed here and both were too much.** The first sampled
-the drive's games to decide whether it was "ours", which Marcus broke in one
+the drive's games to decide whether it was "ours", which MMagTech broke in one
 sentence — people delete games from the server, so the sample misses and four
 terabytes get condemned as somebody else's. The second checked every game
 against the server on plugging in, with a Storage screen for the leftovers.
 
-**Marcus's third answer is that none of it needs building, and he is right,
+**MMagTech's third answer is that none of it needs building, and he is right,
 because the check already exists.** `beginLaunch` will not reuse a downloaded
 file unless it sits at that game's rom-id path, under the name the server gave,
 at the size the server reported:
@@ -5321,7 +5321,7 @@ class of data RomM cannot give back, without needing a rule to say so.
 #### SUPERSEDED — a drive belongs to one console
 
 **The section below decided a drive should move between CabinetOS machines, and
-built a self-describing drive to make it work. Marcus reversed it the same day
+built a self-describing drive to make it work. MMagTech reversed it the same day
 the split above was agreed, and the reasoning is short.**
 
 **The only real benefit of a portable drive is not re-downloading the games.**
@@ -5355,7 +5355,7 @@ future version of CabinetOS can.
 two boxes in one house sharing a RomM server, and there the drive should simply
 work.
 
-**The tension, raised by Marcus:** CabinetOS is tied to a RomM login. Move the
+**The tension, raised by MMagTech:** CabinetOS is tied to a RomM login. Move the
 drive to a machine paired with a *different* server and the ROM files are
 present but the library describing them is not — names, artwork, metadata,
 collections and save history all live server-side, and game identifiers are
