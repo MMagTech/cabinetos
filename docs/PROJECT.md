@@ -2921,21 +2921,68 @@ So the streaming writer checks free space as it goes and aborts when the next
 write would cross the floor, deleting its `.part` — which returns the space it
 had taken. A `statvfs` every few megabytes is not a cost worth optimising.
 
-**The expected size is in the LIBRARY record, not the HTTP response.**
-`fs_size_bytes` is present on every ROM and is what makes "free exactly enough
-for this game" possible at all. Do not reach for `Content-Length`.
+**The size of the DOWNLOAD is in the library record, not the HTTP response.**
+`fs_size_bytes` is present on every ROM and is what makes room for the transfer
+possible to reserve at all. Do not reach for `Content-Length`.
 
-##### Budget for unpacking, which is where the real peak is
+It is the size of the *archive*, though, so it is what the download needs and
+**not** what the game will cost once unpacked. See below.
 
-**Third change, and the number most likely to catch someone out.** ROMs arrive
-archived and are unpacked, so for a moment the disk holds both. A 4 GB game can
-need **8 GB** transiently. That is larger than the whole proposed reserve, and
-it is a working requirement rather than a reserve — checked at download time,
-released immediately after.
+##### Unpacking: ask the archive, do not guess a ratio
 
-Two exceptions already established elsewhere and worth restating here, because
-they halve the peak where they apply: an arcade set is handed to FBNeo
+**Third change. The first draft said "budget twice the archive" and that is
+wrong in the direction that fills the disk**, as Marcus pointed out: an archive
+is *compressed*, so what comes out of it is not the size that went in.
+
+Measured on this library rather than argued: Space Harrier is an **868 KB** zip
+holding a **2 MB** ROM. Extraction holds both, so the peak is 2.9 MB — **3.4×
+the archive**, not 2×. And that is a mild case. DS and N64 ROMs are padded out
+to power-of-two sizes with empty space, which compresses far harder, so no
+multiplier is safe for the set.
+
+**There is no need to estimate at all.** A zip declares each entry's
+uncompressed size in its own index, 7z likewise, and `archive_entry_size()`
+hands it over when the header is read — before a byte is extracted.
+`romfile.cpp` already walks those headers to pick the member to use; it simply
+does not add up the sizes while it is there.
+
+> **peak = the archive + what its index says will come out of it**, known before
+> committing to the extraction, and refused cleanly if it will not fit.
+
+Same idiom as everywhere else in this document: ask the core what it takes, ask
+the magic bytes what the file is, ask the archive what it holds. The multiplier
+was a guess standing in for a fact that was already on disk.
+
+**A format that declares nothing** — some streamed archives report an unknown
+entry size — is the only case needing a fallback, and the honest fallback is to
+extract into the space available and fail if it runs out, not to invent a ratio.
+
+Two exceptions already established elsewhere, worth restating because they make
+the peak vanish entirely where they apply: an arcade set is handed to FBNeo
 unextracted, and `.chd` and `.rvz` are never unpacked at all.
+
+##### What a game costs is what is ON DISK, not what RomM said it was
+
+**Falls out of the above and is its own accounting error.** The policy's budget
+would naturally use `fs_size_bytes`, since that is what the library record
+carries and what "free exactly enough for this game" was written against. For
+anything archived that is the *compressed* size, and the cache ends up holding
+the larger thing. Budgeting against it under-counts every archived game.
+
+**And today it under-counts twice over, because the archive is never deleted.**
+`romcache/39/` holds `Tetris.zip` and the extracted `Tetris.gb` side by side,
+and that is not an oversight: the "do we already have this?" check `stat`s the
+downloaded archive against the size RomM reported, so deleting it would mean
+re-downloading the game on every launch.
+
+So the unpacking cost is not transient at all as things stand — it is permanent,
+and it is the compressed size of every archived game in the cache, forever.
+
+> **Decided: the archive goes once it has been unpacked, and the reuse check
+> moves to the extracted file.** It costs a small per-game record of what was
+> unpacked and how big it should be — which the cache wants regardless, since
+> the budget has to be computed from real sizes on disk rather than from the
+> server's idea of them.
 
 ##### Order: least-recently-played, but never shred a hundred small things
 
@@ -3080,7 +3127,7 @@ happens.
 | Ignore candidates below | **1%** of the space being freed | keeps a hundred small deletions from standing in for one large one |
 | Free beyond what is needed | **10%** of the budget | so eviction is an occasional event rather than every launch |
 | Save floor | **2 GB, or 5% of the disk, whichever is smaller** | it protects the upload queue and room for one more write, not the state history — those are on RomM |
-| Unpacking headroom | **2× the archive**, transient | held only while extracting, and not needed for `.chd`, `.rvz` or an arcade set |
+| Unpacking headroom | **the archive + what its index declares**, transient | read from the archive, never estimated; not needed at all for `.chd`, `.rvz` or an arcade set |
 
 **The floor is smaller than the five gigabytes first proposed** because of what
 it turned out to be protecting. Five was sized for a full local state history,
