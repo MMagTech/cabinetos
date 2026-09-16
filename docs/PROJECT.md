@@ -2894,6 +2894,33 @@ link changes is the *advice*: first-run and the Storage screen should say that
 keeping a game means never waiting for it again, which is a sentence worth
 writing regardless.
 
+##### The policy in one paragraph
+
+**Marcus's, 2026-09-16, and it is better than the version it replaced because it
+is sayable.** Everything else in this section is detail underneath it:
+
+> **The games on your Recent shelf are on the disk. Everything else stays until
+> the disk needs the room, and then the ones you have not played for longest go
+> first. Nothing that is running, nothing you marked as keep, and nothing still
+> waiting to reach RomM is ever touched.**
+
+**Tying the cache to the Recent shelf is the part worth having.** It gives the
+cache a meaning a person can picture — *the games on that shelf start
+instantly* — and the shelf is already on screen in front of them.
+"Least-recently-played is evicted first" describes the same behaviour and
+explains nothing to anybody.
+
+**"Always" is a priority, not a guarantee**, and the difference shows up on a
+small machine: twenty recently-played PS2 games is eighty gigabytes, which no
+policy can promise on a 128 GB console. Recent is the **last** thing evicted
+rather than the thing never evicted — otherwise it is one more protected pile
+that can outgrow the disk, which is the failure that already ruled out exempting
+small systems.
+
+**And "longest since played" means since PLAYED, not since downloaded.** A game
+fetched months ago and played last night stays; a game fetched last night and
+never started goes first. Easy to implement backwards.
+
 ##### Never on a timer. Only under pressure, only at a safe moment
 
 **Nothing is evicted because time has passed.** A cached game on a half-empty
@@ -3022,7 +3049,7 @@ and it is the compressed size of every archived game in the cache, forever.
 > the budget has to be computed from real sizes on disk rather than from the
 > server's idea of them.
 
-##### Order: least-recently-played, but never shred a hundred small things
+##### Order: least-recently-played, and that is the whole rule
 
 **Fourth change, and it answers "should size matter" and "should small systems
 be exempt" with one mechanism.**
@@ -3036,24 +3063,26 @@ costing almost nothing.
 **The threshold that expresses this has to scale with the need, not with a
 number somebody picked.**
 
-> **First pass: least-recently-played first, ignoring anything smaller than one
-> percent of the space being freed. Second pass: everything, same order, only if
-> the first pass could not finish the job.**
+> **Shipped rule: least-recently-played, full stop. The size refinement below
+> is DEFERRED until there is evidence it is needed.**
 
-One percent is arbitrary in the way a rounding is arbitrary rather than in the
-way 300 MB is: it has no units, it belongs to no library, and it is decided
-rather than pending. Needing 4 GB, it
-ignores anything under 40 MB, so cartridge games are left alone and disc games
-and big arcade sets are the candidates. Needing 50 MB for a Game Boy Advance
-title, it ignores anything under 500 KB, so cartridge games ARE the candidates.
-**The same rule gives the opposite answer when the library is the opposite
-shape, which is the property the first draft did not have.**
+The refinement it defers: ignore candidates smaller than one percent of the
+space being freed, so that a single 4 GB download does not take forty Game Boy
+games with it. The effect is real and it is a **presentation** problem more than
+a cost one — those forty come back in a second or two each, and what stings is a
+Storage screen reporting "cleared 40 games", which reads as far more destructive
+than it was.
 
-The reference library shows the effect rather than justifying the rule: its
-three hundred cartridge games come to under 2 GB against a 4 GB PS2 title, so
-clearing every one of them would not house a single disc game. A library of
-five thousand cartridge games and no discs never has that problem, and under
-this rule never triggers the first pass at all.
+**It is one line and it can wait for the list to actually look alarming.**
+Shipping the simple rule first is the right order; this is written down so that
+whoever sees that list knows the fix was considered rather than missed.
+
+One percent is recorded rather than left to be re-derived, because it has no
+units and belongs to no library. Needing 4 GB it ignores anything under 40 MB,
+leaving cartridge games alone. Needing 50 MB for a Game Boy Advance title it
+ignores anything under 500 KB, so cartridge games ARE the candidates. **The same
+rule gives the opposite answer when the library is the opposite shape**, which a
+fixed megabyte threshold could never do.
 
 **Exempting small systems outright was considered and rejected**, though the
 instinct behind it is right. A permanently exempt class can grow past the budget,
@@ -3062,8 +3091,9 @@ and then the disk is full of things nothing is allowed to delete — with
 tvOS's call) that is not a hypothetical. This version has the same practical
 effect and cannot reach that state.
 
-Keyed on **size relative to the need**, not on system: it needs no table of
-platforms to go stale, and a system's name was never the thing that mattered.
+When it is added, it is keyed on **size relative to the need**, never on
+system: that needs no table of platforms to go stale, and a system's name was
+never the thing that mattered.
 
 ##### Free a margin, not exactly enough
 
@@ -3162,7 +3192,7 @@ happens.
 
 | | | |
 |---|---|---|
-| Ignore candidates below | **1%** of the space being freed | keeps a hundred small deletions from standing in for one large one |
+| Ignore candidates below | **nothing — deferred**, then 1% of the space being freed if it is ever needed | oldest-first is what ships; the refinement waits for evidence |
 | Free beyond what is needed | **10%** of the budget | so eviction is an occasional event rather than every launch |
 | Save floor | **2 GB, or 5% of the disk, whichever is smaller** | it protects the upload queue and room for one more write, not the state history — those are on RomM |
 | Unpacking headroom | **the archive + what its index declares**, transient | read from the archive, never estimated; not needed at all for `.chd`, `.rvz` or an arcade set |
