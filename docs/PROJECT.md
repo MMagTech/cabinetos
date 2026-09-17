@@ -6678,3 +6678,60 @@ a note in the layout, not machinery.
 **Not implemented.** Nothing has moved. It should be done before there are
 machines with play histories on them, and it is a behaviour rather than a
 picture, so the SER5 decision does not hold it up.
+
+---
+
+### PSP save sync, BUILT AND PROVEN 2026-09-17
+
+Recorded here rather than under open question 13 because it is the first
+directory-save implementation and the pattern the other seven file-writing
+platforms should follow.
+
+`frontend/src/dirsave.{h,cpp}` zips and unpacks a tree with libarchive;
+`catalog::directorySaveRoot` says which core has one; `syncDirSave` in main.cpp
+captures, and the launch path restores. **The archive is rooted at the SAVEDATA
+level** — entries begin `ULUS10002LUMINES/PARAM.SFO` — so opening one shows the
+game's save folder, which is what every PSP save download on the internet looks
+like.
+
+**Measured, not argued:**
+
+| | |
+|---|---|
+| Played and quit | `Lumines.zip`, **40,344 bytes**, 4 entries, on RomM, tagged `ppsspp-native` |
+| Deleted locally and relaunched | unpacked, and **byte-identical to the server's copy** |
+| The old Apple-format save | sniffed, recognised as not a zip, **left alone** |
+
+**Three things running it taught, each of which would have been wrong on paper:**
+
+1. **Restore must happen BEFORE the core loads the game**, because PPSSPP mounts
+   the memory stick while the game boots. A folder that arrives later is a
+   folder the game has already decided is not there.
+2. **Capture must happen AFTER the unload**, because a directory save is files
+   on a disk and `retro_unload_game` is where a core flushes them.
+3. **Change detection needs nanoseconds and size, not whole seconds.** A save
+   restored and then rewritten inside the same second compares equal. Recorded
+   as a hazard closed rather than a fault observed — it was first reported here
+   as a real failure and that was wrong; checking showed the game had simply not
+   written anything that run.
+
+**And the crash it exposed, which is understood and NOT closed.** Quitting while
+the game was still booting killed the console inside the core's own boot thread
+(`PSP_InitStart` → `CPU_Init` → `__KernelInit` → `__PPGeInit`). Quitting now
+defers until the machine is up.
+
+> **The first fix waited a fixed number of FRAMES and fixed nothing**, because a
+> frame is 3 ms or 100 ms depending on what is being drawn — the same run
+> crashed at the window size and survived at 1920x1080. It waits on the clock
+> now, and the case that crashed twice exits cleanly after 4.1 seconds.
+
+**Still open:** in the headless capture configuration the core sometimes never
+boots at all — one run managed 2,384 frames and zero audio — and tearing it down
+then aborts at process exit in a static `std::thread` destructor inside the
+core. Not seen in the ordinary configuration. Same root cause as the crash: a
+core that never finished starting cannot run its own shutdown.
+
+**The fact underneath all of it, worth more than the feature:** *a core with its
+own emulation thread only advances when the frontend COMPLETES a frame, not when
+`retro_run` is called.* That explains the wait loop that made no progress AND
+why `--state-test` cannot warm this core up — two mysteries with one cause.

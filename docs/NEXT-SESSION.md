@@ -128,11 +128,16 @@ saved; Sega CD's cart is a separate region from its internal RAM).
   file: Dreamcast `system/dc/vmu_save_A1.bin`; MAME `nvram/<stem>.nv`; FBNeo
   `fbneo/<stem>.fs`; 3DO `opera/shared/nvram.0.srm`; Sega CD `*.brm` plus
   `*cart.brm` as its own region; Neo Geo Pocket `*.flash`; DS `*.sav`; PSP the
-  `PSP/SAVEDATA/**` tree. Three of those are **already sitting on this
-  console's disk** from real runs — `scd_U.brm`, `mame2003-plus/nvram/*.nv` and
-  the PSP tree — so the capture half can be written and checked without playing
-  anything new. Cabinet solved every one of them in `MemoryCardSync.swift`;
-  read it before designing anything.
+  `PSP/SAVEDATA/**` tree. Two of those are **already sitting on this console's
+  disk** from real runs — `scd_U.brm` and `mame2003-plus/nvram/*.nv` — so the
+  capture half can be written and checked without playing anything new. Cabinet
+  solved every one of them in `MemoryCardSync.swift`; read it before designing
+  anything.
+- **PSP IS DONE, and it is the worked example for the other seven.**
+  `frontend/src/dirsave.h` and `syncDirSave` in main.cpp: restore before the
+  core loads, capture after the unload, compare against a baseline taken at
+  launch, upload only when something moved. The other seven are simpler than
+  PSP was, because each is one file rather than a tree.
 - **`[save] battery is 0 bytes` is correct, not a fault**, for every core in
   that class. It is the host saying the core exposes no save RAM.
 - **PSP is a third shape, and Cabinet ALREADY SYNCS IT — do not repeat my
@@ -197,7 +202,29 @@ causes are written down with none established. It blocks nothing today, and it
 matters because portable save states are the premise the whole product rests on.
 The cheapest discriminating experiment is in PROJECT.md.
 
-### 4. PSP's save state, which is half answered
+### 4. PSP's save state, and a crash that is understood but not closed
+
+**The save DATA is done** — see item 1. Two things are left, and they are the
+same shape: PPSSPP is the only core that emulates on a thread of its own.
+
+**A threaded core only advances when the frontend COMPLETES a frame**, not when
+`retro_run` is called. That one fact explains both of the following, and it was
+found by a wait loop that made no progress at all.
+
+**The crash.** Quitting a PSP game while it is still booting used to kill the
+console, inside the core's own boot thread. Quitting now defers until the
+machine is up — measured on the case that crashed twice, which waits 4.1s and
+exits cleanly. **It is not closed:** in the headless capture configuration the
+core sometimes never boots at all (one run: 2,384 frames, zero audio), and
+tearing it down then aborts at process exit in a static `std::thread`
+destructor inside the core. Not seen in the ordinary configuration. Same root
+cause — the core never finished starting, so its own shutdown cannot clean up.
+
+**The state.** PPSSPP produces a 41,943,040-byte state at a demo screen, so it
+CAN serialize. Whether the restore is exact is unknown, because `--state-test`
+warms up in a tight `retro_run` loop with no frame in it and this core makes no
+progress there. Fixing the instrument is the work, and the diagnosis above is
+the fix: give the warm-up a real frame loop.
 
 The core produces a 41,943,040-byte state at a demo screen — verified. Whether
 the restore is exact is **not** answered, and it cannot be by the existing tool:
