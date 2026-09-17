@@ -14,11 +14,15 @@ Rewrite it at the end of a session. It is meant to be current, not a log.
 
 ## Before anything else
 
-**Everything below is on `main`.** As of 2026-09-16 the whole of this file's
-"what runs today" is merged — storage floors, the reachable library, core
-options and the hardware-rendered systems, eight commits, in
-[#6](https://github.com/MMagTech/cabinetos/pull/6). There is no stack of
-branches to stand on any more, and no unmerged work.
+**Everything is on `main`, and there are no other branches.** As of 2026-09-17
+the whole of this file's "what runs today" is merged — storage floors, the
+reachable library, core options and the hardware-rendered systems
+([#6](https://github.com/MMagTech/cabinetos/pull/6)), then three follow-ups:
+CI on every pull request ([#7](https://github.com/MMagTech/cabinetos/pull/7)),
+one container build per run instead of twenty
+([#8](https://github.com/MMagTech/cabinetos/pull/8)), and the Bazzite base at
+44.20260914 ([#9](https://github.com/MMagTech/cabinetos/pull/9)). Nothing is
+unmerged and no pull request is open.
 
 Start from `main`, branch once, and **open the pull request against `main`**.
 Four branches were once stacked on each other here, each opened before the last
@@ -251,6 +255,14 @@ sitting there waiting for exactly that case.
   flip. It is the logo rotating. The test that actually settles orientation is
   text that reads correctly: at frame 1100 the title screen says PUSH START
   BUTTON the right way round.
+- **A core build failing is not always the core.** The twenty-job matrix
+  fetches 267 MB of Fedora packages, and on 2026-09-16 a mirror timed out at
+  under a kilobyte a second and failed `Build prosystem` — which passed on
+  re-run in fifty seconds, with nothing wrong with prosystem. The container is
+  now built once per run and pulled by the twenty, so that chance is twentyfold
+  smaller, but it is not zero. **Re-run before reading anything into a single
+  red core**, and look at the log: a `Curl error (28)` is the network, not the
+  code.
 - **The image build still only runs on a pull request aimed at `main`.** The
   frontend compile and the core build were widened on 2026-09-16 to run on every
   pull request, because a stack of branches had slipped past them and the

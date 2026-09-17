@@ -1128,6 +1128,23 @@ it.
 `.github/workflows/base-update.yml` runs weekly and opens a pull request when the
 pinned digest has moved.
 
+> **It needs a repository setting to do the second half, and it did not have
+> it.** *Settings → Actions → General → "Allow GitHub Actions to create and
+> approve pull requests"* is off by default, and with it off `gh pr create`
+> fails with `GitHub Actions is not permitted to create or approve pull
+> requests`. The branch is pushed before that line runs, so the failure leaves
+> a branch and no pull request.
+>
+> That is what happened on its **first and only run**, 2026-09-14: the base
+> moved, the branch appeared, the run went red, and the bump was found three
+> days later by someone tidying up branches. **A half-finished automation is
+> harder to notice than one that never ran** — a workflow that fails completely
+> is a red mark on a page somebody looks at, while this one produced a
+> plausible-looking branch and a failure nobody was watching for.
+>
+> The workflow now says so in its own job summary when the call fails, with the
+> setting named and the command to open the pull request by hand.
+
 **Why not Renovate or Dependabot.** Bazzite rebuilds daily. A dependency bot
 would open a pull request every day that said "digest changed" and nothing more.
 A pull request that arrives every day and carries no information is worse than

@@ -94,11 +94,42 @@ jobs:
           LABEL="routine"
           if [[ "${RELEVANT}" == "true" ]]; then LABEL="relevant"; fi
 
-          gh pr create \
-            --title "Bazzite base → ${NEW_VERSION} (${LABEL})" \
-            --body-file /tmp/pr-body.md \
-            --base "${{ github.event.repository.default_branch }}" \
-            --head "${BRANCH}"
+          # THIS NEEDS A REPOSITORY SETTING, and without it the whole
+          # workflow is worse than useless.
+          #
+          # Settings -> Actions -> General -> "Allow GitHub Actions to create
+          # and approve pull requests". It is OFF by default, and with it off
+          # `gh pr create` fails with:
+          #
+          #   GitHub Actions is not permitted to create or approve pull
+          #   requests (createPullRequest)
+          #
+          # The branch has already been pushed by then, so the failure leaves a
+          # branch with nobody watching it. That is exactly what happened on
+          # 2026-09-14: the base moved, the branch appeared, the run went red,
+          # and the bump was found three days later by someone tidying up
+          # branches. A half-finished automation is harder to notice than one
+          # that never ran.
+          if ! gh pr create \
+              --title "Bazzite base → ${NEW_VERSION} (${LABEL})" \
+              --body-file /tmp/pr-body.md \
+              --base "${{ github.event.repository.default_branch }}" \
+              --head "${BRANCH}"; then
+            {
+              echo "### Could not open the pull request"
+              echo
+              echo "The branch \`${BRANCH}\` is pushed and the bump is in it."
+              echo "If the error mentions \`createPullRequest\`, turn on"
+              echo "**Settings → Actions → General → Allow GitHub Actions to"
+              echo "create and approve pull requests**, then re-run this job."
+              echo
+              echo "Open it by hand meanwhile:"
+              echo '```'
+              echo "gh pr create --base main --head ${BRANCH}"
+              echo '```'
+            } >> "${GITHUB_STEP_SUMMARY}"
+            exit 1
+          fi
 
       - name: Summary
         if: always()
