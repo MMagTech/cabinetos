@@ -37,14 +37,32 @@ CORE="${1:-}"
 # what is lost is only the ability to read it back out.
 VERIFY_REVISION=1
 
-# make is how nineteen of the twenty-one cores build. Two have no
-# Makefile.libretro at all — mGBA's upstream dropped it, Flycast never had one —
-# and set BUILDSYS=cmake with CMAKEARGS and CMAKE_TARGET instead.
+# make is how eighteen of the twenty-one cores build. Three have no
+# Makefile.libretro at all — mGBA's upstream dropped it, Flycast and PPSSPP
+# never had one — and set BUILDSYS=cmake with CMAKEARGS and CMAKE_TARGET
+# instead.
 BUILDSYS="make"
+
+# Files from the core's own source tree that have to be installed under the
+# frontend's system directory, in ASSET_DIR — the folder name the core itself
+# looks for, which is not necessarily the manifest's name for it.
+#
+# Empty for twenty of the twenty-one: their firmware is a console's, and it
+# comes from RomM with the game. PPSSPP is the exception and its case arm says
+# why.
+ASSETS=()
+ASSET_DIR=""
+ASSET_SRC=""
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SRC_ROOT="${CABINETOS_CORE_SRC:-$ROOT/.core-src}"
 OUT="${CABINETOS_CORE_OUT:-$ROOT/cores/build}"
+# Where a core's own system files go, for the one core that has any. This is
+# not the frontend's system directory — that is a working directory holding
+# BIOS files RomM served and files the cores themselves write. This is the
+# staging area the deploy copies FROM, and in the image it becomes a path in
+# /usr. See the ppsspp case arm.
+SYSTEM_OUT="${CABINETOS_SYSTEM_OUT:-$ROOT/cores/system}"
 
 # Per core: upstream, pinned commit, make directory, makefile, extra arguments.
 #
@@ -431,6 +449,80 @@ flycast)
         CMAKEARGS+=(-DCMAKE_C_FLAGS=-DTARGET_NO_REC -DCMAKE_CXX_FLAGS=-DTARGET_NO_REC)
     fi
     ;;
+ppsspp)
+    REPO=https://github.com/hrydgard/ppsspp.git
+    COMMIT=c989c2553e1099730736d965c221823fe974fa55
+    # PlayStation Portable, the twenty-first and last core, and the third and
+    # last that renders through a GL context this frontend owns.
+    #
+    # CMake, like mGBA and Flycast. Upstream's own libretro target, driven the
+    # way Cabinet drives it — tools/build-ppsspp.sh's own header says it "just
+    # drives upstream's own supported configuration", and so does this.
+    #
+    # TWO LEVERS, and neither of them is a recompiler, which is the surprise in
+    # this core. PPSSPP picks its CPU engine AT RUNTIME from the
+    # ppsspp_cpu_core option, not at compile time, so the thing that is a build
+    # flag in five other cores is a core option here — see
+    # catalog::optionOverrides, which has its first entry because of it.
+    #
+    #   USING_GLES2    THE ONE THAT DECIDES WHETHER THIS CORE RUNS HERE AT ALL.
+    #                  LibretroGLContext asks for RETRO_HW_CONTEXT_OPENGLES2
+    #                  when it is defined and RETRO_HW_CONTEXT_OPENGL when it
+    #                  is not, and this frontend's context is EGL/GLES: it
+    #                  refuses desktop GL by name rather than accepting it and
+    #                  failing inside the core. Cabinet gets this from
+    #                  upstream's ios.cmake toolchain; the unix build has no
+    #                  equivalent and would quietly ask for desktop GL. So this
+    #                  is both what Cabinet builds and the only thing that
+    #                  works here, which is a pleasant coincidence rather than
+    #                  a compromise.
+    #   MOBILE_DEVICE  Cabinet gets this from ios.cmake too, and LIBRETRO does
+    #                  not imply it — only ANDROID does. READ RATHER THAN
+    #                  ASSUMED: every use of it in the tree is AVI/WAV dumping,
+    #                  window geometry, the keymap and the desktop UI. Nothing
+    #                  under it touches the emulated machine, and the three
+    #                  sites in Core/SaveState.cpp are all dump-restart
+    #                  bookkeeping around a save, not state content. It is not
+    #                  free, though: the block it disables in Core/Config.cpp
+    #                  also carries AnisotropyLevel's default of 4, so leaving
+    #                  it off would change texture filtering against the Apple
+    #                  TV's picture for no reason.
+    #
+    # The rest are Cabinet's own, minus the ones that only name an Apple SDK.
+    BUILDSYS=cmake
+    CMAKE_TARGET=ppsspp_libretro
+    CMAKEARGS=(
+        -DCMAKE_BUILD_TYPE=Release
+        -DLIBRETRO=ON
+        -DUSING_GLES2=ON
+        -DMOBILE_DEVICE=ON
+        -DUSE_SYSTEM_FFMPEG=OFF
+        -DUSE_DISCORD=OFF
+    )
+    # PPSSPP's firmware is the special case this project has been warning
+    # itself about since Phase 0: its system files do not come from RomM the
+    # way every other platform's BIOS does, because they are not a console's
+    # firmware — they are fonts, VFPU lookup tables and a per-game
+    # compatibility list that ship with the emulator. On Apple they are in the
+    # app bundle. Here they are files this script installs beside the core,
+    # and the frontend's system directory is where they have to land:
+    # retro_init appends "PPSSPP" to it and warns "Core system files missing,
+    # expect bugs" when compat.ini is not there.
+    #
+    # The list is Cabinet's, not upstream's whole assets/ directory. 43 files
+    # against 22 MB of everything, and the difference is the desktop UI's —
+    # the web debugger, themes, UI images, sound effects, the SDL controller
+    # database — none of which a libretro core presents. This subset is the
+    # one that has actually run PSP games on a television.
+    #
+    # PPSSPP, capitalised, because that is the literal the core appends to the
+    # system directory — not the manifest's lowercase name for it.
+    ASSET_DIR=PPSSPP
+    ASSET_SRC=assets
+    ASSETS=(asciifont_atlas.meta asciifont_atlas.zim compat.ini compatvr.ini
+            flash0 font_atlas.meta font_atlas.zim knownfuncs.ini langregion.ini
+            ppge_atlas.meta ppge_atlas.zim vfpu)
+    ;;
 *)
     echo "unknown core: $CORE" >&2
     exit 1
@@ -443,7 +535,21 @@ if [ ! -d "$SRC/.git" ]; then
     mkdir -p "$SRC_ROOT"
     # Not --depth 1: a shallow clone of a branch cannot check out an arbitrary
     # commit, and an arbitrary commit is the entire requirement.
-    git clone "$REPO" "$SRC"
+    #
+    # --filter=blob:none instead. A partial clone takes the whole commit graph
+    # and none of the file contents, then fetches the blobs the checkout below
+    # actually needs — so an arbitrary commit still works, which --depth 1 is
+    # the one thing that would break.
+    #
+    # It was PPSSPP that forced this and the numbers are not marginal. A full
+    # clone of that repository is 324,844 objects and GitHub served them to the
+    # test VM at 55 KB/s — three hours — on a machine that pulls a release
+    # tarball at 9.8 MB/s, so it is the repository being throttled rather than
+    # the network. The partial clone finished in under 45 seconds and the
+    # checkout took four, for 183 MB on disk instead of gigabytes.
+    #
+    # Existing checkouts are untouched: this runs only when there is no .git.
+    git clone --filter=blob:none "$REPO" "$SRC"
 fi
 
 git -C "$SRC" fetch --quiet origin "$COMMIT" 2>/dev/null || git -C "$SRC" fetch --quiet --all
@@ -455,6 +561,12 @@ git -C "$SRC" checkout --quiet --force "$COMMIT"
 # reads. That is upstream debris rather than a missing dependency. Guarding on
 # the file means a core WITH real submodules still gets them, and still fails
 # loudly if one of those cannot be fetched.
+# Deliberately NOT --filter=blob:none, although the superproject's clone above
+# is. Measured on PPSSPP, whose submodules include a repository of prebuilt
+# ffmpeg binaries: a partial submodule clone then has to fetch those blobs
+# lazily, and GitHub served that at 14 KB/s — thirty times slower than cloning
+# the same submodules whole, which comes off a cached pack. The filter helps
+# where history is large and hurts where the checkout is.
 if [ -f "$SRC/.gitmodules" ]; then
     git -C "$SRC" submodule update --init --recursive --quiet
 fi
@@ -492,6 +604,66 @@ if [ "$CORE" = melonds ]; then
         exit 1
     }
     echo "patched: final SRAM flush in retro_unload_game"
+fi
+
+if [ "$CORE" = ppsspp ]; then
+    # Save the GL shader cache when the CONTEXT is lost, not only when the GPU
+    # object is destroyed.
+    #
+    # This is Cabinet's patch and it travels because the thing that makes it
+    # necessary is true here too. Both frontends drive context_destroy BEFORE
+    # retro_unload_game — RetroArch's order, and the one Core::unloadGame
+    # already uses for every hardware-rendered core — and PPSSPP's
+    # context-destroy path drops its linked-shader list on the spot. The save
+    # in ~GPU_GLES then finds an empty list and writes nothing, so no
+    # .glshadercache is ever produced. The periodic save is every 32,767
+    # frames, about nine minutes, so a short session never reaches it either.
+    #
+    # The cost of not having it is a console that recompiles every shader on
+    # every launch, which is the stutter a person notices and cannot explain.
+    # Cabinet applies it on all three of its platforms.
+    GPU_GLES="$SRC/GPU/GLES/GPU_GLES.cpp"
+    perl -0pi -e '
+        s/(void GPU_GLES::DeviceLost\(\) \{\n\tINFO_LOG\(Log::G3D, "GPU_GLES: DeviceLost"\);\n)/$1\t\/\/ cabinet: save the shader cache before the list below is cleared.\n\tif (shaderCachePath_.Valid() \&\& draw_ \&\& g_Config.bShaderCache) {\n\t\tshaderManagerGL_->SaveCache(shaderCachePath_, \&drawEngine_);\n\t}\n/
+        unless /cabinet: save the shader cache/;
+    ' "$GPU_GLES"
+    grep -q 'cabinet: save the shader cache' "$GPU_GLES" || {
+        echo "ppsspp shader-cache patch did not apply; upstream shape changed" >&2
+        exit 1
+    }
+    echo "patched: shader cache saved on context loss"
+
+    # Make the core state which CPU engine it is running, once per boot.
+    #
+    # THE ONLY PATCH IN THIS SCRIPT THAT CABINET DOES NOT APPLY ON EVERY
+    # PLATFORM — it is in Cabinet's Mac build alone — and it is here on purpose.
+    # PPSSPP picks its engine silently: MIPSState::Init turns cpuCore into one
+    # of three very different objects and says nothing, and the libretro layer
+    # will rewrite a request for the recompiler into the IR interpreter without
+    # telling anyone. "PPSSPP runs and renders" is therefore not evidence of
+    # which engine ran, and in Cabinet that question sat unresolved for days
+    # because there was nothing to read.
+    #
+    # It is a log line and nothing else: it cannot change the machine, it
+    # cannot reach a save state, and it turns the one fact this core hides into
+    # one line of the frontend's own log. Given that ppsspp_cpu_core is an
+    # option rather than a build flag, being able to confirm what it did is the
+    # difference between a measurement and an assumption.
+    #
+    # WARN rather than Cabinet's INFO, because this host's log floor is WARN and
+    # raising it is not free: a flag that let INFO through made PPSSPP abort at
+    # exit, twice, where the identical run without it exited cleanly. A probe
+    # that cannot be read is not a probe.
+    MIPS_CPP="$SRC/Core/MIPS/MIPS.cpp"
+    perl -0pi -e '
+        s/(\tif \(PSP_CoreParameter\(\)\.cpuCore == CPUCore::JIT \|\| PSP_CoreParameter\(\)\.cpuCore == CPUCore::JIT_IR\) \{\n)/\tWARN_LOG(Log::CPU, "cabinet: CPU engine = %d (0 interpreter, 1 native JIT, 2 IR interpreter, 3 JIT+IR)", (int)PSP_CoreParameter().cpuCore);\n$1/
+        unless /cabinet: CPU engine/;
+    ' "$MIPS_CPP"
+    grep -q 'cabinet: CPU engine' "$MIPS_CPP" || {
+        echo "ppsspp cpu-engine probe patch did not apply; upstream shape changed" >&2
+        exit 1
+    }
+    echo "patched: the core names its own CPU engine at boot"
 fi
 
 # platform=unix is the core's own Linux case, and on every Makefile-based core
@@ -562,6 +734,30 @@ UPSTREAM=$(basename "${BUILT[0]}")
 [ "$UPSTREAM" = "$SO" ] || echo "built $UPSTREAM, filing it as $SO"
 cp "${BUILT[0]}" "$OUT/$SO"
 echo "wrote $OUT/$SO ($(du -h "$OUT/$SO" | cut -f1))"
+
+# The core's own system files, for the one core that has any.
+#
+# Every entry is asserted to exist before anything is copied. A missing one
+# means upstream moved it, and the failure that would otherwise follow is the
+# worst kind this project has: the core loads, the game starts, and it is
+# quietly wrong — PPSSPP without its font files renders no text and says so
+# only in a log line nobody reads.
+if [ "${#ASSETS[@]}" -ne 0 ]; then
+    DEST="$SYSTEM_OUT/$ASSET_DIR"
+    for a in "${ASSETS[@]}"; do
+        [ -e "$SRC/$ASSET_SRC/$a" ] || {
+            echo "$CORE: $ASSET_SRC/$a is not in the source tree at $COMMIT" >&2
+            exit 1
+        }
+    done
+    rm -rf "$DEST"
+    mkdir -p "$DEST"
+    for a in "${ASSETS[@]}"; do
+        cp -R "$SRC/$ASSET_SRC/$a" "$DEST/"
+    done
+    echo "system      $DEST ($(du -sh "$DEST" | cut -f1), ${#ASSETS[@]} entries)"
+    echo "            copy its parent's contents into the frontend's system directory"
+fi
 
 # Asserting the CHECKOUT is at the pinned commit proves what went in. This
 # reads the revision back out of the finished artifact and proves what came

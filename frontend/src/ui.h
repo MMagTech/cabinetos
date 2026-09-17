@@ -108,7 +108,7 @@ public:
                       float v0, float u1, float v1, const Color& tint,
                       bool singleChannel = true, float lodBias = 0.0f, float clipX = 0,
                       float clipY = 0, float clipW = 0, float clipH = 0,
-                      float clipRadius = 0);
+                      float clipRadius = 0, bool opaque = false);
 
     // Device pixels per design point for the frame in progress. Text has to
     // rasterise at device resolution to be crisp on a 4K set, so it needs this.
@@ -197,7 +197,7 @@ private:
         GLint top, mid, bottom, midStop;
     } bloc_{};
     struct {
-        GLint canvas, rect, uv, tint, tex, single, lod, clip, clipRadius;
+        GLint canvas, rect, uv, tint, tex, single, lod, clip, clipRadius, opaque;
     } tloc_{};
 };
 

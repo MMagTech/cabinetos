@@ -18,6 +18,9 @@ output.env
 # reproducible from cores/build-core.sh, so they are cache and not history.
 .core-src/
 cores/build/
+# A core's own system files, copied out of its source tree by the same script.
+# PPSSPP is the only core that has any; see cores/build-core.sh.
+cores/system/
 
 # macOS
 .DS_Store

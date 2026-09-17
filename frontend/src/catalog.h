@@ -40,8 +40,10 @@ enum class Support {
     NoCore,
     // The manifest has a core for this system, and this console does not have
     // it built. A different thing from NoCore and from Excluded: nothing is
-    // wrong, the core simply has not been built yet — two of twenty-one exist
-    // today. Found by the hero offering an arcade game with no FBNeo on disk.
+    // wrong, the core simply has not been built yet. All twenty-one libretro
+    // cores are built as of PPSSPP; the two rows that still answer this are
+    // GameCube and PS2, whose emulators are not libretro cores at all.
+    // Found by the hero offering an arcade game with no FBNeo on disk.
     NotInstalled,
     // A core exists but CabinetOS deliberately does not ship it. There is
     // always a reason, and `reason()` gives it, because a decision nobody can

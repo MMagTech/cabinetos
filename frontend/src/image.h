@@ -145,7 +145,14 @@ void drawImage(Renderer& r, const Image& img, float x, float y, float w, float h
 // row first, so "the whole texture, the right way up" is true of a software
 // core and false of Flycast. Core::frameUV answers both cases; this just
 // takes the answer.
+//
+// `opaque` throws the texture's alpha away and draws the colour at full
+// strength. That is what a GAME FRAME wants: the alpha in an emulated
+// machine's framebuffer belongs to the machine, and PPSSPP hands back frames
+// whose alpha is nearly zero — which drew Lumines at 1.5% brightness and
+// looked exactly like a core rendering black.
 void drawImageTexture(Renderer& r, GLuint texture, float x, float y, float w, float h,
-                      float u0 = 0, float v0 = 0, float u1 = 1, float v1 = 1);
+                      float u0 = 0, float v0 = 0, float u1 = 1, float v1 = 1,
+                      bool opaque = false);
 
 }  // namespace ui

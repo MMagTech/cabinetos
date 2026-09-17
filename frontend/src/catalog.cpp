@@ -108,6 +108,40 @@ const Entry* lookup(const std::string& slug, const std::string& fsSlug) {
     return slugOnly;
 }
 
+// The manifest's name for a core, given either that name or the file it was
+// built into. Resolved against the table, so the answer is a name the table
+// actually uses rather than one produced by trimming a string and hoping.
+//
+// Unrecognised input comes back unchanged. That is the honest answer: a caller
+// holding a name this table has never heard of has a problem no normalisation
+// can fix.
+std::string manifestName(const std::string& core) {
+    std::string stem = core;
+    // A path is one of the things a caller may hold — --core takes one — and a
+    // directory prefix would defeat every comparison below.
+    if (const size_t slash = stem.find_last_of('/'); slash != std::string::npos)
+        stem.erase(0, slash + 1);
+    const std::string dotSo = ".so";
+    if (stem.size() > dotSo.size() &&
+        stem.compare(stem.size() - dotSo.size(), dotSo.size(), dotSo) == 0)
+        stem.erase(stem.size() - dotSo.size());
+
+    auto known = [](const std::string& name) {
+        for (const Entry& e : kTable)
+            if (e.core && name == e.core) return true;
+        return false;
+    };
+    if (known(stem)) return stem;
+
+    const std::string suffix = "_libretro";
+    if (stem.size() > suffix.size() &&
+        stem.compare(stem.size() - suffix.size(), suffix.size(), suffix) == 0) {
+        const std::string shorter = stem.substr(0, stem.size() - suffix.size());
+        if (known(shorter)) return shorter;
+    }
+    return stem;
+}
+
 }  // namespace
 
 const char* emulatorTag(const char* core) {
@@ -153,6 +187,22 @@ const char* emulatorTag(const char* core) {
         // as Flycast's unscripted edits. The iOS and tvOS archives are clean at
         // this commit, and tvOS is the platform states travel to and from most.
         {"mgba", "mgba-native"},
+        // Pinned at c989c255, and the only core in the set where there is no
+        // configuration difference left to justify. The commit is identical on
+        // every platform Cabinet ships it to (the manifest's own
+        // diverges_across_platforms is false), both of the patches Cabinet's
+        // builder applies travel and are asserted, the two CMake levers that
+        // the unix build would otherwise decide differently are matched
+        // (USING_GLES2, MOBILE_DEVICE), and the CPU engine — which is an
+        // OPTION in this core rather than a build flag — is answered with
+        // Cabinet's own "IR JIT" in optionOverrides below.
+        //
+        // What is not proved, stated because it is true of the other five
+        // here as well: no state written by this build has been loaded by
+        // Cabinet's. The cross-platform load was proved once, on gambatte, and
+        // every tag since rests on configuration parity rather than on its own
+        // experiment.
+        {"ppsspp", "ppsspp-native"},
     };
     for (const auto& t : kTags)
         if (std::strcmp(t.core, core) == 0) return t.tag;
@@ -218,13 +268,61 @@ Coverage coverageFor(const romm::Game& g) {
     return answer(lookup(g.platformSlug, g.platformFsSlug));
 }
 
-std::map<std::string, std::string> optionOverrides(const std::string& coreName) {
-    // Nothing yet, deliberately. Every option is answered with the core's own
+std::map<std::string, std::string> optionOverrides(const std::string& core) {
+    // Callers hold the core by two different names — the manifest's, which is
+    // what the launch path has, and the FILE's, which is what the options
+    // audit has when it is walking a directory. So this takes either, and
+    // resolves it against the table rather than by stripping suffixes blindly:
+    // fbneo_libretro's manifest name ends in _libretro already, so a blind
+    // strip would quietly invent a third name for it.
+    //
+    // Getting this wrong is silent. An override that matches nothing leaves
+    // every option at its default and looks exactly like having no override —
+    // which is the shape of bug this file already warns about twice.
+    const std::string coreName = manifestName(core);
+
+    // Nearly empty, deliberately. Every option is answered with the core's own
     // default, which is the correct baseline and is what was missing. A choice
     // belongs here only when there is a reason for it, and the reason belongs
     // beside it — an override with no justification is the thing that goes
     // stale and that nobody can later tell apart from a mistake.
-    (void)coreName;
+    if (coreName == "ppsspp") {
+        // PPSSPP is the only core in the set whose CPU BACKEND is a runtime
+        // option rather than a build flag, so the lever five other cores pull
+        // in cores/build-core.sh is pulled here instead. Its declared default
+        // is "JIT", the native recompiler; Cabinet ships "IR JIT", which is
+        // upstream's own string for the IR interpreter, on all three of its
+        // platforms.
+        //
+        // Matching it. Two reasons, and the first is the standing rule: until
+        // a backend difference has been MEASURED not to move a core's state
+        // format, match Cabinet's configuration exactly — that is how
+        // pcsx_rearmed, melonDS and picodrive were each settled, and PSP has
+        // not been through it. The second is that nothing is being given up
+        // today: PSP is four games in the reference library, and Cabinet's own
+        // bench found the IR interpreter FASTER than the recompiler on an M4
+        // (Lumines 1.93 ms against 3.05 ms mean) because compilation stalls
+        // land inside frames.
+        //
+        // What it costs, said plainly: on an x86-64 console the native
+        // recompiler is the engine PPSSPP is usually run with, and this leaves
+        // it switched off. The experiment that would change this answer is the
+        // one cores/backend-diff.sh exists for, run on the two option values
+        // rather than two builds — and it needs a PSP game and a machine,
+        // which is the SER5.
+        //
+        // ppsspp_internal_resolution deliberately does NOT appear here. Its
+        // declared default is "480x272", the PSP's own screen, which is what
+        // RetroArch would answer and what Cabinet ships on a television. It is
+        // also the option that used to be this core's defaults trap: the
+        // internal default is 0, "Auto (native)", which sizes the render to a
+        // display a libretro frontend never reports, so every frame comes out
+        // 0x0 and is dropped. Answering declared defaults already closes that,
+        // which is this console's first free ride from the core-options work.
+        // Raising it is a look-and-performance decision and it waits for real
+        // hardware.
+        return {{"ppsspp_cpu_core", "IR JIT"}};
+    }
     return {};
 }
 

@@ -490,6 +490,12 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
     const std::string saveDir = cacheDir + "/saves";
     SDL_CreateDirectory(saveDir.c_str());
     core.setDirectories("system", saveDir);
+    // Also before load(), and for the same reason. This was reaching only the
+    // --core-options audit until PPSSPP needed the first real override, which
+    // meant the override table was being PRINTED rather than applied: every
+    // core played on its declared defaults and the audit agreed with itself.
+    // Invisible while the table was empty, wrong the moment it was not.
+    core.setOptionOverrides(catalog::optionOverrides(job.coreName));
     if (!core.load(job.corePath)) {
         *err = "core " + job.coreName + ": " + core.error();
         job.stage = LaunchJob::Stage::Idle;
@@ -1345,6 +1351,15 @@ int main(int argc, char** argv) {
             cab::Core& core = cab::Core::shared();
             // Before load(), because a core may read its options inside
             // retro_init and several do.
+            //
+            // The directories go in for the same reason, and the audit used to
+            // skip them: with no system directory PPSSPP looked for its own
+            // assets at a relative path, found none, and printed "Core system
+            // files missing, expect bugs" during an audit that is supposed to
+            // report what a core does in the product. An instrument that sets
+            // the core up differently from the way the product does is
+            // measuring something else.
+            core.setDirectories("system", "saves");
             core.setOptionOverrides(catalog::optionOverrides(so));
             if (!core.load(std::string(coreDir) + "/" + so)) {
                 std::printf("%-24s  FAILED TO LOAD: %s\n", so.c_str(),
@@ -1575,6 +1590,9 @@ int main(int argc, char** argv) {
         const std::string saveDir = "saves";
         SDL_CreateDirectory(saveDir.c_str());
         core.setDirectories("system", saveDir);
+        // The same overrides the library path applies, so --core plays the
+        // core the same way the product does. See beginLaunch.
+        core.setOptionOverrides(catalog::optionOverrides(corePath));
         if (!core.load(corePath)) {
             std::fprintf(stderr, "[frontend] core: %s\n", core.error().c_str());
             return 1;
@@ -2844,8 +2862,15 @@ int main(int argc, char** argv) {
                 // the draw below has to know which.
                 float u0, v0, u1, v1;
                 core.frameUV(u0, v0, u1, v1);
+                // Opaque, always. A game's frame is a picture, and whatever is
+                // in its alpha channel is the emulated machine's own state
+                // rather than a compositing instruction. Found on PPSSPP:
+                // Lumines leaves the PSP framebuffer's alpha at nearly zero,
+                // the blend took it literally, and the whole 1920x1080 capture
+                // peaked at RGB (4,4,4) — a picture that was there all along
+                // and read as a core that renders black.
                 ui::drawImageTexture(renderer, core.texture(), px, py, dw, dh, u0, v0, u1,
-                                     v1);
+                                     v1, true);
 
                 // The glow goes over the bars, not under the picture: it is
                 // drawn after, and its shader discards inside the picture rect,
@@ -3325,6 +3350,23 @@ int main(int argc, char** argv) {
         // undefined, so a readback taken there is whatever the driver left.
         if (shotMode && frame >= shotAfterFrames) {
             renderer.saveFrame(shotPath, dw, dh);
+            // Whether the running core can produce a state AT THIS POINT, which
+            // is a different question from whether the round trip is exact and
+            // is the only half of it a capture can answer.
+            //
+            // It is here because --state-test cannot answer it for every core.
+            // Its warm-up is a tight loop of retro_run with no wall clock in
+            // it, and a core that emulates on a thread of its own — PPSSPP is
+            // the only one — barely advances in that loop: no sound, a static
+            // picture and a zero-byte state after three thousand calls, while
+            // the same core reaches its attract demo on the ordinary launch
+            // path. A capture has a real frame loop under it, so the number
+            // here is about the core rather than about the instrument.
+            if (playing) {
+                cab::Core& c = cab::Core::shared();
+                std::fprintf(stderr, "[state] serialize size at capture: %zu bytes\n",
+                             c.stateSize());
+            }
             running = false;
         }
         if (gCaptureRequested) {
@@ -3346,6 +3388,13 @@ int main(int argc, char** argv) {
                      "[core] %llu frames, %llu audio frames = %.2fs of emulated time\n",
                      static_cast<unsigned long long>(core.framesRun()),
                      static_cast<unsigned long long>(core.audioFramesTotal()), realtime);
+        // Whether the second brake did anything. It is reported rather than
+        // assumed, because a brake nobody can see is indistinguishable from a
+        // brake that is not there — and this one has never engaged on either
+        // PSP game measured. See Core::runFor.
+        if (core.governorSkips() > 0)
+            std::fprintf(stderr, "[core] the audio governor held it back %llu times\n",
+                         static_cast<unsigned long long>(core.governorSkips()));
         core.unload();
     }
     if (audioStream) SDL_DestroyAudioStream(audioStream);

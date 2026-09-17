@@ -169,6 +169,15 @@ public:
     // Returns how many emulated frames actually ran.
     int runFor(double dtSeconds);
 
+    // How far the core's own audio output has run ahead of the clock runFor is
+    // driven by, in seconds. Positive means the emulated machine is going
+    // faster than realtime.
+    //
+    // This is the only direct read on emulated speed the frontend has, because
+    // audio is the one output whose rate the emulated machine decides rather
+    // than us. For one core it is also a brake — see runFor.
+    double audioAhead() const;
+
     // Uploads the most recent frame into `texture()`. Call on the GL thread.
     // Returns false if the core has not produced a picture yet.
     //
@@ -297,6 +306,10 @@ public:
     // whether emulated time is advancing at realtime.
     uint64_t framesRun() const;
     uint64_t audioFramesTotal() const;
+    // How many times the governor decided the core was not due. Zero for every
+    // core but one, and so far zero for that one too — which is a fact worth
+    // being able to read rather than a brake nobody can see.
+    uint64_t governorSkips() const { return governorSkips_; }
 
 private:
     Core() = default;
@@ -316,6 +329,11 @@ private:
     // Wall-clock pacing. Capped so a stall cannot bank a debt the core then
     // tries to repay all at once, which stutters and floods the audio buffer.
     double accumulator_ = 0.0;
+    // The clock audioAhead measures against, and whether this core is braked
+    // by it. One core in twenty-one is. See runFor.
+    double paceClock_ = 0.0;
+    bool governed_ = false;
+    uint64_t governorSkips_ = 0;
 };
 
 }  // namespace cab

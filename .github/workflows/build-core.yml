@@ -144,6 +144,7 @@ jobs:
           - mgba
           - mupen64plus
           - flycast
+          - ppsspp
 
     steps:
       - name: Checkout
@@ -186,7 +187,13 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: ${{ matrix.core }}-linux-x86_64
-          path: cores/build/*.so
+          # cores/system is empty for twenty of the twenty-one. PPSSPP's system
+          # files are not a console's firmware and do not come from RomM, so
+          # they are part of what this job produces — and a core artifact
+          # without them is a core that boots a game with no fonts.
+          path: |
+            cores/build/*.so
+            cores/system/
           if-no-files-found: error
           # Long enough to bisect a parity problem against, short enough that
           # these do not accumulate. Phase 5 decides how cores actually ship;

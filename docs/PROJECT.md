@@ -26,11 +26,12 @@
 
 ---
 
-## Where the project is — 2026-09-16
+## Where the project is — 2026-09-17
 
 **Phase 0 complete. Phase 1 complete. Phase 2 mostly done. Phase 3 well under
-way and running. Phase 5 started early and the hardest question in it is
-answered.**
+way and running. Phase 5 started early, the hardest question in it is answered,
+and as of 2026-09-17 every one of the twenty-one libretro cores is built and can
+be run.**
 
 ### The thing that matters most
 
@@ -132,11 +133,15 @@ ordered this way now.
 - **Nothing has been judged on a television.** Motion, the letterbox glow and
   the safe area are all recorded as needing the SER5, which is not yet
   installed. A software-rendered VM cannot answer any of them.
-- **Twenty cores of twenty-one are built**, and all four backend-sensitive ones
-  are settled: pcsx_rearmed and melonDS take the recompiler and share Cabinet's
-  tag, picodrive matches Cabinet's flags exactly, and Flycast is blocked on
-  Cabinet's own unscripted edits rather than on anything here. **1143 of 1644
-  games are playable.** PPSSPP is the one not built.
+- ~~**Twenty cores of twenty-one are built**~~ **— all twenty-one are, as of
+  2026-09-17.** PPSSPP was the last, and it runs: Lumines reaches its attract
+  demo in colour with sound, writes its memory-stick save, and quits back to
+  Home. **1147 of 1644 games are playable**, the four extra being PSP. All four
+  backend-sensitive cores are settled: pcsx_rearmed and melonDS take the
+  recompiler and share Cabinet's tag, picodrive matches Cabinet's flags exactly,
+  and Flycast is blocked on Cabinet's own unscripted edits rather than on
+  anything here. PPSSPP's backend is not a build flag at all — see open
+  question 13.
 - ~~**Two of the twenty cannot be RUN here**~~ **— they can, as of 2026-09-16.**
   Flycast and Mupen64Plus render through a graphics context rather than handing
   back pixels, and the host now owns one and hands them a framebuffer inside
@@ -155,15 +160,29 @@ ordered this way now.
 1. **Flycast carries unscripted edits** in its working tree, so its pin does not
    reproduce what ships — for Dreamcast and Naomi. Capture that diff before
    anything touches the tree.
-2. **Eleven of twenty-three cores ship different revisions to iOS and macOS**,
+2. **PPSSPP's manifest entry says `patches: null` and `build_args: null`, and
+   both are wrong.** `tools/build-ppsspp.sh` applies two source patches — a
+   shader-cache save on context loss, on every platform, and a CPU-engine probe
+   on the Mac — and passes real CMake flags, of which `USING_GLES2` and
+   `MOBILE_DEVICE` change what the binary is. The same shape as Flycast's thin
+   patch inventory, and recoverable in the same way: by reading the builder
+   rather than the manifest. **The manifest is not yet a complete description of
+   how a core is built**, and it is load-bearing for parity.
+3. **Eleven of twenty-three cores ship different revisions to iOS and macOS**,
    and eleven of the twenty-one tvOS revisions were recorded as unrecoverable.
    `core-manifest.json` pins each forward, which is right and far cheaper now,
    in alpha, than once anyone has a save history. **Two of the eleven have since
    been recovered straight out of the shipping archives** — see open question 13
    — and the same trick probably works on several more.
-3. **mGBA's Mac archive reports `e31759b24-dirty`**, so that build carries a
+4. **mGBA's Mac archive reports `e31759b24-dirty`**, so that build carries a
    working-tree modification no script applies, in a core whose manifest entry
    lists no patches at all. Same shape as Flycast's, found the same way.
+5. ~~**`core-manifest.json` is not pushed to GitHub.**~~ **It is, and has been
+   since `37ca75d`** — `docs/core-manifest.json`, byte-identical to the copy in
+   `~/Downloads` that this project has been reading. Checked 2026-09-17 by
+   cloning Cabinet and diffing the two. Recorded because the opposite was
+   written down here and in the handover, and a debt that is already paid is
+   still a wrong fact about the project.
 
 Running infrastructure:
 
@@ -877,8 +896,9 @@ back. `Core::frameUV` is where the two paths meet: a software core answers
 larger target with its rows the other way round, so no caller above it knows
 which kind of core is running.
 
-Four things were not obvious in advance and each one would have looked like a
-broken game:
+Five things were not obvious in advance and each one would have looked like a
+broken game. The fifth is PPSSPP's and arrived a day later, which is the point
+of the list: each one is a different core teaching the same lesson.
 
 - **The target is sized to the core's declared MAXIMUM, not its picture.**
   Flycast asks for 853x853 and then presents 640x480 into the corner of it.
@@ -897,14 +917,30 @@ broken game:
   internal resolution the core was asked for. At 3x internal resolution the
   frame is 1920x1440, flooring to an integer scale gives zero, clamps to one,
   and draws 360 rows off the bottom of the screen.
+- **THE FRAME'S ALPHA IS NOT A COMPOSITING INSTRUCTION**, and taking it as one
+  made PPSSPP look like a core that renders black. The player drew the game's
+  texture with ordinary alpha blending, which is right for a cover and wrong for
+  a picture: the alpha channel of an emulated machine's framebuffer is the
+  machine's own state. Lumines leaves it at nearly zero, so the whole 1920x1080
+  capture peaked at RGB **(4,4,4)** — the picture was there the entire time, at
+  1.5% brightness, with text faintly legible against black. **The game surface
+  is now drawn opaque for every core**, because it is a picture in all of them.
+
+  The thing worth carrying is how it presented. The capture was not empty, so it
+  did not read as "no frame"; it read as a plausible, nearly-black rendering,
+  and the first instinct was to believe the core. Reading the actual pixel
+  maximum out of the BMP took a minute and turned a guess into a number.
 
 **Only GLES is accepted, and the version is read rather than assumed.** SDL is
 asked for GLES 3.0 and the driver is free to hand back more — the test VM
 returns 3.2 — so refusing a core that wants 3.1 on the basis of what was asked
 for would be turning down something the machine can do. Desktop GL and Vulkan
 are refused by name, because accepting and then failing inside the core reads as
-a broken game rather than as a frontend that cannot do something. Both cores
-tested asked for GLES 3.0 and got it.
+a broken game rather than as a frontend that cannot do something. Flycast and
+Mupen64Plus ask for GLES 3.0 and get it; **PPSSPP asks for GLES 2.0**, which
+this GLES 3 context serves, and it only asks for GLES at all because it is built
+with `USING_GLES2` — without it the same core asks for desktop GL and is refused
+by name. See open question 13.
 
 ### Shaders, and the glow around the picture
 
@@ -4173,6 +4209,23 @@ is precisely what was missing. An override is for when CabinetOS wants something
 subset (`NativeCoreOptions.swift`) is the obvious thing to bring across, one
 platform at a time, with a reason beside each.
 
+> **It has one entry now, 2026-09-17, and the first one found a hole.**
+> PPSSPP's CPU backend is an option rather than a build flag, so
+> `ppsspp_cpu_core` is answered with Cabinet's `IR JIT` — and adding it revealed
+> that `optionOverrides` was being called **only by `--core-options`**, the
+> audit, and by nothing that starts a game. While the table was empty that was
+> invisible, and the audit agreed with itself. It is wired into both launch
+> paths now.
+>
+> The lesson is the same one this section is about, one level up: **a table that
+> is printed rather than applied is worse than no table**, because the
+> instrument reports the intention instead of the behaviour.
+>
+> The audit was also not setting the core's directories, which is why PPSSPP
+> warned that its system files were missing during a run meant to describe what
+> the core does in the product. An instrument that sets the core up differently
+> from the way the product does is measuring something else.
+
 #### A bug worth keeping: an offscreen render composited to the window
 
 `Renderer::presentScene` bound framebuffer 0 unconditionally, so with
@@ -4243,7 +4296,14 @@ and then find out. Do the opposite:
    best coverage in the set — one build is Genesis, Sega CD, Master System and
    Game Gear. Confirm each of those four separately, per the rule above; Sega CD
    in particular writes its saves by a different mechanism than the other three.
-5. **The rest**, which by then are a loop.
+5. ~~**The rest**, which by then are a loop.~~ **DONE 2026-09-17, with PPSSPP.**
+   All twenty-one libretro cores are built, and every one of them can be run.
+   PPSSPP was left until last on the grounds that it needed the hardware-render
+   path, and it did — but the thing that actually took the time was none of
+   that: its CPU backend turns out to be a runtime OPTION rather than a build
+   flag, its firmware ships with the emulator rather than coming from RomM, and
+   running it found three host bugs that twenty cores had not. See open
+   question 13.
 6. **Dolphin and PCSX2 last**, as their own `.so` files, against upstream PCSX2
    rather than the ARM64 fork.
 
@@ -4915,6 +4975,15 @@ The recovery was run on the build Mac the same day. `core-manifest.json` now
 exists in Cabinet (not yet pushed at the time of writing). CabinetOS consumes it
 once it lands; do not keep a copy here, it would drift.
 
+> **It landed, and this document did not notice for four days.** It is
+> `docs/core-manifest.json` in Cabinet, pushed in `37ca75d`, and a fresh clone
+> diffs byte-identical against the `~/Downloads` copy this project has been
+> reading. Found 2026-09-17 while cloning Cabinet for PPSSPP's build flags.
+> **So it is fetchable, and `catalog.cpp`'s table is a candidate for generation
+> after all** — that table's own comment says it is hand-written "because the
+> manifest is not in this repository and is not fetchable", and half of that
+> reason has now expired.
+
 It did not merely record what was there. **It found that Cabinet is shipping
 different revisions of the same core to different apps, right now.**
 
@@ -5394,6 +5463,194 @@ row below it.
   identical video digest; the test's own guard reports the scene as static at
   that point, so it proves the round trip rather than a long divergence.
 
+#### PPSSPP, 2026-09-17: the twenty-first core, and its lever is not a build flag
+
+**Built, run, and playing.** Lumines reaches its attract demo in colour with
+sound, writes its memory-stick save, and quits back to Home with the shelf
+showing it as recently played. Hammerin' Hero does the same. That is PSP, and it
+finishes the set at **twenty-one of twenty-one**, 1147 of 1644 games.
+
+| | |
+|---|---|
+| Pinned commit | `c989c2553e1099730736d965c221823fe974fa55` — the same one on every platform Cabinet ships it to |
+| Reports | `PPSSPP v1.20.4-1359-gc989c2553`, asserted against the pin |
+| Content | 480x270 into a 480x272 target, 59.9401 fps, 44100 Hz, aspect 1.7778 |
+| Context | **OpenGL ES 2.0**, bottom-left origin — the only core in the set that asks for ES 2 |
+| Save state | 41,943,040 bytes at the demo screen |
+| System files | 13 MB, 43 files, installed beside the core rather than fetched from RomM |
+
+##### The CPU backend is an OPTION here, not a build flag
+
+Five cores in this set pull their backend lever in `cores/build-core.sh`.
+PPSSPP does not have one: it chooses between three CPU engines **at runtime**,
+from `ppsspp_cpu_core`, whose declared default is `JIT` — the native x86-64
+recompiler. Cabinet ships `IR JIT`, upstream's own string for the IR
+interpreter, on all three of its platforms.
+
+**CabinetOS matches Cabinet, and the lever moved to `catalog::optionOverrides`,
+which now has its first entry.** The standing rule applies unchanged — match
+Cabinet's configuration until a backend difference has been measured not to move
+the state format — and nothing is given up by obeying it: PSP is four games, and
+Cabinet's own bench found the IR interpreter *faster* than the recompiler on an
+M4 (Lumines 1.93 ms mean against 3.05) because compilation stalls land inside
+frames. What it costs, plainly: on an x86-64 console the native recompiler is
+the engine PPSSPP is usually run with, and this leaves it off.
+
+##### And it will not tell you which engine it picked, so it was made to
+
+`MIPSState::Init` turns `cpuCore` into one of three very different objects and
+says nothing, and the libretro layer will silently rewrite a request for the
+recompiler into the IR interpreter. In Cabinet that left the question of which
+engine was running unresolved for days. Cabinet's answer is a one-line log in
+its **Mac** build; this build carries the same line on the only platform it has,
+at WARN rather than INFO because that is this host's log floor.
+
+It earns its place immediately. The core now says, on every boot:
+
+```
+[core] [CPU] cabinet: CPU engine = 2 (0 interpreter, 1 native JIT, 2 IR interpreter, 3 JIT+IR)
+```
+
+and with `--core-options-off`, the control, it says **0** — the plain
+interpreter, because an unanswered `ppsspp_cpu_core` leaves
+`g_Config.iCpuCore` at the `CPUCore::INTERPRETER` that `retro_load_game` sets
+before it reads any variable. **That is this document's own central rule
+demonstrated in a third core, from the core's own mouth.**
+
+##### And that control run does something better than make a point: it does not start
+
+With every option unanswered, the same launch ends at
+
+```
+[launch] the core needs a render target this context cannot build
+```
+
+because `ppsspp_internal_resolution` is then the internal default of 0, *"Auto
+(native)"*, which sizes the render to a display a libretro frontend never
+reports — so the declared geometry comes back **0x0** and the host refuses to
+build a target for it.
+
+**Without the core-options work of 2026-09-16, PSP would not run on this console
+at all.** Not "run badly", not "run silently wrong": not start. Cabinet found the
+same trap on its first PPSSPP boot and had to answer the option by hand;
+CabinetOS gets it for free from answering every declared default, which is the
+first time that work has paid for itself in a way that can be pointed at. And
+the host fails loudly with the reason rather than showing a black screen, which
+is the other half of the same design.
+
+##### Two CMake levers, and one of them decides whether the core runs here at all
+
+`build_args` is null for every platform in the manifest, which is not what the
+builder actually passes — see the Cabinet-side note below. Read from
+`tools/build-ppsspp.sh` instead:
+
+- **`USING_GLES2`.** `LibretroGLContext` asks for `RETRO_HW_CONTEXT_OPENGLES2`
+  when it is defined and `RETRO_HW_CONTEXT_OPENGL` when it is not. This
+  frontend's context is EGL/GLES and refuses desktop GL **by name** — so without
+  this flag the twenty-first core would have been the first customer for
+  `Support::NeedsHardwareRender`, exactly as this document predicted it might
+  be. Cabinet gets the flag from upstream's iOS toolchain; the unix build has no
+  equivalent and would quietly ask for desktop GL.
+- **`MOBILE_DEVICE`.** Cabinet gets this from the same toolchain, and `LIBRETRO`
+  does not imply it — only `ANDROID` does. **Read rather than assumed:** every
+  use of it in the tree is AVI/WAV dumping, window geometry, the keymap or the
+  desktop UI, and the three sites in `Core/SaveState.cpp` are dump-restart
+  bookkeeping around a save rather than state content. It is not free, though —
+  the `Core/Config.cpp` block it disables also carries `AnisotropyLevel`'s
+  default of 4, so leaving it off would change texture filtering against the
+  Apple TV's picture for no reason.
+
+FFmpeg comes from the vendored `ffmpeg/linux/x86_64` prebuilt archives, which is
+the same mechanism Cabinet uses with `ios/universal` and `tvos/arm64`.
+
+##### The firmware special case, finally concrete
+
+PSP's "firmware" is not a console's and does not come from RomM. It is fonts,
+VFPU lookup tables and a per-game compatibility list that ship **with the
+emulator** — in the app bundle on Apple, and here as files `build-core.sh`
+installs into the frontend's system directory, where `retro_init` appends
+`PPSSPP` and warns *"Core system files missing, expect bugs"* if `compat.ini` is
+not there.
+
+The set is Cabinet's 43 files rather than upstream's whole 22 MB `assets/`
+directory: the difference is the desktop UI's — the web debugger, themes, UI
+images, sound effects, the SDL controller database — and Cabinet's subset is the
+one that has actually run PSP games on a television.
+
+**Where they live in the image is still Phase 5's to decide.** The build stages
+them at `cores/system/PPSSPP` and the deploy copies them across; in a bootc
+image that becomes a path in `/usr`, which is fine, because the core only ever
+reads it.
+
+##### The emulator tag IS shared, and this is the strongest case in the set
+
+`ppsspp-native`. There is no configuration difference left to justify: the
+commit is identical on every platform Cabinet ships it to, both of the patches
+Cabinet's builder applies travel and are asserted, both CMake levers are
+matched, and the CPU engine is answered with Cabinet's own value. What is not
+proved — and this is equally true of the five tags that came before it — is that
+a state written by this build has been loaded by Cabinet's. The cross-platform
+load was proved once, on gambatte; every tag since rests on configuration parity.
+
+**PSP save DATA does not sync, and that is inherited rather than new.** PSP games
+save into memory-stick directories — `PSP/SAVEDATA/<id>/` holding `PARAM.SFO`,
+`DATA.BIN` and icons — which neither `RETRO_MEMORY_SAVE_RAM` nor the
+single-file capture path models. Cabinet says the same in as many words and
+calls it a future feature. Verified here by running: Lumines wrote all four
+files under `romcache/saves/PSP/SAVEDATA/ULUS10002LUMINES/`.
+
+##### What running it found that building it could not, for the fourth time
+
+Every assertion in the build pipeline passed — pinned commit, asserted revision,
+reproducible artifact — and none of them could see any of this.
+
+1. **A relative save directory is not a path to every core.** The host named its
+   directories relative to where it runs. PPSSPP wraps them in a path type that
+   asks whether a path is absolute and behaves differently when it is not, and
+   mounted the memory stick somewhere it could not write: the game ran, the save
+   failed, and the only sign was the core's own `Error writing file
+   ms0:/PSP/SAVEDATA/...`. **Cores are handed absolute directories now, and the
+   directories are created before the core is told about them.** That is the
+   melonDS lesson arriving a second time by a different route, so it is fixed
+   once in the host rather than per core.
+2. **`need_fullpath` meant the ROM was read into memory and then ignored.**
+   Twelve of the twenty-one cores set it, and the frontend loaded the file
+   anyway — invisible while those cores were handed small files, and 1.8 GB on a
+   4 GB machine at The Warriors. Fixed, and re-checked by running a fullpath
+   hardware core (Ikaruga on Flycast, 35,908,299-byte state) and a fullpath
+   software one (Crash Bandicoot on pcsx_rearmed, 4,456,448) after the change.
+3. **The frame's alpha channel was being obeyed.** See *Video: two paths*.
+4. **`catalog::optionOverrides` reached the AUDIT and not the launch path.** It
+   was called in one place, `--core-options`, and nowhere a game is actually
+   started. While the table was empty that was invisible; PPSSPP's first real
+   override is what exposed it. **An override table that is printed rather than
+   applied is worse than no table**, because the audit agrees with itself.
+
+##### Loose ends, all small, none blocking
+
+- **`--state-test` cannot answer for this core.** Its warm-up is a tight loop of
+  `retro_run` with no wall clock in it, and PPSSPP is the only core in the set
+  that emulates on a thread of its own: three thousand calls produce no sound, a
+  static picture and a zero-byte state, while the same core reaches its attract
+  demo on the ordinary launch path. So a capture now reports
+  `retro_serialize_size` instead, which answers half the question — the core can
+  produce a 40 MB state — and leaves "is the round trip exact" open. **A core
+  with its own emulation thread is not frame-deterministic under that test**,
+  which is a real limitation of the instrument rather than a fault in the core.
+- **The process aborts at exit if it is killed while a PSP game is still
+  running** — `terminate called without an active exception`, after the capture
+  and the summary have been written. It does **not** happen on the path a person
+  takes: quitting through the overlay unloads the core first and exits 0,
+  verified on both PSP games. Cause not established.
+- **The audio governor is implemented for this core and has never engaged.**
+  Cabinet measured Lumines at exactly 2.0x on an Apple TV, because PPSSPP's GL
+  emu thread produces one SWAP per `retro_run` and a swap is a game frame rather
+  than a vblank. Measured here, the ratio is one vblank per run — Lumines 709
+  audio frames per run, Hammerin' Hero 682, against 735.8 for one vblank. The
+  leading suspicion is this document's own rule: `ppsspp_frame_duplication`
+  defaults to enabled and Cabinet leaves it unanswered, which is `false`. Not
+  established.
+
 #### The test that answers the whole question, and can be run this week
 
 The parity risk is not theoretical and it does not need CabinetOS to exist to
@@ -5461,10 +5718,14 @@ Cabinet's flags exactly.**
   zero patches**, and Dr. Mario runs on it. See Phase 3. The remaining twenty
   are now a loop rather than a question — but they are still twenty, and the
   backend-sensitive ones still need their flags set explicitly.
-- **Firmware.** Cabinet fetches every firmware file a platform lists from RomM.
-  CabinetOS inherits that, but PSP is a special case: PPSSPP's system files ship
-  *inside the app bundle*, not from RomM. In a bootc image they become a path in
-  `/usr`, which is fine, but it is a thing to remember rather than discover.
+- ~~**Firmware.**~~ **HANDLED 2026-09-17, and it was the special case this said
+  it would be.** PPSSPP's system files ship with the emulator rather than coming
+  from RomM, so `build-core.sh` installs Cabinet's 43-file subset of upstream's
+  `assets/` into the frontend's system directory as `PPSSPP/`. The core checks
+  for `compat.ini` there and warns if it is missing, which is how the audit
+  caught that it was not setting directories at all. **Where they live in the
+  IMAGE is still Phase 5's** — a path in `/usr`, and the core only ever reads
+  them.
 
 ### Prior art: how Cabinet and Grout already do this
 
