@@ -84,7 +84,36 @@ states, and leave — with the save syncing on the way out.
 
 ## Pick up with these, in this order
 
-### 0. Finish the core options, which is half done
+> **Decided 2026-09-17: no more UI is designed or tuned until CabinetOS is
+> installed on the SER5.** The user's call. This list is ordered by it, and
+> PROJECT.md records why — the short version is that overscan, motion and
+> vertical fit cannot be judged on a software-rendered VM, so building more
+> screens here is building against a lie.
+>
+> **The line is the acceptance test, not the subsystem.** If the test is "does
+> this look right", it waits. If the test is a measurement or a behaviour, it
+> goes ahead — and a screen that already exists is not frozen, because fixing
+> something *wrong* is not the same as tuning something.
+
+### 1. Saves that actually reach the server
+
+The biggest real hole in the product, and it is invisible until it costs
+somebody their progress.
+
+- **The file-writing save class is not synced at all, and Dreamcast now shows
+  it to your face.** melonDS writes a `.sav` rather than exposing save RAM, so
+  `[save] battery is 0 bytes` is correct and the file never reaches RomM. Neo
+  Geo Pocket, Sega CD and FBNeo are the same class. **Ikaruga opens on "memory
+  card not connected"** — Flycast's VMU is the same problem with a title screen
+  attached, and it is the first one a person would actually notice. Cabinet
+  solved this in `MemoryCardSync.swift`; read it before designing anything.
+- **Saves on the right triggers.** Keys do it today, which is the test
+  environment and not the product. The settled triggers are in PROJECT.md.
+
+Both are measured by whether a file lands on the server, so the VM answers them
+completely.
+
+### 2. Finish the core options, which is half done
 
 The host now answers every option a core declares. Two things are left and both
 are small:
@@ -99,42 +128,15 @@ are small:
   the core's source, not from a guess, and they are the first real customers for
   the override table.
 
-### 1. The navigation bar, which needs a television and not a decision
+### 3. The N64 save states that do not restore exactly
 
-The Library is reached with a temporary **L** key. That is the only thing
-holding the screens apart from being a product.
+Reproducible to the digit, the instrument was checked, and three candidate
+causes are written down with none established. It blocks nothing today, and it
+matters because portable save states are the premise the whole product rests on
+— this is the first core where that premise visibly does not hold. The cheapest
+discriminating experiment is in PROJECT.md.
 
-**Home has about 85 points of vertical slack and the bar needs about 85** — the
-arithmetic is in PROJECT.md. A bar at Title 3 plus its gap puts Recent's caption
-on the bottom edge, and **overscan eats more than a capture shows**. So this is
-a measurement on the SER5, not an argument here: either the bar fits, or the
-hero comes down, or the bar goes elsewhere.
-
-Everything else on this list can be done without it.
-
-### 2. The rest of the launch screen
-
-PROJECT.md's own list, and none of it is built: **a different save state, a
-different core, and an export.** The save-state part is the one with a real
-mechanism behind it already — `fetchStates` works, and the emulator tag is what
-decides whether a state is offered or greyed, so the screen can be honest about
-which states this build can actually load.
-
-### 3. The Storage screen
-
-The one place the cache is allowed to be visible, because it is somewhere a
-person goes deliberately. Its data already exists: run
-`./build/cabinetos-frontend --storage` and you get free space, both floors, the
-upload queue, what is kept and what would be evicted, oldest first.
-
-### 4. Download All, at the platform level
-
-PROJECT.md says CabinetOS should offer it where tvOS deliberately does not, and
-Cabinet's `DownloadAll.swift` already sizes the whole list and refuses rather
-than filling the disk and letting eviction sort it out — which would evict what
-it had just fetched.
-
-### 5. PPSSPP, the twenty-first core
+### 4. PPSSPP, the twenty-first core
 
 The only core of twenty-one not built, and the reason to build it now is that
 the thing that blocked it is gone: the host serves hardware-rendered cores.
@@ -148,31 +150,49 @@ If it asks for desktop GL or Vulkan rather than GLES, the host refuses it by
 name and says so in one line — and `Support::NeedsHardwareRender` is still
 sitting there waiting for exactly that case.
 
-### 6. Still owed from before, and none of it blocks the screens
+### 5. Nothing warns that a system's BIOS is missing
 
-- **Saves on the right triggers.** Keys do it today, which is the test
-  environment and not the product. The settled triggers are in PROJECT.md.
-- **The file-writing save class is not synced at all, and Dreamcast now shows
-  it to your face.** melonDS writes a `.sav` rather than exposing save RAM, so
-  `[save] battery is 0 bytes` is correct and the file never reaches RomM. Neo
-  Geo Pocket, Sega CD and FBNeo are the same class. **Ikaruga opens on "memory
-  card not connected"** — Flycast's VMU is the same problem with a title screen
-  attached, and it is the first one a person would actually notice.
-- **Nothing warns that a system's BIOS is missing** until a game fails to start.
-  `catalog` is where it belongs — a fifth answer, and the first one that is a
-  fact about the person's server rather than about this console.
-- **N64 save states do not restore the machine exactly.** Reproducible to the
-  digit on Mario Kart 64, and the instrument was checked — the same test on mGBA
-  with a moving picture passes. It blocks nothing, because mupen64plus has no
-  shared emulator tag and its states never travel. PROJECT.md, *Open against the
-  frontend right now*, lists the three candidate causes and says plainly that
-  none is established.
-- **A game writes to disk in places eviction cannot see.** Mesa's shader cache
-  in `~/.cache`, and two files the cores put in the system directory. Under
-  3 MB today and it arrived with the hardware-rendered cores. PROJECT.md,
-  *The cache is not the only thing a game writes to disk* — and note that one of
-  those files is a Dreamcast's saved flash, so "clean the system directory" is
-  not the answer.
+Until a game fails to start. `catalog` is where it belongs — a fifth answer, and
+the first one that is a fact about the person's server rather than about this
+console. The answer is a lookup, not a layout, so the tile that shows it can
+reuse the wording already measured for the other four.
+
+### 6. The disk that eviction cannot see
+
+Mesa's shader cache in `~/.cache`, plus two files the cores write into the
+system directory — under 3 MB today, and it arrived with the hardware-rendered
+cores. **One of them is a Dreamcast's saved flash**, so "clean the system
+directory" is not the answer. PROJECT.md, *The cache is not the only thing a
+game writes to disk*.
+
+### 7. Power button to a clean shutdown
+
+Phase 2's last mechanical item, and it is a behaviour rather than a picture.
+
+---
+
+## Waiting on the SER5, and deliberately not started
+
+Ordered for whenever it is installed. **Do not begin these in the VM.**
+
+- **The navigation bar.** The Library is reached with a temporary **L** key.
+  Home has about 85 points of vertical slack and the bar needs about 85 — the
+  arithmetic is in PROJECT.md. A bar at Title 3 plus its gap puts Recent's
+  caption on the bottom edge, and overscan eats more than a capture shows.
+  Either the bar fits, or the hero comes down, or the bar goes elsewhere, and
+  only a television can say which.
+- **The Storage screen.** Its data already exists and can be finished without
+  it — run `./build/cabinetos-frontend --storage` — but the screen itself is a
+  layout.
+- **The rest of the launch screen**: a different save state, a different core,
+  an export. **The save-state half is a mechanism and can be built now**:
+  `fetchStates` works and the emulator tag decides whether a state is offered or
+  greyed, which is a fact rather than a look.
+- **Download All, at the platform level.** Cabinet's `DownloadAll.swift` sizes
+  the whole list and refuses rather than filling the disk. The sizing and the
+  refusal are measurable; the screen is not.
+- **The boot splash**, and the rest of the branding.
+- **Everything about motion, the letterbox glow and the safe area.**
 
 ## Things that will bite you
 

@@ -96,6 +96,37 @@ rather than launched by hand:
   artefact or something the capture does not see. **Ask before chasing it.**
 - **Horizontal wrapping is in, vertical is not.** Judge it with a pad.
 
+### Decided 2026-09-17: the look waits for the SER5
+
+**No more UI is designed or tuned until CabinetOS is installed on the mini PC.**
+The user's call, and it follows from what this document already records rather
+than from a new argument: overscan eats more vertical room than a framebuffer
+capture shows, motion on llvmpipe is tuned against the wrong feedback, and the
+reference implementation's hero height needed four attempts on real hardware.
+Building more screens against a software-rendered VM is building against a lie.
+
+**The line is the acceptance test, not the subsystem.** Plenty of work has a
+visible result and is still fair game:
+
+- **If the test is "does this look right" — wait.** Layout, spacing, type sizes,
+  motion, the letterbox glow, the safe area, the navigation bar, the boot
+  splash. A capture cannot answer any of them and a VM cannot either.
+- **If the test is a measurement or a behaviour — go.** Does the save reach
+  RomM. Does the core report the pinned revision. Does the disk refuse the keep.
+  Does the state load. Does the catalog give the right answer. These are decided
+  by numbers and by running things, and the VM answers them as well as any
+  television would.
+
+A screen that already exists is not frozen — fixing something *wrong* is not the
+same as tuning something. The rule is about adding and polishing.
+
+**What this unblocks rather than blocks.** The list that survives it is long,
+and it is the half of the project with the least guesswork in it: core options,
+the last emulator, saves landing on the right triggers, the save class that does
+not sync at all, BIOS detection, the N64 state divergence, storage that eviction
+cannot see, and the two heavy systems. See `docs/NEXT-SESSION.md`, which is
+ordered this way now.
+
 ### What is still unknown, honestly
 
 - **Nothing has been judged on a television.** Motion, the letterbox glow and
