@@ -117,14 +117,26 @@ somebody their progress.
   card not connected"** — Flycast's VMU is the same problem with a title screen
   attached, and it is the first one a person would actually notice. Cabinet
   solved this in `MemoryCardSync.swift`; read it before designing anything.
-- **PSP is a third shape again, and it is now real rather than theoretical.**
-  PPSSPP saves into memory-stick DIRECTORIES — `PSP/SAVEDATA/<id>/` holding
-  `PARAM.SFO`, `DATA.BIN` and icons — which neither save RAM nor a single-file
-  capture models. Verified by running: Lumines wrote all four files. Cabinet has
-  the identical gap and calls it a future feature; its
-  `NativeLauncher.archivePSPSaveData` turns the subtree into one blob with
-  `FileWrapper` so it rides the same upload as everything else, which is the
-  design to copy rather than invent.
+- **PSP is a third shape, and Cabinet ALREADY SYNCS IT — do not repeat my
+  mistake here.** PPSSPP saves into memory-stick DIRECTORIES —
+  `PSP/SAVEDATA/<id>/` holding `PARAM.SFO`, `DATA.BIN` and icons. I wrote that
+  this does not sync, on the strength of a comment in
+  `NativeCore.savesOverSaveRAM` that says *"Save sync for PSP is its own future
+  feature"*. **That comment is stale in Cabinet's own source.** MMagTech
+  corrected it in one sentence, and there is a real save on the server:
+  `Lumines - Puzzle Fusion (USA) (Cabinet).srm`, 51,426 bytes,
+  `emulator=ppsspp-native`, updated 2026-08-28.
+
+  Cabinet archives the subtree with `FileWrapper` and pushes it through the
+  **same store, endpoint and saveRAM region** as a cartridge battery, on the
+  same after-shutdown trigger. So the design is done and the tag already
+  matches ours. **The obstacle is the format**: the blob is Apple's `rtfd`
+  directory archive, which has no Foundation on Linux — but it is a flat
+  little-endian length-prefixed table with uncompressed members (checked
+  against the bytes), so it is an afternoon's parser, and that 51 KB save is
+  the test case. PROJECT.md has the layout and the one decision that is
+  MMagTech's: keep `rtfd` for compatibility, or move both ends to something
+  portable and orphan that file.
 - **Saves on the right triggers.** Keys do it today, which is the test
   environment and not the product. The settled triggers are in PROJECT.md.
 
@@ -421,12 +433,18 @@ implicit the moment there is more than one.
    is. The same shape as Flycast's thin patch inventory. **The builder scripts
    are the real record**, and the manifest is load-bearing for parity — so this
    is worth a pass across every core, not just this one.
-3. **mGBA's Mac build is `-dirty` too**, and its manifest entry lists no patches
+3. **A comment in `NativeCore.savesOverSaveRAM` says PSP save sync is "its own
+   future feature".** It was built afterwards — `MemoryCardSync.swift:324` plus
+   the archive/unpack/restore trio in `NativeLauncher` — and the comment never
+   moved. It cost a wrong claim in a pull request here on 2026-09-17. One line
+   to fix, and worth a look for others like it: **a stale comment reads exactly
+   like a current one.**
+4. **mGBA's Mac build is `-dirty` too**, and its manifest entry lists no patches
    at all. Same problem, quieter.
-4. **Two "unrecoverable" tvOS revisions were recovered with `strings`.** Nine
+5. **Two "unrecoverable" tvOS revisions were recovered with `strings`.** Nine
    more are probably sitting in the shipping archives. An hour of work turns
    "unknown and unknowable" into facts.
-5. **melonDS's archives carry no revision** while the same upstream built here
+6. **melonDS's archives carry no revision** while the same upstream built here
    reports one, so something in Cabinet's build is losing `GIT_VERSION`.
 
 ## How the user wants this done

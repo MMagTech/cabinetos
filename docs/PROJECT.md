@@ -5608,12 +5608,79 @@ proved — and this is equally true of the five tags that came before it — is 
 a state written by this build has been loaded by Cabinet's. The cross-platform
 load was proved once, on gambatte; every tag since rests on configuration parity.
 
-**PSP save DATA does not sync, and that is inherited rather than new.** PSP games
-save into memory-stick directories — `PSP/SAVEDATA/<id>/` holding `PARAM.SFO`,
-`DATA.BIN` and icons — which neither `RETRO_MEMORY_SAVE_RAM` nor the
-single-file capture path models. Cabinet says the same in as many words and
-calls it a future feature. Verified here by running: Lumines wrote all four
-files under `romcache/saves/PSP/SAVEDATA/ULUS10002LUMINES/`.
+##### PSP save DATA does sync, and this document said the opposite for a day
+
+**Corrected 2026-09-17, by MMagTech, who said "I have other games for it with
+their memory card in RomM."** He is right, and it took one API call to confirm:
+
+```
+Lumines - Puzzle Fusion (USA) (Cabinet).srm   51,426 bytes
+emulator = ppsspp-native      updated 2026-08-28
+users/…/saves/Playstation Portable/967/ppsspp-native/
+```
+
+**How the wrong claim was arrived at, because the mistake is reusable.**
+`NativeCore.savesOverSaveRAM` excludes `.psp`, and the comment above the
+exclusion says in as many words *"Save sync for PSP is its own future
+feature."* That comment was read and believed. It is **stale in Cabinet's own
+source**: the feature was built afterwards, four files away, and nothing went
+back to update the comment. A `grep` for `archivePSPSaveData` in the same
+directory would have shown three call sites in under a second.
+
+> The rule this project already has is *look at the machine rather than
+> reasoning from a message*. A source comment is a message. It deserves exactly
+> the same suspicion as an error string, and it aged worse than the code did.
+
+**What Cabinet actually does**, read from `MemoryCardSync.swift:324` and
+`NativeLauncher.swift:212-260`:
+
+- PSP is a **tree rather than a file**, so `archivePSPSaveData` serialises the
+  whole `PSP/SAVEDATA` subtree into one blob with `FileWrapper`.
+- It is captured on **the same trigger as every other platform** — after the
+  core has shut down and flushed — compared against the previous local
+  snapshot, **written locally first**, and only then uploaded.
+- It rides the **same store, the same `/api/saves` endpoint and the same
+  `saveRAM` region** as a cartridge battery. There is no separate PSP path in
+  the sync layer at all; the difference is entirely in how the bytes are
+  gathered.
+- Only `PSP/SAVEDATA` travels. NAND, `PPSSPP_STATE` and `SYSTEM/CACHE` sit
+  beside it and are this device's own machine state, save states and compiled
+  shaders — *"uploading them would put tens of megabytes of nothing on the
+  server and mean nothing on the other end."*
+- The restore is deliberately additive: a save folder the archive does not
+  contain is never removed, so a wrong newest-wins costs a stale slot rather
+  than somebody's save.
+
+##### So the real obstacle is the FORMAT, and it is much narrower than "no design"
+
+`FileWrapper.serializedRepresentation` is Apple's serialised-directory archive.
+Read off the actual bytes rather than assumed:
+
+```
+00000000: 7274 6664 0000 0000 0300 0000 0400 0000  rtfd............
+00000010: 1700 0000 5f5f 4055 5446 3850 7265 6665  ....__@UTF8Prefe
+```
+
+`rtfd`, then little-endian length-prefixed names — `__@UTF8PreferredName@__`,
+`ULUS10002LUMINES`, `SAVEDATA` — and the payloads stored **uncompressed and
+contiguous**: `PARAM.SFO`'s ` PSF` at offset 230, two PNGs at 5150 and 21404
+with their `IEND` markers where they should be.
+
+**CabinetOS has no Foundation**, so it cannot call `FileWrapper`. But it does
+not need to reverse-engineer anything either — the container is a flat
+length-prefixed table with uncompressed members, which is a bounded afternoon's
+parser, and **there is a real 51 KB save on the server to check the round trip
+against.** That is a far better position than the "future feature" this section
+previously claimed.
+
+**One decision belongs to MMagTech and is not settled here:** keep `rtfd`, so
+the save Cabinet uploaded in August restores on this console and the two stay
+compatible with no Apple-side change; or move both ends to something portable
+and orphan that file. The first is more work here and less everywhere else.
+
+Verified by running: Lumines wrote all four files under
+`romcache/saves/PSP/SAVEDATA/ULUS10002LUMINES/`, so what CabinetOS has to
+archive is exactly what Cabinet archives.
 
 ##### What running it found that building it could not, for the fourth time
 
