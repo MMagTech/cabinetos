@@ -50,9 +50,71 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # ONE CONTAINER BUILD PER RUN, NOT TWENTY.
+  #
+  # Every core in the matrix below used to build this container itself, which
+  # meant twenty runners each downloading the same 267 MB of Fedora packages
+  # independently. That is not only twenty times the work — it is twenty
+  # independent chances for a mirror to time out, and on 2026-09-16 one did:
+  # `Build prosystem` failed after two minutes at under 1 KB/s on openh264,
+  # with nothing whatsoever wrong with prosystem. It passed on re-run in fifty
+  # seconds. A test that fails for reasons unrelated to the code is a test
+  # people learn to ignore.
+  #
+  # The image is tagged by the SHA of the Containerfile that produced it, so an
+  # unchanged Containerfile reuses the published image across runs and never
+  # builds at all, and a changed one gets a new tag that cannot collide with
+  # the old.
+  builder:
+    name: Builder container
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.ref.outputs.image }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+
+      - name: Name the image after the Containerfile that makes it
+        id: ref
+        run: |
+          set -euo pipefail
+          # Lowercased, because a registry requires it and the owner here is not.
+          owner=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          tag=$(sha256sum frontend/Containerfile | cut -c1-16)
+          echo "image=ghcr.io/$owner/cabinetos-builder:$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@abd2ef45e78c5afb21d64d4ca52ee8550d9572c7  # v4.5.1
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish it, unless that exact one is already published
+        run: |
+          set -euo pipefail
+          image="${{ steps.ref.outputs.image }}"
+          if podman manifest inspect "$image" >/dev/null 2>&1; then
+            echo "$image is already published; nothing to build"
+            exit 0
+          fi
+          # Fedora 44 because Bazzite 44 is. The same container the frontend is
+          # built in and the same one the test VM uses, so CI and the
+          # development loop are not two different builds wearing one name.
+          podman build -t "$image" -f frontend/Containerfile frontend
+          podman push "$image"
+
   build:
     name: Build ${{ matrix.core }}
     runs-on: ubuntu-24.04
+    needs: builder
+    permissions:
+      contents: read
+      packages: read
 
     strategy:
       # One core's failure should not hide another's. All four of the
@@ -87,14 +149,35 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
 
-      # The same container the frontend is built in, and the same one the test
-      # VM uses, so CI and the development loop are not two different builds
-      # wearing the same name. Fedora 44 because Bazzite 44 is.
-      - name: Build the builder container
+      - name: Log in to GHCR
+        uses: docker/login-action@abd2ef45e78c5afb21d64d4ca52ee8550d9572c7  # v4.5.1
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Pulled, not built — see the builder job above for why. The fallback is
+      # not decoration: a pull request from a fork gets a read-only token, so
+      # the builder job cannot publish, and without this the twenty core builds
+      # would all fail in a way that reads as twenty broken cores.
+      - name: Fetch the builder container
+        id: builder
         run: |
-          podman build -t cabinetos-builder -f frontend/Containerfile frontend
+          set -euo pipefail
+          image="${{ needs.builder.outputs.image }}"
+          if podman pull "$image"; then
+            echo "builder=$image" >> "$GITHUB_OUTPUT"
+          else
+            echo "could not pull $image; building it here instead"
+            podman build -t cabinetos-builder -f frontend/Containerfile frontend
+            echo "builder=cabinetos-builder" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Build the core
+        env:
+          # build-core.sh already reads this, so the image it uses is chosen
+          # here rather than by a retag.
+          CABINETOS_BUILDER: ${{ steps.builder.outputs.builder }}
         run: |
           set -euo pipefail
           cores/build-core.sh "${{ matrix.core }}" | tee /tmp/build.log
