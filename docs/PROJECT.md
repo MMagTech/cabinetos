@@ -6486,3 +6486,150 @@ a "join another network" path where the name is typed too; **the passphrase is
 usually being read off the underside of a router**, so digits and symbols must
 not be buried behind a shift layer; and **802.1X enterprise is a different form
 entirely** — out of scope, and better refused plainly than half-supported.
+
+### 18. The on-disk layout
+**Raised by MMagTech 2026-09-17. DECIDED the same day. Not yet implemented.**
+
+> *"What I don't want is for these to be in completely random places throughout
+> the OS. If we had to ssh or sftp into the file system there should be an
+> organized folder structure that makes it distinct and easy to find."*
+
+A fair description of what exists. **The current layout was never designed — it
+accumulated**, and three of its problems were hit in one afternoon while adding
+PSP saves:
+
+- **There are two save directories.** `romcache/saves/` when a game is launched
+  from the library, and `saves/` when it is launched with `--core`. PSP save
+  folders were found in both. A save written one way is not seen the other way.
+- **`system/` holds three unrelated kinds of thing**: BIOS fetched from RomM
+  (replaceable), a Dreamcast's saved console settings (irreplaceable), and now
+  13 MB of PPSSPP fonts that are part of a build's output. This document already
+  carries a warning not to clean that directory. A warning is standing in for a
+  layout.
+- **Every core shares one flat save directory**, which is why attributing a PSP
+  save folder to the game that wrote it needed mtime comparison rather than a
+  path.
+- **`romcache/` is named "cache" and holds things that are not a cache** — kept
+  games, pending uploads, and every save. Cabinet renamed its Storage screen the
+  moment it held things that were not a cache; the directory here has the same
+  lie in its name.
+
+#### Take the vocabulary that already exists
+
+**Read from RetroArch's and RetroBat's own documentation rather than recalled.**
+Both use top-level folders named after what is in them — `bios`, `roms`,
+`saves`, `states`, `screenshots`, `cheats`, `config` — with no nesting of
+unrelated things. **Someone who has used either already knows where to look,
+which is most of what this question is asking for.**
+
+Three specifics worth taking:
+
+1. **Saves and states are separate top-level directories.** This console has no
+   states directory at all today; states go to RomM and nowhere else.
+2. **RetroArch sorts saves into folders by core name, and it is ON by default.**
+   So the per-core split is not an invention, it is what the most-used frontend
+   in this space already does. It also offers sorting by content directory.
+3. **RetroBat separates user data from program data** — a `user/` folder that
+   survives updates. That maps exactly onto a bootc image, where `/usr` is
+   replaced wholesale on every update and `/var` is the person's.
+
+#### The cache is the one thing that is genuinely ours
+
+Both of those assume the games are yours and permanent: `roms/` *is* the
+library. This console pulls on demand, so it has two categories neither needs —
+a game that is here because it was played, and a game that is here because
+somebody asked for it. **MMagTech's own read, and it is right.**
+
+Keeping them apart at the top level has a payoff beyond tidiness: **eviction
+only ever deletes inside `cache/`**, which is a rule that can be checked by
+looking rather than by reading code, and it lines up with the drive split
+already decided in open question 14 — kept games travel, the cache does not.
+
+#### Per-user from the start, because RomM already is
+
+**Raised by MMagTech: RomM has users, tvOS switches between them, so the layout
+should account for it before it exists.** It should, and RomM has already
+designed the answer. Read off the live server:
+
+```
+users/557365723a31/saves/Sony Playstation/356/pcsx-rearmed-native/<file>
+```
+
+`557365723a31` is hex for **`User:1`**. So RomM namespaces by **user first**,
+then asset kind, then platform, then rom id, then emulator tag. Mirroring that
+locally means the tree on the console and the tree on the server are the same
+shape — sync becomes obvious and a fault is visible by eye. (The same listing
+shows a save whose path simply *ends* at the rom id, with no emulator segment:
+that is the untagged PlayStation card, and the missing tag is a missing
+directory level.)
+
+**What is NOT per-user matters as much as what is.** Two people on one console
+must not download the same game twice, or hold two copies of the PS2 BIOS — and
+must never see each other's saves.
+
+| Per user | Shared by the machine |
+|---|---|
+| saves, save states | the downloaded game files |
+| screenshots | BIOS and firmware |
+| preferences | cores |
+| **the decision** to keep a game | shader caches |
+
+That last row is the subtle one and it belongs to the account-switching session
+rather than this one: the FILE is shared, the KEEP is personal, so releasing one
+person's keep must not delete a game somebody else pinned. The layout only has
+to leave room for it.
+
+#### The shape
+
+```
+/var/lib/cabinetos/
+├── roms/      kept games                shared
+├── cache/     pulled games              shared, and the only thing eviction touches
+├── bios/      firmware from RomM        shared
+├── users/
+│   └── <id> - <name>/
+│       ├── saves/<platform>/<romId>/<core>/
+│       ├── states/<platform>/<romId>/<core>/
+│       ├── screenshots/
+│       └── config/
+├── config/
+└── logs/
+```
+
+Anything that ships inside the image — PPSSPP's fonts and lookup tables — lives
+in `/usr/share/cabinetos/` and is never written to.
+
+#### One convention, twice: the number identifies, the words are for you
+
+`users/1 - MMagTech/`, and `roms/psx/321 - Crash Bandicoot.chd`.
+
+**The username alone was considered and is not the key.** It is available —
+`/api/users/me` returns it — and it is what a person recognises, so it belongs
+in the name. But **usernames change and ids do not**: rename in RomM and a
+name-keyed console would quietly create an empty folder and start again, with
+every save still on disk and nothing looking for it. That is the same failure as
+the untagged save above — the data is fine, the label moved. Two smaller
+reasons: a username can hold spaces and unicode, and `Matt` and `matt` are one
+directory on a FAT or exFAT drive, which is exactly the USB case open question
+14 contemplates. **RomM itself hex-encodes `User:1` rather than using the name**,
+which suggests the same conclusion reached independently.
+
+So the leading number is matched and everything after `" - "` is decoration that
+may be re-derived at any time. A rename becomes cosmetic rather than
+destructive.
+
+#### Why now, and the one caveat
+
+**Now it costs nothing** — one user, one directory — and later it means moving
+every save on every machine. Saves are the only category of data on this console
+that cannot be re-downloaded, so that asymmetry decides it.
+
+**The honest caveat:** the real key is *(server, user)*, not user alone, because
+two RomM instances both have a `User:1`. Open question 14 already established
+that RomM exposes no instance identity and that "one drive, one server" is a
+sentence of documentation rather than a mechanism. The same applies here: worth
+a note in the layout, not machinery.
+
+**Not implemented.** Nothing has moved. It should be done before there are
+machines with play histories on them, and it is a behaviour rather than a
+picture, so the SER5 decision does not hold it up.

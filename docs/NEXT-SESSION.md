@@ -209,14 +209,34 @@ while the same core reaches its attract demo on the ordinary launch path.
 test.** Fixing the instrument is the work; a capture reporting
 `retro_serialize_size` is the stopgap that exists today.
 
-### 5. Nothing warns that a system's BIOS is missing
+### 5. The on-disk folder layout — decided, not built
+
+**Open question 18, agreed with MMagTech 2026-09-17.** The current layout was
+never designed, it accumulated: there are TWO save directories, `system/` mixes
+replaceable BIOS with an irreplaceable Dreamcast flash and 13 MB of PPSSPP
+fonts, every core shares one flat save pile, and `romcache/` is named "cache"
+while holding kept games and everyone's saves.
+
+The agreed shape takes RetroArch's and RetroBat's vocabulary (`roms`, `saves`,
+`states`, `bios`, `config`), adds the one thing neither needs — a `cache/` that
+is the only directory eviction may touch — and namespaces per user the way RomM
+itself does, mirroring its `users/<user>/saves/<platform>/<romId>/<core>/`.
+One convention throughout: **the number identifies, the words are for you** —
+`users/1 - MMagTech/`, `roms/psx/321 - Crash Bandicoot.chd`.
+
+**Do it before there are machines with play histories.** Today it is one user
+and one directory; later it is moving every save on every console, and saves are
+the only data here that cannot be re-downloaded. It is a behaviour, not a
+picture, so the SER5 decision does not hold it up.
+
+### 6. Nothing warns that a system's BIOS is missing
 
 Until a game fails to start. `catalog` is where it belongs — a fifth answer, and
 the first one that is a fact about the person's server rather than about this
 console. The answer is a lookup, not a layout, so the tile that shows it can
 reuse the wording already measured for the other four.
 
-### 6. The disk that eviction cannot see
+### 7. The disk that eviction cannot see
 
 Mesa's shader cache in `~/.cache`, plus files the cores write into the system
 directory. Under 3 MB today. **One of them is a Dreamcast's saved flash**, so
@@ -225,7 +245,7 @@ directory also holds 13 MB of PSP system files that are part of the build's
 output rather than anything reclaimable. PROJECT.md, *The cache is not the only
 thing a game writes to disk*.
 
-### 7. Power button to a clean shutdown
+### 8. Power button to a clean shutdown
 
 Phase 2's last mechanical item, and it is a behaviour rather than a picture.
 
