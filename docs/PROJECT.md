@@ -4845,6 +4845,12 @@ the revision and the flags rather than about the machine, so a core can be
 checked against it anywhere — and it means a future mismatch is a real signal
 rather than noise to be explained away.
 
+**Now three, and the third is the one that was in doubt.** PPSSPP, 2026-09-17:
+`c93fed82…` on both, from a 38 MB CMake build of roughly four hundred
+translation units with a vendored ffmpeg linked in. The two above are small
+Makefile builds; this is the shape that could plausibly have picked up a
+timestamp or a path. It did not.
+
 **Decision: build with `HAVE_CDROM=0`.** The conservative choice is free here.
 The console has no optical drive and never will — ROMs arrive from RomM as
 files — so the lever disables a feature the hardware cannot use, and matching
@@ -5478,6 +5484,16 @@ finishes the set at **twenty-one of twenty-one**, 1147 of 1644 games.
 | Context | **OpenGL ES 2.0**, bottom-left origin — the only core in the set that asks for ES 2 |
 | Save state | 41,943,040 bytes at the demo screen |
 | System files | 13 MB, 43 files, installed beside the core rather than fetched from RomM |
+| sha256 | `c93fed82…` — **the same on the test VM and on a GitHub runner** |
+
+**It is reproducible across machines, and that is a third data point rather than
+a repeat.** gambatte and genesis_plus_gx are small Makefile builds; this is a
+38 MB CMake build of roughly four hundred translation units with a vendored
+ffmpeg linked in, produced from a bare checkout in CI in 8m52s, and the two
+artifacts are byte-identical. A sha256 in a CI log is a fact about the revision
+and the flags rather than about the machine — see *And the build turns out to be
+reproducible across machines*, which said that when it had two cores to say it
+about.
 
 ##### The CPU backend is an OPTION here, not a build flag
 
