@@ -6812,6 +6812,74 @@ television, with no save state travelling anywhere.
 **What it does not change:** everything Cabinet DOES ship stays in lockstep. This
 is permission to add, not permission to drift.
 
+#### PS3 is the first system where what you DOWNLOAD is not what you RUN
+
+**Raised by MMagTech, 2026-09-17, as the one thing about PS3 he could not see
+how to fit:** *"in rpcs3 you have to first install the firmware into it and then
+install the game. pkg have a license as well that needs inserting and then
+theres disc based iso."*
+
+**He is right, and a first look here said otherwise.** That look checked the
+name of each game's top-level entry, saw thirty directories, concluded "all disc
+rips", and was wrong — it never opened them. The same shape of mistake as
+believing a stale comment: one level checked, the conclusion generalised.
+
+**Counted properly, across every file of all thirty games:**
+
+| | |
+|---|---|
+| Contain a `.pkg` | **24 of 30** |
+| Contain a `.rap` licence | **19 of 30** |
+| Plain disc folders | **6** — God of War III is 97 files and 37 GB |
+
+A PSN title is two files. Sly Cooper is `Sly Cooper - Thieves of Time.pkg` at
+19.8 GB plus `EP9000-NPEA00429_00-SLYCOOPERPSN0000.rap` at a few hundred bytes.
+
+##### Why that breaks the storage model rather than merely complicating it
+
+Everywhere else on this console — including the six PS3 disc rips — **the file
+from RomM is the artefact**. Download it, hand it to the core, done. A PKG is
+not that: it has to be installed into RPCS3's virtual hard drive, which produces
+a second copy of roughly the same size. Sly Cooper would be 19.8 GB downloaded
+plus ~19.8 GB installed, for **forty gigabytes of one game**.
+
+So the PKG has to be deleted after installing, and that has a consequence the
+cache design did not anticipate:
+
+> **`beginLaunch`'s reuse test stops working.** It is the check open question 14
+> leans on so heavily that it made drive identity unnecessary — stat the file at
+> the game's rom-id path, compare its size to what the server reported, reuse it
+> only if both match. For PS3 the thing on disk is an installed TREE, not the
+> file that was fetched, and its size does not match what RomM said. "Is this
+> game here?" becomes "is this title id installed", which is a different
+> question against different evidence.
+
+**A third state exists for PS3 and for nothing else**: fetched, installed, and
+the relationship between them. Whether "kept" means the PKG or the installed
+tree is a real decision, not a detail — and the answer is almost certainly the
+installed tree, because that is the thing that can be run.
+
+##### The other two steps, which are smaller than they sound
+
+- **Firmware is one install, once per machine.** `PS3UPDAT_v4.96.PUP`, 206 MB,
+  and **it is already on the server** as PS3 platform firmware — which is why
+  93% of all firmware in this library belongs to a system with no core, a
+  measurement recorded earlier that stops being dead weight the moment PS3 is
+  real. It is not a file a core reads by name; it decrypts into a `dev_flash`
+  tree. That is a category the layout does not have: derived, shared,
+  machine-wide, and produced by an install rather than a download.
+- **The `.rap` is per-user.** RPCS3 puts it in
+  `dev_hdd0/home/<user>/exdata/`, which lands neatly in the per-user shape
+  agreed in open question 18 — it belongs beside that user's saves.
+- **Installing 20 GB is not instant**, so "Download" for PS3 means fetch AND
+  install, and the one deliberate storage act has two phases rather than one.
+
+##### What this does not change
+
+The saves story above is unaffected: save data is still a folder tree under
+`dev_hdd0/home/<user>/savedata/<TITLEID>/`, and the PSP mechanism still covers
+it.
+
 #### PS3's saves, and why the missing snapshots do not matter
 
 **Recorded because this document briefly implied otherwise and MMagTech
