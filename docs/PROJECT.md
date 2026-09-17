@@ -260,7 +260,51 @@ Neither implementation may be the only one.
 
 **The target is x86-64 PC hardware, not one specific machine.**
 
-The development and reference machine is a Beelink SER5 mini PC (AMD Ryzen 5,
+**The reference machine changed on 2026-09-17, which is exactly what this
+section said would happen.** It is now a **GEEKOM A9 Pro — AMD Ryzen AI 9 HX 370
+(Zen 5, 12 cores) with Radeon 890M integrated graphics (RDNA 3.5, 16 CUs).** It replaces the Beelink
+SER5 (Ryzen 5, Vega), which was only ever the spare box that happened to be
+available.
+
+> *"If the project works out, the hardware may change, and CabinetOS must not
+> have quietly grown dependencies on this particular box in the meantime."* —
+> written here in Phase 1, and now cashed in. Nothing had to change to move
+> machines, which is the point of having said it.
+
+**What moves with it:**
+
+- **The performance floor moves a long way up.** Phase 8 exists to tune PS2,
+  GameCube, Dreamcast and Naomi "on Vega integrated graphics". That premise is
+  gone. The floor is now Zen 5 with a Radeon 890M, and Phase 8's targets should be
+  re-read rather than inherited.
+- **Everything keyed to "the SER5" now means this machine** — most importantly
+  the decision that no UI is designed or tuned until CabinetOS is installed on
+  it. That gate did not move, but the thing it waits for did.
+- **PS3 becomes a hardware question that is ANSWERED.** MMagTech, 2026-09-17:
+  *"ive seen numerous videos on youtube of it running ps3 including god of war
+  3."* RPCS3 is CPU-bound rather than GPU-bound — the work is emulating the
+  Cell's SPUs — and Zen 5 carries AVX-512, which is the instruction set that
+  matters most for it. **Treat PS3 performance as settled and stop revisiting
+  it.** What remains for PS3 is architectural and storage-shaped, not
+  performance-shaped; see open question 12.
+
+**What does NOT move:**
+
+- **Still AMD**, so the base image stays plain `bazzite` and open question 11
+  (NVIDIA) stays out of scope. No second image to build, sign and boot.
+- **Still no wired CEC pin.** Essentially no x86 mini PC has one, so the USB
+  adapter stays in the bill of materials.
+- **Storage is unaffected.** A faster CPU does not make PS3's 307 GB, or its
+  37 GB single title, any smaller.
+
+**One thing to verify rather than assume when it arrives:** Strix Point is recent
+enough that its graphics support depends on a current Mesa and kernel. Bazzite
+44 is Fedora 44 with Mesa 26.2, which should be comfortable — but "should be" is
+the phrase this project has learned to distrust, so boot it before believing it.
+
+The original text follows, because the reasoning is still the rule:
+
+The development and reference machine was a Beelink SER5 mini PC (AMD Ryzen 5,
 Radeon Vega integrated graphics) because that is the spare box available. It is
 not the product's definition. If the project works out, the hardware may change,
 and CabinetOS must not have quietly grown dependencies on this particular box in
