@@ -444,5 +444,9 @@ sure we can't do X?" and "you need to read Cabinet" both produced better answers
 than the first one.
 
 **Use the `MMagTech` handle, never the user's personal name** — not in files,
-commits or documents. `docs/PROJECT.md` still carries 26 uses of it from earlier
-sessions and the repo is public; that is worth a find-and-replace.
+commits or documents, and the repo is public. This file previously said
+`docs/PROJECT.md` still carried 26 uses of the personal name; as of 2026-09-17
+every one of its 29 occurrences is the handle, and a pattern search for a name
+in the places one would sit — *"X's prompt"*, *"X said"*, *"X chose"* — finds
+none. **Treat that as checked rather than as done**, since a search cannot
+prove the absence of a word nobody wrote down, and keep the rule regardless.
