@@ -178,6 +178,19 @@ public:
     // than us. For one core it is also a brake — see runFor.
     double audioAhead() const;
 
+    // Whether the emulated machine is actually RUNNING, as opposed to still
+    // being built. Audio is the signal because it is the one output that does
+    // not appear until the machine runs — a picture arrives while a core is
+    // still initialising, so frames cannot answer this.
+    //
+    // It exists because of what happens otherwise: PPSSPP builds the machine on
+    // a thread of its own, and unloading the game while that is in flight frees
+    // the memory out from under it. The core dies in `__PPGeInit`, off
+    // `PSP_InitStart`, and it is repeatable — quit a PSP game two seconds after
+    // starting it. Only PPSSPP has a thread like this, but the question is
+    // asked of every core because "is it running yet" is not core-specific.
+    bool running() const { return audioFramesTotal() > 0; }
+
     // Uploads the most recent frame into `texture()`. Call on the GL thread.
     // Returns false if the core has not produced a picture yet.
     //

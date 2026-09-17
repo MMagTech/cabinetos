@@ -42,6 +42,8 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -51,6 +53,7 @@
 #include "keyboard.h"
 #include "cache.h"
 #include "catalog.h"
+#include "dirsave.h"
 #include "romfile.h"
 #include "romm.h"
 #include "screens.h"
@@ -222,6 +225,24 @@ struct GameSession {
     std::string emulatorTag;    // empty means: do not upload, we cannot vouch for it
     std::string dir;            // where this game's local copies live
     std::vector<uint8_t> saveAtLaunch;   // to tell whether it actually changed
+
+    // --- Directory saves, which is PSP and nothing else -------------------
+    //
+    // Where the tree lives, and what was in it before the game ran. The
+    // baseline is how a save is attributed to the game that wrote it: this
+    // console gives every core ONE shared save directory, so
+    // `PSP/SAVEDATA` accumulates a folder per PSP game ever played, and
+    // uploading the whole thing under one rom id would file four games'
+    // saves against whichever was launched last.
+    //
+    // So the rule is: a folder that was created or touched while this game
+    // was running belongs to this game. That needs no disc id, no parsing
+    // of the ISO, and no table. (The reference implementation sidesteps it
+    // instead by giving each rom its own save directory — the better answer
+    // eventually, and a bigger change than this, since every core here
+    // shares one.)
+    std::string dirSaveRoot;                  // empty for every core but PPSSPP
+    std::vector<cab::DirEntry> dirAtLaunch;
 };
 
 static std::string sanitisedStem(const std::string& title) {
@@ -252,10 +273,66 @@ static bool writeLocal(const std::string& path, const std::vector<uint8_t>& data
     return ok;
 }
 
+// A directory save, zipped and sent — PSP and nothing else. See dirsave.h for
+// why the archive is a zip and where it is rooted.
+//
+// WHICH FOLDERS. Only the ones created or touched since the game started, and
+// then those folders WHOLE rather than the individual files that changed: a
+// save slot is one thing, and shipping half of it would produce an archive that
+// restores a PARAM.SFO without its DATA.BIN. See GameSession for why the
+// baseline is needed at all.
+static void syncDirSave(GameSession& sess, Uploader& up) {
+    std::map<std::string, cab::DirEntry> before;
+    for (const cab::DirEntry& e : sess.dirAtLaunch) before[e.relPath] = e;
+
+    const std::vector<cab::DirEntry> now = cab::listTree(sess.dirSaveRoot);
+    std::set<std::string> touchedFolders;
+    for (const cab::DirEntry& e : now) {
+        auto it = before.find(e.relPath);
+        if (it != before.end() && it->second == e) continue;
+        const size_t slash = e.relPath.find('/');
+        touchedFolders.insert(slash == std::string::npos ? e.relPath
+                                                         : e.relPath.substr(0, slash));
+    }
+    if (touchedFolders.empty()) return;   // the game saved nothing. Normal.
+
+    std::vector<std::string> paths;
+    for (const cab::DirEntry& e : now) {
+        const size_t slash = e.relPath.find('/');
+        const std::string top =
+            slash == std::string::npos ? e.relPath : e.relPath.substr(0, slash);
+        if (touchedFolders.count(top)) paths.push_back(e.relPath);
+    }
+
+    std::vector<uint8_t> zip;
+    std::string zerr;
+    if (!cab::zipTree(sess.dirSaveRoot, paths, &zip, &zerr)) {
+        std::fprintf(stderr, "[save] could not archive the save folder: %s\n", zerr.c_str());
+        return;
+    }
+    // Local first, always. The network is the part that can fail, and a save
+    // that only exists in a pending upload is a save that can be lost.
+    const std::string name = sanitisedStem(sess.title) + ".zip";
+    const std::string path = sess.dir + "/" + name;
+    if (!writeLocal(path, zip)) {
+        std::fprintf(stderr, "[save] could not write %s\n", path.c_str());
+        return;
+    }
+    std::fprintf(stderr, "[save] %zu file(s) in %zu folder(s), %zu bytes zipped to %s\n",
+                 paths.size(), touchedFolders.size(), zip.size(), path.c_str());
+    sess.dirAtLaunch = now;   // this is the new baseline; do not send it twice
+
+    if (sess.emulatorTag.empty()) return;
+    up.push(Uploader::Job{sess.romId, sess.emulatorTag, name, std::move(zip), false});
+}
+
 // Takes a snapshot of the game's own save and sends it, but only when it has
 // actually changed. A cartridge with no battery returns nothing, which is a
 // normal answer and not a failure.
 static void syncSave(GameSession& sess, Uploader& up) {
+    // The one platform whose save is a tree. It never reaches the save-RAM path
+    // below, because PPSSPP answers RETRO_MEMORY_SAVE_RAM with nothing at all.
+    if (!sess.dirSaveRoot.empty()) { syncDirSave(sess, up); return; }
     cab::Core& core = cab::Core::shared();
     std::vector<uint8_t> ram;
     if (!core.readSaveRam(ram) || ram.empty()) return;
@@ -1214,6 +1291,7 @@ int main(int argc, char** argv) {
     // Opens the overlay and takes Exit to Home, so the whole leave-a-game path
     // can be proved on a machine with nothing attached.
     bool overlayExitDemo = false;
+    int overlayExitAfter = 120;   // frames of play before the overlay quits it
     float autoLaunchAfter = 0.0f;
     for (int i = 1; i < argc; ++i) {
         if (SDL_strcmp(argv[i], "--screenshot") == 0 && i + 1 < argc) {
@@ -1252,6 +1330,10 @@ int main(int argc, char** argv) {
             autoUnkeepId = SDL_atoi(argv[++i]);
         } else if (SDL_strcmp(argv[i], "--overlay-exit") == 0) {
             overlayExitDemo = true;
+            // Optional frame count: --overlay-exit 2000 plays for 2000 frames
+            // and then quits through the overlay, which is the only way to
+            // exercise the quit-time save path on a machine with no controller.
+            if (i + 1 < argc && argv[i + 1][0] != '-') overlayExitAfter = SDL_atoi(argv[++i]);
         } else if (SDL_strcmp(argv[i], "--overlay") == 0) {
             overlayDemo = true;
         } else if (SDL_strcmp(argv[i], "--sync-test") == 0) {
@@ -2262,6 +2344,51 @@ int main(int argc, char** argv) {
         cab::Core& core = cab::Core::shared();
         const std::string saveDir = std::string(romCacheDir) + "/saves";
         SDL_CreateDirectory(saveDir.c_str());
+
+        // A DIRECTORY save comes down BEFORE the game is loaded, unlike the
+        // battery below, which the core can be handed afterwards. PPSSPP mounts
+        // the memory stick while the game boots, so a folder that arrives later
+        // is a folder the game has already decided is not there.
+        const char* dirSub = catalog::directorySaveRoot(launchJob.coreName.c_str());
+        const char* launchTag = catalog::emulatorTag(launchJob.coreName.c_str());
+        if (dirSub && launchTag && liveClient.haveToken()) {
+            const std::string root = saveDir + "/" + dirSub;
+            std::vector<romm::Asset> saves;
+            std::string serr;
+            if (liveClient.fetchSaves(launchJob.romId, &saves, &serr)) {
+                const romm::Asset* newest = nullptr;
+                for (const auto& a : saves) {
+                    if (a.emulator != launchTag) continue;
+                    if (!newest || a.updatedAt > newest->updatedAt) newest = &a;
+                }
+                if (newest) {
+                    std::vector<uint8_t> data = liveClient.fetchAsset("saves", newest->id);
+                    // SNIFFED, never taken from the name. The reference
+                    // implementation's PSP saves are an Apple directory archive
+                    // wearing an `.srm` extension, so the filename says nothing
+                    // at all about what is inside. Anything that is not a zip is
+                    // left alone rather than guessed at — better a missing save
+                    // than a corrupted memory stick.
+                    if (cab::looksLikeZip(data)) {
+                        std::string uerr;
+                        if (cab::unzipTree(data, root, &uerr)) {
+                            std::fprintf(stderr, "[save] unpacked %s (%zu bytes) into %s\n",
+                                         newest->fileName.c_str(), data.size(), root.c_str());
+                        } else {
+                            std::fprintf(stderr, "[save] %s would not unpack: %s\n",
+                                         newest->fileName.c_str(), uerr.c_str());
+                        }
+                    } else if (!data.empty()) {
+                        std::fprintf(stderr,
+                                     "[save] %s is not a zip (%02x %02x %02x %02x) — left alone\n",
+                                     newest->fileName.c_str(), data[0], data[1],
+                                     data.size() > 2 ? data[2] : 0,
+                                     data.size() > 3 ? data[3] : 0);
+                    }
+                }
+            }
+        }
+
         if (!core.loadGame(launchJob.romPath, "system", saveDir)) {
             std::fprintf(stderr, "[launch] %s\n", core.error().c_str());
             return;
@@ -2282,6 +2409,15 @@ int main(int argc, char** argv) {
         } else {
             std::fprintf(stderr, "[sync] no settled tag for %s — saves stay local\n",
                          launchJob.coreName.c_str());
+        }
+        // The baseline for a directory save, taken AFTER the restore above and
+        // BEFORE the game has had a chance to write anything. What changes
+        // between here and the quit is what this game saved. See GameSession.
+        if (dirSub) {
+            session.dirSaveRoot = saveDir + "/" + dirSub;
+            session.dirAtLaunch = cab::listTree(session.dirSaveRoot);
+            std::fprintf(stderr, "[save] %s holds %zu file(s) at launch\n",
+                         session.dirSaveRoot.c_str(), session.dirAtLaunch.size());
         }
 
         if (core.saveRamSize() > 0 && !session.emulatorTag.empty()) {
@@ -2398,13 +2534,73 @@ int main(int argc, char** argv) {
     // Leaving a game. The save goes up FIRST — this is the trigger that matters
     // most, because nobody should lose progress by quitting — and only then is
     // the core torn down.
-    auto exitToHome = [&]() {
+    // Quitting is DEFERRED while a core is still booting, and the waiting has
+    // to happen out here in the frame loop rather than inside unloadGame.
+    //
+    // The first attempt did it in unloadGame, spinning on retro_run until the
+    // core produced audio. It never did, and the reason is the useful part:
+    // PPSSPP's emulation thread only advances when the frontend COMPLETES a
+    // frame, not merely when retro_run is called. A tight loop with no present
+    // in it makes no progress at all — which is the same signature that makes
+    // --state-test unable to warm this core up, and now has one explanation
+    // rather than two mysteries.
+    //
+    // So the exit sets a flag, the ordinary loop keeps running and drawing, and
+    // the quit completes once the machine is up. Capped, because somebody
+    // quitting must not wait on a core that is never going to boot.
+    bool exitPending = false;
+    uint64_t exitWaitStart = 0;
+    auto finishExit = [&]() {
         syncSave(session, uploader);
         cab::Core::shared().unloadGame();
+        // AFTER the unload, for the one platform whose save is a tree. The
+        // battery above is read out of the core's own memory and is finished
+        // the moment the game stopped writing to it; a directory save is files
+        // on a disk, and retro_unload_game is where a core flushes them. The
+        // reference implementation captures this class after shutdown for
+        // exactly that reason, and it is the same rule that lost saves here
+        // once already when it was ignored.
+        //
+        // Safe to run twice: syncDirSave compares against its own baseline and
+        // sends nothing when nothing moved.
+        if (!session.dirSaveRoot.empty()) syncDirSave(session, uploader);
         playing = false;
         overlayOpen = false;
         overlayFade.retarget(0.0f, kOverlayFade);
         std::fprintf(stderr, "[overlay] exited to Home\n");
+    };
+
+    auto exitToHome = [&]() {
+        if (!cab::Core::shared().running()) {
+            // Still building the machine. Close the overlay so the quit looks
+            // like it was accepted — it has been — and let the loop finish it.
+            exitPending = true;
+            exitWaitStart = SDL_GetTicksNS();
+            overlayOpen = false;
+            overlayFade.retarget(0.0f, kOverlayFade);
+            std::fprintf(stderr, "[overlay] quit accepted; waiting for the core to boot\n");
+            return;
+        }
+        finishExit();
+    };
+
+    auto pumpExit = [&]() {
+        if (!exitPending || !playing) return;
+        // WALL CLOCK, NOT FRAMES, and that distinction is the whole fix. The
+        // first version capped the wait at 120 FRAMES, which crashed in one
+        // configuration and not another for a reason that looked like magic: a
+        // capture at 1920x1080 and one at the 1024x768 window differ threefold
+        // in fill rate on a software rasteriser, so the same 120 frames are
+        // seconds in one and an instant in the other. The core's boot takes the
+        // time it takes.
+        const double waited = (SDL_GetTicksNS() - exitWaitStart) / 1e9;
+        const bool up = cab::Core::shared().running();
+        if (up || waited > 15.0) {
+            std::fprintf(stderr, "[overlay] quitting after %.1fs%s\n", waited,
+                         up ? "" : " — the core never booted, unloading anyway");
+            exitPending = false;
+            finishExit();
+        }
     };
 
     auto overlayActivate = [&]() {
@@ -2736,12 +2932,18 @@ int main(int argc, char** argv) {
         }
 
         pumpLaunch();
+        pumpExit();
         pumpStateLoad(stateLoad);
         if (overlayDemo && playing && !overlayOpen) { overlayDemo = false; toggleOverlay(); }
         if (overlayExitDemo && playing) {
             static int t = 0;
-            if (++t == 120) { toggleOverlay(); overlaySlot = OvExit; }
-            if (t == 180) { overlayExitDemo = false; overlayActivate(); }
+            // How long the game is left running before the overlay quits it.
+            // Was a fixed 120 frames, which is two seconds — long enough to
+            // watch the transition and far too short for anything else. A PSP
+            // game is still BOOTING at that point, and a save cannot be tested
+            // at all because the game has not had time to write one.
+            if (++t == overlayExitAfter) { toggleOverlay(); overlaySlot = OvExit; }
+            if (t == overlayExitAfter + 60) { overlayExitDemo = false; overlayActivate(); }
         }
 
         // The round trip, once, a couple of seconds into the game so there is

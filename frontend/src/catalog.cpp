@@ -326,6 +326,12 @@ std::map<std::string, std::string> optionOverrides(const std::string& core) {
     return {};
 }
 
+const char* directorySaveRoot(const char* core) {
+    if (!core) return nullptr;
+    if (manifestName(core) == "ppsspp") return "PSP/SAVEDATA";
+    return nullptr;
+}
+
 const char* shortReason(Support s) {
     switch (s) {
         case Support::Playable: return "";

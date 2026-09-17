@@ -110,6 +110,21 @@ const char* shortReason(Support s);
 // with a reason recorded for each.
 std::map<std::string, std::string> optionOverrides(const std::string& coreName);
 
+// For the one platform whose save is a DIRECTORY rather than a file: where that
+// directory sits under the save directory, or nullptr for everything else.
+//
+// PSP saves into a memory stick — `PSP/SAVEDATA/<GAMEID><TITLE>/` holding
+// PARAM.SFO, DATA.BIN and icons — because that is what PPSSPP reads and writes
+// on every platform, and there is no single-file PSP save anywhere. It travels
+// to RomM as a zip; see dirsave.h for why zip and where the archive is rooted.
+//
+// Deliberately NOT the whole `PSP/` tree: NAND, PPSSPP_STATE and SYSTEM/CACHE
+// sit beside SAVEDATA and are this machine's own state, save states and
+// compiled shaders. Uploading them would put tens of megabytes of nothing on
+// the server and mean nothing on the other end — the reference implementation
+// says exactly that and it is right.
+const char* directorySaveRoot(const char* core);
+
 // The same question asked of a game. A ROM payload carries its own platform
 // slug and fs_slug, so Home can decide whether the most recently played game is
 // one this console can resume without fetching the platform list first.
