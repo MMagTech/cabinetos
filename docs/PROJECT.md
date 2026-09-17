@@ -1192,12 +1192,38 @@ led by the firmware, and zero keyring lines.
 > category nobody had thought of. **When something goes wrong on real hardware,
 > check what this file does not watch** before assuming the base is innocent.
 
-**The 44.20260916 firmware regression was taken deliberately**, with the
-reasoning on the pull request: a month-old `linux-firmware` is older rather
-than broken, Bazzite ships it as stable, the SER5 is not installed so holding
-the pin buys no information, and a pin nobody moves is the failure this whole
-workflow exists to prevent. It is recorded here so that if graphics look wrong
-on the SER5, this is a known change rather than a fresh mystery.
+**The 44.20260916 firmware move is Bazzite's, and it is a fix rather than a
+regression.** Chased down 2026-09-17 rather than left as "upstream did it":
+
+1. Fedora shipped `linux-firmware` **20260910** to F44 stable on 10 September —
+   confirmed against Bodhi, where it is still listed stable, so Fedora did not
+   pull it.
+2. It caused problems on some handhelds.
+3. `ublue-os/bazzite`, **15 September**: *"fix: Allow firmware pinning, pin to
+   old version of firmware due to issues with the latest on some handhelds"*.
+4. Their 16 September stable image carries that pin, and that is the image this
+   project now builds on.
+
+> **Taking the stable channel means taking Bazzite's judgement about firmware,
+> and that is the point of tracking a base.** They have hardware reports across
+> a fleet of devices; this project has none, and no hardware at all until the
+> SER5 is installed. The SER5 is a mini PC rather than a handheld, so it is
+> probably unaffected either way — and right now the older firmware is the
+> better-tested one.
+
+**The flag was still correct, and this is the useful shape of the lesson.** A
+month-long firmware move should always surface for a read. It simply turned out
+that reading it said "good, they caught something" rather than "be careful" —
+which is what a working watchlist looks like most of the time, and is not a
+reason to narrow it.
+
+**The tag written into `Containerfile` is the image's version label, not the
+channel tag** — `44.20260916` rather than `stable-44.20260916`. Checked against
+the registry: `stable`, `44.20260916` and `stable-44.20260916` all resolve to
+the same digest, so nothing is ambiguous and the `FROM` line would still
+resolve if the digest were ever dropped. Worth knowing before somebody reads the
+missing `stable-` prefix as a channel change, which is what it looks like in
+`git log`.
 
 **Why not Renovate or Dependabot.** Bazzite rebuilds daily. A dependency bot
 would open a pull request every day that said "digest changed" and nothing more.
