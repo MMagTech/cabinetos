@@ -5778,6 +5778,130 @@ reproducible artifact — and none of them could see any of this.
   defaults to enabled and Cabinet leaves it unanswered, which is `false`. Not
   established.
 
+#### The save audit, 2026-09-17: every core, against the bytes on the server
+
+**MMagTech, after the PSP correction: "can you audit the other cores and see if
+they suffer the same issue or similar."** Run against all **81 saves** on the
+live RomM server — downloaded and fingerprinted by their actual first bytes,
+not by their extension — and cross-read against Cabinet's `MemoryCardSync` and
+this console's own save directory after real runs.
+
+It answers two different questions, and the second one matters more.
+
+##### Question one: is anything else wrapped in a foreign container? No. Only PSP.
+
+| Platform | Tag | n | Size | First bytes | Verdict |
+|---|---|---|---|---|---|
+| PlayStation | `pcsx-rearmed-native` | 6 | 131072 | `MC` | native memory card |
+| Dreamcast | `flycast-native` | 13 | 131072 | — | native VMU image |
+| Saturn | `saturn-native` | 1 | 32768 | `BackUpRam Format` | native |
+| TurboGrafx / CD | `pcefast-native` | 3 | 2048 | `HUBM` | native |
+| Nintendo 64 | `mupen64plus-native` | 7 | 296960 | — | native combined save |
+| Nintendo DS | `melonds-native` | 5 | 512 / 262144 | `MKDSSV10` | native |
+| Game Boy Advance | `mgba-native` | 3 | 8192 / 32768 | `AGB  KIRBY` | native |
+| Game Boy / Color | `gambatte-native` | 4 | 8192 / 32768, 8 | — | native; the 8-byte one is the RTC, its own region |
+| 3DO | `opera-native` | 4 | 32768 | `.ZZZZZ..opera fo` | native |
+| Sega CD | `gpgx-native` | 5 | 8192, 524288 | — | native; the 512K is the cart, its own region |
+| Game Gear | `gpgx-native` | 2 | 3840 / 8193 | — | native |
+| Neo Geo Pocket | `ngp-native` | 1 | 272 | `S` | native |
+| Arcade | `fbneo-native`, `mame2003plus-native` | 17 | 64 … 131072 | varies | native NVRAM |
+| GameCube | `dolphin` | 3 | 2 MB / 16 MB | — | native raw card |
+| PlayStation 2 | `pcsx2` | 4 | 8650752 | `Sony PS2 Memory` | native |
+| **PSP** | **`ppsspp-native`** | **1** | **51426** | **`rtfd`** | **Apple container** |
+
+**PSP is the only one.** Every other core uploads the emulator's own bytes, so
+anything that can read a save for those platforms can read what is on this
+server. The `.srm` extension is a generic label rather than a claim about the
+contents — misleading on about fifteen rows and harmless, because the bytes
+underneath are native. Two platforms already get an honest extension (`.ps2`,
+`.raw`) and two regions get their own (`.rtc`, `.cart`), which is the pattern
+PSP should have followed.
+
+**Two junk rows worth cleaning up on the server**, found by the same pass:
+
+- **A 4-byte Arcade save containing the ASCII text `null`**, on Cotton Fantasy,
+  under the tag `fbneo` rather than `fbneo-native` — so it is also the only row
+  whose tag no current build writes.
+- **A 131072-byte PlayStation card with `emulator: null`**, on Need for Speed
+  III. It is a perfectly good memory card that no tag can match, so no client
+  will ever offer it.
+
+##### Question two: which of these can this console actually sync? Fewer than half.
+
+This is the finding that matters, and the audit is what made the size of it
+visible. CabinetOS's sync layer knows exactly one mechanism,
+`RETRO_MEMORY_SAVE_RAM`. Sorting the 81 rows by the mechanism their platform
+actually uses:
+
+| | Saves on the server |
+|---|---|
+| Ride `RETRO_MEMORY_SAVE_RAM` — CabinetOS handles these | **34** |
+| Written by the core as a FILE — CabinetOS handles none of them | **47** |
+
+**Fifty-eight percent of the saves on this server are for platforms this console
+can neither upload nor restore today.** The handover has carried that as "the
+file-writing save class is not synced at all", which is true and reads like an
+edge case. It is the majority.
+
+And none of it is a design problem, because Cabinet has already solved each one
+and the recipes are specific:
+
+| Platform | Where the core writes it | Name | On this console |
+|---|---|---|---|
+| **Dreamcast** | the **system** directory, `dc/` | `vmu_save_A1.bin`, or `<gameId>_vmu_save_A1.bin` with per-game VMUs | nothing, and it shows |
+| Arcade — MAME | save directory | `nvram/<stem>.nv` | **already on disk** from a real run |
+| Arcade — FBNeo | save directory | `fbneo/<stem>.fs` | — |
+| 3DO | save directory | `opera/shared/nvram.0.srm` | — |
+| Sega CD | save directory | `*.brm`, plus `*cart.brm` as its own region | **already on disk** (`scd_U.brm`) |
+| Neo Geo Pocket | save directory | `*.flash` | — |
+| Nintendo DS | save directory | `*.sav` | — |
+| PSP | save directory | the `PSP/SAVEDATA/**` tree | **already on disk** |
+
+##### Dreamcast is the one to do first, and the audit explains a symptom this document already had
+
+Thirteen saves — **the largest count of any platform on the server** — and this
+console cannot see any of them. It also explains, exactly, why *"Ikaruga opens
+on memory card not connected"* has been recorded here for two days as a
+curiosity of the file-writing save class:
+
+- Flycast never exposes the VMU through `RETRO_MEMORY_SAVE_RAM` at all. Cabinet
+  confirmed that against the core's own `retro_get_memory_data`, which only ever
+  answers `RETRO_MEMORY_SYSTEM_RAM`.
+- It reads and writes a real file in the **system** directory, `dc/`, not the
+  save directory — which is the same `dc/` the BIOS lives in, and is why this
+  console has `system/dc/dc_nvmem.bin` and nothing beside it.
+- Cabinet **restores the card there before the core boots** and captures it
+  after unload. Nothing here does, so the machine boots with an empty slot and
+  the game says so.
+- Verified on this console: `reicast_device_port1_slot1` is answered `VMU`, so
+  the port is configured — the card itself is simply absent.
+
+So Dreamcast save sync is: write the bytes to `system/dc/vmu_save_A1.bin` before
+boot, read them back after unload, upload if changed. **With thirteen real cards
+on the server to test the restore against**, which is a better test bed than any
+other platform offers.
+
+##### Two guards to copy rather than rediscover
+
+- **A uniform fill means the game never saved.** MAME's fresh NVRAM is all `0x01`
+  for the capbowl family and all `0x00` elsewhere, and a seeded bootstrap image
+  is identical for everyone who plays that board. Cabinet refuses to upload one
+  (`isUntouchedNVRAM`), because otherwise every launch fills somebody's RomM with
+  rows carrying no history — which are then pulled down onto their other device
+  as if they meant something. The audit shows the guard works: several arcade
+  rows exist and none is a uniform fill.
+- **Sega CD's cart is not its internal RAM.** The scan must exclude `cart.brm`
+  from the `.brm` match and give it its own region, or one overwrites the other.
+  Games prefer the cart when present.
+
+##### One more gap, smaller, found on our own disk
+
+`romcache/saves/pcsx-card2.mcd`, 131072 bytes — **PlayStation memory card 2**.
+Card 1 rides `RETRO_MEMORY_SAVE_RAM` and syncs; card 2 is a file and syncs on
+neither Cabinet nor here. Nothing on the server has ever held one. Low stakes,
+but it is the same shape as everything above and should be written down rather
+than found again.
+
 #### The test that answers the whole question, and can be run this week
 
 The parity risk is not theoretical and it does not need CabinetOS to exist to

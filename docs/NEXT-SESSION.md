@@ -107,16 +107,34 @@ and what they are worth considering against matters more than a list of names.
 
 ### 1. Saves that actually reach the server
 
-The biggest real hole in the product, and it is invisible until it costs
-somebody their progress.
+The biggest real hole in the product, and **the audit of 2026-09-17 measured
+it: 47 of the 81 saves on the server — 58% — are for platforms this console can
+neither upload nor restore.** It has been recorded here as "the file-writing
+save class", which reads like an edge case. It is the majority.
 
-- **The file-writing save class is not synced at all, and Dreamcast shows it to
-  your face.** melonDS writes a `.sav` rather than exposing save RAM, so
-  `[save] battery is 0 bytes` is correct and the file never reaches RomM. Neo
-  Geo Pocket, Sega CD and FBNeo are the same class. **Ikaruga opens on "memory
-  card not connected"** — Flycast's VMU is the same problem with a title screen
-  attached, and it is the first one a person would actually notice. Cabinet
-  solved this in `MemoryCardSync.swift`; read it before designing anything.
+**Do Dreamcast first.** Thirteen saves, the largest count of any platform, and
+it explains the symptom below rather than sitting beside it. Flycast never
+exposes the VMU through `RETRO_MEMORY_SAVE_RAM`; it reads and writes
+`vmu_save_A1.bin` in the **system** directory under `dc/` — the same `dc/` the
+BIOS lives in. Cabinet restores it there before boot and captures it after
+unload. Write the bytes before boot, read them after, upload if changed, and
+there are thirteen real cards on the server to test the restore against.
+
+PROJECT.md, *The save audit*, has the per-platform table of where every core
+writes its file and the two guards to copy (a uniform fill means the game never
+saved; Sega CD's cart is a separate region from its internal RAM).
+
+- **The file-writing class, in full**, with where each core actually puts the
+  file: Dreamcast `system/dc/vmu_save_A1.bin`; MAME `nvram/<stem>.nv`; FBNeo
+  `fbneo/<stem>.fs`; 3DO `opera/shared/nvram.0.srm`; Sega CD `*.brm` plus
+  `*cart.brm` as its own region; Neo Geo Pocket `*.flash`; DS `*.sav`; PSP the
+  `PSP/SAVEDATA/**` tree. Three of those are **already sitting on this
+  console's disk** from real runs — `scd_U.brm`, `mame2003-plus/nvram/*.nv` and
+  the PSP tree — so the capture half can be written and checked without playing
+  anything new. Cabinet solved every one of them in `MemoryCardSync.swift`;
+  read it before designing anything.
+- **`[save] battery is 0 bytes` is correct, not a fault**, for every core in
+  that class. It is the host saying the core exposes no save RAM.
 - **PSP is a third shape, and Cabinet ALREADY SYNCS IT — do not repeat my
   mistake here.** PPSSPP saves into memory-stick DIRECTORIES —
   `PSP/SAVEDATA/<id>/` holding `PARAM.SFO`, `DATA.BIN` and icons. I wrote that
