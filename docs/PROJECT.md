@@ -6812,6 +6812,33 @@ television, with no save state travelling anywhere.
 **What it does not change:** everything Cabinet DOES ship stays in lockstep. This
 is permission to add, not permission to drift.
 
+#### PS3's saves, and why the missing snapshots do not matter
+
+**Recorded because this document briefly implied otherwise and MMagTech
+corrected it twice.**
+
+- **PS3 save DATA exists and is a folder tree**, on RPCS3's virtual hard drive —
+  roughly `dev_hdd0/home/<user>/savedata/<TITLEID>/`, a directory per game.
+  **That is the same shape as PSP's memory stick**, which means the mechanism
+  built on 2026-09-17 for PSP — zip the tree, upload it, unpack it before the
+  core boots, compare against a baseline to know what moved — is what PS3 uses
+  too. `dirsave.h` was the first customer for a pattern, not a one-off.
+- **What RPCS3 lacks is SAVE STATES**, the mid-game snapshot, which is a
+  different feature from the console's own saves. *(Believed rather than
+  verified; check it before relying on it.)*
+- **And that does not matter.** MMagTech: *"snapshots arent needed on systems
+  like the ps3 since they have memory cards or in game saves."* Correct, and it
+  is the right frame — a save state earns its keep on a cartridge-era machine
+  that gives the player nothing, or one checkpoint an hour. A PS3 game saves
+  properly by itself.
+- **The UI already knows how to say so.** Cabinet hides the save-state slots
+  outright for the two cores that cannot serialize, rather than offering a
+  button that fails. "This platform does not do snapshots" is an honest state
+  the design already expresses.
+- **It is doubly moot here**, because PS3 is OS-only: there is no Apple build
+  for a state to travel to. The absence costs the in-game snapshot on this
+  console and nothing else. Progress still moves, because progress is save data.
+
 ### 20. Vulkan, and how the host should choose a graphics API
 **Raised by MMagTech 2026-09-17. Recommendation recorded; not built.**
 
