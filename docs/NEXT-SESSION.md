@@ -14,15 +14,11 @@ Rewrite it at the end of a session. It is meant to be current, not a log.
 
 ## Before anything else
 
-**Everything is on `main`, and there are no other branches.** As of 2026-09-17
-the whole of this file's "what runs today" is merged — storage floors, the
-reachable library, core options and the hardware-rendered systems
-([#6](https://github.com/MMagTech/cabinetos/pull/6)), then three follow-ups:
-CI on every pull request ([#7](https://github.com/MMagTech/cabinetos/pull/7)),
-one container build per run instead of twenty
-([#8](https://github.com/MMagTech/cabinetos/pull/8)), and the Bazzite base at
-44.20260914 ([#9](https://github.com/MMagTech/cabinetos/pull/9)). Nothing is
-unmerged and no pull request is open.
+**Everything is on `main`. There are no other branches and no open pull
+requests.** As of 2026-09-17 the whole of this file's "what runs today" is
+merged, along with a run of CI and base-image repairs; the base is pinned at
+Bazzite `44.20260916`. `git log` has the detail and this file will not repeat
+it.
 
 Start from `main`, branch once, and **open the pull request against `main`**.
 Four branches were once stacked on each other here, each opened before the last
@@ -76,6 +72,15 @@ states, and leave — with the save syncing on the way out.
 - **Dreamcast, Naomi and N64 play**, as of 2026-09-16. The cores that draw for
   themselves get a framebuffer inside the frontend's own GLES context, so Mario
   Kart 64 and Ikaruga run with no pixel read back anywhere.
+- **The CI around all of it was repaired**, 2026-09-17, and the shape of every
+  fault was the same: it produced plausible output while being wrong. Checks
+  that did not run on the branch being written; twenty runners rebuilding one
+  container and giving twenty chances for a mirror to fail; a weekly base check
+  that had never once completed; and, once it did, a report calling a
+  month-long firmware move routine while 81% of its diff was keyring noise.
+  **Nothing was failing loudly.** Worth carrying as a habit rather than as
+  trivia — when something here looks fine, check that it is not merely
+  plausible.
 
 ## Pick up with these, in this order
 
@@ -147,10 +152,12 @@ sitting there waiting for exactly that case.
 
 - **Saves on the right triggers.** Keys do it today, which is the test
   environment and not the product. The settled triggers are in PROJECT.md.
-- **The file-writing save class is not synced at all.** melonDS writes a `.sav`
-  rather than exposing save RAM, so `[save] battery is 0 bytes` is correct and
-  the file never reaches RomM. Neo Geo Pocket, Sega CD and FBNeo are the same
-  class and all three are playable today.
+- **The file-writing save class is not synced at all, and Dreamcast now shows
+  it to your face.** melonDS writes a `.sav` rather than exposing save RAM, so
+  `[save] battery is 0 bytes` is correct and the file never reaches RomM. Neo
+  Geo Pocket, Sega CD and FBNeo are the same class. **Ikaruga opens on "memory
+  card not connected"** — Flycast's VMU is the same problem with a title screen
+  attached, and it is the first one a person would actually notice.
 - **Nothing warns that a system's BIOS is missing** until a game fails to start.
   `catalog` is where it belongs — a fifth answer, and the first one that is a
   fact about the person's server rather than about this console.
