@@ -5673,10 +5673,54 @@ parser, and **there is a real 51 KB save on the server to check the round trip
 against.** That is a far better position than the "future feature" this section
 previously claimed.
 
-**One decision belongs to MMagTech and is not settled here:** keep `rtfd`, so
-the save Cabinet uploaded in August restores on this console and the two stay
-compatible with no Apple-side change; or move both ends to something portable
-and orphan that file. The first is more work here and less everywhere else.
+##### What PPSSPP is SUPPOSED to use, which is the question that settles it
+
+**MMagTech, immediately after the correction above: "we're using PPSSPP, what
+format is it supposed to use?"** That is the right question and it has a plain
+answer.
+
+**PPSSPP's save format is the FOLDER.** `PSP/SAVEDATA/<GAMEID><TITLE>/`, holding
+`PARAM.SFO`, `DATA.BIN` and the icons — which is what a real memory stick holds
+and what PPSSPP reads and writes on every platform it ships on. Verified
+first-hand rather than from a page: Lumines wrote exactly
+`PSP/SAVEDATA/ULUS10002LUMINES/{PARAM.SFO, DATA.BIN, ICON0.PNG, PIC1.PNG}`.
+
+**There is no single-file PSP save format, and nobody upstream defines one.**
+
+- **PPSSPP** documents where the memory stick lives and defines no export or
+  archive format at all.
+- **RomM** does not specify one either. Its saves page lists per-platform
+  extensions — `.srm`, `.sav`, `.eep`, `.fla` — and says nothing about PSP or
+  about directory saves, and the device-sync protocol treats a save as an
+  opaque named file with an mtime and a SHA1.
+
+**So the container is a free choice, and `.srm` was the wrong label.** Cabinet
+picked `FileWrapper`, which is Apple's `rtfd` directory archive, and named the
+upload `.srm`, which is a SNES and Genesis save-RAM extension. The file on the
+server is neither an `.srm` nor readable anywhere without Foundation.
+
+**The de facto answer in the PSP world is a plain zip of the save folder.** That
+is how PSP save data is distributed and how a person installs one into PPSSPP —
+extract the folder into `PSP/SAVEDATA`. It is also free here: the frontend
+already links **libarchive** for ROMs, which writes zip as well as reads it.
+
+> **This reverses the recommendation made an hour earlier in this section.** It
+> said keep `rtfd` for compatibility. That was the wrong trade once the actual
+> quantity was known: there is **exactly one** PSP save on the server. Migrating
+> one file is a one-off; keeping `rtfd` means this console carries a
+> hand-written parser for an undocumented Apple format forever, and so does
+> anything else that ever touches these saves — Grout, a handheld, RomM's own
+> web UI.
+
+**The decision that is genuinely MMagTech's is who moves**, not which format:
+
+| | |
+|---|---|
+| **Cabinet switches to zip too** | both ends match, the ecosystem can read them, and the single August save is converted once. Needs an Apple-side change. |
+| **Cabinet stays on `rtfd`** | CabinetOS must both read *and write* `rtfd` to stay interchangeable, and the format stays Apple-only for everyone else |
+
+Either way the sync layer itself needs nothing new: same store, same endpoint,
+same `ppsspp-native` tag, same after-shutdown trigger.
 
 Verified by running: Lumines wrote all four files under
 `romcache/saves/PSP/SAVEDATA/ULUS10002LUMINES/`, so what CabinetOS has to

@@ -130,13 +130,19 @@ somebody their progress.
   Cabinet archives the subtree with `FileWrapper` and pushes it through the
   **same store, endpoint and saveRAM region** as a cartridge battery, on the
   same after-shutdown trigger. So the design is done and the tag already
-  matches ours. **The obstacle is the format**: the blob is Apple's `rtfd`
-  directory archive, which has no Foundation on Linux — but it is a flat
-  little-endian length-prefixed table with uncompressed members (checked
-  against the bytes), so it is an afternoon's parser, and that 51 KB save is
-  the test case. PROJECT.md has the layout and the one decision that is
-  MMagTech's: keep `rtfd` for compatibility, or move both ends to something
-  portable and orphan that file.
+  matches ours.
+
+  **The obstacle is the container, and PPSSPP does not define one.** PPSSPP's
+  save format is the FOLDER; there is no single-file PSP save, PPSSPP defines
+  no export format, and RomM's docs say nothing about directory saves either —
+  it stores one opaque file per rom and emulator. Cabinet's blob is Apple's
+  `rtfd` directory archive labelled `.srm`, which is neither an srm nor
+  readable without Foundation. **Use zip**: it is what the PSP world already
+  uses to move save folders around, and the frontend already links libarchive,
+  which writes it. There is exactly ONE PSP save on the server, so migrating is
+  a one-off. PROJECT.md, *What PPSSPP is supposed to use*, has the reasoning
+  and the one decision that is MMagTech's — whether Cabinet moves to zip too,
+  or CabinetOS reads and writes `rtfd` to stay interchangeable.
 - **Saves on the right triggers.** Keys do it today, which is the test
   environment and not the product. The settled triggers are in PROJECT.md.
 
