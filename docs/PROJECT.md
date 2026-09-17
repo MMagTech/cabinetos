@@ -1144,6 +1144,60 @@ pinned digest has moved.
 >
 > The workflow now says so in its own job summary when the call fails, with the
 > setting named and the command to open the pull request by hand.
+>
+> **The setting was turned on 2026-09-17 and the workflow opened its first real
+> pull request the same day.** Two more things about running it, both found
+> that day:
+>
+> **A run on the bot's pull request lands as `action_required` and waits.**
+> GitHub gates workflow runs on pull requests it treats as untrusted, and
+> `github-actions[bot]` is one of those. So the build does not start until
+> somebody approves it — the button, or:
+>
+> ```
+> gh api -X POST /repos/MMagTech/cabinetos/actions/runs/<run-id>/approve
+> ```
+>
+> A ROUTINE bump is supposed to be mergeable on the strength of a green build,
+> and there is no green build until this happens.
+>
+> **Do not delete the branch while its build is running.** Closing the first
+> attempt and deleting its branch killed the in-flight image build, which then
+> showed as a 16-minute `failure` with zero jobs and no logs — and reads
+> exactly like the new base failing to build, which it was not.
+
+#### What the first real run got wrong, and what it cost to find out
+
+**Both directions at once**, on 44.20260914 → 44.20260916:
+
+- It reported **one** relevant change, a Fanatec steering wheel driver, while
+  `amd-gpu-firmware`, `amd-ucode-firmware` and `linux-firmware` itself went
+  **backwards by a month** — 20260910 to 20260810 — filed under the full diff
+  beside fonts and translations. `base-watch.txt` had no firmware entry at all:
+  kernel modules were covered by `kmod-*`, and firmware matched nothing. The
+  reference SER5 is AMD, and its GPU firmware and CPU microcode are not
+  incidental to this project; they are the machine.
+- **156 of its 193 reported changes were `gpg-pubkey`** — 81%. Not a package:
+  an entry in RPM's keyring, and a dozen of them share one NAME with different
+  versions, so joining the manifests on NAME turned thirteen entries into a
+  hundred and sixty-nine pairs.
+
+Fixed the same day. The regenerated pull request reported 22 relevant changes
+led by the firmware, and zero keyring lines.
+
+> **The lesson is about the watchlist, not about firmware.** The file's own
+> header says to add to it as the project grows, and warns that a package
+> CabinetOS relies on but does not list "can break silently in a base bump that
+> looked routine". That is precisely what happened, on the very first run, in a
+> category nobody had thought of. **When something goes wrong on real hardware,
+> check what this file does not watch** before assuming the base is innocent.
+
+**The 44.20260916 firmware regression was taken deliberately**, with the
+reasoning on the pull request: a month-old `linux-firmware` is older rather
+than broken, Bazzite ships it as stable, the SER5 is not installed so holding
+the pin buys no information, and a pin nobody moves is the failure this whole
+workflow exists to prevent. It is recorded here so that if graphics look wrong
+on the SER5, this is a known change rather than a fresh mystery.
 
 **Why not Renovate or Dependabot.** Bazzite rebuilds daily. A dependency bot
 would open a pull request every day that said "digest changed" and nothing more.
