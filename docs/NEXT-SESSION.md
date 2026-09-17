@@ -14,15 +14,16 @@ Rewrite it at the end of a session. It is meant to be current, not a log.
 
 ## Before anything else
 
-**The work is on a branch, not on `main`.** Check what you are standing on:
+**Everything below is on `main`.** As of 2026-09-16 the whole of this file's
+"what runs today" is merged — storage floors, the reachable library, core
+options and the hardware-rendered systems, eight commits, in
+[#6](https://github.com/MMagTech/cabinetos/pull/6). There is no stack of
+branches to stand on any more, and no unmerged work.
 
-```
-git log --oneline origin/main..HEAD
-```
-
-As of 2026-09-16 the branch is `hardware-render`, which sits on top of
-`core-options`, which sits on top of `screens`. Between them they carry the
-whole of this file's "what runs today". **Nothing below exists on `main` yet.**
+Start from `main`, branch once, and **open the pull request against `main`**.
+Four branches were once stacked on each other here, each opened before the last
+had merged, and the result was three overlapping pull requests and a compile
+check that did not apply to any of them. One branch at a time.
 
 **Read `docs/CABINET.md` before designing anything.** Cabinet ships on iOS, tvOS
 and macOS and has already answered most of what comes up here. tvOS is the
@@ -250,11 +251,15 @@ sitting there waiting for exactly that case.
   flip. It is the logo rotating. The test that actually settles orientation is
   text that reads correctly: at frame 1100 the title screen says PUSH START
   BUTTON the right way round.
-- **CI does not run on a stacked branch.** `build-frontend.yml` and the image
-  build trigger on pull requests into `main` only, and this work is three
-  branches deep, so opening a PR ran nothing at all. Dispatch it by hand —
-  `gh workflow run build-frontend.yml --ref <branch>` — or the compile check
-  that exists silently does not apply to the thing you are writing.
+- **The image build still only runs on a pull request aimed at `main`.** The
+  frontend compile and the core build were widened on 2026-09-16 to run on every
+  pull request, because a stack of branches had slipped past them and the
+  compile check silently did not apply to the work being written. The image
+  build was left narrow on purpose — twelve minutes, no path filter — so if you
+  ever do target something other than `main`, that one still needs
+  `gh workflow run build.yml --ref <branch>`.
+- **Retargeting a pull request does not re-run CI.** The workflows fire when a
+  pull request is *opened*, not when its base changes. Close and reopen it.
 - **`pgrep -f "some string"` matches your own command line.** Three times now,
   the worst being a wait loop whose pattern matched the shell running the check,
   so it sat for nine hours waiting for something already finished. **Match on
