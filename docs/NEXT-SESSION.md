@@ -255,6 +255,15 @@ sitting there waiting for exactly that case.
   flip. It is the logo rotating. The test that actually settles orientation is
   text that reads correctly: at frame 1100 the title screen says PUSH START
   BUTTON the right way round.
+- **The weekly base bump needs two clicks, not none.** It opens a pull request
+  now (the repository setting was turned on 2026-09-17), but the build on it
+  lands as `action_required` and waits for approval —
+  `gh api -X POST /repos/MMagTech/cabinetos/actions/runs/<id>/approve`. And
+  **read the relevant list**: the first real run classified a month-long
+  `linux-firmware` regression as routine because `base-watch.txt` had no
+  firmware entry. PROJECT.md has the whole story; the short version is that
+  **when something breaks on real hardware, look at what that file does not
+  watch.**
 - **A core build failing is not always the core.** The twenty-job matrix
   fetches 267 MB of Fedora packages, and on 2026-09-16 a mirror timed out at
   under a kilobyte a second and failed `Build prosystem` — which passed on
