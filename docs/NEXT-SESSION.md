@@ -260,10 +260,12 @@ sitting there waiting for exactly that case.
   lands as `action_required` and waits for approval —
   `gh api -X POST /repos/MMagTech/cabinetos/actions/runs/<id>/approve`. And
   **read the relevant list**: the first real run classified a month-long
-  `linux-firmware` regression as routine because `base-watch.txt` had no
-  firmware entry. PROJECT.md has the whole story; the short version is that
-  **when something breaks on real hardware, look at what that file does not
-  watch.**
+  `linux-firmware` move as routine because `base-watch.txt` had no firmware
+  entry. PROJECT.md has the whole story; the short version is that **when
+  something breaks on real hardware, look at what that file does not watch.**
+  (That particular move turned out to be Bazzite deliberately pinning back
+  firmware that was breaking handhelds — a fix, not a regression. Chase these
+  to the upstream commit before treating one as a risk.)
 - **A core build failing is not always the core.** The twenty-job matrix
   fetches 267 MB of Fedora packages, and on 2026-09-16 a mirror timed out at
   under a kilobyte a second and failed `Build prosystem` — which passed on
