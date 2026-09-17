@@ -6779,3 +6779,104 @@ core that never finished starting cannot run its own shutdown.
 own emulation thread only advances when the frontend COMPLETES a frame, not when
 `retro_run` is called.* That explains the wait loop that made no progress AND
 why `--state-test` cannot warm this core up — two mysteries with one cause.
+
+### 19. Systems this console has and Cabinet does not
+**Raised and DECIDED by MMagTech, 2026-09-17.**
+
+> *"it doesnt need to be on the other builds just this the os."*
+
+**CabinetOS may carry systems Cabinet does not.** PS3 is the first, and Switch
+would be the second.
+
+This is a larger decision than it looks, because until now every system on this
+console also existed on the Apple TV, and that was not a coincidence — it is the
+premise the sync layer rests on. A PS3 game would be the first that **only**
+exists here: played on the console, never appearing on the phone or the
+television, with no save state travelling anywhere.
+
+**What it changes:**
+
+- **CabinetOS stops being "the same product on another screen" and becomes a
+  superset.** That is a fair thing for it to be — the console has hardware an
+  Apple TV never will — but it should be said out loud rather than discovered.
+- **Core parity stops being universal and becomes conditional.** It still binds
+  absolutely for every system Cabinet also ships, because that is what makes a
+  save state portable. For an OS-only system there is nothing to be parity
+  *with*, so the constraint simply does not apply — which also means those
+  systems are free to use whatever emulator and renderer suits this hardware.
+- **`catalog::coverageFor` gains no new answer.** An OS-only system is
+  `Playable` like any other; what changes is that `emulatorTag` returns nothing
+  for it, exactly as it already does for the cores whose builds cannot be
+  vouched for. The machinery is already there.
+
+**What it does not change:** everything Cabinet DOES ship stays in lockstep. This
+is permission to add, not permission to drift.
+
+### 20. Vulkan, and how the host should choose a graphics API
+**Raised by MMagTech 2026-09-17. Recommendation recorded; not built.**
+
+Three cores render with hardware — Flycast, Mupen64Plus and PPSSPP. Everything
+else hands back a finished picture and none of this touches it.
+
+**All three already have Vulkan compiled in, and all three run on GLES.**
+Measured on the built artifacts rather than assumed:
+
+| Core | Vulkan symbols in the `.so` | What it asks for |
+|---|---|---|
+| Flycast | 353 — built `-DUSE_VULKAN=ON` | OpenGL ES 3.0 |
+| Mupen64Plus | 570 — this is **parallel-RDP**, a Vulkan renderer, built in deliberately | OpenGL ES 3.0 |
+| PPSSPP | 97, and it declares `ppsspp_backend = auto` | OpenGL ES 2.0 |
+
+They run on GLES because **the host owns a GLES context and refuses anything
+else by name**, so that is what `GET_PREFERRED_HW_RENDER` advertises and what
+the cores take. PPSSPP's option says `auto`, and auto means "whatever the
+frontend prefers" — it is not a hardware probe.
+
+#### The recommendation: discover, then fall back
+
+**Not for NVIDIA's sake, though it serves it.** MMagTech raised future NVIDIA
+support as the reason to keep things automatic. The stronger reason is today:
+**the test VM has no Vulkan at all** — this document already records gamescope
+rejecting llvmpipe because Vulkan enumeration finds no devices. A Vulkan-only
+host would not run on the machine this project is developed on.
+
+So the shape is the one *Hardware* already states as a rule — capability is
+discovered, not assumed:
+
+1. The host probes at startup: Vulkan where the machine has it, GLES where it
+   does not, and it advertises whichever it got.
+2. Cores stay on `auto` and follow.
+3. A core asking for something the host cannot serve is still refused **by
+   name**, in one line, rather than being allowed to fail inside the core where
+   it reads as a broken game.
+
+NVIDIA then costs nothing extra here. Its real cost is unchanged and lives in
+open question 11: a second base image to build, sign and boot.
+
+#### What renderers do and do not affect
+
+**Save states are not affected, and a claim here that they were is withdrawn.**
+MMagTech, correctly: *"save states have nothing to do with rendering like gles
+or vulkan just the core version."* A state is the emulated machine — the host's
+graphics API is not in it. The parity rule is about the core and its build, and
+nothing about GLES or Vulkan touches it. An earlier version of this section
+suggested pinning PPSSPP to GLES to protect its shared tag; that was wrong and
+the pin is not needed.
+
+**A graphics PLUGIN is a different thing from a graphics API, and N64 is the
+case that proves it.** Moving Mupen64Plus to parallel-RDP is not merely
+presenting through Vulkan — it swaps the emulated RDP implementation. This
+document already lists *"graphics-plugin state that lives outside the state"* as
+one of three unresolved suspects for N64's save states not restoring exactly. So
+N64 deserves care, for reasons that have nothing to do with Vulkan.
+
+#### Why this is worth building
+
+One piece of work serves three things at once: **PS3 needs it** (RPCS3's good
+renderer is Vulkan), **N64 wants it** (parallel-RDP is already compiled in and
+cannot be reached), and **Dreamcast benefits** (Flycast's Vulkan renderer is
+generally the faster one). That is a better reason to teach the host a second
+API than "PS3 needs it".
+
+**Untestable until there is hardware.** The VM has no Vulkan, so none of this
+can be measured before the A9 Pro is installed.
