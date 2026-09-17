@@ -14,11 +14,13 @@ Rewrite it at the end of a session. It is meant to be current, not a log.
 
 ## Before anything else
 
-**Everything is on `main` except one open pull request.** As of 2026-09-17,
-[#19](https://github.com/MMagTech/cabinetos/pull/19) — *PSP plays: build the
-last emulator, and fix what running it found* — is open against `main` with all
-25 checks green. Everything described below as "runs today" includes it. If it
-has merged by the time you read this, then everything is on `main` again.
+**Everything is on `main` except one open pull request, and it is big.**
+[#19](https://github.com/MMagTech/cabinetos/pull/19) carries the whole of
+2026-09-17: PPSSPP, PSP save sync, the save audit, the folder-layout decisions,
+the hardware change and the PS3 findings. Everything described below as "runs
+today" includes it. **Merging it is the first thing to do** — CI has been green
+on every push. If it has merged by the time you read this, everything is on
+`main` again and this paragraph is stale.
 
 Start from `main`, branch once, and **open the pull request against `main`**.
 Four branches were once stacked on each other here, each opened before the last
@@ -78,6 +80,9 @@ on the way out.
 - **Dreamcast, Naomi, N64 and PSP play.** The cores that draw for themselves get
   a framebuffer inside the frontend's own GLES context, so Mario Kart 64,
   Ikaruga and Lumines run with no pixel read back anywhere.
+- **PSP saves reach RomM and come back**, proven end to end: quit, a 40 KB zip
+  lands on the server, delete it locally, relaunch, byte-identical. The first
+  DIRECTORY save, and the pattern the other seven file-writing platforms follow.
 - **Twenty-one cores build in CI**, each asserting its pinned revision, and the
   frontend compiles there too. Three of them are now known to be
   **byte-identical across machines**, the newest being PPSSPP — a 38 MB CMake
@@ -96,14 +101,31 @@ on the way out.
 > goes ahead — and a screen that already exists is not frozen, because fixing
 > something *wrong* is not the same as tuning something.
 
-### 0. The conversation that was started and not finished
+### 0. The PS3 experiment the VM can now run
 
-**Which of Wii U, PS3, Xbox, Xbox 360 and Switch to add.** The material was put
-in front of the user on 2026-09-17 and they have not answered yet. Do not
-re-derive it; it is written up at the bottom of this file, with the numbers
-counted off the live server the same day. **Do not go researching emulator
-projects before that answer comes back** — the user asked to *consider* these,
-and what they are worth considering against matters more than a list of names.
+**The heavy-systems conversation HAPPENED on 2026-09-17** and settled a lot; the
+outcome is at the bottom of this file. What it left is one experiment, and the
+VM was grown specifically to make it possible.
+
+**Install a PKG and measure what comes out.** PS3 is the first system where the
+thing you download is not the thing you run — 24 of the 30 games on the server
+are `.pkg` installers, not disc folders — and a PKG has to be installed into
+RPCS3's virtual hard drive, which produces a second copy. The question the whole
+storage model hangs on is whether that really means **2x the disk**, and
+whether the PKG can then be deleted.
+
+**It does NOT need the new hardware.** Installing is decrypt-and-unpack; only
+PLAYING needs a GPU, and the VM has no Vulkan. The route is RPCS3's Linux
+AppImage and its command-line install, not a build — RPCS3 is far too large to
+compile on this VM.
+
+Two candidates, both on the server: **Super Stardust HD at 287 MB** to prove the
+mechanism, and **Sly Cooper at 19.8 GB** to prove it at real scale, which now
+fits because of the 100 GB second disk.
+
+Answer these four and the storage design stops being guesswork: what the install
+produces and where, the size ratio, whether the game still runs with the PKG
+deleted, and where the `.rap` licence has to sit.
 
 ### 1. Saves that actually reach the server
 
@@ -439,11 +461,46 @@ Ordered for whenever it is installed. **Do not begin these in the VM.**
 - `~/run-frontend.sh` — the session launcher. The original is `run-frontend.sh.bak`
 - `~/.config/cabinetos/romm.json` — the RomM token, 0600
 
-**Disk on the VM: about 5.3 GB free**, down from 7.6 GB because PPSSPP's source
-tree is 3.4 GB. `podman image prune -f` is the first thing to try if it gets
-tight, then `.core-src`.
+### The VM has TWO disks now, and the second one is the point
 
-## The discussion that is open: which heavy systems to add
+| | |
+|---|---|
+| `/dev/vda4` → `/var` | 21.6 GB btrfs, **about 5.3 GB free**. The OS and everything above. |
+| `/dev/vdb` → `/var/mnt/games` | **100 GB btrfs**, empty, label `cabinetos-games`. Added 2026-09-17. |
+
+In `/etc/fstab` by UUID with `nofail`, and **proved across a reboot** rather
+than assumed. `nofail` matters: a machine that will not boot because a games
+drive is missing is exactly what open question 14 forbids.
+
+**It exists to test the two-drive design, not just to hold a big PKG.** Four
+things become measurable that were decisions on paper:
+
+1. **That demoting a kept game is a RENAME, not a copy.** A rename cannot cross
+   filesystems — the kernel returns `EXDEV` — and that is the whole reason
+   `roms/` and `cache/` repeat on every drive rather than once at the root.
+   Two real filesystems means this can be timed instead of argued.
+2. **That a missing drive degrades rather than errors.** `umount /dev/vdb` with
+   the console running. Written down as a requirement; never once exercised.
+3. **Both disk floors against realistic numbers** — 5.3 GB on one volume and
+   98 GB on the other, rather than ballast on a single disk.
+4. **A PS3 PKG install at full size.** Sly Cooper is 19.8 GB and its install
+   would be about the same again; 40 GB fits on the new disk and could never
+   have fitted on the old one.
+
+**Adding it in Unraid is not obvious** and cost some time: the VM editor will
+not resize an existing vDisk at all, and the option to add a second one is
+hidden behind the **BASIC / ADVANCED toggle** at the top right of the Edit VM
+page. The terminal alternative is `qemu-img resize` on the file under
+`/mnt/user/domains/<vm>/`.
+
+**`disk_config/disk.toml` still says `minsize = "20 GiB"`**, so a VM rebuilt
+from a fresh qcow2 comes out small again with no second disk. If this work
+continues, that number should change — it is a one-line edit nobody has made.
+
+`podman image prune -f` is still the first thing to try when `/var` gets tight,
+then `~/cabinetos/.core-src`.
+
+## The heavy-systems discussion: what it settled, 2026-09-17
 
 The user's ask, 2026-09-17:
 
@@ -451,8 +508,22 @@ The user's ask, 2026-09-17:
 > because none of my Cabinet builds currently have Wii U, PS3, Xbox, Xbox 360 or
 > Switch and I'd like to consider those."
 
-The emulator is done. **The discussion was opened with the material below and
-the user has not answered yet.**
+The emulator is done, and **the discussion happened.** What it settled:
+
+| | |
+|---|---|
+| **Hardware** | Settled. The reference machine is now a **GEEKOM A9 Pro** — Ryzen AI 9 HX 370, Radeon 890M — replacing the SER5. MMagTech has seen it running God of War 3. **Do not reopen this.** |
+| **Systems Cabinet does not have** | **Allowed.** PS3 may be OS-only. Open question 19. |
+| **Save data** | A folder tree, and the PSP mechanism built the same day already covers it. |
+| **Save states** | RPCS3 has none, **and they are not needed** — snapshots earn their keep on cartridge machines, not on a console with real in-game saves. |
+| **Renderer** | RPCS3 wants Vulkan. So do parallel-RDP and Flycast. **One piece of host work serves three systems** — open question 20. |
+| **Installation** | **The one real problem.** 24 of 30 games are PKGs, and what you download is not what you run. Open question 19. |
+| **Storage** | Unchanged by the faster box: 307 GB, one 37 GB title. |
+
+**What is left is the PKG install experiment — item 0 above — and a Vulkan path
+in the host, which cannot be built until the A9 Pro exists.**
+
+The original material follows, because the numbers are still the numbers.
 
 Counted off the live server 2026-09-17, because "should we support X" is a
 different question when X is 109 games and when it is none — and the last column
