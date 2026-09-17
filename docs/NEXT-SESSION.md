@@ -335,6 +335,57 @@ Ordered for whenever it is installed. **Do not begin these in the VM.**
 `cabinetos-builder:latest` alone. If it is tight again, that is the first thing
 to try, then `.core-src`.
 
+## Next session: the last emulator, then which systems to add
+
+The user's plan, said 2026-09-17 while closing the previous session:
+
+> "We should work on the remaining emulator and discuss the addition of others,
+> because none of my Cabinet builds currently have Wii U, PS3, Xbox, Xbox 360 or
+> Switch and I'd like to consider those."
+
+**Build PPSSPP first** — it is item 4 on the list above and it is the one that
+finishes the set at twenty-one of twenty-one.
+
+**Then the discussion, which needs these numbers in front of it.** Counted from
+the live RomM library on 2026-09-17, because "should we support X" is a
+different question when X is 109 games and when it is none:
+
+| System | Games | Size | Where it stands |
+|---|---|---|---|
+| **Switch** | **109** | 310 GB | no core in the manifest |
+| **PS3** | **30** | 307 GB | no core in the manifest |
+| PS Vita | 27 | 22 GB | no core in the manifest |
+| Wii | 2 | 7 GB | no core in the manifest |
+| **Wii U** | **0** | — | not in the library at all |
+| **Xbox** | **0** | — | not in the library at all |
+| **Xbox 360** | **0** | — | not in the library at all |
+| PS2 | 71 | 111 GB | Cabinet embeds PCSX2 — open question 12 |
+| GameCube | 14 | 11 GB | Cabinet embeds Dolphin — open question 12 |
+| PSP | 4 | 3 GB | core not built yet — item 4 above |
+
+**Three of the five the user named serve zero games today.** That is not an
+argument against them, but it should be said out loud before any effort is
+estimated: Wii U, Xbox and Xbox 360 have nothing in the library to run.
+
+**Two things to bring to the discussion rather than decide alone:**
+
+1. **These are not libretro cores.** Every one of the twenty-one is a `.so` this
+   frontend loads and drives. Wii U, PS3, Xbox 360 and Switch emulation lives in
+   standalone applications with their own windows, their own input, and their
+   own renderers — which is the same shape as PS2 and GameCube, and therefore
+   the same question as **open question 12**, not a new one. Answer 12 first, or
+   answer them together.
+2. **Storage stops being theoretical.** Switch and PS3 alone are 617 GB, against
+   a library that is otherwise a few dozen. The cache, both floors and Download
+   All were all designed against cartridge and disc-sized games. A 40 GB single
+   title is a different animal and the storage model should be checked against
+   it before anything is built.
+
+**Do not research emulator options before that conversation.** The user asked to
+*consider* these, and what they are worth considering against — hardware,
+storage, and the standalone-emulator question — matters more than a list of
+project names.
+
 ## Something the user wants discussed, in its own session
 
 **Account switching.** RomM has users; tvOS already switches between them.
