@@ -388,6 +388,64 @@ bool Client::fetchPlatforms(std::vector<Platform>* out, std::string* err) {
     return true;
 }
 
+bool Client::fetchCollections(std::vector<Collection>* out, std::string* err) {
+    std::string body;
+    if (!get("/api/collections", &body, err)) return false;
+    json_object* root = json_tokener_parse(body.c_str());
+    if (!root || json_object_get_type(root) != json_type_array) {
+        if (root) json_object_put(root);
+        if (err) *err = "collections response was not an array";
+        return false;
+    }
+    const size_t n = json_object_array_length(root);
+    out->clear();
+    out->reserve(n);
+    for (size_t i = 0; i < n; ++i) {
+        json_object* o = json_object_array_get_idx(root, i);
+        Collection c;
+        c.id = static_cast<int>(jint(o, "id"));
+        c.name = jstr(o, "name");
+        c.romCount = static_cast<int>(jint(o, "rom_count"));
+        json_object* fav = nullptr;
+        if (json_object_object_get_ex(o, "is_favorite", &fav) && fav)
+            c.isFavorite = json_object_get_boolean(fav);
+
+        // The membership. This is the whole reason a collection is cheap: the
+        // ids come down with the list, so opening one is a lookup rather than
+        // another request.
+        json_object* ids = nullptr;
+        if (json_object_object_get_ex(o, "rom_ids", &ids) &&
+            json_object_get_type(ids) == json_type_array) {
+            const size_t m = json_object_array_length(ids);
+            c.romIds.reserve(m);
+            for (size_t j = 0; j < m; ++j) {
+                const int id = static_cast<int>(
+                    json_object_get_int64(json_object_array_get_idx(ids, j)));
+                if (id != 0) c.romIds.push_back(id);
+            }
+        }
+
+        // `path_cover_small` is null for a collection the person never gave
+        // art to, which is the common case; `path_covers_small` is RomM's
+        // mosaic of member covers and its first entry is a real cover from a
+        // real game. Either way the tile gets a picture rather than a hole.
+        c.coverPath = jstr(o, "path_cover_small");
+        if (c.coverPath.empty()) {
+            json_object* covers = nullptr;
+            if (json_object_object_get_ex(o, "path_covers_small", &covers) &&
+                json_object_get_type(covers) == json_type_array &&
+                json_object_array_length(covers) > 0) {
+                const char* s =
+                    json_object_get_string(json_object_array_get_idx(covers, 0));
+                if (s) c.coverPath = s;
+            }
+        }
+        if (c.id != 0) out->push_back(std::move(c));
+    }
+    json_object_put(root);
+    return true;
+}
+
 bool Client::fetchGames(int platformId, std::vector<Game>* out, std::string* err) {
     out->clear();
     // RomM caps a page. A library of thousands arrives truncated unless this

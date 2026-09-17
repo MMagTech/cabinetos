@@ -136,6 +136,43 @@ Kind sniffFile(const std::string& path, std::string* err) {
     return sniff(head);
 }
 
+int64_t unpackedSize(const std::string& path, const std::string& validExtensions,
+                     bool blockExtract) {
+    // Nothing will be written, so nothing is needed. The same three conditions
+    // prepareFile uses to hand a file over untouched.
+    const Kind k = sniffFile(path, nullptr);
+    if (blockExtract || !isContainer(k) || coreAccepts(validExtensions, kindName(k)))
+        return 0;
+
+    struct archive* a = archive_read_new();
+    if (!a) return 0;
+    archive_read_support_filter_all(a);
+    archive_read_support_format_all(a);
+    if (archive_read_open_filename(a, path.c_str(), 256 * 1024) != ARCHIVE_OK) {
+        archive_read_free(a);
+        return 0;
+    }
+
+    // Reading HEADERS only, never data — the size is in the archive's own index
+    // and costs a seek rather than a decompression.
+    int64_t total = 0;
+    struct archive_entry* entry = nullptr;
+    while (archive_read_next_header(a, &entry) == ARCHIVE_OK) {
+        if (archive_entry_filetype(entry) != AE_IFREG) continue;
+        // A format that streams may not declare a size. Zero then means "I do
+        // not know" rather than "empty", and the honest answer is to say so
+        // rather than to invent a ratio: the caller extracts into whatever room
+        // there is and fails if it runs out.
+        if (!archive_entry_size_is_set(entry)) {
+            archive_read_free(a);
+            return 0;
+        }
+        total += archive_entry_size(entry);
+    }
+    archive_read_free(a);
+    return total;
+}
+
 bool prepareFile(const std::string& downloadedPath, const std::string& outDir,
                  const std::string& validExtensions, bool blockExtract,
                  std::string* primaryPath, Kind* kindOut, std::string* err) {

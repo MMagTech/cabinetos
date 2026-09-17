@@ -92,6 +92,19 @@ Kind sniffFile(const std::string& path, std::string* err = nullptr);
 // Returns the path to hand the core in `primaryPath`. When the file is not a
 // container, or the core reads it as it stands, `primaryPath` is the input and
 // nothing is written.
+// What this archive will become on disk, read from its own index rather than
+// estimated. Zero when nothing will be written — a plain ROM, a .chd, a core
+// that opens its own archives — and also when the format declines to say, which
+// is a real answer and not an error.
+//
+// A multiplier was the first design here and it was wrong in the direction that
+// fills a disk: an archive is COMPRESSED, so what comes out is not the size
+// that went in. 868 KB of Space Harrier becomes 2 MB, and a DS ROM padded with
+// empty space compresses far harder again. The number was already sitting in
+// the file; nothing needed guessing.
+int64_t unpackedSize(const std::string& path, const std::string& validExtensions,
+                     bool blockExtract);
+
 bool prepareFile(const std::string& downloadedPath, const std::string& outDir,
                  const std::string& validExtensions, bool blockExtract,
                  std::string* primaryPath, Kind* kindOut, std::string* err);

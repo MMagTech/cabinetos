@@ -139,6 +139,13 @@ void drawImage(Renderer& r, const Image& img, float x, float y, float w, float h
 // A raw texture straight to the screen, with none of the cache's machinery.
 // The running core's frame goes through here: it is not cached, not faded in,
 // and its size is decided by the core rather than by a layout.
-void drawImageTexture(Renderer& r, GLuint texture, float x, float y, float w, float h);
+//
+// The texture coordinates are not decoration. A hardware-rendered core draws
+// into a target sized to its declared maximum and uses a corner of it, bottom
+// row first, so "the whole texture, the right way up" is true of a software
+// core and false of Flycast. Core::frameUV answers both cases; this just
+// takes the answer.
+void drawImageTexture(Renderer& r, GLuint texture, float x, float y, float w, float h,
+                      float u0 = 0, float v0 = 0, float u1 = 1, float v1 = 1);
 
 }  // namespace ui

@@ -55,11 +55,39 @@ rather than launched by hand:
 - Text (Noto Sans, with CJK fallback), cover art (async, budgeted, evicting),
   and **frosted glass**.
 - **An on-screen keyboard**, which was the gate on everything downstream.
+- **The library is reachable**, as of 2026-09-16: a Library of every system and
+  every collection, a grid of each one's games, and a launch screen carrying
+  Play and Download. Before it, 1100 playable games had fifty reachable.
 - **A libretro core host** that loads a `.so`, paces it against the wall clock,
   plays its audio, draws its picture, and saves and restores its state.
-  **Dr. Mario runs.**
+  **Dr. Mario runs.** It also hosts the cores that draw for themselves: it owns
+  the GLES context and hands a hardware-rendered core a framebuffer inside it,
+  so **Mario Kart 64 and Ikaruga run too**, with no pixel ever read back.
 
 ### Open against the frontend right now
+
+- **Mupen64Plus save states do not restore the machine exactly**, and it is
+  reproducible to the digit. Found 2026-09-16 the day N64 became runnable; it
+  blocks nothing, because mupen64plus has no shared emulator tag, so its states
+  never travel. What `--state-test` says on Mario Kart 64, twice, with
+  byte-identical digests across two separate processes:
+
+  - The picture is **moving**, so the comparison is meaningful — not the static
+    title screen that once made this test report PASS and prove nothing.
+  - **Restoring is self-consistent**: two restores produce identical video and
+    identical audio.
+  - **Both differ from the uninterrupted run**, from video frame 0 of 300, and
+    the audio differs too — by four bytes of a million, which is one sample.
+
+  Three candidate causes and **none of them is established**: the state may not
+  capture everything; `retro_serialize` may perturb the core, since the run it
+  is compared against is the one taken immediately *after* the save; or the
+  picture may depend on graphics-plugin state that lives outside the state at
+  all — though the audio differing argues against that last one on its own.
+
+  **The instrument is not what is wrong, and that was checked rather than
+  assumed.** The same test on the same build, on mGBA with a moving picture,
+  reports video and audio MATCH and PASS. The failure is this core's.
 
 - **A white line reported under the keyboard's title, not reproduced.** Every
   row between the title and the field was scanned in the captured framebuffer
@@ -76,11 +104,15 @@ rather than launched by hand:
 - **Twenty cores of twenty-one are built**, and all four backend-sensitive ones
   are settled: pcsx_rearmed and melonDS take the recompiler and share Cabinet's
   tag, picodrive matches Cabinet's flags exactly, and Flycast is blocked on
-  Cabinet's own unscripted edits rather than on anything here. **1100 of 1644
+  Cabinet's own unscripted edits rather than on anything here. **1143 of 1644
   games are playable.** PPSSPP is the one not built.
-- **Two of the twenty cannot be RUN here**, whatever the build says: Flycast and
-  Mupen64Plus render through a GL context the frontend does not yet hand over.
-  `catalog::coverageFor` says so rather than offering a game that would fail.
+- ~~**Two of the twenty cannot be RUN here**~~ **— they can, as of 2026-09-16.**
+  Flycast and Mupen64Plus render through a graphics context rather than handing
+  back pixels, and the host now owns one and hands them a framebuffer inside
+  it. Measured, not assumed: **Mario Kart 64 reaches its title screen and
+  Ikaruga reaches its own**, both launched from the real library, both with
+  sound, and Home draws correctly on the way back out. That is Dreamcast, Naomi
+  and N64 — the 43 games that took the count from 1100 to 1143.
 - **Every core builds in CI**, on a GitHub runner from a bare checkout, with the
   finished `.so` asserted to report the pinned revision as its own version
   string — see open question 13.
@@ -255,7 +287,7 @@ seven CEC systemd units.
 
 #### CEC will not be tested by the author
 
-**Marcus is not buying a CEC adapter. Testing will come from other people.**
+**MMagTech is not buying a CEC adapter. Testing will come from other people.**
 That is a fine arrangement and it has consequences worth stating plainly,
 because they shape how the feature must be built:
 
@@ -602,7 +634,7 @@ The Settings storage screen shows both, and lets a cached game be promoted to
 kept and a kept game released back to cached.
 
 **And keeping is an action on the GAME, not only a row in Settings.** Added
-2026-09-16 at Marcus's prompt, and it matches what Cabinet already ships — a
+2026-09-16 at MMagTech's prompt, and it matches what Cabinet already ships — a
 per-game toggle, with the size shown, removable from the same place it was
 added. Settings is where you go to see the whole picture; the game's own screen
 is where the decision is actually made.
@@ -806,9 +838,46 @@ Dreamcast scene — two thirds of the whole frame.
 > not a cost — and it removes the single largest per-frame cost the Apple build
 > has on its three heaviest cores.
 
+**BUILT 2026-09-16, and it does not exist.** The host accepts
+`SET_HW_RENDER`, creates the target itself, and the player samples that texture
+in the same context the core drew it in. Nothing is copied and nothing is read
+back. `Core::frameUV` is where the two paths meet: a software core answers
+"the whole texture, the right way up" and a hardware core answers a corner of a
+larger target with its rows the other way round, so no caller above it knows
+which kind of core is running.
+
+Four things were not obvious in advance and each one would have looked like a
+broken game:
+
+- **The target is sized to the core's declared MAXIMUM, not its picture.**
+  Flycast asks for 853x853 and then presents 640x480 into the corner of it.
+  Sampling the whole texture draws a small picture in a large black field.
+- **The picture is upside down**, because GL renders bottom-left origin and
+  every software core hands back a top-down buffer. The core states which
+  convention it used; it is read rather than guessed.
+- **`retro_run` does not give the context back as it found it.** A core
+  emulating a 3D machine leaves depth testing, culling, scissoring, a stencil
+  mask and its own program bound. The UI's `beginFrame` establishes only what
+  it uses, which was correct while nothing else touched the context. The host
+  now restores the context after every `retro_run`, next to the thing that
+  breaks it rather than in the renderer.
+- **Integer scaling is wrong for these cores.** A Game Boy's pixels were each
+  chosen by somebody; a Dreamcast's output is a 3D scene rendered at whatever
+  internal resolution the core was asked for. At 3x internal resolution the
+  frame is 1920x1440, flooring to an integer scale gives zero, clamps to one,
+  and draws 360 rows off the bottom of the screen.
+
+**Only GLES is accepted, and the version is read rather than assumed.** SDL is
+asked for GLES 3.0 and the driver is free to hand back more — the test VM
+returns 3.2 — so refusing a core that wants 3.1 on the basis of what was asked
+for would be turning down something the machine can do. Desktop GL and Vulkan
+are refused by name, because accepting and then failing inside the core reads as
+a broken game rather than as a frontend that cannot do something. Both cores
+tested asked for GLES 3.0 and got it.
+
 ### Shaders, and the glow around the picture
 
-Missed on the first Phase 0 read and added 2026-09-13 at Marcus's prompt. Not
+Missed on the first Phase 0 read and added 2026-09-13 at MMagTech's prompt. Not
 needed to get a core running, and very much part of what the product looks like.
 
 **Eleven shaders**, one Metal fragment function each, with one pipeline built
@@ -842,7 +911,7 @@ rather than being trusted.
 
 **The history is worth keeping, because it is a warning.** The original six came
 from RomM/EmulatorJS's own bundled set. Two ScaleHQ scalers and a `crt-geom`
-slang port *"looked bad enough in this Metal port that Marcus dropped them on
+slang port *"looked bad enough in this Metal port that MMagTech dropped them on
 sight"*. A shader that is well regarded elsewhere is not automatically good once
 reimplemented — judge each on the panel.
 
@@ -1184,6 +1253,47 @@ hide it behind a splash.
 `plasma-setup.service` runs a `bootutil` binary that decides whether to show the
 wizard based on a `plasma-setup-done` flag file. Dropping the flag file in place
 would suppress it, but removing the unit is cleaner — CabinetOS owns first run.
+
+### The cache is not the only thing a game writes to disk
+
+**Measured 2026-09-16, by running Flycast and Mupen64Plus and then looking at
+what appeared**, rather than by reasoning about what a core ought to write.
+Three kinds of file, none of them a ROM, and **eviction sees none of them**:
+
+| What | Where | Size after two games |
+|---|---|---|
+| Mesa's compiled-shader cache | `~/.cache/mesa_shader_cache/` | 2.5 MB |
+| Mupen64Plus's driver database | `system/Mupen64plus/mupen64plus.ini` | 447 KB |
+| Flycast's Dreamcast flash | `system/dc/dc_nvmem.bin` | 131 KB |
+
+`cache::candidates` walks `romcache/<romId>/` and nothing else, on purpose —
+`saves/` sits alongside and is deliberately never a candidate. But that also
+means everything above consumes free space, is counted by the floors as simply
+gone, and **cannot be reclaimed by any code this console has**. Un-keeping every
+game would not shrink it by a byte.
+
+It is small today and the shapes differ, which is why they are listed
+separately rather than as one number:
+
+- **The shader cache is the one that grows with play.** It is the graphics
+  driver's, not the core's, and it is written for every shader a hardware
+  core compiles — so it grows with how many different games have been played
+  and resets whenever Mesa is updated. Mesa evicts it against a **default cap
+  this console inherits rather than sets**, which is the wrong way round for an
+  appliance: the size should be a number CabinetOS chooses, via
+  `MESA_SHADER_CACHE_MAX_SIZE`, and the Storage screen should be able to say
+  what it is.
+- **The system directory is mixed**, and that is the part to be careful with.
+  `mupen64plus.ini` is a database that can be deleted and will come back.
+  `dc_nvmem.bin` is a Dreamcast's saved flash — **console settings, and the
+  thing a VMU lives beside.** Treating the system directory as reclaimable
+  would throw that away. Anything that cleans here has to distinguish the two,
+  which is the same distinction the Storage screen already draws between a
+  cache and a kept game.
+
+Nothing here is urgent — it is under 3 MB against a 5 GB system reserve — but it
+is a category the storage model currently does not have, and it arrived with the
+hardware-rendered cores rather than existing before them.
 
 ### Other facts worth keeping
 
@@ -1673,7 +1783,7 @@ is that there is no wait — with three proposed fixes: a progress bar inside th
 pill, pre-fetching the hero while idle, and a badge saying which kind of Resume
 was coming.
 
-**Closed by Marcus, and he is right.** You press Resume, it downloads, it plays.
+**Closed by MMagTech, and he is right.** You press Resume, it downloads, it plays.
 The wait is the wait whichever way it is presented, and the download already
 shows progress and already takes Escape to cancel. Warning someone in advance
 does not shorten it and does not change what they would do — they want to play
@@ -1843,6 +1953,10 @@ Six hard requirements fall out, and each one eliminates candidates:
    Mupen64Plus and PPSSPP render through
    `RETRO_ENVIRONMENT_SET_HW_RENDER` into an FBO. The toolkit must let the
    frontend create that context, not create one for it and hide it.
+   **Settled 2026-09-16: SDL3 plus one EGL/GLES 3 context does exactly this,
+   and both requirement 2 and requirement 3 are now running rather than
+   argued** — Mario Kart 64 and Ikaruga play in the same context the UI draws
+   in, with no readback anywhere.
 3. **The UI must draw into the same context.** This is what deletes the
    `glReadPixels` readback — the largest per-frame cost on Apple's three
    heaviest cores. A toolkit that composites the game as a separate surface or
@@ -2319,7 +2433,7 @@ differs" is worse than no test, because it is believed.
 
 #### And then it was proved against Cabinet's own build
 
-Run the same day, at Marcus's insistence that reasoning about this was not
+Run the same day, at MMagTech's insistence that reasoning about this was not
 enough. **The headline result of the project so far.**
 
 Cabinet's macOS Gambatte is pinned to `d9d6cd06` — **the same commit CabinetOS
@@ -2725,7 +2839,7 @@ given game needs.
 
 ###### Firmware is per PLATFORM, so fetch the whole lot once and stop thinking about it
 
-**Marcus, 2026-09-16: a BIOS "just needs downloading for that platform one time
+**MMagTech, 2026-09-16: a BIOS "just needs downloading for that platform one time
 and then the platform uses it for all games on it".** That is already how
 CabinetOS stores it and it is better than the reference implementation here —
 one shared `system/` directory, with a file already present at the right size
@@ -2750,7 +2864,7 @@ Ninety-three percent of that total is firmware for a system with no core in the
 manifest and no prospect of one. For everything actually playable it is fifteen
 megabytes — the entire BIOS collection, for every system, permanently.
 
-**Fetching the whole 15 MB at setup was proposed and Marcus chose otherwise:
+**Fetching the whole 15 MB at setup was proposed and MMagTech chose otherwise:
 fetch a platform's firmware the first time a game on that platform is launched.**
 He is right, on two counts. It is less machinery — the launch path already does
 exactly this, and the only change is not asking again afterwards — and it is a
@@ -2783,7 +2897,7 @@ once per console.
 
 ###### Tell the person their server has no BIOS for a system, BEFORE they pick a game
 
-**Marcus, 2026-09-16, and it is a real gap.** Today a platform whose BIOS the
+**MMagTech, 2026-09-16, and it is a real gap.** Today a platform whose BIOS the
 server does not hold fails at launch with the CORE's error message — measured
 earlier the same day, on Sega CD: `Unable to open CD BIOS:
 "system/bios_CD_U.bin"`. Clear, actionable, and delivered at the worst possible
@@ -2924,15 +3038,15 @@ kept*. **Nothing evicts anything.** A library of 1644 games at these sizes will
 not fit on a console, so the disk fills and stays full. That is the next thing
 this needs.
 
-#### The cache policy — decided 2026-09-16, not yet built
+#### The cache policy — decided 2026-09-16, and the core of it now runs
 
 **The rule is that the person never thinks about storage, and never loses
 anything they would miss.** Everything below serves those two sentences. From
-Marcus's proposal, with four changes argued for rather than accepted.
+MMagTech's proposal, with four changes argued for rather than accepted.
 
 ##### What Cabinet already does, on both its platforms
 
-**Read from `NativeLauncher.swift` 2026-09-16 at Marcus's prompt, and it should
+**Read from `NativeLauncher.swift` 2026-09-16 at MMagTech's prompt, and it should
 have been read before any of this was designed.** Neither Apple platform has an
 eviction policy, for two different reasons, and the difference is the whole
 reason CabinetOS needs one.
@@ -2970,7 +3084,7 @@ tier has to exist here, even though the Mac gets away without one.**
 
 ##### None of this may be tuned to one library, one disk or one connection
 
-**Raised by Marcus against the first draft of this section, and he was right.**
+**Raised by MMagTech against the first draft of this section, and he was right.**
 That draft justified its eviction order with "every cartridge game in the
 library together is under 2 GB", which is a fact about *this* reference library
 — about three hundred cartridge games — and it inverts for anyone with a
@@ -3028,9 +3142,64 @@ link changes is the *advice*: first-run and the Storage screen should say that
 keeping a game means never waiting for it again, which is a sentence worth
 writing regardless.
 
+##### BUILT AND MEASURED, 2026-09-16
+
+**The disk no longer fills and stay full**, which is what this whole section was
+for. `frontend/src/cache.{h,cpp}` holds the eviction, and the download path asks
+it for room at the two moments described below.
+
+Proved by filling the test machine's disk rather than by reasoning:
+
+| | |
+|---|---|
+| Free space squeezed to | 120 MB |
+| Game asked for | Twisted Metal, 178 MB, needing 187 MB with overhead |
+| Evicted | `Mad Dog McCree.chd`, dated 09-10 — **the oldest, and only it** |
+| Left alone | `Colin McRae Rally.chd`, dated 09-14, four save states, an `.srm`, a memory card |
+| Result | downloaded, launched, **34,594 frames of PlayStation** |
+
+It stopped the moment there was room rather than clearing everything it could,
+which is the margin rule working, and nothing irreplaceable was a candidate at
+all.
+
+**What is NOT built**, so that nobody reads the above as more than it is: there
+is no keep, so nothing is protected as kept; nothing tracks pending uploads, so
+that protection is a comment rather than a check; and the system reserve for
+updates is unimplemented. Eviction today protects the running game and nothing
+else, because nothing else exists yet to protect.
+
+###### The bug that only running it could find: deleting a file frees nothing
+
+**CabinetOS runs on btrfs, where `unlink` returns immediately and the space
+stays invisible to `statvfs` until a transaction commits.** So the first version
+deleted exactly the right file, measured again, saw no change, and reported that
+there was nothing left to clear.
+
+Measured on the machine rather than guessed from the symptom:
+
+| | |
+|---|---|
+| Before deleting a 50 MB file | 218,812,416 free |
+| Immediately after | 218,812,416 — **no change** |
+| After three seconds | 218,812,416 — **still no change** |
+| After forcing a commit | 268,816,384 |
+
+Waiting is not a fix, because it is not a race. `evictUntilFree` now calls
+`syncfs` on the cache's own filesystem once, after deleting.
+
+**It is not a btrfs workaround to be removed later.** On ext4 or xfs the space
+is already accounted and the call returns almost immediately, so the code is
+correct everywhere without knowing where it is. Which matters, because **the
+filesystem on real hardware is not established** — the VM is btrfs and Bazzite's
+lineage defaults to it, but the installer ISO has never been booted.
+
+**And it is the second time in one day that a thing passed every check and was
+still wrong until somebody ran it**, after melonDS's save directory. Both were
+invisible to the build and obvious within one launch.
+
 ##### The policy in one paragraph
 
-**Marcus's, 2026-09-16, and it is better than the version it replaced because it
+**MMagTech's, 2026-09-16, and it is better than the version it replaced because it
 is sayable.** Everything else in this section is detail underneath it:
 
 > **The games you have played on this console are on the disk. They stay until
@@ -3038,7 +3207,7 @@ is sayable.** Everything else in this section is detail underneath it:
 > first. Nothing that is running, nothing you marked as keep, and nothing still
 > waiting to reach RomM is ever touched.**
 
-**The cache is invisible, and that is the decision.** Marcus, 2026-09-16,
+**The cache is invisible, and that is the decision.** MMagTech, 2026-09-16,
 ending a long detour: *"No one knows or cares if the game exists in cache on the
 OS. You go to the game and hit play. If it isn't cached it downloads. If it is
 cached it doesn't."*
@@ -3085,7 +3254,7 @@ there is room. Nothing is deleted speculatively, in the background, or while a
 game is running.
 
 **Pressure is simply the disk being full**, and there is no cache size to
-configure. Marcus, 2026-09-16: a person picks a game and chooses Download, those
+configure. MMagTech, 2026-09-16: a person picks a game and chooses Download, those
 downloads stay, "and by nature shrink disk space available for cache".
 
 That is the whole sizing rule, and it deletes a setting:
@@ -3101,7 +3270,7 @@ the drive is for games regardless.
 
 ##### The games and the operating system share one disk
 
-**Marcus, 2026-09-16, and it is the most serious thing raised about this
+**MMagTech, 2026-09-16, and it is the most serious thing raised about this
 policy.** `/` is a 43 MB read-only composefs and **all real storage is `/var`** —
 which holds the ROM cache, the OS's own storage, and the space a system update
 needs to stage itself. They are not separate.
@@ -3131,7 +3300,7 @@ protecting from the system, because it is the system's to take.
 
 ##### Partitioning was considered and rejected
 
-**Raised by Marcus in the same breath, and reasoned to the right answer: a
+**Raised by MMagTech in the same breath, and reasoned to the right answer: a
 separate system partition would enforce this in the kernel rather than in our
 code, and the problem is that nobody can say how big it should be.**
 
@@ -3179,7 +3348,7 @@ which is the one failure this policy ever shows anybody.
 
 ##### Everything on the disk is a copy of RomM. That is the whole rule
 
-**Marcus, 2026-09-16, after this section had drifted into categories for the
+**MMagTech, 2026-09-16, after this section had drifted into categories for the
 third time: saves, BIOS and memory cards are all stored on RomM.** They are, and
 this document has said so twice and then built tiers of protected things on top
 of it anyway.
@@ -3242,7 +3411,7 @@ space, the oldest *pending* states for a game could be dropped rather than the
 newest, since a save-scummer wants the last one and not the three hundredth from
 the bottom. That trades a promise this document makes — local first, nothing
 written is ever lost — against a disk that stops working, and **that trade needs
-Marcus rather than an assistant.**
+MMagTech rather than an assistant.**
 
 ##### The eviction unit is a FILE, not a game
 
@@ -3305,7 +3474,7 @@ It is the size of the *archive*, though, so it is what the download needs and
 ##### Unpacking: ask the archive, do not guess a ratio
 
 **Third change. The first draft said "budget twice the archive" and that is
-wrong in the direction that fills the disk**, as Marcus pointed out: an archive
+wrong in the direction that fills the disk**, as MMagTech pointed out: an archive
 is *compressed*, so what comes out of it is not the size that went in.
 
 Measured on this library rather than argued: Space Harrier is an **868 KB** zip
@@ -3673,6 +3842,241 @@ Avoidable, but only if it is not designed back in. Two ways it creeps in:
   refusing is worse; asking once about a server the person typed in themselves
   is the honest middle.
 
+#### The screens, built 2026-09-16
+
+Until this the machine was in good shape and almost none of the library was
+reachable: 1100 playable games, and only the fifty Home happened to show.
+
+##### The Library is a tile grid with a switcher, and it shows EVERY system
+
+Four columns of 413x200 tiles on a 1920 canvas at an 80pt inset, which is what
+"adaptive minimum 380" comes out as — a full-width row would leave a name at one
+end and a count at the other with a third of the screen empty between them.
+Platforms and Collections are capsule pills, selected at white 35% and focused
+at white 25% and 1.06, both visible at once. Focus lands on the switcher the
+first time and only the first time.
+
+**The unplayable systems are on it, dimmed, saying why.** This is the screen
+`catalog::coverageFor` was built for and the reasons had until now only ever
+gone to stderr. All four answers appear: *No core for this system*, *Core not
+built yet*, *Not shipped here*, *Needs a 3D core*.
+
+Two things had to be settled to make that readable, and both are recorded
+because they look like polish and are not:
+
+- **A tile title gets two lines and breaks on hyphens as well as spaces.** On
+  one line, "Nintendo 64" and "Nintendo DS" were both "Nintendo ...", and the
+  two Arcades this project goes to some length to distinguish were both
+  "Arcade (...". Hyphens matter on their own: "TurboGrafx-16" and
+  "TurboGrafx-CD" contain no space at all before the part that tells them apart.
+- **A tile's second line holds about sixteen characters beside a cover**, and
+  twenty-three without one. `Coverage::reason` is a sentence, and a sentence cut
+  to "no core in the ..." tells a person strictly less than nothing. So the tile
+  takes `catalog::shortReason` and the launch screen, which has a column, takes
+  the sentence.
+
+**Playable systems sort first, then alphabetically.** One flat alphabet put
+Atari Jaguar — which this console cannot play — in the first tile on the screen.
+
+##### The launch screen, and Download as the one deliberate storage act
+
+A full-screen cover with the artwork as its own backdrop, filled and blurred
+with the scrim over it. Large Title, the platform and the size, then rows.
+
+**The cache stays invisible and Download is not a cache control.** Pressing Play
+fetches a game that is not here and says nothing about it. The Download row
+means *put this game on the machine and do not take it away again* — which is a
+KEEP, and it is the only place in the product where the console may refuse.
+
+> **A deliberate download IS a kept game.** There are exactly two categories on
+> the disk and the Storage screen names them: kept, which is deliberate and
+> permanent, and the cache, which is automatic and evictable. A download a
+> person asked for by name belongs in the first.
+
+So the row reads **Download and keep**, and on a kept game **Remove download**.
+Un-keeping deletes nothing: the game returns to the cache, where it may sit for
+months before anything needs the room.
+
+##### The two floors, enforced where the button is
+
+Both are checked before a byte moves, because refusing after two gigabytes is
+the same answer at a much higher price.
+
+The question is **not** "is there room right now" — a kept game may already be
+on the disk, in which case keeping it costs nothing today. It is whether, after
+this game stops being evictable, the console can still free its way down to both
+floors:
+
+```
+reclaimable = free + everything still evictable (excluding this game)
+                   - what remains to be fetched for it
+                   - the upload queue
+allowed     = reclaimable >= save floor + system reserve
+```
+
+**Measured on the test VM, 2026-09-16**, by filling the disk rather than by
+reasoning about it: with 5.42 GB free against a 1.16 GB save floor and a 5.37 GB
+reserve, keeping a 5 MB game was refused with 5.78 GB reclaimable against a
+6.53 GB floor — and no directory was created, so nothing was fetched and thrown
+away. The person is told the amount, because *"the disk is full of things you
+asked me to keep"* is a dead end without one.
+
+##### What eviction can and cannot take, now
+
+- **A kept game is not a candidate**, enforced inside `cache::candidates` rather
+  than at each caller, so no future caller can forget it. Verified: a kept
+  game's ROM does not appear in the eviction list, and un-keeping puts both its
+  files straight back into it.
+- **An unsent upload is a fact on disk.** A marker is written before an upload
+  is attempted and removed only on success, so a queue interrupted by a crash is
+  still visible on the next boot and its bytes still count against the save
+  floor. Eviction never took save data, so this is not protecting files from the
+  evictor — it is making "unsynced" something the machine knows.
+
+##### Still owed on the launch screen
+
+A different save state, a different core and an export. The screen is the right
+home for all three and none is built; a row that does nothing is worse than no
+row, so none is drawn.
+
+##### The navigation bar is NOT built, and the reason is a measurement
+
+The design system specifies four destinations in a bar across the top. It is not
+there, and the Library is reached with a temporary key.
+
+**Home has about 85 points of vertical slack and the bar needs about 85.** Hero
+at 40 + 420 + 20, Recent's block at roughly 515, against a 1080 canvas. A bar at
+Title 3 plus its gap consumes very nearly all of it, which would put Recent's
+caption exactly on the bottom edge — and a physical television's overscan eats
+more vertical room than a framebuffer capture shows. That is the trap Cabinet's
+hero fell into three times, once while the simulator showed it fitting.
+
+**So this needs the SER5 and a real panel, not a decision.** Either the bar
+fits, or Home's hero comes down, or the bar lives somewhere else.
+
+#### Core options: every one of them was unanswered — fixed and measured 2026-09-16
+
+**This is the thing docs/PROJECT.md had warned about twice and said nobody had
+checked. Nobody had, and it was worse than the warning.**
+
+`gOptions` in `core.cpp` was declared, read on every `GET_VARIABLE`, and
+**never written to by anything**. Above it sat a comment saying an absent key
+meant "falling back to the core's own default" — which is the exact belief this
+document says is false. The core does not fall back. It skips the case, and its
+C global keeps whatever it was initialised to.
+
+The tables were being thrown away too: `SET_VARIABLES` and all four
+`SET_CORE_OPTIONS` variants were accepted and ignored, so nothing even knew
+what each core could be asked about.
+
+##### What the audit found
+
+`--core-options` loads every built core and prints what it declares and what it
+is answered with.
+
+> **526 options across twenty cores. All of them previously unanswered.**
+
+| | |
+|---|---|
+| Most options | Flycast 89, Mupen64Plus 83, Genesis Plus GX 62, pcsx_rearmed 54 |
+| Fewest | Beetle NGP 1, prosystem 4, vecx 5 |
+| **Declared none at core-load time** | **FBNeo, fceumm, MAME 2003-Plus** |
+
+**A core declaring zero options is the suspicious case, not the clean one.**
+MAME 2003-Plus declares 23 the moment a game is loaded and none before it — its
+options are per-driver, so the table does not exist until a machine is chosen.
+The audit says so where it used to say nothing.
+
+##### The control, run rather than assumed
+
+`--core-options-off` restores the old behaviour so the difference is measured
+rather than asserted — the same discipline `cores/backend-diff.sh` exists for.
+
+| Core | Answered | Control |
+|---|---|---|
+| MAME 2003-Plus | **48000 Hz** | **44100 Hz** |
+| mGBA | 65536 Hz | 65536 Hz |
+| pcsx_rearmed | 44100 Hz | 44100 Hz |
+
+**MAME was running at a sample rate nobody chose.** The other two are unchanged
+*in this probe*, and that is the part worth keeping: `av_info` reports geometry,
+frame rate and sample rate and nothing else, so it cannot see the other five
+hundred options at all. **The narrowness of the only probe we had is why this
+went unnoticed.** Do not read "no difference in av_info" as "no difference".
+
+##### A second finding: options asked for that were never declared
+
+MAME 2003-Plus queries options that are not in the table it declared for the
+loaded driver, and **which ones varies by game**:
+
+| Game | Asked but never declared |
+|---|---|
+| 280 Zzzap | `nvram_bootstraps`, `four_way_emulation`, `crosshair_enabled` |
+| Lethal Enforcers | `nvram_bootstraps`, `four_way_emulation`, `dialsharexy`, `dial_swap_xy`, `cheat_input_ports` |
+
+`crosshair_enabled` IS declared for the light-gun driver and is not for the
+driving one, which confirms the mechanism. Two are constant across both.
+
+**These cannot be answered honestly from the core**, because it never states
+their values or defaults for that driver — so they still fall through to zero.
+They are the first real customers for `catalog::optionOverrides`, and the value
+has to come from the core's source with a reason recorded beside it. **Do not
+guess them.**
+
+##### What the host does now
+
+- Captures whichever generation of the declaration API a core uses:
+  `SET_VARIABLES`, `SET_CORE_OPTIONS`, `SET_CORE_OPTIONS_V2` and both `_INTL`
+  variants. The US table is the one read; `local` is the same table translated.
+- **Reports core options version 2 rather than 0.** At version 0 a core falls
+  back to the original API where the default is "whichever value is listed
+  first" — a convention we would be inferring. At version 2 the core states its
+  default outright. Cores that only speak the old API still call
+  `SET_VARIABLES` and are handled.
+- Answers every declared key with that default, or with an override.
+- Records and reports any key asked for that was never declared.
+
+##### Overrides are deliberately empty, and that is not the old behaviour
+
+`catalog::optionOverrides` returns nothing today. Every option is still
+answered — with the core's own stated default, which is the correct baseline and
+is precisely what was missing. An override is for when CabinetOS wants something
+*other* than what a core ships with, and Cabinet's hand-picked per-platform
+subset (`NativeCoreOptions.swift`) is the obvious thing to bring across, one
+platform at a time, with a reason beside each.
+
+#### A bug worth keeping: an offscreen render composited to the window
+
+`Renderer::presentScene` bound framebuffer 0 unconditionally, so with
+`--render-size` the finished frame went to the WINDOW while `saveFrame` read the
+offscreen target. A 1920x1080 capture came back as the 1024x768 window's
+contents in the corner of a black frame.
+
+It only appears when both are in play — an offscreen render AND frosted glass —
+which is why 2026-09-13's three-resolution check did not find it: Home's glass
+is one band at the bottom of the hero, and the failure reads as a layout
+problem rather than a target problem. **The tool this project uses to prove a
+4K layout was quietly broken for every screen with a pill or a panel on it.**
+
+The renderer now remembers where the frame is going.
+
+#### Headless capture, which CI can also run
+
+`SDL_VIDEODRIVER=offscreen` gives the frontend a GL context with no compositor,
+so every screen can be photographed on a machine with nothing running — no cage,
+no session, no controller. Combined with `--screen`, each screen opens by
+walking the route a person would walk rather than by being constructed directly,
+so a capture cannot show a state the product is unable to reach.
+
+```
+--screen library [--tab 1] [--tile N]
+--screen grid --tile N
+--screen detail --game <romId>
+--storage                       what the disk holds, and what may be evicted
+--download <romId>              what the Download row does, guards and all
+--unkeep <romId>
+```
+
 *Done when* the real library is browsable, a game downloads and plays, and a
 kept game survives a cache eviction.
 
@@ -3698,9 +4102,11 @@ and then find out. Do the opposite:
    audio out. It covers two platforms, Game Boy and Game Boy Color. **Still
    owed: the same thing in CI**, so it is not a thing that works on one
    machine — which is the exact failure this whole open question is about.
-2. **One hardware-rendered core.** Flycast, because it is also Dreamcast and
-   Naomi, and because it is the one that proves the GL context and the
-   no-readback path.
+2. ~~**One hardware-rendered core.**~~ **DONE 2026-09-16.** Flycast, because it
+   is also Dreamcast and Naomi, and because it is the one that proves the GL
+   context and the no-readback path — and it did: Ikaruga runs, in the same
+   context the UI draws in, with nothing read back. Mupen64Plus came with it,
+   so N64 runs too. See *Video: two paths* and open question 13.
 3. **One backend-sensitive core.** pcsx_rearmed, built twice — `DYNAREC=0` and
    the Linux default — with a state written by each loaded by the other. That
    answers the parity question locally even if the Mac↔Apple TV test never
@@ -4832,6 +5238,34 @@ So `Support` now carries **`NeedsHardwareRender`** beside `NoCore`, `Excluded`
 and `NotInstalled`. Four answers, and they lead to four different pieces of
 work — which is the whole reason this document warned against collapsing them.
 
+**RESOLVED 2026-09-16, and the fourth answer is now empty.** The host owns the
+GLES context and hands a hardware-rendered core a framebuffer inside it, so
+Dreamcast, Naomi and N64 are Playable because they play — Mario Kart 64 and
+Ikaruga were launched from the real library and photographed running. See
+*Video: two paths* for what the mechanism actually turned out to require.
+
+`NeedsHardwareRender` is kept rather than deleted, because it is still the
+honest answer for the narrower case it was always really about: a core that
+wants **desktop GL or Vulkan**, which this context is not. Nothing answers it
+today. PPSSPP is the one core left unbuilt and is the next one to find out
+about — and `catalog.cpp`'s `hwRender` flag is kept in place for it, also
+because that table is positional and removing a field silently re-assigns every
+row below it.
+
+**What running them found that building them could not**, again:
+
+- **Flycast writes its Dreamcast flash to the SYSTEM directory**, not the save
+  directory — `system/dc/dc_nvmem.bin` — and Mupen64Plus writes a 447 KB
+  `system/Mupen64plus/mupen64plus.ini`. Neither is a ROM, so neither is visible
+  to cache eviction. See *Measured behaviour* for the whole of that gap.
+- **Ikaruga opens on "no memory card connected"**, which is the file-writing
+  save class showing its face rather than a fault: Flycast exposes no
+  `RETRO_MEMORY_SAVE_RAM`, `[save] battery is 0 bytes` is correct, and the VMU
+  is a file the sync layer does not yet know about.
+- **Save states work on both.** Flycast serialises 35.9 MB and restores to an
+  identical video digest; the test's own guard reports the scene as static at
+  that point, so it proves the round trip rather than a long divergence.
+
 #### The test that answers the whole question, and can be run this week
 
 The parity risk is not theoretical and it does not need CabinetOS to exist to
@@ -4982,7 +5416,7 @@ location rather than globally.
 #### Decided
 
 **REVISED 2026-09-16: a second drive takes the KEPT games, and the cache stays
-on the internal disk.** Marcus, thinking ahead to testing it. The paragraph below
+on the internal disk.** MMagTech, thinking ahead to testing it. The paragraph below
 said one active location holding everything, and the split is better, because
 the two things are different in kind:
 
@@ -5048,7 +5482,7 @@ a drive as-is wherever possible.
 
 #### REVISED AGAIN, 2026-09-16: a drive belongs to a SERVER, not a console
 
-**Marcus, within the hour, and it is better than binding to a console for a
+**MMagTech, within the hour, and it is better than binding to a console for a
 reason that is obvious once said: the games on the drive are already
 server-specific.** They are identified by RomM's own rom IDs, which mean nothing
 on any other instance. Binding to the server states what is already true;
@@ -5077,12 +5511,12 @@ The address will not stand in for it either: an IP changes, a hostname replaces
 it, someone puts https in front, and the same server reads as a different one.
 
 **Two answers were designed here and both were too much.** The first sampled
-the drive's games to decide whether it was "ours", which Marcus broke in one
+the drive's games to decide whether it was "ours", which MMagTech broke in one
 sentence — people delete games from the server, so the sample misses and four
 terabytes get condemned as somebody else's. The second checked every game
 against the server on plugging in, with a Storage screen for the leftovers.
 
-**Marcus's third answer is that none of it needs building, and he is right,
+**MMagTech's third answer is that none of it needs building, and he is right,
 because the check already exists.** `beginLaunch` will not reuse a downloaded
 file unless it sits at that game's rom-id path, under the name the server gave,
 at the size the server reported:
@@ -5119,7 +5553,7 @@ class of data RomM cannot give back, without needing a rule to say so.
 #### SUPERSEDED — a drive belongs to one console
 
 **The section below decided a drive should move between CabinetOS machines, and
-built a self-describing drive to make it work. Marcus reversed it the same day
+built a self-describing drive to make it work. MMagTech reversed it the same day
 the split above was agreed, and the reasoning is short.**
 
 **The only real benefit of a portable drive is not re-downloading the games.**
@@ -5153,7 +5587,7 @@ future version of CabinetOS can.
 two boxes in one house sharing a RomM server, and there the drive should simply
 work.
 
-**The tension, raised by Marcus:** CabinetOS is tied to a RomM login. Move the
+**The tension, raised by MMagTech:** CabinetOS is tied to a RomM login. Move the
 drive to a machine paired with a *different* server and the ROM files are
 present but the library describing them is not — names, artwork, metadata,
 collections and save history all live server-side, and game identifiers are

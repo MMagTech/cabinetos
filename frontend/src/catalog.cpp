@@ -2,6 +2,8 @@
 
 #include <sys/stat.h>
 
+#include <map>
+
 #include <cstring>
 #include <string>
 
@@ -20,6 +22,16 @@ struct Entry {
     // than by asking the core, because the answer has to be available before
     // anything is loaded, while a shelf is being drawn.
     bool hwRender = false;
+    // Set only where the slug alone is ambiguous: the name of the SYSTEM this
+    // row actually serves, used to qualify a tile so two platforms with the
+    // same name can be told apart. Cabinet's manifest carries the same thing in
+    // its `systems` field.
+    //
+    // LAST IN THE STRUCT ON PURPOSE. Every row below is positional, so a field
+    // inserted in the middle would silently re-assign the ones that follow it —
+    // the three rows ending in `true` would have handed that `true` to the
+    // wrong member.
+    const char* system = nullptr;
 };
 
 // Derived from Cabinet's core-manifest.json, 2026-09-14. The manifest is the
@@ -32,8 +44,10 @@ const Entry kTable[] = {
     {"3do",                  nullptr,     Support::Playable, "opera",           nullptr},
     // One slug, two platforms, two different cores. This is the case the
     // "never key on slug alone" rule exists for.
-    {"arcade",               "FBNEO",     Support::Playable, "fbneo_libretro",  nullptr},
-    {"arcade",               "MAME2003",  Support::Playable, "mame2003_plus",   nullptr},
+    {"arcade",               "FBNEO",     Support::Playable, "fbneo_libretro",  nullptr,
+     false, "FinalBurn Neo"},
+    {"arcade",               "MAME2003",  Support::Playable, "mame2003_plus",   nullptr,
+     false, "MAME 2003-Plus"},
     {"atari2600",            nullptr,     Support::Playable, "stella2014",      nullptr},
     {"atari7800",            nullptr,     Support::Playable, "prosystem",       nullptr},
     {"dc",                   nullptr,     Support::Playable, "flycast",         nullptr, true},
@@ -178,13 +192,19 @@ Coverage answer(const Entry* e) {
         return c;
     }
 
-    // Built, and still not runnable. Asked AFTER the file check so that the
-    // reason names the nearer of the two obstacles.
-    if (e->hwRender) {
-        c.support = Support::NeedsHardwareRender;
-        c.reason = "this system needs a hardware-rendered core, which this "
-                   "console cannot host yet";
-    }
+    // A hardware-rendered core used to stop here: built, on the disk, and
+    // still unrunnable, because the host refused RETRO_ENVIRONMENT_SET_HW_RENDER
+    // and these three cores draw with GL rather than handing back pixels.
+    //
+    // It no longer does. The host owns a GLES context and hands the core a
+    // framebuffer inside it, and this was measured rather than assumed:
+    // Mario Kart 64 reaches its title screen on Mupen64Plus and Ikaruga
+    // reaches its own on Flycast, both from the real library, both with
+    // sound. So `hwRender` no longer changes the answer — it records which
+    // rows take that path, which is the fact PPSSPP will be checked against
+    // when it is built. It is kept in place rather than removed because this
+    // table is positional and every row below a removed field silently
+    // re-assigns; see the struct.
     return c;
 }
 }  // namespace
@@ -196,6 +216,49 @@ Coverage coverageFor(const romm::Platform& p) {
 }
 Coverage coverageFor(const romm::Game& g) {
     return answer(lookup(g.platformSlug, g.platformFsSlug));
+}
+
+std::map<std::string, std::string> optionOverrides(const std::string& coreName) {
+    // Nothing yet, deliberately. Every option is answered with the core's own
+    // default, which is the correct baseline and is what was missing. A choice
+    // belongs here only when there is a reason for it, and the reason belongs
+    // beside it — an override with no justification is the thing that goes
+    // stale and that nobody can later tell apart from a mistake.
+    (void)coreName;
+    return {};
+}
+
+const char* shortReason(Support s) {
+    switch (s) {
+        case Support::Playable: return "";
+        // Measured against the tile that shows them, not guessed: a library
+        // tile's second line holds about twenty-three characters at Footnote,
+        // and anything longer comes back as an ellipsis where the explanation
+        // was meant to be.
+        case Support::NoCore: return "No core for this system";
+        case Support::Excluded: return "Not shipped here";
+        case Support::NotInstalled: return "Core not built yet";
+        // Nothing produces this today. Kept because it is the honest answer
+        // for a core that asks for something this context cannot serve —
+        // desktop GL or Vulkan rather than GLES — which the host refuses by
+        // name. Both cores tested asked for GLES 3.0 and got it.
+        case Support::NeedsHardwareRender: return "Needs a 3D core";
+    }
+    return "Not playable here";
+}
+
+std::string displayName(const romm::Platform& p) {
+    const std::string base = p.name.empty() ? p.slug : p.name;
+    const Entry* e = lookup(p.slug, p.fsSlug);
+    // Only the ambiguous rows carry a system name, so everything else comes
+    // back exactly as the server named it. Qualifying a platform nobody can
+    // confuse would be noise.
+    if (e && e->system) return base + " (" + e->system + ")";
+    // An arcade set this table does not recognise is still ambiguous to a
+    // person — two tiles saying "Arcade" — so fall back to the one field that
+    // actually distinguishes them on the server.
+    if (!p.fsSlug.empty() && p.slug == "arcade") return base + " (" + p.fsSlug + ")";
+    return base;
 }
 
 }  // namespace catalog

@@ -79,15 +79,49 @@ ssh -i ~/.ssh/cabinetos cabinet@192.168.1.250 \
 Seconds, not minutes. This is what developer mode's SFTP exists for (Phase 6);
 until then it is plain SSH, which Phase 1 deliberately left on.
 
+## Seeing a screen with nothing running
+
+The captures above need a compositor. This one does not — no cage, no session,
+no controller, no window:
+
+```bash
+SDL_VIDEODRIVER=offscreen ./build/cabinetos-frontend --romm 192.168.1.10:6005 \
+  --screen library --screenshot /tmp/x.bmp --render-size 1920x1080 --frames 60
+```
+
+`--screen` opens a screen by walking the route a person would walk — the Library
+is entered, a tile is opened, the launch screen is opened from a card — so a
+capture cannot photograph a state the product is unable to reach.
+
+```
+--screen library [--tab 1] [--tile N]
+--screen grid --tile N
+--screen detail --game <romId>
+```
+
+Three things have no picture, and they get the same treatment for the same
+reason — this machine has no controller, so the only way to exercise what a
+person would press is to press it from here:
+
+```bash
+./build/cabinetos-frontend --storage              # free space, floors, kept, evictable
+./build/cabinetos-frontend --core-options         # every option every core declares
+./build/cabinetos-frontend --launch ID --core-options-off   # the control: answer none
+./build/cabinetos-frontend --romm HOST --download <romId>
+./build/cabinetos-frontend --romm HOST --unkeep <romId>
+```
+
+`--download` calls exactly what the launch screen's row calls, floors and all.
+
 ## What is not here yet
 
-- **Text.** There is no font layer, so captions and titles are placeholder bars
-  sized to the space the real type will occupy. Until then nothing in this
-  program can be read, only looked at.
-- **Cores.** No libretro core has been built for Linux yet. The frame loop,
-  the core pacing and the audio governor land with the first one.
-- **Images.** Cover art arrives with the RomM client in Phase 4; the cards are
-  flat colours for now.
+- **The navigation bar.** The Library is reached with a temporary **L** key.
+  It is not built because it costs almost exactly the vertical slack Home has
+  left, and that is a measurement only a real television can settle — see
+  `docs/PROJECT.md`.
+- **The rest of the launch screen**: a different save state, a different core,
+  an export.
+- **The Storage screen.** Its data exists; `--storage` prints it.
 
 ## A warning about motion
 

@@ -27,6 +27,7 @@
 #include <GLES3/gl3.h>
 
 #include <cstdint>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -98,6 +99,50 @@ public:
     // directory is the other way that same lesson gets learned.
     void setDirectories(const std::string& systemDir, const std::string& saveDir);
 
+    // --- Core options --------------------------------------------------------
+    //
+    // AN UNANSWERED OPTION IS NOT THE DEFAULT, it is whatever the core's C
+    // global was initialised to, which is zero — silence for a sample rate,
+    // black for brightness, off for every toggle whose useful state is on. The
+    // core skips the case entirely rather than falling back. So the host
+    // captures the table a core declares and answers every key in it.
+    //
+    // See core.cpp for the three generations of the declaration API and why we
+    // report version 2.
+    struct OptionReport {
+        std::string key;
+        std::string desc;
+        std::vector<std::string> values;
+        std::string defaultValue;   // what the core says its default is
+        std::string chosen;         // what we answered with
+        bool overridden = false;    // chosen because we said so, not the default
+        bool asked = false;         // the core actually came back for it
+    };
+
+    // The control, for measuring what answering options actually changes.
+    // Off means GET_VARIABLE answers nothing, which is what this host did
+    // before the table was captured. Not a product setting — a way to run the
+    // comparison rather than assert it.
+    static void setAnswerOptions(bool on);
+
+    // Deliberate choices, keyed by option. Set BEFORE load(): a core may read
+    // its options during retro_init, and several do.
+    //
+    // Empty is the honest starting point and is not the same as the old
+    // behaviour: with no overrides every option is still answered, with the
+    // core's own stated default. An override is for the cases where CabinetOS
+    // wants something other than what the core ships with.
+    void setOptionOverrides(const std::map<std::string, std::string>& overrides);
+
+    // What the currently loaded core declared, in declaration order, with what
+    // it was answered. This is the audit: it is the only way to see what a core
+    // can be configured with, and what it is actually running on.
+    std::vector<OptionReport> options() const;
+
+    // Keys the core asked for and never declared. Nothing can honestly be
+    // answered for these; an empty list is the expected result.
+    std::vector<std::string> undeclaredOptionAsks() const;
+
     // dlopen, resolve the retro_* entry points, retro_init. Returns false with
     // a reason on `error()`.
     bool load(const std::string& soPath);
@@ -126,10 +171,63 @@ public:
 
     // Uploads the most recent frame into `texture()`. Call on the GL thread.
     // Returns false if the core has not produced a picture yet.
+    //
+    // A hardware-rendered core has nothing to upload — see below — and this
+    // becomes a no-op for it rather than a second code path at every call
+    // site.
     bool uploadFrame();
-    GLuint texture() const { return texture_; }
+    GLuint texture() const;
     unsigned frameWidth() const { return frameWidth_; }
     unsigned frameHeight() const { return frameHeight_; }
+
+    // --- Hardware-rendered cores ---------------------------------------------
+    //
+    // WHAT THIS IS FOR. Three cores in the set do not hand back a buffer of
+    // pixels: Flycast, Mupen64Plus and PPSSPP draw with GL themselves, which is
+    // Dreamcast, Naomi, N64 and PSP — forty-three games in the reference
+    // library today and every heavy system after it. They ask for a context
+    // with RETRO_ENVIRONMENT_SET_HW_RENDER, and while this host refused that
+    // ask those cores could be built and could never be run. `catalog` had to
+    // grow a fourth answer, NeedsHardwareRender, to say so honestly.
+    //
+    // WHAT IS ACTUALLY HANDED OVER, AND WHY IT IS NOT A CONTEXT. The frontend
+    // already owns one GLES 3.0 context and draws the whole UI in it. So the
+    // core is given a framebuffer object inside that same context, not a
+    // context of its own: it renders into a texture this class owns, and the
+    // player then draws that texture. Nothing is ever read back. On Apple the
+    // readback is unavoidable and costs a full frame copy per frame; here it
+    // is simply absent, which is the thing docs/PROJECT.md calls "free on
+    // Linux" in "Video: two paths".
+    //
+    // THE TARGET IS THE CORE'S DECLARED MAXIMUM, NOT ITS CURRENT PICTURE. A
+    // core that upscales internally reports a small base size and a large
+    // maximum, and changes the size it actually draws whenever its resolution
+    // option moves. So the texture is allocated once at the maximum and the
+    // picture occupies a corner of it — which is why the picture's position in
+    // the texture is a question with an answer rather than "all of it", and
+    // why frameUV exists.
+    //
+    // THE PICTURE IS UPSIDE DOWN, and that is not a bug to be discovered. GL
+    // renders bottom-left origin and every software core hands back a top-down
+    // buffer. The core states which convention it used in its callback, so
+    // this is read rather than guessed.
+    //
+    // Where the picture sits inside texture(), as texture coordinates, with
+    // the vertical flip already applied when the core rendered bottom-up. A
+    // software core answers the whole texture, the right way up.
+    void frameUV(float& u0, float& v0, float& u1, float& v1) const;
+
+    // Whether the loaded core is rendering through GL rather than handing back
+    // a buffer. For the audit and for the catalog, not for the draw path —
+    // the draw path asks frameUV and does not need to know.
+    bool hardwareRendered() const;
+
+    // What the loaded core asked for, named: "OpenGL ES 3.0", "OpenGL 3.3 core
+    // (refused)". Empty when the core never asked, which is most of them.
+    // This is the whole audit for hardware rendering: a core that asks for
+    // something this context cannot serve says so here rather than failing
+    // later in a way that looks like a broken game.
+    const std::string& hardwareContext() const;
 
     // Drains audio produced since the last call, as interleaved 16-bit stereo
     // at the core's own rate.
