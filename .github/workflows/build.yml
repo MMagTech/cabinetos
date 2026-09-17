@@ -19,6 +19,13 @@ on:
   pull_request:
     branches:
       - main
+    # The same paths-ignore the push trigger has always had. Without it here,
+    # a documentation-only pull request cost twelve minutes of runner time to
+    # rebuild an image whose inputs had not changed — which is how a check
+    # becomes something people route around rather than wait for.
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
   push:
     branches:
       - main
