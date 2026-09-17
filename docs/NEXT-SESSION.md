@@ -224,6 +224,14 @@ itself does, mirroring its `users/<user>/saves/<platform>/<romId>/<core>/`.
 One convention throughout: **the number identifies, the words are for you** —
 `users/1 - MMagTech/`, `roms/psx/321 - Crash Bandicoot.chd`.
 
+**One kept game is one file, however many people play it**, which changes the
+one piece of existing code: `cache::keep/unkeep/isKept` is a boolean per rom and
+has to become *kept by whom*, so that one person releasing does not take the
+game away from another. Releasing the LAST keep demotes to cache rather than
+deleting — un-keep is never destructive — and that is why `roms/` and `cache/`
+repeat on every drive rather than once at the root: otherwise a demotion means
+copying gigabytes between disks because somebody changed their mind.
+
 **Do it before there are machines with play histories.** Today it is one user
 and one directory; later it is moving every save on every console, and saves are
 the only data here that cannot be re-downloaded. It is a behaviour, not a

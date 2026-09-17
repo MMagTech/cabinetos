@@ -6582,7 +6582,7 @@ to leave room for it.
 #### The shape
 
 ```
-/var/lib/cabinetos/
+<storage location>/
 ├── roms/      kept games                shared
 ├── cache/     pulled games              shared, and the only thing eviction touches
 ├── bios/      firmware from RomM        shared
@@ -6595,6 +6595,10 @@ to leave room for it.
 ├── config/
 └── logs/
 ```
+
+The root is `/var/lib/cabinetos/` on the internal disk. **`roms/` and `cache/`
+repeat on every storage location** rather than living only at the root — see
+*One kept game, two people* below, which is the reason.
 
 Anything that ships inside the image — PPSSPP's fonts and lookup tables — lives
 in `/usr/share/cabinetos/` and is never written to.
@@ -6617,6 +6621,47 @@ which suggests the same conclusion reached independently.
 So the leading number is matched and everything after `" - "` is decoration that
 may be re-derived at any time. A rename becomes cosmetic rather than
 destructive.
+
+#### One kept game, two people
+
+**MMagTech, 2026-09-17: if one person keeps a game and somebody else plays it
+without keeping it, what happens on disk?** The answer is short and the
+consequences are not.
+
+**One copy. The second person just plays it.** Nothing is downloaded, nothing is
+copied, and nothing lands in their cache — the file is already on the machine
+and it stays the first person's kept game. Two people on one console never hold
+two copies of a 1.8 GB game.
+
+Three things follow:
+
+**1. "Kept" stops being a flag and becomes a set of people.** If both keep it and
+one releases, it must remain kept for the other. Today `cache::keep`,
+`unkeep` and `isKept` are a boolean per rom id with no notion of who — **that is
+the one piece of existing code this answer changes.**
+
+**2. Releasing the last keep DEMOTES rather than deletes.** The game becomes an
+ordinary cached file: still playable, now evictable, and re-keeping costs
+nothing because the bytes never moved. That makes un-keep a safe button rather
+than a destructive one, which matters when it sits one press away on a game's
+own screen.
+
+**3. And that is why `roms/` and `cache/` repeat per drive.** Kept games live on
+the large drive and the cache on the internal one, so a demotion at the ROOT
+level would mean physically copying gigabytes between disks because somebody
+changed their mind. With the same shape on every location, demotion is a rename
+inside one filesystem — instant — and *"eviction only ever touches `cache/`"*
+stays true on both drives instead of becoming a rule with an exception.
+
+Two smaller consequences, recorded so they are not rediscovered:
+
+- **Last-played is the MACHINE's, not a person's.** Eviction takes the least
+  recently played, and reading that per user would evict a game because *you*
+  have not touched it while somebody else plays it daily. For a shared file it
+  is the most recent play across everyone on the console. Play history itself
+  stays RomM's and per-user; this is a separate, local fact about a file.
+- **Playing a kept game does not quietly keep it for the player.** Keeping stays
+  a deliberate act, which is the entire distinction between the two categories.
 
 #### Why now, and the one caveat
 
