@@ -150,17 +150,26 @@ saved; Sega CD's cart is a separate region from its internal RAM).
   same after-shutdown trigger. So the design is done and the tag already
   matches ours.
 
-  **The obstacle is the container, and PPSSPP does not define one.** PPSSPP's
-  save format is the FOLDER; there is no single-file PSP save, PPSSPP defines
-  no export format, and RomM's docs say nothing about directory saves either —
-  it stores one opaque file per rom and emulator. Cabinet's blob is Apple's
-  `rtfd` directory archive labelled `.srm`, which is neither an srm nor
-  readable without Foundation. **Use zip**: it is what the PSP world already
-  uses to move save folders around, and the frontend already links libarchive,
-  which writes it. There is exactly ONE PSP save on the server, so migrating is
-  a one-off. PROJECT.md, *What PPSSPP is supposed to use*, has the reasoning
-  and the one decision that is MMagTech's — whether Cabinet moves to zip too,
-  or CabinetOS reads and writes `rtfd` to stay interchangeable.
+  **The container was the obstacle and it is now decided: ZIP.** PPSSPP's save
+  format is the FOLDER — there is no single-file PSP save, PPSSPP defines no
+  export format, and RomM stores one opaque file per rom and emulator. Cabinet's
+  August blob is Apple's `rtfd` archive labelled `.srm`, readable nowhere
+  without Foundation. **MMagTech has fixed the Cabinet side to zip (2026-09-17,
+  reported, not yet pushed to GitHub and not seen from here)**, so this console
+  needs to read and write zip and does NOT need an `rtfd` writer. The frontend
+  already links libarchive, which does both.
+
+  **Verify it from the first save the fixed build uploads** — four bytes settle
+  it, `PK\x03\x04` is zip — and read three things off that same file: what the
+  zip is ROOTED at (`ULUS10002LUMINES/…` vs `SAVEDATA/…` vs `PSP/SAVEDATA/…`,
+  which decides where we unzip and is invisible until you look), whether the tag
+  is still `ppsspp-native`, and whether Cabinet still READS `rtfd` — because the
+  only PSP save MMagTech owns is still in the old format.
+
+  The zip round trip is measured, not assumed: zipped the real save folder on
+  this console, deleted the original, unzipped it back, all four files
+  byte-identical, and Lumines ran against the restored folder and quit cleanly.
+  PROJECT.md, *What PPSSPP is supposed to use*, has the detail.
 - **Saves on the right triggers.** Keys do it today, which is the test
   environment and not the product. The settled triggers are in PROJECT.md.
 

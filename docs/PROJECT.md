@@ -5712,15 +5712,54 @@ already links **libarchive** for ROMs, which writes zip as well as reads it.
 > anything else that ever touches these saves — Grout, a handheld, RomM's own
 > web UI.
 
-**The decision that is genuinely MMagTech's is who moves**, not which format:
+##### DECIDED: Cabinet moves. Fixed there 2026-09-17, not yet pushed
 
-| | |
-|---|---|
-| **Cabinet switches to zip too** | both ends match, the ecosystem can read them, and the single August save is converted once. Needs an Apple-side change. |
-| **Cabinet stays on `rtfd`** | CabinetOS must both read *and write* `rtfd` to stay interchangeable, and the format stays Apple-only for everyone else |
+**MMagTech: "we fixed it on cabinet just hasn't been pushed to github."** So the
+question of who moves is answered — CabinetOS targets **zip** and does not need
+to write `rtfd`.
+
+**Recorded as reported, not as verified.** The Cabinet source is not on this Mac
+(checked: `~/Documents/Cabinet` is the ROM and BIOS folder, and the only git
+repo here with a Cabinet remote is this one), and the change is not on GitHub
+yet, so nothing here has seen it.
+
+**It can be verified without the source, from one uploaded save.** As of
+2026-09-17 the server still holds only the August file, first bytes `rtfd`. The
+moment a PSP game is played on the fixed build, four bytes settle it —
+`PK\x03\x04` is zip.
+
+**Three things to read off that first upload, because each one silently breaks
+the other end:**
+
+1. **What the zip is ROOTED at.** `ULUS10002LUMINES/PARAM.SFO`, or
+   `SAVEDATA/ULUS10002LUMINES/…`, or `PSP/SAVEDATA/…`? Any of them is fine and
+   they are not interchangeable: unzip to the wrong level and the files land
+   one directory off and the game simply does not see the save. This is the
+   detail most likely to be got wrong on the second end, and it is invisible
+   until someone looks inside the file.
+2. **Whether Cabinet still READS `rtfd`.** This one risks MMagTech's own data
+   rather than ours: the August Lumines save is the only PSP save he has, it is
+   still `rtfd`, and if the fixed build dropped the old read path then that save
+   is now unreadable on his own devices.
+3. **Whether the tag is still `ppsspp-native`.** It is what this console writes.
+   If Cabinet moved it, saves and states stop lining up between the two.
 
 Either way the sync layer itself needs nothing new: same store, same endpoint,
-same `ppsspp-native` tag, same after-shutdown trigger.
+same tag, same after-shutdown trigger.
+
+**Zip is measured, not assumed.** The round trip was run on this console against
+the real save: zip the folder, delete the original, unzip it back, and all four
+files return byte-identical (`PARAM.SFO`, `DATA.BIN`, `ICON0.PNG`, `PIC1.PNG`).
+Lumines then launched against the restored folder, ran and quit to Home with no
+file errors, and the files were still identical afterwards. **PPSSPP is never
+handed the zip** — it reads loose files from `PSP/SAVEDATA/<GAMEID><TITLE>/`, as
+it always has, and the container exists only between the app and RomM. The zip
+is also smaller than the Apple archive, 40,626 bytes against 51,426, because it
+deflates and `rtfd` does not.
+
+*Not proved*: that the game displayed a "continue" option, which needs a
+controller and an in-game menu. What is proved is that the bytes the core reads
+are bit-identical to the bytes it wrote.
 
 Verified by running: Lumines wrote all four files under
 `romcache/saves/PSP/SAVEDATA/ULUS10002LUMINES/`, so what CabinetOS has to
