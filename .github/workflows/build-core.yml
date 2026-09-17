@@ -22,10 +22,12 @@
 
 name: Build cores
 
+# ON EVERY PULL REQUEST, NOT ONLY THE ONES AIMED AT MAIN — see
+# build-frontend.yml for the day that distinction cost something. The paths
+# filter below is what keeps this rare: it runs when a core actually changes,
+# which is the only time the pinned-revision assertion has anything to say.
 on:
   pull_request:
-    branches:
-      - main
     paths:
       - 'cores/**'
       - 'tools/core-info.c'
