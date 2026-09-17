@@ -31,6 +31,30 @@ systemd-*
 grub2-*
 plymouth*
 
+# --- Firmware --------------------------------------------------------------
+# ADDED 2026-09-17, because the first real base bump this tool ever classified
+# got this wrong. It reported "1 change to packages CabinetOS depends on" — a
+# Fanatec steering wheel driver — while amd-gpu-firmware, amd-ucode-firmware
+# and linux-firmware itself went BACKWARDS by a month, 20260910 to 20260810,
+# and were filed under the full diff as though they were translations.
+#
+# The reference hardware is a Beelink SER5: AMD, with Vega integrated graphics
+# doing all of the rendering and all of the emulation. Its GPU firmware and its
+# CPU microcode are not incidental to this project, they are the machine. A
+# firmware package moving in either direction — and backwards especially — is a
+# "read this" event.
+#
+# Kernel modules were already watched through kmod-*; firmware is a different
+# kind of thing and matched none of the patterns here.
+linux-firmware
+linux-firmware-*
+amd-gpu-firmware
+amd-ucode-firmware
+intel-gpu-firmware
+intel-audio-firmware
+nvidia-gpu-firmware
+*-firmware
+
 # --- Graphics --------------------------------------------------------------
 # Phase 2 runs the frontend inside gamescope and Phase 5 runs emulators inside
 # it. A gamescope or Mesa regression is a project-stopping event.

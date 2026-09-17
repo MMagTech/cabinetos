@@ -96,8 +96,24 @@ emit new_digest "${new_digest}"
 say "pulling the new base to read its package list (this is the slow part)"
 podman pull "${BASE_REPO}@${new_digest}" >/dev/null
 
+# gpg-pubkey is dropped, and it is not a detail.
+#
+# It is not a package — it is an entry in RPM's keyring, and a dozen or so of
+# them share the single NAME "gpg-pubkey" with different versions. The version
+# comparison below joins the two manifests on NAME, so thirteen entries on each
+# side produce a hundred and sixty-nine pairs, and every pair whose versions
+# differ is reported as a changed package.
+#
+# On the 44.20260914 -> 44.20260916 bump that was 156 of 193 reported changes.
+# Eighty-one per cent of the diff was keyring churn, and the five firmware
+# packages that had genuinely gone BACKWARDS a month were buried in it.
+#
+# base-watch.txt's own header says a stream of noise stops being read, which is
+# worse than not having it at all. This is that, arriving through a door nobody
+# was watching.
 podman run --rm "${BASE_REPO}@${new_digest}" \
     rpm -qa --queryformat '%{NAME} %{VERSION}-%{RELEASE}\n' \
+    | grep -v '^gpg-pubkey ' \
     | sort -u > /tmp/new-manifest.txt
 
 say "new base has $(count /tmp/new-manifest.txt) packages"
