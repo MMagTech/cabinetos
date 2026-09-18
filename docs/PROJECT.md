@@ -167,6 +167,11 @@ ordered this way now.
   **But it bounds out at six of the thirty titles**, because 24 are PSN PKGs
   with no disc behind them, so the install route is the majority case and still
   has to be built. See open question 19, *The better answer: a decrypted ISO*.
+- **Three emulators now come from Flathub at pinned revisions**, installed on
+  first boot rather than baked into the image — RPCS3, xemu and Eden. Baking
+  them in looks like it works and does not: `/var` is unpacked only from the
+  initial image, so the emulator would never move again. **Nothing launches them
+  yet** — that is open question 12. See open question 21.
 
 ### The Cabinet-side debts this project has found
 
@@ -7320,3 +7325,121 @@ API than "PS3 needs it".
 
 **Untestable until there is hardware.** The VM has no Vulkan, so none of this
 can be measured before the A9 Pro is installed.
+
+### 21. Emulators that are not cores, and why they cannot be baked into the image
+**Raised by MMagTech 2026-09-18. DECIDED and BUILT the same day.**
+
+Three emulators this console wants are not libretro cores and never will be:
+**RPCS3, xemu and Eden** are standalone applications with their own renderers.
+They come from Flathub rather than being built in `cores/`.
+
+The question was whether to install them at image build time. **No, and the
+reason is not a preference.**
+
+#### The trap, which builds green
+
+A flatpak installs into `/var`. bootc treats `/var` in a container image like a
+Docker `VOLUME`: its contents are unpacked **only from the initial image**, and
+the upstream documentation is explicit that *"subsequent changes to `/var` in a
+container image are not automatically applied"*.
+
+So `flatpak install` in the Containerfile gives:
+
+| | |
+|---|---|
+| Brand new machine | the emulator lands, once |
+| Every image after that | **nothing changes, ever** — a newer emulator never arrives |
+| Every machine that already exists | **nothing at all**, including the test VM |
+| The build | **green, throughout** |
+
+**Half of what this project was told about it is wrong, and checking mattered.**
+The claim was that flatpak "can't install at build time because `/var` isn't
+part of the image, so it installs nothing". Built in a container on 2026-09-18:
+`flatpak remote-add --system` succeeds and writes `/var/lib/flatpak`. Flatpak
+runs perfectly well at build time. **The mechanism works and the semantics do
+not**, which is a worse failure than the one described, because it produces a
+machine that looks correct and an emulator frozen at whatever shipped the day it
+was installed.
+
+It also breaks the requirement outright: baked in, an emulator's version moves
+**never**, not with the image.
+
+#### What is built instead
+
+The image carries the **list and the pinned revisions**; the machine does the
+install. `system_files/usr/share/cabinetos/flatpaks.list`,
+`/usr/libexec/cabinetos-flatpak-setup`, a oneshot service and a retry timer,
+wired in by `build_files/configure-flatpaks.sh`.
+
+**This is the same model as the cores**, which is the point.
+`cores/build-core.sh` pins each core to an exact `COMMIT=`; this pins each
+flatpak to an exact commit. In both cases the revision lives in the image and
+moves only when someone edits it and ships a new image.
+
+Two things make the pin hold rather than merely intend to:
+
+1. **`flatpak-system-update.timer` and `uupd.timer` are masked** by
+   `strip-desktop.sh` — originally to stop partial-version states, and now
+   load-bearing for this. `configure-flatpaks.sh` **fails the build** if either
+   is ever unmasked, because pinned emulators would silently start drifting.
+2. **The install step always names the commit.** `flatpak install` takes
+   whatever the remote serves today; `flatpak update --commit=` moves it to the
+   exact revision.
+
+**Verified on the VM 2026-09-18, in both directions**, because "pinning works"
+is the kind of claim this project has been wrong about before:
+
+| | Version |
+|---|---|
+| Pin forward to a newer commit | `0.0.42-20022-8db660b1` |
+| Pin back to an older one | `0.0.42-19980-028d1e8f` |
+| Plain `flatpak update`, no commit | `0.0.42-20022` — **drifted** |
+
+That last row is not hypothetical. **Flathub moved RPCS3 on the morning of
+2026-09-18**, while this work was happening: the build every PS3 measurement in
+open question 19 was taken on is already not what a new install would fetch.
+
+#### The runtime is pinned too
+
+**MMagTech's call, and the reason is support rather than tidiness.** A flatpak
+sits on a shared runtime carrying its Qt, graphics and audio libraries — KDE
+6.11 for RPCS3 and Eden, Freedesktop 25.08 for xemu. Pinning only the
+application would mean two machines installing the **same CabinetOS image** a
+month apart get different libraries under the same emulator: same version
+string, different behaviour, and a bug report whose answer depends on the date
+somebody installed. Pinning both means **the image version alone says what is on
+the machine**.
+
+The honest limit: runtime *extensions* — `GL.default`, `Locale`, the codec
+bundles — follow their runtime rather than being pinned individually. Pinning
+every extension is not practical and has not been attempted.
+
+#### First boot must not be able to fail
+
+**An unreachable Flathub must not break setup.** A console whose first boot
+fails because a CDN is down is worse than one whose PS3 support arrives late, so
+the installer logs every failure, **always exits 0**, and writes its
+"done" stamp only on a clean run. The timer comes back every six hours, so a
+machine first booted without a network converges on its own.
+
+This was measured rather than asserted — the script was run against an
+unreachable remote, a malformed manifest and a missing manifest, and exits 0
+with no stamp in every case.
+
+#### What it costs, and the thing to watch
+
+**Roughly 2.5–3 GB into `/var` on first boot** — KDE 6.11 alone is 1.1 GB
+installed, and xemu pulls a second runtime. That is real and it lands on the
+same volume as the disk floors, on a machine whose `/var` the test VM shows at
+under 5 GB free. **It has not been sized against the floors**, and it should be
+before anyone installs on the A9 Pro.
+
+Two more open edges:
+
+- **Nothing launches these yet.** The frontend hosts libretro cores in its own
+  process; RPCS3 is a separate application with its own window, which is
+  **open question 12** and unanswered. This question is about getting the
+  emulator onto the machine at a known version, and nothing more.
+- **xemu and Eden serve zero games today** — the systems table above counts 0
+  Xbox and 109 Switch titles, and Switch is the one with games. They are in the
+  manifest to prove the mechanism generalises, which was the requirement.

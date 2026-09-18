@@ -1,0 +1,64 @@
+# Emulators this console installs from Flathub, pinned to exact revisions.
+#
+# WHY THIS FILE EXISTS
+#
+# Three emulators cannot be libretro cores: RPCS3, xemu and Eden are standalone
+# applications with their own windows and renderers. They come from Flathub
+# rather than being built here.
+#
+# They are NOT baked into the image, and that is not a limitation we are working
+# around — it is what bootc requires. A flatpak installs into /var, and bootc
+# unpacks /var from the container image ONLY on the initial install: "subsequent
+# changes to /var in a container image are not automatically applied". Baked in,
+# an emulator would land once on a fresh machine and then never move again, and
+# would do nothing at all on a machine that already exists. It would look like
+# it worked. See docs/PROJECT.md, open question 21.
+#
+# So they are installed on first boot, and this file is how the image says which
+# revision. Same model as the libretro cores in cores/build-core.sh: an exact
+# commit, in the image, that moves only when someone edits it here.
+#
+# THE RUNTIME IS PINNED TOO, and that is the point rather than a detail. A
+# flatpak sits on a shared runtime carrying its Qt, graphics and audio
+# libraries. Pinning only the app would mean two machines installing the SAME
+# CabinetOS image a month apart get different libraries underneath the same
+# emulator — same image version, different behaviour, and a bug report that
+# depends on the date somebody installed. Pinning both means the image version
+# alone says what is on the machine.
+#
+# HOW TO MOVE A VERSION
+#
+#   flatpak remote-info --system flathub <app>           # current commit
+#   flatpak remote-info --system --log flathub <app>     # earlier commits
+#
+# Edit the commit here, in its own commit, and say why in the message. Nothing
+# else moves it: the flatpak auto-update timers are masked by strip-desktop.sh.
+#
+# FORMAT — four fields, whitespace separated. Blank lines and # are ignored.
+#
+#   <kind>    app or runtime
+#   <ref>     the flatpak ref, without the arch
+#   <branch>  the branch
+#   <commit>  the exact revision to hold
+#
+# A runtime must be listed before the apps that use it, so it is installed at
+# the right revision rather than pulled in as a dependency at whatever is
+# current. Commits below were read off Flathub on 2026-09-18.
+
+# --- runtimes -------------------------------------------------------------
+
+runtime  org.freedesktop.Platform  25.08  d27f7a6a974e40b061070bec1be9e1b52a7a6872b271e6a45c2c34a48bf6fedf
+runtime  org.kde.Platform          6.11   4da4797cdce707e1db7bc25720ac5e1f56818c087621f3737ea5482b0ed53c18
+
+# --- emulators ------------------------------------------------------------
+
+# PlayStation 3. Open question 19: this console launches a PKG install or a
+# stamped decrypted ISO, never a disc folder.
+app  net.rpcs3.RPCS3    stable  62f5a1f7ae8f6dae9e30cb0cb84413c322f652af9a3b9b6ccce04f8d82c2a5dd
+
+# Original Xbox. No games on the server yet — see the systems table in
+# docs/PROJECT.md — so this is here to prove the mechanism generalises.
+app  app.xemu.xemu      stable  2f8b8889edcf69fb2ba2a8691371a7bb49febeba360e9c87555379c50ba946e9
+
+# Nintendo Switch.
+app  dev.eden_emu.eden  stable  88af3f795612d92099a71e4ed63d8219ee04088dcd9cfb5776ae595940425091
