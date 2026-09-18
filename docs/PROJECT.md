@@ -7426,30 +7426,51 @@ This was measured rather than asserted — the script was run against an
 unreachable remote, a malformed manifest and a missing manifest, and exits 0
 with no stamp in every case.
 
-#### Nothing tells the person it is downloading — DEFERRED 2026-09-18
+#### Nothing tells the person it is downloading — NOT SETTLED, 2026-09-18
 
-**MMagTech's lean, recorded rather than built:** *"right now im leaning toward
-it just being silent and including that requirement in documentation."* So the
-install says nothing, and **the network requirement is documentation** rather
-than a screen.
+**MMagTech's first lean was silence:** *"right now im leaning toward it just
+being silent and including that requirement in documentation."* **He then
+withdrew it, and was right to:** *"its not a settled decision because the
+network requirement doesn't necessarily mean the OS has external access to RomM
+as someone could be running this all on just their internal LAN."*
 
-That is a defensible default here, because **a network is not an extra
-requirement this introduces.** Every game on this console comes from RomM over
-the network; a CabinetOS machine with no network has no library at all. The
-emulators being late is a smaller version of a condition the product already
-cannot work without.
+**The argument written here for silence was wrong, and this is the correction.**
+It said a network is not an extra requirement because every game comes from RomM
+anyway. That conflates two different networks:
 
-What it means in practice on a first boot with no network: the machine boots,
-the frontend runs, the 21 built-in cores work against whatever is cached, and
-PS3, Xbox and Switch are simply absent. The timer brings them in within six
-hours of a network appearing.
+| | Needs | A LAN-only machine |
+|---|---|---|
+| RomM, and therefore the entire library | **the local network** | **works completely** |
+| Flathub, and therefore PS3, Xbox, Switch | **the internet** | **never works, ever** |
 
-**To discuss when the UI unfreezes**, because the honest objection is that a
-missing system and a *not-yet-downloaded* system look identical:
-`catalog::coverageFor` already answers four questions and none of them is
-"present, but still arriving". Whether that deserves a fifth answer is exactly
-the kind of question that needs a television and a person looking at it, which
-is why it waits.
+RomM is a server on the person's own LAN — this project's is at
+`192.168.1.10`. A console on an isolated network has a full library, 1147
+playable games and twenty-one working emulators, and **three systems that will
+never arrive no matter how long the timer runs.** That is not a delayed
+condition that resolves itself; it is permanent, and under the silent design
+nothing would ever say so.
+
+**That is a materially worse case than the one silence was chosen for.** A
+temporary outage is a machine that fixes itself within six hours. A deliberately
+offline install is a machine that retries every six hours forever and never
+succeeds, with no indication anywhere.
+
+**So this is open, and it is not only a UI question.** Two parts, and the first
+is a mechanism rather than a picture:
+
+1. **Does CabinetOS support an internet-free deployment at all?** If it does,
+   Flathub cannot be the only route to these three emulators, and something else
+   is needed — carrying the flatpaks in the image is exactly what `/var`
+   forbids, so the candidates are a sideload path, an install from removable
+   media, or mirroring them onto the RomM host. None is designed.
+2. **If it does not, that has to be stated as a requirement**, not discovered by
+   someone whose Switch games never appear.
+
+The UI half still waits for a television: a missing system and a
+*still-arriving* one look identical, and `catalog::coverageFor` has four answers
+and none of them is "present, but still downloading". **But a permanently absent
+system is a fifth case again**, and telling those two apart is the part that
+cannot be silent.
 
 #### What it costs, and the thing to watch
 
