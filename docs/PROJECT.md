@@ -7426,6 +7426,31 @@ This was measured rather than asserted — the script was run against an
 unreachable remote, a malformed manifest and a missing manifest, and exits 0
 with no stamp in every case.
 
+#### Nothing tells the person it is downloading — DEFERRED 2026-09-18
+
+**MMagTech's lean, recorded rather than built:** *"right now im leaning toward
+it just being silent and including that requirement in documentation."* So the
+install says nothing, and **the network requirement is documentation** rather
+than a screen.
+
+That is a defensible default here, because **a network is not an extra
+requirement this introduces.** Every game on this console comes from RomM over
+the network; a CabinetOS machine with no network has no library at all. The
+emulators being late is a smaller version of a condition the product already
+cannot work without.
+
+What it means in practice on a first boot with no network: the machine boots,
+the frontend runs, the 21 built-in cores work against whatever is cached, and
+PS3, Xbox and Switch are simply absent. The timer brings them in within six
+hours of a network appearing.
+
+**To discuss when the UI unfreezes**, because the honest objection is that a
+missing system and a *not-yet-downloaded* system look identical:
+`catalog::coverageFor` already answers four questions and none of them is
+"present, but still arriving". Whether that deserves a fifth answer is exactly
+the kind of question that needs a television and a person looking at it, which
+is why it waits.
+
 #### What it costs, and the thing to watch
 
 **Roughly 2.5–3 GB into `/var` on first boot** — KDE 6.11 alone is 1.1 GB
