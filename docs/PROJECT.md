@@ -7192,6 +7192,35 @@ mechanical findings above are all still work that has to be done. The ISO route
 is worth taking because it is free — the images already exist and the fix is on
 the server — not because it removes the need for the other one.
 
+##### DECIDED 2026-09-18: two shapes are supported, and the disc FOLDER is not one
+
+**MMagTech's call:** *"both ways are supported it's just that if they aren't pkg
+we only support decrypted iso and not the folder based structure."*
+
+So this console reads exactly two things for PS3:
+
+| Shape | How it is handled |
+|---|---|
+| **`.pkg` + `.rap`** | fetched and installed, as measured above |
+| **Stamped decrypted `.iso`** | fetched and launched, like any other game file |
+| ~~`PS3_GAME/` folder~~ | **not supported.** A source format, to be converted first. |
+
+**This removes work rather than adding it, which is why it is the right call.**
+A disc folder is not one file and not a few — counted on the server: Uncharted 2
+is 364 files, Metal Gear Solid 4 is 328, and **Mass Effect 2 is 8,337**.
+Downloading a tree that size from RomM one file at a time is a transfer path
+this console does not have, has never tested, and would have to grow a progress
+model, a resume story and a partial-tree check for. Converting to an ISO turns
+all of it into a single download that every existing mechanism already handles.
+
+**Nothing is built for disc folders — not even a way to say they are not
+ready.** MMagTech, immediately after the decision: *"we are not building for
+those folders or to support them they are currently being converted to iso."*
+The four remaining ones — God of War III, Mass Effect 2, Metal Gear Solid 4 and
+Uncharted 2 — are mid-conversion, so the state is temporary and does not need
+code to describe it. **This console's PS3 support is a PKG or a stamped ISO, and
+the folder simply never reaches it.**
+
 **Still not playable here.** Every ISO result above is a boot to the point of
 loading the executable; the VM has no GPU, so nothing has been played. That
 waits on the A9 Pro and open question 20.

@@ -160,8 +160,19 @@ folders or PKGs.
 behind them, so no conversion is possible and **the install route below is the
 majority case, not a fallback.** Where an ISO does exist there is nothing to
 build — one file whose size RomM knows, so the reuse test works, no install
-phase, no transient 2x. Four disc titles are still unconverted: God of War III,
-Mass Effect 2, Metal Gear Solid 4, Uncharted 2.
+phase, no transient 2x.
+
+**DECIDED 2026-09-18: this console reads a PKG or a stamped ISO, and NOT a disc
+folder.** MMagTech's call, and it removes work: a disc folder is hundreds or
+thousands of files — Mass Effect 2 is **8,337** — and downloading a tree that
+size from RomM is a transfer path that does not exist here and would need its
+own progress, resume and partial-tree handling. Converting first makes it one
+download that everything already handles.
+
+**And nothing is built for the folders at all**, not even a way to say they are
+not ready — the four that remain are mid-conversion, so the state is temporary.
+PS3 support here is a PKG or a stamped ISO; the folder never reaches this
+console.
 
 **What is left for PS3, and it is not storage.** Four things the PKG route
 turned up that the design still has to answer — RPCS3 refusing to install without `--headless`,
