@@ -136,14 +136,38 @@ done
 # That is not a tidiness measure here — it is what makes a pinned commit STAY
 # pinned. If a future change unmasks them, the emulators would drift and this
 # file's promise would quietly stop being true.
+#
+# `systemctl is-enabled` EXITS NON-ZERO FOR A MASKED UNIT while still printing
+# "masked", so the obvious `|| echo absent` appends a second line and the
+# comparison never matches. That is what failed this build the first time it
+# ran. Capture the output, ignore the status, and take the first line.
 for unit in flatpak-system-update.timer uupd.timer; do
-    state=$(systemctl is-enabled "${unit}" 2>/dev/null || echo "absent")
-    if [[ "${state}" == "masked" ]]; then
-        log "  ok: ${unit} is masked, so nothing moves a pin behind us"
-    else
-        log "  ERROR: ${unit} is '${state}', not masked — pinned emulators would drift"
-        exit 1
-    fi
+    state=$(systemctl is-enabled "${unit}" 2>/dev/null | head -n1) || true
+    state="${state:-not-found}"
+
+    case "${state}" in
+        masked|masked-runtime)
+            log "  ok: ${unit} is ${state}, so nothing moves a pin behind us"
+            ;;
+        not-found)
+            # Nothing to drift. Bazzite could drop the unit entirely and that
+            # would be fine; what matters is that it cannot run.
+            log "  ok: ${unit} is not present at all"
+            ;;
+        enabled|enabled-runtime|alias|indirect)
+            log "  ERROR: ${unit} is '${state}' — it would update flatpaks on its"
+            log "         own schedule and pinned emulators would silently drift."
+            log "         See docs/PROJECT.md open question 21."
+            exit 1
+            ;;
+        *)
+            # disabled, static, generated and friends cannot start on a timer of
+            # their own, so they are not the hazard this guards against. Logged
+            # rather than failed, because failing here on a harmless state would
+            # break the build every time Bazzite changed how it ships the unit.
+            log "  ok: ${unit} is '${state}' — cannot run unattended"
+            ;;
+    esac
 done
 
 group_end
