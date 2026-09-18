@@ -23,16 +23,10 @@ is on `main`.
 **THE FILES ON DISK MOVED, 2026-09-18.** There is no `romcache/` any more and no
 `system/`. Games are in `roms/` and `cache/` under a platform folder, firmware
 is in `bios/`, and every save, state and keep is under `users/<id> - <name>/`.
-If you have a console or a VM that predates this, move it across before doing
-anything else — read the plan first, because it moves save data:
-
-```
-./build/cabinetos-frontend --romm 192.168.1.10:6005 --migrate --dry-run
-./build/cabinetos-frontend --romm 192.168.1.10:6005 --migrate
-```
-
-It prints a manifest path; `--migrate-undo "<that path>"` puts everything back,
-verified. The test VM has already been moved.
+The test VM's own files were moved across and checked file by file; **there is
+no migration tool in the tree and there should not be**, because nobody has run
+CabinetOS outside of building it, so the one machine that needed moving has been
+moved. Anything built from here starts on this layout.
 
 Start from `main`, branch once, and **open the pull request against `main`**.
 Four branches were once stacked on each other here, each opened before the last
@@ -232,10 +226,12 @@ saved; Sega CD's cart is a separate region from its internal RAM).
   `fbneo/<stem>.fs`; 3DO `opera/shared/nvram.0.srm`; Sega CD `*.brm` plus
   `*cart.brm` as its own region; Neo Geo Pocket `*.flash`; DS `*.sav`; PSP the
   `PSP/SAVEDATA/**` tree. Two of those were **already sitting on this console's
-  disk** from real runs — `scd_U.brm` and `mame2003-plus/nvram/*.nv` — and the
-  migration could not say which game wrote either, so they are in
-  `users/1 - MMagTech/saves/unattributed 2026-09-18 11-43-38/`. The capture half
-  can still be written and checked against them without playing anything new.
+  disk** from real runs — `scd_U.brm` and `mame2003-plus/nvram/*.nv`. **Nothing
+  on this machine says which game wrote either**, because the old layout gave
+  every core one shared save directory and recorded no more than the file name;
+  they were kept rather than guessed at, in
+  `users/1 - MMagTech/saves/unattributed/`. The capture half can still be
+  written and checked against them without playing anything new.
   Cabinet solved every one of them in `MemoryCardSync.swift`; read it before
   designing anything.
 - **PSP IS DONE, and it is the worked example for the other seven.**
@@ -357,11 +353,10 @@ are gone and this is what a console holds now:
 └── logs/
 ```
 
-`frontend/src/storage.{h,cpp}` owns it, `cache.{h,cpp}` was rewritten around it,
-`migrate.{h,cpp}` moves an existing machine across and can be undone. The root
-is `/var/lib/cabinetos` when that can be created and written and the working
-directory otherwise, which on the VM is `~/frontend`; `--storage-root` overrides
-it and the answer is printed at startup.
+`frontend/src/storage.{h,cpp}` owns it and `cache.{h,cpp}` was rewritten around
+it. The root is `/var/lib/cabinetos` when that can be created and written and
+the working directory otherwise, which on the VM is `~/frontend`;
+`--storage-root` overrides it and the answer is printed at startup.
 
 **Two things it turned up that want a decision, not a fix:**
 
@@ -590,15 +585,16 @@ PROJECT.md says "the SER5" and means this one.
     one lands in `/usr/share/cabinetos/` and is symlinked in at startup.
   - `cache/<platform>/` — downloaded games, and the only thing eviction touches
   - `roms/<platform>/` — kept games. Also still holds one loose
-    `Dr. Mario (World) (Rev 1).gb` somebody put there by hand for `--core`; the
-    migration deliberately left it alone.
+    `Dr. Mario (World) (Rev 1).gb` somebody put there by hand for `--core`,
+    deliberately left where a command that expects it can find it.
   - `users/1 - MMagTech/` — every save, state, keep and unsent upload, plus
-    `saves/unattributed 2026-09-18 11-43-38/`, which is the two old shared save
-    piles moved whole because nothing in them says which game wrote them.
-  - `config/migrations/*.jsonl` — what the migration moved, and what
-    `--migrate-undo` reads.
-- **There is no `romcache/` and no `system/` any more.** If you see either, the
-  machine predates 2026-09-18 and wants `--migrate`.
+    `saves/unattributed/`, which is the two old shared save piles kept whole
+    because nothing in them says which game wrote them. They are the material to
+    test the file-writing capture against; see item 1.
+  - `config/user.json` — the RomM user id and name, cached so a console with no
+    network still knows whose saves it is holding.
+- **There is no `romcache/` and no `system/` any more**, on this machine or in
+  the code.
 - `~/cabinetos/` — a clone of this repo, where `cores/build-core.sh` runs
 - `~/cabinetos/.core-src/` — per-core checkouts, **4.8 GB, of which PPSSPP is
   3.4 GB**. They are a cache: delete any to make room and the next build

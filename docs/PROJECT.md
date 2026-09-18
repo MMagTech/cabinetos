@@ -67,9 +67,8 @@ rather than launched by hand:
 - **An on-disk layout somebody can find their way around**, as of 2026-09-18:
   `roms/`, `cache/`, `bios/` and a directory per person holding their saves and
   states. Keeping a game is a decision per person rather than a flag on the
-  game, releasing the last one demotes it to the cache instead of deleting it,
-  and there is a migration that moves an existing console across and can be
-  undone. Open question 18.
+  game, and releasing the last one demotes it to the cache instead of deleting
+  it. Open question 18.
 
 ### Open against the frontend right now
 
@@ -6804,10 +6803,9 @@ a note in the layout, not machinery.
 
 #### BUILT 2026-09-18
 
-**It is on disk and it moved real files.** `frontend/src/storage.{h,cpp}` owns
-the layout, `cache.{h,cpp}` was rewritten around it, and
-`frontend/src/migrate.{h,cpp}` moves a console that already has files on it.
-The shape above is what the test VM now holds, unchanged from what was agreed.
+**It is on disk and it holds real files.** `frontend/src/storage.{h,cpp}` owns
+the layout and `cache.{h,cpp}` was rewritten around it. The shape above is what
+the test VM now holds, unchanged from what was agreed.
 
 **What the code stopped having to remember.** Eviction used to enforce two rules
 the disk could not express — do not delete a kept game, do not delete a save —
@@ -6836,7 +6834,7 @@ The written design showed only the file case; the directory case is what an
 extracted archive forces, and 801 of the reference library's 1644 games are
 `.zip`.
 
-#### Four things building it turned up
+#### Three things building it turned up
 
 **1. The platform segment is spelled two different ways, and that is deliberate
 but it reads like an inconsistency.** Games sit under RomM's `slug` —
@@ -6870,51 +6868,20 @@ looking for its fonts. The assets belong in `/usr/share/cabinetos/system/`, and
 nothing installs them there yet; on the VM they sit in `bios/PPSSPP/` where the
 core build left them and the link step correctly leaves them alone. **Found by
 running it and reading the directory listing**, which is the only reason it did
-not ship.
-
-**4. `.zip` is not a save, and assuming it was would have filed two real games as
-save data.** The first version of the migration classified every `.zip` in a
-game's directory as PSP's zipped save folder. `lethalen.zip` IS a MAME game and
-`Tetris.zip` is how RomM stores that Game Boy ROM, so the plan moved both into
-`saves/` and reported their directories as empty. **The dry run showed it before
-anything moved**, which is the entire reason the dry run exists. The rule is now
-that the payload is the file RomM named in `fs_name`, and a `.zip` is a save only
-when it is not that file.
-
-#### Migration, and the standard it is held to
-
-`--migrate --dry-run` prints the whole plan and touches nothing. `--migrate`
-carries it out. `--migrate-undo <manifest>` puts it all back.
-
-- **Nothing is deleted.** Every step is a rename; the only thing removed is an
-  old directory that is already empty, which `rmdir` cannot do otherwise.
-- **The manifest is appended and flushed per move**, so a migration interrupted
-  by a power cut is still completely reversible — the record is on the disk
-  rather than in the process.
-- **Save data is hashed before the move and again at the destination.** A
-  mismatch puts the file back and stops the run. "The function returned true" is
-  not evidence that a save survived.
-- **What cannot be attributed is set aside, not guessed at.** The old shared save
-  directories hold files that genuinely do not say which game wrote them —
-  `scd_U.brm`, `pcsx-card2.mcd`, `mame2003-plus/nvram/*.nv`. They move whole to
-  `users/<id> - <name>/saves/unattributed <timestamp>/` and every file is listed
-  by name in the report. A save filed against the wrong game is worse than one
-  filed nowhere.
-
-**Measured on the test VM, 2026-09-18**, against the 37 save-class files it was
-carrying:
-
-| | |
-|---|---|
-| Moves planned | 34 |
-| Save-class files before and after | 37 and 37, **every sha256 identical** |
-| Undo | 34 moves reversed, and the tree compared **byte-identical to the pre-migration state**, path and hash |
-| Verified with | `sha256sum` from outside the program, not the program's own FNV check |
+not ship — the same lesson this project keeps relearning: build a thing, then
+look at what it actually did.
 
 #### Measured on the test VM, 2026-09-18
 
 Everything below was run rather than reasoned about, on the machine with two
 real filesystems.
+
+**The test VM's own files were moved onto the layout** — 12 games, four save
+states, two battery saves, a PSP save folder and the BIOS — and every one was
+checked with `sha256sum` before and after: 37 save-class files in, 37 out, every
+hash identical. **There is no migration in the tree**, and there should not be:
+nobody has run CabinetOS outside of building it, so the only machine that ever
+needed moving has been moved. A console built from here starts on this layout.
 
 **Keeping is a set of people.** Kept Mario Kart 64 as user 1 — it went straight
 into `roms/n64/200 - Mario Kart 64.v64` rather than being downloaded to the

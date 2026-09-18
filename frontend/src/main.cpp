@@ -54,7 +54,6 @@
 #include "cache.h"
 #include "catalog.h"
 #include "dirsave.h"
-#include "migrate.h"
 #include "romfile.h"
 #include "romm.h"
 #include "screens.h"
@@ -1409,13 +1408,6 @@ int main(int argc, char** argv) {
     // Where the built cores are. Where games and saves go is storage.h's
     // answer, not a constant here — see --storage-root.
     const char* coreDir = "cores/build";
-    // Moves what a console already has into the layout of open question 18.
-    // `--migrate --dry-run` prints the whole plan and touches nothing, which is
-    // how this should be run the first time on any machine that has saves on
-    // it. `--migrate-undo <manifest>` puts it all back.
-    bool migrateMode = false;
-    bool migrateDryRun = false;
-    const char* migrateUndoPath = nullptr;
     // Launch this RomM id without anybody pressing anything, after a delay, so
     // the whole Home-to-game transition can be watched on a machine with no
     // controller attached to it.
@@ -1459,12 +1451,6 @@ int main(int argc, char** argv) {
             coreDir = argv[++i];
         } else if (SDL_strcmp(argv[i], "--storage-root") == 0 && i + 1 < argc) {
             storage::setRoot(argv[++i]);
-        } else if (SDL_strcmp(argv[i], "--migrate") == 0) {
-            migrateMode = true;
-        } else if (SDL_strcmp(argv[i], "--dry-run") == 0) {
-            migrateDryRun = true;
-        } else if (SDL_strcmp(argv[i], "--migrate-undo") == 0 && i + 1 < argc) {
-            migrateUndoPath = argv[++i];
         } else if (SDL_strcmp(argv[i], "--launch") == 0 && i + 1 < argc) {
             autoLaunchId = SDL_atoi(argv[++i]);
         } else if (SDL_strcmp(argv[i], "--download") == 0 && i + 1 < argc) {
@@ -1555,58 +1541,6 @@ int main(int argc, char** argv) {
             return 1;
         }
         std::fprintf(stderr, "[storage] root %s\n", storage::root().c_str());
-    }
-
-    // --- Moving an existing console into that layout ------------------------
-    //
-    // Separate commands rather than something that happens on the way past,
-    // because this moves save data and save data is the one category here that
-    // cannot be fetched again. Run the dry run, read what it says it will do,
-    // then run it.
-    if (migrateUndoPath) {
-        std::string uerr;
-        if (!migrate::undo(migrateUndoPath, &uerr)) {
-            std::fprintf(stderr, "[migrate] %s\n", uerr.c_str());
-            return 1;
-        }
-        return 0;
-    }
-    if (migrateMode) {
-        catalog::setCoreDirectory(coreDir);
-        romm::Client mclient;
-        std::vector<romm::Game> library;
-        if (rommAddress) {
-            std::string merr;
-            if (mclient.setAddress(rommAddress, &merr) &&
-                mclient.loadToken(rommTokenPath())) {
-                if (!mclient.fetchGames(0, &library, &merr))
-                    std::fprintf(stderr, "[migrate] the server did not answer (%s); "
-                                         "games will land under 'unknown'\n", merr.c_str());
-            } else {
-                std::fprintf(stderr, "[migrate] no RomM connection (%s)\n", merr.c_str());
-            }
-        }
-        adoptUser(mclient);
-        // The old layout is relative to wherever the frontend was started,
-        // which is what it always was: `romcache/`, `saves/`, `system/`.
-        const migrate::Plan plan = migrate::build(".", library);
-        migrate::print(plan);
-        if (migrateDryRun) {
-            std::printf("\nDry run. Nothing was moved.\n");
-            return 0;
-        }
-        if (plan.nothingToDo()) {
-            std::printf("\nNothing of the old layout is here.\n");
-            return 0;
-        }
-        std::string manifest, merr;
-        if (!migrate::run(plan, &manifest, &merr)) {
-            std::fprintf(stderr, "[migrate] %s\n", merr.c_str());
-            return 1;
-        }
-        std::printf("\nDone. To put it all back:\n  --migrate-undo \"%s\"\n",
-                    manifest.c_str());
-        return 0;
     }
 
     // Runs before SDL, deliberately. This needs no window, no GL and no

@@ -48,18 +48,6 @@ An entry is a FILE when the game is one file and a DIRECTORY when its archive
 unpacked into several. See `src/storage.h` and `docs/PROJECT.md`, open
 question 18.
 
-**A console that predates this layout has to be moved across.** Read the plan
-first; it moves save data, and save data is the one thing here that cannot be
-fetched again:
-
-```bash
-./build/cabinetos-frontend --romm 192.168.1.10:6005 --migrate --dry-run
-```
-
-Then `--migrate` to carry it out, and `--migrate-undo "<manifest>"` — the path
-it prints — to put it all back. Save data is hashed before each move and read
-back afterwards; a mismatch puts the file back and stops the run.
-
 ## Running
 
 The OS session already runs `cage`, so the frontend attaches to it as an
