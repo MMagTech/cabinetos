@@ -313,7 +313,22 @@ while the same core reaches its attract demo on the ordinary launch path.
 test.** Fixing the instrument is the work; a capture reporting
 `retro_serialize_size` is the stopgap that exists today.
 
-### 5. The on-disk folder layout — decided, not built
+### 5. The on-disk folder layout — decided, not built — **DO THIS NEXT**
+
+> **Agreed with MMagTech 2026-09-18: this is the next thing built**, ahead of
+> any more PS3 work, and it gets a session of its own.
+>
+> **Why it jumped the queue.** PS3 cannot finish here anyway — launching an
+> emulator that is not a libretro core is open question 12 and unanswered, and
+> nothing can be played until the A9 Pro exists. Meanwhile PS3 introduces three
+> storage categories this layout has nowhere to put: an installed tree that is
+> not the file that was downloaded, a per-user `.rap` licence, and decrypted
+> firmware that is machine-wide and derived rather than fetched. Building PS3
+> storage first means building it twice.
+>
+> It is also the item with a deadline. It changes `cache::keep`/`unkeep`/
+> `isKept`, and it has to land before machines carry play histories, because
+> saves are the only data here that cannot be re-downloaded.
 
 **Open question 18, agreed with MMagTech 2026-09-17.** The current layout was
 never designed, it accumulated: there are TWO save directories, `system/` mixes
