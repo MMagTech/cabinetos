@@ -592,6 +592,10 @@ donations, and that is what keeps them legitimate. **Selling a machine with this
 image on it would break it**, which matters because the hardware has already
 changed once and may change again.
 
+**The terms ship INSIDE the image**, at `/usr/share/licenses/cabinetos/`,
+installed and asserted by `build_files/build.sh` — because whoever pulls the
+image is exactly the person who never sees this repository.
+
 Still owed: the licence text readable on the console (Settings → About), and a
 verification pass over each line against the source it came from — they were
 carried across from Cabinet's list rather than checked here, and this project's

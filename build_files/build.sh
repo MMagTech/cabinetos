@@ -59,6 +59,43 @@ do
 done
 
 # ---------------------------------------------------------------------------
+# The licences, INSIDE the image.
+# ---------------------------------------------------------------------------
+#
+# This image contains twenty-one emulator cores. Most are GPL and six are free
+# for non-commercial use only, and the person most likely to redistribute it is
+# the one who does `docker pull` and never sees this repository at all. Terms
+# that live only beside the binaries are terms that do not travel with them.
+#
+# /usr/share/licenses/<name>/ is where Fedora puts these, so anything that
+# already knows how to look for a package's licence finds ours too.
+log "installing licences"
+mkdir -p /usr/share/licenses/cabinetos
+cp /ctx/licences/LICENSE      /usr/share/licenses/cabinetos/LICENSE
+cp /ctx/licences/LICENCES.md  /usr/share/licenses/cabinetos/LICENCES.md
+
+# Asserted rather than assumed, for the reason the system_files overlay above
+# has the same check: a copy that silently does nothing leaves a green build.
+for expected in \
+    /usr/share/licenses/cabinetos/LICENSE \
+    /usr/share/licenses/cabinetos/LICENCES.md
+do
+    if [[ -s "${expected}" ]]; then
+        log "  installed: ${expected} ($(wc -c < "${expected}") bytes)"
+    else
+        log "  ERROR: ${expected} is missing or empty"
+        exit 1
+    fi
+done
+
+# The one line in there that constrains what anyone may do with this image, put
+# where a person reads it rather than left for them to find in a table.
+grep -q 'non-commercial' /usr/share/licenses/cabinetos/LICENCES.md || {
+    log "  ERROR: LICENCES.md no longer mentions the non-commercial cores"
+    exit 1
+}
+
+# ---------------------------------------------------------------------------
 # Record the starting package set.
 # ---------------------------------------------------------------------------
 #

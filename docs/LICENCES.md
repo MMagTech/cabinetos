@@ -148,6 +148,13 @@ CabinetOS does not bundle them and they are RomM's attribution to make.
 
 ---
 
+## Where this lives on a running machine
+
+**`/usr/share/licenses/cabinetos/`**, installed by `build_files/build.sh` and
+asserted there rather than assumed. The person most likely to redistribute this
+image is the one who pulls it and never sees this repository, so the terms
+travel with the binaries instead of sitting beside them.
+
 ## What this document still owes
 
 - **The full licence text of each core**, readable on the console itself.
