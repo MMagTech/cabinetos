@@ -358,18 +358,20 @@ it. The root is `/var/lib/cabinetos` when that can be created and written and
 the working directory otherwise, which on the VM is `~/frontend`;
 `--storage-root` overrides it and the answer is printed at startup.
 
-**Two things it turned up that want a decision, not a fix:**
+**One spelling of a platform, everywhere: RomM's `fs_slug`.** The first build
+had `roms/psx/` for games, as the agreed shape wrote it, and
+`saves/Sony Playstation/` for saves, because mirroring the server was the reason
+for the per-user tree — one console filed two ways, which MMagTech rejected on
+sight. `fs_slug` is also the only one that is unique: two Arcade platforms share
+the slug `arcade`, 223 games between them, needing different cores.
 
-1. **The platform is spelled two ways.** `cache/psx/` for games (RomM's `slug`,
-   which is what the agreed shape wrote down) and `saves/Sony Playstation/` for
-   saves (its `fs_slug`, because the whole argument for the user tree was that
-   it mirrors RomM's own). Both are right on their own and together they look
-   careless.
-2. **`bios/` still mixes replaceable and irreplaceable**, because libretro gives
-   a core exactly ONE system directory and Flycast writes the Dreamcast's flash
-   into it. The PSP fonts moved out — they ship in the image — but the agreed
-   shape has no name for "what a core wrote into its system directory". Item 1
-   below takes the VMU out of there; `dc_nvmem.bin` stays.
+**The one thing the shape does not answer:** `bios/` still mixes replaceable and
+irreplaceable, because libretro gives a core exactly ONE system directory and
+Flycast writes the Dreamcast's flash into it. The PSP fonts moved out — they
+ship in the image — but there is no name in the shape for "what a core wrote
+into its system directory". Item 1 below takes the VMU out of there;
+`dc_nvmem.bin`, the console's own clock and language, stays and rebuilds itself
+if lost.
 
 **What it did NOT build:** a second storage location. `storage::locations()`
 returns the root alone, so "a missing drive degrades rather than errors" has

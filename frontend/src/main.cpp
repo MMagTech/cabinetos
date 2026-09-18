@@ -512,9 +512,8 @@ struct LaunchJob {
     // does. One entry, named `<romId> - <title>` — a file when the game is a
     // single payload and a directory when its archive unpacked into several.
     std::string entryPath;
-    // Kept apart because saves and states mirror RomM's own tree, which is
-    // keyed on `fs_slug`, while the game itself sits under the shorter `slug`.
-    std::string platformSlug;
+    // ONE SPELLING OF A PLATFORM, EVERYWHERE. RomM's `fs_slug` — "Sony
+    // Playstation", not "psx". See storage.h for why the short one lost.
     std::string platformFsSlug;
     std::string corePath;
     std::string title;
@@ -594,7 +593,6 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
     job.total = 0;
     job.title = game.name.empty() ? game.fsName : game.name;
     job.romId = game.id;
-    job.platformSlug = game.platformSlug;
     job.platformFsSlug = game.platformFsSlug;
     job.coreName = cov.core;
     job.corePath = coreDir + "/" + cov.core + "_libretro.so";
@@ -659,7 +657,7 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
     const bool kept = placed.present ? placed.kept : cache::isKeptByAnyone(game.id);
     job.entryPath = placed.present
                         ? placed.entryPath
-                        : cache::entryPathFor(location, game.platformSlug, game.id,
+                        : cache::entryPathFor(location, game.platformFsSlug, game.id,
                                               job.title, kept);
 
     const int id = game.id;
@@ -724,7 +722,7 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
         }
 
         // A GAME IS ONE ENTRY, AND THE ENTRY IS A FILE WHEN THE GAME IS ONE
-        // FILE. `cache/psx/321 - Crash Bandicoot.chd` is what open question 18
+        // FILE. `cache/Sony Playstation/321 - Crash Bandicoot.chd` is what 18
         // asked for and what somebody browsing over SFTP wants to find. An
         // archive that unpacks into a .cue and its .bin cannot be one file, so
         // it becomes a directory of the same name — and because the two are

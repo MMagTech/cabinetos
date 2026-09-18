@@ -44,9 +44,17 @@ started in otherwise, which on the test VM means `~/frontend`. `--storage-root
 └── logs/
 ```
 
-An entry is a FILE when the game is one file and a DIRECTORY when its archive
-unpacked into several. See `src/storage.h` and `docs/PROJECT.md`, open
-question 18.
+`<platform>` is RomM's own `fs_slug` — `Sony Playstation`, `Game Boy`, `FBNEO` —
+the same spelling in all four places, and the same one the server uses for its
+roms and its assets. An entry is a FILE when the game is one file and a
+DIRECTORY when its archive unpacked into several:
+
+```
+cache/Sony Playstation/323 - Crash Bandicoot.chd
+cache/Game Boy/39 - Tetris/            the zip RomM sent, and the .gb from it
+```
+
+See `src/storage.h` and `docs/PROJECT.md`, open question 18.
 
 ## Running
 

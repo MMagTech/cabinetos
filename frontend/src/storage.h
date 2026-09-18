@@ -42,11 +42,21 @@
 // which is a sentence about code — but a directory you can list.
 //
 // ONE CONVENTION, TWICE: THE NUMBER IDENTIFIES, THE WORDS ARE FOR YOU.
-// `users/1 - MMagTech/` and `cache/psx/321 - Crash Bandicoot.chd`. Everything
-// after " - " is decoration and may be re-derived at any time, so renaming a
-// user in RomM is cosmetic here rather than destructive. That failure is not
-// hypothetical: a name-keyed console would quietly create an empty folder and
-// start again, with every save still on the disk and nothing looking for it.
+// `users/1 - MMagTech/` and `cache/Sony Playstation/321 - Crash Bandicoot.chd`.
+// Everything after " - " is decoration and may be re-derived at any time, so
+// renaming a user in RomM is cosmetic here rather than destructive. That
+// failure is not hypothetical: a name-keyed console would quietly create an
+// empty folder and start again, with every save still on the disk and nothing
+// looking for it.
+//
+// AND ONE SPELLING OF A PLATFORM, EVERYWHERE — RomM's `fs_slug`. The short
+// `slug` was written down first and reads better in a path, but it is NOT
+// UNIQUE: the reference server has two Arcade platforms sharing `arcade`, 223
+// games between them, needing different cores. Under the short name those games
+// share one folder while their saves correctly split into `FBNEO/` and
+// `MAME2003/` — one console, filed two ways, which is the thing this whole
+// question exists to stop. `fs_slug` is also what RomM itself uses for both its
+// roms and its assets, so the two trees are the same shape all the way down.
 //
 // TWO RomM INSTANCES BOTH HAVE A User:1. The real key is (server, user) and
 // this uses the user alone, which is a documented limit rather than a mechanism
@@ -199,11 +209,12 @@ std::string entryName(int romId, const std::string& title);
 // convention that identifies; everything after " - " is ignored on purpose.
 int romIdFromEntry(const std::string& entryName);
 
-// The platform segment. RomM's own `slug` for games — `psx`, `dc` — and its
-// `fs_slug` for saves and states, which is what the server itself uses in
-// `users/<user>/saves/<platform>/<romId>/<core>/`. Mirroring the server there
-// is the point: the two trees are the same shape, so a fault is visible by eye.
-std::string platformSegment(const std::string& slug);
+// The platform segment, and it is RomM's `fs_slug` everywhere — "Sony
+// Playstation", "Game Boy", "FBNEO". The server uses it for both its own roms
+// and its assets, so this tree and that one are the same shape all the way
+// down and a fault is visible by eye. See the top of this file for why the
+// shorter `slug` lost.
+std::string platformSegment(const std::string& fsSlug);
 
 // Anything that came off a server and is about to become a path. Slashes, NULs
 // and the two dot-entries, which is the whole of what can escape a directory.

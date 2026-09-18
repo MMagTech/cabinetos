@@ -6731,7 +6731,20 @@ in `/usr/share/cabinetos/` and is never written to.
 
 #### One convention, twice: the number identifies, the words are for you
 
-`users/1 - MMagTech/`, and `roms/psx/321 - Crash Bandicoot.chd`.
+`users/1 - MMagTech/`, and `roms/Sony Playstation/321 - Crash Bandicoot.chd`.
+
+**REVISED 2026-09-18, while building it: one spelling of a platform, not two.**
+The line above once read `roms/psx/`, and the saves below already used RomM's
+`fs_slug` because mirroring the server was the whole argument for the per-user
+tree. Two spellings for one console is exactly the thing this question exists to
+stop, and MMagTech said so on sight. **The short `slug` is also not unique** —
+the reference server has two Arcade platforms sharing `arcade`, 223 games
+between them, needing different cores — so under it those games share one folder
+while their saves correctly split into `FBNEO/` and `MAME2003/`. `fs_slug` wins
+on both counts, and RomM uses it for its own roms as well as its assets, so the
+two trees are the same shape all the way down. The cost is spaces and mixed case
+in a folder name, which the user directory already accepted; checked against the
+live server, none of its 36 `fs_slug`s collide case-insensitively.
 
 **The username alone was considered and is not the key.** It is available —
 `/api/users/me` returns it — and it is what a person recognises, so it belongs
@@ -6826,25 +6839,24 @@ than quietly copying, because a crossed filesystem there would mean the layout
 has a fault in it.
 
 **A game is one entry named `<romId> - <title>`, and it is a FILE when the game
-is one file.** `cache/psx/323 - Crash Bandicoot.chd`. An archive that unpacks
-into several files cannot be that, so it becomes a directory of the same name —
-`cache/gb/39 - Tetris/` holds the zip RomM sent and the `.gb` that came out of
-it. Both are renamed identically, so nothing above this has to know which it is.
+is one file.** `cache/Sony Playstation/323 - Crash Bandicoot.chd`. An archive
+that unpacks into several files cannot be that, so it becomes a directory of the
+same name — `cache/Game Boy/39 - Tetris/` holds the zip RomM sent and the `.gb`
+that came out of it. Both are renamed identically, so nothing above this has to know which it is.
 The written design showed only the file case; the directory case is what an
 extracted archive forces, and 801 of the reference library's 1644 games are
 `.zip`.
 
 #### Three things building it turned up
 
-**1. The platform segment is spelled two different ways, and that is deliberate
-but it reads like an inconsistency.** Games sit under RomM's `slug` —
-`cache/psx/`, `cache/gb/` — because that is what the agreed shape wrote down.
-Saves and states sit under its `fs_slug` — `saves/Sony Playstation/`,
-`saves/Game Boy/` — because the whole argument for the per-user tree was that it
-MIRRORS RomM's own `users/<user>/saves/<platform>/<romId>/<core>/`, and that is
-the spelling the server uses. Both are defensible on their own and together they
-look like somebody was careless. **Worth a decision rather than leaving it to be
-rediscovered.**
+**1. The first build spelled a platform two different ways, and it had to be
+one.** Games went under RomM's `slug` because the agreed shape wrote
+`roms/psx/`, and saves went under its `fs_slug` because mirroring the server was
+the argument for the per-user tree in the first place. One console, filed as
+`psx` on one shelf and `Sony Playstation` on the other. **MMagTech rejected it
+in a sentence — does it fit the intent of a unified, organised structure — and
+it plainly did not.** It is `fs_slug` everywhere now; the revision and the
+Arcade fact that settles which one are recorded above.
 
 **2. `bios/` still mixes replaceable and irreplaceable, because libretro gives a
 core exactly ONE system directory.** The 13 MB of PSP system files moved out —
@@ -6874,7 +6886,11 @@ look at what it actually did.
 #### Measured on the test VM, 2026-09-18
 
 Everything below was run rather than reasoned about, on the machine with two
-real filesystems.
+real filesystems. **The transcripts predate the platform rename above**, so they
+show `cache/gb/` and `cache/psx/` where a console today shows `cache/Game Boy/`
+and `cache/Sony Playstation/`. They are left as they came out; nothing else
+about them changed, and the tree was renamed and a game relaunched from it
+afterwards.
 
 **The test VM's own files were moved onto the layout** — 12 games, four save
 states, two battery saves, a PSP save folder and the BIOS — and every one was

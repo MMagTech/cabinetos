@@ -262,8 +262,8 @@ std::string safeSegment(const std::string& s) {
     return out;
 }
 
-std::string platformSegment(const std::string& slug) {
-    return slug.empty() ? "unknown" : safeSegment(slug);
+std::string platformSegment(const std::string& fsSlug) {
+    return fsSlug.empty() ? "unknown" : safeSegment(fsSlug);
 }
 
 std::string entryName(int romId, const std::string& title) {
