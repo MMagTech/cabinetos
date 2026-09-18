@@ -225,14 +225,19 @@ writes its file and the two guards to copy (a uniform fill means the game never
 saved; Sega CD's cart is a separate region from its internal RAM).
 
 - **The file-writing class, in full**, with where each core actually puts the
-  file: Dreamcast `system/dc/vmu_save_A1.bin`; MAME `nvram/<stem>.nv`; FBNeo
+  file. All but the first are relative to the SAVE directory, which is now
+  `users/<id> - <name>/saves/<platform>/<romId>/<core>/` and holds one game's
+  files rather than every game's: Dreamcast `bios/dc/vmu_save_A1.bin` — the
+  system directory, not the save one; MAME `nvram/<stem>.nv`; FBNeo
   `fbneo/<stem>.fs`; 3DO `opera/shared/nvram.0.srm`; Sega CD `*.brm` plus
   `*cart.brm` as its own region; Neo Geo Pocket `*.flash`; DS `*.sav`; PSP the
-  `PSP/SAVEDATA/**` tree. Two of those are **already sitting on this console's
-  disk** from real runs — `scd_U.brm` and `mame2003-plus/nvram/*.nv` — so the
-  capture half can be written and checked without playing anything new. Cabinet
-  solved every one of them in `MemoryCardSync.swift`; read it before designing
-  anything.
+  `PSP/SAVEDATA/**` tree. Two of those were **already sitting on this console's
+  disk** from real runs — `scd_U.brm` and `mame2003-plus/nvram/*.nv` — and the
+  migration could not say which game wrote either, so they are in
+  `users/1 - MMagTech/saves/unattributed 2026-09-18 11-43-38/`. The capture half
+  can still be written and checked against them without playing anything new.
+  Cabinet solved every one of them in `MemoryCardSync.swift`; read it before
+  designing anything.
 - **PSP IS DONE, and it is the worked example for the other seven.**
   `frontend/src/dirsave.h` and `syncDirSave` in main.cpp: restore before the
   core loads, capture after the unload, compare against a baseline taken at
@@ -385,12 +390,16 @@ reuse the wording already measured for the other four.
 
 ### 7. The disk that eviction cannot see
 
-Mesa's shader cache in `~/.cache`, plus files the cores write into the system
-directory. Under 3 MB today. **One of them is a Dreamcast's saved flash**, so
-"clean the system directory" is not the answer — and as of PPSSPP the system
-directory also holds 13 MB of PSP system files that are part of the build's
-output rather than anything reclaimable. PROJECT.md, *The cache is not the only
-thing a game writes to disk*.
+Mesa's shader cache in `~/.cache`, plus files the cores write into `bios/`.
+Under 3 MB today. **One of them is a Dreamcast's saved flash**, so "clean the
+system directory" is not the answer — and it also holds 13 MB of PSP system
+files that are part of a build's output rather than anything reclaimable.
+PROJECT.md, *The cache is not the only thing a game writes to disk*.
+
+**The folder layout narrowed this rather than solving it.** Saves used to land
+in there too and now go under a person, and the PSP files belong in
+`/usr/share/cabinetos/system/` inside the image once something installs them
+there. What is left is genuinely the machine's own emulator state.
 
 ### 8. Power button to a clean shutdown
 

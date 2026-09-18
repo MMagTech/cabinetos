@@ -1495,14 +1495,15 @@ Three kinds of file, none of them a ROM, and **eviction sees none of them**:
 | What | Where | Size after two games |
 |---|---|---|
 | Mesa's compiled-shader cache | `~/.cache/mesa_shader_cache/` | 2.5 MB |
-| Mupen64Plus's driver database | `system/Mupen64plus/mupen64plus.ini` | 447 KB |
-| Flycast's Dreamcast flash | `system/dc/dc_nvmem.bin` | 131 KB |
+| Mupen64Plus's driver database | `bios/Mupen64plus/mupen64plus.ini` | 447 KB |
+| Flycast's Dreamcast flash | `bios/dc/dc_nvmem.bin` | 131 KB |
 
-`cache::candidates` walks `romcache/<romId>/` and nothing else, on purpose —
-`saves/` sits alongside and is deliberately never a candidate. But that also
-means everything above consumes free space, is counted by the floors as simply
-gone, and **cannot be reclaimed by any code this console has**. Un-keeping every
-game would not shrink it by a byte.
+**The paths changed on 2026-09-18 and the problem did not.** `cache::candidates`
+walks `cache/` and nothing else — that is the whole of the rule now, and it is
+checkable by listing a directory rather than by reading code. But it still means
+everything above consumes free space, is counted by the floors as simply gone,
+and **cannot be reclaimed by any code this console has**. Un-keeping every game
+would not shrink it by a byte.
 
 It is small today and the shapes differ, which is why they are listed
 separately rather than as one number:
@@ -1519,7 +1520,9 @@ separately rather than as one number:
   `mupen64plus.ini` is a database that can be deleted and will come back.
   `dc_nvmem.bin` is a Dreamcast's saved flash — **console settings, and the
   thing a VMU lives beside.** Treating the system directory as reclaimable
-  would throw that away. Anything that cleans here has to distinguish the two,
+  would throw that away. Open question 18 named this as the one place its own
+  shape does not answer the question: `bios/` promises replaceable firmware and
+  holds this too, because libretro gives a core exactly one system directory. Anything that cleans here has to distinguish the two,
   which is the same distinction the Storage screen already draws between a
   cache and a kept game.
 
@@ -5710,10 +5713,17 @@ directory: the difference is the desktop UI's — the web debugger, themes, UI
 images, sound effects, the SDL controller database — and Cabinet's subset is the
 one that has actually run PSP games on a television.
 
-**Where they live in the image is still Phase 5's to decide.** The build stages
-them at `cores/system/PPSSPP` and the deploy copies them across; in a bootc
-image that becomes a path in `/usr`, which is fine, because the core only ever
-reads it.
+**Where they live in the image is DECIDED as of open question 18:
+`/usr/share/cabinetos/system/`**, which `storage::ensureTree` symlinks into the
+console's system directory at startup. A path in `/usr` is right because the
+core only ever reads it, and it takes 13 MB of build output out of a directory
+that otherwise holds the person's own files. **Nothing installs them there yet** —
+the build still stages them at `cores/system/PPSSPP` and the deploy copies them
+across, so on the test VM they sit in `bios/PPSSPP/` and the link step correctly
+leaves them alone. It cannot be done in `build_files/build.sh` today either:
+those files come out of a core build and the image does not yet carry the cores
+or the frontend at all. **It belongs with whatever puts those in the image**,
+which is Phase 5's deploy.
 
 ##### The emulator tag IS shared, and this is the strongest case in the set
 
