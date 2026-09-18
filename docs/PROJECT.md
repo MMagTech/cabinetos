@@ -26,7 +26,7 @@
 
 ---
 
-## Where the project is — 2026-09-17
+## Where the project is — 2026-09-18
 
 **Phase 0 complete. Phase 1 complete. Phase 2 mostly done. Phase 3 well under
 way and running. Phase 5 started early, the hardest question in it is answered,
@@ -154,6 +154,12 @@ ordered this way now.
   string — see open question 13.
 - **No controller has ever been attached.** The permissions chain is verified
   by reading; a real pad is not.
+- ~~**Whether a PS3 PKG install costs double the disk**~~ **— it does not, as of
+  2026-09-18.** A PKG installs to the same size it came in at, so the 2x lasts
+  only while both the PKG and the install exist. Measured on a 287 MB title and
+  a 19.8 GB one, and both boot with the PKG deleted. **PS3 games can still not
+  be PLAYED here** — that needs a GPU and Vulkan, and waits for the A9 Pro. See
+  open question 19, *The PKG install, MEASURED 2026-09-18*.
 
 ### The Cabinet-side debts this project has found
 
@@ -191,7 +197,7 @@ Running infrastructure:
 | Repository | https://github.com/MMagTech/cabinetos |
 | Image | `ghcr.io/mmagtech/cabinetos:latest` — public, unsigned |
 | Test machine | Unraid VM at `192.168.1.250`, 4 GB, VirtIO-GPU, SSH key installed |
-| Reference hardware | Beelink SER5 — **not yet installed**, awaiting a spare NVMe |
+| Reference hardware | **GEEKOM A9 Pro** — Ryzen AI 9 HX 370, Radeon 890M — **not yet installed**. Replaced the Beelink SER5 on 2026-09-17; see *Hardware*, where the rule is that everything keyed to "the SER5" now means this machine. |
 
 Everything in the pipeline has run green at least once: image build → GHCR →
 signing (skipped, no key) → qcow2 → VM boot → `bootc upgrade` in place →
@@ -1502,6 +1508,15 @@ separately rather than as one number:
 Nothing here is urgent — it is under 3 MB against a 5 GB system reserve — but it
 is a category the storage model currently does not have, and it arrived with the
 hardware-rendered cores rather than existing before them.
+
+**PS3 makes this category much bigger, measured 2026-09-18.** RPCS3 keeps a PPU
+recompiler cache of its own, outside the virtual hard drive entirely — under the
+emulator's config directory, so on the OS volume rather than the games one. It
+reached **21 MB while failing to reach a title screen**, because it caches
+compiled code for every module the game loads and a PS3 game loads dozens. This
+is the first entry in this table that could plausibly run to gigabytes, and the
+first where the *location* is wrong as well as the size: a games drive should
+hold it.
 
 ### Other facts worth keeping
 
@@ -6873,7 +6888,8 @@ believing a stale comment: one level checked, the conclusion generalised.
 | Plain disc folders | **6** — God of War III is 97 files and 37 GB |
 
 A PSN title is two files. Sly Cooper is `Sly Cooper - Thieves of Time.pkg` at
-19.8 GB plus `EP9000-NPEA00429_00-SLYCOOPERPSN0000.rap` at a few hundred bytes.
+19.8 GB plus `EP9000-NPEA00429_00-SLYCOOPERPSN0000.rap`, which is **exactly 16
+bytes** — measured 2026-09-18; every `.rap` in the library is.
 
 ##### Why that breaks the storage model rather than merely complicating it
 
@@ -6882,6 +6898,12 @@ from RomM is the artefact**. Download it, hand it to the core, done. A PKG is
 not that: it has to be installed into RPCS3's virtual hard drive, which produces
 a second copy of roughly the same size. Sly Cooper would be 19.8 GB downloaded
 plus ~19.8 GB installed, for **forty gigabytes of one game**.
+
+> **Measured 2026-09-18, and the 2x turned out to be TEMPORARY** — the installed
+> tree is the same size as the PKG, so deleting the PKG puts the game back at
+> 1x. Sly Cooper peaked at 39.7 GB and settled at 19.8 GB. See *The PKG install,
+> MEASURED 2026-09-18* below; what follows in this subsection is the reasoning
+> that prompted the experiment, and it still holds for the reuse test.
 
 So the PKG has to be deleted after installing, and that has a consequence the
 cache design did not anticipate:
@@ -6919,6 +6941,134 @@ installed tree, because that is the thing that can be run.
 The saves story above is unaffected: save data is still a folder tree under
 `dev_hdd0/home/<user>/savedata/<TITLEID>/`, and the PSP mechanism still covers
 it.
+
+#### The PKG install, MEASURED 2026-09-18
+
+**Installing a PS3 game does not cost a second copy of it.** That was the whole
+worry — that a 19.8 GB download would become 40 GB on disk — and it is wrong.
+The install is the same bytes moved out of the container: **the finished game is
+the same size as the PKG it came from, to within a rounding error**, and once
+the PKG is deleted the game costs exactly what any other game costs. The 2x is
+real but it is **transient**, lasting only while both exist.
+
+Everything below was run on the test VM, which has no GPU and no Vulkan.
+**Installing needs neither** — it is decrypt-and-unpack — so the answer did not
+have to wait for the A9 Pro. RPCS3 came from Flathub (`net.rpcs3.RPCS3`,
+`0.0.42-19980-028d1e8f Alpha`); nothing was built.
+
+##### The four numbers
+
+| | Super Stardust HD | Sly Cooper: Thieves in Time |
+|---|---|---|
+| PKG from RomM | 287,265,040 B | 19,843,204,240 B |
+| Installed tree | 287,260,549 B | 19,843,198,103 B |
+| **Ratio** | **0.999984x** | **0.9999997x** |
+| Files produced | 59 | 53 |
+| Install time | 18 s | 123 s |
+| Peak disk, both present | 574 MB | **39.7 GB** |
+
+Sly's install ran at **161 MB/s** on a four-core VM with no GPU, so a 20 GB
+title installs in about two minutes. The download itself took **173 s** at
+115 MB/s from RomM, so fetch and install are the same order of magnitude:
+**"Download" for a PS3 PKG is roughly twice the wait of a plain download**, not
+ten times.
+
+The whole-volume measurement agrees with the per-directory one. Free space on
+the games drive before installing Sly was 81,971,671,040 B; after installing,
+62,128,369,664 B; after deleting the PKG, 81,971,576,832 B. **94,208 bytes from
+where it started** — the installed game occupies what the PKG occupied.
+
+##### What it produces, and where
+
+`dev_hdd0/game/<TITLEID>/` — one directory per title, `NPEA00014` and
+`NPEA00429` here. It holds the artwork and metadata the PS3 menu shows
+(`ICON0.PNG`, `PIC1.PNG`, `SND0.AT3`, `PARAM.SFO`), a `TROPDIR` of trophies, and
+`USRDIR` with `EBOOT.BIN` and the game's data. **Nothing is written anywhere
+else** — the virtual hard drive's entire contents after installing Super
+Stardust HD were that one game plus four bytes of empty directories.
+
+**The install is self-contained and nothing records where it came from.**
+`games.yml`, RPCS3's index of games held outside the virtual drive, stayed
+**zero bytes** through both installs. A title in `dev_hdd0/game/` is known by
+being there, and its name comes from the `PARAM.SFO` inside it: with the PKG
+deleted, RPCS3 still opened Sly Cooper and logged
+`Localized Title: Sly Cooper: Thieves in Time™`.
+
+##### The PKG can be deleted, and that is proven by running the game
+
+Deleting the PKG was tested the only way that means anything — by booting the
+game afterwards. Super Stardust HD's PKG was removed, the installed tree was
+unchanged (59 files, `EBOOT.BIN` at the same md5), and RPCS3 decrypted and
+booted it. Sly Cooper's 19.8 GB PKG was removed and it booted too.
+
+Neither reached gameplay, and neither was expected to: the VM has no GPU, so
+this ran on the **Null renderer**, and RPCS3's PPU recompiler saturated four
+cores for minutes compiling every module. **What is proven is the part the PKG
+mattered for** — the installed tree is complete, self-describing and
+decryptable on its own.
+
+##### Where the `.rap` has to sit — RPCS3 says so itself
+
+```
+dev_hdd0/home/<user id>/exdata/<CONTENT ID>.rap
+```
+
+`00000001` is the user, and the name is the content id RomM already stores the
+file under. Without it, booting fails with **`Failed to decrypt content`**, and
+the emulator names the exact file it wanted:
+
+> `Failed to locate the game license file: .../exdata/EP9000-NPEA00429_00-SLYCOOPERPSN0000.rap.`
+> `Ensure the .rap license file is placed in the dev_hdd0/home/00000001/exdata folder with a lowercase file extension.`
+
+Run as a control on both games with the directory empty, then again with the
+file copied in, and both then booted. **The extension must be lowercase** — the
+emulator says so, and RomM's filenames already are.
+
+A `.rap` is **16 bytes**. It is per-user, which lands exactly where open
+question 18 put it: beside that user's saves, not beside the game.
+
+##### Firmware, which is one install per machine and was also measured
+
+`PS3UPDAT_v4.96.PUP`, 206,177,436 B on the server, decrypts in **17 s** into
+`dev_flash/` at **195,070,119 B** — seven top-level directories (`sys`, `vsh`,
+`data`, `bdplayer`, `ps1emu`, `ps2emu`, `pspemu`). This document previously
+recorded the `dev_flash` tree as a belief; it is now a measurement.
+
+**The version does not match the filename.** `dev_flash/vsh/etc/version.txt`
+reports `release:04.9200`, and RPCS3 then logs `Firmware version: 4.92`, while
+the file on the server is named `v4.96`. Not investigated. Recorded because
+anything that displays a firmware version should read the installed tree rather
+than the filename.
+
+##### Four things this turned up that the design has to answer
+
+1. **RPCS3 will not install without a GUI, and refuses in so many words.**
+   `--no-gui --installpkg` prints `Cannot perform installation in no-gui mode!`
+   and then relaunches itself with a window, which opens a file chooser because
+   the argument does not survive. **`--headless` is the one that works**: it
+   builds no window at all and installs straight through. The invocation is
+   `rpcs3 --headless --installpkg <path>`. This is worth knowing before anyone
+   designs the install as "shell out to RPCS3 and wait" — two of the three
+   obvious spellings of that command open a dialog on a console with no pointer.
+
+2. **The exit status lies.** Both installs and the firmware install ended
+   `exit=134` — SIGABRT, in a static destructor at process teardown — *after*
+   logging `Successfully installed ... (title_id=NPEA00429, title=Sly Cooper:
+   Thieves in Time™, version=01.00)`. The same shape as PPSSPP's teardown abort.
+   **Success has to be read out of the log line, not the exit code.**
+
+3. **An interrupted install leaves the partial tree behind.** One install was
+   killed three seconds in and left a 1.5 GB `NPEA00429/` that nothing cleans
+   up. The next run would have found a directory that looks installed and is
+   not. **A console needs its own completion marker**, because the thing on disk
+   cannot be checked against RomM's size the way a downloaded file can — which
+   is the same reason `beginLaunch`'s reuse test does not work here.
+
+4. **RPCS3 writes a recompiler cache outside the virtual drive.** It went to
+   `~/.var/app/net.rpcs3.RPCS3/cache/` — **21 MB** after a few minutes of not
+   even reaching a title screen, on the OS volume rather than the games one.
+   That is the same class of disk as item 7's Mesa shader cache, and it will be
+   much larger than 21 MB for a game that actually runs.
 
 #### PS3's saves, and why the missing snapshots do not matter
 
