@@ -14,11 +14,13 @@ Rewrite it at the end of a session. It is meant to be current, not a log.
 
 ## Before anything else
 
-**Everything is on `main`. There are no other branches and no open pull
-requests.** As of 2026-09-17 the whole of this file's "what runs today" is
-merged, along with a run of CI and base-image repairs; the base is pinned at
-Bazzite `44.20260916`. `git log` has the detail and this file will not repeat
-it.
+**Everything is on `main` except one open pull request, and it is big.**
+[#19](https://github.com/MMagTech/cabinetos/pull/19) carries the whole of
+2026-09-17: PPSSPP, PSP save sync, the save audit, the folder-layout decisions,
+the hardware change and the PS3 findings. Everything described below as "runs
+today" includes it. **Merging it is the first thing to do** — CI has been green
+on every push. If it has merged by the time you read this, everything is on
+`main` again and this paragraph is stale.
 
 Start from `main`, branch once, and **open the pull request against `main`**.
 Four branches were once stacked on each other here, each opened before the last
@@ -31,8 +33,11 @@ surface to copy, not iOS. Cabinet is not checked out on this Mac; clone it:
 
 ```
 git clone --filter=blob:none --sparse https://github.com/MMagTech/cabinet.git
-cd cabinet && git sparse-checkout set RommApp docs
+cd cabinet && git sparse-checkout set RommApp docs tools
 ```
+
+`tools` is in that list now because the per-core build scripts are the only
+honest record of how a core is built — see *Cabinet-side debts*.
 
 Then read `docs/PROJECT.md`, and `frontend/README.md` for the build loop.
 
@@ -51,12 +56,14 @@ ssh -i ~/.ssh/cabinetos cabinet@192.168.1.250 \
 
 ## Where things stand
 
-**The whole loop works, and the whole library is now reachable.** Browse every
-system and collection, open a game, play it or download it, save and load
-states, and leave — with the save syncing on the way out.
+**The whole loop works, the whole library is reachable, and every emulator this
+console ships can be run.** Browse every system and collection, open a game,
+play it or download it, save and load states, and leave — with the save syncing
+on the way out.
 
-- **1143 of 1644 games playable**, with twenty cores built — and every one of
-  those twenty can now be RUN, not just built.
+- **1147 of 1644 games playable, with all twenty-one cores built** — and every
+  one of the twenty-one can be RUN, not just built. PPSSPP was the last, landed
+  2026-09-17.
 - **Home is real**: a hero from RomM's own play history, Recent, Favorites.
 - **Library, a grid, and a launch screen**, built 2026-09-16. Every system
   including the ones this console cannot play, each saying why.
@@ -65,22 +72,21 @@ states, and leave — with the save syncing on the way out.
 - **Both floors are enforced where that button is**, measured by filling the
   disk rather than by reasoning about it.
 - **Saves, memory cards and states sync both ways** with RomM, tagged with
-  Cabinet's own emulator strings.
-- **BIOS comes down with the game**, every file the platform lists.
-- **Twenty cores build in CI**, each asserting its pinned revision, and the
-  frontend compiles there too.
-- **Dreamcast, Naomi and N64 play**, as of 2026-09-16. The cores that draw for
-  themselves get a framebuffer inside the frontend's own GLES context, so Mario
-  Kart 64 and Ikaruga run with no pixel read back anywhere.
-- **The CI around all of it was repaired**, 2026-09-17, and the shape of every
-  fault was the same: it produced plausible output while being wrong. Checks
-  that did not run on the branch being written; twenty runners rebuilding one
-  container and giving twenty chances for a mirror to fail; a weekly base check
-  that had never once completed; and, once it did, a report calling a
-  month-long firmware move routine while 81% of its diff was keyring noise.
-  **Nothing was failing loudly.** Worth carrying as a habit rather than as
-  trivia — when something here looks fine, check that it is not merely
-  plausible.
+  Cabinet's own emulator strings. Six cores share a tag; PPSSPP is the newest
+  and has the strongest case of the six, because no configuration difference is
+  left to justify.
+- **BIOS comes down with the game**, every file the platform lists — except
+  PSP's, which is not a console's firmware and ships with the emulator instead.
+- **Dreamcast, Naomi, N64 and PSP play.** The cores that draw for themselves get
+  a framebuffer inside the frontend's own GLES context, so Mario Kart 64,
+  Ikaruga and Lumines run with no pixel read back anywhere.
+- **PSP saves reach RomM and come back**, proven end to end: quit, a 40 KB zip
+  lands on the server, delete it locally, relaunch, byte-identical. The first
+  DIRECTORY save, and the pattern the other seven file-writing platforms follow.
+- **Twenty-one cores build in CI**, each asserting its pinned revision, and the
+  frontend compiles there too. Three of them are now known to be
+  **byte-identical across machines**, the newest being PPSSPP — a 38 MB CMake
+  build, which is the shape that could plausibly have picked up a timestamp.
 
 ## Pick up with these, in this order
 
@@ -95,77 +101,208 @@ states, and leave — with the save syncing on the way out.
 > goes ahead — and a screen that already exists is not frozen, because fixing
 > something *wrong* is not the same as tuning something.
 
+### 0. The PS3 experiment the VM can now run
+
+**The heavy-systems conversation HAPPENED on 2026-09-17** and settled a lot; the
+outcome is at the bottom of this file. What it left is one experiment, and the
+VM was grown specifically to make it possible.
+
+**Install a PKG and measure what comes out.** PS3 is the first system where the
+thing you download is not the thing you run — 24 of the 30 games on the server
+are `.pkg` installers, not disc folders — and a PKG has to be installed into
+RPCS3's virtual hard drive, which produces a second copy. The question the whole
+storage model hangs on is whether that really means **2x the disk**, and
+whether the PKG can then be deleted.
+
+**It does NOT need the new hardware.** Installing is decrypt-and-unpack; only
+PLAYING needs a GPU, and the VM has no Vulkan. The route is RPCS3's Linux
+AppImage and its command-line install, not a build — RPCS3 is far too large to
+compile on this VM.
+
+Two candidates, both on the server: **Super Stardust HD at 287 MB** to prove the
+mechanism, and **Sly Cooper at 19.8 GB** to prove it at real scale, which now
+fits because of the 100 GB second disk.
+
+Answer these four and the storage design stops being guesswork: what the install
+produces and where, the size ratio, whether the game still runs with the PKG
+deleted, and where the `.rap` licence has to sit.
+
 ### 1. Saves that actually reach the server
 
-The biggest real hole in the product, and it is invisible until it costs
-somebody their progress.
+The biggest real hole in the product, and **the audit of 2026-09-17 measured
+it: 47 of the 81 saves on the server — 58% — are for platforms this console can
+neither upload nor restore.** It has been recorded here as "the file-writing
+save class", which reads like an edge case. It is the majority.
 
-- **The file-writing save class is not synced at all, and Dreamcast now shows
-  it to your face.** melonDS writes a `.sav` rather than exposing save RAM, so
-  `[save] battery is 0 bytes` is correct and the file never reaches RomM. Neo
-  Geo Pocket, Sega CD and FBNeo are the same class. **Ikaruga opens on "memory
-  card not connected"** — Flycast's VMU is the same problem with a title screen
-  attached, and it is the first one a person would actually notice. Cabinet
-  solved this in `MemoryCardSync.swift`; read it before designing anything.
+**Do Dreamcast first.** Thirteen saves, the largest count of any platform, and
+it explains the symptom below rather than sitting beside it. Flycast never
+exposes the VMU through `RETRO_MEMORY_SAVE_RAM`; it reads and writes
+`vmu_save_A1.bin` in the **system** directory under `dc/` — the same `dc/` the
+BIOS lives in. Cabinet restores it there before boot and captures it after
+unload. Write the bytes before boot, read them after, upload if changed, and
+there are thirteen real cards on the server to test the restore against.
+
+PROJECT.md, *The save audit*, has the per-platform table of where every core
+writes its file and the two guards to copy (a uniform fill means the game never
+saved; Sega CD's cart is a separate region from its internal RAM).
+
+- **The file-writing class, in full**, with where each core actually puts the
+  file: Dreamcast `system/dc/vmu_save_A1.bin`; MAME `nvram/<stem>.nv`; FBNeo
+  `fbneo/<stem>.fs`; 3DO `opera/shared/nvram.0.srm`; Sega CD `*.brm` plus
+  `*cart.brm` as its own region; Neo Geo Pocket `*.flash`; DS `*.sav`; PSP the
+  `PSP/SAVEDATA/**` tree. Two of those are **already sitting on this console's
+  disk** from real runs — `scd_U.brm` and `mame2003-plus/nvram/*.nv` — so the
+  capture half can be written and checked without playing anything new. Cabinet
+  solved every one of them in `MemoryCardSync.swift`; read it before designing
+  anything.
+- **PSP IS DONE, and it is the worked example for the other seven.**
+  `frontend/src/dirsave.h` and `syncDirSave` in main.cpp: restore before the
+  core loads, capture after the unload, compare against a baseline taken at
+  launch, upload only when something moved. The other seven are simpler than
+  PSP was, because each is one file rather than a tree.
+- **`[save] battery is 0 bytes` is correct, not a fault**, for every core in
+  that class. It is the host saying the core exposes no save RAM.
+- **PSP is a third shape, and Cabinet ALREADY SYNCS IT — do not repeat my
+  mistake here.** PPSSPP saves into memory-stick DIRECTORIES —
+  `PSP/SAVEDATA/<id>/` holding `PARAM.SFO`, `DATA.BIN` and icons. I wrote that
+  this does not sync, on the strength of a comment in
+  `NativeCore.savesOverSaveRAM` that says *"Save sync for PSP is its own future
+  feature"*. **That comment is stale in Cabinet's own source.** MMagTech
+  corrected it in one sentence, and there is a real save on the server:
+  `Lumines - Puzzle Fusion (USA) (Cabinet).srm`, 51,426 bytes,
+  `emulator=ppsspp-native`, updated 2026-08-28.
+
+  Cabinet archives the subtree with `FileWrapper` and pushes it through the
+  **same store, endpoint and saveRAM region** as a cartridge battery, on the
+  same after-shutdown trigger. So the design is done and the tag already
+  matches ours.
+
+  **The container was the obstacle and it is now decided: ZIP.** PPSSPP's save
+  format is the FOLDER — there is no single-file PSP save, PPSSPP defines no
+  export format, and RomM stores one opaque file per rom and emulator. Cabinet's
+  August blob is Apple's `rtfd` archive labelled `.srm`, readable nowhere
+  without Foundation. **MMagTech has fixed the Cabinet side to zip (2026-09-17,
+  reported, not yet pushed to GitHub and not seen from here)**, so this console
+  needs to read and write zip and does NOT need an `rtfd` writer. The frontend
+  already links libarchive, which does both.
+
+  **Verify it from the first save the fixed build uploads** — four bytes settle
+  it, `PK\x03\x04` is zip — and read three things off that same file: what the
+  zip is ROOTED at (`ULUS10002LUMINES/…` vs `SAVEDATA/…` vs `PSP/SAVEDATA/…`,
+  which decides where we unzip and is invisible until you look), whether the tag
+  is still `ppsspp-native`, and whether Cabinet still READS `rtfd` — because the
+  only PSP save MMagTech owns is still in the old format.
+
+  The zip round trip is measured, not assumed: zipped the real save folder on
+  this console, deleted the original, unzipped it back, all four files
+  byte-identical, and Lumines ran against the restored folder and quit cleanly.
+  PROJECT.md, *What PPSSPP is supposed to use*, has the detail.
 - **Saves on the right triggers.** Keys do it today, which is the test
   environment and not the product. The settled triggers are in PROJECT.md.
 
-Both are measured by whether a file lands on the server, so the VM answers them
-completely.
+All of it is measured by whether a file lands on the server, so the VM answers
+these completely.
 
 ### 2. Finish the core options, which is half done
 
-The host now answers every option a core declares. Two things are left and both
-are small:
+The host answers every option a core declares, and **the override table is now
+wired into the launch path as well as the audit** — it was not, until PPSSPP
+needed the first real entry. Two things are left:
 
 - **Bring across Cabinet's per-platform choices.** `catalog::optionOverrides`
-  is empty on purpose — every option gets the core's own default, which is the
-  right baseline. Cabinet hand-picks a subset per platform in
-  `NativeCoreOptions.swift`; port it one platform at a time with a reason
-  recorded beside each choice.
+  has exactly one entry, PPSSPP's CPU engine. Cabinet hand-picks a subset per
+  platform in `NativeCoreOptions.swift`; port it one platform at a time with a
+  reason recorded beside each choice.
 - **The options MAME asks for and never declares.** Two are constant across
   every game tried and the rest vary by driver. Their values have to come from
-  the core's source, not from a guess, and they are the first real customers for
-  the override table.
+  the core's source, not from a guess.
 
 ### 3. The N64 save states that do not restore exactly
 
 Reproducible to the digit, the instrument was checked, and three candidate
 causes are written down with none established. It blocks nothing today, and it
-matters because portable save states are the premise the whole product rests on
-— this is the first core where that premise visibly does not hold. The cheapest
-discriminating experiment is in PROJECT.md.
+matters because portable save states are the premise the whole product rests on.
+The cheapest discriminating experiment is in PROJECT.md.
 
-### 4. PPSSPP, the twenty-first core
+### 4. PSP's save state, and a crash that is understood but not closed
 
-The only core of twenty-one not built, and the reason to build it now is that
-the thing that blocked it is gone: the host serves hardware-rendered cores.
-PSP is four games in the reference library, so build it for the completeness
-rather than the count — and **run it**, because that is the whole lesson of the
-other two. Its firmware is the special case: PPSSPP's system files ship inside
-the app bundle on Apple rather than coming from RomM, which in a bootc image
-becomes a path in `/usr`.
+**The save DATA is done** — see item 1. Two things are left, and they are the
+same shape: PPSSPP is the only core that emulates on a thread of its own.
 
-If it asks for desktop GL or Vulkan rather than GLES, the host refuses it by
-name and says so in one line — and `Support::NeedsHardwareRender` is still
-sitting there waiting for exactly that case.
+**A threaded core only advances when the frontend COMPLETES a frame**, not when
+`retro_run` is called. That one fact explains both of the following, and it was
+found by a wait loop that made no progress at all.
 
-### 5. Nothing warns that a system's BIOS is missing
+**The crash.** Quitting a PSP game while it is still booting used to kill the
+console, inside the core's own boot thread. Quitting now defers until the
+machine is up — measured on the case that crashed twice, which waits 4.1s and
+exits cleanly. **It is not closed:** in the headless capture configuration the
+core sometimes never boots at all (one run: 2,384 frames, zero audio), and
+tearing it down then aborts at process exit in a static `std::thread`
+destructor inside the core. Not seen in the ordinary configuration. Same root
+cause — the core never finished starting, so its own shutdown cannot clean up.
+
+**The state.** PPSSPP produces a 41,943,040-byte state at a demo screen, so it
+CAN serialize. Whether the restore is exact is unknown, because `--state-test`
+warms up in a tight `retro_run` loop with no frame in it and this core makes no
+progress there. Fixing the instrument is the work, and the diagnosis above is
+the fix: give the warm-up a real frame loop.
+
+The core produces a 41,943,040-byte state at a demo screen — verified. Whether
+the restore is exact is **not** answered, and it cannot be by the existing tool:
+`--state-test` warms up in a tight loop of `retro_run` with no wall clock in it,
+and PPSSPP is the only core in the set that emulates on a thread of its own, so
+three thousand calls produce no sound, a static picture and a zero-byte state
+while the same core reaches its attract demo on the ordinary launch path.
+**A core with its own emulation thread is not frame-deterministic under that
+test.** Fixing the instrument is the work; a capture reporting
+`retro_serialize_size` is the stopgap that exists today.
+
+### 5. The on-disk folder layout — decided, not built
+
+**Open question 18, agreed with MMagTech 2026-09-17.** The current layout was
+never designed, it accumulated: there are TWO save directories, `system/` mixes
+replaceable BIOS with an irreplaceable Dreamcast flash and 13 MB of PPSSPP
+fonts, every core shares one flat save pile, and `romcache/` is named "cache"
+while holding kept games and everyone's saves.
+
+The agreed shape takes RetroArch's and RetroBat's vocabulary (`roms`, `saves`,
+`states`, `bios`, `config`), adds the one thing neither needs — a `cache/` that
+is the only directory eviction may touch — and namespaces per user the way RomM
+itself does, mirroring its `users/<user>/saves/<platform>/<romId>/<core>/`.
+One convention throughout: **the number identifies, the words are for you** —
+`users/1 - MMagTech/`, `roms/psx/321 - Crash Bandicoot.chd`.
+
+**One kept game is one file, however many people play it**, which changes the
+one piece of existing code: `cache::keep/unkeep/isKept` is a boolean per rom and
+has to become *kept by whom*, so that one person releasing does not take the
+game away from another. Releasing the LAST keep demotes to cache rather than
+deleting — un-keep is never destructive — and that is why `roms/` and `cache/`
+repeat on every drive rather than once at the root: otherwise a demotion means
+copying gigabytes between disks because somebody changed their mind.
+
+**Do it before there are machines with play histories.** Today it is one user
+and one directory; later it is moving every save on every console, and saves are
+the only data here that cannot be re-downloaded. It is a behaviour, not a
+picture, so the SER5 decision does not hold it up.
+
+### 6. Nothing warns that a system's BIOS is missing
 
 Until a game fails to start. `catalog` is where it belongs — a fifth answer, and
 the first one that is a fact about the person's server rather than about this
 console. The answer is a lookup, not a layout, so the tile that shows it can
 reuse the wording already measured for the other four.
 
-### 6. The disk that eviction cannot see
+### 7. The disk that eviction cannot see
 
-Mesa's shader cache in `~/.cache`, plus two files the cores write into the
-system directory — under 3 MB today, and it arrived with the hardware-rendered
-cores. **One of them is a Dreamcast's saved flash**, so "clean the system
-directory" is not the answer. PROJECT.md, *The cache is not the only thing a
-game writes to disk*.
+Mesa's shader cache in `~/.cache`, plus files the cores write into the system
+directory. Under 3 MB today. **One of them is a Dreamcast's saved flash**, so
+"clean the system directory" is not the answer — and as of PPSSPP the system
+directory also holds 13 MB of PSP system files that are part of the build's
+output rather than anything reclaimable. PROJECT.md, *The cache is not the only
+thing a game writes to disk*.
 
-### 7. Power button to a clean shutdown
+### 8. Power button to a clean shutdown
 
 Phase 2's last mechanical item, and it is a behaviour rather than a picture.
 
@@ -177,20 +314,22 @@ Ordered for whenever it is installed. **Do not begin these in the VM.**
 
 - **The navigation bar.** The Library is reached with a temporary **L** key.
   Home has about 85 points of vertical slack and the bar needs about 85 — the
-  arithmetic is in PROJECT.md. A bar at Title 3 plus its gap puts Recent's
-  caption on the bottom edge, and overscan eats more than a capture shows.
-  Either the bar fits, or the hero comes down, or the bar goes elsewhere, and
-  only a television can say which.
+  arithmetic is in PROJECT.md. Either the bar fits, or the hero comes down, or
+  the bar goes elsewhere, and only a television can say which.
 - **The Storage screen.** Its data already exists and can be finished without
   it — run `./build/cabinetos-frontend --storage` — but the screen itself is a
   layout.
 - **The rest of the launch screen**: a different save state, a different core,
-  an export. **The save-state half is a mechanism and can be built now**:
-  `fetchStates` works and the emulator tag decides whether a state is offered or
-  greyed, which is a fact rather than a look.
+  an export. **The save-state half is a mechanism and can be built now.**
 - **Download All, at the platform level.** Cabinet's `DownloadAll.swift` sizes
   the whole list and refuses rather than filling the disk. The sizing and the
   refusal are measurable; the screen is not.
+- **PSP's internal resolution.** The core is answered with its own declared
+  default, 480x272, which is the PSP's own screen and what Cabinet ships on a
+  television. Cabinet's Mac uses 1920x1088. Raising it is a look-and-performance
+  decision on Vega integrated graphics and it needs the panel.
+- **The audio governor's 20 ms cushion.** Inherited from Cabinet rather than
+  measured here; the lead it permits *is* input lag. Tune it with a pad in hand.
 - **The boot splash**, and the rest of the branding.
 - **Everything about motion, the letterbox glow and the safe area.**
 
@@ -200,8 +339,13 @@ Ordered for whenever it is installed. **Do not begin these in the VM.**
 
 - **Judge nothing visual on the VM.** Software rendering on llvmpipe. And it is
   not only motion: a television's overscan eats more vertical room than a
-  framebuffer capture shows, which is how Cabinet's hero height needed four
-  attempts on real hardware. **Vertical fit cannot be judged here either.**
+  framebuffer capture shows. **Vertical fit cannot be judged here either.**
+- **Read the pixels before believing the picture.** PPSSPP's first capture was
+  not blank — it was a plausible, nearly-black rendering with faintly legible
+  text, and it read as a core that renders black. The maximum pixel in the whole
+  1920x1080 frame was RGB **(4,4,4)**. Pulling that number out of the BMP took a
+  minute and turned a guess into a fact; the cause was the frontend obeying the
+  frame's alpha channel.
 - **Every screen photographs itself, headless.** `SDL_VIDEODRIVER=offscreen`
   needs no compositor, no session and no controller:
   ```
@@ -211,180 +355,217 @@ Ordered for whenever it is installed. **Do not begin these in the VM.**
   `--screen` opens by walking the route a person walks, so a capture cannot show
   a state the product cannot reach. `--storage`, `--download` and `--unkeep` do
   the same for the things with no picture.
-- **`--render-size` was quietly broken** for every screen with a pill or a panel
-  on it: `presentScene` composited to the window while the capture read the
-  offscreen target. Fixed 2026-09-16. The lesson is that **the instrument can be
-  the thing that is wrong**, and it failed in a way that looked like a layout
-  bug.
+- **To watch a real game, launch it**: `--launch <romId> --launch-after 1
+  --frames N`. A PSP game needs about 2500 drawn frames to reach its attract
+  demo on this VM, which is roughly two minutes; Dreamcast about 1400. Add
+  `--overlay-exit` to make it quit back to Home by itself, which is the only way
+  to exercise the unload path without a controller.
 - **Stop the session before building on the VM.** The frontend runs at 300% CPU
-  under llvmpipe and it is four cores. `sudo systemctl stop
-  cabinetos-session.service`, build, start it again — with `--no-block` on the
-  start, or ssh hangs. Or skip it entirely and use the offscreen driver.
+  under llvmpipe and it is four cores. Or skip it and use the offscreen driver.
 
 ### About the product
 
 - **A truncated explanation is worse than none.** A tile's second line holds
-  about sixteen characters beside a cover. "No core in the ..." tells a person
-  strictly less than nothing — they can already see the tile is dimmed. Measure
-  the column before writing the string.
-- **Two tiles that read the same are one tile.** "Nintendo 64" and "Nintendo DS"
-  both truncated to "Nintendo ...", and hyphens matter on their own —
-  "TurboGrafx-16" and "TurboGrafx-CD" have no space before the part that
-  distinguishes them.
+  about sixteen characters beside a cover. Measure the column before writing the
+  string.
+- **Two tiles that read the same are one tile.**
 - **`catalog::coverageFor` answers FOUR different questions.** No core exists, a
   core exists and Cabinet does not ship it, this console has not built it, and
-  it is built and cannot be driven. Collapsing any two hides work.
+  it is built and cannot be driven. Collapsing any two hides work. Only the
+  first three are reachable today; the fourth is empty because every core runs.
 - **An unanswered libretro core option is NOT the default.** The core skips the
-  case and the C global keeps its zero value — silence for a sample rate, black
-  for brightness, off for every toggle whose useful state is on. It cost Cabinet
-  eight evenings. **Fixed 2026-09-16: 526 options across twenty cores, every one
-  of them previously unanswered.** Run `--core-options` to see the table and
-  `--core-options-off` for the control.
+  case and the C global keeps its zero value. **This is no longer an argument,
+  it is a demonstration**: run `--core-options-off` and launch a PSP game, and
+  it ends at *"the core needs a render target this context cannot build"*,
+  because the resolution option falls back to "Auto", which sizes the render to
+  a display a libretro frontend never reports. Without the option work, PSP
+  would not start at all. `--core-options` prints the table; 601 options across
+  twenty-one cores, one of them ours.
 - **A core that declares no options is the suspicious case, not the clean one.**
   FBNeo and MAME declare theirs per driver, so the table does not exist until a
-  game is loaded. MAME also asks for options it never declared, and which ones
-  varies by game — those still go unanswered and must not be guessed at.
-- **`av_info` is a narrow probe.** It reports geometry, frame rate and sample
-  rate. Two of three cores showed no difference there between answered options
-  and none, while MAME's sample rate moved 44100 to 48000. "No difference in
-  av_info" does not mean no difference.
+  game is loaded.
+- **`av_info` is a narrow probe.** Geometry, frame rate, sample rate. "No
+  difference in av_info" does not mean no difference.
 - **Ask the CORE, never the platform**, whether an archive should be opened.
-  FBNeo reads `zip` and `7z` itself; `.chd` and `.rvz` must never be unpacked.
 - **Never dispatch on a file extension.** Thirty-two files in the reference
   library have none. Sniff the magic bytes.
 
 ### About the machine and the work
 
-- **Build a core, then RUN it.** Every assertion passed on melonDS while it
-  wrote its save file to `/`, because it reads the save directory in
-  `retro_init` and the frontend set it at game-load time. Silent, and it hits
-  every core that writes its own saves.
-- **Measure rather than reason, where you can.** The keep refusal was checked by
-  filling the disk with a ballast file; the eviction protection by reading back
-  what `--storage` says is a candidate. Both took two minutes and both would
-  have been plausible-looking and wrong on paper.
-- **Every scripted edit must assert its anchor.** A `python - <<PY` that
-  replaces text it cannot find changes nothing, the build stays green, and the
-  feature silently is not there.
+- **Build a core, then RUN it.** This is now four for four. Every assertion in
+  the build pipeline passed on melonDS while it wrote its save to `/`; on
+  PPSSPP it passed while the memory card went somewhere unwritable, while the
+  picture drew at 1.5% brightness, and while the override table was being
+  printed rather than applied. **The build pipeline cannot see any of it.**
+- **Measure rather than reason, where you can.** Two minutes of measurement has
+  beaten a plausible argument every time it has been tried here.
+- **Run the control.** `--core-options-off` and `cores/backend-diff.sh` exist for
+  it, and the control has twice been more informative than the result.
+- **Every scripted edit must assert its anchor.** A patch that matches nothing
+  leaves a green build with the fix absent.
 - **A field added to the middle of a positional struct re-assigns the rest of
-  the row.** `catalog.cpp`'s table is positional and three rows end in `true`;
-  the new `system` field went last for exactly that reason.
-- **Wall-clock pacing makes a headless capture emulate almost nothing.**
-  `--frames 180` asks for 180 DRAWN frames, and offscreen those take under a
-  tenth of a second, so the core is paced against a tenth of a second and
-  emulates five frames — a black boot screen for every console ever made. The
-  first Mupen64Plus capture came back black and looked exactly like a core that
-  had failed. A capture now steps one emulated frame per drawn frame. **A
-  hardware-rendered console needs about 1100 frames to reach a title screen**,
-  which is 16 seconds on the VM, not minutes.
-- **Do not judge a hardware core by its first screenshot.** Mario Kart 64 at
-  frame 600 shows the Nintendo logo MIRRORED, which looks exactly like a botched
-  flip. It is the logo rotating. The test that actually settles orientation is
-  text that reads correctly: at frame 1100 the title screen says PUSH START
-  BUTTON the right way round.
-- **The weekly base bump needs two clicks, not none.** It opens a pull request
-  now (the repository setting was turned on 2026-09-17), but the build on it
-  lands as `action_required` and waits for approval —
+  the row.** `catalog.cpp`'s table is positional.
+- **Wall-clock pacing makes a headless capture emulate almost nothing**, which is
+  why a capture steps one emulated frame per drawn frame.
+- **Do not judge a hardware core by its first screenshot.** The test that settles
+  orientation is text that reads correctly.
+- **Two podman containers with `:Z` over overlapping paths will break each
+  other.** `:Z` relabels the whole mounted tree for one container's SELinux
+  category, so running `podman run -v ~/cabinetos:/repo:Z` while a core is
+  building under `~/cabinetos/.core-src` relabels the build out from under it —
+  the running compiler then fails with **"Permission denied"** writing its own
+  dependency files, in one directory, for no visible reason. Cost one PPSSPP
+  build. **Do not start a second container over a parent of a running one.**
+- **`pgrep -f "some string"` matches your own command line**, and so does
+  `pkill -f`. This bit twice more in one session: `pkill -f "hrydgard/ppsspp"`
+  and `pkill -f "git-remote-https"` each killed the ssh session issuing them,
+  because the remote command contained the pattern. **Match on something the
+  checker cannot contain** — `pgrep -x`, a pid file, or the exit status of the
+  thing you started. `pgrep -x` also refuses names over 15 characters, so
+  `cabinetos-frontend` needs `ps -eo args | grep "[c]abinetos-frontend"`.
+- **The weekly base bump needs two clicks, not none.** It opens a pull request,
+  but the build on it lands as `action_required` and waits for approval —
   `gh api -X POST /repos/MMagTech/cabinetos/actions/runs/<id>/approve`. And
-  **read the relevant list**: the first real run classified a month-long
-  `linux-firmware` move as routine because `base-watch.txt` had no firmware
-  entry. PROJECT.md has the whole story; the short version is that **when
-  something breaks on real hardware, look at what that file does not watch.**
-  (That particular move turned out to be Bazzite deliberately pinning back
-  firmware that was breaking handhelds — a fix, not a regression. Chase these
-  to the upstream commit before treating one as a risk.)
-- **A core build failing is not always the core.** The twenty-job matrix
-  fetches 267 MB of Fedora packages, and on 2026-09-16 a mirror timed out at
-  under a kilobyte a second and failed `Build prosystem` — which passed on
-  re-run in fifty seconds, with nothing wrong with prosystem. The container is
-  now built once per run and pulled by the twenty, so that chance is twentyfold
-  smaller, but it is not zero. **Re-run before reading anything into a single
-  red core**, and look at the log: a `Curl error (28)` is the network, not the
-  code.
-- **The image build still only runs on a pull request aimed at `main`.** The
-  frontend compile and the core build were widened on 2026-09-16 to run on every
-  pull request, because a stack of branches had slipped past them and the
-  compile check silently did not apply to the work being written. The image
-  build was left narrow on purpose — twelve minutes, no path filter — so if you
-  ever do target something other than `main`, that one still needs
-  `gh workflow run build.yml --ref <branch>`.
-- **Retargeting a pull request does not re-run CI.** The workflows fire when a
-  pull request is *opened*, not when its base changes. Close and reopen it.
-- **`pgrep -f "some string"` matches your own command line.** Three times now,
-  the worst being a wait loop whose pattern matched the shell running the check,
-  so it sat for nine hours waiting for something already finished. **Match on
-  something the checker cannot contain** — a pid file, `pgrep -x`, or the exit
-  status of the thing you started.
-- **Look on disk before concluding a file does not exist.** `core-manifest.json`
-  is at `~/Downloads/core-manifest.json` and is not on GitHub.
+  **read the relevant list**: when something breaks on real hardware, look at
+  what `ci/base-watch.txt` does not watch.
+- **A core build failing is not always the core.** `Curl error (28)` is the
+  network. Re-run before reading anything into a single red core.
+- **GitHub serves some repositories at 55 KB/s over git and 9.8 MB/s over
+  HTTPS.** A full clone of PPSSPP is 324,844 objects and took three hours at
+  that rate on a machine that pulls a tarball in seconds. `build-core.sh` now
+  clones `--filter=blob:none`, which finished the same clone in 45 seconds —
+  but **NOT for submodules**, where the lazy blob fetch is thirty times slower
+  than cloning them whole. The comment in the script says so; do not "tidy" it.
+- **The image build still only runs on a pull request aimed at `main`.** If you
+  target something else, it needs `gh workflow run build.yml --ref <branch>`.
+- **Retargeting a pull request does not re-run CI.** Close and reopen it.
+- **`core-manifest.json` IS on GitHub**, at `docs/core-manifest.json` in
+  Cabinet, and has been since `37ca75d`. This file and PROJECT.md both said
+  otherwise for four days. The `~/Downloads/core-manifest.json` copy is
+  byte-identical to it.
 
 ## The state that lives on the VM and not in git
 
 - `~/frontend/` — the frontend source, built with
   `podman run --rm -v "$PWD":/src:Z -w /src cabinetos-builder make`
-- `~/frontend/cores/build/` — twenty built cores, where the frontend looks
-- `~/frontend/romcache/` — downloaded ROMs, plus `kept/` and `pending/`
+- `~/frontend/cores/build/` — **twenty-one** built cores, where the frontend looks
+- `~/frontend/system/` — BIOS files fetched from RomM, files the cores write,
+  and **`PPSSPP/`**, 13 MB of PSP system files that came out of the core build
+  rather than off the server. Copy it from `~/cabinetos/cores/system/` after
+  building that core.
+- `~/frontend/romcache/` — downloaded ROMs, plus `saves/`, `kept/` and `pending/`
 - `~/cabinetos/` — a clone of this repo, where `cores/build-core.sh` runs
-- `~/cabinetos/.core-src/` — per-core checkouts, ~3.5 GB, of which Flycast is
-  2.2 GB. They are a cache: delete any to make room and the next build re-clones
+- `~/cabinetos/.core-src/` — per-core checkouts, **4.8 GB, of which PPSSPP is
+  3.4 GB**. They are a cache: delete any to make room and the next build
+  re-clones. Flycast's was deleted on 2026-09-17 to make room for PPSSPP.
 - `~/run-frontend.sh` — the session launcher. The original is `run-frontend.sh.bak`
 - `~/.config/cabinetos/romm.json` — the RomM token, 0600
 
-**Disk on the VM: about 7.6 GB free.** 4.5 GB came back on 2026-09-16 from
-`podman image prune -f`, which removes untagged builder layers and leaves
-`cabinetos-builder:latest` alone. If it is tight again, that is the first thing
-to try, then `.core-src`.
+### The VM has TWO disks now, and the second one is the point
 
-## Next session: the last emulator, then which systems to add
+| | |
+|---|---|
+| `/dev/vda4` → `/var` | 21.6 GB btrfs, **about 5.3 GB free**. The OS and everything above. |
+| `/dev/vdb` → `/var/mnt/games` | **100 GB btrfs**, empty, label `cabinetos-games`. Added 2026-09-17. |
 
-The user's plan, said 2026-09-17 while closing the previous session:
+In `/etc/fstab` by UUID with `nofail`, and **proved across a reboot** rather
+than assumed. `nofail` matters: a machine that will not boot because a games
+drive is missing is exactly what open question 14 forbids.
+
+**It exists to test the two-drive design, not just to hold a big PKG.** Four
+things become measurable that were decisions on paper:
+
+1. **That demoting a kept game is a RENAME, not a copy.** A rename cannot cross
+   filesystems — the kernel returns `EXDEV` — and that is the whole reason
+   `roms/` and `cache/` repeat on every drive rather than once at the root.
+   Two real filesystems means this can be timed instead of argued.
+2. **That a missing drive degrades rather than errors.** `umount /dev/vdb` with
+   the console running. Written down as a requirement; never once exercised.
+3. **Both disk floors against realistic numbers** — 5.3 GB on one volume and
+   98 GB on the other, rather than ballast on a single disk.
+4. **A PS3 PKG install at full size.** Sly Cooper is 19.8 GB and its install
+   would be about the same again; 40 GB fits on the new disk and could never
+   have fitted on the old one.
+
+**Adding it in Unraid is not obvious** and cost some time: the VM editor will
+not resize an existing vDisk at all, and the option to add a second one is
+hidden behind the **BASIC / ADVANCED toggle** at the top right of the Edit VM
+page. The terminal alternative is `qemu-img resize` on the file under
+`/mnt/user/domains/<vm>/`.
+
+**`disk_config/disk.toml` still says `minsize = "20 GiB"`**, so a VM rebuilt
+from a fresh qcow2 comes out small again with no second disk. If this work
+continues, that number should change — it is a one-line edit nobody has made.
+
+`podman image prune -f` is still the first thing to try when `/var` gets tight,
+then `~/cabinetos/.core-src`.
+
+## The heavy-systems discussion: what it settled, 2026-09-17
+
+The user's ask, 2026-09-17:
 
 > "We should work on the remaining emulator and discuss the addition of others,
 > because none of my Cabinet builds currently have Wii U, PS3, Xbox, Xbox 360 or
 > Switch and I'd like to consider those."
 
-**Build PPSSPP first** — it is item 4 on the list above and it is the one that
-finishes the set at twenty-one of twenty-one.
+The emulator is done, and **the discussion happened.** What it settled:
 
-**Then the discussion, which needs these numbers in front of it.** Counted from
-the live RomM library on 2026-09-17, because "should we support X" is a
-different question when X is 109 games and when it is none:
+| | |
+|---|---|
+| **Hardware** | Settled. The reference machine is now a **GEEKOM A9 Pro** — Ryzen AI 9 HX 370, Radeon 890M — replacing the SER5. MMagTech has seen it running God of War 3. **Do not reopen this.** |
+| **Systems Cabinet does not have** | **Allowed.** PS3 may be OS-only. Open question 19. |
+| **Save data** | A folder tree, and the PSP mechanism built the same day already covers it. |
+| **Save states** | RPCS3 has none, **and they are not needed** — snapshots earn their keep on cartridge machines, not on a console with real in-game saves. |
+| **Renderer** | RPCS3 wants Vulkan. So do parallel-RDP and Flycast. **One piece of host work serves three systems** — open question 20. |
+| **Installation** | **The one real problem.** 24 of 30 games are PKGs, and what you download is not what you run. Open question 19. |
+| **Storage** | Unchanged by the faster box: 307 GB, one 37 GB title. |
 
-| System | Games | Size | Where it stands |
+**What is left is the PKG install experiment — item 0 above — and a Vulkan path
+in the host, which cannot be built until the A9 Pro exists.**
+
+The original material follows, because the numbers are still the numbers.
+
+Counted off the live server 2026-09-17, because "should we support X" is a
+different question when X is 109 games and when it is none — and the last column
+is the one that was missing before:
+
+| System | Games | Library size | Largest single title |
 |---|---|---|---|
-| **Switch** | **109** | 310 GB | no core in the manifest |
-| **PS3** | **30** | 307 GB | no core in the manifest |
-| PS Vita | 27 | 22 GB | no core in the manifest |
-| Wii | 2 | 7 GB | no core in the manifest |
+| **Switch** | **109** | 310 GB | **28.3 GB** |
+| **PS3** | **30** | 307 GB | **37.0 GB** |
+| PS Vita | 27 | 22 GB | 3.2 GB |
+| Wii | 2 | 7 GB | 4.7 GB |
 | **Wii U** | **0** | — | not in the library at all |
 | **Xbox** | **0** | — | not in the library at all |
 | **Xbox 360** | **0** | — | not in the library at all |
-| PS2 | 71 | 111 GB | Cabinet embeds PCSX2 — open question 12 |
-| GameCube | 14 | 11 GB | Cabinet embeds Dolphin — open question 12 |
-| PSP | 4 | 3 GB | core not built yet — item 4 above |
+| PS2 | 71 | 111 GB | 6.6 GB |
+| GameCube | 14 | 11 GB | 1.3 GB |
+| PSP | 4 | 3 GB | 1.8 GB — **plays, as of today** |
 
-**Three of the five the user named serve zero games today.** That is not an
-argument against them, but it should be said out loud before any effort is
-estimated: Wii U, Xbox and Xbox 360 have nothing in the library to run.
+**Three of the five the user named serve zero games today.** Not an argument
+against them, but it should be said before any effort is estimated.
 
-**Two things to bring to the discussion rather than decide alone:**
+**Two things that were put to the user rather than decided:**
 
 1. **These are not libretro cores.** Every one of the twenty-one is a `.so` this
-   frontend loads and drives. Wii U, PS3, Xbox 360 and Switch emulation lives in
-   standalone applications with their own windows, their own input, and their
-   own renderers — which is the same shape as PS2 and GameCube, and therefore
-   the same question as **open question 12**, not a new one. Answer 12 first, or
-   answer them together.
-2. **Storage stops being theoretical.** Switch and PS3 alone are 617 GB, against
-   a library that is otherwise a few dozen. The cache, both floors and Download
-   All were all designed against cartridge and disc-sized games. A 40 GB single
-   title is a different animal and the storage model should be checked against
-   it before anything is built.
+   frontend loads and drives in its own process and its own frame loop. Wii U,
+   PS3, Xbox 360 and Switch emulation lives in standalone applications with
+   their own windows, input and renderers — the same shape as PS2 and GameCube,
+   and therefore **open question 12**, not a new question. Cabinet answered it
+   for those two by embedding real PCSX2 and Dolphin as libraries rather than
+   launching them. Answer 12 first, or answer them together.
+2. **Storage stops being theoretical.** Switch and PS3 alone are 617 GB. More to
+   the point, **a single 37 GB title is larger than the free space the console
+   keeps in reserve** — the cache, both floors and Download All were all designed
+   against cartridge and disc-sized games, and none has ever seen one game that
+   big. That is cheap to check against the model and has not been checked.
 
-**Do not research emulator options before that conversation.** The user asked to
-*consider* these, and what they are worth considering against — hardware,
-storage, and the standalone-emulator question — matters more than a list of
-project names.
+**The recommendation given, for whoever picks this up if the user has not
+replied:** PS3 and Switch are the only two of the five that would serve a game
+today, they are the two heaviest systems in emulation, and they land on the same
+unanswered question as PS2 and GameCube — which are already in the plan and
+already have a proven answer in Cabinet. So: PS2 and GameCube first, then judge
+PS3 and Switch with that experience in hand.
 
 ## Something the user wants discussed, in its own session
 
@@ -398,6 +579,28 @@ built: Home is assembled from RomM's play history, and favourites and recents
 are RomM's rather than local, so whose account they come from stops being
 implicit the moment there is more than one.
 
+## Licensing, which is now written down
+
+**`docs/LICENCES.md`** lists every core, its licence, its upstream and the
+commit this project pins. Modelled on Cabinet's own, which had already solved
+it.
+
+**The one line that shapes decisions:** six of the twenty-one cores — FBNeo,
+MAME 2003-Plus, Snes9x, Genesis Plus GX, PicoDrive and Opera — are free for
+**non-commercial use only**. CabinetOS is free, is not sold, and takes no
+donations, and that is what keeps them legitimate. **Selling a machine with this
+image on it would break it**, which matters because the hardware has already
+changed once and may change again.
+
+**The terms ship INSIDE the image**, at `/usr/share/licenses/cabinetos/`,
+installed and asserted by `build_files/build.sh` — because whoever pulls the
+image is exactly the person who never sees this repository.
+
+Still owed: the licence text readable on the console (Settings → About), and a
+verification pass over each line against the source it came from — they were
+carried across from Cabinet's list rather than checked here, and this project's
+own rule is that a fact carried across is a fact nobody has checked.
+
 ## Cabinet-side debts
 
 1. **Flycast carries unscripted edits in its working tree**, so its pinned
@@ -405,15 +608,25 @@ implicit the moment there is more than one.
    cannot share its emulator tag.** Capture the diff before anything touches
    that tree:
    `git -C spikes/cores/flycast/src diff > tools/patches/flycast-unscripted.patch`
-2. **mGBA's Mac build is `-dirty` too**, and its manifest entry lists no patches
+2. **The manifest does not describe how a core is built.** PPSSPP's entry says
+   `patches: null` and `build_args: null`; `tools/build-ppsspp.sh` applies two
+   source patches and passes CMake flags, two of which change what the binary
+   is. The same shape as Flycast's thin patch inventory. **The builder scripts
+   are the real record**, and the manifest is load-bearing for parity — so this
+   is worth a pass across every core, not just this one.
+3. **A comment in `NativeCore.savesOverSaveRAM` says PSP save sync is "its own
+   future feature".** It was built afterwards — `MemoryCardSync.swift:324` plus
+   the archive/unpack/restore trio in `NativeLauncher` — and the comment never
+   moved. It cost a wrong claim in a pull request here on 2026-09-17. One line
+   to fix, and worth a look for others like it: **a stale comment reads exactly
+   like a current one.**
+4. **mGBA's Mac build is `-dirty` too**, and its manifest entry lists no patches
    at all. Same problem, quieter.
-3. **Two "unrecoverable" tvOS revisions were recovered with `strings`.** Nine
+5. **Two "unrecoverable" tvOS revisions were recovered with `strings`.** Nine
    more are probably sitting in the shipping archives. An hour of work turns
    "unknown and unknowable" into facts.
-4. **melonDS's archives carry no revision** while the same upstream built here
+6. **melonDS's archives carry no revision** while the same upstream built here
    reports one, so something in Cabinet's build is losing `GIT_VERSION`.
-5. **`core-manifest.json` is still not pushed to GitHub.** It is load-bearing
-   for every core and it is one unbacked file on one Mac.
 
 ## How the user wants this done
 
@@ -430,5 +643,9 @@ sure we can't do X?" and "you need to read Cabinet" both produced better answers
 than the first one.
 
 **Use the `MMagTech` handle, never the user's personal name** — not in files,
-commits or documents. `docs/PROJECT.md` still carries 26 uses of it from earlier
-sessions and the repo is public; that is worth a find-and-replace.
+commits or documents, and the repo is public. This file previously said
+`docs/PROJECT.md` still carried 26 uses of the personal name; as of 2026-09-17
+every one of its 29 occurrences is the handle, and a pattern search for a name
+in the places one would sit — *"X's prompt"*, *"X said"*, *"X chose"* — finds
+none. **Treat that as checked rather than as done**, since a search cannot
+prove the absence of a word nobody wrote down, and keep the rule regardless.

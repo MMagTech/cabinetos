@@ -292,7 +292,17 @@ While you are in the firmware, two settings worth changing now:
 
 ## Credits and licence
 
-CabinetOS is MIT licensed. See [`LICENSE`](LICENSE).
+CabinetOS's own source is MIT licensed. See [`LICENSE`](LICENSE).
+
+**The emulator cores it ships are not, and six of them are free for
+non-commercial use only.** [`docs/LICENCES.md`](docs/LICENCES.md) lists every
+core, its licence, its upstream and the exact commit it was built from.
+**CabinetOS is free, is not sold, and takes no donations** — that is what keeps
+those cores legitimate in this build, and it is a deliberate constraint rather
+than an oversight.
+
+CabinetOS ships no games, no BIOS and no firmware. All of those come from your
+own RomM server.
 
 The `Containerfile`, `Justfile`, `disk_config/` and `.github/workflows/` are
 derived from the [Universal Blue image template](https://github.com/ublue-os/image-template),

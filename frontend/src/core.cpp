@@ -1,6 +1,7 @@
 #include "core.h"
 
 #include <dlfcn.h>
+#include <unistd.h>
 
 #include <SDL3/SDL.h>
 
@@ -479,8 +480,16 @@ int16_t inputState(unsigned port, unsigned device, unsigned index, unsigned id) 
     return 0;
 }
 
+// Cores are chatty at INFO, so warnings and above are what reaches the log.
+//
+// RAISING THIS WAS TRIED AND IT BREAKS PPSSPP. A flag that let everything
+// through was built to read one INFO line the core prints — and with it on, the
+// process aborts at exit with "terminate called without an active exception",
+// reproducibly, twice, while the identical run without it exits 0. The cause is
+// not established; the flag is gone, and the one line worth having says itself
+// at WARN instead (cores/build-core.sh's cpu-engine probe).
 void logCallback(enum retro_log_level level, const char* fmt, ...) {
-    if (level < RETRO_LOG_WARN) return;  // cores are chatty at INFO
+    if (level < RETRO_LOG_WARN) return;
     char buf[1024];
     va_list ap;
     va_start(ap, fmt);
@@ -679,9 +688,38 @@ void* Core::symbol(const char* name) {
     return s;
 }
 
+namespace {
+// Cores get ABSOLUTE directories, always, and they are created before the core
+// is told about them.
+//
+// The frontend names both relative to where it runs, which is convenient here
+// and wrong to hand over. A core is entitled to do more with these than fopen
+// them: PPSSPP wraps them in a path type of its own that asks whether a path is
+// absolute and behaves differently when it is not, and handed "romcache/saves"
+// it mounted the memory stick somewhere it could not write — the game ran, the
+// save failed, and the only sign was a line in the core's own log saying
+// "Error writing file ms0:/PSP/SAVEDATA/...". That is the melonDS lesson
+// arriving a second time by a different route, so it is fixed once, here,
+// rather than per core.
+//
+// The mkdir matters as much as the absolute path: a core that is handed a
+// directory which does not exist yet has nowhere to put a save, and finds that
+// out silently.
+std::string absoluteDir(const std::string& dir) {
+    if (dir.empty()) return dir;
+    std::string abs = dir;
+    if (abs.front() != '/') {
+        char cwd[4096];
+        if (getcwd(cwd, sizeof(cwd))) abs = std::string(cwd) + "/" + abs;
+    }
+    SDL_CreateDirectory(abs.c_str());
+    return abs;
+}
+}  // namespace
+
 void Core::setDirectories(const std::string& systemDir, const std::string& saveDir) {
-    gSystemDir = systemDir;
-    gSaveDir = saveDir;
+    gSystemDir = absoluteDir(systemDir);
+    gSaveDir = absoluteDir(saveDir);
 }
 
 bool Core::load(const std::string& soPath) {
@@ -767,6 +805,26 @@ bool Core::load(const std::string& soPath) {
     needFullpath_ = info.need_fullpath;
     coreVersion_ = info.library_version ? info.library_version : "?";
 
+    // One retro_run is one emulated frame for every core here but this one.
+    //
+    // PPSSPP with a GL context runs its emulation on a thread of its own and
+    // uses retro_run to consume ONE SWAP from it — and a swap is one GAME
+    // frame, not one vblank. A 30fps PSP game flips every other vblank, so
+    // pacing it at the 59.94 the core reports runs it at twice speed, with the
+    // audio to match. Cabinet measured exactly 2.0x on an Apple TV, on
+    // Lumines: 120 emulated vblanks a second against 60 swaps.
+    //
+    // Frame pacing alone cannot see this, because the accumulator counts the
+    // runs it asked for rather than the emulated time they produced. What can
+    // see it is the audio, which is the one thing the core emits at a rate the
+    // emulated machine decides — so the brake is audioAhead() below.
+    //
+    // Named rather than taken from the hardware-render flag, because the other
+    // two hardware-rendered cores do not need it and one of them is measurably
+    // worse for having it: applying Cabinet's governor to every core slowed N64
+    // down, reported from a real device within hours.
+    governed_ = coreName_ == "PPSSPP";
+
     // Order matters: the environment callback must be installed before
     // retro_init, because a core may call it from there.
     g.set_environment(environment);
@@ -810,6 +868,7 @@ std::vector<std::string> Core::undeclaredOptionAsks() const {
 
 void Core::setAnswerOptions(bool on) { gAnswerOptions = on; }
 
+
 void Core::unload() {
     if (!handle_) return;
     if (gameLoaded_) unloadGame();
@@ -832,29 +891,42 @@ bool Core::loadGame(const std::string& romPath, const std::string& systemDir,
         error_ = "no core loaded";
         return false;
     }
-    gSystemDir = systemDir;
-    gSaveDir = saveDir;
+    gSystemDir = absoluteDir(systemDir);
+    gSaveDir = absoluteDir(saveDir);
 
+    // need_fullpath means the core opens the file ITSELF, and libretro is
+    // explicit that the frontend must then not load it. This used to read it
+    // anyway, which was invisible while the cores that ask for it were handed
+    // small files — and stops being invisible at PSP, where The Warriors is
+    // 1.8 GB on a machine with 4 GB of memory. The bytes were allocated, read,
+    // and then ignored by the core.
+    //
+    // The file is still checked, because "the core refused it" and "there is
+    // no file there" are different failures and only one of them is the core's.
     std::vector<uint8_t> rom;
+    size_t romSize = 0;
     if (FILE* f = std::fopen(romPath.c_str(), "rb")) {
         std::fseek(f, 0, SEEK_END);
         long n = std::ftell(f);
         std::fseek(f, 0, SEEK_SET);
         if (n > 0) {
-            rom.resize(static_cast<size_t>(n));
-            if (std::fread(rom.data(), 1, rom.size(), f) != rom.size()) rom.clear();
+            romSize = static_cast<size_t>(n);
+            if (!needFullpath_) {
+                rom.resize(romSize);
+                if (std::fread(rom.data(), 1, rom.size(), f) != rom.size()) rom.clear();
+            }
         }
         std::fclose(f);
     }
-    if (rom.empty()) {
+    if (romSize == 0 || (!needFullpath_ && rom.empty())) {
         error_ = "cannot read " + romPath;
         return false;
     }
 
     retro_game_info info{};
     info.path = romPath.c_str();
-    info.data = rom.data();
-    info.size = rom.size();
+    info.data = needFullpath_ ? nullptr : rom.data();
+    info.size = needFullpath_ ? 0 : rom.size();
 
     if (!g.load_game(&info)) {
         // Deliberately does not claim the core is wrong, because nothing here
@@ -897,6 +969,8 @@ bool Core::loadGame(const std::string& romPath, const std::string& systemDir,
     }
 
     accumulator_ = 0.0;
+    paceClock_ = 0.0;
+    governorSkips_ = 0;
     gFramesRun = 0;
     gAudioFrames = 0;
     gAudio.clear();
@@ -927,6 +1001,11 @@ void Core::unloadGame() {
     destroyHWTarget();
 }
 
+double Core::audioAhead() const {
+    if (av_.sampleRate <= 0) return 0.0;
+    return static_cast<double>(gAudioFrames) / av_.sampleRate - paceClock_;
+}
+
 int Core::runFor(double dt) {
     if (!gameLoaded_) return 0;
 
@@ -936,9 +1015,35 @@ int Core::runFor(double dt) {
     // Letting it accumulate would make the core sprint to catch up, which
     // stutters the picture and floods the audio buffer.
     if (accumulator_ > interval * 4) accumulator_ = interval;
+    // The clock the governor measures against. It is whatever clock runFor is
+    // driven by, which is the wall clock in the product and a synthetic one
+    // frame per draw under --screenshot — so the RELATIONSHIP the governor
+    // enforces holds in both, and a capture of a 30fps PSP game advances it at
+    // 30 game frames per 60 drawn rather than sprinting.
+    paceClock_ += dt;
 
     int ran = 0;
     while (accumulator_ >= interval && ran < 2) {
+        // The second brake, and only one core has it. See load(): the
+        // accumulator counts the runs that were asked for, and for PPSSPP a
+        // run is a game frame rather than a vblank, so the accumulator can be
+        // satisfied while the emulated machine is running at twice speed.
+        //
+        // The core's own audio output is the check, because its rate is
+        // decided by the emulated machine rather than by us. Ahead of the
+        // clock by more than the cushion and the core is simply not due,
+        // whatever the accumulator says.
+        //
+        // THE CUSHION IS FELT LATENCY. The lead it permits is input lag, at
+        // 10 ms per hundredth of a second. Cabinet shipped 50 ms, had it
+        // reported as bad input lag on Dreamcast, and settled on 20 ms. This
+        // is that number, inherited rather than measured — the display path
+        // here is different and it is a thing to tune on the SER5 with a pad
+        // in hand, not on a software-rendered VM.
+        if (governed_ && audioAhead() > 0.020) {
+            ++governorSkips_;
+            break;
+        }
         if (gHWWanted && gHWFBO) {
             // Bound before the core runs as well as answered on request. Cores
             // differ about when they ask for the framebuffer, and one that

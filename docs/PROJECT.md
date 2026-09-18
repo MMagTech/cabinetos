@@ -26,11 +26,12 @@
 
 ---
 
-## Where the project is — 2026-09-16
+## Where the project is — 2026-09-17
 
 **Phase 0 complete. Phase 1 complete. Phase 2 mostly done. Phase 3 well under
-way and running. Phase 5 started early and the hardest question in it is
-answered.**
+way and running. Phase 5 started early, the hardest question in it is answered,
+and as of 2026-09-17 every one of the twenty-one libretro cores is built and can
+be run.**
 
 ### The thing that matters most
 
@@ -132,11 +133,15 @@ ordered this way now.
 - **Nothing has been judged on a television.** Motion, the letterbox glow and
   the safe area are all recorded as needing the SER5, which is not yet
   installed. A software-rendered VM cannot answer any of them.
-- **Twenty cores of twenty-one are built**, and all four backend-sensitive ones
-  are settled: pcsx_rearmed and melonDS take the recompiler and share Cabinet's
-  tag, picodrive matches Cabinet's flags exactly, and Flycast is blocked on
-  Cabinet's own unscripted edits rather than on anything here. **1143 of 1644
-  games are playable.** PPSSPP is the one not built.
+- ~~**Twenty cores of twenty-one are built**~~ **— all twenty-one are, as of
+  2026-09-17.** PPSSPP was the last, and it runs: Lumines reaches its attract
+  demo in colour with sound, writes its memory-stick save, and quits back to
+  Home. **1147 of 1644 games are playable**, the four extra being PSP. All four
+  backend-sensitive cores are settled: pcsx_rearmed and melonDS take the
+  recompiler and share Cabinet's tag, picodrive matches Cabinet's flags exactly,
+  and Flycast is blocked on Cabinet's own unscripted edits rather than on
+  anything here. PPSSPP's backend is not a build flag at all — see open
+  question 13.
 - ~~**Two of the twenty cannot be RUN here**~~ **— they can, as of 2026-09-16.**
   Flycast and Mupen64Plus render through a graphics context rather than handing
   back pixels, and the host now owns one and hands them a framebuffer inside
@@ -155,15 +160,29 @@ ordered this way now.
 1. **Flycast carries unscripted edits** in its working tree, so its pin does not
    reproduce what ships — for Dreamcast and Naomi. Capture that diff before
    anything touches the tree.
-2. **Eleven of twenty-three cores ship different revisions to iOS and macOS**,
+2. **PPSSPP's manifest entry says `patches: null` and `build_args: null`, and
+   both are wrong.** `tools/build-ppsspp.sh` applies two source patches — a
+   shader-cache save on context loss, on every platform, and a CPU-engine probe
+   on the Mac — and passes real CMake flags, of which `USING_GLES2` and
+   `MOBILE_DEVICE` change what the binary is. The same shape as Flycast's thin
+   patch inventory, and recoverable in the same way: by reading the builder
+   rather than the manifest. **The manifest is not yet a complete description of
+   how a core is built**, and it is load-bearing for parity.
+3. **Eleven of twenty-three cores ship different revisions to iOS and macOS**,
    and eleven of the twenty-one tvOS revisions were recorded as unrecoverable.
    `core-manifest.json` pins each forward, which is right and far cheaper now,
    in alpha, than once anyone has a save history. **Two of the eleven have since
    been recovered straight out of the shipping archives** — see open question 13
    — and the same trick probably works on several more.
-3. **mGBA's Mac archive reports `e31759b24-dirty`**, so that build carries a
+4. **mGBA's Mac archive reports `e31759b24-dirty`**, so that build carries a
    working-tree modification no script applies, in a core whose manifest entry
    lists no patches at all. Same shape as Flycast's, found the same way.
+5. ~~**`core-manifest.json` is not pushed to GitHub.**~~ **It is, and has been
+   since `37ca75d`** — `docs/core-manifest.json`, byte-identical to the copy in
+   `~/Downloads` that this project has been reading. Checked 2026-09-17 by
+   cloning Cabinet and diffing the two. Recorded because the opposite was
+   written down here and in the handover, and a debt that is already paid is
+   still a wrong fact about the project.
 
 Running infrastructure:
 
@@ -241,7 +260,51 @@ Neither implementation may be the only one.
 
 **The target is x86-64 PC hardware, not one specific machine.**
 
-The development and reference machine is a Beelink SER5 mini PC (AMD Ryzen 5,
+**The reference machine changed on 2026-09-17, which is exactly what this
+section said would happen.** It is now a **GEEKOM A9 Pro — AMD Ryzen AI 9 HX 370
+(Zen 5, 12 cores) with Radeon 890M integrated graphics (RDNA 3.5, 16 CUs).** It replaces the Beelink
+SER5 (Ryzen 5, Vega), which was only ever the spare box that happened to be
+available.
+
+> *"If the project works out, the hardware may change, and CabinetOS must not
+> have quietly grown dependencies on this particular box in the meantime."* —
+> written here in Phase 1, and now cashed in. Nothing had to change to move
+> machines, which is the point of having said it.
+
+**What moves with it:**
+
+- **The performance floor moves a long way up.** Phase 8 exists to tune PS2,
+  GameCube, Dreamcast and Naomi "on Vega integrated graphics". That premise is
+  gone. The floor is now Zen 5 with a Radeon 890M, and Phase 8's targets should be
+  re-read rather than inherited.
+- **Everything keyed to "the SER5" now means this machine** — most importantly
+  the decision that no UI is designed or tuned until CabinetOS is installed on
+  it. That gate did not move, but the thing it waits for did.
+- **PS3 becomes a hardware question that is ANSWERED.** MMagTech, 2026-09-17:
+  *"ive seen numerous videos on youtube of it running ps3 including god of war
+  3."* RPCS3 is CPU-bound rather than GPU-bound — the work is emulating the
+  Cell's SPUs — and Zen 5 carries AVX-512, which is the instruction set that
+  matters most for it. **Treat PS3 performance as settled and stop revisiting
+  it.** What remains for PS3 is architectural and storage-shaped, not
+  performance-shaped; see open question 12.
+
+**What does NOT move:**
+
+- **Still AMD**, so the base image stays plain `bazzite` and open question 11
+  (NVIDIA) stays out of scope. No second image to build, sign and boot.
+- **Still no wired CEC pin.** Essentially no x86 mini PC has one, so the USB
+  adapter stays in the bill of materials.
+- **Storage is unaffected.** A faster CPU does not make PS3's 307 GB, or its
+  37 GB single title, any smaller.
+
+**One thing to verify rather than assume when it arrives:** Strix Point is recent
+enough that its graphics support depends on a current Mesa and kernel. Bazzite
+44 is Fedora 44 with Mesa 26.2, which should be comfortable — but "should be" is
+the phrase this project has learned to distrust, so boot it before believing it.
+
+The original text follows, because the reasoning is still the rule:
+
+The development and reference machine was a Beelink SER5 mini PC (AMD Ryzen 5,
 Radeon Vega integrated graphics) because that is the spare box available. It is
 not the product's definition. If the project works out, the hardware may change,
 and CabinetOS must not have quietly grown dependencies on this particular box in
@@ -877,8 +940,9 @@ back. `Core::frameUV` is where the two paths meet: a software core answers
 larger target with its rows the other way round, so no caller above it knows
 which kind of core is running.
 
-Four things were not obvious in advance and each one would have looked like a
-broken game:
+Five things were not obvious in advance and each one would have looked like a
+broken game. The fifth is PPSSPP's and arrived a day later, which is the point
+of the list: each one is a different core teaching the same lesson.
 
 - **The target is sized to the core's declared MAXIMUM, not its picture.**
   Flycast asks for 853x853 and then presents 640x480 into the corner of it.
@@ -897,14 +961,30 @@ broken game:
   internal resolution the core was asked for. At 3x internal resolution the
   frame is 1920x1440, flooring to an integer scale gives zero, clamps to one,
   and draws 360 rows off the bottom of the screen.
+- **THE FRAME'S ALPHA IS NOT A COMPOSITING INSTRUCTION**, and taking it as one
+  made PPSSPP look like a core that renders black. The player drew the game's
+  texture with ordinary alpha blending, which is right for a cover and wrong for
+  a picture: the alpha channel of an emulated machine's framebuffer is the
+  machine's own state. Lumines leaves it at nearly zero, so the whole 1920x1080
+  capture peaked at RGB **(4,4,4)** — the picture was there the entire time, at
+  1.5% brightness, with text faintly legible against black. **The game surface
+  is now drawn opaque for every core**, because it is a picture in all of them.
+
+  The thing worth carrying is how it presented. The capture was not empty, so it
+  did not read as "no frame"; it read as a plausible, nearly-black rendering,
+  and the first instinct was to believe the core. Reading the actual pixel
+  maximum out of the BMP took a minute and turned a guess into a number.
 
 **Only GLES is accepted, and the version is read rather than assumed.** SDL is
 asked for GLES 3.0 and the driver is free to hand back more — the test VM
 returns 3.2 — so refusing a core that wants 3.1 on the basis of what was asked
 for would be turning down something the machine can do. Desktop GL and Vulkan
 are refused by name, because accepting and then failing inside the core reads as
-a broken game rather than as a frontend that cannot do something. Both cores
-tested asked for GLES 3.0 and got it.
+a broken game rather than as a frontend that cannot do something. Flycast and
+Mupen64Plus ask for GLES 3.0 and get it; **PPSSPP asks for GLES 2.0**, which
+this GLES 3 context serves, and it only asks for GLES at all because it is built
+with `USING_GLES2` — without it the same core asks for desktop GL and is refused
+by name. See open question 13.
 
 ### Shaders, and the glow around the picture
 
@@ -2220,6 +2300,46 @@ structural, not empirical.
   first real reason beyond tidiness.
 - **`ci/base-watch.txt` gains** SDL3, Mesa and PipeWire, per *Staying current
   with Bazzite*'s own instruction that the list must grow with the project.
+
+---
+
+## Licensing, and the constraint it puts on the project
+
+**`docs/LICENCES.md` is the list.** This section is the part that shapes
+decisions rather than the part that credits people.
+
+**Six of the twenty-one cores are free for NON-COMMERCIAL use only** — FBNeo,
+MAME 2003-Plus, Snes9x, Genesis Plus GX, PicoDrive and Opera. That is not GPL
+and it is stricter: GPL restricts the terms you distribute under, these restrict
+whether you may sell at all. Between them they cover Arcade, SNES, Genesis, Sega
+CD, Master System, Game Gear, 32X and 3DO.
+
+> **CabinetOS is free, is not sold, and takes no donations. That is what keeps
+> those cores legitimate, and it is a deliberate constraint rather than an
+> oversight.** Cabinet states the same thing about itself, and **the risk is
+> sharper for an operating system**: an app is hard to accidentally sell, and an
+> OS is something you put on a box. The moment money changes hands for a machine
+> carrying this image, those six cores have to come out or be relicensed.
+
+**This has teeth for decisions already on the table.** *Hardware* says the
+reference machine may change and has already changed once. If it ever changes
+into a product, this is the constraint that bites first — before performance,
+before storage, before anything discussed in open question 12.
+
+**Everything else of consequence is GPL**, which is not a restriction on use:
+anyone may run, study, modify and redistribute it, commercially included. The
+obligation is on distribution — pass on the same freedoms and make the
+corresponding source available. CabinetOS `dlopen`s its cores rather than
+statically linking them, which is a looser coupling than Cabinet's build, but
+the conservative reading is the same: the image is a combined work. That is
+satisfied the way Cabinet satisfies it — every core is built from a named
+upstream commit by a script in this repository, and the three in-flight source
+patches are visible in that script rather than vendored.
+
+**Two things are owed and neither exists yet:** the licence text readable on the
+console itself (Settings → About, per *Branding*), and a verification pass over
+each licence line against the source it came from, since those were carried
+across from Cabinet's list rather than checked here.
 
 ---
 
@@ -4173,6 +4293,23 @@ is precisely what was missing. An override is for when CabinetOS wants something
 subset (`NativeCoreOptions.swift`) is the obvious thing to bring across, one
 platform at a time, with a reason beside each.
 
+> **It has one entry now, 2026-09-17, and the first one found a hole.**
+> PPSSPP's CPU backend is an option rather than a build flag, so
+> `ppsspp_cpu_core` is answered with Cabinet's `IR JIT` — and adding it revealed
+> that `optionOverrides` was being called **only by `--core-options`**, the
+> audit, and by nothing that starts a game. While the table was empty that was
+> invisible, and the audit agreed with itself. It is wired into both launch
+> paths now.
+>
+> The lesson is the same one this section is about, one level up: **a table that
+> is printed rather than applied is worse than no table**, because the
+> instrument reports the intention instead of the behaviour.
+>
+> The audit was also not setting the core's directories, which is why PPSSPP
+> warned that its system files were missing during a run meant to describe what
+> the core does in the product. An instrument that sets the core up differently
+> from the way the product does is measuring something else.
+
 #### A bug worth keeping: an offscreen render composited to the window
 
 `Renderer::presentScene` bound framebuffer 0 unconditionally, so with
@@ -4243,7 +4380,14 @@ and then find out. Do the opposite:
    best coverage in the set — one build is Genesis, Sega CD, Master System and
    Game Gear. Confirm each of those four separately, per the rule above; Sega CD
    in particular writes its saves by a different mechanism than the other three.
-5. **The rest**, which by then are a loop.
+5. ~~**The rest**, which by then are a loop.~~ **DONE 2026-09-17, with PPSSPP.**
+   All twenty-one libretro cores are built, and every one of them can be run.
+   PPSSPP was left until last on the grounds that it needed the hardware-render
+   path, and it did — but the thing that actually took the time was none of
+   that: its CPU backend turns out to be a runtime OPTION rather than a build
+   flag, its firmware ships with the emulator rather than coming from RomM, and
+   running it found three host bugs that twenty cores had not. See open
+   question 13.
 6. **Dolphin and PCSX2 last**, as their own `.so` files, against upstream PCSX2
    rather than the ARM64 fork.
 
@@ -4785,6 +4929,12 @@ the revision and the flags rather than about the machine, so a core can be
 checked against it anywhere — and it means a future mismatch is a real signal
 rather than noise to be explained away.
 
+**Now three, and the third is the one that was in doubt.** PPSSPP, 2026-09-17:
+`c93fed82…` on both, from a 38 MB CMake build of roughly four hundred
+translation units with a vendored ffmpeg linked in. The two above are small
+Makefile builds; this is the shape that could plausibly have picked up a
+timestamp or a path. It did not.
+
 **Decision: build with `HAVE_CDROM=0`.** The conservative choice is free here.
 The console has no optical drive and never will — ROMs arrive from RomM as
 files — so the lever disables a feature the hardware cannot use, and matching
@@ -4914,6 +5064,15 @@ every save state made so far.
 The recovery was run on the build Mac the same day. `core-manifest.json` now
 exists in Cabinet (not yet pushed at the time of writing). CabinetOS consumes it
 once it lands; do not keep a copy here, it would drift.
+
+> **It landed, and this document did not notice for four days.** It is
+> `docs/core-manifest.json` in Cabinet, pushed in `37ca75d`, and a fresh clone
+> diffs byte-identical against the `~/Downloads` copy this project has been
+> reading. Found 2026-09-17 while cloning Cabinet for PPSSPP's build flags.
+> **So it is fetchable, and `catalog.cpp`'s table is a candidate for generation
+> after all** — that table's own comment says it is hand-written "because the
+> manifest is not in this repository and is not fetchable", and half of that
+> reason has now expired.
 
 It did not merely record what was there. **It found that Cabinet is shipping
 different revisions of the same core to different apps, right now.**
@@ -5394,6 +5553,478 @@ row below it.
   identical video digest; the test's own guard reports the scene as static at
   that point, so it proves the round trip rather than a long divergence.
 
+#### PPSSPP, 2026-09-17: the twenty-first core, and its lever is not a build flag
+
+**Built, run, and playing.** Lumines reaches its attract demo in colour with
+sound, writes its memory-stick save, and quits back to Home with the shelf
+showing it as recently played. Hammerin' Hero does the same. That is PSP, and it
+finishes the set at **twenty-one of twenty-one**, 1147 of 1644 games.
+
+| | |
+|---|---|
+| Pinned commit | `c989c2553e1099730736d965c221823fe974fa55` — the same one on every platform Cabinet ships it to |
+| Reports | `PPSSPP v1.20.4-1359-gc989c2553`, asserted against the pin |
+| Content | 480x270 into a 480x272 target, 59.9401 fps, 44100 Hz, aspect 1.7778 |
+| Context | **OpenGL ES 2.0**, bottom-left origin — the only core in the set that asks for ES 2 |
+| Save state | 41,943,040 bytes at the demo screen |
+| System files | 13 MB, 43 files, installed beside the core rather than fetched from RomM |
+| sha256 | `c93fed82…` — **the same on the test VM and on a GitHub runner** |
+
+**It is reproducible across machines, and that is a third data point rather than
+a repeat.** gambatte and genesis_plus_gx are small Makefile builds; this is a
+38 MB CMake build of roughly four hundred translation units with a vendored
+ffmpeg linked in, produced from a bare checkout in CI in 8m52s, and the two
+artifacts are byte-identical. A sha256 in a CI log is a fact about the revision
+and the flags rather than about the machine — see *And the build turns out to be
+reproducible across machines*, which said that when it had two cores to say it
+about.
+
+##### The CPU backend is an OPTION here, not a build flag
+
+Five cores in this set pull their backend lever in `cores/build-core.sh`.
+PPSSPP does not have one: it chooses between three CPU engines **at runtime**,
+from `ppsspp_cpu_core`, whose declared default is `JIT` — the native x86-64
+recompiler. Cabinet ships `IR JIT`, upstream's own string for the IR
+interpreter, on all three of its platforms.
+
+**CabinetOS matches Cabinet, and the lever moved to `catalog::optionOverrides`,
+which now has its first entry.** The standing rule applies unchanged — match
+Cabinet's configuration until a backend difference has been measured not to move
+the state format — and nothing is given up by obeying it: PSP is four games, and
+Cabinet's own bench found the IR interpreter *faster* than the recompiler on an
+M4 (Lumines 1.93 ms mean against 3.05) because compilation stalls land inside
+frames. What it costs, plainly: on an x86-64 console the native recompiler is
+the engine PPSSPP is usually run with, and this leaves it off.
+
+##### And it will not tell you which engine it picked, so it was made to
+
+`MIPSState::Init` turns `cpuCore` into one of three very different objects and
+says nothing, and the libretro layer will silently rewrite a request for the
+recompiler into the IR interpreter. In Cabinet that left the question of which
+engine was running unresolved for days. Cabinet's answer is a one-line log in
+its **Mac** build; this build carries the same line on the only platform it has,
+at WARN rather than INFO because that is this host's log floor.
+
+It earns its place immediately. The core now says, on every boot:
+
+```
+[core] [CPU] cabinet: CPU engine = 2 (0 interpreter, 1 native JIT, 2 IR interpreter, 3 JIT+IR)
+```
+
+and with `--core-options-off`, the control, it says **0** — the plain
+interpreter, because an unanswered `ppsspp_cpu_core` leaves
+`g_Config.iCpuCore` at the `CPUCore::INTERPRETER` that `retro_load_game` sets
+before it reads any variable. **That is this document's own central rule
+demonstrated in a third core, from the core's own mouth.**
+
+##### And that control run does something better than make a point: it does not start
+
+With every option unanswered, the same launch ends at
+
+```
+[launch] the core needs a render target this context cannot build
+```
+
+because `ppsspp_internal_resolution` is then the internal default of 0, *"Auto
+(native)"*, which sizes the render to a display a libretro frontend never
+reports — so the declared geometry comes back **0x0** and the host refuses to
+build a target for it.
+
+**Without the core-options work of 2026-09-16, PSP would not run on this console
+at all.** Not "run badly", not "run silently wrong": not start. Cabinet found the
+same trap on its first PPSSPP boot and had to answer the option by hand;
+CabinetOS gets it for free from answering every declared default, which is the
+first time that work has paid for itself in a way that can be pointed at. And
+the host fails loudly with the reason rather than showing a black screen, which
+is the other half of the same design.
+
+##### Two CMake levers, and one of them decides whether the core runs here at all
+
+`build_args` is null for every platform in the manifest, which is not what the
+builder actually passes — see the Cabinet-side note below. Read from
+`tools/build-ppsspp.sh` instead:
+
+- **`USING_GLES2`.** `LibretroGLContext` asks for `RETRO_HW_CONTEXT_OPENGLES2`
+  when it is defined and `RETRO_HW_CONTEXT_OPENGL` when it is not. This
+  frontend's context is EGL/GLES and refuses desktop GL **by name** — so without
+  this flag the twenty-first core would have been the first customer for
+  `Support::NeedsHardwareRender`, exactly as this document predicted it might
+  be. Cabinet gets the flag from upstream's iOS toolchain; the unix build has no
+  equivalent and would quietly ask for desktop GL.
+- **`MOBILE_DEVICE`.** Cabinet gets this from the same toolchain, and `LIBRETRO`
+  does not imply it — only `ANDROID` does. **Read rather than assumed:** every
+  use of it in the tree is AVI/WAV dumping, window geometry, the keymap or the
+  desktop UI, and the three sites in `Core/SaveState.cpp` are dump-restart
+  bookkeeping around a save rather than state content. It is not free, though —
+  the `Core/Config.cpp` block it disables also carries `AnisotropyLevel`'s
+  default of 4, so leaving it off would change texture filtering against the
+  Apple TV's picture for no reason.
+
+FFmpeg comes from the vendored `ffmpeg/linux/x86_64` prebuilt archives, which is
+the same mechanism Cabinet uses with `ios/universal` and `tvos/arm64`.
+
+##### The firmware special case, finally concrete
+
+PSP's "firmware" is not a console's and does not come from RomM. It is fonts,
+VFPU lookup tables and a per-game compatibility list that ship **with the
+emulator** — in the app bundle on Apple, and here as files `build-core.sh`
+installs into the frontend's system directory, where `retro_init` appends
+`PPSSPP` and warns *"Core system files missing, expect bugs"* if `compat.ini` is
+not there.
+
+The set is Cabinet's 43 files rather than upstream's whole 22 MB `assets/`
+directory: the difference is the desktop UI's — the web debugger, themes, UI
+images, sound effects, the SDL controller database — and Cabinet's subset is the
+one that has actually run PSP games on a television.
+
+**Where they live in the image is still Phase 5's to decide.** The build stages
+them at `cores/system/PPSSPP` and the deploy copies them across; in a bootc
+image that becomes a path in `/usr`, which is fine, because the core only ever
+reads it.
+
+##### The emulator tag IS shared, and this is the strongest case in the set
+
+`ppsspp-native`. There is no configuration difference left to justify: the
+commit is identical on every platform Cabinet ships it to, both of the patches
+Cabinet's builder applies travel and are asserted, both CMake levers are
+matched, and the CPU engine is answered with Cabinet's own value. What is not
+proved — and this is equally true of the five tags that came before it — is that
+a state written by this build has been loaded by Cabinet's. The cross-platform
+load was proved once, on gambatte; every tag since rests on configuration parity.
+
+##### PSP save DATA does sync, and this document said the opposite for a day
+
+**Corrected 2026-09-17, by MMagTech, who said "I have other games for it with
+their memory card in RomM."** He is right, and it took one API call to confirm:
+
+```
+Lumines - Puzzle Fusion (USA) (Cabinet).srm   51,426 bytes
+emulator = ppsspp-native      updated 2026-08-28
+users/…/saves/Playstation Portable/967/ppsspp-native/
+```
+
+**How the wrong claim was arrived at, because the mistake is reusable.**
+`NativeCore.savesOverSaveRAM` excludes `.psp`, and the comment above the
+exclusion says in as many words *"Save sync for PSP is its own future
+feature."* That comment was read and believed. It is **stale in Cabinet's own
+source**: the feature was built afterwards, four files away, and nothing went
+back to update the comment. A `grep` for `archivePSPSaveData` in the same
+directory would have shown three call sites in under a second.
+
+> The rule this project already has is *look at the machine rather than
+> reasoning from a message*. A source comment is a message. It deserves exactly
+> the same suspicion as an error string, and it aged worse than the code did.
+
+**What Cabinet actually does**, read from `MemoryCardSync.swift:324` and
+`NativeLauncher.swift:212-260`:
+
+- PSP is a **tree rather than a file**, so `archivePSPSaveData` serialises the
+  whole `PSP/SAVEDATA` subtree into one blob with `FileWrapper`.
+- It is captured on **the same trigger as every other platform** — after the
+  core has shut down and flushed — compared against the previous local
+  snapshot, **written locally first**, and only then uploaded.
+- It rides the **same store, the same `/api/saves` endpoint and the same
+  `saveRAM` region** as a cartridge battery. There is no separate PSP path in
+  the sync layer at all; the difference is entirely in how the bytes are
+  gathered.
+- Only `PSP/SAVEDATA` travels. NAND, `PPSSPP_STATE` and `SYSTEM/CACHE` sit
+  beside it and are this device's own machine state, save states and compiled
+  shaders — *"uploading them would put tens of megabytes of nothing on the
+  server and mean nothing on the other end."*
+- The restore is deliberately additive: a save folder the archive does not
+  contain is never removed, so a wrong newest-wins costs a stale slot rather
+  than somebody's save.
+
+##### So the real obstacle is the FORMAT, and it is much narrower than "no design"
+
+`FileWrapper.serializedRepresentation` is Apple's serialised-directory archive.
+Read off the actual bytes rather than assumed:
+
+```
+00000000: 7274 6664 0000 0000 0300 0000 0400 0000  rtfd............
+00000010: 1700 0000 5f5f 4055 5446 3850 7265 6665  ....__@UTF8Prefe
+```
+
+`rtfd`, then little-endian length-prefixed names — `__@UTF8PreferredName@__`,
+`ULUS10002LUMINES`, `SAVEDATA` — and the payloads stored **uncompressed and
+contiguous**: `PARAM.SFO`'s ` PSF` at offset 230, two PNGs at 5150 and 21404
+with their `IEND` markers where they should be.
+
+**CabinetOS has no Foundation**, so it cannot call `FileWrapper`. But it does
+not need to reverse-engineer anything either — the container is a flat
+length-prefixed table with uncompressed members, which is a bounded afternoon's
+parser, and **there is a real 51 KB save on the server to check the round trip
+against.** That is a far better position than the "future feature" this section
+previously claimed.
+
+##### What PPSSPP is SUPPOSED to use, which is the question that settles it
+
+**MMagTech, immediately after the correction above: "we're using PPSSPP, what
+format is it supposed to use?"** That is the right question and it has a plain
+answer.
+
+**PPSSPP's save format is the FOLDER.** `PSP/SAVEDATA/<GAMEID><TITLE>/`, holding
+`PARAM.SFO`, `DATA.BIN` and the icons — which is what a real memory stick holds
+and what PPSSPP reads and writes on every platform it ships on. Verified
+first-hand rather than from a page: Lumines wrote exactly
+`PSP/SAVEDATA/ULUS10002LUMINES/{PARAM.SFO, DATA.BIN, ICON0.PNG, PIC1.PNG}`.
+
+**There is no single-file PSP save format, and nobody upstream defines one.**
+
+- **PPSSPP** documents where the memory stick lives and defines no export or
+  archive format at all.
+- **RomM** does not specify one either. Its saves page lists per-platform
+  extensions — `.srm`, `.sav`, `.eep`, `.fla` — and says nothing about PSP or
+  about directory saves, and the device-sync protocol treats a save as an
+  opaque named file with an mtime and a SHA1.
+
+**So the container is a free choice, and `.srm` was the wrong label.** Cabinet
+picked `FileWrapper`, which is Apple's `rtfd` directory archive, and named the
+upload `.srm`, which is a SNES and Genesis save-RAM extension. The file on the
+server is neither an `.srm` nor readable anywhere without Foundation.
+
+**The de facto answer in the PSP world is a plain zip of the save folder.** That
+is how PSP save data is distributed and how a person installs one into PPSSPP —
+extract the folder into `PSP/SAVEDATA`. It is also free here: the frontend
+already links **libarchive** for ROMs, which writes zip as well as reads it.
+
+> **This reverses the recommendation made an hour earlier in this section.** It
+> said keep `rtfd` for compatibility. That was the wrong trade once the actual
+> quantity was known: there is **exactly one** PSP save on the server. Migrating
+> one file is a one-off; keeping `rtfd` means this console carries a
+> hand-written parser for an undocumented Apple format forever, and so does
+> anything else that ever touches these saves — Grout, a handheld, RomM's own
+> web UI.
+
+##### DECIDED: Cabinet moves. Fixed there 2026-09-17, not yet pushed
+
+**MMagTech: "we fixed it on cabinet just hasn't been pushed to github."** So the
+question of who moves is answered — CabinetOS targets **zip** and does not need
+to write `rtfd`.
+
+**Recorded as reported, not as verified.** The Cabinet source is not on this Mac
+(checked: `~/Documents/Cabinet` is the ROM and BIOS folder, and the only git
+repo here with a Cabinet remote is this one), and the change is not on GitHub
+yet, so nothing here has seen it.
+
+**It can be verified without the source, from one uploaded save.** As of
+2026-09-17 the server still holds only the August file, first bytes `rtfd`. The
+moment a PSP game is played on the fixed build, four bytes settle it —
+`PK\x03\x04` is zip.
+
+**Three things to read off that first upload, because each one silently breaks
+the other end:**
+
+1. **What the zip is ROOTED at.** `ULUS10002LUMINES/PARAM.SFO`, or
+   `SAVEDATA/ULUS10002LUMINES/…`, or `PSP/SAVEDATA/…`? Any of them is fine and
+   they are not interchangeable: unzip to the wrong level and the files land
+   one directory off and the game simply does not see the save. This is the
+   detail most likely to be got wrong on the second end, and it is invisible
+   until someone looks inside the file.
+2. **Whether Cabinet still READS `rtfd`.** This one risks MMagTech's own data
+   rather than ours: the August Lumines save is the only PSP save he has, it is
+   still `rtfd`, and if the fixed build dropped the old read path then that save
+   is now unreadable on his own devices.
+3. **Whether the tag is still `ppsspp-native`.** It is what this console writes.
+   If Cabinet moved it, saves and states stop lining up between the two.
+
+Either way the sync layer itself needs nothing new: same store, same endpoint,
+same tag, same after-shutdown trigger.
+
+**Zip is measured, not assumed.** The round trip was run on this console against
+the real save: zip the folder, delete the original, unzip it back, and all four
+files return byte-identical (`PARAM.SFO`, `DATA.BIN`, `ICON0.PNG`, `PIC1.PNG`).
+Lumines then launched against the restored folder, ran and quit to Home with no
+file errors, and the files were still identical afterwards. **PPSSPP is never
+handed the zip** — it reads loose files from `PSP/SAVEDATA/<GAMEID><TITLE>/`, as
+it always has, and the container exists only between the app and RomM. The zip
+is also smaller than the Apple archive, 40,626 bytes against 51,426, because it
+deflates and `rtfd` does not.
+
+*Not proved*: that the game displayed a "continue" option, which needs a
+controller and an in-game menu. What is proved is that the bytes the core reads
+are bit-identical to the bytes it wrote.
+
+Verified by running: Lumines wrote all four files under
+`romcache/saves/PSP/SAVEDATA/ULUS10002LUMINES/`, so what CabinetOS has to
+archive is exactly what Cabinet archives.
+
+##### What running it found that building it could not, for the fourth time
+
+Every assertion in the build pipeline passed — pinned commit, asserted revision,
+reproducible artifact — and none of them could see any of this.
+
+1. **A relative save directory is not a path to every core.** The host named its
+   directories relative to where it runs. PPSSPP wraps them in a path type that
+   asks whether a path is absolute and behaves differently when it is not, and
+   mounted the memory stick somewhere it could not write: the game ran, the save
+   failed, and the only sign was the core's own `Error writing file
+   ms0:/PSP/SAVEDATA/...`. **Cores are handed absolute directories now, and the
+   directories are created before the core is told about them.** That is the
+   melonDS lesson arriving a second time by a different route, so it is fixed
+   once in the host rather than per core.
+2. **`need_fullpath` meant the ROM was read into memory and then ignored.**
+   Twelve of the twenty-one cores set it, and the frontend loaded the file
+   anyway — invisible while those cores were handed small files, and 1.8 GB on a
+   4 GB machine at The Warriors. Fixed, and re-checked by running a fullpath
+   hardware core (Ikaruga on Flycast, 35,908,299-byte state) and a fullpath
+   software one (Crash Bandicoot on pcsx_rearmed, 4,456,448) after the change.
+3. **The frame's alpha channel was being obeyed.** See *Video: two paths*.
+4. **`catalog::optionOverrides` reached the AUDIT and not the launch path.** It
+   was called in one place, `--core-options`, and nowhere a game is actually
+   started. While the table was empty that was invisible; PPSSPP's first real
+   override is what exposed it. **An override table that is printed rather than
+   applied is worse than no table**, because the audit agrees with itself.
+
+##### Loose ends, all small, none blocking
+
+- **`--state-test` cannot answer for this core.** Its warm-up is a tight loop of
+  `retro_run` with no wall clock in it, and PPSSPP is the only core in the set
+  that emulates on a thread of its own: three thousand calls produce no sound, a
+  static picture and a zero-byte state, while the same core reaches its attract
+  demo on the ordinary launch path. So a capture now reports
+  `retro_serialize_size` instead, which answers half the question — the core can
+  produce a 40 MB state — and leaves "is the round trip exact" open. **A core
+  with its own emulation thread is not frame-deterministic under that test**,
+  which is a real limitation of the instrument rather than a fault in the core.
+- **The process aborts at exit if it is killed while a PSP game is still
+  running** — `terminate called without an active exception`, after the capture
+  and the summary have been written. It does **not** happen on the path a person
+  takes: quitting through the overlay unloads the core first and exits 0,
+  verified on both PSP games. Cause not established.
+- **The audio governor is implemented for this core and has never engaged.**
+  Cabinet measured Lumines at exactly 2.0x on an Apple TV, because PPSSPP's GL
+  emu thread produces one SWAP per `retro_run` and a swap is a game frame rather
+  than a vblank. Measured here, the ratio is one vblank per run — Lumines 709
+  audio frames per run, Hammerin' Hero 682, against 735.8 for one vblank. The
+  leading suspicion is this document's own rule: `ppsspp_frame_duplication`
+  defaults to enabled and Cabinet leaves it unanswered, which is `false`. Not
+  established.
+
+#### The save audit, 2026-09-17: every core, against the bytes on the server
+
+**MMagTech, after the PSP correction: "can you audit the other cores and see if
+they suffer the same issue or similar."** Run against all **81 saves** on the
+live RomM server — downloaded and fingerprinted by their actual first bytes,
+not by their extension — and cross-read against Cabinet's `MemoryCardSync` and
+this console's own save directory after real runs.
+
+It answers two different questions, and the second one matters more.
+
+##### Question one: is anything else wrapped in a foreign container? No. Only PSP.
+
+| Platform | Tag | n | Size | First bytes | Verdict |
+|---|---|---|---|---|---|
+| PlayStation | `pcsx-rearmed-native` | 6 | 131072 | `MC` | native memory card |
+| Dreamcast | `flycast-native` | 13 | 131072 | — | native VMU image |
+| Saturn | `saturn-native` | 1 | 32768 | `BackUpRam Format` | native |
+| TurboGrafx / CD | `pcefast-native` | 3 | 2048 | `HUBM` | native |
+| Nintendo 64 | `mupen64plus-native` | 7 | 296960 | — | native combined save |
+| Nintendo DS | `melonds-native` | 5 | 512 / 262144 | `MKDSSV10` | native |
+| Game Boy Advance | `mgba-native` | 3 | 8192 / 32768 | `AGB  KIRBY` | native |
+| Game Boy / Color | `gambatte-native` | 4 | 8192 / 32768, 8 | — | native; the 8-byte one is the RTC, its own region |
+| 3DO | `opera-native` | 4 | 32768 | `.ZZZZZ..opera fo` | native |
+| Sega CD | `gpgx-native` | 5 | 8192, 524288 | — | native; the 512K is the cart, its own region |
+| Game Gear | `gpgx-native` | 2 | 3840 / 8193 | — | native |
+| Neo Geo Pocket | `ngp-native` | 1 | 272 | `S` | native |
+| Arcade | `fbneo-native`, `mame2003plus-native` | 17 | 64 … 131072 | varies | native NVRAM |
+| GameCube | `dolphin` | 3 | 2 MB / 16 MB | — | native raw card |
+| PlayStation 2 | `pcsx2` | 4 | 8650752 | `Sony PS2 Memory` | native |
+| **PSP** | **`ppsspp-native`** | **1** | **51426** | **`rtfd`** | **Apple container** |
+
+**PSP is the only one.** Every other core uploads the emulator's own bytes, so
+anything that can read a save for those platforms can read what is on this
+server. The `.srm` extension is a generic label rather than a claim about the
+contents — misleading on about fifteen rows and harmless, because the bytes
+underneath are native. Two platforms already get an honest extension (`.ps2`,
+`.raw`) and two regions get their own (`.rtc`, `.cart`), which is the pattern
+PSP should have followed.
+
+**Two junk rows worth cleaning up on the server**, found by the same pass:
+
+- **A 4-byte Arcade save containing the ASCII text `null`**, on Cotton Fantasy,
+  under the tag `fbneo` rather than `fbneo-native` — so it is also the only row
+  whose tag no current build writes.
+- **A 131072-byte PlayStation card with `emulator: null`**, on Need for Speed
+  III. It is a perfectly good memory card that no tag can match, so no client
+  will ever offer it.
+
+##### Question two: which of these can this console actually sync? Fewer than half.
+
+This is the finding that matters, and the audit is what made the size of it
+visible. CabinetOS's sync layer knows exactly one mechanism,
+`RETRO_MEMORY_SAVE_RAM`. Sorting the 81 rows by the mechanism their platform
+actually uses:
+
+| | Saves on the server |
+|---|---|
+| Ride `RETRO_MEMORY_SAVE_RAM` — CabinetOS handles these | **34** |
+| Written by the core as a FILE — CabinetOS handles none of them | **47** |
+
+**Fifty-eight percent of the saves on this server are for platforms this console
+can neither upload nor restore today.** The handover has carried that as "the
+file-writing save class is not synced at all", which is true and reads like an
+edge case. It is the majority.
+
+And none of it is a design problem, because Cabinet has already solved each one
+and the recipes are specific:
+
+| Platform | Where the core writes it | Name | On this console |
+|---|---|---|---|
+| **Dreamcast** | the **system** directory, `dc/` | `vmu_save_A1.bin`, or `<gameId>_vmu_save_A1.bin` with per-game VMUs | nothing, and it shows |
+| Arcade — MAME | save directory | `nvram/<stem>.nv` | **already on disk** from a real run |
+| Arcade — FBNeo | save directory | `fbneo/<stem>.fs` | — |
+| 3DO | save directory | `opera/shared/nvram.0.srm` | — |
+| Sega CD | save directory | `*.brm`, plus `*cart.brm` as its own region | **already on disk** (`scd_U.brm`) |
+| Neo Geo Pocket | save directory | `*.flash` | — |
+| Nintendo DS | save directory | `*.sav` | — |
+| PSP | save directory | the `PSP/SAVEDATA/**` tree | **already on disk** |
+
+##### Dreamcast is the one to do first, and the audit explains a symptom this document already had
+
+Thirteen saves — **the largest count of any platform on the server** — and this
+console cannot see any of them. It also explains, exactly, why *"Ikaruga opens
+on memory card not connected"* has been recorded here for two days as a
+curiosity of the file-writing save class:
+
+- Flycast never exposes the VMU through `RETRO_MEMORY_SAVE_RAM` at all. Cabinet
+  confirmed that against the core's own `retro_get_memory_data`, which only ever
+  answers `RETRO_MEMORY_SYSTEM_RAM`.
+- It reads and writes a real file in the **system** directory, `dc/`, not the
+  save directory — which is the same `dc/` the BIOS lives in, and is why this
+  console has `system/dc/dc_nvmem.bin` and nothing beside it.
+- Cabinet **restores the card there before the core boots** and captures it
+  after unload. Nothing here does, so the machine boots with an empty slot and
+  the game says so.
+- Verified on this console: `reicast_device_port1_slot1` is answered `VMU`, so
+  the port is configured — the card itself is simply absent.
+
+So Dreamcast save sync is: write the bytes to `system/dc/vmu_save_A1.bin` before
+boot, read them back after unload, upload if changed. **With thirteen real cards
+on the server to test the restore against**, which is a better test bed than any
+other platform offers.
+
+##### Two guards to copy rather than rediscover
+
+- **A uniform fill means the game never saved.** MAME's fresh NVRAM is all `0x01`
+  for the capbowl family and all `0x00` elsewhere, and a seeded bootstrap image
+  is identical for everyone who plays that board. Cabinet refuses to upload one
+  (`isUntouchedNVRAM`), because otherwise every launch fills somebody's RomM with
+  rows carrying no history — which are then pulled down onto their other device
+  as if they meant something. The audit shows the guard works: several arcade
+  rows exist and none is a uniform fill.
+- **Sega CD's cart is not its internal RAM.** The scan must exclude `cart.brm`
+  from the `.brm` match and give it its own region, or one overwrites the other.
+  Games prefer the cart when present.
+
+##### One more gap, smaller, found on our own disk
+
+`romcache/saves/pcsx-card2.mcd`, 131072 bytes — **PlayStation memory card 2**.
+Card 1 rides `RETRO_MEMORY_SAVE_RAM` and syncs; card 2 is a file and syncs on
+neither Cabinet nor here. Nothing on the server has ever held one. Low stakes,
+but it is the same shape as everything above and should be written down rather
+than found again.
+
 #### The test that answers the whole question, and can be run this week
 
 The parity risk is not theoretical and it does not need CabinetOS to exist to
@@ -5461,10 +6092,14 @@ Cabinet's flags exactly.**
   zero patches**, and Dr. Mario runs on it. See Phase 3. The remaining twenty
   are now a loop rather than a question — but they are still twenty, and the
   backend-sensitive ones still need their flags set explicitly.
-- **Firmware.** Cabinet fetches every firmware file a platform lists from RomM.
-  CabinetOS inherits that, but PSP is a special case: PPSSPP's system files ship
-  *inside the app bundle*, not from RomM. In a bootc image they become a path in
-  `/usr`, which is fine, but it is a thing to remember rather than discover.
+- ~~**Firmware.**~~ **HANDLED 2026-09-17, and it was the special case this said
+  it would be.** PPSSPP's system files ship with the emulator rather than coming
+  from RomM, so `build-core.sh` installs Cabinet's 43-file subset of upstream's
+  `assets/` into the frontend's system directory as `PPSSPP/`. The core checks
+  for `compat.ini` there and warns if it is missing, which is how the audit
+  caught that it was not setting directories at all. **Where they live in the
+  IMAGE is still Phase 5's** — a path in `/usr`, and the core only ever reads
+  them.
 
 ### Prior art: how Cabinet and Grout already do this
 
@@ -5935,3 +6570,448 @@ a "join another network" path where the name is typed too; **the passphrase is
 usually being read off the underside of a router**, so digits and symbols must
 not be buried behind a shift layer; and **802.1X enterprise is a different form
 entirely** — out of scope, and better refused plainly than half-supported.
+
+### 18. The on-disk layout
+**Raised by MMagTech 2026-09-17. DECIDED the same day. Not yet implemented.**
+
+> *"What I don't want is for these to be in completely random places throughout
+> the OS. If we had to ssh or sftp into the file system there should be an
+> organized folder structure that makes it distinct and easy to find."*
+
+A fair description of what exists. **The current layout was never designed — it
+accumulated**, and three of its problems were hit in one afternoon while adding
+PSP saves:
+
+- **There are two save directories.** `romcache/saves/` when a game is launched
+  from the library, and `saves/` when it is launched with `--core`. PSP save
+  folders were found in both. A save written one way is not seen the other way.
+- **`system/` holds three unrelated kinds of thing**: BIOS fetched from RomM
+  (replaceable), a Dreamcast's saved console settings (irreplaceable), and now
+  13 MB of PPSSPP fonts that are part of a build's output. This document already
+  carries a warning not to clean that directory. A warning is standing in for a
+  layout.
+- **Every core shares one flat save directory**, which is why attributing a PSP
+  save folder to the game that wrote it needed mtime comparison rather than a
+  path.
+- **`romcache/` is named "cache" and holds things that are not a cache** — kept
+  games, pending uploads, and every save. Cabinet renamed its Storage screen the
+  moment it held things that were not a cache; the directory here has the same
+  lie in its name.
+
+#### Take the vocabulary that already exists
+
+**Read from RetroArch's and RetroBat's own documentation rather than recalled.**
+Both use top-level folders named after what is in them — `bios`, `roms`,
+`saves`, `states`, `screenshots`, `cheats`, `config` — with no nesting of
+unrelated things. **Someone who has used either already knows where to look,
+which is most of what this question is asking for.**
+
+Three specifics worth taking:
+
+1. **Saves and states are separate top-level directories.** This console has no
+   states directory at all today; states go to RomM and nowhere else.
+2. **RetroArch sorts saves into folders by core name, and it is ON by default.**
+   So the per-core split is not an invention, it is what the most-used frontend
+   in this space already does. It also offers sorting by content directory.
+3. **RetroBat separates user data from program data** — a `user/` folder that
+   survives updates. That maps exactly onto a bootc image, where `/usr` is
+   replaced wholesale on every update and `/var` is the person's.
+
+#### The cache is the one thing that is genuinely ours
+
+Both of those assume the games are yours and permanent: `roms/` *is* the
+library. This console pulls on demand, so it has two categories neither needs —
+a game that is here because it was played, and a game that is here because
+somebody asked for it. **MMagTech's own read, and it is right.**
+
+Keeping them apart at the top level has a payoff beyond tidiness: **eviction
+only ever deletes inside `cache/`**, which is a rule that can be checked by
+looking rather than by reading code, and it lines up with the drive split
+already decided in open question 14 — kept games travel, the cache does not.
+
+#### Per-user from the start, because RomM already is
+
+**Raised by MMagTech: RomM has users, tvOS switches between them, so the layout
+should account for it before it exists.** It should, and RomM has already
+designed the answer. Read off the live server:
+
+```
+users/557365723a31/saves/Sony Playstation/356/pcsx-rearmed-native/<file>
+```
+
+`557365723a31` is hex for **`User:1`**. So RomM namespaces by **user first**,
+then asset kind, then platform, then rom id, then emulator tag. Mirroring that
+locally means the tree on the console and the tree on the server are the same
+shape — sync becomes obvious and a fault is visible by eye. (The same listing
+shows a save whose path simply *ends* at the rom id, with no emulator segment:
+that is the untagged PlayStation card, and the missing tag is a missing
+directory level.)
+
+**What is NOT per-user matters as much as what is.** Two people on one console
+must not download the same game twice, or hold two copies of the PS2 BIOS — and
+must never see each other's saves.
+
+| Per user | Shared by the machine |
+|---|---|
+| saves, save states | the downloaded game files |
+| screenshots | BIOS and firmware |
+| preferences | cores |
+| **the decision** to keep a game | shader caches |
+
+That last row is the subtle one and it belongs to the account-switching session
+rather than this one: the FILE is shared, the KEEP is personal, so releasing one
+person's keep must not delete a game somebody else pinned. The layout only has
+to leave room for it.
+
+#### The shape
+
+```
+<storage location>/
+├── roms/      kept games                shared
+├── cache/     pulled games              shared, and the only thing eviction touches
+├── bios/      firmware from RomM        shared
+├── users/
+│   └── <id> - <name>/
+│       ├── saves/<platform>/<romId>/<core>/
+│       ├── states/<platform>/<romId>/<core>/
+│       ├── screenshots/
+│       └── config/
+├── config/
+└── logs/
+```
+
+The root is `/var/lib/cabinetos/` on the internal disk. **`roms/` and `cache/`
+repeat on every storage location** rather than living only at the root — see
+*One kept game, two people* below, which is the reason.
+
+Anything that ships inside the image — PPSSPP's fonts and lookup tables — lives
+in `/usr/share/cabinetos/` and is never written to.
+
+#### One convention, twice: the number identifies, the words are for you
+
+`users/1 - MMagTech/`, and `roms/psx/321 - Crash Bandicoot.chd`.
+
+**The username alone was considered and is not the key.** It is available —
+`/api/users/me` returns it — and it is what a person recognises, so it belongs
+in the name. But **usernames change and ids do not**: rename in RomM and a
+name-keyed console would quietly create an empty folder and start again, with
+every save still on disk and nothing looking for it. That is the same failure as
+the untagged save above — the data is fine, the label moved. Two smaller
+reasons: a username can hold spaces and unicode, and `Matt` and `matt` are one
+directory on a FAT or exFAT drive, which is exactly the USB case open question
+14 contemplates. **RomM itself hex-encodes `User:1` rather than using the name**,
+which suggests the same conclusion reached independently.
+
+So the leading number is matched and everything after `" - "` is decoration that
+may be re-derived at any time. A rename becomes cosmetic rather than
+destructive.
+
+#### One kept game, two people
+
+**MMagTech, 2026-09-17: if one person keeps a game and somebody else plays it
+without keeping it, what happens on disk?** The answer is short and the
+consequences are not.
+
+**One copy. The second person just plays it.** Nothing is downloaded, nothing is
+copied, and nothing lands in their cache — the file is already on the machine
+and it stays the first person's kept game. Two people on one console never hold
+two copies of a 1.8 GB game.
+
+Three things follow:
+
+**1. "Kept" stops being a flag and becomes a set of people.** If both keep it and
+one releases, it must remain kept for the other. Today `cache::keep`,
+`unkeep` and `isKept` are a boolean per rom id with no notion of who — **that is
+the one piece of existing code this answer changes.**
+
+**2. Releasing the last keep DEMOTES rather than deletes.** The game becomes an
+ordinary cached file: still playable, now evictable, and re-keeping costs
+nothing because the bytes never moved. That makes un-keep a safe button rather
+than a destructive one, which matters when it sits one press away on a game's
+own screen.
+
+**3. And that is why `roms/` and `cache/` repeat per drive.** Kept games live on
+the large drive and the cache on the internal one, so a demotion at the ROOT
+level would mean physically copying gigabytes between disks because somebody
+changed their mind. With the same shape on every location, demotion is a rename
+inside one filesystem — instant — and *"eviction only ever touches `cache/`"*
+stays true on both drives instead of becoming a rule with an exception.
+
+Two smaller consequences, recorded so they are not rediscovered:
+
+- **Last-played is the MACHINE's, not a person's.** Eviction takes the least
+  recently played, and reading that per user would evict a game because *you*
+  have not touched it while somebody else plays it daily. For a shared file it
+  is the most recent play across everyone on the console. Play history itself
+  stays RomM's and per-user; this is a separate, local fact about a file.
+- **Playing a kept game does not quietly keep it for the player.** Keeping stays
+  a deliberate act, which is the entire distinction between the two categories.
+
+#### Why now, and the one caveat
+
+**Now it costs nothing** — one user, one directory — and later it means moving
+every save on every machine. Saves are the only category of data on this console
+that cannot be re-downloaded, so that asymmetry decides it.
+
+**The honest caveat:** the real key is *(server, user)*, not user alone, because
+two RomM instances both have a `User:1`. Open question 14 already established
+that RomM exposes no instance identity and that "one drive, one server" is a
+sentence of documentation rather than a mechanism. The same applies here: worth
+a note in the layout, not machinery.
+
+**Not implemented.** Nothing has moved. It should be done before there are
+machines with play histories on them, and it is a behaviour rather than a
+picture, so the SER5 decision does not hold it up.
+
+---
+
+### PSP save sync, BUILT AND PROVEN 2026-09-17
+
+Recorded here rather than under open question 13 because it is the first
+directory-save implementation and the pattern the other seven file-writing
+platforms should follow.
+
+`frontend/src/dirsave.{h,cpp}` zips and unpacks a tree with libarchive;
+`catalog::directorySaveRoot` says which core has one; `syncDirSave` in main.cpp
+captures, and the launch path restores. **The archive is rooted at the SAVEDATA
+level** — entries begin `ULUS10002LUMINES/PARAM.SFO` — so opening one shows the
+game's save folder, which is what every PSP save download on the internet looks
+like.
+
+**Measured, not argued:**
+
+| | |
+|---|---|
+| Played and quit | `Lumines.zip`, **40,344 bytes**, 4 entries, on RomM, tagged `ppsspp-native` |
+| Deleted locally and relaunched | unpacked, and **byte-identical to the server's copy** |
+| The old Apple-format save | sniffed, recognised as not a zip, **left alone** |
+
+**Three things running it taught, each of which would have been wrong on paper:**
+
+1. **Restore must happen BEFORE the core loads the game**, because PPSSPP mounts
+   the memory stick while the game boots. A folder that arrives later is a
+   folder the game has already decided is not there.
+2. **Capture must happen AFTER the unload**, because a directory save is files
+   on a disk and `retro_unload_game` is where a core flushes them.
+3. **Change detection needs nanoseconds and size, not whole seconds.** A save
+   restored and then rewritten inside the same second compares equal. Recorded
+   as a hazard closed rather than a fault observed — it was first reported here
+   as a real failure and that was wrong; checking showed the game had simply not
+   written anything that run.
+
+**And the crash it exposed, which is understood and NOT closed.** Quitting while
+the game was still booting killed the console inside the core's own boot thread
+(`PSP_InitStart` → `CPU_Init` → `__KernelInit` → `__PPGeInit`). Quitting now
+defers until the machine is up.
+
+> **The first fix waited a fixed number of FRAMES and fixed nothing**, because a
+> frame is 3 ms or 100 ms depending on what is being drawn — the same run
+> crashed at the window size and survived at 1920x1080. It waits on the clock
+> now, and the case that crashed twice exits cleanly after 4.1 seconds.
+
+**Still open:** in the headless capture configuration the core sometimes never
+boots at all — one run managed 2,384 frames and zero audio — and tearing it down
+then aborts at process exit in a static `std::thread` destructor inside the
+core. Not seen in the ordinary configuration. Same root cause as the crash: a
+core that never finished starting cannot run its own shutdown.
+
+**The fact underneath all of it, worth more than the feature:** *a core with its
+own emulation thread only advances when the frontend COMPLETES a frame, not when
+`retro_run` is called.* That explains the wait loop that made no progress AND
+why `--state-test` cannot warm this core up — two mysteries with one cause.
+
+### 19. Systems this console has and Cabinet does not
+**Raised and DECIDED by MMagTech, 2026-09-17.**
+
+> *"it doesnt need to be on the other builds just this the os."*
+
+**CabinetOS may carry systems Cabinet does not.** PS3 is the first, and Switch
+would be the second.
+
+This is a larger decision than it looks, because until now every system on this
+console also existed on the Apple TV, and that was not a coincidence — it is the
+premise the sync layer rests on. A PS3 game would be the first that **only**
+exists here: played on the console, never appearing on the phone or the
+television, with no save state travelling anywhere.
+
+**What it changes:**
+
+- **CabinetOS stops being "the same product on another screen" and becomes a
+  superset.** That is a fair thing for it to be — the console has hardware an
+  Apple TV never will — but it should be said out loud rather than discovered.
+- **Core parity stops being universal and becomes conditional.** It still binds
+  absolutely for every system Cabinet also ships, because that is what makes a
+  save state portable. For an OS-only system there is nothing to be parity
+  *with*, so the constraint simply does not apply — which also means those
+  systems are free to use whatever emulator and renderer suits this hardware.
+- **`catalog::coverageFor` gains no new answer.** An OS-only system is
+  `Playable` like any other; what changes is that `emulatorTag` returns nothing
+  for it, exactly as it already does for the cores whose builds cannot be
+  vouched for. The machinery is already there.
+
+**What it does not change:** everything Cabinet DOES ship stays in lockstep. This
+is permission to add, not permission to drift.
+
+#### PS3 is the first system where what you DOWNLOAD is not what you RUN
+
+**Raised by MMagTech, 2026-09-17, as the one thing about PS3 he could not see
+how to fit:** *"in rpcs3 you have to first install the firmware into it and then
+install the game. pkg have a license as well that needs inserting and then
+theres disc based iso."*
+
+**He is right, and a first look here said otherwise.** That look checked the
+name of each game's top-level entry, saw thirty directories, concluded "all disc
+rips", and was wrong — it never opened them. The same shape of mistake as
+believing a stale comment: one level checked, the conclusion generalised.
+
+**Counted properly, across every file of all thirty games:**
+
+| | |
+|---|---|
+| Contain a `.pkg` | **24 of 30** |
+| Contain a `.rap` licence | **19 of 30** |
+| Plain disc folders | **6** — God of War III is 97 files and 37 GB |
+
+A PSN title is two files. Sly Cooper is `Sly Cooper - Thieves of Time.pkg` at
+19.8 GB plus `EP9000-NPEA00429_00-SLYCOOPERPSN0000.rap` at a few hundred bytes.
+
+##### Why that breaks the storage model rather than merely complicating it
+
+Everywhere else on this console — including the six PS3 disc rips — **the file
+from RomM is the artefact**. Download it, hand it to the core, done. A PKG is
+not that: it has to be installed into RPCS3's virtual hard drive, which produces
+a second copy of roughly the same size. Sly Cooper would be 19.8 GB downloaded
+plus ~19.8 GB installed, for **forty gigabytes of one game**.
+
+So the PKG has to be deleted after installing, and that has a consequence the
+cache design did not anticipate:
+
+> **`beginLaunch`'s reuse test stops working.** It is the check open question 14
+> leans on so heavily that it made drive identity unnecessary — stat the file at
+> the game's rom-id path, compare its size to what the server reported, reuse it
+> only if both match. For PS3 the thing on disk is an installed TREE, not the
+> file that was fetched, and its size does not match what RomM said. "Is this
+> game here?" becomes "is this title id installed", which is a different
+> question against different evidence.
+
+**A third state exists for PS3 and for nothing else**: fetched, installed, and
+the relationship between them. Whether "kept" means the PKG or the installed
+tree is a real decision, not a detail — and the answer is almost certainly the
+installed tree, because that is the thing that can be run.
+
+##### The other two steps, which are smaller than they sound
+
+- **Firmware is one install, once per machine.** `PS3UPDAT_v4.96.PUP`, 206 MB,
+  and **it is already on the server** as PS3 platform firmware — which is why
+  93% of all firmware in this library belongs to a system with no core, a
+  measurement recorded earlier that stops being dead weight the moment PS3 is
+  real. It is not a file a core reads by name; it decrypts into a `dev_flash`
+  tree. That is a category the layout does not have: derived, shared,
+  machine-wide, and produced by an install rather than a download.
+- **The `.rap` is per-user.** RPCS3 puts it in
+  `dev_hdd0/home/<user>/exdata/`, which lands neatly in the per-user shape
+  agreed in open question 18 — it belongs beside that user's saves.
+- **Installing 20 GB is not instant**, so "Download" for PS3 means fetch AND
+  install, and the one deliberate storage act has two phases rather than one.
+
+##### What this does not change
+
+The saves story above is unaffected: save data is still a folder tree under
+`dev_hdd0/home/<user>/savedata/<TITLEID>/`, and the PSP mechanism still covers
+it.
+
+#### PS3's saves, and why the missing snapshots do not matter
+
+**Recorded because this document briefly implied otherwise and MMagTech
+corrected it twice.**
+
+- **PS3 save DATA exists and is a folder tree**, on RPCS3's virtual hard drive —
+  roughly `dev_hdd0/home/<user>/savedata/<TITLEID>/`, a directory per game.
+  **That is the same shape as PSP's memory stick**, which means the mechanism
+  built on 2026-09-17 for PSP — zip the tree, upload it, unpack it before the
+  core boots, compare against a baseline to know what moved — is what PS3 uses
+  too. `dirsave.h` was the first customer for a pattern, not a one-off.
+- **What RPCS3 lacks is SAVE STATES**, the mid-game snapshot, which is a
+  different feature from the console's own saves. *(Believed rather than
+  verified; check it before relying on it.)*
+- **And that does not matter.** MMagTech: *"snapshots arent needed on systems
+  like the ps3 since they have memory cards or in game saves."* Correct, and it
+  is the right frame — a save state earns its keep on a cartridge-era machine
+  that gives the player nothing, or one checkpoint an hour. A PS3 game saves
+  properly by itself.
+- **The UI already knows how to say so.** Cabinet hides the save-state slots
+  outright for the two cores that cannot serialize, rather than offering a
+  button that fails. "This platform does not do snapshots" is an honest state
+  the design already expresses.
+- **It is doubly moot here**, because PS3 is OS-only: there is no Apple build
+  for a state to travel to. The absence costs the in-game snapshot on this
+  console and nothing else. Progress still moves, because progress is save data.
+
+### 20. Vulkan, and how the host should choose a graphics API
+**Raised by MMagTech 2026-09-17. Recommendation recorded; not built.**
+
+Three cores render with hardware — Flycast, Mupen64Plus and PPSSPP. Everything
+else hands back a finished picture and none of this touches it.
+
+**All three already have Vulkan compiled in, and all three run on GLES.**
+Measured on the built artifacts rather than assumed:
+
+| Core | Vulkan symbols in the `.so` | What it asks for |
+|---|---|---|
+| Flycast | 353 — built `-DUSE_VULKAN=ON` | OpenGL ES 3.0 |
+| Mupen64Plus | 570 — this is **parallel-RDP**, a Vulkan renderer, built in deliberately | OpenGL ES 3.0 |
+| PPSSPP | 97, and it declares `ppsspp_backend = auto` | OpenGL ES 2.0 |
+
+They run on GLES because **the host owns a GLES context and refuses anything
+else by name**, so that is what `GET_PREFERRED_HW_RENDER` advertises and what
+the cores take. PPSSPP's option says `auto`, and auto means "whatever the
+frontend prefers" — it is not a hardware probe.
+
+#### The recommendation: discover, then fall back
+
+**Not for NVIDIA's sake, though it serves it.** MMagTech raised future NVIDIA
+support as the reason to keep things automatic. The stronger reason is today:
+**the test VM has no Vulkan at all** — this document already records gamescope
+rejecting llvmpipe because Vulkan enumeration finds no devices. A Vulkan-only
+host would not run on the machine this project is developed on.
+
+So the shape is the one *Hardware* already states as a rule — capability is
+discovered, not assumed:
+
+1. The host probes at startup: Vulkan where the machine has it, GLES where it
+   does not, and it advertises whichever it got.
+2. Cores stay on `auto` and follow.
+3. A core asking for something the host cannot serve is still refused **by
+   name**, in one line, rather than being allowed to fail inside the core where
+   it reads as a broken game.
+
+NVIDIA then costs nothing extra here. Its real cost is unchanged and lives in
+open question 11: a second base image to build, sign and boot.
+
+#### What renderers do and do not affect
+
+**Save states are not affected, and a claim here that they were is withdrawn.**
+MMagTech, correctly: *"save states have nothing to do with rendering like gles
+or vulkan just the core version."* A state is the emulated machine — the host's
+graphics API is not in it. The parity rule is about the core and its build, and
+nothing about GLES or Vulkan touches it. An earlier version of this section
+suggested pinning PPSSPP to GLES to protect its shared tag; that was wrong and
+the pin is not needed.
+
+**A graphics PLUGIN is a different thing from a graphics API, and N64 is the
+case that proves it.** Moving Mupen64Plus to parallel-RDP is not merely
+presenting through Vulkan — it swaps the emulated RDP implementation. This
+document already lists *"graphics-plugin state that lives outside the state"* as
+one of three unresolved suspects for N64's save states not restoring exactly. So
+N64 deserves care, for reasons that have nothing to do with Vulkan.
+
+#### Why this is worth building
+
+One piece of work serves three things at once: **PS3 needs it** (RPCS3's good
+renderer is Vulkan), **N64 wants it** (parallel-RDP is already compiled in and
+cannot be reached), and **Dreamcast benefits** (Flycast's Vulkan renderer is
+generally the faster one). That is a better reason to teach the host a second
+API than "PS3 needs it".
+
+**Untestable until there is hardware.** The VM has no Vulkan, so none of this
+can be measured before the A9 Pro is installed.

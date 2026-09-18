@@ -40,8 +40,10 @@ enum class Support {
     NoCore,
     // The manifest has a core for this system, and this console does not have
     // it built. A different thing from NoCore and from Excluded: nothing is
-    // wrong, the core simply has not been built yet — two of twenty-one exist
-    // today. Found by the hero offering an arcade game with no FBNeo on disk.
+    // wrong, the core simply has not been built yet. All twenty-one libretro
+    // cores are built as of PPSSPP; the two rows that still answer this are
+    // GameCube and PS2, whose emulators are not libretro cores at all.
+    // Found by the hero offering an arcade game with no FBNeo on disk.
     NotInstalled,
     // A core exists but CabinetOS deliberately does not ship it. There is
     // always a reason, and `reason()` gives it, because a decision nobody can
@@ -107,6 +109,21 @@ const char* shortReason(Support s);
 // and that list is the obvious thing to bring across, one platform at a time,
 // with a reason recorded for each.
 std::map<std::string, std::string> optionOverrides(const std::string& coreName);
+
+// For the one platform whose save is a DIRECTORY rather than a file: where that
+// directory sits under the save directory, or nullptr for everything else.
+//
+// PSP saves into a memory stick — `PSP/SAVEDATA/<GAMEID><TITLE>/` holding
+// PARAM.SFO, DATA.BIN and icons — because that is what PPSSPP reads and writes
+// on every platform, and there is no single-file PSP save anywhere. It travels
+// to RomM as a zip; see dirsave.h for why zip and where the archive is rooted.
+//
+// Deliberately NOT the whole `PSP/` tree: NAND, PPSSPP_STATE and SYSTEM/CACHE
+// sit beside SAVEDATA and are this machine's own state, save states and
+// compiled shaders. Uploading them would put tens of megabytes of nothing on
+// the server and mean nothing on the other end — the reference implementation
+// says exactly that and it is right.
+const char* directorySaveRoot(const char* core);
 
 // The same question asked of a game. A ROM payload carries its own platform
 // slug and fs_slug, so Home can decide whether the most recently played game is

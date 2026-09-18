@@ -14,6 +14,12 @@
 FROM scratch AS ctx
 COPY build_files /
 COPY system_files /system_files
+# The terms this image ships under, carried in so build.sh can put them INSIDE
+# it. Referenced from their real homes rather than duplicated into
+# system_files/, so the copy in the image cannot drift from the copy in the
+# repository.
+COPY LICENSE /licences/LICENSE
+COPY docs/LICENCES.md /licences/LICENCES.md
 
 # ---------------------------------------------------------------------------
 # Base image

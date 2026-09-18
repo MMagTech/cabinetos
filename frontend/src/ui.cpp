@@ -160,6 +160,16 @@ uniform float uLod;
 // have to stop at the card's rounded edge. Zero size means no clip.
 uniform vec4 uClip;
 uniform float uClipRadius;
+// Take the texture's colour and ignore its alpha.
+//
+// For a PICTURE that is what you want, and for a game's frame it is the only
+// correct reading: the alpha channel of an emulated machine's framebuffer is
+// the machine's own business, not an instruction about how to composite it.
+// PPSSPP hands back a frame whose alpha is whatever the PSP game left in it,
+// and Lumines leaves it at nearly zero — so the picture drew at 1.5% of its
+// brightness, which reads as a core that renders black rather than as a
+// blending mistake. The whole 1920x1080 capture peaked at RGB (4,4,4).
+uniform int uOpaque;
 out vec4 fragColor;
 
 float clipSDF(vec2 p, vec2 halfSize, float r) {
@@ -173,7 +183,7 @@ void main() {
         // Coverage in red, colour from the tint. Straight alpha, composited by
         // the same blend function everything else uses.
         ? vec4(uTint.rgb, uTint.a * t.r)
-        : vec4(t.rgb * uTint.rgb, t.a * uTint.a);
+        : vec4(t.rgb * uTint.rgb, (uOpaque == 1 ? 1.0 : t.a) * uTint.a);
 
     if (uClip.z > 0.0) {
         vec2 center = uClip.xy + uClip.zw * 0.5;
@@ -378,6 +388,7 @@ bool Renderer::init() {
     tloc_.rect = glGetUniformLocation(texturedProgram_, "uRect");
     tloc_.uv = glGetUniformLocation(texturedProgram_, "uUV");
     tloc_.tint = glGetUniformLocation(texturedProgram_, "uTint");
+    tloc_.opaque = glGetUniformLocation(texturedProgram_, "uOpaque");
     tloc_.tex = glGetUniformLocation(texturedProgram_, "uTex");
     tloc_.single = glGetUniformLocation(texturedProgram_, "uSingleChannel");
     tloc_.lod = glGetUniformLocation(texturedProgram_, "uLod");
@@ -394,7 +405,7 @@ bool Renderer::init() {
 void Renderer::drawTextured(float x, float y, float w, float h, GLuint texture,
                             float u0, float v0, float u1, float v1, const Color& tint,
                             bool singleChannel, float lodBias, float clipX, float clipY,
-                            float clipW, float clipH, float clipRadius) {
+                            float clipW, float clipH, float clipRadius, bool opaque) {
     glUseProgram(texturedProgram_);
     glUniform2f(tloc_.canvas, kCanvasWidth, kCanvasHeight);
     glUniform4f(tloc_.rect, x, y, w, h);
@@ -404,6 +415,7 @@ void Renderer::drawTextured(float x, float y, float w, float h, GLuint texture,
     glUniform1f(tloc_.lod, lodBias);
     glUniform4f(tloc_.clip, clipX, clipY, clipW, clipH);
     glUniform1f(tloc_.clipRadius, clipRadius);
+    glUniform1i(tloc_.opaque, opaque ? 1 : 0);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, texture);
     glUniform1i(tloc_.tex, 0);
