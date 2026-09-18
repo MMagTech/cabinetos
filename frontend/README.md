@@ -24,6 +24,42 @@ is what Bazzite 44 is built from, so glibc and every runtime library match the
 image the binary runs on. **If the base image's Fedora release moves, move that
 with it.**
 
+## Where it puts things
+
+Everything the console holds lives under one root — `/var/lib/cabinetos` when
+that directory can be created and written, and the directory the binary was
+started in otherwise, which on the test VM means `~/frontend`. `--storage-root
+<path>` overrides both, and whichever wins is printed at startup:
+
+```
+<root>/
+├── roms/<platform>/<romId> - <name>     kept games
+├── cache/<platform>/<romId> - <name>    pulled games, the only thing eviction touches
+├── bios/                                firmware from RomM, and the core system directory
+├── users/<id> - <name>/
+│   ├── saves/<platform>/<romId>/<core>/
+│   ├── states/<platform>/<romId>/<core>/
+│   ├── keeps/  pending/  screenshots/  config/
+├── config/
+└── logs/
+```
+
+An entry is a FILE when the game is one file and a DIRECTORY when its archive
+unpacked into several. See `src/storage.h` and `docs/PROJECT.md`, open
+question 18.
+
+**A console that predates this layout has to be moved across.** Read the plan
+first; it moves save data, and save data is the one thing here that cannot be
+fetched again:
+
+```bash
+./build/cabinetos-frontend --romm 192.168.1.10:6005 --migrate --dry-run
+```
+
+Then `--migrate` to carry it out, and `--migrate-undo "<manifest>"` — the path
+it prints — to put it all back. Save data is hashed before each move and read
+back afterwards; a mismatch puts the file back and stops the run.
+
 ## Running
 
 The OS session already runs `cage`, so the frontend attaches to it as an
@@ -104,7 +140,7 @@ reason — this machine has no controller, so the only way to exercise what a
 person would press is to press it from here:
 
 ```bash
-./build/cabinetos-frontend --storage              # free space, floors, kept, evictable
+./build/cabinetos-frontend --storage              # free space, floors, who kept what, evictable
 ./build/cabinetos-frontend --core-options         # every option every core declares
 ./build/cabinetos-frontend --launch ID --core-options-off   # the control: answer none
 ./build/cabinetos-frontend --romm HOST --download <romId>

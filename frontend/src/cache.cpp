@@ -11,44 +11,14 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <set>
 
 namespace cache {
 namespace {
 
-// Everything a game's directory holds that is NOT a ROM. Each of these is
-// either irreplaceable until it reaches RomM, or so small that reclaiming it
-// would cost more bookkeeping than it returns.
-//
-// A save state is 27 KB for a Game Boy and 6.5 MB for a DS, and they do not
-// overwrite because the history is the point — so states CAN become the largest
-// thing on a disk for somebody who saves often. They are still not deleted
-// here: which ones are safe to drop depends on what has been uploaded, and this
-// code does not know. docs/PROJECT.md records the rule that wants building.
-//
-// `.part` is a download that was interrupted. Not a ROM, not reusable, and
-// removed by the downloader rather than by eviction.
-bool isNotARom(const char* name) {
-    const char* dot = std::strrchr(name, '.');
-    if (!dot) return false;
-    static const char* kNotRoms[] = {".state", ".srm", ".sav", ".brm",
-                                     ".rtc",   ".png", ".part"};
-    for (const char* ext : kNotRoms)
-        if (std::strcmp(dot, ext) == 0) return true;
-    return false;
+std::string keepPath(const storage::User& u, int romId) {
+    return storage::keepsDir(u) + "/" + std::to_string(romId) + ".json";
 }
-
-// Where a keep is recorded, and where an unsent upload is recorded. Both sit
-// BESIDE the game directories rather than inside them, so neither can be
-// mistaken for a game and swept up by a walk over the cache.
-std::string keptDir(const std::string& cacheDir) { return cacheDir + "/kept"; }
-std::string keptPath(const std::string& cacheDir, int romId) {
-    return keptDir(cacheDir) + "/" + std::to_string(romId) + ".json";
-}
-std::string pendingDir(const std::string& cacheDir) { return cacheDir + "/pending"; }
-
-// One directory level, created if it is not there. No recursion needed: every
-// path here is one level under a cache directory the caller already made.
-void ensureDir(const std::string& path) { ::mkdir(path.c_str(), 0755); }
 
 // A file name that cannot escape its directory or collide with a marker from
 // another game. Upload file names come from game titles, which contain slashes,
@@ -62,6 +32,84 @@ std::string markerName(int romId, const std::string& fileName) {
     return s + ".pending";
 }
 
+// Walks one half of one location — `roms/` or `cache/` — calling `fn` with the
+// platform segment and the entry name. Both halves have exactly the same shape,
+// which is the property that makes a demotion a rename.
+template <typename F>
+void walkHalf(const std::string& half, F fn) {
+    DIR* top = ::opendir(half.c_str());
+    if (!top) return;   // nothing kept yet, or nothing cached. Both ordinary.
+    while (struct dirent* plat = ::readdir(top)) {
+        if (plat->d_name[0] == '.') continue;
+        const std::string platform = plat->d_name;
+        const std::string pdir = half + "/" + platform;
+        DIR* pd = ::opendir(pdir.c_str());
+        if (!pd) continue;
+        while (struct dirent* e = ::readdir(pd)) {
+            if (e->d_name[0] == '.') continue;
+            fn(platform, std::string(e->d_name));
+        }
+        ::closedir(pd);
+    }
+    ::closedir(top);
+}
+
+int64_t newestMtime(const std::string& path) {
+    struct stat st;
+    if (::lstat(path.c_str(), &st) != 0) return 0;
+    return static_cast<int64_t>(st.st_mtime);
+}
+
+bool removeTree(const std::string& path) {
+    struct stat st;
+    if (::lstat(path.c_str(), &st) != 0) return false;
+    if (!S_ISDIR(st.st_mode)) return ::unlink(path.c_str()) == 0;
+    DIR* d = ::opendir(path.c_str());
+    if (!d) return false;
+    while (struct dirent* e = ::readdir(d)) {
+        if (std::strcmp(e->d_name, ".") == 0 || std::strcmp(e->d_name, "..") == 0) continue;
+        removeTree(path + "/" + e->d_name);
+    }
+    ::closedir(d);
+    return ::rmdir(path.c_str()) == 0;
+}
+
+// Moves a game between `roms/` and `cache/` on the location it already sits on.
+//
+// THIS IS WHY THE TWO DIRECTORIES REPEAT ON EVERY LOCATION. With one `cache/`
+// at the root and kept games on a second drive, this would be a copy of
+// gigabytes because somebody changed their mind about a game. moveEntry reports
+// a crossed filesystem rather than hiding it, so if that ever happens here it
+// is a fault in the layout and it says so.
+bool relocate(const Placement& p, bool toKept) {
+    if (!p.present || p.kept == toKept) return true;
+    // THE NAME DOES NOT CHANGE — only which half it is under. Rebuilding it
+    // from the game's title here would rename a game as a side effect of
+    // keeping it, and the name on disk is what a person recognises.
+    const std::string entryName = p.entryPath.substr(p.entryPath.find_last_of('/') + 1);
+    const std::string target = (toKept ? storage::romsDir(p.location)
+                                       : storage::cacheDir(p.location)) +
+                               "/" + p.platform + "/" + entryName;
+    if (target == p.entryPath) return true;
+    const storage::MoveResult r = storage::moveEntry(p.entryPath, target);
+    if (!r.ok) {
+        std::fprintf(stderr, "[keep] could not %s %s: %s\n",
+                     toKept ? "promote" : "demote", p.entryPath.c_str(), r.error.c_str());
+        return false;
+    }
+    if (r.crossedFilesystem) {
+        std::fprintf(stderr,
+                     "[keep] %s CROSSED A FILESYSTEM and had to be copied: %s -> %s. "
+                     "roms/ and cache/ are supposed to repeat per location so this "
+                     "is a rename; something is wrong with the layout.\n",
+                     toKept ? "promotion" : "demotion", p.entryPath.c_str(),
+                     target.c_str());
+    }
+    std::fprintf(stderr, "[keep] %s %s\n", toKept ? "promoted" : "demoted to the cache",
+                 target.c_str());
+    return true;
+}
+
 }  // namespace
 
 int64_t freeBytes(const std::string& path) {
@@ -73,43 +121,52 @@ int64_t freeBytes(const std::string& path) {
     return static_cast<int64_t>(vfs.f_bavail) * static_cast<int64_t>(vfs.f_frsize);
 }
 
-std::vector<Entry> candidates(const std::string& cacheDir) {
-    std::vector<Entry> out;
-    DIR* top = ::opendir(cacheDir.c_str());
-    if (!top) return out;
-
-    while (struct dirent* gameDir = ::readdir(top)) {
-        if (gameDir->d_name[0] == '.') continue;
-        // A game's directory is its rom id. `saves/` sits alongside and is not
-        // one, which is exactly why it is skipped here and never a candidate.
-        char* end = nullptr;
-        const long romId = std::strtol(gameDir->d_name, &end, 10);
-        if (!end || *end != '\0' || romId <= 0) continue;
-
-        // A kept game is not a candidate, whatever its mtime says. This is the
-        // whole of what keeping buys, and it is enforced here so that no future
-        // caller of candidates() can forget it. Asked BEFORE the directory is
-        // opened, so skipping one does not leak the handle.
-        if (isKept(cacheDir, static_cast<int>(romId))) continue;
-
-        const std::string dir = cacheDir + "/" + gameDir->d_name;
-        DIR* inner = ::opendir(dir.c_str());
-        if (!inner) continue;
-
-        while (struct dirent* f = ::readdir(inner)) {
-            if (f->d_name[0] == '.') continue;
-            if (isNotARom(f->d_name)) continue;
-            const std::string path = dir + "/" + f->d_name;
-            struct stat st;
-            if (::stat(path.c_str(), &st) != 0 || !S_ISREG(st.st_mode)) continue;
-            out.push_back({path, static_cast<int64_t>(st.st_size),
-                           static_cast<int64_t>(st.st_mtime),
-                           static_cast<int>(romId)});
+Placement find(int romId) {
+    Placement out;
+    for (const std::string& loc : storage::locations()) {
+        // `roms/` first: a game is in one or the other, and if a crash ever
+        // left a copy in both, the kept one is the one that must win.
+        const std::pair<std::string, bool> halves[2] = {
+            {storage::romsDir(loc), true},
+            {storage::cacheDir(loc), false},
+        };
+        for (const auto& [half, kept] : halves) {
+            walkHalf(half, [&](const std::string& platform, const std::string& entry) {
+                if (out.present) return;
+                if (storage::romIdFromEntry(entry) != romId) return;
+                out.present = true;
+                out.kept = kept;
+                out.location = loc;
+                out.platform = platform;
+                out.entryPath = half + "/" + platform + "/" + entry;
+                struct stat st;
+                out.isDirectory = ::lstat(out.entryPath.c_str(), &st) == 0 &&
+                                  S_ISDIR(st.st_mode);
+            });
+            if (out.present) return out;
         }
-        ::closedir(inner);
     }
-    ::closedir(top);
+    return out;
+}
 
+std::string entryPathFor(const std::string& location, const std::string& platform,
+                         int romId, const std::string& title, bool kept) {
+    const std::string half = kept ? storage::romsDir(location) : storage::cacheDir(location);
+    return half + "/" + storage::platformSegment(platform) + "/" +
+           storage::entryName(romId, title);
+}
+
+std::vector<Entry> candidates(const std::string& location) {
+    std::vector<Entry> out;
+    walkHalf(storage::cacheDir(location),
+             [&](const std::string& platform, const std::string& entry) {
+                 const int romId = storage::romIdFromEntry(entry);
+                 if (romId <= 0) return;
+                 const std::string path =
+                     storage::cacheDir(location) + "/" + platform + "/" + entry;
+                 out.push_back({path, storage::treeBytes(path), newestMtime(path), romId,
+                                platform});
+             });
     // Oldest first, which is the entire eviction order.
     std::sort(out.begin(), out.end(), [](const Entry& a, const Entry& b) {
         return a.lastUsed < b.lastUsed;
@@ -117,22 +174,22 @@ std::vector<Entry> candidates(const std::string& cacheDir) {
     return out;
 }
 
-int64_t evictUntilFree(const std::string& cacheDir, int64_t needBytes,
+int64_t evictUntilFree(const std::string& location, int64_t needBytes,
                        int protectRomId) {
     const int64_t target =
         needBytes + static_cast<int64_t>(static_cast<double>(needBytes) * kMarginFraction);
-    int64_t have = freeBytes(cacheDir);
+    int64_t have = freeBytes(location);
     if (have >= target) return 0;
 
     // `have + freed` rather than re-measuring each time round, which is both
     // cheaper and — see the sync below — the only thing that would work.
     int64_t freed = 0;
-    for (const Entry& e : candidates(cacheDir)) {
+    for (const Entry& e : candidates(location)) {
         if (have + freed >= target) break;
         // The running game. Its file is open, and deleting it would be the one
         // eviction a person could actually notice.
         if (protectRomId != 0 && e.romId == protectRomId) continue;
-        if (::unlink(e.path.c_str()) != 0) continue;
+        if (!removeTree(e.path)) continue;
         freed += e.bytes;
         std::fprintf(stderr, "[cache] evicted %s (%lld bytes)\n", e.path.c_str(),
                      static_cast<long long>(e.bytes));
@@ -152,7 +209,7 @@ int64_t evictUntilFree(const std::string& cacheDir, int64_t needBytes,
         // syncfs rather than sync, so this is the one filesystem rather than
         // every mounted one. It happens once per eviction, on a path that is
         // about to move hundreds of megabytes over a network.
-        if (const int fd = ::open(cacheDir.c_str(), O_RDONLY | O_DIRECTORY); fd >= 0) {
+        if (const int fd = ::open(location.c_str(), O_RDONLY | O_DIRECTORY); fd >= 0) {
             ::syncfs(fd);
             ::close(fd);
         }
@@ -175,14 +232,25 @@ int64_t saveFloorBytes(const std::string& path) {
     return std::min<int64_t>(2LL << 30, total / 20);   // 5%
 }
 
-bool isKept(const std::string& cacheDir, int romId) {
+bool isKeptBy(const storage::User& u, int romId) {
+    if (!u.valid()) return false;
     struct stat st;
-    return ::stat(keptPath(cacheDir, romId).c_str(), &st) == 0 && S_ISREG(st.st_mode);
+    return ::stat(keepPath(u, romId).c_str(), &st) == 0 && S_ISREG(st.st_mode);
 }
 
-std::vector<int> keptRoms(const std::string& cacheDir) {
+std::vector<int> keepers(int romId) {
     std::vector<int> out;
-    DIR* d = ::opendir(keptDir(cacheDir).c_str());
+    for (const storage::User& u : storage::knownUsers())
+        if (isKeptBy(u, romId)) out.push_back(u.id);
+    return out;
+}
+
+bool isKeptByAnyone(int romId) { return !keepers(romId).empty(); }
+
+std::vector<int> keptRoms(const storage::User& u) {
+    std::vector<int> out;
+    if (!u.valid()) return out;
+    DIR* d = ::opendir(storage::keepsDir(u).c_str());
     if (!d) return out;   // nothing kept yet is the ordinary case, not a fault
     while (struct dirent* f = ::readdir(d)) {
         if (f->d_name[0] == '.') continue;
@@ -192,52 +260,45 @@ std::vector<int> keptRoms(const std::string& cacheDir) {
             out.push_back(static_cast<int>(id));
     }
     ::closedir(d);
+    std::sort(out.begin(), out.end());
     return out;
 }
 
-// What this game already has on the disk. Keeping a game that is fully
-// downloaded costs nothing today; keeping one that is not is a promise to fetch
-// the rest and then never let go of it.
-static int64_t bytesOnDiskFor(const std::string& cacheDir, int romId) {
-    const std::string dir = cacheDir + "/" + std::to_string(romId);
-    DIR* d = ::opendir(dir.c_str());
-    if (!d) return 0;
-    int64_t total = 0;
-    while (struct dirent* f = ::readdir(d)) {
-        if (f->d_name[0] == '.') continue;
-        if (isNotARom(f->d_name)) continue;
-        struct stat st;
-        if (::stat((dir + "/" + f->d_name).c_str(), &st) == 0 && S_ISREG(st.st_mode))
-            total += st.st_size;
-    }
-    ::closedir(d);
-    return total;
+std::vector<int> allKeptRoms() {
+    std::set<int> ids;
+    for (const storage::User& u : storage::knownUsers())
+        for (int id : keptRoms(u)) ids.insert(id);
+    return std::vector<int>(ids.begin(), ids.end());
 }
 
-KeepVerdict mayKeep(const std::string& cacheDir, int romId, int64_t gameBytes) {
+KeepVerdict mayKeep(const std::string& location, int romId, int64_t gameBytes) {
     KeepVerdict v;
-    v.floorBytes = saveFloorBytes(cacheDir) + kSystemReserveBytes;
+    v.floorBytes = saveFloorBytes(location) + kSystemReserveBytes;
 
-    // Everything the console could still delete if it had to, WITH this game
-    // already excluded — candidates() skips kept games, and this game is about
-    // to be one, so it is subtracted by hand rather than by keeping first and
-    // asking afterwards.
-    int64_t reclaimable = freeBytes(cacheDir);
-    for (const Entry& e : candidates(cacheDir)) {
+    // Everything the console could still delete if it had to, with this game
+    // excluded — it is about to stop being evictable.
+    int64_t reclaimable = freeBytes(location);
+    for (const Entry& e : candidates(location)) {
         if (e.romId == romId) continue;
         reclaimable += e.bytes;
     }
 
     // The part of this game still to fetch comes OUT of that, because keeping
     // an undownloaded game is a promise to spend the space.
-    const int64_t onDisk = bytesOnDiskFor(cacheDir, romId);
-    const int64_t stillToFetch = std::max<int64_t>(0, gameBytes - onDisk);
+    //
+    // A game SOMEBODY ELSE ALREADY KEEPS costs nothing at all: the bytes are on
+    // the machine and are already not evictable, so the second keep changes
+    // nothing about the disk. That is the whole of what "one kept game, two
+    // people" means here.
+    const Placement p = find(romId);
+    const int64_t onDisk = p.present ? storage::treeBytes(p.entryPath) : 0;
+    const int64_t stillToFetch = p.kept ? 0 : std::max<int64_t>(0, gameBytes - onDisk);
     reclaimable -= stillToFetch;
 
     // An upload that has not reached the server is the one thing here that
     // cannot be re-fetched, so its bytes are spoken for and are not reclaimable
     // by anybody.
-    reclaimable -= pendingBytes(cacheDir);
+    reclaimable -= pendingBytes();
 
     v.reclaimableBytes = reclaimable;
     v.allowed = reclaimable >= v.floorBytes;
@@ -245,11 +306,14 @@ KeepVerdict mayKeep(const std::string& cacheDir, int romId, int64_t gameBytes) {
     return v;
 }
 
-bool keep(const std::string& cacheDir, int romId, const std::string& record,
+bool keep(const storage::User& u, int romId, const std::string& record,
           std::string* err) {
-    ensureDir(cacheDir);
-    ensureDir(keptDir(cacheDir));
-    const std::string path = keptPath(cacheDir, romId);
+    if (!u.valid()) {
+        if (err) *err = "no user, so there is nobody to keep this for";
+        return false;
+    }
+    storage::makeDirs(storage::keepsDir(u));
+    const std::string path = keepPath(u, romId);
     // Written through a temporary and renamed, so a keep is either recorded or
     // it is not. A half-written record is a kept game that cannot be read back,
     // which is the worst of both: the space is protected and the game is not
@@ -267,54 +331,77 @@ bool keep(const std::string& cacheDir, int romId, const std::string& record,
         if (err) *err = "could not write the keep record";
         return false;
     }
+    // And out of the cache, if it is here. A game that is not here yet is
+    // promoted by the download, which writes it straight into `roms/`.
+    relocate(find(romId), /*toKept=*/true);
     return true;
 }
 
-bool unkeep(const std::string& cacheDir, int romId) {
-    // The ROM itself stays exactly where it is. Un-keeping returns a game to
-    // the cache; it does not delete it. It becomes evictable, and it may well
-    // sit there for months before anything needs the room.
-    return ::unlink(keptPath(cacheDir, romId).c_str()) == 0;
+bool unkeep(const storage::User& u, int romId) {
+    if (!u.valid()) return false;
+    const std::string path = keepPath(u, romId);
+    struct stat st;
+    const bool had = ::stat(path.c_str(), &st) == 0;
+    if (had && ::unlink(path.c_str()) != 0) return false;
+
+    // SOMEBODY ELSE MAY STILL BE KEEPING IT, and then nothing moves. This is
+    // the whole reason keeping stopped being a boolean.
+    const std::vector<int> rest = keepers(romId);
+    if (!rest.empty()) {
+        std::fprintf(stderr, "[keep] %d released by user %d, still kept by %zu other(s)\n",
+                     romId, u.id, rest.size());
+        return true;
+    }
+    // THE LAST KEEP DEMOTES; IT NEVER DELETES. The game becomes an ordinary
+    // cached file — still playable, now evictable — and re-keeping costs
+    // nothing because the bytes never moved.
+    relocate(find(romId), /*toKept=*/false);
+    return true;
 }
 
-void markPending(const std::string& cacheDir, int romId, const std::string& fileName,
+void markPending(const storage::User& u, int romId, const std::string& fileName,
                  int64_t bytes) {
-    ensureDir(cacheDir);
-    ensureDir(pendingDir(cacheDir));
-    const std::string path = pendingDir(cacheDir) + "/" + markerName(romId, fileName);
+    if (!u.valid()) return;
+    storage::makeDirs(storage::pendingDir(u));
+    const std::string path = storage::pendingDir(u) + "/" + markerName(romId, fileName);
     if (FILE* f = std::fopen(path.c_str(), "wb")) {
         std::fprintf(f, "%lld\n", static_cast<long long>(bytes));
         std::fclose(f);
     }
 }
 
-void clearPending(const std::string& cacheDir, int romId, const std::string& fileName) {
-    ::unlink((pendingDir(cacheDir) + "/" + markerName(romId, fileName)).c_str());
+void clearPending(const storage::User& u, int romId, const std::string& fileName) {
+    if (!u.valid()) return;
+    ::unlink((storage::pendingDir(u) + "/" + markerName(romId, fileName)).c_str());
 }
 
-int64_t pendingBytes(const std::string& cacheDir) {
-    DIR* d = ::opendir(pendingDir(cacheDir).c_str());
-    if (!d) return 0;
+int64_t pendingBytes() {
     int64_t total = 0;
-    while (struct dirent* f = ::readdir(d)) {
-        if (f->d_name[0] == '.') continue;
-        if (FILE* fh = std::fopen((pendingDir(cacheDir) + "/" + f->d_name).c_str(), "rb")) {
-            long long n = 0;
-            if (std::fscanf(fh, "%lld", &n) == 1 && n > 0) total += n;
-            std::fclose(fh);
+    for (const storage::User& u : storage::knownUsers()) {
+        const std::string dir = storage::pendingDir(u);
+        DIR* d = ::opendir(dir.c_str());
+        if (!d) continue;
+        while (struct dirent* f = ::readdir(d)) {
+            if (f->d_name[0] == '.') continue;
+            if (FILE* fh = std::fopen((dir + "/" + f->d_name).c_str(), "rb")) {
+                long long n = 0;
+                if (std::fscanf(fh, "%lld", &n) == 1 && n > 0) total += n;
+                std::fclose(fh);
+            }
         }
+        ::closedir(d);
     }
-    ::closedir(d);
     return total;
 }
 
-void touch(const std::string& romPath) {
-    // The file's own mtime is the record, so there is no sidecar to keep in
-    // step and nothing to migrate. utimensat with nullptr means "now".
-    if (::utimensat(AT_FDCWD, romPath.c_str(), nullptr, 0) != 0) {
+void touch(const std::string& entryPath) {
+    // The entry's own mtime is the record, so there is no sidecar to keep in
+    // step and nothing to migrate. utimensat with nullptr means "now", and it
+    // works on a directory entry exactly as it does on a file one.
+    if (::utimensat(AT_FDCWD, entryPath.c_str(), nullptr, 0) != 0) {
         // Not worth failing a launch over: the cost is that this game looks
         // older than it is and may be evicted sooner than it deserves.
-        std::fprintf(stderr, "[cache] could not touch %s\n", romPath.c_str());
+        std::fprintf(stderr, "[cache] could not touch %s\n", entryPath.c_str());
     }
 }
 

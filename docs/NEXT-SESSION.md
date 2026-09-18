@@ -20,6 +20,20 @@ the save audit, the folder-layout decisions, the hardware change and the PS3
 findings — merged as `4ff3818`, so everything described below as "runs today"
 is on `main`.
 
+**THE FILES ON DISK MOVED, 2026-09-18.** There is no `romcache/` any more and no
+`system/`. Games are in `roms/` and `cache/` under a platform folder, firmware
+is in `bios/`, and every save, state and keep is under `users/<id> - <name>/`.
+If you have a console or a VM that predates this, move it across before doing
+anything else — read the plan first, because it moves save data:
+
+```
+./build/cabinetos-frontend --romm 192.168.1.10:6005 --migrate --dry-run
+./build/cabinetos-frontend --romm 192.168.1.10:6005 --migrate
+```
+
+It prints a manifest path; `--migrate-undo "<that path>"` puts everything back,
+verified. The test VM has already been moved.
+
 Start from `main`, branch once, and **open the pull request against `main`**.
 Four branches were once stacked on each other here, each opened before the last
 had merged, and the result was three overlapping pull requests and a compile
@@ -182,7 +196,7 @@ outside the virtual drive onto the OS volume. All four are in PROJECT.md. **PS3
 still cannot be PLAYED here**; that needs Vulkan and waits on the A9 Pro, which
 is open question 20.
 
-### 1. Saves that actually reach the server
+### 1. Saves that actually reach the server — **DO THIS NEXT**
 
 The biggest real hole in the product, and **the audit of 2026-09-17 measured
 it: 47 of the 81 saves on the server — 58% — are for platforms this console can
@@ -192,10 +206,19 @@ save class", which reads like an edge case. It is the majority.
 **Do Dreamcast first.** Thirteen saves, the largest count of any platform, and
 it explains the symptom below rather than sitting beside it. Flycast never
 exposes the VMU through `RETRO_MEMORY_SAVE_RAM`; it reads and writes
-`vmu_save_A1.bin` in the **system** directory under `dc/` — the same `dc/` the
-BIOS lives in. Cabinet restores it there before boot and captures it after
-unload. Write the bytes before boot, read them after, upload if changed, and
-there are thirteen real cards on the server to test the restore against.
+`vmu_save_A1.bin` in the **system** directory under `dc/` — which is now
+`bios/dc/`, beside the BIOS. Cabinet restores it there before boot and captures
+it after unload. Write the bytes before boot, read them after, upload if
+changed, and there are thirteen real cards on the server to test the restore
+against.
+
+**And it closes the one gap the new layout left open.** `bios/` is supposed to
+hold replaceable firmware, and `vmu_save_A1.bin` is the one file in there that
+cannot be fetched again. Once Dreamcast saves travel, the card belongs in
+`users/<id> - <name>/saves/Sega Dreamcast/<romId>/flycast/` like every other
+save, and what stays in `bios/dc/` is `dc_nvmem.bin` — the console's own clock
+and language settings, which are a machine fact rather than a person's. See
+open question 18, *Four things building it turned up*.
 
 PROJECT.md, *The save audit*, has the per-platform table of where every core
 writes its file and the two guards to copy (a uniform fill means the game never
@@ -313,48 +336,45 @@ while the same core reaches its attract demo on the ordinary launch path.
 test.** Fixing the instrument is the work; a capture reporting
 `retro_serialize_size` is the stopgap that exists today.
 
-### 5. The on-disk folder layout — decided, not built — **DO THIS NEXT**
+### 5. The on-disk folder layout — DONE 2026-09-18
 
-> **Agreed with MMagTech 2026-09-18: this is the next thing built**, ahead of
-> any more PS3 work, and it gets a session of its own.
->
-> **Why it jumped the queue.** PS3 cannot finish here anyway — launching an
-> emulator that is not a libretro core is open question 12 and unanswered, and
-> nothing can be played until the A9 Pro exists. Meanwhile PS3 introduces three
-> storage categories this layout has nowhere to put: an installed tree that is
-> not the file that was downloaded, a per-user `.rap` licence, and decrypted
-> firmware that is machine-wide and derived rather than fetched. Building PS3
-> storage first means building it twice.
->
-> It is also the item with a deadline. It changes `cache::keep`/`unkeep`/
-> `isKept`, and it has to land before machines carry play histories, because
-> saves are the only data here that cannot be re-downloaded.
+**Built, and the test VM was moved onto it.** Open question 18 in PROJECT.md has
+the detail and the numbers; the short version is that `romcache/` and `system/`
+are gone and this is what a console holds now:
 
-**Open question 18, agreed with MMagTech 2026-09-17.** The current layout was
-never designed, it accumulated: there are TWO save directories, `system/` mixes
-replaceable BIOS with an irreplaceable Dreamcast flash and 13 MB of PPSSPP
-fonts, every core shares one flat save pile, and `romcache/` is named "cache"
-while holding kept games and everyone's saves.
+```
+<root>/
+├── roms/<platform>/<romId> - <name>     kept games
+├── cache/<platform>/<romId> - <name>    pulled games — the ONLY thing eviction touches
+├── bios/                                firmware from RomM, and the core system directory
+├── users/<id> - <name>/{saves,states,keeps,pending,screenshots,config}/
+├── config/
+└── logs/
+```
 
-The agreed shape takes RetroArch's and RetroBat's vocabulary (`roms`, `saves`,
-`states`, `bios`, `config`), adds the one thing neither needs — a `cache/` that
-is the only directory eviction may touch — and namespaces per user the way RomM
-itself does, mirroring its `users/<user>/saves/<platform>/<romId>/<core>/`.
-One convention throughout: **the number identifies, the words are for you** —
-`users/1 - MMagTech/`, `roms/psx/321 - Crash Bandicoot.chd`.
+`frontend/src/storage.{h,cpp}` owns it, `cache.{h,cpp}` was rewritten around it,
+`migrate.{h,cpp}` moves an existing machine across and can be undone. The root
+is `/var/lib/cabinetos` when that can be created and written and the working
+directory otherwise, which on the VM is `~/frontend`; `--storage-root` overrides
+it and the answer is printed at startup.
 
-**One kept game is one file, however many people play it**, which changes the
-one piece of existing code: `cache::keep/unkeep/isKept` is a boolean per rom and
-has to become *kept by whom*, so that one person releasing does not take the
-game away from another. Releasing the LAST keep demotes to cache rather than
-deleting — un-keep is never destructive — and that is why `roms/` and `cache/`
-repeat on every drive rather than once at the root: otherwise a demotion means
-copying gigabytes between disks because somebody changed their mind.
+**Two things it turned up that want a decision, not a fix:**
 
-**Do it before there are machines with play histories.** Today it is one user
-and one directory; later it is moving every save on every console, and saves are
-the only data here that cannot be re-downloaded. It is a behaviour, not a
-picture, so the SER5 decision does not hold it up.
+1. **The platform is spelled two ways.** `cache/psx/` for games (RomM's `slug`,
+   which is what the agreed shape wrote down) and `saves/Sony Playstation/` for
+   saves (its `fs_slug`, because the whole argument for the user tree was that
+   it mirrors RomM's own). Both are right on their own and together they look
+   careless.
+2. **`bios/` still mixes replaceable and irreplaceable**, because libretro gives
+   a core exactly ONE system directory and Flycast writes the Dreamcast's flash
+   into it. The PSP fonts moved out — they ship in the image — but the agreed
+   shape has no name for "what a core wrote into its system directory". Item 1
+   below takes the VMU out of there; `dc_nvmem.bin` stays.
+
+**What it did NOT build:** a second storage location. `storage::locations()`
+returns the root alone, so "a missing drive degrades rather than errors" has
+still never been exercised — there is no second location to remove. Everything
+takes a location already, so adding one is a list getting longer.
 
 ### 6. Nothing warns that a system's BIOS is missing
 
@@ -427,6 +447,13 @@ PROJECT.md says "the SER5" and means this one.
   `--screen` opens by walking the route a person walks, so a capture cannot show
   a state the product cannot reach. `--storage`, `--download` and `--unkeep` do
   the same for the things with no picture.
+- **`--frames N` only ends the run when there is a `--screenshot` to take.**
+  Without one the loop never exits and the command sits there at full CPU. This
+  cost about five minutes; `--download 200 --screenshot /tmp/x.bmp --frames 300`
+  is the shape that terminates.
+- **`--storage-root <path>` puts a whole console somewhere else**, which is how
+  the two-disk and the out-of-space tests above were run without disturbing the
+  real tree. Everything — games, saves, keeps, config — goes under it.
 - **To watch a real game, launch it**: `--launch <romId> --launch-after 1
   --frames N`. A PSP game needs about 2500 drawn frames to reach its attract
   demo on this VM, which is roughly two minutes; Dreamcast about 1400. Add
@@ -544,11 +571,25 @@ PROJECT.md says "the SER5" and means this one.
 - `~/frontend/` — the frontend source, built with
   `podman run --rm -v "$PWD":/src:Z -w /src cabinetos-builder make`
 - `~/frontend/cores/build/` — **twenty-one** built cores, where the frontend looks
-- `~/frontend/system/` — BIOS files fetched from RomM, files the cores write,
-  and **`PPSSPP/`**, 13 MB of PSP system files that came out of the core build
-  rather than off the server. Copy it from `~/cabinetos/cores/system/` after
-  building that core.
-- `~/frontend/romcache/` — downloaded ROMs, plus `saves/`, `kept/` and `pending/`
+- `~/frontend/` is also the **storage root**, because `/var/lib/cabinetos` does
+  not exist on this machine and cannot be created by the `cabinet` user, so the
+  root falls back to the working directory. It holds:
+  - `bios/` — BIOS fetched from RomM, files the cores write into their system
+    directory, and **`PPSSPP/`**, 13 MB of PSP system files that came out of the
+    core build rather than off the server. Copy it from
+    `~/cabinetos/cores/system/` after building that core. On a real console that
+    one lands in `/usr/share/cabinetos/` and is symlinked in at startup.
+  - `cache/<platform>/` — downloaded games, and the only thing eviction touches
+  - `roms/<platform>/` — kept games. Also still holds one loose
+    `Dr. Mario (World) (Rev 1).gb` somebody put there by hand for `--core`; the
+    migration deliberately left it alone.
+  - `users/1 - MMagTech/` — every save, state, keep and unsent upload, plus
+    `saves/unattributed 2026-09-18 11-43-38/`, which is the two old shared save
+    piles moved whole because nothing in them says which game wrote them.
+  - `config/migrations/*.jsonl` — what the migration moved, and what
+    `--migrate-undo` reads.
+- **There is no `romcache/` and no `system/` any more.** If you see either, the
+  machine predates 2026-09-18 and wants `--migrate`.
 - `~/cabinetos/` — a clone of this repo, where `cores/build-core.sh` runs
 - `~/cabinetos/.core-src/` — per-core checkouts, **4.8 GB, of which PPSSPP is
   3.4 GB**. They are a cache: delete any to make room and the next build
@@ -578,15 +619,22 @@ than assumed. `nofail` matters: a machine that will not boot because a games
 drive is missing is exactly what open question 14 forbids.
 
 **It exists to test the two-drive design, not just to hold a big PKG.** Four
-things become measurable that were decisions on paper — **the fourth was done on
-2026-09-18** and the first three are still untried:
+things become measurable that were decisions on paper. **Two are now done**:
 
-1. **That demoting a kept game is a RENAME, not a copy.** A rename cannot cross
-   filesystems — the kernel returns `EXDEV` — and that is the whole reason
-   `roms/` and `cache/` repeat on every drive rather than once at the root.
-   Two real filesystems means this can be timed instead of argued.
+1. ~~**That demoting a kept game is a RENAME, not a copy.**~~ **Done
+   2026-09-18.** Kept Mario Kart 64 onto the games disk, released it, and the
+   entry came out of `cache/` with the **same device and inode** it went into
+   `roms/` with — `58:82064` both times. So it was renamed, and the cost is the
+   same whatever the game weighs. For comparison, copying that same 12.6 MB
+   across the two filesystems took **0.124 s**, which is 101 MB/s — a 19.8 GB
+   PS3 title would be about three minutes of copying because somebody changed
+   their mind about keeping it. That is the whole reason `roms/` and `cache/`
+   repeat per drive rather than once at the root.
 2. **That a missing drive degrades rather than errors.** `umount /dev/vdb` with
-   the console running. Written down as a requirement; never once exercised.
+   the console running. Written down as a requirement; **still never exercised,
+   and it cannot be yet**: `storage::locations()` returns one location, so there
+   is no second one to remove. It becomes testable the day open question 14's
+   second location is wired in, and everything below it already takes a location.
 3. **Both disk floors against realistic numbers** — 5.3 GB on one volume and
    98 GB on the other, rather than ballast on a single disk.
 4. ~~**A PS3 PKG install at full size.**~~ **Done.** Sly Cooper peaked at

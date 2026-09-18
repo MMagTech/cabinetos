@@ -118,6 +118,23 @@ struct Asset {
     std::string updatedAt;
 };
 
+// Who the token belongs to.
+//
+// The console needs this before it writes a single save, because the on-disk
+// layout is namespaced per user — `users/<id> - <name>/` — and RomM's own asset
+// tree is namespaced the same way. The ID is the identity and the name is
+// decoration: usernames change and ids do not, so a console keyed on the name
+// would quietly start a new empty directory the day somebody renamed
+// themselves, with every save still on the disk and nothing looking for it.
+//
+// The honest limit, recorded rather than solved: two RomM instances both have a
+// User:1, and RomM exposes no instance identity to tell them apart. See
+// docs/PROJECT.md, open questions 14 and 18.
+struct User {
+    int id = 0;
+    std::string username;
+};
+
 // An in-flight pairing. Short-lived: RomM expires these in minutes.
 struct Pairing {
     std::string userCode;          // shown to the person, e.g. "ZHVUCSF4"
@@ -159,6 +176,10 @@ public:
     //   0  still pending
     //  -1  failed or expired; `err` says which
     int pollPairing(const Pairing& p, std::string* err);
+
+    // `/api/users/me` — the id and name behind the token. Needs the `me.read`
+    // scope, which pairing already asks for.
+    bool fetchCurrentUser(User* out, std::string* err);
 
     bool fetchPlatforms(std::vector<Platform>* out, std::string* err);
 

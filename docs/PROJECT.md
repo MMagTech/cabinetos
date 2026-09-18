@@ -64,6 +64,12 @@ rather than launched by hand:
   **Dr. Mario runs.** It also hosts the cores that draw for themselves: it owns
   the GLES context and hands a hardware-rendered core a framebuffer inside it,
   so **Mario Kart 64 and Ikaruga run too**, with no pixel ever read back.
+- **An on-disk layout somebody can find their way around**, as of 2026-09-18:
+  `roms/`, `cache/`, `bios/` and a directory per person holding their saves and
+  states. Keeping a game is a decision per person rather than a flag on the
+  game, releasing the last one demotes it to the cache instead of deleting it,
+  and there is a migration that moves an existing console across and can be
+  undone. Open question 18.
 
 ### Open against the frontend right now
 
@@ -6786,9 +6792,196 @@ that RomM exposes no instance identity and that "one drive, one server" is a
 sentence of documentation rather than a mechanism. The same applies here: worth
 a note in the layout, not machinery.
 
-**Not implemented.** Nothing has moved. It should be done before there are
-machines with play histories on them, and it is a behaviour rather than a
-picture, so the SER5 decision does not hold it up.
+#### BUILT 2026-09-18
+
+**It is on disk and it moved real files.** `frontend/src/storage.{h,cpp}` owns
+the layout, `cache.{h,cpp}` was rewritten around it, and
+`frontend/src/migrate.{h,cpp}` moves a console that already has files on it.
+The shape above is what the test VM now holds, unchanged from what was agreed.
+
+**What the code stopped having to remember.** Eviction used to enforce two rules
+the disk could not express — do not delete a kept game, do not delete a save —
+and it carried a list of extensions it must not touch (`.srm`, `.state`,
+`.brm`) because a game's directory held its saves beside the ROM. One wrong
+entry in that list would have taken the only irreplaceable thing on the machine.
+Now `roms/` and `cache/` are different directories and saves are under a person,
+so **eviction walks `cache/` and deletes whole entries**. The extension list is
+gone, and *"eviction only ever deletes inside `cache/`"* is checkable by listing
+a directory.
+
+**Keeping is a set of people.** `users/<id> - <name>/keeps/<romId>.json` holds
+the whole library entry, as before. `cache::keepers(romId)` walks every user
+directory, `unkeep` removes one person's record, and only an empty result
+demotes. Promotion and demotion are `rename(2)` on the entry — file or directory
+— within one location, and `storage::moveEntry` reports `EXDEV` loudly rather
+than quietly copying, because a crossed filesystem there would mean the layout
+has a fault in it.
+
+**A game is one entry named `<romId> - <title>`, and it is a FILE when the game
+is one file.** `cache/psx/323 - Crash Bandicoot.chd`. An archive that unpacks
+into several files cannot be that, so it becomes a directory of the same name —
+`cache/gb/39 - Tetris/` holds the zip RomM sent and the `.gb` that came out of
+it. Both are renamed identically, so nothing above this has to know which it is.
+The written design showed only the file case; the directory case is what an
+extracted archive forces, and 801 of the reference library's 1644 games are
+`.zip`.
+
+#### Four things building it turned up
+
+**1. The platform segment is spelled two different ways, and that is deliberate
+but it reads like an inconsistency.** Games sit under RomM's `slug` —
+`cache/psx/`, `cache/gb/` — because that is what the agreed shape wrote down.
+Saves and states sit under its `fs_slug` — `saves/Sony Playstation/`,
+`saves/Game Boy/` — because the whole argument for the per-user tree was that it
+MIRRORS RomM's own `users/<user>/saves/<platform>/<romId>/<core>/`, and that is
+the spelling the server uses. Both are defensible on their own and together they
+look like somebody was careless. **Worth a decision rather than leaving it to be
+rediscovered.**
+
+**2. `bios/` still mixes replaceable and irreplaceable, because libretro gives a
+core exactly ONE system directory.** The 13 MB of PSP system files moved out —
+they ship inside the image and belong in `/usr/share/cabinetos/system/`, which
+`ensureTree` symlinks into `bios/` at startup — but a Dreamcast's saved flash is
+written by Flycast into the system directory and there is nowhere else for it to
+go. The agreed shape has six top-level names and
+none of them is "what a core wrote into its system directory", so `bios/` is
+holding it. **This is the one place the shape as written does not answer the
+question**, and it is left visible rather than papered over. The likely fix is
+item 1 of the handover: the Dreamcast VMU work moves `vmu_save_A1.bin` into the
+per-user save tree, which takes the irreplaceable part out of `bios/` for the
+one platform that has it. `dc_nvmem.bin` — the console's own settings — would
+still be there.
+
+**3. `/usr/share/cabinetos` is not the core-assets directory, it is a directory
+that happens to have that name.** The image already puts three unrelated files
+there — a `DEVELOPMENT-IMAGE` marker and two package inventories — so linking
+its contents into the console's system directory put all three where a core goes
+looking for its fonts. The assets belong in `/usr/share/cabinetos/system/`, and
+nothing installs them there yet; on the VM they sit in `bios/PPSSPP/` where the
+core build left them and the link step correctly leaves them alone. **Found by
+running it and reading the directory listing**, which is the only reason it did
+not ship.
+
+**4. `.zip` is not a save, and assuming it was would have filed two real games as
+save data.** The first version of the migration classified every `.zip` in a
+game's directory as PSP's zipped save folder. `lethalen.zip` IS a MAME game and
+`Tetris.zip` is how RomM stores that Game Boy ROM, so the plan moved both into
+`saves/` and reported their directories as empty. **The dry run showed it before
+anything moved**, which is the entire reason the dry run exists. The rule is now
+that the payload is the file RomM named in `fs_name`, and a `.zip` is a save only
+when it is not that file.
+
+#### Migration, and the standard it is held to
+
+`--migrate --dry-run` prints the whole plan and touches nothing. `--migrate`
+carries it out. `--migrate-undo <manifest>` puts it all back.
+
+- **Nothing is deleted.** Every step is a rename; the only thing removed is an
+  old directory that is already empty, which `rmdir` cannot do otherwise.
+- **The manifest is appended and flushed per move**, so a migration interrupted
+  by a power cut is still completely reversible — the record is on the disk
+  rather than in the process.
+- **Save data is hashed before the move and again at the destination.** A
+  mismatch puts the file back and stops the run. "The function returned true" is
+  not evidence that a save survived.
+- **What cannot be attributed is set aside, not guessed at.** The old shared save
+  directories hold files that genuinely do not say which game wrote them —
+  `scd_U.brm`, `pcsx-card2.mcd`, `mame2003-plus/nvram/*.nv`. They move whole to
+  `users/<id> - <name>/saves/unattributed <timestamp>/` and every file is listed
+  by name in the report. A save filed against the wrong game is worse than one
+  filed nowhere.
+
+**Measured on the test VM, 2026-09-18**, against the 37 save-class files it was
+carrying:
+
+| | |
+|---|---|
+| Moves planned | 34 |
+| Save-class files before and after | 37 and 37, **every sha256 identical** |
+| Undo | 34 moves reversed, and the tree compared **byte-identical to the pre-migration state**, path and hash |
+| Verified with | `sha256sum` from outside the program, not the program's own FNV check |
+
+#### Measured on the test VM, 2026-09-18
+
+Everything below was run rather than reasoned about, on the machine with two
+real filesystems.
+
+**Keeping is a set of people.** Kept Mario Kart 64 as user 1 — it went straight
+into `roms/n64/200 - Mario Kart 64.v64` rather than being downloaded to the
+cache and moved. A second user's keep record was added by hand and the storage
+report showed `kept by user(s) 1, 2`. **User 1 released it and nothing moved**:
+`released by user 1, still kept by 1 other(s)`, one entry still in `roms/`, none
+in `cache/`. User 1 kept it again, user 2 went away, user 1 released — and that
+last release demoted it.
+
+**The demotion is a rename.** The entry came out of `cache/` with the **same
+device and inode it went into `roms/` with, `58:82064`**, so no bytes moved and
+the cost is the same whatever the game weighs. For comparison, copying that same
+12.6 MB across the VM's two filesystems took **0.124 s — 101 MB/s**, which puts
+a 19.8 GB PS3 title at about three minutes of copying because somebody changed
+their mind. That is the whole reason `roms/` and `cache/` repeat per location
+rather than living once at the root, and it is now a measurement rather than an
+argument.
+
+**Eviction takes whole games, oldest first.** On btrfs with `/var` filled to
+358 MB free and two cached games of 314 MB each — one a single file, one a
+directory of two files, the directory a week older. Pressing Play on the 464 MB
+Crash Bandicoot evicted **the directory, whole**, and stopped:
+
+```
+[cache] evicted .../cache/gb/9002 - Fake Set (314572800 bytes)
+[cache] freed 314572800 bytes to make room for 487486623
+```
+
+The newer single-file game was left alone, because 358 + 314 MB was already
+enough. **The old code could not have done this** — it deleted individual ROM
+files and skipped anything that looked like a save, because a game's directory
+held both.
+
+**Keeping is refused before a byte moves.** The same disk, the same game, with
+Download rather than Play: `refused Crash Bandicoot: 165089713 reclaimable
+against a 6529167155 floor`. Both floors, checked against what the machine could
+still reclaim, and no download attempted.
+
+**A single-payload download really does become a single file.** Pokémon Red was
+not on the disk; pressing Play fetched it and left
+`cache/gb/2813 - Pokémon Red Version.gb`, a regular file of 1,048,576 bytes.
+Tetris, whose RomM payload is a `.zip` that Gambatte cannot read as it stands,
+is `cache/gb/39 - Tetris/` holding both the zip and the `.gb` that came out of
+it. Its save came back from RomM into
+`users/1 - MMagTech/saves/Game Boy/2813/gambatte/` and the core reported
+`battery is 32768 bytes`.
+
+**And the whole path, on a platform that needs firmware.** Twisted Metal:
+
+```
+[firmware] scph1001.bin already here
+[core] loaded ./cache/psx/357 - Twisted Metal.chd
+[save] restored Twisted Metal (Cabinet).srm (131072 bytes)
+[save] battery is 131072 bytes
+[launch] running PCSX-ReARMed
+```
+
+A BIOS found in `bios/`, a game found in `cache/psx/`, and a memory card
+restored from RomM into this person's save directory — which is also the
+directory the core was handed.
+
+#### What is still not built
+
+- **More than one storage location.** `storage::locations()` returns the root
+  alone. `roms/` and `cache/` already repeat per location and every path takes a
+  location, so adding the second drive is a list getting longer — but the UI is
+  open question 14 and is deferred, so **"a missing drive degrades rather than
+  errors" has still never been exercised**, because there is no second location
+  to remove.
+- **Account switching.** One user, resolved from `/api/users/me` and cached to
+  `config/user.json` so a console with no network still knows whose saves it
+  holds. Its own session.
+- **`/var/lib/cabinetos` is not yet where this runs.** The root resolves to
+  `/var/lib/cabinetos` when it can be created and written and to the working
+  directory otherwise, which on the VM is `~/frontend`. The image will need that
+  directory to exist and be owned by the console user; today it does not exist
+  at all.
 
 ---
 
