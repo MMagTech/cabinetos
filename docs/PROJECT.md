@@ -160,12 +160,13 @@ ordered this way now.
   a 19.8 GB one, and both boot with the PKG deleted. **PS3 games can still not
   be PLAYED here** — that needs a GPU and Vulkan, and waits for the A9 Pro. See
   open question 19, *The PKG install, MEASURED 2026-09-18*.
-- **And PS3 no longer needs a storage model of its own at all**, because the
-  better answer is a decrypted ISO: one file, no install, no licence, and
-  `beginLaunch`'s reuse test works on it unchanged. RPCS3 opens such an image
-  itself, given a 20-byte disc header that ordinary ISO builders omit. **The fix
-  is on the server, not in this console** — two games are converted and verified.
-  See open question 19, *The better answer: a decrypted ISO*.
+- **A decrypted ISO is a better shape where it is available** — one file, no
+  install, no licence, and `beginLaunch`'s reuse test works on it unchanged.
+  RPCS3 opens such an image itself, given a 20-byte disc header that ordinary
+  ISO builders omit; the fix is on the server rather than in this console.
+  **But it bounds out at six of the thirty titles**, because 24 are PSN PKGs
+  with no disc behind them, so the install route is the majority case and still
+  has to be built. See open question 19, *The better answer: a decrypted ISO*.
 
 ### The Cabinet-side debts this project has found
 
@@ -7172,6 +7173,24 @@ game.**
 
 **It is the same size as the folder it came from** — Bioshock is 12.51 GB either
 way — so this buys simplicity, not space.
+
+##### But it can only ever cover a fifth of this library
+
+**Counted on the server 2026-09-18, and this bounds the whole idea: 24 of the 30
+PS3 titles are PKGs.** A PKG is a PSN download — there is no disc behind it, so
+there is nothing to make an ISO from, and no conversion script changes that.
+Only the six disc-based titles can take this route:
+
+| Shape | Count | |
+|---|---|---|
+| PKG — PSN downloads | **24** | install route only |
+| Disc, converted to ISO | 2 | Bioshock, Bioshock 2 |
+| Disc, still a folder | 4 | God of War III, Mass Effect 2, Metal Gear Solid 4, Uncharted 2 |
+
+**So the PKG install is the majority case, not the fallback**, and the four
+mechanical findings above are all still work that has to be done. The ISO route
+is worth taking because it is free — the images already exist and the fix is on
+the server — not because it removes the need for the other one.
 
 **Still not playable here.** Every ISO result above is a boot to the point of
 loading the executable; the VM has no GPU, so nothing has been played. That

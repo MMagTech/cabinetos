@@ -132,7 +132,7 @@ install, MEASURED 2026-09-18*:
 **Firmware was measured too**: the 206 MB PUP decrypts in 17 s into a 195 MB
 `dev_flash` tree. One install per machine.
 
-### 0b. And then the PKG route turned out not to be the one to build
+### 0b. A decrypted ISO is better where it exists, which is six titles of thirty
 
 **A decrypted ISO is the better shape, and it needs nothing from this console.**
 MMagTech has a script that converts his disc dumps to ISOs; RPCS3 opens such an
@@ -156,9 +156,12 @@ every ISO has.
 with the last-sector field matching the real file size. The rest are still disc
 folders or PKGs.
 
-**What this means here: nothing to build.** An ISO is one file whose size RomM
-knows, so the reuse test works, there is no install phase and no transient 2x.
-The PKG findings below still matter for PKG-only titles.
+**But it only reaches six of the thirty titles.** 24 are PSN PKGs with no disc
+behind them, so no conversion is possible and **the install route below is the
+majority case, not a fallback.** Where an ISO does exist there is nothing to
+build — one file whose size RomM knows, so the reuse test works, no install
+phase, no transient 2x. Four disc titles are still unconverted: God of War III,
+Mass Effect 2, Metal Gear Solid 4, Uncharted 2.
 
 **What is left for PS3, and it is not storage.** Four things the PKG route
 turned up that the design still has to answer — RPCS3 refusing to install without `--headless`,
