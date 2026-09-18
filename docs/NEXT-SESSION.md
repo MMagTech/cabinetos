@@ -14,13 +14,11 @@ Rewrite it at the end of a session. It is meant to be current, not a log.
 
 ## Before anything else
 
-**Everything is on `main` except one open pull request, and it is big.**
-[#19](https://github.com/MMagTech/cabinetos/pull/19) carries the whole of
-2026-09-17: PPSSPP, PSP save sync, the save audit, the folder-layout decisions,
-the hardware change and the PS3 findings. Everything described below as "runs
-today" includes it. **Merging it is the first thing to do** — CI has been green
-on every push. If it has merged by the time you read this, everything is on
-`main` again and this paragraph is stale.
+**Everything is on `main`.** No other branches and no open pull requests.
+[#19](https://github.com/MMagTech/cabinetos/pull/19) — PPSSPP, PSP save sync,
+the save audit, the folder-layout decisions, the hardware change and the PS3
+findings — merged as `4ff3818`, so everything described below as "runs today"
+is on `main`.
 
 Start from `main`, branch once, and **open the pull request against `main`**.
 Four branches were once stacked on each other here, each opened before the last
@@ -101,31 +99,88 @@ on the way out.
 > goes ahead — and a screen that already exists is not frozen, because fixing
 > something *wrong* is not the same as tuning something.
 
-### 0. The PS3 experiment the VM can now run
+### 0. The PS3 PKG experiment — DONE 2026-09-18, and the answer was good news
 
-**The heavy-systems conversation HAPPENED on 2026-09-17** and settled a lot; the
-outcome is at the bottom of this file. What it left is one experiment, and the
-VM was grown specifically to make it possible.
+**Installing a PS3 game does not cost a second copy of it.** The worry was that a
+19.8 GB download would become 40 GB on disk and that PS3 would need its own
+storage model because of it. It does not: **the installed game is the same size
+as the PKG**, so once the PKG is deleted the game costs what any other game
+costs. The doubling is real but it only lasts while both exist.
 
-**Install a PKG and measure what comes out.** PS3 is the first system where the
-thing you download is not the thing you run — 24 of the 30 games on the server
-are `.pkg` installers, not disc folders — and a PKG has to be installed into
-RPCS3's virtual hard drive, which produces a second copy. The question the whole
-storage model hangs on is whether that really means **2x the disk**, and
-whether the PKG can then be deleted.
+Measured on the VM, which has no GPU — installing is decrypt-and-unpack, so it
+needed none. RPCS3 came from Flathub; nothing was built.
 
-**It does NOT need the new hardware.** Installing is decrypt-and-unpack; only
-PLAYING needs a GPU, and the VM has no Vulkan. The route is RPCS3's Linux
-AppImage and its command-line install, not a build — RPCS3 is far too large to
-compile on this VM.
+| | Super Stardust HD | Sly Cooper |
+|---|---|---|
+| PKG | 287,265,040 B | 19,843,204,240 B |
+| Installed | 287,260,549 B | 19,843,198,103 B |
+| Install time | 18 s | 123 s — 161 MB/s |
+| Peak, both present | 574 MB | 39.7 GB |
 
-Two candidates, both on the server: **Super Stardust HD at 287 MB** to prove the
-mechanism, and **Sly Cooper at 19.8 GB** to prove it at real scale, which now
-fits because of the 100 GB second disk.
+All four questions are answered, in PROJECT.md under open question 19, *The PKG
+install, MEASURED 2026-09-18*:
 
-Answer these four and the storage design stops being guesswork: what the install
-produces and where, the size ratio, whether the game still runs with the PKG
-deleted, and where the `.rap` licence has to sit.
+- **What it produces and where**: `dev_hdd0/game/<TITLEID>/`, and nothing
+  anywhere else.
+- **The ratio**: 1.00x, both times.
+- **The PKG can be deleted** — proven by booting both games afterwards, not by
+  looking at the directory. Neither reached gameplay and neither could: no GPU.
+- **The `.rap` goes in `dev_hdd0/home/<user id>/exdata/<CONTENT ID>.rap`**, with
+  a lowercase extension, and RPCS3 names the exact file when it is missing. It
+  is **16 bytes**. Per-user, exactly where open question 18 put it.
+
+**Firmware was measured too**: the 206 MB PUP decrypts in 17 s into a 195 MB
+`dev_flash` tree. One install per machine.
+
+### 0b. A decrypted ISO is better where it exists, which is six titles of thirty
+
+**A decrypted ISO is the better shape, and it needs nothing from this console.**
+MMagTech has a script that converts his disc dumps to ISOs; RPCS3 opens such an
+image directly — mounts it as the disc itself, no install, no `.rap`, no second
+copy — **provided it carries a 20-byte PS3 disc header** that `xorriso`,
+`mkisofs` and `hdiutil` do not write. Without it RPCS3 rejects the file as
+`non-PS3ISO`.
+
+Proved both ways on a real 12.5 GB image: rejected unstamped, booted stamped.
+PROJECT.md has the byte layout under open question 19, *The better answer: a
+decrypted ISO*.
+
+**The fix lives on the server, deliberately.** Stamp the file once and it is
+correct for everything that reads it. Two tools were handed to MMagTech on
+2026-09-18 and are NOT in this repository: `stamp-ps3-iso.command` for images
+already built, and his own `Build PS3 ISO.command` with the header step added —
+its verification was also wrong, checking only for an ISO9660 signature that
+every ISO has.
+
+**Two games are converted and verified** — Bioshock and Bioshock 2, both stamped
+with the last-sector field matching the real file size. The rest are still disc
+folders or PKGs.
+
+**But it only reaches six of the thirty titles.** 24 are PSN PKGs with no disc
+behind them, so no conversion is possible and **the install route below is the
+majority case, not a fallback.** Where an ISO does exist there is nothing to
+build — one file whose size RomM knows, so the reuse test works, no install
+phase, no transient 2x.
+
+**DECIDED 2026-09-18: this console reads a PKG or a stamped ISO, and NOT a disc
+folder.** MMagTech's call, and it removes work: a disc folder is hundreds or
+thousands of files — Mass Effect 2 is **8,337** — and downloading a tree that
+size from RomM is a transfer path that does not exist here and would need its
+own progress, resume and partial-tree handling. Converting first makes it one
+download that everything already handles.
+
+**And nothing is built for the folders at all**, not even a way to say they are
+not ready — the four that remain are mid-conversion, so the state is temporary.
+PS3 support here is a PKG or a stamped ISO; the folder never reaches this
+console.
+
+**What is left for PS3, and it is not storage.** Four things the PKG route
+turned up that the design still has to answer — RPCS3 refusing to install without `--headless`,
+an exit status that reports failure after logging success, an interrupted
+install leaving a partial tree nothing cleans up, and a recompiler cache written
+outside the virtual drive onto the OS volume. All four are in PROJECT.md. **PS3
+still cannot be PLAYED here**; that needs Vulkan and waits on the A9 Pro, which
+is open question 20.
 
 ### 1. Saves that actually reach the server
 
@@ -308,9 +363,11 @@ Phase 2's last mechanical item, and it is a behaviour rather than a picture.
 
 ---
 
-## Waiting on the SER5, and deliberately not started
+## Waiting on the reference machine, and deliberately not started
 
-Ordered for whenever it is installed. **Do not begin these in the VM.**
+Ordered for whenever it is installed. **Do not begin these in the VM.** The
+machine is now the **GEEKOM A9 Pro**, not the SER5 — older text below and in
+PROJECT.md says "the SER5" and means this one.
 
 - **The navigation bar.** The Library is reached with a temporary **L** key.
   Home has about 85 points of vertical slack and the bar needs about 85 — the
@@ -436,6 +493,29 @@ Ordered for whenever it is installed. **Do not begin these in the VM.**
   clones `--filter=blob:none`, which finished the same clone in 45 seconds —
   but **NOT for submodules**, where the lazy blob fetch is thirty times slower
   than cloning them whole. The comment in the script says so; do not "tidy" it.
+- **RPCS3 will not install a PKG or firmware unless you say `--headless`.**
+  `--no-gui --installpkg` prints *"Cannot perform installation in no-gui mode!"*,
+  relaunches itself with a window, and opens a file chooser — on a machine with
+  no pointer, that is a hang. Plain `--installpkg` with no mode flag does the
+  same. Only `rpcs3 --headless --installpkg <path>` builds no window and
+  installs straight through.
+- **RPCS3 exits 134 after a successful install.** SIGABRT in a static destructor
+  at teardown, on every one of the three installs run here, *after* logging
+  `Successfully installed`. **Read the log line, not the exit code.** Same shape
+  as PPSSPP's teardown abort.
+- **An interrupted PS3 install leaves the partial tree behind**, and nothing
+  cleans it up. One was killed three seconds in and left 1.5 GB that looks
+  installed. Delete the title directory before retrying.
+- **`timeout` does not kill RPCS3 under flatpak.** It signals the `flatpak run`
+  wrapper; `rpcs3` inside the bwrap sandbox keeps going. One "150 second" boot
+  ran for four minutes. Follow it with `pkill -x rpcs3` — and mind that a
+  `pkill` aimed at a stuck process will also kill an install you started in the
+  same breath, which happened here and cost a 19.8 GB run.
+- **Flathub stalls from this network, silently.** Two `flatpak install` runs sat
+  with established connections and zero bytes read for ten minutes each. A retry
+  loop fixes it, because ostree resumes from what it already fetched:
+  `for i in $(seq 1 30); do timeout 240 flatpak install -y --user ... && break; done`.
+  A large download running at the same time makes it much worse.
 - **The image build still only runs on a pull request aimed at `main`.** If you
   target something else, it needs `gh workflow run build.yml --ref <branch>`.
 - **Retargeting a pull request does not re-run CI.** Close and reopen it.
@@ -460,6 +540,16 @@ Ordered for whenever it is installed. **Do not begin these in the VM.**
   re-clones. Flycast's was deleted on 2026-09-17 to make room for PPSSPP.
 - `~/run-frontend.sh` — the session launcher. The original is `run-frontend.sh.bak`
 - `~/.config/cabinetos/romm.json` — the RomM token, 0600
+- `/var/mnt/games/flatpak/` — **a flatpak user installation holding RPCS3**, 2.7 GB,
+  reached with `FLATPAK_USER_DIR=/var/mnt/games/flatpak`. It is on the games disk
+  deliberately: the KDE runtime it needs is 1.1 GB and `/var` has 5 GB.
+- `/var/mnt/games/ps3lab/` — the PS3 experiment. `rpcs3/dev_flash` (195 MB
+  firmware), `rpcs3/dev_hdd0/game/` with Super Stardust HD and Sly Cooper
+  installed, both `.rap`s in `rpcs3/dev_hdd0/home/00000001/exdata/`, and the PUP
+  in `dl/`. Both PKGs were deleted after installing, on purpose — that was the
+  experiment. RPCS3's paths are set by a hand-written
+  `~/.var/app/net.rpcs3.RPCS3/config/rpcs3/vfs.yml`, and its renderer is set to
+  **Null** in `config.yml` because the VM has no Vulkan.
 
 ### The VM has TWO disks now, and the second one is the point
 
@@ -473,7 +563,8 @@ than assumed. `nofail` matters: a machine that will not boot because a games
 drive is missing is exactly what open question 14 forbids.
 
 **It exists to test the two-drive design, not just to hold a big PKG.** Four
-things become measurable that were decisions on paper:
+things become measurable that were decisions on paper — **the fourth was done on
+2026-09-18** and the first three are still untried:
 
 1. **That demoting a kept game is a RENAME, not a copy.** A rename cannot cross
    filesystems — the kernel returns `EXDEV` — and that is the whole reason
@@ -483,9 +574,9 @@ things become measurable that were decisions on paper:
    the console running. Written down as a requirement; never once exercised.
 3. **Both disk floors against realistic numbers** — 5.3 GB on one volume and
    98 GB on the other, rather than ballast on a single disk.
-4. **A PS3 PKG install at full size.** Sly Cooper is 19.8 GB and its install
-   would be about the same again; 40 GB fits on the new disk and could never
-   have fitted on the old one.
+4. ~~**A PS3 PKG install at full size.**~~ **Done.** Sly Cooper peaked at
+   39.7 GB with the PKG and the install both present — which could never have
+   fitted on the old disk — and settled at 19.8 GB once the PKG was deleted.
 
 **Adding it in Unraid is not obvious** and cost some time: the VM editor will
 not resize an existing vDisk at all, and the option to add a second one is
@@ -517,11 +608,12 @@ The emulator is done, and **the discussion happened.** What it settled:
 | **Save data** | A folder tree, and the PSP mechanism built the same day already covers it. |
 | **Save states** | RPCS3 has none, **and they are not needed** — snapshots earn their keep on cartridge machines, not on a console with real in-game saves. |
 | **Renderer** | RPCS3 wants Vulkan. So do parallel-RDP and Flycast. **One piece of host work serves three systems** — open question 20. |
-| **Installation** | **The one real problem.** 24 of 30 games are PKGs, and what you download is not what you run. Open question 19. |
+| **Installation** | ~~The one real problem.~~ **Measured 2026-09-18 and it is not a problem.** A PKG installs to its own size, the PKG can then be deleted, and the game still boots. Item 0 above. |
 | **Storage** | Unchanged by the faster box: 307 GB, one 37 GB title. |
 
-**What is left is the PKG install experiment — item 0 above — and a Vulkan path
-in the host, which cannot be built until the A9 Pro exists.**
+**The PKG install experiment is done — item 0 above. What is left is a Vulkan
+path in the host, which cannot be built until the A9 Pro exists**, plus four
+mechanical findings from the install that PROJECT.md records.
 
 The original material follows, because the numbers are still the numbers.
 

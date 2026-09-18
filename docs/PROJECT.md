@@ -26,7 +26,7 @@
 
 ---
 
-## Where the project is — 2026-09-17
+## Where the project is — 2026-09-18
 
 **Phase 0 complete. Phase 1 complete. Phase 2 mostly done. Phase 3 well under
 way and running. Phase 5 started early, the hardest question in it is answered,
@@ -154,6 +154,19 @@ ordered this way now.
   string — see open question 13.
 - **No controller has ever been attached.** The permissions chain is verified
   by reading; a real pad is not.
+- ~~**Whether a PS3 PKG install costs double the disk**~~ **— it does not, as of
+  2026-09-18.** A PKG installs to the same size it came in at, so the 2x lasts
+  only while both the PKG and the install exist. Measured on a 287 MB title and
+  a 19.8 GB one, and both boot with the PKG deleted. **PS3 games can still not
+  be PLAYED here** — that needs a GPU and Vulkan, and waits for the A9 Pro. See
+  open question 19, *The PKG install, MEASURED 2026-09-18*.
+- **A decrypted ISO is a better shape where it is available** — one file, no
+  install, no licence, and `beginLaunch`'s reuse test works on it unchanged.
+  RPCS3 opens such an image itself, given a 20-byte disc header that ordinary
+  ISO builders omit; the fix is on the server rather than in this console.
+  **But it bounds out at six of the thirty titles**, because 24 are PSN PKGs
+  with no disc behind them, so the install route is the majority case and still
+  has to be built. See open question 19, *The better answer: a decrypted ISO*.
 
 ### The Cabinet-side debts this project has found
 
@@ -191,7 +204,7 @@ Running infrastructure:
 | Repository | https://github.com/MMagTech/cabinetos |
 | Image | `ghcr.io/mmagtech/cabinetos:latest` — public, unsigned |
 | Test machine | Unraid VM at `192.168.1.250`, 4 GB, VirtIO-GPU, SSH key installed |
-| Reference hardware | Beelink SER5 — **not yet installed**, awaiting a spare NVMe |
+| Reference hardware | **GEEKOM A9 Pro** — Ryzen AI 9 HX 370, Radeon 890M — **not yet installed**. Replaced the Beelink SER5 on 2026-09-17; see *Hardware*, where the rule is that everything keyed to "the SER5" now means this machine. |
 
 Everything in the pipeline has run green at least once: image build → GHCR →
 signing (skipped, no key) → qcow2 → VM boot → `bootc upgrade` in place →
@@ -1502,6 +1515,15 @@ separately rather than as one number:
 Nothing here is urgent — it is under 3 MB against a 5 GB system reserve — but it
 is a category the storage model currently does not have, and it arrived with the
 hardware-rendered cores rather than existing before them.
+
+**PS3 makes this category much bigger, measured 2026-09-18.** RPCS3 keeps a PPU
+recompiler cache of its own, outside the virtual hard drive entirely — under the
+emulator's config directory, so on the OS volume rather than the games one. It
+reached **21 MB while failing to reach a title screen**, because it caches
+compiled code for every module the game loads and a PS3 game loads dozens. This
+is the first entry in this table that could plausibly run to gigabytes, and the
+first where the *location* is wrong as well as the size: a games drive should
+hold it.
 
 ### Other facts worth keeping
 
@@ -6873,7 +6895,8 @@ believing a stale comment: one level checked, the conclusion generalised.
 | Plain disc folders | **6** — God of War III is 97 files and 37 GB |
 
 A PSN title is two files. Sly Cooper is `Sly Cooper - Thieves of Time.pkg` at
-19.8 GB plus `EP9000-NPEA00429_00-SLYCOOPERPSN0000.rap` at a few hundred bytes.
+19.8 GB plus `EP9000-NPEA00429_00-SLYCOOPERPSN0000.rap`, which is **exactly 16
+bytes** — measured 2026-09-18; every `.rap` in the library is.
 
 ##### Why that breaks the storage model rather than merely complicating it
 
@@ -6882,6 +6905,16 @@ from RomM is the artefact**. Download it, hand it to the core, done. A PKG is
 not that: it has to be installed into RPCS3's virtual hard drive, which produces
 a second copy of roughly the same size. Sly Cooper would be 19.8 GB downloaded
 plus ~19.8 GB installed, for **forty gigabytes of one game**.
+
+> **Superseded for any title available as a stamped ISO** — see *The better
+> answer: a decrypted ISO* below, which removes the install step entirely. What
+> follows still governs PKG-only titles.
+>
+> **Measured 2026-09-18, and the 2x turned out to be TEMPORARY** — the installed
+> tree is the same size as the PKG, so deleting the PKG puts the game back at
+> 1x. Sly Cooper peaked at 39.7 GB and settled at 19.8 GB. See *The PKG install,
+> MEASURED 2026-09-18* below; what follows in this subsection is the reasoning
+> that prompted the experiment, and it still holds for the reuse test.
 
 So the PKG has to be deleted after installing, and that has a consequence the
 cache design did not anticipate:
@@ -6919,6 +6952,278 @@ installed tree, because that is the thing that can be run.
 The saves story above is unaffected: save data is still a folder tree under
 `dev_hdd0/home/<user>/savedata/<TITLEID>/`, and the PSP mechanism still covers
 it.
+
+#### The PKG install, MEASURED 2026-09-18
+
+**Installing a PS3 game does not cost a second copy of it.** That was the whole
+worry — that a 19.8 GB download would become 40 GB on disk — and it is wrong.
+The install is the same bytes moved out of the container: **the finished game is
+the same size as the PKG it came from, to within a rounding error**, and once
+the PKG is deleted the game costs exactly what any other game costs. The 2x is
+real but it is **transient**, lasting only while both exist.
+
+Everything below was run on the test VM, which has no GPU and no Vulkan.
+**Installing needs neither** — it is decrypt-and-unpack — so the answer did not
+have to wait for the A9 Pro. RPCS3 came from Flathub (`net.rpcs3.RPCS3`,
+`0.0.42-19980-028d1e8f Alpha`); nothing was built.
+
+##### The four numbers
+
+| | Super Stardust HD | Sly Cooper: Thieves in Time |
+|---|---|---|
+| PKG from RomM | 287,265,040 B | 19,843,204,240 B |
+| Installed tree | 287,260,549 B | 19,843,198,103 B |
+| **Ratio** | **0.999984x** | **0.9999997x** |
+| Files produced | 59 | 53 |
+| Install time | 18 s | 123 s |
+| Peak disk, both present | 574 MB | **39.7 GB** |
+
+Sly's install ran at **161 MB/s** on a four-core VM with no GPU, so a 20 GB
+title installs in about two minutes. The download itself took **173 s** at
+115 MB/s from RomM, so fetch and install are the same order of magnitude:
+**"Download" for a PS3 PKG is roughly twice the wait of a plain download**, not
+ten times.
+
+The whole-volume measurement agrees with the per-directory one. Free space on
+the games drive before installing Sly was 81,971,671,040 B; after installing,
+62,128,369,664 B; after deleting the PKG, 81,971,576,832 B. **94,208 bytes from
+where it started** — the installed game occupies what the PKG occupied.
+
+##### What it produces, and where
+
+`dev_hdd0/game/<TITLEID>/` — one directory per title, `NPEA00014` and
+`NPEA00429` here. It holds the artwork and metadata the PS3 menu shows
+(`ICON0.PNG`, `PIC1.PNG`, `SND0.AT3`, `PARAM.SFO`), a `TROPDIR` of trophies, and
+`USRDIR` with `EBOOT.BIN` and the game's data. **Nothing is written anywhere
+else** — the virtual hard drive's entire contents after installing Super
+Stardust HD were that one game plus four bytes of empty directories.
+
+**The install is self-contained and nothing records where it came from.**
+`games.yml`, RPCS3's index of games held outside the virtual drive, stayed
+**zero bytes** through both installs. A title in `dev_hdd0/game/` is known by
+being there, and its name comes from the `PARAM.SFO` inside it: with the PKG
+deleted, RPCS3 still opened Sly Cooper and logged
+`Localized Title: Sly Cooper: Thieves in Time™`.
+
+##### The PKG can be deleted, and that is proven by running the game
+
+Deleting the PKG was tested the only way that means anything — by booting the
+game afterwards. Super Stardust HD's PKG was removed, the installed tree was
+unchanged (59 files, `EBOOT.BIN` at the same md5), and RPCS3 decrypted and
+booted it. Sly Cooper's 19.8 GB PKG was removed and it booted too.
+
+Neither reached gameplay, and neither was expected to: the VM has no GPU, so
+this ran on the **Null renderer**, and RPCS3's PPU recompiler saturated four
+cores for minutes compiling every module. **What is proven is the part the PKG
+mattered for** — the installed tree is complete, self-describing and
+decryptable on its own.
+
+##### Where the `.rap` has to sit — RPCS3 says so itself
+
+```
+dev_hdd0/home/<user id>/exdata/<CONTENT ID>.rap
+```
+
+`00000001` is the user, and the name is the content id RomM already stores the
+file under. Without it, booting fails with **`Failed to decrypt content`**, and
+the emulator names the exact file it wanted:
+
+> `Failed to locate the game license file: .../exdata/EP9000-NPEA00429_00-SLYCOOPERPSN0000.rap.`
+> `Ensure the .rap license file is placed in the dev_hdd0/home/00000001/exdata folder with a lowercase file extension.`
+
+Run as a control on both games with the directory empty, then again with the
+file copied in, and both then booted. **The extension must be lowercase** — the
+emulator says so, and RomM's filenames already are.
+
+A `.rap` is **16 bytes**. It is per-user, which lands exactly where open
+question 18 put it: beside that user's saves, not beside the game.
+
+##### Firmware, which is one install per machine and was also measured
+
+`PS3UPDAT_v4.96.PUP`, 206,177,436 B on the server, decrypts in **17 s** into
+`dev_flash/` at **195,070,119 B** — seven top-level directories (`sys`, `vsh`,
+`data`, `bdplayer`, `ps1emu`, `ps2emu`, `pspemu`). This document previously
+recorded the `dev_flash` tree as a belief; it is now a measurement.
+
+**The version does not match the filename.** `dev_flash/vsh/etc/version.txt`
+reports `release:04.9200`, and RPCS3 then logs `Firmware version: 4.92`, while
+the file on the server is named `v4.96`. Not investigated. Recorded because
+anything that displays a firmware version should read the installed tree rather
+than the filename.
+
+##### Four things this turned up that the design has to answer
+
+1. **RPCS3 will not install without a GUI, and refuses in so many words.**
+   `--no-gui --installpkg` prints `Cannot perform installation in no-gui mode!`
+   and then relaunches itself with a window, which opens a file chooser because
+   the argument does not survive. **`--headless` is the one that works**: it
+   builds no window at all and installs straight through. The invocation is
+   `rpcs3 --headless --installpkg <path>`. This is worth knowing before anyone
+   designs the install as "shell out to RPCS3 and wait" — two of the three
+   obvious spellings of that command open a dialog on a console with no pointer.
+
+2. **The exit status lies.** Both installs and the firmware install ended
+   `exit=134` — SIGABRT, in a static destructor at process teardown — *after*
+   logging `Successfully installed ... (title_id=NPEA00429, title=Sly Cooper:
+   Thieves in Time™, version=01.00)`. The same shape as PPSSPP's teardown abort.
+   **Success has to be read out of the log line, not the exit code.**
+
+3. **An interrupted install leaves the partial tree behind.** One install was
+   killed three seconds in and left a 1.5 GB `NPEA00429/` that nothing cleans
+   up. The next run would have found a directory that looks installed and is
+   not. **A console needs its own completion marker**, because the thing on disk
+   cannot be checked against RomM's size the way a downloaded file can — which
+   is the same reason `beginLaunch`'s reuse test does not work here.
+
+4. **RPCS3 writes a recompiler cache outside the virtual drive.** It went to
+   `~/.var/app/net.rpcs3.RPCS3/cache/` — **21 MB** after a few minutes of not
+   even reaching a title screen, on the OS volume rather than the games one.
+   That is the same class of disk as item 7's Mesa shader cache, and it will be
+   much larger than 21 MB for a game that actually runs.
+
+#### The better answer: a decrypted ISO, MEASURED 2026-09-18
+
+**The PKG install works, and it is not the shape this console wants.** Later the
+same day MMagTech pointed at a folder of games he had already converted to
+decrypted ISOs — *"im thinking it would be easier to support them converted this
+way then the folder structure"* — and he is right. **One file, no install, no
+licence, no second copy.** Every PS3-shaped problem in the section above
+disappears, and PS3 stops being a special case in the storage model: it becomes
+a game file like any other.
+
+##### RPCS3 opens a PS3 ISO itself, and the requirement is 20 bytes
+
+RPCS3 has a disc-image loader (`rpcs3/Loader/ISO.cpp`) that mounts an ISO as
+`/dev_bdvd` with no help from the frontend — no loop mount, no root, no unpack.
+It accepts encrypted and decrypted images alike.
+
+What it requires is the **PS3 disc header**, in the first two sectors:
+
+| Offset | Bytes | What |
+|---|---|---|
+| `0x000` | u32 big-endian | region count, which must be 1–127 |
+| `0x00C` | u32 big-endian | the last sector of region 0 — for one region, `size / 2048 - 1` |
+| `0xF70` | 16 | `Dncrypted 3K BLD`, the watermark that means **decrypted**; RPCS3 then returns the data untouched |
+
+`region_count` outside 1–127 is rejected as *"non-PS3ISO"*, which is exactly
+what a plain `xorriso`/`mkisofs`/`hdiutil` image produces — its first sectors
+are zero. **This header lives in the ISO9660 system area, the first 32 KB, which
+the filesystem leaves empty** (ISO.h says so in as many words), so it can be
+written into a finished image without rebuilding anything and without touching
+the volume, the files or the size.
+
+**Measured on the real thing, both directions.** A 12.5 GB `Bioshock.iso` built
+by MMagTech's own script was rejected:
+
+> `ISO: init: Failed to read region information (region_count=0)`
+> `ISO: iso_archive: Corrupt ISO file: Decryption failed`
+
+Stamped with the three values above, the same file was accepted and the game
+booted:
+
+> `ISO: init: Set 'enc type': DEC_3K3Y, 'reg count': 1`
+> `SYS: Localized Title: BioShock`
+> `SYS: Elf path: /dev_bdvd/PS3_GAME/USRDIR/EBOOT.BIN`
+
+Zero licence errors, zero decrypt errors, and the PKG route's `.rap` is not
+needed at all — a disc carries no per-user licence. Reverting the header and
+letting the shipped stamper write it produced the same boot, so the tool is
+proven and not just the byte layout.
+
+**The loop-mount route also works and is the wrong answer.** Before the header
+was understood, the ISO was mounted with `mount -o loop` and RPCS3 booted from
+the mountpoint happily. It is recorded because it proves the image itself was
+always sound — but it needs a privileged mount at launch, which is machinery
+this console should not grow when a 20-byte header removes the need.
+
+##### The fix belongs on the server, not in this console
+
+**MMagTech's call, and it is the right one:** *"can the games on romm be fixed so
+the fix doesn't live in cabinetos."* The header is part of the file. Stamped
+once on the server, the ISO is correct for everything that ever reads it —
+CabinetOS, RPCS3 on a PC, anything else — and **this console needs no PS3 code
+at all beyond launching a file**.
+
+Two tools were written and handed over on 2026-09-18; neither lives in this
+repository, on purpose:
+
+- **`stamp-ps3-iso.command`** — stamps images already built. It refuses a file
+  whose system area is not empty rather than clobbering it, refuses anything
+  that is not ISO9660, verifies by reading back, and is safe to run twice.
+  `--check` reports without writing.
+- **`Build PS3 ISO.command`** — MMagTech's builder, with the header written
+  after each build. **Its verification was also wrong** and is fixed: it checked
+  only for the ISO9660 signature, which every ISO has, so it passed every image
+  RPCS3 could not read. It now checks the header that actually decides it.
+
+**Two games are converted and verified on the server as of 2026-09-18** —
+Bioshock (12.51 GB) and Bioshock 2 (11.40 GB) — both stamped, both with the
+last-sector field matching the real file size. The remaining PS3 titles are
+still disc folders or PKGs.
+
+##### What this means for the storage model
+
+**Nothing has to change.** An ISO is one file whose size RomM knows, so
+`beginLaunch`'s reuse test works again — the objection raised against PKGs in
+this open question does not apply. There is no install phase, no transient 2x,
+no partial-install marker, and no per-user licence file to place. The four
+mechanical findings from the PKG route stay recorded because PKG-only titles
+still exist, but **for any title available as a stamped ISO, PS3 is an ordinary
+game.**
+
+**It is the same size as the folder it came from** — Bioshock is 12.51 GB either
+way — so this buys simplicity, not space.
+
+##### But it can only ever cover a fifth of this library
+
+**Counted on the server 2026-09-18, and this bounds the whole idea: 24 of the 30
+PS3 titles are PKGs.** A PKG is a PSN download — there is no disc behind it, so
+there is nothing to make an ISO from, and no conversion script changes that.
+Only the six disc-based titles can take this route:
+
+| Shape | Count | |
+|---|---|---|
+| PKG — PSN downloads | **24** | install route only |
+| Disc, converted to ISO | 2 | Bioshock, Bioshock 2 |
+| Disc, still a folder | 4 | God of War III, Mass Effect 2, Metal Gear Solid 4, Uncharted 2 |
+
+**So the PKG install is the majority case, not the fallback**, and the four
+mechanical findings above are all still work that has to be done. The ISO route
+is worth taking because it is free — the images already exist and the fix is on
+the server — not because it removes the need for the other one.
+
+##### DECIDED 2026-09-18: two shapes are supported, and the disc FOLDER is not one
+
+**MMagTech's call:** *"both ways are supported it's just that if they aren't pkg
+we only support decrypted iso and not the folder based structure."*
+
+So this console reads exactly two things for PS3:
+
+| Shape | How it is handled |
+|---|---|
+| **`.pkg` + `.rap`** | fetched and installed, as measured above |
+| **Stamped decrypted `.iso`** | fetched and launched, like any other game file |
+| ~~`PS3_GAME/` folder~~ | **not supported.** A source format, to be converted first. |
+
+**This removes work rather than adding it, which is why it is the right call.**
+A disc folder is not one file and not a few — counted on the server: Uncharted 2
+is 364 files, Metal Gear Solid 4 is 328, and **Mass Effect 2 is 8,337**.
+Downloading a tree that size from RomM one file at a time is a transfer path
+this console does not have, has never tested, and would have to grow a progress
+model, a resume story and a partial-tree check for. Converting to an ISO turns
+all of it into a single download that every existing mechanism already handles.
+
+**Nothing is built for disc folders — not even a way to say they are not
+ready.** MMagTech, immediately after the decision: *"we are not building for
+those folders or to support them they are currently being converted to iso."*
+The four remaining ones — God of War III, Mass Effect 2, Metal Gear Solid 4 and
+Uncharted 2 — are mid-conversion, so the state is temporary and does not need
+code to describe it. **This console's PS3 support is a PKG or a stamped ISO, and
+the folder simply never reaches it.**
+
+**Still not playable here.** Every ISO result above is a boot to the point of
+loading the executable; the VM has no GPU, so nothing has been played. That
+waits on the A9 Pro and open question 20.
 
 #### PS3's saves, and why the missing snapshots do not matter
 
