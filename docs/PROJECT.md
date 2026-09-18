@@ -2303,6 +2303,46 @@ structural, not empirical.
 
 ---
 
+## Licensing, and the constraint it puts on the project
+
+**`docs/LICENCES.md` is the list.** This section is the part that shapes
+decisions rather than the part that credits people.
+
+**Six of the twenty-one cores are free for NON-COMMERCIAL use only** — FBNeo,
+MAME 2003-Plus, Snes9x, Genesis Plus GX, PicoDrive and Opera. That is not GPL
+and it is stricter: GPL restricts the terms you distribute under, these restrict
+whether you may sell at all. Between them they cover Arcade, SNES, Genesis, Sega
+CD, Master System, Game Gear, 32X and 3DO.
+
+> **CabinetOS is free, is not sold, and takes no donations. That is what keeps
+> those cores legitimate, and it is a deliberate constraint rather than an
+> oversight.** Cabinet states the same thing about itself, and **the risk is
+> sharper for an operating system**: an app is hard to accidentally sell, and an
+> OS is something you put on a box. The moment money changes hands for a machine
+> carrying this image, those six cores have to come out or be relicensed.
+
+**This has teeth for decisions already on the table.** *Hardware* says the
+reference machine may change and has already changed once. If it ever changes
+into a product, this is the constraint that bites first — before performance,
+before storage, before anything discussed in open question 12.
+
+**Everything else of consequence is GPL**, which is not a restriction on use:
+anyone may run, study, modify and redistribute it, commercially included. The
+obligation is on distribution — pass on the same freedoms and make the
+corresponding source available. CabinetOS `dlopen`s its cores rather than
+statically linking them, which is a looser coupling than Cabinet's build, but
+the conservative reading is the same: the image is a combined work. That is
+satisfied the way Cabinet satisfies it — every core is built from a named
+upstream commit by a script in this repository, and the three in-flight source
+patches are visible in that script rather than vendored.
+
+**Two things are owed and neither exists yet:** the licence text readable on the
+console itself (Settings → About, per *Branding*), and a verification pass over
+each licence line against the source it came from, since those were carried
+across from Cabinet's list rather than checked here.
+
+---
+
 ## Non goals
 
 - Not a Steam machine.

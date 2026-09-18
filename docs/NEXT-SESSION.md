@@ -579,6 +579,24 @@ built: Home is assembled from RomM's play history, and favourites and recents
 are RomM's rather than local, so whose account they come from stops being
 implicit the moment there is more than one.
 
+## Licensing, which is now written down
+
+**`docs/LICENCES.md`** lists every core, its licence, its upstream and the
+commit this project pins. Modelled on Cabinet's own, which had already solved
+it.
+
+**The one line that shapes decisions:** six of the twenty-one cores — FBNeo,
+MAME 2003-Plus, Snes9x, Genesis Plus GX, PicoDrive and Opera — are free for
+**non-commercial use only**. CabinetOS is free, is not sold, and takes no
+donations, and that is what keeps them legitimate. **Selling a machine with this
+image on it would break it**, which matters because the hardware has already
+changed once and may change again.
+
+Still owed: the licence text readable on the console (Settings → About), and a
+verification pass over each line against the source it came from — they were
+carried across from Cabinet's list rather than checked here, and this project's
+own rule is that a fact carried across is a fact nobody has checked.
+
 ## Cabinet-side debts
 
 1. **Flycast carries unscripted edits in its working tree**, so its pinned
