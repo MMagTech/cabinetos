@@ -1,0 +1,26 @@
+[Unit]
+Description=Install CabinetOS emulator flatpaks at their pinned revisions
+Documentation=file:/usr/share/cabinetos/flatpaks.list
+# Needs the network, and needs it to be actually up rather than merely
+# configured — this downloads gigabytes from Flathub on a first boot.
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/cabinetos-flatpak-setup
+RemainAfterExit=yes
+
+# NOT Restart=on-failure, and not by omission. The script always exits 0 by
+# design, so a restart policy here would never fire; the retry that matters is
+# cabinetos-flatpak-setup.timer, which comes back for a machine that first
+# booted with no network. See the script's header.
+#
+# TimeoutStartSec is generous because the KDE runtime alone is 1.1 GB and a
+# first boot installs two runtimes and three emulators over a domestic
+# connection. infinity is wrong — a wedged download should end, and the timer
+# will pick it up again.
+TimeoutStartSec=3600
+
+[Install]
+WantedBy=multi-user.target

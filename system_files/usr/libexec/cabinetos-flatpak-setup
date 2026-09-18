@@ -1,0 +1,166 @@
+#!/usr/bin/env bash
+#
+# Installs the emulators listed in /usr/share/cabinetos/flatpaks.list, each at
+# the exact revision the image names.
+#
+# THIS RUNS ON THE MACHINE, NOT IN THE BUILD, and that is forced by bootc rather
+# than chosen. A flatpak lives in /var, and bootc unpacks /var from the image
+# only on the initial install — a later image with a newer emulator would change
+# nothing, on a machine that already exists. Installing here is what makes the
+# pin in the image actually reach the disk. See docs/PROJECT.md open question 21.
+#
+# IT MUST NOT BE FATAL. A console whose first boot fails because Flathub is
+# unreachable is a worse product than one whose PS3 support arrives late. Every
+# failure here is logged and the unit still succeeds; the timer retries later.
+# The one thing this must never do is stop the machine reaching its frontend.
+#
+# It is idempotent and cheap to re-run: a ref already at the pinned commit is
+# left alone, and the whole run is skipped unless the image or the list changed.
+
+set -uo pipefail   # deliberately NOT -e: see above, no single failure aborts
+
+# Overridable so this can be exercised against a scratch installation rather
+# than the machine's own. The service sets none of them and gets the defaults;
+# nothing but a test should ever pass these.
+MANIFEST="${CABINETOS_FLATPAK_MANIFEST:-/usr/share/cabinetos/flatpaks.list}"
+STATE_DIR="${CABINETOS_FLATPAK_STATE:-/var/lib/cabinetos}"
+STAMP="${STATE_DIR}/flatpaks-installed"
+REMOTE="${CABINETOS_FLATPAK_REMOTE:-flathub}"
+
+# `--system` everywhere below, except when a test points us at its own
+# installation directory.
+SCOPE=(--system)
+if [[ -n "${CABINETOS_FLATPAK_INSTALLATION:-}" ]]; then
+    export FLATPAK_USER_DIR="${CABINETOS_FLATPAK_INSTALLATION}"
+    SCOPE=(--user)
+fi
+
+log() { echo "[cabinetos-flatpak] $*"; }
+
+[[ -r "${MANIFEST}" ]] || { log "no manifest at ${MANIFEST}, nothing to do"; exit 0; }
+command -v flatpak >/dev/null 2>&1 || { log "flatpak is not installed; skipping"; exit 0; }
+
+# ---------------------------------------------------------------------------
+# Has anything changed since the last successful run?
+# ---------------------------------------------------------------------------
+#
+# Keyed on the manifest's own content and the booted image. The manifest hash
+# alone would be enough for a pin change, but not for "same pins, new image" —
+# and an image that reinstalls its emulators when nothing moved is an image that
+# downloads gigabytes on every update.
+manifest_hash=$(sha256sum "${MANIFEST}" | cut -d' ' -f1)
+image_id=$(bootc status --format=json 2>/dev/null \
+    | python3 -c 'import json,sys; print(json.load(sys.stdin)["status"]["booted"]["image"]["imageDigest"])' 2>/dev/null \
+    || echo unknown)
+want="${manifest_hash} ${image_id}"
+
+if [[ -r "${STAMP}" && "$(cat "${STAMP}")" == "${want}" ]]; then
+    log "already applied for this image and manifest; nothing to do"
+    exit 0
+fi
+
+log "applying ${MANIFEST}"
+log "  manifest ${manifest_hash:0:12}  image ${image_id:0:19}"
+
+# ---------------------------------------------------------------------------
+# The remote.
+# ---------------------------------------------------------------------------
+#
+# Bazzite ships a filtered flathub remote and all three emulators pass its
+# filter, so this only has to make sure it exists and is enabled rather than
+# define it. `|| true` throughout: a machine that cannot reach Flathub should
+# fall through to the install loop, fail there, and be retried by the timer.
+flatpak remote-modify "${SCOPE[@]}" --enable "${REMOTE}" 2>/dev/null || true
+
+if ! flatpak remotes "${SCOPE[@]}" --columns=name 2>/dev/null | grep -qx "${REMOTE}"; then
+    log "  ERROR: no '${REMOTE}' remote on this system; cannot install"
+    log "  leaving the stamp unwritten so the timer retries"
+    exit 0
+fi
+
+# ---------------------------------------------------------------------------
+# Install each ref at its pinned commit.
+# ---------------------------------------------------------------------------
+#
+# Two steps per ref, and the second is the one that matters. `flatpak install`
+# takes whatever the remote currently serves; `flatpak update --commit=` moves
+# it to the exact revision, in either direction — verified 2026-09-18 by pinning
+# RPCS3 forward to a newer commit and back to an older one, with the version
+# string following both times.
+failures=0
+installed=0
+
+while read -r kind ref branch commit; do
+    [[ -z "${kind:-}" || "${kind}" =~ ^# ]] && continue
+
+    if [[ -z "${ref:-}" || -z "${branch:-}" || -z "${commit:-}" ]]; then
+        log "  ERROR: malformed line for '${kind}'; skipping"
+        failures=$((failures + 1))
+        continue
+    fi
+
+    case "${kind}" in
+        app|runtime) ;;
+        *) log "  ERROR: unknown kind '${kind}' for ${ref}; skipping"
+           failures=$((failures + 1)); continue ;;
+    esac
+
+    full="${kind}/${ref}/$(uname -m)/${branch}"
+
+    have=$(flatpak info "${SCOPE[@]}" --show-commit "${ref}//${branch}" 2>/dev/null || true)
+    if [[ "${have}" == "${commit}" ]]; then
+        log "  ok: ${ref} already at ${commit:0:12}"
+        installed=$((installed + 1))
+        continue
+    fi
+
+    if [[ -n "${have}" ]]; then
+        log "  ${ref}: at ${have:0:12}, want ${commit:0:12}"
+    else
+        log "  ${ref}: not installed, want ${commit:0:12}"
+        if ! flatpak install "${SCOPE[@]}" --noninteractive --or-update \
+                "${REMOTE}" "${full}" 2>&1 | sed 's/^/      /'; then
+            log "  ERROR: install failed for ${ref}"
+            failures=$((failures + 1))
+            continue
+        fi
+    fi
+
+    # The pin. Without this the machine has whatever Flathub served today, which
+    # is the thing this whole file exists to prevent.
+    if ! flatpak update "${SCOPE[@]}" --noninteractive --commit="${commit}" \
+            "${ref}" 2>&1 | sed 's/^/      /'; then
+        log "  ERROR: could not pin ${ref} to ${commit:0:12}"
+        failures=$((failures + 1))
+        continue
+    fi
+
+    # Read it back. A pin that did not take is exactly the silent failure this
+    # repository keeps finding, so it is checked rather than assumed.
+    now=$(flatpak info "${SCOPE[@]}" --show-commit "${ref}//${branch}" 2>/dev/null || true)
+    if [[ "${now}" == "${commit}" ]]; then
+        log "  pinned: ${ref} at ${commit:0:12}"
+        installed=$((installed + 1))
+    else
+        log "  ERROR: ${ref} is at ${now:0:12} after pinning, wanted ${commit:0:12}"
+        failures=$((failures + 1))
+    fi
+done < "${MANIFEST}"
+
+# ---------------------------------------------------------------------------
+# Record the outcome.
+# ---------------------------------------------------------------------------
+#
+# The stamp is written only on a clean run. A partial one leaves it absent so
+# the timer comes back — which is how a machine that first booted without a
+# network eventually converges, rather than needing someone to notice.
+if [[ "${failures}" -eq 0 ]]; then
+    mkdir -p "${STATE_DIR}"
+    echo "${want}" > "${STAMP}"
+    log "done: ${installed} refs at their pinned revisions"
+else
+    log "done with ${failures} failure(s); ${installed} ok. Will retry."
+fi
+
+# Always. See the header.
+exit 0

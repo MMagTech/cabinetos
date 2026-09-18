@@ -1,0 +1,19 @@
+[Unit]
+Description=Retry the CabinetOS emulator flatpak install
+Documentation=file:/usr/share/cabinetos/flatpaks.list
+
+[Timer]
+# The service is non-fatal by design: a first boot with no network leaves the
+# emulators absent and the machine otherwise working. This is what eventually
+# fixes that without anybody noticing it needs fixing.
+#
+# It is a retry, not an update schedule. The script exits immediately once the
+# image and the manifest match what it last applied, so on a healthy machine
+# this costs a process start. Nothing here can move an emulator's version —
+# only editing the pinned commit in the image can.
+OnBootSec=15min
+OnUnitActiveSec=6h
+Persistent=true
+
+[Install]
+WantedBy=timers.target

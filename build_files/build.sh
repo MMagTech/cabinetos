@@ -48,7 +48,11 @@ for expected in \
     /usr/bin/cabinetos-session \
     /usr/lib/systemd/system/cabinetos-session.service \
     /usr/lib/sysusers.d/cabinetos.conf \
-    /usr/lib/bootc/install/20-cabinetos.toml
+    /usr/lib/bootc/install/20-cabinetos.toml \
+    /usr/libexec/cabinetos-flatpak-setup \
+    /usr/lib/systemd/system/cabinetos-flatpak-setup.service \
+    /usr/lib/systemd/system/cabinetos-flatpak-setup.timer \
+    /usr/share/cabinetos/flatpaks.list
 do
     if [[ -e "${expected}" ]]; then
         log "  overlaid: ${expected}"
@@ -140,6 +144,16 @@ log "base image has $(wc -l < /usr/share/cabinetos/packages-before-strip.txt) pa
 # Makes the machine boot into gamescope instead of a console, and closes the
 # routes to a desktop that the strip pass left behind.
 /ctx/configure-session.sh
+
+# ---------------------------------------------------------------------------
+# Emulator flatpaks.
+# ---------------------------------------------------------------------------
+#
+# After the strip, because it asserts that strip-desktop.sh masked the flatpak
+# update timers — which is what keeps a pinned emulator pinned. Nothing is
+# installed here; see the script for why that is forced by bootc rather than
+# chosen.
+/ctx/configure-flatpaks.sh
 
 # ---------------------------------------------------------------------------
 # HDMI-CEC.
@@ -239,6 +253,21 @@ fi
 # cost a debugging round on the VM (203/EXEC from /etc). /usr/bin is correct and
 # gets labelled bin_t automatically.
 check_present "session script" /usr/bin/cabinetos-session || failed=1
+
+# The emulator flatpak units. Enabled in configure-flatpaks.sh, checked again
+# here for the same reason everything else in this block is: absence would not
+# fail the build, it would just mean no PS3, Xbox or Switch on the machine and
+# nothing saying so.
+for unit in cabinetos-flatpak-setup.service cabinetos-flatpak-setup.timer; do
+    if systemctl is-enabled "${unit}" >/dev/null 2>&1; then
+        log "  ok: ${unit} is enabled"
+    else
+        log "  MISSING: ${unit} is not enabled"
+        failed=1
+    fi
+done
+
+check_present "emulator flatpak manifest" /usr/share/cabinetos/flatpaks.list || failed=1
 
 # The default target must be multi-user. The session is pulled in by it; a
 # graphical.target default would try to start a desktop.
