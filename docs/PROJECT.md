@@ -160,6 +160,12 @@ ordered this way now.
   a 19.8 GB one, and both boot with the PKG deleted. **PS3 games can still not
   be PLAYED here** — that needs a GPU and Vulkan, and waits for the A9 Pro. See
   open question 19, *The PKG install, MEASURED 2026-09-18*.
+- **And PS3 no longer needs a storage model of its own at all**, because the
+  better answer is a decrypted ISO: one file, no install, no licence, and
+  `beginLaunch`'s reuse test works on it unchanged. RPCS3 opens such an image
+  itself, given a 20-byte disc header that ordinary ISO builders omit. **The fix
+  is on the server, not in this console** — two games are converted and verified.
+  See open question 19, *The better answer: a decrypted ISO*.
 
 ### The Cabinet-side debts this project has found
 
@@ -6899,6 +6905,10 @@ not that: it has to be installed into RPCS3's virtual hard drive, which produces
 a second copy of roughly the same size. Sly Cooper would be 19.8 GB downloaded
 plus ~19.8 GB installed, for **forty gigabytes of one game**.
 
+> **Superseded for any title available as a stamped ISO** — see *The better
+> answer: a decrypted ISO* below, which removes the install step entirely. What
+> follows still governs PKG-only titles.
+>
 > **Measured 2026-09-18, and the 2x turned out to be TEMPORARY** — the installed
 > tree is the same size as the PKG, so deleting the PKG puts the game back at
 > 1x. Sly Cooper peaked at 39.7 GB and settled at 19.8 GB. See *The PKG install,
@@ -7069,6 +7079,103 @@ than the filename.
    even reaching a title screen, on the OS volume rather than the games one.
    That is the same class of disk as item 7's Mesa shader cache, and it will be
    much larger than 21 MB for a game that actually runs.
+
+#### The better answer: a decrypted ISO, MEASURED 2026-09-18
+
+**The PKG install works, and it is not the shape this console wants.** Later the
+same day MMagTech pointed at a folder of games he had already converted to
+decrypted ISOs — *"im thinking it would be easier to support them converted this
+way then the folder structure"* — and he is right. **One file, no install, no
+licence, no second copy.** Every PS3-shaped problem in the section above
+disappears, and PS3 stops being a special case in the storage model: it becomes
+a game file like any other.
+
+##### RPCS3 opens a PS3 ISO itself, and the requirement is 20 bytes
+
+RPCS3 has a disc-image loader (`rpcs3/Loader/ISO.cpp`) that mounts an ISO as
+`/dev_bdvd` with no help from the frontend — no loop mount, no root, no unpack.
+It accepts encrypted and decrypted images alike.
+
+What it requires is the **PS3 disc header**, in the first two sectors:
+
+| Offset | Bytes | What |
+|---|---|---|
+| `0x000` | u32 big-endian | region count, which must be 1–127 |
+| `0x00C` | u32 big-endian | the last sector of region 0 — for one region, `size / 2048 - 1` |
+| `0xF70` | 16 | `Dncrypted 3K BLD`, the watermark that means **decrypted**; RPCS3 then returns the data untouched |
+
+`region_count` outside 1–127 is rejected as *"non-PS3ISO"*, which is exactly
+what a plain `xorriso`/`mkisofs`/`hdiutil` image produces — its first sectors
+are zero. **This header lives in the ISO9660 system area, the first 32 KB, which
+the filesystem leaves empty** (ISO.h says so in as many words), so it can be
+written into a finished image without rebuilding anything and without touching
+the volume, the files or the size.
+
+**Measured on the real thing, both directions.** A 12.5 GB `Bioshock.iso` built
+by MMagTech's own script was rejected:
+
+> `ISO: init: Failed to read region information (region_count=0)`
+> `ISO: iso_archive: Corrupt ISO file: Decryption failed`
+
+Stamped with the three values above, the same file was accepted and the game
+booted:
+
+> `ISO: init: Set 'enc type': DEC_3K3Y, 'reg count': 1`
+> `SYS: Localized Title: BioShock`
+> `SYS: Elf path: /dev_bdvd/PS3_GAME/USRDIR/EBOOT.BIN`
+
+Zero licence errors, zero decrypt errors, and the PKG route's `.rap` is not
+needed at all — a disc carries no per-user licence. Reverting the header and
+letting the shipped stamper write it produced the same boot, so the tool is
+proven and not just the byte layout.
+
+**The loop-mount route also works and is the wrong answer.** Before the header
+was understood, the ISO was mounted with `mount -o loop` and RPCS3 booted from
+the mountpoint happily. It is recorded because it proves the image itself was
+always sound — but it needs a privileged mount at launch, which is machinery
+this console should not grow when a 20-byte header removes the need.
+
+##### The fix belongs on the server, not in this console
+
+**MMagTech's call, and it is the right one:** *"can the games on romm be fixed so
+the fix doesn't live in cabinetos."* The header is part of the file. Stamped
+once on the server, the ISO is correct for everything that ever reads it —
+CabinetOS, RPCS3 on a PC, anything else — and **this console needs no PS3 code
+at all beyond launching a file**.
+
+Two tools were written and handed over on 2026-09-18; neither lives in this
+repository, on purpose:
+
+- **`stamp-ps3-iso.command`** — stamps images already built. It refuses a file
+  whose system area is not empty rather than clobbering it, refuses anything
+  that is not ISO9660, verifies by reading back, and is safe to run twice.
+  `--check` reports without writing.
+- **`Build PS3 ISO.command`** — MMagTech's builder, with the header written
+  after each build. **Its verification was also wrong** and is fixed: it checked
+  only for the ISO9660 signature, which every ISO has, so it passed every image
+  RPCS3 could not read. It now checks the header that actually decides it.
+
+**Two games are converted and verified on the server as of 2026-09-18** —
+Bioshock (12.51 GB) and Bioshock 2 (11.40 GB) — both stamped, both with the
+last-sector field matching the real file size. The remaining PS3 titles are
+still disc folders or PKGs.
+
+##### What this means for the storage model
+
+**Nothing has to change.** An ISO is one file whose size RomM knows, so
+`beginLaunch`'s reuse test works again — the objection raised against PKGs in
+this open question does not apply. There is no install phase, no transient 2x,
+no partial-install marker, and no per-user licence file to place. The four
+mechanical findings from the PKG route stay recorded because PKG-only titles
+still exist, but **for any title available as a stamped ISO, PS3 is an ordinary
+game.**
+
+**It is the same size as the folder it came from** — Bioshock is 12.51 GB either
+way — so this buys simplicity, not space.
+
+**Still not playable here.** Every ISO result above is a boot to the point of
+loading the executable; the VM has no GPU, so nothing has been played. That
+waits on the A9 Pro and open question 20.
 
 #### PS3's saves, and why the missing snapshots do not matter
 

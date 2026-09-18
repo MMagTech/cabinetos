@@ -132,8 +132,36 @@ install, MEASURED 2026-09-18*:
 **Firmware was measured too**: the 206 MB PUP decrypts in 17 s into a 195 MB
 `dev_flash` tree. One install per machine.
 
-**What is left for PS3, and it is not storage.** Four things this turned up that
-the design still has to answer — RPCS3 refusing to install without `--headless`,
+### 0b. And then the PKG route turned out not to be the one to build
+
+**A decrypted ISO is the better shape, and it needs nothing from this console.**
+MMagTech has a script that converts his disc dumps to ISOs; RPCS3 opens such an
+image directly — mounts it as the disc itself, no install, no `.rap`, no second
+copy — **provided it carries a 20-byte PS3 disc header** that `xorriso`,
+`mkisofs` and `hdiutil` do not write. Without it RPCS3 rejects the file as
+`non-PS3ISO`.
+
+Proved both ways on a real 12.5 GB image: rejected unstamped, booted stamped.
+PROJECT.md has the byte layout under open question 19, *The better answer: a
+decrypted ISO*.
+
+**The fix lives on the server, deliberately.** Stamp the file once and it is
+correct for everything that reads it. Two tools were handed to MMagTech on
+2026-09-18 and are NOT in this repository: `stamp-ps3-iso.command` for images
+already built, and his own `Build PS3 ISO.command` with the header step added —
+its verification was also wrong, checking only for an ISO9660 signature that
+every ISO has.
+
+**Two games are converted and verified** — Bioshock and Bioshock 2, both stamped
+with the last-sector field matching the real file size. The rest are still disc
+folders or PKGs.
+
+**What this means here: nothing to build.** An ISO is one file whose size RomM
+knows, so the reuse test works, there is no install phase and no transient 2x.
+The PKG findings below still matter for PKG-only titles.
+
+**What is left for PS3, and it is not storage.** Four things the PKG route
+turned up that the design still has to answer — RPCS3 refusing to install without `--headless`,
 an exit status that reports failure after logging success, an interrupted
 install leaving a partial tree nothing cleans up, and a recompiler cache written
 outside the virtual drive onto the OS volume. All four are in PROJECT.md. **PS3
