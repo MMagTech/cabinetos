@@ -26,7 +26,13 @@ name: Build cores
 # build-frontend.yml for the day that distinction cost something. The paths
 # filter below is what keeps this rare: it runs when a core actually changes,
 # which is the only time the pinned-revision assertion has anything to say.
+#
+# ALSO CALLED BY build.yml as of 2026-09-19, because the image now carries the
+# cores and has to get them from somewhere. Calling this rather than copying
+# its steps is the point: there is one place a core is built, and it is the
+# place that asserts the pinned revision.
 on:
+  workflow_call:
   pull_request:
     paths:
       - 'cores/**'
@@ -45,9 +51,21 @@ on:
       - '.github/workflows/build-core.yml'
   workflow_dispatch:
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref || github.run_id }}
-  cancel-in-progress: true
+# NO `concurrency:` HERE, DELIBERATELY, AND IT IS NOT AN OVERSIGHT.
+#
+# A concurrency group is a string, and build.yml now calls this workflow. If
+# the string a called run computes ever matches the one its caller computed —
+# and `github.workflow` inside a called workflow is documented as the CALLER's
+# name — then `cancel-in-progress` has a run cancelling itself, which surfaces
+# as a red image build with no failing step in it. Getting that string
+# provably distinct in all four combinations of called/standalone and
+# push/pull_request is more cleverness than the thing is worth.
+#
+# What is given up is cancelling a superseded run. build.yml's own group still
+# cancels the whole thing, called jobs included, so that only costs anything
+# when somebody pushes twice in ten minutes to a branch that touches cores/ —
+# which is rare, because the paths filter above is what keeps this workflow
+# rare.
 
 jobs:
   # ONE CONTAINER BUILD PER RUN, NOT TWENTY.
@@ -183,17 +201,36 @@ jobs:
           set -euo pipefail
           cores/build-core.sh "${{ matrix.core }}" | tee /tmp/build.log
 
+      # ONE FIXED SHAPE, WHATEVER THE CORE PRODUCED.
+      #
+      # This used to upload `cores/build/*.so` and `cores/system/` as two
+      # globs, and an artifact's internal root is the least common ancestor of
+      # the files actually found — so the twenty cores with no system files got
+      # an artifact rooted at `cores/build` and PPSSPP got one rooted at
+      # `cores`. Two different layouts under one naming scheme, which nothing
+      # noticed while nothing downloaded them. The image build downloads all
+      # twenty-one and merges them, so it does now.
+      #
+      # This is also the layout ci/stage-image-payload.sh takes.
+      - name: Stage it
+        run: |
+          set -euo pipefail
+          mkdir -p artifact/cores artifact/system
+          cp cores/build/*.so artifact/cores/
+          # Empty for twenty of the twenty-one. PPSSPP's system files are not a
+          # console's firmware and do not come from RomM — they ship with the
+          # emulator — so they are part of what this job produces, and a core
+          # artifact without them is a core that boots a game with no fonts.
+          if [ -n "$(ls -A cores/system 2>/dev/null)" ]; then
+            cp -R cores/system/. artifact/system/
+          fi
+          find artifact -type f | sort
+
       - name: Upload the core
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: ${{ matrix.core }}-linux-x86_64
-          # cores/system is empty for twenty of the twenty-one. PPSSPP's system
-          # files are not a console's firmware and do not come from RomM, so
-          # they are part of what this job produces — and a core artifact
-          # without them is a core that boots a game with no fonts.
-          path: |
-            cores/build/*.so
-            cores/system/
+          path: artifact/
           if-no-files-found: error
           # Long enough to bisect a parity problem against, short enough that
           # these do not accumulate. Phase 5 decides how cores actually ship;

@@ -2,8 +2,10 @@
 #
 # The CabinetOS session.
 #
-# Phase 2: launches gamescope with a placeholder. Phase 3 replaces the
-# placeholder with the real frontend; nothing else here should need to change.
+# Launches gamescope with the CabinetOS frontend inside it. Until 2026-09-19
+# this ran `sleep infinity` and a freshly installed machine booted to a black
+# screen, because the image carried no frontend to run — see docs/PROJECT.md,
+# Phase 5.
 #
 # This is deliberately not gamescope-session-plus. That harness is bazzite-deck
 # only, and its substance is Steam bootstrapping and SteamOS management, which
@@ -12,8 +14,43 @@
 
 set -uo pipefail
 
-# The app to run inside gamescope. Phase 3 swaps this for the frontend binary.
-APP="${CABINETOS_APP:-/usr/bin/sleep infinity}"
+# What the machine is, for the console to read.
+#
+# The image is the same on every machine; this file is not. It holds the things
+# only this machine can know, and today that is one line:
+#
+#   CABINETOS_ROMM=192.168.1.10:6005
+#
+# The address is NOT baked into the image. This repository is public and
+# somebody's LAN address does not belong in it, and an image with one server's
+# address compiled in is useful to exactly one person. A console with no file
+# here still boots — it comes up on the stand-in library and says on stderr
+# that it has no server — which is the state the first-run screen will replace
+# (docs/PROJECT.md, open question 17). It writes this same file.
+#
+# /etc, because that is the part of a bootc machine that is the machine's own
+# and survives an update. Sourced rather than parsed: it is shell, and it is
+# root-owned.
+if [[ -r /etc/cabinetos/session.env ]]; then
+    # shellcheck disable=SC1091  # machine-local, does not exist at build time
+    source /etc/cabinetos/session.env
+    export CABINETOS_ROMM
+fi
+
+# The app to run inside gamescope.
+#
+# CABINETOS_APP overrides it, which is how a development machine points the
+# session at a build it just compiled without touching the image. It is
+# WORD-SPLIT deliberately, so it can carry arguments — which is also why a
+# path with a space in it needs a wrapper script rather than quoting here.
+APP="${CABINETOS_APP:-/usr/bin/cabinetos-frontend}"
+
+if [[ ! -x /usr/bin/cabinetos-frontend && -z "${CABINETOS_APP:-}" ]]; then
+    # Loudly, and then carry on into gamescope anyway: a session that refuses
+    # to start is a machine that flaps on Restart=always, and the journal line
+    # below is the one thing that tells whoever looks what is actually wrong.
+    echo "cabinetos-session: ERROR — /usr/bin/cabinetos-frontend is not in this image"
+fi
 
 run_gamescope() {
     local backend="$1"

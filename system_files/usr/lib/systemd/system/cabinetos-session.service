@@ -20,6 +20,14 @@ After=getty@tty1.service
 Type=simple
 User=cabinet
 
+# Belt and braces under the tmpfiles.d entry that creates /var/lib/cabinetos.
+# storage::root() falls back to the working directory when it cannot use
+# /var/lib/cabinetos, and a service's working directory is `/` — so the one
+# failure mode of that fallback is a console quietly filling the root of the
+# filesystem with somebody's games. Landing in the session user's own home
+# instead is wrong but visible and removable.
+WorkingDirectory=/var/home/cabinet
+
 # PAMName=login gives the process a real logind session on seat0, which
 # gamescope needs to take the display and the input devices.
 PAMName=login
