@@ -33,6 +33,12 @@ way and running. Phase 5 started early, the hardest question in it is answered,
 and as of 2026-09-17 every one of the twenty-one libretro cores is built and can
 be run.**
 
+**AND IT IS INSTALLED ON THE REFERENCE MACHINE, 2026-09-19.** The GEEKOM A9
+Pro boots into the frontend on `gamescope (drm)`, rendering on its own Radeon
+890M with Vulkan present, zero session restarts, and the full 1147-game
+library. See *The A9 Pro, measured*. **The UI freeze's condition is all but
+met** — one thing stands in the way and it is the output resolution, below.
+
 **AND AS OF 2026-09-19 THEY ARE IN THE IMAGE, along with the frontend.** Until
 that day the image was the OS half only: `cabinetos-session` ran
 `sleep infinity` inside gamescope, so an installed machine booted to a black
@@ -163,14 +169,22 @@ image contained no frontend. It contains one now. **The condition is the
 console running the frontend on a television, not the box being unboxed and not
 the image being installed.**
 
+**IT IS NOW RUNNING THERE, AND THERE IS STILL ONE THING TO DO FIRST.** The
+console came up on `gamescope (drm)` on its own GPU the same day — but at
+1920x1080 on a 3840x2160 panel, because the session hardcoded the mode. Until
+an image carrying that fix is installed, **anything judged on that screen is
+judged through the television's scaler.** The fix ships in this change; verify
+the console reports `cabinetos-session: output 3840x2160` before forming a
+single opinion about the look.
+
 ### What is still unknown, honestly
 
 - **Nothing has been judged on a television.** Motion, the letterbox glow and
   the safe area are all recorded as needing the reference machine — the A9 Pro,
-  which arrived 2026-09-19 and is not yet installed. A software-rendered VM
-  cannot answer any of them. What changed that day is that installing it is now
-  worth doing: before, the image carried no frontend, so a freshly installed
-  machine drew nothing at all.
+  which arrived AND WAS INSTALLED on 2026-09-19 and now runs the frontend on
+  its own GPU. A software-rendered VM could never answer any of them; that
+  machine can. They become answerable the moment it runs at the panel's native
+  resolution rather than a scaled 1080p — see *The A9 Pro, measured*.
 - ~~**Twenty cores of twenty-one are built**~~ **— all twenty-one are, as of
   2026-09-17.** PPSSPP was the last, and it runs: Lumines reaches its attract
   demo in colour with sound, writes its memory-stick save, and quits back to
@@ -1474,6 +1488,73 @@ keyboards for idle purposes.
 Worth ~90 MB and ~7s of boot before touching anything contentious. Emulation
 performance itself will be bound by GPU throughput and single-thread CPU speed,
 neither of which any of this affects.
+
+### The A9 Pro, measured — 2026-09-19
+
+**The reference machine is installed and running CabinetOS, on its own GPU.**
+Everything below is read off the machine rather than hoped for. This is the
+first time any of it has been true.
+
+```
+amdgpu 0000:c6:00.0: VRAM: 4096M ... 4096M of VRAM memory ready
+amdgpu 0000:c6:00.0: SMU is initialized successfully!
+amdgpu 0000:c6:00.0: [drm] Display Core v3.2.384 initialized on DCN 3.5
+amdgpu 0000:c6:00.0: [drm] DMUB hardware initialized: version=0x09004E00
+[drm] Initialized amdgpu 3.64.0 for 0000:c6:00.0 on minor 1
+
+cabinetos-session: trying gamescope (drm)
+cabinetos-session: gamescope (drm) is up
+[gamescope] version 3.16.28-ogc3+
+
+[cores]   /usr/lib/cabinetos/cores
+[storage] root /var/lib/cabinetos
+[storage] linked PPSSPP into the system directory
+[storage] user 1 - MMagTech
+[frontend] GL_RENDERER AMD Radeon 890M Graphics (radeonsi, strix1, ACO, DRM 3.64)
+[library] 1147 playable games, 1147 with art; 501 games skipped
+```
+
+| | |
+|---|---|
+| Compositor rung | **gamescope on drm** — the top one. The VM has only ever reached cage. |
+| Session restarts | **0** |
+| Renderer | **radeonsi / strix1 / ACO**, not llvmpipe |
+| Vulkan | **AMD Radeon 890M Graphics (RADV STRIX1)** — open question 20's prerequisite, present |
+| Address | `cabinet@192.168.1.212`, key installed; sudo password `cabinet`, the same throwaway as the VM |
+
+**What this unblocks.** Vulkan existing on this machine is what open question
+20 was waiting for, and it serves three systems at once — RPCS3, parallel-RDP
+and Flycast. PS3 could not be *played* anywhere before today.
+
+#### The output was hardcoded to 1080p on a 4K panel
+
+**The one thing wrong on first boot, and it matters more than it sounds.**
+`system_files/usr/bin/cabinetos-session` passed `--output-width 1920
+--output-height 1080` as literals, written in Phase 2 before anything had ever
+been plugged into it. The display reports `3840x2160`, gamescope obeyed the
+literals, and the panel scaled the result.
+
+That is the worst possible state for the work that follows: the frontend's
+shapes are signed-distance fields and render exactly at any resolution —
+verified at 3840x2160, 1920x1080 and 1280x720 — so **every soft edge on that
+screen was the television's scaler and none of it was the design.** Judging
+the look against it is judging the wrong picture, the same error as tuning
+motion on llvmpipe.
+
+**Removing the flags is NOT the fix, and that was measured rather than
+assumed.** With no `--output-width`/`--output-height` at all, gamescope still
+chose `1920x1080@60Hz` on a display offering 3840x2160. The mode has to be
+found and passed. The session now reads the first line of a connected
+connector's `modes` file — the kernel lists them preferred-first — and
+`CABINETOS_OUTPUT=WxH` overrides it.
+
+**Cabinet is the reason this is not a trade-off.** Cabinet chooses no
+resolution at all: there is no `nativeBounds`, no `preferredDisplayMode` and
+no 3840 anywhere in the app, because tvOS hands it a canvas. Its own docs
+reason against a 4K output — Game & Watch is iOS-only partly because a
+562x374 canvas "goes soft on a 4K television, roughly a 7x blowup". So a 4K
+presentation is what the reference implementation gets, and core parity with
+Cabinet is a hard constraint here.
 
 ### Session infrastructure present
 
@@ -4983,17 +5064,95 @@ symbol-renaming apparatus disappears and nothing replaces it. See open question
 13 and *The frontend toolkit* for the layout.
 
 ### 5. Anaconda ISO vs. a plain disk image for installing to real hardware
-**Raised: Phase 1. Both are built; neither is tested.**
+**Raised: Phase 1. TESTED FOR THE FIRST TIME 2026-09-19, installing the A9 Pro.
+It works, and it is not acceptable for anyone but us.**
 
-CI produces both a `qcow2` (for the Phase 1 VM boot test) and an `anaconda-iso`
-(for installing to real hardware). The ISO runs a graphical installer, which is
-a keyboard-and-mouse experience and therefore contradicts the product's
-principles — but it only happens once, at install time, on a machine that has
-not been set up yet.
+CI produces both a `qcow2` (for the VM boot test) and an `anaconda-iso` (for
+real hardware). The ISO installs correctly — the A9 Pro went from bare metal to
+a working console with it. **What it does to the person doing the installing is
+the problem**, and MMagTech asked directly whether this would do for a release.
+It would not. In the order they hit it:
 
-If a keyboard-free install becomes a requirement, the alternative is a `raw`
-image written directly to the target machine's drive from another computer.
-Decide in Phase 6.
+1. The stick is branded **Bazzite**, not CabinetOS.
+2. The boot menu offers "Test this media & install", and that check reports
+   **FAIL on good media** — `Supported ISO: no`, aborting at 4.8% — followed by
+   *"We do not recommend using this medium. System will halt in 12 hours."* The
+   media was fine: `dd` had written the ISO's exact 6,064,252,928 bytes and the
+   install from it succeeded.
+3. Screens of kernel errors, including `amdgpu: Fatal error during GPU init`
+   and MediaTek Wi-Fi firmware failures. See *The installer runtime carries no
+   firmware* below — they are harmless and they look like a broken machine.
+4. **Anaconda itself**: disk partitioning, a "reclaim space" dialog that means
+   *destroy the Windows install*, root password policy, an administrator
+   checkbox, and an Advanced dialog offering UID and GID.
+5. **No Wi-Fi to choose from**, with nothing on screen saying why.
+
+Against *Constraints and principles* item 3 — anything that could leave the
+user stuck at a terminal is a bug — and the rule that a screen needing a
+keyboard is a bug, this is not a near miss. A console that opens by asking
+about UIDs is not a console.
+
+**What to build, in value order.** None of it is hard; it simply was never
+anyone's job:
+
+- **Automate the install completely in kickstart** — `clearpart --all
+  --initlabel`, `autopart`, the `cabinet` user created silently, no Users
+  screen and no Network screen. Anaconda runs with zero interactive screens
+  when the kickstart answers everything. That reduces five decisions to one:
+  *this will erase this machine — continue?*
+- **`quiet loglevel=0` on the installer's kernel command line**, plus a
+  CabinetOS splash over it. Phase 2 already carries this item for the OS boot
+  and nobody had it for the installer, which is the screen a person sees
+  FIRST.
+- **Remove or fix the media check.** It fails on good media today, which is
+  worse than not having it.
+- **Brand the ISO.** Same Phase 8 work as the boot splash.
+- **Get firmware into the installer runtime** if `bootc-image-builder` permits
+  it, so Wi-Fi exists during setup; otherwise say on screen to use a cable.
+
+**The honest remaining gap**, which no amount of kickstart closes: the first
+step is still a firmware boot menu, and that needs a keyboard. A `raw` image
+written to the target's drive from another computer does not help — it is
+worse for most people, since it means opening the machine or owning a
+USB-NVMe adapter.
+
+**Decide the rest in Phase 6**, but the direction is settled: keep the ISO,
+automate it, and brand it.
+
+#### The installer runtime carries no firmware — 2026-09-19
+
+Worth its own note, because it looks catastrophic and is not. Installing on
+the A9 Pro, the installer printed:
+
+```
+amdgpu 0000:c6:00.0: early_init of IP block <psp> failed -19
+... <dm> <gfx_v11_0> <sdma_v6_0> <vcn_v4_0_5> <mes_v11_0> all -19
+amdgpu 0000:c6:00.0: Fatal error during GPU init
+mt7925e 0000:c3:00.0: Direct firmware load for mediatek/mt7925/... failed with error -2
+```
+
+**It is the installer's environment, not the image**, and one observation
+settles it: the installer also failed to load `gc_11_5_0_pfp.bin`, which *is*
+in Fedora's `amd-gpu-firmware` and *is* in the CabinetOS image. A file that
+should not have failed was worth more than all the ones that did. The
+installer runs a stock Fedora kernel — `7.2.5-200.fc44`, not the image's
+`7.2.4-ogc3.1.fc44` — and ships no firmware.
+
+The CabinetOS image has what this machine needs: 677 amdgpu blobs including
+`gc_11_5_0_*`, `dcn_3_5_dmcub.bin`, `sdma_6_1_0.bin`, `vcn_4_0_5.bin` and
+`psp_14_0_0_toc.bin`, all three MT7925 Wi-Fi and Bluetooth blobs, and an
+initramfs carrying 666 amdgpu firmware files plus `amdgpu.ko`, built
+`hostonly=no`. The installed machine drives the GPU perfectly — see *The A9
+Pro, measured*.
+
+**Two wrong turns on the way, recorded so nobody repeats them.** The
+base-bump note about `linux-firmware` going backwards 20260910 → 20260810 made
+"old firmware" the obvious theory, and it was "checked" against an invented
+filename rather than the one on screen. Then `psp_14_0_8` was misread off a
+photograph of a rotated monitor and a second theory built on the misread
+digit — no Fedora `amd-gpu-firmware`, including the newest 20260916, contains
+any `psp_14_0_8`. **Do not diagnose hardware from a photograph. Get a shell
+and read `dmesg`.**
 
 ### 6. `/opt` mutability
 **Raised: Phase 1. Left at Bazzite's default.**
@@ -7335,6 +7494,128 @@ nobody decided to build that.
 
 *Do not resolve before the on-screen keyboard has been used on a television.*
 
+### 15b. First run, and the one input that can be guaranteed
+**Designed with MMagTech 2026-09-19, after the A9 Pro was installed and the
+setup was done by hand over SSH. Not built.**
+
+Everything here exists because installing the first real console took a
+keyboard, an SSH session and two commands nobody else would know. That is
+fine for us and it is not a product.
+
+#### The requirement, and everything else follows from it
+
+> **A keyboard is needed exactly once, ever. After first run the console must
+> never require one again, for anything.**
+
+It is testable, which is why it is the requirement rather than a principle.
+
+#### Why the keyboard is the floor, and the controller is not
+
+The instinct is to build setup around a wired controller — a console owner
+owns controllers. **MMagTech's correction, and it is the right one: owning a
+Bluetooth pad and having its cable to hand at setup time are different
+things, and most pads sold now are Bluetooth.**
+
+The keyboard guarantee is structural rather than lucky: **a machine cannot
+reach an installed state without a keyboard, because the firmware boot menu
+needs one.** That stays true after open question 5's work automates the
+installer down to a single confirmation. So it is not "most people probably
+have one" — it is "this machine could not exist without one having been
+present."
+
+| | |
+|---|---|
+| **Required** | a **keyboard**. Setup must complete with nothing else attached. |
+| Wired controller | works if present; never assumed |
+| Mouse | focus-move and click only — open question 16 |
+| **Bluetooth controller** | **paired DURING setup, never a precondition for it** |
+
+That last row is what the keyboard floor buys. Treating a paired controller as
+a precondition creates a chicken-and-egg — pair a pad to reach the screen that
+pairs pads — and with a keyboard underneath, pairing is simply another step
+inside setup, driven in our own UI rather than by a Linux utility.
+
+#### The chain, and why each link is gated
+
+```
+first run:  keyboard → Wi-Fi → RomM server → pair pad 1 → unplug the keyboard
+later:      pad 1 → Settings → Add a controller → pads 2, 3, 4
+never:      needing a keyboard again
+```
+
+- **Wi-Fi before RomM**, because RomM is on the LAN. And the two networks are
+  not the same question: open question 21 records that a LAN-only console has
+  a complete library and three emulator systems that will *never* arrive,
+  because those come from Flathub over the internet. **First run is where
+  that gets said out loud**, not discovered by someone whose Switch games
+  never appear.
+- **Pairing RomM needs a second device.** The flow is device authorisation: it
+  yields a URL and a user code and somebody must approve it in a browser. A
+  console has no browser, so first run shows a **QR code** — which `main.cpp`
+  already anticipates in a comment above the `printf` that prints them. A
+  phone is therefore a real dependency of setup and should be stated as one.
+- **A physical keyboard types into the same field the on-screen keyboard
+  shows.** One field, two ways to fill it; not two text-entry paths. And the
+  on-screen keyboard does not become optional — first run is the one moment a
+  real keyboard is near-certain, and changing a Wi-Fi password later from the
+  sofa is not.
+- **Pairing a controller is the last step and should be insistent.** Not a
+  hard block, because the input model says a keyboard must keep working
+  forever — but someone who skips it owns a games console they cannot play
+  from the sofa, and Settings must offer it again.
+
+#### Adding a second controller uses only the first
+
+**MMagTech's requirement, and the one that makes the guarantee above real.**
+A friend arrives with a pad; nobody should have to find a keyboard.
+
+It also resolves an ambiguity in the rule Phase 6 already carries — *pair on
+a button press, not on discovery; let the pad that sends the first input
+become player one*. That is clean for the FIRST pad and under-specified for
+the second: if the confirmation is "whichever pad sends input first", a
+neighbour's pad in pairing mode can answer it.
+
+**Two-sided confirmation, and it costs the user nothing:**
+
+1. Pad 1 opens *Add a controller*; the console scans.
+2. It shows what it found and **pad 1 chooses which**.
+3. The new pad confirms by **sending its own first input**.
+
+Neither half is sufficient alone. Pad 1 cannot adopt a stranger's device,
+because that device never responds. A stranger's device cannot adopt itself,
+because it was never selected. The confirmation is still the very input being
+established, which is the original rule's insight applied at both ends.
+
+#### Two things to build once, not twice
+
+- **First run's pairing step and Settings → *Add a controller* are the same
+  screen**, entered from two places. The frontend is already built this way:
+  `--screen` opens a screen by walking the route a person walks, so a capture
+  cannot show a state the product cannot reach.
+- **The screen for "nothing is attached" must be readable and actionable with
+  no input at all**, and should name what the console is currently being
+  driven by. Phase 6 already demands three Bluetooth states rather than two —
+  searching, found, and *no adapter, plug something in* — and this is the same
+  rule one level up. A setup screen nobody can operate, with no explanation,
+  is worse than a black one.
+- **The escape hatch has to survive.** If pad 1's battery dies mid-session,
+  USB always works and the keyboard must still work. That is the input model's
+  existing line — supported, never a dependency — and this is the case that
+  makes it load-bearing rather than polite.
+
+#### What already exists
+
+Most of the mechanism, which is why this is a screen problem rather than a
+plumbing one: the on-screen keyboard, the device-authorisation pairing flow
+and its code and URL, `/etc/cabinetos/session.env` as the file a first-run
+screen writes, and `bluez` plus the MT7925's Bluetooth firmware in the image
+with the adapter already naming itself `cabinetos` from the hostname.
+
+Missing: a state machine, a QR renderer, NetworkManager plumbing, and a way
+to know it is the first run at all. **None of those is a picture**, so they
+can be built before the look is settled — but the screens themselves wait,
+like every other screen.
+
 ### 16. Is a mouse supported, or not?
 **Raised 2026-09-13. Two documents currently disagree. Needs a decision, not a
 default.**
@@ -7361,6 +7642,22 @@ built for it, because that is a promise the product does not keep.
 **Keyboard is not in question** and is settled: every screen must be fully
 operable by directional input plus confirm and back, from whatever device
 supplies them. That is already an architectural rule rather than a feature.
+
+**ANSWERED 2026-09-19: option 2, and the reason is that the mouse stopped
+being load-bearing.** Working out first run (below) established that a
+*keyboard* is the guaranteed input on any installed machine, not a mouse and
+not a controller. Everything a person must do can therefore be done with
+directional input, confirm and back — which the architecture already
+requires. That leaves the mouse with nothing it uniquely enables, so it gets
+the cheap treatment: **it moves focus and clicks the focused thing, and
+nothing else.** No cursor, no hover states, no pointer affordances, and
+therefore no second interaction model to design for or test.
+
+The first-run proposal's objection stands and is respected rather than
+overruled — pointer input *would* pull the design toward hover and click
+targets, which is why none of that is built. A mouse under this rule is not a
+pointer; it is a second way to drive the one model that exists. Amend the
+input-model table to say exactly that, rather than the bare word "supported".
 
 ### 17. Wi-Fi credentials on a controller-only console
 **Raised 2026-09-13. The mechanism is DECIDED; the UI is Phase 6.**

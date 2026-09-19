@@ -23,6 +23,13 @@ branch that does the work it describes, so there is never a handover-only push
 and never a handover-only pull request. The rule and the one narrow exception
 are in PROJECT.md, *Constraints and principles*, item 7.
 
+**THE A9 PRO IS INSTALLED AND RUNNING, 2026-09-19.** `cabinet@192.168.1.212`,
+same SSH key as the VM, sudo password `cabinet`. It boots into the frontend on
+**gamescope/drm** — the top compositor rung, which the VM has never reached —
+rendering on its own Radeon 890M with **Vulkan present (RADV STRIX1)**, zero
+session restarts, 1147 playable games. **Judge nothing about the look on it
+until it is running an image with the resolution fix**; see item 1.
+
 **THE IMAGE NOW CARRIES THE FRONTEND AND THE TWENTY-ONE CORES, 2026-09-19.**
 This is the thing most likely to be wrong in anyone's head, because it was
 untrue for a fortnight and a lot of text said so. Install CabinetOS on a
@@ -56,9 +63,16 @@ record of how a core is built — see *Cabinet-side debts*.
 
 Then read `docs/PROJECT.md`, and `frontend/README.md` for the build loop.
 
-**The test VM is `cabinet@192.168.1.250`**, key at `~/.ssh/cabinetos`, sudo
-password `cabinet` — a throwaway from the public repo's `disk_config/disk.toml`.
-The RomM server it talks to is `192.168.1.10:6005`.
+**Two machines now.**
+
+| | | |
+|---|---|---|
+| **A9 Pro** | `cabinet@192.168.1.212` | the reference console. Real GPU, gamescope/drm, Vulkan. Judge the look here — and only here. |
+| **Test VM** | `cabinet@192.168.1.250` | Unraid, no Vulkan, cage on llvmpipe. The dev loop and every headless measurement. |
+
+Both take the key at `~/.ssh/cabinetos` and both have sudo password `cabinet`
+— a throwaway, the same one the public repo's `disk_config/disk.toml` carries.
+The RomM server they talk to is `192.168.1.10:6005`.
 
 **Nothing builds on this Mac.** The frontend and the cores build in a container
 on the VM and in CI. The VM loop is eleven seconds:
@@ -112,62 +126,78 @@ states, and leave — with the save syncing on the way out.
 
 ## Pick up with these, in this order
 
-### 1. INSTALL IT ON THE A9 PRO. That is the acceptance test — **DO THIS FIRST**
+### 1. Install the resolution fix on the A9, then look at it — **DO THIS FIRST**
 
-**The machine is bare — nothing installed on it as of 2026-09-19.** Everything
-needed to install is built and in `main`; what is left is physical and needs
-MMagTech at the keyboard, because it is a USB stick and a firmware boot menu.
+**The A9 is installed and running. One thing stands between it and the UI
+work**, and it is in this change but not yet on the machine: the session
+hardcoded `--output-width 1920 --output-height 1080`, written in Phase 2
+before any display existed, and the panel is **3840x2160**. The console ran at
+1080p and the television scaled it.
 
-**A green build says nothing about whether a game runs.** This week had three
-faults that were green in CI and broken in reality: no arcade game could start
-for a day, Saturn could not start at all, and Dreamcast was running a fake BIOS
-and saying nothing. **The test is the console booting into the frontend on a
-television with a controller in hand.**
+**That is the worst possible state for judging a look.** The frontend's shapes
+are signed-distance fields, exact at any resolution and verified at all three
+— so every soft edge on that screen was the scaler and none of it was the
+design.
 
-The whole sequence, in order:
+**Removing the flags does not fix it, and that was measured**: with no
+`--output-width`/`--output-height` at all, gamescope still chose
+`1920x1080@60Hz`. The session now reads the connected connector's preferred
+mode from `/sys/class/drm/card*-*/modes` and passes it, with
+`CABINETOS_OUTPUT=WxH` as an override.
 
-1. **Build the ISO.** Actions → *Build disk images* → Run workflow, tag
-   `latest`, from `main`. About sixteen minutes. The ISO is at
-   `bootiso/install.iso` inside the artifact.
-2. **Write it to a USB stick** and install. README.md, *Writing the disk image
-   to a USB stick* and *Installing to real hardware*, has the `dd` line and the
-   two firmware settings worth changing while in there (restore on AC power
-   loss → on; Secure Boot → off).
-3. **It boots into the frontend**, on the stand-in library, because the machine
-   does not yet know which RomM server it belongs to.
-4. **Pair it and tell it the server**, over SSH, two commands. README.md has
-   them. The second writes `/etc/cabinetos/session.env`, which is machine-local
-   and deliberately not in the image.
+So: merge this, let the image build, then on the A9
 
-   **Pair it AS `cabinet`.** The token goes in that account's home directory
-   and the session runs as `cabinet`; pair as anyone else and the console
-   stays on the stand-in library with nothing saying why. Name the installer's
-   user `cabinet` too — the image already creates the account, so the
-   installer only adds a password to it.
-5. **Read what it printed, do not assume it.**
-   `journalctl -u cabinetos-session -b`. The three lines that matter:
+```
+sudo bootc upgrade && sudo systemctl reboot
+```
 
-   ```
-   [cores] /usr/lib/cabinetos/cores
-   [storage] root /var/lib/cabinetos
-   [library] 1147 playable games, 1147 with art; 501 games skipped
-   ```
+and confirm it says `cabinetos-session: output 3840x2160`. **Then** the UI
+freeze is genuinely lifted and everything under *Waiting on the reference
+machine* is available.
 
-   `[cores] cores/build` means it is reading a directory that is not there and
-   every platform will say *"the core for this system is not built on this
-   console yet"*. `[storage] root /` means the `tmpfiles.d` rule did not run.
+### 1b. Installing the A9 — DONE 2026-09-19, and what it found
 
-**What to actually look at, once it is up.** Not the UI — see the freeze below
-— but these, which nothing on a VM can answer:
+The install itself worked and the machine is described at the top of this
+file. **Four faults turned up in the first hour on real hardware, none of
+which the VM could ever have shown**, and all four are fixed in the same
+change as the resolution one:
 
-- **Does gamescope take the drm backend?** The session ladder is gamescope/drm
-  → cage → headless, and on the VM it has always fallen to cage because a
-  virtual GPU has no Vulkan. The A9 Pro's Radeon 890M does. The journal says
-  which rung it took, and **cage on real hardware means something is wrong.**
-- **Does a controller work at all**, wired first. `[frontend] gamepads at
-  startup: 0` on the VM every time.
-- **Do the hardware-rendered cores render** — Dreamcast, N64, PSP — on a real
-  GPU rather than llvmpipe.
+- **A fresh console threw its RomM token away.** `rommTokenPath()` is
+  `$HOME/.config/cabinetos/romm.json` and nothing created that directory, so
+  on a machine nobody has configured — which is exactly the machine that is
+  pairing — the write failed after the person had already approved it in a
+  browser. Worse, the line printed was `paired      (could not write ...)`: a
+  success word with the failure in brackets. `saveToken` creates the parents
+  at 0700 now, and the failure is loud and exits non-zero. **This would have
+  hit every single person who ever installs CabinetOS.**
+- **`--romm-probe` reported every platform as "not playable here"** on a
+  machine with all twenty-one cores installed and working, because it returns
+  before `catalog::setCoreDirectory`. Cosmetic, and corrosive: a diagnostic
+  that lies is worse than one that says nothing.
+- **The output was hardcoded to 1080p.** Item 1.
+- **The installer is not fit for anyone but us.** Open question 5 is rewritten
+  from "neither is tested" into what a person actually hits. The short version
+  is in *Things that will bite you*.
+
+**Two traps this project had already written down and I walked into anyway**,
+so they are worth repeating:
+
+- **`203/EXEC` is SELinux refusing to run a session script from the wrong
+  place.** `build.sh` says so in as many words. A test copy in
+  `/var/home/cabinet` will not exec; `chcon -t bin_t` fixes it, and `/usr/bin`
+  gets the right label automatically. The machine flapped for two minutes
+  until the drop-in came off — `Restart=always` with `StartLimitIntervalSec=0`
+  did exactly what it was designed to do and the console recovered on its own.
+- **`pkill -f <pattern>` kills the shell issuing it** when that shell's own
+  command line contains the pattern. Third time on this project. `pkill -x`,
+  or match on something the checker cannot contain.
+
+**And the journal filter that wasted several minutes:** the session script's
+output is tagged with the syslog identifier, so `journalctl -u
+cabinetos-session` shows only systemd's own start/stop lines and none of the
+console's output. Use **`journalctl -t cabinetos-session`**. Also, the clock
+jumps when NTP syncs after install, so `--since` is unreliable on the first
+boot — use `-n`.
 
 ### 2. One real in-game save, on Dreamcast
 
@@ -178,9 +208,16 @@ the correct answer for a session that saved nothing, and is why forcing an
 upload needed `--sync-test`.
 
 MMagTech's call, 2026-09-19: *"real in-games will wait until we have the A9 in
-hands and the OS written to it."* **So this is item 2 and not item 1, and it
-becomes possible the moment item 1 is done.** Play a Dreamcast game, save in
-it, quit, and watch the VMU reach RomM.
+hands and the OS written to it."* **Both of those are now true**, so this is
+available as soon as a controller is plugged in — it does not even wait for
+the resolution fix, because the test is a file reaching a server rather than
+anything about the picture. Play a Dreamcast game, save in it, quit, and watch
+the VMU reach RomM.
+
+**`[frontend] gamepads at startup: 0` on the A9 as of 2026-09-19** — nothing
+has been plugged in yet. Wired first: `bluez` and the MT7925's Bluetooth
+firmware are both in the image, but USB is the bootstrap and the deterministic
+one.
 
 `frontend/src/filesave.{h,cpp}` is the mechanism and `catalog::saveFiles` is the
 table.
@@ -190,8 +227,12 @@ table.
 **Decided 2026-09-17: no more UI is designed or tuned until CabinetOS is
 installed on the reference machine.** The user's call. **The condition is the
 console RUNNING THE FRONTEND on a television — not the box being unboxed, and
-not the image being installed.** Everything under *Waiting on the reference
-machine* below becomes available then, in the order it is written.
+not the image being installed.**
+
+**That is now true, with one asterisk: item 1.** The console is on a
+television, on its own GPU, at the wrong resolution. Everything under *Waiting
+on the reference machine* becomes available the moment it reports
+`cabinetos-session: output 3840x2160`, in the order it is written.
 
 **The line is the acceptance test, not the subsystem.** If the test is "does
 this look right", it waits. If the test is a measurement or a behaviour, it
@@ -295,10 +336,19 @@ these in the VM.**
   decision and it needs the panel.
 - **The audio governor's 20 ms cushion.** Inherited from Cabinet rather than
   measured here; the lead it permits *is* input lag. Tune it with a pad in hand.
-- **A first-run screen**, so a console can be told which RomM server it belongs
-  to without somebody writing `/etc/cabinetos/session.env` over SSH. Open
-  question 15. **The mechanism exists now and the screen does not** — that file
-  is what any screen would write.
+- **First run**, which is now designed and not built — **open question 15b**,
+  written with MMagTech on 2026-09-19 after setting the A9 up by hand over
+  SSH. The requirement is one line and it is testable: **a keyboard is needed
+  exactly once, ever.** A keyboard is the only input an installed machine
+  guarantees, because the firmware boot menu needs one; a wired controller is
+  not, because most pads sold now are Bluetooth. So setup runs on a keyboard,
+  pairs a controller as its last step, and a second controller is added using
+  only the first — with two-sided confirmation, so a neighbour's pad in
+  pairing mode cannot answer for itself. **The mechanisms mostly exist** (the
+  on-screen keyboard, the pairing flow's code and URL, `session.env`, bluez);
+  what is missing is a state machine, a QR renderer, NetworkManager plumbing
+  and a way to know it is the first run. **None of those is a picture**, so
+  they can start before the look is settled.
 - **The boot splash**, and the rest of the branding.
 - **The row in Settings that turns file access on**, decided 2026-09-19 and the
   answer to open question 9. A console ships listening to nothing; an ordinary
@@ -368,6 +418,33 @@ these in the VM.**
   it becomes a problem, cache `cores/build` on the hash of `cores/build-core.sh`
   — but keep the revision assertion running on a cache hit, or the check that
   justifies the whole workflow stops happening.
+
+### About real hardware, learned in one hour of it
+
+- **The installer is not fit for anyone but us**, and open question 5 now says
+  so with the detail. It brands itself Bazzite, its media check FAILS on good
+  media (`Supported ISO: no`, aborting at 4.8% — the write was byte-exact and
+  the install from it worked), it scrolls `amdgpu: Fatal error during GPU
+  init`, and it asks about UIDs. Installing works; the experience does not
+  ship.
+- **The installer runtime carries NO firmware**, which is why the GPU and
+  Wi-Fi die in it and why neither matters. The tell: it also failed to load
+  `gc_11_5_0_pfp.bin`, a file that *is* in Fedora's package and *is* in our
+  image. **One thing that should not have failed was worth more than all the
+  things that did.** Its kernel is stock Fedora's, not ours.
+- **DO NOT DIAGNOSE HARDWARE FROM A PHOTOGRAPH.** Two theories were built and
+  discarded here — one from a filename nobody checked, one from a digit
+  misread off a picture of a rotated monitor. Get a shell and read `dmesg`.
+- **`journalctl -u cabinetos-session` shows almost nothing.** The script's own
+  output carries the syslog identifier, so the unit filter returns only
+  systemd's start/stop lines. Use **`journalctl -t cabinetos-session`**. And
+  the clock jumps when NTP syncs after an install, so `--since` lies on the
+  first boot; use `-n`.
+- **gamescope does not pick the display's mode on its own.** With no
+  `--output-width`/`--output-height` at all it still chose 1920x1080 on a
+  3840x2160 panel. If you want native, read the connector and pass it.
+- **A 4K panel is the default assumption now, not a possibility.** PROJECT.md
+  always said most sets are 4K; the first one plugged in was.
 
 ### About looking at what you built
 
@@ -562,9 +639,11 @@ connected. The console says it on stderr, once.
   `podman run --rm -v "$PWD":/src:Z -w /src cabinetos-builder make`
 - `~/frontend/cores/build/` — **twenty-one** built cores, where the frontend
   looks when it is run from there
-- `~/frontend/` is also the **storage root**, because `/var/lib/cabinetos` does
-  not exist on this machine and cannot be created by the `cabinet` user. It
-  holds:
+- `~/frontend/` is **still the storage root for a build run by hand from that
+  directory**, and that is the dev loop. **It is no longer the session's root**:
+  the VM was upgraded onto the image that carries the console on 2026-09-19,
+  so `tmpfiles.d` now creates `/var/lib/cabinetos` and the session uses it.
+  Two consoles' worth of tree on one machine, deliberately. `~/frontend` holds:
   - `bios/` — BIOS fetched from RomM, files the cores write into their system
     directory, and **`PPSSPP/`**, 13 MB of PSP system files that came out of the
     core build. Copy it from `~/cabinetos/cores/system/` after building that
@@ -589,7 +668,12 @@ connected. The console says it on stderr, once.
   3.4 GB**. They are a cache: delete any to make room and the next build
   re-clones.
 - `~/run-frontend.sh` — the session launcher, used via `CABINETOS_APP`. The
-  original is `run-frontend.sh.bak`
+  original is `run-frontend.sh.bak`. **The drop-in that pointed the session at
+  it was moved aside on 2026-09-19** to `~/10-frontend.conf.disabled`: its own
+  comment said it goes away once the binary ships in the image, and it does.
+  Put it back if you want the session running a hand-built frontend.
+- `/etc/cabinetos/session.env` — the RomM address, added 2026-09-19. Same file
+  as on the A9.
 - `~/.config/cabinetos/romm.json` — the RomM token, 0600
 - `/var/mnt/games/flatpak/` — **a flatpak user installation holding RPCS3**,
   2.7 GB, reached with `FLATPAK_USER_DIR=/var/mnt/games/flatpak`. On the games
