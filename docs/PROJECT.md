@@ -64,6 +64,11 @@ rather than launched by hand:
   **Dr. Mario runs.** It also hosts the cores that draw for themselves: it owns
   the GLES context and hands a hardware-rendered core a framebuffer inside it,
   so **Mario Kart 64 and Ikaruga run too**, with no pixel ever read back.
+- **An on-disk layout somebody can find their way around**, as of 2026-09-18:
+  `roms/`, `cache/`, `bios/` and a directory per person holding their saves and
+  states. Keeping a game is a decision per person rather than a flag on the
+  game, and releasing the last one deletes the game and gives the space back.
+  Open question 18.
 
 ### Open against the frontend right now
 
@@ -1489,14 +1494,15 @@ Three kinds of file, none of them a ROM, and **eviction sees none of them**:
 | What | Where | Size after two games |
 |---|---|---|
 | Mesa's compiled-shader cache | `~/.cache/mesa_shader_cache/` | 2.5 MB |
-| Mupen64Plus's driver database | `system/Mupen64plus/mupen64plus.ini` | 447 KB |
-| Flycast's Dreamcast flash | `system/dc/dc_nvmem.bin` | 131 KB |
+| Mupen64Plus's driver database | `bios/Mupen64plus/mupen64plus.ini` | 447 KB |
+| Flycast's Dreamcast flash | `bios/dc/dc_nvmem.bin` | 131 KB |
 
-`cache::candidates` walks `romcache/<romId>/` and nothing else, on purpose —
-`saves/` sits alongside and is deliberately never a candidate. But that also
-means everything above consumes free space, is counted by the floors as simply
-gone, and **cannot be reclaimed by any code this console has**. Un-keeping every
-game would not shrink it by a byte.
+**The paths changed on 2026-09-18 and the problem did not.** `cache::candidates`
+walks `cache/` and nothing else — that is the whole of the rule now, and it is
+checkable by listing a directory rather than by reading code. But it still means
+everything above consumes free space, is counted by the floors as simply gone,
+and **cannot be reclaimed by any code this console has**. Un-keeping every game
+would not shrink it by a byte.
 
 It is small today and the shapes differ, which is why they are listed
 separately rather than as one number:
@@ -1513,7 +1519,9 @@ separately rather than as one number:
   `mupen64plus.ini` is a database that can be deleted and will come back.
   `dc_nvmem.bin` is a Dreamcast's saved flash — **console settings, and the
   thing a VMU lives beside.** Treating the system directory as reclaimable
-  would throw that away. Anything that cleans here has to distinguish the two,
+  would throw that away. Open question 18 named this as the one place its own
+  shape does not answer the question: `bios/` promises replaceable firmware and
+  holds this too, because libretro gives a core exactly one system directory. Anything that cleans here has to distinguish the two,
   which is the same distinction the Storage screen already draws between a
   cache and a kept game.
 
@@ -4169,6 +4177,10 @@ KEEP, and it is the only place in the product where the console may refuse.
 > person asked for by name belongs in the first.
 
 So the row reads **Download and keep**, and on a kept game **Remove download**.
+**Superseded 2026-09-19 — see open question 18.** Un-keeping now deletes the
+game, because the row says "Remove download" and reclaiming space is why people
+press it. The paragraph below is the original reasoning.
+
 Un-keeping deletes nothing: the game returns to the cache, where it may sit for
 months before anything needs the room.
 
@@ -4201,7 +4213,11 @@ asked me to keep"* is a dead end without one.
 - **A kept game is not a candidate**, enforced inside `cache::candidates` rather
   than at each caller, so no future caller can forget it. Verified: a kept
   game's ROM does not appear in the eviction list, and un-keeping puts both its
-  files straight back into it.
+  files straight back into it. **Both halves of that changed on 2026-09-18 and
+  -19 and got simpler:** a kept game is not a candidate because `candidates`
+  only ever walks `cache/` and a kept game is in `roms/`, and un-keeping no
+  longer puts anything back into the list because it deletes the game. Open
+  question 18.
 - **An unsent upload is a fact on disk.** A marker is written before an upload
   is attempted and removed only on success, so a queue interrupted by a crash is
   still visible on the next boot and its bytes still count against the save
@@ -5704,10 +5720,17 @@ directory: the difference is the desktop UI's — the web debugger, themes, UI
 images, sound effects, the SDL controller database — and Cabinet's subset is the
 one that has actually run PSP games on a television.
 
-**Where they live in the image is still Phase 5's to decide.** The build stages
-them at `cores/system/PPSSPP` and the deploy copies them across; in a bootc
-image that becomes a path in `/usr`, which is fine, because the core only ever
-reads it.
+**Where they live in the image is DECIDED as of open question 18:
+`/usr/share/cabinetos/system/`**, which `storage::ensureTree` symlinks into the
+console's system directory at startup. A path in `/usr` is right because the
+core only ever reads it, and it takes 13 MB of build output out of a directory
+that otherwise holds the person's own files. **Nothing installs them there yet** —
+the build still stages them at `cores/system/PPSSPP` and the deploy copies them
+across, so on the test VM they sit in `bios/PPSSPP/` and the link step correctly
+leaves them alone. It cannot be done in `build_files/build.sh` today either:
+those files come out of a core build and the image does not yet carry the cores
+or the frontend at all. **It belongs with whatever puts those in the image**,
+which is Phase 5's deploy.
 
 ##### The emulator tag IS shared, and this is the strongest case in the set
 
@@ -6340,6 +6363,136 @@ keeping a game means.
 Unrecognised files are simply not used. That keeps the console away from the one
 class of data RomM cannot give back, without needing a rule to say so.
 
+#### DECIDED 2026-09-19: plug it in and it works, and never two copies of a game
+
+**MMagTech's ask, after the folder layout landed: "I want the easiest most
+seamless experience for a second drive whether it's a second internal drive or a
+USB you plug in."** What the console does about a drive — not what the drive is
+for, which is settled above.
+
+Checked against what the consoles people already own actually do, rather than
+recalled:
+
+| | |
+|---|---|
+| **Switch** | Put a card in and it becomes the download location. **No setup screen.** If it fills, it falls back to internal on its own. |
+| **Switch** | Save data is **never** on the card — *"stored on the console's System Memory... in order to keep it safe."* The same rule this question reached independently, with the same reason. |
+| **Steam** | One library per drive, one of them marked Default, and *Move install folder* per game. The same shape as `roms/`+`cache/` repeating per location. |
+| **Steam Deck** | **Gets removal wrong, and that is the finding worth having.** Pull the card and the games still show as installed with a green Play button that does nothing; it does not notice a physical removal at all. Exactly what *"a missing drive degrades; it never errors"* forbids. |
+| **PS5** | A USB drive may HOLD a PS5 game but not run it, so you move it back to play. A tier this console does not need — everything here is a copy of the server. |
+
+**So: six rules, and every one of them is the console not asking a question.**
+
+1. **Never take over the drive.** One folder named `CabinetOS/` on it, and only
+   that. No formatting, no wizard, no adoption prompt. A drive with somebody's
+   films on it also works as a games drive and nothing of theirs is at risk.
+2. **Plug it in and it is used.** It becomes where kept games go. The Switch's
+   answer, and it removes a screen that would otherwise wait on the reference
+   machine.
+3. **A second internal drive and a USB stick are the same thing** — another
+   place with room. The PS5 distinguishes them for a speed reason this console
+   does not have.
+4. **Saves never go on it.** Already decided above; Nintendo says the reason out
+   loud and it is the right one.
+5. **Look at the disk, do not remember what was on it.** This is the one line
+   that makes the Steam Deck bug impossible here: `cache::find` does a readdir
+   at the moment somebody presses Play, so there is no cached list to go stale
+   and no hot-plug event to miss. An unplugged drive simply means the game is
+   not found, and not found already means fetch it.
+6. **Say it once, then behave normally.** *"Your games drive is not connected"*
+   the first time and nothing after, because silently re-downloading a library
+   over Wi-Fi is its own kind of rude.
+
+##### The duplicate, which MMagTech found and is the only real hole in it
+
+**Keep a game with the drive plugged in, unplug it, play the game — it comes
+down from RomM into the cache. Plug the drive back in and the game is on the
+machine twice.**
+
+Leaving both is not acceptable: two copies of a 40 GB title sitting there until
+something happens to need the room is exactly the sort of thing a console should
+never do. **So the redundant copy is deleted, on the spot.**
+
+That is safe, and provably rather than probably: the two files are the same
+game at the same size their server reports, one of them has just been read, and
+even losing both costs a re-download. It is the same size check the download
+path already trusts to decide a game is here and need not be fetched again.
+
+**Which one wins is decided by what the game IS, not by which disk it is on:**
+
+| | |
+|---|---|
+| Still kept | the **drive** copy wins — that is where kept games live, and it leaves the internal disk for the cache and the system reserve |
+| No longer kept | the **internal** copy wins — that is where the cache lives, so the drive only ever carries what somebody deliberately asked to keep |
+| One is the wrong size | the good one wins, whichever disk it is on, and moves to where its state says it belongs |
+| **Neither** is the right size | **nothing is deleted.** Two suspect files and a guess is the one move here that could actually cost something. Fetch a clean one. |
+
+**The console always knows the answer even with the drive in a drawer**, because
+the keep record lives in `users/<id> - <name>/keeps/` on the internal disk and
+never travels. And the check runs when somebody next plays that game rather than
+when the drive appears, so it needs no detection and cannot go stale — rule 5
+again.
+
+#### BUILT 2026-09-19
+
+`storage::locations()` looks for drives every time it is asked — under
+`/run/media/<user>/` where udisks mounts a USB stick and `/var/mnt/` where an
+fstab-mounted second internal disk goes — and takes any mount that is **on a
+different filesystem from the internal root**, which is the check that stops a
+folder on the internal disk being mistaken for a drive and then "lost". It
+claims `CabinetOS/` on each and nothing else. `$CABINETOS_DRIVES` overrides the
+search for testing.
+
+`keepLocation()` is the first drive or the internal disk. `cache::dedupe`
+resolves a game that is on the machine twice. The missing-drive line is said
+once and the drive then forgotten, so it is never said twice.
+
+##### The bug this turned up, which is the reason it was worth running
+
+**A game fetched by PLAYING it was landing in `roms/`, where nothing may evict
+it.** The keep record lives on the internal disk and survives the drive being
+unplugged — which is the point of it — so asking *"is this game kept"* answered
+yes, and the fetched copy was filed as a kept game on the internal disk.
+
+Play it twenty times with the drive in a drawer and the console has filled its
+own disk with games it is not allowed to delete. **That is precisely what the
+system reserve exists to prevent, arriving through a door nothing was watching**
+— the floors guard the Download button, and this was not the Download button.
+
+The rule is now the product's own, stated in Phase 4 and forgotten here:
+**Download is the one deliberate storage act.** So a fetch writes into `roms/`
+only when the person is keeping the game with that press, and everything else
+goes to the cache on the internal disk — where it is a stand-in, evictable,
+costing a re-download at worst, and deleted outright the moment the drive
+returns and `dedupe` sees the real copy.
+
+##### The scenario, run end to end on the test VM
+
+MMagTech's own, on a machine with two real filesystems — internal on device 37,
+the drive on 58:
+
+| | |
+|---|---|
+| Keep it with the drive plugged in | lands at `<drive>/CabinetOS/roms/Game Boy/2813 - Pokémon Red Version.gb`. **Nothing on the internal disk.** |
+| Unplug it and press Play | *"the games drive at … is not connected — games kept on it will be fetched from RomM again"*, then fetched to `cache/Game Boy/2813 - …` on the internal disk. **Evictable**, which is the fix above. |
+| Start again, still unplugged | **says nothing.** Reported once and the drive then forgotten. |
+| Plug it back in and press Play | *"rom 2813 was here twice; kept `<drive>/…/roms/…` and removed `<internal>/cache/…`"*, then played from the drive. |
+| Afterwards | one copy, on the drive. |
+
+##### What still is not built
+
+The **screen** that says the drive is missing. The console says it on stderr
+once; the person-facing version is a picture and waits with the rest of the UI.
+The games on that drive already behave correctly without it.
+
+And a consequence worth knowing rather than fixing: **keeping a game that is
+already in the internal cache leaves it on the internal disk.** Keeping never
+moves bytes between drives — it renames the entry from `cache/` to `roms/` on
+the location it is already on, which is instant whatever the game weighs.
+`keepLocation()` decides where a download LANDS and nothing else. The
+alternative is a cross-drive copy of gigabytes at the moment somebody presses a
+button, which is the thing this whole layout is arranged to avoid.
+
 #### SUPERSEDED — a drive belongs to one console
 
 **The section below decided a drive should move between CabinetOS machines, and
@@ -6716,7 +6869,20 @@ in `/usr/share/cabinetos/` and is never written to.
 
 #### One convention, twice: the number identifies, the words are for you
 
-`users/1 - MMagTech/`, and `roms/psx/321 - Crash Bandicoot.chd`.
+`users/1 - MMagTech/`, and `roms/Sony Playstation/321 - Crash Bandicoot.chd`.
+
+**REVISED 2026-09-18, while building it: one spelling of a platform, not two.**
+The line above once read `roms/psx/`, and the saves below already used RomM's
+`fs_slug` because mirroring the server was the whole argument for the per-user
+tree. Two spellings for one console is exactly the thing this question exists to
+stop, and MMagTech said so on sight. **The short `slug` is also not unique** —
+the reference server has two Arcade platforms sharing `arcade`, 223 games
+between them, needing different cores — so under it those games share one folder
+while their saves correctly split into `FBNEO/` and `MAME2003/`. `fs_slug` wins
+on both counts, and RomM uses it for its own roms as well as its assets, so the
+two trees are the same shape all the way down. The cost is spaces and mixed case
+in a folder name, which the user directory already accepted; checked against the
+live server, none of its 36 `fs_slug`s collide case-insensitively.
 
 **The username alone was considered and is not the key.** It is available —
 `/api/users/me` returns it — and it is what a person recognises, so it belongs
@@ -6757,6 +6923,41 @@ nothing because the bytes never moved. That makes un-keep a safe button rather
 than a destructive one, which matters when it sits one press away on a game's
 own screen.
 
+> **REVERSED 2026-09-19: releasing the last keep DELETES.** MMagTech, on being
+> shown the behaviour: *"most users would assume unkeeping a chosen game would
+> free up space on their drive."* They would, and there is a sharper version of
+> the point — **the row says "Remove download" and it removed nothing.**
+>
+> The safety argument above does not survive contact with what it is protecting.
+> Every game here is a copy of RomM, so the worst a mis-press costs is a
+> download this console is built to make invisible; that is a very small thing
+> to buy with a button that appears to do nothing. Deleting matches the words on
+> the row, matches every other console, and matches why anybody presses it.
+>
+> **Two callers still demote**, and neither is somebody asking for space: the
+> game being played right now, whose files the core has open, and a keep whose
+> download failed — which is undoing a promise, and where the file may be a
+> perfectly good game that was already on the disk before Download was pressed.
+>
+> **And the delete calls `syncfs`.** Without it btrfs reports the old free-space
+> figure until a transaction commits, so a Storage screen refreshed a second
+> later would show no change at all — which is the exact complaint that started
+> this. Measured on the games disk first, to be sure the fault was real rather
+> than assumed: write 228 MB and `avail` drops by exactly that; `rm` it and
+> **`avail` does not move at all**; `sync` and the whole 228 MB returns.
+>
+> **MEASURED END TO END, 2026-09-19.** Keep Hammerin' Hero, then press Remove
+> download and read the free space immediately, with no manual sync anywhere:
+>
+> | | |
+> |---|---|
+> | Free with the game kept | 67,607,900 KB |
+> | Free straight after the release | 67,830,524 KB |
+> | Handed back | **217 MB, which is the whole game** |
+>
+> And the two-keeper case still holds: with a second person keeping it,
+> *"released by user 1, still kept by 1 other(s)"* and the file does not move.
+
 **3. And that is why `roms/` and `cache/` repeat per drive.** Kept games live on
 the large drive and the cache on the internal one, so a demotion at the ROOT
 level would mean physically copying gigabytes between disks because somebody
@@ -6786,9 +6987,167 @@ that RomM exposes no instance identity and that "one drive, one server" is a
 sentence of documentation rather than a mechanism. The same applies here: worth
 a note in the layout, not machinery.
 
-**Not implemented.** Nothing has moved. It should be done before there are
-machines with play histories on them, and it is a behaviour rather than a
-picture, so the SER5 decision does not hold it up.
+#### BUILT 2026-09-18
+
+**It is on disk and it holds real files.** `frontend/src/storage.{h,cpp}` owns
+the layout and `cache.{h,cpp}` was rewritten around it. The shape above is what
+the test VM now holds, unchanged from what was agreed.
+
+**What the code stopped having to remember.** Eviction used to enforce two rules
+the disk could not express — do not delete a kept game, do not delete a save —
+and it carried a list of extensions it must not touch (`.srm`, `.state`,
+`.brm`) because a game's directory held its saves beside the ROM. One wrong
+entry in that list would have taken the only irreplaceable thing on the machine.
+Now `roms/` and `cache/` are different directories and saves are under a person,
+so **eviction walks `cache/` and deletes whole entries**. The extension list is
+gone, and *"eviction only ever deletes inside `cache/`"* is checkable by listing
+a directory.
+
+**Keeping is a set of people.** `users/<id> - <name>/keeps/<romId>.json` holds
+the whole library entry, as before. `cache::keepers(romId)` walks every user
+directory, `unkeep` removes one person's record, and only an empty result
+demotes. Promotion and demotion are `rename(2)` on the entry — file or directory
+— within one location, and `storage::moveEntry` reports `EXDEV` loudly rather
+than quietly copying, because a crossed filesystem there would mean the layout
+has a fault in it.
+
+**A game is one entry named `<romId> - <title>`, and it is a FILE when the game
+is one file.** `cache/Sony Playstation/323 - Crash Bandicoot.chd`. An archive
+that unpacks into several files cannot be that, so it becomes a directory of the
+same name — `cache/Game Boy/39 - Tetris/` holds the zip RomM sent and the `.gb`
+that came out of it. Both are renamed identically, so nothing above this has to know which it is.
+The written design showed only the file case; the directory case is what an
+extracted archive forces, and 801 of the reference library's 1644 games are
+`.zip`.
+
+#### Three things building it turned up
+
+**1. The first build spelled a platform two different ways, and it had to be
+one.** Games went under RomM's `slug` because the agreed shape wrote
+`roms/psx/`, and saves went under its `fs_slug` because mirroring the server was
+the argument for the per-user tree in the first place. One console, filed as
+`psx` on one shelf and `Sony Playstation` on the other. **MMagTech rejected it
+in a sentence — does it fit the intent of a unified, organised structure — and
+it plainly did not.** It is `fs_slug` everywhere now; the revision and the
+Arcade fact that settles which one are recorded above.
+
+**2. `bios/` still mixes replaceable and irreplaceable, because libretro gives a
+core exactly ONE system directory.** The 13 MB of PSP system files moved out —
+they ship inside the image and belong in `/usr/share/cabinetos/system/`, which
+`ensureTree` symlinks into `bios/` at startup — but a Dreamcast's saved flash is
+written by Flycast into the system directory and there is nowhere else for it to
+go. The agreed shape has six top-level names and
+none of them is "what a core wrote into its system directory", so `bios/` is
+holding it. **This is the one place the shape as written does not answer the
+question**, and it is left visible rather than papered over. The likely fix is
+item 1 of the handover: the Dreamcast VMU work moves `vmu_save_A1.bin` into the
+per-user save tree, which takes the irreplaceable part out of `bios/` for the
+one platform that has it. `dc_nvmem.bin` — the console's own settings — would
+still be there.
+
+**3. `/usr/share/cabinetos` is not the core-assets directory, it is a directory
+that happens to have that name.** The image already puts three unrelated files
+there — a `DEVELOPMENT-IMAGE` marker and two package inventories — so linking
+its contents into the console's system directory put all three where a core goes
+looking for its fonts. The assets belong in `/usr/share/cabinetos/system/`, and
+nothing installs them there yet; on the VM they sit in `bios/PPSSPP/` where the
+core build left them and the link step correctly leaves them alone. **Found by
+running it and reading the directory listing**, which is the only reason it did
+not ship — the same lesson this project keeps relearning: build a thing, then
+look at what it actually did.
+
+#### Measured on the test VM, 2026-09-18
+
+Everything below was run rather than reasoned about, on the machine with two
+real filesystems. **The transcripts predate the platform rename above**, so they
+show `cache/gb/` and `cache/psx/` where a console today shows `cache/Game Boy/`
+and `cache/Sony Playstation/`. They are left as they came out; nothing else
+about them changed, and the tree was renamed and a game relaunched from it
+afterwards.
+
+**The test VM's own files were moved onto the layout** — 12 games, four save
+states, two battery saves, a PSP save folder and the BIOS — and every one was
+checked with `sha256sum` before and after: 37 save-class files in, 37 out, every
+hash identical. **There is no migration in the tree**, and there should not be:
+nobody has run CabinetOS outside of building it, so the only machine that ever
+needed moving has been moved. A console built from here starts on this layout.
+
+**Keeping is a set of people.** Kept Mario Kart 64 as user 1 — it went straight
+into `roms/n64/200 - Mario Kart 64.v64` rather than being downloaded to the
+cache and moved. A second user's keep record was added by hand and the storage
+report showed `kept by user(s) 1, 2`. **User 1 released it and nothing moved**:
+`released by user 1, still kept by 1 other(s)`, one entry still in `roms/`, none
+in `cache/`. User 1 kept it again, user 2 went away, user 1 released — and that
+last release demoted it.
+
+**The demotion is a rename.** The entry came out of `cache/` with the **same
+device and inode it went into `roms/` with, `58:82064`**, so no bytes moved and
+the cost is the same whatever the game weighs. For comparison, copying that same
+12.6 MB across the VM's two filesystems took **0.124 s — 101 MB/s**, which puts
+a 19.8 GB PS3 title at about three minutes of copying because somebody changed
+their mind. That is the whole reason `roms/` and `cache/` repeat per location
+rather than living once at the root, and it is now a measurement rather than an
+argument.
+
+**Eviction takes whole games, oldest first.** On btrfs with `/var` filled to
+358 MB free and two cached games of 314 MB each — one a single file, one a
+directory of two files, the directory a week older. Pressing Play on the 464 MB
+Crash Bandicoot evicted **the directory, whole**, and stopped:
+
+```
+[cache] evicted .../cache/gb/9002 - Fake Set (314572800 bytes)
+[cache] freed 314572800 bytes to make room for 487486623
+```
+
+The newer single-file game was left alone, because 358 + 314 MB was already
+enough. **The old code could not have done this** — it deleted individual ROM
+files and skipped anything that looked like a save, because a game's directory
+held both.
+
+**Keeping is refused before a byte moves.** The same disk, the same game, with
+Download rather than Play: `refused Crash Bandicoot: 165089713 reclaimable
+against a 6529167155 floor`. Both floors, checked against what the machine could
+still reclaim, and no download attempted.
+
+**A single-payload download really does become a single file.** Pokémon Red was
+not on the disk; pressing Play fetched it and left
+`cache/gb/2813 - Pokémon Red Version.gb`, a regular file of 1,048,576 bytes.
+Tetris, whose RomM payload is a `.zip` that Gambatte cannot read as it stands,
+is `cache/gb/39 - Tetris/` holding both the zip and the `.gb` that came out of
+it. Its save came back from RomM into
+`users/1 - MMagTech/saves/Game Boy/2813/gambatte/` and the core reported
+`battery is 32768 bytes`.
+
+**And the whole path, on a platform that needs firmware.** Twisted Metal:
+
+```
+[firmware] scph1001.bin already here
+[core] loaded ./cache/psx/357 - Twisted Metal.chd
+[save] restored Twisted Metal (Cabinet).srm (131072 bytes)
+[save] battery is 131072 bytes
+[launch] running PCSX-ReARMed
+```
+
+A BIOS found in `bios/`, a game found in `cache/psx/`, and a memory card
+restored from RomM into this person's save directory — which is also the
+directory the core was handed.
+
+#### What is still not built
+
+- **More than one storage location.** `storage::locations()` returns the root
+  alone. `roms/` and `cache/` already repeat per location and every path takes a
+  location, so adding the second drive is a list getting longer — but the UI is
+  open question 14 and is deferred, so **"a missing drive degrades rather than
+  errors" has still never been exercised**, because there is no second location
+  to remove.
+- **Account switching.** One user, resolved from `/api/users/me` and cached to
+  `config/user.json` so a console with no network still knows whose saves it
+  holds. Its own session.
+- **`/var/lib/cabinetos` is not yet where this runs.** The root resolves to
+  `/var/lib/cabinetos` when it can be created and written and to the working
+  directory otherwise, which on the VM is `~/frontend`. The image will need that
+  directory to exist and be owned by the console user; today it does not exist
+  at all.
 
 ---
 

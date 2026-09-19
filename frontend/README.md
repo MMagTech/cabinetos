@@ -24,6 +24,38 @@ is what Bazzite 44 is built from, so glibc and every runtime library match the
 image the binary runs on. **If the base image's Fedora release moves, move that
 with it.**
 
+## Where it puts things
+
+Everything the console holds lives under one root — `/var/lib/cabinetos` when
+that directory can be created and written, and the directory the binary was
+started in otherwise, which on the test VM means `~/frontend`. `--storage-root
+<path>` overrides both, and whichever wins is printed at startup:
+
+```
+<root>/
+├── roms/<platform>/<romId> - <name>     kept games
+├── cache/<platform>/<romId> - <name>    pulled games, the only thing eviction touches
+├── bios/                                firmware from RomM, and the core system directory
+├── users/<id> - <name>/
+│   ├── saves/<platform>/<romId>/<core>/
+│   ├── states/<platform>/<romId>/<core>/
+│   ├── keeps/  pending/  screenshots/  config/
+├── config/
+└── logs/
+```
+
+`<platform>` is RomM's own `fs_slug` — `Sony Playstation`, `Game Boy`, `FBNEO` —
+the same spelling in all four places, and the same one the server uses for its
+roms and its assets. An entry is a FILE when the game is one file and a
+DIRECTORY when its archive unpacked into several:
+
+```
+cache/Sony Playstation/323 - Crash Bandicoot.chd
+cache/Game Boy/39 - Tetris/            the zip RomM sent, and the .gb from it
+```
+
+See `src/storage.h` and `docs/PROJECT.md`, open question 18.
+
 ## Running
 
 The OS session already runs `cage`, so the frontend attaches to it as an
@@ -104,7 +136,7 @@ reason — this machine has no controller, so the only way to exercise what a
 person would press is to press it from here:
 
 ```bash
-./build/cabinetos-frontend --storage              # free space, floors, kept, evictable
+./build/cabinetos-frontend --storage              # free space, floors, who kept what, evictable
 ./build/cabinetos-frontend --core-options         # every option every core declares
 ./build/cabinetos-frontend --launch ID --core-options-off   # the control: answer none
 ./build/cabinetos-frontend --romm HOST --download <romId>

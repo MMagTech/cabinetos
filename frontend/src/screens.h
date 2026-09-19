@@ -56,7 +56,7 @@ enum class Action {
     OpenGame,          // value is a card index
     Play,              // value is a rom id
     Download,          // value is a rom id — fetch it AND keep it
-    RemoveDownload,    // value is a rom id — un-keep; the bytes stay, evictable
+    RemoveDownload,    // value is a rom id — release the keep AND delete the game
 };
 
 struct Result {

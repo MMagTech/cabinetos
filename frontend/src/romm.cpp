@@ -362,6 +362,30 @@ int Client::pollPairing(const Pairing& p, std::string* err) {
     return 1;
 }
 
+bool Client::fetchCurrentUser(User* out, std::string* err) {
+    std::string body;
+    if (!get("/api/users/me", &body, err)) return false;
+    json_object* root = json_tokener_parse(body.c_str());
+    if (!root || json_object_get_type(root) != json_type_object) {
+        if (root) json_object_put(root);
+        if (err) *err = "users/me response was not an object";
+        return false;
+    }
+    // Hand-written and deliberately partial, the same rule as every other
+    // response here: decode the fields used and ignore the rest, because
+    // generating from openapi.json is what makes a client break across RomM
+    // releases. This one carries an email, a role, an avatar and a page of UI
+    // preferences, and none of them are this console's business.
+    out->id = static_cast<int>(jint(root, "id"));
+    out->username = jstr(root, "username");
+    json_object_put(root);
+    if (out->id <= 0) {
+        if (err) *err = "users/me carried no id";
+        return false;
+    }
+    return true;
+}
+
 bool Client::fetchPlatforms(std::vector<Platform>* out, std::string* err) {
     std::string body;
     if (!get("/api/platforms", &body, err)) return false;

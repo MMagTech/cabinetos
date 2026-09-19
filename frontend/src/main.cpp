@@ -57,6 +57,7 @@
 #include "romfile.h"
 #include "romm.h"
 #include "screens.h"
+#include "storage.h"
 #include "text.h"
 #include "ui.h"
 
@@ -131,15 +132,16 @@ public:
         bool isState = false;
     };
 
-    // `cacheDir` is where the pending markers live. An upload that has not
-    // reached the server is the ONE irreplaceable thing on this machine, and
-    // until now nothing recorded that one was outstanding — so a crash between
-    // writing a state and sending it left no trace that anything was owed. The
-    // marker makes it a fact on disk, and its bytes count against the save
-    // floor when somebody asks to keep a game.
-    void start(romm::Client* client, std::string cacheDir) {
+    // An upload that has not reached the server is the ONE irreplaceable thing
+    // on this machine, and until this existed nothing recorded that one was
+    // outstanding — so a crash between writing a state and sending it left no
+    // trace that anything was owed. The marker makes it a fact on disk, and its
+    // bytes count against the save floor when somebody asks to keep a game.
+    //
+    // The marker belongs to a PERSON now, because the thing it is tracking is a
+    // save. It lands in `users/<id> - <name>/pending/`.
+    void start(romm::Client* client) {
         client_ = client;
-        cacheDir_ = std::move(cacheDir);
         worker_ = std::thread([this] { run(); });
     }
 
@@ -155,7 +157,7 @@ public:
     void push(Job job) {
         // Recorded BEFORE it is queued, so the window in which the console owes
         // the server something and does not know it is zero.
-        cache::markPending(cacheDir_, job.romId, job.fileName,
+        cache::markPending(storage::currentUser(), job.romId, job.fileName,
                            static_cast<int64_t>(job.data.size()));
         {
             std::lock_guard<std::mutex> lock(mutex_);
@@ -189,7 +191,7 @@ private:
             // Cleared only on success. A failed upload leaves the marker, which
             // is the point: the file is still on disk, it still has not reached
             // RomM, and the console still owes it.
-            if (ok) cache::clearPending(cacheDir_, job.romId, job.fileName);
+            if (ok) cache::clearPending(storage::currentUser(), job.romId, job.fileName);
             std::fprintf(stderr, "[%s] %s %s\n", job.isState ? "state" : "save",
                          ok ? "uploaded" : "upload failed, kept locally:",
                          ok ? job.emulator.c_str() : err.c_str());
@@ -198,7 +200,6 @@ private:
     }
 
     romm::Client* client_ = nullptr;
-    std::string cacheDir_;
     std::thread worker_;
     std::mutex mutex_;
     std::condition_variable wake_;
@@ -223,7 +224,19 @@ struct GameSession {
     int romId = 0;
     std::string title;
     std::string emulatorTag;    // empty means: do not upload, we cannot vouch for it
-    std::string dir;            // where this game's local copies live
+    // Where this person's copies live, which is no longer beside the ROM.
+    //
+    //   users/<id> - <name>/saves/<platform>/<romId>/<core>/
+    //   users/<id> - <name>/states/<platform>/<romId>/<core>/
+    //
+    // The save directory is ALSO the one handed to the core, so a core that
+    // writes its own file — a Sega CD's .brm, MAME's nvram, PSP's memory stick
+    // — writes it into the same place. That is what closes the oldest fault in
+    // this subsystem: there were two save directories and a save written one
+    // way was not seen the other way, and every core on the machine shared one
+    // flat pile so a file did not say which game wrote it.
+    std::string saveDir;
+    std::string stateDir;
     std::vector<uint8_t> saveAtLaunch;   // to tell whether it actually changed
 
     // --- Directory saves, which is PSP and nothing else -------------------
@@ -237,10 +250,14 @@ struct GameSession {
     //
     // So the rule is: a folder that was created or touched while this game
     // was running belongs to this game. That needs no disc id, no parsing
-    // of the ISO, and no table. (The reference implementation sidesteps it
-    // instead by giving each rom its own save directory — the better answer
-    // eventually, and a bigger change than this, since every core here
-    // shares one.)
+    // of the ISO, and no table.
+    //
+    // THE SAVE DIRECTORY IS NOW PER ROM, which is the answer this comment
+    // called "the better answer eventually", so the baseline no longer has
+    // anything to disambiguate — the tree holds one game's saves. It is kept
+    // because it still answers a second question the layout does not: whether
+    // this game wrote anything at all this run, which is what decides between
+    // an upload and a no-op.
     std::string dirSaveRoot;                  // empty for every core but PPSSPP
     std::vector<cab::DirEntry> dirAtLaunch;
 };
@@ -313,7 +330,7 @@ static void syncDirSave(GameSession& sess, Uploader& up) {
     // Local first, always. The network is the part that can fail, and a save
     // that only exists in a pending upload is a save that can be lost.
     const std::string name = sanitisedStem(sess.title) + ".zip";
-    const std::string path = sess.dir + "/" + name;
+    const std::string path = sess.saveDir + "/" + name;
     if (!writeLocal(path, zip)) {
         std::fprintf(stderr, "[save] could not write %s\n", path.c_str());
         return;
@@ -339,7 +356,7 @@ static void syncSave(GameSession& sess, Uploader& up) {
     if (ram == sess.saveAtLaunch) return;     // nothing happened worth sending
 
     const std::string name = sanitisedStem(sess.title) + ".srm";
-    const std::string path = sess.dir + "/" + name;
+    const std::string path = sess.saveDir + "/" + name;
     if (!writeLocal(path, ram)) {
         std::fprintf(stderr, "[save] could not write %s\n", path.c_str());
         return;
@@ -368,7 +385,8 @@ static void saveStateNow(GameSession& sess, Uploader& up) {
     std::strftime(stamp, sizeof stamp, "%Y-%m-%d %H-%M-%S", std::localtime(&now));
     const std::string name = sanitisedStem(sess.title) + " [" + stamp + "].state";
 
-    if (!writeLocal(sess.dir + "/" + name, st)) {
+    storage::makeDirs(sess.stateDir);
+    if (!writeLocal(sess.stateDir + "/" + name, st)) {
         std::fprintf(stderr, "[state] could not write locally, not uploading\n");
         return;
     }
@@ -487,9 +505,16 @@ struct LaunchJob {
     std::string romPath;
     std::string coreName;
     // Carried through so the session can be built when the game loads: which
-    // game it is, and where its local saves and states belong.
+    // game it is, which platform it belongs to, and where its files are.
     int romId = 0;
-    std::string gameDir;
+    // WHERE THE GAME LIVES ON DISK, which is `<location>/roms/<platform>/…`
+    // when somebody keeps it and `<location>/cache/<platform>/…` when nobody
+    // does. One entry, named `<romId> - <title>` — a file when the game is a
+    // single payload and a directory when its archive unpacked into several.
+    std::string entryPath;
+    // ONE SPELLING OF A PLATFORM, EVERYWHERE. RomM's `fs_slug` — "Sony
+    // Playstation", not "psx". See storage.h for why the short one lost.
+    std::string platformFsSlug;
     std::string corePath;
     std::string title;
     std::string message;
@@ -530,12 +555,32 @@ static std::string gameRecordJson(const romm::Game& g) {
     return out;
 }
 
+// How many things are in a directory. Used once, to decide whether a download
+// left anything behind it when the core turned out to read its own archive.
+static int countEntries(const std::string& dir) {
+    DIR* d = ::opendir(dir.c_str());
+    if (!d) return -1;
+    int n = 0;
+    while (struct dirent* e = ::readdir(d)) {
+        if (e->d_name[0] == '.') continue;
+        ++n;
+    }
+    ::closedir(d);
+    return n;
+}
+
 // Starts one. Returns false if the game cannot be played here at all, which is
 // worth saying immediately rather than after a download.
+//
+// WHERE THE BYTES GO is decided here and nowhere else. A game somebody keeps is
+// written straight into `roms/` rather than downloaded into `cache/` and then
+// moved, because the move would be a second pass over gigabytes for no reason.
+// A game already on the disk is left exactly where it is — including when
+// somebody else keeps it, which is the case that makes "one kept game, two
+// people" true on disk rather than only in a comment.
 static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& game,
-                        const std::string& coreDir, const std::string& cacheDir,
-                        std::string* err, bool playWhenReady = true,
-                        bool keepWhenReady = false) {
+                        const std::string& coreDir, std::string* err,
+                        bool playWhenReady = true, bool keepWhenReady = false) {
     const catalog::Coverage cov = catalog::coverageFor(game);
     if (cov.support != catalog::Support::Playable || !cov.core) {
         *err = game.platformName + ": " + (cov.reason ? cov.reason : "not playable here");
@@ -548,7 +593,7 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
     job.total = 0;
     job.title = game.name.empty() ? game.fsName : game.name;
     job.romId = game.id;
-    job.gameDir = cacheDir + "/" + std::to_string(game.id);
+    job.platformFsSlug = game.platformFsSlug;
     job.coreName = cov.core;
     job.corePath = coreDir + "/" + cov.core + "_libretro.so";
     job.romPath.clear();
@@ -557,6 +602,8 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
     job.keepWhenReady = keepWhenReady;
     job.stage = LaunchJob::Stage::Downloading;
 
+    const storage::User& user = storage::currentUser();
+
     // The core is loaded here, on the frame thread, before the worker starts:
     // it is cheap, it is the thing that decides whether the archive gets
     // opened, and a core that will not load should fail now rather than after
@@ -564,9 +611,14 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
     cab::Core& core = cab::Core::shared();
     // Before load(), because retro_init is inside it and a core may read the
     // directories there and never ask again. See Core::setDirectories.
-    const std::string saveDir = cacheDir + "/saves";
-    SDL_CreateDirectory(saveDir.c_str());
-    core.setDirectories("system", saveDir);
+    //
+    // THE SAVE DIRECTORY IS THIS PERSON'S AND THIS GAME'S. Every core on the
+    // machine used to share one, which is why attributing a PSP save folder to
+    // the game that wrote it needed a timestamp comparison rather than a path.
+    const std::string saveDir =
+        storage::savesDir(user, game.platformFsSlug, game.id, cov.core);
+    storage::makeDirs(saveDir);
+    core.setDirectories(storage::biosDir(), saveDir);
     // Also before load(), and for the same reason. This was reaching only the
     // --core-options audit until PPSSPP needed the first real override, which
     // meant the override table was being PRINTED rather than applied: every
@@ -583,49 +635,82 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
 
     // THE KEEP IS RECORDED BEFORE THE FIRST BYTE MOVES, for two reasons that
     // both matter. It makes the in-flight download safe from the eviction its
-    // own size may trigger — candidates() skips kept games — and it means the
-    // console has already decided it can afford the promise rather than
-    // discovering it cannot after fetching two gigabytes. A job that fails
-    // clears the record again, in pumpLaunch.
+    // own size may trigger — a game in `roms/` is not a candidate, because
+    // eviction only walks `cache/` — and it means the console has already
+    // decided it can afford the promise rather than discovering it cannot after
+    // fetching two gigabytes. A job that fails clears the record again, in
+    // pumpLaunch.
     if (keepWhenReady) {
         std::string kerr;
-        if (!cache::keep(cacheDir, game.id, gameRecordJson(game), &kerr)) {
+        if (!cache::keep(user, game.id, gameRecordJson(game), &kerr)) {
             *err = kerr;
             job.stage = LaunchJob::Stage::Idle;
             return false;
         }
     }
 
+    // ONE GAME, ONE COPY, and this is where that is enforced. A game kept while
+    // the drive was plugged in, then played while it was not, is on the machine
+    // twice — see cache::dedupe. Checked at the moment somebody presses Play
+    // rather than when a drive appears, so there is no plug-in event to miss.
+    const cache::Placement placed = cache::dedupe(game.id, game.sizeBytes);
+
+    // Already here? Then that is where it stays.
+    //
+    // OTHERWISE, AND THIS IS THE RULE THAT CAUGHT ME OUT: a fetch only writes
+    // into `roms/` when the person is keeping the game with THIS press. Pressing
+    // Play is not a storage act — that is the product's own rule, the one that
+    // makes Download the single deliberate one — so a game fetched by playing it
+    // goes into the cache even when somebody keeps it.
+    //
+    // The case that proves it: keep a game on the drive, unplug the drive, press
+    // Play. The game is still kept and the keep record is still on the internal
+    // disk, so asking "is this kept" put the fetched copy in `roms/` on the
+    // INTERNAL disk, where nothing is allowed to evict it. Do that twenty times
+    // with the drive in a drawer and the console has filled its own disk with
+    // games it may not delete — which is the exact failure the system reserve
+    // exists to prevent, arriving by a door nothing was watching.
+    //
+    // As a cached copy it is a stand-in: evictable, costing a download at worst,
+    // and deleted outright the moment the drive comes back and dedupe sees the
+    // real one. Which is what a copy of a file you already own should be.
+    const bool kept = placed.present ? placed.kept : keepWhenReady;
+    const std::string location = placed.present
+                                     ? placed.location
+                                     : (keepWhenReady ? storage::keepLocation()
+                                                      : storage::primaryLocation());
+    job.entryPath = placed.present
+                        ? placed.entryPath
+                        : cache::entryPathFor(location, game.platformFsSlug, game.id,
+                                              job.title, kept);
+
     const int id = game.id;
     const int platformId = game.platformId;
     const std::string fsName = game.fsName;
     const int64_t expectedSize = game.sizeBytes;
-    job.worker = std::thread([&job, &client, id, platformId, fsName, cacheDir, validExts,
-                              blockExtract, expectedSize]() {
-        const std::string dir = cacheDir + "/" + std::to_string(id);
-        SDL_CreateDirectory(cacheDir.c_str());
-        SDL_CreateDirectory(dir.c_str());
-        const std::string dest = dir + "/" + fsName;
-
+    const std::string entryPath = job.entryPath;
+    job.worker = std::thread([&job, &client, id, platformId, fsName, entryPath, location,
+                              validExts, blockExtract, expectedSize]() {
         // FIRMWARE FIRST, and EVERY file the platform lists rather than
         // whichever one this game looks like it needs. A core looks BIOS up by
         // name in the system directory and ignores what it does not want, so
         // extra files cost a little disk and a missing one costs the launch.
         // Cabinet's rule — see docs/CABINET.md.
         //
-        // Shared by every game on the platform, so it lives beside the cache
-        // rather than inside one game's directory, and a file already present
-        // at the right size is not fetched again.
+        // Shared by every game on the platform and by every person on the
+        // console, so it lives at the root in `bios/` rather than inside one
+        // game's directory, and a file already present at the right size is not
+        // fetched again.
         {
             job.stage = LaunchJob::Stage::Firmware;
-            const std::string systemDir = "system";
-            SDL_CreateDirectory(systemDir.c_str());
+            const std::string biosDir = storage::biosDir();
+            storage::makeDirs(biosDir);
             std::vector<romm::Firmware> firmware;
             std::string ferr;
             if (client.fetchFirmware(platformId, &firmware, &ferr)) {
                 for (const auto& f : firmware) {
                     if (job.cancel.load()) break;
-                    const std::string fdest = systemDir + "/" + f.fileName;
+                    const std::string fdest = biosDir + "/" + storage::safeSegment(f.fileName);
                     struct stat fst;
                     if (f.sizeBytes > 0 && ::stat(fdest.c_str(), &fst) == 0 &&
                         fst.st_size == f.sizeBytes) {
@@ -660,22 +745,37 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
             job.total = 0;
         }
 
+        // A GAME IS ONE ENTRY, AND THE ENTRY IS A FILE WHEN THE GAME IS ONE
+        // FILE. `cache/Sony Playstation/321 - Crash Bandicoot.chd` is what 18
+        // asked for and what somebody browsing over SFTP wants to find. An
+        // archive that unpacks into a .cue and its .bin cannot be one file, so
+        // it becomes a directory of the same name — and because the two are
+        // renamed identically, keeping and releasing do not care which it is.
+        //
+        // The download always builds the directory form first, because whether
+        // it collapses is not knowable until the core has been asked whether it
+        // opens its own archives.
+        struct stat est;
+        const bool entryIsFile =
+            ::lstat(entryPath.c_str(), &est) == 0 && !S_ISDIR(est.st_mode);
+        std::string dest = entryPath;
+        if (!entryIsFile) {
+            storage::makeDirs(entryPath);
+            dest = entryPath + "/" + storage::safeSegment(fsName);
+        }
+
         // Already here and the right size? Then it is the same ROM: RomM told
         // us how big it is, and a partial download was never renamed into
         // place. Re-fetching 112 MB to play the same game twice is not a
         // caching subtlety, it is just wrong.
-        //
-        // This is the crude half of what PROJECT.md calls cached-versus-kept.
-        // Nothing evicts any of it yet, so the disk fills — which is the next
-        // thing this needs and is recorded as such.
         bool haveIt = false;
         if (struct stat st; expectedSize > 0 && ::stat(dest.c_str(), &st) == 0)
             haveIt = st.st_size == expectedSize;
 
         std::string err;
         if (!haveIt) {
-            // ROOM FOR IT FIRST, which until now nothing checked: the disk
-            // filled and stayed full. See cache.h for the policy.
+            // ROOM FOR IT FIRST, which until the cache existed nothing checked:
+            // the disk filled and stayed full. See cache.h for the policy.
             //
             // expectedSize is RomM's `fs_size_bytes`, so for an archived game
             // it is the COMPRESSED size and this is only the first of two
@@ -687,9 +787,9 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
                     expectedSize +
                     static_cast<int64_t>(static_cast<double>(expectedSize) *
                                          cache::kOverheadFraction);
-                if (cache::freeBytes(cacheDir) < want) {
-                    cache::evictUntilFree(cacheDir, want, /*protectRomId=*/0);
-                    if (cache::freeBytes(cacheDir) < want) {
+                if (cache::freeBytes(location) < want) {
+                    cache::evictUntilFree(location, want, /*protectRomId=*/0);
+                    if (cache::freeBytes(location) < want) {
                         job.message =
                             "not enough space for this game, and nothing left "
                             "that can be cleared";
@@ -720,6 +820,14 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
         std::string primary;
         romfile::Kind kind = romfile::Kind::Plain;
 
+        if (entryIsFile) {
+            // A file entry is one the console already collapsed, which only
+            // happens for a payload no core wanted unpacked. Nothing to do.
+            job.romPath = dest;
+            job.stage = LaunchJob::Stage::Ready;
+            return;
+        }
+
         // THE SECOND CHECK, and the compression ratio is why it exists: 868 KB
         // of Space Harrier becomes 2 MB, and a DS ROM padded with empty space
         // compresses far harder than that. No multiplier is safe, so the
@@ -730,20 +838,46 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
         // for a .chd or an arcade set handed over unextracted, which is most of
         // the large files in a library.
         if (const int64_t unpacked = romfile::unpackedSize(dest, validExts, blockExtract);
-            unpacked > 0 && cache::freeBytes(cacheDir) < unpacked) {
-            cache::evictUntilFree(cacheDir, unpacked, id);
-            if (cache::freeBytes(cacheDir) < unpacked) {
+            unpacked > 0 && cache::freeBytes(location) < unpacked) {
+            cache::evictUntilFree(location, unpacked, id);
+            if (cache::freeBytes(location) < unpacked) {
                 job.message = "not enough space to unpack this game";
                 job.stage = LaunchJob::Stage::Failed;
                 return;
             }
         }
 
-        if (!romfile::prepareFile(dest, dir, validExts, blockExtract, &primary, &kind, &err)) {
+        if (!romfile::prepareFile(dest, entryPath, validExts, blockExtract, &primary,
+                                  &kind, &err)) {
             job.message = err;
             job.stage = LaunchJob::Stage::Failed;
             return;
         }
+
+        // Nothing came out of it, so the directory holds one file and the
+        // layout says it should not be a directory at all. Two renames inside
+        // one filesystem, whatever the game weighs.
+        if (primary == dest && countEntries(entryPath) == 1) {
+            const size_t dot = fsName.find_last_of('.');
+            const std::string ext = dot == std::string::npos ? "" : fsName.substr(dot);
+            const std::string tmp = entryPath + ".collapsing";
+            const std::string flat = entryPath + ext;
+            if (::rename(dest.c_str(), tmp.c_str()) == 0 &&
+                ::rmdir(entryPath.c_str()) == 0 &&
+                ::rename(tmp.c_str(), flat.c_str()) == 0) {
+                primary = flat;
+                job.entryPath = flat;
+            } else {
+                // Not worth failing a launch over: the game is playable exactly
+                // where it is, it is simply a directory holding one file. Said
+                // out loud because a layout that quietly does not hold is worse
+                // than one that does not hold.
+                std::fprintf(stderr, "[storage] could not flatten %s; leaving it a "
+                                     "directory\n", entryPath.c_str());
+                ::rename(tmp.c_str(), dest.c_str());
+            }
+        }
+
         job.romPath = primary;
         job.stage = LaunchJob::Stage::Ready;
     });
@@ -1006,6 +1140,25 @@ static Library loadLibrary(romm::Client& client) {
 static std::string rommTokenPath() {
     const char* home = getenv("HOME");
     return std::string(home ? home : ".") + "/.config/cabinetos/romm.json";
+}
+
+// Who this console is acting as, settled before anything writes a save.
+//
+// Saves, states and the decision to keep a game all live under a person now, so
+// this is not a nicety: without an answer there is no directory to write into.
+// The answer comes from RomM's `/api/users/me` and is cached on disk, because a
+// console with no network still has to know whose saves it is holding.
+static bool adoptUser(romm::Client& client) {
+    std::string err;
+    if (storage::resolveCurrentUser(client, &err)) {
+        std::fprintf(stderr, "[storage] user %s\n",
+                     storage::currentUser().dirName().c_str());
+        return true;
+    }
+    std::fprintf(stderr,
+                 "[storage] no RomM user (%s) — saves and keeps have nobody to "
+                 "belong to until this console is paired\n", err.c_str());
+    return false;
 }
 
 // Downloads one ROM and says what a core would actually be given.
@@ -1274,9 +1427,9 @@ int main(int argc, char** argv) {
     // that gets checked against a real server rather than assumed.
     int romProbeId = 0;
     const char* romProbeExts = "gb|gbc|dmg";
-    // Where the built cores are, and where downloaded ROMs are kept.
+    // Where the built cores are. Where games and saves go is storage.h's
+    // answer, not a constant here — see --storage-root.
     const char* coreDir = "cores/build";
-    const char* romCacheDir = "romcache";
     // Launch this RomM id without anybody pressing anything, after a delay, so
     // the whole Home-to-game transition can be watched on a machine with no
     // controller attached to it.
@@ -1318,6 +1471,8 @@ int main(int argc, char** argv) {
             rommAddress = argv[++i];
         } else if (SDL_strcmp(argv[i], "--core-dir") == 0 && i + 1 < argc) {
             coreDir = argv[++i];
+        } else if (SDL_strcmp(argv[i], "--storage-root") == 0 && i + 1 < argc) {
+            storage::setRoot(argv[++i]);
         } else if (SDL_strcmp(argv[i], "--launch") == 0 && i + 1 < argc) {
             autoLaunchId = SDL_atoi(argv[++i]);
         } else if (SDL_strcmp(argv[i], "--download") == 0 && i + 1 < argc) {
@@ -1396,6 +1551,33 @@ int main(int argc, char** argv) {
         }
     }
 
+    // --- Where everything lives, decided before anything writes a byte ------
+    //
+    // Printed rather than assumed. A console quietly writing somewhere nobody
+    // expected is the kind of bug that costs an afternoon, and the one line it
+    // takes to prevent that is this one.
+    {
+        std::string serr;
+        if (!storage::ensureTree(&serr)) {
+            std::fprintf(stderr, "[storage] %s\n", serr.c_str());
+            return 1;
+        }
+        std::fprintf(stderr, "[storage] root %s\n", storage::root().c_str());
+        const std::vector<std::string> locs = storage::locations();
+        for (size_t i = 1; i < locs.size(); ++i)
+            std::fprintf(stderr, "[storage] games drive %s\n", locs[i].c_str());
+        // SAID ONCE AND THEN NEVER AGAIN. A console that complains every boot
+        // about a drive somebody removed on purpose is worse than one that says
+        // nothing, so having reported it the console forgets that drive. The
+        // screen version of this waits with the rest of the UI; the games on it
+        // already behave correctly, because nothing is found and not found
+        // means fetch it.
+        if (const std::string gone = storage::missingDriveToReport(); !gone.empty())
+            std::fprintf(stderr,
+                         "[storage] the games drive at %s is not connected — games "
+                         "kept on it will be fetched from RomM again\n", gone.c_str());
+    }
+
     // Runs before SDL, deliberately. This needs no window, no GL and no
     // controller, and on a headless machine it must work anyway — the whole
     // point is to test the server conversation on its own.
@@ -1441,7 +1623,8 @@ int main(int argc, char** argv) {
             // report what a core does in the product. An instrument that sets
             // the core up differently from the way the product does is
             // measuring something else.
-            core.setDirectories("system", "saves");
+            core.setDirectories(storage::biosDir(), storage::scratchSavesDir(so));
+            storage::makeDirs(storage::scratchSavesDir(so));
             core.setOptionOverrides(catalog::optionOverrides(so));
             if (!core.load(std::string(coreDir) + "/" + so)) {
                 std::printf("%-24s  FAILED TO LOAD: %s\n", so.c_str(),
@@ -1479,28 +1662,54 @@ int main(int argc, char** argv) {
     // exists this is how anyone — or anything in CI — checks that keeping,
     // eviction and the floors agree with each other.
     if (storageReport) {
-        const std::string dir = romCacheDir;
-        const int64_t free = cache::freeBytes(dir);
-        const int64_t floor = cache::saveFloorBytes(dir);
-        const std::vector<int> kept = cache::keptRoms(dir);
-        const std::vector<cache::Entry> evictable = cache::candidates(dir);
-        int64_t evictableBytes = 0;
-        for (const auto& e : evictable) evictableBytes += e.bytes;
+        romm::Client sclient;
+        if (rommAddress && sclient.setAddress(rommAddress, nullptr))
+            sclient.loadToken(rommTokenPath());
+        adoptUser(sclient);
 
-        std::printf("free            %10.2f GB\n", free / 1e9);
-        std::printf("save floor      %10.2f GB\n", floor / 1e9);
+        std::printf("root            %s\n", storage::root().c_str());
+        std::printf("pending upload  %10.2f GB\n", cache::pendingBytes() / 1e9);
         std::printf("system reserve  %10.2f GB\n", cache::kSystemReserveBytes / 1e9);
-        std::printf("pending upload  %10.2f GB\n", cache::pendingBytes(dir) / 1e9);
-        std::printf("evictable       %10.2f GB  in %zu file(s)\n", evictableBytes / 1e9,
-                    evictable.size());
-        std::printf("kept            %zu game(s)%s", kept.size(), kept.empty() ? "\n" : ": ");
-        for (size_t i = 0; i < kept.size(); ++i)
-            std::printf("%d%s", kept[i], i + 1 == kept.size() ? "\n" : ", ");
-        // Oldest first is the whole eviction order, so printing it in order is
-        // printing what would go, in the order it would go.
-        for (const auto& e : evictable)
-            std::printf("  evictable  %8.1f MB  rom %d  %s\n", e.bytes / 1e6, e.romId,
-                        e.path.c_str());
+
+        // PER LOCATION, because the floors are a fact about a filesystem and
+        // the whole reason `roms/` and `cache/` repeat is that there is more
+        // than one of them.
+        const std::vector<std::string> locs = storage::locations();
+        for (size_t i = 0; i < locs.size(); ++i) {
+            const std::string& loc = locs[i];
+            const std::vector<cache::Entry> evictable = cache::candidates(loc);
+            int64_t evictableBytes = 0;
+            for (const auto& e : evictable) evictableBytes += e.bytes;
+            std::printf("\n%-15s %s%s\n", i == 0 ? "internal" : "games drive",
+                        loc.c_str(),
+                        loc == storage::keepLocation() ? "   <- kept games go here" : "");
+            std::printf("  free          %10.2f GB\n", cache::freeBytes(loc) / 1e9);
+            std::printf("  save floor    %10.2f GB\n", cache::saveFloorBytes(loc) / 1e9);
+            std::printf("  evictable     %10.2f GB  in %zu game(s)\n",
+                        evictableBytes / 1e9, evictable.size());
+            // Oldest first is the whole eviction order, so printing it in order
+            // is printing what would go, in the order it would go.
+            for (const auto& e : evictable)
+                std::printf("    evictable  %8.1f MB  rom %d  %s\n", e.bytes / 1e6,
+                            e.romId, e.path.c_str());
+        }
+
+        // WHO KEPT WHAT, which is the question the old boolean could not
+        // answer. A game with two keepers is a game one person releasing must
+        // not take away from the other.
+        const std::vector<int> kept = cache::allKeptRoms();
+        std::printf("\nkept            %zu game(s)\n", kept.size());
+        for (int romId : kept) {
+            const cache::Placement p = cache::find(romId);
+            std::string who;
+            for (int id : cache::keepers(romId))
+                who += (who.empty() ? "" : ", ") + std::to_string(id);
+            std::printf("  rom %-6d kept by user(s) %-12s %s%s\n", romId, who.c_str(),
+                        p.present ? p.entryPath.c_str() : "NOT ON THIS DISK",
+                        p.present && p.isDirectory ? "/   (a set of files)" : "");
+        }
+        for (const storage::User& u : storage::knownUsers())
+            std::printf("user            %s\n", u.dirName().c_str());
         return 0;
     }
 
@@ -1605,6 +1814,7 @@ int main(int argc, char** argv) {
                          rommTokenPath().c_str());
             return 1;
         }
+        adoptUser(liveClient);
         Library lib = loadLibrary(liveClient);
         cards = std::move(lib.cards);
         heroIndex = lib.heroIndex;
@@ -1664,14 +1874,17 @@ int main(int argc, char** argv) {
     SDL_AudioStream* audioStream = nullptr;
     if (corePath && romPath) {
         cab::Core& core = cab::Core::shared();
-        // The save directory must outlive the session. Per-game, alongside the
-        // ROM for now; Phase 4 moves it under the chosen storage location.
+        // THE DEVELOPER PATH USES THE SAME TREE AS THE PRODUCT, under a user
+        // id of 0 that cannot be mistaken for a person. It used to have a
+        // `saves/` directory of its own, which is half of the fault open
+        // question 18 opened with: a PSP save written by `--core` was not the
+        // one the library path could see.
         //
         // Set before load(), not before loadGame(): retro_init happens inside
         // load(), and a core is allowed to read the directories there.
-        const std::string saveDir = "saves";
-        SDL_CreateDirectory(saveDir.c_str());
-        core.setDirectories("system", saveDir);
+        const std::string saveDir = storage::scratchSavesDir(corePath);
+        storage::makeDirs(saveDir);
+        core.setDirectories(storage::biosDir(), saveDir);
         // The same overrides the library path applies, so --core plays the
         // core the same way the product does. See beginLaunch.
         core.setOptionOverrides(catalog::optionOverrides(corePath));
@@ -1679,7 +1892,7 @@ int main(int argc, char** argv) {
             std::fprintf(stderr, "[frontend] core: %s\n", core.error().c_str());
             return 1;
         }
-        if (!core.loadGame(romPath, "system", saveDir)) {
+        if (!core.loadGame(romPath, storage::biosDir(), saveDir)) {
             std::fprintf(stderr, "[frontend] %s\n", core.error().c_str());
             return 1;
         }
@@ -2076,7 +2289,7 @@ int main(int argc, char** argv) {
     // One worker for every upload. Started here and drained on the way out, so
     // quitting does not discard a save someone has already made.
     Uploader uploader;
-    uploader.start(&liveClient, romCacheDir);
+    uploader.start(&liveClient);
     StateLoad stateLoad;
 
     // The in-game overlay: a scrim, a panel and buttons drawn over the game
@@ -2099,7 +2312,7 @@ int main(int argc, char** argv) {
         if (!g) { std::fprintf(stderr, "[launch] no game with id %d\n", romId); return false; }
 
         std::string lerr;
-        if (!beginLaunch(launchJob, liveClient, *g, coreDir, romCacheDir, &lerr)) {
+        if (!beginLaunch(launchJob, liveClient, *g, coreDir, &lerr)) {
             std::fprintf(stderr, "[launch] %s\n", lerr.c_str());
             return false;
         }
@@ -2132,7 +2345,13 @@ int main(int argc, char** argv) {
         for (const auto& x : games) if (x.id == romId) { g = &x; break; }
         if (!g) return;
 
-        const cache::KeepVerdict v = cache::mayKeep(romCacheDir, romId, g->sizeBytes);
+        // Against the disk the game will actually occupy. A kept game going on
+        // the games drive cannot threaten the internal disk's floors at all,
+        // which is the quiet second benefit of the split — see open question 14.
+        const cache::Placement where = cache::find(romId);
+        const std::string keepOn =
+            where.present ? where.location : storage::keepLocation();
+        const cache::KeepVerdict v = cache::mayKeep(keepOn, romId, g->sizeBytes);
         if (!v.allowed) {
             // The one failure the person ever sees, and the number is what makes
             // it actionable: without it "the disk is full" is a dead end.
@@ -2147,7 +2366,7 @@ int main(int argc, char** argv) {
         }
 
         std::string derr;
-        if (!beginLaunch(launchJob, liveClient, *g, coreDir, romCacheDir, &derr,
+        if (!beginLaunch(launchJob, liveClient, *g, coreDir, &derr,
                          /*playWhenReady=*/false, /*keepWhenReady=*/true)) {
             detailScreen.setNotice(derr);
             std::fprintf(stderr, "[download] %s\n", derr.c_str());
@@ -2158,15 +2377,22 @@ int main(int argc, char** argv) {
                      static_cast<double>(g->sizeBytes) / 1e6);
     };
 
-    // Un-keeping does NOT delete anything. The game returns to the cache, where
-    // it may sit for months before something needs the room; taking the bytes
-    // away immediately would be a deletion nobody asked for, to reclaim space
-    // nobody needed yet.
+    // "Remove download" removes the download. If nobody else is keeping the
+    // game, the bytes go and the space comes back — because reclaiming space is
+    // why a person presses a row with that name on it.
+    //
+    // The exception is the game being played right now, which the core has open;
+    // that one drops into the cache and goes when the session ends.
+    //
+    // WHAT ACTUALLY HAPPENED IS NOT THIS FUNCTION'S TO SAY, and the first
+    // version said it anyway — it printed "released to the cache" every time,
+    // including on the run where the game stayed exactly where it was because a
+    // second person still wanted it. cache::unkeep reports what it did.
     auto removeDownload = [&](int romId) {
-        cache::unkeep(romCacheDir, romId);
+        const bool nowPlaying = playing && session.romId == romId;
+        cache::unkeep(storage::currentUser(), romId, /*keepTheBytes=*/nowPlaying);
         detailScreen.setKept(false);
         detailScreen.setNotice("");
-        std::fprintf(stderr, "[keep] %d released to the cache\n", romId);
     };
 
     // Opening the launch screen for a card. Everything it shows is decided
@@ -2188,7 +2414,7 @@ int main(int argc, char** argv) {
             d.reason = cov.reason ? cov.reason : "not playable on this console";
             break;
         }
-        d.kept = cache::isKept(romCacheDir, d.romId);
+        d.kept = cache::isKeptBy(storage::currentUser(), d.romId);
         detailScreen.open(std::move(d));
         stack.push_back(Screen::Detail);
     };
@@ -2314,10 +2540,17 @@ int main(int argc, char** argv) {
             // record went in before the download so the download would be safe
             // from eviction; it comes out again if the download never finished,
             // or the disk fills with reserved space holding nothing.
-            if (launchJob.keepWhenReady) cache::unkeep(romCacheDir, launchJob.romId);
+            // UNDOING A PROMISE, NOT RECLAIMING SPACE, so the bytes stay and
+            // become evictable. The file may be a game that was already on the
+            // disk before anybody pressed Download, and throwing that away
+            // because a firmware fetch failed would be its own small disaster.
+            if (launchJob.keepWhenReady)
+                cache::unkeep(storage::currentUser(), launchJob.romId,
+                              /*keepTheBytes=*/true);
             if (here() == Screen::Detail &&
                 detailScreen.game().romId == launchJob.romId) {
-                detailScreen.setKept(cache::isKept(romCacheDir, launchJob.romId));
+                detailScreen.setKept(
+                    cache::isKeptBy(storage::currentUser(), launchJob.romId));
                 detailScreen.setNotice(launchJob.message);
             }
             launchJob.stop();
@@ -2337,13 +2570,21 @@ int main(int argc, char** argv) {
                          launchJob.keepWhenReady ? " and kept" : "");
             if (here() == Screen::Detail &&
                 detailScreen.game().romId == launchJob.romId)
-                detailScreen.setKept(cache::isKept(romCacheDir, launchJob.romId));
+                detailScreen.setKept(
+                    cache::isKeptBy(storage::currentUser(), launchJob.romId));
             return;
         }
 
         cab::Core& core = cab::Core::shared();
-        const std::string saveDir = std::string(romCacheDir) + "/saves";
-        SDL_CreateDirectory(saveDir.c_str());
+        // THIS PERSON'S SAVES, FOR THIS GAME, FROM THIS CORE. It is also the
+        // directory the core itself is handed, so a Sega CD's .brm and a PSP's
+        // memory stick land in the same place as the battery snapshot this
+        // frontend takes — which is the whole of what "two save directories"
+        // and "one flat pile" cost.
+        const storage::User& user = storage::currentUser();
+        const std::string saveDir = storage::savesDir(
+            user, launchJob.platformFsSlug, launchJob.romId, launchJob.coreName);
+        storage::makeDirs(saveDir);
 
         // A DIRECTORY save comes down BEFORE the game is loaded, unlike the
         // battery below, which the core can be handed afterwards. PPSSPP mounts
@@ -2389,21 +2630,24 @@ int main(int argc, char** argv) {
             }
         }
 
-        if (!core.loadGame(launchJob.romPath, "system", saveDir)) {
+        if (!core.loadGame(launchJob.romPath, storage::biosDir(), saveDir)) {
             std::fprintf(stderr, "[launch] %s\n", core.error().c_str());
             return;
         }
         // Played now, so it is the LAST thing eviction should take rather than
-        // whatever its download time says. The file's own mtime is the record —
-        // see cache.h — so a game downloaded and never started stays oldest.
-        cache::touch(launchJob.romPath);
+        // whatever its download time says. The ENTRY's own mtime is the record —
+        // see cache.h — so a game downloaded and never started stays oldest, and
+        // it works the same whether the entry is one file or a folder.
+        cache::touch(launchJob.entryPath);
         // The session, and the game's own save restored into it BEFORE the
         // first frame. A battery save is the game's progress; it has to be in
         // place when the game boots, not offered as a choice afterwards.
         session = GameSession{};
         session.romId = launchJob.romId;
         session.title = launchJob.title;
-        session.dir = launchJob.gameDir;
+        session.saveDir = saveDir;
+        session.stateDir = storage::statesDir(
+            user, launchJob.platformFsSlug, launchJob.romId, launchJob.coreName);
         if (const char* tag = catalog::emulatorTag(launchJob.coreName.c_str())) {
             session.emulatorTag = tag;
         } else {
