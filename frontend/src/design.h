@@ -68,10 +68,41 @@ constexpr float kHeroBandPadY = 10.0f;
 constexpr float kHeroGapBelow = 20.0f;
 constexpr float kHeroPillBlur = 4.0f;    // a pill is the thin material
 constexpr float kHeroBandBlur = 6.0f;    // a panel is the regular one
-constexpr float kShelfCoverWidth = 260.0f;
-constexpr float kShelfCoverHeight = 347.0f;   // 3:4
+// HOME FITS IN ONE SCREEN, and these three numbers are what buys it.
+//
+// MMagTech, 2026-09-19, on the A9 at native 4K: "I should not have to scroll
+// down to see the favorites. Everything on home should be visible in one 4K
+// screen." The same objection he had to the reference implementation, which
+// scrolls.
+//
+// The arithmetic it replaces. A shelf block was the header (60), a 347 cover,
+// a 39 caption and their gaps — about 508 — and PROJECT.md's "Home has about
+// 85 points of vertical slack" only ever counted the hero and ONE shelf:
+// 40 + 420 + 20 + 508 = 988 of 1080. Favourites needed another 508 and got
+// 92, which is why its title was on screen and its covers were not.
+//
+// So about 430 points had to come out of a 1080 canvas, and it came from all
+// three: the hero down from 420, the covers down from 347, and the per-card
+// caption out of the layout entirely — the focused card's title now rides in
+// the shelf header, where it costs no vertical space at all.
+//
+// Budget, and it deliberately does not fill the canvas:
+//   40 top + 340 hero + 20 gap + 2 x (~310) = about 1020 of 1080
+//
+// REVISED the same evening, on the panel: the shelf headings at Title 2 read
+// too large next to 210-point covers, so they are Title 3 and the room that
+// frees goes to the hero rather than to whitespace. MMagTech, looking at it:
+// "recent and favorite text seem too large. We could make them a bit smaller
+// and allow the hero area to get slightly bigger."
+// The 60 left over is overscan allowance. A television eats the edges, and
+// this project has resized the hero three times over exactly that — once
+// while a simulator showed it fitting. Check with --safe-area on a panel
+// before trusting any of it.
+constexpr float kHeroHeight = 340.0f;
+constexpr float kShelfCoverWidth = 158.0f;
+constexpr float kShelfCoverHeight = 210.0f;   // 3:4
 constexpr float kShelfSpacing = 40.0f;
-constexpr float kShelfHeadroom = 24.0f;
+constexpr float kShelfHeadroom = 20.0f;
 constexpr float kCoverRadius = 10.0f;
 constexpr float kCaptionGap = 6.0f;
 

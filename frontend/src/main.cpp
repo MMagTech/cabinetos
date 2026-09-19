@@ -2665,13 +2665,33 @@ int main(int argc, char** argv) {
     //
     // The hero takes focus on arrival, which is what "resume-first" means: the
     // thing you were playing is already under the cursor.
-    enum Row { RowHero = 0, RowRecent = 1, RowFavorites = 2 };
+    // THE TOP BAR IS A ROW, above the hero. It is drawn OVER the hero's top
+    // edge rather than above it, because Home has 60 points of slack and a bar
+    // costs about 105 — docs/PROJECT.md priced the three options as "either
+    // the bar fits, or Home's hero comes down, or the bar goes elsewhere", and
+    // overlaying it is "elsewhere". It is the only one that does not undo
+    // Home fitting on one screen.
+    //
+    // Always visible rather than revealed by pressing Up. Up from the hero is
+    // a dead input today and it is tempting to spend it, but a console that
+    // hides Settings behind an undiscoverable gesture is constraint 3 — the
+    // one about leaving somebody stuck — and showing it costs nothing.
+    //
+    // No "Home" item: Home is the root and Back returns to it, so a
+    // destination that does nothing when you are already there only teaches
+    // people the bar is decorative. Cabinet's iOS reaches the same shape from
+    // the other side, three destinations with Settings demoted, on the rule
+    // that "reach should track frequency".
+    enum Row { RowBar = 0, RowHero = 1, RowRecent = 2, RowFavorites = 3 };
+    enum BarItem { BarLibrary = 0, BarSearch, BarSettings, BarCount };
+    const char* kBarLabels[BarCount] = { "Library", "Search", "Settings" };
 
     const size_t shelfSlots = shelf.empty() ? cards.size() : shelf.size();
     const bool haveHero = heroIndex >= 0;
     const bool haveFavorites = !favorites.empty();
 
     auto rowSlots = [&](int row) -> size_t {
+        if (row == RowBar) return static_cast<size_t>(BarCount);
         if (row == RowHero) return haveHero ? 2u : 0u;
         if (row == RowRecent) return shelfSlots;
         return favorites.size();
@@ -2681,6 +2701,7 @@ int main(int argc, char** argv) {
     // The card a (row, slot) points at, or nullptr for the Resume pill, which
     // is a control rather than a card.
     auto cardAt = [&](int row, int slot) -> Card* {
+        if (row == RowBar) return nullptr;   // destinations, not cards
         if (row == RowHero) return slot == 0 ? &cards[heroIndex] : nullptr;
         if (row == RowRecent) {
             if (slot < 0 || static_cast<size_t>(slot) >= shelfSlots) return nullptr;
@@ -2700,7 +2721,7 @@ int main(int argc, char** argv) {
         focusSlot = std::clamp(initialFocus, 0, static_cast<int>(shelfSlots) - 1);
     }
     if (initialRow >= 0) {
-        focusRow = std::clamp(initialRow, 0, 2);
+        focusRow = std::clamp(initialRow, 0, static_cast<int>(RowFavorites));
         if (!rowExists(focusRow)) focusRow = RowRecent;
         focusSlot = std::clamp(focusSlot, 0, static_cast<int>(rowSlots(focusRow)) - 1);
     }
@@ -2773,6 +2794,10 @@ int main(int argc, char** argv) {
     // is what makes this simple and is the direct payoff of hosting cores in
     // process rather than launching them.
     bool overlayOpen = false;
+    // Both stick clicks together are the overlay hotkey — see where they are
+    // read. Held state rather than a chord test at press time, because SDL
+    // delivers the two presses as separate events.
+    bool l3Down = false, r3Down = false;
     int overlaySlot = 0;
     Animated overlayFade;
     overlayFade.smooth = true;    // 350 ms ease-in-out, per the design system
@@ -2943,6 +2968,21 @@ int main(int argc, char** argv) {
     // screen for it to open and doing nothing at all was worse. There is one
     // now, so the distinction is real.
     auto activateHome = [&]() {
+        // The top bar. Library works; the other two are drawn because the bar
+        // has to be laid out against its real contents, and they say nothing
+        // when pressed rather than pretending — a destination that goes
+        // nowhere is a promise the product does not keep, and neither screen
+        // exists yet.
+        if (focusRow == RowBar) {
+            if (focusSlot == BarLibrary) {
+                libraryScreen.enter();
+                stack.push_back(Screen::Library);
+            } else {
+                std::fprintf(stderr, "[nav] %s is not built yet\n",
+                             kBarLabels[focusSlot]);
+            }
+            return;
+        }
         if (focusRow == RowHero && focusSlot == 1) {
             if (heroIndex >= 0) launchById(cards[heroIndex].id);
             return;
@@ -3206,6 +3246,36 @@ int main(int argc, char** argv) {
                              k.c_str());
         }
 
+        // OPEN THE AUDIO DEVICE. Until 2026-09-19 this happened ONLY on the
+        // `--core` developer path, so **a game launched from the library had
+        // no sound at all** — `audioStream` stayed null and nothing was ever
+        // opened. Found on the A9 Pro by MMagTech simply listening, with
+        // Crazy Taxi 2 running and PipeWire reporting zero streams.
+        //
+        // It survived this long because every audio claim in this project was
+        // made by COUNTING SAMPLES out of drainAudio() rather than by hearing
+        // anything — "2,384 frames, zero audio" is a sample count. A headless
+        // VM has nothing to listen with, so the one test nobody could run is
+        // the one that would have caught it.
+        //
+        // Opened here rather than at startup because the rate comes from the
+        // core: av_info is not known until a game is loaded.
+        if (!audioStream) {
+            SDL_AudioSpec src{};
+            src.format = SDL_AUDIO_S16;
+            src.channels = 2;
+            src.freq = static_cast<int>(core.avInfo().sampleRate);
+            audioStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK,
+                                                    &src, nullptr, nullptr);
+            if (audioStream) {
+                SDL_ResumeAudioStreamDevice(audioStream);
+                std::fprintf(stderr, "[frontend] audio out at %d Hz\n", src.freq);
+            } else {
+                // A console with no sound card is still a console.
+                std::fprintf(stderr, "[frontend] no audio device: %s\n", SDL_GetError());
+            }
+        }
+
         std::fprintf(stderr, "[launch] running %s\n", core.coreName().c_str());
         playing = true;
     };
@@ -3214,7 +3284,7 @@ int main(int argc, char** argv) {
     // one people notice missing: leaving Recent at the sixth cover and coming
     // back to the first is the kind of thing that feels broken without anyone
     // being able to say why.
-    int rememberedSlot[3] = {0, 0, 0};
+    int rememberedSlot[4] = {0, 0, 0, 0};
 
     auto leaveFocus = [&]() {
         if (Card* c = cardAt(focusRow, focusSlot)) c->focus.retarget(0.0f, kFocusDuration);
@@ -3240,12 +3310,12 @@ int main(int argc, char** argv) {
         int row = focusRow;
         // Step over a row that is not there — no Favorites, or no hero —
         // rather than stopping on nothing.
-        for (int i = 0; i < 3; ++i) {
+        for (int i = 0; i < 4; ++i) {
             const int candidate = row + delta;
-            if (candidate < RowHero || candidate > RowFavorites) return;
+            if (candidate < RowBar || candidate > RowFavorites) return;
             row = candidate;
             if (rowExists(row)) break;
-            if (row == RowHero || row == RowFavorites) return;
+            if (row == RowBar || row == RowFavorites) return;
         }
         if (row == focusRow || !rowExists(row)) return;
         leaveFocus();
@@ -3515,11 +3585,29 @@ int main(int argc, char** argv) {
                         if (e.gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_RIGHT)
                             navigate(screens::Nav::Right);
                     }
-                    // Start reaches the overlay from inside a game, which is
-                    // what "reachable from a controller button without leaving
-                    // the game" means.
-                    if (e.gbutton.button == SDL_GAMEPAD_BUTTON_START &&
-                        (playing || overlayOpen)) {
+                    // BOTH STICK CLICKS, NOT START. Start is the pause button
+                    // on nearly every system this console emulates, and taking
+                    // it meant a game could never be paused — MMagTech, on the
+                    // A9, 2026-09-19, before playing the first real game on it.
+                    //
+                    // L3+R3 is Cabinet's default and its reasoning carries:
+                    // RetroArch's alternative to Select+Start, chosen because
+                    // analog trigger pairs collide with real gameplay —
+                    // braking and accelerating together in a racing game is
+                    // the obvious case — "while clicking both sticks at once
+                    // has no gameplay meaning in anything this app runs".
+                    //
+                    // Still hardcoded here. Cabinet makes it remappable and
+                    // GLOBAL rather than per-controller, on the grounds that
+                    // the risk comes from the game and not the pad model, and
+                    // lets the second button be cleared for single-button
+                    // mode. That belongs with the remapping screen.
+                    if (e.gbutton.button == SDL_GAMEPAD_BUTTON_LEFT_STICK)
+                        l3Down = true;
+                    if (e.gbutton.button == SDL_GAMEPAD_BUTTON_RIGHT_STICK)
+                        r3Down = true;
+                    if (l3Down && r3Down && (playing || overlayOpen)) {
+                        l3Down = r3Down = false;   // one toggle per pair, not per frame
                         toggleOverlay();
                         break;
                     }
@@ -3557,6 +3645,10 @@ int main(int argc, char** argv) {
                     if (e.gbutton.button == SDL_GAMEPAD_BUTTON_START) running = false;
                     break;
                 case SDL_EVENT_GAMEPAD_BUTTON_UP:
+                    if (e.gbutton.button == SDL_GAMEPAD_BUTTON_LEFT_STICK)
+                        l3Down = false;
+                    if (e.gbutton.button == SDL_GAMEPAD_BUTTON_RIGHT_STICK)
+                        r3Down = false;
                     if (e.gbutton.button == SDL_GAMEPAD_BUTTON_SOUTH) pressing = false;
                     break;
                 default:
@@ -3622,8 +3714,43 @@ int main(int argc, char** argv) {
                         if (down(SDL_GAMEPAD_BUTTON_NORTH)) pad.buttons |= bit(cab::X);
                         if (down(SDL_GAMEPAD_BUTTON_START)) pad.buttons |= bit(cab::Start);
                         if (down(SDL_GAMEPAD_BUTTON_BACK)) pad.buttons |= bit(cab::Select);
+
+                        // THE SHOULDERS, THE TRIGGERS AND THE RIGHT STICK.
+                        // None of these were mapped until 2026-09-19 — the
+                        // pad sent a d-pad, four face buttons, Start, Select
+                        // and one stick, and RetroPad's other six inputs went
+                        // nowhere. Found by MMagTech on the A9 trying to play
+                        // Crazy Taxi, where the triggers ARE drive and
+                        // reverse, so the game could not be played at all.
+                        //
+                        // It survived because nothing headless presses a
+                        // button: every measurement to date drove the pad
+                        // from code or watched an attract demo.
+                        if (down(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER))  pad.buttons |= bit(cab::L);
+                        if (down(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER)) pad.buttons |= bit(cab::R);
+                        // L3/R3 also open the overlay as a pair. They still
+                        // reach the core individually: Cabinet's rule is that
+                        // the hotkey "applies regardless of what either button
+                        // is otherwise bound to", and the overlay pauses the
+                        // core the instant it opens anyway.
+                        if (down(SDL_GAMEPAD_BUTTON_LEFT_STICK))  pad.buttons |= bit(cab::L3);
+                        if (down(SDL_GAMEPAD_BUTTON_RIGHT_STICK)) pad.buttons |= bit(cab::R3);
+
+                        // Analog triggers as digital L2/R2, which is what a
+                        // RetroPad's L2/R2 are for every core in this set.
+                        // Half travel: a hair-trigger fires on the spring's
+                        // own slop and a full-travel one never fires on a worn
+                        // pad.
+                        const int kTrigger = 16384;
+                        if (SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_LEFT_TRIGGER) > kTrigger)
+                            pad.buttons |= bit(cab::L2);
+                        if (SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > kTrigger)
+                            pad.buttons |= bit(cab::R2);
+
                         pad.leftX = SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_LEFTX) / 32767.0f;
                         pad.leftY = SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_LEFTY) / 32767.0f;
+                        pad.rightX = SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_RIGHTX) / 32767.0f;
+                        pad.rightY = SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_RIGHTY) / 32767.0f;
                     }
                 }
                 SDL_free(ids);
@@ -3642,7 +3769,19 @@ int main(int argc, char** argv) {
             // then means what it says, and the same command gives the same
             // picture on a fast machine and a slow one. The instrument being
             // the thing that is wrong has cost this project a day already.
-            if (shotMode) {
+            // THE OVERLAY PAUSES THE EMULATOR. It did not until 2026-09-19,
+            // so the game carried on being played behind the menu — in Crazy
+            // Taxi you would still be driving while reading it. Cabinet has
+            // always done this (`openMenu` sets `renderer.paused = true`);
+            // this console simply never did, because nobody had opened the
+            // overlay with a game they were actually playing.
+            //
+            // Not the game's own pause: the core stops being stepped, which
+            // works for every system whether or not it has a pause button.
+            if (overlayOpen) {
+                // Nothing to step. The last frame stays uploaded, so the
+                // menu sits over a frozen picture rather than a black one.
+            } else if (shotMode) {
                 core.runFor(1.0 / std::max(core.avInfo().fps, 1.0));
             } else {
                 core.runFor(dt);
@@ -3887,12 +4026,14 @@ int main(int argc, char** argv) {
 
         // The height a shelf will occupy, known before it is drawn so the
         // scroll target can be computed this frame rather than one frame late.
+        // No caption row. The focused card's title rides in the shelf header
+        // instead, which is what makes Home fit in one screen — see the
+        // budget in design.h.
         const float shelfBlockHeight =
-            text.lineHeight(ui::TextStyle::Title2, sc) + 12.0f + kShelfHeadroom +
-            kShelfCoverHeight + kCaptionGap +
-            text.lineHeight(ui::TextStyle::Callout, sc) + kShelfHeadroom;
+            text.lineHeight(ui::TextStyle::Title3, sc) + 12.0f + kShelfHeadroom +
+            kShelfCoverHeight + kShelfHeadroom;
 
-        const float heroHeight = haveHero ? std::min(ui::kCanvasHeight * 0.40f, 420.0f) : 0.0f;
+        const float heroHeight = haveHero ? kHeroHeight : 0.0f;
         const float recentTop = haveHero ? kHeroTop + heroHeight + kHeroGapBelow : kHeroTop;
         const float favoritesTop = recentTop + shelfBlockHeight;
 
@@ -3942,7 +4083,15 @@ int main(int argc, char** argv) {
             const float bandH = text.lineHeight(ui::TextStyle::Headline, sc) +
                                 text.lineHeight(ui::TextStyle::Caption1, sc) +
                                 2.0f + kHeroBandPadY * 2.0f;
-            const float artH = std::max(0.0f, heroH - bandH);
+            // THE ART FILLS THE HERO. The title used to sit in a full-width
+            // strip across the bottom, which cost about 106 of the hero's 340
+            // points — a third of the artwork — to carry two short lines.
+            // MMagTech, 2026-09-19: "the long strip where the title is for
+            // the hero is taking a lot of space that could be used if we
+            // found a better way to format/visualise that area." It is a
+            // plate sized to its own text now, at the bottom left, with the
+            // art running the full height behind it.
+            const float artH = heroH;
 
             // The hero's focus treatment, and both halves of it are the design
             // system's rather than invented:
@@ -4028,20 +4177,49 @@ int main(int argc, char** argv) {
                 return indices.empty() ? slot : static_cast<size_t>(indices[slot]);
             };
 
-            // The shelf header: Title 2 bold, with the chevron that says the row
+            // The shelf header: Title 3, with the chevron that says the row
             // continues into a screen of its own.
-            const float headerBaseline = top + text.ascent(ui::TextStyle::Title2, sc);
+            //
+            // TITLE 3 AND NOT TITLE 2, changed on the panel 2026-09-19. At
+            // Title 2 the headings read too large beside 210-point covers —
+            // the heading was shouting over the artwork it labels. The room
+            // it frees goes to the hero.
+            const float headerBaseline = top + text.ascent(ui::TextStyle::Title3, sc);
             text.draw(renderer, label, kContentInset, headerBaseline,
-                      ui::TextStyle::Title2, ui::Color::white(1.0f), sc);
-            const float headerWidth = text.measure(label, ui::TextStyle::Title2, sc);
-            // Title 3 semibold at tertiary, not Title 2: the chevron says "this
-            // row continues", it is not part of the heading, and at heading
-            // weight it competes with it.
+                      ui::TextStyle::Title3, ui::Color::white(1.0f), sc);
+            const float headerWidth = text.measure(label, ui::TextStyle::Title3, sc);
+            // A step below the heading, not level with it: the chevron says
+            // "this row continues", it is not part of the heading, and at
+            // heading size it competes with it.
             text.draw(renderer, "\xE2\x80\xBA", kContentInset + headerWidth + 10.0f,
-                      headerBaseline, ui::TextStyle::Title3, ui::Color::white(0.30f), sc);
+                      headerBaseline, ui::TextStyle::Callout, ui::Color::white(0.30f), sc);
+
+            // THE FOCUSED CARD'S TITLE, HERE RATHER THAN UNDER THE COVER.
+            //
+            // A caption under every cover reserved about 45 points per shelf
+            // and Home could not afford two shelves with it. Putting the one
+            // title you are actually reading into the header costs nothing
+            // vertically, and it is only ever one line because only one card
+            // is focused.
+            //
+            // Only on the focused row: a title under an unfocused shelf would
+            // be a label for something nobody is pointing at, and two of them
+            // at once reads as two headings.
+            if (rowFocused && !cards.empty()) {
+                const size_t slot = static_cast<size_t>(
+                    std::clamp(focusSlot, 0, static_cast<int>(count) - 1));
+                const std::string& title = cards[at(slot)].title;
+                const float titleX = kContentInset + headerWidth + 10.0f +
+                                     text.measure("\xE2\x80\xBA", ui::TextStyle::Callout, sc) +
+                                     24.0f;
+                const float room = ui::kCanvasWidth - kContentInset - titleX;
+                text.draw(renderer, text.truncate(title, ui::TextStyle::Callout, sc, room),
+                          titleX, headerBaseline, ui::TextStyle::Callout,
+                          ui::Color::white(0.60f), sc);
+            }
 
             const float shelfTop =
-                top + text.lineHeight(ui::TextStyle::Title2, sc) + 12.0f + kShelfHeadroom;
+                top + text.lineHeight(ui::TextStyle::Title3, sc) + 12.0f + kShelfHeadroom;
 
             // CULL TO WHAT IS ON SCREEN, and do it before touching the cover
             // cache. This loop used to run over every card: invisible with a
@@ -4110,24 +4288,14 @@ int main(int argc, char** argv) {
                     }
                 }
 
-                // The caption, riding down with the lift so the grown card
-                // cannot bury it. One line, truncated with a real ellipsis:
-                // game titles are long and at this width most of them are.
-                const float capBaseline = shelfTop + kShelfCoverHeight + kCaptionGap +
-                                          text.ascent(ui::TextStyle::Callout, sc) +
-                                          captionSlide(f, kShelfCoverHeight);
-                const std::string caption = text.truncate(
-                    card.title, ui::TextStyle::Callout, sc, kShelfCoverWidth);
-                // Focused is primary, everything else is secondary — the same
-                // way the reference implementation dims what you are not on.
-                text.draw(renderer, caption, baseX, capBaseline, ui::TextStyle::Callout,
-                          ui::Color::white(isFocused ? 1.0f : 0.60f), sc);
+                // No caption here any more — the focused card's title is in
+                // the shelf header. At 158 points wide a caption truncated
+                // most titles to nothing useful anyway.
             }
         }
-            // Header, headroom, cover, caption — and the caption's own slide,
-            // which is reserved headroom rather than slack.
-            return (shelfTop - top) + kShelfCoverHeight + kCaptionGap +
-                   text.lineHeight(ui::TextStyle::Callout, sc) + kShelfHeadroom;
+            // Header, headroom, cover, headroom. No caption row: the focused
+            // title is in the header, so it costs nothing here.
+            return (shelfTop - top) + kShelfCoverHeight + kShelfHeadroom;
         };
 
         float rowY = shelfHeaderY;
@@ -4272,7 +4440,20 @@ int main(int argc, char** argv) {
             const Card& hero = cards[heroIndex];
             ui::Rect band = heroBand;
             band.radius = 0.0f;
-            renderer.drawGlass(band, kHeroBandBlur, ui::Color::black(0.18f));
+
+            // A PLATE SIZED TO ITS TEXT, not a strip across the whole hero.
+            // Wide enough for the longer of the two lines and no wider, so
+            // the artwork carries the rest of the width. Still a material
+            // rather than flat black: Cabinet learned on tvOS that a
+            // material keeps the game's colours showing through while giving
+            // the text a surface to be read against.
+            const float titleW = text.measure(hero.title, ui::TextStyle::Headline, sc);
+            const float platW = text.measure(heroPlatform, ui::TextStyle::Caption1, sc);
+            ui::Rect plate = band;
+            plate.w = std::min(std::max(titleW, platW) + kHeroBandPadX * 2.0f,
+                               band.w * 0.55f);
+            plate.radius = kHeroRadius;
+            renderer.drawGlass(plate, kHeroBandBlur, ui::Color::black(0.32f));
 
             const float titleBaseline =
                 band.y + kHeroBandPadY + text.ascent(ui::TextStyle::Headline, sc);
@@ -4288,8 +4469,14 @@ int main(int argc, char** argv) {
             // It goes straight into the game; the artwork opens the detail
             // screen. Stopping at a screen with a Play button on it is two
             // actions, not one, and Home promises one.
+            // CALLOUT, NOT TITLE 3, changed on the panel 2026-09-19: at Title
+            // 3 with a 180-point floor this read as a primary action on a
+            // detail screen rather than a button in the corner of a banner,
+            // and it was the loudest thing on Home. Callout is the design
+            // system's floor for anything a person reads rather than glances
+            // at, so it is as small as this may go.
             const char* kResume = "\xE2\x96\xB6  Resume";
-            const float pillTextW = text.measure(kResume, ui::TextStyle::Title3, sc);
+            const float pillTextW = text.measure(kResume, ui::TextStyle::Callout, sc);
             // Treatment 2, the text-control one: tinted blur at white 25%,
             // scale 1.06, text to full white. A pill growing a cover's 10%
             // would read as a bug; 3% on something this small would not read
@@ -4297,19 +4484,86 @@ int main(int argc, char** argv) {
             const float rf = (focusRow == RowHero && focusSlot == 1)
                                  ? resumeFocus.value() : 0.0f;
             const float rs = 1.0f + rf * (kPillFocusScale - 1.0f);
-            const float pillW0 = std::max(pillTextW + 28.0f, 180.0f);
-            const float pillH0 = text.lineHeight(ui::TextStyle::Title3, sc) + 16.0f;
+            const float pillW0 = std::max(pillTextW + 24.0f, 150.0f);
+            const float pillH0 = text.lineHeight(ui::TextStyle::Callout, sc) + 12.0f;
             const float pillW = pillW0 * rs, pillH = pillH0 * rs;
-            const float pillX = heroCardRect.x + heroCardRect.w - pillW0 - 12.0f -
+            // IN THE TITLE BAND, NOT THE TOP-RIGHT CORNER. That corner now
+            // belongs to the account chip, which is where the reference
+            // implementation reserves it — and Resume reads better here
+            // anyway, beside the name of the game it resumes rather than
+            // floating in a corner it does not own.
+            const float pillX = band.x + band.w - pillW0 - kHeroBandPadX -
                                 (pillW - pillW0) * 0.5f;
-            const float pillY = heroCardRect.y + 12.0f - (pillH - pillH0) * 0.5f;
+            const float pillY = band.y + (band.h - pillH0) * 0.5f -
+                                (pillH - pillH0) * 0.5f;
             renderer.drawGlass(ui::Rect{pillX, pillY, pillW, pillH, pillH * 0.5f,
                                         ui::Color::white(0)},
                                kHeroPillBlur,
                                ui::Color::white(0.18f + 0.07f * rf));
             text.draw(renderer, kResume, pillX + (pillW - pillTextW) * 0.5f,
-                      pillY + 8.0f * rs + text.ascent(ui::TextStyle::Title3, sc),
-                      ui::TextStyle::Title3, ui::Color::white(0.75f + 0.25f * rf), sc);
+                      pillY + 6.0f * rs + text.ascent(ui::TextStyle::Callout, sc),
+                      ui::TextStyle::Callout, ui::Color::white(0.75f + 0.25f * rf), sc);
+
+            // --- The top bar, drawn OVER the hero -------------------------
+            //
+            // A scrim first, because this is text on artwork and some covers
+            // are bright at the top. It is the cheapest way to keep the
+            // destinations legible without dimming the whole hero — and it
+            // is the part most likely to need tuning on a television, where
+            // contrast and overscan both bite hardest at the top edge.
+            const float barH = 64.0f;
+            renderer.draw(ui::Rect{heroCardRect.x, heroCardRect.y, heroCardRect.w, barH,
+                                   kHeroRadius, ui::Color::black(0.45f)});
+
+            const float barBaseline =
+                heroCardRect.y + (barH - text.lineHeight(ui::TextStyle::Callout, sc)) * 0.5f +
+                text.ascent(ui::TextStyle::Callout, sc);
+            float bx = heroCardRect.x + 24.0f;
+            for (int i = 0; i < BarCount; ++i) {
+                const bool on = (focusRow == RowBar && focusSlot == i);
+                const float w = text.measure(kBarLabels[i], ui::TextStyle::Callout, sc);
+                if (on) {
+                    // Treatment 2, the text-control one, the same as Resume:
+                    // a tinted pill rather than a scale, because a
+                    // destination growing would shove its neighbours along.
+                    renderer.draw(ui::Rect{bx - 14.0f, heroCardRect.y + 10.0f,
+                                           w + 28.0f, barH - 20.0f,
+                                           (barH - 20.0f) * 0.5f,
+                                           ui::Color::white(kFocusedTint)});
+                }
+                text.draw(renderer, kBarLabels[i], bx, barBaseline, ui::TextStyle::Callout,
+                          ui::Color::white(on ? 1.0f : 0.65f), sc);
+                bx += w + 44.0f;
+            }
+
+            // The account, at the far right — the corner the reference
+            // implementation reserves for it. `TVAccountChip`: "the signed-in
+            // RomM username beside a small circular avatar, in Home's
+            // top-right corner". Name and avatar, as MMagTech asked for.
+            //
+            // A lettered disc stands in until the real avatar is fetched,
+            // which is Cabinet's fallback too — it uses a person glyph.
+            // Account switching is its own topic and nothing here is
+            // focusable yet.
+            const storage::User me = storage::currentUser();
+            const std::string who = me.valid() ? me.name : std::string("Not signed in");
+            const float discD = barH - 26.0f;
+            const float discX = heroCardRect.x + heroCardRect.w - 24.0f - discD;
+            const float nameW = text.measure(who, ui::TextStyle::Callout, sc);
+            renderer.draw(ui::Rect{discX, heroCardRect.y + 13.0f, discD, discD,
+                                   discD * 0.5f, ui::Color::white(0.22f)});
+            if (!who.empty()) {
+                const std::string initial(1, static_cast<char>(std::toupper(
+                    static_cast<unsigned char>(who[0]))));
+                const float iw = text.measure(initial, ui::TextStyle::Callout, sc);
+                text.draw(renderer, initial, discX + (discD - iw) * 0.5f,
+                          heroCardRect.y + 13.0f +
+                              (discD - text.lineHeight(ui::TextStyle::Callout, sc)) * 0.5f +
+                              text.ascent(ui::TextStyle::Callout, sc),
+                          ui::TextStyle::Callout, ui::Color::white(0.90f), sc);
+            }
+            text.draw(renderer, who, discX - 12.0f - nameW, barBaseline,
+                      ui::TextStyle::Callout, ui::Color::white(0.65f), sc);
         }
         keyboard.draw(renderer, text, renderer.scale());
         if (safeGuides) renderer.drawSafeAreaGuides();
