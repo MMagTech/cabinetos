@@ -15,10 +15,10 @@ Rewrite it at the end of a session. It is meant to be current, not a log.
 ## Before anything else
 
 **Everything is on `main`.** No other branches and no open pull requests.
-[#19](https://github.com/MMagTech/cabinetos/pull/19) — PPSSPP, PSP save sync,
-the save audit, the folder-layout decisions, the hardware change and the PS3
-findings — merged as `4ff3818`, so everything described below as "runs today"
-is on `main`.
+[#22](https://github.com/MMagTech/cabinetos/pull/22) — the on-disk folder
+layout, keeping per person, the second drive and "Remove download" actually
+removing the download — merged as `8f23fc7`, so everything described below as
+"runs today" is on `main`.
 
 **THE FILES ON DISK MOVED, 2026-09-18.** There is no `romcache/` any more and no
 `system/`. Games are in `roms/` and `cache/` under a platform folder, firmware
@@ -74,7 +74,15 @@ on the way out.
 - **Library, a grid, and a launch screen**, built 2026-09-16. Every system
   including the ones this console cannot play, each saying why.
 - **Download is the one deliberate storage act**, and it keeps the game. The
-  cache stays invisible; Play fetches silently and says nothing.
+  cache stays invisible; Play fetches silently and says nothing. **"Remove
+  download" removes it and gives the space back**, as of 2026-09-19.
+- **The files are somewhere a person can find them**, as of 2026-09-18:
+  `roms/`, `cache/`, `bios/`, and a folder per person holding their saves and
+  states. Keeping a game is a decision per person rather than a flag on it, so
+  two people share one copy and one releasing does not take it from the other.
+- **Plug a second drive in and it is used** — internal or USB, no setup screen,
+  one folder claimed on it and nothing else touched. Unplug it and the console
+  copes; plug it back in and the duplicate copy goes.
 - **Both floors are enforced where that button is**, measured by filling the
   disk rather than by reasoning about it.
 - **Saves, memory cards and states sync both ways** with RomM, tagged with
@@ -97,7 +105,10 @@ on the way out.
 ## Pick up with these, in this order
 
 > **Decided 2026-09-17: no more UI is designed or tuned until CabinetOS is
-> installed on the SER5.** The user's call. This list is ordered by it, and
+> installed on the reference machine.** The user's call. **It was still in
+> shipping on 2026-09-19** — delayed, expected within a day or two — so this
+> line still holds. When it lands, read item 1b first: installing the OS on it
+> does NOT bring the frontend with it. This list is ordered by it, and
 > PROJECT.md records why — the short version is that overscan, motion and
 > vertical fit cannot be judged on a software-rendered VM, so building more
 > screens here is building against a lie.
@@ -647,6 +658,10 @@ PROJECT.md says "the SER5" and means this one.
     test the file-writing capture against; see item 1.
   - `config/user.json` — the RomM user id and name, cached so a console with no
     network still knows whose saves it is holding.
+  - `config/drives.json` — which games drives were here last time, and the ONLY
+    thing about storage that is remembered rather than read off the disk. It
+    exists so the console can say "your games drive is not connected" once and
+    then stop; nothing decides where a file is from it.
 - **There is no `romcache/` and no `system/` any more**, on this machine or in
   the code.
 - `/var/mnt/games/CabinetOS/` — **the VM's games drive**, claimed automatically
@@ -663,6 +678,10 @@ PROJECT.md says "the SER5" and means this one.
 - `/var/mnt/games/flatpak/` — **a flatpak user installation holding RPCS3**, 2.7 GB,
   reached with `FLATPAK_USER_DIR=/var/mnt/games/flatpak`. It is on the games disk
   deliberately: the KDE runtime it needs is 1.1 GB and `/var` has 5 GB.
+- `/var/mnt/games/layout-backup/` — a tar and a `sha256sum` list of every save
+  the VM held before the folder layout moved them, 2026-09-18. The move was
+  verified file by file and the saves are live in the tree, so this is belt and
+  braces rather than the only copy. 11 MB; delete it whenever.
 - `/var/mnt/games/ps3lab/` — the PS3 experiment. `rpcs3/dev_flash` (195 MB
   firmware), `rpcs3/dev_hdd0/game/` with Super Stardust HD and Sly Cooper
   installed, both `.rap`s in `rpcs3/dev_hdd0/home/00000001/exdata/`, and the PUP
