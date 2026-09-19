@@ -11,14 +11,30 @@
 # This is correct for a development artifact and WRONG for a console handed to
 # somebody else.
 #
+# WHAT PHASE 6 DOES ABOUT IT CHANGED ON 2026-09-19, and this list is shorter
+# than the one it replaces. MMagTech's call, and the reasoning is his:
+# **most people will never use this, and most of them would not want it on.**
+# So the console ships closed and the people who want it turn it on.
+#
 # PHASE 6 MUST:
-#   1. Flip the default to off.
-#   2. Put SSH and SFTP behind the hidden developer mode toggle.
-#   3. Replace password authentication with key-based auth (open question 9).
-#   4. Surface in the UI that SSH is listening whenever it is.
+#   1. Flip the default to off. A console ships listening to nothing.
+#   2. Put it behind an ORDINARY, VISIBLE row in Settings — not the hidden
+#      developer-mode toggle this file used to call for. Reaching your own
+#      saves is a feature, not a developer act; hiding it only stops the
+#      people who need it from finding it.
+#   3. Turn it on and the screen shows the address, the user name and a
+#      password THIS MACHINE generated for itself. Different on every console,
+#      and nothing published contains it. Turn it off and sshd stops.
+#   4. The switch gives FILE ACCESS, not a shell. "Copy my saves off" and
+#      "give me a root shell" are different asks with very different risk, and
+#      only the first is something a console should offer in Settings.
+#
+# A SHELL STAYS ON THE DEVELOPMENT IMAGE, which is this script and the marker
+# it writes. That distinction already exists in the build; Phase 6 uses it
+# rather than inventing a second one.
 #
 # Until then, do not install CabinetOS on a machine exposed to an untrusted
-# network. See docs/PROJECT.md, open questions 8 and 9.
+# network. See docs/PROJECT.md, open questions 8 and 9, which are ANSWERED.
 
 source /ctx/lib.sh
 
@@ -63,11 +79,15 @@ fi
 # the image's build log. Phase 6 removes both the marker and this script.
 mkdir -p /usr/share/cabinetos
 cat > /usr/share/cabinetos/DEVELOPMENT-IMAGE <<'MARKER'
-This CabinetOS image has SSH enabled by default.
+This CabinetOS image has SSH enabled by default, with a shell.
 
 That is deliberate for Phases 1-5, which are developed by booting images and
-inspecting them. It is not the shipping configuration. Phase 6 moves SSH behind
-the hidden developer mode toggle and turns it off by default.
+inspecting them. It is NOT the shipping configuration.
+
+A shipping console starts with this switched off and offers it as an ordinary
+row in Settings: file access over SFTP, no shell, and a password the machine
+generates for itself and shows on screen. A shell is a development thing and
+stays on images carrying this file.
 
 Do not install this image on a machine exposed to an untrusted network.
 MARKER

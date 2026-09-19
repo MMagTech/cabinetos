@@ -4846,31 +4846,113 @@ a different and much worse project. Contribution has the same requirement.
 listening is correct for a development tool and wrong for a console handed to
 someone else. The tracked obligations are:
 
-1. Phase 6 must flip the default to off and put SSH behind developer mode.
+1. Phase 6 must flip the default to off. **What replaces it is open question 9,
+   which is now answered**, and it is not developer mode.
 2. Until then, CabinetOS is a development artifact. It should not be installed
    on a machine exposed to an untrusted network, and the README says so.
 3. Password authentication is the interim mechanism because it is the only one
-   that works before there is a UI to enrol a key. It is not the shipping
-   answer — see open question 9.
+   that works before there is a UI. **It is also the shipping answer** — see
+   open question 9 for why key-based auth was dropped.
 
 `build_files/enable-ssh.sh` carries the same warning next to the code.
 
-### 9. How is developer mode revealed, and how does it authenticate?
-**Raised: Phase 1. Unresolved. Phase 6 owns it.**
+### 9. How a person reaches their own files, and how it authenticates
+**Raised: Phase 1 as "how is developer mode revealed". ANSWERED 2026-09-19 by
+MMagTech, and the answer made the question smaller.**
 
-Two separate questions:
+#### The decision
 
-**Discovery.** How does a developer turn it on without a normal user finding it?
-Prior art ranges from a version-number press count (Android), to a hidden entry
-in an About screen, to a controller input sequence. It needs to be discoverable
-from documentation and not by accident.
+**A console ships with nothing listening. Settings has an ordinary, visible row
+that turns file access on. Turning it on shows the address, the user name and a
+password the machine generated for itself. It gives SFTP, not a shell.**
 
-**Authentication.** Password auth on a home LAN console is weak, and there is no
-good way to type a strong password with a controller. Likely answer is public
-key only, with the key supplied through the UI or fetched from a GitHub username
-— but that needs deciding rather than assuming. Also unresolved: whether SSH
-binds to all interfaces or only the LAN, and whether the machine advertises
-itself over mDNS so a developer can find it without knowing its IP.
+Four sentences, and each one replaces something this project was going to
+build.
+
+#### Why, in MMagTech's own terms
+
+> *"We have to account for the fact most people won't want this on by default
+> for security purposes, and most will also probably never use them."*
+
+That is the whole argument and it is the right one. The previous plan was
+written from a developer's chair — SSH is how this project is built, so the
+question got framed as *how does a developer get in* rather than *what does a
+console do for the person who owns it*. Those have different answers and the
+second one is the product.
+
+#### What it deletes
+
+**The hidden developer-mode toggle, entirely.** This question used to be two
+questions and the first was *discovery*: a version-number press count, a hidden
+entry in an About screen, a controller input sequence. All of that machinery
+exists to conceal something dangerous. **Getting at your own saves is not
+dangerous, it is a feature** — the whole of open question 18's layout was
+designed so that somebody logging in over SFTP could find their files without
+being told where they are. Concealing it protects nobody and stops exactly the
+people who need it from finding it. So there is no ritual, no press count, and
+nothing to document about how to reveal it. It is a row in Settings.
+
+**Key-based authentication.** The previous answer was "likely public key only,
+with the key supplied through the UI or fetched from a GitHub username". Two
+reasons it goes:
+
+- **Enrolling a key with a controller is the thing that would make this
+  unusable.** A generated password is six characters read off a television; a
+  public key is not something anyone is typing on a d-pad, and fetching one
+  from a GitHub username makes a local file transfer depend on an internet
+  service and an account the owner may not have.
+- **It is not proportionate to the threat.** The exposure is somebody on the
+  same home network. A per-machine generated password, off unless switched on,
+  and displayed only to whoever is in the room, is the same posture as a NAS
+  and better than most. The image publishes no credential either way.
+
+**Half of the "is the image dangerous" worry**, which was overstated and is
+worth recording because it was believed for a day. `disk_config/disk.toml` sets
+`cabinet` / `cabinet` and is in a public repository — but it only builds the
+**VM's qcow2**. A console installed from the real image gets its account from
+`system_files/usr/lib/sysusers.d/cabinetos.conf`, and sysusers creates it
+**locked, with no password at all**. So the published image has never shipped a
+published password. The real gap was the opposite: on a real console nobody
+could log in, including its owner.
+
+#### What it keeps, and it is the only thing to build
+
+**The screen.** It was item 4 of four on Phase 6's list — *"surface in the UI
+that SSH is listening whenever it is"* — and it turns out to be the whole
+answer rather than a footnote, because it is also where the password lives and
+where the switch is. One place that tells the truth: on or off, the address,
+the user name, the password.
+
+#### File access, not a shell
+
+**"Copy my saves off" and "give me a root shell on the console" are different
+asks with very different risk, and only the first belongs in Settings.** sshd
+can restrict an account to the SFTP subsystem, and that is what the switch
+turns on.
+
+A shell stays on the development image, which already identifies itself with
+`/usr/share/cabinetos/DEVELOPMENT-IMAGE`. That distinction exists in the build
+today; Phase 6 uses it rather than inventing a second one.
+
+#### Still to decide when it is built
+
+- **Whether the machine advertises itself over mDNS** so `cabinetos.local`
+  works and nobody has to read an IP address off a screen. Carried over from
+  the original question and still open. It is the difference between typing
+  `sftp cabinet@cabinetos.local` and copying four numbers by hand.
+- **Whether sshd binds to the LAN only.** Also carried over. It matters less
+  now that the default is off, and it is still the correct belt.
+- **What the generated password looks like.** RomM's own pairing code is the
+  obvious shape to copy — this console already shows one and people already
+  read it off a television.
+
+#### When
+
+**With the Settings screen, on the reference machine.** It is a screen, so it
+waits: see *Decided 2026-09-17: the look waits*. Nothing about it is buildable
+usefully before then, because a password nobody can read is no better than no
+password, and the development image must keep its shell until the day the
+project stops being built over SSH.
 
 ### 10. Waking the machine, and turning the TV on
 **Raised: Phase 1. Largely DECIDED — HDMI-CEC is a requirement. Phase 6 tunes it.**

@@ -260,8 +260,10 @@ PSP's directory save.
   card left behind by a session that did not finish is moved to
   `saves/unattributed/system-directory/` rather than overwritten.
 
-**What is left, and it needs a controller:** no save in this class has been
-written by actually PLAYING a game here. Every round trip restored a real save,
+**What is left, and it waits for the reference machine.** MMagTech's call,
+2026-09-19: *"real in-games will wait until we have the A9 in hands and the OS
+written to it."* So do not go looking for a controller on the VM. No save in
+this class has been written by actually PLAYING a game here. Every round trip restored a real save,
 watched the core read it, and sent back byte-identical bytes — which is the
 correct answer for a session that saved nothing, and is why forcing the upload
 needed `--sync-test`. That flag now drops the file-save baselines at frame 150
@@ -524,6 +526,13 @@ PROJECT.md says "the SER5" and means this one.
 - **The audio governor's 20 ms cushion.** Inherited from Cabinet rather than
   measured here; the lead it permits *is* input lag. Tune it with a pad in hand.
 - **The boot splash**, and the rest of the branding.
+- **The row in Settings that turns file access on**, decided 2026-09-19 and
+  the answer to open question 9. A console ships listening to nothing; an
+  ordinary visible row turns SFTP on and shows the address, the user name and
+  a password the machine generated for itself. Not the hidden developer-mode
+  toggle this project planned for two weeks — that machinery exists to conceal
+  something dangerous and reaching your own saves is a feature. It is a screen
+  and it is also where the password lives, so the whole thing waits together.
 - **Everything about motion, the letterbox glow and the safe area.**
 
 ## Things that will bite you

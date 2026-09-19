@@ -13,26 +13,34 @@ No desktop. No terminal. No package manager. No browser. No app store.
 The controller is the primary input device and the only one the design assumes
 exists — every screen must be navigable with one alone. A keyboard and mouse work
 if attached, for things like typing a RomM server address, but nothing may
-*require* them. A hidden, opt-in developer mode enables SSH and SFTP for
-development and contribution; it is off by default and lands in Phase 6.
+*require* them. A console ships with nothing listening on the network; a row in
+Settings turns on file access over SFTP, so you can copy your saves off, and
+shows the address and a password the machine generated for itself. It lands in
+Phase 6 — see `docs/PROJECT.md`, open question 9.
 
 > **Start here:** [`docs/PROJECT.md`](docs/PROJECT.md) is the specification and
 > the phase plan. Read it before changing anything in this repository.
 >
-> **Current status: Phase 1 — base image.** Nothing has been built or booted
-> yet. The frontend does not exist.
+> **Current status: Phase 3/5, and the console runs.** 1147 of 1644 games in
+> the reference library are playable, all twenty-one cores are built, and every
+> platform this console claims to play has been launched and measured. Saves,
+> memory cards and save states sync both ways with RomM. What is missing is the
+> television: the image does not yet carry the frontend or the cores, and no UI
+> is tuned until it is running on the reference machine.
 
 > [!WARNING]
-> **These images have SSH enabled by default with password authentication.**
-> That is deliberate for Phases 1–5, which are developed by booting images and
-> inspecting them, but it is not the shipping configuration. Phase 6 moves SSH
-> behind the hidden developer mode toggle and turns it off by default. Until
-> then, do not install CabinetOS on a machine exposed to an untrusted network.
+> **These images have SSH enabled by default, with a shell and password
+> authentication.** That is deliberate for Phases 1–5, which are developed by
+> booting images and inspecting them, but it is not the shipping configuration:
+> a shipping console starts with nothing listening and offers file access as a
+> switch in Settings. Until Phase 6, do not install CabinetOS on a machine
+> exposed to an untrusted network.
 
 ### Hardware
 
-The reference machine is a Beelink SER5 (AMD Ryzen 5, Vega graphics), because
-that is the box available. **It is not the product's definition.** The target is
+The reference machine is a GEEKOM A9 Pro (Ryzen AI 9 HX 370, Radeon 890M),
+because that is the box available. Older text in `docs/` says "the SER5" and
+means this one. **It is not the product's definition.** The target is
 generic x86-64 PC hardware: the reference machine sets the performance floor,
 nothing machine-specific goes in the image, and hardware capabilities that may or
 may not be present — HDMI-CEC, for instance — are detected at runtime rather than
