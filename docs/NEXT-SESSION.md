@@ -135,7 +135,22 @@ on the way out.
 > goes ahead — and a screen that already exists is not frozen, because fixing
 > something *wrong* is not the same as tuning something.
 
-### 0. The PS3 PKG experiment — DONE 2026-09-18, and the answer was good news
+### 0. PS3 STORAGE is answered. PS3 still cannot be PLAYED — 2026-09-18
+
+**Read the heading twice, because the old one just said "DONE" and that cost a
+conversation on 2026-09-19.** What was measured is the STORAGE question and
+nothing else. Two games were installed and booted far enough to prove the PKG
+could then be deleted; **neither reached gameplay and neither could, because
+the test VM has no GPU.** Playing a PS3 game needs a Vulkan path in the host,
+which is open question 20 and waits on the reference machine.
+
+The same caution applies to the two systems underneath it. **GameCube and PS2
+do not run on this console either** — 85 games between them, both reported in
+the library as *"the core for this system is not built on this console yet"*,
+because Dolphin and PCSX2 are not libretro cores and neither has been built
+here. Cabinet plays both on the Mac by embedding them, and their saves are on
+the reference server, which is exactly what makes it easy to believe they work
+here. They do not.
 
 **Installing a PS3 game does not cost a second copy of it.** The worry was that a
 19.8 GB download would become 40 GB on disk and that PS3 would need its own
