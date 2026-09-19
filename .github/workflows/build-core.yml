@@ -22,26 +22,39 @@
 
 name: Build cores
 
-# ON EVERY PULL REQUEST, NOT ONLY THE ONES AIMED AT MAIN — see
-# build-frontend.yml for the day that distinction cost something. The paths
-# filter below is what keeps this rare: it runs when a core actually changes,
-# which is the only time the pinned-revision assertion has anything to say.
-#
-# ALSO CALLED BY build.yml as of 2026-09-19, because the image now carries the
+# CALLED BY build.yml as of 2026-09-19, because the image now carries the
 # cores and has to get them from somewhere. Calling this rather than copying
 # its steps is the point: there is one place a core is built, and it is the
 # place that asserts the pinned revision.
+#
+# WHICH IS WHY THIS NO LONGER RUNS ITSELF ON MAIN. build.yml runs on every
+# pull request aimed at main and on every push to it, its paths-ignore is
+# documentation only and can therefore never skip a change under `cores/`, and
+# it calls this workflow — so a `pull_request`/`push` trigger here as well
+# meant the same twenty-one core builds queued TWICE for one change. That is
+# not merely wasteful: a runner has a concurrency cap, so the duplicate starves
+# the image build of the runners it is waiting for, and it doubled the wall
+# clock of the change that introduced it. Cancelling one by hand then leaves a
+# red cross on a pull request whose code is fine, which is how a check stops
+# meaning anything.
+#
+# ON EVERY PULL REQUEST AIMED AT ANYTHING **BUT** MAIN — which is the same
+# guard as before, aimed at the gap it was actually written for. It asked for
+# `branches: [main]` until 2026-09-16, and that day four branches were stacked
+# on each other, so the one pull request that existed targeted another branch,
+# this workflow was not eligible, and the check built specifically to stop "it
+# builds on one machine" silently did not apply. `branches-ignore` covers
+# exactly that case and nothing build.yml already covers. **Do not narrow it
+# to `branches: [main]` again** — that is the hole, and build.yml is what fills
+# the other half.
+#
+# The paths filter is what keeps this rare: it runs when a core actually
+# changes, which is the only time the pinned-revision assertion has anything
+# to say.
 on:
   workflow_call:
   pull_request:
-    paths:
-      - 'cores/**'
-      - 'tools/core-info.c'
-      - 'frontend/src/libretro.h'
-      - 'frontend/Containerfile'
-      - '.github/workflows/build-core.yml'
-  push:
-    branches:
+    branches-ignore:
       - main
     paths:
       - 'cores/**'

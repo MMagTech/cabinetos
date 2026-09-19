@@ -341,11 +341,21 @@ these in the VM.**
   `cancel-in-progress` then has a run cancelling itself — a red build with no
   failing step. `build-core.yml` and `build-frontend.yml` therefore have **no**
   `concurrency:` at all, and `build.yml`'s group is a literal prefix rather
-  than `${{ github.workflow }}`. The cost is that a second push within ten
-  minutes to a branch touching `cores/**` leaves the first standalone core run
-  going. If that ever grates, the fix is a `workflow_call` input used in the
-  group string — but test it, because an invalid `concurrency` expression is a
-  workflow that does not parse.
+  than `${{ github.workflow }}`. If that ever needs to change, the fix is a
+  `workflow_call` input used in the group string — but test it, because an
+  invalid `concurrency` expression is a workflow that does not parse.
+- **A workflow that build.yml CALLS must not also trigger itself where
+  build.yml runs**, or one change queues the same twenty-one core builds
+  twice. That is not merely wasteful: the runner concurrency cap means the
+  duplicate starves the image build of the runners it is waiting for, and it
+  doubled the wall clock of the change that introduced it. Cancelling one by
+  hand leaves a red cross on a pull request whose code is fine, which is how a
+  check stops meaning anything. So both called workflows now use
+  **`pull_request: branches-ignore: [main]`** and have no `push:` trigger at
+  all — build.yml covers main in both directions, and its paths-ignore is
+  documentation-only so it can never skip a change under `cores/`.
+  **Do not narrow them to `branches: [main]`**: that is the 2026-09-16 hole
+  where a stack of branches slipped past every check.
 - **The image build is now about twenty-three minutes**, not thirteen: it
   builds the cores first. That is the honest price of the image containing what
   it claims to, and it buys an image build that proves all twenty-one pins. If

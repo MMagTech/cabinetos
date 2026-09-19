@@ -17,13 +17,20 @@
 # Wayland display and a GPU to do anything interesting, and the test machine
 # remains where that happens.
 #
-# ON EVERY PULL REQUEST, NOT ONLY THE ONES AIMED AT MAIN. This asked for
+# ON EVERY PULL REQUEST AIMED AT ANYTHING **BUT** MAIN. This asked for
 # `branches: [main]` until 2026-09-16, and that day four branches were stacked
 # on each other — so the one pull request that existed targeted another branch,
 # this workflow was not eligible, and the compile check that had been built
 # specifically to stop "it builds on one machine" silently did not apply to the
 # work being written. A guard with a condition on it is a guard that is absent
 # exactly when somebody is doing something unusual.
+#
+# It then ran on EVERY pull request until 2026-09-19, when build.yml started
+# calling it — which made a pull request aimed at main compile the frontend
+# twice for one change. `branches-ignore` leaves exactly the gap build.yml
+# does not reach and removes the overlap. **Do not narrow it back to
+# `branches: [main]`**; that is the original hole. See build-core.yml, where
+# the same change removed twenty-one duplicated jobs rather than one.
 
 name: Build frontend
 
@@ -35,11 +42,7 @@ name: Build frontend
 on:
   workflow_call:
   pull_request:
-    paths:
-      - 'frontend/**'
-      - '.github/workflows/build-frontend.yml'
-  push:
-    branches:
+    branches-ignore:
       - main
     paths:
       - 'frontend/**'
