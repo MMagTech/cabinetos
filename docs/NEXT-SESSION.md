@@ -161,6 +161,42 @@ rather than a scaled image.
 
 **That same reboot found item 2**, which is a bigger problem than this was.
 
+### 1c. An hour with a controller found five things — 2026-09-19
+
+**Every one needed a person, a television and a pad. None was findable
+headless.** Four are fixed; the fifth is item 3.
+
+- **THE SOUND HAS NEVER WORKED.** `SDL_OpenAudioDeviceStream` was called only
+  on the `--core` developer path, so a game launched from the library opened
+  no audio device at all. It lasted a fortnight because every audio claim here
+  was made by COUNTING SAMPLES out of `drainAudio()` — *"2,384 frames, zero
+  audio"* is a sample count. **A headless VM has nothing to listen with.**
+- **The shoulders, triggers and right stick were never mapped.** The pad sent
+  a d-pad, four face buttons, Start and Select; RetroPad's other six inputs
+  went nowhere. On Dreamcast the triggers are drive and reverse, so Crazy Taxi
+  could not be played at all.
+- **Start opened the overlay**, so no game could ever be paused. It is L3+R3
+  now — Cabinet's default, chosen because trigger pairs collide with real
+  gameplay and stick clicks mean nothing in anything we run. **Still owed:**
+  Cabinet makes it remappable and GLOBAL rather than per-pad, with the second
+  button clearable for single-button mode.
+- **The overlay did not pause the game.** It ran on behind the menu.
+- **Vertical arcade games render sideways.** Item 3.
+
+**And one gap with no bug behind it: there is no interface sound at all.** The
+only audio path in the program is the core's — no focus click, no selection
+sound. tvOS gives Cabinet those for free; owning the whole stack means we get
+nothing unless we build it. Belongs with motion and the glow: decidable only
+in a room, with speakers.
+
+**Pairing a controller works and has no UI.** `cabinet@192.168.1.212` has a
+Switch Pro Controller paired and trusted (`E4:17:D8:71:F1:ED`), done entirely
+with `bluetoothctl` over SSH. bluez, the MT7925 firmware, `hid_nintendo` and
+SDL hotplug all work — `[frontend] gamepad connected` without a restart. What
+does not exist is the screen, which is open question 15b. Worth knowing: that
+scan turned up **seventeen devices**, sixteen of them neighbours' lights and
+beacons — the concrete case behind "never auto-pair the first pad discovered".
+
 ### 1b. Installing the A9 — DONE 2026-09-19, and what it found
 
 The install itself worked and the machine is described at the top of this
@@ -205,7 +241,61 @@ console's output. Use **`journalctl -t cabinetos-session`**. Also, the clock
 jumps when NTP syncs after install, so `--since` is unreliable on the first
 boot — use `-n`.
 
-### 2. The console dies if the server is away — **and every power cut hits it**
+### 2. WHAT TO DO NEXT, because the last session ended scattered
+
+The A9 works. A person played on it for the first time and **five faults fell
+out in an hour**, four fixed and one not. Read this order before picking
+anything up — the list below it is longer than what actually matters now.
+
+| | |
+|---|---|
+| **1** | **Vertical arcade games render sideways.** The one fault from that hour still open. Spec is complete — see item 3. Half the arcade library is affected. |
+| **2** | **The first real in-game save.** Still not done: the pad only started working at the end of the session. Everything for it is now in place. |
+| **3** | **Judge Home on the 65-inch.** The redesign is on the machine and has only been seen on a 27-inch desk monitor. |
+| **4** | Then the offline work (item 4) or the core options (item 7). |
+
+**Do not start new UI screens before 1 and 2.** Search and Settings are drawn
+in the top bar and say "not built yet"; that is deliberate and can stay for
+now.
+
+### 3. Vertical arcade games render sideways — **NOT FIXED**
+
+**`RETRO_ENVIRONMENT_SET_ROTATION` is in `libretro.h` and handled nowhere in
+`core.cpp`.** DoDonPachi and every other TATE board renders sideways in its
+framebuffer and asks the frontend to turn the picture; this console ignores
+the request. Found by MMagTech on the A9, 2026-09-19.
+
+**Cabinet does it and the whole design can be copied.**
+`LibretroFrontend.mm`:
+
+```objc
+case RETRO_ENVIRONMENT_SET_ROTATION:
+    // Vertical (TATE) boards render sideways in the framebuffer
+    // and ask the frontend to rotate the picture. Value is in
+    // 90-degree counter-clockwise steps.
+    gRotation.store(*(const unsigned *)data, std::memory_order_relaxed);
+    return true;
+```
+
+and it is applied in `NativePlayerRenderer.aspectFitVertices(textureSize:
+viewSize:rotation:flipped:)` — **rotated texture coordinates in the quad, with
+the source dimensions swapped when the rotation is odd.** Note it already
+carries a `flipped` flag for GL frames that arrive bottom-row-first, which is
+the same problem `core.frameUV()` solves here, so the two compose.
+
+**Why it was not done in that session:** it is a RENDERER change, not a
+mapping. `drawImageTexture` takes an axis-aligned quad with `u0,v0,u1,v1` and
+a 90-degree turn cannot be expressed in those — it needs a rotation parameter
+threaded through `image.cpp` and the renderer, and the letterbox and the glow
+both reshaped, because a vertical game on a 16:9 panel is pillarboxed with a
+TALL window rather than a wide one.
+
+**One product question to settle first**, and it is MMagTech's: a vertical
+game on a 4K 16:9 screen uses about a third of the width. Centre it at native
+aspect with black either side, or integer-scale it as tall as the screen
+allows? Nothing makes a vertical game fill a horizontal screen without lying.
+
+### 4. The console dies if the server is away — **and every power cut hits it**
 
 **Found by the A9's first cold boot, 2026-09-19.** The session came up faster
 than the network, could not reach RomM, and the frontend exited. Because
@@ -238,7 +328,7 @@ user it knew** and offers no switcher it cannot honour — MMagTech's call,
 fallback and it is worse than an error: it looks like a working console
 showing somebody else's games.
 
-### 3. One real in-game save, on Dreamcast
+### 5. One real in-game save, on Dreamcast
 
 **No save in this class has ever been written by actually PLAYING a game here**,
 and a headless VM cannot press Start. Every round trip so far restored a real
@@ -261,7 +351,7 @@ one.
 `frontend/src/filesave.{h,cpp}` is the mechanism and `catalog::saveFiles` is the
 table.
 
-### 4. The UI freeze lifts when the console is running on a television
+### 6. The UI freeze lifts when the console is running on a television
 
 **Decided 2026-09-17: no more UI is designed or tuned until CabinetOS is
 installed on the reference machine.** The user's call. **The condition is the
@@ -278,7 +368,7 @@ this look right", it waits. If the test is a measurement or a behaviour, it
 goes ahead — and a screen that already exists is not frozen, because fixing
 something *wrong* is not the same as tuning something.
 
-### 5. Finish the core options, which is half done
+### 7. Finish the core options, which is half done
 
 The host answers every option a core declares, and the override table is wired
 into the launch path as well as the audit. Two things are left:
@@ -298,14 +388,14 @@ into the launch path as well as the audit. Two things are left:
   every game tried and the rest vary by driver. Their values have to come from
   the core's source, not from a guess.
 
-### 6. The N64 save states that do not restore exactly
+### 8. The N64 save states that do not restore exactly
 
 Reproducible to the digit, the instrument was checked, and three candidate
 causes are written down with none established. It blocks nothing today, and it
 matters because portable save states are the premise the whole product rests on.
 The cheapest discriminating experiment is in PROJECT.md.
 
-### 7. PSP's save state, and a crash that is understood but not closed
+### 9. PSP's save state, and a crash that is understood but not closed
 
 **The save DATA is done.** Two things are left, and they are the same shape:
 PPSSPP is the only core that emulates on a thread of its own.
@@ -326,14 +416,14 @@ warms up in a tight `retro_run` loop with no frame in it and this core makes no
 progress there. **Fixing the instrument is the work**, and the diagnosis above
 is the fix: give the warm-up a real frame loop.
 
-### 8. Nothing warns that a system's BIOS is missing
+### 10. Nothing warns that a system's BIOS is missing
 
 Until a game fails to start. `catalog` is where it belongs — a fifth answer, and
 the first one that is a fact about the person's server rather than about this
 console. The answer is a lookup, not a layout, so the tile that shows it can
 reuse the wording already measured for the other four.
 
-### 9. The disk that eviction cannot see
+### 11. The disk that eviction cannot see
 
 Mesa's shader cache in `~/.cache`, plus files the cores write into `bios/`.
 Under 3 MB today. One of them is a Dreamcast's saved clock and language
@@ -346,7 +436,7 @@ machine built from the image: they ship at `/usr/share/cabinetos/system/` and
 `bios/PPSSPP/`**, where the core build put them, and the link step correctly
 leaves them alone — so the VM and a console differ here, on purpose.
 
-### 10. Power button to a clean shutdown
+### 12. Power button to a clean shutdown
 
 Phase 2's last mechanical item, and it is a behaviour rather than a picture.
 Phase 2's other leftover is the **boot splash**, which is a picture and waits.
