@@ -126,7 +126,7 @@ states, and leave — with the save syncing on the way out.
 
 ## Pick up with these, in this order
 
-### 1. Install the resolution fix on the A9, then look at it — **DO THIS FIRST**
+### 1. Install the resolution fix on the A9 — DONE 2026-09-19
 
 **The A9 is installed and running. One thing stands between it and the UI
 work**, and it is in this change but not yet on the machine: the session
@@ -145,15 +145,21 @@ design.
 mode from `/sys/class/drm/card*-*/modes` and passes it, with
 `CABINETOS_OUTPUT=WxH` as an override.
 
-So: merge this, let the image build, then on the A9
+**Done and verified the same day.** `bootc upgrade`, reboot, and the console
+reports:
 
 ```
-sudo bootc upgrade && sudo systemctl reboot
+cabinetos-session: output 3840x2160 (from the display)
+drm: selecting mode 3840x2160@60Hz
+[frontend] GL_RENDERER AMD Radeon 890M Graphics (radeonsi, strix1, ACO)
 ```
 
-and confirm it says `cabinetos-session: output 3840x2160`. **Then** the UI
-freeze is genuinely lifted and everything under *Waiting on the reference
-machine* is available.
+A frame captured off it is 3840x2160, max pixel 255, 95% of the frame lit.
+**The UI freeze is lifted** — everything under *Waiting on the reference
+machine* is available, and what is on that television is now the real thing
+rather than a scaled image.
+
+**That same reboot found item 2**, which is a bigger problem than this was.
 
 ### 1b. Installing the A9 — DONE 2026-09-19, and what it found
 
@@ -199,7 +205,40 @@ console's output. Use **`journalctl -t cabinetos-session`**. Also, the clock
 jumps when NTP syncs after install, so `--since` is unreliable on the first
 boot — use `-n`.
 
-### 2. One real in-game save, on Dreamcast
+### 2. The console dies if the server is away — **and every power cut hits it**
+
+**Found by the A9's first cold boot, 2026-09-19.** The session came up faster
+than the network, could not reach RomM, and the frontend exited. Because
+gamescope exits when its primary child exits, the compositor ladder concluded
+that *gamescope* had failed and permanently demoted the machine to **cage on
+llvmpipe** — hardware rendering gone for the rest of the session, silently,
+with nothing on screen saying so. It recovered only because somebody restarted
+the service by hand.
+
+Three faults, fix them together, and **open question 22 has the whole design**:
+
+1. **Do not exit when the server is unreachable** — come up, keep retrying,
+   fill in when it answers.
+2. **Order the session after `network-online.target`**, so the race usually
+   does not happen.
+3. **The ladder must tell "the compositor failed" from "the app exited".** It
+   exists for a machine with no usable GPU and must not be reachable by an
+   application error.
+
+And with it, the things that make an offline console useful rather than dead,
+all specified in open question 22 with Cabinet's own rules quoted: **kept
+games play with no server** (the library deliberately does not), a keep has to
+**save the cover and a record** because our layout recovers the id and name
+but not the art, saves **write to disk first and upload later** with a
+four-rule precedence at launch, and **offline the console stays as the last
+user it knew** and offers no switcher it cannot honour — MMagTech's call,
+2026-09-19.
+
+**The stand-in demo library must never appear on a console.** It is today's
+fallback and it is worse than an error: it looks like a working console
+showing somebody else's games.
+
+### 3. One real in-game save, on Dreamcast
 
 **No save in this class has ever been written by actually PLAYING a game here**,
 and a headless VM cannot press Start. Every round trip so far restored a real
@@ -222,7 +261,7 @@ one.
 `frontend/src/filesave.{h,cpp}` is the mechanism and `catalog::saveFiles` is the
 table.
 
-### 3. The UI freeze lifts when the console is running on a television
+### 4. The UI freeze lifts when the console is running on a television
 
 **Decided 2026-09-17: no more UI is designed or tuned until CabinetOS is
 installed on the reference machine.** The user's call. **The condition is the
@@ -239,7 +278,7 @@ this look right", it waits. If the test is a measurement or a behaviour, it
 goes ahead — and a screen that already exists is not frozen, because fixing
 something *wrong* is not the same as tuning something.
 
-### 4. Finish the core options, which is half done
+### 5. Finish the core options, which is half done
 
 The host answers every option a core declares, and the override table is wired
 into the launch path as well as the audit. Two things are left:
@@ -259,14 +298,14 @@ into the launch path as well as the audit. Two things are left:
   every game tried and the rest vary by driver. Their values have to come from
   the core's source, not from a guess.
 
-### 5. The N64 save states that do not restore exactly
+### 6. The N64 save states that do not restore exactly
 
 Reproducible to the digit, the instrument was checked, and three candidate
 causes are written down with none established. It blocks nothing today, and it
 matters because portable save states are the premise the whole product rests on.
 The cheapest discriminating experiment is in PROJECT.md.
 
-### 6. PSP's save state, and a crash that is understood but not closed
+### 7. PSP's save state, and a crash that is understood but not closed
 
 **The save DATA is done.** Two things are left, and they are the same shape:
 PPSSPP is the only core that emulates on a thread of its own.
@@ -287,14 +326,14 @@ warms up in a tight `retro_run` loop with no frame in it and this core makes no
 progress there. **Fixing the instrument is the work**, and the diagnosis above
 is the fix: give the warm-up a real frame loop.
 
-### 7. Nothing warns that a system's BIOS is missing
+### 8. Nothing warns that a system's BIOS is missing
 
 Until a game fails to start. `catalog` is where it belongs — a fifth answer, and
 the first one that is a fact about the person's server rather than about this
 console. The answer is a lookup, not a layout, so the tile that shows it can
 reuse the wording already measured for the other four.
 
-### 8. The disk that eviction cannot see
+### 9. The disk that eviction cannot see
 
 Mesa's shader cache in `~/.cache`, plus files the cores write into `bios/`.
 Under 3 MB today. One of them is a Dreamcast's saved clock and language
@@ -307,7 +346,7 @@ machine built from the image: they ship at `/usr/share/cabinetos/system/` and
 `bios/PPSSPP/`**, where the core build put them, and the link step correctly
 leaves them alone — so the VM and a console differ here, on purpose.
 
-### 9. Power button to a clean shutdown
+### 10. Power button to a clean shutdown
 
 Phase 2's last mechanical item, and it is a behaviour rather than a picture.
 Phase 2's other leftover is the **boot splash**, which is a picture and waits.

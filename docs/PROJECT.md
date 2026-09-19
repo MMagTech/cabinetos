@@ -8863,3 +8863,144 @@ Two more open edges:
 - **xemu and Eden serve zero games today** — the systems table above counts 0
   Xbox and 109 Switch titles, and Switch is the one with games. They are in the
   manifest to prove the mechanism generalises, which was the requirement.
+
+### 22. What the console does when the server is away
+**Raised by the A9 Pro's first reboot, 2026-09-19. Partly decided the same day.
+Not built.**
+
+**The console currently dies.** The first cold boot after an upgrade came up
+faster than the network did, `romm::Client::setAddress` failed, the frontend
+returned 1, and — because gamescope exits when its primary child exits — the
+session's compositor ladder concluded that *gamescope* had failed and
+permanently demoted the machine to cage on llvmpipe. A transient network race
+at boot cost hardware rendering for the rest of the session, silently, and
+nothing on screen said anything. **Every power cut will hit this.**
+
+That is three separate faults and they should be fixed together:
+
+1. **The frontend must not exit when the server is unreachable.** It should
+   come up, keep retrying, and fill in when the server answers.
+2. **The session must order after the network** (`network-online.target`), so
+   the common case does not arise at all.
+3. **The ladder must tell "the compositor failed to start" apart from "the app
+   exited".** The ladder exists for a machine with no usable GPU; it must not
+   be reachable by an application error. If gamescope got as far as setting a
+   mode, a dead child is not a reason to fall back.
+
+#### The stand-in library must never appear on a console
+
+Today's fallback when there is no server is the built-in demo library. On a
+development VM that is useful. On a television it is the worst available
+answer: it looks like a working console showing somebody else's games, and
+nothing says the real library is missing.
+
+#### What to show instead, escalating with time
+
+A console switched on at the same moment as the router must not accuse anyone
+of anything two seconds later.
+
+| When | On screen |
+|---|---|
+| First few seconds | the boot splash simply stays up — nothing has gone wrong yet |
+| ~10 s | *"Finding your library…"*, quiet, no alarm |
+| ~30 s | which thing is actually missing, and what to do about it |
+
+**And it corrects itself with no input.** The moment the server answers it
+goes to Home. Power comes back, the router takes forty seconds, the console
+arrives on its own.
+
+**Three different problems must not read as one**, or it is the
+truncated-explanation trap this document already warns about: no network at
+all (check the cable or Wi-Fi), network but no server (is the machine at that
+address switched on), and server but not paired (that is first run, open
+question 15b).
+
+#### Kept games play offline. The library does not. — Cabinet's rule
+
+**MMagTech, 2026-09-19: "it seems natural that no network should still allow
+you to play offline if a game is kept."** Cabinet already settled this, and
+its answer is narrower and cheaper than caching a catalogue. From
+`OfflineNotice.swift`:
+
+> The library itself stays server-only on purpose, no snapshot of it kept
+> locally, so this is still the honest answer for browsing. **Kept games are
+> the one deliberate exception: Home shows those directly instead of this
+> notice when any exist, since they genuinely do play with no connection.**
+
+So browsing 1,600 games offline is not a goal — you could not play them
+anyway. What was kept, plays.
+
+**A keep writes down everything about the game at keep time**, which is the
+part this console does not do yet. `KeptGames.swift`:
+
+> Embeds the whole `Rom` it was kept from, captured once at keep time, rather
+> than a hand-picked subset of fields. Offline navigation … needs everything a
+> live library fetch would have given it, **cover paths and platform
+> identifiers included**, and re-deriving a partial, patched-together `Rom`
+> later would only invite the fields to drift apart.
+
+Our layout gives the id and the name back for free —
+`roms/Sega Dreamcast/556 - Ikaruga.chd` — but **not the cover**, and covers
+live only in the in-memory image cache. Keeping a game therefore has to save
+its cover and a record beside it.
+
+**Two more rules worth taking verbatim**, both from `offlinePlatforms()`:
+
+- **Offline Home and offline Library are built from the same list**, "so the
+  two can never draw a different picture of the same underlying data".
+- **The count shown is how many are kept**, not the server's catalogue size,
+  "which would mean nothing without a connection to trust it".
+- And **a kept game whose emulator is unavailable is hidden**, because
+  "listing them would set up a tap that fails regardless of what is actually
+  stored". Here that means a game whose core this console has not built.
+
+#### Saves offline: the disk always wins first
+
+`MemoryCardStore`:
+
+> The disk copy is written first on every snapshot, before any upload is
+> attempted … **losing signal must never mean losing an in-game save.** A card
+> whose upload has not yet succeeded carries a pending flag and is retried at
+> the next launch.
+
+And the launch-time precedence, from `MemoryCardSync.syncIn()`:
+
+| | |
+|---|---|
+| 1 | a local copy **still waiting to upload** wins — it is strictly newer than anything the server has |
+| 2 | otherwise the **server's** copy, when its stamp moved since the last sync — a save made on another device |
+| 3 | offline, or nothing on the server — **whatever is on disk plays** |
+| 4 | nothing anywhere — the core's own freshly formatted card |
+
+Retries happen **at the next launch**, not from a background service.
+
+**What exists here already**: `users/<id>/pending/` and a save path that
+writes locally before syncing. **What is missing**: the per-save bookkeeping —
+a pending flag and the server's stamp — and the precedence above.
+
+**The accepted trade, so it is a decision rather than a discovery.** Rule 1
+means an unsent local save always beats the server, so playing offline on the
+console and then playing the same game on an Apple TV before the console
+reconnects loses the Apple TV's save. **MMagTech's reasoning, 2026-09-19, and
+it is why this is accepted: saves are per person and this console switches
+users, so two people on two devices are two different rows and never
+collide.** What remains needs one person, two devices, sequentially, with the
+console offline in between. Rare, and the alternative is asking someone to
+resolve a merge conflict on a television.
+
+#### Who the console is with no server — DECIDED 2026-09-19
+
+Identity comes from RomM's `/api/users/me` and is cached in
+`config/user.json`, which holds **one** user: the last one seen. So an offline
+console knows who it is and cannot know who else exists.
+
+**MMagTech's call: offline, the console stays as the last user it knew.** It
+says so plainly and **does not offer a switcher it cannot honour.**
+
+That is the safe answer as well as the simple one. The failure it avoids is
+worse than any save conflict: someone switching to a person the console cannot
+verify, then playing, and having their saves filed under the wrong user and
+the wrong person's games on the kept shelf — silently, and only noticed later.
+
+Caching the user *list* would allow offline switching, and it is not decided
+here; it belongs with account switching, which is already its own topic.
