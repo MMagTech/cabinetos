@@ -531,6 +531,57 @@ esac
 
 SRC="$SRC_ROOT/$CORE"
 
+# The name the artifact is filed under. See the long comment at the copy below:
+# it is the MANIFEST name, not upstream's output name, and the same three lines
+# live in catalog::coreFileName and ci/stage-image-payload.sh.
+SO="${CORE%_libretro}_libretro.so"
+
+# The container the compile and the verification both run in.
+BUILDER="${CABINETOS_BUILDER:-cabinetos-builder}"
+
+# Read the revision back out of the FINISHED artifact and check it against the
+# commit that was supposed to be built. Asserting the checkout proves what went
+# in; this proves what came out, which is the assertion open question 13
+# actually asks for. It runs inside the builder because the binary is linked
+# against Fedora 44's glibc and the host running this script need not have it.
+verify_core() {
+    local expect=""
+    echo "verifying $SO"
+    if [ "$VERIFY_REVISION" -eq 1 ]; then
+        expect="$COMMIT"
+    else
+        echo "note: this core cannot report its revision — see its case arm"
+    fi
+    podman run --rm -v "$ROOT":/repo:Z -v "$OUT":/out:Z -w /repo "$BUILDER" \
+        sh -c 'gcc -O2 -Wall -Wextra -o /tmp/core-info tools/core-info.c -ldl \
+               && if [ -n "$2" ]; then exec /tmp/core-info "/out/$1" "$2"; \
+                  else exec /tmp/core-info "/out/$1"; fi' _ "$SO" "$expect"
+    echo "sha256      $(sha256sum "$OUT/$SO" | cut -d' ' -f1)"
+}
+
+# CHECK AN ARTIFACT THAT ALREADY EXISTS AND BUILD NOTHING.
+#
+# This is for the CI cache and nothing else. A core is determined entirely by
+# this script — the pinned commit, the patches and the build arguments are all
+# here — and by the toolchain in frontend/Containerfile, so CI keys a cache on
+# the hash of those two files and restores the .so instead of spending eight
+# minutes rebuilding something that cannot have changed.
+#
+# THE ASSERTION STILL RUNS ON A CACHE HIT, and that is the point of having this
+# mode rather than just skipping the job. What makes the whole workflow worth
+# its runtime is that every build proves the finished binary reports its pinned
+# revision; a cache that skipped the proof would be trading away the only thing
+# being bought. Ten seconds of dlopen is not worth saving.
+if [ -n "${CABINETOS_VERIFY_ONLY:-}" ]; then
+    if [ ! -f "$OUT/$SO" ]; then
+        echo "$CORE: --verify-only, but $OUT/$SO is not there" >&2
+        exit 1
+    fi
+    echo "$CORE @ $COMMIT (from cache, not rebuilt)"
+    verify_core
+    exit 0
+fi
+
 if [ ! -d "$SRC/.git" ]; then
     mkdir -p "$SRC_ROOT"
     # Not --depth 1: a shallow clone of a branch cannot check out an arbitrary
@@ -669,8 +720,7 @@ fi
 # platform=unix is the core's own Linux case, and on every Makefile-based core
 # in the set it is also the default when uname says Linux. It is the
 # best-tested path these cores have; the ios-arm64 case Cabinet uses is the
-# unusual one.
-BUILDER="${CABINETOS_BUILDER:-cabinetos-builder}"
+# unusual one. BUILDER is set near the top, because verify_core needs it too.
 
 # safe.directory is not paranoia about this checkout, it is about the core's
 # own Makefile. Every Makefile-based core in the set does
@@ -728,8 +778,8 @@ fi
 # A manifest name that already ends in _libretro does not get a second one:
 # fbneo_libretro would otherwise be filed as fbneo_libretro_libretro.so.
 # catalog.cpp applies the same rule when it looks for the file — the two must
-# agree, and this comment is on both.
-SO="${CORE%_libretro}_libretro.so"
+# agree, and this comment is on both. SO is set near the top so that
+# --verify-only knows the name without building anything.
 UPSTREAM=$(basename "${BUILT[0]}")
 [ "$UPSTREAM" = "$SO" ] || echo "built $UPSTREAM, filing it as $SO"
 cp "${BUILT[0]}" "$OUT/$SO"
@@ -759,21 +809,6 @@ if [ "${#ASSETS[@]}" -ne 0 ]; then
     echo "            copy its parent's contents into the frontend's system directory"
 fi
 
-# Asserting the CHECKOUT is at the pinned commit proves what went in. This
-# reads the revision back out of the finished artifact and proves what came
-# out, which is the assertion open question 13 actually asks for. It runs
-# inside the builder because the binary is linked against Fedora 44's glibc and
-# the host running this script need not have it.
-echo "verifying $SO"
-if [ "$VERIFY_REVISION" -eq 1 ]; then
-    EXPECT="$COMMIT"
-else
-    EXPECT=""
-    echo "note: this core cannot report its revision — see its case arm"
-fi
-podman run --rm -v "$ROOT":/repo:Z -v "$OUT":/out:Z -w /repo "$BUILDER" \
-    sh -c 'gcc -O2 -Wall -Wextra -o /tmp/core-info tools/core-info.c -ldl \
-           && if [ -n "$2" ]; then exec /tmp/core-info "/out/$1" "$2"; \
-              else exec /tmp/core-info "/out/$1"; fi' _ "$SO" "$EXPECT"
-
-echo "sha256      $(sha256sum "$OUT/$SO" | cut -d' ' -f1)"
+# Asserting the CHECKOUT is at the pinned commit proves what went in;
+# verify_core proves what came out. See its definition near the top.
+verify_core
