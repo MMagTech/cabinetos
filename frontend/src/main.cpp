@@ -1847,7 +1847,11 @@ int main(int argc, char** argv) {
     const char* romProbeExts = "gb|gbc|dmg";
     // Where the built cores are. Where games and saves go is storage.h's
     // answer, not a constant here — see --storage-root.
-    const char* coreDir = "cores/build";
+    //
+    // Left null so the two defaults below can be TRIED rather than one of them
+    // assumed — see the resolution block after the argument loop. --core-dir
+    // still wins outright.
+    const char* coreDir = nullptr;
     // Launch this RomM id without anybody pressing anything, after a delay, so
     // the whole Home-to-game transition can be watched on a machine with no
     // controller attached to it.
@@ -1967,6 +1971,38 @@ int main(int argc, char** argv) {
         } else if (SDL_strcmp(argv[i], "--game") == 0 && i + 1 < argc) {
             initialGame = SDL_atoi(argv[++i]);
         }
+    }
+
+    // --- Where the cores are, and which server this console talks to -------
+    //
+    // BOTH ARE TRIED RATHER THAN ASSUMED, because this one binary now runs in
+    // two places that disagree about both answers:
+    //
+    //   the image      /usr/lib/cabinetos/cores, installed by the build, and a
+    //                  server address in /etc/cabinetos/session.env that the
+    //                  session script exports before starting this;
+    //   a source tree  cores/build, where cores/build-core.sh leaves them, and
+    //                  --romm on the command line.
+    //
+    // An explicit flag always wins. What is chosen is printed, for the same
+    // reason the storage root below is: a console reading the wrong directory
+    // reports every platform as "not built on this console yet", which reads
+    // as twenty-one broken cores rather than as one wrong path.
+    if (!coreDir) {
+        struct stat cs;
+        coreDir = (::stat("cores/build", &cs) == 0 && S_ISDIR(cs.st_mode))
+                      ? "cores/build"
+                      : "/usr/lib/cabinetos/cores";
+    }
+    std::fprintf(stderr, "[cores] %s\n", coreDir);
+
+    // A console has no command line. Nothing is baked into the image — this
+    // repository is public and somebody's LAN address does not belong in it —
+    // so the address comes from the machine, and the session script is what
+    // puts it in the environment. The first-run screen writes the same file
+    // when it exists; see docs/PROJECT.md, open question 15.
+    if (!rommAddress) {
+        if (const char* env = getenv("CABINETOS_ROMM"); env && *env) rommAddress = env;
     }
 
     // --- Where everything lives, decided before anything writes a byte ------

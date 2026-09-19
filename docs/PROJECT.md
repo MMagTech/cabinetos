@@ -33,6 +33,13 @@ way and running. Phase 5 started early, the hardest question in it is answered,
 and as of 2026-09-17 every one of the twenty-one libretro cores is built and can
 be run.**
 
+**AND AS OF 2026-09-19 THEY ARE IN THE IMAGE, along with the frontend.** Until
+that day the image was the OS half only: `cabinetos-session` ran
+`sleep infinity` inside gamescope, so an installed machine booted to a black
+screen, and everything a person would call the console lived on one development
+VM and was compiled there by hand. Installing CabinetOS now installs CabinetOS.
+See Phase 5, *The deploy*.
+
 ### The thing that matters most
 
 **Save states are portable between Cabinet and CabinetOS.** Proved, not
@@ -69,6 +76,15 @@ rather than launched by hand:
   states. Keeping a game is a decision per person rather than a flag on the
   game, and releasing the last one deletes the game and gives the space back.
   Open question 18.
+- **The image carries the console**, as of 2026-09-19: the frontend at
+  `/usr/bin/cabinetos-frontend`, the twenty-one cores at
+  `/usr/lib/cabinetos/cores/` and PPSSPP's system files at
+  `/usr/share/cabinetos/system/`. 273 MB. The image build calls
+  `build-frontend.yml` and `build-core.yml` rather than repeating them, so
+  **every image build now asserts all twenty-one pinned revisions**, and the
+  last thing it does before shipping is ask whether the binary and all
+  twenty-one cores can resolve every library they link against inside the image
+  itself. Phase 5, *The deploy*.
 - **Saves reach the server for every platform this console can play**, as of
   2026-09-19. The 47 of 81 rows on the reference server that could neither be
   uploaded nor restored — Dreamcast, Sega CD, both arcade emulators, 3DO, Neo
@@ -108,7 +124,7 @@ rather than launched by hand:
   artefact or something the capture does not see. **Ask before chasing it.**
 - **Horizontal wrapping is in, vertical is not.** Judge it with a pad.
 
-### Decided 2026-09-17: the look waits for the SER5
+### Decided 2026-09-17: the look waits for the reference machine
 
 **No more UI is designed or tuned until CabinetOS is installed on the mini PC.**
 The user's call, and it follows from what this document already records rather
@@ -139,11 +155,22 @@ not sync at all, BIOS detection, the N64 state divergence, storage that eviction
 cannot see, and the two heavy systems. See `docs/NEXT-SESSION.md`, which is
 ordered this way now.
 
+**WHEN IT LIFTS, AND IT IS NOT WHEN THE MACHINE ARRIVES.** The freeze says
+"until CabinetOS is installed on the reference machine", and the thing that
+makes that sentence mean something changed on 2026-09-19: until then,
+installing CabinetOS on it would have produced a black screen, because the
+image contained no frontend. It contains one now. **The condition is the
+console running the frontend on a television, not the box being unboxed and not
+the image being installed.**
+
 ### What is still unknown, honestly
 
 - **Nothing has been judged on a television.** Motion, the letterbox glow and
-  the safe area are all recorded as needing the SER5, which is not yet
-  installed. A software-rendered VM cannot answer any of them.
+  the safe area are all recorded as needing the reference machine — the A9 Pro,
+  which arrived 2026-09-19 and is not yet installed. A software-rendered VM
+  cannot answer any of them. What changed that day is that installing it is now
+  worth doing: before, the image carried no frontend, so a freshly installed
+  machine drew nothing at all.
 - ~~**Twenty cores of twenty-one are built**~~ **— all twenty-one are, as of
   2026-09-17.** PPSSPP was the last, and it runs: Lumines reaches its attract
   demo in colour with sound, writes its memory-stick save, and quits back to
@@ -552,6 +579,12 @@ There is no state in which the frontend and the system are on different
 versions. This is the reason for building on a bootc/OSTree base: the entire OS
 is a single signed, versioned artifact, and a bad update is a rollback rather
 than a recovery USB stick.
+
+**TRUE AS OF 2026-09-19 AND NOT BEFORE.** For a fortnight this was a
+description of an intent: the image carried the OS and the session, and the
+frontend and the twenty-one cores were not in it at all, so a machine that
+pulled an update got half a system and nothing said so. The half it got was
+the half nobody was watching. Phase 5, *The deploy*.
 
 Corollary: Bazzite's own automatic updater (`uupd`) is disabled, because it
 would create exactly the partial-version state this model exists to prevent.
@@ -1448,6 +1481,36 @@ neither of which any of this affects.
 question 3. The only Wayland session defined is `plasma.desktop`, which Phase 2
 removes.
 
+### What the image actually contains — 2026-09-19
+
+Measured while putting the console into it, on real files rather than on
+estimates. Phase 5, *The deploy*, has the reasoning; these are the numbers.
+
+| | |
+|---|---|
+| The frontend binary | **868 KB** |
+| Twenty-one cores | **259 MB** |
+| PPSSPP's system files | **13 MB**, 12 entries |
+| **Added to the image** | **273 MB** |
+
+**Every library resolves, and that was run rather than reasoned about.**
+`ldd` over the binary and all twenty-one cores, inside the Fedora 44 builder
+container and again on the test VM — which *is* CabinetOS, so it is the image's
+own library set — reports nothing unresolved in either place.
+
+**The control was run too, and it is the more informative half.** The same
+install into a bare `registry.fedoraproject.org/fedora:44`, which has none of
+the graphics stack, names all six libraries the frontend is missing —
+`libSDL3`, `libEGL`, `libGLESv2`, `libfreetype`, `libjpeg`, `libpng16` — plus
+`libGL` for melonDS and **`libX11` and `libXext` for PPSSPP**, which nothing
+had ever written down. `ldd` prints `=> not found` and still exits 0, so the
+check reads its output and not its status.
+
+**`mesa-libGLES` is not in the base image and libGLESv2 is there anyway**, via
+`libglvnd-gles`. Worth knowing before somebody "fixes" a package list: the
+frontend and three cores link `libGLESv2.so.2`, and looking for the obvious
+package name finds nothing.
+
 ### A GPU-less VM *can* show the frontend, via cage
 
 Established 2026-09-13, correcting an earlier claim in this document that
@@ -1478,6 +1541,10 @@ hardware means something is wrong with the GPU, and the About screen should name
 the running compositor so that state is visible rather than mysterious.
 
 ### First boot shows Linux
+
+**And as of 2026-09-19 the boot after it shows the frontend**, which it did not
+before: the session ran `sleep infinity`, so an installed machine showed Linux
+and then showed nothing.
 
 `bazzite-hardware-setup.service` runs visibly on first boot and takes long
 enough to notice. `plasma-setup.service` — Plasma's out-of-box wizard — is
@@ -2676,17 +2743,18 @@ An `anaconda-iso` also builds. It has **not** been booted; installing to real
 hardware is the one step in the chain never exercised.
 
 ### Phase 2 — Boot to frontend
-**Status: in progress. The session works; splash and power button remain.**
+**Status: in progress. The session works and now launches the real frontend;
+splash and power button remain.**
 
 Autologin, no display manager, a custom session launching a fullscreen
-placeholder application. Every route to a desktop, file manager or terminal
-closed. Shutdown and suspend reachable from a controller.
+application. Every route to a desktop, file manager or terminal closed.
+Shutdown and suspend reachable from a controller.
 
 A keyboard and mouse attached to the session must work — they simply must not be
 needed. Closing "every route to a terminal" means the UI offers none, not that
 input devices are blocked.
 
-*Done when* power on leads to the placeholder with no keyboard involved.
+*Done when* power on leads to the frontend with no keyboard involved.
 
 **Shipped:** `cabinetos-session.service` takes tty1 via
 `Conflicts=getty@tty1.service`, so there is no login prompt to fall back to.
@@ -2698,6 +2766,14 @@ cage → headless). The session user is created by the image via `sysusers.d`.
 services disabled — 91 MB and 5 seconds of boot.
 
 Verified on the VM: session active, zero restarts, correct fallback chosen.
+
+**AND IT RUNS THE FRONTEND AS OF 2026-09-19**, rather than `sleep infinity`.
+That line was written as a Phase 2 placeholder with a comment saying Phase 3
+would replace it, and it outlived Phase 3 entirely: the frontend existed, ran,
+played games and synced saves for a fortnight while the image still shipped
+the placeholder, because the image did not contain the frontend to run. Phase
+5, *The deploy*. `CABINETOS_APP` still overrides it, which is how the VM points
+the session at a build it has just compiled.
 
 **Remaining:**
 
@@ -2829,9 +2905,11 @@ enough, so the accumulator discards the time it cannot use and the game runs in
 slow motion rather than sprinting to catch up. That is the designed behaviour
 and the right one; it will not happen on a GPU.
 
-**Seeing it on the actual screen.** The frontend runs as the session's app via
-`CABINETOS_APP`, which is the hook Phase 2 left for exactly this, so the VM now
-boots to the frontend rather than to a placeholder.
+**Seeing it on the actual screen.** On the VM the frontend runs as the session's
+app via `CABINETOS_APP`, which is the hook Phase 2 left for exactly this, so
+the VM boots to a build it has just compiled rather than to whatever is in the
+image. **On a real console it needs no override**, as of 2026-09-19: the
+session defaults to `/usr/bin/cabinetos-frontend`, which the image now carries.
 
 It can also **photograph itself on demand, without stopping**:
 
@@ -2846,8 +2924,11 @@ where "send me a photo of the telly" is the whole bug-report channel — see
 
 A latent bug found on the way: the session expands `CABINETOS_APP` **unquoted**,
 so a path containing a space is word-split. RomM filenames contain spaces
-constantly. Worked around with a wrapper script for now; the session should stop
-word-splitting.
+constantly. Worked around with a wrapper script for now. **It is deliberate
+now rather than latent**: the word-splitting is what lets `CABINETOS_APP` carry
+arguments, which is most of what the override is for, and the comment in the
+session script says so and says a path with a space needs a wrapper. The
+default path has no space in it.
 
 **Save states work, 2026-09-13.** `retro_serialize`/`retro_unserialize` wired
 up, plus save RAM and arbitrary memory regions (the Game Boy clock lives in one
@@ -4612,13 +4693,110 @@ and then find out. Do the opposite:
 6. **Dolphin and PCSX2 last**, as their own `.so` files, against upstream PCSX2
    rather than the ARM64 fork.
 
+#### The deploy — BUILT 2026-09-19
+
+**"Cores and emulators bundled into the image" was the first line of this phase
+and it was the last part of it to happen.** For a fortnight the cores were
+built, pinned, asserted and run, and none of them was in the image. Neither was
+the frontend. `cabinetos-session` ran:
+
+```
+APP="${CABINETOS_APP:-/usr/bin/sleep infinity}"
+```
+
+So a freshly installed machine took tty1, started a compositor, and drew
+nothing — indistinguishable on a television from a machine that failed to boot.
+The OS half updated itself properly the whole time, which made it easy to
+believe the rest did too. **MMagTech asked the question that found it**: if we
+install CabinetOS on the mini PC now, does the work we do afterwards just
+arrive as updates? Half of it did.
+
+| | | |
+|---|---|---|
+| `/usr/bin/cabinetos-frontend` | 868 KB | a program, where programs go |
+| `/usr/lib/cabinetos/cores/` | 259 MB | architecture-specific `.so` files, so `/usr/lib` |
+| `/usr/share/cabinetos/system/` | 13 MB | PPSSPP's fonts and lookup tables |
+
+All three under `/usr`, which a bootc update replaces wholesale. **That is the
+whole point**: it is what makes the frontend and the cores travel the way the
+session service already did. Nothing here may go in `/var` — see below.
+
+**Nothing is built by the image build.** `build-frontend.yml` and
+`build-core.yml` already build these things, and the image build CALLS them.
+That matters most for the cores: the entire value of `build-core.yml` is that
+it checks out an exact pinned commit and reads that same revision back out of
+the finished `.so`, so a second way of building a core would be a second way of
+getting that wrong and the image would ship from the one nobody was watching.
+It costs about ten minutes of wall clock per image build, and it buys an image
+build that proves all twenty-one pins.
+
+Two scripts, and each fails loudly where it is cheapest to fail:
+
+- **`ci/stage-image-payload.sh`** collects the three things above into
+  `image_payload/` and refuses if any is missing — in seconds, before the
+  thirteen-minute image build starts, naming the core. The list of cores comes
+  off `cores/build-core.sh`'s own case arms rather than a second copy of it.
+- **`build_files/install-frontend.sh`** installs them, then asks the question
+  that decides whether the console starts at all: **can the binary, and each of
+  the twenty-one cores, resolve every library it links against inside this
+  image?** `ldd` prints `=> not found` and still exits 0, so it reads the
+  output rather than the status. Run as a control into a bare `fedora:44` it
+  names all six the frontend is missing plus PPSSPP's `libX11` and `libXext`,
+  and exits 1.
+
+That last check is worth more than the rest put together, because
+`require-frontend-libs.sh` names only three libraries and the cores' own
+dependencies have never been written down anywhere. Flycast alone wants zlib,
+libzip, alsa and udev off the system.
+
+##### `/var/lib/cabinetos` is created at BOOT, not at build
+
+`storage::root()` tries `/var/lib/cabinetos` and falls back to the working
+directory, which for a systemd service is `/`. The session runs as the
+unprivileged `cabinet` user and cannot create a directory in `/var/lib`, so
+without something making it the console would quietly fill the root of the
+filesystem with somebody's games.
+
+**The obvious fix is a `mkdir` in the Containerfile and it is wrong**, for
+exactly the reason open question 21 records one layer along: bootc unpacks
+`/var` from the INITIAL image only, and no later image touches it. A directory
+created at build time would appear on machines installed after today and never
+on machines that upgraded into it — green build, correct on the newest
+machines, silently broken on the oldest.
+
+`system_files/usr/lib/tmpfiles.d/cabinetos.conf` instead, which
+`systemd-tmpfiles-setup.service` runs every boot, before `multi-user.target`
+and therefore before the session.
+
+##### The two things a console cannot be told on a command line
+
+Both are tried rather than assumed, and **both print what they chose**, for the
+same reason the storage root does.
+
+- **Where the cores are.** `cores/build` when that exists beside the working
+  directory, `/usr/lib/cabinetos/cores` otherwise; `--core-dir` overrides both.
+  Printing it matters because getting it wrong is not loud on its own: the
+  console reports every platform as *"the core for this system is not built on
+  this console yet"*, which reads as twenty-one broken emulators rather than as
+  one wrong path.
+- **Which RomM server it belongs to.** `--romm`, or `$CABINETOS_ROMM`, which
+  the session script exports from `/etc/cabinetos/session.env` if that file
+  exists. **Nothing is baked into the image.** This repository is public and
+  somebody's LAN address does not belong in it, and an image with one server
+  compiled in is useful to one person. A console with no such file still boots,
+  onto the stand-in library. The first-run screen writes the same file when it
+  is built — open question 15.
+
 *Done when* several systems are playable end to end, and a save state written on
 Apple TV loads on CabinetOS.
 
 ### Phase 6 — Real hardware
-**Status: not started.**
+**Status: not started, but no longer blocked.** Until 2026-09-19 installing on
+real hardware produced a black screen, because the image carried no frontend —
+so "install it and look at it" was not a thing anybody could do. Phase 5's
+deploy fixed that, and the reference machine arrived the same day.
 
-Install on real hardware — the SER5 is the reference machine. Performance
+Install on real hardware — the GEEKOM A9 Pro is the reference machine. Performance
 tuning, Bluetooth controller pairing, audio output, display and resolution
 handling.
 
@@ -5980,17 +6158,19 @@ directory: the difference is the desktop UI's — the web debugger, themes, UI
 images, sound effects, the SDL controller database — and Cabinet's subset is the
 one that has actually run PSP games on a television.
 
-**Where they live in the image is DECIDED as of open question 18:
-`/usr/share/cabinetos/system/`**, which `storage::ensureTree` symlinks into the
-console's system directory at startup. A path in `/usr` is right because the
-core only ever reads it, and it takes 13 MB of build output out of a directory
-that otherwise holds the person's own files. **Nothing installs them there yet** —
-the build still stages them at `cores/system/PPSSPP` and the deploy copies them
-across, so on the test VM they sit in `bios/PPSSPP/` and the link step correctly
-leaves them alone. It cannot be done in `build_files/build.sh` today either:
-those files come out of a core build and the image does not yet carry the cores
-or the frontend at all. **It belongs with whatever puts those in the image**,
-which is Phase 5's deploy.
+**Where they live in the image is DECIDED as of open question 18 and BUILT as
+of 2026-09-19: `/usr/share/cabinetos/system/`**, which `storage::ensureTree`
+symlinks into the console's system directory at startup. A path in `/usr` is
+right because the core only ever reads it, and it takes 13 MB of build output
+out of a directory that otherwise holds the person's own files.
+
+`build_files/install-frontend.sh` puts them there, which is Phase 5's deploy —
+it could never have been done in `build_files/build.sh` alone, because the
+files come out of a core build and until that day the image carried neither the
+cores nor the frontend. The build still stages them at `cores/system/PPSSPP`,
+so **on the test VM they sit in `bios/PPSSPP/` where the core build left them
+and the link step correctly leaves them alone**, which is the development case
+the link step was written to tolerate.
 
 ##### The emulator tag IS shared, and this is the strongest case in the set
 
@@ -7090,6 +7270,18 @@ wrong one here, since we can.
 **Raised 2026-09-13 as a design proposal. NOT ADOPTED YET — deferred, with
 reasons. Revisit after the on-screen keyboard exists.**
 
+> **The address has a machine-local home as of 2026-09-19, and it is not a
+> screen.** Putting the frontend in the image made this urgent rather than
+> theoretical: an installed console had no way at all to learn which RomM
+> server it belongs to, because `--romm` is a command-line flag and a console
+> has no command line. `/etc/cabinetos/session.env` holds it, the session
+> script exports it as `CABINETOS_ROMM`, and README.md has the two commands
+> that set it up on a fresh machine. **That is plumbing, not an answer to this
+> question** — somebody still has to reach the console over SSH — but it means
+> whatever screen is eventually built has one file to write rather than a
+> mechanism to invent, and it means the machine boots usefully in the
+> meantime. A console with no such file comes up on the stand-in library.
+
 The proposal: CabinetOS serves a small web page during first run and shows a QR
 code pointing at itself, so the RomM address, credentials and Wi-Fi details can
 be typed on a phone instead of with a D-pad. Off afterwards, with a toggle.
@@ -7261,7 +7453,10 @@ not be buried behind a shift layer; and **802.1X enterprise is a different form
 entirely** — out of scope, and better refused plainly than half-supported.
 
 ### 18. The on-disk layout
-**Raised by MMagTech 2026-09-17. DECIDED the same day. Not yet implemented.**
+**Raised by MMagTech 2026-09-17. DECIDED the same day. BUILT 2026-09-18, and
+the test VM was moved onto it. The last undone piece — PPSSPP's system files
+shipping inside the image at `/usr/share/cabinetos/system/` — landed
+2026-09-19 with Phase 5's deploy.**
 
 > *"What I don't want is for these to be in completely random places throughout
 > the OS. If we had to ssh or sftp into the file system there should be an
@@ -7373,8 +7568,19 @@ The root is `/var/lib/cabinetos/` on the internal disk. **`roms/` and `cache/`
 repeat on every storage location** rather than living only at the root — see
 *One kept game, two people* below, which is the reason.
 
+**The root is created at every boot by
+`system_files/usr/lib/tmpfiles.d/cabinetos.conf`, not by the image**, and the
+distinction is load-bearing: bootc unpacks `/var` from the initial image only,
+so a directory made at build time would exist on machines installed after it
+and never on machines that upgraded into it. Phase 5, *The deploy*, has the
+detail. Without it `storage::root()` falls back to the working directory, which
+for a systemd service is `/`.
+
 Anything that ships inside the image — PPSSPP's fonts and lookup tables — lives
-in `/usr/share/cabinetos/` and is never written to.
+in `/usr/share/cabinetos/system/` and is never written to. `ensureTree`
+symlinks what it finds there into the console's system directory at startup,
+leaving alone any name that is already a real file, which is what keeps a
+development machine working.
 
 #### One convention, twice: the number identifies, the words are for you
 
@@ -7562,10 +7768,10 @@ that happens to have that name.** The image already puts three unrelated files
 there — a `DEVELOPMENT-IMAGE` marker and two package inventories — so linking
 its contents into the console's system directory put all three where a core goes
 looking for its fonts. The assets belong in `/usr/share/cabinetos/system/`, and
-nothing installs them there yet; on the VM they sit in `bios/PPSSPP/` where the
-core build left them and the link step correctly leaves them alone. **Found by
-running it and reading the directory listing**, which is the only reason it did
-not ship — the same lesson this project keeps relearning: build a thing, then
+**`build_files/install-frontend.sh` installs them there as of 2026-09-19**; on
+the VM they sit in `bios/PPSSPP/` where the core build left them and the link
+step correctly leaves them alone. **Found by running it and reading the
+directory listing**, which is the only reason it did not ship — the same lesson this project keeps relearning: build a thing, then
 look at what it actually did.
 
 #### Measured on the test VM, 2026-09-18

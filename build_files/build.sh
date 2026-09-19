@@ -5,9 +5,10 @@
 # Called from the Containerfile with build_files/ mounted at /ctx and
 # system_files/ mounted at /system_files.
 #
-# Phase 1 is subtractive only: nothing is installed here. The gaming stack comes
-# from Bazzite and is kept as-is. Phase 2 onwards adds the session and the
-# frontend.
+# The gaming stack comes from Bazzite and is kept as-is; the desktop and Steam
+# are stripped out, the session is wired in, and the console itself — the
+# frontend, the twenty-one cores and one core's system files — is installed
+# from image_payload/ near the end. See install-frontend.sh.
 
 set -euo pipefail
 
@@ -48,6 +49,7 @@ for expected in \
     /usr/bin/cabinetos-session \
     /usr/lib/systemd/system/cabinetos-session.service \
     /usr/lib/sysusers.d/cabinetos.conf \
+    /usr/lib/tmpfiles.d/cabinetos.conf \
     /usr/lib/bootc/install/20-cabinetos.toml \
     /usr/libexec/cabinetos-flatpak-setup \
     /usr/lib/systemd/system/cabinetos-flatpak-setup.service \
@@ -174,6 +176,20 @@ log "base image has $(wc -l < /usr/share/cabinetos/packages-before-strip.txt) pa
 /ctx/require-frontend-libs.sh
 
 # ---------------------------------------------------------------------------
+# The console itself.
+# ---------------------------------------------------------------------------
+#
+# The frontend, the twenty-one cores and PPSSPP's system files. Immediately
+# after the library check above and deliberately so: that one names three
+# libraries and says why each is needed, so when one has gone missing its error
+# is the legible one. This script's own ldd sweep then catches everything that
+# list does not cover, which is most of what the cores link against.
+#
+# Before this, the image was the OS half only and an installed machine booted
+# to a black gamescope session. See the header of install-frontend.sh.
+/ctx/install-frontend.sh
+
+# ---------------------------------------------------------------------------
 # Record the result.
 # ---------------------------------------------------------------------------
 rpm -qa | sort > /usr/share/cabinetos/packages-after-strip.txt
@@ -268,6 +284,30 @@ for unit in cabinetos-flatpak-setup.service cabinetos-flatpak-setup.timer; do
 done
 
 check_present "emulator flatpak manifest" /usr/share/cabinetos/flatpaks.list || failed=1
+
+# The console. install-frontend.sh already asserts each of these as it puts it
+# there; they are here as well because this block is the list somebody reads to
+# find out what an image is supposed to contain, and "the frontend" belongs on
+# it more than anything else does.
+check_present "the frontend" /usr/bin/cabinetos-frontend || failed=1
+check_present "the cores" /usr/lib/cabinetos/cores || failed=1
+check_present "PPSSPP's system files" /usr/share/cabinetos/system/PPSSPP/compat.ini || failed=1
+
+# The session must actually RUN the frontend. It ran `sleep infinity` until
+# 2026-09-19, which is a session that starts, takes the display, and draws
+# nothing — indistinguishable on a television from a machine that failed to
+# boot.
+if grep -q 'CABINETOS_APP:-/usr/bin/cabinetos-frontend' /usr/bin/cabinetos-session; then
+    log "  ok: the session runs the frontend"
+else
+    log "  MISSING: cabinetos-session does not default to the frontend"
+    failed=1
+fi
+
+# Where the console keeps games and saves. Created at every boot rather than
+# built into the image, because /var in a bootc image is unpacked from the
+# FIRST image only and never updated — see the file itself.
+check_present "the storage root's tmpfiles rule" /usr/lib/tmpfiles.d/cabinetos.conf || failed=1
 
 # The default target must be multi-user. The session is pulled in by it; a
 # graphical.target default would try to start a desktop.

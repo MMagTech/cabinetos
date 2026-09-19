@@ -64,6 +64,23 @@ build $target_image=image_name $tag=default_tag:
     #!/usr/bin/env bash
     set -euox pipefail
 
+    # The frontend, the cores and PPSSPP's system files. Not in this
+    # repository and not built here — collected by ci/stage-image-payload.sh,
+    # which is what the workflow runs before this. Checked here so the failure
+    # is one sentence rather than a podman COPY error thirty lines into a
+    # build log.
+    if [[ ! -d image_payload ]]; then
+        set +x
+        echo "image_payload/ is missing." >&2
+        echo >&2
+        echo "The image carries the frontend and the twenty-one cores, and" >&2
+        echo "neither is in this repository. Build them and collect them:" >&2
+        echo >&2
+        echo "    ci/stage-image-payload.sh              from this tree" >&2
+        echo "    ci/stage-image-payload.sh <artifacts>  from a CI download" >&2
+        exit 1
+    fi
+
     LABELS=()
     if [[ -z "$(git status -s)" ]]; then
         GIT_SHA=$(git rev-parse --short HEAD)

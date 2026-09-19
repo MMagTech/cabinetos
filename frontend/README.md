@@ -8,6 +8,18 @@ C++20, SDL3 for platform, input and audio, one EGL / OpenGL ES 3 context, and a
 UI layer of our own. No toolkit between us and the frame, because the frame is
 the part that must not go wrong.
 
+## Where the binary ends up
+
+**In the image, as of 2026-09-19.** `/usr/bin/cabinetos-frontend`, with the
+twenty-one cores at `/usr/lib/cabinetos/cores/`, put there by
+`build_files/install-frontend.sh` from what CI built. Before that the image
+contained none of it and an installed machine booted to a black screen, so
+this binary existed only on the test VM.
+
+That means **a change here now rebuilds the image**, and a machine running
+CabinetOS picks it up with `bootc`. It also means the loop below is still the
+loop: eleven seconds against thirteen minutes.
+
 ## Building
 
 **Not on the Mac, and not on the console.** The development machine cannot build
@@ -55,6 +67,28 @@ cache/Game Boy/39 - Tetris/            the zip RomM sent, and the .gb from it
 ```
 
 See `src/storage.h` and `docs/PROJECT.md`, open question 18.
+
+## Where it looks for the cores, and for a server
+
+Two things the program cannot be told on the command line when it is a console,
+because a console has no command line. Both are **tried, and the answer is
+printed**, for the same reason the storage root is:
+
+```
+[cores] /usr/lib/cabinetos/cores
+```
+
+- **The cores.** `cores/build` if that directory exists beside the working
+  directory — the development case — and `/usr/lib/cabinetos/cores` otherwise,
+  which is where the image puts them. `--core-dir` overrides both. Getting this
+  wrong is not loud on its own: the console simply reports every platform as
+  *"the core for this system is not built on this console yet"*, which reads as
+  twenty-one broken emulators rather than one wrong path. Hence the line above.
+- **The server.** `--romm <address>`, or `$CABINETOS_ROMM`. On a console the
+  session script exports it from `/etc/cabinetos/session.env`, which is
+  machine-local and not in the image — this repository is public and somebody's
+  LAN address does not belong in it. With neither, the frontend comes up on the
+  stand-in library.
 
 ## Running
 
@@ -151,6 +185,9 @@ person would press is to press it from here:
   It is not built because it costs almost exactly the vertical slack Home has
   left, and that is a measurement only a real television can settle — see
   `docs/PROJECT.md`.
+- **A first-run screen**, so a console can be told which RomM server it belongs
+  to without somebody writing `/etc/cabinetos/session.env` over SSH. Open
+  question 15.
 - **The rest of the launch screen**: a different save state, a different core,
   an export.
 - **The Storage screen.** Its data exists; `--storage` prints it.
@@ -160,4 +197,4 @@ person would press is to press it from here:
 Judge it on the reference hardware, never here. The VM has no usable GPU, so
 this renders on llvmpipe, and an animation tuned against software rendering is
 tuned against the wrong feedback. Build the motion from the numbers in
-`docs/PROJECT.md`; look at it on the SER5.
+`docs/PROJECT.md`; look at it on the A9 Pro.

@@ -11,10 +11,11 @@ name: Build CabinetOS image
 
 # DELIBERATELY STILL ONLY THE PULL REQUESTS AIMED AT MAIN, unlike
 # build-frontend.yml and build-core.yml, which were widened on 2026-09-16 after
-# a stack of branches slipped past them. This one is twelve minutes of runner
-# time and no path filter narrows it, and the question it answers is "does the
-# image that ships build" — which is a question about what reaches main. The
-# cheap checks are the ones worth running everywhere.
+# a stack of branches slipped past them. This one is about twenty-three minutes
+# of wall clock — thirteen for the image and ten for the cores it now builds
+# first — and the question it answers is "does the image that ships build",
+# which is a question about what reaches main. The cheap checks are the ones
+# worth running everywhere.
 on:
   pull_request:
     branches:
@@ -24,35 +25,35 @@ on:
     # rebuild an image whose inputs had not changed — which is how a check
     # becomes something people route around rather than wait for.
     #
-    # `frontend/**` joined the list on 2026-09-19 for exactly that reason, one
-    # layer along. The Containerfile copies `build_files`, `system_files`,
-    # `LICENSE` and `docs/LICENCES.md` and NOTHING from `frontend/`, so a
-    # session spent entirely on frontend source was starting a thirteen-minute
-    # image build per push and cancelling the one before it. The frontend has
-    # its own check, `build-frontend.yml`, which compiles it in a minute.
-    #
-    # ==> TAKE `frontend/**` BACK OUT THE DAY THE IMAGE CARRIES THE FRONTEND.
-    # That is docs/NEXT-SESSION.md item 1b, and it is the whole of what makes
-    # this safe: today the image genuinely does not contain the frontend, and
-    # the moment it does, this line starts hiding a real breakage.
+    # `frontend/**` WAS ON THIS LIST FOR ONE DAY AND IS GONE AGAIN, 2026-09-19.
+    # It was added when the Containerfile copied build_files, system_files and
+    # two licence files and nothing whatsoever from frontend/, so a session
+    # spent on frontend source was starting a thirteen-minute image build per
+    # push for an image whose inputs had not moved. The comment that went with
+    # it said, in capitals, to take it back out the day the image carried the
+    # frontend. The image carries the frontend as of today, so it is out: the
+    # binary in the image is built from frontend/, and leaving the line in
+    # would mean a change to the console's own source no longer builds the
+    # thing that ships it.
     paths-ignore:
       - '**.md'
       - 'docs/**'
-      - 'frontend/**'
   push:
     branches:
       - main
     paths-ignore:
       - '**.md'
       - 'docs/**'
-      - 'frontend/**'
   workflow_dispatch:
 
 env:
   IMAGE_REGISTRY: "ghcr.io/${{ github.repository_owner }}"
 
+# A literal prefix rather than ${{ github.workflow }}, so that this group
+# cannot collide with one computed inside the workflows called below. See the
+# block at the top of build-core.yml.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref || github.run_id }}
+  group: cabinetos-image-${{ github.ref || github.run_id }}
   cancel-in-progress: true
 
 jobs:
@@ -72,9 +73,40 @@ jobs:
           find build_files ci cores -name '*.sh' -print0 \
             | xargs -0 shellcheck -e SC1091
 
+  # THE CONSOLE ITSELF, WHICH THE IMAGE DID NOT CONTAIN UNTIL 2026-09-19.
+  #
+  # Both of these are CALLS to the workflows that already build these things
+  # properly, not copies of their steps. That matters for the cores: the whole
+  # value of build-core.yml is that it checks out an exact pinned commit,
+  # asserts it, and then reads that same revision back out of the finished .so
+  # — so a second way of building a core would be a second way of getting that
+  # wrong, and the image would ship from the one nobody was watching.
+  #
+  # What it costs: about ten minutes of wall clock on every image build, in
+  # parallel with nothing, because the image cannot start until the cores are
+  # there. That is the honest price of the image containing what it claims to.
+  # It also means every image build now proves all twenty-one cores are at
+  # their pinned revisions, which is more than was true yesterday.
+  frontend:
+    name: Frontend
+    needs: lint
+    uses: ./.github/workflows/build-frontend.yml
+
+  cores:
+    name: Cores
+    needs: lint
+    # The builder container is published to GHCR by the called workflow and
+    # reused whenever frontend/Containerfile has not changed. A called
+    # workflow cannot have more permission than its caller gives it, so
+    # without this line the twenty-one core builds fail at the login step.
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/build-core.yml
+
   build_push:
     name: Build and push image
-    needs: lint
+    needs: [lint, frontend, cores]
     runs-on: ubuntu-24.04
 
     permissions:
@@ -92,6 +124,29 @@ jobs:
         uses: ublue-os/remove-unwanted-software@695eb75bc387dbcd9685a8e72d23439d8686cba6
         with:
           remove-codeql: true
+
+      # The frontend and the twenty-one cores, from the jobs above. Merged
+      # into one directory, which works because each artifact was staged into
+      # the same three folders and no two of them hold a file of the same
+      # name: bin/ comes from the frontend, cores/ has one .so per core, and
+      # system/ exists in PPSSPP's artifact alone.
+      - name: Fetch the frontend and the cores
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7.0.0
+        with:
+          # Dotted and gitignored, because `just build` and
+          # `just generate-build-tags` both decide whether to stamp the image
+          # with a revision by asking whether `git status -s` is empty — so an
+          # untracked download directory costs the image its labels and its
+          # git-sha tags, silently.
+          path: .artifacts
+          pattern: '*-linux-x86_64'
+          merge-multiple: true
+
+      # Fails in seconds if anything is missing, rather than thirteen minutes
+      # into the image build — and names which core it was. The script checks
+      # the list against cores/build-core.sh rather than against a copy of it.
+      - name: Collect them into the image payload
+        run: ci/stage-image-payload.sh .artifacts
 
       - name: Install just
         uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3  # v4.0.0

@@ -22,5 +22,23 @@ cores/build/
 # PPSSPP is the only core that has any; see cores/build-core.sh.
 cores/system/
 
+# The frontend binary, built in a container on the test VM or in CI.
+frontend/build/
+
+# What the image build copies in that is not in this repository: the frontend
+# binary, the twenty-one cores and PPSSPP's system files, collected by
+# ci/stage-image-payload.sh.
+#
+# IGNORED RATHER THAN MERELY UNTRACKED, and that matters. The Justfile decides
+# whether to stamp the image with a revision and a git-sha tag by asking
+# whether `git status -s` is empty, so an untracked staging directory would
+# quietly produce an unlabelled, untagged image.
+image_payload/
+
+# Where the image build downloads the frontend and core artifacts to before
+# collecting them. Same reason as above: it must be ignored, not merely
+# untracked, or `git status -s` stops being empty.
+.artifacts/
+
 # macOS
 .DS_Store

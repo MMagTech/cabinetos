@@ -13,9 +13,10 @@
 #
 # ---------------------------------------------------------------------------
 # ADD TO THIS FILE AS THE PROJECT GROWS.
-# Phase 3 added the frontend's runtime libraries and fonts. Phase 5 should add
-# the emulators. A package CabinetOS relies on that is not listed here can break
-# silently in a base bump that looked routine.
+# Phase 3 added the frontend's runtime libraries and fonts. Phase 5 added the
+# cores' own, on the day the image started carrying them. A package CabinetOS
+# relies on that is not listed here can break silently in a base bump that
+# looked routine.
 # ---------------------------------------------------------------------------
 
 # --- Kernel and boot -------------------------------------------------------
@@ -38,7 +39,8 @@ plymouth*
 # and linux-firmware itself went BACKWARDS by a month, 20260910 to 20260810,
 # and were filed under the full diff as though they were translations.
 #
-# The reference hardware is a Beelink SER5: AMD, with Vega integrated graphics
+# The reference hardware is a GEEKOM A9 Pro: AMD, with Radeon 890M integrated
+# graphics
 # doing all of the rendering and all of the emulation. Its GPU firmware and its
 # CPU microcode are not incidental to this project, they are the machine. A
 # firmware package moving in either direction — and backwards especially — is a
@@ -101,6 +103,33 @@ libwebp
 google-noto-sans-fonts
 google-noto-sans-cjk-fonts
 google-noto-fonts-common
+
+# --- The CORES' runtime, added 2026-09-19 ----------------------------------
+# The image carries twenty-one emulator cores from that day. Their library
+# dependencies had never been written down anywhere, and three of the
+# frontend's own — named in build_files/require-frontend-libs.sh with a reason
+# each — were not on this list either, which is precisely the gap the header
+# above warns about.
+#
+# What makes them urgent rather than tidy: build_files/install-frontend.sh now
+# runs `ldd` over the binary and all twenty-one cores and FAILS THE BUILD if
+# anything is unresolved. So a base bump that drops one of these no longer
+# ships a broken console — it produces a red image build with no obvious
+# cause. Listing them here is what turns that into a base-bump pull request
+# that says "read this" before anybody wastes an afternoon on it.
+#
+# Read off `ldd` against the real binaries rather than guessed at. libX11 and
+# libXext are PPSSPP's, which nothing had noticed until the control run.
+libcurl
+libcurl-minimal
+json-c
+libarchive
+zlib-ng-compat
+libzip
+libX11
+libXext
+libxkbcommon*
+libudev*
 
 # --- Audio -----------------------------------------------------------------
 pipewire*

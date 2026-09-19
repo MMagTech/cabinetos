@@ -58,8 +58,8 @@ bad update is a rollback rather than a recovery USB stick.
 
 Bazzite provides the kernel, the Valve-patched Mesa stack, gamescope, the
 controller drivers (`xone`, the GameCube adapter module, force-feedback wheels)
-and the power and thermal handling. CabinetOS removes the desktop and Steam and,
-from Phase 2 onwards, adds its own session and frontend on top.
+and the power and thermal handling. CabinetOS removes the desktop and Steam and
+adds its own session, its frontend and twenty-one emulator cores on top.
 
 ```
 ghcr.io/ublue-os/bazzite:stable-44.20260908   (pinned by digest)
@@ -68,6 +68,11 @@ ghcr.io/ublue-os/bazzite:stable-44.20260908   (pinned by digest)
                 ├── build_files/strip-desktop.sh   display manager, KDE apps,
                 │                                  browser, terminal, app store
                 ├── build_files/enable-ssh.sh      sshd + sftp (development only)
+                ├── build_files/configure-session.sh   boot into gamescope
+                ├── build_files/install-frontend.sh    THE CONSOLE ITSELF:
+                │        /usr/bin/cabinetos-frontend
+                │        /usr/lib/cabinetos/cores/          21 cores, 259 MB
+                │        /usr/share/cabinetos/system/       PPSSPP's, 13 MB
                 └── bootc container lint
                         │
                         ▼
@@ -76,6 +81,22 @@ ghcr.io/ublue-os/bazzite:stable-44.20260908   (pinned by digest)
                         ├── qcow2          → VM boot test
                         └── anaconda-iso   → USB stick → real hardware
 ```
+
+**The frontend and the cores are not in this repository and are not built by
+the image build.** They come from `build-frontend.yml` and `build-core.yml`,
+which the image build calls, and `ci/stage-image-payload.sh` collects what they
+produce into `image_payload/` before `podman build` runs. Building the image on
+a Linux box by hand means doing the same thing first:
+
+```bash
+ci/stage-image-payload.sh              # from frontend/build and cores/build
+ci/stage-image-payload.sh <artifacts>  # from a merged CI artifact download
+just build
+```
+
+It is not optional and it fails loudly. Until 2026-09-19 the image contained
+none of it, and an installed machine booted into a gamescope session running
+`sleep infinity` — a black screen.
 
 ### Repository layout
 
@@ -88,10 +109,14 @@ ghcr.io/ublue-os/bazzite:stable-44.20260908   (pinned by digest)
 | `build_files/strip-steam.sh` | Removes Steam and the PC-gaming layer. |
 | `build_files/strip-desktop.sh` | Removes the display manager and desktop applications. |
 | `build_files/enable-ssh.sh` | Enables SSH and SFTP for development. **Phase 6 must undo this.** |
+| `build_files/install-frontend.sh` | Puts the frontend, the 21 cores and PPSSPP's system files in the image, and proves every library they link against resolves inside it. |
+| `frontend/` | The console's own source. C++20, SDL3, one GLES context. See `frontend/README.md`. |
+| `cores/build-core.sh` | Builds one libretro core at an exact pinned commit, and asserts that commit back out of the finished `.so`. |
+| `ci/stage-image-payload.sh` | Collects the frontend and the cores into `image_payload/` for the image build, and refuses if anything is missing. |
 | `ci/check-base-update.sh` | Detects and classifies Bazzite base updates. |
 | `ci/base-watch.txt` | Packages CabinetOS depends on. Grows with the project. |
 | `base-manifest.txt` | The base's package list as of the current pin. Generated. |
-| `system_files/` | Files overlaid onto the image. Empty in Phase 1; Phase 2 puts the session units here. |
+| `system_files/` | Files overlaid onto the image: the session script and its unit, the `cabinet` user, and the `tmpfiles.d` rule that creates `/var/lib/cabinetos` at every boot. |
 | `disk_config/` | `bootc-image-builder` configuration for the qcow2 and the ISO. |
 | `cabinetos.env` | Image name, owner, tags. |
 | `Justfile` | Build recipes. Linux only — see below. |
@@ -109,20 +134,27 @@ be run on a Linux machine later, not because it is expected to run here.
 
 ### `build.yml` — the image
 
-Runs on every push to `main`, on pull requests, and manually.
+Runs on every push to `main`, on pull requests, and manually. Documentation-only
+changes are skipped; `frontend/**` is **not** skipped, because the image carries
+the frontend.
 
-1. **Lint** — shellcheck over `build_files/`. Fails in seconds rather than after
-   a twenty-minute image build.
-2. **Build** — `podman build` against the pinned Bazzite digest.
-3. **Rechunk** — re-layers the image so updates ship small deltas. This is what
+1. **Lint** — shellcheck over `build_files/`, `ci/` and `cores/`. Fails in
+   seconds rather than after a twenty-minute image build.
+2. **Frontend and cores** — calls `build-frontend.yml` and `build-core.yml`,
+   rather than repeating their steps. About ten minutes, and it means every
+   image build proves all twenty-one cores are at their pinned revisions.
+   `ci/stage-image-payload.sh` then collects the results and refuses if any is
+   missing.
+3. **Build** — `podman build` against the pinned Bazzite digest.
+4. **Rechunk** — re-layers the image so updates ship small deltas. This is what
    keeps the Phase 7 console update from being a multi-gigabyte download every
    time.
-4. **Push** — to `ghcr.io/mmagtech/cabinetos`, tagged `latest`, the date, and
+5. **Push** — to `ghcr.io/mmagtech/cabinetos`, tagged `latest`, the date, and
    the date plus commit SHA.
-5. **Sign** — with cosign, so the installed system can verify an update came
+6. **Sign** — with cosign, so the installed system can verify an update came
    from this repository before rebooting into it.
 
-Pull requests stop after step 3. They prove the image builds; they cannot
+Pull requests stop after step 4. They prove the image builds; they cannot
 publish or sign anything.
 
 ### `base-update.yml` — keeping up with Bazzite
@@ -271,23 +303,84 @@ diskutil eject /dev/diskN
    you leave one attached — it is just never necessary, and any CabinetOS screen
    that cannot be completed with a controller alone is a bug.
 2. Power on and press **Delete** or **F7** during the firmware splash for the
-   boot menu (those are the Beelink keys; other machines differ). Select the
-   USB device.
-3. Anaconda starts. Set the destination to the internal NVMe, create a user, and
-   install.
+   boot menu. Those are the Beelink keys and they are what was written down
+   here before the reference machine changed; a GEEKOM A9 Pro is **Delete**
+   for setup and **F7** for the boot menu too, but do not take that on trust —
+   tap both. Select the USB device.
+3. Anaconda starts. Set the destination to the internal NVMe and create a
+   user.
+
+   > **NAME THAT USER `cabinet`, and give it a password.** The image already
+   > creates a `cabinet` account via `sysusers.d` — it is the account
+   > `cabinetos-session.service` runs as, and creating it again in the
+   > installer is a no-op that only adds the password. **It matters because
+   > the console's RomM token lives in that account's home directory.** Pair
+   > the machine while logged in as anyone else and the token lands in the
+   > wrong `~`, where the session will never look: the console keeps showing
+   > the stand-in library and nothing says why. If you have already installed
+   > under another name, every command in the next section still works —
+   > prefix them with `sudo -u cabinet`.
 4. Reboot and remove the stick.
 
-Phase 1 boots to a console login prompt. That is the expected result and the
-proof that Phase 1 is done — the frontend arrives in Phase 2.
+**It boots into CabinetOS — the frontend, full screen, with every emulator.**
+There is no login prompt: `cabinetos-session.service` takes tty1 and there is
+no getty behind it.
 
-SSH is enabled, so from that point you can work on the machine remotely:
+The first boot shows the **stand-in library**, because the machine does not yet
+know which RomM server it belongs to and there is no first-run screen to ask
+(open question 15). Two things are needed, and both are done once, over SSH:
 
 ```bash
 ssh cabinet@cabinetos.local
 ```
 
-If mDNS does not resolve, find the address from the console with `ip addr`. Push
-a build over SFTP with `sftp` or `scp` to the same host.
+If mDNS does not resolve, find the address from the machine with `ip addr`.
+
+**1. Pair it with your RomM server.** Run this **as `cabinet`**. It writes a
+token to that account's `~/.config/cabinetos/romm.json` at 0600, and the
+session runs as `cabinet`, which is the only reason the console can read it —
+a token in anybody else's home directory is a console that stays on the
+stand-in library and says nothing about why:
+
+```bash
+cabinetos-frontend --romm 192.168.1.10:6005 --romm-probe --romm-pair
+```
+
+**2. Tell the session which server that was.** Nothing is baked into the image;
+this repository is public, and an image with one person's LAN address in it is
+useful to one person.
+
+```bash
+sudo mkdir -p /etc/cabinetos
+echo 'CABINETOS_ROMM=192.168.1.10:6005' | sudo tee /etc/cabinetos/session.env
+sudo systemctl restart cabinetos-session
+```
+
+`/etc` because that is the part of a bootc machine that belongs to the machine
+and survives an update. The first-run screen will write the same file.
+
+**Then check what it actually did**, rather than what it should have:
+
+```bash
+journalctl -u cabinetos-session -b --no-pager | tail -40
+```
+
+The first three lines the frontend prints are the three things most worth
+knowing — which core directory it chose, where it is keeping games and saves,
+and which games drive it found:
+
+```
+[cores] /usr/lib/cabinetos/cores
+[storage] root /var/lib/cabinetos
+[library] 1147 playable games, 1147 with art; 501 games skipped
+```
+
+`[cores] cores/build` on a console means it is reading a directory that is not
+there, and every platform will report as *"the core for this system is not
+built on this console yet"*. `[storage] root /` means the `tmpfiles.d` rule did
+not run.
+
+Push a build over SFTP with `sftp` or `scp` to the same host.
 
 While you are in the firmware, two settings worth changing now:
 

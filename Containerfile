@@ -1,7 +1,7 @@
 # CabinetOS
 #
 # A console operating system for x86-64 PC hardware, built as a bootc image on
-# top of Bazzite. The reference machine is a Beelink SER5, but nothing here may
+# top of Bazzite. The reference machine is a GEEKOM A9 Pro, but nothing here may
 # assume it.
 #
 # Bazzite is used for its kernel, graphics stack, controller drivers and power
@@ -20,6 +20,18 @@ COPY system_files /system_files
 # repository.
 COPY LICENSE /licences/LICENSE
 COPY docs/LICENCES.md /licences/LICENCES.md
+# The frontend binary, the twenty-one cores and PPSSPP's system files.
+#
+# None of them is in this repository and none of them is built here — they are
+# far too slow, and .github/workflows/build-frontend.yml and build-core.yml
+# already build them properly, each core pinned to an exact commit and each
+# asserting that commit back out of the finished .so.
+#
+# ci/stage-image-payload.sh collects them into image_payload/ and refuses if
+# anything is missing, so this COPY is the last step of a chain rather than the
+# place the checking happens. If the build fails here saying image_payload does
+# not exist, that script has not been run — see README.md.
+COPY image_payload /payload
 
 # ---------------------------------------------------------------------------
 # Base image
