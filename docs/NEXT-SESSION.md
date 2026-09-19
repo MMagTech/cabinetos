@@ -121,11 +121,28 @@ on the way out.
 
 ## Pick up with these, in this order
 
+> ## THE A9 PRO WENT OUT FOR DELIVERY ON 2026-09-19
+>
+> **So this list is about to be reordered, and item 1b is the first thing to
+> do.** Installing CabinetOS on that machine does NOT bring the frontend or the
+> twenty-one cores with it — the image does not contain them. A freshly
+> installed A9 Pro boots to a black gamescope session. Everything built in the
+> last fortnight lives at `~/frontend` on the test VM and is compiled by hand.
+>
+> **Do item 1b before setting the machine up by hand**, or the value of doing
+> it at all drops to nothing: the alternative is another machine to rsync
+> source at, which is what the VM already is. And take the `frontend/**` ignore
+> back out of `build.yml` the same day — the comment in the workflow says so
+> too.
+>
+> **The UI freeze lifts the moment it is running there.** Everything under
+> *Waiting on the reference machine* below becomes available, in the order it
+> is written.
+>
 > **Decided 2026-09-17: no more UI is designed or tuned until CabinetOS is
-> installed on the reference machine.** The user's call. **It was still in
-> shipping on 2026-09-19** — delayed, expected within a day or two — so this
-> line still holds. When it lands, read item 1b first: installing the OS on it
-> does NOT bring the frontend with it. This list is ordered by it, and
+> installed on the reference machine.** The user's call, and it holds until the
+> machine is actually running the frontend — not merely unboxed. This list is
+> ordered by it, and
 > PROJECT.md records why — the short version is that overscan, motion and
 > vertical fit cannot be judged on a software-rendered VM, so building more
 > screens here is building against a lie.
