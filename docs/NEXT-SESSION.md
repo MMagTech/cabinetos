@@ -138,6 +138,12 @@ The whole sequence, in order:
 4. **Pair it and tell it the server**, over SSH, two commands. README.md has
    them. The second writes `/etc/cabinetos/session.env`, which is machine-local
    and deliberately not in the image.
+
+   **Pair it AS `cabinet`.** The token goes in that account's home directory
+   and the session runs as `cabinet`; pair as anyone else and the console
+   stays on the stand-in library with nothing saying why. Name the installer's
+   user `cabinet` too — the image already creates the account, so the
+   installer only adds a password to it.
 5. **Read what it printed, do not assume it.**
    `journalctl -u cabinetos-session -b`. The three lines that matter:
 

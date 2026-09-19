@@ -307,8 +307,19 @@ diskutil eject /dev/diskN
    here before the reference machine changed; a GEEKOM A9 Pro is **Delete**
    for setup and **F7** for the boot menu too, but do not take that on trust —
    tap both. Select the USB device.
-3. Anaconda starts. Set the destination to the internal NVMe, create a user, and
-   install.
+3. Anaconda starts. Set the destination to the internal NVMe and create a
+   user.
+
+   > **NAME THAT USER `cabinet`, and give it a password.** The image already
+   > creates a `cabinet` account via `sysusers.d` — it is the account
+   > `cabinetos-session.service` runs as, and creating it again in the
+   > installer is a no-op that only adds the password. **It matters because
+   > the console's RomM token lives in that account's home directory.** Pair
+   > the machine while logged in as anyone else and the token lands in the
+   > wrong `~`, where the session will never look: the console keeps showing
+   > the stand-in library and nothing says why. If you have already installed
+   > under another name, every command in the next section still works —
+   > prefix them with `sudo -u cabinet`.
 4. Reboot and remove the stick.
 
 **It boots into CabinetOS — the frontend, full screen, with every emulator.**
@@ -325,9 +336,11 @@ ssh cabinet@cabinetos.local
 
 If mDNS does not resolve, find the address from the machine with `ip addr`.
 
-**1. Pair it with your RomM server.** This writes a token to
-`~/.config/cabinetos/romm.json` at 0600, as the `cabinet` user — the same
-account the session runs as, which is what makes the console able to read it:
+**1. Pair it with your RomM server.** Run this **as `cabinet`**. It writes a
+token to that account's `~/.config/cabinetos/romm.json` at 0600, and the
+session runs as `cabinet`, which is the only reason the console can read it —
+a token in anybody else's home directory is a console that stays on the
+stand-in library and says nothing about why:
 
 ```bash
 cabinetos-frontend --romm 192.168.1.10:6005 --romm-probe --romm-pair
