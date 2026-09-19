@@ -121,11 +121,28 @@ on the way out.
 
 ## Pick up with these, in this order
 
+> ## THE A9 PRO WENT OUT FOR DELIVERY ON 2026-09-19
+>
+> **So this list is about to be reordered, and item 1b is the first thing to
+> do.** Installing CabinetOS on that machine does NOT bring the frontend or the
+> twenty-one cores with it — the image does not contain them. A freshly
+> installed A9 Pro boots to a black gamescope session. Everything built in the
+> last fortnight lives at `~/frontend` on the test VM and is compiled by hand.
+>
+> **Do item 1b before setting the machine up by hand**, or the value of doing
+> it at all drops to nothing: the alternative is another machine to rsync
+> source at, which is what the VM already is. And take the `frontend/**` ignore
+> back out of `build.yml` the same day — the comment in the workflow says so
+> too.
+>
+> **The UI freeze lifts the moment it is running there.** Everything under
+> *Waiting on the reference machine* below becomes available, in the order it
+> is written.
+>
 > **Decided 2026-09-17: no more UI is designed or tuned until CabinetOS is
-> installed on the reference machine.** The user's call. **It was still in
-> shipping on 2026-09-19** — delayed, expected within a day or two — so this
-> line still holds. When it lands, read item 1b first: installing the OS on it
-> does NOT bring the frontend with it. This list is ordered by it, and
+> installed on the reference machine.** The user's call, and it holds until the
+> machine is actually running the frontend — not merely unboxed. This list is
+> ordered by it, and
 > PROJECT.md records why — the short version is that overscan, motion and
 > vertical fit cannot be judged on a software-rendered VM, so building more
 > screens here is building against a lie.
@@ -135,7 +152,22 @@ on the way out.
 > goes ahead — and a screen that already exists is not frozen, because fixing
 > something *wrong* is not the same as tuning something.
 
-### 0. The PS3 PKG experiment — DONE 2026-09-18, and the answer was good news
+### 0. PS3 STORAGE is answered. PS3 still cannot be PLAYED — 2026-09-18
+
+**Read the heading twice, because the old one just said "DONE" and that cost a
+conversation on 2026-09-19.** What was measured is the STORAGE question and
+nothing else. Two games were installed and booted far enough to prove the PKG
+could then be deleted; **neither reached gameplay and neither could, because
+the test VM has no GPU.** Playing a PS3 game needs a Vulkan path in the host,
+which is open question 20 and waits on the reference machine.
+
+The same caution applies to the two systems underneath it. **GameCube and PS2
+do not run on this console either** — 85 games between them, both reported in
+the library as *"the core for this system is not built on this console yet"*,
+because Dolphin and PCSX2 are not libretro cores and neither has been built
+here. Cabinet plays both on the Mac by embedding them, and their saves are on
+the reference server, which is exactly what makes it easy to believe they work
+here. They do not.
 
 **Installing a PS3 game does not cost a second copy of it.** The worry was that a
 19.8 GB download would become 40 GB on disk and that PS3 would need its own
@@ -260,8 +292,10 @@ PSP's directory save.
   card left behind by a session that did not finish is moved to
   `saves/unattributed/system-directory/` rather than overwritten.
 
-**What is left, and it needs a controller:** no save in this class has been
-written by actually PLAYING a game here. Every round trip restored a real save,
+**What is left, and it waits for the reference machine.** MMagTech's call,
+2026-09-19: *"real in-games will wait until we have the A9 in hands and the OS
+written to it."* So do not go looking for a controller on the VM. No save in
+this class has been written by actually PLAYING a game here. Every round trip restored a real save,
 watched the core read it, and sent back byte-identical bytes — which is the
 correct answer for a session that saved nothing, and is why forcing the upload
 needed `--sync-test`. That flag now drops the file-save baselines at frame 150
@@ -524,6 +558,13 @@ PROJECT.md says "the SER5" and means this one.
 - **The audio governor's 20 ms cushion.** Inherited from Cabinet rather than
   measured here; the lead it permits *is* input lag. Tune it with a pad in hand.
 - **The boot splash**, and the rest of the branding.
+- **The row in Settings that turns file access on**, decided 2026-09-19 and
+  the answer to open question 9. A console ships listening to nothing; an
+  ordinary visible row turns SFTP on and shows the address, the user name and
+  a password the machine generated for itself. Not the hidden developer-mode
+  toggle this project planned for two weeks — that machinery exists to conceal
+  something dangerous and reaching your own saves is a feature. It is a screen
+  and it is also where the password lives, so the whole thing waits together.
 - **Everything about motion, the letterbox glow and the safe area.**
 
 ## Things that will bite you
