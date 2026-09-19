@@ -23,15 +23,29 @@ on:
     # a documentation-only pull request cost twelve minutes of runner time to
     # rebuild an image whose inputs had not changed — which is how a check
     # becomes something people route around rather than wait for.
+    #
+    # `frontend/**` joined the list on 2026-09-19 for exactly that reason, one
+    # layer along. The Containerfile copies `build_files`, `system_files`,
+    # `LICENSE` and `docs/LICENCES.md` and NOTHING from `frontend/`, so a
+    # session spent entirely on frontend source was starting a thirteen-minute
+    # image build per push and cancelling the one before it. The frontend has
+    # its own check, `build-frontend.yml`, which compiles it in a minute.
+    #
+    # ==> TAKE `frontend/**` BACK OUT THE DAY THE IMAGE CARRIES THE FRONTEND.
+    # That is docs/NEXT-SESSION.md item 1b, and it is the whole of what makes
+    # this safe: today the image genuinely does not contain the frontend, and
+    # the moment it does, this line starts hiding a real breakage.
     paths-ignore:
       - '**.md'
       - 'docs/**'
+      - 'frontend/**'
   push:
     branches:
       - main
     paths-ignore:
       - '**.md'
       - 'docs/**'
+      - 'frontend/**'
   workflow_dispatch:
 
 env:

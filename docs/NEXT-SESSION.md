@@ -301,6 +301,13 @@ So a freshly installed machine boots to a black gamescope session, and none of
 the frontend work of the last fortnight reaches it. Everything that has been
 built here lives at `~/frontend` on the test VM and is compiled by hand.
 
+**And there is a tripwire waiting for whoever does it.** `build.yml` now ignores
+`frontend/**`, because the image does not contain the frontend and a session of
+frontend work was starting a thirteen-minute image build per push for nothing.
+**Take that line back out the day the frontend goes in**, or the check will
+quietly stop covering the thing it exists for. The comment in the workflow says
+so too.
+
 **What it needs:** the frontend binary and `cores/build/*.so` installed into the
 image — which is also where PPSSPP's 13 MB of system files go, at
 `/usr/share/cabinetos/system/`, the one part of open question 18 that is decided
