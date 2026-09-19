@@ -7494,6 +7494,128 @@ nobody decided to build that.
 
 *Do not resolve before the on-screen keyboard has been used on a television.*
 
+### 15b. First run, and the one input that can be guaranteed
+**Designed with MMagTech 2026-09-19, after the A9 Pro was installed and the
+setup was done by hand over SSH. Not built.**
+
+Everything here exists because installing the first real console took a
+keyboard, an SSH session and two commands nobody else would know. That is
+fine for us and it is not a product.
+
+#### The requirement, and everything else follows from it
+
+> **A keyboard is needed exactly once, ever. After first run the console must
+> never require one again, for anything.**
+
+It is testable, which is why it is the requirement rather than a principle.
+
+#### Why the keyboard is the floor, and the controller is not
+
+The instinct is to build setup around a wired controller — a console owner
+owns controllers. **MMagTech's correction, and it is the right one: owning a
+Bluetooth pad and having its cable to hand at setup time are different
+things, and most pads sold now are Bluetooth.**
+
+The keyboard guarantee is structural rather than lucky: **a machine cannot
+reach an installed state without a keyboard, because the firmware boot menu
+needs one.** That stays true after open question 5's work automates the
+installer down to a single confirmation. So it is not "most people probably
+have one" — it is "this machine could not exist without one having been
+present."
+
+| | |
+|---|---|
+| **Required** | a **keyboard**. Setup must complete with nothing else attached. |
+| Wired controller | works if present; never assumed |
+| Mouse | focus-move and click only — open question 16 |
+| **Bluetooth controller** | **paired DURING setup, never a precondition for it** |
+
+That last row is what the keyboard floor buys. Treating a paired controller as
+a precondition creates a chicken-and-egg — pair a pad to reach the screen that
+pairs pads — and with a keyboard underneath, pairing is simply another step
+inside setup, driven in our own UI rather than by a Linux utility.
+
+#### The chain, and why each link is gated
+
+```
+first run:  keyboard → Wi-Fi → RomM server → pair pad 1 → unplug the keyboard
+later:      pad 1 → Settings → Add a controller → pads 2, 3, 4
+never:      needing a keyboard again
+```
+
+- **Wi-Fi before RomM**, because RomM is on the LAN. And the two networks are
+  not the same question: open question 21 records that a LAN-only console has
+  a complete library and three emulator systems that will *never* arrive,
+  because those come from Flathub over the internet. **First run is where
+  that gets said out loud**, not discovered by someone whose Switch games
+  never appear.
+- **Pairing RomM needs a second device.** The flow is device authorisation: it
+  yields a URL and a user code and somebody must approve it in a browser. A
+  console has no browser, so first run shows a **QR code** — which `main.cpp`
+  already anticipates in a comment above the `printf` that prints them. A
+  phone is therefore a real dependency of setup and should be stated as one.
+- **A physical keyboard types into the same field the on-screen keyboard
+  shows.** One field, two ways to fill it; not two text-entry paths. And the
+  on-screen keyboard does not become optional — first run is the one moment a
+  real keyboard is near-certain, and changing a Wi-Fi password later from the
+  sofa is not.
+- **Pairing a controller is the last step and should be insistent.** Not a
+  hard block, because the input model says a keyboard must keep working
+  forever — but someone who skips it owns a games console they cannot play
+  from the sofa, and Settings must offer it again.
+
+#### Adding a second controller uses only the first
+
+**MMagTech's requirement, and the one that makes the guarantee above real.**
+A friend arrives with a pad; nobody should have to find a keyboard.
+
+It also resolves an ambiguity in the rule Phase 6 already carries — *pair on
+a button press, not on discovery; let the pad that sends the first input
+become player one*. That is clean for the FIRST pad and under-specified for
+the second: if the confirmation is "whichever pad sends input first", a
+neighbour's pad in pairing mode can answer it.
+
+**Two-sided confirmation, and it costs the user nothing:**
+
+1. Pad 1 opens *Add a controller*; the console scans.
+2. It shows what it found and **pad 1 chooses which**.
+3. The new pad confirms by **sending its own first input**.
+
+Neither half is sufficient alone. Pad 1 cannot adopt a stranger's device,
+because that device never responds. A stranger's device cannot adopt itself,
+because it was never selected. The confirmation is still the very input being
+established, which is the original rule's insight applied at both ends.
+
+#### Two things to build once, not twice
+
+- **First run's pairing step and Settings → *Add a controller* are the same
+  screen**, entered from two places. The frontend is already built this way:
+  `--screen` opens a screen by walking the route a person walks, so a capture
+  cannot show a state the product cannot reach.
+- **The screen for "nothing is attached" must be readable and actionable with
+  no input at all**, and should name what the console is currently being
+  driven by. Phase 6 already demands three Bluetooth states rather than two —
+  searching, found, and *no adapter, plug something in* — and this is the same
+  rule one level up. A setup screen nobody can operate, with no explanation,
+  is worse than a black one.
+- **The escape hatch has to survive.** If pad 1's battery dies mid-session,
+  USB always works and the keyboard must still work. That is the input model's
+  existing line — supported, never a dependency — and this is the case that
+  makes it load-bearing rather than polite.
+
+#### What already exists
+
+Most of the mechanism, which is why this is a screen problem rather than a
+plumbing one: the on-screen keyboard, the device-authorisation pairing flow
+and its code and URL, `/etc/cabinetos/session.env` as the file a first-run
+screen writes, and `bluez` plus the MT7925's Bluetooth firmware in the image
+with the adapter already naming itself `cabinetos` from the hostname.
+
+Missing: a state machine, a QR renderer, NetworkManager plumbing, and a way
+to know it is the first run at all. **None of those is a picture**, so they
+can be built before the look is settled — but the screens themselves wait,
+like every other screen.
+
 ### 16. Is a mouse supported, or not?
 **Raised 2026-09-13. Two documents currently disagree. Needs a decision, not a
 default.**
@@ -7520,6 +7642,22 @@ built for it, because that is a promise the product does not keep.
 **Keyboard is not in question** and is settled: every screen must be fully
 operable by directional input plus confirm and back, from whatever device
 supplies them. That is already an architectural rule rather than a feature.
+
+**ANSWERED 2026-09-19: option 2, and the reason is that the mouse stopped
+being load-bearing.** Working out first run (below) established that a
+*keyboard* is the guaranteed input on any installed machine, not a mouse and
+not a controller. Everything a person must do can therefore be done with
+directional input, confirm and back — which the architecture already
+requires. That leaves the mouse with nothing it uniquely enables, so it gets
+the cheap treatment: **it moves focus and clicks the focused thing, and
+nothing else.** No cursor, no hover states, no pointer affordances, and
+therefore no second interaction model to design for or test.
+
+The first-run proposal's objection stands and is respected rather than
+overruled — pointer input *would* pull the design toward hover and click
+targets, which is why none of that is built. A mouse under this rule is not a
+pointer; it is a second way to drive the one model that exists. Amend the
+input-model table to say exactly that, rather than the bare word "supported".
 
 ### 17. Wi-Fi credentials on a controller-only console
 **Raised 2026-09-13. The mechanism is DECIDED; the UI is Phase 6.**

@@ -336,10 +336,19 @@ these in the VM.**
   decision and it needs the panel.
 - **The audio governor's 20 ms cushion.** Inherited from Cabinet rather than
   measured here; the lead it permits *is* input lag. Tune it with a pad in hand.
-- **A first-run screen**, so a console can be told which RomM server it belongs
-  to without somebody writing `/etc/cabinetos/session.env` over SSH. Open
-  question 15. **The mechanism exists now and the screen does not** — that file
-  is what any screen would write.
+- **First run**, which is now designed and not built — **open question 15b**,
+  written with MMagTech on 2026-09-19 after setting the A9 up by hand over
+  SSH. The requirement is one line and it is testable: **a keyboard is needed
+  exactly once, ever.** A keyboard is the only input an installed machine
+  guarantees, because the firmware boot menu needs one; a wired controller is
+  not, because most pads sold now are Bluetooth. So setup runs on a keyboard,
+  pairs a controller as its last step, and a second controller is added using
+  only the first — with two-sided confirmation, so a neighbour's pad in
+  pairing mode cannot answer for itself. **The mechanisms mostly exist** (the
+  on-screen keyboard, the pairing flow's code and URL, `session.env`, bluez);
+  what is missing is a state machine, a QR renderer, NetworkManager plumbing
+  and a way to know it is the first run. **None of those is a picture**, so
+  they can start before the look is settled.
 - **The boot splash**, and the rest of the branding.
 - **The row in Settings that turns file access on**, decided 2026-09-19 and the
   answer to open question 9. A console ships listening to nothing; an ordinary
