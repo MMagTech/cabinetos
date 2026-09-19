@@ -282,6 +282,37 @@ saved; Sega CD's cart is a separate region from its internal RAM).
 All of it is measured by whether a file lands on the server, so the VM answers
 these completely.
 
+### 1b. The image does not carry the frontend or the cores — **and that surprises people**
+
+**Noticed 2026-09-19, when MMagTech asked a reasonable question: if we install
+CabinetOS on the mini PC now, does the work we do afterwards just arrive as
+updates?** Half of it does. The OS half is genuinely self-updating — merge to
+main, the image rebuilds, `bootc` pulls it, and packages, system files and the
+session service all travel.
+
+**The frontend and the twenty-one cores do not travel, because they are not in
+the image.** `system_files/usr/bin/cabinetos-session` still runs a placeholder:
+
+```
+APP="${CABINETOS_APP:-/usr/bin/sleep infinity}"
+```
+
+So a freshly installed machine boots to a black gamescope session, and none of
+the frontend work of the last fortnight reaches it. Everything that has been
+built here lives at `~/frontend` on the test VM and is compiled by hand.
+
+**What it needs:** the frontend binary and `cores/build/*.so` installed into the
+image — which is also where PPSSPP's 13 MB of system files go, at
+`/usr/share/cabinetos/system/`, the one part of open question 18 that is decided
+and not built. The frontend is compiled in CI already (`build-frontend.yml`) and
+the cores are built and cached (`build-core.yml`), so the pieces exist; nothing
+collects them into the image.
+
+**Until it is done**, a mini PC is another machine to push source at and build
+on, exactly like the VM. That is still worth having the day it arrives — it is
+the only way to judge the UI on a television — but it is not "install it once
+and it keeps up".
+
 ### 2. Finish the core options, which is half done
 
 The host answers every option a core declares, and **the override table is now
