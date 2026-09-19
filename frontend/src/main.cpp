@@ -54,6 +54,7 @@
 #include "cache.h"
 #include "catalog.h"
 #include "dirsave.h"
+#include "filesave.h"
 #include "romfile.h"
 #include "romm.h"
 #include "screens.h"
@@ -223,7 +224,21 @@ private:
 struct GameSession {
     int romId = 0;
     std::string title;
-    std::string emulatorTag;    // empty means: do not upload, we cannot vouch for it
+    // The server's own file name for the game, without its extension. A
+    // save's row on RomM is named after it — see saveRowName.
+    std::string fsStem;
+    // TWO TAGS, NOT ONE, and the difference is what lets five platforms' saves
+    // travel at all. A STATE is a photograph of the emulator's insides and the
+    // tag is the promise that the build about to load it is the build that
+    // wrote it; a SAVE in the file-writing class is the emulated machine's own
+    // storage — a VMU image, a board's NVRAM — and no build flag moves it. So
+    // Flycast has a save tag and no state tag, which is exactly right: its
+    // pinned commit does not reproduce what the reference implementation
+    // ships, and a memory card does not care. See catalog::saveTag.
+    //
+    // Empty means: do not upload, we cannot vouch for it.
+    std::string saveTag;
+    std::string stateTag;
     // Where this person's copies live, which is no longer beside the ROM.
     //
     //   users/<id> - <name>/saves/<platform>/<romId>/<core>/
@@ -260,6 +275,15 @@ struct GameSession {
     // an upload and a no-op.
     std::string dirSaveRoot;                  // empty for every core but PPSSPP
     std::vector<cab::DirEntry> dirAtLaunch;
+
+    // --- Saves the core writes as a FILE ----------------------------------
+    //
+    // Empty for the cores that expose a battery, which this frontend reads out
+    // of the core's own memory above. For the rest — Dreamcast, arcade, 3DO,
+    // Sega CD, Neo Geo Pocket, DS — this is where the game's progress actually
+    // lives, and each entry carries what was in the file once the restore had
+    // run and before the game had a chance to write. See filesave.h.
+    std::vector<cab::FileSaveState> fileSaves;
 };
 
 static std::string sanitisedStem(const std::string& title) {
@@ -339,8 +363,271 @@ static void syncDirSave(GameSession& sess, Uploader& up) {
                  paths.size(), touchedFolders.size(), zip.size(), path.c_str());
     sess.dirAtLaunch = now;   // this is the new baseline; do not send it twice
 
-    if (sess.emulatorTag.empty()) return;
-    up.push(Uploader::Job{sess.romId, sess.emulatorTag, name, std::move(zip), false});
+    if (sess.saveTag.empty()) return;
+    up.push(Uploader::Job{sess.romId, sess.saveTag, name, std::move(zip), false});
+}
+
+// The name a save travels under on RomM, and it is the REFERENCE
+// IMPLEMENTATION'S rather than this console's own. That is the whole point.
+//
+// `POST /api/saves` is sent with `overwrite=true`, and RomM matches a row for
+// overwrite BY FILENAME ALONE — the emulator tag is not part of it. So the
+// filename is what decides whether a person ends up with one memory card per
+// game or one per device, and this console was quietly choosing the second:
+// it named rows after the game's TITLE while the reference names them after
+// the server's own file name, so the same card arrived twice. It is visible on
+// the reference server today — Lumines has a `Lumines - Puzzle Fusion (USA)
+// (Cabinet).srm` from an Apple TV and a `Lumines.zip` from here, both tagged
+// `ppsspp-native`, both the same save.
+//
+// `<fs name without extension> (Cabinet).<region>`, then:
+//
+//   * the STEM is the server's `fs_name`, so `Ikaruga (Japan)`, `lethalen`;
+//   * the `(Cabinet)` marker keeps the row distinct from anything RomM's own
+//     web player wrote, which a bare `<name>.srm` would silently take over;
+//   * arcade puts the core inside the marker, because one game has two of
+//     these and they must not overwrite each other;
+//   * the REGION is the extension, so Sega CD's external RAM cartridge is its
+//     own row rather than something that lands on top of the internal RAM.
+//
+// WHAT CHANGES FOR SAVES ALREADY ON A SERVER: a row this console wrote under
+// the old name is left where it is and stops being updated. Nothing is lost —
+// a restore takes the newest row for the tag whatever it is called, so the new
+// one wins from the first save onward — and the orphan can be deleted by hand.
+//
+// PSP IS THE ONE EXCEPTION AND IT IS DELIBERATE. Its row is still
+// `<title>.zip`, because the reference's own PSP row is an Apple archive
+// wearing an `.srm` extension and the fixed build that writes a zip instead
+// has not been seen from here yet. Renaming ours onto that row would overwrite
+// a save with a container the other end may not read. docs/NEXT-SESSION.md
+// says to settle it from the first save that build uploads; until then two
+// rows is the safe answer and one row is not.
+static std::string saveRowName(const std::string& fsStem, const std::string& coreRowName,
+                               const std::string& region) {
+    std::string base = sanitisedStem(fsStem) + " (Cabinet";
+    if (!coreRowName.empty()) base += " " + coreRowName;
+    return base + ")." + region;
+}
+
+// Which region a row on the server belongs to, judged by the extension this
+// console and the reference implementation both upload under. Anything else —
+// a card somebody made in RomM's web player, a file from another emulator —
+// reads as the main save, which is right: that is the only region a foreign
+// row could ever be.
+static std::string regionOfRow(const std::string& fileName) {
+    if (fileName.size() > 5 && fileName.compare(fileName.size() - 5, 5, ".cart") == 0)
+        return "cart";
+    if (fileName.size() > 4 && fileName.compare(fileName.size() - 4, 4, ".rtc") == 0)
+        return "rtc";
+    return "srm";
+}
+
+// Puts a game's save files where the core will look for them, and remembers
+// what was in them.
+//
+// RUN BEFORE `retro_load_game` AND NOWHERE ELSE. Every core in this class
+// reads its save file once while the machine is being built and never looks
+// again, so a file placed afterwards is a file the game has already decided is
+// not there. That is the same rule PSP's directory save taught, and it is the
+// reason this cannot be folded into the battery restore below, which happens
+// after the load because the core can be handed bytes directly.
+//
+// WHICH COPY WINS. A save this console still owes the server wins outright —
+// it is strictly newer than anything the server has, and without that rule a
+// launch after an offline session would fetch the older copy and write it over
+// the top. Otherwise the server's own row wins, because that is how a card
+// made on another device arrives. Failing both, whatever is on this disk plays.
+static std::vector<cab::FileSaveState> restoreFileSaves(
+        const std::vector<catalog::SaveFile>& specs, const std::string& fsStem,
+        const std::string& saveDir, int romId, const char* tag,
+        romm::Client& client) {
+    std::vector<cab::FileSaveState> out;
+    if (specs.empty()) return out;
+
+    std::vector<romm::Asset> rows;
+    if (tag && client.haveToken()) {
+        std::string err;
+        if (!client.fetchSaves(romId, &rows, &err))
+            std::fprintf(stderr, "[save] could not ask the server: %s\n", err.c_str());
+    }
+    const storage::User& user = storage::currentUser();
+
+    for (const catalog::SaveFile& spec : specs) {
+        cab::FileSaveState f;
+        f.spec = spec;
+        f.path = (spec.inSystemDir ? storage::biosDir() : saveDir) + "/" + spec.path;
+        const std::string name = saveRowName(fsStem, spec.coreRowName, spec.region);
+
+        // WHERE THIS PERSON'S COPY LIVES. For every platform but Dreamcast it
+        // is the file the core writes, because the core was handed this
+        // person's own save directory. Dreamcast's is a copy under the same
+        // directory, because Flycast insists on the system directory and the
+        // system directory is shared by the whole machine.
+        const std::string mine = spec.inSystemDir ? saveDir + "/" + name : f.path;
+
+        // A card left in the system directory by a session that did not shut
+        // down cleanly. It is somebody's save and nothing on this machine says
+        // whose game it was, so it is kept rather than guessed at — the same
+        // answer the folder move gave to the two save piles it could not
+        // attribute, and in the same place.
+        if (spec.inSystemDir) {
+            const std::string stray = cab::writtenFile(spec, f.path);
+            if (!stray.empty()) {
+                const std::vector<uint8_t> bytes = cab::readBytes(stray);
+                if (!bytes.empty() && bytes != cab::readBytes(mine)) {
+                    char stamp[32];
+                    const std::time_t now = std::time(nullptr);
+                    std::strftime(stamp, sizeof stamp, "%Y-%m-%d %H-%M-%S",
+                                  std::localtime(&now));
+                    const std::string kept = storage::userDir(user) +
+                                             "/saves/unattributed/system-directory/" +
+                                             std::string(stamp) + " " + spec.region + ".bin";
+                    if (cab::writeBytes(kept, bytes))
+                        std::fprintf(stderr,
+                                     "[save] a card was left in the system directory by a "
+                                     "session that did not finish; kept at %s\n",
+                                     kept.c_str());
+                }
+                cab::removeFile(stray);
+            }
+        }
+
+        // What this console already has. Found by scanning rather than by the
+        // predicted name, because the name the core chose last time is the one
+        // that is actually on the disk.
+        const std::string existing =
+            spec.inSystemDir ? mine : cab::writtenFile(spec, f.path);
+        std::vector<uint8_t> chosen =
+            existing.empty() ? std::vector<uint8_t>() : cab::readBytes(existing);
+        const bool haveLocal = !chosen.empty();
+        const char* from = haveLocal ? "this console" : nullptr;
+
+        if (!cache::isPending(user, romId, name)) {
+            const romm::Asset* newest = nullptr;
+            for (const romm::Asset& a : rows) {
+                if (!tag || a.emulator != tag) continue;
+                if (regionOfRow(a.fileName) != spec.region) continue;
+                if (!newest || a.updatedAt > newest->updatedAt) newest = &a;
+            }
+            if (newest) {
+                std::vector<uint8_t> data = client.fetchAsset("saves", newest->id);
+                // A row that holds nothing a game wrote does not get to
+                // replace one that does. Three of the thirteen Dreamcast cards
+                // on the reference server are formatted and empty, uploaded by
+                // an implementation with no freshness rule, and restoring one
+                // of those over a real card would be this feature losing a
+                // save rather than moving one.
+                if (data.empty()) {
+                    std::fprintf(stderr, "[save] %s came back empty\n",
+                                 newest->fileName.c_str());
+                } else if (haveLocal && !cab::holdsASave(data, spec.untouched)) {
+                    std::fprintf(stderr,
+                                 "[save] %s holds no save — keeping this console's copy\n",
+                                 newest->fileName.c_str());
+                } else {
+                    chosen = std::move(data);
+                    from = "the server";
+                }
+            }
+        } else {
+            std::fprintf(stderr, "[save] %s has not reached the server yet — it wins\n",
+                         name.c_str());
+        }
+
+        if (!chosen.empty()) {
+            // LOCAL FIRST, ALWAYS, and for Dreamcast that means two writes:
+            // this person's copy, then the working copy the core reads. For
+            // everything else the two are the same file.
+            if (!cab::writeBytes(mine, chosen)) {
+                std::fprintf(stderr, "[save] could not write %s\n", mine.c_str());
+            } else if (!spec.inSystemDir || cab::writeBytes(f.path, chosen)) {
+                std::fprintf(stderr, "[save] %zu bytes from %s into %s\n", chosen.size(),
+                             from ? from : "nowhere", f.path.c_str());
+                f.atLaunch = chosen;
+                f.hadOne = true;
+            } else {
+                std::fprintf(stderr, "[save] could not place the card at %s\n",
+                             f.path.c_str());
+            }
+        } else {
+            std::fprintf(stderr, "[save] no save anywhere for %s yet\n", spec.path.c_str());
+        }
+        out.push_back(std::move(f));
+    }
+    return out;
+}
+
+// The saves a core wrote as files, read back after it shut down.
+//
+// RUN AFTER `retro_unload_game` AND NOWHERE ELSE. Every core in this class
+// buffers, and Flycast does not even close the VMU until its device is
+// destroyed at teardown, so a capture taken mid-session reads a partially
+// written card. The reference implementation captured Dreamcast on pause once
+// and uploaded exactly such a half-written image; the game that later restored
+// it reported the file corrupt. That is the whole reason this is a separate
+// function called from one place rather than part of syncSave.
+//
+// WHAT TRAVELS. Only a file whose bytes differ from the baseline taken at
+// launch — so a session that looked at a title screen and quit sends nothing —
+// and, when there was no save anywhere to begin with, only one that holds
+// something a game actually wrote. Once a real save has existed every later
+// change travels, erasing one included, because losing history is worse than
+// an empty row.
+static void syncFileSaves(GameSession& sess, Uploader& up) {
+    for (cab::FileSaveState& f : sess.fileSaves) {
+        const std::string written = cab::writtenFile(f.spec, f.path);
+        std::vector<uint8_t> data =
+            written.empty() ? std::vector<uint8_t>() : cab::readBytes(written);
+
+        // Dreamcast, and this is the half that closes the folder layout's last
+        // rough edge. The card was placed in the system directory because that
+        // is the only place Flycast looks; now that it has been read back, it
+        // comes out again, so what sits in `bios/` between sessions is
+        // firmware and the console's own settings rather than the one file in
+        // there that could never be fetched a second time.
+        //
+        // Taken out whether or not anything changed, and whether or not the
+        // upload works: the copy below is written to this person's save
+        // directory first, and the thing left in `bios/` is a duplicate either
+        // way. Only removed when it was actually read — a file we could not
+        // read is left exactly where it is rather than deleted on a guess.
+        const bool tidyAway = f.spec.inSystemDir && !written.empty() && !data.empty();
+
+        if (data.empty() || data == f.atLaunch) {
+            if (tidyAway) cab::removeFile(written);
+            continue;
+        }
+        if (!f.hadOne && !cab::holdsASave(data, f.spec.untouched)) {
+            std::fprintf(stderr,
+                         "[save] %s is what the core writes by starting up, not a save — "
+                         "not sending it\n", written.c_str());
+            if (tidyAway) cab::removeFile(written);
+            continue;
+        }
+
+        // LOCAL FIRST, ALWAYS. For every platform but Dreamcast the file is
+        // already sitting in this person's save directory, because that is the
+        // directory the core was handed — so this writes nothing and the
+        // guarantee holds for free. Dreamcast's card has to be copied across
+        // out of the system directory, and that copy happens before a single
+        // byte is offered to the network.
+        const std::string name = saveRowName(sess.fsStem, f.spec.coreRowName, f.spec.region);
+        const std::string local = sess.saveDir + "/" + name;
+        if (f.spec.inSystemDir && !writeLocal(local, data)) {
+            std::fprintf(stderr, "[save] could not write %s — leaving the card in %s\n",
+                         local.c_str(), written.c_str());
+            continue;
+        }
+        if (tidyAway) cab::removeFile(written);
+
+        std::fprintf(stderr, "[save] %zu bytes from %s\n", data.size(),
+                     f.spec.path.c_str());
+        f.atLaunch = data;    // the new baseline; do not send it twice
+        f.hadOne = true;
+
+        if (sess.saveTag.empty()) continue;
+        up.push(Uploader::Job{sess.romId, sess.saveTag, name, std::move(data), false});
+    }
 }
 
 // Takes a snapshot of the game's own save and sends it, but only when it has
@@ -355,7 +642,7 @@ static void syncSave(GameSession& sess, Uploader& up) {
     if (!core.readSaveRam(ram) || ram.empty()) return;
     if (ram == sess.saveAtLaunch) return;     // nothing happened worth sending
 
-    const std::string name = sanitisedStem(sess.title) + ".srm";
+    const std::string name = saveRowName(sess.fsStem, std::string(), "srm");
     const std::string path = sess.saveDir + "/" + name;
     if (!writeLocal(path, ram)) {
         std::fprintf(stderr, "[save] could not write %s\n", path.c_str());
@@ -364,11 +651,11 @@ static void syncSave(GameSession& sess, Uploader& up) {
     std::fprintf(stderr, "[save] %zu bytes to %s\n", ram.size(), path.c_str());
     sess.saveAtLaunch = ram;   // copied before the move below
 
-    if (sess.emulatorTag.empty()) return;
+    if (sess.saveTag.empty()) return;
     // Queued, not sent. The local copy above is already safe; the network is
     // the part that can take thirty seconds and it does not get to stop the
     // picture.
-    up.push(Uploader::Job{sess.romId, sess.emulatorTag, name, std::move(ram), false});
+    up.push(Uploader::Job{sess.romId, sess.saveTag, name, std::move(ram), false});
 }
 
 static void saveStateNow(GameSession& sess, Uploader& up) {
@@ -392,11 +679,11 @@ static void saveStateNow(GameSession& sess, Uploader& up) {
     }
     std::fprintf(stderr, "[state] %zu bytes saved locally\n", st.size());
 
-    if (sess.emulatorTag.empty()) {
+    if (sess.stateTag.empty()) {
         std::fprintf(stderr, "[state] no settled tag for this core — not uploaded\n");
         return;
     }
-    up.push(Uploader::Job{sess.romId, sess.emulatorTag, name, std::move(st), true});
+    up.push(Uploader::Job{sess.romId, sess.stateTag, name, std::move(st), true});
 }
 
 // The newest state RomM holds that THIS build can actually restore. A state
@@ -417,7 +704,7 @@ struct StateLoad {
 
 static void beginLoadLatestState(StateLoad& load, GameSession& sess, romm::Client& client) {
     if (load.running.load()) return;
-    if (sess.emulatorTag.empty()) {
+    if (sess.stateTag.empty()) {
         std::fprintf(stderr, "[state] no settled tag for this core — refusing to load\n");
         return;
     }
@@ -425,7 +712,7 @@ static void beginLoadLatestState(StateLoad& load, GameSession& sess, romm::Clien
     load.running = true;
     load.ready = false;
     const int romId = sess.romId;
-    const std::string tag = sess.emulatorTag;
+    const std::string tag = sess.stateTag;
     load.worker = std::thread([&load, &client, romId, tag]() {
         std::vector<romm::Asset> states;
         std::string err;
@@ -515,6 +802,16 @@ struct LaunchJob {
     // ONE SPELLING OF A PLATFORM, EVERYWHERE. RomM's `fs_slug` — "Sony
     // Playstation", not "psx". See storage.h for why the short one lost.
     std::string platformFsSlug;
+    // AND THE SHORT ONE AS WELL, for the one question that has to be asked of
+    // the platform rather than the core: which file, if any, the core writes
+    // its save into. `fs_slug` is what a server's owner can rename; `slug` is
+    // RomM's own and is what catalog is keyed on. Both are carried because
+    // each answers a different question, and the arcade rows need both.
+    std::string platformSlug;
+    // The server's own file name for this game, with its extension removed —
+    // `Ikaruga (Japan)`, `lethalen`. It is what a save's row on RomM is named
+    // after; see saveRowName.
+    std::string fsStem;
     std::string corePath;
     std::string title;
     std::string message;
@@ -594,8 +891,19 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
     job.title = game.name.empty() ? game.fsName : game.name;
     job.romId = game.id;
     job.platformFsSlug = game.platformFsSlug;
+    job.platformSlug = game.platformSlug;
+    job.fsStem = game.fsName;
+    if (const size_t dot = job.fsStem.find_last_of('.'); dot != std::string::npos)
+        job.fsStem.erase(dot);
     job.coreName = cov.core;
-    job.corePath = coreDir + "/" + cov.core + "_libretro.so";
+    // ONE RULE, ONE PLACE. This used to append `_libretro.so` to whatever the
+    // manifest called the core, which is right for twenty of the twenty-one
+    // and wrong for `fbneo_libretro`, whose name already ends in it — so the
+    // launch looked for `fbneo_libretro_libretro.so`, a file nothing builds,
+    // while coverageFor looked for the right one and reported the game
+    // playable. Every FBNeo game on this console failed at the moment somebody
+    // pressed Play. See catalog::coreFileName.
+    job.corePath = coreDir + "/" + catalog::coreFileName(cov.core);
     job.romPath.clear();
     job.message.clear();
     job.playWhenReady = playWhenReady;
@@ -857,7 +1165,24 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
         // Nothing came out of it, so the directory holds one file and the
         // layout says it should not be a directory at all. Two renames inside
         // one filesystem, whatever the game weighs.
-        if (primary == dest && countEntries(entryPath) == 1) {
+        //
+        // EXCEPT WHEN THE CORE OPENS THE ARCHIVE ITSELF, and this cost every
+        // arcade game on the console. A core that answers `block_extract` is
+        // handed the file whole, and for MAME 2003-Plus and FBNeo the file's
+        // own NAME is how the machine is chosen — `lethalen.zip` is the Lethal
+        // Enforcers driver. Collapsing renames it to `3022 - Lethal
+        // Enforcers.zip`, the core looks that up in its driver table, finds
+        // nothing, and the launch ends at "Game driver not found". That has
+        // been true of all 223 arcade games since the folder layout landed on
+        // 2026-09-18 and nobody ran one; found by running one, 2026-09-19.
+        //
+        // So the entry stays a directory and the file inside keeps the name
+        // the server gave it. The layout already allows either shape and
+        // renames both identically, so keeping and releasing do not care —
+        // and the save filed under `nvram/lethalen.nv` now matches what every
+        // other MAME frontend, and the reference implementation, already
+        // writes.
+        if (primary == dest && countEntries(entryPath) == 1 && !blockExtract) {
             const size_t dot = fsName.find_last_of('.');
             const std::string ext = dot == std::string::npos ? "" : fsName.substr(dot);
             const std::string tmp = entryPath + ".collapsing";
@@ -2591,7 +2916,7 @@ int main(int argc, char** argv) {
         // the memory stick while the game boots, so a folder that arrives later
         // is a folder the game has already decided is not there.
         const char* dirSub = catalog::directorySaveRoot(launchJob.coreName.c_str());
-        const char* launchTag = catalog::emulatorTag(launchJob.coreName.c_str());
+        const char* launchTag = catalog::saveTag(launchJob.coreName.c_str());
         if (dirSub && launchTag && liveClient.haveToken()) {
             const std::string root = saveDir + "/" + dirSub;
             std::vector<romm::Asset> saves;
@@ -2630,6 +2955,29 @@ int main(int argc, char** argv) {
             }
         }
 
+        // AND THE SAVES THE CORE WRITES AS A FILE, which is most of the ones
+        // on a real server and none of the ones this console used to handle.
+        // Before the load for the same reason the directory save is: these
+        // cores read their file once while the machine is being built. See
+        // filesave.h.
+        //
+        // The stem is the basename of what the core is handed, without its
+        // extension, because that is what these cores name the save after —
+        // `lethalen.nv`, `Lunar - The Silver Star.brm`.
+        std::vector<catalog::SaveFile> saveSpecs;
+        {
+            std::string stem = launchJob.romPath;
+            if (const size_t slash = stem.find_last_of('/'); slash != std::string::npos)
+                stem.erase(0, slash + 1);
+            if (const size_t dot = stem.find_last_of('.'); dot != std::string::npos)
+                stem.erase(dot);
+            saveSpecs = catalog::saveFiles(launchJob.platformSlug,
+                                           launchJob.platformFsSlug, stem);
+        }
+        std::vector<cab::FileSaveState> restored =
+            restoreFileSaves(saveSpecs, launchJob.fsStem, saveDir, launchJob.romId,
+                             launchTag, liveClient);
+
         if (!core.loadGame(launchJob.romPath, storage::biosDir(), saveDir)) {
             std::fprintf(stderr, "[launch] %s\n", core.error().c_str());
             return;
@@ -2646,13 +2994,18 @@ int main(int argc, char** argv) {
         session.romId = launchJob.romId;
         session.title = launchJob.title;
         session.saveDir = saveDir;
+        session.fsStem = launchJob.fsStem;
         session.stateDir = storage::statesDir(
             user, launchJob.platformFsSlug, launchJob.romId, launchJob.coreName);
+        session.fileSaves = std::move(restored);
+        if (launchTag) session.saveTag = launchTag;
         if (const char* tag = catalog::emulatorTag(launchJob.coreName.c_str())) {
-            session.emulatorTag = tag;
+            session.stateTag = tag;
         } else {
-            std::fprintf(stderr, "[sync] no settled tag for %s — saves stay local\n",
-                         launchJob.coreName.c_str());
+            std::fprintf(stderr,
+                         "[sync] no settled tag for %s — states stay local%s\n",
+                         launchJob.coreName.c_str(),
+                         launchTag ? ", saves travel" : ", and so do saves");
         }
         // The baseline for a directory save, taken AFTER the restore above and
         // BEFORE the game has had a chance to write anything. What changes
@@ -2664,13 +3017,13 @@ int main(int argc, char** argv) {
                          session.dirSaveRoot.c_str(), session.dirAtLaunch.size());
         }
 
-        if (core.saveRamSize() > 0 && !session.emulatorTag.empty()) {
+        if (core.saveRamSize() > 0 && !session.saveTag.empty()) {
             std::vector<romm::Asset> saves;
             std::string serr;
             if (liveClient.fetchSaves(session.romId, &saves, &serr)) {
                 const romm::Asset* newest = nullptr;
                 for (const auto& a : saves) {
-                    if (a.emulator != session.emulatorTag) continue;
+                    if (a.emulator != session.saveTag) continue;
                     if (!newest || a.updatedAt > newest->updatedAt) newest = &a;
                 }
                 if (newest) {
@@ -2808,6 +3161,10 @@ int main(int argc, char** argv) {
         // Safe to run twice: syncDirSave compares against its own baseline and
         // sends nothing when nothing moved.
         if (!session.dirSaveRoot.empty()) syncDirSave(session, uploader);
+        // And the same trigger for the same reason, for the class that is one
+        // file rather than a tree. This is where a Dreamcast's card is read
+        // back out of the system directory and taken out of `bios/`.
+        syncFileSaves(session, uploader);
         playing = false;
         overlayOpen = false;
         overlayFade.retarget(0.0f, kOverlayFade);
@@ -3203,6 +3560,21 @@ int main(int argc, char** argv) {
                 // proves nothing about whether sending works.
                 session.saveAtLaunch.clear();
                 syncSave(session, uploader);
+                // The same forcing for the saves the core writes as files, and
+                // it is the only way to see that half send anything: those are
+                // captured after the unload rather than here, and a headless
+                // run cannot press the buttons that would make a game save.
+                // So the baseline is dropped now and the quit-time capture
+                // treats whatever the core flushed as new. `hadOne` goes with
+                // it, because the freshness guard is the other thing under
+                // test and a forced run must not be stopped by it.
+                for (cab::FileSaveState& f : session.fileSaves) {
+                    f.atLaunch.clear();
+                    f.hadOne = true;
+                }
+                std::fprintf(stderr,
+                             "[sync-test] %zu file save(s) will be sent at the quit\n",
+                             session.fileSaves.size());
                 // What the game actually paid. Everything after this point is
                 // on the worker, so this is the whole cost to the picture.
                 std::fprintf(stderr, "[sync-test] frame thread blocked %.2f ms\n",

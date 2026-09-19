@@ -15,10 +15,16 @@ Rewrite it at the end of a session. It is meant to be current, not a log.
 ## Before anything else
 
 **Everything is on `main`.** No other branches and no open pull requests.
-[#22](https://github.com/MMagTech/cabinetos/pull/22) — the on-disk folder
-layout, keeping per person, the second drive and "Remove download" actually
-removing the download — merged as `8f23fc7`, so everything described below as
-"runs today" is on `main`.
+The saves that could not travel now travel — Dreamcast, Sega CD, both arcade
+emulators, 3DO, Neo Geo Pocket and DS — so everything described below as "runs
+today" is on `main`.
+
+**AND THE HANDOVER GOES IN THE WORK'S OWN PULL REQUEST FROM NOW ON.** Last
+session pushed this file straight to `main` and nobody could say whether that
+was allowed. It is not, and it never needs to be: write the handover inside the
+branch that does the work it describes, so there is never a handover-only push
+and never a handover-only pull request. The rule and the one narrow exception
+are in PROJECT.md, *Constraints and principles*, item 7.
 
 **THE FILES ON DISK MOVED, 2026-09-18.** There is no `romcache/` any more and no
 `system/`. Games are in `roms/` and `cache/` under a platform folder, firmware
@@ -86,9 +92,14 @@ on the way out.
 - **Both floors are enforced where that button is**, measured by filling the
   disk rather than by reasoning about it.
 - **Saves, memory cards and states sync both ways** with RomM, tagged with
-  Cabinet's own emulator strings. Six cores share a tag; PPSSPP is the newest
-  and has the strongest case of the six, because no configuration difference is
-  left to justify.
+  Cabinet's own emulator strings. Six cores share a state tag; PPSSPP is the
+  newest and has the strongest case of the six, because no configuration
+  difference is left to justify.
+- **EVERY platform's saves travel, as of 2026-09-19**, not just the ones whose
+  core exposes a battery. The 47 of 81 rows on the server that could neither be
+  uploaded nor restored — Dreamcast, Sega CD, MAME, FBNeo, 3DO, Neo Geo Pocket,
+  DS — now do, into the same rows an Apple TV reads. Ikaruga says
+  「データファイルのロードに成功しました」 to a card that came off RomM.
 - **BIOS comes down with the game**, every file the platform lists — except
   PSP's, which is not a console's firmware and ships with the emulator instead.
 - **Dreamcast, Naomi, N64 and PSP play.** The cores that draw for themselves get
@@ -201,97 +212,61 @@ outside the virtual drive onto the OS volume. All four are in PROJECT.md. **PS3
 still cannot be PLAYED here**; that needs Vulkan and waits on the A9 Pro, which
 is open question 20.
 
-### 1. Saves that actually reach the server — **DO THIS NEXT**
+### 1. Saves that actually reach the server — DONE 2026-09-19
 
-The biggest real hole in the product, and **the audit of 2026-09-17 measured
-it: 47 of the 81 saves on the server — 58% — are for platforms this console can
-neither upload nor restore.** It has been recorded here as "the file-writing
-save class", which reads like an edge case. It is the majority.
+**All seven remaining platforms sync, and the 58% is now zero.** The audit
+measured 47 of the 81 saves on the server as belonging to platforms this
+console could neither upload nor restore. Dreamcast, Sega CD (both regions),
+MAME, FBNeo, 3DO, Neo Geo Pocket and DS all travel now, filed under the same
+rows an Apple TV already reads. PROJECT.md, *BUILT AND MEASURED, 2026-09-19*,
+has the per-platform table and the numbers.
 
-**Do Dreamcast first.** Thirteen saves, the largest count of any platform, and
-it explains the symptom below rather than sitting beside it. Flycast never
-exposes the VMU through `RETRO_MEMORY_SAVE_RAM`; it reads and writes
-`vmu_save_A1.bin` in the **system** directory under `dc/` — which is now
-`bios/dc/`, beside the BIOS. Cabinet restores it there before boot and captures
-it after unload. Write the bytes before boot, read them after, upload if
-changed, and there are thirteen real cards on the server to test the restore
-against.
+**`frontend/src/filesave.{h,cpp}` is the mechanism and `catalog::saveFiles` is
+the table.** Restore before `retro_load_game`, capture after
+`retro_unload_game`, compare against a baseline taken at launch. Same shape as
+PSP's directory save.
 
-**And it closes the one gap the new layout left open.** `bios/` is supposed to
-hold replaceable firmware, and `vmu_save_A1.bin` is the one file in there that
-cannot be fetched again. Once Dreamcast saves travel, the card belongs in
-`users/<id> - <name>/saves/Sega Dreamcast/<romId>/flycast/` like every other
-save, and what stays in `bios/dc/` is `dc_nvmem.bin` — the console's own clock
-and language settings, which are a machine fact rather than a person's. See
-open question 18, *Four things building it turned up*.
+**The four things worth knowing before touching it:**
 
-PROJECT.md, *The save audit*, has the per-platform table of where every core
-writes its file and the two guards to copy (a uniform fill means the game never
-saved; Sega CD's cart is a separate region from its internal RAM).
+- **Three rows of the audit's table were wrong**, all read across from Cabinet,
+  all failing silently, all found by running a game and listing the directory.
+  MAME writes one directory deeper than Cabinet says; Sega CD's `.brm` is named
+  after the BIOS region unless `genesis_plus_gx_system_bram` is forced to
+  `per game`; 3DO's fixed path needs `opera_bios` and `opera_nvram_storage`
+  forced, and without the first the core does not boot at all. Those three
+  option overrides are in `catalog::optionOverrides` now and are the first
+  slice of item 2.
+- **A save tag is not a state tag.** `catalog::saveTag` exists beside
+  `emulatorTag`. Flycast, Opera, FBNeo, MAME and Beetle NGP have no state tag
+  and 35 of the 47 saves between them; a VMU image or a board's NVRAM is the
+  emulated machine's own format and no build flag moves it. Flycast still
+  uploads no state, correctly.
+- **The filename is what makes a card one row instead of two.** RomM matches
+  for overwrite by filename alone, so every save now uploads as
+  `<fs name> (Cabinet).<region>` — Cabinet's own convention. Seven uploads and
+  the server still holds 81 rows. **PSP is the deliberate exception**: its row
+  stays `<title>.zip` until somebody sees what the fixed Cabinet build actually
+  writes, because Cabinet's only PSP row is still an `rtfd` and renaming onto
+  it would overwrite a save with a container the other end may not read.
+- **The VMU is out of `bios/`.** Placed there for the length of a session
+  because Flycast looks nowhere else, moved into
+  `users/<id> - <name>/saves/Sega Dreamcast/<romId>/flycast/` at the quit. A
+  card left behind by a session that did not finish is moved to
+  `saves/unattributed/system-directory/` rather than overwritten.
 
-- **The file-writing class, in full**, with where each core actually puts the
-  file. All but the first are relative to the SAVE directory, which is now
-  `users/<id> - <name>/saves/<platform>/<romId>/<core>/` and holds one game's
-  files rather than every game's: Dreamcast `bios/dc/vmu_save_A1.bin` — the
-  system directory, not the save one; MAME `nvram/<stem>.nv`; FBNeo
-  `fbneo/<stem>.fs`; 3DO `opera/shared/nvram.0.srm`; Sega CD `*.brm` plus
-  `*cart.brm` as its own region; Neo Geo Pocket `*.flash`; DS `*.sav`; PSP the
-  `PSP/SAVEDATA/**` tree. Two of those were **already sitting on this console's
-  disk** from real runs — `scd_U.brm` and `mame2003-plus/nvram/*.nv`. **Nothing
-  on this machine says which game wrote either**, because the old layout gave
-  every core one shared save directory and recorded no more than the file name;
-  they were kept rather than guessed at, in
-  `users/1 - MMagTech/saves/unattributed/`. The capture half can still be
-  written and checked against them without playing anything new.
-  Cabinet solved every one of them in `MemoryCardSync.swift`; read it before
-  designing anything.
-- **PSP IS DONE, and it is the worked example for the other seven.**
-  `frontend/src/dirsave.h` and `syncDirSave` in main.cpp: restore before the
-  core loads, capture after the unload, compare against a baseline taken at
-  launch, upload only when something moved. The other seven are simpler than
-  PSP was, because each is one file rather than a tree.
-- **`[save] battery is 0 bytes` is correct, not a fault**, for every core in
-  that class. It is the host saying the core exposes no save RAM.
-- **PSP is a third shape, and Cabinet ALREADY SYNCS IT — do not repeat my
-  mistake here.** PPSSPP saves into memory-stick DIRECTORIES —
-  `PSP/SAVEDATA/<id>/` holding `PARAM.SFO`, `DATA.BIN` and icons. I wrote that
-  this does not sync, on the strength of a comment in
-  `NativeCore.savesOverSaveRAM` that says *"Save sync for PSP is its own future
-  feature"*. **That comment is stale in Cabinet's own source.** MMagTech
-  corrected it in one sentence, and there is a real save on the server:
-  `Lumines - Puzzle Fusion (USA) (Cabinet).srm`, 51,426 bytes,
-  `emulator=ppsspp-native`, updated 2026-08-28.
+**What is left, and it needs a controller:** no save in this class has been
+written by actually PLAYING a game here. Every round trip restored a real save,
+watched the core read it, and sent back byte-identical bytes — which is the
+correct answer for a session that saved nothing, and is why forcing the upload
+needed `--sync-test`. That flag now drops the file-save baselines at frame 150
+so the quit-time capture sends whatever the core flushed. **The first real
+in-game save is one controller away and is the thing to do when the A9 Pro
+arrives.**
 
-  Cabinet archives the subtree with `FileWrapper` and pushes it through the
-  **same store, endpoint and saveRAM region** as a cartridge battery, on the
-  same after-shutdown trigger. So the design is done and the tag already
-  matches ours.
-
-  **The container was the obstacle and it is now decided: ZIP.** PPSSPP's save
-  format is the FOLDER — there is no single-file PSP save, PPSSPP defines no
-  export format, and RomM stores one opaque file per rom and emulator. Cabinet's
-  August blob is Apple's `rtfd` archive labelled `.srm`, readable nowhere
-  without Foundation. **MMagTech has fixed the Cabinet side to zip (2026-09-17,
-  reported, not yet pushed to GitHub and not seen from here)**, so this console
-  needs to read and write zip and does NOT need an `rtfd` writer. The frontend
-  already links libarchive, which does both.
-
-  **Verify it from the first save the fixed build uploads** — four bytes settle
-  it, `PK\x03\x04` is zip — and read three things off that same file: what the
-  zip is ROOTED at (`ULUS10002LUMINES/…` vs `SAVEDATA/…` vs `PSP/SAVEDATA/…`,
-  which decides where we unzip and is invisible until you look), whether the tag
-  is still `ppsspp-native`, and whether Cabinet still READS `rtfd` — because the
-  only PSP save MMagTech owns is still in the old format.
-
-  The zip round trip is measured, not assumed: zipped the real save folder on
-  this console, deleted the original, unzipped it back, all four files
-  byte-identical, and Lumines ran against the restored folder and quit cleanly.
-  PROJECT.md, *What PPSSPP is supposed to use*, has the detail.
-- **Saves on the right triggers.** Keys do it today, which is the test
-  environment and not the product. The settled triggers are in PROJECT.md.
-
-All of it is measured by whether a file lands on the server, so the VM answers
-these completely.
+Two smaller leftovers: an arcade entry that was already collapsed under the old
+naming stays broken (the cache re-downloads, and the two on the VM were deleted
+by hand), and PlayStation memory card 2 is still a file nothing syncs, here or
+in Cabinet.
 
 ### 1b. The image does not carry the frontend or the cores — **and that surprises people**
 
@@ -331,16 +306,23 @@ on, exactly like the VM. That is still worth having the day it arrives — it is
 the only way to judge the UI on a television — but it is not "install it once
 and it keeps up".
 
-### 2. Finish the core options, which is half done
+### 2. Finish the core options, which is half done — **DO THIS NEXT**
 
 The host answers every option a core declares, and **the override table is now
 wired into the launch path as well as the audit** — it was not, until PPSSPP
 needed the first real entry. Two things are left:
 
 - **Bring across Cabinet's per-platform choices.** `catalog::optionOverrides`
-  has exactly one entry, PPSSPP's CPU engine. Cabinet hand-picks a subset per
-  platform in `NativeCoreOptions.swift`; port it one platform at a time with a
-  reason recorded beside each choice.
+  has three entries now: PPSSPP's CPU engine, Genesis Plus GX's
+  `system_bram`, and Opera's `bios` and `nvram_storage`. The last two were
+  added by the save work because **the save PATHS depend on them** — and
+  `opera_bios` turned out to be the difference between 3DO booting and 3DO not
+  starting at all, which nothing had noticed because nobody had run a 3DO game.
+  **That is the argument for doing the rest**: an unanswered option is not the
+  default, and here it was silently deciding where a person's save lived.
+  Cabinet hand-picks a subset per platform in `NativeCoreOptions.swift`; port
+  it one platform at a time with a reason recorded beside each choice, and
+  **run a game on each platform afterwards** rather than trusting the table.
 - **The options MAME asks for and never declares.** Two are constant across
   every game tried and the rest vary by driver. Their values have to come from
   the core's source, not from a guess.
@@ -414,13 +396,26 @@ for the per-user tree — one console filed two ways, which MMagTech rejected on
 sight. `fs_slug` is also the only one that is unique: two Arcade platforms share
 the slug `arcade`, 223 games between them, needing different cores.
 
-**The one thing the shape does not answer:** `bios/` still mixes replaceable and
-irreplaceable, because libretro gives a core exactly ONE system directory and
-Flycast writes the Dreamcast's flash into it. The PSP fonts moved out — they
-ship in the image — but there is no name in the shape for "what a core wrote
-into its system directory". Item 1 below takes the VMU out of there;
-`dc_nvmem.bin`, the console's own clock and language, stays and rebuilds itself
-if lost.
+**AND THOSE 223 GAMES COULD NOT START, from the day this landed until
+2026-09-19.** Two faults, both invisible to CI and both found by pressing Play.
+FBNeo's core file was looked up as `fbneo_libretro_libretro.so`, because the
+launch path appended a suffix the manifest name already had while
+`coverageFor` did not — the rule lives once now, in `catalog::coreFileName`.
+And MAME and FBNeo pick their machine from the loaded file's NAME, which the
+layout was renaming: `lethalen.zip` became `3022 - Lethal Enforcers.zip` and
+the core answered *"Game driver not found"*. **An entry whose core opens its
+own archive now stays a directory holding the server's own file name**, which
+the layout already allows and renames identically.
+
+**The one thing the shape did not answer, and it is answered now.** `bios/`
+mixed replaceable and irreplaceable, because libretro gives a core exactly ONE
+system directory and Flycast writes the Dreamcast's card into it. Item 1 took
+the card out on 2026-09-19: it is placed there for the length of a session,
+because Flycast will look nowhere else, and moved into the person's own save
+tree at the quit. What stays is `dc_nvmem.bin`, the console's own clock and
+language, which rebuilds itself if lost. There is still no NAME in the shape
+for "what a core wrote into its system directory" — there is simply nothing
+irreplaceable in there any more.
 
 **The second drive was built the next day, 2026-09-19** — plug one in and it is
 used, no setup screen, and the console never holds two copies of a game. Open
@@ -451,15 +446,19 @@ reuse the wording already measured for the other four.
 ### 7. The disk that eviction cannot see
 
 Mesa's shader cache in `~/.cache`, plus files the cores write into `bios/`.
-Under 3 MB today. **One of them is a Dreamcast's saved flash**, so "clean the
-system directory" is not the answer — and it also holds 13 MB of PSP system
-files that are part of a build's output rather than anything reclaimable.
-PROJECT.md, *The cache is not the only thing a game writes to disk*.
+Under 3 MB today. **One of them is a Dreamcast's saved clock and language
+settings**, so "clean the system directory" is not the answer — though it is
+the cheapest of them to lose, because it rebuilds itself. `bios/` also holds
+13 MB of PSP system files that are part of a build's output rather than
+anything reclaimable. PROJECT.md, *The cache is not the only thing a game
+writes to disk*.
 
-**The folder layout narrowed this rather than solving it.** Saves used to land
-in there too and now go under a person, and the PSP files belong in
-`/usr/share/cabinetos/system/` inside the image once something installs them
-there. What is left is genuinely the machine's own emulator state.
+**The folder layout narrowed this and the save work narrowed it again.** Saves
+used to land in there too and now go under a person; the Dreamcast VMU was the
+last irreplaceable thing in `bios/` and came out on 2026-09-19; and the PSP
+files belong in `/usr/share/cabinetos/system/` inside the image once something
+installs them there. What is left is genuinely the machine's own emulator
+state.
 
 ### 8. Power button to a clean shutdown
 
@@ -560,7 +559,24 @@ PROJECT.md says "the SER5" and means this one.
 
 ### About the machine and the work
 
-- **Build a core, then RUN it.** This is now four for four. Every assertion in
+- **Build a core, then RUN it.** This is now five for five — and the fifth was
+  the worst, because nothing was newly built at all. On 2026-09-19 every one of
+  the 223 arcade games turned out to be unable to start, and had been since the
+  folder layout landed the day before. Two separate faults, both silent, both
+  found by pressing Play once. **A green build and a passing screenshot say
+  nothing about whether a game runs.**
+- **A fact carried across is a fact nobody has checked, and this is the
+  sharpest example so far.** Three of the eight rows in a save-path table taken
+  from a working implementation were wrong on this console. All three failed
+  silently: the restore wrote a file the core ignored, the core made its own
+  beside it, and the capture aimed at the same wrong path found nothing. Two
+  minutes of `find` after a launch caught all three.
+- **Telling a core about SOME of its ports is the same as telling it about
+  none.** Flycast returns early from `retro_set_controller_port_device` while
+  any of its four ports is unset, so the code that puts a VMU in the
+  controller's expansion socket never runs. This frontend drives one pad, so
+  the temptation was to announce one port. The host reads the port count from
+  `RETRO_ENVIRONMENT_SET_CONTROLLER_INFO` now and answers every one. Every assertion in
   the build pipeline passed on melonDS while it wrote its save to `/`; on
   PPSSPP it passed while the memory card went somewhere unwritable, while the
   picture drew at 1.5% brightness, and while the override table was being

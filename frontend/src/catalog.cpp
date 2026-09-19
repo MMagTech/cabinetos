@@ -3,6 +3,7 @@
 #include <sys/stat.h>
 
 #include <map>
+#include <vector>
 
 #include <cstring>
 #include <string>
@@ -209,8 +210,68 @@ const char* emulatorTag(const char* core) {
     return nullptr;
 }
 
+const char* saveTag(const char* core) {
+    if (!core) return nullptr;
+    // A state tag is always good enough for a save: it is the stricter test of
+    // the two, and every core that passes it writes both.
+    if (const char* t = emulatorTag(core)) return t;
+
+    // The five the state rule refuses and a save has no reason to. Each one is
+    // the reference implementation's own string, so a card written here lands
+    // in the row an Apple TV already reads — which is the whole point, and is
+    // how the thirteen Dreamcast cards already on the server become testable.
+    //
+    // The bytes are the emulated machine's, not the emulator's. See the header
+    // for why that is the line, and docs/PROJECT.md, *The save audit*, for the
+    // measurement behind it.
+    struct { const char* core; const char* tag; } kSaveTags[] = {
+        // The VMU. Same pinned commit as the reference implementation
+        // (a172e000) but that build carries unscripted working-tree edits, so
+        // there is no revision for a STATE to match and emulatorTag correctly
+        // says nothing. A 128 KB VMU image in the VMU's own format is not
+        // something an unscripted edit can change the shape of.
+        {"flycast", "flycast-native"},
+        // 3DO NVRAM. Same commit as every platform the reference ships
+        // (a501a278), no patches and no build arguments on either side — this
+        // one would pass the state rule too and simply has not been through
+        // it. The save is the 3DO's own NVRAM either way.
+        {"opera", "opera-native"},
+        // Arcade NVRAM, FinalBurn Neo's half. Same commit (2444fbe3), one
+        // source tree serves every platform the reference builds, no patches
+        // and no build arguments.
+        {"fbneo_libretro", "fbneo-native"},
+        // Arcade NVRAM, MAME 2003-Plus's half. This is the one where the
+        // commits genuinely differ — CabinetOS pins 21256d24, which is the
+        // reference's MAC revision, while its iOS and tvOS builds are at
+        // 93159c0c. A board's NVRAM is its own chip's contents and travels
+        // across that; a state would not, and does not.
+        {"mame2003_plus", "mame2003plus-native"},
+        // Neo Geo Pocket flash. Same commit as the reference's iOS build
+        // (a50d5ac2), one source tree, no patches, no build arguments.
+        {"beetle_ngp", "ngp-native"},
+    };
+    const std::string name = manifestName(core);
+    for (const auto& t : kSaveTags)
+        if (name == t.core) return t.tag;
+    return nullptr;
+}
+
 namespace {
 std::string gCoreDir = "cores/build";
+}  // namespace
+
+std::string coreFileName(const std::string& manifestCoreName) {
+    // See the header. cores/build-core.sh has the same three lines and the
+    // same comment; the two must agree.
+    std::string stem = manifestCoreName;
+    const std::string suffix = "_libretro";
+    if (stem.size() > suffix.size() &&
+        stem.compare(stem.size() - suffix.size(), suffix.size(), suffix) == 0)
+        stem.erase(stem.size() - suffix.size());
+    return stem + "_libretro.so";
+}
+
+namespace {
 
 // Turns a table row into the answer for THIS console. The table is a fact about
 // Cabinet's manifest; everything here is a fact about the machine it is running
@@ -225,16 +286,7 @@ Coverage answer(const Entry* e) {
     Coverage c{e->support, e->core, e->reason};
     if (c.support != Support::Playable || !c.core) return c;
 
-    // A manifest name that already ends in _libretro does not get a second one:
-    // fbneo_libretro would otherwise be looked up as fbneo_libretro_libretro.so.
-    // cores/build-core.sh applies the same rule when it files the artifact —
-    // the two must agree, and this comment is on both.
-    std::string stem = c.core;
-    const std::string suffix = "_libretro";
-    if (stem.size() > suffix.size() &&
-        stem.compare(stem.size() - suffix.size(), suffix.size(), suffix) == 0)
-        stem.erase(stem.size() - suffix.size());
-    const std::string path = gCoreDir + "/" + stem + "_libretro.so";
+    const std::string path = gCoreDir + "/" + coreFileName(c.core);
     struct stat st;
     if (::stat(path.c_str(), &st) != 0 || st.st_size == 0) {
         c.support = Support::NotInstalled;
@@ -323,6 +375,59 @@ std::map<std::string, std::string> optionOverrides(const std::string& core) {
         // hardware.
         return {{"ppsspp_cpu_core", "IR JIT"}};
     }
+
+    // Genesis Plus GX, and this one decides WHERE THE SAVE IS, not how it
+    // plays. The Sega CD's internal backup RAM is the console's own 8 KB, so
+    // the core names its file after the BIOS region — `scd_U.brm` — and every
+    // Sega CD game in the library shares it. That is real hardware's own
+    // behaviour and it is wrong here for two reasons: RomM files a save
+    // against ONE rom, so a shared file would have to be filed under whichever
+    // game happened to be played last; and 8 KB shared across a library fills
+    // up. The reference implementation forced this for the same reasons on
+    // 2026-08-16 and its save path assumes it.
+    //
+    // MEASURED, not read across: the first run of the save work restored
+    // Lunar's real 8 KB card to `<stem>.brm` and Genesis Plus GX ignored it
+    // and made a fresh `scd_U.brm` beside it. The option is the difference.
+    // Each game already has its own save directory here, so "per game" costs
+    // nothing beyond the name.
+    //
+    // cart_size stays at the core's declared "4meg", which already matches —
+    // it is recorded here only because the reference forces it explicitly and
+    // the reason is worth keeping: unanswered, the core's cart_size global
+    // stays 0 and Sonic CD refuses to boot past "RAM cartridge not
+    // initialized". Answering declared defaults is what closes that, which is
+    // this console's second free ride from the core-options work.
+    if (coreName == "genesis_plus_gx") {
+        return {{"genesis_plus_gx_system_bram", "per game"}};
+    }
+
+    // Opera, and both of these are the difference between 3DO working and
+    // 3DO not starting at all.
+    //
+    // opera_bios is the defaults trap at its purest. Its declared default is
+    // "disabled", its value has to be a BIOS FILENAME, and answered with the
+    // default the core has no BIOS ROM and there is no boot. RomM holds the
+    // 3DO firmware under exactly this name on the reference server and the
+    // launch path fetches every file a platform lists into `bios/`, so the
+    // two halves meet. THE WEAK JOINT, said out loud: this is a filename
+    // written down here and a filename on somebody's server, and nothing
+    // checks that they agree. The reference stages whatever 1 MB firmware the
+    // platform has UNDER this name, which is the stronger answer and is worth
+    // building the day a server is found that calls it something else.
+    //
+    // opera_nvram_storage is a declared-default-versus-code-fallback mismatch:
+    // the option table says "per game" and the core's own unanswered fallback
+    // is "shared". Forced to shared deliberately, because it buys a fixed
+    // filename — `opera/shared/nvram.0.srm` — that the save sync can rely on,
+    // and each game already has its own save directory here so shared IS per
+    // game. catalog::saveFiles depends on this being set.
+    if (coreName == "opera") {
+        return {
+            {"opera_bios", "panafz10.bin"},
+            {"opera_nvram_storage", "shared"},
+        };
+    }
     return {};
 }
 
@@ -330,6 +435,121 @@ const char* directorySaveRoot(const char* core) {
     if (!core) return nullptr;
     if (manifestName(core) == "ppsspp") return "PSP/SAVEDATA";
     return nullptr;
+}
+
+std::vector<SaveFile> saveFiles(const std::string& slug, const std::string& fsSlug,
+                                const std::string& stem) {
+    // Straight out of the audit's per-platform table, and each row was read
+    // off the core that writes it rather than guessed. docs/PROJECT.md, *The
+    // save audit*, has the evidence for every line.
+    //
+    // Nothing here is keyed on the core, because a core is not a platform:
+    // genesis_plus_gx appears once, for Sega CD, and the same core running a
+    // Master System cartridge has a real battery this console already syncs.
+
+    // Dreamcast. The one row that is not under the save directory: Flycast
+    // never answers RETRO_MEMORY_SAVE_RAM — confirmed against its own
+    // retro_get_memory_data, which only ever answers RETRO_MEMORY_SYSTEM_RAM —
+    // and writes the card into the system directory instead, beside the BIOS.
+    //
+    // `per_content_vmus` defaults to 0, so the file is the bare
+    // `vmu_save_A1.bin`; the capture scans for the suffix anyway, because with
+    // that option on the core prefixes the disc's own game id and a capture
+    // that insisted on the exact name would silently find nothing.
+    if (slug == "dc") {
+        SaveFile vmu;
+        vmu.path = "dc/vmu_save_A1.bin";
+        vmu.captureSuffix = "vmu_save_A1.bin";
+        vmu.untouched = Untouched::VmuDirectory;
+        vmu.inSystemDir = true;
+        return {vmu};
+    }
+
+    // Sega CD, and it is TWO regions rather than one. Games prefer the
+    // external RAM cartridge when it is present, so a console that treated
+    // "the .brm" as one thing would have one of them overwrite the other —
+    // which is why the scan excludes `cart.brm` and the cartridge gets its own
+    // row. `4Mbit_cart.brm` is fixed by the core's own defaults for cart_bram
+    // and cart_size; per-game separation already comes from the save directory.
+    if (slug == "segacd") {
+        SaveFile internal;
+        internal.path = stem + ".brm";
+        internal.captureSuffix = ".brm";
+        internal.captureExclude = "cart.brm";
+        internal.untouched = Untouched::SegaCDBackup;
+        SaveFile cart;
+        cart.path = "4Mbit_cart.brm";
+        cart.captureSuffix = "cart.brm";
+        cart.region = "cart";
+        cart.untouched = Untouched::SegaCDBackup;
+        return {internal, cart};
+    }
+
+    if (slug == "neo-geo-pocket-color") {
+        SaveFile f;
+        f.path = stem + ".flash";
+        f.captureSuffix = ".flash";
+        return {f};
+    }
+
+    // melonDS writes `<content basename>.sav` through its own SRAM manager,
+    // debounce-flushed during play and flushed again at unload.
+    if (slug == "nds") {
+        SaveFile f;
+        f.path = stem + ".sav";
+        f.captureSuffix = ".sav";
+        return {f};
+    }
+
+    // Opera writes to a fixed nested path rather than a flat suffix-named
+    // file, so this one is exact in both directions.
+    if (slug == "3do") {
+        SaveFile f;
+        f.path = "opera/shared/nvram.0.srm";
+        f.untouched = Untouched::ThreeDONvram;
+        return {f};
+    }
+
+    // Arcade. The two emulators disagree about both the folder and the
+    // extension and their contents are not interchangeable, which is exactly
+    // why this keeps them apart instead of treating "the arcade save" as one
+    // thing. The stem is the set name — `lethalen`, `smashtv` — because that
+    // is what the core was handed; see the note in main.cpp about why an
+    // arcade entry keeps the server's own file name.
+    if (slug == "arcade") {
+        SaveFile f;
+        f.untouched = Untouched::Uniform;
+        if (fsSlug == "MAME2003") {
+            f.coreRowName = "mame2003Plus";
+            // ONE DIRECTORY DEEPER THAN THE REFERENCE IMPLEMENTATION SAYS, and
+            // this was measured rather than carried across. Cabinet writes
+            // `nvram/<stem>.nv` straight under the save directory; MAME
+            // 2003-Plus as this console builds and drives it puts its whole
+            // working tree under a `mame2003-plus/` folder first, so the file
+            // is `mame2003-plus/nvram/lethalen.nv`. Confirmed twice on the
+            // test VM, 2026-09-19: by running Lethal Enforcers and reading the
+            // directory afterwards, and by the orphaned NVRAM the old flat
+            // save pile left behind, which sits at exactly that path.
+            //
+            // Placing it at the reference's path is not a harmless miss. The
+            // core does not find it, bootstraps a fresh image instead, and
+            // writes that — so the restore silently does nothing and a
+            // capture aimed at the same wrong path finds nothing either. That
+            // is what the first run of this did.
+            f.path = "mame2003-plus/nvram/" + stem + ".nv";
+            return {f};
+        }
+        if (fsSlug == "FBNEO") {
+            f.coreRowName = "fbneo";
+            f.path = "fbneo/" + stem + ".fs";
+            return {f};
+        }
+        return {};
+    }
+
+    // PSP is in this class too and is already built, as a tree rather than a
+    // file. directorySaveRoot above is its entry.
+    return {};
 }
 
 const char* shortReason(Support s) {

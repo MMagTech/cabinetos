@@ -483,6 +483,13 @@ void clearPending(const storage::User& u, int romId, const std::string& fileName
     ::unlink((storage::pendingDir(u) + "/" + markerName(romId, fileName)).c_str());
 }
 
+bool isPending(const storage::User& u, int romId, const std::string& fileName) {
+    if (!u.valid()) return false;
+    struct stat st;
+    const std::string path = storage::pendingDir(u) + "/" + markerName(romId, fileName);
+    return ::stat(path.c_str(), &st) == 0;
+}
+
 int64_t pendingBytes() {
     int64_t total = 0;
     for (const storage::User& u : storage::knownUsers()) {

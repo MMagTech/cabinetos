@@ -317,6 +317,16 @@ void markPending(const storage::User& u, int romId, const std::string& fileName,
                  int64_t bytes);
 void clearPending(const storage::User& u, int romId, const std::string& fileName);
 
+// Whether this console still owes the server this exact file. Read off the
+// disk like everything else here, so it survives the console being switched
+// off between the save and the upload.
+//
+// IT IS WHAT STOPS A LAUNCH UNDOING A SAVE. A game saved with no network
+// leaves a newer file on this machine than anything the server holds; without
+// this the next launch would fetch the server's older copy and write it over
+// the top, and the person would lose the session they made offline.
+bool isPending(const storage::User& u, int romId, const std::string& fileName);
+
 // Across everybody on the machine: the floor is a fact about the disk, and the
 // disk does not care whose upload is queued on it.
 int64_t pendingBytes();

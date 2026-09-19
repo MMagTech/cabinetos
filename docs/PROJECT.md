@@ -26,7 +26,7 @@
 
 ---
 
-## Where the project is — 2026-09-18
+## Where the project is — 2026-09-19
 
 **Phase 0 complete. Phase 1 complete. Phase 2 mostly done. Phase 3 well under
 way and running. Phase 5 started early, the hardest question in it is answered,
@@ -69,6 +69,12 @@ rather than launched by hand:
   states. Keeping a game is a decision per person rather than a flag on the
   game, and releasing the last one deletes the game and gives the space back.
   Open question 18.
+- **Saves reach the server for every platform this console can play**, as of
+  2026-09-19. The 47 of 81 rows on the reference server that could neither be
+  uploaded nor restored — Dreamcast, Sega CD, both arcade emulators, 3DO, Neo
+  Geo Pocket, DS — now travel, filed under the same rows an Apple TV already
+  reads. Ikaruga says 「データファイルのロードに成功しました」 to a card that
+  came off RomM. See *The save audit*.
 
 ### Open against the frontend right now
 
@@ -1517,13 +1523,19 @@ separately rather than as one number:
   what it is.
 - **The system directory is mixed**, and that is the part to be careful with.
   `mupen64plus.ini` is a database that can be deleted and will come back.
-  `dc_nvmem.bin` is a Dreamcast's saved flash — **console settings, and the
-  thing a VMU lives beside.** Treating the system directory as reclaimable
-  would throw that away. Open question 18 named this as the one place its own
-  shape does not answer the question: `bios/` promises replaceable firmware and
-  holds this too, because libretro gives a core exactly one system directory. Anything that cleans here has to distinguish the two,
+  `dc_nvmem.bin` is a Dreamcast's saved flash — **console settings, and a
+  machine fact rather than a person's.** Treating the system directory as
+  reclaimable would throw it away, and it is the cheapest of the three to lose:
+  it rebuilds itself. Anything that cleans here has to distinguish the two,
   which is the same distinction the Storage screen already draws between a
   cache and a kept game.
+
+  **The VMU that used to live beside it is gone from here, as of 2026-09-19.**
+  Open question 18 named `bios/` holding one irreplaceable file as the single
+  place its own shape did not answer the question, and the Dreamcast save work
+  took that file out — the card is placed for the length of a session and moved
+  into the person's save tree at the quit. What is left in the system directory
+  is genuinely the machine's own emulator state.
 
 Nothing here is urgent — it is under 3 MB against a 5 GB system reserve — but it
 is a category the storage model currently does not have, and it arrived with the
@@ -2410,6 +2422,29 @@ invisible to anyone who has not deliberately turned it on.
 6. **Builds happen in CI, on Linux.** The project is developed on a Mac, which
    cannot build or run bootc images. Nothing in this repo may depend on being
    able to build locally.
+7. **One branch at a time, and the pull request is aimed at `main`.** Four
+   branches were once stacked on each other here, each opened before the last
+   had merged, and the result was three overlapping pull requests and a compile
+   check that did not apply to any of them.
+
+   **THE HANDOVER IS NOT AN EXCEPTION TO THIS, IT IS PART OF THE WORK.**
+   Decided 2026-09-19, after `docs/NEXT-SESSION.md` was pushed straight to
+   `main` at the end of a session and nobody could say afterwards whether that
+   was allowed. It is not, and it never needs to be: **the handover is written
+   inside the pull request that does the work it describes**, so there is never
+   a handover-only push and never a handover-only pull request. A session that
+   produced nothing to merge has nothing to hand over either.
+
+   The reason is not tidiness. `NEXT-SESSION.md` is the most load-bearing
+   document in the repository — it is the only thing a fresh assistant reads
+   before touching anything — and a wrong sentence in it costs a day. It
+   deserves the same review surface as the code, and it is easier to write
+   honestly next to the diff than from memory afterwards.
+
+   **The one narrow exception**, and it has to be narrow or it eats the rule: a
+   fact that cannot be known until after the merge — the pull request's own
+   number, the merge commit — may be corrected straight on `main`, in one
+   commit that changes nothing else.
 
 ---
 
@@ -6019,13 +6054,20 @@ edge case. It is the majority.
 And none of it is a design problem, because Cabinet has already solved each one
 and the recipes are specific:
 
+> **THIS TABLE WAS READ OUT OF THE REFERENCE IMPLEMENTATION AND THREE OF ITS
+> ROWS ARE WRONG HERE.** Corrected 2026-09-19 by running each platform and
+> reading the directory afterwards; the corrections are in the section below,
+> *BUILT AND MEASURED*, and the live version of the table is
+> `catalog::saveFiles`. Kept as written because the three that moved are the
+> useful part.
+
 | Platform | Where the core writes it | Name | On this console |
 |---|---|---|---|
 | **Dreamcast** | the **system** directory, `dc/` | `vmu_save_A1.bin`, or `<gameId>_vmu_save_A1.bin` with per-game VMUs | nothing, and it shows |
-| Arcade — MAME | save directory | `nvram/<stem>.nv` | **already on disk** from a real run |
+| Arcade — MAME | save directory | `nvram/<stem>.nv` — **wrong, it is one directory deeper** | **already on disk** from a real run |
 | Arcade — FBNeo | save directory | `fbneo/<stem>.fs` | — |
-| 3DO | save directory | `opera/shared/nvram.0.srm` | — |
-| Sega CD | save directory | `*.brm`, plus `*cart.brm` as its own region | **already on disk** (`scd_U.brm`) |
+| 3DO | save directory | `opera/shared/nvram.0.srm` — **only with two options forced** | — |
+| Sega CD | save directory | `*.brm`, plus `*cart.brm` as its own region — **`*.brm` is named after the BIOS region unless an option is forced** | **already on disk** (`scd_U.brm`) |
 | Neo Geo Pocket | save directory | `*.flash` | — |
 | Nintendo DS | save directory | `*.sav` | — |
 | PSP | save directory | the `PSP/SAVEDATA/**` tree | **already on disk** |
@@ -6049,10 +6091,17 @@ curiosity of the file-writing save class:
 - Verified on this console: `reicast_device_port1_slot1` is answered `VMU`, so
   the port is configured — the card itself is simply absent.
 
-So Dreamcast save sync is: write the bytes to `system/dc/vmu_save_A1.bin` before
+So Dreamcast save sync is: write the bytes to `bios/dc/vmu_save_A1.bin` before
 boot, read them back after unload, upload if changed. **With thirteen real cards
 on the server to test the restore against**, which is a better test bed than any
 other platform offers.
+
+**DONE 2026-09-19, and the diagnosis above was right about the file and wrong
+about the cause of the symptom.** The card was already reaching
+`bios/dc/vmu_save_A1.bin` and Ikaruga still opened on "memory card not
+connected", because a VMU lives in a CONTROLLER'S expansion socket and this
+frontend was never calling `retro_set_controller_port_device`. See the section
+below.
 
 ##### Two guards to copy rather than rediscover
 
@@ -6074,6 +6123,241 @@ Card 1 rides `RETRO_MEMORY_SAVE_RAM` and syncs; card 2 is a file and syncs on
 neither Cabinet nor here. Nothing on the server has ever held one. Low stakes,
 but it is the same shape as everything above and should be written down rather
 than found again.
+
+#### BUILT AND MEASURED, 2026-09-19: the file-writing class syncs, all seven platforms
+
+**In one sentence: a save made on an Apple TV now arrives on this console and a
+save made here reaches the server, for the 47 of 81 rows that could do neither.**
+Seven platforms, each proved against real saves already on the reference server
+rather than against files this session made up.
+
+`frontend/src/filesave.{h,cpp}` is the mechanism, `catalog::saveFiles` is the
+table, and the two halves hang off the same triggers PSP's directory save
+taught: restore BEFORE `retro_load_game`, capture AFTER `retro_unload_game`,
+compare against a baseline taken at launch and send only what moved.
+
+##### What each platform actually does, measured on the test VM
+
+Every row is a real save that was already on the server, pulled down, read by
+the core, written back by the core, and sent up again — with the hash checked
+at both ends.
+
+| Platform | The core's file | Round trip |
+|---|---|---|
+| Dreamcast | `bios/dc/vmu_save_A1.bin` | Ikaruga, 131072 B, byte-identical |
+| Sega CD | `<stem>.brm` **and** `4Mbit_cart.brm` | Lunar, 8192 B and 524288 B, both |
+| Arcade — MAME | `mame2003-plus/nvram/<stem>.nv` | Lethal Enforcers, 128 B |
+| Arcade — FBNeo | `fbneo/<stem>.fs` | Smash T.V., 32768 B |
+| 3DO | `opera/shared/nvram.0.srm` | Gex, 32768 B |
+| Neo Geo Pocket | `<stem>.flash` | Metal Slug 1st Mission, 272 B |
+| Nintendo DS | `<stem>.sav` | Contra 4, 512 B |
+
+**Seven uploads and the server still holds 81 rows.** That number is the whole
+of the filename decision below: every one of them replaced the reference
+implementation's own row rather than sitting beside it.
+
+##### Three of the table's rows were wrong, and only running them said so
+
+The audit's per-platform table was read out of the reference implementation.
+Three lines do not survive contact with this console, and each was found by
+launching a game and reading the directory afterwards.
+
+- **MAME writes one directory deeper.** `mame2003-plus/nvram/<stem>.nv`, not
+  `nvram/<stem>.nv`. Corroborated twice: by the run, and by the orphaned NVRAM
+  the old flat save pile left behind, which sits at exactly that path. Placing
+  it at the shallower path is not a harmless miss — the core does not find it,
+  bootstraps a fresh image, and writes THAT, so the restore silently does
+  nothing and the capture finds nothing either. The first run did exactly this
+  and produced a plausible-looking 128-byte file that was not the save.
+- **Sega CD's internal backup RAM is named after the BIOS REGION**, `scd_U.brm`,
+  not after the game — because on real hardware it is the console's own 8 KB
+  shared by every disc. The reference gets `<stem>.brm` only because it forces
+  `genesis_plus_gx_system_bram` to `per game`, and this console was answering
+  that option with the core's declared default. The first run restored Lunar's
+  real card to `<stem>.brm` and the core ignored it and made a fresh `scd_U.brm`
+  beside it.
+- **3DO's fixed path depends on two forced options**, and without them the core
+  does not start at all: `opera_bios` has a declared default of `disabled`
+  while its value must be a BIOS FILENAME, and `opera_nvram_storage` has a
+  declared default of `per game` against a code fallback of `shared`. Both are
+  now in `catalog::optionOverrides` with the reasoning beside them, which is
+  the first slice of the handover's *Finish the core options*.
+
+**The lesson is the one this project keeps relearning, in its sharpest form
+yet: a fact carried across is a fact nobody has checked.** Three of eight rows
+in a table taken from a working implementation were wrong here, all three
+failed silently, and all three would have shipped.
+
+##### The guard the reference does not have, and the 23% it explains
+
+**Three of the thirteen Dreamcast cards on the server hold no save at all** —
+Cannon Spike, Re-Volt, San Francisco Rush 2049. They are formatted, empty cards
+uploaded because the reference implementation applies no freshness rule to
+Dreamcast: its Dreamcast capture compares against the previous local copy and
+nothing else, so a session that started with no card at all uploads whatever
+the core formatted. Nearly a quarter of the rows for the platform with the most
+of them carry nothing.
+
+A VMU says outright whether it holds anything, so this console asks it. The
+card is 256 blocks of 512 bytes; block 255 is the root and begins with sixteen
+`0x55` bytes; blocks 253 down to 241 are the directory, sixteen 32-byte entries
+each, and an entry's first byte is `0x33` for a data file, `0xCC` for a game and
+`0x00` for a free slot. All thirteen real cards carry the root signature and ten
+of them have at least one entry. It is the Dreamcast analogue of the PS1
+block-header test the reference already uses.
+
+**Demonstrated rather than asserted.** Power Stone has no card anywhere —
+nothing local, nothing on the server. Launched it, Flycast formatted a fresh
+VMU, and the quit said:
+
+```
+[save] no save anywhere for dc/vmu_save_A1.bin yet
+[save] ./bios/dc/vmu_save_A1.bin is what the core writes by starting up,
+       not a save — not sending it
+```
+
+No row on the server, no file under the person, and the card still taken out of
+`bios/`. The other rules are the reference's own, kept: a uniform fill for
+arcade NVRAM, the first 16 and last 64 bytes skipped for Sega CD, the first 176
+skipped for 3DO. All of them apply only when no real save existed before —
+once one has, every later change travels, an erase included, because losing
+history is worse than an empty row.
+
+##### The filename decides whether a person has one memory card or two
+
+`POST /api/saves` is sent with `overwrite=true` and **RomM matches a row for
+overwrite by FILENAME ALONE** — the emulator tag is not part of it. So the name
+is what decides whether a card is one row across all of somebody's devices or
+one row per device, and this console was quietly choosing the second: it named
+rows after the game's TITLE while the reference names them after the server's
+own `fs_name`. It is visible on the server today, and was before this work —
+Lumines has a `Lumines - Puzzle Fusion (USA) (Cabinet).srm` from an Apple TV
+and a `Lumines.zip` from here, both tagged `ppsspp-native`, both the same save.
+
+Every save this console uploads is now `<fs name without extension>
+(Cabinet).<region>`, which is the reference's own convention:
+
+- the `(Cabinet)` marker keeps the row distinct from anything RomM's own web
+  player wrote, which a bare `<name>.srm` would silently take over;
+- arcade puts the core inside it — `(Cabinet fbneo)`, `(Cabinet mame2003Plus)` —
+  because one game legitimately has two of these and they must not overwrite
+  each other;
+- the region is the extension, so Sega CD's cartridge is `.cart` and lands in
+  its own row rather than on top of the internal RAM.
+
+**What it costs:** a row this console wrote under the old name stops being
+updated and a correctly named one appears beside it. Nothing is lost — a
+restore takes the newest row for the tag whatever it is called — and the orphan
+can be deleted by hand.
+
+**PSP is the one exception and it is deliberate.** Its row stays `<title>.zip`,
+because the reference's only PSP row is an Apple `rtfd` archive wearing an
+`.srm` extension and the fixed build that writes a zip has not been seen from
+here yet. Renaming ours onto that row would overwrite a save with a container
+the other end may not read. Settle it from the first save that build uploads.
+
+##### A save tag is not a state tag, and five platforms needed the difference
+
+`catalog::emulatorTag` is deliberately silent for Flycast, Opera, FBNeo, MAME
+2003-Plus and Beetle NGP, and silence means "do not upload". Those five hold
+**35 of the 47** file saves on the server, all thirteen Dreamcast cards
+included, so the strict rule would have left the majority of this feature dead
+on arrival.
+
+It would also have been the wrong rule. **A state is a photograph of the
+emulator's insides and the tag is the promise that the build about to load it
+is the build that wrote it. A file save in this class is the emulated machine's
+own storage** — a VMU image, a board's NVRAM chip, a Sega CD's backup RAM — and
+its format is defined by the hardware, not by the emulator. The audit proved
+exactly that by reading the bytes: every core but PPSSPP uploads the emulator's
+own bytes, so anything that can read a save for those platforms can read what
+is on the server.
+
+So `catalog::saveTag` exists beside `emulatorTag`, returns the state tag
+wherever there is one, and adds those five with the reference's own strings.
+**Flycast is the case that shows the two apart:** its pinned commit does not
+reproduce what the reference ships, because that build carries unscripted edits
+in its working tree, so `emulatorTag` still returns nothing for it and no state
+is ever uploaded — and `saveTag` returns `flycast-native`, because nothing about
+an unscripted edit changes the shape of a VMU.
+
+##### The VMU is out of `bios/`, which closes the folder layout's last gap
+
+Open question 18 left one thing unanswered: `bios/` is meant to hold
+replaceable firmware, libretro gives a core exactly ONE system directory, and
+Flycast keeps the Dreamcast's card in it — the single file in there that could
+never be fetched again.
+
+The card is now placed in `bios/dc/` for the length of a session, because
+Flycast will look nowhere else, and taken back out into
+`users/<id> - <name>/saves/Sega Dreamcast/<romId>/flycast/` at the quit. **After
+a clean quit `bios/dc/` holds `dc_nvmem.bin` and nothing else** — the console's
+own clock and language, a machine fact that rebuilds itself if lost. Checked by
+listing the directory, not by reading the code.
+
+**A session that does not quit cleanly leaves the card there**, and the next
+launch would otherwise write over it. It does not: a card found in the system
+directory that does not match this game's own copy is moved to
+`users/<id> - <name>/saves/unattributed/system-directory/` with a timestamp.
+Nothing on the machine says which game wrote it, so it is kept rather than
+guessed at — the same answer the folder move gave to the two piles it could not
+attribute, in the same place.
+
+##### Three bugs this work found by running things, which nothing else would have
+
+None of the three is about saves. All three were invisible to the build
+pipeline and to every screenshot taken before.
+
+1. **No arcade game could start, and had not been able to since the folder
+   layout landed.** `cores/build-core.sh` names FBNeo's artifact
+   `fbneo_libretro.so` and `catalog::coverageFor` looked for the same, but the
+   LAUNCH path appended `_libretro.so` to whatever the manifest called the
+   core — so it opened `fbneo_libretro_libretro.so`, a file nothing builds. The
+   rule now lives once, in `catalog::coreFileName`.
+2. **MAME and FBNeo could not find their machines.** Both pick the driver from
+   the loaded file's NAME — `lethalen.zip` is the Lethal Enforcers driver — and
+   the folder layout collapses a single-file entry to `<romId> - <title>.zip`.
+   The core looked up `3022 - Lethal Enforcers`, found nothing, and the launch
+   ended at *"Game driver not found"*. An entry whose core opens its own
+   archive now stays a DIRECTORY holding the server's own file name:
+   `cache/MAME2003/3022 - Lethal Enforcers/lethalen.zip`. The layout already
+   allows either shape and renames both identically, so keeping and releasing
+   do not care.
+3. **The frontend never told a core what was plugged in**, and that is what
+   *"Ikaruga opens on memory card not connected"* has been for two days. A VMU
+   lives in a CONTROLLER'S expansion socket, and Flycast builds the Dreamcast's
+   Maple bus out of `retro_set_controller_port_device` calls this frontend was
+   not making. **Telling it about some ports is the same as telling it about
+   none** — Flycast returns early while any of its four ports is still unset, so
+   the code that reads `device_port1_slot1` never runs. The host now learns the
+   port count from `RETRO_ENVIRONMENT_SET_CONTROLLER_INFO`, which it used to
+   acknowledge and throw away, and answers every port: a joypad on port 0,
+   nothing on the rest, because this frontend drives one pad.
+
+   **Found by photographing the screen.** The log said nothing, the file was in
+   the right place, and the restore reported success. What settled it was the
+   picture — 「メモリーカードが未接続です」 before, and
+   「データファイルのロードに成功しました」 after.
+
+##### What is still not done
+
+- **No save in this class has been written by actually PLAYING a game here.**
+  Every round trip above restored a real save, watched the core read it, and
+  sent back what the core wrote — byte-identical, which is the correct answer
+  for a session that saved nothing. Forcing the upload needed `--sync-test`,
+  which now drops the file-save baselines at frame 150 so the quit-time capture
+  sends whatever the core flushed. A headless VM cannot press the buttons that
+  make a game save; the first real in-game save is a controller away.
+- **An arcade entry that was already collapsed stays broken.** The cache is
+  disposable and re-downloads, and the two on the test VM were deleted by hand,
+  but nothing detects the old shape and re-makes it.
+- **PlayStation memory card 2** is still a file nothing syncs, on this console
+  or the reference. Nothing on the server has ever held one.
+- **`opera_bios` is a filename written down in this repository and a filename
+  on somebody's server**, and nothing checks that they agree. The reference
+  stages whatever 1 MB firmware the platform has UNDER that name, which is the
+  stronger answer, and is worth building the day a server calls it something
+  else.
 
 #### The test that answers the whole question, and can be run this week
 
@@ -7032,7 +7316,10 @@ it plainly did not.** It is `fs_slug` everywhere now; the revision and the
 Arcade fact that settles which one are recorded above.
 
 **2. `bios/` still mixes replaceable and irreplaceable, because libretro gives a
-core exactly ONE system directory.** The 13 MB of PSP system files moved out —
+core exactly ONE system directory. — CLOSED 2026-09-19.** The Dreamcast save
+work took the card out: it is placed in `bios/dc/` for the length of a session
+and moved into the person's own save tree at the quit, so what sits in there at
+rest is firmware and `dc_nvmem.bin`. The original text follows.** The 13 MB of PSP system files moved out —
 they ship inside the image and belong in `/usr/share/cabinetos/system/`, which
 `ensureTree` symlinks into `bios/` at startup — but a Dreamcast's saved flash is
 written by Flycast into the system directory and there is nowhere else for it to
