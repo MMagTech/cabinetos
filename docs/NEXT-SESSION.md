@@ -383,6 +383,15 @@ plug it back in.
 connected. The console says it on stderr, once. Everything else about a missing
 drive already behaves correctly without it.
 
+**"Remove download" now removes the download, as of 2026-09-19.** It used to
+demote the game to the cache and free nothing, which MMagTech called out — the
+row says Remove and it removed nothing, and reclaiming space is why anybody
+presses it. Two callers still demote and neither is somebody asking for space:
+the game being played right now, whose files the core has open, and a keep whose
+download failed. The delete calls `syncfs`, because btrfs otherwise reports the
+old free-space figure until a transaction commits and the screen would show no
+change at all.
+
 ### 6. Nothing warns that a system's BIOS is missing
 
 Until a game fails to start. `catalog` is where it belongs — a fifth answer, and

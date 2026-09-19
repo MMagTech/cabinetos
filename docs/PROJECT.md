@@ -67,8 +67,8 @@ rather than launched by hand:
 - **An on-disk layout somebody can find their way around**, as of 2026-09-18:
   `roms/`, `cache/`, `bios/` and a directory per person holding their saves and
   states. Keeping a game is a decision per person rather than a flag on the
-  game, and releasing the last one demotes it to the cache instead of deleting
-  it. Open question 18.
+  game, and releasing the last one deletes the game and gives the space back.
+  Open question 18.
 
 ### Open against the frontend right now
 
@@ -4177,6 +4177,10 @@ KEEP, and it is the only place in the product where the console may refuse.
 > person asked for by name belongs in the first.
 
 So the row reads **Download and keep**, and on a kept game **Remove download**.
+**Superseded 2026-09-19 — see open question 18.** Un-keeping now deletes the
+game, because the row says "Remove download" and reclaiming space is why people
+press it. The paragraph below is the original reasoning.
+
 Un-keeping deletes nothing: the game returns to the cache, where it may sit for
 months before anything needs the room.
 
@@ -4209,7 +4213,11 @@ asked me to keep"* is a dead end without one.
 - **A kept game is not a candidate**, enforced inside `cache::candidates` rather
   than at each caller, so no future caller can forget it. Verified: a kept
   game's ROM does not appear in the eviction list, and un-keeping puts both its
-  files straight back into it.
+  files straight back into it. **Both halves of that changed on 2026-09-18 and
+  -19 and got simpler:** a kept game is not a candidate because `candidates`
+  only ever walks `cache/` and a kept game is in `roms/`, and un-keeping no
+  longer puts anything back into the list because it deletes the game. Open
+  question 18.
 - **An unsent upload is a fact on disk.** A marker is written before an upload
   is attempted and removed only on success, so a queue interrupted by a crash is
   still visible on the next boot and its bytes still count against the save
@@ -6914,6 +6922,41 @@ ordinary cached file: still playable, now evictable, and re-keeping costs
 nothing because the bytes never moved. That makes un-keep a safe button rather
 than a destructive one, which matters when it sits one press away on a game's
 own screen.
+
+> **REVERSED 2026-09-19: releasing the last keep DELETES.** MMagTech, on being
+> shown the behaviour: *"most users would assume unkeeping a chosen game would
+> free up space on their drive."* They would, and there is a sharper version of
+> the point — **the row says "Remove download" and it removed nothing.**
+>
+> The safety argument above does not survive contact with what it is protecting.
+> Every game here is a copy of RomM, so the worst a mis-press costs is a
+> download this console is built to make invisible; that is a very small thing
+> to buy with a button that appears to do nothing. Deleting matches the words on
+> the row, matches every other console, and matches why anybody presses it.
+>
+> **Two callers still demote**, and neither is somebody asking for space: the
+> game being played right now, whose files the core has open, and a keep whose
+> download failed — which is undoing a promise, and where the file may be a
+> perfectly good game that was already on the disk before Download was pressed.
+>
+> **And the delete calls `syncfs`.** Without it btrfs reports the old free-space
+> figure until a transaction commits, so a Storage screen refreshed a second
+> later would show no change at all — which is the exact complaint that started
+> this. Measured on the games disk first, to be sure the fault was real rather
+> than assumed: write 228 MB and `avail` drops by exactly that; `rm` it and
+> **`avail` does not move at all**; `sync` and the whole 228 MB returns.
+>
+> **MEASURED END TO END, 2026-09-19.** Keep Hammerin' Hero, then press Remove
+> download and read the free space immediately, with no manual sync anywhere:
+>
+> | | |
+> |---|---|
+> | Free with the game kept | 67,607,900 KB |
+> | Free straight after the release | 67,830,524 KB |
+> | Handed back | **217 MB, which is the whole game** |
+>
+> And the two-keeper case still holds: with a second person keeping it,
+> *"released by user 1, still kept by 1 other(s)"* and the file does not move.
 
 **3. And that is why `roms/` and `cache/` repeat per drive.** Kept games live on
 the large drive and the cache on the internal one, so a demotion at the ROOT

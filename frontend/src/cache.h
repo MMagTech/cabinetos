@@ -49,10 +49,19 @@
 //   inside `cache/` any more, so that list is gone.
 //
 //   KEEPING IS A SET OF PEOPLE, NOT A FLAG. One kept game is one file however
-//   many people play it, so releasing must not take it from somebody else — and
-//   releasing the LAST keep DEMOTES the game to the cache rather than deleting
-//   it. Un-keep is a safe button, which matters when it sits one press away on
-//   a game's own screen.
+//   many people play it, so releasing must not take it from somebody else. When
+//   the LAST person releases it, the game is DELETED.
+//
+//   That last part was the other way round until 2026-09-19, and the row is why
+//   it changed: it says "Remove download", and it removed nothing. MMagTech —
+//   *"most users would assume unkeeping a chosen game would free up space"* —
+//   and they would be right, because that is why anybody presses it.
+//
+//   The old reasoning was that demoting made un-keep a safe button. Look at
+//   what that safety actually bought: every game here is a copy of RomM, so the
+//   worst a mis-press costs is a download this console is built to make
+//   invisible. That is a very small thing to protect, and it was paid for with
+//   a button that appeared to do nothing.
 
 #pragma once
 
@@ -255,13 +264,26 @@ KeepVerdict mayKeep(const std::string& location, int romId, int64_t gameBytes);
 bool keep(const storage::User& u, int romId, const std::string& record,
           std::string* err);
 
-// Releases THIS PERSON's keep. If nobody else is keeping it, the game is
-// demoted to the cache — a rename, not a copy, and never a delete.
+// Releases THIS PERSON's keep. If nobody else is keeping it, THE GAME IS
+// DELETED and the space comes back, which is what the row promises.
 //
-// Returns false only when the record could not be removed. A demotion that
-// could not happen is reported on stderr and leaves the game kept on disk,
-// which is the safe direction to fail in.
-bool unkeep(const storage::User& u, int romId);
+// `keepTheBytes` demotes the game to the cache instead, where it is evictable
+// and costs nothing until something needs the room. Two callers want it, and
+// neither is somebody asking for space back:
+//
+//   THE GAME BEING PLAYED RIGHT NOW. The running core has it open. Deleting it
+//   would work on Linux — the open descriptors stay valid — right up to the
+//   moment the core opens a second file it had not needed yet, which is an
+//   ordinary thing for a `.cue` or a multi-disc `.m3u` to do.
+//
+//   A KEEP THAT FAILED. The record goes in before the first byte moves, so a
+//   download that never finished has to take it out again. That is undoing a
+//   promise, not reclaiming space — and the file may well be a perfectly good
+//   game that was already on the disk before the keep was asked for, which
+//   throwing away over a failed firmware fetch would be its own small disaster.
+//
+// Returns false only when the record could not be removed.
+bool unkeep(const storage::User& u, int romId, bool keepTheBytes = false);
 
 bool isKeptBy(const storage::User& u, int romId);
 bool isKeptByAnyone(int romId);

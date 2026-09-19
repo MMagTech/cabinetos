@@ -2377,18 +2377,20 @@ int main(int argc, char** argv) {
                      static_cast<double>(g->sizeBytes) / 1e6);
     };
 
-    // Un-keeping does NOT delete anything. If nobody else is keeping the game it
-    // returns to the cache, where it may sit for months before something needs
-    // the room; taking the bytes away immediately would be a deletion nobody
-    // asked for, to reclaim space nobody needed yet. And if somebody else IS
-    // keeping it, nothing moves at all.
+    // "Remove download" removes the download. If nobody else is keeping the
+    // game, the bytes go and the space comes back — because reclaiming space is
+    // why a person presses a row with that name on it.
     //
-    // WHICH OF THOSE HAPPENED IS NOT THIS FUNCTION'S TO SAY, and the first
+    // The exception is the game being played right now, which the core has open;
+    // that one drops into the cache and goes when the session ends.
+    //
+    // WHAT ACTUALLY HAPPENED IS NOT THIS FUNCTION'S TO SAY, and the first
     // version said it anyway — it printed "released to the cache" every time,
     // including on the run where the game stayed exactly where it was because a
-    // second person still wanted it. cache::unkeep reports what it actually did.
+    // second person still wanted it. cache::unkeep reports what it did.
     auto removeDownload = [&](int romId) {
-        cache::unkeep(storage::currentUser(), romId);
+        const bool nowPlaying = playing && session.romId == romId;
+        cache::unkeep(storage::currentUser(), romId, /*keepTheBytes=*/nowPlaying);
         detailScreen.setKept(false);
         detailScreen.setNotice("");
     };
@@ -2538,8 +2540,13 @@ int main(int argc, char** argv) {
             // record went in before the download so the download would be safe
             // from eviction; it comes out again if the download never finished,
             // or the disk fills with reserved space holding nothing.
+            // UNDOING A PROMISE, NOT RECLAIMING SPACE, so the bytes stay and
+            // become evictable. The file may be a game that was already on the
+            // disk before anybody pressed Download, and throwing that away
+            // because a firmware fetch failed would be its own small disaster.
             if (launchJob.keepWhenReady)
-                cache::unkeep(storage::currentUser(), launchJob.romId);
+                cache::unkeep(storage::currentUser(), launchJob.romId,
+                              /*keepTheBytes=*/true);
             if (here() == Screen::Detail &&
                 detailScreen.game().romId == launchJob.romId) {
                 detailScreen.setKept(

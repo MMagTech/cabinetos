@@ -417,25 +417,53 @@ bool keep(const storage::User& u, int romId, const std::string& record,
     return true;
 }
 
-bool unkeep(const storage::User& u, int romId) {
+bool unkeep(const storage::User& u, int romId, bool keepTheBytes) {
     if (!u.valid()) return false;
     const std::string path = keepPath(u, romId);
     struct stat st;
     const bool had = ::stat(path.c_str(), &st) == 0;
     if (had && ::unlink(path.c_str()) != 0) return false;
 
-    // SOMEBODY ELSE MAY STILL BE KEEPING IT, and then nothing moves. This is
-    // the whole reason keeping stopped being a boolean.
+    // SOMEBODY ELSE MAY STILL BE KEEPING IT, and then nothing happens to the
+    // file at all. This is the whole reason keeping stopped being a boolean.
     const std::vector<int> rest = keepers(romId);
     if (!rest.empty()) {
         std::fprintf(stderr, "[keep] %d released by user %d, still kept by %zu other(s)\n",
                      romId, u.id, rest.size());
         return true;
     }
-    // THE LAST KEEP DEMOTES; IT NEVER DELETES. The game becomes an ordinary
-    // cached file — still playable, now evictable — and re-keeping costs
-    // nothing because the bytes never moved.
-    relocate(find(romId), /*toKept=*/false);
+
+    const Placement p = find(romId);
+    if (!p.present) return true;
+
+    if (keepTheBytes) {
+        // See cache.h: the game is being played, or a keep failed. Neither is
+        // somebody asking for their space back, so the game drops into the
+        // cache and eviction takes it in the ordinary way.
+        relocate(p, /*toKept=*/false);
+        std::fprintf(stderr, "[keep] %d released to the cache\n", romId);
+        return true;
+    }
+
+    // THE LAST KEEP DELETES, because the row says "Remove download" and
+    // reclaiming the space is why anybody presses it.
+    const int64_t bytes = storage::treeBytes(p.entryPath);
+    if (!removeTree(p.entryPath)) {
+        std::fprintf(stderr, "[keep] %d released but %s could not be removed\n", romId,
+                     p.entryPath.c_str());
+        return true;
+    }
+    // WITHOUT THIS THE SPACE DOES NOT APPEAR TO COME BACK, which is the exact
+    // complaint that changed this behaviour. btrfs unlinks immediately and
+    // leaves statvfs reporting the old figure until a transaction commits, so a
+    // Storage screen refreshed a second later would show no change at all. Same
+    // reason evictUntilFree does it.
+    if (const int fd = ::open(p.location.c_str(), O_RDONLY | O_DIRECTORY); fd >= 0) {
+        ::syncfs(fd);
+        ::close(fd);
+    }
+    std::fprintf(stderr, "[keep] %d released and removed, %lld bytes back\n", romId,
+                 static_cast<long long>(bytes));
     return true;
 }
 
