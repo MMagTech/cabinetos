@@ -24,6 +24,8 @@
 #include <sys/stat.h>
 
 #include <cctype>
+#include <cerrno>
+#include <cstring>
 #include <ctime>
 
 #include <atomic>
@@ -1683,12 +1685,24 @@ static int rommProbe(const char* address, bool allowPairing) {
                          err.empty() ? "timed out" : err.c_str());
             return 1;
         }
-        // Best effort: an unwritable config directory should not throw away a
-        // pairing the person has already approved.
-        if (client.saveToken(tokenPath))
+        // SAY IT LOUDLY WHEN THE TOKEN DOES NOT LAND, and do not call it
+        // "paired". The old wording was `paired (could not write ...)` — a
+        // success word with the failure in brackets after it — which is
+        // exactly how the first console ever installed came up on the
+        // stand-in library with nobody able to say why. The pairing itself
+        // genuinely succeeded; what failed is the only part that lasts.
+        if (client.saveToken(tokenPath)) {
             std::printf("\npaired      token saved to %s\n", tokenPath.c_str());
-        else
-            std::printf("\npaired      (could not write %s)\n", tokenPath.c_str());
+        } else {
+            std::printf("\n");
+            std::fflush(stdout);
+            std::fprintf(stderr,
+                         "[romm] PAIRED, BUT THE TOKEN COULD NOT BE SAVED to %s (%s).\n"
+                         "[romm] This console will not stay paired. Fix the path and\n"
+                         "[romm] run --romm-probe --romm-pair again.\n",
+                         tokenPath.c_str(), std::strerror(errno));
+            return 1;
+        }
     }
 
     std::vector<romm::Platform> platforms;
@@ -2035,6 +2049,14 @@ int main(int argc, char** argv) {
     // Runs before SDL, deliberately. This needs no window, no GL and no
     // controller, and on a headless machine it must work anyway — the whole
     // point is to test the server conversation on its own.
+    // The probe reports, per game, whether this console can play it — and it
+    // asked that question WITHOUT being told where the cores are, so on a real
+    // console it answered "not playable here" for every platform while all
+    // twenty-one cores sat installed and working. Found on the A9 Pro,
+    // 2026-09-19. Harmless to the product and corrosive to the diagnosis: a
+    // tool that lies is worse than one that says nothing.
+    catalog::setCoreDirectory(coreDir);
+
     if (rommAddress && romProbeId > 0)
         return romProbe(rommAddress, romProbeId, romProbeExts);
     if (rommAddress && rommProbeMode) return rommProbe(rommAddress, rommPair);

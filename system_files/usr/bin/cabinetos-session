@@ -56,14 +56,68 @@ if [[ ! -x /usr/bin/cabinetos-frontend && -z "${CABINETOS_APP:-}" ]]; then
     echo "cabinetos-session: ERROR — /usr/bin/cabinetos-frontend is not in this image"
 fi
 
+# ---------------------------------------------------------------------------
+# The output resolution: the display's, not a number written here.
+# ---------------------------------------------------------------------------
+#
+# THIS WAS HARDCODED TO 1920x1080 UNTIL 2026-09-19, and the first television it
+# ever met was a 3840x2160 one. The console ran at 1080p and the panel scaled
+# it up, which is the worst possible state for the work that comes next: the
+# frontend's shapes are signed-distance fields and render exactly at any
+# resolution — verified at 3840x2160, 1920x1080 and 1280x720 — so every soft
+# edge on that screen was the television's scaler and none of it was the
+# design. Judging the look against that is judging the wrong picture, the same
+# mistake as tuning motion on llvmpipe.
+#
+# DROPPING THE FLAGS IS NOT THE FIX, AND THAT WAS MEASURED RATHER THAN
+# ASSUMED. Run with no --output-width/--output-height at all and gamescope
+# still chose 1920x1080@60Hz on a display offering 3840x2160. So the mode has
+# to be found and passed.
+#
+# The kernel lists a connector's modes preferred-first, so the first line of
+# `modes` on a connected connector is the display's own answer. A console
+# should take it: docs/PROJECT.md says most sets are 4K and plenty are not,
+# and that neither may be assumed.
+#
+# CABINETOS_OUTPUT=WxH overrides, for the machine plugged into something that
+# lies about itself, and for testing a layout at a size nobody here owns.
+detect_output() {
+    local c status
+    for c in /sys/class/drm/card*-*/; do
+        status=$(cat "${c}/status" 2>/dev/null) || continue
+        [[ "${status}" == "connected" ]] || continue
+        # First line, first field: "3840x2160" from "3840x2160" or similar.
+        local mode
+        mode=$(head -1 "${c}/modes" 2>/dev/null | tr -d '[:space:]')
+        [[ "${mode}" =~ ^[0-9]+x[0-9]+$ ]] || continue
+        printf '%s' "${mode}"
+        return 0
+    done
+    return 1
+}
+
+OUTPUT="${CABINETOS_OUTPUT:-$(detect_output || true)}"
+if [[ "${OUTPUT}" =~ ^([0-9]+)x([0-9]+)$ ]]; then
+    OUT_W="${BASH_REMATCH[1]}"
+    OUT_H="${BASH_REMATCH[2]}"
+    echo "cabinetos-session: output ${OUT_W}x${OUT_H} (from ${CABINETOS_OUTPUT:+CABINETOS_OUTPUT}${CABINETOS_OUTPUT:-the display})"
+else
+    # No connected connector yet — a television that is off, or an input not
+    # selected. 1080p is a safe thing to ask any display for, and the session
+    # restarts on its own if it dies, so the next attempt may find the panel.
+    OUT_W=1920
+    OUT_H=1080
+    echo "cabinetos-session: no display reported a mode; asking for ${OUT_W}x${OUT_H}"
+fi
+
 run_gamescope() {
     local backend="$1"
     echo "cabinetos-session: starting gamescope (backend=${backend})"
     # shellcheck disable=SC2086  # APP is a command plus arguments
     exec gamescope \
         --backend "${backend}" \
-        --output-width 1920 \
-        --output-height 1080 \
+        --output-width "${OUT_W}" \
+        --output-height "${OUT_H}" \
         -- ${APP}
 }
 
@@ -113,7 +167,7 @@ try_compositor() {
 if ls /dev/dri/card* >/dev/null 2>&1; then
     # shellcheck disable=SC2086
     try_compositor "gamescope (drm)" \
-        gamescope --backend drm --output-width 1920 --output-height 1080 -- ${APP}
+        gamescope --backend drm --output-width "${OUT_W}" --output-height "${OUT_H}" -- ${APP}
 
     # Degraded, and loudly so. A console that works without VRR beats a black
     # screen, but this should never be the state on real hardware — if it is,

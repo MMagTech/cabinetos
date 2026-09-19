@@ -33,6 +33,12 @@ way and running. Phase 5 started early, the hardest question in it is answered,
 and as of 2026-09-17 every one of the twenty-one libretro cores is built and can
 be run.**
 
+**AND IT IS INSTALLED ON THE REFERENCE MACHINE, 2026-09-19.** The GEEKOM A9
+Pro boots into the frontend on `gamescope (drm)`, rendering on its own Radeon
+890M with Vulkan present, zero session restarts, and the full 1147-game
+library. See *The A9 Pro, measured*. **The UI freeze's condition is all but
+met** — one thing stands in the way and it is the output resolution, below.
+
 **AND AS OF 2026-09-19 THEY ARE IN THE IMAGE, along with the frontend.** Until
 that day the image was the OS half only: `cabinetos-session` ran
 `sleep infinity` inside gamescope, so an installed machine booted to a black
@@ -163,14 +169,22 @@ image contained no frontend. It contains one now. **The condition is the
 console running the frontend on a television, not the box being unboxed and not
 the image being installed.**
 
+**IT IS NOW RUNNING THERE, AND THERE IS STILL ONE THING TO DO FIRST.** The
+console came up on `gamescope (drm)` on its own GPU the same day — but at
+1920x1080 on a 3840x2160 panel, because the session hardcoded the mode. Until
+an image carrying that fix is installed, **anything judged on that screen is
+judged through the television's scaler.** The fix ships in this change; verify
+the console reports `cabinetos-session: output 3840x2160` before forming a
+single opinion about the look.
+
 ### What is still unknown, honestly
 
 - **Nothing has been judged on a television.** Motion, the letterbox glow and
   the safe area are all recorded as needing the reference machine — the A9 Pro,
-  which arrived 2026-09-19 and is not yet installed. A software-rendered VM
-  cannot answer any of them. What changed that day is that installing it is now
-  worth doing: before, the image carried no frontend, so a freshly installed
-  machine drew nothing at all.
+  which arrived AND WAS INSTALLED on 2026-09-19 and now runs the frontend on
+  its own GPU. A software-rendered VM could never answer any of them; that
+  machine can. They become answerable the moment it runs at the panel's native
+  resolution rather than a scaled 1080p — see *The A9 Pro, measured*.
 - ~~**Twenty cores of twenty-one are built**~~ **— all twenty-one are, as of
   2026-09-17.** PPSSPP was the last, and it runs: Lumines reaches its attract
   demo in colour with sound, writes its memory-stick save, and quits back to
@@ -1474,6 +1488,73 @@ keyboards for idle purposes.
 Worth ~90 MB and ~7s of boot before touching anything contentious. Emulation
 performance itself will be bound by GPU throughput and single-thread CPU speed,
 neither of which any of this affects.
+
+### The A9 Pro, measured — 2026-09-19
+
+**The reference machine is installed and running CabinetOS, on its own GPU.**
+Everything below is read off the machine rather than hoped for. This is the
+first time any of it has been true.
+
+```
+amdgpu 0000:c6:00.0: VRAM: 4096M ... 4096M of VRAM memory ready
+amdgpu 0000:c6:00.0: SMU is initialized successfully!
+amdgpu 0000:c6:00.0: [drm] Display Core v3.2.384 initialized on DCN 3.5
+amdgpu 0000:c6:00.0: [drm] DMUB hardware initialized: version=0x09004E00
+[drm] Initialized amdgpu 3.64.0 for 0000:c6:00.0 on minor 1
+
+cabinetos-session: trying gamescope (drm)
+cabinetos-session: gamescope (drm) is up
+[gamescope] version 3.16.28-ogc3+
+
+[cores]   /usr/lib/cabinetos/cores
+[storage] root /var/lib/cabinetos
+[storage] linked PPSSPP into the system directory
+[storage] user 1 - MMagTech
+[frontend] GL_RENDERER AMD Radeon 890M Graphics (radeonsi, strix1, ACO, DRM 3.64)
+[library] 1147 playable games, 1147 with art; 501 games skipped
+```
+
+| | |
+|---|---|
+| Compositor rung | **gamescope on drm** — the top one. The VM has only ever reached cage. |
+| Session restarts | **0** |
+| Renderer | **radeonsi / strix1 / ACO**, not llvmpipe |
+| Vulkan | **AMD Radeon 890M Graphics (RADV STRIX1)** — open question 20's prerequisite, present |
+| Address | `cabinet@192.168.1.212`, key installed; sudo password `cabinet`, the same throwaway as the VM |
+
+**What this unblocks.** Vulkan existing on this machine is what open question
+20 was waiting for, and it serves three systems at once — RPCS3, parallel-RDP
+and Flycast. PS3 could not be *played* anywhere before today.
+
+#### The output was hardcoded to 1080p on a 4K panel
+
+**The one thing wrong on first boot, and it matters more than it sounds.**
+`system_files/usr/bin/cabinetos-session` passed `--output-width 1920
+--output-height 1080` as literals, written in Phase 2 before anything had ever
+been plugged into it. The display reports `3840x2160`, gamescope obeyed the
+literals, and the panel scaled the result.
+
+That is the worst possible state for the work that follows: the frontend's
+shapes are signed-distance fields and render exactly at any resolution —
+verified at 3840x2160, 1920x1080 and 1280x720 — so **every soft edge on that
+screen was the television's scaler and none of it was the design.** Judging
+the look against it is judging the wrong picture, the same error as tuning
+motion on llvmpipe.
+
+**Removing the flags is NOT the fix, and that was measured rather than
+assumed.** With no `--output-width`/`--output-height` at all, gamescope still
+chose `1920x1080@60Hz` on a display offering 3840x2160. The mode has to be
+found and passed. The session now reads the first line of a connected
+connector's `modes` file — the kernel lists them preferred-first — and
+`CABINETOS_OUTPUT=WxH` overrides it.
+
+**Cabinet is the reason this is not a trade-off.** Cabinet chooses no
+resolution at all: there is no `nativeBounds`, no `preferredDisplayMode` and
+no 3840 anywhere in the app, because tvOS hands it a canvas. Its own docs
+reason against a 4K output — Game & Watch is iOS-only partly because a
+562x374 canvas "goes soft on a 4K television, roughly a 7x blowup". So a 4K
+presentation is what the reference implementation gets, and core parity with
+Cabinet is a hard constraint here.
 
 ### Session infrastructure present
 
@@ -4983,17 +5064,95 @@ symbol-renaming apparatus disappears and nothing replaces it. See open question
 13 and *The frontend toolkit* for the layout.
 
 ### 5. Anaconda ISO vs. a plain disk image for installing to real hardware
-**Raised: Phase 1. Both are built; neither is tested.**
+**Raised: Phase 1. TESTED FOR THE FIRST TIME 2026-09-19, installing the A9 Pro.
+It works, and it is not acceptable for anyone but us.**
 
-CI produces both a `qcow2` (for the Phase 1 VM boot test) and an `anaconda-iso`
-(for installing to real hardware). The ISO runs a graphical installer, which is
-a keyboard-and-mouse experience and therefore contradicts the product's
-principles — but it only happens once, at install time, on a machine that has
-not been set up yet.
+CI produces both a `qcow2` (for the VM boot test) and an `anaconda-iso` (for
+real hardware). The ISO installs correctly — the A9 Pro went from bare metal to
+a working console with it. **What it does to the person doing the installing is
+the problem**, and MMagTech asked directly whether this would do for a release.
+It would not. In the order they hit it:
 
-If a keyboard-free install becomes a requirement, the alternative is a `raw`
-image written directly to the target machine's drive from another computer.
-Decide in Phase 6.
+1. The stick is branded **Bazzite**, not CabinetOS.
+2. The boot menu offers "Test this media & install", and that check reports
+   **FAIL on good media** — `Supported ISO: no`, aborting at 4.8% — followed by
+   *"We do not recommend using this medium. System will halt in 12 hours."* The
+   media was fine: `dd` had written the ISO's exact 6,064,252,928 bytes and the
+   install from it succeeded.
+3. Screens of kernel errors, including `amdgpu: Fatal error during GPU init`
+   and MediaTek Wi-Fi firmware failures. See *The installer runtime carries no
+   firmware* below — they are harmless and they look like a broken machine.
+4. **Anaconda itself**: disk partitioning, a "reclaim space" dialog that means
+   *destroy the Windows install*, root password policy, an administrator
+   checkbox, and an Advanced dialog offering UID and GID.
+5. **No Wi-Fi to choose from**, with nothing on screen saying why.
+
+Against *Constraints and principles* item 3 — anything that could leave the
+user stuck at a terminal is a bug — and the rule that a screen needing a
+keyboard is a bug, this is not a near miss. A console that opens by asking
+about UIDs is not a console.
+
+**What to build, in value order.** None of it is hard; it simply was never
+anyone's job:
+
+- **Automate the install completely in kickstart** — `clearpart --all
+  --initlabel`, `autopart`, the `cabinet` user created silently, no Users
+  screen and no Network screen. Anaconda runs with zero interactive screens
+  when the kickstart answers everything. That reduces five decisions to one:
+  *this will erase this machine — continue?*
+- **`quiet loglevel=0` on the installer's kernel command line**, plus a
+  CabinetOS splash over it. Phase 2 already carries this item for the OS boot
+  and nobody had it for the installer, which is the screen a person sees
+  FIRST.
+- **Remove or fix the media check.** It fails on good media today, which is
+  worse than not having it.
+- **Brand the ISO.** Same Phase 8 work as the boot splash.
+- **Get firmware into the installer runtime** if `bootc-image-builder` permits
+  it, so Wi-Fi exists during setup; otherwise say on screen to use a cable.
+
+**The honest remaining gap**, which no amount of kickstart closes: the first
+step is still a firmware boot menu, and that needs a keyboard. A `raw` image
+written to the target's drive from another computer does not help — it is
+worse for most people, since it means opening the machine or owning a
+USB-NVMe adapter.
+
+**Decide the rest in Phase 6**, but the direction is settled: keep the ISO,
+automate it, and brand it.
+
+#### The installer runtime carries no firmware — 2026-09-19
+
+Worth its own note, because it looks catastrophic and is not. Installing on
+the A9 Pro, the installer printed:
+
+```
+amdgpu 0000:c6:00.0: early_init of IP block <psp> failed -19
+... <dm> <gfx_v11_0> <sdma_v6_0> <vcn_v4_0_5> <mes_v11_0> all -19
+amdgpu 0000:c6:00.0: Fatal error during GPU init
+mt7925e 0000:c3:00.0: Direct firmware load for mediatek/mt7925/... failed with error -2
+```
+
+**It is the installer's environment, not the image**, and one observation
+settles it: the installer also failed to load `gc_11_5_0_pfp.bin`, which *is*
+in Fedora's `amd-gpu-firmware` and *is* in the CabinetOS image. A file that
+should not have failed was worth more than all the ones that did. The
+installer runs a stock Fedora kernel — `7.2.5-200.fc44`, not the image's
+`7.2.4-ogc3.1.fc44` — and ships no firmware.
+
+The CabinetOS image has what this machine needs: 677 amdgpu blobs including
+`gc_11_5_0_*`, `dcn_3_5_dmcub.bin`, `sdma_6_1_0.bin`, `vcn_4_0_5.bin` and
+`psp_14_0_0_toc.bin`, all three MT7925 Wi-Fi and Bluetooth blobs, and an
+initramfs carrying 666 amdgpu firmware files plus `amdgpu.ko`, built
+`hostonly=no`. The installed machine drives the GPU perfectly — see *The A9
+Pro, measured*.
+
+**Two wrong turns on the way, recorded so nobody repeats them.** The
+base-bump note about `linux-firmware` going backwards 20260910 → 20260810 made
+"old firmware" the obvious theory, and it was "checked" against an invented
+filename rather than the one on screen. Then `psp_14_0_8` was misread off a
+photograph of a rotated monitor and a second theory built on the misread
+digit — no Fedora `amd-gpu-firmware`, including the newest 20260916, contains
+any `psp_14_0_8`. **Do not diagnose hardware from a photograph. Get a shell
+and read `dmesg`.**
 
 ### 6. `/opt` mutability
 **Raised: Phase 1. Left at Bazzite's default.**

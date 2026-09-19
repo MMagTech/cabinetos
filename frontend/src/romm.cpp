@@ -278,6 +278,30 @@ bool Client::loadToken(const std::string& path) {
 
 bool Client::saveToken(const std::string& path) const {
     if (token_.empty()) return false;
+
+    // THE DIRECTORY HAS TO BE MADE, AND NOT MAKING IT COST A PAIRING ON THE
+    // FIRST CONSOLE EVER INSTALLED. `~/.config/cabinetos/` does not exist on a
+    // machine nobody has configured, which is precisely the machine that is
+    // pairing. The open below then fails with ENOENT, the pairing that the
+    // person has just approved in a browser is thrown away, and the console
+    // goes on showing the stand-in library. Found 2026-09-19, on the A9 Pro,
+    // ten minutes after it first booted; the test VM never showed it because
+    // that directory had been created there by hand weeks earlier.
+    //
+    // 0700, because what goes in it is a credential.
+    if (const size_t slash = path.rfind('/'); slash != std::string::npos && slash > 0) {
+        const std::string dir = path.substr(0, slash);
+        std::string built;
+        size_t at = 0;
+        while (at < dir.size()) {
+            const size_t next = dir.find('/', at + 1);
+            built = dir.substr(0, next == std::string::npos ? dir.size() : next);
+            if (!built.empty()) ::mkdir(built.c_str(), S_IRWXU);
+            if (next == std::string::npos) break;
+            at = next;
+        }
+    }
+
     // 0600 from the moment it exists. Creating it readable and chmod-ing after
     // leaves a window where the credential is world-readable.
     int fd = open(path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
