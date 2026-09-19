@@ -205,11 +205,48 @@ jobs:
             echo "builder=cabinetos-builder" >> "$GITHUB_OUTPUT"
           fi
 
+      # A CORE CANNOT CHANGE UNLESS ONE OF TWO FILES DOES, so a cache keyed on
+      # them is not a guess about staleness — it is the whole input.
+      # cores/build-core.sh holds the pinned commit, the patches and the build
+      # arguments; frontend/Containerfile is the toolchain. Upstream cannot
+      # shift underneath either, because the checkout is by commit SHA and not
+      # by a tag.
+      #
+      # Why it is worth the machinery: PPSSPP alone is eight and a half
+      # minutes, FBNeo nearly seven, and build.yml now builds all twenty-one
+      # before every image. That was about half the wall clock of a change
+      # that touched a shell script and could not possibly have altered a
+      # core.
+      #
+      # THE PINNED-REVISION ASSERTION STILL RUNS ON A HIT — see the step below
+      # and the --verify-only block in build-core.sh. Skipping the proof to
+      # save ten seconds would trade away the only thing this workflow buys.
+      - name: Restore the built core, if this exact one has been built before
+        id: corecache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: |
+            cores/build
+            cores/system
+          key: core-${{ matrix.core }}-${{ hashFiles('cores/build-core.sh', 'frontend/Containerfile') }}
+
       - name: Build the core
+        if: steps.corecache.outputs.cache-hit != 'true'
         env:
           # build-core.sh already reads this, so the image it uses is chosen
           # here rather than by a retag.
           CABINETOS_BUILDER: ${{ steps.builder.outputs.builder }}
+        run: |
+          set -euo pipefail
+          cores/build-core.sh "${{ matrix.core }}" | tee /tmp/build.log
+
+      # Nothing was compiled, so prove the thing that came out of the cache is
+      # still the pinned revision. Reads it back out of the .so itself.
+      - name: Check the cached core is the pinned revision
+        if: steps.corecache.outputs.cache-hit == 'true'
+        env:
+          CABINETOS_BUILDER: ${{ steps.builder.outputs.builder }}
+          CABINETOS_VERIFY_ONLY: "1"
         run: |
           set -euo pipefail
           cores/build-core.sh "${{ matrix.core }}" | tee /tmp/build.log

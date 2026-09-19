@@ -169,7 +169,19 @@ jobs:
       # Splits the image into many layers so that a CabinetOS update downloads
       # only what changed. This matters for the Phase 7 update model: a console
       # update should not be a multi-gigabyte download every time.
+      #
+      # NOT ON PULL REQUESTS, as of 2026-09-19. A pull request never pushes an
+      # image, so the re-layered result is built and thrown away — minutes
+      # spent on an artifact nobody will ever pull. What ships is unaffected:
+      # every image that reaches the registry comes from a push to main, and
+      # that still rechunks before it publishes.
+      #
+      # What is given up, stated plainly: a broken rechunk is found on main
+      # rather than on the pull request. The consequence of that is a red build
+      # and NO publish, not a bad publish — so it costs feedback, never
+      # correctness.
       - name: Rechunk
+        if: github.event_name != 'pull_request'
         run: just ostree-rechunk "${IMAGE_NAME}" "${DEFAULT_TAG}"
 
       - name: Generate tags
