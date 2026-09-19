@@ -452,6 +452,13 @@ these in the VM.**
   pid file, or the exit status of the thing you started. `pgrep -x` also
   refuses names over 15 characters, so `cabinetos-frontend` needs
   `ps -eo args | grep "[c]abinetos-frontend"`.
+- **`ci/base-watch.txt` now watches the CORES' libraries too**, added
+  2026-09-19 off a real `ldd` sweep rather than guessed at — including
+  `libX11` and `libXext`, which are PPSSPP's and which nothing had written
+  down. Three of the frontend's own were missing from that list as well. The
+  image build would now fail rather than ship broken, but it would fail with
+  no obvious cause; this is what makes the base-bump pull request say "read
+  this" first.
 - **The weekly base bump needs two clicks, not none.** It opens a pull request,
   but the build on it lands as `action_required` and waits for approval —
   `gh api -X POST /repos/MMagTech/cabinetos/actions/runs/<id>/approve`. And

@@ -11,10 +11,11 @@ name: Build CabinetOS image
 
 # DELIBERATELY STILL ONLY THE PULL REQUESTS AIMED AT MAIN, unlike
 # build-frontend.yml and build-core.yml, which were widened on 2026-09-16 after
-# a stack of branches slipped past them. This one is twelve minutes of runner
-# time and no path filter narrows it, and the question it answers is "does the
-# image that ships build" — which is a question about what reaches main. The
-# cheap checks are the ones worth running everywhere.
+# a stack of branches slipped past them. This one is about twenty-three minutes
+# of wall clock — thirteen for the image and ten for the cores it now builds
+# first — and the question it answers is "does the image that ships build",
+# which is a question about what reaches main. The cheap checks are the ones
+# worth running everywhere.
 on:
   pull_request:
     branches:

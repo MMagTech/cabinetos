@@ -580,6 +580,12 @@ versions. This is the reason for building on a bootc/OSTree base: the entire OS
 is a single signed, versioned artifact, and a bad update is a rollback rather
 than a recovery USB stick.
 
+**TRUE AS OF 2026-09-19 AND NOT BEFORE.** For a fortnight this was a
+description of an intent: the image carried the OS and the session, and the
+frontend and the twenty-one cores were not in it at all, so a machine that
+pulled an update got half a system and nothing said so. The half it got was
+the half nobody was watching. Phase 5, *The deploy*.
+
 Corollary: Bazzite's own automatic updater (`uupd`) is disabled, because it
 would create exactly the partial-version state this model exists to prevent.
 
