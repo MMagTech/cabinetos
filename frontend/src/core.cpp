@@ -47,6 +47,12 @@ struct {
 constexpr int kMaxPorts = 2;
 PadState gPads[kMaxPorts];
 
+// How many controller ports the CORE says it has, from
+// RETRO_ENVIRONMENT_SET_CONTROLLER_INFO. Four for Flycast, and it matters that
+// the answer comes from the core rather than from a number chosen here — see
+// the note in loadGame about telling a core what is plugged in.
+unsigned gCorePorts = 0;
+
 unsigned gPixelFormat = RETRO_PIXEL_FORMAT_0RGB1555;
 std::string gSystemDir, gSaveDir;
 
@@ -586,8 +592,19 @@ bool environment(unsigned cmd, void* data) {
                 captureV2(intl->us);
             return true;
 
+        case RETRO_ENVIRONMENT_SET_CONTROLLER_INFO: {
+            // Acknowledged before, and the data thrown away. It is the only
+            // place a core says how many ports it has, and loadGame has to
+            // know: a core that is told about some of its ports and not the
+            // rest can sit waiting for the rest forever. The array is
+            // terminated by an entry with no types.
+            gCorePorts = 0;
+            if (const auto* info = static_cast<const retro_controller_info*>(data))
+                while (info[gCorePorts].types || info[gCorePorts].num_types) ++gCorePorts;
+            return true;
+        }
+
         case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY:
-        case RETRO_ENVIRONMENT_SET_CONTROLLER_INFO:
         case RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS:
         case RETRO_ENVIRONMENT_SET_MEMORY_MAPS:
         case RETRO_ENVIRONMENT_SET_SUPPORT_ACHIEVEMENTS:
@@ -936,6 +953,44 @@ bool Core::loadGame(const std::string& romPath, const std::string& systemDir,
         return false;
     }
     gameLoaded_ = true;
+
+    // TELL THE CORE WHAT IS PLUGGED IN, and this was never being said.
+    //
+    // libretro's own documentation says a joypad is assumed on every port, and
+    // it is a poor assumption to lean on: a core is free to build its idea of
+    // the machine out of these calls and Flycast does exactly that. It
+    // constructs the Dreamcast's Maple bus from `retro_set_controller_port_device`,
+    // so a port nothing was ever said about carries no controller — and a VMU
+    // lives in a CONTROLLER'S expansion socket, not in the console. With no
+    // call, Ikaruga opens on "memory card not connected" however good the card
+    // sitting on the disk is.
+    //
+    // That symptom has been in this project's notes for days, filed as a
+    // curiosity of the file-writing save class. It is not: the save work put
+    // a real 128 KB card in exactly the right place and the game still said
+    // the slot was empty, which is what made it worth looking at the call
+    // nobody was making. Found 2026-09-19 by photographing the screen rather
+    // than by reading the log, which said nothing at all.
+    //
+    // EVERY PORT THE CORE HAS, not just the ones this console drives, and that
+    // is the half that took the longest to find. Flycast will not act on any
+    // of these calls until it has heard about ALL FOUR of its ports — it
+    // returns early while any port is still unset, so the code that reads
+    // `device_port1_slot1` and puts a VMU in the controller's expansion socket
+    // never runs. Telling it about one port is the same as telling it about
+    // none.
+    //
+    // ONE PAD, HONESTLY. This frontend drives port 0 and nothing else — see
+    // setPad — so port 0 is a joypad and the rest are empty. Saying every port
+    // has a controller would have Flycast create four memory cards for a
+    // console with one player, three of which nothing would ever sync and all
+    // of which would sit in the system directory.
+    if (g.set_controller_port_device) {
+        const unsigned ports = std::max(gCorePorts, 1u);
+        g.set_controller_port_device(0, RETRO_DEVICE_JOYPAD);
+        for (unsigned p = 1; p < ports; ++p)
+            g.set_controller_port_device(p, RETRO_DEVICE_NONE);
+    }
 
     retro_system_av_info av{};
     g.get_system_av_info(&av);

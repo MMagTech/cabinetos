@@ -22,6 +22,7 @@
 
 #include <map>
 #include <string>
+#include <vector>
 
 #include "romm.h"
 
@@ -75,6 +76,20 @@ struct Coverage {
     const char* reason = nullptr;   // why, when it is not simply playable
 };
 
+// The file a core was built into, given the manifest's name for it.
+//
+// ONE RULE, ONE PLACE, and it is here because having it in two cost a launch.
+// A manifest name that already ends in `_libretro` does not get a second one:
+// `fbneo_libretro` is filed as `fbneo_libretro.so`, not
+// `fbneo_libretro_libretro.so`. `cores/build-core.sh` applies the same rule
+// when it names the artifact and says so in a comment; coverageFor applied it
+// too, and the LAUNCH path did not — so every arcade game on this console
+// reported the core as playable from one code path and then failed to open it
+// from the other, with a message about a file nothing ever builds. Found by
+// running an FBNeo game, 2026-09-19, and it had been true since the core
+// landed.
+std::string coreFileName(const std::string& manifestCoreName);
+
 Coverage coverageFor(const romm::Platform& p);
 
 // The name to put on a tile. RomM's own `name` is not always enough to tell two
@@ -125,6 +140,129 @@ std::map<std::string, std::string> optionOverrides(const std::string& coreName);
 // says exactly that and it is right.
 const char* directorySaveRoot(const char* core);
 
+// --- Saves the CORE writes as a file ---------------------------------------
+//
+// THE MAJORITY OF THE SAVES ON A REAL SERVER, which is the thing that made
+// this worth building. The audit of 2026-09-17 measured 47 of the 81 saves on
+// the reference server — 58% — as belonging to platforms whose core never
+// exposes RETRO_MEMORY_SAVE_RAM at all. It reads like an edge case and it is
+// not one.
+//
+// A core in this class keeps the game's progress in a FILE it opens itself: a
+// Dreamcast VMU image, a Sega CD backup-RAM dump, an arcade board's NVRAM, a
+// Neo Geo Pocket flash, a DS cartridge SRAM, a 3DO NVRAM. `[save] battery is 0
+// bytes` at launch is this console correctly reporting that there is no
+// battery to read — the save is on the disk, not in the core's memory.
+//
+// So the mechanism is the one PSP already uses and for the same reasons: put
+// the file there BEFORE the core loads the game, because these cores read it
+// once while the machine is being built and never look again; read it back
+// AFTER `retro_unload_game`, because that is where a core flushes what it has
+// been buffering. See filesave.h for the halves and docs/PROJECT.md, *The save
+// audit*, for the per-platform evidence.
+//
+// This is the table. filesave.{h,cpp} is the mechanism.
+
+// How to tell a save somebody made from the empty thing a core writes just by
+// being switched on.
+//
+// WITHOUT THIS EVERY LAUNCH UPLOADS. A core formats its own storage the first
+// time it runs, the result is identical for everyone who plays that game, and
+// it would then be pulled back down onto somebody's other device as if it
+// meant something. The reference implementation's `isUntouchedNVRAM` exists
+// for exactly this and the rules below are its per-platform refinements.
+enum class Untouched {
+    // Nothing but 0x00 and 0xFF: no core wrote anything worth keeping.
+    Blank,
+    // Every byte identical, whatever the byte is. MAME's fresh NVRAM is all
+    // 0x01 for the capbowl family and all 0x00 elsewhere, and a seeded
+    // bootstrap image is the same for everyone who plays that board.
+    Uniform,
+    // Genesis Plus GX puts its 64-byte format block at the END of a .brm, and
+    // freshly formatted backup RAM carries allocation marks in the first 16
+    // bytes — a repeating `ff fa 00 02`. Counting either as data uploads
+    // formatted-empty images. Same layout at a bigger size for the cartridge.
+    SegaCDBackup,
+    // Opera formats a fresh NVRAM with a filesystem header — the volume block
+    // and root directory, all inside the first 176 bytes. Data past that is
+    // what distinguishes a real save.
+    ThreeDONvram,
+    // A VMU's own directory, and the one guard this project did not inherit.
+    // MEASURED, 2026-09-19: three of the thirteen Dreamcast cards on the
+    // reference server — Cannon Spike, Re-Volt, San Francisco Rush 2049 — hold
+    // no file at all. They are formatted cards the reference implementation
+    // uploaded because its Dreamcast path applies no freshness rule. A quarter
+    // of the rows for the platform with the most of them carry nothing.
+    //
+    // A VMU is 128 KB of 512-byte blocks. Block 255 is the root and starts
+    // with sixteen 0x55 bytes; blocks 253 down to 241 are the directory,
+    // sixteen 32-byte entries each, and an entry's first byte is 0x33 for a
+    // data file, 0xCC for a game and 0x00 for a free slot. So "this card holds
+    // a save" is a fact the bytes state outright.
+    VmuDirectory,
+};
+
+// One file a core writes for itself.
+struct SaveFile {
+    // Relative to the core's SAVE directory, which is
+    // `users/<id> - <name>/saves/<platform>/<romId>/<core>/` and holds this one
+    // game's files. Already has the ROM's stem substituted where the core names
+    // the file after what it loaded.
+    std::string path;
+    // A suffix to scan the directory for after the core has shut down, when
+    // the name the core chose cannot be predicted from here. Empty means
+    // `path` is exact in both directions.
+    std::string captureSuffix;
+    // A name that ends in `captureSuffix` and belongs to a DIFFERENT region.
+    // Sega CD is the case: `4Mbit_cart.brm` also ends in `.brm`, and without
+    // this the cartridge and the internal RAM overwrite each other.
+    std::string captureExclude;
+    // The extension this console uploads the row under, which is also how a
+    // restore tells two regions of one game apart. "srm" for the game's own
+    // save and "cart" for Sega CD's external RAM cartridge — the reference
+    // implementation's convention, and the reason its Lunar has two rows.
+    std::string region = "srm";
+    Untouched untouched = Untouched::Blank;
+    // What the row on the server calls the core, or empty when naming the game
+    // is enough.
+    //
+    // ARCADE AND ONLY ARCADE: one game can legitimately have two of these, one
+    // per emulator, and RomM matches a row for overwrite by FILENAME ALONE
+    // with the emulator tag not included. So two arcade cores both uploading
+    // `smashtv (Cabinet).srm` would quietly overwrite each other's high scores
+    // on the server despite being tagged differently — a fault nobody would
+    // see until the scores were gone.
+    //
+    // The strings are the reference implementation's, not this console's
+    // manifest names, and they were read off the rows already on the server
+    // rather than guessed: `smashtv (Cabinet fbneo).srm` and `lethalen
+    // (Cabinet mame2003Plus).srm`. Matching them is the point — see
+    // main.cpp's saveRowName.
+    std::string coreRowName;
+    // DREAMCAST ONLY. Flycast keeps the VMU in the libretro SYSTEM directory —
+    // `bios/dc/` here — because libretro gives a core exactly one of those and
+    // that is where the core looks. It is the one file in `bios/` that cannot
+    // be fetched again, which is the last rough edge the folder layout left
+    // open: see docs/PROJECT.md, open question 18. So the card is placed there
+    // for the length of a session and taken back out afterwards, and what
+    // lives in `bios/dc/` at rest is `dc_nvmem.bin`, the console's own clock
+    // and language, which rebuilds itself if it is lost.
+    bool inSystemDir = false;
+};
+
+// What this platform's core writes, or empty for the cores that expose a
+// battery and need none of this.
+//
+// Keyed on the platform rather than the core, because one core serves several
+// systems and only some of them are in this class: Genesis Plus GX writes a
+// `.brm` for Sega CD and nothing at all for Genesis, Game Gear or Master
+// System, whose cartridges have real batteries the core exposes. The audit's
+// own table is the source; `stem` is the basename of the file the core was
+// handed, without its extension, which is what these cores name the save
+// after.
+std::vector<SaveFile> saveFiles(const std::string& slug, const std::string& fsSlug,
+                                const std::string& stem);
+
 // The same question asked of a game. A ROM payload carries its own platform
 // slug and fs_slug, so Home can decide whether the most recently played game is
 // one this console can resume without fetching the platform list first.
@@ -159,5 +297,37 @@ inline bool playable(const romm::Game& g) {
 // Returns nullptr for a core whose tag has not been settled, which is a refusal
 // to upload rather than a licence to guess.
 const char* emulatorTag(const char* manifestCoreName);
+
+// The tag a SAVE travels under, which is not always the tag a STATE travels
+// under — and five platforms' worth of saves depend on the difference.
+//
+// THE PLAIN VERSION: a save state is a photograph of the emulator's own
+// insides, so two builds of a core can disagree about it and the tag is what
+// stops somebody being handed one that will not load. A file save is not that.
+// A Dreamcast VMU image is 128 KB in the VMU's own format, an arcade NVRAM is
+// the board's own chip, a Sega CD `.brm` is the machine's backup RAM. Those
+// formats are defined by the hardware being emulated and no build flag moves
+// them — which the audit proved by reading the bytes: "every other core
+// uploads the emulator's own bytes, so anything that can read a save for those
+// platforms can read what is on this server."
+//
+// WHY IT MATTERS HERE. `emulatorTag` is deliberately silent for five of the
+// cores in the file-writing class — Flycast, Opera, FBNeo, MAME 2003-Plus and
+// Beetle NGP — and silence means "do not upload". Between them those five hold
+// 35 of the 47 file saves on the reference server, including all thirteen
+// Dreamcast cards. Applying the state rule to them would leave the majority of
+// this feature dead on arrival, and it would be the wrong rule: nothing about
+// a VMU image can be unloadable.
+//
+// So states keep the strict rule and saves get this one. Flycast is the case
+// that shows the two apart: its pinned commit does not reproduce what the
+// reference implementation ships, because that build carries unscripted edits
+// in its working tree (docs/NEXT-SESSION.md, *Cabinet-side debts*). That is a
+// real reason to refuse a save STATE and no reason at all to refuse a memory
+// card, so `emulatorTag` still returns nullptr for it and this returns
+// `flycast-native`.
+//
+// Returns nullptr when even a save should stay local.
+const char* saveTag(const char* manifestCoreName);
 
 }  // namespace catalog
