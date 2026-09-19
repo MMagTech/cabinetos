@@ -2000,7 +2000,7 @@ int main(int argc, char** argv) {
     // repository is public and somebody's LAN address does not belong in it —
     // so the address comes from the machine, and the session script is what
     // puts it in the environment. The first-run screen writes the same file
-    // when it exists; see docs/PROJECT.md, open question 17.
+    // when it exists; see docs/PROJECT.md, open question 15.
     if (!rommAddress) {
         if (const char* env = getenv("CABINETOS_ROMM"); env && *env) rommAddress = env;
     }

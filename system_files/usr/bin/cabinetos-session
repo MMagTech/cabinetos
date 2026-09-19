@@ -26,7 +26,7 @@ set -uo pipefail
 # address compiled in is useful to exactly one person. A console with no file
 # here still boots — it comes up on the stand-in library and says on stderr
 # that it has no server — which is the state the first-run screen will replace
-# (docs/PROJECT.md, open question 17). It writes this same file.
+# (docs/PROJECT.md, open question 15). It writes this same file.
 #
 # /etc, because that is the part of a bootc machine that is the machine's own
 # and survives an update. Sourced rather than parsed: it is shell, and it is

@@ -88,6 +88,13 @@ struct Coverage {
 // from the other, with a message about a file nothing ever builds. Found by
 // running an FBNeo game, 2026-09-19, and it had been true since the core
 // landed.
+//
+// THERE IS A THIRD COPY NOW and it is deliberate: ci/stage-image-payload.sh
+// derives the same name to check that every core reached the image. It cannot
+// call this, being a shell script that runs before anything is compiled, so
+// the comment is on all three. It also PRINTS any .so it finds that is not on
+// the list, which is how a name that drifts shows up as a line of output
+// rather than as a platform the console says it cannot play.
 std::string coreFileName(const std::string& manifestCoreName);
 
 Coverage coverageFor(const romm::Platform& p);
