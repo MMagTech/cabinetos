@@ -15,7 +15,8 @@ Rewrite it at the end of a session. It is meant to be current, not a log.
 ## Before anything else
 
 **Everything is on `main`.** No other branches and no open pull requests.
-The saves that could not travel now travel — Dreamcast, Sega CD, both arcade
+[#23](https://github.com/MMagTech/cabinetos/pull/23) merged as `26ce4ed` and
+the firmware work followed it. The saves that could not travel now travel — Dreamcast, Sega CD, both arcade
 emulators, 3DO, Neo Geo Pocket and DS — so everything described below as "runs
 today" is on `main`.
 
@@ -95,6 +96,11 @@ on the way out.
   Cabinet's own emulator strings. Six cores share a state tag; PPSSPP is the
   newest and has the strongest case of the six, because no configuration
   difference is left to justify.
+- **EVERY platform this console claims to play, plays** — measured 2026-09-19
+  by launching the smallest game on each of twenty-six platform rows and
+  reading the maximum pixel of the frame, rather than by anyone asserting it.
+  It found three faults and all three were silent. PROJECT.md, *Every
+  platform, run once*.
 - **EVERY platform's saves travel, as of 2026-09-19**, not just the ones whose
   core exposes a battery. The 47 of 81 rows on the server that could neither be
   uploaded nor restored — Dreamcast, Sega CD, MAME, FBNeo, 3DO, Neo Geo Pocket,
@@ -305,6 +311,33 @@ collects them into the image.
 on, exactly like the VM. That is still worth having the day it arrives — it is
 the only way to judge the UI on a television — but it is not "install it once
 and it keeps up".
+
+### 1c. Firmware a core can actually find — DONE 2026-09-19
+
+**Saturn could not start a single game**, and nothing said so until one was
+launched. RomM serves the BIOS as `saturn_bios.bin`; Beetle Saturn opens
+`sega_101.bin`. Both right, nothing joining them up. `catalog::firmwareAliases`
+now matches the platform's own firmware **by size** — the only field RomM
+offers — and copies it under every name the core might try, because Saturn and
+Sega CD choose between region BIOSes from the disc at load time.
+
+**Two things to know before touching it.** The source must come from THIS
+platform's firmware list, never a scan of `bios/`: the PlayStation BIOS is
+524288 bytes, exactly Saturn's, and the first version separated them by
+alphabetical order alone. And **Dreamcast was running Flycast's built-in
+substitute boot ROM the whole time** — the real one was at `bios/dc_boot.bin`
+and Flycast reads `bios/dc/dc_boot.bin`, falling back silently with no error at
+any log level. It is staged into both now, and the proof is a picture: frame
+400 of Ikaruga is the Dreamcast startup swirl, which the substitute does not
+have.
+
+**And a web page is no longer played as a game.** Three Master System entries
+on the reference server are HTML error pages wearing a `.7z` extension; the
+console downloaded one, handed it to a core, and drew black for three thousand
+frames. `romfile::sniff` recognises them now and the launch says so — and
+**deletes the file**, because the download path skips anything already on disk
+at the expected size, so a cached error page would break that game for ever.
+Those three files are the server owner's to replace.
 
 ### 2. Finish the core options, which is half done — **DO THIS NEXT**
 
@@ -559,6 +592,21 @@ PROJECT.md says "the SER5" and means this one.
 
 ### About the machine and the work
 
+- **A dark first capture is usually a slow boot.** PlayStation needs about
+  6000 frames to clear the Sony logo on this VM, Saturn 2600, Sega 32X 2000,
+  Neo Geo Pocket 1200. Three platforms looked broken on the first sweep and
+  none was. Capture at two frame counts and see whether the picture moves.
+  **And a Saturn capture is not repeatable** — the same 2000-frame run gave
+  max=209 and then max=8.
+- **A core will happily "load" something that is not a game.** Genesis Plus GX
+  accepted an HTML error page, reported correct Master System geometry, ran,
+  and drew black for three thousand frames. Sniff the bytes; the console does
+  now.
+- **A silent fallback is worse than a failure.** Flycast substitutes its own
+  boot ROM when it cannot find the real one and says nothing at any log level,
+  so this console emulated a Dreamcast with an approximation for as long as
+  Dreamcast has worked. It showed up in exactly one place: the startup
+  animation at frame 400.
 - **Build a core, then RUN it.** This is now five for five — and the fifth was
   the worst, because nothing was newly built at all. On 2026-09-19 every one of
   the 223 arcade games turned out to be unable to start, and had been since the
@@ -822,6 +870,37 @@ already have a proven answer in Cabinet. So: PS2 and GameCube first, then judge
 PS3 and Switch with that experience in hand.
 
 ## Something the user wants discussed, in its own session
+
+**Switch, or Xbox.** Asked for on 2026-09-19: *"for our next session I'd like to
+discuss implementing switch or xbox."* Do not start building either as a side
+effect of something else — and read these three numbers before the conversation
+opens, because they decide most of it:
+
+| | Games in the reference library | Size |
+|---|---|---|
+| **Switch** | **109** | 310 GB, largest title 28.3 GB |
+| **Xbox** | **0** | not in the library at all |
+| Xbox 360 | 0 | not in the library at all |
+
+**Switch serves 109 games today and Xbox serves none.** That is not an argument
+against Xbox, but it should be said before any effort is estimated, and it was
+already the finding of the heavy-systems discussion below.
+
+Both land on the same unanswered question rather than a new one: **neither is a
+libretro core.** Every one of the twenty-one cores here is a `.so` this
+frontend loads and drives in its own frame loop; Switch and Xbox emulation
+lives in standalone applications with their own windows, input and renderers —
+the same shape as PS2 and GameCube, which is **open question 12**, and the same
+shape as open question 21 on emulators that cannot be baked into the image.
+Cabinet answered it for PS2 and GameCube by embedding real PCSX2 and Dolphin as
+libraries rather than launching them.
+
+The recommendation already on record, unchanged: **PS2 and GameCube first**,
+because they are already in the plan and already have a proven answer in
+Cabinet, then judge the heavy systems with that experience in hand. Switch also
+brings the storage question with it — a single 37 GB title is larger than the
+free space this console keeps in reserve, and the cache, both floors and
+Download All were all designed against cartridge and disc-sized games.
 
 **Account switching.** RomM has users; tvOS already switches between them.
 Raised 2026-09-16 with the words "we would implement it slightly different", and

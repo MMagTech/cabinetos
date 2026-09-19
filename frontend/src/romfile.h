@@ -45,6 +45,22 @@ enum class Kind {
     // compressed containers that cores open themselves.
     Chd,
     Rvz,
+    // NOT A GAME AT ALL. A web page where a ROM should be.
+    //
+    // FOUND ON THE REFERENCE LIBRARY, 2026-09-19, and it is not a curiosity:
+    // three Master System entries — Gangster Town, Rambo III, Assault City —
+    // are 5 to 9 KB files beginning `<!DOCTYPE HTML>`. They are error pages
+    // from wherever the ROMs were fetched, saved with a `.7z` extension. RomM
+    // serves them with HTTP 200 and reports `missing_from_fs: false`, so
+    // nothing on that side notices either.
+    //
+    // WHAT IT LOOKED LIKE BEFORE THIS EXISTED: the console downloaded a web
+    // page, handed it to Genesis Plus GX, the core accepted it, reported
+    // correct Master System geometry, ran, and drew black. No error anywhere.
+    // Three thousand frames later it was still black. **A black screen is the
+    // worst possible way to say "that file is not a game"**, and this is the
+    // one case where the bytes say so outright.
+    NotAGame,
 };
 
 Kind sniff(const std::vector<uint8_t>& bytes);

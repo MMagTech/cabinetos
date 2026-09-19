@@ -1550,6 +1550,149 @@ is the first entry in this table that could plausibly run to gigabytes, and the
 first where the *location* is wrong as well as the size: a games drive should
 hold it.
 
+### Every platform, run once — 2026-09-19
+
+**Twenty-six platform rows, one game each, and until this was run nobody could
+say which of them worked.** The claim in the handover was *1147 games playable,
+all twenty-one cores can be RUN*. That was true when it was measured, and then
+the on-disk layout moved and two platforms broke without anybody noticing. So
+the claim was not something to stand behind.
+
+The test is deliberately not a look-and-feel judgement, so it does not wait on
+the reference machine: launch the SMALLEST game on each platform headless, and
+ask three things.
+
+1. **Does the core load it?**
+2. **Does it reach a running state?**
+3. **Does it draw anything that is not black?**
+
+The third is there because of what PPSSPP taught: a capture can be a plausible,
+nearly-black picture with legible text and a maximum pixel of **(4,4,4)**, and
+it reads as "this core renders black" until somebody reads the number. So the
+harness reports the maximum and mean pixel of every frame it takes.
+
+#### The result, after the three faults below were fixed
+
+| | | | |
+|---|---|---|---|
+| Atari 2600 | ran, max 231 | Neo Geo Pocket | ran, max 255 |
+| Atari 7800 | ran, max 255 | Arcade — FBNeo | ran, max 255 |
+| Vectrex | ran, max 248 | Arcade — MAME | ran, max 255 |
+| NES | ran, max 255 | Nintendo DS | ran, max 255 |
+| Game Boy | ran, max 255 | Nintendo 64 | ran, max 255 |
+| Game Boy Color | ran, max 247 | PlayStation | ran, max 255 |
+| Game Boy Advance | ran, max 255 | **Saturn** | **ran, max 248** |
+| Master System | ran, max 255 | Sega CD | ran, max 239 |
+| Game Gear | ran, max 255 | TurboGrafx-CD | ran, max 255 |
+| Genesis | ran, max 239 | 3DO | ran, max 223 |
+| Sega 32X | ran, max 239 | Dreamcast | ran, max 255 |
+| SNES | ran, max 255 | PSP | ran, max 255 |
+| TurboGrafx-16 | ran, max 255 | | |
+
+**Every platform this console claims to play, plays.** It is the first time
+that sentence has been measured rather than asserted.
+
+#### Two false alarms, and they cost an hour each time they are rediscovered
+
+**A dark first capture is usually a slow boot, not a broken core.** Neo Geo
+Pocket and PlayStation both came back at max=8 — indistinguishable from black —
+on the first pass, and both are simply slow: **PlayStation needs about 6000
+frames to get past the Sony logo on this VM**, Neo Geo Pocket about 1200, Sega
+32X about 2000, Saturn about 2600. The discriminating test is to capture at two
+frame counts and see whether the picture moves.
+
+**And a Saturn capture is nondeterministic.** Death Crimson gave max=209 at
+2000 frames on one run and max=8 at 2000 frames on the next, then max=248 twice
+at 2600. The CD emulation is not frame-deterministic under this harness, so a
+single dark capture of a CD platform means nothing on its own.
+
+#### Fault one: a core looks its BIOS up by a name RomM does not use
+
+**No Saturn game could start.** Not one, and nothing said so until a game was
+launched:
+
+```
+[firmware] saturn_bios.bin (524288 bytes)
+[core] Cannot open BIOS file ".../bios/sega_101.bin".
+[launch] the core refused .../Death Crimson (Japan).chd
+```
+
+The file downloaded correctly. The core looked for a different name. **Both are
+right and nothing joined them up** — RomM serves firmware under whatever name
+the person who uploaded it chose, and every core hardcodes the names it will
+try and gives up if none are present.
+
+It is the third instance of this shape in one day. 3DO was the same and only
+works because `opera_bios` is answered with `panafz10.bin` and the reference
+server happens to use that name. Sega CD and TurboGrafx-CD happen to match.
+**Two of the four firmware platforms were working by luck.**
+
+`catalog::firmwareAliases` closes it, and the reasoning is the reference
+implementation's:
+
+- **Match on SIZE**, because RomM's firmware record carries a filename and a
+  length and nothing else. There is no region field and no purpose field.
+- **Copy under EVERY name the core might try**, not the likeliest one. Beetle
+  Saturn and Genesis Plus GX pick their CD BIOS from the DISC's region code at
+  load time with no fallback, so which name is needed is not knowable when the
+  file is being placed.
+
+**AND ONLY FROM THIS PLATFORM'S OWN FIRMWARE LIST.** The first version scanned
+`bios/` by size, which reaches across platforms — and very nearly did: the
+PlayStation BIOS is **524288 bytes, exactly Saturn's size**, and the two were
+separated only by alphabetical order. `saturn_bios.bin` sorts before
+`scph1001.bin`. It picked correctly and that is not a property to rely on.
+
+#### Fault two: Dreamcast was running a fake BIOS and saying nothing
+
+Flycast reads the boot ROM from `dc/` inside the system directory. This console
+put it at `bios/dc_boot.bin`, one level up, and **`bios/dc/` never contained it**
+— checked five times over the course of the day. When Flycast cannot find the
+file it falls back to **reios**, its own built-in approximation, with no error
+at any log level.
+
+So the console has been emulating a Dreamcast with a substitute boot ROM for as
+long as Dreamcast has worked. Games run, which is exactly why nobody noticed.
+
+**Confirmed by the picture, which is the only place it shows.** With the boot
+ROM staged into `bios/dc/`, frame 400 of Ikaruga is the Dreamcast startup
+animation — the wordmark with the orange swirl being drawn. reios has no logo
+and boots straight into the game. The difference is one frame capture and it
+was invisible everywhere else.
+
+#### Fault three: a web page was accepted as a game and played
+
+**Three entries in the reference library are not games.** Gangster Town, Rambo
+III and Assault City on Master System are 5 to 9 KB files beginning
+`<!DOCTYPE HTML>` — error pages from wherever the ROMs were fetched, saved with
+a `.7z` extension. RomM serves them with **HTTP 200**, content type
+`application/octet-stream`, and `missing_from_fs: false`, so nothing on the
+server side flags them either.
+
+**What this console did with one:** downloaded it, handed it to Genesis Plus
+GX, which accepted it, reported correct Master System geometry — 256x192 at
+59.92 Hz — ran, and drew black. Three thousand frames later, still black. No
+error anywhere in the log.
+
+`romfile::sniff` already identifies a payload by its leading bytes to decide
+whether to unpack it. It now also recognises the one case where the bytes say
+outright that this is not a game, and the launch refuses with a sentence:
+
+```
+[launch] ... is a web page, not a game; deleted rather than kept, because a
+         cached one would fail the same way for ever
+```
+
+**The delete is the load-bearing half.** The download path skips a file already
+on disk at the expected size, so a cached error page would match for ever and
+that game would be permanently broken with no way back from inside the product.
+A download that is not a game is not a download.
+
+Matched only on `<!doctype` and `<html`, case-insensitively, after any byte
+order mark and leading whitespace, and checked LAST so nothing that is a real
+container can fall into it. A ROM beginning with those bytes is not a file
+anyone has.
+
 ### Other facts worth keeping
 
 - The installed system is **7.9 GB**. `/` is a 43 MB read-only composefs; all

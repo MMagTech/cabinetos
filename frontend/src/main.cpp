@@ -994,11 +994,13 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
 
     const int id = game.id;
     const int platformId = game.platformId;
+    const std::string slug = game.platformSlug;
+    const std::string fsSlug = game.platformFsSlug;
     const std::string fsName = game.fsName;
     const int64_t expectedSize = game.sizeBytes;
     const std::string entryPath = job.entryPath;
-    job.worker = std::thread([&job, &client, id, platformId, fsName, entryPath, location,
-                              validExts, blockExtract, expectedSize]() {
+    job.worker = std::thread([&job, &client, id, platformId, slug, fsSlug, fsName,
+                              entryPath, location, validExts, blockExtract, expectedSize]() {
         // FIRMWARE FIRST, and EVERY file the platform lists rather than
         // whichever one this game looks like it needs. A core looks BIOS up by
         // name in the system directory and ignores what it does not want, so
@@ -1015,10 +1017,19 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
             storage::makeDirs(biosDir);
             std::vector<romm::Firmware> firmware;
             std::string ferr;
+            // THIS PLATFORM'S OWN FILES, and only these, are candidates for
+            // the aliasing below. `bios/` is shared by the whole console, so a
+            // scan of it by size would reach across platforms — and it very
+            // nearly did: the PlayStation BIOS is 524288 bytes, exactly the
+            // size of Saturn's, and the first version of this picked between
+            // them on alphabetical order. It happened to choose correctly and
+            // that is not a property anyone should rely on.
+            std::vector<std::string> platformFirmware;
             if (client.fetchFirmware(platformId, &firmware, &ferr)) {
                 for (const auto& f : firmware) {
                     if (job.cancel.load()) break;
                     const std::string fdest = biosDir + "/" + storage::safeSegment(f.fileName);
+                    platformFirmware.push_back(fdest);
                     struct stat fst;
                     if (f.sizeBytes > 0 && ::stat(fdest.c_str(), &fst) == 0 &&
                         fst.st_size == f.sizeBytes) {
@@ -1048,6 +1059,60 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
                 }
             } else {
                 std::fprintf(stderr, "[firmware] none listed: %s\n", ferr.c_str());
+            }
+
+            // AND THEN UNDER THE NAME THE CORE WILL ACTUALLY OPEN.
+            //
+            // Downloading the file is only half of it. A core looks its BIOS
+            // up by a fixed name and RomM serves it under whatever name
+            // somebody chose, so the file can be sitting right there and the
+            // core still say it has no BIOS — which is what stopped every
+            // Saturn game on this console from starting. See
+            // catalog::firmwareAliases for why the match is on SIZE and why
+            // the copy goes under every name rather than the likeliest one.
+            if (const catalog::FirmwareAliases fa = catalog::firmwareAliases(slug, fsSlug);
+                fa.sizeBytes > 0) {
+                // The source is whichever of THIS PLATFORM's firmware files
+                // is exactly the right length — never just whatever in `bios/`
+                // happens to match, which would reach into another platform's
+                // BIOS of the same size. Checked on the disk rather than
+                // against what RomM said, so a file already present from an
+                // earlier launch counts and a failed download does not.
+                std::string source;
+                for (const std::string& cand : platformFirmware) {
+                    struct stat st;
+                    if (::lstat(cand.c_str(), &st) != 0 || !S_ISREG(st.st_mode)) continue;
+                    if (st.st_size != fa.sizeBytes) continue;
+                    if (source.empty() || cand < source) source = cand;
+                }
+                if (source.empty()) {
+                    // Not fatal, and not silent either: the core is about to
+                    // say the same thing less clearly.
+                    std::fprintf(stderr,
+                                 "[firmware] this platform lists no file of %lld bytes — "
+                                 "its core will not find a BIOS\n",
+                                 static_cast<long long>(fa.sizeBytes));
+                } else {
+                    std::vector<std::string> targets;
+                    for (const char* n : fa.names) targets.push_back(biosDir + "/" + n);
+                    if (fa.subDir) {
+                        const std::string sub = biosDir + "/" + fa.subDir;
+                        storage::makeDirs(sub);
+                        for (const char* n : fa.names) targets.push_back(sub + "/" + n);
+                    }
+                    const std::vector<uint8_t> bytes = cab::readBytes(source);
+                    for (const std::string& t : targets) {
+                        if (t == source) continue;
+                        struct stat st;
+                        if (::stat(t.c_str(), &st) == 0 && st.st_size == fa.sizeBytes) continue;
+                        if (bytes.empty() || !cab::writeBytes(t, bytes)) {
+                            std::fprintf(stderr, "[firmware] could not place %s\n", t.c_str());
+                            continue;
+                        }
+                        std::fprintf(stderr, "[firmware] %s also placed as %s\n",
+                                     source.c_str(), t.c_str());
+                    }
+                }
             }
             job.got = 0;
             job.total = 0;
@@ -1122,6 +1187,34 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
         } else {
             std::fprintf(stderr, "[launch] already downloaded, %lld bytes\n",
                          static_cast<long long>(expectedSize));
+        }
+
+        // IS IT A GAME AT ALL? Asked of the bytes, before a core is ever
+        // handed them, because the alternative is what this console did until
+        // now: pass a web page to an emulator, watch it accept it, report
+        // correct geometry, run, and draw black for as long as anyone cares to
+        // wait. See romfile.h, Kind::NotAGame, for the three real files that
+        // do this on the reference library.
+        //
+        // AND THE BAD FILE IS DELETED. Without that the size check above
+        // matches it on every later launch — "already downloaded" — and the
+        // game is permanently broken with no way back from inside the product.
+        // A download that is not a game is not a download.
+        {
+            std::string serr;
+            if (romfile::sniffFile(dest, &serr) == romfile::Kind::NotAGame) {
+                ::unlink(dest.c_str());
+                if (!entryIsFile) ::rmdir(entryPath.c_str());
+                job.message =
+                    "this game's file is a web page, not a game — it needs "
+                    "replacing on the server";
+                std::fprintf(stderr,
+                             "[launch] %s is a web page, not a game; deleted rather than "
+                             "kept, because a cached one would fail the same way for "
+                             "ever\n", dest.c_str());
+                job.stage = LaunchJob::Stage::Failed;
+                return;
+            }
         }
 
         job.stage = LaunchJob::Stage::Unpacking;
