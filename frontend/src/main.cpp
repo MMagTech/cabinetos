@@ -649,12 +649,36 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
         }
     }
 
-    // Already here? Then that is where it stays. Otherwise it goes to the half
-    // that matches who is keeping it — which may be somebody else entirely.
-    const cache::Placement placed = cache::find(game.id);
-    const std::string location =
-        placed.present ? placed.location : storage::locations().front();
-    const bool kept = placed.present ? placed.kept : cache::isKeptByAnyone(game.id);
+    // ONE GAME, ONE COPY, and this is where that is enforced. A game kept while
+    // the drive was plugged in, then played while it was not, is on the machine
+    // twice — see cache::dedupe. Checked at the moment somebody presses Play
+    // rather than when a drive appears, so there is no plug-in event to miss.
+    const cache::Placement placed = cache::dedupe(game.id, game.sizeBytes);
+
+    // Already here? Then that is where it stays.
+    //
+    // OTHERWISE, AND THIS IS THE RULE THAT CAUGHT ME OUT: a fetch only writes
+    // into `roms/` when the person is keeping the game with THIS press. Pressing
+    // Play is not a storage act — that is the product's own rule, the one that
+    // makes Download the single deliberate one — so a game fetched by playing it
+    // goes into the cache even when somebody keeps it.
+    //
+    // The case that proves it: keep a game on the drive, unplug the drive, press
+    // Play. The game is still kept and the keep record is still on the internal
+    // disk, so asking "is this kept" put the fetched copy in `roms/` on the
+    // INTERNAL disk, where nothing is allowed to evict it. Do that twenty times
+    // with the drive in a drawer and the console has filled its own disk with
+    // games it may not delete — which is the exact failure the system reserve
+    // exists to prevent, arriving by a door nothing was watching.
+    //
+    // As a cached copy it is a stand-in: evictable, costing a download at worst,
+    // and deleted outright the moment the drive comes back and dedupe sees the
+    // real one. Which is what a copy of a file you already own should be.
+    const bool kept = placed.present ? placed.kept : keepWhenReady;
+    const std::string location = placed.present
+                                     ? placed.location
+                                     : (keepWhenReady ? storage::keepLocation()
+                                                      : storage::primaryLocation());
     job.entryPath = placed.present
                         ? placed.entryPath
                         : cache::entryPathFor(location, game.platformFsSlug, game.id,
@@ -1539,6 +1563,19 @@ int main(int argc, char** argv) {
             return 1;
         }
         std::fprintf(stderr, "[storage] root %s\n", storage::root().c_str());
+        const std::vector<std::string> locs = storage::locations();
+        for (size_t i = 1; i < locs.size(); ++i)
+            std::fprintf(stderr, "[storage] games drive %s\n", locs[i].c_str());
+        // SAID ONCE AND THEN NEVER AGAIN. A console that complains every boot
+        // about a drive somebody removed on purpose is worse than one that says
+        // nothing, so having reported it the console forgets that drive. The
+        // screen version of this waits with the rest of the UI; the games on it
+        // already behave correctly, because nothing is found and not found
+        // means fetch it.
+        if (const std::string gone = storage::missingDriveToReport(); !gone.empty())
+            std::fprintf(stderr,
+                         "[storage] the games drive at %s is not connected — games "
+                         "kept on it will be fetched from RomM again\n", gone.c_str());
     }
 
     // Runs before SDL, deliberately. This needs no window, no GL and no
@@ -1637,11 +1674,15 @@ int main(int argc, char** argv) {
         // PER LOCATION, because the floors are a fact about a filesystem and
         // the whole reason `roms/` and `cache/` repeat is that there is more
         // than one of them.
-        for (const std::string& loc : storage::locations()) {
+        const std::vector<std::string> locs = storage::locations();
+        for (size_t i = 0; i < locs.size(); ++i) {
+            const std::string& loc = locs[i];
             const std::vector<cache::Entry> evictable = cache::candidates(loc);
             int64_t evictableBytes = 0;
             for (const auto& e : evictable) evictableBytes += e.bytes;
-            std::printf("\nlocation        %s\n", loc.c_str());
+            std::printf("\n%-15s %s%s\n", i == 0 ? "internal" : "games drive",
+                        loc.c_str(),
+                        loc == storage::keepLocation() ? "   <- kept games go here" : "");
             std::printf("  free          %10.2f GB\n", cache::freeBytes(loc) / 1e9);
             std::printf("  save floor    %10.2f GB\n", cache::saveFloorBytes(loc) / 1e9);
             std::printf("  evictable     %10.2f GB  in %zu game(s)\n",
@@ -2304,8 +2345,13 @@ int main(int argc, char** argv) {
         for (const auto& x : games) if (x.id == romId) { g = &x; break; }
         if (!g) return;
 
-        const cache::KeepVerdict v =
-            cache::mayKeep(storage::locationFor(romId), romId, g->sizeBytes);
+        // Against the disk the game will actually occupy. A kept game going on
+        // the games drive cannot threaten the internal disk's floors at all,
+        // which is the quiet second benefit of the split — see open question 14.
+        const cache::Placement where = cache::find(romId);
+        const std::string keepOn =
+            where.present ? where.location : storage::keepLocation();
+        const cache::KeepVerdict v = cache::mayKeep(keepOn, romId, g->sizeBytes);
         if (!v.allowed) {
             // The one failure the person ever sees, and the number is what makes
             // it actionable: without it "the disk is full" is a dead end.

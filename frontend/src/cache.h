@@ -88,7 +88,44 @@ struct Placement {
 
 // Finds a game wherever it is, on any location. Cheap enough to call per
 // launch: it is a readdir over a few platform folders.
+//
+// READ OFF THE DISK EVERY TIME, never remembered. That is the whole of what
+// stops the fault the Steam Deck has: pull its card out and it still lists the
+// games on it as installed, offering a Play button that does nothing, because
+// it trusts a list instead of looking. Here an unplugged drive means the game
+// is simply not found, and not found already means fetch it.
 Placement find(int romId);
+
+// Every copy of this game on the machine. More than one is possible and it is
+// nobody's mistake — see dedupe.
+std::vector<Placement> findAll(int romId);
+
+// ONE GAME, ONE COPY. Deletes every redundant copy and returns the survivor.
+//
+// THE CASE THIS EXISTS FOR, which MMagTech found: keep a game while the drive
+// is plugged in and it lands in `roms/` on the drive. Unplug the drive, press
+// Play, and the console cannot see it — so it fetches it from RomM into the
+// cache on the internal disk, which is right. Plug the drive back in and the
+// game is on the machine twice.
+//
+// Leaving both is not acceptable. Two copies of a 40 GB title sitting there
+// until something happens to need the room is exactly what a console should not
+// do, so the redundant one goes immediately.
+//
+// WHICH ONE WINS IS DECIDED BY WHAT THE GAME IS, NOT BY WHICH DISK IT IS ON:
+// a game somebody still keeps belongs on the games drive, and one nobody keeps
+// belongs in the cache on the internal disk. The console knows which even with
+// the drive in a drawer, because the keep record never leaves the internal disk.
+//
+// `expectedBytes` is RomM's `fs_size_bytes`. A copy that is not that size never
+// wins, and **if NO copy is the right size nothing is deleted at all** — two
+// suspect files and a guess is the one move here that could actually cost
+// something, so the launch re-fetches instead.
+//
+// Deleting is safe rather than probably safe: the copies are the same game at
+// the same size, the survivor has just been read, and losing every copy would
+// still only cost a download.
+Placement dedupe(int romId, int64_t expectedBytes);
 
 // Where a game SHOULD go. `kept` picks `roms/` over `cache/`; everything else
 // follows the naming convention — the number identifies, the words are for you.

@@ -99,10 +99,48 @@ bool ensureTree(std::string* err);
 // changed their mind. A rename cannot cross a filesystem — the kernel returns
 // EXDEV — so this is a fact the layout has to carry, not a preference.
 //
-// Today there is one location. The second drive of open question 14 has its UI
-// deferred, so this returns the root alone; the shape is here so that adding
-// one is a list getting longer rather than a design.
+// PLUG IT IN AND IT IS USED. There is no setup screen and no confirmation,
+// which is the Nintendo Switch's answer and the one open question 14 settled on:
+// put a card in a Switch and it becomes where downloads go, full stop. So this
+// LOOKS for drives every time it is asked rather than being told about them
+// once.
+//
+// AND IT NEVER TAKES OVER A DRIVE. One folder named `CabinetOS/` on it, and
+// nothing outside that folder is read, written or counted. A drive with
+// somebody's films on it works as a games drive too, and unplugging it takes
+// their films back untouched.
+//
+// THE FIRST ENTRY IS ALWAYS THE INTERNAL ROOT and is always present. Everything
+// after it is a drive somebody plugged in, and any of them may vanish between
+// one call and the next — which is fine, because nothing here remembers.
 std::vector<std::string> locations();
+
+// Where the cache lives, and everything that is not a game: saves, keeps,
+// firmware, configuration. The internal disk, always.
+const std::string& primaryLocation();
+
+// Where a game being KEPT should go: the games drive when one is plugged in,
+// and the internal disk otherwise.
+//
+// This decides where a download LANDS and nothing else. Keeping a game already
+// on the disk never moves bytes between drives — it changes which half of its
+// own location it sits in, which is a rename. See cache::keep.
+std::string keepLocation();
+
+// A drive that was here the last time the console looked and is not here now,
+// or empty.
+//
+// THE ONE THING THAT IS REMEMBERED, and only so the console can say a true
+// sentence out loud. It is never used to decide where a file is — that is
+// always read off the disk — because a remembered list that has gone stale is
+// exactly the fault this design exists to avoid: pull the card out of a Steam
+// Deck and it still shows the games as installed, with a Play button that does
+// nothing.
+//
+// It reports a given drive ONCE. Having said it, the console forgets that drive
+// and stops mentioning it, because a machine that complains about a drive you
+// removed on purpose every time it boots is worse than one that says nothing.
+std::string missingDriveToReport();
 
 // The location a game with this id is stored under, or the primary location
 // when it is not here yet.

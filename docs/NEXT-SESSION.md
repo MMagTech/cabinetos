@@ -373,24 +373,15 @@ into its system directory". Item 1 below takes the VMU out of there;
 `dc_nvmem.bin`, the console's own clock and language, stays and rebuilds itself
 if lost.
 
-**What it did NOT build: the second drive.** `storage::locations()` returns the
-root alone, so "a missing drive degrades rather than errors" has still never
-been exercised — there is no second location to remove. Everything takes a
-location already, so this is a list getting longer plus one rule.
+**The second drive was built the next day, 2026-09-19** — plug one in and it is
+used, no setup screen, and the console never holds two copies of a game. Open
+question 14 has the rules and the measurements; the scenario it was tested
+against is MMagTech's own: keep a game with the drive in, unplug it, play it,
+plug it back in.
 
-**The behaviour was designed with MMagTech on 2026-09-19 and is written up under
-open question 14**, *plug it in and it works, and never two copies of a game*.
-Read it before building: six rules, all of them the console not asking a
-question, and one hole MMagTech found — keep a game with the drive in, unplug
-it, play it, and it comes down from RomM into the cache, so plugging the drive
-back in leaves the game on the machine twice. The redundant copy is deleted on
-the spot and which one wins depends on whether the game is still kept, not on
-which disk it is on.
-
-**The reason it is worth doing is not the plumbing.** The Steam Deck, which is
-the nearest comparable product, gets removal wrong: pull the card and the games
-still show as installed with a Play button that does nothing. That is the exact
-thing this console must not do, and it is what the test would prove.
+**The one thing still missing is the screen** that says a drive is not
+connected. The console says it on stderr, once. Everything else about a missing
+drive already behaves correctly without it.
 
 ### 6. Nothing warns that a system's BIOS is missing
 
@@ -611,6 +602,11 @@ PROJECT.md says "the SER5" and means this one.
     network still knows whose saves it is holding.
 - **There is no `romcache/` and no `system/` any more**, on this machine or in
   the code.
+- `/var/mnt/games/CabinetOS/` — **the VM's games drive**, claimed automatically
+  the first time the frontend ran after 2026-09-19, holding its own `roms/` and
+  `cache/`. Kept games go there now. The console claims that one folder and
+  nothing else on the disk: `flatpak/`, `ps3lab/` and `layout-backup/` sit
+  beside it untouched, which is the whole of rule 1.
 - `~/cabinetos/` — a clone of this repo, where `cores/build-core.sh` runs
 - `~/cabinetos/.core-src/` — per-core checkouts, **4.8 GB, of which PPSSPP is
   3.4 GB**. They are a cache: delete any to make room and the next build

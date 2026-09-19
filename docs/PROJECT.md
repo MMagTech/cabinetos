@@ -6425,9 +6425,65 @@ never travels. And the check runs when somebody next plays that game rather than
 when the drive appears, so it needs no detection and cannot go stale — rule 5
 again.
 
-**Not built.** `storage::locations()` still returns the root alone. Everything
-below it already takes a location, so this is a list getting longer plus the
-rule above, and the test it unlocks is the one every comparable product fails.
+#### BUILT 2026-09-19
+
+`storage::locations()` looks for drives every time it is asked — under
+`/run/media/<user>/` where udisks mounts a USB stick and `/var/mnt/` where an
+fstab-mounted second internal disk goes — and takes any mount that is **on a
+different filesystem from the internal root**, which is the check that stops a
+folder on the internal disk being mistaken for a drive and then "lost". It
+claims `CabinetOS/` on each and nothing else. `$CABINETOS_DRIVES` overrides the
+search for testing.
+
+`keepLocation()` is the first drive or the internal disk. `cache::dedupe`
+resolves a game that is on the machine twice. The missing-drive line is said
+once and the drive then forgotten, so it is never said twice.
+
+##### The bug this turned up, which is the reason it was worth running
+
+**A game fetched by PLAYING it was landing in `roms/`, where nothing may evict
+it.** The keep record lives on the internal disk and survives the drive being
+unplugged — which is the point of it — so asking *"is this game kept"* answered
+yes, and the fetched copy was filed as a kept game on the internal disk.
+
+Play it twenty times with the drive in a drawer and the console has filled its
+own disk with games it is not allowed to delete. **That is precisely what the
+system reserve exists to prevent, arriving through a door nothing was watching**
+— the floors guard the Download button, and this was not the Download button.
+
+The rule is now the product's own, stated in Phase 4 and forgotten here:
+**Download is the one deliberate storage act.** So a fetch writes into `roms/`
+only when the person is keeping the game with that press, and everything else
+goes to the cache on the internal disk — where it is a stand-in, evictable,
+costing a re-download at worst, and deleted outright the moment the drive
+returns and `dedupe` sees the real copy.
+
+##### The scenario, run end to end on the test VM
+
+MMagTech's own, on a machine with two real filesystems — internal on device 37,
+the drive on 58:
+
+| | |
+|---|---|
+| Keep it with the drive plugged in | lands at `<drive>/CabinetOS/roms/Game Boy/2813 - Pokémon Red Version.gb`. **Nothing on the internal disk.** |
+| Unplug it and press Play | *"the games drive at … is not connected — games kept on it will be fetched from RomM again"*, then fetched to `cache/Game Boy/2813 - …` on the internal disk. **Evictable**, which is the fix above. |
+| Start again, still unplugged | **says nothing.** Reported once and the drive then forgotten. |
+| Plug it back in and press Play | *"rom 2813 was here twice; kept `<drive>/…/roms/…` and removed `<internal>/cache/…`"*, then played from the drive. |
+| Afterwards | one copy, on the drive. |
+
+##### What still is not built
+
+The **screen** that says the drive is missing. The console says it on stderr
+once; the person-facing version is a picture and waits with the rest of the UI.
+The games on that drive already behave correctly without it.
+
+And a consequence worth knowing rather than fixing: **keeping a game that is
+already in the internal cache leaves it on the internal disk.** Keeping never
+moves bytes between drives — it renames the entry from `cache/` to `roms/` on
+the location it is already on, which is instant whatever the game weighs.
+`keepLocation()` decides where a download LANDS and nothing else. The
+alternative is a cross-drive copy of gigabytes at the moment somebody presses a
+button, which is the thing this whole layout is arranged to avoid.
 
 #### SUPERSEDED — a drive belongs to one console
 

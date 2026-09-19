@@ -150,6 +150,81 @@ bool removeTree(const std::string& path) {
     return ::rmdir(path.c_str()) == 0;
 }
 
+// The filesystem a path is on. Two paths on the same one are the same disk,
+// whatever their names say, and a "drive" that is really a folder on the
+// internal disk is not a drive.
+dev_t deviceOf(const std::string& path) {
+    struct stat st;
+    return ::stat(path.c_str(), &st) == 0 ? st.st_dev : 0;
+}
+
+// Where a plugged-in drive turns up. Nothing here is a CabinetOS invention:
+// `/run/media/<user>/` is where udisks mounts a USB stick on Fedora and
+// therefore on Bazzite, and `/var/mnt/` is where an fstab-mounted second
+// internal disk conventionally goes on an image-based system.
+//
+// $CABINETOS_DRIVES overrides the search with an explicit colon-separated list,
+// which is how this gets tested on a machine where nobody can plug anything in.
+std::vector<std::string> driveSearchPaths() {
+    std::vector<std::string> out;
+    if (const char* env = std::getenv("CABINETOS_DRIVES"); env && *env) {
+        std::string s = env;
+        size_t start = 0;
+        while (start <= s.size()) {
+            const size_t colon = s.find(':', start);
+            const std::string one =
+                s.substr(start, colon == std::string::npos ? std::string::npos : colon - start);
+            if (!one.empty()) out.push_back(one);
+            if (colon == std::string::npos) break;
+            start = colon + 1;
+        }
+        return out;
+    }
+    const char* user = std::getenv("USER");
+    out.push_back(std::string("/run/media/") + (user ? user : "cabinet"));
+    out.push_back("/var/mnt");
+    return out;
+}
+
+// The one folder this console claims on somebody else's drive.
+const char* kDriveFolder = "CabinetOS";
+
+std::string drivesMemoPath() { return configDir() + "/drives.json"; }
+
+std::vector<std::string> readRememberedDrives() {
+    std::vector<std::string> out;
+    FILE* f = std::fopen(drivesMemoPath().c_str(), "rb");
+    if (!f) return out;
+    std::string body;
+    char buf[1024];
+    size_t n;
+    while ((n = std::fread(buf, 1, sizeof buf, f)) > 0) body.append(buf, n);
+    std::fclose(f);
+    json_object* o = json_tokener_parse(body.c_str());
+    if (o && json_object_get_type(o) == json_type_array) {
+        for (size_t i = 0; i < json_object_array_length(o); ++i)
+            if (const char* v = json_object_get_string(json_object_array_get_idx(o, i)))
+                out.push_back(v);
+    }
+    if (o) json_object_put(o);
+    return out;
+}
+
+void writeRememberedDrives(const std::vector<std::string>& drives) {
+    makeDirs(configDir());
+    json_object* a = json_object_new_array();
+    for (const std::string& d : drives)
+        json_object_array_add(a, json_object_new_string(d.c_str()));
+    const std::string tmp = drivesMemoPath() + ".part";
+    if (FILE* f = std::fopen(tmp.c_str(), "wb")) {
+        std::fputs(json_object_to_json_string_ext(a, JSON_C_TO_STRING_PRETTY), f);
+        std::fputc('\n', f);
+        std::fclose(f);
+        ::rename(tmp.c_str(), drivesMemoPath().c_str());
+    }
+    json_object_put(a);
+}
+
 }  // namespace
 
 void setRoot(const std::string& path) {
@@ -216,10 +291,65 @@ bool ensureTree(std::string* err) {
 }
 
 std::vector<std::string> locations() {
-    // One today. The second drive of open question 14 is decided and its UI is
-    // deferred, so this is the list that will grow rather than a design that
-    // has to be invented then.
-    return {root()};
+    std::vector<std::string> out{root()};
+    const dev_t here = deviceOf(root());
+    for (const std::string& where : driveSearchPaths()) {
+        DIR* d = ::opendir(where.c_str());
+        if (!d) continue;   // nothing mounted there. The ordinary case.
+        std::vector<std::string> mounts;
+        while (struct dirent* e = ::readdir(d)) {
+            if (e->d_name[0] == '.') continue;
+            mounts.push_back(where + "/" + e->d_name);
+        }
+        ::closedir(d);
+        std::sort(mounts.begin(), mounts.end());
+        for (const std::string& mount : mounts) {
+            if (!isDir(mount)) continue;
+            // A folder on the internal disk is not a second drive, whatever it
+            // is called. This is the check that stops the console treating its
+            // own storage as removable and then "losing" it.
+            if (deviceOf(mount) == here) continue;
+            const std::string claim = mount + "/" + kDriveFolder;
+            // PLUG IT IN AND IT IS USED: the folder is made without asking,
+            // because a drive plugged into a games console is a games drive and
+            // a confirmation dialogue is the thing this is trying not to have.
+            // Nothing outside this folder is ever touched.
+            if (!isDir(claim) && !makeDirs(claim)) continue;
+            if (!writable(claim)) continue;
+            out.push_back(claim);
+        }
+    }
+    return out;
+}
+
+const std::string& primaryLocation() { return root(); }
+
+std::string keepLocation() {
+    const std::vector<std::string> all = locations();
+    // The first drive, if there is one. Kept games are what a drive is FOR —
+    // they are deliberate, they are the bulk, and they are the only thing worth
+    // carrying. The cache stays on the internal disk, which is always attached
+    // and usually faster than USB.
+    return all.size() > 1 ? all[1] : all.front();
+}
+
+std::string missingDriveToReport() {
+    const std::vector<std::string> now = locations();
+    std::vector<std::string> present(now.begin() + 1, now.end());
+    const std::vector<std::string> before = readRememberedDrives();
+
+    std::string gone;
+    for (const std::string& d : before) {
+        if (std::find(present.begin(), present.end(), d) == present.end()) {
+            gone = d;
+            break;
+        }
+    }
+    // Whatever is here now is what gets remembered, so a drive that has just
+    // been reported missing is forgotten in the same breath and is not
+    // mentioned again.
+    if (before != present) writeRememberedDrives(present);
+    return gone;
 }
 
 std::string romsDir(const std::string& location) { return location + "/roms"; }

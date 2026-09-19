@@ -121,32 +121,112 @@ int64_t freeBytes(const std::string& path) {
     return static_cast<int64_t>(vfs.f_bavail) * static_cast<int64_t>(vfs.f_frsize);
 }
 
-Placement find(int romId) {
-    Placement out;
+std::vector<Placement> findAll(int romId) {
+    std::vector<Placement> out;
     for (const std::string& loc : storage::locations()) {
-        // `roms/` first: a game is in one or the other, and if a crash ever
-        // left a copy in both, the kept one is the one that must win.
+        // `roms/` before `cache/`, so that where there IS only one answer it is
+        // the kept one.
         const std::pair<std::string, bool> halves[2] = {
             {storage::romsDir(loc), true},
             {storage::cacheDir(loc), false},
         };
         for (const auto& [half, kept] : halves) {
             walkHalf(half, [&](const std::string& platform, const std::string& entry) {
-                if (out.present) return;
                 if (storage::romIdFromEntry(entry) != romId) return;
-                out.present = true;
-                out.kept = kept;
-                out.location = loc;
-                out.platform = platform;
-                out.entryPath = half + "/" + platform + "/" + entry;
+                Placement p;
+                p.present = true;
+                p.kept = kept;
+                p.location = loc;
+                p.platform = platform;
+                p.entryPath = half + "/" + platform + "/" + entry;
                 struct stat st;
-                out.isDirectory = ::lstat(out.entryPath.c_str(), &st) == 0 &&
-                                  S_ISDIR(st.st_mode);
+                p.isDirectory = ::lstat(p.entryPath.c_str(), &st) == 0 &&
+                                S_ISDIR(st.st_mode);
+                out.push_back(std::move(p));
             });
-            if (out.present) return out;
         }
     }
     return out;
+}
+
+Placement find(int romId) {
+    const std::vector<Placement> all = findAll(romId);
+    return all.empty() ? Placement{} : all.front();
+}
+
+namespace {
+
+// Does this entry hold the payload RomM describes?
+//
+// A single-file entry answers with its own size. A directory entry cannot —
+// it holds the archive that came down AND whatever was unpacked out of it, so
+// its total is always larger — so the question becomes whether any one file
+// inside it is exactly the size the server reports. That file is the download,
+// and its presence at the right size is the same test the launch path already
+// trusts to decide a game need not be fetched again.
+bool holdsPayloadOfSize(const std::string& entryPath, int64_t expectedBytes) {
+    if (expectedBytes <= 0) return false;
+    struct stat st;
+    if (::lstat(entryPath.c_str(), &st) != 0) return false;
+    if (!S_ISDIR(st.st_mode)) return st.st_size == expectedBytes;
+    DIR* d = ::opendir(entryPath.c_str());
+    if (!d) return false;
+    bool found = false;
+    while (struct dirent* e = ::readdir(d)) {
+        if (e->d_name[0] == '.') continue;
+        struct stat f;
+        if (::stat((entryPath + "/" + e->d_name).c_str(), &f) == 0 && S_ISREG(f.st_mode) &&
+            f.st_size == expectedBytes) {
+            found = true;
+            break;
+        }
+    }
+    ::closedir(d);
+    return found;
+}
+
+}  // namespace
+
+Placement dedupe(int romId, int64_t expectedBytes) {
+    std::vector<Placement> all = findAll(romId);
+    if (all.size() <= 1) return all.empty() ? Placement{} : all.front();
+
+    // Where this game BELONGS, which is a fact about the game and not about any
+    // disk: kept games live on the games drive, and the cache lives on the
+    // internal one. The keep record never leaves the internal disk, so this
+    // answer is available even when the drive is not.
+    const bool kept = isKeptByAnyone(romId);
+    const std::string home = kept ? storage::keepLocation() : storage::primaryLocation();
+
+    std::vector<const Placement*> usable;
+    for (const Placement& p : all)
+        if (holdsPayloadOfSize(p.entryPath, expectedBytes)) usable.push_back(&p);
+
+    if (usable.empty()) {
+        // NOTHING IS DELETED. Every copy is the wrong size, so there is no
+        // known-good one to fall back on and picking a survivor would be a
+        // guess — the one move here that could actually cost something. The
+        // launch re-fetches, which fixes it.
+        std::fprintf(stderr,
+                     "[storage] rom %d is here %zu times and NONE is %lld bytes — "
+                     "leaving all of them alone and fetching a clean copy\n",
+                     romId, all.size(), static_cast<long long>(expectedBytes));
+        return all.front();
+    }
+
+    const Placement* winner = usable.front();
+    for (const Placement* p : usable)
+        if (p->location == home) { winner = p; break; }
+
+    for (const Placement& p : all) {
+        if (&p == winner) continue;
+        if (removeTree(p.entryPath)) {
+            std::fprintf(stderr,
+                         "[storage] rom %d was here twice; kept %s and removed %s\n",
+                         romId, winner->entryPath.c_str(), p.entryPath.c_str());
+        }
+    }
+    return *winner;
 }
 
 std::string entryPathFor(const std::string& location, const std::string& platform,
