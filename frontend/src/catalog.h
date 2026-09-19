@@ -250,6 +250,50 @@ struct SaveFile {
     bool inSystemDir = false;
 };
 
+// --- Firmware a core can actually find --------------------------------------
+//
+// THE PROBLEM, PLAINLY: a core looks its BIOS up by a FIXED filename, and RomM
+// serves firmware under whatever name the person who uploaded it chose. When
+// the two disagree the file is downloaded, sits in `bios/`, and the core says
+// it cannot find a BIOS — which is exactly as unhelpful as it sounds.
+//
+// It is not hypothetical and it is not rare. On the reference server, Saturn's
+// BIOS is `saturn_bios.bin` and Beetle Saturn opens `sega_101.bin`, so **no
+// Saturn game could start at all** until 2026-09-19. 3DO is the same shape and
+// only works because that server happens to use the one name `opera_bios` is
+// answered with. Sega CD and TurboGrafx-CD happen to match. Four platforms,
+// two of them broken by luck.
+//
+// THE ONLY SIGNAL AVAILABLE IS THE SIZE. RomM's firmware record carries a
+// filename and a length and says nothing about region or purpose, so matching
+// by size is not a shortcut — it is the whole of what there is to match on.
+//
+// AND THE COPY GOES UNDER EVERY NAME, not the one that looks right. Beetle
+// Saturn and Genesis Plus GX both pick their CD BIOS from the DISC's region
+// code at runtime, with no fallback if that one file is absent — so which name
+// is needed is not knowable when the file is being placed. Putting the same
+// bytes under both names lets whichever one the disc asks for resolve. That is
+// the reference implementation's reasoning and it is right.
+struct FirmwareAliases {
+    // The exact byte count of the real file. A downloaded firmware file of any
+    // other size is a different thing and is left alone.
+    int64_t sizeBytes = 0;
+    // Every name a core serving this platform might open, in no order.
+    std::vector<const char*> names;
+    // A subdirectory of `bios/` to place it in as well, or empty. Flycast is
+    // the one that wants this: it looks for the Dreamcast boot ROM under
+    // `dc/`, which libretro-super's own `flycast_libretro.info` documents and
+    // which the reference implementation confirmed the hard way — a flat
+    // placement produces a SILENT fallback to the core's built-in HLE BIOS
+    // with no error at all, so the console appears to work while running
+    // something other than the machine it says it is.
+    const char* subDir = nullptr;
+};
+
+// What to copy where, for this platform, or nothing for the platforms whose
+// cores need no firmware or already agree with RomM about the name.
+FirmwareAliases firmwareAliases(const std::string& slug, const std::string& fsSlug);
+
 // What this platform's core writes, or empty for the cores that expose a
 // battery and need none of this.
 //

@@ -437,6 +437,49 @@ const char* directorySaveRoot(const char* core) {
     return nullptr;
 }
 
+FirmwareAliases firmwareAliases(const std::string& slug, const std::string& fsSlug) {
+    // Sizes and names taken from the reference implementation's own table,
+    // which was built against real hardware, and checked against what the
+    // reference server actually serves.
+
+    // Saturn: Japan and NA/EU, 512 KB. THE ONE THAT WAS BROKEN — the server
+    // calls it `saturn_bios.bin` and the core opens `sega_101.bin`. Both names
+    // go down because Beetle Saturn chooses between them from the disc's own
+    // region code at load time.
+    if (slug == "saturn")
+        return {524288, {"sega_101.bin", "mpr-17933.bin"}, nullptr};
+
+    // Sega CD: NTSC-U, PAL and NTSC-J, a fixed 128 KB boot ROM. The reference
+    // server already uses these names, so this row changes nothing there and
+    // exists for the server that does not.
+    if (slug == "segacd")
+        return {131072, {"bios_CD_U.bin", "bios_CD_E.bin", "bios_CD_J.bin"}, nullptr};
+
+    // TurboGrafx-CD: Beetle PCE Fast defaults to System Card 3, 256 KB.
+    if (slug == "turbografx-cd")
+        return {262144, {"syscard3.pce"}, nullptr};
+
+    // 3DO: every retail BIOS Opera knows is exactly 1 MB, and one name is
+    // enough because Opera does not scan by region — it opens exactly the file
+    // `opera_bios` names, and optionOverrides always answers `panafz10.bin`.
+    // So whatever 1 MB firmware the platform carries is staged under the one
+    // name the core will be told to load, and the weak joint that comment
+    // warns about is closed.
+    if (slug == "3do")
+        return {1048576, {"panafz10.bin"}, nullptr};
+
+    // Dreamcast: the name already matches, and the DIRECTORY does not.
+    // Flycast reads the boot ROM from `dc/` inside the system directory, and
+    // when it is not there it falls back to its own HLE BIOS silently — so a
+    // console can look entirely healthy while running an approximation of the
+    // machine. Copied rather than moved: a flat `bios/dc_boot.bin` is what
+    // RomM sent and what anyone looking would expect to find.
+    if (slug == "dc")
+        return {2097152, {"dc_boot.bin"}, "dc"};
+
+    return {};
+}
+
 std::vector<SaveFile> saveFiles(const std::string& slug, const std::string& fsSlug,
                                 const std::string& stem) {
     // Straight out of the audit's per-platform table, and each row was read

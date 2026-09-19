@@ -58,6 +58,31 @@ Kind sniff(const std::vector<uint8_t>& b) {
     // tar keeps its magic 257 bytes in, which is why a tar cannot be
     // recognised from a short prefix.
     if (starts(b, "ustar", 5, 257)) return Kind::Tar;
+
+    // A web page where a ROM should be. Checked LAST, so nothing that is a
+    // real container can fall into it, and matched only on the two openings
+    // that cannot be anything else — a ROM starting with `<!DOCTYPE` or
+    // `<html` is not a file anyone has. Leading whitespace and a UTF-8 byte
+    // order mark are skipped, because a served error page often carries them.
+    {
+        size_t i = 0;
+        if (b.size() >= 3 && b[0] == 0xEF && b[1] == 0xBB && b[2] == 0xBF) i = 3;
+        while (i < b.size() && (b[i] == ' ' || b[i] == '\t' || b[i] == '\r' || b[i] == '\n'))
+            ++i;
+        auto at = [&](const char* lit) {
+            const size_t n = std::strlen(lit);
+            if (i + n > b.size()) return false;
+            for (size_t k = 0; k < n; ++k) {
+                const unsigned char c = b[i + k];
+                const char want = lit[k];
+                const char got = (c >= 'A' && c <= 'Z') ? static_cast<char>(c - 'A' + 'a')
+                                                        : static_cast<char>(c);
+                if (got != want) return false;
+            }
+            return true;
+        };
+        if (at("<!doctype") || at("<html")) return Kind::NotAGame;
+    }
     return Kind::Plain;
 }
 
@@ -70,6 +95,7 @@ const char* kindName(Kind k) {
         case Kind::Gzip: return "gzip";
         case Kind::Chd: return "chd";
         case Kind::Rvz: return "rvz";
+        case Kind::NotAGame: return "a web page";
         default: return "plain";
     }
 }
