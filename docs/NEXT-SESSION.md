@@ -373,10 +373,24 @@ into its system directory". Item 1 below takes the VMU out of there;
 `dc_nvmem.bin`, the console's own clock and language, stays and rebuilds itself
 if lost.
 
-**What it did NOT build:** a second storage location. `storage::locations()`
-returns the root alone, so "a missing drive degrades rather than errors" has
-still never been exercised — there is no second location to remove. Everything
-takes a location already, so adding one is a list getting longer.
+**What it did NOT build: the second drive.** `storage::locations()` returns the
+root alone, so "a missing drive degrades rather than errors" has still never
+been exercised — there is no second location to remove. Everything takes a
+location already, so this is a list getting longer plus one rule.
+
+**The behaviour was designed with MMagTech on 2026-09-19 and is written up under
+open question 14**, *plug it in and it works, and never two copies of a game*.
+Read it before building: six rules, all of them the console not asking a
+question, and one hole MMagTech found — keep a game with the drive in, unplug
+it, play it, and it comes down from RomM into the cache, so plugging the drive
+back in leaves the game on the machine twice. The redundant copy is deleted on
+the spot and which one wins depends on whether the game is still kept, not on
+which disk it is on.
+
+**The reason it is worth doing is not the plumbing.** The Steam Deck, which is
+the nearest comparable product, gets removal wrong: pull the card and the games
+still show as installed with a Play button that does nothing. That is the exact
+thing this console must not do, and it is what the test would prove.
 
 ### 6. Nothing warns that a system's BIOS is missing
 

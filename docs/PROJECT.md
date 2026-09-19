@@ -6355,6 +6355,80 @@ keeping a game means.
 Unrecognised files are simply not used. That keeps the console away from the one
 class of data RomM cannot give back, without needing a rule to say so.
 
+#### DECIDED 2026-09-19: plug it in and it works, and never two copies of a game
+
+**MMagTech's ask, after the folder layout landed: "I want the easiest most
+seamless experience for a second drive whether it's a second internal drive or a
+USB you plug in."** What the console does about a drive — not what the drive is
+for, which is settled above.
+
+Checked against what the consoles people already own actually do, rather than
+recalled:
+
+| | |
+|---|---|
+| **Switch** | Put a card in and it becomes the download location. **No setup screen.** If it fills, it falls back to internal on its own. |
+| **Switch** | Save data is **never** on the card — *"stored on the console's System Memory... in order to keep it safe."* The same rule this question reached independently, with the same reason. |
+| **Steam** | One library per drive, one of them marked Default, and *Move install folder* per game. The same shape as `roms/`+`cache/` repeating per location. |
+| **Steam Deck** | **Gets removal wrong, and that is the finding worth having.** Pull the card and the games still show as installed with a green Play button that does nothing; it does not notice a physical removal at all. Exactly what *"a missing drive degrades; it never errors"* forbids. |
+| **PS5** | A USB drive may HOLD a PS5 game but not run it, so you move it back to play. A tier this console does not need — everything here is a copy of the server. |
+
+**So: six rules, and every one of them is the console not asking a question.**
+
+1. **Never take over the drive.** One folder named `CabinetOS/` on it, and only
+   that. No formatting, no wizard, no adoption prompt. A drive with somebody's
+   films on it also works as a games drive and nothing of theirs is at risk.
+2. **Plug it in and it is used.** It becomes where kept games go. The Switch's
+   answer, and it removes a screen that would otherwise wait on the reference
+   machine.
+3. **A second internal drive and a USB stick are the same thing** — another
+   place with room. The PS5 distinguishes them for a speed reason this console
+   does not have.
+4. **Saves never go on it.** Already decided above; Nintendo says the reason out
+   loud and it is the right one.
+5. **Look at the disk, do not remember what was on it.** This is the one line
+   that makes the Steam Deck bug impossible here: `cache::find` does a readdir
+   at the moment somebody presses Play, so there is no cached list to go stale
+   and no hot-plug event to miss. An unplugged drive simply means the game is
+   not found, and not found already means fetch it.
+6. **Say it once, then behave normally.** *"Your games drive is not connected"*
+   the first time and nothing after, because silently re-downloading a library
+   over Wi-Fi is its own kind of rude.
+
+##### The duplicate, which MMagTech found and is the only real hole in it
+
+**Keep a game with the drive plugged in, unplug it, play the game — it comes
+down from RomM into the cache. Plug the drive back in and the game is on the
+machine twice.**
+
+Leaving both is not acceptable: two copies of a 40 GB title sitting there until
+something happens to need the room is exactly the sort of thing a console should
+never do. **So the redundant copy is deleted, on the spot.**
+
+That is safe, and provably rather than probably: the two files are the same
+game at the same size their server reports, one of them has just been read, and
+even losing both costs a re-download. It is the same size check the download
+path already trusts to decide a game is here and need not be fetched again.
+
+**Which one wins is decided by what the game IS, not by which disk it is on:**
+
+| | |
+|---|---|
+| Still kept | the **drive** copy wins — that is where kept games live, and it leaves the internal disk for the cache and the system reserve |
+| No longer kept | the **internal** copy wins — that is where the cache lives, so the drive only ever carries what somebody deliberately asked to keep |
+| One is the wrong size | the good one wins, whichever disk it is on, and moves to where its state says it belongs |
+| **Neither** is the right size | **nothing is deleted.** Two suspect files and a guess is the one move here that could actually cost something. Fetch a clean one. |
+
+**The console always knows the answer even with the drive in a drawer**, because
+the keep record lives in `users/<id> - <name>/keeps/` on the internal disk and
+never travels. And the check runs when somebody next plays that game rather than
+when the drive appears, so it needs no detection and cannot go stale — rule 5
+again.
+
+**Not built.** `storage::locations()` still returns the root alone. Everything
+below it already takes a location, so this is a list getting longer plus the
+rule above, and the test it unlocks is the one every comparable product fails.
+
 #### SUPERSEDED — a drive belongs to one console
 
 **The section below decided a drive should move between CabinetOS machines, and
