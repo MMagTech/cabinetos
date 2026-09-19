@@ -31,10 +31,14 @@ set -uo pipefail
 # /etc, because that is the part of a bootc machine that is the machine's own
 # and survives an update. Sourced rather than parsed: it is shell, and it is
 # root-owned.
+# `set -a` so everything the file defines is exported without this script
+# having to know each name. It knows about CABINETOS_ROMM today and should not
+# have to be edited to learn a second one.
 if [[ -r /etc/cabinetos/session.env ]]; then
+    set -a
     # shellcheck disable=SC1091  # machine-local, does not exist at build time
     source /etc/cabinetos/session.env
-    export CABINETOS_ROMM
+    set +a
 fi
 
 # The app to run inside gamescope.
