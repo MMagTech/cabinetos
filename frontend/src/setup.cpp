@@ -364,11 +364,11 @@ private:
 
 const char* Flow::title() const {
     switch (machine_.step()) {
-        case firstrun::Step::Network:    return "Get on the network";
+        case firstrun::Step::Network:    return "Connect to Network";
         case firstrun::Step::WiFi:       return "Set up Wi-Fi";
-        case firstrun::Step::Server:     return "Find your games";
-        case firstrun::Step::Pair:       return "Let this console in";
-        case firstrun::Step::Controller: return "Pair a controller";
+        case firstrun::Step::Server:     return "RomM Server";
+        case firstrun::Step::Pair:       return "Pair with RomM";
+        case firstrun::Step::Controller: return "Pair a Controller";
         case firstrun::Step::Done:       return "Ready";
     }
     return "";
@@ -376,36 +376,39 @@ const char* Flow::title() const {
 
 // The step's own sentence comes from the state machine, so the words a person
 // reads and the rule the console is enforcing cannot drift apart. Anything
-// extra here is context that is true whatever the machine's state is.
+// added here is either a state the machine cannot see — a request in flight —
+// or a fact about THIS machine that changes what the sentence should say.
 std::string Flow::prose() const {
     const std::string why = machine_.because();
     switch (machine_.step()) {
         case firstrun::Step::Network:
-            return why.empty()
-                       ? "This console is on the network."
-                       : why;
+            if (!facts_.online) return why;
+            return facts_.wiredOnline ? "Connected over Ethernet."
+                                      : "Connected over Wi-Fi.";
+
         case firstrun::Step::WiFi:
-            return why.empty() ? "Wi-Fi is set up." : why;
+            if (joinJob_.busy()) return "Joining…";
+            if (facts_.wifiConfigured) return "Connected.";
+            return why;
+
         case firstrun::Step::Server:
-            if (serverJob_.busy()) return "Looking for RomM at " + address_ + "…";
-            return why.empty()
-                       ? "Found it."
-                       : why + " It usually looks like romm.local:8080 or an "
-                               "address like 192.168.1.10:6005.";
+            if (serverJob_.busy()) return "Checking " + address_ + "…";
+            return why.empty() ? "Connected." : why;
+
         case firstrun::Step::Pair:
-            return why.empty()
-                       ? "This console is paired."
-                       : "Scan the code with a phone, or type the address into "
-                         "any browser that is signed in to RomM, and approve "
-                         "this console.";
+            if (pairBeginJob_.busy()) return "Starting…";
+            return why.empty() ? "Paired." : why;
+
         case firstrun::Step::Controller:
-            return why.empty()
-                       ? "Your controller is ready."
-                       : "Hold the pairing button on your controller until its "
-                         "lights flash, then pick it from the list. " + why;
+            if (btScanJob_.busy()) return "Scanning. Put a controller into "
+                                          "pairing mode.";
+            if (btPairJob_.busy()) return "Pairing…";
+            return why.empty() ? "Ready." : why;
+
         case firstrun::Step::Done:
-            return "Everything is set up. You can unplug the keyboard — you "
-                   "will not need it again.";
+            // The one line worth spending, because it is the promise the whole
+            // flow was built to keep and nothing else on screen says it.
+            return "You can unplug the keyboard. You will not need it again.";
     }
     return {};
 }

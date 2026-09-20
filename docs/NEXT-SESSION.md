@@ -793,6 +793,11 @@ These are ordered. **Do not begin any of them in the VM.**
   dashes where the address has colons. An unnamed device does not have an empty
   name, it has a name that looks like one — and the controller list filled with
   SIXTEEN of the neighbours' beacons before anybody noticed.
+- **THE COPY ASSUMES A COMPETENT ADULT.** MMagTech, 2026-09-20: *"if you have a
+  RomM server and can install an OS I shouldn't need to tell you in depth how to
+  pair a controller."* Every line says the CONSTRAINT — required or optional,
+  and why only when the why is not obvious — and stops. Titles say what the step
+  does, not hello.
 - **NEVER LET FOCUS LAND ON A ROW THAT DOES NOTHING.** Every placeholder in the
   setup flow is disabled, so this is the common case. A focus rim on a row that
   ignores the button cannot be told apart from a crash.

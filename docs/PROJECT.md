@@ -8045,6 +8045,37 @@ before the server had answered and the capture of the pairing screen came out
 with no code on it — **the same trap `--launch-after` fell into, one screen
 along.**
 
+##### The copy assumes a competent adult, and that is a rule
+
+The first draft explained how to pair a controller. MMagTech, 2026-09-20:
+
+> **if you have a RomM server and can install an OS I shouldn't need to tell you
+> in depth how to pair a controller**
+
+That is a better test than *is this clear*, because it is about the reader
+rather than the sentence. **The person in front of this screen has already stood
+up a self-hosted web application and written an operating system to a USB
+stick.** Explaining what a pairing button is insults them, and it buries the one
+thing they do need — what this step will and will not let them do.
+
+So every line says the CONSTRAINT and stops. Required or optional, and why only
+when the why is not obvious:
+
+| | |
+|---|---|
+| **Connect to Network** | *A network connection is required.* / *Connected over Ethernet.* |
+| **Set up Wi-Fi** | *Optional. A fallback for when the cable is unplugged.* |
+| **RomM Server** | *Enter the address of your RomM server.* |
+| **Pair with RomM** | *Approve this console in a browser signed in to RomM.* |
+| **Pair a Controller** | *Optional, and you can add one later in Settings.* |
+| **Ready** | *You can unplug the keyboard. You will not need it again.* |
+
+The last one is the only line worth spending, because it is the promise the
+whole flow was built to keep and nothing else on the screen says it.
+
+**The titles are what the step DOES**, not a greeting. "Connect to Network", not
+"Let's get you online".
+
 ##### Four faults the captures found, and none was visible in the code
 
 - **Focus landed on rows that do nothing.** Every placeholder this flow draws —

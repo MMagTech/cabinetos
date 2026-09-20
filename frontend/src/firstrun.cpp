@@ -302,50 +302,49 @@ Gate Machine::gate() const {
     return Gate::Blocked;
 }
 
+// One line, and it assumes a competent adult.
+//
+// MMagTech, 2026-09-20, on the first draft of these: *"if you have a RomM
+// server and can install an OS I shouldn't need to tell you in depth how to
+// pair a controller."* That is the right test, and it is a stronger one than
+// "is this clear" — the person in front of this screen has already stood up a
+// self-hosted web application and written an operating system to a USB stick.
+// Explaining what a pairing button is insults them and buries the one thing
+// they actually need, which is what this step will and will not let them do.
+//
+// So each of these says the CONSTRAINT and stops. Required or optional, and
+// why if the why is not obvious. No instructions for things that have one
+// obvious way to do them.
 std::string Machine::because() const {
     switch (step_) {
         case Step::Network:
             if (facts_.online) return {};
             if (!facts_.wifiPresent)
-                return "This console is not on a network, and it has no Wi-Fi. "
-                       "Plug in an Ethernet cable — a phone sharing its "
-                       "connection over USB works too.";
-            return "This console is not on a network yet. Plug in an Ethernet "
-                   "cable, or join a Wi-Fi network below.";
+                return "A network connection is required. Plug in a cable, or "
+                       "share a phone's connection over USB.";
+            return "A network connection is required.";
 
         case Step::WiFi:
-            if (!facts_.wifiPresent) return "This console has no Wi-Fi.";
+            if (!facts_.wifiPresent) return "No Wi-Fi hardware.";
             if (facts_.wifiConfigured) return {};
-            if (facts_.wiredOnline)
-                return "You are online over the cable. Setting up Wi-Fi now "
-                       "means the console still works if the cable is ever "
-                       "unplugged — and this is the easiest moment to do it, "
-                       "while a keyboard is to hand.";
             if (facts_.online)
-                return "You are already online. Setting up Wi-Fi now gives the "
-                       "console a second way to reach your server.";
-            return "Join a network to carry on.";
+                return "Optional. A fallback for when the cable is unplugged.";
+            return "Pick a network.";
 
         case Step::Server:
             if (facts_.serverAnswered) return {};
             if (!facts_.haveServerAddress)
-                return "CabinetOS keeps your games on a RomM server. Enter its "
-                       "address to carry on.";
-            // Nothing has asked yet — so do not tell somebody their server is
-            // unreachable on the strength of a question nobody put.
-            if (!facts_.serverChecked) return "Checking that address…";
+                return "Enter the address of your RomM server.";
+            if (!facts_.serverChecked) return "Checking…";
             return "Nothing answered at that address.";
 
         case Step::Pair:
             if (facts_.havePairedToken) return {};
-            return "Open the link on a phone or computer that is signed in to "
-                   "RomM, and approve this console.";
+            return "Approve this console in a browser signed in to RomM.";
 
         case Step::Controller:
             if (facts_.gamepadCount > 0) return {};
-            return "No controller is paired. You can finish without one and "
-                   "add it later in Settings, but you will not be able to play "
-                   "anything from the sofa until you do.";
+            return "Optional, and you can add one later in Settings.";
 
         case Step::Done:
             return {};
