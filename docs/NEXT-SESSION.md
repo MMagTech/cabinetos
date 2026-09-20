@@ -185,17 +185,42 @@ the right way up. Read this order before picking anything up.
 
 | | |
 |---|---|
-| **1** | **A GAME CAN GO BLACK AND NOBODY KNOWS WHY.** Six launches in one session drew nothing but the letterbox glow while the core ran and made sound. Not reproduced since. Two theories tested and both falsified. See item 3b — it has the instruments. |
-| **2** | **Judge the TATE look, and Home, on the 65-inch.** Both are on the machine and neither has been looked at properly. |
-| **3** | **Walk first run with your hands, on the television.** Every screen is captured and every mechanism measured, but nobody has been through it — and `net::join` has never met a real access point. It needs a machine that is not already set up, or a keyboard and a willingness to unconfigure one. See item 4b. |
-| **4** | Then the core options (item 7). |
+| **1** | **PLAYSTATION 2 AND GAMECUBE.** MMagTech's call, 2026-09-20, and the largest thing on this list: 85 games, and the only missing tier with a working implementation to copy. **Open question 12b has the order and 12 has the numbers.** Start by reading `tools/build-dolphin-mac.sh` in Cabinet — those two are NOT libretro cores and nobody wrote down why. |
+| **2** | **A GAME CAN GO BLACK AND NOBODY KNOWS WHY.** Six launches in one session drew nothing but the letterbox glow while the core ran and made sound. Not reproduced since. Two theories tested and both falsified. See item 3b — it has the instruments. |
+| **3** | **Judge the TATE look, and Home, on the 65-inch.** Both are on the machine and neither has been looked at properly. |
+| **4** | **Atari Jaguar and ColecoVision** — 73 games, ordinary libretro cores, no architectural question at all. The cheapest games available. See 12b. |
+| **5** | Then the core options (item 7). |
+
+**FIRST RUN IS DONE and is not on this list.** Built, walked on the television
+with a keyboard, a controller and a mouse, and the console was set up from
+nothing with no cable in it. See item 4b for what is left, which is small.
 
 **Item 2's old entry is gone because it is fixed**: the console no longer demotes
 itself to software rendering on a boot-time network race. The A9 has come up on
 `gamescope (drm)` on every boot since.
 
-**Do not start new UI screens before 1.** Search and Settings are drawn in the
-top bar and say "not built yet"; that is deliberate and can stay.
+**Search and Settings** are drawn in the top bar and say "not built yet"; that
+is deliberate and can stay.
+
+### THE PLATFORM AUDIT, AND WHERE THE MISSING GAMES ARE
+
+Done 2026-09-20 against the running console and Cabinet's own manifest. **36
+platforms, 1650 games, 1147 playable.** CabinetOS ships exactly Cabinet's tvOS
+core set — all 21, no gaps.
+
+| | Games | |
+|---|---|---|
+| Libretro core exists, nobody added it | **73** | Jaguar 48, ColecoVision 25 |
+| Cabinet solved it on macOS, we have not | **85** | PS2 71, GameCube 14 |
+| Nobody has solved it | **174** | Switch 109, PS3 32, Vita 27, Xbox 4, Wii 2 |
+| **Will never be built** | 171 | Game & Watch — *"too small on a tv"* |
+
+**THE HEAVY SYSTEMS ARE COMING.** MMagTech, 2026-09-20: *"switch, ps3 and xbox
+will be brought to the OS because we have less constraints to work with in linux
+and more power. Same with Wii U if I get more games."* That settles a question
+this project had only ever discussed as a recommendation. **PS2 and GameCube
+first; Wii last and probably free, because Dolphin does both.** Open question
+12b has the reasoning.
 
 ### 2. Vertical arcade games play the right way up — DONE 2026-09-19
 

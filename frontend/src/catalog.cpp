@@ -80,8 +80,13 @@ const Entry kTable[] = {
     // is the platform CabinetOS most resembles. Not carried over without a
     // deliberate decision, because whatever made it wrong for a television
     // has not changed.
+    // NOT A GAP, A DECISION — MMagTech, 2026-09-20: this console will not build
+    // it, "as the games are too small on a tv". The reason a person reads has
+    // to be about THIS console, not about what Cabinet chose on a phone: 171
+    // games is the largest excluded row in the reference library, so it is the
+    // tile most likely to be asked about.
     {"Game & Watch",         nullptr,     Support::Excluded, "gw",
-     "iOS-only in Cabinet by decision; never built for tvOS"},
+     "not built here — these games are too small to play on a television"},
 };
 
 bool eq(const char* a, const std::string& b) { return b == a; }
