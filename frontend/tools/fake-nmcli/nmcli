@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# A TEST DOUBLE FOR nmcli, and nothing else in the program is faked.
+#
+# The A9 is on a cable and the VM has no radio, so the one state neither machine
+# can reach is the one that matters most: offline, with Wi-Fi hardware, where
+# the network gate has no skip and joining is the only way forward. This answers
+# nmclis terse queries as such a machine would, so net.cpps real parsing, the
+# real state machine and the real screens all run.
+args="$*"
+case "$args" in
+  "--version") echo "nmcli tool, version 1.56.1-2.fc44" ;;
+  "-t -f RUNNING general") echo "running" ;;
+  "-t -f DEVICE,TYPE,STATE,CONNECTION device status")
+      echo "wlp195s0:wifi:disconnected:"
+      echo "lo:loopback:connected (externally):lo"
+      ;;
+  "-t -f WIFI radio") echo "enabled" ;;
+  "-t -f NAME,TYPE connection show") : ;;   # nothing saved
+  *"device wifi list"*)
+      echo ":Loft:82:WPA2"
+      echo ":Loft-5G:76:WPA3"
+      echo ":BTWiFi-with-FON:41:"
+      echo ":Campus Secure:55:WPA2 802.1X"
+      ;;
+  *) : ;;
+esac
+exit 0

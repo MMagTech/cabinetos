@@ -230,6 +230,13 @@ bool listWifi(bool rescan, std::vector<Network>* out, std::string* err) {
     }
 
     std::sort(out->begin(), out->end(), [](const Network& a, const Network& b) {
+        // A ROW NOBODY CAN PICK SORTS LAST, whatever its signal. 802.1X is
+        // refused by decision rather than by omission — it needs a certificate,
+        // an identity and an inner method, which is a different form and not
+        // one anybody fills in from a sofa — so its row is drawn greyed and
+        // cannot be activated. Leaving it ranked by signal put a dead row above
+        // live ones in the middle of the list somebody is choosing from.
+        if (a.enterprise != b.enterprise) return b.enterprise;
         if (a.active != b.active) return a.active;      // the one we are on, first
         if (a.known != b.known) return a.known;         // then ones needing no typing
         return a.signal > b.signal;
