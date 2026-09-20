@@ -148,31 +148,115 @@ fi
 # probed with a throwaway gamescope passed over SSH and still failed under the
 # service, because what a compositor can do depends on the seat it starts from.
 
+# Where logind puts this session's sockets. A compositor creates its Wayland
+# socket here the moment it is serving, which is the backstop readiness signal
+# for anything with no way to say so itself.
+runtime_dir() { printf '%s' "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"; }
+wayland_sockets() {
+    ls -1 "$(runtime_dir)" 2>/dev/null | grep -E '^(wayland|gamescope)-[0-9]+$' | sort
+}
+
+# THE LADDER MUST TELL "THE COMPOSITOR FAILED" FROM "THE APP EXITED", and until
+# 2026-09-19 it could not.
+#
+# The old test was "is the process still alive five seconds after launch", and
+# it attributed the answer to the COMPOSITOR. But gamescope exits when its
+# primary child exits, so a frontend that quit at one second — which is exactly
+# what it does when the network is not up yet and RomM cannot be reached — was
+# indistinguishable from a GPU that cannot do Vulkan. The ladder always blamed
+# the compositor, and the console spent the rest of its session on llvmpipe
+# while printing "no Vulkan-capable GPU" four seconds after gamescope had
+# logged `selecting physical device 'AMD Radeon 890M Graphics (RADV STRIX1)'`
+# and `selecting mode 3840x2160@60Hz`. Silently, with nothing on screen saying
+# so, and recoverable only by somebody restarting the service by hand. Every
+# power cut hit it. See docs/PROJECT.md, open question 22.
+#
+# SO ASK THE COMPOSITOR, RATHER THAN GUESSING FROM ITS CHILD. gamescope answers
+# directly: `--ready-fd` is written to the instant the compositor is serving,
+# which is the mechanism it provides for precisely this question. cage has no
+# such flag and is judged by its Wayland socket appearing, which is the same
+# fact observed from outside.
+#
+# Once a compositor has come up, a dead child is the APP's exit and never a
+# reason to fall down the ladder: the session exits with the app's status and
+# systemd starts it again at the top rung. That is a restart loop while the
+# server is away, which is the honest behaviour and is bounded by the frontend
+# waiting for the network itself — and it is a world away from being demoted to
+# software rendering until somebody notices.
+#
+# Callers that can signal readiness put `--ready-fd 3` in their own arguments,
+# before the `--`, because anything after that belongs to the app. Fd 3 is
+# wired up here for every rung; it is harmless to one that does not use it.
 try_compositor() {
     local label="$1"
     shift
     echo "cabinetos-session: trying ${label}"
-    "$@" &
+
+    local before ready_file
+    before=$(wayland_sockets)
+    ready_file=$(mktemp "${TMPDIR:-/tmp}/cabinetos-ready.XXXXXX") || ready_file=/dev/null
+
+    "$@" 3>"${ready_file}" &
     local pid=$!
-    sleep 5
-    if kill -0 "${pid}" 2>/dev/null; then
+
+    # Twenty seconds, in tenths. A compositor that has not served anything by
+    # then is not about to, and the old five seconds was a guess that happened
+    # to be longer than the frontend took to fail.
+    local waited=0 ready=0
+    while (( waited < 200 )); do
+        if [[ -s "${ready_file}" ]] || [[ "$(wayland_sockets)" != "${before}" ]]; then
+            ready=1
+            break
+        fi
+        kill -0 "${pid}" 2>/dev/null || break
+        sleep 0.1
+        (( waited++ ))
+    done
+
+    if (( ready )); then
         echo "cabinetos-session: ${label} is up"
+        rm -f "${ready_file}"
+        wait "${pid}"
+        local status=$?
+        # Said out loud, because this is the line that stops the next person
+        # reading a demotion into an ordinary exit.
+        echo "cabinetos-session: ${label} exited with ${status} AFTER coming up —" \
+             "that is the app's exit, not a display fault; not falling back"
+        exit "${status}"
+    fi
+
+    if kill -0 "${pid}" 2>/dev/null; then
+        # Running, but it never said it was serving and made no socket. Keeping
+        # the better rung is the safer bet: the failure this ladder exists for
+        # is a compositor that cannot start at all, and this one has started.
+        echo "cabinetos-session: ${label} never signalled ready but is running; keeping it"
+        rm -f "${ready_file}"
         wait "${pid}"
         exit $?
     fi
-    echo "cabinetos-session: ${label} died on startup"
+
+    wait "${pid}" 2>/dev/null
+    local status=$?
+    rm -f "${ready_file}"
+    echo "cabinetos-session: ${label} failed to start (status ${status})"
     return 1
 }
 
 if ls /dev/dri/card* >/dev/null 2>&1; then
+    # --ready-fd goes BEFORE the `--`: everything after it is the app's.
     # shellcheck disable=SC2086
     try_compositor "gamescope (drm)" \
-        gamescope --backend drm --output-width "${OUT_W}" --output-height "${OUT_H}" -- ${APP}
+        gamescope --backend drm --output-width "${OUT_W}" --output-height "${OUT_H}" \
+                  --ready-fd 3 -- ${APP}
 
     # Degraded, and loudly so. A console that works without VRR beats a black
     # screen, but this should never be the state on real hardware — if it is,
     # something is wrong with the GPU or its driver, and the About screen should
     # say which compositor is running so it is visible rather than mysterious.
+    #
+    # REACHING THIS LINE NOW MEANS SOMETHING. Until 2026-09-19 it was also
+    # printed when the frontend had merely exited, which made it a lie on a
+    # machine with a perfectly good Radeon in it.
     echo "cabinetos-session: WARNING — no Vulkan-capable GPU. Falling back to cage."
     echo "cabinetos-session: display features (VRR, HDR, scaling) are unavailable."
     # shellcheck disable=SC2086

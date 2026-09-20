@@ -265,12 +265,11 @@ That turns "it looks black" into a number: a black game screen measures
 **max pixel 8**, which is not black at all, it is the bias glow at 0.025, and
 reading that is what proved the geometry was right.
 
-### 4. The console dies if the server is away — **and it did it again today**
+### 4. The console dies if the server is away — **the machine half is FIXED**
 
-**IT HAPPENED ON THIS SESSION'S FIRST BOOT**, so this is no longer a story
-about one cold boot. Upgrade the A9 and reboot it and there is a real chance
-the machine you come back to is running on llvmpipe and telling you it has no
-GPU. The whole sequence, from one journal:
+**It happened on this session's first boot**, which is how it stopped being a
+story about one cold boot: upgrade the A9, reboot, and there was a real chance
+the machine you came back to was on llvmpipe telling you it had no GPU.
 
 ```
 [romm] nothing answered at 192.168.1.10:6005 over http or https
@@ -279,40 +278,42 @@ cabinetos-session: gamescope (drm) died on startup
 cabinetos-session: WARNING — no Vulkan-capable GPU. Falling back to cage.
 ```
 
-**That message is false and the same log disproves it four seconds earlier**:
+**That message was false and the same log disproved it four seconds earlier**:
 `vulkan: selecting physical device 'AMD Radeon 890M Graphics (RADV STRIX1)'`
-and `drm: selecting mode 3840x2160@60Hz`. gamescope had a Vulkan GPU and had
-set a mode. It exited because its child did, and the ladder read that as its
-own failure.
+and `drm: selecting mode 3840x2160@60Hz`.
 
-**`systemctl restart cabinetos-session` recovers it**, because by then the
-network is up. That is the workaround and it is not a fix.
+**Both machine-level faults are fixed, 2026-09-19, and both were measured on
+the A9 against the real failure** — see PROJECT.md, open question 22:
 
-The session came up faster than the network, could not reach RomM, and the
-frontend exited.
+- **The ladder asks instead of guessing.** Its old test was "is the process
+  alive five seconds later", attributed to the compositor, and gamescope exits
+  with its child — so an app quitting at one second looked exactly like a GPU
+  that cannot do Vulkan. It now uses gamescope's `--ready-fd`, with a Wayland
+  socket appearing as the backstop for cage. **Once a compositor is up, a dead
+  child is the app's exit and never a reason to fall down the ladder.**
+- **The frontend waits ninety seconds for the server** rather than exiting at
+  once, says so, and says when it answers.
+- **Ordering after `network-online.target` was considered and rejected**,
+  because it delays the picture on a console with no network in exchange for a
+  race the retry already closes. A decision, not an omission.
 
-Three faults, fix them together, and **open question 22 has the whole design**:
+**WHAT IS STILL OWED IS THE PRODUCT HALF, AND IT IS THE BIGGER ONE.** All of
+this makes the machine recover; none of it makes an offline console useful.
+Open question 22 has the design with Cabinet's own rules quoted: **kept games
+play with no server** (the library deliberately does not), a keep has to
+**save the cover and a record** because our layout recovers the id and name but
+not the art, saves **write to disk first and upload later** with a four-rule
+precedence at launch, and **offline the console stays as the last user it knew**
+and offers no switcher it cannot honour — MMagTech's call, 2026-09-19.
 
-1. **Do not exit when the server is unreachable** — come up, keep retrying,
-   fill in when it answers.
-2. **Order the session after `network-online.target`**, so the race usually
-   does not happen.
-3. **The ladder must tell "the compositor failed" from "the app exited".** It
-   exists for a machine with no usable GPU and must not be reachable by an
-   application error.
-
-And with it, the things that make an offline console useful rather than dead,
-all specified in open question 22 with Cabinet's own rules quoted: **kept
-games play with no server** (the library deliberately does not), a keep has to
-**save the cover and a record** because our layout recovers the id and name
-but not the art, saves **write to disk first and upload later** with a
-four-rule precedence at launch, and **offline the console stays as the last
-user it knew** and offers no switcher it cannot honour — MMagTech's call,
-2026-09-19.
+**That half belongs with first run**, and the reason is that they are the same
+state: a console on its very first boot has no server address and no token, so
+"what does this show with no server" is a first-run question before it is an
+offline one. See open question 15b.
 
 **The stand-in demo library must never appear on a console.** It is today's
-fallback and it is worse than an error: it looks like a working console
-showing somebody else's games.
+fallback when no address is configured at all, and it is worse than an error:
+it looks like a working console showing somebody else's games.
 
 ### 5. Where the in-game save machinery lives
 

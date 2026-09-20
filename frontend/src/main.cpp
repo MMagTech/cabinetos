@@ -2281,9 +2281,46 @@ int main(int argc, char** argv) {
         // Where the cores are, so the catalog can tell "the manifest has a core
         // for this" apart from "this console has it built".
         catalog::setCoreDirectory(coreDir);
-        if (!liveClient.setAddress(rommAddress, &err)) {
-            std::fprintf(stderr, "[romm] %s\n", err.c_str());
-            return 1;
+        // WAIT FOR THE NETWORK RATHER THAN GIVING UP ON IT.
+        //
+        // This used to try once and exit 1, and on a console that is a fault
+        // rather than tidiness: the session starts within a couple of seconds
+        // of boot and the network is routinely not up yet, so a cold boot
+        // reached RomM before the machine had an address and the frontend
+        // quit. gamescope exits when its child exits, and the compositor
+        // ladder then read that as ITS OWN failure and demoted the machine to
+        // software rendering for the rest of the session — see
+        // docs/PROJECT.md, open question 22. The ladder no longer draws that
+        // conclusion; this is the other half, which is not having the race.
+        //
+        // A BOUNDED WAIT, not an indefinite one, and not the offline console.
+        // Ninety seconds covers a boot race and a router coming back after a
+        // power cut. It is deliberately NOT the answer to "there is no server"
+        // — a console that keeps its library, plays its kept games and fills
+        // in when the server returns is open question 22's design and a
+        // different piece of work. This is the difference between a machine
+        // that recovers from a power cut on its own and one that does not.
+        {
+            constexpr double kWaitSeconds = 90.0;
+            const uint64_t start = SDL_GetTicks();
+            bool said = false;
+            while (!liveClient.setAddress(rommAddress, &err)) {
+                if ((SDL_GetTicks() - start) / 1000.0 >= kWaitSeconds) {
+                    std::fprintf(stderr, "[romm] %s — gave up after %.0fs\n",
+                                 err.c_str(), kWaitSeconds);
+                    return 1;
+                }
+                // Once, not once per attempt: a line a second for a minute and
+                // a half buries whatever else the boot had to say.
+                if (!said) {
+                    said = true;
+                    std::fprintf(stderr,
+                                 "[romm] %s — waiting up to %.0fs for it\n",
+                                 err.c_str(), kWaitSeconds);
+                }
+                SDL_Delay(2000);
+            }
+            if (said) std::fprintf(stderr, "[romm] the server answered\n");
         }
         if (!liveClient.loadToken(rommTokenPath())) {
             std::fprintf(stderr, "[romm] no token at %s — pair first with --romm-probe --romm-pair\n",

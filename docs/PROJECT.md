@@ -9074,16 +9074,45 @@ permanently demoted the machine to cage on llvmpipe. A transient network race
 at boot cost hardware rendering for the rest of the session, silently, and
 nothing on screen said anything. **Every power cut will hit this.**
 
-That is three separate faults and they should be fixed together:
+That is three separate faults. **The two that make the machine lie about
+itself are fixed, 2026-09-19**; the third is deliberately not done.
 
-1. **The frontend must not exit when the server is unreachable.** It should
-   come up, keep retrying, and fill in when the server answers.
-2. **The session must order after the network** (`network-online.target`), so
-   the common case does not arise at all.
-3. **The ladder must tell "the compositor failed to start" apart from "the app
-   exited".** The ladder exists for a machine with no usable GPU; it must not
-   be reachable by an application error. If gamescope got as far as setting a
-   mode, a dead child is not a reason to fall back.
+1. ~~**The frontend must not exit when the server is unreachable.**~~ **It now
+   waits ninety seconds for it**, saying so once, and says so again when the
+   server answers. That covers a boot race and a router coming back after a
+   power cut, which is what the fault actually was. It is NOT the offline
+   console — a machine that keeps its library and plays its kept games with no
+   server is the design below, and is still owed.
+2. **The session ordering after `network-online.target` was considered and NOT
+   done.** It would delay the picture on a console with no network at all,
+   by however long `nm-online` takes to give up, in exchange for closing a race
+   the retry above already closes. A console showing nothing for a minute
+   because it is waiting to be told there is no network is a worse failure than
+   the one being fixed. Recorded as a decision rather than an omission.
+3. ~~**The ladder must tell "the compositor failed to start" apart from "the
+   app exited".**~~ **It does.** The old test was "is the process alive five
+   seconds after launch", attributed to the compositor — and gamescope exits
+   with its child, so a frontend quitting at one second was indistinguishable
+   from a GPU that cannot do Vulkan. It now ASKS: gamescope's own `--ready-fd`
+   is written the instant the compositor is serving, with a Wayland socket
+   appearing as the backstop for cage, which has no such flag. Once a
+   compositor has come up, a dead child is the app's exit and the session exits
+   with its status for systemd to restart at the top rung, rather than falling
+   down the ladder.
+
+   **Measured on the A9 against the real failure**, by pointing the session at
+   an unreachable server under the real service:
+
+   ```
+   cabinetos-session: trying gamescope (drm)
+   cabinetos-session: gamescope (drm) is up
+   [frontend] GL_RENDERER AMD Radeon 890M Graphics (radeonsi, strix1, ACO...)
+   cabinetos-session: gamescope (drm) exited with 0 AFTER coming up — that is
+                      the app's exit, not a display fault; not falling back
+   ```
+
+   It cycles on the real GPU until the server answers, instead of demoting to
+   llvmpipe until somebody notices.
 
 #### The stand-in library must never appear on a console
 
