@@ -28,14 +28,21 @@ on its own Radeon 890M at the panel's native **3840x2160**, with Vulkan
 present (RADV STRIX1) and 1147 playable games. **The UI freeze is lifted and
 what is on that television is the real thing.**
 
-**THERE IS A DEV BINARY WIRED INTO IT AGAIN, AND IT HAS TO COME OFF.**
-`/etc/systemd/system/cabinetos-session.service.d/90-dev-binary.conf` points the
-session at `/var/home/cabinet/cabinetos-frontend-dev`, which is this session's
-build carrying the vertical arcade rotation fix. MMagTech's call, 2026-09-19,
-so that one sitting at the television could cover both the TATE look and the
-Dreamcast save. **Once this pull request merges: delete that file,
-`bootc upgrade`, reboot.** The machine was found in exactly this state at the
-start of this session and nobody could say what it was running.
+**IT RUNS THE IMAGE AND NOTHING BY HAND, as of 2026-09-20.** There is no
+drop-in in `/etc/systemd/system/cabinetos-session.service.d/` — the directory
+does not exist — and the running process is `/usr/bin/cabinetos-frontend`,
+launched by `gamescope --backend drm --output-width 3840 --output-height 2160
+--ready-fd 3`. Booted digest `sha256:78e43b5a…`, which is #30 merged. **Check
+that before believing anything about the machine**, because this session began
+with a hand-built binary wired in and nobody able to say what was running:
+
+```
+ps -eo args | grep [c]abinetos-frontend
+```
+
+`/var/home/cabinet/cabinetos-frontend-dev` is still on disk and is now stale.
+It is a fine escape hatch — put a drop-in back to use it — but nothing depends
+on it, and if you build a new one, overwrite it rather than adding a second.
 
 **ALWAYS CHECK WHICH COMPOSITOR RUNG IT LANDED ON BEFORE JUDGING ANYTHING.**
 
