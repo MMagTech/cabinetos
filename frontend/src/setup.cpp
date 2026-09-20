@@ -1279,8 +1279,27 @@ void Flow::draw() {
         bx += bw + design::kPillGap;
     }
 
-    // THE KEYBOARD IS DRAWN LAST AND OWNS EVERY KEY WHILE IT IS OPEN, the same
-    // way the core owns the pad while a game is running.
+    // EVERYTHING ABOVE WENT INTO A TEXTURE, NOT ONTO THE SCREEN.
+    //
+    // `beginFrame` binds an offscreen scene target so that panels can blur what
+    // is behind them, and `presentScene` is what puts that texture on the actual
+    // framebuffer. Miss it and the frame loop runs perfectly, at sixty frames a
+    // second, presenting nothing — which is exactly what the television showed:
+    // a blank screen from a process using 5% of a core and reporting no error
+    // anywhere. gamescope's own screenshot came back entirely black while the
+    // panel showed white, and neither of those is a message anybody can act on.
+    //
+    // It did not show up in any capture, because `--render-size` takes the
+    // offscreen path and `saveFrame` reads that target directly. So every
+    // screenshot of these screens was correct and the console still drew
+    // nothing. **An offscreen capture does not prove a window ever gets a
+    // frame.**
+    r.presentScene();
+
+    // THE KEYBOARD IS DRAWN AFTER, and owns every key while it is open — the
+    // same way the core owns the pad while a game is running. After, because
+    // presentScene has just bound the real framebuffer: anything drawn from
+    // here lands on top of the scene rather than inside it.
     if (keyboard_.isOpen()) keyboard_.draw(r, t, sc);
 }
 

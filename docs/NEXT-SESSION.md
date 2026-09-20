@@ -784,6 +784,21 @@ These are ordered. **Do not begin any of them in the VM.**
   `base + verification_path_complete` from `/api/auth/device/init`, and on RomM
   5.1.0 that is `/pair/device?user_code=…`. A fabricated one produces a QR that
   scans perfectly and lands on a page saying the code does not exist.
+- **AN OFFSCREEN CAPTURE DOES NOT PROVE A WINDOW EVER GETS A FRAME.**
+  `Renderer::beginFrame` binds an offscreen SCENE target so panels can blur what
+  is behind them, and **`presentScene()` is what puts it on the real
+  framebuffer**. Miss that call and the loop runs perfectly at sixty frames a
+  second presenting nothing — while every `--render-size` capture comes out
+  correct, because `saveFrame` reads the offscreen target directly. The
+  television showed white, gamescope's own screenshot came back entirely black,
+  the process sat at 5% of a core, and nothing logged an error. **Anything that
+  draws a screen must call `presentScene()`, and anything drawn after it lands
+  on top of the scene rather than inside it.**
+- **`gamescopectl` IS NOT ALWAYS ON `gamescope-1`.** The socket number is
+  whichever the current instance took, and it changes when the session
+  restarts. List `$XDG_RUNTIME_DIR` and use the one whose mtime matches the
+  running gamescope; stale sockets from earlier instances sit there looking
+  identical.
 - **A SETUP SCREEN'S LOOP MUST BE PACED, AND `--frames` DEPENDS ON IT.** A page
   of static text left unpaced runs at thousands of frames a second on the A9,
   and four hundred frames went by before the server had answered — so the

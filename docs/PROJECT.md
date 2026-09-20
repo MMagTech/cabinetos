@@ -8076,6 +8076,26 @@ whole flow was built to keep and nothing else on the screen says it.
 **The titles are what the step DOES**, not a greeting. "Connect to Network", not
 "Let's get you online".
 
+##### The fault the captures could not find, and the television did
+
+**Every screen captured correctly and the console drew nothing.**
+
+`Renderer::beginFrame` binds an offscreen scene target so that panels can blur
+what is behind them, and `presentScene()` is what puts that texture on the real
+framebuffer. The setup loop never called it. So it ran at sixty frames a second,
+presenting nothing, at 5% of a core, with no error anywhere — the television
+showed white and gamescope's own screenshot came back entirely black, and
+neither of those is a message anybody can act on.
+
+**It was invisible to every capture**, because `--render-size` takes the
+offscreen path and `saveFrame` reads that target directly. Every screenshot in
+this section was taken through a code path the console does not use.
+
+**So an offscreen capture does not prove a window ever gets a frame**, and that
+is a limit of the instrument this project has leaned on for a fortnight. Found
+2026-09-20 by MMagTech, on the television, in the first ten seconds of looking
+at it.
+
 ##### Four faults the captures found, and none was visible in the code
 
 - **Focus landed on rows that do nothing.** Every placeholder this flow draws —
