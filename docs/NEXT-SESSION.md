@@ -306,10 +306,14 @@ not the art, saves **write to disk first and upload later** with a four-rule
 precedence at launch, and **offline the console stays as the last user it knew**
 and offers no switcher it cannot honour — MMagTech's call, 2026-09-19.
 
-**That half belongs with first run**, and the reason is that they are the same
-state: a console on its very first boot has no server address and no token, so
-"what does this show with no server" is a first-run question before it is an
-offline one. See open question 15b.
+**But it is NOT a first-run branch, and that was decided 2026-09-19.**
+MMagTech: *you cannot have kept games until a server has been paired and you
+have kept one.* So first run assumes a server and is a linear path to pairing
+one, with no skip — and the offline console is a strictly LATER state, a
+machine that HAS been paired and now cannot reach its server. It may therefore
+assume it knows the user, the library it last saw and which games are kept.
+**"No server yet" and "no server right now" are different problems and only the
+second has anything to work with.** See open question 15b.
 
 **The stand-in demo library must never appear on a console.** It is today's
 fallback when no address is configured at all, and it is worse than an error:

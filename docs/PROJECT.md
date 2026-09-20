@@ -7682,6 +7682,33 @@ fine for us and it is not a product.
 
 It is testable, which is why it is the requirement rather than a principle.
 
+#### First run assumes a server, and there is no way past it
+
+**MMagTech's call, 2026-09-19**, and it is what decides the shape of the whole
+state machine:
+
+> **You cannot have kept games until a server has been paired and you have kept
+> one.**
+
+So first run is a LINEAR PATH TO A PAIRED SERVER, not a branch. There is no
+"set this up later", no "use it without a server", and no skip — because on the
+other side of a skip there is nothing to show. A console that has never been
+paired has no library, no covers, no saves, no user and no kept games; the only
+honest thing it could offer is the stand-in demo library, and PROJECT.md
+already says that must never appear on a console because it looks like a
+working machine showing somebody else's games.
+
+**That is a simplification, not a restriction.** Every step can assume the one
+before it succeeded, and the last step can assume a real library exists to drop
+the person into.
+
+**AND IT DRAWS THE LINE UNDER OPEN QUESTION 22.** The offline console is a
+strictly LATER state — a machine that HAS been paired and now cannot reach its
+server — so it may assume it knows the user, the library it last saw and which
+games are kept. "No server yet" and "no server right now" are different
+problems, and only the second one has anything to work with. That is why the
+offline design is not a first-run branch and must not be built as one.
+
 #### Why the keyboard is the floor, and the controller is not
 
 The instinct is to build setup around a wired controller — a console owner
