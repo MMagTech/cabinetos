@@ -72,6 +72,23 @@ jobs:
           # only exists inside the container build.
           find build_files ci cores -name '*.sh' -print0 \
             | xargs -0 shellcheck -e SC1091
+          # THE SCRIPTS THAT SHIP IN THE IMAGE, which this lint did not cover
+          # until 2026-09-19 — they live outside those three directories and
+          # carry no .sh extension, so `find -name '*.sh'` never saw them.
+          #
+          # They are the ones that most need it. `cabinetos-session` is what
+          # the machine boots into: a mistake in it is not a failed build, it
+          # is a console that comes up to a black screen or silently on
+          # software rendering, and it is only ever exercised on real hardware.
+          # It was carrying an `ls | grep` (SC2010) on the directory that
+          # holds a compositor's sockets, which is a shape shellcheck warns
+          # about and a glob plus a socket test says better.
+          #
+          # Selected by their shebang rather than their path, so a script added
+          # to the image later is covered without anyone remembering to add it.
+          find system_files -type f -exec \
+            sh -c 'head -1 "$1" | grep -q "^#!.*sh" && echo "$1"' _ {} \; \
+            | xargs -r shellcheck -e SC1091
 
   # THE CONSOLE ITSELF, WHICH THE IMAGE DID NOT CONTAIN UNTIL 2026-09-19.
   #

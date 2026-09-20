@@ -152,8 +152,18 @@ fi
 # socket here the moment it is serving, which is the backstop readiness signal
 # for anything with no way to say so itself.
 runtime_dir() { printf '%s' "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"; }
+# A glob and a socket test rather than `ls | grep`. The runtime directory holds
+# `wayland-0.lock` and `gamescope-limiter-XXXXXX` beside the sockets, and
+# asking whether a name IS a socket is a better question than asking whether it
+# looks like one. Only a real socket means a compositor is serving.
 wayland_sockets() {
-    ls -1 "$(runtime_dir)" 2>/dev/null | grep -E '^(wayland|gamescope)-[0-9]+$' | sort
+    local dir entry out=""
+    dir=$(runtime_dir)
+    for entry in "${dir}"/wayland-[0-9]* "${dir}"/gamescope-[0-9]*; do
+        [[ -S "${entry}" ]] || continue
+        out+="${entry##*/}"$'\n'
+    done
+    printf '%s' "${out}" | sort
 }
 
 # THE LADDER MUST TELL "THE COMPOSITOR FAILED" FROM "THE APP EXITED", and until
