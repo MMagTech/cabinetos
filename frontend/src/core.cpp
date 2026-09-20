@@ -56,6 +56,20 @@ unsigned gCorePorts = 0;
 unsigned gPixelFormat = RETRO_PIXEL_FORMAT_0RGB1555;
 std::string gSystemDir, gSaveDir;
 
+// How the core wants its picture turned, in 90-degree counter-clockwise steps.
+//
+// A vertical arcade board — DoDonPachi, Ikaruga, most shmups — has its monitor
+// bolted in sideways in the cabinet, so the board renders a picture that is
+// sideways in memory and asks the frontend to turn it. A frontend that ignores
+// the ask draws a rotated game, which is what this console did for every TATE
+// board in the library until 2026-09-19.
+//
+// THIS IS THE CORE'S ANSWER, NOT THE PLATFORM'S. It cannot be looked up from
+// the system, because the same arcade emulator serves upright and vertical
+// boards from one platform row and only knows which after the game is loaded.
+unsigned gRotation = 0;
+bool gRotationAnnounced = false;
+
 // The core writes into its own buffer and reuses it between calls, so a frame
 // is copied out rather than referenced.
 std::vector<uint8_t> gFrame;
@@ -422,6 +436,30 @@ void restoreGLState() {
     glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
 }
 
+// Says once, for a turned picture, what the core hands over and what ends up
+// on the screen.
+//
+// IT EXISTS BECAUSE THE TWO SIZES THE CORE REPORTS DISAGREE AND NEITHER IS
+// WRONG. MAME 2003-Plus declares 224x256 in its av_info for Arkanoid — that is
+// the picture as SHOWN, already turned — and then hands back a 256x224 buffer
+// every frame, which is the board's own sideways output. The layout has to use
+// the second one and gets the first one for free in the launch log, so an
+// honest line that prints both is the difference between reading this in a
+// minute and inferring it off a photograph.
+void announceRotation(unsigned width, unsigned height) {
+    // Not a function-local static: this process plays one game after another,
+    // and a static would say it once in the life of the console rather than
+    // once per game. Cleared beside gRotation in loadGame.
+    if (gRotationAnnounced || gRotation == 0) return;
+    gRotationAnnounced = true;
+    const bool quarter = (gRotation & 1u) != 0u;
+    std::fprintf(stderr,
+                 "[core] the core hands back %ux%u and asks for %u degrees "
+                 "counter-clockwise; shown as %ux%u\n",
+                 width, height, gRotation * 90, quarter ? height : width,
+                 quarter ? width : height);
+}
+
 void videoRefresh(const void* data, unsigned width, unsigned height, size_t pitch) {
     if (data == RETRO_HW_FRAME_BUFFER_VALID) {
         // Not a buffer at all: the core has already drawn this frame into our
@@ -442,6 +480,7 @@ void videoRefresh(const void* data, unsigned width, unsigned height, size_t pitc
         gFrameW = width;
         gFrameH = height;
         gFrameDirty = true;
+        announceRotation(width, height);
         return;
     }
     if (!data) return;  // "same picture as last time"
@@ -453,6 +492,7 @@ void videoRefresh(const void* data, unsigned width, unsigned height, size_t pitc
     gFrameH = height;
     gFramePitch = pitch;
     gFrameDirty = true;
+    announceRotation(width, height);
     (void)bpp;
 }
 
@@ -511,6 +551,16 @@ bool environment(unsigned cmd, void* data) {
             // the draw loop keeps presenting the last one.
             *static_cast<bool*>(data) = true;
             return true;
+
+        case RETRO_ENVIRONMENT_SET_ROTATION: {
+            // 0, 1, 2, 3 — 90 degrees counter-clockwise each. Answered rather
+            // than refused: a core that is told no is entitled to carry on
+            // drawing sideways, and several do.
+            const unsigned r = *static_cast<const unsigned*>(data);
+            if (r > 3) return false;
+            gRotation = r;
+            return true;
+        }
 
         case RETRO_ENVIRONMENT_SET_PIXEL_FORMAT: {
             const unsigned fmt = *static_cast<const enum retro_pixel_format*>(data);
@@ -911,6 +961,14 @@ bool Core::loadGame(const std::string& romPath, const std::string& systemDir,
     gSystemDir = absoluteDir(systemDir);
     gSaveDir = absoluteDir(saveDir);
 
+    // Cleared HERE, not in load(), because rotation is a fact about the GAME
+    // and not about the core. One arcade emulator serves upright and vertical
+    // boards out of the same .so, and it calls SET_ROTATION from inside
+    // retro_load_game — so a vertical game followed by an upright one that
+    // never calls it at all would otherwise leave the upright one sideways.
+    gRotation = 0;
+    gRotationAnnounced = false;
+
     // need_fullpath means the core opens the file ITSELF, and libretro is
     // explicit that the frontend must then not load it. This used to read it
     // anyway, which was invisible while the cores that ask for it were handed
@@ -1289,6 +1347,8 @@ bool Core::loadMemoryRegion(unsigned id, const std::vector<uint8_t>& data) {
 GLuint Core::texture() const { return gHWFrame ? gHWColor : texture_; }
 
 bool Core::hardwareRendered() const { return gHWWanted; }
+
+unsigned Core::rotation() const { return gRotation; }
 
 const std::string& Core::hardwareContext() const { return gHWContextName; }
 

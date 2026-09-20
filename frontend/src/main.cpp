@@ -3940,9 +3940,33 @@ int main(int argc, char** argv) {
                 // the non-integer option; the default should be honest.
                 const float srcW = static_cast<float>(core.frameWidth());
                 const float srcH = static_cast<float>(core.frameHeight());
-                const float aspect = core.avInfo().aspectRatio > 0
-                                         ? core.avInfo().aspectRatio
-                                         : srcW / srcH;
+                //
+                // A VERTICAL ARCADE BOARD TURNS THE PICTURE AND THE LAYOUT
+                // WITH IT. Its monitor was bolted into the cabinet sideways,
+                // so the board renders sideways and asks for a quarter turn.
+                // After the turn the picture is TALL: the rows running down
+                // the screen are the source's columns and the aspect is the
+                // inverse of the stored one.
+                const bool quarterTurn = core.rotatedQuarterTurn();
+                //
+                // AND A TURNED PICTURE IGNORES THE CORE'S DECLARED ASPECT.
+                // This looks like throwing away the better answer and is the
+                // opposite: FBNeo reports a vertical board's aspect ALREADY
+                // turned — 0.75 for DoDonPachi DaiOuJou, which is the 3:4 of
+                // the cabinet's tube on its side, not the 448x224 sitting in
+                // the framebuffer. Inverting that would apply the turn twice
+                // and stretch the picture. Cabinet shipped it the wrong way
+                // round first and the comment in `aspectFitVertices` is the
+                // record: it "stretched every vertical game".
+                //
+                // The declared aspect is still what a picture with square
+                // pixels needs and Saturn is unplayable without it, so it
+                // keeps winning everywhere else. Nothing is lost by dropping
+                // it here, for the reason Cabinet gives: the platforms whose
+                // pixels are not square never rotate, and the boards that
+                // rotate are square-pixel.
+                const float declaredAspect = quarterTurn ? 0.0f : core.avInfo().aspectRatio;
+                const float aspect = declaredAspect > 0 ? declaredAspect : srcW / srcH;
                 //
                 // EXCEPT for a hardware-rendered core, where integer scaling
                 // is the wrong idea rather than a stricter one. A Dreamcast's
@@ -3952,15 +3976,33 @@ int main(int argc, char** argv) {
                 // resolution the frame is 1920x1440, where flooring to an
                 // integer gives zero, clamps to one, and draws 360 rows off
                 // the bottom of the screen.
-                const bool integerScale = !core.hardwareRendered();
-                float scale = std::min(ui::kCanvasWidth / (srcH * aspect),
-                                       ui::kCanvasHeight / srcH);
+                //
+                // Everything from here is in terms of the picture as SHOWN
+                // rather than as stored, which is the only version of it the
+                // screen has an opinion about.
+                const float shownAspect = quarterTurn ? 1.0f / aspect : aspect;
+                const float shownRows = quarterTurn ? srcW : srcH;
+                //
+                // AND A TURNED PICTURE FILLS THE HEIGHT RATHER THAN INTEGER
+                // SCALING. MMagTech's call, 2026-09-19, asked because nothing
+                // makes a vertical game fill a horizontal screen without
+                // lying and the two honest answers differ. A 240x320 board
+                // integer-scaled into 1080 points gives 3x, a 720-point-tall
+                // window with 180 points of dead space above and below it on
+                // top of the pillarboxing that is already unavoidable; filling
+                // the height gives 3.375x and the largest true-shaped picture
+                // the panel can show. The dot grid argument that earns integer
+                // scaling a Game Boy is worth less here than the 33% of the
+                // screen it costs.
+                const bool integerScale = !core.hardwareRendered() && !quarterTurn;
+                float scale = std::min(ui::kCanvasWidth / (shownRows * shownAspect),
+                                       ui::kCanvasHeight / shownRows);
                 if (integerScale) {
                     scale = std::floor(scale);
                     if (scale < 1.0f) scale = 1.0f;
                 }
-                const float dh = srcH * scale;
-                const float dw = dh * aspect;
+                const float dh = shownRows * scale;
+                const float dw = dh * shownAspect;
                 const float px = (ui::kCanvasWidth - dw) * 0.5f;
                 const float py = (ui::kCanvasHeight - dh) * 0.5f;
                 // Where the picture actually sits in that texture. A
@@ -3977,14 +4019,29 @@ int main(int argc, char** argv) {
                 // the blend took it literally, and the whole 1920x1080 capture
                 // peaked at RGB (4,4,4) — a picture that was there all along
                 // and read as a core that renders black.
+                //
+                // The turn goes to the DRAW and the shape goes to the layout,
+                // and they are two different things. frameUV has already said
+                // where the picture is in the texture and which way up its
+                // rows are; rotation says how the picture it found is turned,
+                // and the two compose — which is what a hardware-rendered
+                // vertical board needs.
                 ui::drawImageTexture(renderer, core.texture(), px, py, dw, dh, u0, v0, u1,
-                                     v1, true);
+                                     v1, true, static_cast<int>(core.rotation()));
 
                 // The glow goes over the bars, not under the picture: it is
                 // drawn after, and its shader discards inside the picture rect,
                 // so no game pixel is ever covered. An integer-scaled handheld
                 // on a 4K set is mostly dead space, which is exactly the case
                 // this exists for.
+                //
+                // It reshapes itself for a vertical board for free, and that
+                // is worth saying because it looks like it should need work.
+                // The shader ramps from the picture's edge to the screen's in
+                // each direction separately, so handing it a tall rect lights
+                // two wide bars at the sides and nothing above or below, where
+                // a picture that fills the height leaves no room to ramp
+                // across. The rect is the whole interface.
                 renderer.drawBiasGlow(px, py, dw, dh, glowPeak);
             }
 
