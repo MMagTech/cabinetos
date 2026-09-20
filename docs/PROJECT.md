@@ -36,8 +36,16 @@ be run.**
 **AND IT IS INSTALLED ON THE REFERENCE MACHINE, 2026-09-19.** The GEEKOM A9
 Pro boots into the frontend on `gamescope (drm)`, rendering on its own Radeon
 890M with Vulkan present, zero session restarts, and the full 1147-game
-library. See *The A9 Pro, measured*. **The UI freeze's condition is all but
-met** — one thing stands in the way and it is the output resolution, below.
+library. See *The A9 Pro, measured*. **The UI freeze is lifted**: the machine
+runs at the panel's native 3840x2160, so what is on that television is the real
+thing rather than a scaled image.
+
+**AND VERTICAL ARCADE GAMES PLAY THE RIGHT WAY UP, 2026-09-19.** Half the
+arcade library was on its side until then, because
+`RETRO_ENVIRONMENT_SET_ROTATION` was handled nowhere. See *Vertical arcade
+boards, and the turn they ask for* — it is a renderer change, it carries one
+product decision of MMagTech's, and it contains the one trap that Cabinet had
+already paid for.
 
 **AND AS OF 2026-09-19 THEY ARE IN THE IMAGE, along with the frontend.** Until
 that day the image was the OS half only: `cabinetos-session` ran
@@ -45,6 +53,20 @@ that day the image was the OS half only: `cabinetos-session` ran
 screen, and everything a person would call the console lived on one development
 VM and was compiled there by hand. Installing CabinetOS now installs CabinetOS.
 See Phase 5, *The deploy*.
+
+**AND A PERSON SAVED A GAME, 2026-09-19.** Somebody played Crazy Taxi 2 with a
+controller, saved inside it, quit through the overlay, and the Dreamcast VMU
+reached RomM — `updated 2026-09-20T02:48:19Z` on the row that already existed,
+overwritten rather than duplicated. **No save in this class had ever been
+written by actually playing a game here**; every round trip before it restored
+a real card, watched the core read it, and sent back byte-identical bytes,
+which is the right answer for a session that saved nothing. See
+`docs/NEXT-SESSION.md` item 3.
+
+It could not have happened a day earlier, and the reason is the one below about
+the analogue trigger index: the Dreamcast's accelerator and brake are its
+triggers, this console answered that channel with the right stick, and Crazy
+Taxi could not be driven at all.
 
 ### The thing that matters most
 
@@ -204,8 +226,17 @@ single opinion about the look.
 - **Every core builds in CI**, on a GitHub runner from a bare checkout, with the
   finished `.so` asserted to report the pinned revision as its own version
   string — see open question 13.
-- **No controller has ever been attached.** The permissions chain is verified
-  by reading; a real pad is not.
+- ~~**No controller has ever been attached.**~~ **A Switch Pro Controller is
+  paired over Bluetooth and has been played with**, 2026-09-19. It has to be
+  woken by its own Home button — `bluetoothctl connect` fails with
+  `br-connection-create-socket` on a sleeping pad — and there is still no
+  pairing screen, which is open question 15b.
+- **A GAME CAN DRAW NOTHING AND NOBODY KNOWS WHY.** Six FBNeo launches in one
+  session drew only the letterbox glow while the core ran and made sound, and
+  it has not reproduced since. The frame is known to reach the texture intact
+  and to be lost at sampling; two theories were tested and both falsified. See
+  `docs/NEXT-SESSION.md` item 3b, which also has the command that photographs
+  the television with the session running.
 - ~~**Whether a PS3 PKG install costs double the disk**~~ **— it does not, as of
   2026-09-18.** A PKG installs to the same size it came in at, so the 2x lasts
   only while both the PKG and the install exist. Measured on a 287 MB title and
@@ -295,6 +326,51 @@ The user never sees:
 - a package manager
 - a file browser
 - a Linux error message
+
+### The trigger channel, and why answering it wrongly is worse than silence
+
+**Found 2026-09-19 by MMagTech, who said the shoulder buttons did not work.**
+
+libretro has a third analogue index, `RETRO_DEVICE_INDEX_ANALOG_BUTTON`, and it
+is not a stick: its `id` is a joypad button id, so L2 is 12 and R2 is 13. A
+callback that tests for the LEFT index and treats everything else as the right
+stick answers *"how far is the left trigger pressed"* with **where the right
+stick is sitting**. Two faults in one line — the triggers cannot be pressed,
+and the right stick drives them.
+
+**And it is worse than returning nothing.** Flycast reads the analogue value
+first and falls back to the digital L2/R2 bit **only when that value is exactly
+zero**. Cabinet answers this index with a plain `0` and therefore works, by
+taking the fallback. A real pad's right stick rests a few hundred counts off
+centre; that is not zero, so it reads as *"the trigger is very slightly
+pressed"* and suppresses the fallback entirely. **A bug that needed stick drift
+to appear.**
+
+CabinetOS now carries a real analogue value rather than Cabinet's zero —
+`PadState` has `leftTrigger` and `rightTrigger` — so a pad with sprung triggers
+gives a Dreamcast a continuous throttle, and one with switches, which is what a
+Switch Pro Controller's ZL and ZR are, gives it 0 or full.
+
+#### A button that does nothing is usually correct
+
+A RetroPad has sixteen inputs and a real machine has fewer, so a press that
+does nothing is normally right and looks exactly like a fault. **The Dreamcast
+controller has no shoulder BUTTONS at all** — its L and R are the analogue
+triggers — so on a Switch Pro Controller the top shoulders are meant to be
+silent and ZL/ZR are the triggers.
+
+The console stopped leaving that to guesswork on 2026-09-19:
+`RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS` was accepted and thrown away, and is
+now printed once per game, including the half nobody prints:
+
+```
+[input] port 0: ... B=A, A=B, X=Y, Y=X, L2 (trigger)=L Trigger, R2 (trigger)=R Trigger, Start=Start
+[input] port 0 does nothing in this game: Select, L (shoulder), R (shoulder), L3 (stick click), R3 (stick click)
+```
+
+It earned its keep immediately: Metal Slug X binds **L3 to Select**, so the
+L3+R3 overlay chord sends one stray press on its way to opening — which follows
+the rule already chosen, and is now visible rather than theoretical.
 
 ### The input model
 
@@ -1061,6 +1137,103 @@ Mupen64Plus ask for GLES 3.0 and get it; **PPSSPP asks for GLES 2.0**, which
 this GLES 3 context serves, and it only asks for GLES at all because it is built
 with `USING_GLES2` — without it the same core asks for desktop GL and is refused
 by name. See open question 13.
+
+### Vertical arcade boards, and the turn they ask for
+
+**BUILT 2026-09-19.** A vertical (TATE) board had its monitor bolted into the
+cabinet turned ninety degrees, so it renders a sideways picture and asks the
+frontend to turn it round with `RETRO_ENVIRONMENT_SET_ROTATION` — 0 to 3, in
+90-degree counter-clockwise steps. This console ignored the ask, and **every
+TATE game in a 223-game arcade library played on its side** for as long as
+arcade has worked here. Found by MMagTech on the A9 with a pad, which is the
+only way it could have been found: a headless capture is a picture nobody looks
+at.
+
+**ONLY AN ARCADE CORE EVER ASKS.** MMagTech's point, 2026-09-19, and it is what
+makes the rule below safe: a console was built to put its picture on a
+television the right way up, so no console core rotates. Every decision here is
+therefore about arcade boards alone and cannot reach anything else.
+
+**The turn cannot live in the texture coordinates**, which is why this is a
+renderer change and not a mapping. `drawImageTexture` takes an axis-aligned
+`u0,v0,u1,v1`, and no ordering of four numbers transposes x and y — swapping
+them flips a picture, it never turns one. So the turn is applied to the quad's
+**corner** in the vertex shader, before the corner is used to look up a texture
+coordinate, and the uv rectangle goes on doing its own job.
+
+**THE ORDER IS DELIBERATE AND IT IS NOT CABINET'S.** Cabinet rotates the
+texture coordinates *after* flipping them, and `aspectFitVertices` says in as
+many words that the two "never combine today" — its rotations are arcade boards
+and its flipped frames come from the two GL cores, which do not rotate. That is
+not safe here, so this frontend applies the turn first, in the picture's own
+space, and lets the uv rectangle map the result into memory. Read it as: the
+rotation says which part of the PICTURE a corner shows, and the uv says where
+that part of the picture lives. Verified by forcing a turn onto a Dreamcast
+frame, which arrives bottom-row-first: the picture comes out turned and not
+mirrored.
+
+#### The declared aspect of a turned board is ALREADY turned
+
+The one trap, and Cabinet paid for it first. FBNeo reports `aspect 0.7500` for
+DoDonPachi DaiOuJou — the 3:4 of the cabinet's tube on its side — while handing
+back a **448x224** framebuffer. Inverting the declared value applies the turn
+twice; Cabinet's own comment records the result as having *"stretched every
+vertical game"*.
+
+**So a turned picture takes its shape from raw pixels and ignores the declared
+aspect.** Nothing else changes, and nothing else can: the platforms whose pixels
+are not square — Saturn is the one that is unplayable without the declared value
+— never rotate.
+
+#### Two sizes a core reports, and neither is wrong
+
+MAME 2003-Plus declares **224x256** in `av_info` for Arkanoid, which is the
+picture as SHOWN, already turned, and then hands back **256x224** from
+`video_refresh` every frame, which is the board's own sideways output. **The
+layout must use the second.** One log line now prints both rather than leaving
+it to be inferred:
+
+```
+[core] the core hands back 256x224 and asks for 270 degrees counter-clockwise; shown as 224x256
+```
+
+#### A turned picture fills the height
+
+**MMagTech's call, 2026-09-19**, asked because nothing makes a vertical game
+fill a horizontal screen without lying and the two honest answers differ. A
+turned picture is scaled to its true shape until it is as tall as the screen
+allows — on the A9's 3840x2160 panel that is **1080x2160, 28% of the width** —
+rather than integer-scaled. Integer scaling would give 6x and throw away 11% of
+the height on top of pillarboxing that is already unavoidable, and the
+deliberate-dot-grid argument that earns a Game Boy integer scaling is worth
+less than a third of the screen. **Every upright game keeps integer scaling
+exactly as before.**
+
+**The letterbox glow reshapes itself for free**, which is worth saying because
+it looks like it should need work. Its shader ramps from the picture's edge to
+the screen's in each direction separately, so a tall rect lights two wide bars
+at the sides and nothing above or below. Measured on the A9: 8 at the picture's
+edge falling to 0 at the panel edge. The rect is the whole interface.
+
+#### What was measured, on the machines
+
+| | |
+|---|---|
+| DoDonPachi DaiOuJou, FBNeo, 90 CCW | upright; 540x1080 at 1080p and **1080x2160 on the A9's own Radeon at 3840x2160** |
+| Arkanoid, MAME 2003-Plus, 270 CCW | upright. A different emulator and the other odd turn |
+| Metal Slug X, FBNeo | no rotation, unchanged, still integer scaled. **The control** |
+| Ikaruga on Flycast, turn forced in | turned, not mirrored, on a bottom-up hardware frame |
+
+**Flycast calls `SET_ROTATION(0)` explicitly**, so a core asking for no turn is
+ordinary and will overwrite anything set before it. That is why the reset lives
+in `loadGame` beside the other per-game state and not in `load`.
+
+**Rotation is not read from a DAT, and Cabinet does not either.** Checked
+2026-09-19 because it was raised as a likely memory. Cabinet ships three
+MAME-derived JSON files under `Resources/ArcadeProfiles/`, and every field in
+them is a CONTROL PANEL — `rotary`, `dial`, `trackball`, `pedals`, `lightgun`,
+`paddle`. Which inputs a cabinet had, never which way its monitor faced.
+`gRotation` has exactly one writer in Cabinet: the environment callback.
 
 ### Shaders, and the glow around the picture
 
@@ -7509,6 +7682,33 @@ fine for us and it is not a product.
 
 It is testable, which is why it is the requirement rather than a principle.
 
+#### First run assumes a server, and there is no way past it
+
+**MMagTech's call, 2026-09-19**, and it is what decides the shape of the whole
+state machine:
+
+> **You cannot have kept games until a server has been paired and you have kept
+> one.**
+
+So first run is a LINEAR PATH TO A PAIRED SERVER, not a branch. There is no
+"set this up later", no "use it without a server", and no skip — because on the
+other side of a skip there is nothing to show. A console that has never been
+paired has no library, no covers, no saves, no user and no kept games; the only
+honest thing it could offer is the stand-in demo library, and PROJECT.md
+already says that must never appear on a console because it looks like a
+working machine showing somebody else's games.
+
+**That is a simplification, not a restriction.** Every step can assume the one
+before it succeeded, and the last step can assume a real library exists to drop
+the person into.
+
+**AND IT DRAWS THE LINE UNDER OPEN QUESTION 22.** The offline console is a
+strictly LATER state — a machine that HAS been paired and now cannot reach its
+server — so it may assume it knows the user, the library it last saw and which
+games are kept. "No server yet" and "no server right now" are different
+problems, and only the second one has anything to work with. That is why the
+offline design is not a first-run branch and must not be built as one.
+
 #### Why the keyboard is the floor, and the controller is not
 
 The instinct is to build setup around a wired controller — a console owner
@@ -7538,10 +7738,22 @@ inside setup, driven in our own UI rather than by a Linux utility.
 #### The chain, and why each link is gated
 
 ```
-first run:  keyboard → Wi-Fi → RomM server → pair pad 1 → unplug the keyboard
+first run:  keyboard → network → RomM server → pair pad 1 → unplug the keyboard
 later:      pad 1 → Settings → Add a controller → pads 2, 3, 4
 never:      needing a keyboard again
 ```
+
+**THE NETWORK LINK IS A HARD GATE, and it is the only one.** MMagTech,
+2026-09-19: *the entirety of this OS relies on a RomM server*, so a console
+that cannot reach a network cannot be set up and must not pretend otherwise.
+One of Ethernet or Wi-Fi has to be working before setup can go on. There is no
+"continue without a network", for the same reason there is no "continue
+without a server" — on the far side of it there is nothing to show.
+
+**Wi-Fi is offered even when Ethernet is already up**, skippable in that case
+and required otherwise. It is the fallback for the cable being unplugged, and
+first run is the one moment it can be configured with a keyboard to hand. See
+open question 17, rung 1.
 
 - **Wi-Fi before RomM**, because RomM is on the LAN. And the two networks are
   not the same question: open question 21 records that a LAN-only console has
@@ -7699,10 +7911,27 @@ privilege and should not be the same grant.
 
 #### The ladder, in the order the UI should offer it
 
-1. **Ethernet — and skip the screen entirely when it is already up.** Do not ask
-   someone to confirm a network they are already on. A console under a
-   television is very often within reach of a cable, and this path involves no
-   typing at all.
+1. **Ethernet, which needs no typing** — but it does NOT skip the Wi-Fi step.
+   **Reversed by MMagTech 2026-09-19**, and the reversal is right.
+
+   This used to say "skip the screen entirely when it is already up: do not ask
+   someone to confirm a network they are already on." **Wi-Fi is not a
+   duplicate of the cable, it is the fallback for losing it** — and a console
+   under a television is exactly where a cable gets tripped over, moved house
+   or pulled out to borrow. This whole OS is useless without reaching RomM, so
+   a machine whose only path to the server is one cable is a machine one
+   accident away from being a brick.
+
+   **And setup is the one moment the fallback can be configured cheaply.** This
+   document already makes that argument, against itself, two sections down: the
+   on-screen keyboard cannot become optional because *"first run is the one
+   moment a real keyboard is near-certain, and changing a Wi-Fi password later
+   from the sofa is not."* That is an argument for asking while the keyboard is
+   still plugged in, not for skipping.
+
+   So: **with Ethernet up, the Wi-Fi step is offered and SKIPPABLE** — the
+   person is already online and is choosing whether to set up a fallback. With
+   no cable, it is not skippable, because it is the only way forward.
 2. **The on-screen keyboard.** The baseline, and **this is what every console
    does** — PlayStation, Xbox, Apple TV and Switch all make you type the
    passphrase with a controller. It is not a product failure, it is the normal
@@ -8868,6 +9097,31 @@ Two more open edges:
 **Raised by the A9 Pro's first reboot, 2026-09-19. Partly decided the same day.
 Not built.**
 
+**REPRODUCED IN FULL ON 2026-09-19**, on the first boot after the A9 was moved
+onto the image, and worth reading because the whole sequence is in one journal
+and every step of it is quiet:
+
+```
+[romm] nothing answered at 192.168.1.10:6005 over http or https
+[gamescope] launch: Primary child shut down!
+cabinetos-session: gamescope (drm) died on startup
+cabinetos-session: WARNING — no Vulkan-capable GPU. Falling back to cage.
+```
+
+**The message is a lie, and it is the machine's own log that proves it.** Four
+seconds earlier the same gamescope had printed `vulkan: selecting physical
+device 'AMD Radeon 890M Graphics (RADV STRIX1)'` and `drm: selecting mode
+3840x2160@60Hz`. It had a Vulkan GPU, it had set a mode, and it exited only
+because its child did. The console then ran the whole session on llvmpipe with
+nothing on screen saying so, and recovered only when the service was restarted
+by hand.
+
+**This is now the thing most likely to make the reference machine lie to
+whoever looks at it next**, because the failure looks exactly like a working
+console. Anyone judging the look on the A9 should read
+`journalctl -t cabinetos-session | grep 'is up'` first and check which rung it
+landed on.
+
 **The console currently dies.** The first cold boot after an upgrade came up
 faster than the network did, `romm::Client::setAddress` failed, the frontend
 returned 1, and — because gamescope exits when its primary child exits — the
@@ -8876,16 +9130,45 @@ permanently demoted the machine to cage on llvmpipe. A transient network race
 at boot cost hardware rendering for the rest of the session, silently, and
 nothing on screen said anything. **Every power cut will hit this.**
 
-That is three separate faults and they should be fixed together:
+That is three separate faults. **The two that make the machine lie about
+itself are fixed, 2026-09-19**; the third is deliberately not done.
 
-1. **The frontend must not exit when the server is unreachable.** It should
-   come up, keep retrying, and fill in when the server answers.
-2. **The session must order after the network** (`network-online.target`), so
-   the common case does not arise at all.
-3. **The ladder must tell "the compositor failed to start" apart from "the app
-   exited".** The ladder exists for a machine with no usable GPU; it must not
-   be reachable by an application error. If gamescope got as far as setting a
-   mode, a dead child is not a reason to fall back.
+1. ~~**The frontend must not exit when the server is unreachable.**~~ **It now
+   waits ninety seconds for it**, saying so once, and says so again when the
+   server answers. That covers a boot race and a router coming back after a
+   power cut, which is what the fault actually was. It is NOT the offline
+   console — a machine that keeps its library and plays its kept games with no
+   server is the design below, and is still owed.
+2. **The session ordering after `network-online.target` was considered and NOT
+   done.** It would delay the picture on a console with no network at all,
+   by however long `nm-online` takes to give up, in exchange for closing a race
+   the retry above already closes. A console showing nothing for a minute
+   because it is waiting to be told there is no network is a worse failure than
+   the one being fixed. Recorded as a decision rather than an omission.
+3. ~~**The ladder must tell "the compositor failed to start" apart from "the
+   app exited".**~~ **It does.** The old test was "is the process alive five
+   seconds after launch", attributed to the compositor — and gamescope exits
+   with its child, so a frontend quitting at one second was indistinguishable
+   from a GPU that cannot do Vulkan. It now ASKS: gamescope's own `--ready-fd`
+   is written the instant the compositor is serving, with a Wayland socket
+   appearing as the backstop for cage, which has no such flag. Once a
+   compositor has come up, a dead child is the app's exit and the session exits
+   with its status for systemd to restart at the top rung, rather than falling
+   down the ladder.
+
+   **Measured on the A9 against the real failure**, by pointing the session at
+   an unreachable server under the real service:
+
+   ```
+   cabinetos-session: trying gamescope (drm)
+   cabinetos-session: gamescope (drm) is up
+   [frontend] GL_RENDERER AMD Radeon 890M Graphics (radeonsi, strix1, ACO...)
+   cabinetos-session: gamescope (drm) exited with 0 AFTER coming up — that is
+                      the app's exit, not a display fault; not falling back
+   ```
+
+   It cycles on the real GPU until the server answers, instead of demoting to
+   llvmpipe until somebody notices.
 
 #### The stand-in library must never appear on a console
 

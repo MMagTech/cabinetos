@@ -135,12 +135,46 @@ precision highp float;
 uniform vec2 uCanvas;
 uniform vec4 uRect;
 uniform vec4 uUV;
+// Quarter turns counter-clockwise, 0 to 3, for a vertical arcade board that
+// renders sideways and asks the frontend to turn the picture round.
+//
+// IT IS DONE HERE BECAUSE IT CANNOT BE DONE IN uUV. A ninety-degree turn maps
+// the destination's x to the source's y, and an axis-aligned u0,v0,u1,v1
+// rectangle has no way to say that however the four numbers are ordered —
+// swapping them flips, it never transposes. So the turn is applied to the
+// quad's CORNER, before the corner is used to look up a texture coordinate.
+//
+// Which means it composes with whatever uUV already says rather than fighting
+// it: uUV goes on locating the picture inside a larger target and flipping a
+// bottom-up hardware frame, and this turns the picture it located.
+//
+// THE ORDER IS THE WHOLE POINT, AND IT IS NOT CABINET'S. Cabinet rotates the
+// texture coordinates AFTER flipping them, and says in as many words that the
+// two "never combine today" — its rotations are arcade boards and its flipped
+// frames come from the two GL cores, which do not rotate. That is not true
+// here: Ikaruga is a vertical NAOMI board, so on this console it is a
+// hardware-rendered frame that arrives bottom-row-first AND asks for a quarter
+// turn, and a turn applied to already-flipped coordinates turns the wrong way.
+//
+// So the turn is applied to the corner FIRST, in the picture's own space, and
+// the uv rectangle maps that into the texture afterwards. Read it as: uRot
+// says which part of the PICTURE this corner shows, and uUV says where that
+// part of the picture lives in memory. Neither has to know about the other.
+uniform int uRot;
 out vec2 vUV;
 out vec2 vPoint;
 void main() {
     vec2 corner = vec2(float(gl_VertexID & 1), float((gl_VertexID >> 1) & 1));
     vec2 p = uRect.xy + corner * uRect.zw;
-    vUV = mix(uUV.xy, uUV.zw, corner);
+    // Where this corner of the destination reads from in the source picture.
+    // Turning the PICTURE one quarter anticlockwise means reading the source
+    // the other way: the destination's top-left corner takes the source's
+    // top-right, which is (1 - y, x).
+    vec2 s = corner;
+    if (uRot == 1) s = vec2(1.0 - corner.y, corner.x);
+    else if (uRot == 2) s = vec2(1.0 - corner.x, 1.0 - corner.y);
+    else if (uRot == 3) s = vec2(corner.y, 1.0 - corner.x);
+    vUV = mix(uUV.xy, uUV.zw, s);
     vPoint = p;
     vec2 ndc = vec2(p.x / uCanvas.x * 2.0 - 1.0, 1.0 - p.y / uCanvas.y * 2.0);
     gl_Position = vec4(ndc, 0.0, 1.0);
@@ -394,6 +428,7 @@ bool Renderer::init() {
     tloc_.lod = glGetUniformLocation(texturedProgram_, "uLod");
     tloc_.clip = glGetUniformLocation(texturedProgram_, "uClip");
     tloc_.clipRadius = glGetUniformLocation(texturedProgram_, "uClipRadius");
+    tloc_.rot = glGetUniformLocation(texturedProgram_, "uRot");
 
     // GLES 3 still requires a bound vertex array even when every attribute is
     // derived from gl_VertexID and nothing is read from a buffer.
@@ -405,7 +440,8 @@ bool Renderer::init() {
 void Renderer::drawTextured(float x, float y, float w, float h, GLuint texture,
                             float u0, float v0, float u1, float v1, const Color& tint,
                             bool singleChannel, float lodBias, float clipX, float clipY,
-                            float clipW, float clipH, float clipRadius, bool opaque) {
+                            float clipW, float clipH, float clipRadius, bool opaque,
+                            int rotation) {
     glUseProgram(texturedProgram_);
     glUniform2f(tloc_.canvas, kCanvasWidth, kCanvasHeight);
     glUniform4f(tloc_.rect, x, y, w, h);
@@ -416,6 +452,7 @@ void Renderer::drawTextured(float x, float y, float w, float h, GLuint texture,
     glUniform4f(tloc_.clip, clipX, clipY, clipW, clipH);
     glUniform1f(tloc_.clipRadius, clipRadius);
     glUniform1i(tloc_.opaque, opaque ? 1 : 0);
+    glUniform1i(tloc_.rot, rotation & 3);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, texture);
     glUniform1i(tloc_.tex, 0);

@@ -151,8 +151,16 @@ void drawImage(Renderer& r, const Image& img, float x, float y, float w, float h
 // machine's framebuffer belongs to the machine, and PPSSPP hands back frames
 // whose alpha is nearly zero — which drew Lumines at 1.5% brightness and
 // looked exactly like a core rendering black.
+//
+// `rotation` is quarter turns anticlockwise, and it is the core's own answer
+// to RETRO_ENVIRONMENT_SET_ROTATION. A vertical arcade board had its monitor
+// bolted into the cabinet sideways, so it renders a sideways picture and asks
+// for it to be turned; ignoring the ask plays every TATE shmup on its side.
+// It composes with the texture coordinates rather than replacing them, so a
+// hardware-rendered vertical board gets its corner of the target, its vertical
+// flip AND its turn.
 void drawImageTexture(Renderer& r, GLuint texture, float x, float y, float w, float h,
                       float u0 = 0, float v0 = 0, float u1 = 1, float v1 = 1,
-                      bool opaque = false);
+                      bool opaque = false, int rotation = 0);
 
 }  // namespace ui

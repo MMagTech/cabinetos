@@ -9,6 +9,7 @@
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
+#include <string>
 #include <mutex>
 #include <unordered_map>
 
@@ -55,6 +56,47 @@ unsigned gCorePorts = 0;
 
 unsigned gPixelFormat = RETRO_PIXEL_FORMAT_0RGB1555;
 std::string gSystemDir, gSaveDir;
+
+// How the core wants its picture turned, in 90-degree counter-clockwise steps.
+//
+// A vertical arcade board — DoDonPachi, Ikaruga, most shmups — has its monitor
+// bolted in sideways in the cabinet, so the board renders a picture that is
+// sideways in memory and asks the frontend to turn it. A frontend that ignores
+// the ask draws a rotated game, which is what this console did for every TATE
+// board in the library until 2026-09-19.
+//
+// THIS IS THE CORE'S ANSWER, NOT THE PLATFORM'S. It cannot be looked up from
+// the system, because the same arcade emulator serves upright and vertical
+// boards from one platform row and only knows which after the game is loaded.
+unsigned gRotation = 0;
+bool gRotationAnnounced = false;
+
+// Once per game, like the rotation line. Cleared in loadGame.
+bool gInputDescriptorsLogged = false;
+
+// RetroPad ids as a person says them, for the input descriptor log. The order
+// is libretro's own and matches cab::Button.
+const char* padIdName(unsigned id) {
+    switch (id) {
+        case RETRO_DEVICE_ID_JOYPAD_B: return "B";
+        case RETRO_DEVICE_ID_JOYPAD_Y: return "Y";
+        case RETRO_DEVICE_ID_JOYPAD_SELECT: return "Select";
+        case RETRO_DEVICE_ID_JOYPAD_START: return "Start";
+        case RETRO_DEVICE_ID_JOYPAD_UP: return "Up";
+        case RETRO_DEVICE_ID_JOYPAD_DOWN: return "Down";
+        case RETRO_DEVICE_ID_JOYPAD_LEFT: return "Left";
+        case RETRO_DEVICE_ID_JOYPAD_RIGHT: return "Right";
+        case RETRO_DEVICE_ID_JOYPAD_A: return "A";
+        case RETRO_DEVICE_ID_JOYPAD_X: return "X";
+        case RETRO_DEVICE_ID_JOYPAD_L: return "L (shoulder)";
+        case RETRO_DEVICE_ID_JOYPAD_R: return "R (shoulder)";
+        case RETRO_DEVICE_ID_JOYPAD_L2: return "L2 (trigger)";
+        case RETRO_DEVICE_ID_JOYPAD_R2: return "R2 (trigger)";
+        case RETRO_DEVICE_ID_JOYPAD_L3: return "L3 (stick click)";
+        case RETRO_DEVICE_ID_JOYPAD_R3: return "R3 (stick click)";
+        default: return nullptr;
+    }
+}
 
 // The core writes into its own buffer and reuses it between calls, so a frame
 // is copied out rather than referenced.
@@ -422,6 +464,30 @@ void restoreGLState() {
     glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
 }
 
+// Says once, for a turned picture, what the core hands over and what ends up
+// on the screen.
+//
+// IT EXISTS BECAUSE THE TWO SIZES THE CORE REPORTS DISAGREE AND NEITHER IS
+// WRONG. MAME 2003-Plus declares 224x256 in its av_info for Arkanoid — that is
+// the picture as SHOWN, already turned — and then hands back a 256x224 buffer
+// every frame, which is the board's own sideways output. The layout has to use
+// the second one and gets the first one for free in the launch log, so an
+// honest line that prints both is the difference between reading this in a
+// minute and inferring it off a photograph.
+void announceRotation(unsigned width, unsigned height) {
+    // Not a function-local static: this process plays one game after another,
+    // and a static would say it once in the life of the console rather than
+    // once per game. Cleared beside gRotation in loadGame.
+    if (gRotationAnnounced || gRotation == 0) return;
+    gRotationAnnounced = true;
+    const bool quarter = (gRotation & 1u) != 0u;
+    std::fprintf(stderr,
+                 "[core] the core hands back %ux%u and asks for %u degrees "
+                 "counter-clockwise; shown as %ux%u\n",
+                 width, height, gRotation * 90, quarter ? height : width,
+                 quarter ? width : height);
+}
+
 void videoRefresh(const void* data, unsigned width, unsigned height, size_t pitch) {
     if (data == RETRO_HW_FRAME_BUFFER_VALID) {
         // Not a buffer at all: the core has already drawn this frame into our
@@ -442,6 +508,7 @@ void videoRefresh(const void* data, unsigned width, unsigned height, size_t pitc
         gFrameW = width;
         gFrameH = height;
         gFrameDirty = true;
+        announceRotation(width, height);
         return;
     }
     if (!data) return;  // "same picture as last time"
@@ -453,6 +520,7 @@ void videoRefresh(const void* data, unsigned width, unsigned height, size_t pitc
     gFrameH = height;
     gFramePitch = pitch;
     gFrameDirty = true;
+    announceRotation(width, height);
     (void)bpp;
 }
 
@@ -478,6 +546,42 @@ int16_t inputState(unsigned port, unsigned device, unsigned index, unsigned id) 
         return (pad.buttons >> id) & 1;
     }
     if (device == RETRO_DEVICE_ANALOG) {
+        // HOW FAR A TRIGGER IS PRESSED. A third index, and it is NOT a stick:
+        // its `id` is a joypad button id rather than an axis, so L2 is 12 and
+        // R2 is 13. Flycast asks for exactly these two, because the
+        // Dreamcast's triggers are analogue.
+        //
+        // THIS USED TO RETURN THE RIGHT STICK'S Y AXIS. The old line tested
+        // only for the LEFT index and treated everything else as the right
+        // stick, so "how far is the left trigger pressed" was answered with
+        // where the right stick was sitting. Two faults in one: the triggers
+        // could not be pressed, and the right stick drove them.
+        //
+        // AND IT WAS WORSE THAN RETURNING NOTHING, which is the part worth
+        // remembering. Flycast reads the analogue value FIRST and only falls
+        // back to the digital L2/R2 bit when that value is zero — so the
+        // reference implementation, which answers this index with a plain 0,
+        // works by taking the fallback. A real pad's right stick rests a few
+        // hundred counts off centre, that is not zero, and a non-zero answer
+        // means "the trigger is very slightly pressed" and suppresses the
+        // fallback entirely. Found 2026-09-19 by MMagTech, who said the
+        // shoulder buttons did not work and was right.
+        if (index == RETRO_DEVICE_INDEX_ANALOG_BUTTON) {
+            const float t = id == RETRO_DEVICE_ID_JOYPAD_L2   ? pad.leftTrigger
+                            : id == RETRO_DEVICE_ID_JOYPAD_R2 ? pad.rightTrigger
+                                                              : 0.0f;
+            // Anything else the core asks about here is an ordinary button,
+            // which is pressed or it is not.
+            if (id != RETRO_DEVICE_ID_JOYPAD_L2 && id != RETRO_DEVICE_ID_JOYPAD_R2)
+                return ((pad.buttons >> id) & 1u) ? 32767 : 0;
+            return static_cast<int16_t>(std::clamp(t, 0.0f, 1.0f) * 32767.0f);
+        }
+        // Sticks. Only the two indices that ARE sticks, and only the two ids
+        // that are axes — the old fall-through is what caused the above.
+        if (index != RETRO_DEVICE_INDEX_ANALOG_LEFT &&
+            index != RETRO_DEVICE_INDEX_ANALOG_RIGHT)
+            return 0;
+        if (id != RETRO_DEVICE_ID_ANALOG_X && id != RETRO_DEVICE_ID_ANALOG_Y) return 0;
         const float v = (index == RETRO_DEVICE_INDEX_ANALOG_LEFT)
                             ? (id == RETRO_DEVICE_ID_ANALOG_X ? pad.leftX : pad.leftY)
                             : (id == RETRO_DEVICE_ID_ANALOG_X ? pad.rightX : pad.rightY);
@@ -511,6 +615,16 @@ bool environment(unsigned cmd, void* data) {
             // the draw loop keeps presenting the last one.
             *static_cast<bool*>(data) = true;
             return true;
+
+        case RETRO_ENVIRONMENT_SET_ROTATION: {
+            // 0, 1, 2, 3 — 90 degrees counter-clockwise each. Answered rather
+            // than refused: a core that is told no is entitled to carry on
+            // drawing sideways, and several do.
+            const unsigned r = *static_cast<const unsigned*>(data);
+            if (r > 3) return false;
+            gRotation = r;
+            return true;
+        }
 
         case RETRO_ENVIRONMENT_SET_PIXEL_FORMAT: {
             const unsigned fmt = *static_cast<const enum retro_pixel_format*>(data);
@@ -604,8 +718,67 @@ bool environment(unsigned cmd, void* data) {
             return true;
         }
 
+        case RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS: {
+            // WHAT EACH BUTTON ACTUALLY DOES IN THIS GAME, IN THE CORE'S OWN
+            // WORDS. Accepted and thrown away until 2026-09-19, and throwing
+            // it away is what made "the shoulder buttons do not work" an
+            // unanswerable question: a RetroPad has sixteen ids, a real
+            // machine has fewer, and the ones a core does not use are silent
+            // by design rather than broken. The Dreamcast pad, for one, has no
+            // shoulder BUTTONS at all — its L and R are analogue triggers —
+            // so a press that does nothing is the correct behaviour and looks
+            // identical to a bug.
+            //
+            // Printed once per game, port 0 only, and only for the joypad:
+            // Flycast declares four ports and a mouse and a lightgun besides,
+            // and a wall of those is not a diagnostic.
+            if (gInputDescriptorsLogged) return true;
+            const auto* d = static_cast<const retro_input_descriptor*>(data);
+            if (!d) return true;
+            std::string line;
+            for (; d->description; ++d) {
+                if (d->port != 0 || d->device != RETRO_DEVICE_JOYPAD) continue;
+                if (d->index != 0) continue;
+                const char* name = padIdName(d->id);
+                if (!name) continue;
+                if (!line.empty()) line += ", ";
+                line += name;
+                line += "=";
+                line += d->description;
+            }
+            // The flag is set only once something was actually printed. A core
+            // is free to call this more than once and to describe other ports
+            // first, and latching on a call that said nothing about port 0
+            // would silently throw away the one that does.
+            if (line.empty()) return true;
+            gInputDescriptorsLogged = true;
+            std::fprintf(stderr, "[input] port 0: %s\n", line.c_str());
+            // Say the silent ones too, because that is the half that answers
+            // the question somebody actually asked.
+            std::string unused;
+            for (unsigned id = 0; id <= RETRO_DEVICE_ID_JOYPAD_R3; ++id) {
+                const char* name = padIdName(id);
+                if (!name) continue;
+                bool found = false;
+                for (const auto* e = static_cast<const retro_input_descriptor*>(data);
+                     e->description; ++e) {
+                    if (e->port == 0 && e->device == RETRO_DEVICE_JOYPAD &&
+                        e->index == 0 && e->id == id) {
+                        found = true;
+                        break;
+                    }
+                }
+                if (found) continue;
+                if (!unused.empty()) unused += ", ";
+                unused += name;
+            }
+            if (!unused.empty())
+                std::fprintf(stderr, "[input] port 0 does nothing in this game: %s\n",
+                             unused.c_str());
+            return true;
+        }
+
         case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY:
-        case RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS:
         case RETRO_ENVIRONMENT_SET_MEMORY_MAPS:
         case RETRO_ENVIRONMENT_SET_SUPPORT_ACHIEVEMENTS:
         case RETRO_ENVIRONMENT_SET_SERIALIZATION_QUIRKS:
@@ -910,6 +1083,15 @@ bool Core::loadGame(const std::string& romPath, const std::string& systemDir,
     }
     gSystemDir = absoluteDir(systemDir);
     gSaveDir = absoluteDir(saveDir);
+
+    // Cleared HERE, not in load(), because rotation is a fact about the GAME
+    // and not about the core. One arcade emulator serves upright and vertical
+    // boards out of the same .so, and it calls SET_ROTATION from inside
+    // retro_load_game — so a vertical game followed by an upright one that
+    // never calls it at all would otherwise leave the upright one sideways.
+    gRotation = 0;
+    gRotationAnnounced = false;
+    gInputDescriptorsLogged = false;
 
     // need_fullpath means the core opens the file ITSELF, and libretro is
     // explicit that the frontend must then not load it. This used to read it
@@ -1289,6 +1471,8 @@ bool Core::loadMemoryRegion(unsigned id, const std::vector<uint8_t>& data) {
 GLuint Core::texture() const { return gHWFrame ? gHWColor : texture_; }
 
 bool Core::hardwareRendered() const { return gHWWanted; }
+
+unsigned Core::rotation() const { return gRotation; }
 
 const std::string& Core::hardwareContext() const { return gHWContextName; }
 

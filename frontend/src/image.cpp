@@ -272,9 +272,9 @@ void ImageCache::evictToBudget() {
 }
 
 void drawImageTexture(Renderer& r, GLuint texture, float x, float y, float w, float h,
-                      float u0, float v0, float u1, float v1, bool opaque) {
+                      float u0, float v0, float u1, float v1, bool opaque, int rotation) {
     r.drawTextured(x, y, w, h, texture, u0, v0, u1, v1, Color{1, 1, 1, 1}, false, 0.0f, 0,
-                   0, 0, 0, 0, opaque);
+                   0, 0, 0, 0, opaque, rotation);
 }
 
 void drawImage(Renderer& r, const Image& img, float x, float y, float w, float h, Fit fit,

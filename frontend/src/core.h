@@ -73,6 +73,14 @@ struct PadState {
     uint32_t buttons = 0;
     float leftX = 0, leftY = 0;
     float rightX = 0, rightY = 0;
+    // HOW FAR THE TRIGGERS ARE PRESSED, 0 to 1, as well as the L2/R2 bits
+    // above. Both, because a trigger is two things at once: a Dreamcast reads
+    // it as a continuous value and a SNES reads its shoulder as pressed or
+    // not, and the same physical pull has to serve both.
+    //
+    // A pad whose triggers are digital — a Switch Pro Controller's ZL and ZR
+    // are switches, not springs — simply reports 0 or 1 here.
+    float leftTrigger = 0, rightTrigger = 0;
 };
 
 class Core {
@@ -238,6 +246,33 @@ public:
     // the vertical flip already applied when the core rendered bottom-up. A
     // software core answers the whole texture, the right way up.
     void frameUV(float& u0, float& v0, float& u1, float& v1) const;
+
+    // How far the picture has to be turned before it is shown, in 90-degree
+    // counter-clockwise steps: 0, 1, 2 or 3.
+    //
+    // A VERTICAL ARCADE BOARD RENDERS SIDEWAYS ON PURPOSE. Its monitor was
+    // bolted into the cabinet turned ninety degrees, so the board draws a
+    // picture that is sideways in memory and asks the frontend to turn it
+    // round with RETRO_ENVIRONMENT_SET_ROTATION. Ignore the ask and every
+    // TATE shmup in the library plays on its side — which is what this
+    // console did until 2026-09-19.
+    //
+    // It is the CORE's answer and not the platform's, and it cannot be
+    // anything else: FBNeo and MAME each serve upright and vertical boards
+    // from one platform row and only know which after the game is loaded.
+    //
+    // It composes with frameUV rather than replacing it. frameUV says where
+    // the picture is in the texture and which way up its rows are; this says
+    // how the picture, once found, is turned. A hardware-rendered vertical
+    // board needs both.
+    unsigned rotation() const;
+
+    // True when the turn is an odd number of quarters, which is the case that
+    // changes the SHAPE of the picture: a 320x240 board becomes a 240x320
+    // picture, so the aspect ratio inverts and the window on a 16:9 panel is
+    // tall rather than wide. Callers laying the picture out need this; callers
+    // drawing it just pass rotation() through.
+    bool rotatedQuarterTurn() const { return (rotation() & 1u) != 0u; }
 
     // Whether the loaded core is rendering through GL rather than handing back
     // a buffer. For the audit and for the catalog, not for the draw path —

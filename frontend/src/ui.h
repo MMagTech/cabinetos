@@ -104,11 +104,18 @@ public:
     // lodBias forces sampling from a coarser mip level. That is how the
     // blurred echo under an odd-shaped cover is drawn: a box blur that costs a
     // texture fetch rather than a blur pass.
+    // `rotation` turns the PICTURE by that many quarter turns anticlockwise,
+    // for a vertical arcade board that renders sideways and asks the frontend
+    // to turn it round. It is applied to the quad's corners before the texture
+    // coordinates are looked up, which is the only place it can go: a
+    // ninety-degree turn transposes x and y, and no ordering of u0,v0,u1,v1
+    // can say that. It therefore composes with whatever the uv rectangle
+    // already says rather than replacing it.
     void drawTextured(float x, float y, float w, float h, GLuint texture, float u0,
                       float v0, float u1, float v1, const Color& tint,
                       bool singleChannel = true, float lodBias = 0.0f, float clipX = 0,
                       float clipY = 0, float clipW = 0, float clipH = 0,
-                      float clipRadius = 0, bool opaque = false);
+                      float clipRadius = 0, bool opaque = false, int rotation = 0);
 
     // Device pixels per design point for the frame in progress. Text has to
     // rasterise at device resolution to be crisp on a 4K set, so it needs this.
@@ -197,7 +204,7 @@ private:
         GLint top, mid, bottom, midStop;
     } bloc_{};
     struct {
-        GLint canvas, rect, uv, tint, tex, single, lod, clip, clipRadius, opaque;
+        GLint canvas, rect, uv, tint, tex, single, lod, clip, clipRadius, opaque, rot;
     } tloc_{};
 };
 

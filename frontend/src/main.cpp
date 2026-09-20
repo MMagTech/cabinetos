@@ -2281,9 +2281,46 @@ int main(int argc, char** argv) {
         // Where the cores are, so the catalog can tell "the manifest has a core
         // for this" apart from "this console has it built".
         catalog::setCoreDirectory(coreDir);
-        if (!liveClient.setAddress(rommAddress, &err)) {
-            std::fprintf(stderr, "[romm] %s\n", err.c_str());
-            return 1;
+        // WAIT FOR THE NETWORK RATHER THAN GIVING UP ON IT.
+        //
+        // This used to try once and exit 1, and on a console that is a fault
+        // rather than tidiness: the session starts within a couple of seconds
+        // of boot and the network is routinely not up yet, so a cold boot
+        // reached RomM before the machine had an address and the frontend
+        // quit. gamescope exits when its child exits, and the compositor
+        // ladder then read that as ITS OWN failure and demoted the machine to
+        // software rendering for the rest of the session — see
+        // docs/PROJECT.md, open question 22. The ladder no longer draws that
+        // conclusion; this is the other half, which is not having the race.
+        //
+        // A BOUNDED WAIT, not an indefinite one, and not the offline console.
+        // Ninety seconds covers a boot race and a router coming back after a
+        // power cut. It is deliberately NOT the answer to "there is no server"
+        // — a console that keeps its library, plays its kept games and fills
+        // in when the server returns is open question 22's design and a
+        // different piece of work. This is the difference between a machine
+        // that recovers from a power cut on its own and one that does not.
+        {
+            constexpr double kWaitSeconds = 90.0;
+            const uint64_t start = SDL_GetTicks();
+            bool said = false;
+            while (!liveClient.setAddress(rommAddress, &err)) {
+                if ((SDL_GetTicks() - start) / 1000.0 >= kWaitSeconds) {
+                    std::fprintf(stderr, "[romm] %s — gave up after %.0fs\n",
+                                 err.c_str(), kWaitSeconds);
+                    return 1;
+                }
+                // Once, not once per attempt: a line a second for a minute and
+                // a half buries whatever else the boot had to say.
+                if (!said) {
+                    said = true;
+                    std::fprintf(stderr,
+                                 "[romm] %s — waiting up to %.0fs for it\n",
+                                 err.c_str(), kWaitSeconds);
+                }
+                SDL_Delay(2000);
+            }
+            if (said) std::fprintf(stderr, "[romm] the server answered\n");
         }
         if (!liveClient.loadToken(rommTokenPath())) {
             std::fprintf(stderr, "[romm] no token at %s — pair first with --romm-probe --romm-pair\n",
@@ -3742,10 +3779,22 @@ int main(int argc, char** argv) {
                         // own slop and a full-travel one never fires on a worn
                         // pad.
                         const int kTrigger = 16384;
-                        if (SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_LEFT_TRIGGER) > kTrigger)
-                            pad.buttons |= bit(cab::L2);
-                        if (SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > kTrigger)
-                            pad.buttons |= bit(cab::R2);
+                        const int lt = SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_LEFT_TRIGGER);
+                        const int rt = SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER);
+                        if (lt > kTrigger) pad.buttons |= bit(cab::L2);
+                        if (rt > kTrigger) pad.buttons |= bit(cab::R2);
+                        // AND HOW FAR, not just whether. A Dreamcast reads its
+                        // triggers as a continuous value — they are the
+                        // accelerator and the brake in a driving game — and
+                        // Flycast asks for that through the analogue channel
+                        // rather than the button. The digital bits above still
+                        // go out for every core that wants a shoulder.
+                        //
+                        // A pad with switches instead of springs, which is what
+                        // a Switch Pro Controller's ZL and ZR are, hands SDL a
+                        // clean 0 or 32767 and arrives here as 0 or 1.
+                        pad.leftTrigger = std::clamp(lt / 32767.0f, 0.0f, 1.0f);
+                        pad.rightTrigger = std::clamp(rt / 32767.0f, 0.0f, 1.0f);
 
                         pad.leftX = SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_LEFTX) / 32767.0f;
                         pad.leftY = SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_LEFTY) / 32767.0f;
@@ -3940,9 +3989,33 @@ int main(int argc, char** argv) {
                 // the non-integer option; the default should be honest.
                 const float srcW = static_cast<float>(core.frameWidth());
                 const float srcH = static_cast<float>(core.frameHeight());
-                const float aspect = core.avInfo().aspectRatio > 0
-                                         ? core.avInfo().aspectRatio
-                                         : srcW / srcH;
+                //
+                // A VERTICAL ARCADE BOARD TURNS THE PICTURE AND THE LAYOUT
+                // WITH IT. Its monitor was bolted into the cabinet sideways,
+                // so the board renders sideways and asks for a quarter turn.
+                // After the turn the picture is TALL: the rows running down
+                // the screen are the source's columns and the aspect is the
+                // inverse of the stored one.
+                const bool quarterTurn = core.rotatedQuarterTurn();
+                //
+                // AND A TURNED PICTURE IGNORES THE CORE'S DECLARED ASPECT.
+                // This looks like throwing away the better answer and is the
+                // opposite: FBNeo reports a vertical board's aspect ALREADY
+                // turned — 0.75 for DoDonPachi DaiOuJou, which is the 3:4 of
+                // the cabinet's tube on its side, not the 448x224 sitting in
+                // the framebuffer. Inverting that would apply the turn twice
+                // and stretch the picture. Cabinet shipped it the wrong way
+                // round first and the comment in `aspectFitVertices` is the
+                // record: it "stretched every vertical game".
+                //
+                // The declared aspect is still what a picture with square
+                // pixels needs and Saturn is unplayable without it, so it
+                // keeps winning everywhere else. Nothing is lost by dropping
+                // it here, for the reason Cabinet gives: the platforms whose
+                // pixels are not square never rotate, and the boards that
+                // rotate are square-pixel.
+                const float declaredAspect = quarterTurn ? 0.0f : core.avInfo().aspectRatio;
+                const float aspect = declaredAspect > 0 ? declaredAspect : srcW / srcH;
                 //
                 // EXCEPT for a hardware-rendered core, where integer scaling
                 // is the wrong idea rather than a stricter one. A Dreamcast's
@@ -3952,15 +4025,33 @@ int main(int argc, char** argv) {
                 // resolution the frame is 1920x1440, where flooring to an
                 // integer gives zero, clamps to one, and draws 360 rows off
                 // the bottom of the screen.
-                const bool integerScale = !core.hardwareRendered();
-                float scale = std::min(ui::kCanvasWidth / (srcH * aspect),
-                                       ui::kCanvasHeight / srcH);
+                //
+                // Everything from here is in terms of the picture as SHOWN
+                // rather than as stored, which is the only version of it the
+                // screen has an opinion about.
+                const float shownAspect = quarterTurn ? 1.0f / aspect : aspect;
+                const float shownRows = quarterTurn ? srcW : srcH;
+                //
+                // AND A TURNED PICTURE FILLS THE HEIGHT RATHER THAN INTEGER
+                // SCALING. MMagTech's call, 2026-09-19, asked because nothing
+                // makes a vertical game fill a horizontal screen without
+                // lying and the two honest answers differ. A 240x320 board
+                // integer-scaled into 1080 points gives 3x, a 720-point-tall
+                // window with 180 points of dead space above and below it on
+                // top of the pillarboxing that is already unavoidable; filling
+                // the height gives 3.375x and the largest true-shaped picture
+                // the panel can show. The dot grid argument that earns integer
+                // scaling a Game Boy is worth less here than the 33% of the
+                // screen it costs.
+                const bool integerScale = !core.hardwareRendered() && !quarterTurn;
+                float scale = std::min(ui::kCanvasWidth / (shownRows * shownAspect),
+                                       ui::kCanvasHeight / shownRows);
                 if (integerScale) {
                     scale = std::floor(scale);
                     if (scale < 1.0f) scale = 1.0f;
                 }
-                const float dh = srcH * scale;
-                const float dw = dh * aspect;
+                const float dh = shownRows * scale;
+                const float dw = dh * shownAspect;
                 const float px = (ui::kCanvasWidth - dw) * 0.5f;
                 const float py = (ui::kCanvasHeight - dh) * 0.5f;
                 // Where the picture actually sits in that texture. A
@@ -3977,14 +4068,29 @@ int main(int argc, char** argv) {
                 // the blend took it literally, and the whole 1920x1080 capture
                 // peaked at RGB (4,4,4) — a picture that was there all along
                 // and read as a core that renders black.
+                //
+                // The turn goes to the DRAW and the shape goes to the layout,
+                // and they are two different things. frameUV has already said
+                // where the picture is in the texture and which way up its
+                // rows are; rotation says how the picture it found is turned,
+                // and the two compose — which is what a hardware-rendered
+                // vertical board needs.
                 ui::drawImageTexture(renderer, core.texture(), px, py, dw, dh, u0, v0, u1,
-                                     v1, true);
+                                     v1, true, static_cast<int>(core.rotation()));
 
                 // The glow goes over the bars, not under the picture: it is
                 // drawn after, and its shader discards inside the picture rect,
                 // so no game pixel is ever covered. An integer-scaled handheld
                 // on a 4K set is mostly dead space, which is exactly the case
                 // this exists for.
+                //
+                // It reshapes itself for a vertical board for free, and that
+                // is worth saying because it looks like it should need work.
+                // The shader ramps from the picture's edge to the screen's in
+                // each direction separately, so handing it a tall rect lights
+                // two wide bars at the sides and nothing above or below, where
+                // a picture that fills the height leaves no room to ramp
+                // across. The rect is the whole interface.
                 renderer.drawBiasGlow(px, py, dw, dh, glowPeak);
             }
 
