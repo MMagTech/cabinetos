@@ -694,6 +694,13 @@ These are ordered. **Do not begin any of them in the VM.**
 
 ### About the network, polkit and QR codes, all new on 2026-09-20
 
+- **A COMMAND THE FRONTEND *RUNS* IS INVISIBLE TO EVERY CHECK THIS REPO HAS.**
+  `ci/base-watch.txt` watches shared LIBRARIES and `require-frontend-libs.sh`
+  reads `ldd`, so a strip pass that removed NetworkManager or polkit would leave
+  a green build, a binary that links perfectly, and a console that cannot see a
+  Wi-Fi network or say why. `net.cpp` needs `/usr/bin/nmcli` and
+  `/usr/bin/pkcheck`; `build.sh` now asserts both. **Anything else that shells
+  out needs the same treatment.**
 - **`pkcheck` PRINTS SEVERAL `key=value` LINES, NOT ONE.** Taking the last `=`
   in its output reports `1` — the value of
   `polkit\56retains_authorization_after_challenge`, which is not even one of the

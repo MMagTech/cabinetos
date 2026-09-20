@@ -132,6 +132,28 @@ grep -q '^u cabinet ' /usr/lib/sysusers.d/cabinetos.conf || {
     exit 1
 }
 
+# The two commands the frontend RUNS rather than links against.
+#
+# NOTHING ELSE WOULD CATCH THESE GOING MISSING. ci/base-watch.txt watches shared
+# LIBRARIES, and require-frontend-libs.sh reads `ldd` — so a strip pass that took
+# NetworkManager or polkit out would leave a green build, a binary that links
+# perfectly, and a console that cannot see a Wi-Fi network or say why. They are
+# a real dependency of frontend/src/net.cpp and they are invisible to every
+# check this repository already has.
+#
+# They are in the base image today: NetworkManager owns nmcli and polkit owns
+# pkcheck. Neither is something CabinetOS installs, and neither should be
+# removed — a console that cannot configure its own network cannot complete
+# first run, which is docs/PROJECT.md open question 15b's one hard gate.
+for needed in /usr/bin/nmcli /usr/bin/pkcheck; do
+    if [[ -x "${needed}" ]]; then
+        log "present: ${needed} ($(rpm -qf "${needed}" 2>/dev/null || echo 'unowned'))"
+    else
+        log "  ERROR: ${needed} is not in this image — frontend/src/net.cpp runs it"
+        exit 1
+    fi
+done
+
 # ---------------------------------------------------------------------------
 # Record the starting package set.
 # ---------------------------------------------------------------------------
