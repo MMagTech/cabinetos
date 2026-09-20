@@ -5618,6 +5618,81 @@ toolkit*.
 The remaining work is open question 13 — producing Linux builds of the same
 cores — not an architectural choice.
 
+### 12b. Every platform audited, and the order the rest get built
+**Audited 2026-09-20 against the running console and against Cabinet's own core
+manifest. The ORDER is MMagTech's decision, the same day.**
+
+36 platforms on the reference server, 1650 games. **1147 play; 503 do not.**
+
+#### CabinetOS ships exactly Cabinet's tvOS core set
+
+All 21, no gaps — the core-parity constraint holding. Read from Cabinet's
+`docs/core-manifest.json`: of its 25 cores, `gw` and `vemulator` are iOS-only by
+Cabinet's own decision, and `dolphin` and `pcsx2` are Mac-only. **Nothing tvOS
+plays is missing here.**
+
+#### The 332 games that are missing, in three tiers
+
+Game & Watch is excluded from this table — see below — which is why it is 332
+and not 503.
+
+| | Games | |
+|---|---|---|
+| **An ordinary libretro core exists and nobody added it** | **73** | Atari Jaguar 48 (`virtualjaguar`), ColecoVision 25 (`gearcoleco`, `bluemsx`) |
+| **Cabinet solved it on macOS and we have not** | **85** | PlayStation 2 71, GameCube 14 — open question 12, and there is a working reference to copy |
+| **Nobody has solved it** | **174** | Switch 109, PS3 32, Vita 27, Xbox 4, Wii 2 |
+
+**The first row is the cheap one and it is nobody's architecture problem.** Both
+cores are on libretro's buildbot as ordinary `.so`s — checked, not recalled —
+and they are excluded only because they are not in Cabinet's manifest. Cabinet
+never played them on any platform, so this is the first place CabinetOS would
+have more systems than its reference implementation. See open question 19.
+
+#### THE HEAVY SYSTEMS ARE COMING TO THIS OS — decided 2026-09-20
+
+> switch, ps3 and xbox will be brought to the OS because we have less
+> constraints to work with in linux and more power. Same with Wii U if I get
+> more games.
+
+That settles a question this document has only ever discussed as a
+recommendation. **The argument is the machine**: these were out of reach on
+Apple hardware for reasons that are not reasons here — no JIT restrictions, a
+real GPU, Vulkan, and a power budget a set-top box does not have.
+
+**The order, and it is deliberate:**
+
+1. **PlayStation 2 and GameCube first.** 85 games, and the only tier where a
+   working implementation already exists to copy. Open question 12 has the
+   numbers: roughly five of Dolphin's eight patch groups and nine of PCSX2's
+   seventeen are Apple or Metal walls **that do not exist on Linux**.
+2. **Then Switch, PS3 and Xbox**, largest first by library — Switch alone is 109
+   games, more than the whole of tier one and two together.
+3. **Wii last, because it has the fewest games** — 2. And it may arrive free:
+   Dolphin does Wii as well as GameCube, so the tier-one work probably carries
+   it. **Nothing should be spent on Wii on its own.**
+4. **Wii U** if the library ever justifies it. Not in the reference library at
+   all today.
+
+**AND THE MAC CORES ARE NOT LIBRETRO CORES, which is the thing to check before
+assuming this is a build job.** `dolphin` builds from `dolphin-emu/dolphin` and
+`pcsx2` from a fork, each with its own script — while all 23 other cores use one
+shared `tools/build-core.sh` against a `libretro/*` repo. Both libretro
+equivalents exist on the buildbot, and Cabinet did not take them. Nobody wrote
+down why, and a dedicated builder for exactly the two systems that have a
+libretro alternative is a decision somebody made after trying. **Read
+`tools/build-dolphin-mac.sh` before believing otherwise.**
+
+#### Game & Watch will not be built — decided 2026-09-20
+
+171 games, and **the largest excluded row in the library by a distance.**
+MMagTech: *"we will not build that in the os as the games are too small on a
+tv."*
+
+It is a decision rather than a gap, and it is not the one Cabinet made — Cabinet
+ships `gw` on iOS and macOS and excluded it from tvOS. The console's own reason
+string now says why THIS machine will not play them rather than what Cabinet
+chose on a phone, because 171 games is the tile most likely to be asked about.
+
 ### 13. Building the same cores for Linux x86-64
 **Raised: Phase 1. Repo layout DECIDED. SCOPED IN PHASE 0, 2026-09-13 — most of
 this is now answered. What remains is listed at the end and is small.**
