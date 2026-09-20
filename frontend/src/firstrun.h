@@ -128,21 +128,26 @@ enum class Step {
     // A link, and it is the ONE HARD GATE in the whole flow. MMagTech,
     // 2026-09-19: the entirety of this OS relies on a RomM server, so a console
     // that cannot reach a network cannot be set up and must not pretend
-    // otherwise. With no cable, joining a Wi-Fi network is the only way past
-    // this step.
-    Network,
-
-    // OFFERED EVEN WHEN ETHERNET IS ALREADY UP, and skippable only then. This
-    // reverses what open question 17 used to say, and the reversal is the point:
-    // Wi-Fi is not a duplicate of the cable, it is the FALLBACK FOR LOSING IT.
-    // A console under a television is exactly where a cable gets tripped over
-    // or borrowed, and a machine whose only route to its server is one cable is
-    // one accident away from being a brick.
+    // otherwise.
     //
-    // And setup is the one moment the fallback is cheap to configure, because
-    // it is the one moment a real keyboard is near-certain. Changing a Wi-Fi
-    // password later from a sofa is not.
-    WiFi,
+    // WI-FI IS PART OF THIS STEP AND NOT A SECOND ONE. It used to be its own
+    // step, offered after the network was up, and that produced a flow which
+    // made you join a network and then showed you a screen headed "Set up
+    // Wi-Fi" — MMagTech, 2026-09-20: *"if the first screen had me setup wifi
+    // then why did the second screen say setup wifi."*
+    //
+    // One screen states the rule exactly, where two only approximated it. The
+    // list of networks is ALWAYS offered; whether you have to use it is decided
+    // by whether anything else is carrying the connection, which is precisely
+    // what this gate already asks. On a cable, Continue is live and the list
+    // sits there for anybody who wants a fallback — so Continue IS the skip,
+    // and there is no second button to explain.
+    //
+    // The fallback still matters and is still the reason the list appears at
+    // all: a console under a television is exactly where a cable gets tripped
+    // over, and setup is the one moment Wi-Fi is cheap to configure because it
+    // is the one moment a real keyboard is near-certain.
+    Network,
 
     // The address of the RomM server. The ONLY thing anybody types in the whole
     // of first run, which is what the QR code at the next step buys.
@@ -187,7 +192,7 @@ struct Facts {
     // Wi-Fi step skippable.
     bool wiredOnline = false;
     bool wifiPresent = false;      // there is a radio at all
-    bool wifiConfigured = false;   // a Wi-Fi connection is saved
+    bool wifiConfigured = false;   // the radio is carrying the connection
 
     bool haveServerAddress = false;
     bool serverAnswered = false;   // something spoke RomM at that address
@@ -248,12 +253,20 @@ private:
     Facts facts_;
 };
 
-// Goes and looks, which is the one thing `Machine` will not do. `client` is
-// asked nothing over the network — only whether it is holding a token — so this
-// is cheap apart from the Wi-Fi status, which shells out to nmcli.
+// Goes and looks, which is the one thing `Machine` will not do.
 //
 // `serverAnswered` is left false: whether an address answers is a question only
 // something that has tried can answer, and trying belongs to the caller.
 Facts observe(const romm::Client& client, int gamepadCount);
+
+// The half that costs nothing — a couple of file tests and a flag. The LINK is
+// deliberately not asked about, because `net::status()` is three or four nmcli
+// round trips and several hundred milliseconds, which is ten frames.
+//
+// WHY THE SPLIT EXISTS. Anything drawing a screen refreshes far more often than
+// a probe does, and it must never pay for a subprocess to do it. A frontend
+// calls this and lets a worker own the link; `observe()` above is for the
+// one-shot reports, where blocking is the whole point.
+Facts observeLocal(const romm::Client& client, int gamepadCount);
 
 }  // namespace firstrun

@@ -1813,7 +1813,6 @@ static int firstRunRules() {
         firstrun::Machine m;
         m.update(f);
 
-        bool skippedWifi = false;
         int guard = 0;
         for (; guard < 16 && !m.finished(); ++guard) {
             const firstrun::Step at = m.step();
@@ -1835,13 +1834,10 @@ static int firstRunRules() {
                 if (copy.skip()) fail("skip() got past a step that may not be skipped", f);
             }
 
+            (void)at;
             if (g == firstrun::Gate::Blocked) break;
-            if (g == firstrun::Gate::Skippable) {
-                if (at == firstrun::Step::WiFi) skippedWifi = true;
-                m.skip();
-            } else {
-                m.advance();
-            }
+            if (g == firstrun::Gate::Skippable) m.skip();
+            else m.advance();
         }
         if (guard >= 16) fail("the chain did not terminate", f);
 
@@ -1852,12 +1848,6 @@ static int firstRunRules() {
             if (!f.serverAnswered)  fail("finished setup with no server answering", f);
             if (!f.havePairedToken) fail("finished setup with no token", f);
         }
-
-        // Wi-Fi may only ever be passed over when something ELSE is already
-        // carrying the connection. Skipping it while offline would leave setup
-        // with no route to the server it is about to ask for.
-        if (skippedWifi && !f.online)
-            fail("skipped Wi-Fi while offline", f);
 
         // A machine with a radio, no cable and no Wi-Fi must not get past the
         // network step at all.
@@ -2733,11 +2723,32 @@ int main(int argc, char** argv) {
     std::vector<romm::Game> games;
     std::vector<screens::Tile> platformTiles, collectionTiles;
 
+    // WHAT THE SCREEN SAYS WHILE THE CONSOLE IS BUSY.
+    //
+    // Everything below blocks: reaching the server, adopting the user, and
+    // pulling a library that is sixteen hundred games on the reference machine.
+    // Until 2026-09-20 the screen showed nothing at all for those seconds — and
+    // for up to ninety of them when the server is not up yet — because the
+    // frame loop does not exist until after all of it.
+    //
+    // MMagTech noticed it as the pause after "Start playing" in first run, but
+    // it is not a first-run fault: it has happened on every boot this console
+    // has ever done. Nobody watches a console boot with a stopwatch.
+    setup::Deps waitDeps;
+    waitDeps.window = window;
+    waitDeps.renderer = &renderer;
+    waitDeps.text = &text;
+
     if (rommAddress) {
         std::string err;
         // Where the cores are, so the catalog can tell "the manifest has a core
         // for this" apart from "this console has it built".
         catalog::setCoreDirectory(coreDir);
+        setup::showWaiting(waitDeps, "Starting up",
+                           std::string("Looking for your server at ")
+                               .append(rommAddress)
+                               .append("…")
+                               .c_str());
         // WAIT FOR THE NETWORK RATHER THAN GIVING UP ON IT.
         //
         // This used to try once and exit 1, and on a console that is a fault
@@ -2785,6 +2796,10 @@ int main(int argc, char** argv) {
             return 1;
         }
         adoptUser(liveClient);
+        // The long one: platforms, every game, collections, recents and
+        // favourites. Sixteen hundred games take several seconds on the
+        // reference machine.
+        setup::showWaiting(waitDeps, "Starting up", "Loading your library…");
         Library lib = loadLibrary(liveClient);
         cards = std::move(lib.cards);
         heroIndex = lib.heroIndex;

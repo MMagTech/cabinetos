@@ -74,6 +74,27 @@ struct Options {
     bool dryRun = false;
 };
 
+// One frame saying the console is busy, drawn in the same language as the setup
+// screens and presented immediately.
+//
+// WHY THIS EXISTS. Pressing "Start playing" is followed by several seconds of
+// blocking work — reaching the server, adopting the user, and pulling a library
+// that is sixteen hundred games on the reference machine — and until this
+// existed the screen simply stopped changing. MMagTech, 2026-09-20: *"after
+// hitting start playing there's a bit of a delay. It sort of seems like maybe
+// it's stalled since nothing indicates the delay."*
+//
+// AND IT IS NOT ONLY AFTER SETUP. The same blocking work runs on EVERY boot, so
+// a console has always shown a blank screen for those seconds — and for up to
+// ninety of them when it is waiting for a server that is not up yet. Nobody had
+// noticed because nobody watches a console boot with a stopwatch; it took
+// somebody pressing a button and expecting something to happen.
+//
+// It is one frame, not a loop: the work it covers is synchronous, so there is
+// nothing to animate against. A still sentence that says what is happening
+// beats a picture that has stopped changing for no stated reason.
+void showWaiting(const Deps& d, const char* title, const char* detail);
+
 enum class Outcome {
     Completed,   // setup finished; the console is configured
     Quit,        // the person quit, or a capture run ended

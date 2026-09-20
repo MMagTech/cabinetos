@@ -113,7 +113,6 @@ bool alreadyConfigured() {
 const char* name(Step s) {
     switch (s) {
         case Step::Network:    return "network";
-        case Step::WiFi:       return "wifi";
         case Step::Server:     return "server";
         case Step::Pair:       return "pair";
         case Step::Controller: return "controller";
@@ -262,27 +261,16 @@ Gate Machine::gate() const {
         case Step::Network:
             // THE ONE HARD GATE. No skip, and none may ever be added: on the
             // far side of it there is no server, so there is nothing to show.
-            return facts_.online ? Gate::Ready : Gate::Blocked;
-
-        case Step::WiFi:
-            // A machine with no radio has nothing to offer here, so this is not
-            // a step it can fail — it is a step it does not have.
-            if (!facts_.wifiPresent) return Gate::Ready;
-            if (facts_.wifiConfigured) return Gate::Ready;
-            // Skippable when SOMETHING ELSE is already carrying the connection
-            // — which is `online`, not `wiredOnline`.
             //
-            // THIS WAS KEYED ON ETHERNET AND IT WAS A LATENT DEADLOCK, found by
-            // walking every combination of facts rather than by reading it
-            // again. The documents say "offered even when Ethernet is up"
-            // because Ethernet is the case anybody has; the RULE is "offered
-            // when you are already online", and the two only coincide while
-            // this console knows about exactly two kinds of link. The day
-            // net.cpp counts a third, a machine online over it would pass the
-            // network gate and then sit at a Wi-Fi step it could neither
-            // satisfy nor skip — setup stuck on a machine that is on the
-            // network.
-            return facts_.online ? Gate::Skippable : Gate::Blocked;
+            // AND IT IS THE WHOLE OF THE WI-FI RULE TOO, now that the two steps
+            // are one. "Offered even when Ethernet is up, skippable then and
+            // required otherwise" is exactly `online ? Ready : Blocked` — the
+            // list is drawn either way, and being online is what decides
+            // whether anybody has to touch it. The old second step needed its
+            // own Skip button to say the same thing, and then said it on a
+            // screen headed "Set up Wi-Fi" to somebody who had just set up
+            // Wi-Fi.
+            return facts_.online ? Gate::Ready : Gate::Blocked;
 
         case Step::Server:
             return facts_.serverAnswered ? Gate::Ready : Gate::Blocked;
@@ -318,18 +306,56 @@ Gate Machine::gate() const {
 std::string Machine::because() const {
     switch (step_) {
         case Step::Network:
-            if (facts_.online) return {};
-            if (!facts_.wifiPresent)
-                return "A network connection is required. Plug in a cable, or "
-                       "share a phone's connection over USB.";
-            return "A network connection is required.";
-
-        case Step::WiFi:
-            if (!facts_.wifiPresent) return "No Wi-Fi hardware.";
-            if (facts_.wifiConfigured) return {};
-            if (facts_.online)
-                return "Optional. A fallback for when the cable is unplugged.";
-            return "Pick a network.";
+            // SIX ANSWERS, AND THE WORD "REQUIRED" OR "OPTIONAL" IS IN ALL THE
+            // ONES WHERE IT IS IN QUESTION.
+            //
+            // MMagTech, 2026-09-20: *"the wording needs to say something along
+            // the lines of wifi is optional but not required and probably
+            // something different if nothing is plugged in."* The old line
+            // described what Wi-Fi would buy and never said you could walk past
+            // it, and the offline line said a connection was required without
+            // saying what to do about it. Neither is a sentence somebody can
+            // act on.
+            if (!facts_.online) {
+                // Nothing is carrying the connection, so this is the hard gate
+                // and the sentence has to end in an instruction.
+                // NO PHONE TETHERING ON THIS SCREEN, and that reverses what
+                // open question 17 decided.
+                //
+                // It used to end "or share a phone's connection over USB",
+                // because tethering presents as an ordinary wired device and
+                // nobody thinks of it. MMagTech, 2026-09-20: *"i dont know if i
+                // like the idea of the phone option, leaves a lot of potential
+                // on me when this doesn't work for people."*
+                //
+                // He is right, and checking the image settles it. Android
+                // tethering is pure kernel — rndis_host and cdc_ncm are in the
+                // image and it simply appears as a wired device. **iPhone
+                // tethering needs usbmuxd**, which is installed but inactive
+                // and `static`, and it needs the phone to TRUST the computer:
+                // a prompt, an unlock and a pairing step, none of which anybody
+                // here has ever run on this console.
+                //
+                // So it is a promise that holds for one phone ecosystem and is
+                // untested for the other, offered on the one screen where
+                // somebody is already stuck and out of options. A console
+                // should not suggest a fix it has never seen work. It stays in
+                // the documentation as a trick; it does not go on a television.
+                if (!facts_.wifiPresent)
+                    return "A network connection is required. Plug in a cable.";
+                return "A network connection is required. Pick a network to "
+                       "join, or plug in a cable.";
+            }
+            // Online. What is carrying it, and whether anything below is worth
+            // touching.
+            if (facts_.wiredOnline && facts_.wifiConfigured)
+                return "Connected over Ethernet, with Wi-Fi set up as a "
+                       "fallback.";
+            if (facts_.wifiConfigured) return "Connected over Wi-Fi.";
+            if (!facts_.wifiPresent) return "Connected over Ethernet.";
+            return "Connected over Ethernet. Wi-Fi is optional — setting it up "
+                   "now gives the console a way back if the cable is ever "
+                   "unplugged.";
 
         case Step::Server:
             if (facts_.serverAnswered) return {};
@@ -385,19 +411,8 @@ bool Machine::openAt(const std::string& stepName) {
 
 // --- Going and looking ------------------------------------------------------
 
-Facts observe(const romm::Client& client, int gamepadCount) {
+Facts observeLocal(const romm::Client& client, int gamepadCount) {
     Facts f;
-
-    const net::Status s = net::status();
-    f.online = s.online;
-    f.wiredOnline = s.ethernetUp;
-    f.wifiPresent = s.wifiPresent;
-    // A radio that is up is by definition configured; one that is merely
-    // enabled is not. Asking NetworkManager for saved profiles would be a
-    // second shell-out for a fact the status already implies, and a saved
-    // profile that has never connected is not a working fallback anyway.
-    f.wifiConfigured = s.wifiUp;
-
     f.haveServerAddress = !serverAddress().empty();
     // Only something that has tried can set these two; see the header.
     f.serverChecked = false;
@@ -407,6 +422,20 @@ Facts observe(const romm::Client& client, int gamepadCount) {
     f.serverAnswered = false;
 
     f.gamepadCount = gamepadCount;
+    return f;
+}
+
+Facts observe(const romm::Client& client, int gamepadCount) {
+    Facts f = observeLocal(client, gamepadCount);
+    const net::Status s = net::status();
+    f.online = s.online;
+    f.wiredOnline = s.ethernetUp;
+    f.wifiPresent = s.wifiPresent;
+    // A radio that is up is by definition configured; one that is merely
+    // enabled is not. Asking NetworkManager for saved profiles would be a
+    // second shell-out for a fact the status already implies, and a saved
+    // profile that has never connected is not a working fallback anyway.
+    f.wifiConfigured = s.wifiUp;
     return f;
 }
 

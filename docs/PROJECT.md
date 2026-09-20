@@ -8404,9 +8404,25 @@ naming the rule file.
    costs nothing beyond saying it on screen.
 4. **A phone on a USB cable.** Enable tethering and the console is online
    immediately — NetworkManager picks it up as an ordinary ethernet device with
-   no configuration at all. **This already works and needs no code.** It is
-   worth naming on the screen because nobody thinks of it, and it turns an
-   unreachable console into a connected one in seconds.
+   no configuration at all.
+
+   **NOT NAMED ON THE SCREEN, reversed 2026-09-20.** This used to say it was
+   worth naming because nobody thinks of it. MMagTech's objection, and it is the
+   right one: *"i dont know if i like the idea of the phone option, leaves a lot
+   of potential on me when this doesn't work for people."*
+
+   Checking the image settles it. **Android tethering is pure kernel** —
+   `rndis_host` and `cdc_ncm` ship in the image and the phone simply appears as
+   a wired device. **iPhone tethering needs `usbmuxd`**, which is installed but
+   `inactive` and `static`, and it needs the phone to TRUST the computer: a
+   prompt, an unlock and a pairing step, none of which has ever been run on this
+   console.
+
+   So it is a promise that holds for one phone ecosystem and is untested for the
+   other — offered on the one screen where somebody is already stuck and out of
+   options. **A console should not suggest a fix it has never seen work.** It
+   stays here as a trick for whoever is setting a machine up; it does not go on
+   a television until somebody has done it and it worked.
 
 #### Against the console running its own access point
 

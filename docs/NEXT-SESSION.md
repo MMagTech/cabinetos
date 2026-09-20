@@ -784,6 +784,31 @@ These are ordered. **Do not begin any of them in the VM.**
   `base + verification_path_complete` from `/api/auth/device/init`, and on RomM
   5.1.0 that is `/pair/device?user_code=…`. A fabricated one produces a QR that
   scans perfectly and lands on a page saying the code does not exist.
+- **ANYTHING FROM OUTSIDE THIS PROCESS IS A SNAPSHOT WITH A COST, AND EVERY
+  SCREEN SHOWING ONE OWES TWO ANSWERS: WHO REFRESHES IT, AND ON WHICH THREAD.**
+  That one sentence covers seven bugs found in an hour of walking first run on
+  the television. Neither the Wi-Fi list nor the Bluetooth list had an answer to
+  the first — both went on reporting what was true a minute ago, and a deleted
+  Wi-Fi profile left a row claiming to be connected AND saved, so pressing it
+  tried to join with no password. Four calls had the wrong answer to the second,
+  the worst being `bt::adapter()` inside `rebuild()`: **two subprocesses every
+  two seconds, for ever, to choose the wording of one row.**
+- **A BLOCKING CALL ON THE FRAME THREAD LOOKS EXACTLY LIKE A WORKING FRAME IN A
+  SCREENSHOT.** `bt::known()` ran there after a successful pairing — one process
+  to list devices and another PER DEVICE, twenty-odd on a real scan — so the
+  console froze for seconds at the moment it had just said "Controller ready."
+- **THE CONSOLE SHOWED A BLANK SCREEN ON EVERY BOOT AND NOBODY HAD NOTICED.**
+  Reaching the server, adopting the user and pulling sixteen hundred games all
+  happen before the frame loop exists — seconds normally, up to NINETY when the
+  server is not up yet. It took somebody pressing "Start playing" and expecting
+  something to happen. `setup::showWaiting` now draws a still frame naming the
+  stage. Nobody watches a console boot with a stopwatch.
+- **A `void` FUNCTION THAT ENDS A SESSION TELLS NOBODY IT DID.**
+  `Keyboard::pressKey` handled its own "done" and "cancel" keys internally, so
+  driving the on-screen keyboard with a CONTROLLER and pressing A on "done"
+  closed the panel and threw away what had been typed. The physical keyboard's
+  Return worked, which is exactly why it survived. Three call sites doing the
+  same job is what let one of them go unwired.
 - **A SCREEN THAT WAITS FOR SOMETHING MUST KEEP LOOKING, AND MUST FETCH WHAT IT
   NEEDS RATHER THAN WHAT ITS ENTRY POINT NEEDED.** First run's network step read
   the facts once on arrival and started its Wi-Fi scan the same way. Enter it on

@@ -234,8 +234,22 @@ private:
 constexpr float kInset = 80.0f;
 constexpr float kDotsY = 96.0f;
 constexpr float kTitleTop = 150.0f;
-constexpr float kProseWidth = 700.0f;
-constexpr float kPanelX = 880.0f;
+
+// THE GUTTER BETWEEN THE TWO COLUMNS IS SET BY THE TITLE, NOT BY THE PROSE.
+//
+// The prose wraps and can be any width you like; the TITLE does not. At 76pt,
+// "Connect to Network" runs to about x=850 on the 1920 canvas, and the panel
+// used to start at 880 — thirty points of air between the largest text on the
+// screen and a filled rectangle. Every screen read as cramped down the middle
+// and it was always the same thirty points.
+//
+// Reported by MMagTech, 2026-09-20, looking at it on the television.
+//
+// So the panel starts at 1020, which leaves about 170 points of gutter past the
+// longest title this flow has. That takes width off the panel, which it can
+// afford: a row holds a network name and one short word, and the QR is 470.
+constexpr float kProseWidth = 760.0f;
+constexpr float kPanelX = 1020.0f;
 constexpr float kPanelY = 168.0f;
 constexpr float kPanelW = ui::kCanvasWidth - kPanelX - kInset;
 constexpr float kPanelH = 660.0f;
@@ -250,6 +264,10 @@ struct Row {
     bool enabled = true;
     int value = 0;          // index into whatever list the step is showing
     Animated focus;
+    // Where `draw` last put it, in canvas points, so a pointer can be asked
+    // what it is over. Written by the draw pass and read by the event pass on
+    // the frame after, which is the same order `DetailScreen` already relies on.
+    float x = 0, y = 0, w = 0, h = 0;
 };
 
 // What pressing a footer button means. Named rather than positional, because
@@ -262,6 +280,7 @@ struct Button {
     std::string label;
     bool enabled = true;
     Animated focus;
+    float x = 0, y = 0, w = 0, h = 0;
 };
 
 // What the on-screen keyboard is currently filling in. One field at a time, and
@@ -291,6 +310,24 @@ private:
     bool anyEnabledRow() const;
     void moveFocus(int dy);
     void moveAction(int dx);
+    // A MOUSE MOVES FOCUS AND CLICKS THE FOCUSED THING, AND NOTHING ELSE.
+    //
+    // docs/PROJECT.md open question 16, answered 2026-09-19. Once the KEYBOARD
+    // became the guaranteed input, the mouse had nothing it uniquely enabled —
+    // so it gets the cheap treatment: a second way to drive the one model that
+    // exists, rather than a second model. No cursor of our own, no hover
+    // treatment, no click targets that are not already focus targets.
+    //
+    // Returns true when the pointer is over something focusable.
+    bool pointAt(float windowX, float windowY);
+    bool canvasPoint(float windowX, float windowY, float* cx, float* cy) const;
+
+    // ONE PLACE WHERE A FILLED-IN FIELD IS ACTED ON, whichever of the three
+    // inputs finished it: Return on a physical keyboard, Start or A-on-"done"
+    // with a controller, or a click on "done". Three call sites meant the
+    // controller's own "done" key was the one nobody had wired up, and what had
+    // been typed was thrown away in silence.
+    void typingFinished(ui::KeyboardResult result, const std::string& value);
     void activate();
     void goBack();
 
@@ -368,6 +405,17 @@ private:
     // Controller
     std::vector<bt::Device> devices_;
     int chosenDevice_ = -1;
+    // The cheap refresh, separate from the ten-second discovery: asks the
+    // adapter what it already knows. Still a job, because "cheap" here is one
+    // subprocess plus one more per device.
+    Job<std::vector<bt::Device>> btKnownJob_;
+    uint64_t lastBtKnownNS_ = 0;
+    // CACHED, because asking costs two subprocesses and `rebuild()` runs on
+    // every status tick. This was called straight from the panel code, so a
+    // console sitting on the controller step forked `bluetoothctl` twice every
+    // two seconds, for ever, to decide the wording of one row.
+    bt::Adapter btAdapter_;
+    bool btAdapterKnown_ = false;
     bool showAllDevices_ = false;
     int hiddenDevices_ = 0;
     Job<std::vector<bt::Device>> btScanJob_;
@@ -384,7 +432,6 @@ private:
 const char* Flow::title() const {
     switch (machine_.step()) {
         case firstrun::Step::Network:    return "Connect to Network";
-        case firstrun::Step::WiFi:       return "Set up Wi-Fi";
         case firstrun::Step::Server:     return "RomM Server";
         case firstrun::Step::Pair:       return "Pair with RomM";
         case firstrun::Step::Controller: return "Pair a Controller";
@@ -404,13 +451,7 @@ std::string Flow::prose() const {
     const std::string why = machine_.because();
     switch (machine_.step()) {
         case firstrun::Step::Network:
-            if (!facts_.online) return why;
-            return facts_.wiredOnline ? "Connected over Ethernet."
-                                      : "Connected over Wi-Fi.";
-
-        case firstrun::Step::WiFi:
             if (joinJob_.busy()) return "Joining…";
-            if (facts_.wifiConfigured) return "Connected.";
             return why;
 
         case firstrun::Step::Server:
@@ -453,13 +494,23 @@ std::string Flow::prose() const {
 
 // --- Looking at the machine -------------------------------------------------
 
+// THE LINK IS NOT ASKED ABOUT HERE, and that is the point.
+//
+// This used to call net::status() — three or four nmcli round trips — and it is
+// called on every step transition, so pressing Continue cost a visible hitch on
+// the frame thread. The link is the status watcher's job (see `statusJob_`), it
+// is never more than two seconds old, and everything left in here is a file
+// test.
 void Flow::observe() {
     const firstrun::Facts before = facts_;
-    netStatus_ = net::status();
-    facts_ = firstrun::observe(client_, SDL_HasGamepad() ? 1 : 0);
-    // These two are not things `observe` can know: only something that has
-    // tried can say whether a server answered, and the token may have arrived
-    // in this very session.
+    facts_ = firstrun::observeLocal(client_, SDL_HasGamepad() ? 1 : 0);
+    // Carried over rather than re-derived. The link belongs to the watcher;
+    // only something that has TRIED can say whether a server answered; and the
+    // token may have arrived in this very session.
+    facts_.online = before.online;
+    facts_.wiredOnline = before.wiredOnline;
+    facts_.wifiPresent = before.wifiPresent;
+    facts_.wifiConfigured = before.wifiConfigured;
     facts_.serverAnswered = before.serverAnswered;
     facts_.serverChecked = before.serverChecked;
     facts_.havePairedToken = before.havePairedToken || facts_.havePairedToken;
@@ -476,6 +527,7 @@ void Flow::enterStep() {
     moved_ = false;
     showAllDevices_ = false;
     hiddenDevices_ = 0;
+    lastBtKnownNS_ = 0;
     stepFade_.from = 0.0f;
     stepFade_.to = 1.0f;
     stepFade_.elapsed = 0.0f;
@@ -484,20 +536,15 @@ void Flow::enterStep() {
 
     switch (machine_.step()) {
         case firstrun::Step::Network:
-        case firstrun::Step::WiFi:
             // Draw whatever NetworkManager already knows immediately, then ask
             // the radio to look again. A screen that shows nothing for five
             // seconds reads as broken even when it is working.
-            //
-            // Not scanned at all on the network step when something is already
-            // carrying the connection: there is no list to fill, and spinning
-            // the radio for a panel nobody will see is work for nothing.
-            if (facts_.wifiPresent &&
-                !(machine_.step() == firstrun::Step::Network && facts_.online)) {
-                std::string err;
-                net::cachedScan(&networks_, &err);
-                startWifiScan();
-            }
+            // ASKED FOR, NOT FETCHED HERE. This used to call cachedScan on
+            // the frame thread for an instant list — one subprocess, plus one
+            // more for every saved profile. Zeroing the clock makes the watcher
+            // scan on its very next pump instead, which costs a few frames of
+            // "Looking for networks…" and no stutter at all.
+            lastScanNS_ = 0;
             break;
         case firstrun::Step::Server:
             address_ = firstrun::serverAddress();
@@ -537,43 +584,27 @@ void Flow::rebuild() {
 
     switch (machine_.step()) {
         case firstrun::Step::Network: {
-            // ONLINE ALREADY? THEN SAY SO AND SHOW NOTHING ELSE.
-            //
-            // This used to draw the Wi-Fi list, which meant somebody on a cable
-            // saw the same list of networks twice in a row — once here under
-            // "Connected over Ethernet", where it was irrelevant, and again on
-            // the Wi-Fi step where it belongs. Two screens that look the same
-            // read as the flow having gone backwards.
-            //
-            // The list appears here only when there is no other way forward.
-            if (facts_.online) {
-                Row r;
-                r.title = facts_.wiredOnline ? "Ethernet" : netStatus_.connection;
-                r.detail = netStatus_.ipv4.empty() ? "connected" : netStatus_.ipv4;
-                r.enabled = false;
-                rows_.push_back(std::move(r));
-                break;
-            }
+            // NO RADIO: there is no list to draw, so the panel shows the link
+            // instead — or says there is not one.
             if (!facts_.wifiPresent) {
                 Row r;
-                r.title = "No network";
-                r.detail = "plug in a cable";
+                if (facts_.online) {
+                    r.title = "Ethernet";
+                    r.detail = netStatus_.ipv4.empty() ? "connected" : netStatus_.ipv4;
+                } else {
+                    r.title = "No network";
+                    r.detail = "plug in a cable";
+                }
                 r.enabled = false;
                 rows_.push_back(std::move(r));
                 break;
             }
-        }
-            [[fallthrough]];
+            // WITH A RADIO THE LIST IS ALWAYS DRAWN, on a cable or not. That is
+            // the whole of the Wi-Fi rule: offered either way, and the gate
+            // decides whether anybody has to use it. The row for the network
+            // already carrying the connection says so, so a person on Wi-Fi can
+            // see at a glance that this screen is already satisfied.
 
-        case firstrun::Step::WiFi: {
-            if (!facts_.wifiPresent) {
-                Row r;
-                r.title = "No Wi-Fi on this console";
-                r.detail = "wired only";
-                r.enabled = false;
-                rows_.push_back(std::move(r));
-                break;
-            }
             if (scanJob_.busy() && networks_.empty()) {
                 Row r;
                 r.title = "Looking for networks…";
@@ -594,9 +625,16 @@ void Flow::rebuild() {
                 Row r;
                 r.title = n.ssid;
                 r.value = static_cast<int>(i);
+                // WHICH ONE IS CONNECTED COMES FROM THE LIVE STATUS, not from
+                // the scan. The scan's own IN-USE column is a snapshot and the
+                // status is re-read every two seconds, so this stays right even
+                // in the seconds before a refreshed list arrives.
+                const bool active =
+                    netStatus_.wifiUp && !netStatus_.connection.empty() &&
+                    netStatus_.connection == n.ssid;
                 // The right-hand side answers "what will happen if I press
                 // this" rather than reporting a signal nobody can act on.
-                r.detail = n.active      ? "connected"
+                r.detail = active        ? "connected"
                            : n.enterprise ? "not supported"
                            : n.known      ? "saved"
                            : n.secured    ? "password"
@@ -651,8 +689,9 @@ void Flow::rebuild() {
                 // The three-state rule: no adapter is a different sentence from
                 // nothing found, and a machine with no Bluetooth must never be
                 // shown a spinner it will never finish.
-                r.title = bt::adapter().present ? "Nothing found yet"
-                                                : "This console has no Bluetooth";
+                r.title = (!btAdapterKnown_ || btAdapter_.present)
+                              ? "Nothing found yet"
+                              : "This console has no Bluetooth";
                 r.enabled = false;
                 rows_.push_back(std::move(r));
                 break;
@@ -713,10 +752,6 @@ void Flow::rebuild() {
     // would be asking the machine a question it deliberately will not answer.
     switch (machine_.step()) {
         case firstrun::Step::Network:
-            if (facts_.wifiPresent && !facts_.online)
-                buttons_.push_back({Act::Rescan, "Scan again", !scanJob_.busy(), {}});
-            break;
-        case firstrun::Step::WiFi:
             if (facts_.wifiPresent)
                 buttons_.push_back({Act::Rescan, "Scan again", !scanJob_.busy(), {}});
             break;
@@ -739,6 +774,18 @@ void Flow::rebuild() {
             break;
     }
 
+    // CONTINUE IS THE SKIP, AND THE PROSE SAYS SO RATHER THAN THE BUTTON.
+    //
+    // Folding Wi-Fi into the network step means there is no second button:
+    // being online is the whole rule, so pressing on IS declining the optional
+    // half. That was briefly spelled out on the button itself — "Continue
+    // without Wi-Fi" — and MMagTech's call was to take it back off:
+    // *"continue was fine if you let the wording carry it."*
+    //
+    // He is right. The sentence beside it already says the console is connected
+    // over Ethernet and what Wi-Fi would buy; a button that restates the
+    // sentence is a second voice saying the same thing, and it grows every time
+    // a step gains an optional half.
     if (machine_.step() == firstrun::Step::Done) {
         buttons_.push_back({Act::Finish, "Start playing", true, {}});
     } else if (gate == firstrun::Gate::Skippable) {
@@ -755,13 +802,34 @@ void Flow::rebuild() {
     // has just been replaced by a placeholder must move focus to the buttons,
     // or the screen becomes unusable without anything looking wrong.
     row_ = std::max(0, std::min(keepRow, static_cast<int>(rows_.size()) - 1));
-    // A LIST THAT ARRIVES WHILE NOBODY HAS TOUCHED ANYTHING TAKES FOCUS. Every
-    // one of these screens starts with a placeholder and fills in seconds
-    // later, so without this focus is left on the footer and the thing the
-    // person came here to pick is never under the cursor.
-    if (!moved_ && onFooter_ && anyEnabledRow()) {
-        onFooter_ = false;
-        row_ = nextEnabledRow(0, +1);
+    // WHERE FOCUS SITS BEFORE ANYBODY HAS TOUCHED ANYTHING SAYS WHAT THE STEP
+    // WANTS — and the network step wants two different things depending on
+    // whether it is already satisfied.
+    //
+    // MMagTech, 2026-09-20: *"if ethernet is connected will this screen allow me
+    // to skip and not need wifi."* It does — Continue is live and the list is
+    // optional — but focus was landing on the first network in the list, which
+    // is an invitation to pick one. The answer to "do I have to do this?" ought
+    // to be visible without pressing anything.
+    //
+    // So: a step that is ALREADY SATISFIED puts focus on the way out, and a
+    // step that is BLOCKED puts it on the thing that unblocks it. Once somebody
+    // moves, it is theirs and this stops interfering.
+    if (!moved_) {
+        const bool satisfied = gate == firstrun::Gate::Ready;
+        int continueAt = -1;
+        for (size_t i = 0; i < buttons_.size(); ++i)
+            if (buttons_[i].act == Act::Continue || buttons_[i].act == Act::Finish)
+                continueAt = static_cast<int>(i);
+        if (satisfied && continueAt >= 0) {
+            onFooter_ = true;
+            button_ = continueAt;
+        } else if (anyEnabledRow()) {
+            onFooter_ = false;
+            row_ = nextEnabledRow(0, +1);
+        } else if (!buttons_.empty()) {
+            onFooter_ = true;
+        }
     }
     if (!anyEnabledRow()) {
         onFooter_ = true;
@@ -770,6 +838,32 @@ void Flow::rebuild() {
         row_ = down >= 0 ? down : nextEnabledRow(row_, -1);
     }
     button_ = std::max(0, std::min(button_, static_cast<int>(buttons_.size()) - 1));
+
+    // THE FLASHING.
+    //
+    // Rebuilding throws the old rows and buttons away, and each new one arrives
+    // with a fresh `Animated` sitting at zero — so the focused thing fades up
+    // from nothing every single time. That was invisible while rebuilds only
+    // happened when somebody pressed something, and became a steady blink the
+    // moment the link began being re-read every two seconds: Continue pulsing
+    // on a screen nobody was touching.
+    //
+    // Reported by MMagTech, 2026-09-20, watching it on the television.
+    //
+    // So focus is SETTLED rather than animated after a rebuild — the focused
+    // item starts already lit. Moving focus still animates, because `tick`
+    // retargets and a retarget to a value the animation is not already at is
+    // what starts one.
+    for (size_t i = 0; i < rows_.size(); ++i) {
+        const bool focused = !onFooter_ && static_cast<int>(i) == row_;
+        rows_[i].focus.from = rows_[i].focus.to = focused ? 1.0f : 0.0f;
+        rows_[i].focus.elapsed = rows_[i].focus.duration;
+    }
+    for (size_t i = 0; i < buttons_.size(); ++i) {
+        const bool focused = onFooter_ && static_cast<int>(i) == button_;
+        buttons_[i].focus.from = buttons_[i].focus.to = focused ? 1.0f : 0.0f;
+        buttons_[i].focus.elapsed = buttons_[i].focus.duration;
+    }
 }
 
 // --- Starting the blocking things -------------------------------------------
@@ -865,7 +959,11 @@ void Flow::pollPairing() {
 
 void Flow::startBtScan() {
     if (btScanJob_.busy()) return;
-    if (!bt::adapter().present) return;
+    // The cached answer, and only once it is known. Before the first refresh
+    // lands the scan is allowed through: bt::scan() checks the adapter itself
+    // and says so properly, which is a better answer than silently doing
+    // nothing.
+    if (btAdapterKnown_ && !btAdapter_.present) return;
     btScanJob_.start([](std::vector<bt::Device>& out, std::string& err) {
         // Ten seconds: the sensible floor for a pad somebody has only just put
         // into pairing mode, and short enough that "Scan again" is a reasonable
@@ -915,6 +1013,7 @@ void Flow::pumpJobs() {
     }
     if (net::Status st; statusJob_.take(&st, &err, &ok)) {
         const bool wasOnline = facts_.online;
+        const bool wasWifiUp = facts_.wifiConfigured;
         netStatus_ = st;
         facts_.online = st.online;
         facts_.wiredOnline = st.ethernetUp;
@@ -924,10 +1023,27 @@ void Flow::pumpJobs() {
         // A LINK THAT ARRIVES WHILE THE NETWORK STEP IS BLOCKED IS THE ANSWER
         // TO THAT STEP, so say so rather than silently ungreying a button.
         if (!wasOnline && st.online &&
-            (machine_.step() == firstrun::Step::Network ||
-             machine_.step() == firstrun::Step::WiFi)) {
+            machine_.step() == firstrun::Step::Network) {
             notice_ = st.ethernetUp ? "Connected over Ethernet." : "Connected.";
             noticeIsError_ = false;
+        }
+        // A LINK THAT CHANGES MAKES THE LIST WRONG, not just the sentence. Both
+        // "this is the one you are on" and "this one needs no password" are
+        // properties of the moment the scan was taken, and losing or gaining a
+        // connection changes both.
+        if (st.online != wasOnline || st.wifiUp != wasWifiUp) lastScanNS_ = 0;
+
+        // LOSING THE LINK UNDOES "the server answered", because it did — a
+        // moment ago, over a connection that is gone. The same snapshot problem
+        // one step along: without this the server step goes on saying
+        // "Connected." with no network at all, Continue stays live, and the
+        // failure surfaces two screens later as a pairing that will not start.
+        if (wasOnline && !st.online) {
+            facts_.serverAnswered = false;
+            facts_.serverChecked = false;
+            machine_.update(facts_);
+            notice_ = "The network connection was lost.";
+            noticeIsError_ = true;
         }
         changed = true;
     }
@@ -945,12 +1061,27 @@ void Flow::pumpJobs() {
     // Found by MMagTech, 2026-09-20, unplugging the cable.
     {
         const bool needList =
-            facts_.wifiPresent &&
-            (machine_.step() == firstrun::Step::WiFi ||
-             (machine_.step() == firstrun::Step::Network && !facts_.online));
-        constexpr uint64_t kScanEveryNS = 8000000000ull;
-        if (needList && networks_.empty() && !scanJob_.busy() &&
-            SDL_GetTicksNS() - lastScanNS_ > kScanEveryNS) {
+            facts_.wifiPresent && machine_.step() == firstrun::Step::Network;
+        // A LIST IS REFRESHED, NOT JUST FILLED.
+        //
+        // This was gated on `networks_.empty()`, so the first scan populated it
+        // and nothing ever looked again. Two of the three things a row says are
+        // properties of the moment the scan was taken — whether it is the
+        // network you are ON, and whether it is one the console already KNOWS —
+        // and both go stale the instant anything about the link changes.
+        //
+        // MMagTech, 2026-09-20, having had the saved network deleted out from
+        // under a screen that was already showing it: *"the wifi still says its
+        // connected and gave an error... i dont think it was actually connected
+        // just the ui said it still was."* The row still claimed to be
+        // connected AND still claimed to be saved, so pressing it tried to join
+        // with no passphrase and failed. One stale list, both symptoms.
+        //
+        // Empty gets an eager retry; a list that already has something in it is
+        // refreshed on a slower clock, and immediately whenever the link moves.
+        const uint64_t since = SDL_GetTicksNS() - lastScanNS_;
+        const uint64_t due = networks_.empty() ? 8000000000ull : 20000000000ull;
+        if (needList && !scanJob_.busy() && since > due) {
             lastScanNS_ = SDL_GetTicksNS();
             startWifiScan();
             changed = true;
@@ -981,7 +1112,30 @@ void Flow::pumpJobs() {
             notice_ = "Joined.";
             noticeIsError_ = false;
             observe();
-            startWifiScan();
+            lastScanNS_ = 0;      // the list's "connected" and "saved" just moved
+        } else if (chosenNetwork_ >= 0 &&
+                   chosenNetwork_ < static_cast<int>(networks_.size()) &&
+                   networks_[static_cast<size_t>(chosenNetwork_)].secured &&
+                   (err.find("Secrets") != std::string::npos ||
+                    err.find("secrets") != std::string::npos ||
+                    err.find("password") != std::string::npos)) {
+            // A NETWORK THE CONSOLE THOUGHT IT KNEW AND DOES NOT. NetworkManager
+            // answers "Secrets were required, but not provided", which is true
+            // and is not something a person can act on — and the remedy is
+            // obvious, so do it rather than printing the sentence and stopping.
+            //
+            // This is the safety net under the stale-list fix above rather than
+            // a substitute for it: the list should already be right, and if it
+            // ever is not, the screen asks for the password instead of dying.
+            const net::Network& n = networks_[static_cast<size_t>(chosenNetwork_)];
+            ui::Keyboard::Config cfg;
+            cfg.title = n.ssid;
+            cfg.hint = "The password for this network";
+            cfg.conceal = false;
+            keyboard_.open(cfg);
+            typing_ = Typing::Passphrase;
+            notice_.clear();
+            lastScanNS_ = 0;
         } else {
             notice_ = err;
             noticeIsError_ = true;
@@ -1082,10 +1236,45 @@ void Flow::pumpJobs() {
         noticeIsError_ = !paired;
         if (paired) {
             observe();
-            std::string berr;
-            bt::known(&devices_, &berr);
+            // THIS USED TO CALL bt::known() RIGHT HERE, ON THE FRAME THREAD.
+            // That is one subprocess to list the devices and ANOTHER PER DEVICE
+            // to describe it — a real scan on the A9 found twenty-odd — so the
+            // console froze solid for several seconds at the exact moment it
+            // had just told somebody their controller was ready. Ask for a
+            // refresh instead and let the worker do it.
+            lastBtKnownNS_ = 0;
         }
         changed = true;
+    }
+
+    if (std::vector<bt::Device> refreshed; btKnownJob_.take(&refreshed, &err, &ok)) {
+        // Only replaces the list when the adapter actually answered. A failed
+        // refresh must not blank a list somebody is looking at.
+        if (ok && !refreshed.empty()) devices_ = std::move(refreshed);
+        changed = true;
+    }
+
+    // THE SAME STALENESS THE WI-FI LIST HAD, and MMagTech spotted it in the
+    // same breath. "paired" and "connected" are properties of the moment the
+    // list was taken: wake a pad, or pair one, and every row goes on saying
+    // what was true a minute ago. Discovery is expensive and stays on its
+    // button; asking the adapter what it already knows is not, so that runs on
+    // a clock.
+    //
+    // Never while a discovery or a pairing is in flight — bluetoothctl does not
+    // want two of these at once, and the answers would race.
+    if (machine_.step() == firstrun::Step::Controller && !btScanJob_.busy() &&
+        !btPairJob_.busy() && !btKnownJob_.busy() &&
+        SDL_GetTicksNS() - lastBtKnownNS_ > 5000000000ull) {
+        lastBtKnownNS_ = SDL_GetTicksNS();
+        btKnownJob_.start([this](std::vector<bt::Device>& out, std::string& e) {
+            // The adapter comes back on the same trip. Writing it from the
+            // worker is safe because nothing else ever writes it, and the frame
+            // thread only reads it to pick a word.
+            btAdapter_ = bt::adapter();
+            btAdapterKnown_ = true;
+            return bt::known(&out, &e);
+        });
     }
 
     if (changed) rebuild();
@@ -1135,6 +1324,65 @@ void Flow::moveFocus(int dy) {
             row_ = last;
         }
     }
+}
+
+// Window pixels to canvas points, through the letterbox.
+//
+// The renderer scales the 1920x1080 canvas to fit and centres it, so a pointer
+// in window space is not in canvas space on any display that is not exactly
+// 16:9 — and the bars are real estate the pointer can sit in and nothing can be
+// under it.
+bool Flow::canvasPoint(float windowX, float windowY, float* cx, float* cy) const {
+    int dw = 0, dh = 0, lw = 0, lh = 0;
+    SDL_GetWindowSizeInPixels(d_.window, &dw, &dh);
+    SDL_GetWindowSize(d_.window, &lw, &lh);
+    if (dw <= 0 || dh <= 0 || lw <= 0 || lh <= 0) return false;
+    // SDL reports the pointer in the window's logical space, which is not the
+    // pixel space on a scaled display.
+    const float px = windowX * (static_cast<float>(dw) / static_cast<float>(lw));
+    const float py = windowY * (static_cast<float>(dh) / static_cast<float>(lh));
+
+    const float sc = std::min(static_cast<float>(dw) / ui::kCanvasWidth,
+                              static_cast<float>(dh) / ui::kCanvasHeight);
+    if (sc <= 0.0f) return false;
+    *cx = (px - (dw - ui::kCanvasWidth * sc) * 0.5f) / sc;
+    *cy = (py - (dh - ui::kCanvasHeight * sc) * 0.5f) / sc;
+    return true;
+}
+
+void Flow::typingFinished(ui::KeyboardResult result, const std::string& value) {
+    if (result == ui::KeyboardResult::Committed) {
+        if (typing_ == Typing::Address) startServerProbe(value);
+        else if (typing_ == Typing::Passphrase) joinSelected(value);
+    }
+    if (result != ui::KeyboardResult::Typing) typing_ = Typing::None;
+    rebuild();
+}
+
+bool Flow::pointAt(float windowX, float windowY) {
+    float cx = 0, cy = 0;
+    if (!canvasPoint(windowX, windowY, &cx, &cy)) return false;
+
+    auto inside = [&](float x, float y, float w, float h) {
+        return cx >= x && cx <= x + w && cy >= y && cy <= y + h;
+    };
+    for (size_t i = 0; i < rows_.size(); ++i) {
+        if (!rows_[i].enabled) continue;
+        if (!inside(rows_[i].x, rows_[i].y, rows_[i].w, rows_[i].h)) continue;
+        moved_ = true;
+        onFooter_ = false;
+        row_ = static_cast<int>(i);
+        return true;
+    }
+    for (size_t i = 0; i < buttons_.size(); ++i) {
+        if (!buttons_[i].enabled) continue;
+        if (!inside(buttons_[i].x, buttons_[i].y, buttons_[i].w, buttons_[i].h)) continue;
+        moved_ = true;
+        onFooter_ = true;
+        button_ = static_cast<int>(i);
+        return true;
+    }
+    return false;
 }
 
 void Flow::moveAction(int dx) {
@@ -1197,8 +1445,7 @@ void Flow::activate() {
     if (!r.enabled) return;
 
     switch (machine_.step()) {
-        case firstrun::Step::Network:
-        case firstrun::Step::WiFi: {
+        case firstrun::Step::Network: {
             chosenNetwork_ = r.value;
             const net::Network& n = networks_[static_cast<size_t>(r.value)];
             // A saved or open network needs nothing typed. That is not a
@@ -1266,7 +1513,9 @@ void Flow::draw() {
     // shape somebody can see the end of at a glance, which is the one thing a
     // setup flow owes a person who does not know how long it is.
     {
-        constexpr int kSteps = 5;
+        // One per step, Done excluded — it is the end, not a stop along the
+        // way.
+        constexpr int kSteps = 4;
         const int at = static_cast<int>(machine_.step());
         for (int i = 0; i < kSteps; ++i) {
             Rect dot;
@@ -1360,13 +1609,18 @@ void Flow::draw() {
         float ry = kPanelY + 20.0f;
         for (size_t i = static_cast<size_t>(first);
              i < rows_.size() && static_cast<int>(i) - first < visible; ++i) {
-            const Row& row = rows_[i];
+            Row& row = rows_[i];
             const float f = row.focus.value();
             Rect box;
             box.x = kPanelX + 18.0f;
             box.y = ry;
             box.w = kPanelW - 36.0f;
             box.h = kRowH;
+            // Remembered so a pointer can be asked what it is over.
+            rows_[i].x = box.x;
+            rows_[i].y = box.y;
+            rows_[i].w = box.w;
+            rows_[i].h = box.h;
             box.radius = design::kRowRadius;
             box.fill = Color::white(0.05f + 0.10f * f);
             box.border = design::kFocusRimWidth * f;
@@ -1405,7 +1659,7 @@ void Flow::draw() {
 
     // The buttons.
     float bx = kInset;
-    for (const Button& b : buttons_) {
+    for (Button& b : buttons_) {
         const float f = b.focus.value();
         const float tw = t.measure(b.label, ui::TextStyle::Title3, sc);
         const float bw = tw + design::kPillPadX * 4.0f;
@@ -1415,6 +1669,10 @@ void Flow::draw() {
         pill.y = kFooterY;
         pill.w = bw;
         pill.h = bh;
+        b.x = bx;
+        b.y = kFooterY;
+        b.w = bw;
+        b.h = bh;
         pill.radius = bh * 0.5f;
         pill.fill = Color::white(b.enabled ? 0.08f + 0.14f * f : 0.04f);
         pill.border = design::kFocusRimWidth * f;
@@ -1494,6 +1752,48 @@ Outcome Flow::run() {
                     if (keyboard_.isOpen()) keyboard_.typeText(e.text.text);
                     break;
 
+                // A MOUSE MOVES FOCUS AND CLICKS THE FOCUSED THING. See
+                // `pointAt` and open question 16 — this is deliberately not a
+                // pointer: there is no cursor of ours, nothing lights up under
+                // it that would not light up under the d-pad, and a click on
+                // empty space does nothing at all.
+                //
+                // The on-screen keyboard owns every input while it is open, so
+                // the pointer is ignored there too rather than half-working. A
+                // physical keyboard types into that field anyway, which is the
+                // one input this flow guarantees.
+                case SDL_EVENT_MOUSE_MOTION: {
+                    float cx = 0, cy = 0;
+                    if (keyboard_.isOpen()) {
+                        if (canvasPoint(e.motion.x, e.motion.y, &cx, &cy))
+                            keyboard_.focusAt(cx, cy);
+                    } else {
+                        pointAt(e.motion.x, e.motion.y);
+                    }
+                    break;
+                }
+
+                case SDL_EVENT_MOUSE_BUTTON_DOWN: {
+                    if (e.button.button != SDL_BUTTON_LEFT) break;
+                    if (keyboard_.isOpen()) {
+                        float cx = 0, cy = 0;
+                        if (!canvasPoint(e.button.x, e.button.y, &cx, &cy)) break;
+                        const std::string value = keyboard_.value();
+                        bool hit = false;
+                        const ui::KeyboardResult res = keyboard_.pressAt(cx, cy, &hit);
+                        // A click on the scrim is not a press. Without this a
+                        // miss would act on whatever key happened to be focused
+                        // last, which is the one thing a pointer must never do.
+                        if (hit) typingFinished(res, value);
+                        break;
+                    }
+                    // Focus first, then activate what is now focused — so a
+                    // click is exactly "point at it and press A", and never a
+                    // second path into the same action.
+                    if (pointAt(e.button.x, e.button.y)) activate();
+                    break;
+                }
+
                 case SDL_EVENT_KEY_DOWN:
                     if (keyboard_.isOpen()) {
                         switch (e.key.key) {
@@ -1505,16 +1805,11 @@ Outcome Flow::run() {
                             case SDLK_RETURN:
                             case SDLK_KP_ENTER: {
                                 const std::string value = keyboard_.value();
-                                keyboard_.commit();
-                                if (typing_ == Typing::Address) startServerProbe(value);
-                                else if (typing_ == Typing::Passphrase) joinSelected(value);
-                                typing_ = Typing::None;
-                                rebuild();
+                                typingFinished(keyboard_.commit(), value);
                                 break;
                             }
                             case SDLK_ESCAPE:
-                                keyboard_.cancel();
-                                typing_ = Typing::None;
+                                typingFinished(keyboard_.cancel(), {});
                                 break;
                             default: break;
                         }
@@ -1541,21 +1836,24 @@ Outcome Flow::run() {
                             case SDL_GAMEPAD_BUTTON_DPAD_RIGHT: keyboard_.moveFocus(+1, 0); break;
                             case SDL_GAMEPAD_BUTTON_DPAD_UP: keyboard_.moveFocus(0, -1); break;
                             case SDL_GAMEPAD_BUTTON_DPAD_DOWN: keyboard_.moveFocus(0, +1); break;
-                            case SDL_GAMEPAD_BUTTON_SOUTH: keyboard_.pressKey(); break;
+                            case SDL_GAMEPAD_BUTTON_SOUTH: {
+                                // A on the "done" KEY ends the session, and
+                                // that used to be dropped on the floor. The
+                                // value has to be read before the press,
+                                // because the press is what closes it.
+                                const std::string value = keyboard_.value();
+                                typingFinished(keyboard_.pressKey(), value);
+                                break;
+                            }
                             case SDL_GAMEPAD_BUTTON_WEST: keyboard_.backspace(); break;
                             case SDL_GAMEPAD_BUTTON_NORTH: keyboard_.toggleShift(); break;
                             case SDL_GAMEPAD_BUTTON_START: {
                                 const std::string value = keyboard_.value();
-                                keyboard_.commit();
-                                if (typing_ == Typing::Address) startServerProbe(value);
-                                else if (typing_ == Typing::Passphrase) joinSelected(value);
-                                typing_ = Typing::None;
-                                rebuild();
+                                typingFinished(keyboard_.commit(), value);
                                 break;
                             }
                             case SDL_GAMEPAD_BUTTON_EAST:
-                                keyboard_.cancel();
-                                typing_ = Typing::None;
+                                typingFinished(keyboard_.cancel(), {});
                                 break;
                             default: break;
                         }
@@ -1631,6 +1929,39 @@ Outcome Flow::run() {
 }
 
 }  // namespace
+
+void showWaiting(const Deps& d, const char* title, const char* detail) {
+    if (!d.window || !d.renderer || !d.text) return;
+    ui::Renderer& r = *d.renderer;
+    ui::TextRenderer& t = *d.text;
+
+    int dw = 0, dh = 0;
+    SDL_GetWindowSizeInPixels(d.window, &dw, &dh);
+    if (dw <= 0 || dh <= 0) return;
+    r.beginFrame(dw, dh);
+    const float sc = r.scale();
+
+    r.drawBackdrop({ui::palette::kBackdropTop, ui::palette::kBackdropMid,
+                    ui::palette::kBackdropBottom, 0.55f});
+
+    float y = kTitleTop;
+    t.draw(r, title, kInset, y + t.ascent(ui::TextStyle::LargeTitle, sc),
+           ui::TextStyle::LargeTitle, Color::white(1.0f), sc);
+    y += t.lineHeight(ui::TextStyle::LargeTitle, sc) + 24.0f;
+    if (detail) {
+        for (const std::string& line :
+             wrap(t, detail, ui::TextStyle::Body, sc, kProseWidth)) {
+            t.draw(r, line, kInset, y + t.ascent(ui::TextStyle::Body, sc),
+                   ui::TextStyle::Body, Color::white(0.74f), sc);
+            y += t.lineHeight(ui::TextStyle::Body, sc);
+        }
+    }
+
+    // Without this the frame goes into the scene texture and never reaches the
+    // window — see the note at the end of Flow::draw.
+    r.presentScene();
+    SDL_GL_SwapWindow(d.window);
+}
 
 Outcome run(const Deps& d, const Options& o) {
     if (!d.window || !d.renderer || !d.text) return Outcome::Quit;
