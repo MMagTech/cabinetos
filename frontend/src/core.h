@@ -73,6 +73,14 @@ struct PadState {
     uint32_t buttons = 0;
     float leftX = 0, leftY = 0;
     float rightX = 0, rightY = 0;
+    // HOW FAR THE TRIGGERS ARE PRESSED, 0 to 1, as well as the L2/R2 bits
+    // above. Both, because a trigger is two things at once: a Dreamcast reads
+    // it as a continuous value and a SNES reads its shoulder as pressed or
+    // not, and the same physical pull has to serve both.
+    //
+    // A pad whose triggers are digital — a Switch Pro Controller's ZL and ZR
+    // are switches, not springs — simply reports 0 or 1 here.
+    float leftTrigger = 0, rightTrigger = 0;
 };
 
 class Core {

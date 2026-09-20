@@ -3742,10 +3742,22 @@ int main(int argc, char** argv) {
                         // own slop and a full-travel one never fires on a worn
                         // pad.
                         const int kTrigger = 16384;
-                        if (SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_LEFT_TRIGGER) > kTrigger)
-                            pad.buttons |= bit(cab::L2);
-                        if (SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > kTrigger)
-                            pad.buttons |= bit(cab::R2);
+                        const int lt = SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_LEFT_TRIGGER);
+                        const int rt = SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER);
+                        if (lt > kTrigger) pad.buttons |= bit(cab::L2);
+                        if (rt > kTrigger) pad.buttons |= bit(cab::R2);
+                        // AND HOW FAR, not just whether. A Dreamcast reads its
+                        // triggers as a continuous value — they are the
+                        // accelerator and the brake in a driving game — and
+                        // Flycast asks for that through the analogue channel
+                        // rather than the button. The digital bits above still
+                        // go out for every core that wants a shoulder.
+                        //
+                        // A pad with switches instead of springs, which is what
+                        // a Switch Pro Controller's ZL and ZR are, hands SDL a
+                        // clean 0 or 32767 and arrives here as 0 or 1.
+                        pad.leftTrigger = std::clamp(lt / 32767.0f, 0.0f, 1.0f);
+                        pad.rightTrigger = std::clamp(rt / 32767.0f, 0.0f, 1.0f);
 
                         pad.leftX = SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_LEFTX) / 32767.0f;
                         pad.leftY = SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_LEFTY) / 32767.0f;

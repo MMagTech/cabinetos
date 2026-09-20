@@ -546,6 +546,42 @@ int16_t inputState(unsigned port, unsigned device, unsigned index, unsigned id) 
         return (pad.buttons >> id) & 1;
     }
     if (device == RETRO_DEVICE_ANALOG) {
+        // HOW FAR A TRIGGER IS PRESSED. A third index, and it is NOT a stick:
+        // its `id` is a joypad button id rather than an axis, so L2 is 12 and
+        // R2 is 13. Flycast asks for exactly these two, because the
+        // Dreamcast's triggers are analogue.
+        //
+        // THIS USED TO RETURN THE RIGHT STICK'S Y AXIS. The old line tested
+        // only for the LEFT index and treated everything else as the right
+        // stick, so "how far is the left trigger pressed" was answered with
+        // where the right stick was sitting. Two faults in one: the triggers
+        // could not be pressed, and the right stick drove them.
+        //
+        // AND IT WAS WORSE THAN RETURNING NOTHING, which is the part worth
+        // remembering. Flycast reads the analogue value FIRST and only falls
+        // back to the digital L2/R2 bit when that value is zero — so the
+        // reference implementation, which answers this index with a plain 0,
+        // works by taking the fallback. A real pad's right stick rests a few
+        // hundred counts off centre, that is not zero, and a non-zero answer
+        // means "the trigger is very slightly pressed" and suppresses the
+        // fallback entirely. Found 2026-09-19 by MMagTech, who said the
+        // shoulder buttons did not work and was right.
+        if (index == RETRO_DEVICE_INDEX_ANALOG_BUTTON) {
+            const float t = id == RETRO_DEVICE_ID_JOYPAD_L2   ? pad.leftTrigger
+                            : id == RETRO_DEVICE_ID_JOYPAD_R2 ? pad.rightTrigger
+                                                              : 0.0f;
+            // Anything else the core asks about here is an ordinary button,
+            // which is pressed or it is not.
+            if (id != RETRO_DEVICE_ID_JOYPAD_L2 && id != RETRO_DEVICE_ID_JOYPAD_R2)
+                return ((pad.buttons >> id) & 1u) ? 32767 : 0;
+            return static_cast<int16_t>(std::clamp(t, 0.0f, 1.0f) * 32767.0f);
+        }
+        // Sticks. Only the two indices that ARE sticks, and only the two ids
+        // that are axes — the old fall-through is what caused the above.
+        if (index != RETRO_DEVICE_INDEX_ANALOG_LEFT &&
+            index != RETRO_DEVICE_INDEX_ANALOG_RIGHT)
+            return 0;
+        if (id != RETRO_DEVICE_ID_ANALOG_X && id != RETRO_DEVICE_ID_ANALOG_Y) return 0;
         const float v = (index == RETRO_DEVICE_INDEX_ANALOG_LEFT)
                             ? (id == RETRO_DEVICE_ID_ANALOG_X ? pad.leftX : pad.leftY)
                             : (id == RETRO_DEVICE_ID_ANALOG_X ? pad.rightX : pad.rightY);
