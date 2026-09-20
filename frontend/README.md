@@ -104,8 +104,18 @@ printed**, for the same reason the storage root is:
 
 ## First run, and the network
 
-None of it draws anything yet — the screens wait for the look — but all four
-mechanisms are here and each one can be run from a shell. **None of these
+**Built, start to finish.** Five screens — network, Wi-Fi, the RomM server,
+pairing by QR, a Bluetooth controller — plus everything behind them. `--setup`
+forces the flow on a machine that is already configured and never writes
+anything, which is the only way to look at it here: both machines are set up.
+
+```
+--setup                     run it even on a configured machine; writes nothing
+--setup-step <name>         open at one step: network wifi server pair controller done
+--no-setup                  skip it entirely on a machine that cannot finish it
+```
+
+Each mechanism can also be run on its own from a shell. **None of these
 disturbs a session already on the television**, and all of them run before SDL,
 so they need no window, no GL and no controller.
 
@@ -227,15 +237,13 @@ person would press is to press it from here:
   It is not built because it costs almost exactly the vertical slack Home has
   left, and that is a measurement only a real television can settle — see
   `docs/PROJECT.md`.
-- **The first-run SCREENS.** The mechanisms behind them are built — the state
-  machine, the QR encoder, the NetworkManager plumbing and the marker that says
-  whether setup has happened — and none of them draws anything. See the flags
-  above, and open question 15b.
 - **Joining a Wi-Fi network has not been done from the console.** `net::join`
-  is written and the scan, the status and the polkit verdict are all measured on
-  the A9, but actually joining one is not: the reference machine is on a cable,
-  and taking it off is how you lose the machine you are measuring. Do it with a
-  keyboard at the console.
+  is written and the scan, the status, the polkit verdict and every screen are
+  measured on the A9, but actually joining one is not: the reference machine is
+  on a cable, and taking it off is how you lose the machine you are measuring.
+  Do it with a keyboard at the console.
+- **Nobody has walked first run with their hands.** Every screen is captured,
+  but the whole of it start to finish on a television has not been done.
 - **The rest of the launch screen**: a different save state, a different core,
   an export.
 - **The Storage screen.** Its data exists; `--storage` prints it.

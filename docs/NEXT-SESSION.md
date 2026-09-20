@@ -16,10 +16,11 @@ Rewrite it at the end of a session. It is meant to be current, not a log.
 
 **Everything is on `main`.** No other branches and no open pull requests.
 
-**FIRST RUN HAS ITS FOUR MECHANISMS AND NONE OF ITS SCREENS, 2026-09-20.** A
-state machine, a QR encoder, NetworkManager plumbing and a way to know whether
-setup has ever happened — plus the polkit rule open question 17 asked for. All
-of it is checkable from a shell without disturbing the television:
+**FIRST RUN IS BUILT, START TO FINISH, 2026-09-20.** A person can set this
+console up with a keyboard and a phone and never touch SSH: network, Wi-Fi, the
+RomM server, pairing by QR code, and a Bluetooth controller. Five screens and
+six new files — see item 4b. All of it is checkable from a shell without
+disturbing the television:
 
 ```
 cabinetos-frontend --first-run          where setup is, and where it would stop
@@ -186,8 +187,8 @@ the right way up. Read this order before picking anything up.
 |---|---|
 | **1** | **A GAME CAN GO BLACK AND NOBODY KNOWS WHY.** Six launches in one session drew nothing but the letterbox glow while the core ran and made sound. Not reproduced since. Two theories tested and both falsified. See item 3b — it has the instruments. |
 | **2** | **Judge the TATE look, and Home, on the 65-inch.** Both are on the machine and neither has been looked at properly. |
-| **3** | **Join a Wi-Fi network from the console, with a keyboard.** `net::join` is written and has never been run against a real access point — see item 4b. It is twenty minutes and it is the only part of the network plumbing that is not measured. |
-| **4** | Then the core options (item 7), or the first-run screens if the look is ready to be settled (item 4b). |
+| **3** | **Walk first run with your hands, on the television.** Every screen is captured and every mechanism measured, but nobody has been through it — and `net::join` has never met a real access point. It needs a machine that is not already set up, or a keyboard and a willingness to unconfigure one. See item 4b. |
+| **4** | Then the core options (item 7). |
 
 **Item 2's old entry is gone because it is fixed**: the console no longer demotes
 itself to software rendering on a boot-time network race. The A9 has come up on
@@ -361,18 +362,32 @@ second has anything to work with.** See open question 15b.
 fallback when no address is configured at all, and it is worse than an error:
 it looks like a working console showing somebody else's games.
 
-### 4b. First run — the mechanisms are built, the screens are not
+### 4b. First run — BUILT, start to finish
 
-**All four of the things open question 15b listed as missing exist as of
-2026-09-20**, and the polkit rule open question 17 asked for ships with them.
-None of them draws anything, which is why they could go ahead of the look.
+**A person can now set this console up with a keyboard and a phone, and never
+touch SSH.** Five screens, the whole chain, on the reference machine.
 
 | | |
 |---|---|
 | `firstrun.{h,cpp}` | the chain, and every rule about what may be skipped |
+| `setup.{h,cpp}` | the five screens, and the workers that keep them drawing |
 | `qr.{h,cpp}` | byte mode, versions 1–10, error correction M |
 | `net.{h,cpp}` | status, scan, join, forget, and the polkit verdict |
+| `bluetooth.{h,cpp}` | the adapter, the scan, and pair/trust/connect |
+| `proc.{h,cpp}` | the one place that starts a process, argv only, never a shell |
 | `60-cabinetos-network.rules` | the grant that stops Phase 6 breaking Wi-Fi |
+
+**SEE IT WITHOUT DISTURBING THE TELEVISION:**
+
+```
+SDL_VIDEODRIVER=offscreen ./cabinetos-frontend --setup-step pair \
+  --screenshot /tmp/x.bmp --render-size 3840x2160 --frames 400
+```
+
+`--setup` forces the flow on a machine that is already configured and **never
+writes anything**, which is the only way anybody here can look at it — both
+machines are set up and taking that away to see a screen is a silly way to lose
+an afternoon.
 
 **THE CHAIN IS ENFORCED, NOT DESCRIBED.** `Machine` is handed a `Facts` and
 judges it; it never calls the network, the disk or a server. `observe()` is the
@@ -396,25 +411,34 @@ Without that rule, the reference console — set up by hand over SSH, working fo
 a day — would have presented a welcome screen the next time it booted. The
 question is *"is this machine configured"*, not *"has this flow been run"*.
 
+**THE QR IS PROVED ALL THE WAY TO THE GLASS.** A capture of the finished
+3840x2160 frame off the A9's own Radeon was handed to a decoder with no cropping
+and no help — exactly as a phone pointed at the television sees it — and read
+back the live pairing URL the server had issued seconds earlier.
+
 **What is still owed:**
 
-- **The screens.** All of them, and they wait for the look like every other.
-- **`net::join` has never been run against a real access point.** Status,
-  scanning, the polkit verdict and the whole state machine are measured on the
-  A9; joining is not, because the reference machine is on a cable and taking it
-  off is how you lose the machine you are measuring. **Do it with a keyboard at
-  the console.**
-- **Pairing a controller** is a step in the chain with no mechanism behind it
-  yet. The chain treats it as soft, which is correct, so nothing is blocked.
+- **`net::join` has never been run against a real access point.** Everything
+  else is measured on the A9; joining is not, because the reference machine is
+  on a cable and taking it off is how you lose the machine you are measuring.
+  **Do it with a keyboard at the console.** It is the last unmeasured thing.
+- **Nobody has walked the flow with their hands.** Every screen is captured and
+  every mechanism measured, but the whole of it start to finish, on a
+  television, has not been done — and cannot be on either machine here without
+  unconfiguring one of them.
+- **The look is a first pass.** Consistent and legible at ten feet, not judged
+  on the 65-inch by a person.
 
 **How to see any of it:**
 
 ```
+--setup      --setup-step <name>       --no-setup
 --first-run  --first-run-check-server  --first-run-step <name>  --first-run-rules
 --network    --network-scan            --qr "<text>"            --qr-out <path>
 ```
 
-All run before SDL and none disturbs the session on the television.
+The probes all run before SDL and none of them disturbs the session on the
+television.
 
 ### 5. Where the in-game save machinery lives
 
@@ -760,6 +784,26 @@ These are ordered. **Do not begin any of them in the VM.**
   `base + verification_path_complete` from `/api/auth/device/init`, and on RomM
   5.1.0 that is `/pair/device?user_code=…`. A fabricated one produces a QR that
   scans perfectly and lands on a page saying the code does not exist.
+- **A SETUP SCREEN'S LOOP MUST BE PACED, AND `--frames` DEPENDS ON IT.** A page
+  of static text left unpaced runs at thousands of frames a second on the A9,
+  and four hundred frames went by before the server had answered — so the
+  capture of the pairing screen came out with no code on it. **The same trap
+  `--launch-after` fell into, one screen along.**
+- **BLUEZ USES THE ADDRESS AS THE NAME when a device has not given one**, with
+  dashes where the address has colons. An unnamed device does not have an empty
+  name, it has a name that looks like one — and the controller list filled with
+  SIXTEEN of the neighbours' beacons before anybody noticed.
+- **NEVER LET FOCUS LAND ON A ROW THAT DOES NOTHING.** Every placeholder in the
+  setup flow is disabled, so this is the common case. A focus rim on a row that
+  ignores the button cannot be told apart from a crash.
+- **DO NOT SAY A SERVER DID NOT ANSWER BEFORE ASKING IT.** Arriving at the
+  server step with an address already in `session.env` is the common case, and
+  the screen reported it unreachable before sending a packet. It needed a fact
+  at the rules level, not a fix in the screen.
+- **`bluetoothctl pair` WITHOUT `trust` LOOKS EXACTLY LIKE A BROKEN PAD.** bluez
+  refuses the incoming connection every time the controller wakes, so the pad
+  pairs perfectly once and then never reconnects. It reads as "it keeps
+  disconnecting" and has nothing to do with pairing.
 - **WALK EVERY COMBINATION RATHER THAN RE-READING THE RULES.** The state
   machine's exhaustive check is 96 cases, needs nothing, and found a deadlock
   the code read as correct. Assert the REFUSALS — the happy path is the part

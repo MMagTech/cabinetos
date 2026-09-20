@@ -191,6 +191,13 @@ struct Facts {
 
     bool haveServerAddress = false;
     bool serverAnswered = false;   // something spoke RomM at that address
+    // WHETHER ANYBODY HAS ACTUALLY ASKED. Without this, "we have an address and
+    // it has not answered" and "we have an address and have not tried it yet"
+    // are the same state, and the console tells somebody their perfectly good
+    // server did not answer before it has sent a single packet at it. Arriving
+    // at this step with an address already in /etc is the COMMON case, not an
+    // edge one.
+    bool serverChecked = false;
     bool havePairedToken = false;
 
     int gamepadCount = 0;

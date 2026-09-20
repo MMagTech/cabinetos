@@ -7996,18 +7996,93 @@ One exposure is kept rather than solved, and recorded: a passphrase passed to
 not an escalation — the only readers are the same user and root, and
 NetworkManager stores the passphrase where root can read it anyway.
 
+#### AND THE SCREENS ARE BUILT TOO — 2026-09-20
+
+**`frontend/src/setup.{h,cpp}`.** Five screens, one shape: prose on the left,
+the thing you act on in a panel on the right, actions along the bottom. The step
+changes what is in the panel and nothing else, so the flow does not read as five
+unrelated screens.
+
+**IT RUNS A LOOP OF ITS OWN rather than being a mode inside the main one.** The
+library is fetched from RomM before the main loop exists, so a first run woven
+into that loop would have to survive a state where the thing the loop is built
+around does not exist. And it genuinely is linear and happens once — a mode flag
+would be modelling a freedom the product does not have.
+
+**NOTHING IN IT BLOCKS THE FRAME.** A Wi-Fi scan is seconds, a Bluetooth scan is
+ten, and waiting for somebody to pick up a phone is minutes. Every one runs on a
+worker and is polled once a frame, the same shape `LaunchJob` and `StateLoad`
+already use. A setup screen that froze while looking for networks would be
+indistinguishable from a console that had crashed — and it would be the first
+thing anybody ever saw it do.
+
+**The step's own sentence comes from `firstrun::Machine::because()`**, so the
+words a person reads and the rule the console is enforcing cannot drift apart.
+
+##### The QR is proved all the way to the glass
+
+Encoding correctly is not the same as drawing correctly. The code is uploaded as
+a single-channel texture with **nearest filtering** — a QR is the one thing on
+this console that must not be smoothed — and drawn as one quad on a white card
+carrying the quiet zone as real light modules.
+
+**Measured 2026-09-20, and this is the test that matters**: a capture of the
+finished 3840x2160 frame, taken off the A9's own Radeon, was handed to a decoder
+with no cropping and no help, exactly as a phone pointed at the television sees
+it. It read back the live pairing URL the server had issued seconds earlier.
+Server → encoder → GL texture → framebuffer → decoder, end to end.
+
+##### The setup loop is paced at sixty, and that is not tidiness
+
+A static page of text left unpaced runs as fast as the GPU will go — thousands
+of frames a second on the A9, spinning a discrete graphics chip to draw a list,
+on a machine that may be in a cabinet.
+
+**And it is what makes `--frames` mean anything.** Every one of these screens is
+waiting on something that takes seconds, so a capture has to be able to wait in
+units a person can reason about. Unpaced, four hundred frames on the A9 went by
+before the server had answered and the capture of the pairing screen came out
+with no code on it — **the same trap `--launch-after` fell into, one screen
+along.**
+
+##### Four faults the captures found, and none was visible in the code
+
+- **Focus landed on rows that do nothing.** Every placeholder this flow draws —
+  *Looking for networks…*, *This console has no Bluetooth* — is disabled, so
+  this was the common case rather than an edge one. A focus rim on a row that
+  ignores the button is the worst thing a setup screen can do, because there is
+  no way to tell it from a crash.
+- **It said "Nothing answered at that address" before it had tried.** Arriving
+  at the server step with an address already in `session.env` is the COMMON
+  case. Fixed at the rules level with a `serverChecked` fact, because "we asked
+  and got nothing" and "we have not asked" are different sentences and the
+  machine could not tell them apart.
+- **The pairing URL ran off its column and under the panel.** It is one
+  unbroken token and the longest string the flow ever draws, so word wrapping
+  could not touch it. There is now a codepoint-wise hard wrap — UTF-8 aware,
+  because a break inside a multi-byte character produces a glyph the font
+  cannot resolve.
+- **BLUEZ USES THE ADDRESS AS THE NAME when a device has not given one**, with
+  dashes where the address has colons. So an unnamed device does not have an
+  empty name, it has a name that looks like one — and the list somebody picks
+  their controller out of filled with **sixteen** of the neighbours' beacons.
+  Unnamed devices are now counted and hidden behind a button rather than
+  dropped, because a pad bluez has not resolved yet is exactly the thing
+  somebody has just woken up.
+
 ##### What is still owed here
 
-- **The screens.** Every one of them, and they wait for the look like all the
-  others.
 - **`join()` has not been run against a real access point.** Status, scanning,
-  the polkit verdict and the whole state machine are measured on the A9;
-  actually joining a network is not, because the reference console is on a
-  cable and taking it off is how you lose the machine you are measuring.
+  the polkit verdict, the whole state machine and every screen are measured on
+  the A9; actually joining a network is not, because the reference console is
+  on a cable and taking it off is how you lose the machine you are measuring.
   **Do this with a keyboard at the console, not over SSH.**
-- **Pairing a controller** is a step in the chain and a mechanism nobody has
-  written yet. The chain treats it as soft, which is correct, so nothing is
-  blocked on it.
+- **Nobody has walked the flow with their hands.** Every screen is captured and
+  every mechanism is measured, but the whole of it start to finish, on a
+  television, with a keyboard, has not been done — and cannot be on either
+  machine here without unconfiguring one of them.
+- **The look is a first pass.** It is consistent and it is legible at ten feet,
+  but it has not been judged on the 65-inch by a person.
 
 #### A browser is a dependency, and it is a safe one — decided 2026-09-20
 

@@ -141,15 +141,17 @@ grep -q '^u cabinet ' /usr/lib/sysusers.d/cabinetos.conf || {
 # a real dependency of frontend/src/net.cpp and they are invisible to every
 # check this repository already has.
 #
-# They are in the base image today: NetworkManager owns nmcli and polkit owns
-# pkcheck. Neither is something CabinetOS installs, and neither should be
-# removed — a console that cannot configure its own network cannot complete
-# first run, which is docs/PROJECT.md open question 15b's one hard gate.
-for needed in /usr/bin/nmcli /usr/bin/pkcheck; do
+# They are in the base image today: NetworkManager owns nmcli, polkit owns
+# pkcheck and bluez owns bluetoothctl. None is something CabinetOS installs, and
+# none should be removed — a console that cannot configure its own network
+# cannot complete first run at all (open question 15b's one hard gate), and one
+# that cannot pair a controller finishes setup owning a games console nobody can
+# play from a sofa.
+for needed in /usr/bin/nmcli /usr/bin/pkcheck /usr/bin/bluetoothctl; do
     if [[ -x "${needed}" ]]; then
         log "present: ${needed} ($(rpm -qf "${needed}" 2>/dev/null || echo 'unowned'))"
     else
-        log "  ERROR: ${needed} is not in this image — frontend/src/net.cpp runs it"
+        log "  ERROR: ${needed} is not in this image — the frontend runs it"
         exit 1
     fi
 done

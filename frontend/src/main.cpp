@@ -63,6 +63,7 @@
 #include "romfile.h"
 #include "romm.h"
 #include "screens.h"
+#include "setup.h"
 #include "storage.h"
 #include "text.h"
 #include "ui.h"
@@ -1774,13 +1775,13 @@ static int firstRunRules() {
     auto fail = [&](const char* what, const firstrun::Facts& f) {
         ++failures;
         std::printf("  FAIL  %s\n        online=%d wired=%d wifiHw=%d wifiUp=%d "
-                    "addr=%d answered=%d token=%d pads=%d\n",
+                    "addr=%d checked=%d answered=%d token=%d pads=%d\n",
                     what, f.online, f.wiredOnline, f.wifiPresent, f.wifiConfigured,
-                    f.haveServerAddress, f.serverAnswered, f.havePairedToken,
-                    f.gamepadCount);
+                    f.haveServerAddress, f.serverChecked, f.serverAnswered,
+                    f.havePairedToken, f.gamepadCount);
     };
 
-    for (int bits = 0; bits < 256; ++bits) {
+    for (int bits = 0; bits < 512; ++bits) {
         firstrun::Facts f;
         f.online          = bits & 1;
         f.wiredOnline     = bits & 2;
@@ -1790,6 +1791,7 @@ static int firstRunRules() {
         f.serverAnswered  = bits & 32;
         f.havePairedToken = bits & 64;
         f.gamepadCount    = (bits & 128) ? 1 : 0;
+        f.serverChecked   = bits & 256;
 
         // Nonsense the machine can never be handed: a wired link that is up
         // while nothing is online, or a radio connected with no radio. Skipped
@@ -1804,6 +1806,8 @@ static int firstRunRules() {
         // survive it anyway, because that is one net.cpp change away from being
         // reachable.
         if (f.online && !f.wiredOnline && !f.wifiConfigured) continue;
+        // A server cannot have answered without having been asked.
+        if (f.serverAnswered && !f.serverChecked) continue;
         ++cases;
 
         firstrun::Machine m;
@@ -2183,6 +2187,15 @@ int main(int argc, char** argv) {
     bool networkScan = false;
     bool firstRunProbeMode = false;
     bool firstRunRulesMode = false;
+    // Runs the setup flow even on a console that is already configured, so it
+    // can be looked at and photographed. It never writes anything — see
+    // setup::Options::dryRun — because the only machines anybody here can try
+    // it on are ones that are already set up.
+    bool forceSetup = false;
+    // The escape hatch: start the console without setup on a machine that
+    // cannot complete it. Not a product affordance, a development one.
+    bool noSetup = false;
+    const char* setupStep = nullptr;
     bool firstRunServerCheck = false;
     const char* firstRunStep = nullptr;
     const char* qrText = nullptr;
@@ -2278,6 +2291,13 @@ int main(int argc, char** argv) {
             qrText = argv[++i];
         } else if (SDL_strcmp(argv[i], "--qr-out") == 0 && i + 1 < argc) {
             qrPbm = argv[++i];
+        } else if (SDL_strcmp(argv[i], "--setup") == 0) {
+            forceSetup = true;
+        } else if (SDL_strcmp(argv[i], "--setup-step") == 0 && i + 1 < argc) {
+            forceSetup = true;
+            setupStep = argv[++i];
+        } else if (SDL_strcmp(argv[i], "--no-setup") == 0) {
+            noSetup = true;
         } else if (SDL_strcmp(argv[i], "--first-run-rules") == 0) {
             firstRunRulesMode = true;
         } else if (SDL_strcmp(argv[i], "--first-run") == 0) {
@@ -2630,6 +2650,65 @@ int main(int argc, char** argv) {
         std::fprintf(stderr, "[frontend] text init failed\n");
         return 1;
     }
+
+    // --- FIRST RUN -----------------------------------------------------------
+    //
+    // Before anything asks a server for anything, because on a console that has
+    // never been paired there is no server to ask. Setup runs a loop of its own
+    // and returns once the machine is configured; see setup.h for why it is not
+    // a mode inside the loop below.
+    //
+    // A MACHINE THAT IS ALREADY CONFIGURED IS NEVER SHOWN THIS. The reference
+    // console was set up by hand over SSH and has been playing games for a day;
+    // presenting it with a welcome screen would be a far worse failure than
+    // skipping a wizard nobody needed. firstrun::completion() answers "is this
+    // machine configured", not "has this flow been run" — and where the answer
+    // came from being configured rather than from a marker, the marker is
+    // back-filled here so the judgement is made once and recorded.
+    if (!noSetup) {
+        const firstrun::Completion done = firstrun::completion();
+        if (forceSetup || !done.done) {
+            setup::Deps deps;
+            deps.window = window;
+            deps.renderer = &renderer;
+            deps.text = &text;
+            setup::Options opts;
+            opts.startStep = setupStep;
+            // A capture of a setup screen must never write a marker or an
+            // address: it is a photograph, and the machine it is taken on is
+            // usually one that is already set up.
+            opts.dryRun = forceSetup || shotMode;
+            opts.screenshotPath = shotMode ? shotPath : nullptr;
+            opts.frames = shotAfterFrames;
+            opts.renderWidth = renderW;
+            opts.renderHeight = renderH;
+            const setup::Outcome outcome = setup::run(deps, opts);
+            if (outcome != setup::Outcome::Completed) {
+                renderer.shutdown();
+                SDL_Quit();
+                return 0;
+            }
+            // Setup writes the address; pick it up, because the resolution done
+            // before SDL started ran on a console that had none.
+            resolvedAddress = firstrun::serverAddress();
+            rommAddress = resolvedAddress.empty() ? nullptr : resolvedAddress.c_str();
+        } else if (done.why == firstrun::Why::AdoptedExisting && done.when.empty()) {
+            // Adopted, and no marker on disk yet — so write one. An empty
+            // `when` is exactly the case where the answer came from looking at
+            // the machine rather than from a file.
+            std::string merr;
+            if (firstrun::markCompleted(/*adopted=*/true, &merr))
+                std::fprintf(stderr,
+                             "[first-run] this console was already configured; "
+                             "recorded that rather than asking again\n");
+        }
+    }
+
+    // TEXT INPUT IS OFF BY DEFAULT IN SDL3, and the handler for it below has
+    // therefore never once fired. Without this a physical keyboard cannot type
+    // a character into the on-screen keyboard — which is not a small gap, it is
+    // the input the whole first-run design is built on being guaranteed.
+    SDL_StartTextInput(window);
 
     // 192 MB of covers resident. A shelf holds a handful; a library grid holds
     // a screenful; anything past that is re-decoded on the way back, which is

@@ -1,162 +1,21 @@
 #include "net.h"
 
-#include <fcntl.h>
-#include <poll.h>
-#include <signal.h>
-#include <sys/wait.h>
 #include <unistd.h>
 
 #include <algorithm>
-#include <cerrno>
-#include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <ctime>
+
+#include "proc.h"
 
 namespace net {
 namespace {
 
-// --- Running a command, with no shell anywhere in it ------------------------
-//
-// See the header: a scan puts strings chosen by strangers into this process, so
-// nothing may ever be concatenated into a command line. argv, execvp, done.
-//
-// stdout and stderr are captured separately because they answer different
-// questions: nmcli puts its data on one and its reason for failing on the
-// other, and the reason is the half a person can act on.
-struct Run {
-    int status = -1;      // the process's exit status, or -1 if it never ran
-    bool timedOut = false;
-    std::string out;
-    std::string err;
-    bool ok() const { return status == 0; }
-};
-
-int64_t nowMs() {
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return static_cast<int64_t>(ts.tv_sec) * 1000 + ts.tv_nsec / 1000000;
-}
-
-Run run(const std::vector<std::string>& args, int timeoutSeconds) {
-    Run r;
-    if (args.empty()) return r;
-
-    int outPipe[2], errPipe[2];
-    if (pipe(outPipe) != 0) return r;
-    if (pipe(errPipe) != 0) {
-        close(outPipe[0]);
-        close(outPipe[1]);
-        return r;
-    }
-
-    const pid_t pid = fork();
-    if (pid < 0) {
-        close(outPipe[0]); close(outPipe[1]);
-        close(errPipe[0]); close(errPipe[1]);
-        return r;
-    }
-    if (pid == 0) {
-        // The child. Nothing here may allocate or throw in a way that matters;
-        // it is a few dups and an exec.
-        dup2(outPipe[1], STDOUT_FILENO);
-        dup2(errPipe[1], STDERR_FILENO);
-        close(outPipe[0]); close(outPipe[1]);
-        close(errPipe[0]); close(errPipe[1]);
-        // A child that inherits our stdin can block forever on a prompt.
-        // nmcli asks for secrets interactively when it wants them and we never
-        // want it to, so stdin is closed rather than passed through.
-        const int devnull = open("/dev/null", O_RDONLY);
-        if (devnull >= 0) { dup2(devnull, STDIN_FILENO); close(devnull); }
-
-        std::vector<char*> argv;
-        argv.reserve(args.size() + 1);
-        for (const std::string& a : args) argv.push_back(const_cast<char*>(a.c_str()));
-        argv.push_back(nullptr);
-        execvp(argv[0], argv.data());
-        _exit(127);   // execvp only returns on failure
-    }
-
-    close(outPipe[1]);
-    close(errPipe[1]);
-
-    // Read both pipes until they close or the deadline passes. A deadline
-    // matters more here than it looks: `nmcli device wifi connect` against a
-    // network that is simply not answering will sit there, and a console that
-    // stops responding is worse than one that says it could not join.
-    const int64_t deadline = nowMs() + static_cast<int64_t>(timeoutSeconds) * 1000;
-    struct pollfd fds[2] = {
-        {outPipe[0], POLLIN, 0},
-        {errPipe[0], POLLIN, 0},
-    };
-    bool open0 = true, open1 = true;
-    while (open0 || open1) {
-        const int64_t left = deadline - nowMs();
-        if (left <= 0) { r.timedOut = true; break; }
-        fds[0].events = open0 ? POLLIN : 0;
-        fds[1].events = open1 ? POLLIN : 0;
-        const int n = poll(fds, 2, static_cast<int>(std::min<int64_t>(left, 1000)));
-        if (n < 0) {
-            if (errno == EINTR) continue;
-            break;
-        }
-        for (int i = 0; i < 2; ++i) {
-            if (!(fds[i].revents & (POLLIN | POLLHUP | POLLERR))) continue;
-            char buf[4096];
-            const ssize_t got = read(fds[i].fd, buf, sizeof buf);
-            if (got > 0) {
-                (i == 0 ? r.out : r.err).append(buf, static_cast<size_t>(got));
-            } else {
-                (i == 0 ? open0 : open1) = false;
-            }
-        }
-    }
-    close(outPipe[0]);
-    close(errPipe[0]);
-
-    if (r.timedOut) {
-        kill(pid, SIGTERM);
-        // Give it a moment to go politely, then stop being polite. A wedged
-        // nmcli left behind becomes a zombie this process never reaps.
-        for (int i = 0; i < 20; ++i) {
-            int st = 0;
-            if (waitpid(pid, &st, WNOHANG) == pid) return r;
-            usleep(100000);
-        }
-        kill(pid, SIGKILL);
-        int st = 0;
-        waitpid(pid, &st, 0);
-        return r;
-    }
-
-    int st = 0;
-    if (waitpid(pid, &st, 0) == pid && WIFEXITED(st)) r.status = WEXITSTATUS(st);
-    return r;
-}
-
-// Trailing whitespace off a captured stream. nmcli newline-terminates
-// everything and a trailing "\n" in an error message reads badly on a screen.
-std::string trimmed(const std::string& s) {
-    size_t b = 0, e = s.size();
-    while (b < e && (s[b] == ' ' || s[b] == '\n' || s[b] == '\r' || s[b] == '\t')) ++b;
-    while (e > b && (s[e - 1] == ' ' || s[e - 1] == '\n' || s[e - 1] == '\r' || s[e - 1] == '\t')) --e;
-    return s.substr(b, e - b);
-}
-
-std::vector<std::string> lines(const std::string& s) {
-    std::vector<std::string> out;
-    size_t start = 0;
-    while (start <= s.size()) {
-        const size_t nl = s.find('\n', start);
-        if (nl == std::string::npos) {
-            if (start < s.size()) out.push_back(s.substr(start));
-            break;
-        }
-        out.push_back(s.substr(start, nl - start));
-        start = nl + 1;
-    }
-    return out;
-}
+// Every command here goes through proc::run, which takes an argv array and
+// never builds a command line. See proc.h: a scan puts strings chosen by
+// strangers into this process, every time it runs.
+using proc::lines;
+using proc::trimmed;
 
 // THE SPLIT THAT HAS TO BE RIGHT. nmcli --terse separates fields with ':' and
 // escapes any ':' or '\' inside a value with a backslash. An SSID may contain
@@ -189,7 +48,7 @@ const std::string& fieldAt(const std::vector<std::string>& f, size_t i) {
 bool haveNmcli() {
     // `nmcli --version` rather than looking for the file: a binary that is
     // present and cannot run answers the same question the wrong way.
-    return run({"nmcli", "--version"}, 5).ok();
+    return proc::run({"nmcli", "--version"}, 5).ok();
 }
 
 }  // namespace
@@ -205,7 +64,7 @@ std::string unescapeField(const std::string& s) {
 
 bool available() {
     if (!haveNmcli()) return false;
-    const Run r = run({"nmcli", "-t", "-f", "RUNNING", "general"}, 5);
+    const proc::Result r = proc::run({"nmcli", "-t", "-f", "RUNNING", "general"}, 5);
     return r.ok() && trimmed(r.out) == "running";
 }
 
@@ -217,7 +76,7 @@ Status status() {
     }
 
     // DEVICE:TYPE:STATE:CONNECTION, one line per device.
-    const Run dev = run({"nmcli", "-t", "-f", "DEVICE,TYPE,STATE,CONNECTION",
+    const proc::Result dev = proc::run({"nmcli", "-t", "-f", "DEVICE,TYPE,STATE,CONNECTION",
                          "device", "status"}, 10);
     if (!dev.ok()) {
         s.managerMissing = true;
@@ -267,12 +126,12 @@ Status status() {
     }
 
     if (s.wifiPresent) {
-        const Run radio = run({"nmcli", "-t", "-f", "WIFI", "radio"}, 5);
+        const proc::Result radio = proc::run({"nmcli", "-t", "-f", "WIFI", "radio"}, 5);
         s.wifiEnabled = radio.ok() && trimmed(radio.out) == "enabled";
     }
 
     if (!s.device.empty()) {
-        const Run ip = run({"nmcli", "-t", "-f", "IP4.ADDRESS", "device", "show",
+        const proc::Result ip = proc::run({"nmcli", "-t", "-f", "IP4.ADDRESS", "device", "show",
                             s.device}, 10);
         if (ip.ok()) {
             for (const std::string& line : lines(ip.out)) {
@@ -294,13 +153,13 @@ namespace {
 // console offers to type a passphrase for a network it already knows.
 std::vector<std::string> savedSsids() {
     std::vector<std::string> out;
-    const Run r = run({"nmcli", "-t", "-f", "NAME,TYPE", "connection", "show"}, 10);
+    const proc::Result r = proc::run({"nmcli", "-t", "-f", "NAME,TYPE", "connection", "show"}, 10);
     if (!r.ok()) return out;
     for (const std::string& line : lines(r.out)) {
         if (line.empty()) continue;
         const std::vector<std::string> f = splitFields(line);
         if (fieldAt(f, 1) != "802-11-wireless") continue;
-        const Run ssid = run({"nmcli", "-t", "-f", "802-11-wireless.ssid",
+        const proc::Result ssid = proc::run({"nmcli", "-t", "-f", "802-11-wireless.ssid",
                               "connection", "show", fieldAt(f, 0)}, 10);
         if (!ssid.ok()) continue;
         const std::vector<std::string> sf = splitFields(trimmed(ssid.out));
@@ -320,7 +179,7 @@ bool listWifi(bool rescan, std::vector<Network>* out, std::string* err) {
     // A scan is the slow call in this file, which is why it is separated from
     // cachedScan: a screen can draw the cached list at once and replace it when
     // this returns.
-    const Run r = run({"nmcli", "-t", "-f", "IN-USE,SSID,SIGNAL,SECURITY",
+    const proc::Result r = proc::run({"nmcli", "-t", "-f", "IN-USE,SSID,SIGNAL,SECURITY",
                        "device", "wifi", "list",
                        "--rescan", rescan ? "yes" : "no"},
                       rescan ? 30 : 10);
@@ -411,7 +270,7 @@ bool join(const std::string& ssid, const std::string& passphrase, bool hidden,
         args.push_back("yes");
     }
 
-    const Run r = run(args, timeoutSeconds + 10);
+    const proc::Result r = proc::run(args, timeoutSeconds + 10);
     if (r.ok()) return true;
 
     if (err) {
@@ -443,7 +302,7 @@ bool forget(const std::string& ssid, std::string* err) {
     // for one network without complaint, and deleting one of them leaves the
     // console rejoining with the other — which looks exactly like "forget did
     // nothing".
-    const Run r = run({"nmcli", "-t", "-f", "NAME,TYPE", "connection", "show"}, 10);
+    const proc::Result r = proc::run({"nmcli", "-t", "-f", "NAME,TYPE", "connection", "show"}, 10);
     if (!r.ok()) {
         if (err) *err = "could not list saved networks";
         return false;
@@ -454,12 +313,12 @@ bool forget(const std::string& ssid, std::string* err) {
         const std::vector<std::string> f = splitFields(line);
         if (fieldAt(f, 1) != "802-11-wireless") continue;
         const std::string name = fieldAt(f, 0);
-        const Run got = run({"nmcli", "-t", "-f", "802-11-wireless.ssid",
+        const proc::Result got = proc::run({"nmcli", "-t", "-f", "802-11-wireless.ssid",
                              "connection", "show", name}, 10);
         if (!got.ok()) continue;
         const std::vector<std::string> sf = splitFields(trimmed(got.out));
         if (sf.size() < 2 || sf[1] != ssid) continue;
-        if (run({"nmcli", "connection", "delete", name}, 15).ok()) deletedAny = true;
+        if (proc::run({"nmcli", "connection", "delete", name}, 15).ok()) deletedAny = true;
     }
     if (!deletedAny && err) *err = "no saved network by that name";
     return deletedAny;
@@ -470,7 +329,7 @@ bool setRadio(bool on, std::string* err) {
         if (err) *err = "NetworkManager is not running";
         return false;
     }
-    const Run r = run({"nmcli", "radio", "wifi", on ? "on" : "off"}, 15);
+    const proc::Result r = proc::run({"nmcli", "radio", "wifi", on ? "on" : "off"}, 15);
     if (r.ok()) return true;
     if (err) *err = trimmed(r.err).empty() ? "could not change the radio" : trimmed(r.err);
     return false;
@@ -482,7 +341,7 @@ std::string polkitVerdict() {
     // the grant depends on the session the caller is in, which is why the same
     // check from an SSH shell and from the console can legitimately disagree.
     const std::string pid = std::to_string(static_cast<long>(getpid()));
-    const Run r = run({"pkcheck", "--action-id",
+    const proc::Result r = proc::run({"pkcheck", "--action-id",
                        "org.freedesktop.NetworkManager.settings.modify.system",
                        "--process", pid}, 10);
     if (r.status == -1) return "unknown (pkcheck did not run)";

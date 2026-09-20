@@ -331,6 +331,9 @@ std::string Machine::because() const {
             if (!facts_.haveServerAddress)
                 return "CabinetOS keeps your games on a RomM server. Enter its "
                        "address to carry on.";
+            // Nothing has asked yet — so do not tell somebody their server is
+            // unreachable on the strength of a question nobody put.
+            if (!facts_.serverChecked) return "Checking that address…";
             return "Nothing answered at that address.";
 
         case Step::Pair:
@@ -394,6 +397,8 @@ Facts observe(const romm::Client& client, int gamepadCount) {
     f.wifiConfigured = s.wifiUp;
 
     f.haveServerAddress = !serverAddress().empty();
+    // Only something that has tried can set these two; see the header.
+    f.serverChecked = false;
     f.havePairedToken = client.haveToken() || fileExists(tokenPath());
     // Left to the caller: only something that has tried can say. See the
     // header.
