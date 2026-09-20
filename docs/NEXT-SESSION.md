@@ -16,6 +16,23 @@ Rewrite it at the end of a session. It is meant to be current, not a log.
 
 **Everything is on `main`.** No other branches and no open pull requests.
 
+**FIRST RUN HAS ITS FOUR MECHANISMS AND NONE OF ITS SCREENS, 2026-09-20.** A
+state machine, a QR encoder, NetworkManager plumbing and a way to know whether
+setup has ever happened — plus the polkit rule open question 17 asked for. All
+of it is checkable from a shell without disturbing the television:
+
+```
+cabinetos-frontend --first-run          where setup is, and where it would stop
+cabinetos-frontend --first-run-rules    96 fact combinations, asserting the refusals
+cabinetos-frontend --network-scan       link, radio, polkit verdict, what is on the air
+cabinetos-frontend --qr "<text>"        a code you can scan off a terminal
+```
+
+**The A9 correctly says it needs no setup**, because a machine that already has
+an address, a token and a user is adopted rather than walked through a wizard.
+That rule matters more than the marker file: the reference console was set up by
+hand and must never be shown a setup screen.
+
 **THE HANDOVER GOES IN THE WORK'S OWN PULL REQUEST.** Write it inside the
 branch that does the work it describes, so there is never a handover-only push
 and never a handover-only pull request. The rule and the one narrow exception
@@ -152,6 +169,11 @@ states, and leave — with the save syncing on the way out.
   PSP's, which is not a console's firmware and ships with the emulator.
 - **Dreamcast, Naomi, N64 and PSP play**, through a framebuffer inside the
   frontend's own GLES context, with no pixel read back anywhere.
+- **First run's mechanisms exist and none of them is a picture**, as of
+  2026-09-20: `firstrun.{h,cpp}`, `qr.{h,cpp}`, `net.{h,cpp}` and a polkit rule.
+  The chain is enforced rather than described — `--first-run-rules` walks every
+  combination of facts and asserts the REFUSALS, and it found a real deadlock on
+  its first run. **The screens themselves still wait for the look.**
 
 ## Pick up with these, in this order
 
@@ -163,12 +185,16 @@ the right way up. Read this order before picking anything up.
 | | |
 |---|---|
 | **1** | **A GAME CAN GO BLACK AND NOBODY KNOWS WHY.** Six launches in one session drew nothing but the letterbox glow while the core ran and made sound. Not reproduced since. Two theories tested and both falsified. See item 3b — it has the instruments. |
-| **2** | **The console demotes itself to software rendering on a boot-time network race**, and it did it on this session's very first boot. It is item 4's fault, it is no longer theoretical, and it makes the reference machine lie. |
-| **3** | **Judge the TATE look, and Home, on the 65-inch.** Both are on the machine and neither has been looked at properly. |
-| **4** | Then the core options (item 7) or the rest of item 4. |
+| **2** | **Judge the TATE look, and Home, on the 65-inch.** Both are on the machine and neither has been looked at properly. |
+| **3** | **Join a Wi-Fi network from the console, with a keyboard.** `net::join` is written and has never been run against a real access point — see item 4b. It is twenty minutes and it is the only part of the network plumbing that is not measured. |
+| **4** | Then the core options (item 7), or the first-run screens if the look is ready to be settled (item 4b). |
 
-**Do not start new UI screens before 1 and 2.** Search and Settings are drawn
-in the top bar and say "not built yet"; that is deliberate and can stay.
+**Item 2's old entry is gone because it is fixed**: the console no longer demotes
+itself to software rendering on a boot-time network race. The A9 has come up on
+`gamescope (drm)` on every boot since.
+
+**Do not start new UI screens before 1.** Search and Settings are drawn in the
+top bar and say "not built yet"; that is deliberate and can stay.
 
 ### 2. Vertical arcade games play the right way up — DONE 2026-09-19
 
@@ -335,6 +361,61 @@ second has anything to work with.** See open question 15b.
 fallback when no address is configured at all, and it is worse than an error:
 it looks like a working console showing somebody else's games.
 
+### 4b. First run — the mechanisms are built, the screens are not
+
+**All four of the things open question 15b listed as missing exist as of
+2026-09-20**, and the polkit rule open question 17 asked for ships with them.
+None of them draws anything, which is why they could go ahead of the look.
+
+| | |
+|---|---|
+| `firstrun.{h,cpp}` | the chain, and every rule about what may be skipped |
+| `qr.{h,cpp}` | byte mode, versions 1–10, error correction M |
+| `net.{h,cpp}` | status, scan, join, forget, and the polkit verdict |
+| `60-cabinetos-network.rules` | the grant that stops Phase 6 breaking Wi-Fi |
+
+**THE CHAIN IS ENFORCED, NOT DESCRIBED.** `Machine` is handed a `Facts` and
+judges it; it never calls the network, the disk or a server. `observe()` is the
+one place that goes and looks. That is the same split `screens::` makes and it
+buys the same thing — the whole flow can be walked at any point in it, on a
+machine with nothing attached.
+
+**Which made the rules testable, and the test found a real deadlock on its first
+run.** `--first-run-rules` walks all 96 reachable combinations of facts and
+asserts the REFUSALS rather than the happy path. What it caught: the Wi-Fi
+step's skip was keyed on **Ethernet** being up rather than on being **online**,
+and those coincide only while this console knows about exactly two kinds of
+link. One `net.cpp` change later, a machine online over a third kind would pass
+the network gate and then sit at a Wi-Fi step it could neither satisfy nor skip.
+Reading the code again would not have found it.
+
+**THE A9 SAYS IT NEEDS NO SETUP, AND THAT IS THE RULE THAT MATTERS MOST.** A
+machine with a server address, a token and a user behind that token is ADOPTED
+rather than walked through a wizard, and the marker is back-filled saying so.
+Without that rule, the reference console — set up by hand over SSH, working for
+a day — would have presented a welcome screen the next time it booted. The
+question is *"is this machine configured"*, not *"has this flow been run"*.
+
+**What is still owed:**
+
+- **The screens.** All of them, and they wait for the look like every other.
+- **`net::join` has never been run against a real access point.** Status,
+  scanning, the polkit verdict and the whole state machine are measured on the
+  A9; joining is not, because the reference machine is on a cable and taking it
+  off is how you lose the machine you are measuring. **Do it with a keyboard at
+  the console.**
+- **Pairing a controller** is a step in the chain with no mechanism behind it
+  yet. The chain treats it as soft, which is correct, so nothing is blocked.
+
+**How to see any of it:**
+
+```
+--first-run  --first-run-check-server  --first-run-step <name>  --first-run-rules
+--network    --network-scan            --qr "<text>"            --qr-out <path>
+```
+
+All run before SDL and none disturbs the session on the television.
+
 ### 5. Where the in-game save machinery lives
 
 Item 3 is the job; this is the map. `frontend/src/filesave.{h,cpp}` is the
@@ -457,7 +538,10 @@ These are ordered. **Do not begin any of them in the VM.**
   decision and it needs the panel.
 - **The audio governor's 20 ms cushion.** Inherited from Cabinet rather than
   measured here; the lead it permits *is* input lag. Tune it with a pad in hand.
-- **First run**, which is now designed and not built — **open question 15b**,
+- **First run's SCREENS.** Its four mechanisms were built on 2026-09-20 and none
+  of them is a picture; see item 4b. What waits is every screen. The old text
+  follows, because the design behind those screens is unchanged — **open
+  question 15b**,
   written with MMagTech on 2026-09-19 after setting the A9 up by hand over
   SSH. The requirement is one line and it is testable: **a keyboard is needed
   exactly once, ever.** A keyboard is the only input an installed machine
@@ -466,10 +550,10 @@ These are ordered. **Do not begin any of them in the VM.**
   pairs a controller as its last step, and a second controller is added using
   only the first — with two-sided confirmation, so a neighbour's pad in
   pairing mode cannot answer for itself. **The mechanisms mostly exist** (the
-  on-screen keyboard, the pairing flow's code and URL, `session.env`, bluez);
-  what is missing is a state machine, a QR renderer, NetworkManager plumbing
-  and a way to know it is the first run. **None of those is a picture**, so
-  they can start before the look is settled.
+  on-screen keyboard, the pairing flow's code and URL, `session.env`, bluez),
+  **and as of 2026-09-20 so do the four that did not** — the state machine, the
+  QR renderer, the NetworkManager plumbing and knowing it is the first run.
+  What is left here is the look.
 - **The boot splash**, and the rest of the branding.
 - **The row in Settings that turns file access on**, decided 2026-09-19 and the
   answer to open question 9. A console ships listening to nothing; an ordinary
@@ -607,6 +691,72 @@ These are ordered. **Do not begin any of them in the VM.**
   without a controller.
 - **Stop the session before building on the VM.** The frontend runs at 300% CPU
   under llvmpipe and it is four cores. Or skip it and use the offscreen driver.
+
+### About the network, polkit and QR codes, all new on 2026-09-20
+
+- **`pkcheck` PRINTS SEVERAL `key=value` LINES, NOT ONE.** Taking the last `=`
+  in its output reports `1` — the value of
+  `polkit\56retains_authorization_after_challenge`, which is not even one of the
+  values the action can have. Match the line whose key ends in `result`.
+- **THE POLKIT ANSWER DEPENDS ON WHO IS ASKING, AND BOTH ANSWERS ARE RIGHT.**
+  Over SSH the verdict for saving a network is `auth_admin_keep`; from the
+  console's own session it is `yes`. The rule requires `subject.local`, on
+  purpose — developer mode hands out SSH deliberately and a shell over the
+  network should not inherit the console's privileges. **`--network` says which
+  question it put**, because a probe that printed one number without saying
+  would be the third lying instrument this project has fixed.
+- **A POLKIT RULE THAT GRANTS SOMETHING ALREADY GRANTED PROVES NOTHING.** The
+  machine already answers `yes` via `wheel`, so installing a rule that also says
+  yes changes nothing observable. **The decisive test is to install it returning
+  `NO` and watch the verdict flip** — that proves yours is consulted first.
+  `60-` sorts before `org.freedesktop.NetworkManager.rules`, and polkit takes
+  the first rule that returns a result. Put the machine back afterwards.
+- **`nmcli --terse` ESCAPES COLONS, AND AN SSID MAY CONTAIN ONE.** Anybody
+  within radio range picks their own SSID, so a naive `split(':')` is a stranger
+  deciding how many fields this console thinks it received. And **nothing may go
+  through a shell**: every nmcli call is `fork`/`execvp` with an argv array,
+  because a scan puts unvetted bytes from strangers into this process every time
+  it runs.
+- **ONE ROW PER NETWORK, NOT ONE PER ACCESS POINT.** A house with three mesh
+  nodes broadcasts the same SSID three times and nmcli lists all three.
+- **`/etc/cabinetos/session.env` IS NOT IN YOUR ENVIRONMENT OVER SSH.** The
+  session script sources it; an SSH shell does not. Every check of first run is
+  made over SSH, so `--first-run` reported "NEEDED" on a console that had been
+  working for a day. The frontend now reads the file directly as well.
+- **A QR CODE CANNOT BE CHECKED BY LOOKING AT IT** — a wrong one looks exactly
+  like a right one. Check it three ways: module-for-module against a reference
+  **with the mask forced**, a second reference to break ties, and a round trip
+  through a real decoder. Each of the three found something the others did not.
+- **THE MASK IS A LEGITIMATE DIFFERENCE BETWEEN ENCODERS.** Three
+  implementations picked three different masks for the same string and all three
+  are valid. So "matches a reference exactly" is not achievable across
+  implementations — force the mask to compare the rest, and decode to settle it.
+- **IN A BCH REMAINDER, TEST THE GENERATOR'S DEGREE, NOT THE FIELD'S WIDTH.**
+  Testing bit 14 instead of bit 10 reduces nothing and puts **no error
+  correction at all** in the format field. The data region was perfect and no
+  scanner would read it.
+- **THE QUIET ZONE IS NOT OPTIONAL AND IT IS THE RENDERER'S.** Measured: the
+  same code drawn flush to the edge does not decode at all; with four modules of
+  margin it decodes every time. It is the commonest reason a correct code will
+  not scan.
+- **`(6,8)` AND `(8,6)` ARE TIMING, NOT FORMAT.** They sit inside the format
+  area's L shape and belong to the timing pattern. Reserving them blanks two
+  modules of the timing line — a two-module difference in a 33x33 symbol that no
+  scanner will accept.
+- **`--romm-pair` DOES NOTHING IF A TOKEN ALREADY EXISTS.** It loads
+  `$HOME/.config/cabinetos/romm.json` and, finding one, skips straight to
+  reporting the library — so on either machine here it never pairs. To get a
+  real pairing code without disturbing anything, point HOME somewhere empty:
+  `HOME=/tmp/pairhome ./build/cabinetos-frontend --romm <addr> --romm-pair`.
+  The token lands in the throwaway directory and nothing else changes.
+- **THE PAIRING URL IS THE SERVER'S, NOT A SHAPE YOU CAN GUESS.** It is
+  `base + verification_path_complete` from `/api/auth/device/init`, and on RomM
+  5.1.0 that is `/pair/device?user_code=…`. A fabricated one produces a QR that
+  scans perfectly and lands on a page saying the code does not exist.
+- **WALK EVERY COMBINATION RATHER THAN RE-READING THE RULES.** The state
+  machine's exhaustive check is 96 cases, needs nothing, and found a deadlock
+  the code read as correct. Assert the REFUSALS — the happy path is the part
+  that already works.
 
 ### About the product
 

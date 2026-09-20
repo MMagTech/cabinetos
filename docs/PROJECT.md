@@ -26,7 +26,7 @@
 
 ---
 
-## Where the project is — 2026-09-19
+## Where the project is — 2026-09-20
 
 **Phase 0 complete. Phase 1 complete. Phase 2 mostly done. Phase 3 well under
 way and running. Phase 5 started early, the hardest question in it is answered,
@@ -119,6 +119,22 @@ rather than launched by hand:
   Geo Pocket, DS — now travel, filed under the same rows an Apple TV already
   reads. Ikaruga says 「データファイルのロードに成功しました」 to a card that
   came off RomM. See *The save audit*.
+
+### First run has its mechanisms, and no screens — 2026-09-20
+
+**All four of the things open question 15b listed as missing are built**: a
+state machine, a QR renderer, NetworkManager plumbing, and a way to know it is
+the first run at all. None of them draws anything, which is why they could go
+ahead of the look. **The screens still wait, like every other screen.**
+
+The polkit rule open question 17 asked for ships with them, and the reference
+console correctly reports that it is *already configured* and needs no setup —
+which is the rule that matters most, because that machine was set up by hand and
+must never be shown a wizard.
+
+Read open question 15b for the whole of it, including the three faults the QR
+encoder's verification found and the deadlock the state machine's rules check
+found.
 
 ### Open against the frontend right now
 
@@ -7769,9 +7785,11 @@ open question 17, rung 1.
   never appear.
 - **Pairing RomM needs a second device.** The flow is device authorisation: it
   yields a URL and a user code and somebody must approve it in a browser. A
-  console has no browser, so first run shows a **QR code** — which `main.cpp`
-  already anticipates in a comment above the `printf` that prints them. A
-  phone is therefore a real dependency of setup and should be stated as one.
+  console has no browser, so first run shows a **QR code** — built 2026-09-20,
+  `frontend/src/qr.{h,cpp}`. **A browser signed in to RomM is therefore a real
+  dependency of setup and is stated as one** — not a phone specifically, which
+  is a tighter claim than the truth and would push a screen toward mentioning
+  only phones. See *A browser is a dependency, and it is a safe one* below.
 - **A physical keyboard types into the same field the on-screen keyboard
   shows.** One field, two ways to fill it; not two text-entry paths. And the
   on-screen keyboard does not become optional — first run is the one moment a
@@ -7829,10 +7847,217 @@ and its code and URL, `/etc/cabinetos/session.env` as the file a first-run
 screen writes, and `bluez` plus the MT7925's Bluetooth firmware in the image
 with the adapter already naming itself `cabinetos` from the hostname.
 
-Missing: a state machine, a QR renderer, NetworkManager plumbing, and a way
-to know it is the first run at all. **None of those is a picture**, so they
-can be built before the look is settled — but the screens themselves wait,
-like every other screen.
+#### THE FOUR MECHANISMS ARE BUILT — 2026-09-20
+
+**What this bought, in one sentence: a console can now be asked where it is in
+setup, and answer, on a machine with no screens built yet.** All four of the
+things that were missing are in the tree, none of them draws anything, and each
+one can be run from a shell against the reference console without disturbing
+what is on the television. The screens still wait, like every other screen.
+
+| | | |
+|---|---|---|
+| **A state machine** | `frontend/src/firstrun.{h,cpp}` | The chain, and every rule about what may be skipped |
+| **A QR renderer** | `frontend/src/qr.{h,cpp}` | Byte mode, versions 1–10, error correction M |
+| **NetworkManager plumbing** | `frontend/src/net.{h,cpp}` | Status, scan, join, forget, and the polkit verdict |
+| **Knowing it is the first run** | `firstrun::completion()` | A marker, and the rule that adopts a machine set up by hand |
+
+**And the polkit rule open question 17 asked for ships with them**, at
+`system_files/usr/share/polkit-1/rules.d/60-cabinetos-network.rules`.
+
+##### The state machine hands nothing to itself
+
+`Machine` is given a `Facts` and judges it. It never calls the network, the disk
+or a server — `observe()` is the one place that goes and looks, and it is
+deliberately separate. That is the same split `screens::` makes, and it buys the
+same thing: the whole flow can be walked at any point in it, on a machine with
+no network, no server and no pad.
+
+**Which is what made the rules testable, and the test found a real deadlock.**
+`--first-run-rules` walks every combination of facts the machine can be handed —
+96 of them — and asserts the refusals rather than the happy path: that setup
+cannot finish while offline, with no server answering, or with no token; that
+Wi-Fi cannot be passed over while offline; that every Blocked step has a
+sentence; and that `advance()` and `skip()` each refuse anything but their own
+gate. It runs in CI and needs nothing.
+
+The deadlock it found: **the Wi-Fi step's skip was keyed on ETHERNET being up
+rather than on being ONLINE.** Those coincide only while this console knows
+about exactly two kinds of link. The day `net.cpp` counts a third, a machine
+online over it would pass the network gate and then sit at a Wi-Fi step it could
+neither satisfy nor skip — setup stuck, on a machine that is on the network.
+Reading the code again would not have found it; walking every combination did.
+
+##### Knowing it is the first run — and the machine set up by hand
+
+The hard half of this question is not the marker file, it is **the reference
+console**. Somebody SSHed into it and wrote `session.env` and a token, which is
+exactly what this flow will one day produce. It has never seen a setup screen
+and must never be shown one: a console that boots into a wizard after a year of
+use is a far worse failure than one that skips a wizard it did not need.
+
+So the answer is in two parts and the second matters more:
+
+1. A marker at `<root>/config/first-run.json` says setup finished.
+2. **With no marker, a machine that already has everything setup produces — a
+   server address, a token, and a user behind that token — is taken as set up**,
+   and the marker is back-filled recording that it was adopted rather than
+   walked.
+
+Rule 2 is the difference between *"has this flow been run"* and *"is this
+machine configured"*, and only the second is the question anybody cares about.
+**Measured on the A9 on 2026-09-20**: `--first-run` reports *"not needed — this
+machine is already configured"* and walks the chain to completion.
+
+##### The server address now has somewhere to be written
+
+First run's one lasting output is the RomM address, and the session user
+**cannot write `/etc/cabinetos/session.env`** — it is root's. Rather than invent
+a privileged helper for one string that is not a secret, first run writes
+`<root>/config/server.json`, and the resolution order is:
+
+```
+--romm  →  $CABINETOS_ROMM  →  /etc/cabinetos/session.env  →  config/server.json
+```
+
+**Root's answer wins**, because `session.env` is the documented way to set a
+console up by hand and a file the session wrote must not silently override it.
+Writing the address while something that outranks it says otherwise is reported
+rather than done silently.
+
+**`session.env` is read DIRECTLY as well as through the environment**, and that
+is not redundancy. The session script exports it, so a frontend started by the
+session sees it either way — but one started over SSH does not, and that is how
+every check of this gets made. Without it, `--first-run` on the reference
+console reported *"NEEDED"* on a machine that had been working for a day. **An
+instrument that lies about the thing it exists to report is worse than no
+instrument.**
+
+##### The QR encoder is written out, and it was checked against two others
+
+Byte mode, versions 1 to 10, error correction M — roughly four times the
+headroom a RomM verification URL needs. Longer input is refused rather than
+silently truncated. It has no dependency, because the alternative is a library
+in the image and in the build container for one screen that runs once in a
+console's life.
+
+**A QR code cannot be checked by looking at it**, which is the whole difficulty:
+a wrong one looks exactly like a right one. So it was checked three ways on
+2026-09-20, and each way found something:
+
+- **Module-for-module against two independent encoders.** With the mask forced,
+  every case from version 1 to version 10 matches exactly. This found three real
+  faults: a BCH remainder that **tested the wrong bit** and therefore put no
+  error correction in the format field at all; two timing-pattern modules
+  blanked by the format-area reservation; and a mask-penalty rule that treated
+  off-the-edge as light and scored every real finder pattern twice.
+- **A third implementation broke a tie.** The two references disagreed about
+  padding — one writes a longer, legal, non-minimal terminator. A third agreed
+  with ours byte for byte, including every error-correction codeword.
+- **Round-tripped through a real decoder.** 18 of 19 cases decode back to the
+  exact input. The nineteenth produces a matrix **byte-identical to a reference
+  encoder's**, and the reference fails to decode in precisely the same way at
+  precisely the same scales — so it is the detector, not the encoder.
+
+**THE QUIET ZONE IS THE RENDERER'S JOB AND IT IS NOT OPTIONAL.** Measured: the
+same code drawn flush to the edge does not decode at all, while with four
+modules of margin it decodes every time. It is the commonest reason a perfectly
+correct code will not scan, and it is margin — which is layout, which belongs to
+whatever draws this.
+
+**The mask is a legitimate difference between encoders.** Three implementations
+picked three different masks for the same string and all three are valid; the
+format field records which was used. So "matches a reference exactly" is not
+achievable across implementations, and the decode test is what settles it.
+
+##### nmcli, and not libnm or D-Bus
+
+`net.cpp` shells out to `nmcli`. That looks like the lazy answer and it is the
+considered one: libnm wants a GMainLoop and this program already has a frame
+loop that owns the process; raw sd-bus avoids the loop but not the work, since
+adding a Wi-Fi connection means hand-building NetworkManager's nested
+`a{sa{sv}}` settings schema, which is the part most likely to be subtly wrong
+and the part with no way to check by hand. **nmcli is already in the image, and
+any fault in it can be reproduced at a shell in one line** — which on a project
+whose rule is *measure rather than reason* is worth more than elegance.
+
+The price is paid in two places and both are written down:
+
+- **Terse output is colon-separated with backslash escapes, and an SSID may
+  legally contain a colon.** Anyone within radio range picks their own SSID, so
+  a naive `split(':')` is not a tidiness bug — it is a stranger deciding how many
+  fields this console thinks it received.
+- **Nothing goes through a shell.** Every command is `fork`/`execvp` with an
+  argv array. A scan puts unvetted bytes from strangers into this process every
+  time it runs.
+
+One exposure is kept rather than solved, and recorded: a passphrase passed to
+`nmcli` is visible in that process's argv while it runs. On this machine that is
+not an escalation — the only readers are the same user and root, and
+NetworkManager stores the passphrase where root can read it anyway.
+
+##### What is still owed here
+
+- **The screens.** Every one of them, and they wait for the look like all the
+  others.
+- **`join()` has not been run against a real access point.** Status, scanning,
+  the polkit verdict and the whole state machine are measured on the A9;
+  actually joining a network is not, because the reference console is on a
+  cable and taking it off is how you lose the machine you are measuring.
+  **Do this with a keyboard at the console, not over SSH.**
+- **Pairing a controller** is a step in the chain and a mechanism nobody has
+  written yet. The chain treats it as soft, which is correct, so nothing is
+  blocked on it.
+
+#### A browser is a dependency, and it is a safe one — decided 2026-09-20
+
+Pairing is a device authorisation: somebody must approve it in a browser that is
+already signed in to RomM, and the console has no browser. This was going to be
+recorded as an open question. **MMagTech closed it, and the reasoning is
+stronger than the argument for the keyboard:**
+
+> if you have a mini PC lying around to install this on, you have a phone as
+> well, or another browser
+
+**You cannot have a RomM library without a browser.** RomM is a self-hosted web
+application; to be at the point of setting up a console you have already stood
+up a server, signed in to it and added games — all through a browser. So this is
+not a hopeful guess about the user, it is a restatement of the thing first run
+is pairing *with*. The keyboard is justified by the hardware; this is justified
+by the premise, which is firmer ground.
+
+Two things follow, and neither costs anything:
+
+- **Say "phone or computer", never "phone".** The QR only saves somebody typing
+  the URL; a laptop already signed in to RomM is the easier path for plenty of
+  people. **The screen shows the URL and the short code as text beside the
+  code**, so either works.
+- **A failed pairing says what was observed and nothing more.** The step already
+  needs a timeout, because a person can simply walk away — *"RomM didn't confirm
+  this console. Here's the link and code again."* A console that starts
+  diagnosing somebody's reverse proxy has lost the plot; their infrastructure is
+  not ours to explain, and we do not claim to know why.
+
+#### How to see any of it work
+
+```
+cabinetos-frontend --first-run                 where setup is, and where it would stop
+cabinetos-frontend --first-run-check-server    the same, and ask whether the server answers
+cabinetos-frontend --first-run-step wifi       open the chain at one step
+cabinetos-frontend --first-run-rules           96 fact combinations, asserting the refusals
+cabinetos-frontend --network                   link, radio, and the polkit verdict
+cabinetos-frontend --network-scan              the same, and what is on the air
+cabinetos-frontend --qr "<text>"               a code on a terminal, scannable off the screen
+```
+
+All of them run before SDL, so they need no window, no GL and no controller, and
+**none of them disturbs the session on the television**.
+
+**`--first-run` and `--network` both report WHO IS ASKING**, because the polkit
+grant depends on the session the caller is in: over SSH the verdict is
+`auth_admin_keep` and at the console it is `yes`, and both are correct. A probe
+that printed one number without saying which question it put would be the third
+lying instrument this project has had to fix.
 
 ### 16. Is a mouse supported, or not?
 **Raised 2026-09-13. Two documents currently disagree. Needs a decision, not a
@@ -7914,6 +8139,44 @@ than a permissions one. Same class of trap as the controller ACL in *Controls*.
 session user directly, rather than depending on `wheel`. Cheap, and it decouples
 "can configure the network" from "can become root", which are not the same
 privilege and should not be the same grant.
+
+**SHIPPED 2026-09-20**, at
+`system_files/usr/share/polkit-1/rules.d/60-cabinetos-network.rules`. It names
+one action and one user and adds nothing else, so the session user can be taken
+out of `wheel` whenever Phase 6 wants to and Wi-Fi keeps working.
+
+**AND IT WAS MEASURED ON THE A9 RATHER THAN REASONED ABOUT**, which mattered,
+because the obvious check proves nothing: the machine already answers `yes` by
+way of `wheel`, so installing a rule that also says yes changes no observable
+thing. The decisive test was to install the rule **returning `NO`** and watch
+the verdict flip:
+
+```
+pkcheck --action-id org.freedesktop.NetworkManager.settings.modify.system         --process <the frontend's pid>
+
+   with nothing of ours installed   polkit.result=yes      (Bazzite's wheel rule)
+   with ours installed saying NO    polkit.result=no       (ours is consulted first)
+   with ours installed as shipped   polkit.result=yes
+   ours removed again               polkit.result=yes
+```
+
+The second line is the whole proof. **`60-` sorts before
+`org.freedesktop.NetworkManager.rules`**, polkit takes the first rule that
+returns a result, and ours therefore answers whether or not Bazzite's file is
+present or still grants anything. The machine was put back as found.
+
+**`subject.local` is kept and it is not ceremony**: the grant belongs to
+somebody sitting at the machine, not to an SSH session. Developer mode hands out
+SSH deliberately (open question 9), and a shell reached over the network should
+not silently inherit the console's own privileges. The visible consequence is
+that `--network` reports `auth_admin_keep` over SSH and `yes` at the console,
+and **both are correct** — which is why that probe says which question it put.
+
+**The console can now ask this question itself.** `net::polkitVerdict()` reports
+what polkit says about saving a system connection, and `join()` appends it to
+the error when a join fails for want of privilege. That turns the Phase 6 trap
+from a silent Wi-Fi failure on a machine whose network is fine into one line
+naming the rule file.
 
 #### The ladder, in the order the UI should offer it
 

@@ -102,6 +102,37 @@ grep -q 'non-commercial' /usr/share/licenses/cabinetos/LICENCES.md || {
 }
 
 # ---------------------------------------------------------------------------
+# The console's own polkit rule.
+# ---------------------------------------------------------------------------
+#
+# Copied by the system_files overlay above; asserted here, because this one is
+# invisible when it is missing. Wi-Fi configuration works on the reference
+# machine today WITHOUT it — the session user is in `wheel` and Bazzite grants
+# the action to that group — so a build that silently dropped this file would
+# ship a console that works until the day Phase 6 tightens developer mode and
+# takes the session user out of `wheel`. Then Wi-Fi stops being configurable,
+# with no error anywhere near the cause. See docs/PROJECT.md open question 17.
+POLKIT_RULE=/usr/share/polkit-1/rules.d/60-cabinetos-network.rules
+if [[ -s "${POLKIT_RULE}" ]]; then
+    log "installed: ${POLKIT_RULE}"
+else
+    log "  ERROR: ${POLKIT_RULE} is missing — Wi-Fi would depend on 'wheel'"
+    exit 1
+fi
+# The action it grants, spelled out, so a rename upstream fails the build rather
+# than producing a rule that matches nothing.
+grep -q 'org.freedesktop.NetworkManager.settings.modify.system' "${POLKIT_RULE}" || {
+    log "  ERROR: ${POLKIT_RULE} no longer names the action it exists to grant"
+    exit 1
+}
+# The user it names has to be the one sysusers.d creates, or the grant lands on
+# nobody. Both are in this repository and they must move together.
+grep -q '^u cabinet ' /usr/lib/sysusers.d/cabinetos.conf || {
+    log "  ERROR: the session user is no longer 'cabinet'; ${POLKIT_RULE} names it"
+    exit 1
+}
+
+# ---------------------------------------------------------------------------
 # Record the starting package set.
 # ---------------------------------------------------------------------------
 #

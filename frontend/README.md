@@ -84,11 +84,53 @@ printed**, for the same reason the storage root is:
   wrong is not loud on its own: the console simply reports every platform as
   *"the core for this system is not built on this console yet"*, which reads as
   twenty-one broken emulators rather than one wrong path. Hence the line above.
-- **The server.** `--romm <address>`, or `$CABINETOS_ROMM`. On a console the
-  session script exports it from `/etc/cabinetos/session.env`, which is
-  machine-local and not in the image — this repository is public and somebody's
-  LAN address does not belong in it. With neither, the frontend comes up on the
-  stand-in library.
+- **The server.** Four places, in this order, and the first one that answers
+  wins:
+
+  ```
+  --romm  →  $CABINETOS_ROMM  →  /etc/cabinetos/session.env  →  config/server.json
+  ```
+
+  `session.env` is machine-local and not in the image — this repository is
+  public and somebody's LAN address does not belong in it. `config/server.json`
+  is what first run writes, because the session user cannot write `/etc`, and it
+  loses to the other three deliberately: root's answer must not be silently
+  overridden by a file the session wrote. With none of them, the frontend comes
+  up on the stand-in library.
+
+  **`session.env` is read directly as well as through the environment**, so a
+  binary started over SSH resolves the same address the session does. Without
+  that, every probe run over SSH reports a configured console as unconfigured.
+
+## First run, and the network
+
+None of it draws anything yet — the screens wait for the look — but all four
+mechanisms are here and each one can be run from a shell. **None of these
+disturbs a session already on the television**, and all of them run before SDL,
+so they need no window, no GL and no controller.
+
+```
+--first-run                 where setup is, and where it would stop
+--first-run-check-server    the same, and ask whether the server answers
+--first-run-step <name>     open the chain at one step: network wifi server pair controller
+--first-run-rules           96 fact combinations, asserting the refusals
+--network                   link, radio, and whether a network can still be saved
+--network-scan              the same, and what is on the air
+--qr "<text>"               a QR code on a terminal, scannable straight off the screen
+--qr-out <path.pbm>         and write it as an image
+```
+
+**`--first-run-rules` is the test, not a report.** It walks every combination of
+facts the state machine can be handed and asserts what must be REFUSED — that
+setup cannot finish while offline, with no server answering or with no token;
+that Wi-Fi cannot be passed over while offline; that every blocked step explains
+itself. It needs no network and no server, so it runs anywhere. It has already
+found one real deadlock.
+
+**`--network` reports who is asking, and you should read that line.** The polkit
+grant for saving a Wi-Fi network depends on the session the caller is in, so
+over SSH it says `auth_admin_keep` and at the console it says `yes` — and both
+are correct.
 
 ## Running
 
@@ -185,9 +227,15 @@ person would press is to press it from here:
   It is not built because it costs almost exactly the vertical slack Home has
   left, and that is a measurement only a real television can settle — see
   `docs/PROJECT.md`.
-- **A first-run screen**, so a console can be told which RomM server it belongs
-  to without somebody writing `/etc/cabinetos/session.env` over SSH. Open
-  question 15.
+- **The first-run SCREENS.** The mechanisms behind them are built — the state
+  machine, the QR encoder, the NetworkManager plumbing and the marker that says
+  whether setup has happened — and none of them draws anything. See the flags
+  above, and open question 15b.
+- **Joining a Wi-Fi network has not been done from the console.** `net::join`
+  is written and the scan, the status and the polkit verdict are all measured on
+  the A9, but actually joining one is not: the reference machine is on a cable,
+  and taking it off is how you lose the machine you are measuring. Do it with a
+  keyboard at the console.
 - **The rest of the launch screen**: a different save state, a different core,
   an export.
 - **The Storage screen.** Its data exists; `--storage` prints it.

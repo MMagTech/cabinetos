@@ -1,0 +1,50 @@
+// Let the console configure its own network.
+//
+// WHAT BREAKS WITHOUT THIS: nothing, today. That is the problem.
+//
+// Saving a Wi-Fi connection that comes back after a reboot is the polkit action
+// `org.freedesktop.NetworkManager.settings.modify.system`, and its shipped
+// default is `auth_admin_keep` — a password prompt. A console has no way to
+// answer one: there is no desktop, no polkit agent and nobody at a keyboard
+// after first run. So the action has to be granted outright or Wi-Fi cannot be
+// set up at all.
+//
+// It IS granted today, by a rule Bazzite ships for a different reason:
+//
+//     org.freedesktop.NetworkManager.rules — "Allow users in the wheel group
+//     to create system-wide connections ... to maintain backwards
+//     compatibility ... This is discouraged otherwise."
+//
+// The CabinetOS session user is in `wheel`, so Wi-Fi works by inheritance
+// rather than by design. `wheel` is also what grants sudo, and Phase 6 —
+// tightening security around developer mode — is exactly the change that takes
+// the session user out of it. The moment that lands, Wi-Fi configuration stops
+// working, with no error anybody would connect to the cause: it presents as a
+// network bug on a machine whose network is fine.
+//
+// So the grant is written down here, naming the one action and the one user,
+// and it decouples "may configure the network" from "may become root". Those
+// are not the same privilege and should never have been the same grant.
+//
+// WHY 60-: polkit reads rules.d in lexicographic order and takes the first rule
+// that returns a result. Digits sort before letters, so this is consulted
+// before Bazzite's `org.freedesktop.NetworkManager.rules` and answers whether
+// or not that file is present or still grants anything.
+//
+// The user name is the one `system_files/usr/lib/sysusers.d/cabinetos.conf`
+// creates. If that ever changes, this changes with it — and the check for that
+// is `frontend/src/net.cpp`'s `--network` probe, which reports the action's
+// polkit result rather than assuming it.
+//
+// `subject.local` is kept, and it is not ceremony: it means the grant belongs
+// to somebody sitting at the machine, not to an SSH session. Developer mode
+// hands out SSH deliberately (open question 9), and a shell reached over the
+// network should not silently inherit the console's own privileges.
+
+polkit.addRule(function(action, subject) {
+    if (action.id == "org.freedesktop.NetworkManager.settings.modify.system" &&
+        subject.user == "cabinet" &&
+        subject.local) {
+        return polkit.Result.YES;
+    }
+});
