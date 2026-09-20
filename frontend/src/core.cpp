@@ -9,6 +9,7 @@
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
+#include <string>
 #include <mutex>
 #include <unordered_map>
 
@@ -69,6 +70,33 @@ std::string gSystemDir, gSaveDir;
 // boards from one platform row and only knows which after the game is loaded.
 unsigned gRotation = 0;
 bool gRotationAnnounced = false;
+
+// Once per game, like the rotation line. Cleared in loadGame.
+bool gInputDescriptorsLogged = false;
+
+// RetroPad ids as a person says them, for the input descriptor log. The order
+// is libretro's own and matches cab::Button.
+const char* padIdName(unsigned id) {
+    switch (id) {
+        case RETRO_DEVICE_ID_JOYPAD_B: return "B";
+        case RETRO_DEVICE_ID_JOYPAD_Y: return "Y";
+        case RETRO_DEVICE_ID_JOYPAD_SELECT: return "Select";
+        case RETRO_DEVICE_ID_JOYPAD_START: return "Start";
+        case RETRO_DEVICE_ID_JOYPAD_UP: return "Up";
+        case RETRO_DEVICE_ID_JOYPAD_DOWN: return "Down";
+        case RETRO_DEVICE_ID_JOYPAD_LEFT: return "Left";
+        case RETRO_DEVICE_ID_JOYPAD_RIGHT: return "Right";
+        case RETRO_DEVICE_ID_JOYPAD_A: return "A";
+        case RETRO_DEVICE_ID_JOYPAD_X: return "X";
+        case RETRO_DEVICE_ID_JOYPAD_L: return "L (shoulder)";
+        case RETRO_DEVICE_ID_JOYPAD_R: return "R (shoulder)";
+        case RETRO_DEVICE_ID_JOYPAD_L2: return "L2 (trigger)";
+        case RETRO_DEVICE_ID_JOYPAD_R2: return "R2 (trigger)";
+        case RETRO_DEVICE_ID_JOYPAD_L3: return "L3 (stick click)";
+        case RETRO_DEVICE_ID_JOYPAD_R3: return "R3 (stick click)";
+        default: return nullptr;
+    }
+}
 
 // The core writes into its own buffer and reuses it between calls, so a frame
 // is copied out rather than referenced.
@@ -654,8 +682,67 @@ bool environment(unsigned cmd, void* data) {
             return true;
         }
 
+        case RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS: {
+            // WHAT EACH BUTTON ACTUALLY DOES IN THIS GAME, IN THE CORE'S OWN
+            // WORDS. Accepted and thrown away until 2026-09-19, and throwing
+            // it away is what made "the shoulder buttons do not work" an
+            // unanswerable question: a RetroPad has sixteen ids, a real
+            // machine has fewer, and the ones a core does not use are silent
+            // by design rather than broken. The Dreamcast pad, for one, has no
+            // shoulder BUTTONS at all — its L and R are analogue triggers —
+            // so a press that does nothing is the correct behaviour and looks
+            // identical to a bug.
+            //
+            // Printed once per game, port 0 only, and only for the joypad:
+            // Flycast declares four ports and a mouse and a lightgun besides,
+            // and a wall of those is not a diagnostic.
+            if (gInputDescriptorsLogged) return true;
+            const auto* d = static_cast<const retro_input_descriptor*>(data);
+            if (!d) return true;
+            std::string line;
+            for (; d->description; ++d) {
+                if (d->port != 0 || d->device != RETRO_DEVICE_JOYPAD) continue;
+                if (d->index != 0) continue;
+                const char* name = padIdName(d->id);
+                if (!name) continue;
+                if (!line.empty()) line += ", ";
+                line += name;
+                line += "=";
+                line += d->description;
+            }
+            // The flag is set only once something was actually printed. A core
+            // is free to call this more than once and to describe other ports
+            // first, and latching on a call that said nothing about port 0
+            // would silently throw away the one that does.
+            if (line.empty()) return true;
+            gInputDescriptorsLogged = true;
+            std::fprintf(stderr, "[input] port 0: %s\n", line.c_str());
+            // Say the silent ones too, because that is the half that answers
+            // the question somebody actually asked.
+            std::string unused;
+            for (unsigned id = 0; id <= RETRO_DEVICE_ID_JOYPAD_R3; ++id) {
+                const char* name = padIdName(id);
+                if (!name) continue;
+                bool found = false;
+                for (const auto* e = static_cast<const retro_input_descriptor*>(data);
+                     e->description; ++e) {
+                    if (e->port == 0 && e->device == RETRO_DEVICE_JOYPAD &&
+                        e->index == 0 && e->id == id) {
+                        found = true;
+                        break;
+                    }
+                }
+                if (found) continue;
+                if (!unused.empty()) unused += ", ";
+                unused += name;
+            }
+            if (!unused.empty())
+                std::fprintf(stderr, "[input] port 0 does nothing in this game: %s\n",
+                             unused.c_str());
+            return true;
+        }
+
         case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY:
-        case RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS:
         case RETRO_ENVIRONMENT_SET_MEMORY_MAPS:
         case RETRO_ENVIRONMENT_SET_SUPPORT_ACHIEVEMENTS:
         case RETRO_ENVIRONMENT_SET_SERIALIZATION_QUIRKS:
@@ -968,6 +1055,7 @@ bool Core::loadGame(const std::string& romPath, const std::string& systemDir,
     // never calls it at all would otherwise leave the upright one sideways.
     gRotation = 0;
     gRotationAnnounced = false;
+    gInputDescriptorsLogged = false;
 
     // need_fullpath means the core opens the file ITSELF, and libretro is
     // explicit that the frontend must then not load it. This used to read it
