@@ -36,7 +36,7 @@ be run.**
 **AND IT IS INSTALLED ON THE REFERENCE MACHINE, 2026-09-19.** The GEEKOM A9
 Pro boots into the frontend on `gamescope (drm)`, rendering on its own Radeon
 890M with Vulkan present, zero session restarts, and the full 1147-game
-library. See *The A9 Pro, measured*. **The UI freeze is lifted**: the machine
+library. See *The A9 Max, measured*. **The UI freeze is lifted**: the machine
 runs at the panel's native 3840x2160, so what is on that television is the real
 thing rather than a scaled image.
 
@@ -202,11 +202,11 @@ single opinion about the look.
 ### What is still unknown, honestly
 
 - **Nothing has been judged on a television.** Motion, the letterbox glow and
-  the safe area are all recorded as needing the reference machine — the A9 Pro,
+  the safe area are all recorded as needing the reference machine — the A9 Max,
   which arrived AND WAS INSTALLED on 2026-09-19 and now runs the frontend on
   its own GPU. A software-rendered VM could never answer any of them; that
   machine can. They become answerable the moment it runs at the panel's native
-  resolution rather than a scaled 1080p — see *The A9 Pro, measured*.
+  resolution rather than a scaled 1080p — see *The A9 Max, measured*.
 - ~~**Twenty cores of twenty-one are built**~~ **— all twenty-one are, as of
   2026-09-17.** PPSSPP was the last, and it runs: Lumines reaches its attract
   demo in colour with sound, writes its memory-stick save, and quits back to
@@ -241,7 +241,7 @@ single opinion about the look.
   2026-09-18.** A PKG installs to the same size it came in at, so the 2x lasts
   only while both the PKG and the install exist. Measured on a 287 MB title and
   a 19.8 GB one, and both boot with the PKG deleted. **PS3 games can still not
-  be PLAYED here** — that needs a GPU and Vulkan, and waits for the A9 Pro. See
+  be PLAYED here** — that needs a GPU and Vulkan, and waits for the A9 Max. See
   open question 19, *The PKG install, MEASURED 2026-09-18*.
 - **A decrypted ISO is a better shape where it is available** — one file, no
   install, no licence, and `beginLaunch`'s reuse test works on it unchanged.
@@ -292,7 +292,7 @@ Running infrastructure:
 | Repository | https://github.com/MMagTech/cabinetos |
 | Image | `ghcr.io/mmagtech/cabinetos:latest` — public, unsigned |
 | Test machine | Unraid VM at `192.168.1.250`, 4 GB, VirtIO-GPU, SSH key installed |
-| Reference hardware | **GEEKOM A9 Pro** — Ryzen AI 9 HX 370, Radeon 890M — **not yet installed**. Replaced the Beelink SER5 on 2026-09-17; see *Hardware*, where the rule is that everything keyed to "the SER5" now means this machine. |
+| Reference hardware | **GEEKOM A9 Max** — Ryzen AI 9 HX 370, Radeon 890M — **not yet installed**. Replaced the Beelink SER5 on 2026-09-17; see *Hardware*, where the rule is that everything keyed to "the SER5" now means this machine. |
 
 Everything in the pipeline has run green at least once: image build → GHCR →
 signing (skipped, no key) → qcow2 → VM boot → `bootc upgrade` in place →
@@ -407,8 +407,14 @@ Neither implementation may be the only one.
 **The target is x86-64 PC hardware, not one specific machine.**
 
 **The reference machine changed on 2026-09-17, which is exactly what this
-section said would happen.** It is now a **GEEKOM A9 Pro — AMD Ryzen AI 9 HX 370
-(Zen 5, 12 cores) with Radeon 890M integrated graphics (RDNA 3.5, 16 CUs).** It replaces the Beelink
+section said would happen.** It is now a **GEEKOM A9 Max — AMD Ryzen AI 9 HX 370
+(Zen 5, 12 cores) with Radeon 890M integrated graphics (RDNA 3.5, 16 CUs).**
+
+> **It is the A9 MAX, not the A9 Pro.** Written down as "A9 Pro" in twenty
+> places from 2026-09-17 until 2026-09-20, when the machine was asked rather
+> than remembered: `/sys/class/dmi/id/product_name` says `A9 Max`, which is the
+> manufacturer's own string for the board. Corrected everywhere, and noted here
+> so nobody helpfully corrects it back. A GEEKOM A9 Pro is a different machine. It replaces the Beelink
 SER5 (Ryzen 5, Vega), which was only ever the spare box that happened to be
 available.
 
@@ -1662,7 +1668,7 @@ Worth ~90 MB and ~7s of boot before touching anything contentious. Emulation
 performance itself will be bound by GPU throughput and single-thread CPU speed,
 neither of which any of this affects.
 
-### The A9 Pro, measured — 2026-09-19
+### The A9 Max, measured — 2026-09-19
 
 **The reference machine is installed and running CabinetOS, on its own GPU.**
 Everything below is read off the machine rather than hoped for. This is the
@@ -5050,7 +5056,7 @@ real hardware produced a black screen, because the image carried no frontend —
 so "install it and look at it" was not a thing anybody could do. Phase 5's
 deploy fixed that, and the reference machine arrived the same day.
 
-Install on real hardware — the GEEKOM A9 Pro is the reference machine. Performance
+Install on real hardware — the GEEKOM A9 Max is the reference machine. Performance
 tuning, Bluetooth controller pairing, audio output, display and resolution
 handling.
 
@@ -5237,11 +5243,11 @@ symbol-renaming apparatus disappears and nothing replaces it. See open question
 13 and *The frontend toolkit* for the layout.
 
 ### 5. Anaconda ISO vs. a plain disk image for installing to real hardware
-**Raised: Phase 1. TESTED FOR THE FIRST TIME 2026-09-19, installing the A9 Pro.
+**Raised: Phase 1. TESTED FOR THE FIRST TIME 2026-09-19, installing the A9 Max.
 It works, and it is not acceptable for anyone but us.**
 
 CI produces both a `qcow2` (for the VM boot test) and an `anaconda-iso` (for
-real hardware). The ISO installs correctly — the A9 Pro went from bare metal to
+real hardware). The ISO installs correctly — the A9 Max went from bare metal to
 a working console with it. **What it does to the person doing the installing is
 the problem**, and MMagTech asked directly whether this would do for a release.
 It would not. In the order they hit it:
@@ -5295,7 +5301,7 @@ automate it, and brand it.
 #### The installer runtime carries no firmware — 2026-09-19
 
 Worth its own note, because it looks catastrophic and is not. Installing on
-the A9 Pro, the installer printed:
+the A9 Max, the installer printed:
 
 ```
 amdgpu 0000:c6:00.0: early_init of IP block <psp> failed -19
@@ -7668,7 +7674,7 @@ nobody decided to build that.
 *Do not resolve before the on-screen keyboard has been used on a television.*
 
 ### 15b. First run, and the one input that can be guaranteed
-**Designed with MMagTech 2026-09-19, after the A9 Pro was installed and the
+**Designed with MMagTech 2026-09-19, after the A9 Max was installed and the
 setup was done by hand over SSH. Not built.**
 
 Everything here exists because installing the first real console took a
@@ -8572,7 +8578,7 @@ real but it is **transient**, lasting only while both exist.
 
 Everything below was run on the test VM, which has no GPU and no Vulkan.
 **Installing needs neither** — it is decrypt-and-unpack — so the answer did not
-have to wait for the A9 Pro. RPCS3 came from Flathub (`net.rpcs3.RPCS3`,
+have to wait for the A9 Max. RPCS3 came from Flathub (`net.rpcs3.RPCS3`,
 `0.0.42-19980-028d1e8f Alpha`); nothing was built.
 
 ##### The four numbers
@@ -8831,7 +8837,7 @@ the folder simply never reaches it.**
 
 **Still not playable here.** Every ISO result above is a boot to the point of
 loading the executable; the VM has no GPU, so nothing has been played. That
-waits on the A9 Pro and open question 20.
+waits on the A9 Max and open question 20.
 
 #### PS3's saves, and why the missing snapshots do not matter
 
@@ -8927,7 +8933,7 @@ generally the faster one). That is a better reason to teach the host a second
 API than "PS3 needs it".
 
 **Untestable until there is hardware.** The VM has no Vulkan, so none of this
-can be measured before the A9 Pro is installed.
+can be measured before the A9 Max is installed.
 
 ### 21. Emulators that are not cores, and why they cannot be baked into the image
 **Raised by MMagTech 2026-09-18. DECIDED and BUILT the same day.**
@@ -9081,7 +9087,7 @@ cannot be silent.
 installed, and xemu pulls a second runtime. That is real and it lands on the
 same volume as the disk floors, on a machine whose `/var` the test VM shows at
 under 5 GB free. **It has not been sized against the floors**, and it should be
-before anyone installs on the A9 Pro.
+before anyone installs on the A9 Max.
 
 Two more open edges:
 
@@ -9094,7 +9100,7 @@ Two more open edges:
   manifest to prove the mechanism generalises, which was the requirement.
 
 ### 22. What the console does when the server is away
-**Raised by the A9 Pro's first reboot, 2026-09-19. Partly decided the same day.
+**Raised by the A9 Max's first reboot, 2026-09-19. Partly decided the same day.
 Not built.**
 
 **REPRODUCED IN FULL ON 2026-09-19**, on the first boot after the A9 was moved
