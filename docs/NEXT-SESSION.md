@@ -416,18 +416,45 @@ question is *"is this machine configured"*, not *"has this flow been run"*.
 and no help — exactly as a phone pointed at the television sees it — and read
 back the live pairing URL the server had issued seconds earlier.
 
+### THE FRESH INSTALL IS THE ONLY REMAINING TEST, AND IT IS THE REAL ONE
+
+Everything here has been walked on the reference console — but that machine is
+CONFIGURED, so every run used `--setup`, which forces the flow and **writes
+nothing**. A fresh install is the first time first run will happen for real, and
+it is the only way to see three things nobody has ever seen:
+
+| | |
+|---|---|
+| **The writes** | `config/first-run.json`, `config/server.json` and the token, written by the flow rather than by hand |
+| **An empty Bluetooth list** | Every run so far had the Pro Controller already paired and trusted, so the list was never empty and the pad never had to be *discovered*. **This is what every real first run hits and it has never been exercised.** |
+| **An unknown server** | The address has always come from `session.env`, so the server step has never been reached with nothing in it — the one field somebody actually has to type |
+
+**A Bluetooth oddity was seen on 2026-09-20 and deliberately dropped.** MMagTech
+saw something wrong on the controller step and judged it to be the pads already
+being paired and known to the OS, which a fresh install will not be. Rather than
+chase a theory on a machine that cannot reproduce the honest case, **look for it
+again on the fresh install** — and if it is gone, it was the stale state.
+
+**What to check while you are there**, because a fresh install is expensive and
+nobody wants to do it twice:
+
+- The three files above actually appear, and a REBOOT goes straight to Home
+  rather than back into setup
+- The Bluetooth list with nothing paired: does a pad in pairing mode appear, and
+  does picking it pair, trust and connect
+- Typing a server address into an empty field, with a keyboard and with a pad
+- The QR on the television, scanned with a phone, approved for real
+
 **What is still owed:**
 
-- **`net::join` has never been run against a real access point.** Everything
-  else is measured on the A9; joining is not, because the reference machine is
-  on a cable and taking it off is how you lose the machine you are measuring.
-  **Do it with a keyboard at the console.** It is the last unmeasured thing.
-- **Nobody has walked the flow with their hands.** Every screen is captured and
-  every mechanism measured, but the whole of it start to finish, on a
-  television, has not been done — and cannot be on either machine here without
-  unconfiguring one of them.
-- **The look is a first pass.** Consistent and legible at ten feet, not judged
-  on the 65-inch by a person.
+- **DONE 2026-09-20: joining a real network, and walking the whole flow.** The
+  reference console had its saved Wi-Fi deleted and its cable pulled — genuinely
+  offline — and was set up from the screen alone: joined in about thirty seconds
+  including typing the password, `MMagTech.nmconnection` written root-owned 0600
+  with autoconnect on, running on the radio with both Ethernet devices
+  reporting `unavailable`. **That is the case the hard gate exists for.**
+- **Small UI tweaks.** MMagTech's words, 2026-09-20: *"might be some small ui
+  tweaks later but functionally great."* Nothing is blocked on them.
 
 **How to see any of it:**
 
