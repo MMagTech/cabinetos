@@ -306,6 +306,15 @@ not the art, saves **write to disk first and upload later** with a four-rule
 precedence at launch, and **offline the console stays as the last user it knew**
 and offers no switcher it cannot honour — MMagTech's call, 2026-09-19.
 
+**AND FIRST RUN CANNOT BE COMPLETED WITHOUT A NETWORK.** MMagTech,
+2026-09-19: the entirety of this OS relies on a RomM server, so one of Ethernet
+or Wi-Fi must be working before setup can proceed — there is no "continue
+without a network". **Wi-Fi is offered even when Ethernet is already up**,
+skippable in that case and required otherwise, because it is the fallback for
+the cable being unplugged and first run is the one moment it can be set up with
+a keyboard to hand. This REVERSES open question 17's old rung 1, which skipped
+the Wi-Fi screen entirely whenever a cable was live.
+
 **But it is NOT a first-run branch, and that was decided 2026-09-19.**
 MMagTech: *you cannot have kept games until a server has been paired and you
 have kept one.* So first run assumes a server and is a linear path to pairing

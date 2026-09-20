@@ -7738,10 +7738,22 @@ inside setup, driven in our own UI rather than by a Linux utility.
 #### The chain, and why each link is gated
 
 ```
-first run:  keyboard → Wi-Fi → RomM server → pair pad 1 → unplug the keyboard
+first run:  keyboard → network → RomM server → pair pad 1 → unplug the keyboard
 later:      pad 1 → Settings → Add a controller → pads 2, 3, 4
 never:      needing a keyboard again
 ```
+
+**THE NETWORK LINK IS A HARD GATE, and it is the only one.** MMagTech,
+2026-09-19: *the entirety of this OS relies on a RomM server*, so a console
+that cannot reach a network cannot be set up and must not pretend otherwise.
+One of Ethernet or Wi-Fi has to be working before setup can go on. There is no
+"continue without a network", for the same reason there is no "continue
+without a server" — on the far side of it there is nothing to show.
+
+**Wi-Fi is offered even when Ethernet is already up**, skippable in that case
+and required otherwise. It is the fallback for the cable being unplugged, and
+first run is the one moment it can be configured with a keyboard to hand. See
+open question 17, rung 1.
 
 - **Wi-Fi before RomM**, because RomM is on the LAN. And the two networks are
   not the same question: open question 21 records that a LAN-only console has
@@ -7899,10 +7911,27 @@ privilege and should not be the same grant.
 
 #### The ladder, in the order the UI should offer it
 
-1. **Ethernet — and skip the screen entirely when it is already up.** Do not ask
-   someone to confirm a network they are already on. A console under a
-   television is very often within reach of a cable, and this path involves no
-   typing at all.
+1. **Ethernet, which needs no typing** — but it does NOT skip the Wi-Fi step.
+   **Reversed by MMagTech 2026-09-19**, and the reversal is right.
+
+   This used to say "skip the screen entirely when it is already up: do not ask
+   someone to confirm a network they are already on." **Wi-Fi is not a
+   duplicate of the cable, it is the fallback for losing it** — and a console
+   under a television is exactly where a cable gets tripped over, moved house
+   or pulled out to borrow. This whole OS is useless without reaching RomM, so
+   a machine whose only path to the server is one cable is a machine one
+   accident away from being a brick.
+
+   **And setup is the one moment the fallback can be configured cheaply.** This
+   document already makes that argument, against itself, two sections down: the
+   on-screen keyboard cannot become optional because *"first run is the one
+   moment a real keyboard is near-certain, and changing a Wi-Fi password later
+   from the sofa is not."* That is an argument for asking while the keyboard is
+   still plugged in, not for skipping.
+
+   So: **with Ethernet up, the Wi-Fi step is offered and SKIPPABLE** — the
+   person is already online and is choosing whether to set up a fallback. With
+   no cable, it is not skippable, because it is the only way forward.
 2. **The on-screen keyboard.** The baseline, and **this is what every console
    does** — PlayStation, Xbox, Apple TV and Switch all make you type the
    passphrase with a controller. It is not a product failure, it is the normal
