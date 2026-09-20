@@ -102,6 +102,61 @@ grep -q 'non-commercial' /usr/share/licenses/cabinetos/LICENCES.md || {
 }
 
 # ---------------------------------------------------------------------------
+# The console's own polkit rule.
+# ---------------------------------------------------------------------------
+#
+# Copied by the system_files overlay above; asserted here, because this one is
+# invisible when it is missing. Wi-Fi configuration works on the reference
+# machine today WITHOUT it — the session user is in `wheel` and Bazzite grants
+# the action to that group — so a build that silently dropped this file would
+# ship a console that works until the day Phase 6 tightens developer mode and
+# takes the session user out of `wheel`. Then Wi-Fi stops being configurable,
+# with no error anywhere near the cause. See docs/PROJECT.md open question 17.
+POLKIT_RULE=/usr/share/polkit-1/rules.d/60-cabinetos-network.rules
+if [[ -s "${POLKIT_RULE}" ]]; then
+    log "installed: ${POLKIT_RULE}"
+else
+    log "  ERROR: ${POLKIT_RULE} is missing — Wi-Fi would depend on 'wheel'"
+    exit 1
+fi
+# The action it grants, spelled out, so a rename upstream fails the build rather
+# than producing a rule that matches nothing.
+grep -q 'org.freedesktop.NetworkManager.settings.modify.system' "${POLKIT_RULE}" || {
+    log "  ERROR: ${POLKIT_RULE} no longer names the action it exists to grant"
+    exit 1
+}
+# The user it names has to be the one sysusers.d creates, or the grant lands on
+# nobody. Both are in this repository and they must move together.
+grep -q '^u cabinet ' /usr/lib/sysusers.d/cabinetos.conf || {
+    log "  ERROR: the session user is no longer 'cabinet'; ${POLKIT_RULE} names it"
+    exit 1
+}
+
+# The two commands the frontend RUNS rather than links against.
+#
+# NOTHING ELSE WOULD CATCH THESE GOING MISSING. ci/base-watch.txt watches shared
+# LIBRARIES, and require-frontend-libs.sh reads `ldd` — so a strip pass that took
+# NetworkManager or polkit out would leave a green build, a binary that links
+# perfectly, and a console that cannot see a Wi-Fi network or say why. They are
+# a real dependency of frontend/src/net.cpp and they are invisible to every
+# check this repository already has.
+#
+# They are in the base image today: NetworkManager owns nmcli, polkit owns
+# pkcheck and bluez owns bluetoothctl. None is something CabinetOS installs, and
+# none should be removed — a console that cannot configure its own network
+# cannot complete first run at all (open question 15b's one hard gate), and one
+# that cannot pair a controller finishes setup owning a games console nobody can
+# play from a sofa.
+for needed in /usr/bin/nmcli /usr/bin/pkcheck /usr/bin/bluetoothctl; do
+    if [[ -x "${needed}" ]]; then
+        log "present: ${needed} ($(rpm -qf "${needed}" 2>/dev/null || echo 'unowned'))"
+    else
+        log "  ERROR: ${needed} is not in this image — the frontend runs it"
+        exit 1
+    fi
+done
+
+# ---------------------------------------------------------------------------
 # Record the starting package set.
 # ---------------------------------------------------------------------------
 #

@@ -59,7 +59,14 @@ public:
     // Directional input, from a pad or the arrow keys — the layer above does
     // not say which, because nothing here may depend on the answer.
     void moveFocus(int dx, int dy);
-    void pressKey();       // commit the focused key
+    // Presses the focused key. RETURNS A RESULT, because two of the keys on
+    // this layout end the whole session — "done" and "cancel" — and until
+    // 2026-09-20 this returned void and handled them silently. So somebody
+    // driving the keyboard with a CONTROLLER, pressing A on "done", closed the
+    // panel and had what they had typed thrown away: the caller was watching
+    // for its own Start button and never learned. The physical keyboard's
+    // Return worked, which is exactly why nobody noticed.
+    KeyboardResult pressKey();
     void backspace();
     void toggleShift();
     void toggleConceal();
@@ -74,6 +81,36 @@ public:
 
     void draw(Renderer& r, TextRenderer& text, float scale);
 
+    // --- A pointer, which is a THIRD way in and takes nothing away ----------
+    //
+    // docs/PROJECT.md open question 16 gives the mouse focus and click and
+    // nothing else, and MMagTech's condition on extending it here, 2026-09-20,
+    // was that *"typing with keyboard still works as well or the on screen
+    // keyboard can still be driven by a wired controller."* Both do: this moves
+    // the same `row_`/`col_` the d-pad moves and presses the same key `A`
+    // presses. There is no pointer-only affordance and no key that can only be
+    // reached with a mouse.
+    //
+    // WHY THE KEYBOARD NEEDS IT AT ALL. A mouse that drives the list behind
+    // this panel and then goes dead the moment a password field opens is worse
+    // than no mouse: it teaches somebody it works and abandons them at the
+    // hardest typing in the whole flow. And people arrive here straight out of
+    // a pointer-driven installer — MMagTech's argument, and a better one than
+    // the document had.
+    //
+    // Coordinates are CANVAS POINTS, because that is what the layout is in and
+    // the letterbox is the caller's problem to undo.
+
+    // Moves focus to the key under the point. Returns false when there is no
+    // key there, which includes the panel's own margins — nothing is focused
+    // by pointing at the gap between keys.
+    bool focusAt(float canvasX, float canvasY);
+
+    // Focuses the key under the point and presses it, returning what that
+    // press meant. `hit` says whether there was a key there at all — a click on
+    // the scrim does nothing rather than pressing whatever was focused last.
+    KeyboardResult pressAt(float canvasX, float canvasY, bool* hit = nullptr);
+
     // Public only so the layout tables in the .cpp can be built by free
     // helpers. Nothing outside this class has a reason to touch it.
     struct Key {
@@ -86,6 +123,13 @@ public:
 private:
     const std::vector<std::vector<Key>>& layout() const;
     void clampFocus();
+
+    // Where `draw` last put each key, in canvas points. The draw pass fills it
+    // and the event pass reads it on the frame after — the same order the rest
+    // of this flow already relies on. Empty until the first frame is drawn, so
+    // a click that somehow arrives first simply finds nothing.
+    struct KeyRect { float x = 0, y = 0, w = 0, h = 0; int row = 0, col = 0; };
+    std::vector<KeyRect> keyRects_;
 
     bool open_ = false;
     Config config_;

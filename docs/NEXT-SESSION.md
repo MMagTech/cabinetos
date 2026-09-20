@@ -16,6 +16,24 @@ Rewrite it at the end of a session. It is meant to be current, not a log.
 
 **Everything is on `main`.** No other branches and no open pull requests.
 
+**FIRST RUN IS BUILT, START TO FINISH, 2026-09-20.** A person can set this
+console up with a keyboard and a phone and never touch SSH: network, Wi-Fi, the
+RomM server, pairing by QR code, and a Bluetooth controller. Five screens and
+six new files — see item 4b. All of it is checkable from a shell without
+disturbing the television:
+
+```
+cabinetos-frontend --first-run          where setup is, and where it would stop
+cabinetos-frontend --first-run-rules    96 fact combinations, asserting the refusals
+cabinetos-frontend --network-scan       link, radio, polkit verdict, what is on the air
+cabinetos-frontend --qr "<text>"        a code you can scan off a terminal
+```
+
+**The A9 correctly says it needs no setup**, because a machine that already has
+an address, a token and a user is adopted rather than walked through a wizard.
+That rule matters more than the marker file: the reference console was set up by
+hand and must never be shown a setup screen.
+
 **THE HANDOVER GOES IN THE WORK'S OWN PULL REQUEST.** Write it inside the
 branch that does the work it describes, so there is never a handover-only push
 and never a handover-only pull request. The rule and the one narrow exception
@@ -152,6 +170,11 @@ states, and leave — with the save syncing on the way out.
   PSP's, which is not a console's firmware and ships with the emulator.
 - **Dreamcast, Naomi, N64 and PSP play**, through a framebuffer inside the
   frontend's own GLES context, with no pixel read back anywhere.
+- **First run's mechanisms exist and none of them is a picture**, as of
+  2026-09-20: `firstrun.{h,cpp}`, `qr.{h,cpp}`, `net.{h,cpp}` and a polkit rule.
+  The chain is enforced rather than described — `--first-run-rules` walks every
+  combination of facts and asserts the REFUSALS, and it found a real deadlock on
+  its first run. **The screens themselves still wait for the look.**
 
 ## Pick up with these, in this order
 
@@ -163,12 +186,16 @@ the right way up. Read this order before picking anything up.
 | | |
 |---|---|
 | **1** | **A GAME CAN GO BLACK AND NOBODY KNOWS WHY.** Six launches in one session drew nothing but the letterbox glow while the core ran and made sound. Not reproduced since. Two theories tested and both falsified. See item 3b — it has the instruments. |
-| **2** | **The console demotes itself to software rendering on a boot-time network race**, and it did it on this session's very first boot. It is item 4's fault, it is no longer theoretical, and it makes the reference machine lie. |
-| **3** | **Judge the TATE look, and Home, on the 65-inch.** Both are on the machine and neither has been looked at properly. |
-| **4** | Then the core options (item 7) or the rest of item 4. |
+| **2** | **Judge the TATE look, and Home, on the 65-inch.** Both are on the machine and neither has been looked at properly. |
+| **3** | **Walk first run with your hands, on the television.** Every screen is captured and every mechanism measured, but nobody has been through it — and `net::join` has never met a real access point. It needs a machine that is not already set up, or a keyboard and a willingness to unconfigure one. See item 4b. |
+| **4** | Then the core options (item 7). |
 
-**Do not start new UI screens before 1 and 2.** Search and Settings are drawn
-in the top bar and say "not built yet"; that is deliberate and can stay.
+**Item 2's old entry is gone because it is fixed**: the console no longer demotes
+itself to software rendering on a boot-time network race. The A9 has come up on
+`gamescope (drm)` on every boot since.
+
+**Do not start new UI screens before 1.** Search and Settings are drawn in the
+top bar and say "not built yet"; that is deliberate and can stay.
 
 ### 2. Vertical arcade games play the right way up — DONE 2026-09-19
 
@@ -335,6 +362,111 @@ second has anything to work with.** See open question 15b.
 fallback when no address is configured at all, and it is worse than an error:
 it looks like a working console showing somebody else's games.
 
+### 4b. First run — BUILT, start to finish
+
+**A person can now set this console up with a keyboard and a phone, and never
+touch SSH.** Five screens, the whole chain, on the reference machine.
+
+| | |
+|---|---|
+| `firstrun.{h,cpp}` | the chain, and every rule about what may be skipped |
+| `setup.{h,cpp}` | the five screens, and the workers that keep them drawing |
+| `qr.{h,cpp}` | byte mode, versions 1–10, error correction M |
+| `net.{h,cpp}` | status, scan, join, forget, and the polkit verdict |
+| `bluetooth.{h,cpp}` | the adapter, the scan, and pair/trust/connect |
+| `proc.{h,cpp}` | the one place that starts a process, argv only, never a shell |
+| `60-cabinetos-network.rules` | the grant that stops Phase 6 breaking Wi-Fi |
+
+**SEE IT WITHOUT DISTURBING THE TELEVISION:**
+
+```
+SDL_VIDEODRIVER=offscreen ./cabinetos-frontend --setup-step pair \
+  --screenshot /tmp/x.bmp --render-size 3840x2160 --frames 400
+```
+
+`--setup` forces the flow on a machine that is already configured and **never
+writes anything**, which is the only way anybody here can look at it — both
+machines are set up and taking that away to see a screen is a silly way to lose
+an afternoon.
+
+**THE CHAIN IS ENFORCED, NOT DESCRIBED.** `Machine` is handed a `Facts` and
+judges it; it never calls the network, the disk or a server. `observe()` is the
+one place that goes and looks. That is the same split `screens::` makes and it
+buys the same thing — the whole flow can be walked at any point in it, on a
+machine with nothing attached.
+
+**Which made the rules testable, and the test found a real deadlock on its first
+run.** `--first-run-rules` walks all 96 reachable combinations of facts and
+asserts the REFUSALS rather than the happy path. What it caught: the Wi-Fi
+step's skip was keyed on **Ethernet** being up rather than on being **online**,
+and those coincide only while this console knows about exactly two kinds of
+link. One `net.cpp` change later, a machine online over a third kind would pass
+the network gate and then sit at a Wi-Fi step it could neither satisfy nor skip.
+Reading the code again would not have found it.
+
+**THE A9 SAYS IT NEEDS NO SETUP, AND THAT IS THE RULE THAT MATTERS MOST.** A
+machine with a server address, a token and a user behind that token is ADOPTED
+rather than walked through a wizard, and the marker is back-filled saying so.
+Without that rule, the reference console — set up by hand over SSH, working for
+a day — would have presented a welcome screen the next time it booted. The
+question is *"is this machine configured"*, not *"has this flow been run"*.
+
+**THE QR IS PROVED ALL THE WAY TO THE GLASS.** A capture of the finished
+3840x2160 frame off the A9's own Radeon was handed to a decoder with no cropping
+and no help — exactly as a phone pointed at the television sees it — and read
+back the live pairing URL the server had issued seconds earlier.
+
+### THE FRESH INSTALL IS THE ONLY REMAINING TEST, AND IT IS THE REAL ONE
+
+Everything here has been walked on the reference console — but that machine is
+CONFIGURED, so every run used `--setup`, which forces the flow and **writes
+nothing**. A fresh install is the first time first run will happen for real, and
+it is the only way to see three things nobody has ever seen:
+
+| | |
+|---|---|
+| **The writes** | `config/first-run.json`, `config/server.json` and the token, written by the flow rather than by hand |
+| **An empty Bluetooth list** | Every run so far had the Pro Controller already paired and trusted, so the list was never empty and the pad never had to be *discovered*. **This is what every real first run hits and it has never been exercised.** |
+| **An unknown server** | The address has always come from `session.env`, so the server step has never been reached with nothing in it — the one field somebody actually has to type |
+
+**A Bluetooth oddity was seen on 2026-09-20 and deliberately dropped.** MMagTech
+saw something wrong on the controller step and judged it to be the pads already
+being paired and known to the OS, which a fresh install will not be. Rather than
+chase a theory on a machine that cannot reproduce the honest case, **look for it
+again on the fresh install** — and if it is gone, it was the stale state.
+
+**What to check while you are there**, because a fresh install is expensive and
+nobody wants to do it twice:
+
+- The three files above actually appear, and a REBOOT goes straight to Home
+  rather than back into setup
+- The Bluetooth list with nothing paired: does a pad in pairing mode appear, and
+  does picking it pair, trust and connect
+- Typing a server address into an empty field, with a keyboard and with a pad
+- The QR on the television, scanned with a phone, approved for real
+
+**What is still owed:**
+
+- **DONE 2026-09-20: joining a real network, and walking the whole flow.** The
+  reference console had its saved Wi-Fi deleted and its cable pulled — genuinely
+  offline — and was set up from the screen alone: joined in about thirty seconds
+  including typing the password, `MMagTech.nmconnection` written root-owned 0600
+  with autoconnect on, running on the radio with both Ethernet devices
+  reporting `unavailable`. **That is the case the hard gate exists for.**
+- **Small UI tweaks.** MMagTech's words, 2026-09-20: *"might be some small ui
+  tweaks later but functionally great."* Nothing is blocked on them.
+
+**How to see any of it:**
+
+```
+--setup      --setup-step <name>       --no-setup
+--first-run  --first-run-check-server  --first-run-step <name>  --first-run-rules
+--network    --network-scan            --qr "<text>"            --qr-out <path>
+```
+
+The probes all run before SDL and none of them disturbs the session on the
+television.
+
 ### 5. Where the in-game save machinery lives
 
 Item 3 is the job; this is the map. `frontend/src/filesave.{h,cpp}` is the
@@ -457,7 +589,10 @@ These are ordered. **Do not begin any of them in the VM.**
   decision and it needs the panel.
 - **The audio governor's 20 ms cushion.** Inherited from Cabinet rather than
   measured here; the lead it permits *is* input lag. Tune it with a pad in hand.
-- **First run**, which is now designed and not built — **open question 15b**,
+- **First run's SCREENS.** Its four mechanisms were built on 2026-09-20 and none
+  of them is a picture; see item 4b. What waits is every screen. The old text
+  follows, because the design behind those screens is unchanged — **open
+  question 15b**,
   written with MMagTech on 2026-09-19 after setting the A9 up by hand over
   SSH. The requirement is one line and it is testable: **a keyboard is needed
   exactly once, ever.** A keyboard is the only input an installed machine
@@ -466,10 +601,10 @@ These are ordered. **Do not begin any of them in the VM.**
   pairs a controller as its last step, and a second controller is added using
   only the first — with two-sided confirmation, so a neighbour's pad in
   pairing mode cannot answer for itself. **The mechanisms mostly exist** (the
-  on-screen keyboard, the pairing flow's code and URL, `session.env`, bluez);
-  what is missing is a state machine, a QR renderer, NetworkManager plumbing
-  and a way to know it is the first run. **None of those is a picture**, so
-  they can start before the look is settled.
+  on-screen keyboard, the pairing flow's code and URL, `session.env`, bluez),
+  **and as of 2026-09-20 so do the four that did not** — the state machine, the
+  QR renderer, the NetworkManager plumbing and knowing it is the first run.
+  What is left here is the look.
 - **The boot splash**, and the rest of the branding.
 - **The row in Settings that turns file access on**, decided 2026-09-19 and the
   answer to open question 9. A console ships listening to nothing; an ordinary
@@ -607,6 +742,161 @@ These are ordered. **Do not begin any of them in the VM.**
   without a controller.
 - **Stop the session before building on the VM.** The frontend runs at 300% CPU
   under llvmpipe and it is four cores. Or skip it and use the offscreen driver.
+
+### About the network, polkit and QR codes, all new on 2026-09-20
+
+- **A COMMAND THE FRONTEND *RUNS* IS INVISIBLE TO EVERY CHECK THIS REPO HAS.**
+  `ci/base-watch.txt` watches shared LIBRARIES and `require-frontend-libs.sh`
+  reads `ldd`, so a strip pass that removed NetworkManager or polkit would leave
+  a green build, a binary that links perfectly, and a console that cannot see a
+  Wi-Fi network or say why. `net.cpp` needs `/usr/bin/nmcli` and
+  `/usr/bin/pkcheck`; `build.sh` now asserts both. **Anything else that shells
+  out needs the same treatment.**
+- **`pkcheck` PRINTS SEVERAL `key=value` LINES, NOT ONE.** Taking the last `=`
+  in its output reports `1` — the value of
+  `polkit\56retains_authorization_after_challenge`, which is not even one of the
+  values the action can have. Match the line whose key ends in `result`.
+- **THE POLKIT ANSWER DEPENDS ON WHO IS ASKING, AND BOTH ANSWERS ARE RIGHT.**
+  Over SSH the verdict for saving a network is `auth_admin_keep`; from the
+  console's own session it is `yes`. The rule requires `subject.local`, on
+  purpose — developer mode hands out SSH deliberately and a shell over the
+  network should not inherit the console's privileges. **`--network` says which
+  question it put**, because a probe that printed one number without saying
+  would be the third lying instrument this project has fixed.
+- **A POLKIT RULE THAT GRANTS SOMETHING ALREADY GRANTED PROVES NOTHING.** The
+  machine already answers `yes` via `wheel`, so installing a rule that also says
+  yes changes nothing observable. **The decisive test is to install it returning
+  `NO` and watch the verdict flip** — that proves yours is consulted first.
+  `60-` sorts before `org.freedesktop.NetworkManager.rules`, and polkit takes
+  the first rule that returns a result. Put the machine back afterwards.
+- **`nmcli --terse` ESCAPES COLONS, AND AN SSID MAY CONTAIN ONE.** Anybody
+  within radio range picks their own SSID, so a naive `split(':')` is a stranger
+  deciding how many fields this console thinks it received. And **nothing may go
+  through a shell**: every nmcli call is `fork`/`execvp` with an argv array,
+  because a scan puts unvetted bytes from strangers into this process every time
+  it runs.
+- **ONE ROW PER NETWORK, NOT ONE PER ACCESS POINT.** A house with three mesh
+  nodes broadcasts the same SSID three times and nmcli lists all three.
+- **`/etc/cabinetos/session.env` IS NOT IN YOUR ENVIRONMENT OVER SSH.** The
+  session script sources it; an SSH shell does not. Every check of first run is
+  made over SSH, so `--first-run` reported "NEEDED" on a console that had been
+  working for a day. The frontend now reads the file directly as well.
+- **A QR CODE CANNOT BE CHECKED BY LOOKING AT IT** — a wrong one looks exactly
+  like a right one. Check it three ways: module-for-module against a reference
+  **with the mask forced**, a second reference to break ties, and a round trip
+  through a real decoder. Each of the three found something the others did not.
+- **THE MASK IS A LEGITIMATE DIFFERENCE BETWEEN ENCODERS.** Three
+  implementations picked three different masks for the same string and all three
+  are valid. So "matches a reference exactly" is not achievable across
+  implementations — force the mask to compare the rest, and decode to settle it.
+- **IN A BCH REMAINDER, TEST THE GENERATOR'S DEGREE, NOT THE FIELD'S WIDTH.**
+  Testing bit 14 instead of bit 10 reduces nothing and puts **no error
+  correction at all** in the format field. The data region was perfect and no
+  scanner would read it.
+- **THE QUIET ZONE IS NOT OPTIONAL AND IT IS THE RENDERER'S.** Measured: the
+  same code drawn flush to the edge does not decode at all; with four modules of
+  margin it decodes every time. It is the commonest reason a correct code will
+  not scan.
+- **`(6,8)` AND `(8,6)` ARE TIMING, NOT FORMAT.** They sit inside the format
+  area's L shape and belong to the timing pattern. Reserving them blanks two
+  modules of the timing line — a two-module difference in a 33x33 symbol that no
+  scanner will accept.
+- **`--romm-pair` DOES NOTHING IF A TOKEN ALREADY EXISTS.** It loads
+  `$HOME/.config/cabinetos/romm.json` and, finding one, skips straight to
+  reporting the library — so on either machine here it never pairs. To get a
+  real pairing code without disturbing anything, point HOME somewhere empty:
+  `HOME=/tmp/pairhome ./build/cabinetos-frontend --romm <addr> --romm-pair`.
+  The token lands in the throwaway directory and nothing else changes.
+- **THE PAIRING URL IS THE SERVER'S, NOT A SHAPE YOU CAN GUESS.** It is
+  `base + verification_path_complete` from `/api/auth/device/init`, and on RomM
+  5.1.0 that is `/pair/device?user_code=…`. A fabricated one produces a QR that
+  scans perfectly and lands on a page saying the code does not exist.
+- **ANYTHING FROM OUTSIDE THIS PROCESS IS A SNAPSHOT WITH A COST, AND EVERY
+  SCREEN SHOWING ONE OWES TWO ANSWERS: WHO REFRESHES IT, AND ON WHICH THREAD.**
+  That one sentence covers seven bugs found in an hour of walking first run on
+  the television. Neither the Wi-Fi list nor the Bluetooth list had an answer to
+  the first — both went on reporting what was true a minute ago, and a deleted
+  Wi-Fi profile left a row claiming to be connected AND saved, so pressing it
+  tried to join with no password. Four calls had the wrong answer to the second,
+  the worst being `bt::adapter()` inside `rebuild()`: **two subprocesses every
+  two seconds, for ever, to choose the wording of one row.**
+- **A BLOCKING CALL ON THE FRAME THREAD LOOKS EXACTLY LIKE A WORKING FRAME IN A
+  SCREENSHOT.** `bt::known()` ran there after a successful pairing — one process
+  to list devices and another PER DEVICE, twenty-odd on a real scan — so the
+  console froze for seconds at the moment it had just said "Controller ready."
+- **THE CONSOLE SHOWED A BLANK SCREEN ON EVERY BOOT AND NOBODY HAD NOTICED.**
+  Reaching the server, adopting the user and pulling sixteen hundred games all
+  happen before the frame loop exists — seconds normally, up to NINETY when the
+  server is not up yet. It took somebody pressing "Start playing" and expecting
+  something to happen. `setup::showWaiting` now draws a still frame naming the
+  stage. Nobody watches a console boot with a stopwatch.
+- **A `void` FUNCTION THAT ENDS A SESSION TELLS NOBODY IT DID.**
+  `Keyboard::pressKey` handled its own "done" and "cancel" keys internally, so
+  driving the on-screen keyboard with a CONTROLLER and pressing A on "done"
+  closed the panel and threw away what had been typed. The physical keyboard's
+  Return worked, which is exactly why it survived. Three call sites doing the
+  same job is what let one of them go unwired.
+- **A SCREEN THAT WAITS FOR SOMETHING MUST KEEP LOOKING, AND MUST FETCH WHAT IT
+  NEEDS RATHER THAN WHAT ITS ENTRY POINT NEEDED.** First run's network step read
+  the facts once on arrival and started its Wi-Fi scan the same way. Enter it on
+  a cable, then unplug: the panel correctly switched to a Wi-Fi list and showed
+  the empty one nobody had ever filled — "Nothing on the air", in a house with
+  four networks — and plugging the cable back in changed nothing on screen. Both
+  halves are now driven by what the screen NEEDS, on a two-second worker.
+- **NetworkManager REFUSES `--rescan yes` while its own scan is running**, and
+  that reads as an empty sky. Fall back to the cached list. And tell "we looked
+  and there is nothing" apart from "we could not look" — only one means retry.
+- **A GUARANTEE STATED UNCONDITIONALLY BY A FLOW THAT CAN BE SKIPPED IS A BUG.**
+  First run's last screen said "you can unplug the keyboard" — the promise the
+  whole design exists to make — while the controller step it follows is
+  deliberately skippable. Somebody who skips it has exactly one input and was
+  being told to unplug it. **Anything that can be skipped must have its
+  consequence said on the step that offers the skip, and every later promise has
+  to be conditional on what actually happened.**
+- **AN OFFSCREEN CAPTURE DOES NOT PROVE A WINDOW EVER GETS A FRAME.**
+  `Renderer::beginFrame` binds an offscreen SCENE target so panels can blur what
+  is behind them, and **`presentScene()` is what puts it on the real
+  framebuffer**. Miss that call and the loop runs perfectly at sixty frames a
+  second presenting nothing — while every `--render-size` capture comes out
+  correct, because `saveFrame` reads the offscreen target directly. The
+  television showed white, gamescope's own screenshot came back entirely black,
+  the process sat at 5% of a core, and nothing logged an error. **Anything that
+  draws a screen must call `presentScene()`, and anything drawn after it lands
+  on top of the scene rather than inside it.**
+- **`gamescopectl` IS NOT ALWAYS ON `gamescope-1`.** The socket number is
+  whichever the current instance took, and it changes when the session
+  restarts. List `$XDG_RUNTIME_DIR` and use the one whose mtime matches the
+  running gamescope; stale sockets from earlier instances sit there looking
+  identical.
+- **A SETUP SCREEN'S LOOP MUST BE PACED, AND `--frames` DEPENDS ON IT.** A page
+  of static text left unpaced runs at thousands of frames a second on the A9,
+  and four hundred frames went by before the server had answered — so the
+  capture of the pairing screen came out with no code on it. **The same trap
+  `--launch-after` fell into, one screen along.**
+- **BLUEZ USES THE ADDRESS AS THE NAME when a device has not given one**, with
+  dashes where the address has colons. An unnamed device does not have an empty
+  name, it has a name that looks like one — and the controller list filled with
+  SIXTEEN of the neighbours' beacons before anybody noticed.
+- **THE COPY ASSUMES A COMPETENT ADULT.** MMagTech, 2026-09-20: *"if you have a
+  RomM server and can install an OS I shouldn't need to tell you in depth how to
+  pair a controller."* Every line says the CONSTRAINT — required or optional,
+  and why only when the why is not obvious — and stops. Titles say what the step
+  does, not hello.
+- **NEVER LET FOCUS LAND ON A ROW THAT DOES NOTHING.** Every placeholder in the
+  setup flow is disabled, so this is the common case. A focus rim on a row that
+  ignores the button cannot be told apart from a crash.
+- **DO NOT SAY A SERVER DID NOT ANSWER BEFORE ASKING IT.** Arriving at the
+  server step with an address already in `session.env` is the common case, and
+  the screen reported it unreachable before sending a packet. It needed a fact
+  at the rules level, not a fix in the screen.
+- **`bluetoothctl pair` WITHOUT `trust` LOOKS EXACTLY LIKE A BROKEN PAD.** bluez
+  refuses the incoming connection every time the controller wakes, so the pad
+  pairs perfectly once and then never reconnects. It reads as "it keeps
+  disconnecting" and has nothing to do with pairing.
+- **WALK EVERY COMBINATION RATHER THAN RE-READING THE RULES.** The state
+  machine's exhaustive check is 96 cases, needs nothing, and found a deadlock
+  the code read as correct. Assert the REFUSALS — the happy path is the part
+  that already works.
 
 ### About the product
 

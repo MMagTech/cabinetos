@@ -136,6 +136,30 @@ const std::vector<std::vector<Keyboard::Key>>& Keyboard::layout() const {
     return shifted_ ? upper_ : lower_;
 }
 
+bool Keyboard::focusAt(float canvasX, float canvasY) {
+    if (!open_) return false;
+    for (const KeyRect& k : keyRects_) {
+        if (canvasX < k.x || canvasX > k.x + k.w) continue;
+        if (canvasY < k.y || canvasY > k.y + k.h) continue;
+        row_ = k.row;
+        col_ = k.col;
+        clampFocus();
+        return true;
+    }
+    return false;
+}
+
+KeyboardResult Keyboard::pressAt(float canvasX, float canvasY, bool* hit) {
+    if (!focusAt(canvasX, canvasY)) {
+        if (hit) *hit = false;
+        return KeyboardResult::Typing;
+    }
+    if (hit) *hit = true;
+    // The same call the controller's A button makes, on the same focused key.
+    // A click is "point at it and press A" and never a second path in.
+    return pressKey();
+}
+
 void Keyboard::clampFocus() {
     const auto& rows = layout();
     row_ = std::clamp(row_, 0, static_cast<int>(rows.size()) - 1);
@@ -190,17 +214,17 @@ void Keyboard::moveFocus(int dx, int dy) {
     clampFocus();
 }
 
-void Keyboard::pressKey() {
-    if (!open_) return;
+KeyboardResult Keyboard::pressKey() {
+    if (!open_) return KeyboardResult::Cancelled;
     clampFocus();
     const Key& key = layout()[row_][col_];
     switch (key.action) {
-        case Key::Backspace: backspace(); return;
-        case Key::Shift: toggleShift(); return;
-        case Key::Space: value_ += ' '; return;
-        case Key::Conceal: toggleConceal(); return;
-        case Key::Done: commit(); return;
-        case Key::Cancel: cancel(); return;
+        case Key::Backspace: backspace(); return KeyboardResult::Typing;
+        case Key::Shift: toggleShift(); return KeyboardResult::Typing;
+        case Key::Space: value_ += ' '; return KeyboardResult::Typing;
+        case Key::Conceal: toggleConceal(); return KeyboardResult::Typing;
+        case Key::Done: return commit();
+        case Key::Cancel: return cancel();
         case Key::None: break;
     }
     value_ += key.insert;
@@ -211,6 +235,7 @@ void Keyboard::pressKey() {
         shifted_ = false;
         clampFocus();
     }
+    return KeyboardResult::Typing;
 }
 
 void Keyboard::backspace() {
@@ -338,11 +363,20 @@ void Keyboard::draw(Renderer& r, TextRenderer& text, float scale) {
     y += fieldH + 28.0f;
 
     // The keys.
+    //
+    // Their resting rectangles are recorded as they are drawn, so a pointer can
+    // be asked which key it is over. The RESTING one, not the focused one: a
+    // focused key is drawn slightly larger, and hit-testing the grown shape
+    // would make the key under the pointer subtly harder to leave than to
+    // enter.
+    keyRects_.clear();
     for (size_t ri = 0; ri < rows.size(); ++ri) {
         float x = panelX + kPanelPad;
         for (size_t ci = 0; ci < rows[ri].size(); ++ci) {
             const Key& key = rows[ri][ci];
             const float kw = key.width * kKeyUnit;
+            keyRects_.push_back(KeyRect{x, y, kw, kKeyUnit, static_cast<int>(ri),
+                                        static_cast<int>(ci)});
             const bool focused = (static_cast<int>(ri) == row_ && static_cast<int>(ci) == col_);
             const float s = focused ? kFocusScale : 1.0f;
             const float dw = kw * s, dh = kKeyUnit * s;

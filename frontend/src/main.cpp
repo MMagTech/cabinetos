@@ -57,9 +57,13 @@
 #include "catalog.h"
 #include "dirsave.h"
 #include "filesave.h"
+#include "firstrun.h"
+#include "net.h"
+#include "qr.h"
 #include "romfile.h"
 #include "romm.h"
 #include "screens.h"
+#include "setup.h"
 #include "storage.h"
 #include "text.h"
 #include "ui.h"
@@ -1636,6 +1640,315 @@ static int romProbe(const char* address, int romId, const char* validExts) {
     return 0;
 }
 
+// --- The first-run mechanisms, each reportable without a screen -------------
+//
+// None of the four things first run needs is a picture — a state machine, a QR
+// renderer, NetworkManager plumbing, and a way to know it is the first run at
+// all — which is why they can be built before the look is settled. But
+// "not a picture" only helps if there is a way to SEE each of them work, and on
+// this project that means a command that prints a fact rather than a screen
+// somebody has to describe over the telephone.
+//
+// So there are three, in the same shape as --storage and --core-options: they
+// run before SDL, need no window, no GL and no controller, and can be run over
+// SSH against the real console without disturbing the session on the television.
+
+// What the network is, what is on the air, and whether this console is still
+// allowed to save a connection.
+//
+// THE LAST LINE IS THE POINT OF THE WHOLE COMMAND. Wi-Fi configuration works
+// today only because the session user is in `wheel`, and Phase 6 is exactly the
+// change that takes it out. That failure presents as a network bug on a machine
+// whose network is fine, so the console answers the question directly.
+static int networkProbe(bool doScan) {
+    if (!net::available()) {
+        std::printf("NetworkManager  NOT RUNNING — nothing below can be answered\n");
+        return 1;
+    }
+    const net::Status s = net::status();
+    std::printf("NetworkManager  running\n");
+    std::printf("online          %s\n", s.online ? "yes" : "NO");
+    if (s.online) {
+        std::printf("link            %s %s%s%s\n",
+                    s.link == net::Link::Ethernet ? "ethernet" : "wi-fi",
+                    s.device.c_str(),
+                    s.ipv4.empty() ? "" : "  ",
+                    s.ipv4.c_str());
+        if (!s.connection.empty())
+            std::printf("connection      %s\n", s.connection.c_str());
+    }
+    std::printf("ethernet        %s\n",
+                !s.ethernetPresent ? "no wired port on this machine"
+                : s.ethernetUp     ? "up"
+                                   : "present, no link");
+    std::printf("wi-fi           %s\n",
+                !s.wifiPresent  ? "no radio on this machine"
+                : !s.wifiEnabled ? "PRESENT BUT THE RADIO IS OFF"
+                : s.wifiUp       ? "connected"
+                                 : "on, not connected");
+
+    // Asked of this very process, because the grant depends on the session the
+    // caller is in — which is why the answer over SSH and the answer on the
+    // television can legitimately differ, and why this line names which it is.
+    const std::string verdict = net::polkitVerdict();
+    std::printf("save a network  polkit says %s%s\n", verdict.c_str(),
+                verdict == "yes" ? "" :
+                "  <-- Wi-Fi CANNOT be saved; see 60-cabinetos-network.rules");
+    std::printf("asked as        %s\n",
+                getenv("SSH_CONNECTION") ? "an SSH session (not the console's own)"
+                                         : "a local session");
+
+    if (!doScan) return 0;
+    if (!s.wifiPresent) {
+        std::printf("\nno radio, so nothing to scan for\n");
+        return 0;
+    }
+    std::vector<net::Network> found;
+    std::string err;
+    std::printf("\nscanning…\n");
+    if (!net::scan(&found, &err)) {
+        std::printf("scan failed: %s\n", err.c_str());
+        return 1;
+    }
+    if (found.empty()) {
+        // A real answer, not an error. A console in a cupboard hears nothing.
+        std::printf("nothing on the air\n");
+        return 0;
+    }
+    std::printf("\n%zu network%s\n\n", found.size(), found.size() == 1 ? "" : "s");
+    for (const net::Network& n : found) {
+        std::printf("  %s%s %3d%%  %-14s %s%s\n",
+                    n.active ? "*" : " ",
+                    n.known ? " saved" : "      ",
+                    n.signal,
+                    n.security.empty() ? "open" : n.security.c_str(),
+                    n.ssid.c_str(),
+                    n.enterprise ? "   [802.1X — not supported]" : "");
+    }
+    return 0;
+}
+
+// A QR code, on a terminal, at a size a phone will read straight off the
+// screen. That is the whole test: the encoder is proved end to end — string in,
+// URL back out of a real camera — on a machine with no console and no server.
+static int qrProbe(const char* text, const char* pbmPath) {
+    std::string err;
+    const qr::Code code = qr::encode(text, &err);
+    if (!code.valid()) {
+        std::fprintf(stderr, "[qr] %s\n", err.c_str());
+        return 1;
+    }
+    std::printf("%s", qr::toText(code).c_str());
+    std::printf("\n%d x %d modules, version %d — %s\n", code.size, code.size,
+                (code.size - 17) / 4, text);
+    // THE QUIET ZONE IS THE RENDERER'S, AND IT IS NOT OPTIONAL. Measured:
+    // the same code drawn flush to the edge of an image does not decode at all,
+    // while with four modules of margin it decodes every time. It is the
+    // commonest reason a perfectly correct code will not scan.
+    std::printf("four modules of quiet zone are included above, and whatever "
+                "draws this owes it the same\n");
+    if (pbmPath) {
+        if (!qr::writePbm(code, pbmPath)) {
+            std::fprintf(stderr, "[qr] could not write %s\n", pbmPath);
+            return 1;
+        }
+        std::printf("wrote %s\n", pbmPath);
+    }
+    return 0;
+}
+
+// Every combination of facts the flow can be handed, walked to the end.
+//
+// WHY THIS EXISTS RATHER THAN A DEMONSTRATION ON ONE MACHINE. The reference
+// console is online over a cable with a paired token, so walking it there
+// proves the happy path and nothing else — and the rules that matter most are
+// the REFUSALS. Open question 15b's whole argument is that first run is a
+// linear path with no skip, because on the far side of a skip there is nothing
+// to show. A rule like that is only worth anything if it cannot be got round,
+// and the way to know is to try every way round it rather than to read the code
+// again.
+//
+// It needs no network, no server, no pad and no screen, so it runs in CI and it
+// runs on a laptop.
+static int firstRunRules() {
+    int cases = 0, failures = 0;
+    auto fail = [&](const char* what, const firstrun::Facts& f) {
+        ++failures;
+        std::printf("  FAIL  %s\n        online=%d wired=%d wifiHw=%d wifiUp=%d "
+                    "addr=%d checked=%d answered=%d token=%d pads=%d\n",
+                    what, f.online, f.wiredOnline, f.wifiPresent, f.wifiConfigured,
+                    f.haveServerAddress, f.serverChecked, f.serverAnswered,
+                    f.havePairedToken, f.gamepadCount);
+    };
+
+    for (int bits = 0; bits < 512; ++bits) {
+        firstrun::Facts f;
+        f.online          = bits & 1;
+        f.wiredOnline     = bits & 2;
+        f.wifiPresent     = bits & 4;
+        f.wifiConfigured  = bits & 8;
+        f.haveServerAddress = bits & 16;
+        f.serverAnswered  = bits & 32;
+        f.havePairedToken = bits & 64;
+        f.gamepadCount    = (bits & 128) ? 1 : 0;
+        f.serverChecked   = bits & 256;
+
+        // Nonsense the machine can never be handed: a wired link that is up
+        // while nothing is online, or a radio connected with no radio. Skipped
+        // rather than asserted about, because a rule about an impossible state
+        // is a rule nobody can act on.
+        if (f.wiredOnline && !f.online) continue;
+        if (f.wifiConfigured && !f.wifiPresent) continue;
+        if (f.wifiConfigured && !f.online) continue;
+        // net::status() only ever reports online because of a wired device or a
+        // radio, so "online by neither" cannot be handed to the machine. It is
+        // skipped rather than asserted about — but the Wi-Fi gate is written to
+        // survive it anyway, because that is one net.cpp change away from being
+        // reachable.
+        if (f.online && !f.wiredOnline && !f.wifiConfigured) continue;
+        // A server cannot have answered without having been asked.
+        if (f.serverAnswered && !f.serverChecked) continue;
+        ++cases;
+
+        firstrun::Machine m;
+        m.update(f);
+
+        int guard = 0;
+        for (; guard < 16 && !m.finished(); ++guard) {
+            const firstrun::Step at = m.step();
+            const firstrun::Gate g = m.gate();
+
+            // Every refusal explains itself. A setup screen that stops with no
+            // sentence is worse than a black one.
+            if (g == firstrun::Gate::Blocked && m.because().empty())
+                fail("a Blocked step with nothing to say", f);
+
+            // advance() and skip() are the only enforcement there is, so they
+            // must refuse on anything but their own gate.
+            if (g != firstrun::Gate::Ready) {
+                firstrun::Machine copy = m;
+                if (copy.advance()) fail("advance() got past a gate that was not ready", f);
+            }
+            if (g != firstrun::Gate::Skippable) {
+                firstrun::Machine copy = m;
+                if (copy.skip()) fail("skip() got past a step that may not be skipped", f);
+            }
+
+            (void)at;
+            if (g == firstrun::Gate::Blocked) break;
+            if (g == firstrun::Gate::Skippable) m.skip();
+            else m.advance();
+        }
+        if (guard >= 16) fail("the chain did not terminate", f);
+
+        // THE THREE HARD GATES. Finishing setup without any one of them is a
+        // console with nothing to show, which is the thing 15b forbids.
+        if (m.finished()) {
+            if (!f.online)          fail("finished setup while offline", f);
+            if (!f.serverAnswered)  fail("finished setup with no server answering", f);
+            if (!f.havePairedToken) fail("finished setup with no token", f);
+        }
+
+        // A machine with a radio, no cable and no Wi-Fi must not get past the
+        // network step at all.
+        if (!f.online && m.step() != firstrun::Step::Network)
+            fail("got past the network step while offline", f);
+
+        // The one soft gate, and it has to STAY soft: refusing to finish
+        // without a controller would break the keyboard guarantee the whole
+        // flow exists to make.
+        if (f.online && f.serverAnswered && f.havePairedToken && !m.finished())
+            fail("a fully configured machine could not finish setup", f);
+    }
+
+    std::printf("first-run rules: %d fact combinations, %d failure%s\n", cases,
+                failures, failures == 1 ? "" : "s");
+    return failures == 0 ? 0 : 1;
+}
+
+// Where a real console would be in setup right now, and where it would stop.
+//
+// It WALKS the chain rather than describing it, advancing and skipping exactly
+// as the rules allow, and halts at the first gate that refuses — which is the
+// same thing a person would hit. A description can drift from the rules; a walk
+// cannot.
+static int firstRunProbe(romm::Client& client, const char* startAt, bool tryServer) {
+    const firstrun::Completion done = firstrun::completion();
+    std::printf("first run       %s\n",
+                !done.done               ? "NEEDED — this console is not set up"
+                : done.why == firstrun::Why::AdoptedExisting
+                      ? "not needed — this machine is already configured, so it "
+                        "is treated as set up"
+                      : "not needed — setup was completed here");
+    if (!done.when.empty()) std::printf("marked          %s\n", done.when.c_str());
+
+    const std::string address = firstrun::serverAddress();
+    std::printf("server address  %s  (from %s)\n",
+                address.empty() ? "none" : address.c_str(),
+                firstrun::serverAddressSource().c_str());
+
+    firstrun::Facts f = firstrun::observe(client, 0);
+
+    // Only if asked: it is the one part of this command that talks to anything
+    // over the network, and a report should not quietly cost a round trip.
+    if (tryServer && !address.empty()) {
+        std::string err;
+        romm::Client probe;
+        f.serverAnswered = probe.setAddress(address, &err);
+        std::printf("server answers  %s%s%s\n", f.serverAnswered ? "yes" : "no",
+                    f.serverAnswered ? " — RomM " : " — ",
+                    f.serverAnswered ? probe.serverVersion().c_str() : err.c_str());
+    }
+
+    std::printf("\nwhat it sees\n");
+    std::printf("  online              %s\n", f.online ? "yes" : "no");
+    std::printf("  online over a cable %s\n", f.wiredOnline ? "yes" : "no");
+    std::printf("  wi-fi radio         %s\n", f.wifiPresent ? "present" : "none");
+    std::printf("  wi-fi connected     %s\n", f.wifiConfigured ? "yes" : "no");
+    std::printf("  server address      %s\n", f.haveServerAddress ? "yes" : "no");
+    std::printf("  server answered     %s\n",
+                f.serverAnswered ? "yes" : tryServer ? "no" : "not asked");
+    std::printf("  paired token        %s\n", f.havePairedToken ? "yes" : "no");
+    // NOT COUNTED HERE, and said so rather than printed as a zero: this whole
+    // command runs before SDL, so there is nothing to ask. A report that shows
+    // "0" for a question it never put is the kind of instrument that costs an
+    // afternoon.
+    std::printf("  gamepads            not counted — this runs before SDL\n");
+
+    firstrun::Machine m;
+    m.update(f);
+    if (startAt && !m.openAt(startAt)) {
+        std::fprintf(stderr, "[first-run] no step called '%s'\n", startAt);
+        return 1;
+    }
+
+    std::printf("\nwalking the chain\n\n");
+    for (int guard = 0; guard < 16; ++guard) {
+        const firstrun::Gate g = m.gate();
+        const std::string why = m.because();
+        std::printf("  %-11s %s\n", firstrun::name(m.step()),
+                    g == firstrun::Gate::Ready       ? "ready"
+                    : g == firstrun::Gate::Skippable ? "may be skipped"
+                                                     : "BLOCKED");
+        if (!why.empty()) std::printf("              \"%s\"\n", why.c_str());
+        if (m.finished()) {
+            std::printf("\nsetup would complete.\n");
+            return 0;
+        }
+        if (g == firstrun::Gate::Ready) {
+            m.advance();
+        } else if (g == firstrun::Gate::Skippable) {
+            m.skip();
+        } else {
+            std::printf("\nsetup would stop here, and this is the correct "
+                        "behaviour: there is no way past this step.\n");
+            return 0;
+        }
+    }
+    std::fprintf(stderr, "[first-run] the chain did not terminate — that is a bug\n");
+    return 1;
+}
+
 static int rommProbe(const char* address, bool allowPairing) {
     romm::Client client;
     std::string err;
@@ -1854,6 +2167,29 @@ int main(int argc, char** argv) {
     int initialTab = 0;
     int initialGame = 0;
     bool rommProbeMode = false;
+    // --- The first-run mechanisms ------------------------------------------
+    //
+    // Each of the four things first run needs that is NOT a picture has a way
+    // to be seen working from a shell: the state machine, the QR renderer, the
+    // NetworkManager plumbing, and knowing whether it is the first run at all.
+    // See the probes above.
+    bool networkProbeMode = false;
+    bool networkScan = false;
+    bool firstRunProbeMode = false;
+    bool firstRunRulesMode = false;
+    // Runs the setup flow even on a console that is already configured, so it
+    // can be looked at and photographed. It never writes anything — see
+    // setup::Options::dryRun — because the only machines anybody here can try
+    // it on are ones that are already set up.
+    bool forceSetup = false;
+    // The escape hatch: start the console without setup on a machine that
+    // cannot complete it. Not a product affordance, a development one.
+    bool noSetup = false;
+    const char* setupStep = nullptr;
+    bool firstRunServerCheck = false;
+    const char* firstRunStep = nullptr;
+    const char* qrText = nullptr;
+    const char* qrPbm = nullptr;
     // Downloads one ROM and reports what came back and what a core would be
     // handed. The formats people keep ROMs in are not uniform and this is how
     // that gets checked against a real server rather than assumed.
@@ -1936,6 +2272,32 @@ int main(int argc, char** argv) {
             rommProbeMode = true;
         } else if (SDL_strcmp(argv[i], "--rom-exts") == 0 && i + 1 < argc) {
             romProbeExts = argv[++i];
+        } else if (SDL_strcmp(argv[i], "--network") == 0) {
+            networkProbeMode = true;
+        } else if (SDL_strcmp(argv[i], "--network-scan") == 0) {
+            networkProbeMode = true;
+            networkScan = true;
+        } else if (SDL_strcmp(argv[i], "--qr") == 0 && i + 1 < argc) {
+            qrText = argv[++i];
+        } else if (SDL_strcmp(argv[i], "--qr-out") == 0 && i + 1 < argc) {
+            qrPbm = argv[++i];
+        } else if (SDL_strcmp(argv[i], "--setup") == 0) {
+            forceSetup = true;
+        } else if (SDL_strcmp(argv[i], "--setup-step") == 0 && i + 1 < argc) {
+            forceSetup = true;
+            setupStep = argv[++i];
+        } else if (SDL_strcmp(argv[i], "--no-setup") == 0) {
+            noSetup = true;
+        } else if (SDL_strcmp(argv[i], "--first-run-rules") == 0) {
+            firstRunRulesMode = true;
+        } else if (SDL_strcmp(argv[i], "--first-run") == 0) {
+            firstRunProbeMode = true;
+        } else if (SDL_strcmp(argv[i], "--first-run-step") == 0 && i + 1 < argc) {
+            firstRunProbeMode = true;
+            firstRunStep = argv[++i];
+        } else if (SDL_strcmp(argv[i], "--first-run-check-server") == 0) {
+            firstRunProbeMode = true;
+            firstRunServerCheck = true;
         } else if (SDL_strcmp(argv[i], "--romm-probe") == 0) {
             rommProbeMode = true;
         } else if (SDL_strcmp(argv[i], "--romm-pair") == 0) {
@@ -2015,9 +2377,25 @@ int main(int argc, char** argv) {
     // so the address comes from the machine, and the session script is what
     // puts it in the environment. The first-run screen writes the same file
     // when it exists; see docs/PROJECT.md, open question 15.
+    //
+    // TWO PLACES, AND THE ENVIRONMENT WINS. /etc/cabinetos/session.env is
+    // root's and is how a console is set up by hand today; config/server.json
+    // is what the first-run screen writes, because the session user cannot
+    // write /etc and inventing a privileged helper for one string that is not a
+    // secret would be a mechanism for nothing. firstrun::serverAddress() holds
+    // that order in one place so nothing else has to know it.
+    static std::string resolvedAddress;
     if (!rommAddress) {
-        if (const char* env = getenv("CABINETOS_ROMM"); env && *env) rommAddress = env;
+        resolvedAddress = firstrun::serverAddress();
+        if (!resolvedAddress.empty()) rommAddress = resolvedAddress.c_str();
     }
+
+    // Neither of these needs a storage tree, a window, GL or a controller, so
+    // they answer before anything is created on disk. --qr in particular should
+    // not cost a console a directory it did not have.
+    if (firstRunRulesMode) return firstRunRules();
+    if (qrText) return qrProbe(qrText, qrPbm);
+    if (networkProbeMode) return networkProbe(networkScan);
 
     // --- Where everything lives, decided before anything writes a byte ------
     //
@@ -2056,6 +2434,16 @@ int main(int argc, char** argv) {
     // 2026-09-19. Harmless to the product and corrosive to the diagnosis: a
     // tool that lies is worse than one that says nothing.
     catalog::setCoreDirectory(coreDir);
+
+    // Needs the storage tree, because the marker and the server address both
+    // live in it — and it must run before anything else looks at the server,
+    // since "is this console set up at all" is the question underneath all of
+    // them.
+    if (firstRunProbeMode) {
+        romm::Client fr;
+        fr.loadToken(rommTokenPath());
+        return firstRunProbe(fr, firstRunStep, firstRunServerCheck);
+    }
 
     if (rommAddress && romProbeId > 0)
         return romProbe(rommAddress, romProbeId, romProbeExts);
@@ -2253,6 +2641,65 @@ int main(int argc, char** argv) {
         return 1;
     }
 
+    // --- FIRST RUN -----------------------------------------------------------
+    //
+    // Before anything asks a server for anything, because on a console that has
+    // never been paired there is no server to ask. Setup runs a loop of its own
+    // and returns once the machine is configured; see setup.h for why it is not
+    // a mode inside the loop below.
+    //
+    // A MACHINE THAT IS ALREADY CONFIGURED IS NEVER SHOWN THIS. The reference
+    // console was set up by hand over SSH and has been playing games for a day;
+    // presenting it with a welcome screen would be a far worse failure than
+    // skipping a wizard nobody needed. firstrun::completion() answers "is this
+    // machine configured", not "has this flow been run" — and where the answer
+    // came from being configured rather than from a marker, the marker is
+    // back-filled here so the judgement is made once and recorded.
+    if (!noSetup) {
+        const firstrun::Completion done = firstrun::completion();
+        if (forceSetup || !done.done) {
+            setup::Deps deps;
+            deps.window = window;
+            deps.renderer = &renderer;
+            deps.text = &text;
+            setup::Options opts;
+            opts.startStep = setupStep;
+            // A capture of a setup screen must never write a marker or an
+            // address: it is a photograph, and the machine it is taken on is
+            // usually one that is already set up.
+            opts.dryRun = forceSetup || shotMode;
+            opts.screenshotPath = shotMode ? shotPath : nullptr;
+            opts.frames = shotAfterFrames;
+            opts.renderWidth = renderW;
+            opts.renderHeight = renderH;
+            const setup::Outcome outcome = setup::run(deps, opts);
+            if (outcome != setup::Outcome::Completed) {
+                renderer.shutdown();
+                SDL_Quit();
+                return 0;
+            }
+            // Setup writes the address; pick it up, because the resolution done
+            // before SDL started ran on a console that had none.
+            resolvedAddress = firstrun::serverAddress();
+            rommAddress = resolvedAddress.empty() ? nullptr : resolvedAddress.c_str();
+        } else if (done.why == firstrun::Why::AdoptedExisting && done.when.empty()) {
+            // Adopted, and no marker on disk yet — so write one. An empty
+            // `when` is exactly the case where the answer came from looking at
+            // the machine rather than from a file.
+            std::string merr;
+            if (firstrun::markCompleted(/*adopted=*/true, &merr))
+                std::fprintf(stderr,
+                             "[first-run] this console was already configured; "
+                             "recorded that rather than asking again\n");
+        }
+    }
+
+    // TEXT INPUT IS OFF BY DEFAULT IN SDL3, and the handler for it below has
+    // therefore never once fired. Without this a physical keyboard cannot type
+    // a character into the on-screen keyboard — which is not a small gap, it is
+    // the input the whole first-run design is built on being guaranteed.
+    SDL_StartTextInput(window);
+
     // 192 MB of covers resident. A shelf holds a handful; a library grid holds
     // a screenful; anything past that is re-decoded on the way back, which is
     // cheap and bounded. Four workers, so a fast scroll keeps up without
@@ -2276,11 +2723,32 @@ int main(int argc, char** argv) {
     std::vector<romm::Game> games;
     std::vector<screens::Tile> platformTiles, collectionTiles;
 
+    // WHAT THE SCREEN SAYS WHILE THE CONSOLE IS BUSY.
+    //
+    // Everything below blocks: reaching the server, adopting the user, and
+    // pulling a library that is sixteen hundred games on the reference machine.
+    // Until 2026-09-20 the screen showed nothing at all for those seconds — and
+    // for up to ninety of them when the server is not up yet — because the
+    // frame loop does not exist until after all of it.
+    //
+    // MMagTech noticed it as the pause after "Start playing" in first run, but
+    // it is not a first-run fault: it has happened on every boot this console
+    // has ever done. Nobody watches a console boot with a stopwatch.
+    setup::Deps waitDeps;
+    waitDeps.window = window;
+    waitDeps.renderer = &renderer;
+    waitDeps.text = &text;
+
     if (rommAddress) {
         std::string err;
         // Where the cores are, so the catalog can tell "the manifest has a core
         // for this" apart from "this console has it built".
         catalog::setCoreDirectory(coreDir);
+        setup::showWaiting(waitDeps, "Starting up",
+                           std::string("Looking for your server at ")
+                               .append(rommAddress)
+                               .append("…")
+                               .c_str());
         // WAIT FOR THE NETWORK RATHER THAN GIVING UP ON IT.
         //
         // This used to try once and exit 1, and on a console that is a fault
@@ -2328,6 +2796,10 @@ int main(int argc, char** argv) {
             return 1;
         }
         adoptUser(liveClient);
+        // The long one: platforms, every game, collections, recents and
+        // favourites. Sixteen hundred games take several seconds on the
+        // reference machine.
+        setup::showWaiting(waitDeps, "Starting up", "Loading your library…");
         Library lib = loadLibrary(liveClient);
         cards = std::move(lib.cards);
         heroIndex = lib.heroIndex;
