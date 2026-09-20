@@ -15,20 +15,38 @@ Rewrite it at the end of a session. It is meant to be current, not a log.
 ## Before anything else
 
 **Everything is on `main`.** No other branches and no open pull requests.
-[#26](https://github.com/MMagTech/cabinetos/pull/26) merged and is the work
-described below as "the image carries the console".
 
 **THE HANDOVER GOES IN THE WORK'S OWN PULL REQUEST.** Write it inside the
 branch that does the work it describes, so there is never a handover-only push
 and never a handover-only pull request. The rule and the one narrow exception
 are in PROJECT.md, *Constraints and principles*, item 7.
 
-**THE A9 PRO IS INSTALLED AND RUNNING, 2026-09-19.** `cabinet@192.168.1.212`,
-same SSH key as the VM, sudo password `cabinet`. It boots into the frontend on
+**THE A9 PRO IS THE REFERENCE CONSOLE.** `cabinet@192.168.1.212`, same SSH key
+as the VM, sudo password `cabinet`. It boots into the frontend on
 **gamescope/drm** — the top compositor rung, which the VM has never reached —
-rendering on its own Radeon 890M with **Vulkan present (RADV STRIX1)**, zero
-session restarts, 1147 playable games. **Judge nothing about the look on it
-until it is running an image with the resolution fix**; see item 1.
+on its own Radeon 890M at the panel's native **3840x2160**, with Vulkan
+present (RADV STRIX1) and 1147 playable games. **The UI freeze is lifted and
+what is on that television is the real thing.**
+
+**THERE IS A DEV BINARY WIRED INTO IT AGAIN, AND IT HAS TO COME OFF.**
+`/etc/systemd/system/cabinetos-session.service.d/90-dev-binary.conf` points the
+session at `/var/home/cabinet/cabinetos-frontend-dev`, which is this session's
+build carrying the vertical arcade rotation fix. MMagTech's call, 2026-09-19,
+so that one sitting at the television could cover both the TATE look and the
+Dreamcast save. **Once this pull request merges: delete that file,
+`bootc upgrade`, reboot.** The machine was found in exactly this state at the
+start of this session and nobody could say what it was running.
+
+**ALWAYS CHECK WHICH COMPOSITOR RUNG IT LANDED ON BEFORE JUDGING ANYTHING.**
+
+```
+journalctl -t cabinetos-session | grep 'is up'
+```
+
+`gamescope (drm) is up` is the real thing. `cage (software rendering) is up` is
+llvmpipe and every visual judgement made on it is worthless — and the machine
+gets there **on its own, from a boot-time network race**, while printing a
+message that is not true. See item 4.
 
 **THE IMAGE NOW CARRIES THE FRONTEND AND THE TWENTY-ONE CORES, 2026-09-19.**
 This is the thing most likely to be wrong in anyone's head, because it was
@@ -112,6 +130,9 @@ states, and leave — with the save syncing on the way out.
   disk rather than by reasoning about it.
 - **Saves, memory cards and states sync both ways** with RomM, tagged with
   Cabinet's own emulator strings.
+- **Vertical arcade games play the right way up**, as of 2026-09-19. Half the
+  arcade library was on its side; a TATE board now fills the height of the
+  screen in a tall window with the glow on the wide bars either side.
 - **EVERY platform this console claims to play, plays** — measured 2026-09-19
   by launching the smallest game on each of twenty-six platform rows and
   reading the maximum pixel of the frame. It found three faults and all three
@@ -126,184 +147,99 @@ states, and leave — with the save syncing on the way out.
 
 ## Pick up with these, in this order
 
-### 1. Install the resolution fix on the A9 — DONE 2026-09-19
+### 1. WHAT TO DO NEXT
 
-**The A9 is installed and running. One thing stands between it and the UI
-work**, and it is in this change but not yet on the machine: the session
-hardcoded `--output-width 1920 --output-height 1080`, written in Phase 2
-before any display existed, and the panel is **3840x2160**. The console ran at
-1080p and the television scaled it.
-
-**That is the worst possible state for judging a look.** The frontend's shapes
-are signed-distance fields, exact at any resolution and verified at all three
-— so every soft edge on that screen was the scaler and none of it was the
-design.
-
-**Removing the flags does not fix it, and that was measured**: with no
-`--output-width`/`--output-height` at all, gamescope still chose
-`1920x1080@60Hz`. The session now reads the connected connector's preferred
-mode from `/sys/class/drm/card*-*/modes` and passes it, with
-`CABINETOS_OUTPUT=WxH` as an override.
-
-**Done and verified the same day.** `bootc upgrade`, reboot, and the console
-reports:
-
-```
-cabinetos-session: output 3840x2160 (from the display)
-drm: selecting mode 3840x2160@60Hz
-[frontend] GL_RENDERER AMD Radeon 890M Graphics (radeonsi, strix1, ACO)
-```
-
-A frame captured off it is 3840x2160, max pixel 255, 95% of the frame lit.
-**The UI freeze is lifted** — everything under *Waiting on the reference
-machine* is available, and what is on that television is now the real thing
-rather than a scaled image.
-
-**That same reboot found item 2**, which is a bigger problem than this was.
-
-### 1c. An hour with a controller found five things — 2026-09-19
-
-**Every one needed a person, a television and a pad. None was findable
-headless.** Four are fixed; the fifth is item 3.
-
-- **THE SOUND HAS NEVER WORKED.** `SDL_OpenAudioDeviceStream` was called only
-  on the `--core` developer path, so a game launched from the library opened
-  no audio device at all. It lasted a fortnight because every audio claim here
-  was made by COUNTING SAMPLES out of `drainAudio()` — *"2,384 frames, zero
-  audio"* is a sample count. **A headless VM has nothing to listen with.**
-- **The shoulders, triggers and right stick were never mapped.** The pad sent
-  a d-pad, four face buttons, Start and Select; RetroPad's other six inputs
-  went nowhere. On Dreamcast the triggers are drive and reverse, so Crazy Taxi
-  could not be played at all.
-- **Start opened the overlay**, so no game could ever be paused. It is L3+R3
-  now — Cabinet's default, chosen because trigger pairs collide with real
-  gameplay and stick clicks mean nothing in anything we run. **Still owed:**
-  Cabinet makes it remappable and GLOBAL rather than per-pad, with the second
-  button clearable for single-button mode.
-- **The overlay did not pause the game.** It ran on behind the menu.
-- **Vertical arcade games render sideways.** Item 3.
-
-**And one gap with no bug behind it: there is no interface sound at all.** The
-only audio path in the program is the core's — no focus click, no selection
-sound. tvOS gives Cabinet those for free; owning the whole stack means we get
-nothing unless we build it. Belongs with motion and the glow: decidable only
-in a room, with speakers.
-
-**Pairing a controller works and has no UI.** `cabinet@192.168.1.212` has a
-Switch Pro Controller paired and trusted (`E4:17:D8:71:F1:ED`), done entirely
-with `bluetoothctl` over SSH. bluez, the MT7925 firmware, `hid_nintendo` and
-SDL hotplug all work — `[frontend] gamepad connected` without a restart. What
-does not exist is the screen, which is open question 15b. Worth knowing: that
-scan turned up **seventeen devices**, sixteen of them neighbours' lights and
-beacons — the concrete case behind "never auto-pair the first pad discovered".
-
-### 1b. Installing the A9 — DONE 2026-09-19, and what it found
-
-The install itself worked and the machine is described at the top of this
-file. **Four faults turned up in the first hour on real hardware, none of
-which the VM could ever have shown**, and all four are fixed in the same
-change as the resolution one:
-
-- **A fresh console threw its RomM token away.** `rommTokenPath()` is
-  `$HOME/.config/cabinetos/romm.json` and nothing created that directory, so
-  on a machine nobody has configured — which is exactly the machine that is
-  pairing — the write failed after the person had already approved it in a
-  browser. Worse, the line printed was `paired      (could not write ...)`: a
-  success word with the failure in brackets. `saveToken` creates the parents
-  at 0700 now, and the failure is loud and exits non-zero. **This would have
-  hit every single person who ever installs CabinetOS.**
-- **`--romm-probe` reported every platform as "not playable here"** on a
-  machine with all twenty-one cores installed and working, because it returns
-  before `catalog::setCoreDirectory`. Cosmetic, and corrosive: a diagnostic
-  that lies is worse than one that says nothing.
-- **The output was hardcoded to 1080p.** Item 1.
-- **The installer is not fit for anyone but us.** Open question 5 is rewritten
-  from "neither is tested" into what a person actually hits. The short version
-  is in *Things that will bite you*.
-
-**Two traps this project had already written down and I walked into anyway**,
-so they are worth repeating:
-
-- **`203/EXEC` is SELinux refusing to run a session script from the wrong
-  place.** `build.sh` says so in as many words. A test copy in
-  `/var/home/cabinet` will not exec; `chcon -t bin_t` fixes it, and `/usr/bin`
-  gets the right label automatically. The machine flapped for two minutes
-  until the drop-in came off — `Restart=always` with `StartLimitIntervalSec=0`
-  did exactly what it was designed to do and the console recovered on its own.
-- **`pkill -f <pattern>` kills the shell issuing it** when that shell's own
-  command line contains the pattern. Third time on this project. `pkill -x`,
-  or match on something the checker cannot contain.
-
-**And the journal filter that wasted several minutes:** the session script's
-output is tagged with the syslog identifier, so `journalctl -u
-cabinetos-session` shows only systemd's own start/stop lines and none of the
-console's output. Use **`journalctl -t cabinetos-session`**. Also, the clock
-jumps when NTP syncs after install, so `--since` is unreliable on the first
-boot — use `-n`.
-
-### 2. WHAT TO DO NEXT, because the last session ended scattered
-
-The A9 works. A person played on it for the first time and **five faults fell
-out in an hour**, four fixed and one not. Read this order before picking
-anything up — the list below it is longer than what actually matters now.
+The A9 works, runs at 4K on its own GPU, and now plays vertical arcade games
+the right way up. Read this order before picking anything up.
 
 | | |
 |---|---|
-| **1** | **Vertical arcade games render sideways.** The one fault from that hour still open. Spec is complete — see item 3. Half the arcade library is affected. |
-| **2** | **The first real in-game save.** Still not done: the pad only started working at the end of the session. Everything for it is now in place. |
-| **3** | **Judge Home on the 65-inch.** The redesign is on the machine and has only been seen on a 27-inch desk monitor. |
-| **4** | Then the offline work (item 4) or the core options (item 7). |
+| **1** | **The first real in-game save.** Still the thing that has been top of the list for three sessions. Everything for it is staged — see item 3. |
+| **2** | **The console demotes itself to software rendering on a boot-time network race**, and it did it on this session's very first boot. It is item 4's fault, it is no longer theoretical, and it makes the reference machine lie. |
+| **3** | **Judge the TATE look, and Home, on the 65-inch.** Both are on the machine and neither has been looked at by a person. |
+| **4** | Then the core options (item 7) or the rest of item 4. |
 
 **Do not start new UI screens before 1 and 2.** Search and Settings are drawn
-in the top bar and say "not built yet"; that is deliberate and can stay for
-now.
+in the top bar and say "not built yet"; that is deliberate and can stay.
 
-### 3. Vertical arcade games render sideways — **NOT FIXED**
+### 2. Vertical arcade games play the right way up — DONE 2026-09-19
 
-**`RETRO_ENVIRONMENT_SET_ROTATION` is in `libretro.h` and handled nowhere in
-`core.cpp`.** DoDonPachi and every other TATE board renders sideways in its
-framebuffer and asks the frontend to turn the picture; this console ignores
-the request. Found by MMagTech on the A9, 2026-09-19.
+**`RETRO_ENVIRONMENT_SET_ROTATION` was in `libretro.h` and handled nowhere.**
+DoDonPachi and every other TATE board rendered sideways; 223 arcade games were
+affected. It is fixed, and PROJECT.md's *Vertical arcade boards, and the turn
+they ask for* has the whole thing. The three parts worth carrying:
 
-**Cabinet does it and the whole design can be copied.**
-`LibretroFrontend.mm`:
+- **The turn goes on the quad's CORNER in the vertex shader**, before the
+  corner looks up a texture coordinate. It cannot go in `u0,v0,u1,v1` — those
+  flip, they never transpose.
+- **A turned board's declared aspect is ALREADY turned.** FBNeo says 0.75 for
+  DoDonPachi while handing back 448x224. Inverting it turns the picture twice;
+  Cabinet's own comment says that "stretched every vertical game". So a turned
+  picture takes its shape from raw pixels. Safe because **only arcade cores
+  ever rotate** — a console was built to output to a television — which is
+  MMagTech's point and what bounds the whole rule.
+- **A turned picture fills the height at its true shape**, MMagTech's call:
+  1080x2160 on the A9, 28% of the width. Upright games keep integer scaling.
 
-```objc
-case RETRO_ENVIRONMENT_SET_ROTATION:
-    // Vertical (TATE) boards render sideways in the framebuffer
-    // and ask the frontend to rotate the picture. Value is in
-    // 90-degree counter-clockwise steps.
-    gRotation.store(*(const unsigned *)data, std::memory_order_relaxed);
-    return true;
+**What has NOT been done is look at it on the television.** Every check was a
+capture, including one at 3840x2160 off the A9's own Radeon. A person with a
+pad is still owed.
+
+### 3. One real in-game save, on Dreamcast — STAGED, NOT DONE
+
+**No save in this class has ever been written by actually PLAYING a game here.**
+Every round trip so far restored a real save, watched the core read it, and
+sent back byte-identical bytes — the correct answer for a session that saved
+nothing, and why forcing an upload needed `--sync-test`.
+
+**Everything is in position on the A9 as of 2026-09-19:**
+
+- Crazy Taxi (rom 552) is downloaded, 70 MB, and boots on the A9's own GPU.
+- Its card came down from the server on a pre-flight run:
+  `[save] 131072 bytes from the server into /var/lib/cabinetos/bios/dc/vmu_save_A1.bin`
+- **The baseline hash is `f5ab223fb794e4458d64ee70bdac009763a41ed96d11d888beb303dd43672ef6`.**
+  Anything other than that on disk afterwards is a save the game wrote, which
+  is the whole measurement.
+- Thirteen Dreamcast cards sit on the server, all 131072 bytes, tagged
+  `flycast-native`.
+
+**The test is: launch it, save INSIDE the game, quit with L3+R3 through the
+overlay — never kill it — and watch the VMU reach RomM.** The capture happens
+after `retro_unload_game` on purpose: Flycast only closes the VMU in its
+device's destructor at teardown, so the image on disk mid-session is partial by
+construction and the reference implementation once uploaded exactly such a
+half-written card.
+
+**The pad has to be woken by hand.** `E4:17:D8:71:F1:ED` is paired, bonded and
+trusted, but it is asleep and `bluetoothctl connect` fails with
+`br-connection-create-socket`. Press its Home button. There is still no pairing
+UI — open question 15b.
+
+### 4. The console dies if the server is away — **and it did it again today**
+
+**IT HAPPENED ON THIS SESSION'S FIRST BOOT**, so this is no longer a story
+about one cold boot. Upgrade the A9 and reboot it and there is a real chance
+the machine you come back to is running on llvmpipe and telling you it has no
+GPU. The whole sequence, from one journal:
+
+```
+[romm] nothing answered at 192.168.1.10:6005 over http or https
+[gamescope] launch: Primary child shut down!
+cabinetos-session: gamescope (drm) died on startup
+cabinetos-session: WARNING — no Vulkan-capable GPU. Falling back to cage.
 ```
 
-and it is applied in `NativePlayerRenderer.aspectFitVertices(textureSize:
-viewSize:rotation:flipped:)` — **rotated texture coordinates in the quad, with
-the source dimensions swapped when the rotation is odd.** Note it already
-carries a `flipped` flag for GL frames that arrive bottom-row-first, which is
-the same problem `core.frameUV()` solves here, so the two compose.
+**That message is false and the same log disproves it four seconds earlier**:
+`vulkan: selecting physical device 'AMD Radeon 890M Graphics (RADV STRIX1)'`
+and `drm: selecting mode 3840x2160@60Hz`. gamescope had a Vulkan GPU and had
+set a mode. It exited because its child did, and the ladder read that as its
+own failure.
 
-**Why it was not done in that session:** it is a RENDERER change, not a
-mapping. `drawImageTexture` takes an axis-aligned quad with `u0,v0,u1,v1` and
-a 90-degree turn cannot be expressed in those — it needs a rotation parameter
-threaded through `image.cpp` and the renderer, and the letterbox and the glow
-both reshaped, because a vertical game on a 16:9 panel is pillarboxed with a
-TALL window rather than a wide one.
+**`systemctl restart cabinetos-session` recovers it**, because by then the
+network is up. That is the workaround and it is not a fix.
 
-**One product question to settle first**, and it is MMagTech's: a vertical
-game on a 4K 16:9 screen uses about a third of the width. Centre it at native
-aspect with black either side, or integer-scale it as tall as the screen
-allows? Nothing makes a vertical game fill a horizontal screen without lying.
-
-### 4. The console dies if the server is away — **and every power cut hits it**
-
-**Found by the A9's first cold boot, 2026-09-19.** The session came up faster
-than the network, could not reach RomM, and the frontend exited. Because
-gamescope exits when its primary child exits, the compositor ladder concluded
-that *gamescope* had failed and permanently demoted the machine to **cage on
-llvmpipe** — hardware rendering gone for the rest of the session, silently,
-with nothing on screen saying so. It recovered only because somebody restarted
-the service by hand.
+The session came up faster than the network, could not reach RomM, and the
+frontend exited.
 
 Three faults, fix them together, and **open question 22 has the whole design**:
 
@@ -328,40 +264,25 @@ user it knew** and offers no switcher it cannot honour — MMagTech's call,
 fallback and it is worse than an error: it looks like a working console
 showing somebody else's games.
 
-### 5. One real in-game save, on Dreamcast
+### 5. Where the in-game save machinery lives
 
-**No save in this class has ever been written by actually PLAYING a game here**,
-and a headless VM cannot press Start. Every round trip so far restored a real
-save, watched the core read it, and sent back byte-identical bytes — which is
-the correct answer for a session that saved nothing, and is why forcing an
-upload needed `--sync-test`.
+Item 3 is the job; this is the map. `frontend/src/filesave.{h,cpp}` is the
+mechanism and `catalog::saveFiles` is the table. The two rules that are not
+obvious and were both paid for:
 
-MMagTech's call, 2026-09-19: *"real in-games will wait until we have the A9 in
-hands and the OS written to it."* **Both of those are now true**, so this is
-available as soon as a controller is plugged in — it does not even wait for
-the resolution fix, because the test is a file reaching a server rather than
-anything about the picture. Play a Dreamcast game, save in it, quit, and watch
-the VMU reach RomM.
+- **Restore before the core loads the game.** These cores read their save file
+  once, synchronously, while the machine is being built. A file that arrives
+  afterwards is a file the game has already decided is not there.
+- **Capture after `retro_unload_game`.** A core buffers its writes and flushes
+  at shutdown, and Flycast only closes the VMU in its device's destructor.
 
-**`[frontend] gamepads at startup: 0` on the A9 as of 2026-09-19** — nothing
-has been plugged in yet. Wired first: `bluez` and the MT7925's Bluetooth
-firmware are both in the image, but USB is the bootstrap and the deterministic
-one.
-
-`frontend/src/filesave.{h,cpp}` is the mechanism and `catalog::saveFiles` is the
-table.
-
-### 6. The UI freeze lifts when the console is running on a television
+### 6. The UI freeze IS LIFTED
 
 **Decided 2026-09-17: no more UI is designed or tuned until CabinetOS is
-installed on the reference machine.** The user's call. **The condition is the
-console RUNNING THE FRONTEND on a television — not the box being unboxed, and
-not the image being installed.**
-
-**That is now true, with one asterisk: item 1.** The console is on a
-television, on its own GPU, at the wrong resolution. Everything under *Waiting
-on the reference machine* becomes available the moment it reports
-`cabinetos-session: output 3840x2160`, in the order it is written.
+installed on the reference machine.** The user's call, and **the condition is
+met**: the console runs the frontend on a television, on its own GPU, at the
+panel's native 3840x2160. Everything under *Available now that the console runs
+on a television* is available, in the order it is written.
 
 **The line is the acceptance test, not the subsystem.** If the test is "does
 this look right", it waits. If the test is a measurement or a behaviour, it
@@ -443,10 +364,10 @@ Phase 2's other leftover is the **boot splash**, which is a picture and waits.
 
 ---
 
-## Waiting on the reference machine, and deliberately not started
+## Available now that the console runs on a television
 
-Ordered for whenever the console is running on a television. **Do not begin
-these in the VM.**
+**The wait is over** — the A9 runs the frontend on its own GPU at 3840x2160.
+These are ordered. **Do not begin any of them in the VM.**
 
 - **The navigation bar.** The Library is reached with a temporary **L** key.
   Home has about 85 points of vertical slack and the bar needs about 85 — the
@@ -594,6 +515,16 @@ these in the VM.**
   the same for the things with no picture.
 - **`--frames N` only ends the run when there is a `--screenshot` to take.**
   Without one the loop never exits and the command sits there at full CPU.
+- **`--launch-after` IS WALL-CLOCK SECONDS AND THE UI LOOP IS NOT PACED**, so
+  on the A9's Radeon a run of 1600 frames goes by in under a second and the
+  launch never fires at all — no error, no `[launch]` line, just a screenshot
+  of Home. It worked on the VM the whole time because llvmpipe is slow enough
+  to take longer than a second. **Use `--launch-after 0`.** Twenty minutes went
+  on this, chasing a difference between two binaries that did not exist.
+- **The same capture command is worth running ON THE A9**, with
+  `SDL_VIDEODRIVER=offscreen` and `--render-size 3840x2160`. It uses the real
+  Radeon, needs no compositor, and does not disturb the running session — so a
+  4K frame off the reference GPU costs one command and no downtime.
 - **`--storage-root <path>` puts a whole console somewhere else**, which is how
   the two-disk and the out-of-space tests were run without disturbing the real
   tree.
@@ -631,6 +562,23 @@ these in the VM.**
 - **Ask the CORE, never the platform**, whether an archive should be opened.
 - **Never dispatch on a file extension.** Thirty-two files in the reference
   library have none. Sniff the magic bytes.
+- **A core reports TWO geometries and neither is wrong.** MAME 2003-Plus
+  declares 224x256 in `av_info` for Arkanoid — the picture as SHOWN, already
+  turned — and hands back 256x224 from `video_refresh` every frame. A layout
+  must use the second. The `[core] WxH` line at load prints the first.
+- **A TURNED BOARD'S DECLARED ASPECT IS ALREADY TURNED.** FBNeo says 0.75 for
+  DoDonPachi while handing back 448x224. Inverting it turns the picture twice
+  and stretches it, which Cabinet shipped once and wrote down.
+- **A core calling `SET_ROTATION(0)` is ordinary, not a no-op to ignore.**
+  Flycast does it explicitly, which silently overwrote a rotation forced in for
+  a test. Anything per-game must be cleared in `loadGame`, not in `load`.
+- **Only ARCADE cores ever rotate.** MMagTech, 2026-09-19: a console was built
+  to put its picture on a television the right way up. It is what bounds the
+  rule above to boards, where it is safe.
+- **Rotation does not come from a MAME DAT and never did.** Checked in
+  Cabinet's own tree because it was raised as a likely memory: the three
+  MAME-derived JSON files it ships hold `rotary`, `dial`, `trackball`,
+  `pedals`, `lightgun` and `paddle` — control panels, not screens.
 
 ### About the machine and the work
 

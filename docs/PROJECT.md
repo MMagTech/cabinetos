@@ -36,8 +36,16 @@ be run.**
 **AND IT IS INSTALLED ON THE REFERENCE MACHINE, 2026-09-19.** The GEEKOM A9
 Pro boots into the frontend on `gamescope (drm)`, rendering on its own Radeon
 890M with Vulkan present, zero session restarts, and the full 1147-game
-library. See *The A9 Pro, measured*. **The UI freeze's condition is all but
-met** — one thing stands in the way and it is the output resolution, below.
+library. See *The A9 Pro, measured*. **The UI freeze is lifted**: the machine
+runs at the panel's native 3840x2160, so what is on that television is the real
+thing rather than a scaled image.
+
+**AND VERTICAL ARCADE GAMES PLAY THE RIGHT WAY UP, 2026-09-19.** Half the
+arcade library was on its side until then, because
+`RETRO_ENVIRONMENT_SET_ROTATION` was handled nowhere. See *Vertical arcade
+boards, and the turn they ask for* — it is a renderer change, it carries one
+product decision of MMagTech's, and it contains the one trap that Cabinet had
+already paid for.
 
 **AND AS OF 2026-09-19 THEY ARE IN THE IMAGE, along with the frontend.** Until
 that day the image was the OS half only: `cabinetos-session` ran
@@ -1061,6 +1069,103 @@ Mupen64Plus ask for GLES 3.0 and get it; **PPSSPP asks for GLES 2.0**, which
 this GLES 3 context serves, and it only asks for GLES at all because it is built
 with `USING_GLES2` — without it the same core asks for desktop GL and is refused
 by name. See open question 13.
+
+### Vertical arcade boards, and the turn they ask for
+
+**BUILT 2026-09-19.** A vertical (TATE) board had its monitor bolted into the
+cabinet turned ninety degrees, so it renders a sideways picture and asks the
+frontend to turn it round with `RETRO_ENVIRONMENT_SET_ROTATION` — 0 to 3, in
+90-degree counter-clockwise steps. This console ignored the ask, and **every
+TATE game in a 223-game arcade library played on its side** for as long as
+arcade has worked here. Found by MMagTech on the A9 with a pad, which is the
+only way it could have been found: a headless capture is a picture nobody looks
+at.
+
+**ONLY AN ARCADE CORE EVER ASKS.** MMagTech's point, 2026-09-19, and it is what
+makes the rule below safe: a console was built to put its picture on a
+television the right way up, so no console core rotates. Every decision here is
+therefore about arcade boards alone and cannot reach anything else.
+
+**The turn cannot live in the texture coordinates**, which is why this is a
+renderer change and not a mapping. `drawImageTexture` takes an axis-aligned
+`u0,v0,u1,v1`, and no ordering of four numbers transposes x and y — swapping
+them flips a picture, it never turns one. So the turn is applied to the quad's
+**corner** in the vertex shader, before the corner is used to look up a texture
+coordinate, and the uv rectangle goes on doing its own job.
+
+**THE ORDER IS DELIBERATE AND IT IS NOT CABINET'S.** Cabinet rotates the
+texture coordinates *after* flipping them, and `aspectFitVertices` says in as
+many words that the two "never combine today" — its rotations are arcade boards
+and its flipped frames come from the two GL cores, which do not rotate. That is
+not safe here, so this frontend applies the turn first, in the picture's own
+space, and lets the uv rectangle map the result into memory. Read it as: the
+rotation says which part of the PICTURE a corner shows, and the uv says where
+that part of the picture lives. Verified by forcing a turn onto a Dreamcast
+frame, which arrives bottom-row-first: the picture comes out turned and not
+mirrored.
+
+#### The declared aspect of a turned board is ALREADY turned
+
+The one trap, and Cabinet paid for it first. FBNeo reports `aspect 0.7500` for
+DoDonPachi DaiOuJou — the 3:4 of the cabinet's tube on its side — while handing
+back a **448x224** framebuffer. Inverting the declared value applies the turn
+twice; Cabinet's own comment records the result as having *"stretched every
+vertical game"*.
+
+**So a turned picture takes its shape from raw pixels and ignores the declared
+aspect.** Nothing else changes, and nothing else can: the platforms whose pixels
+are not square — Saturn is the one that is unplayable without the declared value
+— never rotate.
+
+#### Two sizes a core reports, and neither is wrong
+
+MAME 2003-Plus declares **224x256** in `av_info` for Arkanoid, which is the
+picture as SHOWN, already turned, and then hands back **256x224** from
+`video_refresh` every frame, which is the board's own sideways output. **The
+layout must use the second.** One log line now prints both rather than leaving
+it to be inferred:
+
+```
+[core] the core hands back 256x224 and asks for 270 degrees counter-clockwise; shown as 224x256
+```
+
+#### A turned picture fills the height
+
+**MMagTech's call, 2026-09-19**, asked because nothing makes a vertical game
+fill a horizontal screen without lying and the two honest answers differ. A
+turned picture is scaled to its true shape until it is as tall as the screen
+allows — on the A9's 3840x2160 panel that is **1080x2160, 28% of the width** —
+rather than integer-scaled. Integer scaling would give 6x and throw away 11% of
+the height on top of pillarboxing that is already unavoidable, and the
+deliberate-dot-grid argument that earns a Game Boy integer scaling is worth
+less than a third of the screen. **Every upright game keeps integer scaling
+exactly as before.**
+
+**The letterbox glow reshapes itself for free**, which is worth saying because
+it looks like it should need work. Its shader ramps from the picture's edge to
+the screen's in each direction separately, so a tall rect lights two wide bars
+at the sides and nothing above or below. Measured on the A9: 8 at the picture's
+edge falling to 0 at the panel edge. The rect is the whole interface.
+
+#### What was measured, on the machines
+
+| | |
+|---|---|
+| DoDonPachi DaiOuJou, FBNeo, 90 CCW | upright; 540x1080 at 1080p and **1080x2160 on the A9's own Radeon at 3840x2160** |
+| Arkanoid, MAME 2003-Plus, 270 CCW | upright. A different emulator and the other odd turn |
+| Metal Slug X, FBNeo | no rotation, unchanged, still integer scaled. **The control** |
+| Ikaruga on Flycast, turn forced in | turned, not mirrored, on a bottom-up hardware frame |
+
+**Flycast calls `SET_ROTATION(0)` explicitly**, so a core asking for no turn is
+ordinary and will overwrite anything set before it. That is why the reset lives
+in `loadGame` beside the other per-game state and not in `load`.
+
+**Rotation is not read from a DAT, and Cabinet does not either.** Checked
+2026-09-19 because it was raised as a likely memory. Cabinet ships three
+MAME-derived JSON files under `Resources/ArcadeProfiles/`, and every field in
+them is a CONTROL PANEL — `rotary`, `dial`, `trackball`, `pedals`, `lightgun`,
+`paddle`. Which inputs a cabinet had, never which way its monitor faced.
+`gRotation` has exactly one writer in Cabinet: the environment callback.
 
 ### Shaders, and the glow around the picture
 
@@ -8867,6 +8972,31 @@ Two more open edges:
 ### 22. What the console does when the server is away
 **Raised by the A9 Pro's first reboot, 2026-09-19. Partly decided the same day.
 Not built.**
+
+**REPRODUCED IN FULL ON 2026-09-19**, on the first boot after the A9 was moved
+onto the image, and worth reading because the whole sequence is in one journal
+and every step of it is quiet:
+
+```
+[romm] nothing answered at 192.168.1.10:6005 over http or https
+[gamescope] launch: Primary child shut down!
+cabinetos-session: gamescope (drm) died on startup
+cabinetos-session: WARNING — no Vulkan-capable GPU. Falling back to cage.
+```
+
+**The message is a lie, and it is the machine's own log that proves it.** Four
+seconds earlier the same gamescope had printed `vulkan: selecting physical
+device 'AMD Radeon 890M Graphics (RADV STRIX1)'` and `drm: selecting mode
+3840x2160@60Hz`. It had a Vulkan GPU, it had set a mode, and it exited only
+because its child did. The console then ran the whole session on llvmpipe with
+nothing on screen saying so, and recovered only when the service was restarted
+by hand.
+
+**This is now the thing most likely to make the reference machine lie to
+whoever looks at it next**, because the failure looks exactly like a working
+console. Anyone judging the look on the A9 should read
+`journalctl -t cabinetos-session | grep 'is up'` first and check which rung it
+landed on.
 
 **The console currently dies.** The first cold boot after an upgrade came up
 faster than the network did, `romm::Client::setAddress` failed, the frontend
