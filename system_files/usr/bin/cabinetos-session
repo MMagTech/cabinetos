@@ -156,12 +156,24 @@ runtime_dir() { printf '%s' "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"; }
 # `wayland-0.lock` and `gamescope-limiter-XXXXXX` beside the sockets, and
 # asking whether a name IS a socket is a better question than asking whether it
 # looks like one. Only a real socket means a compositor is serving.
+#
+# EACH SOCKET IS REPORTED WITH ITS INODE, AND THAT IS THE WHOLE POINT. The
+# names repeat: cage always takes `wayland-0`, so a snapshot of NAMES taken
+# before launching one is identical to the snapshot after it comes up, and a
+# comparison of names detects nothing. Measured on the test VM, where cage
+# reached the twenty-second timeout and was kept only because its process
+# happened to still be alive — which is the same "is it still running" guess
+# this whole function exists to replace.
+#
+# Binding a Unix socket unlinks any old file and creates a new one, so the
+# INODE always changes even when the name does not. That is the fact that says
+# "a compositor came up just now" rather than "a file with that name exists".
 wayland_sockets() {
     local dir entry out=""
     dir=$(runtime_dir)
     for entry in "${dir}"/wayland-[0-9]* "${dir}"/gamescope-[0-9]*; do
         [[ -S "${entry}" ]] || continue
-        out+="${entry##*/}"$'\n'
+        out+="${entry##*/}:$(stat -c '%i' "${entry}" 2>/dev/null)"$'\n'
     done
     printf '%s' "${out}" | sort
 }
