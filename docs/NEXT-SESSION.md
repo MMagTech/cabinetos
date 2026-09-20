@@ -1193,7 +1193,25 @@ should change; it is a one-line edit nobody has made.
 `podman image prune -f` is still the first thing to try when `/var` gets tight,
 then `~/cabinetos/.core-src`.
 
-## Two things the user wants discussed, each in its own session
+## Three things the user wants discussed, each in its own session
+
+### Sleep, screen blanking, and what a console does when nobody is playing
+
+Raised 2026-09-20: *"we currently have no screen or sleep behaviour, the console
+just stays active all the time."* **Open question 10b** has the measurements —
+`IdleAction=ignore`, `IdleHint=no` permanently, the panel still lit after nearly
+eleven hours, and every connector exposing a `dpms` node that nothing writes to.
+
+**There is no idle handling at all**, and nothing measuring idleness for
+anything to act on. Two things already in PROJECT.md point at the gap: open
+question 10 assumes *"a machine that stays awake and blanks its display"* is the
+likely default, and the image deliberately keeps `ds-inhibit`, whose entire job
+is making idle detection behave properly on a machine that does not detect idle.
+
+**Take it with the CEC work**, because the console turns the television on and is
+woken by it, and blanking our output while the set stays on is a different
+behaviour from letting the set sleep while we stay lit. The two answers have to
+agree.
 
 ### Switch, or Xbox
 

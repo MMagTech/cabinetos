@@ -5507,6 +5507,61 @@ What remains for Phase 6, with real hardware and a Pulse-Eight adapter present:
   Bluetooth wake-from-suspend for a controller remains unreliable in general, so
   a machine that stays awake and blanks its display is still the likely default.
 
+### 10b. The console never sleeps, and never blanks the screen
+**Raised by MMagTech 2026-09-20, for a later discussion. NOT DECIDED — this
+records what the machine does today and why it is not an accident.**
+
+> we currently have no screen or sleep behaviour, the console just stays active
+> all the time
+
+**Measured on the A9 the same day**, rather than inferred:
+
+| | |
+|---|---|
+| `IdleAction` | `ignore` — systemd's default, never changed |
+| `IdleHint` on the session | `no`, permanently — **nothing is even watching** |
+| The connected output | `card1-HDMI-A-1`, `dpms=On`, after 10 hours 46 minutes lit |
+| `upower.service` | masked by us — *"mains powered; nothing to monitor"* |
+| `ds-inhibit` | running, kept deliberately |
+
+So it is not that idle handling is configured badly. **There is none at all**,
+and no part of the system is measuring idleness for anything to act on.
+
+**THE HARDWARE CAN DO IT.** Every connector exposes a `dpms` node and the
+inactive ones read `Off`, so blanking is a write away. Nothing is missing except
+a decision and something to make it.
+
+#### Two things already in this document point at it
+
+- **Open question 10 assumes this half-exists.** It says *"a machine that stays
+  awake and blanks its display is still the likely default"* — the POLICY is
+  half-decided and the MECHANISM was never built. That gap is this question.
+- **`ds-inhibit` is kept on purpose**, and its whole job is stopping controllers
+  from being counted as keyboards *for idle purposes*. The image carries a
+  service that exists to make idle detection behave correctly, on a console that
+  does not detect idle. One of those two decisions is wrong.
+
+#### What makes this harder than it looks, and why it is worth a session
+
+- **A console is not a PC and not a television.** Suspending is wrong if a
+  controller cannot wake it — and Bluetooth wake-from-suspend is unreliable in
+  general, which open question 10 already records. Blanking the display is the
+  safe half; suspending the machine is the half that can strand somebody.
+- **It collides with CEC.** The console turns the television on and is woken by
+  it. Blanking our own output while the set stays on, or letting the set sleep
+  while we stay lit, are different behaviours and only one of them is right.
+  `cecd` carries `suspend_tv` and `allow_standby` for exactly this.
+- **A game running is not idle even when nothing is pressed.** Somebody
+  watching a demo attract loop, or thinking about a puzzle, must not have the
+  screen go out. Whatever measures idleness has to know a core is running.
+- **And burn-in is a real cost on the panels this ships to.** A static frontend
+  left on an OLED for ten hours is not a neutral default, which is what the
+  measurement above is.
+
+**Nothing is blocked on this** — it is a console that stays on, which is
+survivable and honest. It wants a session of its own, with the CEC work, because
+the two answers have to agree.
+
 ### 11. NVIDIA hardware
 **Raised: Phase 1. Out of scope until there is hardware that needs it.**
 
