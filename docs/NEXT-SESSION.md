@@ -416,12 +416,41 @@ question is *"is this machine configured"*, not *"has this flow been run"*.
 and no help — exactly as a phone pointed at the television sees it — and read
 back the live pairing URL the server had issued seconds earlier.
 
-### THE FRESH INSTALL IS THE ONLY REMAINING TEST, AND IT IS THE REAL ONE
+### THE WRITES ARE TESTED NOW — `--first-run-writes`
+
+**Completing setup had never written anything, ever.** Every walkthrough used
+`--setup`, which forces the flow on a configured machine and deliberately writes
+nothing — so `setServerAddress` and `markCompleted` had never once been executed
+by the product. **That is the worst failure this feature can have**: a marker
+that does not persist means a console completes setup and boots straight back
+into setup, for ever, on a machine somebody has just installed. It would look
+exactly like a console that cannot be set up at all.
+
+Given that three of 2026-09-20's faults were in code that looked correct and had
+simply never run, that was not a risk worth carrying. `--first-run-writes` runs
+against a scratch root, touches nothing real, passes nine checks and belongs in
+CI. **The token save is the one write not covered, and it is the one that is
+already proven** — both machines here were paired with `--romm-pair`, which
+calls the same `saveToken`.
+
+**MMagTech will not reinstall until the UI is finished and every core is built
+and tested** (2026-09-20), which is the right call — a fresh install is
+expensive and should be spent once on something complete. So the fresh install
+is the FINAL ACCEPTANCE TEST rather than a prerequisite, and most of what it
+would prove can be had sooner:
+
+| | |
+|---|---|
+| The writes | **done** — `--first-run-writes` |
+| An empty server field | **the VM**, with its config moved aside; nothing needs reinstalling |
+| An empty Bluetooth list | **the A9, reversibly** — `bluetoothctl remove` the Pro Controller and it has to be DISCOVERED, which is the real first-run case. Re-pairing it through the product is the test. |
+| The whole thing on a virgin machine | only a fresh install |
+
+### WHAT THE FRESH INSTALL IS STILL FOR
 
 Everything here has been walked on the reference console — but that machine is
-CONFIGURED, so every run used `--setup`, which forces the flow and **writes
-nothing**. A fresh install is the first time first run will happen for real, and
-it is the only way to see three things nobody has ever seen:
+CONFIGURED. The fresh install is the first time the whole chain happens for real
+end to end, and the only way to see these together:
 
 | | |
 |---|---|

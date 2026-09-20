@@ -1757,6 +1757,123 @@ static int qrProbe(const char* text, const char* pbmPath) {
     return 0;
 }
 
+// Does completing setup actually STICK?
+//
+// THIS TESTS THE ONLY CODE IN FIRST RUN THAT HAS NEVER RUN. Every walkthrough
+// of the flow so far has used `--setup`, which forces it on an already
+// configured machine and deliberately writes nothing — so `setServerAddress`,
+// `markCompleted` and the token save have never once been executed by the
+// product. Three separate faults found on 2026-09-20 were in code that looked
+// correct and had simply never been exercised: SDL text input that was never
+// enabled, a key press that never reported a commit, and a frame that never
+// reached the window.
+//
+// AND THE FAILURE THIS GUARDS IS THE WORST ONE THE FEATURE HAS. If the marker
+// does not persist, a console completes setup and boots straight back into
+// setup, for ever, with no way past it — on a machine somebody has just
+// installed. It would look exactly like a console that cannot be set up at all.
+//
+// It runs against a scratch root and touches nothing real, so it is safe on any
+// machine and belongs in CI.
+static int firstRunWriteTest() {
+    int failures = 0;
+    auto check = [&](bool ok, const char* what) {
+        std::printf("  %s  %s\n", ok ? "ok  " : "FAIL", what);
+        if (!ok) ++failures;
+    };
+
+    // Somewhere that is nobody's console.
+    char root[] = "/tmp/cabinetos-firstrun-XXXXXX";
+    if (!mkdtemp(root)) {
+        std::fprintf(stderr, "[first-run] could not make a scratch root\n");
+        return 1;
+    }
+    storage::setRoot(root);
+    std::string serr;
+    if (!storage::ensureTree(&serr)) {
+        std::fprintf(stderr, "[first-run] scratch root unusable: %s\n", serr.c_str());
+        return 1;
+    }
+    std::printf("scratch root  %s\n\n", root);
+
+    // 1. A machine with nothing on it has not been set up.
+    //
+    // NOTE WHAT THIS CANNOT ISOLATE: `serverAddress()` reads $CABINETOS_ROMM and
+    // /etc/cabinetos/session.env before it reads our file, by design — root's
+    // answer outranks the session's. On a console that is configured by hand,
+    // those are set, so "is it configured" can legitimately be true here. That
+    // is the adoption rule working, not a failure, and the test says which case
+    // it is rather than pretending the environment is clean.
+    const bool envConfigured = !firstrun::serverAddress().empty();
+    const firstrun::Completion before = firstrun::completion();
+    if (envConfigured) {
+        std::printf("  note  this machine has a server address from %s, so the\n"
+                    "        'not set up' case cannot be checked here\n",
+                    firstrun::serverAddressSource().c_str());
+    } else {
+        check(!before.done, "a machine with nothing on it is not set up");
+    }
+
+    // 2. The address is written, and comes back.
+    const std::string want = "cabinetos-write-test.invalid:6005";
+    std::string werr;
+    check(firstrun::setServerAddress(want, &werr),
+          "setServerAddress reports success");
+    if (!werr.empty()) std::printf("        (%s)\n", werr.c_str());
+
+    // Read the FILE, not the resolver, because the resolver correctly prefers
+    // root's answer and would hide whether ours landed at all.
+    {
+        const std::string path = storage::configDir() + "/server.json";
+        FILE* f = std::fopen(path.c_str(), "rb");
+        std::string body;
+        if (f) {
+            char buf[512];
+            size_t n;
+            while ((n = std::fread(buf, 1, sizeof buf, f)) > 0) body.append(buf, n);
+            std::fclose(f);
+        }
+        check(body.find(want) != std::string::npos,
+              "config/server.json holds the address that was written");
+    }
+
+    // 3. The marker is written, and says the flow was WALKED.
+    check(firstrun::markCompleted(/*adopted=*/false, &werr),
+          "markCompleted reports success");
+    const firstrun::Completion after = firstrun::completion();
+    check(after.done, "the console now reports itself set up");
+    check(after.why == firstrun::Why::Completed,
+          "and records that the flow was walked, not adopted");
+    check(!after.when.empty(), "with a timestamp");
+
+    // 4. THE ONE THAT MATTERS ON A REBOOT: it survives being read fresh. The
+    // marker is a file, so this is the same question as "does the next boot see
+    // it" — and a `completion()` that answered from memory would pass every
+    // check above while a rebooted console went round the loop again.
+    {
+        const std::string path = storage::configDir() + "/first-run.json";
+        struct stat st;
+        check(::stat(path.c_str(), &st) == 0 && st.st_size > 0,
+              "config/first-run.json is on disk and not empty");
+    }
+
+    // 5. Adopted is a different answer and has to stay different, because it is
+    // how a machine set up by hand is told from one that walked the flow.
+    check(firstrun::markCompleted(/*adopted=*/true, &werr), "markCompleted(adopted)");
+    check(firstrun::completion().why == firstrun::Why::AdoptedExisting,
+          "an adopted machine records itself as adopted");
+
+    // Leave nothing behind. A test that litters is a test nobody runs twice.
+    std::string rm = "rm -rf ";
+    rm += root;
+    if (std::system(rm.c_str()) != 0)
+        std::printf("\n  (could not remove %s)\n", root);
+
+    std::printf("\nfirst-run writes: %d failure%s\n", failures,
+                failures == 1 ? "" : "s");
+    return failures == 0 ? 0 : 1;
+}
+
 // Every combination of facts the flow can be handed, walked to the end.
 //
 // WHY THIS EXISTS RATHER THAN A DEMONSTRATION ON ONE MACHINE. The reference
@@ -2177,6 +2294,7 @@ int main(int argc, char** argv) {
     bool networkScan = false;
     bool firstRunProbeMode = false;
     bool firstRunRulesMode = false;
+    bool firstRunWriteMode = false;
     // Runs the setup flow even on a console that is already configured, so it
     // can be looked at and photographed. It never writes anything — see
     // setup::Options::dryRun — because the only machines anybody here can try
@@ -2290,6 +2408,8 @@ int main(int argc, char** argv) {
             noSetup = true;
         } else if (SDL_strcmp(argv[i], "--first-run-rules") == 0) {
             firstRunRulesMode = true;
+        } else if (SDL_strcmp(argv[i], "--first-run-writes") == 0) {
+            firstRunWriteMode = true;
         } else if (SDL_strcmp(argv[i], "--first-run") == 0) {
             firstRunProbeMode = true;
         } else if (SDL_strcmp(argv[i], "--first-run-step") == 0 && i + 1 < argc) {
@@ -2394,6 +2514,7 @@ int main(int argc, char** argv) {
     // they answer before anything is created on disk. --qr in particular should
     // not cost a console a directory it did not have.
     if (firstRunRulesMode) return firstRunRules();
+    if (firstRunWriteMode) return firstRunWriteTest();
     if (qrText) return qrProbe(qrText, qrPbm);
     if (networkProbeMode) return networkProbe(networkScan);
 
