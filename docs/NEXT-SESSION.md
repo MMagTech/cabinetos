@@ -21,7 +21,7 @@ branch that does the work it describes, so there is never a handover-only push
 and never a handover-only pull request. The rule and the one narrow exception
 are in PROJECT.md, *Constraints and principles*, item 7.
 
-**THE A9 PRO IS THE REFERENCE CONSOLE.** `cabinet@192.168.1.212`, same SSH key
+**THE A9 MAX IS THE REFERENCE CONSOLE.** `cabinet@192.168.1.212`, same SSH key
 as the VM, sudo password `cabinet`. It boots into the frontend on
 **gamescope/drm** — the top compositor rung, which the VM has never reached —
 on its own Radeon 890M at the panel's native **3840x2160**, with Vulkan
@@ -85,7 +85,7 @@ Then read `docs/PROJECT.md`, and `frontend/README.md` for the build loop.
 
 | | | |
 |---|---|---|
-| **A9 Pro** | `cabinet@192.168.1.212` | the reference console. Real GPU, gamescope/drm, Vulkan. Judge the look here — and only here. |
+| **A9 Max** | `cabinet@192.168.1.212` | the reference console. Real GPU, gamescope/drm, Vulkan. Judge the look here — and only here. |
 | **Test VM** | `cabinet@192.168.1.250` | Unraid, no Vulkan, cage on llvmpipe. The dev loop and every headless measurement. |
 
 Both take the key at `~/.ssh/cabinetos` and both have sudo password `cabinet`
@@ -750,7 +750,7 @@ These are ordered. **Do not begin any of them in the VM.**
 games were installed and booted far enough to prove the PKG could then be
 deleted; **neither reached gameplay and neither could, because the test VM has
 no GPU.** Playing a PS3 game needs a Vulkan path in the host, which is open
-question 20 — **and the A9 Pro is the machine that makes it possible.**
+question 20 — **and the A9 Max is the machine that makes it possible.**
 
 **GameCube and PS2 do not run on this console either** — 85 games between them,
 both reported as *"the core for this system is not built on this console yet"*,
