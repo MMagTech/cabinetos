@@ -179,10 +179,20 @@ bool listWifi(bool rescan, std::vector<Network>* out, std::string* err) {
     // A scan is the slow call in this file, which is why it is separated from
     // cachedScan: a screen can draw the cached list at once and replace it when
     // this returns.
-    const proc::Result r = proc::run({"nmcli", "-t", "-f", "IN-USE,SSID,SIGNAL,SECURITY",
-                       "device", "wifi", "list",
-                       "--rescan", rescan ? "yes" : "no"},
-                      rescan ? 30 : 10);
+    proc::Result r = proc::run({"nmcli", "-t", "-f", "IN-USE,SSID,SIGNAL,SECURITY",
+                                "device", "wifi", "list",
+                                "--rescan", rescan ? "yes" : "no"},
+                               rescan ? 30 : 10);
+    // A REFUSED RESCAN IS NOT AN EMPTY SKY. NetworkManager declines
+    // `--rescan yes` while a scan it started itself is already running, and it
+    // scans on its own schedule — so the commonest reason this fails is that
+    // results are on their way. Falling back to the cached list turns a
+    // transient conflict into the list NetworkManager already has, instead of a
+    // screen saying there is nothing on the air in a house full of routers.
+    if (!r.ok() && rescan) {
+        r = proc::run({"nmcli", "-t", "-f", "IN-USE,SSID,SIGNAL,SECURITY",
+                       "device", "wifi", "list", "--rescan", "no"}, 10);
+    }
     if (!r.ok()) {
         if (err) {
             *err = r.timedOut ? "the scan did not finish"

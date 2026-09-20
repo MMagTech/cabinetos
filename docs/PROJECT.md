@@ -8076,6 +8076,41 @@ whole flow was built to keep and nothing else on the screen says it.
 **The titles are what the step DOES**, not a greeting. "Connect to Network", not
 "Let's get you online".
 
+##### And three more that only pulling the cable out could find
+
+**MMagTech unplugged the Ethernet on a console whose Wi-Fi profile had been
+deleted, so the machine was genuinely offline — the state neither machine here
+can otherwise reach.** It found the network step's whole reason for existing
+broken in three different ways.
+
+**THE SCREEN WAS A PHOTOGRAPH.** The facts were read when a step was entered and
+never again, so somebody sitting on *"A network connection is required"* who
+plugs a cable in watches nothing happen, forever. That is the exact moment this
+screen exists for. The link is now re-read every two seconds on a worker —
+a worker because `net::status()` is three or four nmcli round trips, several
+hundred milliseconds, which is ten frames.
+
+**NOTHING EVER STARTED A SCAN.** The scan was kicked off by ARRIVING at the
+step, and the step was entered while the machine was still on a cable — so no
+list was needed and none was asked for. Then the cable came out, the panel
+correctly switched to showing a Wi-Fi list, and the list it showed was the empty
+one nobody had ever filled: *"Nothing on the air"*, in a house with four
+networks in it, with the only remedy a button somebody had to know to press.
+**A scan is now started by what the screen NEEDS, not by how somebody got
+there**, and retried on its own.
+
+**A REFUSED RESCAN LOOKED LIKE AN EMPTY SKY.** NetworkManager declines
+`--rescan yes` while a scan it started itself is running, and the two-second
+status poll above makes that collision more likely — so the fix partly caused
+the fault. It now falls back to the cached list, which NetworkManager keeps
+current anyway, and *"Nothing on the air"* is told apart from *"Could not
+scan"*: they mean different things and only one of them means try again.
+
+**Measured afterwards, with both Ethernet devices reporting `unavailable`:**
+joined in about thirty seconds including typing the password,
+`MMagTech.nmconnection` written root-owned 0600, autoconnect on, running on
+`192.168.1.109/24` over the radio.
+
 ##### Three faults only walking it could find — 2026-09-20
 
 MMagTech walked the flow on the television. None of these was visible in a

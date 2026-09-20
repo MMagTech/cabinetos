@@ -331,6 +331,22 @@ private:
     std::string notice_;
     bool noticeIsError_ = false;
 
+    // THE LINK, WATCHED RATHER THAN SAMPLED ONCE.
+    //
+    // Without this the network step is a photograph: somebody sitting on
+    // "A network connection is required" who then plugs a cable in watches
+    // nothing happen, forever, because the facts are only re-read when the step
+    // changes. That is the exact moment this screen exists for.
+    //
+    // It is a job because it is not free — net::status() is three or four
+    // nmcli round trips, several hundred milliseconds, which is ten frames.
+    Job<net::Status> statusJob_;
+    uint64_t lastStatusNS_ = 0;
+    uint64_t lastScanNS_ = 0;
+    // Told apart on purpose: "we looked and there is nothing" and "we could not
+    // look" are different sentences, and only one of them means try again.
+    bool scanFailed_ = false;
+
     // Wi-Fi
     std::vector<net::Network> networks_;
     int chosenNetwork_ = -1;
@@ -567,8 +583,8 @@ void Flow::rebuild() {
             }
             if (networks_.empty()) {
                 Row r;
-                r.title = "Nothing on the air";
-                r.detail = "try again";
+                r.title = scanFailed_ ? "Could not scan" : "Nothing on the air";
+                r.detail = scanFailed_ ? "" : "looking again…";
                 r.enabled = false;
                 rows_.push_back(std::move(r));
                 break;
@@ -885,7 +901,72 @@ void Flow::pumpJobs() {
     std::string err;
     bool ok = false;
 
+    // Re-read the link about every two seconds. Slow enough not to hammer
+    // NetworkManager from a screen that is otherwise idle, quick enough that
+    // plugging a cable in feels like it did something.
+    constexpr uint64_t kStatusEveryNS = 2000000000ull;
+    if (!statusJob_.busy() && SDL_GetTicksNS() - lastStatusNS_ > kStatusEveryNS) {
+        lastStatusNS_ = SDL_GetTicksNS();
+        statusJob_.start([](net::Status& out, std::string& e) {
+            out = net::status();
+            (void)e;
+            return true;
+        });
+    }
+    if (net::Status st; statusJob_.take(&st, &err, &ok)) {
+        const bool wasOnline = facts_.online;
+        netStatus_ = st;
+        facts_.online = st.online;
+        facts_.wiredOnline = st.ethernetUp;
+        facts_.wifiPresent = st.wifiPresent;
+        facts_.wifiConfigured = st.wifiUp;
+        machine_.update(facts_);
+        // A LINK THAT ARRIVES WHILE THE NETWORK STEP IS BLOCKED IS THE ANSWER
+        // TO THAT STEP, so say so rather than silently ungreying a button.
+        if (!wasOnline && st.online &&
+            (machine_.step() == firstrun::Step::Network ||
+             machine_.step() == firstrun::Step::WiFi)) {
+            notice_ = st.ethernetUp ? "Connected over Ethernet." : "Connected.";
+            noticeIsError_ = false;
+        }
+        changed = true;
+    }
+
+    // A SCAN IS STARTED BY WHAT THE SCREEN NEEDS, NOT BY ARRIVING AT A STEP.
+    //
+    // This was driven from `enterStep` alone, and the cable being unplugged is
+    // exactly the case that breaks: the step was entered while the machine was
+    // online, so no list was needed and none was asked for — then the cable came
+    // out, the panel correctly switched to showing a Wi-Fi list, and the list it
+    // showed was the empty one nobody had ever filled. It said "Nothing on the
+    // air" in a house with four networks in it, and the only thing on screen
+    // that could fix it was a button somebody had to know to press.
+    //
+    // Found by MMagTech, 2026-09-20, unplugging the cable.
+    {
+        const bool needList =
+            facts_.wifiPresent &&
+            (machine_.step() == firstrun::Step::WiFi ||
+             (machine_.step() == firstrun::Step::Network && !facts_.online));
+        constexpr uint64_t kScanEveryNS = 8000000000ull;
+        if (needList && networks_.empty() && !scanJob_.busy() &&
+            SDL_GetTicksNS() - lastScanNS_ > kScanEveryNS) {
+            lastScanNS_ = SDL_GetTicksNS();
+            startWifiScan();
+            changed = true;
+        }
+    }
+
+    // Cheap enough to ask every frame, and it is how a pad waking up mid-setup
+    // answers the controller step by itself.
+    if (const int pads = SDL_HasGamepad() ? 1 : 0; pads != facts_.gamepadCount) {
+        facts_.gamepadCount = pads;
+        machine_.update(facts_);
+        changed = true;
+    }
+
     if (std::vector<net::Network> found; scanJob_.take(&found, &err, &ok)) {
+        scanFailed_ = !ok;
         if (ok) {
             networks_ = std::move(found);
         } else {
@@ -1085,6 +1166,7 @@ void Flow::activate() {
                 break;
             case Act::Back: goBack(); break;
             case Act::Rescan:
+                lastScanNS_ = SDL_GetTicksNS();
                 if (machine_.step() == firstrun::Step::Controller) startBtScan();
                 else startWifiScan();
                 rebuild();

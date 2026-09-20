@@ -784,6 +784,16 @@ These are ordered. **Do not begin any of them in the VM.**
   `base + verification_path_complete` from `/api/auth/device/init`, and on RomM
   5.1.0 that is `/pair/device?user_code=…`. A fabricated one produces a QR that
   scans perfectly and lands on a page saying the code does not exist.
+- **A SCREEN THAT WAITS FOR SOMETHING MUST KEEP LOOKING, AND MUST FETCH WHAT IT
+  NEEDS RATHER THAN WHAT ITS ENTRY POINT NEEDED.** First run's network step read
+  the facts once on arrival and started its Wi-Fi scan the same way. Enter it on
+  a cable, then unplug: the panel correctly switched to a Wi-Fi list and showed
+  the empty one nobody had ever filled — "Nothing on the air", in a house with
+  four networks — and plugging the cable back in changed nothing on screen. Both
+  halves are now driven by what the screen NEEDS, on a two-second worker.
+- **NetworkManager REFUSES `--rescan yes` while its own scan is running**, and
+  that reads as an empty sky. Fall back to the cached list. And tell "we looked
+  and there is nothing" apart from "we could not look" — only one means retry.
 - **A GUARANTEE STATED UNCONDITIONALLY BY A FLOW THAT CAN BE SKIPPED IS A BUG.**
   First run's last screen said "you can unplug the keyboard" — the promise the
   whole design exists to make — while the controller step it follows is
