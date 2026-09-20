@@ -1062,6 +1062,18 @@ These are ordered. **Do not begin any of them in the VM.**
   image build would now fail rather than ship broken, but it would fail with
   no obvious cause; this is what makes the base-bump pull request say "read
   this" first.
+- **A `pull_request` EVENT CAN SIMPLY NOT FIRE, AND NOTHING SAYS SO.** Seen
+  2026-09-20 on a pull request that changed `frontend/src/catalog.cpp` as well as
+  docs, so `paths-ignore` did not apply: zero workflow runs were created, the
+  branch showed *"no checks reported"*, and the pull request sat at
+  **`MERGEABLE / CLEAN` with nothing having built it.** A green-looking pull
+  request that ran no checks at all is the most dangerous state this repository
+  can be in. **`gh pr checks` printing nothing is not the same as passing** —
+  count them. The documented remedy works: close the pull request and reopen it.
+- **A DOCUMENTATION-ONLY PULL REQUEST CORRECTLY RUNS NOTHING**, because
+  `build.yml` ignores `**.md` and `docs/**`. That is expected and is a different
+  thing from the fault above — check WHAT the pull request touches before
+  deciding which one you are looking at.
 - **The weekly base bump needs two clicks, not none.** It opens a pull request,
   but the build on it lands as `action_required` and waits for approval —
   `gh api -X POST /repos/MMagTech/cabinetos/actions/runs/<id>/approve`. And
@@ -1325,6 +1337,18 @@ own rule is that a fact carried across is a fact nobody has checked.
    more are probably sitting in the shipping archives.
 6. **melonDS's archives carry no revision** while the same upstream built here
    reports one, so something in Cabinet's build is losing `GIT_VERSION`.
+7. **`PS2PlayerView.swift`'s header says the screen has no pause menu and no
+   save state. It has both.** The file opens with *"there is no sound, no
+   controller, no pause menu, and no save state or memory card sync — this
+   screen exists to put a picture on the display"*, and forty lines later there
+   is a four-row menu whose Save and Load call `CabinetPS2SaveStateToSlot(1)`
+   and `CabinetPS2LoadStateFromSlot(1)`.
+
+   **Same shape as 4 and as the `savesOverSaveRAM` comment in the handover's
+   list**, and it cost the same thing again on 2026-09-20: a stale comment reads
+   exactly like a current one, and the comment is what got remembered rather
+   than the code. The memory-card half of that sentence IS still true, which is
+   what makes the rest of it convincing.
 
 ## How the user wants this done
 
