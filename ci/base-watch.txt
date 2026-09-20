@@ -60,6 +60,13 @@ nvidia-gpu-firmware
 # --- Graphics --------------------------------------------------------------
 # Phase 2 runs the frontend inside gamescope and Phase 5 runs emulators inside
 # it. A gamescope or Mesa regression is a project-stopping event.
+#
+# `vulkan-*` and `mesa-*` became load-bearing for the PRODUCT on 2026-09-20,
+# not just for gamescope: PlayStation 2 and GameCube render through Vulkan and
+# the frontend dlopens libvulkan.so.1 itself. Losing the loader or the RADV
+# driver takes those two systems out while every other core keeps working, so
+# it is the quiet kind of breakage. build_files/build.sh asserts both, because
+# a dlopen is invisible to `ldd` and therefore to require-frontend-libs.sh.
 gamescope
 terra-gamescope*
 mesa-*
@@ -168,6 +175,10 @@ plasma-discover*
 waydroid
 firefox
 konsole
+# KDE's FILE MANAGER, not the emulator. CabinetOS ships a GameCube core called
+# dolphin and strips a desktop application called dolphin, and they have
+# nothing to do with each other. Removing this line to "keep GameCube" would
+# put a file manager back in the image and change nothing about the core.
 dolphin
 cockpit*
 uupd

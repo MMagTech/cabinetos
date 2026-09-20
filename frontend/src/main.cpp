@@ -58,6 +58,8 @@
 #include "dirsave.h"
 #include "filesave.h"
 #include "firstrun.h"
+#include "gpu.h"
+#include "vkhost.h"
 #include "net.h"
 #include "qr.h"
 #include "romfile.h"
@@ -2279,6 +2281,20 @@ int main(int argc, char** argv) {
     int autoUnkeepId = 0;
     bool storageReport = false;
     bool coreOptionsAudit = false;
+    // One core option, set from the command line, for finding out what a value
+    // actually does before writing it into catalog::optionOverrides.
+    //
+    // It exists because the alternative is a rebuild per value, and an option
+    // is exactly the kind of thing that has to be tried rather than reasoned
+    // about — `catalog::optionOverrides` already says so, and open question 7
+    // asks for Cabinet's whole per-platform table to be brought across "with a
+    // reason recorded beside each choice", which means somebody has to be able
+    // to see the difference each one makes. Two of the four overrides in that
+    // table today were found by a launch failing, not by reading.
+    //
+    // These are applied ON TOP of catalog::optionOverrides, so this can also be
+    // used to take a shipped override back off and see what it was buying.
+    std::map<std::string, std::string> cliOptionOverrides;
     const char* initialScreen = nullptr;
     int initialTile = 0;
     int initialTab = 0;
@@ -2292,6 +2308,10 @@ int main(int argc, char** argv) {
     // See the probes above.
     bool networkProbeMode = false;
     bool networkScan = false;
+    // What this machine's graphics hardware can do, before anything is created.
+    // See gpu.h: the A9 and the test VM differ here in the one way that decides
+    // whether PlayStation 2 and GameCube can be played at all.
+    bool gpuProbeMode = false;
     bool firstRunProbeMode = false;
     bool firstRunRulesMode = false;
     bool firstRunWriteMode = false;
@@ -2395,6 +2415,8 @@ int main(int argc, char** argv) {
         } else if (SDL_strcmp(argv[i], "--network-scan") == 0) {
             networkProbeMode = true;
             networkScan = true;
+        } else if (SDL_strcmp(argv[i], "--gpu-probe") == 0) {
+            gpuProbeMode = true;
         } else if (SDL_strcmp(argv[i], "--qr") == 0 && i + 1 < argc) {
             qrText = argv[++i];
         } else if (SDL_strcmp(argv[i], "--qr-out") == 0 && i + 1 < argc) {
@@ -2442,12 +2464,26 @@ int main(int argc, char** argv) {
             // before it captured option tables, kept so the difference can be
             // measured rather than asserted.
             cab::Core::setAnswerOptions(false);
+        } else if (SDL_strcmp(argv[i], "--core-no-hw-render") == 0) {
+            // The other control. See core.h.
+            cab::Core::setRefuseHWRender(true);
         } else if (SDL_strcmp(argv[i], "--core-options") == 0) {
             // Every option every built core declares, and what it is answered
             // with. This is the audit docs/PROJECT.md asked for and nobody had
             // run: an unanswered option is not the default, it is zero, and
             // until this existed there was no way to see which were which.
             coreOptionsAudit = true;
+        } else if (SDL_strcmp(argv[i], "--core-option") == 0 && i + 1 < argc) {
+            //   --core-option dolphin_shader_compilation_mode=Synchronous
+            // Repeatable. See cliOptionOverrides.
+            const std::string kv = argv[++i];
+            const size_t eq = kv.find('=');
+            if (eq == std::string::npos || eq == 0) {
+                std::fprintf(stderr, "[frontend] --core-option wants key=value, got '%s'\n",
+                             kv.c_str());
+                return 1;
+            }
+            cliOptionOverrides[kv.substr(0, eq)] = kv.substr(eq + 1);
         } else if (SDL_strcmp(argv[i], "--storage") == 0) {
             storageReport = true;
         } else if (SDL_strcmp(argv[i], "--tab") == 0 && i + 1 < argc) {
@@ -2517,6 +2553,10 @@ int main(int argc, char** argv) {
     if (firstRunWriteMode) return firstRunWriteTest();
     if (qrText) return qrProbe(qrText, qrPbm);
     if (networkProbeMode) return networkProbe(networkScan);
+    if (gpuProbeMode) {
+        cab::gpu::report();
+        return 0;
+    }
 
     // --- Where everything lives, decided before anything writes a byte ------
     //
@@ -2993,7 +3033,13 @@ int main(int argc, char** argv) {
         core.setDirectories(storage::biosDir(), saveDir);
         // The same overrides the library path applies, so --core plays the
         // core the same way the product does. See beginLaunch.
-        core.setOptionOverrides(catalog::optionOverrides(corePath));
+        std::map<std::string, std::string> overrides = catalog::optionOverrides(corePath);
+        for (const auto& [key, value] : cliOptionOverrides) {
+            std::fprintf(stderr, "[core] option from the command line: %s = %s\n",
+                         key.c_str(), value.c_str());
+            overrides[key] = value;
+        }
+        core.setOptionOverrides(overrides);
         if (!core.load(corePath)) {
             std::fprintf(stderr, "[frontend] core: %s\n", core.error().c_str());
             return 1;
@@ -5310,6 +5356,29 @@ int main(int argc, char** argv) {
                      "[core] %llu frames, %llu audio frames = %.2fs of emulated time\n",
                      static_cast<unsigned long long>(core.framesRun()),
                      static_cast<unsigned long long>(core.audioFramesTotal()), realtime);
+        // What the bridge between Vulkan and GL cost, when there was one. The
+        // whole question "does handing a Vulkan picture to a GLES UI hurt"
+        // gets an answer here rather than an opinion. See vkhost.h.
+        {
+            uint64_t vframes = 0;
+            double vseconds = 0.0;
+            cab::vk::presentCost(vframes, vseconds);
+            if (vframes > 0)
+                std::fprintf(stderr,
+                             "[vulkan] %llu pictures crossed into GL in %.3fs "
+                             "= %.3f ms each\n",
+                             static_cast<unsigned long long>(vframes), vseconds,
+                             1000.0 * vseconds / static_cast<double>(vframes));
+            if (vframes > 0) {
+                double rec = 0.0, wait = 0.0;
+                cab::vk::presentCostSplit(rec, wait);
+                std::fprintf(stderr,
+                             "[vulkan]   of which %.3f ms recording the copy and "
+                             "%.3f ms waiting for the GPU\n",
+                             1000.0 * rec / static_cast<double>(vframes),
+                             1000.0 * wait / static_cast<double>(vframes));
+            }
+        }
         // Whether the second brake did anything. It is reported rather than
         // assumed, because a brake nobody can see is indistinguishable from a
         // brake that is not there — and this one has never engaged on either

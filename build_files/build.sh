@@ -156,6 +156,31 @@ for needed in /usr/bin/nmcli /usr/bin/pkcheck /usr/bin/bluetoothctl; do
     fi
 done
 
+# THE SAME BLIND SPOT, ONE STEP WORSE: A LIBRARY THAT IS dlopen'd.
+#
+# frontend/src/gpu.cpp opens libvulkan.so.1 by hand rather than linking it, so
+# that the binary still starts on a machine with no Vulkan and says so. That is
+# the right behaviour and it costs the one check that would have caught its
+# absence: `ldd` on the frontend does not name it, so
+# require-frontend-libs.sh cannot see it and ci/base-watch.txt has nothing to
+# watch.
+#
+# WITHOUT IT, PLAYSTATION 2 AND GAMECUBE SIMPLY DO NOT PLAY, and the console
+# says only "this core wants Vulkan and no libvulkan.so.1 on this machine" —
+# on a machine whose GPU is fine. Every other core keeps working, so the build
+# is green, the console boots, and one tier of the library quietly goes dark.
+#
+# The ICD matters as much as the loader: a loader with no driver behind it
+# enumerates zero devices, which is exactly what the test VM reports.
+for needed in /usr/lib64/libvulkan.so.1 /usr/lib64/libvulkan_radeon.so; do
+    if [[ -e "${needed}" ]]; then
+        log "present: ${needed} ($(rpm -qf "${needed}" 2>/dev/null || echo 'unowned'))"
+    else
+        log "  ERROR: ${needed} is not in this image — PS2 and GameCube need it"
+        exit 1
+    fi
+done
+
 # ---------------------------------------------------------------------------
 # Record the starting package set.
 # ---------------------------------------------------------------------------

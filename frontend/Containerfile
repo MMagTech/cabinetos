@@ -17,10 +17,18 @@ RUN dnf install -y --setopt=install_weak_deps=False \
         mesa-libEGL-devel \
         mesa-libGLES-devel \
         mesa-libGL-devel \
+        vulkan-headers vulkan-loader-devel \
         wayland-devel freetype-devel libjpeg-turbo-devel libpng-devel \
         libcurl-devel json-c-devel libarchive-devel \
         zlib-ng-compat-devel libzip-devel alsa-lib-devel systemd-devel \
     && dnf clean all
+
+# vulkan-headers is for the frontend's own Vulkan path, and vulkan-loader-devel
+# is NOT for linking against. Nothing here links libvulkan: gpu.cpp opens it
+# with dlopen so the binary still starts on the test VM, which has no Vulkan
+# device at all. The devel package is here for the headers' pkg-config file and
+# so a mistake that DOES link it fails in the container rather than on the
+# console. See frontend/src/gpu.h, and docs/PROJECT.md open question 20.
 
 # libarchive is for ROMs, which arrive in whatever format their owner has —
 # zip, 7z, plain, or no extension at all. See frontend/src/archive.h.
