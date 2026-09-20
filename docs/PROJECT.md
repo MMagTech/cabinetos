@@ -54,6 +54,20 @@ screen, and everything a person would call the console lived on one development
 VM and was compiled there by hand. Installing CabinetOS now installs CabinetOS.
 See Phase 5, *The deploy*.
 
+**AND A PERSON SAVED A GAME, 2026-09-19.** Somebody played Crazy Taxi 2 with a
+controller, saved inside it, quit through the overlay, and the Dreamcast VMU
+reached RomM — `updated 2026-09-20T02:48:19Z` on the row that already existed,
+overwritten rather than duplicated. **No save in this class had ever been
+written by actually playing a game here**; every round trip before it restored
+a real card, watched the core read it, and sent back byte-identical bytes,
+which is the right answer for a session that saved nothing. See
+`docs/NEXT-SESSION.md` item 3.
+
+It could not have happened a day earlier, and the reason is the one below about
+the analogue trigger index: the Dreamcast's accelerator and brake are its
+triggers, this console answered that channel with the right stick, and Crazy
+Taxi could not be driven at all.
+
 ### The thing that matters most
 
 **Save states are portable between Cabinet and CabinetOS.** Proved, not
@@ -212,8 +226,17 @@ single opinion about the look.
 - **Every core builds in CI**, on a GitHub runner from a bare checkout, with the
   finished `.so` asserted to report the pinned revision as its own version
   string — see open question 13.
-- **No controller has ever been attached.** The permissions chain is verified
-  by reading; a real pad is not.
+- ~~**No controller has ever been attached.**~~ **A Switch Pro Controller is
+  paired over Bluetooth and has been played with**, 2026-09-19. It has to be
+  woken by its own Home button — `bluetoothctl connect` fails with
+  `br-connection-create-socket` on a sleeping pad — and there is still no
+  pairing screen, which is open question 15b.
+- **A GAME CAN DRAW NOTHING AND NOBODY KNOWS WHY.** Six FBNeo launches in one
+  session drew only the letterbox glow while the core ran and made sound, and
+  it has not reproduced since. The frame is known to reach the texture intact
+  and to be lost at sampling; two theories were tested and both falsified. See
+  `docs/NEXT-SESSION.md` item 3b, which also has the command that photographs
+  the television with the session running.
 - ~~**Whether a PS3 PKG install costs double the disk**~~ **— it does not, as of
   2026-09-18.** A PKG installs to the same size it came in at, so the 2x lasts
   only while both the PKG and the install exist. Measured on a 287 MB title and
@@ -303,6 +326,51 @@ The user never sees:
 - a package manager
 - a file browser
 - a Linux error message
+
+### The trigger channel, and why answering it wrongly is worse than silence
+
+**Found 2026-09-19 by MMagTech, who said the shoulder buttons did not work.**
+
+libretro has a third analogue index, `RETRO_DEVICE_INDEX_ANALOG_BUTTON`, and it
+is not a stick: its `id` is a joypad button id, so L2 is 12 and R2 is 13. A
+callback that tests for the LEFT index and treats everything else as the right
+stick answers *"how far is the left trigger pressed"* with **where the right
+stick is sitting**. Two faults in one line — the triggers cannot be pressed,
+and the right stick drives them.
+
+**And it is worse than returning nothing.** Flycast reads the analogue value
+first and falls back to the digital L2/R2 bit **only when that value is exactly
+zero**. Cabinet answers this index with a plain `0` and therefore works, by
+taking the fallback. A real pad's right stick rests a few hundred counts off
+centre; that is not zero, so it reads as *"the trigger is very slightly
+pressed"* and suppresses the fallback entirely. **A bug that needed stick drift
+to appear.**
+
+CabinetOS now carries a real analogue value rather than Cabinet's zero —
+`PadState` has `leftTrigger` and `rightTrigger` — so a pad with sprung triggers
+gives a Dreamcast a continuous throttle, and one with switches, which is what a
+Switch Pro Controller's ZL and ZR are, gives it 0 or full.
+
+#### A button that does nothing is usually correct
+
+A RetroPad has sixteen inputs and a real machine has fewer, so a press that
+does nothing is normally right and looks exactly like a fault. **The Dreamcast
+controller has no shoulder BUTTONS at all** — its L and R are the analogue
+triggers — so on a Switch Pro Controller the top shoulders are meant to be
+silent and ZL/ZR are the triggers.
+
+The console stopped leaving that to guesswork on 2026-09-19:
+`RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS` was accepted and thrown away, and is
+now printed once per game, including the half nobody prints:
+
+```
+[input] port 0: ... B=A, A=B, X=Y, Y=X, L2 (trigger)=L Trigger, R2 (trigger)=R Trigger, Start=Start
+[input] port 0 does nothing in this game: Select, L (shoulder), R (shoulder), L3 (stick click), R3 (stick click)
+```
+
+It earned its keep immediately: Metal Slug X binds **L3 to Select**, so the
+L3+R3 overlay chord sends one stray press on its way to opening — which follows
+the rule already chosen, and is now visible rather than theoretical.
 
 ### The input model
 

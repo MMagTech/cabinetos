@@ -129,7 +129,8 @@ states, and leave — with the save syncing on the way out.
 - **Both floors are enforced where that button is**, measured by filling the
   disk rather than by reasoning about it.
 - **Saves, memory cards and states sync both ways** with RomM, tagged with
-  Cabinet's own emulator strings.
+  Cabinet's own emulator strings — and as of 2026-09-19 **one of them was
+  written by a person playing a game**, not by a round-trip test.
 - **Vertical arcade games play the right way up**, as of 2026-09-19. Half the
   arcade library was on its side; a TATE board now fills the height of the
   screen in a tall window with the glow on the wide bars either side.
@@ -154,9 +155,9 @@ the right way up. Read this order before picking anything up.
 
 | | |
 |---|---|
-| **1** | **The first real in-game save.** Still the thing that has been top of the list for three sessions. Everything for it is staged — see item 3. |
+| **1** | **A GAME CAN GO BLACK AND NOBODY KNOWS WHY.** Six launches in one session drew nothing but the letterbox glow while the core ran and made sound. Not reproduced since. Two theories tested and both falsified. See item 3b — it has the instruments. |
 | **2** | **The console demotes itself to software rendering on a boot-time network race**, and it did it on this session's very first boot. It is item 4's fault, it is no longer theoretical, and it makes the reference machine lie. |
-| **3** | **Judge the TATE look, and Home, on the 65-inch.** Both are on the machine and neither has been looked at by a person. |
+| **3** | **Judge the TATE look, and Home, on the 65-inch.** Both are on the machine and neither has been looked at properly. |
 | **4** | Then the core options (item 7) or the rest of item 4. |
 
 **Do not start new UI screens before 1 and 2.** Search and Settings are drawn
@@ -185,35 +186,84 @@ they ask for* has the whole thing. The three parts worth carrying:
 capture, including one at 3840x2160 off the A9's own Radeon. A person with a
 pad is still owed.
 
-### 3. One real in-game save, on Dreamcast — STAGED, NOT DONE
+### 3. One real in-game save, on Dreamcast — **DONE 2026-09-19**
 
-**No save in this class has ever been written by actually PLAYING a game here.**
-Every round trip so far restored a real save, watched the core read it, and
-sent back byte-identical bytes — the correct answer for a session that saved
-nothing, and why forcing an upload needed `--sync-test`.
+**A person played Crazy Taxi 2, saved inside it, quit through the overlay, and
+the VMU reached RomM.** No save in this class had ever been written by actually
+playing a game here; every round trip before this restored a real card, watched
+the core read it, and sent back byte-identical bytes, which is the correct
+answer for a session that saved nothing and is why forcing an upload needed
+`--sync-test`.
 
-**Everything is in position on the A9 as of 2026-09-19:**
+```
+22:45:24  [save] 131072 bytes from the server into /var/lib/cabinetos/bios/dc/vmu_save_A1.bin
+22:48:19  [save] 131072 bytes from dc/vmu_save_A1.bin
+22:48:19  [overlay] exited to Home
+22:48:20  [save] uploaded flycast-native
+```
 
-- Crazy Taxi (rom 552) is downloaded, 70 MB, and boots on the A9's own GPU.
-- Its card came down from the server on a pre-flight run:
-  `[save] 131072 bytes from the server into /var/lib/cabinetos/bios/dc/vmu_save_A1.bin`
-- **The baseline hash is `f5ab223fb794e4458d64ee70bdac009763a41ed96d11d888beb303dd43672ef6`.**
-  Anything other than that on disk afterwards is a save the game wrote, which
-  is the whole measurement.
-- Thirteen Dreamcast cards sit on the server, all 131072 bytes, tagged
-  `flycast-native`.
+The middle line is the whole result: it prints only when the card differs from
+the baseline taken at launch, so it is the console saying *this game wrote
+something*. On the server, `Crazy Taxi 2 (USA) (Cabinet).srm` now reads
+`updated 2026-09-20T02:48:19Z` against a `created 2026-08-16` — **the same row
+overwritten rather than a second one**, 131072 bytes, tagged `flycast-native`,
+which is the row an Apple TV already reads.
 
-**The test is: launch it, save INSIDE the game, quit with L3+R3 through the
-overlay — never kill it — and watch the VMU reach RomM.** The capture happens
-after `retro_unload_game` on purpose: Flycast only closes the VMU in its
-device's destructor at teardown, so the image on disk mid-session is partial by
-construction and the reference implementation once uploaded exactly such a
-half-written card.
+**It could not have happened a day earlier**, and that is worth keeping: the
+Dreamcast's accelerator and brake are its analogue triggers, and this console
+answered "how far is the trigger pressed" with the right stick's Y axis until
+the same evening. Crazy Taxi literally could not be driven. See *Things that
+will bite you*.
 
-**The pad has to be woken by hand.** `E4:17:D8:71:F1:ED` is paired, bonded and
-trusted, but it is asleep and `bluetoothctl connect` fails with
-`br-connection-create-socket`. Press its Home button. There is still no pairing
-UI — open question 15b.
+**What is still owed in this area:** every other file-writing platform is
+proven by round trip rather than by play — 3DO, Sega CD, Neo Geo Pocket, DS and
+both arcade emulators. The mechanism is now known to work end to end, so those
+are a matter of playing them.
+
+### 3b. A game that draws nothing, and is not reproducible — **OPEN**
+
+**Found by MMagTech on the television, 2026-09-19.** Six FBNeo launches in one
+session — DoDonPachi, Deathsmiles, Pink Sweets, ESP Ra.De., Mushihime-sama
+Futari — drew a black picture while the core ran normally and played sound.
+Every launch in every process since has been fine, including deliberate
+attempts to reproduce it.
+
+**What was established, and it is a lot:**
+
+- **The core is innocent.** The probe read the buffer it hands over:
+  `rgbaMax=248`, a real picture, every frame.
+- **The upload is innocent.** `upload ok`, correct texture on the correct unit,
+  no GL error.
+- **The layout is innocent.** The letterbox glow was drawn from the picture
+  rect and its profile put the window at x 1120..2790 on a 3840x2160 panel,
+  which is exactly where a 240x320 board belongs.
+- **The loop is innocent.** 44% of a core, sleeping in poll, presenting.
+
+So **the frame reaches the texture intact and is lost at sampling**, and the
+console keeps drawing everything else perfectly — which is why it reads as
+"this game does not work" rather than as a fault.
+
+**Two theories, both killed by measurement**, recorded so nobody spends the day
+again: *Flycast poisons the cores after it* (the launch order fitted six for
+six, then Crazy Taxi 2 followed by Pink Sweets rendered fine), and *Flycast
+leaves a GLES sampler object bound* (it leaves none — probed).
+
+**One loose end**: the first upload after a Flycast session reports
+`errBefore=0x502`, a `GL_INVALID_OPERATION` left pending by the teardown.
+Unexplained, and not shown to be related.
+
+**THE INSTRUMENT THAT MAKES THIS TRACTABLE, AND IT IS NEW.** The television can
+be photographed directly, with the session running and undisturbed:
+
+```
+export XDG_RUNTIME_DIR=/run/user/$(id -u) GAMESCOPE_WAYLAND_DISPLAY=gamescope-1
+gamescopectl screenshot /var/home/cabinet/now.png
+```
+
+**`gamescope-1`, not `gamescope-0`** — the first socket refuses the connection.
+That turns "it looks black" into a number: a black game screen measures
+**max pixel 8**, which is not black at all, it is the bias glow at 0.025, and
+reading that is what proved the geometry was right.
 
 ### 4. The console dies if the server is away — **and it did it again today**
 
@@ -543,6 +593,24 @@ These are ordered. **Do not begin any of them in the VM.**
   about sixteen characters beside a cover. Measure the column before writing the
   string.
 - **Two tiles that read the same are one tile.**
+- **`RETRO_DEVICE_INDEX_ANALOG_BUTTON` IS NOT A STICK.** It is libretro's third
+  analogue index and its `id` is a joypad button id — L2 is 12, R2 is 13. Any
+  code that tests for the LEFT index and treats "everything else" as the right
+  stick answers "how far is the trigger pressed" with the right stick's Y axis.
+  That is what this console did until 2026-09-19.
+- **AND ANSWERING IT WRONGLY IS WORSE THAN NOT ANSWERING IT.** Flycast reads
+  the analogue trigger first and falls back to the digital L2/R2 bit **only
+  when that value is exactly zero**. Cabinet returns a plain 0 here and
+  therefore works by taking the fallback; a real pad's right stick rests a few
+  hundred counts off centre, which is not zero, so the fallback never ran. On
+  Dreamcast those triggers are the accelerator and the brake.
+- **A BUTTON THAT DOES NOTHING IS USUALLY CORRECT.** A RetroPad has sixteen
+  inputs and a real machine has fewer. The Dreamcast pad has no shoulder
+  BUTTONS at all — its L and R are analogue triggers, so on a Switch Pro
+  Controller the top shoulders are meant to be silent and ZL/ZR are the
+  triggers. The console prints this per game now:
+  `[input] port 0 does nothing in this game: ...`, which is the half that
+  answers the question somebody actually asks.
 - **`catalog::coverageFor` answers FOUR different questions.** No core exists, a
   core exists and Cabinet does not ship it, this console has not built it, and
   it is built and cannot be driven. Collapsing any two hides work.
