@@ -300,6 +300,18 @@ single opinion about the look.
    cloning Cabinet and diffing the two. Recorded because the opposite was
    written down here and in the handover, and a debt that is already paid is
    still a wrong fact about the project.
+6. **`PS2PlayerView.swift`'s header says the screen has no pause menu and no
+   save state. It has both.** The file opens with *"there is no sound, no
+   controller, no pause menu, and no save state or memory card sync — this
+   screen exists to put a picture on the display"*, and forty lines later there
+   is a four-row menu whose Save and Load call `CabinetPS2SaveStateToSlot(1)`
+   and `CabinetPS2LoadStateFromSlot(1)`.
+
+   **Same shape as 4 and as the `savesOverSaveRAM` comment in the handover's
+   list**, and it cost the same thing again on 2026-09-20: a stale comment reads
+   exactly like a current one, and the comment is what got remembered rather
+   than the code. The memory-card half of that sentence IS still true, which is
+   what makes the rest of it convincing.
 
 Running infrastructure:
 
@@ -5672,6 +5684,36 @@ real GPU, Vulkan, and a power budget a set-top box does not have.
    it. **Nothing should be spent on Wii on its own.**
 4. **Wii U** if the library ever justifies it. Not in the reference library at
    all today.
+
+#### Which PCSX2 to pin, and what its save states actually are
+
+**PIN UPSTREAM `PCSX2/pcsx2`, NOT THE FORK CABINET USES.** Checked 2026-09-20:
+
+| | |
+|---|---|
+| Cabinet's pin | `isztldav/pcsx2` @ `c89cb8ae`, **2026-07-06** — *"fix linux arm build"* |
+| Against upstream | **384 ahead, 291 behind**, diverged from `master` 2026-07-04 |
+| What the fork is for | Apple Silicon: *"ARM64: EE rec — fix FMV lag"*, *"only build macos arm"*, Qt/macOS keyboard and clipboard work |
+
+**Almost none of that divergence is work this console needs**, and matching it
+would mean deliberately shipping a staler, Apple-specific PCSX2 on the one
+platform PCSX2 already supports natively. Dolphin needs no such decision: it is
+already upstream `dolphin-emu/dolphin` @ `a1e636d7`, 2026-09-01.
+
+**AND VERSION PARITY BUYS LESS HERE THAN IT DOES FOR THE LIBRETRO CORES**, which
+is MMagTech's point and it is right. A PS2 memory card is the emulator's own
+bytes — `Sony PS2 Memory`, 8,650,752, native — so it travels regardless of
+build. And the STATES do not travel at all today:
+
+- Cabinet's Mac save state is **PCSX2's own slot 1**, through
+  `VMManager::SaveStateToSlot`, keyed by disc serial and CRC. Not a buffer, not
+  uploaded, not tagged, not a history.
+- GameCube is the same shape — `CabinetDolphinSaveState(slot)`.
+
+**So "one save state path" above is an aspiration rather than a description of
+Cabinet.** `PS2PlayerView` says so itself: *"PS2 shares no code with the libretro
+path: not the frontend, not the renderer, not the audio."* Whatever CabinetOS
+does here is new work, and nothing crossing between machines today constrains it.
 
 **AND THE MAC CORES ARE NOT LIBRETRO CORES, which is the thing to check before
 assuming this is a build job.** `dolphin` builds from `dolphin-emu/dolphin` and
