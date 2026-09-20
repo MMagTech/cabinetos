@@ -8076,6 +8076,39 @@ whole flow was built to keep and nothing else on the screen says it.
 **The titles are what the step DOES**, not a greeting. "Connect to Network", not
 "Let's get you online".
 
+##### Three faults only walking it could find — 2026-09-20
+
+MMagTech walked the flow on the television. None of these was visible in a
+capture, and two of them are about what the console SAYS rather than what it
+draws.
+
+**THE LAST SCREEN PROMISED SOMETHING THAT WAS NOT TRUE, and it was the one
+promise the whole design exists to make.** The controller step says pairing is
+optional; the last screen said *"You can unplug the keyboard. You will not need
+it again."* Somebody who skips the controller step has exactly one input, and
+the console was telling them to unplug it.
+
+> *"on the bluetooth pairing screen it said it wasn't required and could be done
+> later, but then on the last screen said the keyboard could be unplugged and
+> wasn't needed anymore"*
+
+So the promise is now made only when it is true, and the controller step says
+what skipping costs in the same breath as saying it is allowed — *"Optional, but
+without one you will still need the keyboard."* **A guarantee stated
+unconditionally by a flow that can be skipped is not a guarantee, it is a bug
+with good intentions.**
+
+**The network step showed the Wi-Fi list it did not need.** On a cable, the same
+list appeared twice in a row — once under *Connected over Ethernet*, where it
+was irrelevant, and again on the Wi-Fi step where it belongs. Two screens that
+look the same read as the flow having gone backwards. The network step now shows
+the link and its address, and the list appears there only when there is no other
+way forward.
+
+**The last screen drew an empty panel.** No rows, so a grey box sat beside
+*Start playing* — which reads as a list that failed to load, on the one screen
+whose whole job is to say that everything worked.
+
 ##### The fault the captures could not find, and the television did
 
 **Every screen captured correctly and the console drew nothing.**

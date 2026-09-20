@@ -784,6 +784,13 @@ These are ordered. **Do not begin any of them in the VM.**
   `base + verification_path_complete` from `/api/auth/device/init`, and on RomM
   5.1.0 that is `/pair/device?user_code=…`. A fabricated one produces a QR that
   scans perfectly and lands on a page saying the code does not exist.
+- **A GUARANTEE STATED UNCONDITIONALLY BY A FLOW THAT CAN BE SKIPPED IS A BUG.**
+  First run's last screen said "you can unplug the keyboard" — the promise the
+  whole design exists to make — while the controller step it follows is
+  deliberately skippable. Somebody who skips it has exactly one input and was
+  being told to unplug it. **Anything that can be skipped must have its
+  consequence said on the step that offers the skip, and every later promise has
+  to be conditional on what actually happened.**
 - **AN OFFSCREEN CAPTURE DOES NOT PROVE A WINDOW EVER GETS A FRAME.**
   `Renderer::beginFrame` binds an offscreen SCENE target so panels can blur what
   is behind them, and **`presentScene()` is what puts it on the real

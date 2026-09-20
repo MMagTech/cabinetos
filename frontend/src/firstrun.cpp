@@ -344,7 +344,10 @@ std::string Machine::because() const {
 
         case Step::Controller:
             if (facts_.gamepadCount > 0) return {};
-            return "Optional, and you can add one later in Settings.";
+            // SAY WHAT SKIPPING COSTS, in the same breath as saying it is
+            // allowed. Without the second half this reads as "this does not
+            // matter", and the person finds out it did on the last screen.
+            return "Optional, but without one you will still need the keyboard.";
 
         case Step::Done:
             return {};

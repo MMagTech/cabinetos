@@ -311,6 +311,9 @@ private:
 
     firstrun::Machine machine_;
     firstrun::Facts facts_;
+    // The link's own details — device, name, address. `Facts` deliberately
+    // carries only what the RULES need; this is what the screen says out loud.
+    net::Status netStatus_;
     romm::Client client_;
     ui::Keyboard keyboard_;
     Typing typing_ = Typing::None;
@@ -369,7 +372,10 @@ const char* Flow::title() const {
         case firstrun::Step::Server:     return "RomM Server";
         case firstrun::Step::Pair:       return "Pair with RomM";
         case firstrun::Step::Controller: return "Pair a Controller";
-        case firstrun::Step::Done:       return "Ready";
+        case firstrun::Step::Done:       return "Ready";   // see prose(): what
+                                                          // "ready" means
+                                                          // depends on whether
+                                                          // a pad was paired
     }
     return "";
 }
@@ -406,9 +412,25 @@ std::string Flow::prose() const {
             return why.empty() ? "Ready." : why;
 
         case firstrun::Step::Done:
-            // The one line worth spending, because it is the promise the whole
-            // flow was built to keep and nothing else on screen says it.
-            return "You can unplug the keyboard. You will not need it again.";
+            // THE PROMISE IS ONLY MADE WHEN IT IS TRUE.
+            //
+            // "You can unplug the keyboard" is the one line worth spending,
+            // because it is the guarantee the whole design exists to keep. But
+            // it is a guarantee about A CONSOLE WITH A CONTROLLER ON IT — and
+            // the controller step is deliberately skippable, so somebody can
+            // and will arrive here without one. Telling them to unplug the only
+            // input they have would not be a clumsy sentence, it would be the
+            // console lying about the one thing it set out to promise.
+            //
+            // Found by MMagTech, 2026-09-20, walking the flow: *"on the
+            // bluetooth pairing screen it said it wasn't required and could be
+            // done later, but then on the last screen said the keyboard could
+            // be unplugged and wasn't needed anymore."*
+            if (facts_.gamepadCount > 0)
+                return "You can unplug the keyboard. You will not need it "
+                       "again.";
+            return "No controller is paired, so keep the keyboard plugged in. "
+                   "Add one in Settings and you can put it away.";
     }
     return {};
 }
@@ -417,6 +439,7 @@ std::string Flow::prose() const {
 
 void Flow::observe() {
     const firstrun::Facts before = facts_;
+    netStatus_ = net::status();
     facts_ = firstrun::observe(client_, SDL_HasGamepad() ? 1 : 0);
     // These two are not things `observe` can know: only something that has
     // tried can say whether a server answered, and the token may have arrived
@@ -449,7 +472,12 @@ void Flow::enterStep() {
             // Draw whatever NetworkManager already knows immediately, then ask
             // the radio to look again. A screen that shows nothing for five
             // seconds reads as broken even when it is working.
-            if (facts_.wifiPresent) {
+            //
+            // Not scanned at all on the network step when something is already
+            // carrying the connection: there is no list to fill, and spinning
+            // the radio for a panel nobody will see is work for nothing.
+            if (facts_.wifiPresent &&
+                !(machine_.step() == firstrun::Step::Network && facts_.online)) {
                 std::string err;
                 net::cachedScan(&networks_, &err);
                 startWifiScan();
@@ -492,7 +520,35 @@ void Flow::rebuild() {
     const firstrun::Gate gate = machine_.gate();
 
     switch (machine_.step()) {
-        case firstrun::Step::Network:
+        case firstrun::Step::Network: {
+            // ONLINE ALREADY? THEN SAY SO AND SHOW NOTHING ELSE.
+            //
+            // This used to draw the Wi-Fi list, which meant somebody on a cable
+            // saw the same list of networks twice in a row — once here under
+            // "Connected over Ethernet", where it was irrelevant, and again on
+            // the Wi-Fi step where it belongs. Two screens that look the same
+            // read as the flow having gone backwards.
+            //
+            // The list appears here only when there is no other way forward.
+            if (facts_.online) {
+                Row r;
+                r.title = facts_.wiredOnline ? "Ethernet" : netStatus_.connection;
+                r.detail = netStatus_.ipv4.empty() ? "connected" : netStatus_.ipv4;
+                r.enabled = false;
+                rows_.push_back(std::move(r));
+                break;
+            }
+            if (!facts_.wifiPresent) {
+                Row r;
+                r.title = "No network";
+                r.detail = "plug in a cable";
+                r.enabled = false;
+                rows_.push_back(std::move(r));
+                break;
+            }
+        }
+            [[fallthrough]];
+
         case firstrun::Step::WiFi: {
             if (!facts_.wifiPresent) {
                 Row r;
@@ -641,6 +697,9 @@ void Flow::rebuild() {
     // would be asking the machine a question it deliberately will not answer.
     switch (machine_.step()) {
         case firstrun::Step::Network:
+            if (facts_.wifiPresent && !facts_.online)
+                buttons_.push_back({Act::Rescan, "Scan again", !scanJob_.busy(), {}});
+            break;
         case firstrun::Step::WiFi:
             if (facts_.wifiPresent)
                 buttons_.push_back({Act::Rescan, "Scan again", !scanJob_.busy(), {}});
@@ -1180,22 +1239,29 @@ void Flow::draw() {
     // in it and six rows of empty space below reads as a list that failed to
     // load — which is exactly the wrong thing to say on the screen where the
     // console is looking for networks.
+    // A STEP WITH NOTHING TO ACT ON GETS NO PANEL. The last screen has no rows
+    // and was drawing an empty grey box beside "Start playing" — which reads as
+    // a list that failed to load on the one screen whose whole job is to say
+    // that everything worked.
     const bool showingQr = machine_.step() == firstrun::Step::Pair && qrTex_.valid();
+    const bool showPanel = showingQr || !rows_.empty();
     const float contentH =
         showingQr ? kPanelH
                   : std::min(kPanelH, 40.0f + static_cast<float>(rows_.size()) *
                                                   (kRowH + kRowGap) - kRowGap);
     const float panelH = std::max(contentH, kRowH + 40.0f);
 
-    Rect panel;
-    panel.x = kPanelX;
-    panel.y = kPanelY;
-    panel.w = kPanelW;
-    panel.h = panelH;
-    panel.radius = design::kTileRadius;
-    panel.fill = ui::palette::kSurface;
-    panel.fill.a = 0.55f;
-    r.draw(panel);
+    if (showPanel) {
+        Rect panel;
+        panel.x = kPanelX;
+        panel.y = kPanelY;
+        panel.w = kPanelW;
+        panel.h = panelH;
+        panel.radius = design::kTileRadius;
+        panel.fill = ui::palette::kSurface;
+        panel.fill.a = 0.55f;
+        r.draw(panel);
+    }
 
     if (showingQr) {
         const float side = 470.0f;
