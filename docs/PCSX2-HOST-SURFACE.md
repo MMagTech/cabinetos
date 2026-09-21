@@ -123,10 +123,28 @@ naming only the **first** one — which says nothing about the size of the job.
 57 symbols, 53 of them in the Host:: namespace
 ```
 
-**Three independent counts agree**, which is the reason to trust the number:
-Cabinet answers 54 on the Mac, upstream's gsrunner implements 52 on Linux, and
-the linker demands 53 here. The differences are Apple-only entry points and one
-or two the linker never reaches in this configuration.
+That is what the **linker** demands. The **contract** is slightly larger; see
+directly below.
+
+**THE REAL SURFACE IS 55 FUNCTIONS, AND IMPLEMENT ALL 55 RATHER THAN THE 53 THE
+LINKER ASKS FOR.** Two independent implementations agree *exactly* — Cabinet's
+`CabinetPS2Host.cpp` and upstream's gsrunner define the **same 55 `Host::`
+functions**, set-for-set, with nothing in either that the other lacks. That is a
+far better guarantee than three roughly-similar counts, and it was worth
+checking rather than carrying: an earlier draft of this document said 54 and 52,
+taken from a handover rather than measured.
+
+The linker demands 53 of those 55. The two it does not are:
+
+```
+Host::GetTopLevelWindowInfo     Host::InBatchMode
+```
+
+Neither is referenced by anything this configuration links — no Qt UI, no batch
+path — **but both are part of the contract and both are implemented by both
+reference frontends.** Building only what the linker complains about is how a
+host layer ends up one `dlopen` away from a link error in a configuration
+somebody changes later.
 
 ### The 53 in `Host::`
 

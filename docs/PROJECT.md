@@ -5835,10 +5835,13 @@ name them all. 53 are in `Host::`; the other four are three
 `InputManager::ConvertHostKeyboard*` functions and `g_host_hotkeys`, which is a
 **variable** and is the one a `dlopen` trips on first.
 
-**Three independent counts agree** — Cabinet answers 54, gsrunner implements 52,
-the linker demands 53 — and the majority of them are one-line stubs, because a
-console has no clipboard, no file selector, no achievements login and no game
-list of PCSX2's own. **Six are the real job**, all in the display path:
+**The contract is 55 and the linker asks for 53, so implement 55.** Cabinet's
+`CabinetPS2Host.cpp` and upstream's gsrunner define the **same 55 `Host::`
+functions, set-for-set** — nothing in either that the other lacks. The two the
+linker leaves out, `GetTopLevelWindowInfo` and `InBatchMode`, are simply
+unreferenced in this configuration and both reference frontends implement them.
+The majority of the 55 are one-line stubs, because a console has no clipboard,
+no file selector, no achievements login and no game list of PCSX2's own. **Six are the real job**, all in the display path:
 `AcquireRenderWindow`, `ReleaseRenderWindow`, `BeginPresentFrame`,
 `RequestResizeHostDisplay`, `IsFullscreen`, `SetFullscreen` — and open question
 20's Vulkan host already owns the device, the queue and the crossing those need.

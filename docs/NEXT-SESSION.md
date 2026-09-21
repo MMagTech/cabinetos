@@ -334,10 +334,17 @@ the linker refuse and name them all.
 what a `dlopen` of the unfinished library trips on before mentioning any of the
 other 56.
 
-**Three independent counts agree**: Cabinet answers 54, gsrunner implements 52,
-the linker demands 53. **Most are one-line stubs** — a console has no clipboard,
-no file selector, no achievements login, no Big Picture mode and no game list of
-PCSX2's own.
+**IMPLEMENT 55, NOT THE 53 THE LINKER ASKS FOR.** Cabinet's
+`CabinetPS2Host.cpp` and upstream's gsrunner define the **same 55 `Host::`
+functions, set-for-set** — nothing in either that the other lacks, which is a
+much better guarantee than two similar-looking counts. The linker asks for 53
+because `Host::GetTopLevelWindowInfo` and `Host::InBatchMode` are unreferenced
+in this configuration, and **both reference frontends implement them anyway.**
+Building only what the linker complains about leaves you one configuration
+change from a link error.
+
+**Most are one-line stubs** — a console has no clipboard, no file selector, no
+achievements login, no Big Picture mode and no game list of PCSX2's own.
 
 **THE SIX THAT ARE THE JOB ARE ALL THE DISPLAY PATH:**
 
@@ -371,8 +378,9 @@ shaderc 2026.1.
 
 1. **Write the host layer. There is no cheaper step in front of it** — see the
    warning below about gsrunner, which was tried. Read gsrunner's `Main.cpp`
-   beside Cabinet's `CabinetPS2Host.cpp`. Stub the ~47 that are stubs, then do
-   the six that are the display path.
+   beside Cabinet's `CabinetPS2Host.cpp`. All **55**, not the 53 the linker
+   names. Stub the ~49 that are stubs, then do the six that are the display
+   path.
 2. **Make it `dlopen`.** That is the milestone that turns this from a library
    into the `.so` open question 12's correction asks for, and `g_host_hotkeys`
    is the symbol it will fail on first.
