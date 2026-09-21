@@ -123,6 +123,9 @@ fi
 # and saying so beats it vanishing silently.
 for f in "$CORES"/*.so; do
     [ -e "$f" ] || continue
+    # cabinetos-ps2.so is not in the core list because it is not a core. It is
+    # installed by the PlayStation 2 section below.
+    [ "$(basename "$f")" = "cabinetos-ps2.so" ] && continue
     [ -f "$OUT/cores/$(basename "$f")" ] || echo "not shipped, not in the core list: $(basename "$f")"
 done
 
@@ -141,12 +144,85 @@ fi
     exit 1
 }
 
+# --- PlayStation 2, which is not a libretro core ---------------------------
+#
+# PCSX2 is a whole emulator with CabinetOS's own host layer compiled into it,
+# not a core that implements retro_run, so none of the machinery above applies:
+# it is not in build-core.sh's case arms, its file is not <name>_libretro.so,
+# and it carries two shared libraries of its own.
+#
+# IT IS REQUIRED, NOT OPTIONAL, AND THAT IS THE POINT. A missing core does not
+# break this console — catalog.cpp reports the platform as "not built on this
+# console yet" and the library carries on — so an image that quietly lost
+# PlayStation 2 would look completely normal and be missing 71 games. The whole
+# reason to check here is that nothing downstream will.
+#
+# Built by cores/build-pcsx2.sh, whose output IS this payload. Locally that
+# lands in cores/build/pcsx2; from a CI artifact it arrives already merged into
+# cores/ and system/.
+PS2SRC="$CORES/pcsx2"
+[ -d "$PS2SRC" ] || PS2SRC="$CORES"
+
+[ -f "$PS2SRC/cabinetos-ps2.so" ] || {
+    echo "cabinetos-ps2.so is not in $PS2SRC — the image would lose PlayStation 2" >&2
+    echo "Build it with cores/build-pcsx2.sh." >&2
+    exit 1
+}
+install -m 0644 "$PS2SRC/cabinetos-ps2.so" "$OUT/cores/cabinetos-ps2.so"
+
+# The libraries the Bazzite base does not have. THE LIST IS READ, NOT WRITTEN
+# DOWN: frontend/ps2/compile.sh works out which libraries the console is
+# missing and records what it acted on, so this cannot drift from what the
+# emulator was actually linked to expect beside it.
+#
+# It found an empty manifest on 2026-09-21 — compile.sh skipped RECORDING a
+# library it had skipped COPYING because it was already there — so an empty one
+# is a build failure and not an absence.
+[ -s "$PS2SRC/cabinetos-ps2.bundled" ] || {
+    echo "$PS2SRC/cabinetos-ps2.bundled is empty or absent" >&2
+    echo "PCSX2 carries libraries the image lacks; without them it cannot dlopen." >&2
+    exit 1
+}
+while read -r soname; do
+    [ -n "$soname" ] || continue
+    [ -f "$PS2SRC/$soname" ] || {
+        echo "the manifest names $soname and it is not in $PS2SRC" >&2
+        exit 1
+    }
+    install -m 0644 "$PS2SRC/$soname" "$OUT/cores/$soname"
+done < "$PS2SRC/cabinetos-ps2.bundled"
+install -m 0644 "$PS2SRC/cabinetos-ps2.bundled" "$OUT/cores/cabinetos-ps2.bundled"
+
+# PCSX2 REFUSES TO START WITHOUT ITS RESOURCES — its game database, its fonts
+# and its GS shaders. Not a warning, not a degraded picture: it does not boot.
+# The frontend looks for them at imageAssetsDir() + "/pcsx2/resources", which
+# is /usr/share/cabinetos/system/pcsx2/resources in the image.
+if [ -d "$PS2SRC/resources" ]; then
+    mkdir -p "$OUT/system/pcsx2"
+    rm -rf "$OUT/system/pcsx2/resources"
+    cp -R "$PS2SRC/resources" "$OUT/system/pcsx2/resources"
+fi
+[ -f "$OUT/system/pcsx2/resources/GameIndex.yaml" ] || {
+    echo "PCSX2's resources are not staged — it would refuse to start" >&2
+    echo "Expected $OUT/system/pcsx2/resources/GameIndex.yaml" >&2
+    exit 1
+}
+
+# NOT SHIPPED: cabinet-ps2-probe. It is the headless harness for measuring
+# without a television, it is 28 MB, and nothing on a console runs it.
+
 # --- What went in ----------------------------------------------------------
 
 echo "staged $OUT"
 printf '  frontend  %s\n' "$(du -h "$OUT/bin/cabinetos-frontend" | cut -f1)"
-printf '  cores     %s in %s\n' "$(find "$OUT/cores" -name '*.so' | wc -l | tr -d ' ')" \
+# COUNTED BY NAME. `*.so` counted PlayStation 2 as a twenty-second core, which
+# it is not — it is a whole emulator with our host layer compiled into it.
+printf '  cores     %s in %s\n' "$(find "$OUT/cores" -name '*_libretro.so' | wc -l | tr -d ' ')" \
        "$(du -sh "$OUT/cores" | cut -f1)"
+printf '  ps2       %s emulator, %s libraries, %s resources\n' \
+       "$(du -h "$OUT/cores/cabinetos-ps2.so" | cut -f1)" \
+       "$(wc -l < "$OUT/cores/cabinetos-ps2.bundled" | tr -d ' ')" \
+       "$(du -sh "$OUT/system/pcsx2/resources" | cut -f1)"
 printf '  system    %s, %s entries\n' "$(du -sh "$OUT/system" | cut -f1)" \
        "$(find "$OUT/system" -mindepth 2 -maxdepth 2 | wc -l | tr -d ' ')"
 printf '  total     %s\n' "$(du -sh "$OUT" | cut -f1)"

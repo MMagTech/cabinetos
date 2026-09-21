@@ -373,6 +373,23 @@ check_present "the frontend" /usr/bin/cabinetos-frontend || failed=1
 check_present "the cores" /usr/lib/cabinetos/cores || failed=1
 check_present "PPSSPP's system files" /usr/share/cabinetos/system/PPSSPP/compat.ini || failed=1
 
+# PLAYSTATION 2, WHICH IS NOT A CORE AND SO IS NOT COVERED BY THE LINE ABOVE.
+#
+# All four are checked rather than just the emulator, because each absence
+# fails differently and all of them fail QUIETLY:
+#
+#   the .so        catalog.cpp reports PlayStation 2 as "not built on this
+#                  console yet" and the library carries on — 71 games gone,
+#                  and the console looks entirely normal
+#   the libraries  it is there and cannot dlopen; the failure arrives at the
+#                  moment somebody starts a game
+#   the resources  PCSX2 refuses to start. Not a warning, not a degraded
+#                  picture: it does not boot
+check_present "the PlayStation 2 emulator" /usr/lib/cabinetos/cores/cabinetos-ps2.so || failed=1
+check_present "PCSX2's rapidyaml" /usr/lib/cabinetos/cores/libryml.so.0.10.0 || failed=1
+check_present "PCSX2's c4core" /usr/lib/cabinetos/cores/libc4core.so.0.2.8 || failed=1
+check_present "PCSX2's resources" /usr/share/cabinetos/system/pcsx2/resources/GameIndex.yaml || failed=1
+
 # The session must actually RUN the frontend. It ran `sleep infinity` until
 # 2026-09-19, which is a session that starts, takes the display, and draws
 # nothing — indistinguishable on a television from a machine that failed to

@@ -78,6 +78,18 @@ struct Rect {
     float shadowBlur = 0;
     float shadowOffsetY = 0;
     Color shadowColor = Color::black(0);
+
+    // A VERTICAL GRADIENT between `fill` at the top and `fillBottom` at the
+    // bottom. Off by default, and when off the shape draws exactly as it did
+    // before this existed. A large flat panel reads as a hole punched in the
+    // screen; a few per cent of gradient reads as a surface.
+    bool gradient = false;
+    Color fillBottom = Color::white(0);
+
+    // A highlight along the TOP EDGE ONLY, as if lit from above. Alpha 0 is
+    // off. This is not the same thing as `border`: a rim of even weight all the
+    // way round says "outline", where a top-only highlight says "edge".
+    Color edgeLight = Color::white(0);
 };
 
 // A three-stop vertical gradient, which is exactly what the backdrop is and
@@ -120,6 +132,21 @@ public:
     // Device pixels per design point for the frame in progress. Text has to
     // rasterise at device resolution to be crisp on a 4K set, so it needs this.
     float scale() const { return scale_; }
+
+    // DRAW ONTO NOTHING INSTEAD OF ONTO BLACK.
+    //
+    // For the one case where this console is not the only thing on the screen:
+    // an emulator that owns its own window and presents for itself, with our
+    // menu composited on top by gamescope. There the frame we produce must be
+    // TRANSPARENT wherever we have not drawn, or we would black the game out.
+    //
+    // It changes the two clears and nothing else. The blend function is already
+    // right — glBlendFuncSeparate keeps a correct destination alpha — which is
+    // why this is a flag and not a second renderer.
+    //
+    // docs/PROJECT.md, open question 24.
+    void setTransparentBackground(bool on) { transparentBackground_ = on; }
+    bool transparentBackground() const { return transparentBackground_; }
 
     // --- Frosted glass -------------------------------------------------------
     //
@@ -170,6 +197,7 @@ public:
     void endOffscreen();
 
 private:
+    bool transparentBackground_ = false;
     GLuint program_ = 0;
     GLuint backdropProgram_ = 0;
     GLuint texturedProgram_ = 0;
@@ -198,7 +226,7 @@ private:
 
     struct {
         GLint canvas, rect, radius, fill, border, borderColor, shadow, shadowColor,
-            shadowVS;
+            shadowVS, fillBottom, edgeLight;
     } loc_{};
     struct {
         GLint top, mid, bottom, midStop;

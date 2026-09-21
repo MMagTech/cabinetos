@@ -76,7 +76,27 @@ log "installed /usr/bin/cabinetos-frontend ($(du -h /usr/bin/cabinetos-frontend 
 mkdir -p /usr/lib/cabinetos/cores
 install -m 0644 "${PAYLOAD}"/cores/*.so /usr/lib/cabinetos/cores/
 
-cores=$(find /usr/lib/cabinetos/cores -name '*.so' | wc -l)
+# PCSX2's own shared libraries, which the Bazzite base does not carry.
+#
+# A SEPARATE LINE BECAUSE THE GLOB ABOVE DOES NOT MATCH THEM. They are
+# libryml.so.0.10.0 and libc4core.so.0.2.8 — `*.so` matches neither, so they
+# would have been left behind in the payload while everything looked fine, and
+# the emulator would have failed to dlopen at the moment somebody started a
+# game. Found while wiring this up rather than on a television.
+shopt -s nullglob
+ps2libs=("${PAYLOAD}"/cores/*.so.*)
+shopt -u nullglob
+if [[ ${#ps2libs[@]} -gt 0 ]]; then
+    install -m 0644 "${ps2libs[@]}" /usr/lib/cabinetos/cores/
+    log "installed ${#ps2libs[@]} bundled libraries beside the emulators"
+fi
+
+# COUNTED BY NAME, NOT BY EXTENSION. This was `-name '*.so'`, which counted
+# every shared object in the directory — correct while all of them were cores,
+# and wrong the moment cabinetos-ps2.so arrived, because PlayStation 2 is a
+# whole emulator rather than a libretro core. It would have read 22 and failed
+# a build that was entirely correct.
+cores=$(find /usr/lib/cabinetos/cores -name '*_libretro.so' | wc -l)
 log "installed ${cores} cores into /usr/lib/cabinetos/cores ($(du -sh /usr/lib/cabinetos/cores | cut -f1))"
 
 # The count is checked again here, having already been checked against
@@ -104,6 +124,35 @@ if [[ ! -f /usr/share/cabinetos/system/PPSSPP/compat.ini ]]; then
     log "ERROR: PPSSPP's system files did not land — PSP would run with no fonts"
     exit 1
 fi
+
+# --- PlayStation 2 ---------------------------------------------------------
+#
+# Named individually, because each absence is silent in a different way and
+# none of them stops the image building. See build_files/build.sh, which checks
+# the same four things again once the image is assembled.
+for f in /usr/lib/cabinetos/cores/cabinetos-ps2.so \
+         /usr/share/cabinetos/system/pcsx2/resources/GameIndex.yaml; do
+    if [[ ! -f "${f}" ]]; then
+        log "ERROR: ${f} did not land — the image would lose PlayStation 2"
+        exit 1
+    fi
+done
+
+# The emulator's own libraries, read from the manifest compile.sh wrote rather
+# than from a list kept here — see ci/stage-image-payload.sh for why that list
+# is computed and never written down.
+if [[ -f "${PAYLOAD}/cores/cabinetos-ps2.bundled" ]]; then
+    while read -r soname; do
+        [[ -n "${soname}" ]] || continue
+        if [[ ! -f "/usr/lib/cabinetos/cores/${soname}" ]]; then
+            log "ERROR: PCSX2 expects ${soname} beside it and it did not land"
+            exit 1
+        fi
+    done < "${PAYLOAD}/cores/cabinetos-ps2.bundled"
+    install -m 0644 "${PAYLOAD}/cores/cabinetos-ps2.bundled" \
+        /usr/lib/cabinetos/cores/cabinetos-ps2.bundled
+fi
+log "installed PlayStation 2 ($(du -sh /usr/share/cabinetos/system/pcsx2 | cut -f1) of resources)"
 
 group_end
 

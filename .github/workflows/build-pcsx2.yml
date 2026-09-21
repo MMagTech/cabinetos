@@ -1,0 +1,181 @@
+---
+# Build PlayStation 2 for Linux x86-64, on a machine nobody owns.
+#
+# WHY THIS IS NOT A JOB IN build-core.yml. That workflow builds libretro cores:
+# one upstream, one `make`, one .so that already implements a frontend contract,
+# all twenty-one sharing a container and a script. PCSX2 is not a libretro core
+# and has no retro_run. It is a whole emulator, built with CMake as a static
+# library, with CabinetOS's own host layer — 55 `Host::` functions — compiled
+# against it and linked into `cabinetos-ps2.so`. Different upstream, different
+# container, different script, different output. Putting it in the core matrix
+# would mean a matrix whose arms do not do the same thing.
+#
+# It exists for the same reason build-core.yml does. Until 2026-09-21 the
+# PlayStation 2 emulator had been built on exactly one box — the reference
+# console — and lived in a home directory that an image knows nothing about,
+# pointed at by a hand-written systemd drop-in. "It builds here" is a property
+# of that machine, not of the build.
+#
+# What this asserts, beyond "the compiler exited 0":
+#
+#   * the source is at the pinned commit, v2.8.2, not at a moving tag —
+#     cores/build-pcsx2.sh reads it back out of git and refuses otherwise;
+#   * the library carries the renderers and recompilers this console needs,
+#     and CabinetOS's host layer links against it with every symbol resolved;
+#   * the libraries the console's image does NOT have are carried beside it,
+#     from a list compile.sh computes rather than one written down here.
+#
+# WHAT IT DOES NOT ASSERT, AND AN EARLIER VERSION OF THIS HEADER CLAIMED IT DID:
+# that the emulator boots a virtual machine and produces a frame. It cannot. A
+# running PlayStation 2 needs a BIOS and a disc, and neither belongs in this
+# repository — so everything here is a build-time and link-time check, and the
+# picture is only ever proved on the reference console.
+#
+# That matters because this project has been caught by exactly this shape
+# before: three faults in the PS2 work were found by PLAYING it and none by the
+# headless harness. A green check here means it compiled, linked and was pinned.
+# It does not mean a game runs.
+
+name: Build PlayStation 2
+
+# CALLED BY build.yml, like build-core.yml, because the image carries the
+# emulator and has to get it from somewhere.
+#
+# ON PULL REQUESTS AIMED AT ANYTHING BUT MAIN, for the same reason build-core.yml
+# gives at length: build.yml already covers pull requests aimed at main and
+# pushes to it, and a second trigger here would queue the same long build twice
+# for one change and starve the image build of runners.
+on:
+  workflow_call:
+  pull_request:
+    branches-ignore:
+      - main
+    paths:
+      - 'cores/build-pcsx2.sh'
+      - 'cores/pcsx2-builder/**'
+      - 'frontend/ps2/**'
+      - '.github/workflows/build-pcsx2.yml'
+  workflow_dispatch:
+
+# No `concurrency:` here, for the reason build-core.yml sets out: this workflow
+# is called by build.yml, `github.workflow` inside a called workflow is the
+# CALLER's name, and a group string that collides has a run cancelling itself —
+# which surfaces as a red image build with no failing step in it.
+
+jobs:
+  build:
+    name: PCSX2 and the CabinetOS host layer
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+
+      # PCSX2's checkout and build want about 1.5 GB, and the runner's default
+      # free space is not generous once its preinstalled toolchains are counted.
+      - name: Maximize build space
+        uses: ublue-os/remove-unwanted-software@695eb75bc387dbcd9685a8e72d23439d8686cba6
+        with:
+          remove-codeql: true
+
+      # NOTHING CHANGES UNLESS ONE OF THESE DOES, so a cache keyed on them is
+      # the whole input rather than a guess about staleness: build-pcsx2.sh
+      # holds the pinned commit and the build arguments, frontend/ps2 is our own
+      # host layer, and the Containerfile is the toolchain. Upstream cannot
+      # shift underneath any of them, because the checkout is by commit SHA.
+      #
+      # It is worth the machinery here more than anywhere else in this
+      # repository: this is the longest build it has.
+      - name: Restore the build, if this exact one has been built before
+        id: ps2cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: cores/build/pcsx2
+          key: pcsx2-${{ hashFiles('cores/build-pcsx2.sh', 'cores/pcsx2-builder/Containerfile', 'frontend/ps2/**') }}
+
+      - name: Build it
+        if: steps.ps2cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          cores/build-pcsx2.sh | tee /tmp/ps2.log
+
+      # A CACHE HIT STILL HAS TO PROVE WHAT IT RESTORED. Skipping the check to
+      # save a minute would trade away the only thing this workflow buys.
+      - name: Check what came out of the cache
+        if: steps.ps2cache.outputs.cache-hit == 'true'
+        run: |
+          set -euo pipefail
+          out=cores/build/pcsx2
+          fail=0
+          for f in cabinetos-ps2.so cabinetos-ps2.bundled resources/GameIndex.yaml; do
+            if [ -e "$out/$f" ]; then
+              echo "ok: $f"
+            else
+              echo "MISSING from the cached build: $f" >&2
+              fail=1
+            fi
+          done
+          # An EMPTY manifest is a failure and not an absence — compile.sh wrote
+          # one on 2026-09-21 by skipping the record for a library it had
+          # skipped copying, and anything staging from it would have shipped an
+          # emulator that cannot dlopen.
+          if [ ! -s "$out/cabinetos-ps2.bundled" ]; then
+            echo "the bundled-library manifest is empty" >&2
+            fail=1
+          fi
+          while read -r soname; do
+            [ -n "$soname" ] || continue
+            [ -f "$out/$soname" ] || { echo "manifest names $soname, not present" >&2; fail=1; }
+          done < "$out/cabinetos-ps2.bundled"
+          exit $fail
+
+      # THE SAME THREE FOLDERS EVERY OTHER PAYLOAD JOB PRODUCES, so build.yml's
+      # download can merge them all with `merge-multiple` and no special case.
+      # ci/stage-image-payload.sh takes exactly this layout.
+      - name: Stage it
+        run: |
+          set -euo pipefail
+          out=cores/build/pcsx2
+          mkdir -p artifact/cores artifact/system/pcsx2
+          cp "$out/cabinetos-ps2.so" artifact/cores/
+          cp "$out/cabinetos-ps2.bundled" artifact/cores/
+          # The libraries the image lacks, from the computed manifest.
+          while read -r soname; do
+            [ -n "$soname" ] || continue
+            cp "$out/$soname" artifact/cores/
+          done < "$out/cabinetos-ps2.bundled"
+          # PCSX2 refuses to START without these — not a warning, not a degraded
+          # picture. 9.4 MB of game database, fonts and GS shaders.
+          cp -R "$out/resources" artifact/system/pcsx2/resources
+          # NOT SHIPPED: cabinet-ps2-probe, the headless harness. 28 MB, and
+          # nothing on a console runs it.
+          find artifact -maxdepth 2 | sort
+
+      - name: Upload it
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          # The `-linux-x86_64` suffix is what build.yml's download pattern
+          # matches. A different name here means an image with no PlayStation 2
+          # — which ci/stage-image-payload.sh now refuses to build.
+          name: pcsx2-linux-x86_64
+          path: artifact/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## PlayStation 2 — Linux x86-64"
+            echo
+            if [[ -f /tmp/ps2.log ]]; then
+              echo '```'
+              tail -40 /tmp/ps2.log
+              echo '```'
+            else
+              echo "Restored from cache; see the check step above."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

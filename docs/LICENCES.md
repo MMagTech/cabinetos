@@ -118,10 +118,23 @@ here. See `frontend/src/catalog.cpp`.
 | **PPSSPP system files** — fonts, VFPU tables, `compat.ini`, the atlases | PPSSPP's own `assets/`, installed by `cores/build-core.sh` | GPL v2 or later, as PPSSPP |
 | **FFmpeg**, statically linked inside PPSSPP | the prebuilt `ffmpeg/linux/x86_64` in PPSSPP's own tree | LGPL v2.1 or later |
 | **Noto Sans** and Noto Sans CJK, the interface type | already in the Bazzite base; nothing is bundled | SIL Open Font License 1.1 |
+| **PCSX2**, linked into `cabinetos-ps2.so` | upstream `PCSX2/pcsx2` at v2.8.2, built by `cores/build-pcsx2.sh` | GPL v3 or later |
+| **PCSX2's resources** — `GameIndex.yaml`, the Redump database, fonts, GS shaders | PCSX2's own `bin/resources` | GPL v3 or later, as PCSX2 |
+| **rapidyaml** and **c4core**, carried beside the emulator | Fedora's packages, copied because the Bazzite base lacks them | MIT |
 
 PSP is the only platform whose "firmware" ships with the emulator rather than
 coming from RomM. Every other system's BIOS is fetched at runtime from the
 person's own server and none is redistributed.
+
+**PLAYSTATION 2 IS NOT A LIBRETRO CORE and is listed here rather than in the
+table above.** It is the whole PCSX2 emulator built as a static library, with
+CabinetOS's own host layer compiled against it and the two linked into one
+shared object. That makes `cabinetos-ps2.so` a combined work under the GPL v3,
+and this project's own sources are offered under the same terms — see
+*CabinetOS* above. **There is one patch**, three lines in
+`AudioStream::CreateStream` to stop PCSX2 opening a sound device of its own; it
+lives in `cores/build-pcsx2.sh` where anyone can read it, which is what GPL v3
+section 5 asks of a modified version.
 
 ## Libraries the frontend links
 

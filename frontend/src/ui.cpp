@@ -39,10 +39,12 @@ in vec2 vPoint;
 uniform vec4 uRect;
 uniform float uRadius;
 uniform vec4 uFill;
+uniform vec4 uFillBottom;    // equals uFill for a flat fill
 uniform float uBorder;
 uniform vec4 uBorderColor;
 uniform vec2 uShadowParams;  // blur, offsetY
 uniform vec4 uShadowColor;
+uniform vec4 uEdgeLight;     // alpha 0 = off
 out vec4 fragColor;
 
 float roundedBoxSDF(vec2 p, vec2 halfSize, float r) {
@@ -79,7 +81,13 @@ void main() {
     }
 
     // Fill, composited over the shadow.
-    vec4 fill = vec4(uFill.rgb, uFill.a * shapeAlpha);
+    //
+    // A VERTICAL GRADIENT, because a large flat panel reads as a hole punched
+    // in the screen rather than as a surface. uFillBottom equals uFill unless
+    // the caller asked for one, so every existing shape is unchanged.
+    float ny = clamp((vPoint.y - uRect.y) / max(uRect.w, 1.0), 0.0, 1.0);
+    vec4 fillColor = mix(uFill, uFillBottom, ny);
+    vec4 fill = vec4(fillColor.rgb, fillColor.a * shapeAlpha);
     color.rgb = mix(color.rgb, fill.rgb, fill.a);
     color.a = color.a + fill.a * (1.0 - color.a);
 
@@ -91,6 +99,21 @@ void main() {
         vec4 b = vec4(uBorderColor.rgb, uBorderColor.a * band);
         color.rgb = mix(color.rgb, b.rgb, b.a);
         color.a = color.a + b.a * (1.0 - color.a);
+    }
+
+    // A HIGHLIGHT ALONG THE TOP EDGE ONLY, as if lit from above. It is the
+    // cheapest thing that makes a panel read as a raised surface rather than a
+    // flat shape, and it is what the rim alone cannot do — a rim of even weight
+    // all the way round says "outline", not "edge catching the light".
+    if (uEdgeLight.a > 0.0) {
+        float lw = 2.0;
+        float lightInner = 1.0 - smoothstep(-lw - aa, -lw + aa, d);
+        float lightBand = shapeAlpha - lightInner;
+        // Fade out over the top third, so the sides do not get a stripe.
+        float topness = 1.0 - smoothstep(0.0, 0.33, ny);
+        vec4 e = vec4(uEdgeLight.rgb, uEdgeLight.a * lightBand * topness);
+        color.rgb = mix(color.rgb, e.rgb, e.a);
+        color.a = color.a + e.a * (1.0 - color.a);
     }
 
     fragColor = color;
@@ -407,6 +430,8 @@ bool Renderer::init() {
     loc_.rect = glGetUniformLocation(program_, "uRect");
     loc_.radius = glGetUniformLocation(program_, "uRadius");
     loc_.fill = glGetUniformLocation(program_, "uFill");
+    loc_.fillBottom = glGetUniformLocation(program_, "uFillBottom");
+    loc_.edgeLight = glGetUniformLocation(program_, "uEdgeLight");
     loc_.border = glGetUniformLocation(program_, "uBorder");
     loc_.borderColor = glGetUniformLocation(program_, "uBorderColor");
     loc_.shadow = glGetUniformLocation(program_, "uShadowParams");
@@ -530,7 +555,7 @@ void Renderer::presentScene() {
     // showed as a ghost strip of the last frame across the top of the screen.
     glViewport(0, 0, drawableW_, drawableH_);
     glDisable(GL_SCISSOR_TEST);
-    glClearColor(0, 0, 0, 1);
+    glClearColor(0, 0, 0, transparentBackground_ ? 0.0f : 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
     glViewport(vx_, vy_, vw_, vh_);
     glDisable(GL_BLEND);
@@ -654,7 +679,7 @@ void Renderer::beginFrame(int drawableWidth, int drawableHeight) {
     glEnable(GL_BLEND);
     glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE,
                         GL_ONE_MINUS_SRC_ALPHA);
-    glClearColor(0, 0, 0, 1);
+    glClearColor(0, 0, 0, transparentBackground_ ? 0.0f : 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
     glBindVertexArray(vao_);
 }
@@ -674,6 +699,11 @@ void Renderer::draw(const Rect& r) {
     glUniform4f(loc_.rect, r.x, r.y, r.w, r.h);
     glUniform1f(loc_.radius, r.radius);
     glUniform4f(loc_.fill, r.fill.r, r.fill.g, r.fill.b, r.fill.a);
+    // Flat unless the caller asked for a gradient, so nothing else changes.
+    const Color bottom = r.gradient ? r.fillBottom : r.fill;
+    glUniform4f(loc_.fillBottom, bottom.r, bottom.g, bottom.b, bottom.a);
+    glUniform4f(loc_.edgeLight, r.edgeLight.r, r.edgeLight.g, r.edgeLight.b,
+                r.edgeLight.a);
     glUniform1f(loc_.border, r.border);
     glUniform4f(loc_.borderColor, r.borderColor.r, r.borderColor.g, r.borderColor.b,
                 r.borderColor.a);

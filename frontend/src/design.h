@@ -178,6 +178,67 @@ constexpr float kOverlayFocusScale = 1.04f;
 constexpr float kOverlayFocusDuration = 0.150f;
 constexpr float kOverlayPanelRadius = 32.0f;
 constexpr float kOverlayPanelWidth = 720.0f;
+
+// THE PAUSE PANEL IS SOLID, NOT GLASS, AND THAT IS DELIBERATE — 2026-09-21.
+//
+// It used to be glass: it blurred the game showing through it, by sampling the
+// console's own scene texture. That works only while the console is the thing
+// drawing the game. It is not, for the emulators that are not libretro cores —
+// PCSX2 and the heavy systems after it own their own window and gamescope
+// composites our menu on top, so there is no game in our texture to blur and
+// the panel came out flat on that path and frosted on this one.
+//
+// MMagTech's call: *"if its just about consistency then we can remove the glass
+// from this menu and maybe add a little style to both to make them match."*
+// Right, and it deletes work rather than adding it — the alternative was
+// grabbing the screen once per pause to blur ourselves, which is a READBACK,
+// the exact thing the compositing route exists to remove.
+//
+// So both paths now run the same code with no branch in it at all. Every OTHER
+// glass surface — the Home hero, Library, Grid and Detail — is untouched,
+// because those only ever appear while the console is drawing the whole scene.
+//
+// docs/PROJECT.md, open question 24.
+// THE PANEL. A SURFACE, NOT A HOLE — and this was pure black for one build,
+// which MMagTech called correctly: *"still seems a bit flat and maybe too
+// black"*. It uses the console's own surface token, the dark purple the library
+// tiles are made of, so the pause menu belongs to the same object as everything
+// else rather than being a black rectangle borrowed from nowhere.
+//
+// Near-opaque, because it has to stay readable over a bright game with only the
+// scrim helping. Glass used to do some of that work.
+constexpr ui::Color kOverlayPanelSurface = ui::palette::kSurface;
+constexpr float kOverlayPanelFill = 0.92f;
+// The gradient and the top edge light, which are what stop a panel this size
+// reading as a hole punched in the screen. Both are small on purpose: at 4K a
+// gradient you can NAME is too strong, and one you can only feel is right.
+constexpr float kOverlayPanelFillBottom = 0.96f;   // slightly denser at the foot
+constexpr float kOverlayPanelBottomDarken = 0.62f; // and slightly darker
+constexpr float kOverlayPanelEdgeLight = 0.22f;
+// A hairline rather than a border. At 4K a 2px stroke reads as a drawn box;
+// 1.5px at 14% reads as an edge catching the light, which is the intent.
+constexpr float kOverlayPanelBorder = 1.5f;
+constexpr float kOverlayPanelBorderAlpha = 0.14f;
+// The shadow is what lifts the panel off the game now that the blur does not.
+// Big and soft: a tight shadow looks like a sticker, a wide one like depth.
+constexpr float kOverlayPanelShadowBlur = 64.0f;
+constexpr float kOverlayPanelShadowY = 22.0f;
+constexpr float kOverlayPanelShadowAlpha = 0.60f;
+
+// THE BUTTONS. FOCUS IS A RIM, which is what focus is everywhere else in this
+// console — every card, every pill, the setup boxes. A full-width light bar was
+// tried for one build and MMagTech was right about it: *"not sure how i feel
+// about the giant white bars"*. It also invented a second focus idiom for one
+// screen, which is exactly the drift the shared-menu rule exists to prevent.
+constexpr float kOverlayButtonRadius = 18.0f;
+constexpr float kOverlayButtonRestFill = 0.06f;
+constexpr float kOverlayButtonFocusFill = 0.16f;
+constexpr float kOverlayButtonRestText = 0.62f;
+// A focused row gets its own small shadow, so it sits above its neighbours
+// rather than merely being paler than them.
+constexpr float kOverlayButtonFocusShadowBlur = 22.0f;
+constexpr float kOverlayButtonFocusShadowY = 6.0f;
+constexpr float kOverlayButtonFocusShadowAlpha = 0.45f;
 constexpr float kOverlayButtonHeight = 92.0f;
 constexpr float kOverlayButtonGap = 14.0f;
 

@@ -10401,3 +10401,269 @@ the wrong person's games on the kept shelf — silently, and only noticed later.
 
 Caching the user *list* would allow offline switching, and it is not decided
 here; it belongs with account switching, which is already its own topic.
+
+### 24. Will gamescope composite our overlay over a window we do not own?
+**Raised by MMagTech, 2026-09-21, before any more measuring. ANSWERED THE SAME
+DAY, on the reference console's own television. YES — and the slot it has to
+live in is not the obvious one.**
+
+#### Why it was asked
+
+PCSX2 renders the picture on the GPU. To get it onto the television this console
+copies it OFF the card, hands it over, and copies it BACK ON to draw it. A
+normal PCSX2 — on Windows, on Bazzite — never does this: it draws straight to
+the screen. We do it so the console can draw its own pause menu over the game.
+
+That copy costs **6.1 ms on average and 12.2 ms at worst** at 4x, paced to
+60 Hz: 37% and 73% of a frame budget. MMagTech, 2026-09-21: *"i didnt buy this
+mini pc to be gimped in performace especually compared to it running on
+windows."* The standard is right and the hardware is not the constraint.
+
+**It was never a PlayStation 2 question.** The twenty-one libretro cores do not
+have this problem and must not be moved: there the FRONTEND creates the device
+and lends it to the core, which renders into a texture the console already
+owns. It is the emulators that are *not* libretro cores — PCSX2, standalone
+Dolphin, RPCS3, xemu, Eden — and MMagTech has said PS3, Switch, Xbox and Wii U
+are all coming. Whatever this question answers, it answers for all of them.
+
+#### The answer
+
+**Yes on all three counts, verified on the A9 at 3840x2160 under gamescope/drm:**
+
+| | |
+|---|---|
+| Composites a window we do not own | **Yes.** glxgears drew over a vkcube it has no relationship with. |
+| The game shows through our transparency | **Yes.** MMagTech, looking at the television: *"i can see through the green"* — a 50% band with the game visible beneath it. |
+| Our overlay can take the pad, and give it back | **Yes**, one atom, while the game keeps the screen. |
+
+**All three were then confirmed TOGETHER in the `STEAM_OVERLAY` slot**, which is
+the only one a pause menu can use, with MMagTech watching the set: *"yes magenta
+is therre and i can see throught the green bar and the cube keeps spinning"*.
+
+**"The cube keeps spinning" is the part to notice.** The game goes on rendering
+and presenting while the overlay holds keyboard and pad focus. That is not a
+screenshot of a paused game with a menu drawn on it — it is the live game
+underneath a live menu, which is what this console's pause menu already is for
+the libretro cores.
+
+The input result is the one that matters, and it is exactly a pause menu:
+
+```
+Global focus window:          0x400000 (Vkcube X11)            <- game keeps presenting
+Global input focus window:    0x600002 (cabinetos overlay probe)
+Global keyboard focus window: 0x600002 (cabinetos overlay probe)
+```
+
+Setting `STEAM_INPUT_FOCUS` back to 0 hands input straight back to the game.
+Pause and Resume are one property each.
+
+#### THE TWO SLOTS ARE NOT THE SAME, and this is the load-bearing detail
+
+`GAMESCOPE_EXTERNAL_OVERLAY` is the obvious one and it is **the wrong one**. It
+composites, and it can never take input:
+
+```c
+if ( w->isOverlay && w->inputFocusMode )   /* STEAM_OVERLAY, not EXTERNAL */
+    inputFocus = w;
+```
+
+`isOverlay` is the `STEAM_OVERLAY` atom. The external-overlay slot is the HUD
+slot — it is what mangoapp uses, and a HUD never needs the pad. **A pause menu
+has to live in the `STEAM_OVERLAY` slot**, with `STEAM_INPUT_FOCUS` toggled when
+the menu opens and closes. That is the slot Steam's own overlay uses to draw
+over a game it does not own and take the controller, which is the same problem.
+
+#### Three things that will cost a day each if nobody says them
+
+1. **`gamescopectl screenshot` DOES NOT CAPTURE EITHER OVERLAY PLANE.** Not with
+   the default type 1, and not with type 2, `all_real_layers`, whose own summary
+   says "the game + overlays". A capture taken with a working overlay on the
+   screen comes back showing only the game. **Most of a session was spent
+   chasing an overlay that was on the television the whole time**, and it ended
+   because MMagTech looked up and said the gears were in the top left. There is
+   no capture path that shows this. **Photograph the screen, or look at it.**
+
+   This is the same lesson as "judge the look only on the A9", arriving in a new
+   costume: the instrument was lying, and it was lying *plausibly*.
+
+2. **Both slots are read only from the ROOT Xwayland context** —
+   `pFocus->externalOverlayWindow = root_ctx->focus.externalOverlayWindow`. A
+   window on any other server carries the atom correctly and is silently never
+   consulted. With `--xwayland-count 2` the game lands on the root server, so
+   the overlay must go there too and not on the second one.
+
+3. **The atoms must be set BEFORE the window maps.** gamescope classifies a
+   window when it maps; setting them afterwards sets a flag on a window nothing
+   re-examines. There is a way to force the rescan — any property-notify on
+   `_NET_WM_WINDOW_OPACITY` makes `handle_property_notify` walk `ctx->list` and
+   reassign the overlay unconditionally — but that is a lever for testing
+   somebody else's program, not a design.
+
+**And the overlay is painted `NoScale`**, at its own pixel size, never stretched
+to the output. The frontend would have to render its menu at the panel's full
+resolution itself. glxgears' 300x300 window landing in a corner of a 4K screen
+is what that looks like when you get it wrong.
+
+#### What this does NOT answer
+
+- **Nothing has been built.** This is one test program and a stand-in game. The
+  frontend has not been split, PCSX2 has not been given a window, and no
+  emulator has run this way.
+- **The overlay has not been drawn by our own renderer.** The probe is XPutImage
+  and a flat pattern. The frontend's menu is signed-distance fields in a GLES
+  context and has never been asked to render into a transparent surface.
+- **Nobody has measured what it saves.** The 6.1 ms is what the CURRENT path
+  costs; the compositing path's own cost has not been measured at all. It should
+  be near nothing — the emulator presents directly and gamescope blends one
+  extra plane — but *should be* is how this project has been wrong before.
+- **The headless backend does not do it**, and that is worth knowing because it
+  is where the dev loop lives. An opaque fullscreen overlay makes no difference
+  to a headless capture. Whether that is headless having no planes or the same
+  capture blindness as item 1 was not separated out, because the DRM answer
+  arrived first and made it moot.
+
+#### TWO PATHS ARE ACCEPTED — MMagTech, 2026-09-21. THE CONDITION IS THE POINT
+
+The price of this route was never the atoms. It is that the console would have
+**two ways of getting a game onto the screen**: the twenty-one libretro cores
+rendering into a texture the frontend owns, and the standalone emulators
+presenting for themselves with our menu blended on top.
+
+**MMagTech's call: *"i dont mind if its two paths so long as they resemble each
+other closely."*** That settles the architecture question and replaces it with a
+design constraint, which is the harder and more useful half.
+
+**What "resemble each other closely" has to mean in practice**, so that this is
+a testable requirement rather than a sentiment:
+
+- **One menu, one set of code.** Pause, Save state, Exit to Home are drawn by
+  the same renderer from the same scene, whether the game underneath came from
+  our own texture or from another window's plane. If the composited path grows
+  its own copy of the menu, the constraint has been broken no matter how similar
+  they look.
+- **The same behaviour at the same moments.** The menu opens on the same button,
+  takes the pad at the same instant, dims the game the same amount, and ducks
+  the audio the same way. A PlayStation 2 game and a Mega Drive game should be
+  indistinguishable to the person holding the pad.
+- **The same save-and-quit.** Exit to Home syncs the save on the way out on both
+  paths, or the second path is a trap.
+- **The difference is confined to where the picture comes from.** Anything that
+  leaks above that line — different menu, different timing, different exit — is
+  the failure this constraint exists to prevent.
+
+**THE MENU IS NOT THE MAINTENANCE RISK, AND AN EARLIER VERSION OF THIS SECTION
+IMPLIED IT WAS.** MMagTech pushed back: *"Its really just a mneu that is pretty
+much the same between the two paths doesnt seem like much maintanance. Am i
+missing something"* — and he is right. The menu is one scene, one renderer, one
+set of code, drawn into a different surface. That is not two things to maintain.
+
+**THE ONE REAL DIFFERENCE IS WHAT "PAUSE" MEANS**, and it is small, specific and
+worth naming so it does not get discovered late:
+
+- **Today, pausing is free.** The frontend stops calling `retro_run` and the
+  game genuinely stops, because the console is the thing driving it.
+- **Composited, the emulator keeps running unless told to stop.** This was
+  visible in the experiment itself: the overlay held the pad and **the cube kept
+  spinning**. PCSX2 runs on its own thread and does not care that a menu is up.
+
+So Pause, Resume, Exit to Home and save-and-quit each need an explicit "and also
+tell the emulator" that the current path gets for nothing. **That is a handful of
+lifecycle calls, not a second menu.**
+
+The drift worth guarding against is therefore narrow: keep the menu and its
+behaviour genuinely shared — one scene, one input handler — so that the only
+thing either path implements for itself is *where the picture comes from* and
+*how the emulator is told to stop and start*.
+
+
+#### WHAT IT SAVES, MEASURED — 2026-09-21
+
+Run the same game at the same upscale, uncapped, twice: once reading the frame
+back through the CPU as the console does today, and once with
+`CABINETOS_PS2_NO_READBACK`, which skips exactly the work a composited PCSX2
+would not do. Burnout 3, warm shader cache, on the A9. 4x was run twice and
+reproduced within 3%.
+
+| Upscale | readback on | readback off | throughput saved |
+|---|---|---|---|
+| 3x | 3.36 ms/frame | 3.25 ms/frame | **0.11 ms — free** |
+| 4x | 5.08 / 5.21 ms | 3.21 / 3.25 ms | **~1.9 ms** |
+| 6x | 13.16 ms | 4.17 ms | **~9.0 ms** (76 → 240 fps) |
+
+**AT 3x THE READBACK IS FREE, AND THAT IS THE MOST USEFUL NUMBER HERE.** It
+*measures* 1.95 ms and *costs* 0.11 ms, because it overlaps with the emulator's
+other threads. So for PlayStation 2 at the upscale this project already calls the
+sweet spot, compositing buys nothing at all.
+
+**THE COUNTER OVERSTATES ITS OWN COST UNTIL IT DOES NOT.** At 4x it reports
+~5 ms and removing it buys ~1.9 ms. At 6x it reports 13 ms and removing it buys
+9 ms. The overlap absorbs a fixed amount and then the cost lands squarely on the
+critical path — a cliff, not a curve, and 4x sits on the edge of it, which is
+consistent with the stutter MMagTech felt there.
+
+**WITHOUT THE READBACK, THE UPSCALE IS NEARLY FREE.** 3.25 ms at 3x, 3.21 ms at
+4x, 4.17 ms at 6x. With it, 4x to 6x takes the emulator from 188 fps to 76.
+Nearly the whole cost of a high upscale on this console is our picture path, not
+the emulation and not the rendering.
+
+**SO THE CASE IS NOT "PLAYSTATION 2 TODAY", AND SAYING OTHERWISE WOULD BE
+OVERSELLING IT.** It is true 4K — 5x is the first genuinely 4K value on a
+3840x2160 panel and that is past the cliff — and it is the systems that do not
+exist yet. **MMagTech made that argument before the numbers came in and the
+numbers support it better than they support the PS2 one:** *"you have to remeber
+this could also benefit other more demanding cores we have yet to built like
+ps3, switch, wii u and xbox."*
+
+The reason is in the measurement rather than beside it. **The readback is free at
+3x precisely because PCSX2 is running three times faster than realtime and has
+slack to hide it in.** An emulator running at 100% has no slack. Lining the
+systems up by pixels per frame, a PlayStation 3 at its own native 1080p pushes
+about what a PS2 pushes at 3x — and pays for it with none of PS2's headroom.
+
+| | pixels/frame | PS2 equivalent |
+|---|---|---|
+| PS2 native | 287k | 1x |
+| Switch 720p | 922k | ~2x |
+| PS3 1080p | 2.07M | ~3x |
+| 4K | 8.3M | ~6x |
+
+#### THE MENU RENDERS CORRECTLY ONTO NOTHING — 2026-09-21
+
+`cabinetos-frontend --overlay-test` puts the real pause menu up as a gamescope
+overlay over a game the console did not draw. Run on the A9 over vkcube,
+MMagTech watching: *"everything looks pretty solid except the menu itself is not
+glass. I can see the game around but not throught the menu."*
+
+**THE RISK THAT COULD HAVE KILLED THE ROUTE IS GONE.** Text and panel edges are
+clean, with none of the dark haloing a renderer produces when it gets
+premultiplied alpha wrong on a transparent surface. The scrim dims the game
+correctly. **It needed no shader work at all** — `glBlendFuncSeparate(..., GL_ONE,
+GL_ONE_MINUS_SRC_ALPHA)` was already right, so the whole change is two clears
+going from alpha 1 to alpha 0 and one full-screen black fill being skipped.
+
+**THE ONE CASUALTY IS THE GLASS PANEL, AND IT IS A REAL DIFFERENCE.**
+`drawGlass` blurs what is behind it by sampling the console's OWN scene texture.
+On this path the game is on another plane and is not in that texture, so there is
+nothing to blur and the panel comes out flat.
+
+**gamescope's own blur was tried and DID NOT WORK.** `GAMESCOPE_BLUR_MODE` set to
+1 and to 2 on the root window, with radius and fade duration, with composition
+forced. `composite_debug` confirmed gamescope really was compositing — MMagTech
+saw the markers — and the blur shaders are in the build. Why it does not apply
+was not established, and nobody should assume it is unavailable on the strength
+of this. It was abandoned rather than solved.
+
+**THE PROMISING ROUTE INSTEAD IS ONE GRAB AT THE MOMENT OF PAUSE, and the
+ingredient is proved.** A base-plane screenshot taken WHILE our overlay is on
+screen comes back as the game alone, clean, at full output resolution — verified
+2026-09-21. So the console can take one grab when the menu opens, blur it itself,
+and use it as the panel's backdrop for as long as the menu is up. The game is
+paused, so a still is correct rather than a compromise, and the panel already
+fades in over 350 ms, which is room to do it in. One grab per pause instead of
+sixty a second, in our own code, preserving the look on both paths.
+
+**That the thing which wasted most of a session — screenshots not capturing the
+overlay planes — is exactly what makes this possible is worth a moment's
+reflection before the next instrument is trusted or discarded.**
+
+The reproduction is `tools/gamescope-overlay-test.sh` and `tools/overlay-probe.c`.
