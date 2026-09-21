@@ -5749,6 +5749,25 @@ x86-64, where upstream PCSX2's recompiler and Dolphin's JIT64 are the
 originals rather than a translation. **That is why the question is open again
 on Linux, and it is the thing nobody had written down.**
 
+#### THE PS2 LIBRETRO CORE CANNOT BE SHIPPED — checked 2026-09-21
+
+**`libretro/pcsx2` does not exist.** `git ls-remote` says *"Repository not
+found"*, the API returns 404 while `libretro/dolphin` returns 200 in the same
+second, and the only mirror was last pushed in **2020**. libretro's own recipe
+still points at the dead URL and their buildbot builds from a checkout nobody
+can obtain.
+
+**A core whose source cannot be cloned cannot be pinned, built in CI, put in
+the image, or audited.** That is not a quality trade-off, it is a hard stop,
+and it is independent of every other argument on this page.
+
+It is also years stale even if it could be had: it reports `v2.0.0-afbcc8a`
+and carries the string `1.7.1`, against upstream PCSX2 **v2.8.2**.
+
+**So PlayStation 2 takes the route this document already chose — embed upstream
+`PCSX2/pcsx2`.** GameCube is different: `libretro/dolphin` exists, was pushed
+2026-09-19, and is pinnable, so that one remains a real choice.
+
 **WHAT THE LIBRETRO ROUTE COSTS, and it is not nothing.** The two cores follow
 libretro's forks rather than Cabinet's pinned manifest, which is a real
 exception to *Core parity is a hard constraint* and has to be recorded as one

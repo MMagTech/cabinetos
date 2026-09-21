@@ -236,12 +236,74 @@ both rules are measured and in `filesave.cpp`.
 
 - **Nobody has saved inside a game and watched it go up.** The download half is
   proved; the upload half is the same code Crazy Taxi 2 proved for Dreamcast.
-- **The cores are buildbot downloads**, not pinned builds in
-  `cores/build-core.sh`. They are a hard fork each — LRPS2 and
-  `libretro/dolphin` — so the rule that commits come from Cabinet's manifest
-  cannot apply and the exception has to be written down.
+- **PLAYSTATION 2 CANNOT SHIP AS IT STANDS, and this is the single most
+  important thing on this page.** See *THE PS2 CORE IS UNPINNABLE* below. The
+  GameCube core can be pinned; the PS2 one cannot, at all.
 - **TWO OPEN BUGS FROM ONE HOUR OF PLAY, both reported by MMagTech and neither
   reproducible from here.** See item 1b.
+
+### 1a. THE PS2 CORE IS UNPINNABLE AND MUST BE REPLACED — 2026-09-21
+
+**`libretro/pcsx2` DOES NOT EXIST.** Not renamed, not moved, not a rate limit —
+checked three ways:
+
+```
+git ls-remote https://github.com/libretro/pcsx2.git
+remote: Repository not found.
+```
+
+`libretro/dolphin` returns 200 from the same script in the same second;
+`libretro/pcsx2` returns **404**; the only mirror, `libretro-mirrors/pcsx2`,
+was last pushed in **2020**. libretro's own build recipe still points at the
+dead URL and their buildbot is producing binaries from a checkout nobody else
+can obtain.
+
+**So the PS2 core on the A9 right now cannot be pinned, cannot be built in CI,
+cannot go in the image, and cannot be reproduced by anybody.** It is a working
+proof and nothing more. Do not spend an hour trying to add it to
+`cores/build-core.sh` — that is why this section exists.
+
+**It is also years out of date even if it could be obtained.** It reports
+`v2.0.0-afbcc8a` and its binary carries the string `1.7.1`; upstream PCSX2's
+current release is **v2.8.2** (2026-09-04), with dev builds at v2.9.78.
+
+**THE ROUTE FOR PS2 IS THE ONE THAT WAS ALREADY DECIDED: EMBED UPSTREAM
+`PCSX2/pcsx2`.** MMagTech, 2026-09-21, and he is right that it should never
+have been reinterpreted: *"what does macos use for ps2 and why did you not use
+it here"*. The Mac embeds real PCSX2 and so should this.
+
+**The job, sized from Cabinet's own tree rather than guessed:**
+
+| | lines | ports? |
+|---|---|---|
+| `CabinetPS2Host.cpp` — all 54 `Host` functions and the VM lifecycle | 811 | **yes**, plain C++ |
+| `CabinetPS2Bridge.cpp` — the flat C face | 150 | **yes** |
+| `CabinetInputSource.cpp` — the slot SDL vacated | 109 | **yes** |
+| `CabinetDrawableProbe.mm` — Metal drawable probing | 315 | no — does not exist here |
+| `CabinetCocoaTools.mm` — AppKit replaced with UIKit | 201 | no — not needed at all |
+| `CabinetAudioStream.mm` — AVAudioEngine | 165 | no — SDL audio already exists |
+
+**LINUX REMOVES MOST OF WHAT MADE IT HARD ON THE MAC.** Cabinet cross-compiled
+**ten** external dependencies for Catalyst by hand with pinned tarballs and SHA
+sums — on Linux they are `dnf install`. Metal becomes Vulkan, which PCSX2
+supports natively **and which this console now has**. SDL3 "does not survive
+Catalyst" and is already linked here. `pthread_jit_write_protect_np` reached
+through `dlsym` is nothing on Linux. PROJECT.md already counted nine of
+PCSX2's seventeen patch groups as Apple or Metal walls that do not exist here.
+
+**TONIGHT'S VULKAN WORK IS THE FOUNDATION FOR THIS, NOT A DETOUR.** Cabinet's
+`CabinetPS2Host` presents into a `CAMetalLayer` and runs the VM on its own
+thread; `vkhost.cpp` is the same shape with a Vulkan device instead. An
+embedded PCSX2 needs exactly what was built for the libretro one.
+
+**THE FIRST QUESTION, and it decides how hard the rest is:** PCSX2's CMake
+builds an APPLICATION, not a library — Cabinet had to carve the frontend out.
+Whether upstream will produce a linkable library on Linux without that surgery
+is answerable in one build. Do that first.
+
+**Pin `upstream PCSX2/pcsx2`, not the `isztldav` fork.** That fork exists to
+add an ARM64 recompiler for Apple Silicon; on x86-64 it is not a feature, it is
+291 commits of staleness.
 
 ### 1b. TWO BUGS FOUND BY PLAYING, NEITHER REPRODUCIBLE — OPEN
 
@@ -282,7 +344,8 @@ the right way up. Read this order before picking anything up.
 
 | | |
 |---|---|
-| **0** | **THE TWO BUGS IN ITEM 1b**, because they are the only things stopping somebody playing 85 games. Then finish the list under *PLAYSTATION 2 AND GAMECUBE PLAY* — the cores need pinning into `cores/build-core.sh`, and an in-game save needs to be watched reaching RomM. |
+| **0** | **EMBED UPSTREAM PCSX2 — item 1a.** The libretro PS2 core cannot ship and cannot even be obtained. This is the decision that was already made before the last session and should never have been reinterpreted. |
+| **0b** | **THE TWO BUGS IN ITEM 1b**, which need MMagTech to catch them — leave the console stuck rather than restarting it. GameCube's core CAN be pinned into `cores/build-core.sh` and that part still stands. |
 | **1** | ~~PLAYSTATION 2 AND GAMECUBE~~ — **done to the point of playing**, see above. The original entry follows for its reasoning. **PLAYSTATION 2 AND GAMECUBE.** MMagTech's call, 2026-09-20, and the largest thing on this list: 85 games, and the only missing tier with a working implementation to copy. **Open question 12b has the order and 12 has the numbers.** Start by reading `tools/build-dolphin-mac.sh` in Cabinet — those two are NOT libretro cores and nobody wrote down why. |
 | **2** | **A GAME CAN GO BLACK AND NOBODY KNOWS WHY.** Six launches in one session drew nothing but the letterbox glow while the core ran and made sound. Not reproduced since. Two theories tested and both falsified. See item 3b — it has the instruments. |
 | **3** | **Judge the TATE look, and Home, on the 65-inch.** Both are on the machine and neither has been looked at properly. |
