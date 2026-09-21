@@ -286,23 +286,49 @@ void Keyboard::draw(Renderer& r, TextRenderer& text, float scale) {
     if (!open_) return;
     const auto& rows = layout();
 
+    // A DOCKED KEYBOARD IS SMALLER, and it has to be: at full size this panel
+    // is 788 points of a 1080 canvas, which leaves 94 under the top bar for the
+    // results it exists to filter. Two thirds of the key size gives it 550 and
+    // leaves room for a row of covers, which is the whole point of docking it.
+    //
+    // The keys stay well above a comfortable target size on a television — 64
+    // design points is 128 real pixels at 4K — and every position below is
+    // computed from these three, including the rectangles the pointer path
+    // hit-tests against. A second set of numbers that only the drawing knew
+    // about is how a mouse ends up pressing the key next to the one it is over.
+    const bool dock = config_.dockedBottom;
+    const float unit = dock ? 64.0f : kKeyUnit;
+    const float gap = dock ? 9.0f : kKeyGap;
+    const float pad = dock ? 28.0f : kPanelPad;
+
     // Widest row decides the panel, so the panel does not jump when the layout
     // changes between shift states.
     float widest = 0;
     for (const auto& row : rows) {
-        float w = -kKeyGap;
-        for (const auto& key : row) w += key.width * kKeyUnit + kKeyGap;
+        float w = -gap;
+        for (const auto& key : row) w += key.width * unit + gap;
         widest = std::max(widest, w);
     }
 
-    const float fieldH = 96.0f;
-    const float titleH = 70.0f;
-    const float hintH = config_.hint.empty() ? 0.0f : 34.0f;
-    const float gridH = rows.size() * kKeyUnit + (rows.size() - 1) * kKeyGap;
-    const float panelW = widest + kPanelPad * 2;
-    const float panelH = titleH + hintH + fieldH + 28.0f + gridH + kPanelPad * 2 + 56.0f;
+    const float fieldH = dock ? 76.0f : 96.0f;
+    // A DOCKED PANEL DROPS ITS TITLE AND HINT. See Config::dockedBottom: the
+    // field is the title when the thing it filters is on the screen above it,
+    // and those two lines are ninety points the results want.
+    const float titleH = config_.dockedBottom ? 0.0f : 70.0f;
+    const float hintH = (config_.dockedBottom || config_.hint.empty()) ? 0.0f : 34.0f;
+    const float gridH = rows.size() * unit + (rows.size() - 1) * gap;
+    const float panelW = widest + pad * 2;
+    const float panelH = titleH + hintH + fieldH + (dock ? 20.0f : 28.0f) + gridH +
+                         pad * 2 + (dock ? 44.0f : 56.0f);
     const float panelX = (kCanvasWidth - panelW) * 0.5f;
-    const float panelY = (kCanvasHeight - panelH) * 0.5f;
+    // Bottom-anchored when docked, with the safe inset under it — this is text
+    // and controls a person has to reach, so it obeys the same rule the top bar
+    // does about the edges of a television.
+    const float panelY = config_.dockedBottom
+                             ? kCanvasHeight - panelH - kSafeInset * 0.5f
+                             : (kCanvasHeight - panelH) * 0.5f;
+
+    panelTop_ = panelY;
 
     // Scrim, then ONE piece of frosted glass.
     //
@@ -316,19 +342,47 @@ void Keyboard::draw(Renderer& r, TextRenderer& text, float scale) {
     // And the tint is DARK. A white tint over a blur lightens, and this is a
     // dark interface: what makes a material read as a material here is that it
     // dims what is behind it as well as softening it.
-    r.draw(Rect{0, 0, kCanvasWidth, kCanvasHeight, 0, Color::black(0.45f)});
-    r.drawGlass(Rect{panelX, panelY, panelW, panelH, kPanelRadius, Color::white(0)}, 6.0f,
-                Color::black(0.68f));
+    // NO SCRIM WHEN DOCKED. The screen behind it is not something to be got out
+    // of the way, it is the answer to what is being typed.
+    if (!config_.dockedBottom)
+        r.draw(Rect{0, 0, kCanvasWidth, kCanvasHeight, 0, Color::black(0.45f)});
+    // THE DOCKED PANEL IS PLAIN BLACK AND SEE-THROUGH — settled 2026-09-21
+    // after three wrong answers, each one recorded because the next person will
+    // otherwise try them again in the same order:
+    //
+    //   BLACK AT 68%, BLURRED. A slab borrowed from nowhere — *"the search
+    //   background just seems off against the black keyboard."*
+    //   THE CONSOLE'S SURFACE PURPLE, on the pause menu's precedent. Worse —
+    //   *"no i dont think purple is working out here for the keyboard."*
+    //   NO PANEL, just a gradient and a lit outline. *"no thats looks horrible
+    //   like it needs a whole background."*
+    //
+    // What it wanted all along: *"maybe just black but transparent."* Not
+    // glass — glass blurs what is behind it and then tints it, which is why
+    // 68% read as opaque. This is flat black at 62% with the screen showing
+    // straight through it, so the artwork behind stays legible AS artwork and
+    // the keys have something solid to sit on.
+    //
+    // No border and no edge light. A panel you can see through does not need an
+    // outline to say it is there, and the one that was tried is the thing that
+    // looked horrible.
+    if (dock) {
+        r.draw(Rect{panelX, panelY, panelW, panelH, kPanelRadius, Color::black(0.62f)});
+    } else {
+        r.drawGlass(Rect{panelX, panelY, panelW, panelH, kPanelRadius, Color::white(0)},
+                    6.0f, Color::black(0.68f));
+    }
 
-    float y = panelY + kPanelPad;
-    text.draw(r, config_.title, panelX + kPanelPad,
-              y + text.ascent(TextStyle::Title2, scale), TextStyle::Title2,
-              Color::white(1.0f), scale);
-    if (!config_.hint.empty()) {
+    float y = panelY + pad;
+    if (!config_.dockedBottom)
+        text.draw(r, config_.title, panelX + pad,
+                  y + text.ascent(TextStyle::Title2, scale), TextStyle::Title2,
+                  Color::white(1.0f), scale);
+    if (!config_.hint.empty() && !config_.dockedBottom) {
         // Set by every caller and drawn by none until now. A field whose title
         // is "Connect to RomM" genuinely needs the line that says WHICH
         // address, and it was being silently dropped.
-        text.draw(r, config_.hint, panelX + kPanelPad,
+        text.draw(r, config_.hint, panelX + pad,
                   y + titleH + text.ascent(TextStyle::Callout, scale) - 10.0f,
                   TextStyle::Callout, Color::white(0.55f), scale);
         y += 34.0f;
@@ -336,7 +390,7 @@ void Keyboard::draw(Renderer& r, TextRenderer& text, float scale) {
     y += titleH;
 
     // The field.
-    r.draw(Rect{panelX + kPanelPad, y, widest, fieldH, kKeyRadius, Color::black(0.45f)});
+    r.draw(Rect{panelX + pad, y, widest, fieldH, kKeyRadius, Color::black(0.45f)});
     std::string shown = value_;
     if (conceal_) shown.assign(value_.size(), '*');
     const bool empty = shown.empty();
@@ -351,16 +405,16 @@ void Keyboard::draw(Renderer& r, TextRenderer& text, float scale) {
         while (n < shown.size() && (static_cast<unsigned char>(shown[n]) & 0xC0) == 0x80) ++n;
         shown.erase(0, n);
     }
-    text.draw(r, shown, panelX + kPanelPad + 20.0f, fieldBaseline, TextStyle::Title3,
+    text.draw(r, shown, panelX + pad + 20.0f, fieldBaseline, TextStyle::Title3,
               empty ? Color::white(0.35f) : Color::white(1.0f), scale);
     if (!empty) {
         // A caret at the end, so the field reads as active rather than as a
         // label that happens to contain text.
         const float caretX =
-            panelX + kPanelPad + 20.0f + text.measure(shown, TextStyle::Title3, scale) + 4.0f;
+            panelX + pad + 20.0f + text.measure(shown, TextStyle::Title3, scale) + 4.0f;
         r.draw(Rect{caretX, y + 22.0f, 3.0f, fieldH - 44.0f, 1.5f, Color::white(0.75f)});
     }
-    y += fieldH + 28.0f;
+    y += fieldH + (dock ? 20.0f : 28.0f);
 
     // The keys.
     //
@@ -371,17 +425,17 @@ void Keyboard::draw(Renderer& r, TextRenderer& text, float scale) {
     // enter.
     keyRects_.clear();
     for (size_t ri = 0; ri < rows.size(); ++ri) {
-        float x = panelX + kPanelPad;
+        float x = panelX + pad;
         for (size_t ci = 0; ci < rows[ri].size(); ++ci) {
             const Key& key = rows[ri][ci];
-            const float kw = key.width * kKeyUnit;
-            keyRects_.push_back(KeyRect{x, y, kw, kKeyUnit, static_cast<int>(ri),
+            const float kw = key.width * unit;
+            keyRects_.push_back(KeyRect{x, y, kw, unit, static_cast<int>(ri),
                                         static_cast<int>(ci)});
             const bool focused = (static_cast<int>(ri) == row_ && static_cast<int>(ci) == col_);
             const float s = focused ? kFocusScale : 1.0f;
-            const float dw = kw * s, dh = kKeyUnit * s;
+            const float dw = kw * s, dh = unit * s;
             const float dx = x - (dw - kw) * 0.5f;
-            const float dy = y - (dh - kKeyUnit) * 0.5f;
+            const float dy = y - (dh - unit) * 0.5f;
 
             Rect cap{dx, dy, dw, dh, kKeyRadius * s,
                      focused ? Color::white(0.30f) : Color::white(0.10f)};
@@ -397,9 +451,9 @@ void Keyboard::draw(Renderer& r, TextRenderer& text, float scale) {
             text.draw(r, key.label, dx + (dw - lw) * 0.5f,
                       dy + dh * 0.5f + text.ascent(st, scale) * 0.5f, st,
                       focused ? Color::white(1.0f) : Color::white(0.75f), scale);
-            x += kw + kKeyGap;
+            x += kw + gap;
         }
-        y += kKeyUnit + kKeyGap;
+        y += unit + gap;
     }
 
     // What the buttons do. A controller-only UI has to say, because there is
@@ -411,7 +465,7 @@ void Keyboard::draw(Renderer& r, TextRenderer& text, float scale) {
     const char* legend = "A select     X delete     Y shift     Start done     B back";
     const float lw = text.measure(legend, TextStyle::Callout, scale);
     text.draw(r, legend, panelX + (panelW - lw) * 0.5f,
-              panelY + panelH - kPanelPad + 12.0f, TextStyle::Callout, Color::white(0.55f),
+              panelY + panelH - pad + 12.0f, TextStyle::Callout, Color::white(0.55f),
               scale);
 }
 

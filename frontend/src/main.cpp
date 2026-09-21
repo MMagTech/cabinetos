@@ -65,6 +65,7 @@
 #include "romfile.h"
 #include "romm.h"
 #include "screens.h"
+#include "sound.h"
 #include "setup.h"
 #include "storage.h"
 #include "text.h"
@@ -866,6 +867,10 @@ struct LaunchJob {
     enum class Stage { Idle, Firmware, Downloading, Unpacking, Ready, Failed };
 
     std::atomic<Stage> stage{Stage::Idle};
+    // How long this job has been doing something a person would wait for, in
+    // seconds. Advanced by the frame loop rather than by the worker: it is a
+    // fact about what has been on the screen, not about the work.
+    float busyFor = 0.0f;
     std::atomic<int64_t> got{0};
     std::atomic<int64_t> total{0};
     std::atomic<bool> cancel{false};
@@ -877,6 +882,11 @@ struct LaunchJob {
     // than two code paths that would drift.
     bool playWhenReady = true;
     bool keepWhenReady = false;
+    // WHERE THE PERSON WAS WHEN THEY PRESSED PLAY, as an integer the launch
+    // machinery does not have to understand. See `startedOn` at the press site
+    // and the ready branch in pumpLaunch: a download that finishes while
+    // somebody has moved on somewhere else must not drag them out of it.
+    int startedOn = -1;
 
     // Written by the worker before it sets Ready or Failed, read by the frame
     // thread only after it observes one of those. The atomic stage is the
@@ -1484,8 +1494,17 @@ static Library loadLibrary(romm::Client& client) {
         const catalog::Coverage cov = catalog::coverageFor(p);
         screens::Tile tile;
         tile.id = p.id;
-        tile.title = catalog::displayName(p);
-        tile.art = colorForTitle(tile.title);
+        // THE NAME AND THE QUALIFIER ARE TWO FACTS ON A TILE, not one string.
+        // Joined, "Arcade (FinalBurn Neo)" and "Arcade (MAME 2003-Plus)" both
+        // came out as "Arcade" over "(FinalBurn ..." and "(MAME 200..." at this
+        // width — so the qualifier that exists SOLELY to tell the two tiles
+        // apart was the part being cut off. See catalog::displayQualifier.
+        tile.title = p.name.empty() ? p.slug : p.name;
+        const std::string qualifier = catalog::displayQualifier(p);
+        // The colour a coverless tile falls back to is keyed on the FULL name,
+        // so two platforms that differ only by qualifier do not come out the
+        // same colour.
+        tile.art = colorForTitle(catalog::displayName(p));
         tile.enterable = (cov.support == catalog::Support::Playable);
 
         if (!tile.enterable) {
@@ -1515,6 +1534,8 @@ static Library loadLibrary(romm::Client& client) {
             c.id = g.id;
             c.title = g.name.empty() ? g.fsName : g.name;
             c.cover = g.coverPath;
+            c.coverLarge = g.coverLargePath;
+            c.platform = g.platformName;
             c.art = colorForTitle(c.title);
             // The tile's own artwork is the first cover in it that exists. Not
             // every platform has any — Game & Watch has none of 171 — and a
@@ -1526,7 +1547,10 @@ static Library loadLibrary(romm::Client& client) {
         char count[48];
         std::snprintf(count, sizeof count, "%zu game%s", games.size(),
                       games.size() == 1 ? "" : "s");
-        tile.detail = count;
+        // The qualifier rides on the second line, where there is room for it,
+        // in front of the count.
+        tile.detail = qualifier.empty() ? std::string(count)
+                                        : qualifier + "  \xC2\xB7  " + count;
         lib.platformTiles.push_back(std::move(tile));
     }
 
@@ -1643,13 +1667,22 @@ static Library loadLibrary(romm::Client& client) {
                 if (cards[i].id == g.id) { idx = static_cast<int>(i); break; }
             }
             if (idx < 0) continue;
-            // The first playable one is the hero; the rest are the shelf.
+            // THE MOST RECENT ONE STAYS ON THE SHELF — changed 2026-09-21.
+            //
+            // It used to be lifted out and given its own hero card, with the
+            // shelf holding everything after it. The hero card is gone and the
+            // shelf holds all of them, with the most recent first, because
+            // that is what it already was before one of them was taken away.
+            //
+            // `heroIndex` is still recorded: it is what Home focuses on when it
+            // opens, which is the whole of "resume-first". It is now an index
+            // into the shelf's first slot rather than a separate object on the
+            // screen. See the Rows enum.
             if (lib.heroIndex < 0) {
                 lib.heroIndex = idx;
                 lib.heroPlatform = g.platformName;
-            } else {
-                lib.shelf.push_back(idx);
             }
+            lib.shelf.push_back(idx);
         }
     } else {
         std::fprintf(stderr, "[library] no play history: %s\n", err.c_str());
@@ -1666,11 +1699,11 @@ static Library loadLibrary(romm::Client& client) {
         std::fprintf(stderr, "[library] %zu favourites\n", lib.favorites.size());
     }
     if (lib.heroIndex >= 0)
-        std::fprintf(stderr, "[library] hero: %s (%s), %zu more on the Recent shelf\n",
+        std::fprintf(stderr, "[library] resume: %s (%s), %zu on the Recent shelf\n",
                      cards[lib.heroIndex].title.c_str(), lib.heroPlatform.c_str(),
                      lib.shelf.size());
     else
-        std::fprintf(stderr, "[library] no hero — nothing recent is playable here\n");
+        std::fprintf(stderr, "[library] nothing recent is playable here\n");
     return lib;
 }
 
@@ -2360,8 +2393,48 @@ int main(int argc, char** argv) {
     int shotAfterFrames = 30;
     int initialFocus = -1;
     // Which row to start on, so each of Home's rows can be photographed without
-    // a controller. 0 hero, 1 Recent, 2 Favorites.
+    // a controller. 0 Recent, 1 Favorites. The bar is not a row any more — see
+    // the Row enum — so a capture of it wants --focus-bar, not --row 0.
     int initialRow = -1;
+    // What to type into Search for a capture. See the route below.
+    const char* searchQuery = nullptr;
+    // Integer scaling for a game's picture: OFF by default since 2026-09-21,
+    // so every system fills the height. See the draw site for what that trades.
+    bool integerScaling = false;
+    // THE SWITCH SETTINGS WILL OWN, as a flag until Settings exists. MMagTech:
+    // *"a navigation sound of some sort would be nice and later we have the
+    // option in settings to turn it off."* The off half is built now so that
+    // when the screen arrives it has something to set rather than something to
+    // implement.
+    bool uiSound = true;
+    float uiSoundVolume = 0.22f;
+    // HOME'S BACKDROP, TUNABLE WITHOUT A COMPILER.
+    //
+    // design.h is still where these live and still what ships — these start as
+    // its values and are only moved by a flag. The reason the flag exists is
+    // that the three of them can only be judged on a television, and the loop
+    // from "try 0.55" to "see 0.55 on the panel" is otherwise a rebuild, a
+    // deploy and a restarted session for one number. MMagTech on this session:
+    // *"its going to be all over the place i have alot to tweak on the ui."*
+    //
+    // Whatever wins goes back into design.h. A number that only exists on a
+    // command line is not a decision, it is a thing somebody once tried.
+    float backdropFill = kHomeBackdropFill;
+    float backdropScrim = kHomeBackdropScrim;
+    float backdropTexels = kHomeBackdropTexels;
+    // The two that decide how it MOVES rather than how it looks, and they are
+    // the pair most worth arguing with on a panel: how long it waits before it
+    // notices, and how long it takes to get there.
+    float backdropDelay = kHomeBackdropDelay;
+    float backdropFade = kHomeBackdropFade;
+    // And the bar's own three, for the same reason. Where the room above and
+    // below the top bar goes is a judgement about a television and nothing
+    // else — a capture cannot show whether two rows of text are crowding each
+    // other from a sofa, and this project has been wrong about the top edge of
+    // a screen before.
+    float barTop = kBarTop;
+    float barHeight = kBarHeight;
+    float barGapBelow = kBarGapBelow;
     // Verify the layout at a panel size this machine does not have. Most sets
     // are 4K; plenty are not; the design canvas scales to both and this is how
     // that gets checked rather than assumed.
@@ -2487,6 +2560,45 @@ int main(int argc, char** argv) {
             shotPath = argv[++i];
         } else if (SDL_strcmp(argv[i], "--frames") == 0 && i + 1 < argc) {
             shotAfterFrames = SDL_atoi(argv[++i]);
+        } else if (SDL_strcmp(argv[i], "--integer-scale") == 0) {
+            integerScaling = true;
+            std::fprintf(stderr, "[picture] integer scaling, with bars\n");
+        } else if (SDL_strcmp(argv[i], "--query") == 0 && i + 1 < argc) {
+            searchQuery = argv[++i];
+        } else if (SDL_strcmp(argv[i], "--ui-sound") == 0 && i + 1 < argc) {
+            const char* v = argv[++i];
+            uiSound = !(SDL_strcmp(v, "off") == 0 || SDL_strcmp(v, "0") == 0);
+            if (uiSound) uiSoundVolume = static_cast<float>(SDL_atof(v)) > 0
+                                             ? static_cast<float>(SDL_atof(v))
+                                             : uiSoundVolume;
+            std::fprintf(stderr, "[sound] %s, volume %.2f\n",
+                         uiSound ? "on" : "off", uiSoundVolume);
+        } else if (SDL_strcmp(argv[i], "--home-bar") == 0 && i + 1 < argc) {
+            // top,height,gap — e.g. --home-bar 36,56,52
+            float t = barTop, h = barHeight, g = barGapBelow;
+            if (std::sscanf(argv[++i], "%f,%f,%f", &t, &h, &g) >= 1) {
+                barTop = std::clamp(t, 0.0f, 300.0f);
+                barHeight = std::clamp(h, 20.0f, 200.0f);
+                barGapBelow = std::clamp(g, 0.0f, 300.0f);
+            }
+            std::fprintf(stderr, "[home] bar top %.0f height %.0f gap %.0f\n",
+                         barTop, barHeight, barGapBelow);
+        } else if (SDL_strcmp(argv[i], "--home-backdrop") == 0 && i + 1 < argc) {
+            // fill,scrim,texels — e.g. --home-backdrop 0.6,0.22,28
+            float f = backdropFill, s = backdropScrim, t = backdropTexels;
+            float d = backdropDelay, fade = backdropFade;
+            if (std::sscanf(argv[++i], "%f,%f,%f,%f,%f", &f, &s, &t, &d, &fade) >= 1) {
+                backdropFill = std::clamp(f, 0.0f, 1.0f);
+                backdropScrim = std::clamp(s, 0.0f, 1.0f);
+                backdropTexels = std::clamp(t, 1.0f, 512.0f);
+                backdropDelay = std::clamp(d, 0.0f, 3.0f);
+                backdropFade = std::clamp(fade, 0.05f, 5.0f);
+            }
+            std::fprintf(stderr,
+                         "[home] backdrop fill %.2f scrim %.2f texels %.0f "
+                         "delay %.2fs fade %.2fs\n",
+                         backdropFill, backdropScrim, backdropTexels,
+                         backdropDelay, backdropFade);
         } else if (SDL_strcmp(argv[i], "--glow") == 0 && i + 1 < argc) {
             const char* g = argv[++i];
             glowPeak = SDL_strcmp(g, "off") == 0      ? 0.0f
@@ -2949,6 +3061,13 @@ int main(int argc, char** argv) {
         return 1;
     }
 
+    // The interface's own sounds. Opened here rather than lazily, because the
+    // first click a person hears should not be the second one they asked for —
+    // and a console with no audio device says so once and stays silent.
+    sound::init();
+    sound::setEnabled(uiSound);
+    sound::setVolume(uiSoundVolume);
+
     // GLES 3.0, which is what the libretro hardware-rendered cores ask for via
     // RETRO_ENVIRONMENT_SET_HW_RENDER. The UI and the cores share one context
     // on purpose: that is what removes the readback the Apple build cannot
@@ -3213,6 +3332,10 @@ int main(int argc, char** argv) {
             c.art = ui::Color::rgb(e.art);
             c.title = e.title;
             c.cover = e.cover ? e.cover : "";
+            // The sample library is files on disk at one size, so the large
+            // cover IS the cover. Keeping the field filled rather than empty
+            // means the drawing code never has to ask which library it is in.
+            c.coverLarge = c.cover;
             cards.push_back(std::move(c));
         }
     }
@@ -3579,27 +3702,56 @@ int main(int argc, char** argv) {
     // people the bar is decorative. Cabinet's iOS reaches the same shape from
     // the other side, three destinations with Settings demoted, on the rule
     // that "reach should track frequency".
-    enum Row { RowBar = 0, RowHero = 1, RowRecent = 2, RowFavorites = 3 };
+    // THE HERO ROW IS GONE — 2026-09-21.
+    //
+    // Home was bar / hero / Recent / Favorites, where the hero was the most
+    // recently played game lifted out of Recent and given an 1800x340 card of
+    // its own. The card was mostly not artwork: a 3:4 cover fitted in the
+    // middle of a 16:5 box, with the same cover blurred either side to fill the
+    // space it could not. MMagTech, looking at it: *"the homepage needs some
+    // work"*, and that band was the thing.
+    //
+    // It is now three rows, and the most recent game is simply the first card
+    // on Recent — which is what it was before it was taken out. Resume-first is
+    // unchanged and is now cheaper: focus opens on that card, and A launches it
+    // rather than opening its launch screen. See `activateHome`.
+    //
+    // WHAT THE 284 POINTS BOUGHT: the shelf covers are back at the reference
+    // implementation's own 260x347. They were cut to 158x210 to fit two shelves
+    // under the hero — design.h records that as "about 430 points had to come
+    // out of a 1080 canvas". Most of it has come back.
+    // THE BAR IS NOT ONE OF HOME'S ROWS — changed 2026-09-21.
+    //
+    // It was, back when it was drawn on Home and nowhere else. Now it is drawn
+    // over every browsing screen, and MMagTech asked the obvious question:
+    // *"if the library has the top bar in view shouldnt i be able to up and
+    // access it."* Yes. Chrome that is on screen and cannot be reached is worse
+    // than chrome that is hidden, because it reads as the console having
+    // stopped responding rather than as a thing that is not there.
+    //
+    // So the bar's focus belongs to the APP — `barFocused` and `barSlot` — and
+    // every screen hands focus up to it the same way, through
+    // screens::Action::FocusBar. Two mechanisms for one piece of chrome is how
+    // a shelf and a grid end up disagreeing about what focus looks like, which
+    // is the same reason design.h exists.
+    enum Row { RowRecent = 0, RowFavorites = 1 };
     enum BarItem { BarLibrary = 0, BarSearch, BarSettings, BarCount };
     const char* kBarLabels[BarCount] = { "Library", "Search", "Settings" };
 
     const size_t shelfSlots = shelf.empty() ? cards.size() : shelf.size();
-    const bool haveHero = heroIndex >= 0;
+    // Whether there is a game to resume. It is shelf slot 0 when there is.
+    const bool haveResume = heroIndex >= 0 && !shelf.empty();
     const bool haveFavorites = !favorites.empty();
 
     auto rowSlots = [&](int row) -> size_t {
-        if (row == RowBar) return static_cast<size_t>(BarCount);
-        if (row == RowHero) return haveHero ? 2u : 0u;
         if (row == RowRecent) return shelfSlots;
         return favorites.size();
     };
     auto rowExists = [&](int row) { return rowSlots(row) > 0; };
 
-    // The card a (row, slot) points at, or nullptr for the Resume pill, which
-    // is a control rather than a card.
+    // The card a (row, slot) points at, or nullptr for the top bar, whose
+    // items are destinations rather than cards.
     auto cardAt = [&](int row, int slot) -> Card* {
-        if (row == RowBar) return nullptr;   // destinations, not cards
-        if (row == RowHero) return slot == 0 ? &cards[heroIndex] : nullptr;
         if (row == RowRecent) {
             if (slot < 0 || static_cast<size_t>(slot) >= shelfSlots) return nullptr;
             return &cards[shelf.empty() ? static_cast<size_t>(slot)
@@ -3609,7 +3761,10 @@ int main(int argc, char** argv) {
         return &cards[favorites[slot]];
     };
 
-    int focusRow = haveHero ? RowHero : RowRecent;
+    // RESUME-FIRST, and it is now one rule rather than a separate object:
+    // Home opens on the first card of Recent, which is the most recently played
+    // game this console can play.
+    int focusRow = RowRecent;
     int focusSlot = 0;
     // --focus N still means "start on card N of Recent", which is what every
     // existing capture script passes it for.
@@ -3622,14 +3777,26 @@ int main(int argc, char** argv) {
         if (!rowExists(focusRow)) focusRow = RowRecent;
         focusSlot = std::clamp(focusSlot, 0, static_cast<int>(rowSlots(focusRow)) - 1);
     }
-    // Focus of the pill is not a Card, so it has its own animation.
-    Animated resumeFocus;
     // Home is taller than the screen once there are two shelves, so it scrolls
     // to follow focus — the same as tvOS, which puts Home in a ScrollView. The
     // hero alone is 420 of a 1080 canvas; Recent and Favorites do not both fit
     // under it.
     Animated scrollY;
     scrollY.from = scrollY.to = 0.0f;
+    // What is lighting the room, and what was lighting it before. Two cache
+    // keys and a mix, because a cut between two covers is the one thing this
+    // must not look like. `backdropWant` is what focus is asking for, which is
+    // not the same as what is on screen until it has stopped asking for long
+    // enough — see kHomeBackdropDelay.
+    std::string backdropKey, backdropPrevKey, backdropWant;
+    float backdropSettle = 0.0f;
+    Animated backdropMix;
+    backdropMix.from = backdropMix.to = 1.0f;
+    // EASE-IN-OUT, the design system's curve for a state change worth watching.
+    // Every other animation on these screens is ease-out because it is focus
+    // arriving; this one is the room itself changing and it has to leave as
+    // deliberately as it arrives.
+    backdropMix.smooth = true;
     // Settled, not animating: a screenshot should show the resting focused
     // state, not a frame part-way through the transition into it.
     auto settleFocus = [&]() {
@@ -3637,8 +3804,8 @@ int main(int argc, char** argv) {
             c->focus.retarget(1.0f, kFocusDuration);
             c->focus.elapsed = kFocusDuration;
         } else {
-            resumeFocus.retarget(1.0f, kFocusDuration);
-            resumeFocus.elapsed = kFocusDuration;
+            // The top bar's items are not Cards and have no animation of their
+            // own: focus there is a tinted pill drawn from focusRow/focusSlot.
         }
     };
     settleFocus();
@@ -3651,13 +3818,17 @@ int main(int argc, char** argv) {
     // over whatever was behind it, and the player is a cover over that — which
     // is what makes quitting a game return to the launch screen and backing out
     // again return to the browsing.
-    enum class Screen { Home, Library, Grid, Detail };
+    enum class Screen { Home, Library, Grid, Detail, Search };
     std::vector<Screen> stack{Screen::Home};
     auto here = [&]() { return stack.back(); };
 
     screens::LibraryScreen libraryScreen;
     screens::GridScreen gridScreen;
     screens::DetailScreen detailScreen;
+    screens::SearchScreen searchScreen;
+    // What the docked keyboard held last frame, so the filter is re-run when it
+    // changes and not sixty times a second when it does not.
+    std::string searchTyped;
     libraryScreen.build(platformTiles, collectionTiles);
 
     // Any pad that is already plugged in. Hotplug is handled in the event loop,
@@ -3704,7 +3875,26 @@ int main(int argc, char** argv) {
         "Resume", "Save state", "Load latest state", "Exit to Home",
     };
     auto launchById = [&](int romId) -> bool {
-        if (launchJob.busy()) return false;    // one at a time
+        // PRESSING PLAY ON SOMETHING ALREADY COMING JOINS IT — 2026-09-21.
+        //
+        // A download started by "Download and keep" runs in the background and
+        // leaves the person free to browse. Pressing Play on that same game
+        // while it is in flight means "and I want to play it when it lands",
+        // which is one flag on the job that is already fetching it — not a
+        // second fetch of the same bytes, and not a refusal.
+        //
+        // Any OTHER game is still refused while one is in flight: the fetch is
+        // one worker and one entry path, and a second would need both.
+        if (launchJob.busy()) {
+            if (launchJob.romId == romId && !launchJob.playWhenReady) {
+                launchJob.playWhenReady = true;
+                launchJob.startedOn = static_cast<int>(here());
+                std::fprintf(stderr, "[launch] joining the download of %s\n",
+                             launchJob.title.c_str());
+                return true;
+            }
+            return false;    // one at a time
+        }
         const romm::Game* g = nullptr;
         for (const auto& x : games) if (x.id == romId) { g = &x; break; }
         if (!g) { std::fprintf(stderr, "[launch] no game with id %d\n", romId); return false; }
@@ -3714,6 +3904,7 @@ int main(int argc, char** argv) {
             std::fprintf(stderr, "[launch] %s\n", lerr.c_str());
             return false;
         }
+        launchJob.startedOn = static_cast<int>(here());
         std::fprintf(stderr, "[launch] %s (%s) via %s\n", g->name.c_str(),
                      g->platformName.c_str(), launchJob.coreName.c_str());
         return true;
@@ -3802,6 +3993,7 @@ int main(int argc, char** argv) {
         d.romId = cards[cardIndex].id;
         d.title = cards[cardIndex].title;
         d.cover = cards[cardIndex].cover;
+        d.coverLarge = cards[cardIndex].coverLarge;
         d.art = cards[cardIndex].art;
         for (const auto& g : games) {
             if (g.id != d.romId) continue;
@@ -3822,22 +4014,86 @@ int main(int argc, char** argv) {
     // Declared before `apply` because `apply` is what it calls, and defined
     // after it for the same reason. std::function rather than a lambda, which
     // is what lets the two refer to each other at all.
+    // WHICH GAMES ARE KEPT, ASKED ONCE AND NOT PER FRAME. `cache::keptRoms`
+    // reads the keep directory; `cache::isKeptBy` is a stat() per game, and
+    // twelve covers at sixty frames a second would be seven hundred stats a
+    // second to draw a dot. So the answer is pushed onto the cards whenever it
+    // can have changed: at startup, and after a download or a removal.
+    auto refreshKeeps = [&]() {
+        const storage::User me = storage::currentUser();
+        if (!me.valid()) return;
+        const std::vector<int> kept = cache::keptRoms(me);
+        for (Card& c : cards) c.kept = false;
+        for (int romId : kept)
+            for (Card& c : cards)
+                if (c.id == romId) { c.kept = true; break; }
+    };
+
+    // WHERE THE BAR'S FOCUS LIVES. Not in Home's row model and not in any
+    // screen's: the bar is drawn over all of them, so its cursor belongs to the
+    // app. Every screen gets into it the same way (Action::FocusBar) and out of
+    // it the same way (Down, or Back).
+    bool barFocused = false;
+    int barSlot = 0;
+    // Trigger edge state. See the axis handler.
+    bool l2Held = false, r2Held = false;
+    // HELD-DIRECTION REPEAT. One direction at a time, which is what a d-pad is:
+    // pressing a second direction takes over rather than queueing, so a person
+    // rolling their thumb around the pad never ends up with two repeats
+    // fighting each other.
+    bool navHeld = false;
+    screens::Nav heldNav = screens::Nav::Down;
+    float heldFor = 0.0f, nextRepeat = 0.0f;
+    auto holdNav = [&](screens::Nav n) {
+        navHeld = true;
+        heldNav = n;
+        heldFor = 0.0f;
+        nextRepeat = kRepeatDelay;
+    };
+    auto releaseNav = [&](screens::Nav n) {
+        // Only the direction that is actually held releases it. Letting go of
+        // Left while holding Down must not stop the Down.
+        if (navHeld && heldNav == n) navHeld = false;
+    };
+
     std::function<bool(screens::Nav)> navigate;
+    // Home's own keys, as one function, so that everything — Home, the Library,
+    // the grid — arrives through `navigate` and the bar can be offered the key
+    // first in exactly one place. Assigned further down, once moveFocus and
+    // moveRow exist.
+    std::function<bool(screens::Nav)> homeKey;
 
     auto apply = [&](const screens::Result& res) {
         switch (res.action) {
             case screens::Action::None:
                 break;
             case screens::Action::Back:
-                if (stack.size() > 1) stack.pop_back();
+                if (stack.size() > 1) { stack.pop_back(); sound::play(sound::Cue::Back); }
+                else sound::play(sound::Cue::Edge);
                 break;
             case screens::Action::OpenTile: {
                 const auto& tiles = libraryScreen.visible();
                 if (res.value < 0 || res.value >= static_cast<int>(tiles.size())) break;
-                gridScreen.open(tiles[res.value].title, tiles[res.value].cards);
+                gridScreen.open(tiles[res.value].title, tiles[res.value].cards, cards);
                 stack.push_back(Screen::Grid);
+                sound::play(sound::Cue::Activate);
                 break;
             }
+            case screens::Action::FocusKeyboard:
+                // Back into the keyboard under the results. Focus does not
+                // leave the screen, it moves down within it.
+                searchScreen.setFocused(false);
+                sound::play(sound::Cue::Move);
+                break;
+            case screens::Action::FocusBar:
+                // Where the cursor lands in the bar: on the destination you are
+                // standing in, so walking up and straight back down is a no-op
+                // rather than a silent change of where you would go.
+                barSlot = (here() == Screen::Library || here() == Screen::Grid)
+                              ? BarLibrary : 0;
+                barFocused = true;
+                sound::play(sound::Cue::Move);
+                break;
             case screens::Action::OpenGame:
                 openDetail(res.value);
                 break;
@@ -3849,6 +4105,7 @@ int main(int argc, char** argv) {
                 break;
             case screens::Action::RemoveDownload:
                 removeDownload(res.value);
+                refreshKeeps();
                 break;
         }
     };
@@ -3865,28 +4122,21 @@ int main(int argc, char** argv) {
     // screen for it to open and doing nothing at all was worse. There is one
     // now, so the distinction is real.
     auto activateHome = [&]() {
-        // The top bar. Library works; the other two are drawn because the bar
-        // has to be laid out against its real contents, and they say nothing
-        // when pressed rather than pretending — a destination that goes
-        // nowhere is a promise the product does not keep, and neither screen
-        // exists yet.
-        if (focusRow == RowBar) {
-            if (focusSlot == BarLibrary) {
-                libraryScreen.enter();
-                stack.push_back(Screen::Library);
-            } else {
-                std::fprintf(stderr, "[nav] %s is not built yet\n",
-                             kBarLabels[focusSlot]);
-            }
+        // THE FIRST CARD ON RECENT IS RESUME, and it goes straight into the
+        // game. This used to be a pill on the hero, and the objection recorded
+        // against a shelf card launching directly was that it would be "a
+        // second Resume that nothing on the screen says is one". That was
+        // right, and it is answered rather than ignored: the shelf header says
+        // Resume over this card and the card carries a play mark. It is the
+        // only card on Home that behaves this way.
+        //
+        // Home promises one action from cold to playing, and this is it.
+        if (haveResume && focusRow == RowRecent && focusSlot == 0) {
+            launchById(cards[heroIndex].id);
             return;
         }
-        if (focusRow == RowHero && focusSlot == 1) {
-            if (heroIndex >= 0) launchById(cards[heroIndex].id);
-            return;
-        }
-        // Every cover on Home opens the launch screen, the same as a cover
-        // anywhere else. A shelf card that launched directly would be a second
-        // Resume that nothing on the screen says is one.
+        // Every other cover on Home opens the launch screen, the same as a
+        // cover anywhere else.
         if (const Card* c = cardAt(focusRow, focusSlot)) {
             for (size_t i = 0; i < cards.size(); ++i) {
                 if (cards[i].id == c->id) { openDetail(static_cast<int>(i)); return; }
@@ -3894,12 +4144,140 @@ int main(int argc, char** argv) {
         }
     };
 
-    navigate = [&](screens::Nav n) -> bool {
+    // THE SHOULDERS SWITCH DESTINATION — 2026-09-21.
+    //
+    // MMagTech: *"i also think that r1 and l1 should allow moving between the
+    // top rows."* They do now, and they do it product-wide rather than only on
+    // Home, which is the point of them: the top bar was a row of links a person
+    // had to TRAVEL to — up out of the shelves, across, press A — and the
+    // bumpers make it a tab strip reachable from wherever you are. Every
+    // console does this and the shoulders were unmapped in the whole product.
+    //
+    // ONLY AT THE TOP LEVEL. Home and Library are destinations; the grid of a
+    // platform and a game's launch screen are places you went INSIDE one, and a
+    // bumper that teleported out of them would lose somebody's place rather
+    // than move them. Back is what leaves those, and it already does.
+    //
+    // NO WRAPPING. With two destinations built, wrapping would make L1 and R1
+    // do the same thing, which teaches nobody anything. When Search and
+    // Settings exist this walks four and the question can be asked again.
+    // GOING TO A DESTINATION RESETS TO ITS ROOT, which is what makes the bar a
+    // tab strip rather than a stack of pushes. Walking into a platform's grid
+    // and then pressing R1 twice must not leave that grid buried under two more
+    // screens: each destination is entered fresh and Back from any of them
+    // returns to Home.
+    //
+    // 0 Home, 1 Library, 2 Search. Settings is drawn in the bar and does not
+    // exist; see barKey.
+    auto goToDestination = [&](int d) {
+        if (keyboard.isOpen()) keyboard.cancel();
+        stack.clear();
+        stack.push_back(Screen::Home);
+        if (d == 1) {
+            libraryScreen.enter();
+            stack.push_back(Screen::Library);
+        } else if (d == 2) {
+            searchScreen.open();
+            searchTyped.clear();
+            stack.push_back(Screen::Search);
+            ui::Keyboard::Config cfg;
+            cfg.title = "Search";
+            cfg.placeholder = "Game name";
+            cfg.dockedBottom = true;
+            keyboard.open(cfg);
+        }
+    };
+
+    auto destinationHere = [&]() {
         switch (here()) {
-            case Screen::Home: return false;
+            case Screen::Home: return 0;
+            case Screen::Library:
+            case Screen::Grid: return 1;
+            case Screen::Search: return 2;
+            default: return -1;      // the launch screen is inside a destination
+        }
+    };
+
+    auto switchDestination = [&](int delta) {
+        const int at = destinationHere();
+        if (at < 0) return;
+        const int want = at + delta;
+        // The range ends at Search, because Settings is drawn in the bar and
+        // does not exist. A bumper that went nowhere and said nothing would
+        // read as the button being broken rather than the screen being unbuilt,
+        // so it makes the edge sound instead.
+        if (want < 0 || want > 2 || want == at) {
+            sound::play(sound::Cue::Edge);
+            return;
+        }
+        goToDestination(want);
+        sound::play(want > at ? sound::Cue::Activate : sound::Cue::Back);
+    };
+
+    // THE BAR'S OWN KEYS. Offered every key first whenever it holds focus, from
+    // whichever screen is underneath — which is the whole point of its cursor
+    // living here rather than in a screen.
+    auto barKey = [&](screens::Nav n) -> bool {
+        switch (n) {
+            case screens::Nav::Left:
+            case screens::Nav::Right: {
+                const int d = (n == screens::Nav::Right) ? 1 : -1;
+                const int next = std::clamp(barSlot + d, 0, BarCount - 1);
+                if (next == barSlot) { sound::play(sound::Cue::Edge); return true; }
+                barSlot = next;
+                sound::play(sound::Cue::Move);
+                return true;
+            }
+            // DOWN AND BACK BOTH LEAVE IT, and neither leaves the screen. Back
+            // out of the bar going to the previous screen would mean a person
+            // who walked up to look at it could not simply come back down.
+            case screens::Nav::Down:
+            case screens::Nav::Back:
+                barFocused = false;
+                sound::play(n == screens::Nav::Down ? sound::Cue::Move
+                                                    : sound::Cue::Back);
+                return true;
+            case screens::Nav::Up:
+                sound::play(sound::Cue::Edge);
+                return true;
+            case screens::Nav::Activate:
+                // Settings is drawn because the bar has to be laid out against
+                // its real contents. It says nothing when pressed rather than
+                // pretending — a destination that goes nowhere is a promise the
+                // product does not keep, and that screen does not exist.
+                if (barSlot == BarLibrary || barSlot == BarSearch) {
+                    const int d = (barSlot == BarLibrary) ? 1 : 2;
+                    barFocused = false;
+                    // Already standing in it: drop back into the screen rather
+                    // than rebuilding it under the person's feet.
+                    if (destinationHere() == d) {
+                        sound::play(sound::Cue::Move);
+                        return true;
+                    }
+                    goToDestination(d);
+                    sound::play(sound::Cue::Activate);
+                    return true;
+                }
+                sound::play(sound::Cue::Edge);
+                std::fprintf(stderr, "[nav] %s is not built yet\n", kBarLabels[barSlot]);
+                return true;
+        }
+        return false;
+    };
+
+    // The first answer, before anything is drawn. Everything after this is a
+    // refresh triggered by the thing that changed it.
+    refreshKeeps();
+
+    navigate = [&](screens::Nav n) -> bool {
+        // The bar first, wherever it is focused. One place, one behaviour.
+        if (barFocused && barKey(n)) return true;
+        switch (here()) {
+            case Screen::Home: return homeKey ? homeKey(n) : false;
             case Screen::Library: apply(libraryScreen.key(n)); return true;
             case Screen::Grid: apply(gridScreen.key(n)); return true;
             case Screen::Detail: apply(detailScreen.key(n)); return true;
+            case Screen::Search: apply(searchScreen.key(n)); return true;
         }
         return false;
     };
@@ -3908,7 +4286,19 @@ int main(int argc, char** argv) {
     // a person would: the Library is entered, a tile is opened, the launch
     // screen is opened from a card. A capture that built a screen some other
     // way would be photographing something the product cannot reach.
-    if (initialScreen) {
+    // SEARCH IS ITS OWN ROUTE, because walking to it is not walking to the
+    // Library. `--screen search --query metal` types the query the way a person
+    // would type it and leaves focus in the results, which is the state worth
+    // photographing — an empty Search is a picture of a keyboard.
+    if (initialScreen && SDL_strcmp(initialScreen, "search") == 0) {
+        goToDestination(2);
+        if (searchQuery) {
+            keyboard.typeText(searchQuery);
+            searchTyped = keyboard.value();
+            searchScreen.setQuery(searchTyped, cards);
+            if (searchScreen.resultCount() > 0) searchScreen.setFocused(true);
+        }
+    } else if (initialScreen) {
         libraryScreen.enter();
         stack.push_back(Screen::Library);
         if (initialTab > 0) {
@@ -3966,6 +4356,7 @@ int main(int argc, char** argv) {
                     cache::isKeptBy(storage::currentUser(), launchJob.romId));
                 detailScreen.setNotice(launchJob.message);
             }
+            refreshKeeps();
             launchJob.stop();
             launchJob.stage = LaunchJob::Stage::Idle;
             return;
@@ -3985,6 +4376,33 @@ int main(int argc, char** argv) {
                 detailScreen.game().romId == launchJob.romId)
                 detailScreen.setKept(
                     cache::isKeptBy(storage::currentUser(), launchJob.romId));
+            refreshKeeps();
+            return;
+        }
+
+        // AND IT ONLY LAUNCHES ITSELF IF NOBODY WALKED AWAY — 2026-09-21.
+        //
+        // MMagTech, on the download no longer blocking the screen: *"wait
+        // should it auto launch after complete."* It is a question that could
+        // not be asked while a modal panel was up, because there was nowhere to
+        // walk to. Now there is: press Play on a 1.78 GB arcade set, get bored,
+        // go and look at something else, and four minutes later the console
+        // would drop you into a game you had stopped waiting for.
+        //
+        // So: still on the screen you pressed it from, you are visibly waiting
+        // and it launches — "one action from cold to playing" holds. Moved on,
+        // and it finishes quietly. The game is on the disk, prepared exactly as
+        // a launch would have prepared it, and its row says Play.
+        if (launchJob.startedOn >= 0 &&
+            launchJob.startedOn != static_cast<int>(here())) {
+            std::fprintf(stderr,
+                         "[launch] %s is ready, and not starting: the screen moved on\n",
+                         launchJob.title.c_str());
+            if (here() == Screen::Detail &&
+                detailScreen.game().romId == launchJob.romId)
+                detailScreen.setKept(
+                    cache::isKeptBy(storage::currentUser(), launchJob.romId));
+            refreshKeeps();
             return;
         }
 
@@ -4071,7 +4489,37 @@ int main(int argc, char** argv) {
                              launchTag, liveClient);
 
         if (!core.loadGame(launchJob.romPath, storage::biosDir(), saveDir)) {
+            // AND SAY IT ON THE SCREEN, NOT ONLY TO STDERR — 2026-09-21.
+            //
+            // MMagTech: *"dreamcast game downloaded and didnt auto launch and
+            // clicking play didnt launch it either."* The console knew exactly
+            // why and had said so, to a log nobody on a sofa can read:
+            //
+            //   [launch] this core wants Vulkan and this device will not export
+            //   memory as a file descriptor, so nothing it draws could reach
+            //   the screen
+            //
+            // A refusal the person cannot see is indistinguishable from a
+            // console that has stopped responding — and it is worse than a
+            // crash, because pressing the button again does the same nothing
+            // forever. The launch screen already has somewhere to put this:
+            // `setNotice` is the same place a full disk reports itself.
             std::fprintf(stderr, "[launch] %s\n", core.error().c_str());
+            // If the press came from somewhere with nowhere to put a message —
+            // Home's Resume card, for instance — the console goes to the
+            // game's own screen and says it there, rather than inventing a
+            // second place for refusals to live.
+            if (here() != Screen::Detail ||
+                detailScreen.game().romId != launchJob.romId) {
+                for (size_t i = 0; i < cards.size(); ++i) {
+                    if (cards[i].id == launchJob.romId) {
+                        openDetail(static_cast<int>(i));
+                        break;
+                    }
+                }
+            }
+            detailScreen.setNotice(core.error());
+            sound::play(sound::Cue::Edge);
             return;
         }
         // Played now, so it is the LAST thing eviction should take rather than
@@ -4206,23 +4654,24 @@ int main(int argc, char** argv) {
     // one people notice missing: leaving Recent at the sixth cover and coming
     // back to the first is the kind of thing that feels broken without anyone
     // being able to say why.
-    int rememberedSlot[4] = {0, 0, 0, 0};
+    int rememberedSlot[2] = {0, 0};
 
     auto leaveFocus = [&]() {
         if (Card* c = cardAt(focusRow, focusSlot)) c->focus.retarget(0.0f, kFocusDuration);
-        else resumeFocus.retarget(0.0f, kFocusDuration);
     };
     auto enterFocus = [&]() {
         if (Card* c = cardAt(focusRow, focusSlot)) c->focus.retarget(1.0f, kFocusDuration);
-        else resumeFocus.retarget(1.0f, kFocusDuration);
     };
 
     auto moveFocus = [&](int delta) {
         const int slots = static_cast<int>(rowSlots(focusRow));
         if (slots <= 0) return;
         const int next = std::clamp(focusSlot + delta, 0, slots - 1);
-        if (next == focusSlot) return;
+        // The end of a row is a sound too. Silence here reads as the console
+        // having stopped listening rather than as there being nothing there.
+        if (next == focusSlot) { sound::play(sound::Cue::Edge); return; }
         leaveFocus();
+        sound::play(sound::Cue::Move);
         focusSlot = next;
         rememberedSlot[focusRow] = focusSlot;
         enterFocus();
@@ -4234,17 +4683,45 @@ int main(int argc, char** argv) {
         // rather than stopping on nothing.
         for (int i = 0; i < 4; ++i) {
             const int candidate = row + delta;
-            if (candidate < RowBar || candidate > RowFavorites) return;
+            if (candidate < RowRecent || candidate > RowFavorites) return;
             row = candidate;
             if (rowExists(row)) break;
-            if (row == RowBar || row == RowFavorites) return;
+            if (row == RowFavorites) return;
         }
-        if (row == focusRow || !rowExists(row)) return;
+        if (row == focusRow || !rowExists(row)) { sound::play(sound::Cue::Edge); return; }
         leaveFocus();
+        sound::play(sound::Cue::Move);
         focusRow = row;
         focusSlot = std::clamp(rememberedSlot[row], 0,
                                static_cast<int>(rowSlots(row)) - 1);
         enterFocus();
+    };
+
+    // Home's keys, routed through the same door as every other screen's so the
+    // bar can be offered them first. See `navigate`.
+    homeKey = [&](screens::Nav n) -> bool {
+        switch (n) {
+            case screens::Nav::Left:  moveFocus(-1); return true;
+            case screens::Nav::Right: moveFocus(+1); return true;
+            case screens::Nav::Down:  moveRow(+1); return true;
+            case screens::Nav::Up:
+                // Up out of the top shelf is the bar, the same as it is on the
+                // Library and in a grid. This is the one that used to be a row
+                // move into RowBar.
+                if (focusRow == RowRecent) {
+                    leaveFocus();
+                    barSlot = 0;
+                    barFocused = true;
+                    sound::play(sound::Cue::Move);
+                } else {
+                    moveRow(-1);
+                }
+                return true;
+            case screens::Nav::Activate: activateHome(); return true;
+            // Home is the root. Back has nowhere to go and says so.
+            case screens::Nav::Back: sound::play(sound::Cue::Edge); return true;
+        }
+        return false;
     };
 
     // WHO OWNS THE INPUT, asked once per event rather than decided again at
@@ -4262,13 +4739,48 @@ int main(int argc, char** argv) {
     // nobody chose. Found by someone actually playing it.
     enum class InputOwner { Keyboard, Overlay, Game, UI };
     auto inputOwner = [&]() {
-        if (keyboard.isOpen()) return InputOwner::Keyboard;
+        // THE DOCKED KEYBOARD DOES NOT OWN THE SCREEN. Everywhere else an open
+        // keyboard is modal and takes every key, which is right for a question
+        // with one answer. On Search it shares the screen with the results, and
+        // when focus is up in those results the keyboard is just something that
+        // is still visible.
+        if (keyboard.isOpen() &&
+            !(here() == Screen::Search && searchScreen.focused()))
+            return InputOwner::Keyboard;
         // The overlay takes the pad FROM the core while it is open, which is
         // the whole rule: never both. tvOS does this by turning the focus
         // engine off during play; here it is this one line.
         if (overlayOpen) return InputOwner::Overlay;
         if (playing) return InputOwner::Game;
         return InputOwner::UI;
+    };
+
+    // UP OUT OF THE KEYBOARD'S TOP ROW. It means nothing anywhere else — this
+    // keyboard deliberately does not wrap — and on Search it is how a person
+    // gets from what they typed to what it found.
+    auto keyboardUp = [&]() {
+        if (here() == Screen::Search && keyboard.atTopRow() &&
+            searchScreen.resultCount() > 0) {
+            searchScreen.setFocused(true);
+            sound::play(sound::Cue::Move);
+            return;
+        }
+        keyboard.moveFocus(0, -1);
+    };
+
+    // What a commit or a cancel MEANS, which is not the same on every screen.
+    // On Search, done goes up into the results and cancel leaves the screen —
+    // and cancel closing the keyboard while leaving an empty Search behind it
+    // would be a dead end with no way out but the bar.
+    auto keyboardResult = [&](ui::KeyboardResult res) {
+        if (here() != Screen::Search) return;
+        if (res == ui::KeyboardResult::Committed) {
+            if (searchScreen.resultCount() > 0) searchScreen.setFocused(true);
+            else if (!keyboard.isOpen()) goToDestination(2);   // nothing found: type again
+        } else if (res == ui::KeyboardResult::Cancelled) {
+            goToDestination(0);
+            sound::play(sound::Cue::Back);
+        }
     };
 
     // Leaving a game. The save goes up FIRST — this is the trigger that matters
@@ -4387,22 +4899,22 @@ int main(int argc, char** argv) {
                     if (keyboard.isOpen()) keyboard.typeText(e.text.text);
                     break;
                 case SDL_EVENT_KEY_DOWN:
-                    if (keyboard.isOpen()) {
-                        // While it is open it owns every key, the same way the
-                        // core owns the pad while a game runs. A control that
-                        // means two things at once is the bug.
+                    if (owner == InputOwner::Keyboard) {
+                        // While it owns input it takes every key, the same way
+                        // the core owns the pad while a game runs. A control
+                        // that means two things at once is the bug.
                         switch (e.key.key) {
                             case SDLK_LEFT: keyboard.moveFocus(-1, 0); break;
                             case SDLK_RIGHT: keyboard.moveFocus(+1, 0); break;
-                            case SDLK_UP: keyboard.moveFocus(0, -1); break;
+                            case SDLK_UP: keyboardUp(); break;
                             case SDLK_DOWN: keyboard.moveFocus(0, +1); break;
                             case SDLK_BACKSPACE: keyboard.backspace(); break;
                             case SDLK_RETURN:
                                 std::fprintf(stderr, "[keyboard] committed: %s\n",
                                              keyboard.value().c_str());
-                                keyboard.commit();
+                                keyboardResult(keyboard.commit());
                                 break;
-                            case SDLK_ESCAPE: keyboard.cancel(); break;
+                            case SDLK_ESCAPE: keyboardResult(keyboard.cancel()); break;
                             default: break;
                         }
                         break;
@@ -4417,6 +4929,18 @@ int main(int argc, char** argv) {
                         // whole stack the person had walked down.
                         else if (stack.size() > 1) navigate(screens::Nav::Back);
                         else running = false;
+                    }
+                    // The shoulders, for a machine with no pad attached. `[`
+                    // and `]` sit where L1 and R1 do on a controller and the
+                    // capture tooling can drive them.
+                    if (owner == InputOwner::UI) {
+                        if (e.key.key == SDLK_LEFTBRACKET) switchDestination(-1);
+                        if (e.key.key == SDLK_RIGHTBRACKET) switchDestination(+1);
+                        // The triggers' equivalent, where a pad is not attached.
+                        if (here() == Screen::Grid) {
+                            if (e.key.key == SDLK_COMMA) gridScreen.jumpLetter(-1);
+                            if (e.key.key == SDLK_PERIOD) gridScreen.jumpLetter(+1);
+                        }
                     }
                     if (owner == InputOwner::Overlay) {
                         if (e.key.key == SDLK_UP || e.key.key == SDLK_DOWN) {
@@ -4454,10 +4978,28 @@ int main(int argc, char** argv) {
                         }
                         break;
                     }
-                    if (e.key.key == SDLK_LEFT) moveFocus(-1);
-                    if (e.key.key == SDLK_RIGHT) moveFocus(+1);
-                    if (e.key.key == SDLK_UP) moveRow(-1);
-                    if (e.key.key == SDLK_DOWN) moveRow(+1);
+                    // THROUGH `navigate`, NOT STRAIGHT AT HOME. Every key on
+                    // every screen arrives at one place now, so the bar can be
+                    // offered it first wherever it holds focus.
+                    // `e.key.repeat` is the system's own key repeat, at the
+                    // system's own rate. Ignore it and run the same accelerating
+                    // repeat the pad gets, so the two input devices behave
+                    // identically — which is the rule the whole input model is
+                    // built on.
+                    if (!e.key.repeat) {
+                        if (e.key.key == SDLK_LEFT) {
+                            navigate(screens::Nav::Left); holdNav(screens::Nav::Left);
+                        }
+                        if (e.key.key == SDLK_RIGHT) {
+                            navigate(screens::Nav::Right); holdNav(screens::Nav::Right);
+                        }
+                        if (e.key.key == SDLK_UP) {
+                            navigate(screens::Nav::Up); holdNav(screens::Nav::Up);
+                        }
+                        if (e.key.key == SDLK_DOWN) {
+                            navigate(screens::Nav::Down); holdNav(screens::Nav::Down);
+                        }
+                    }
                     // Until the navigation bar exists, this is the door to the
                     // Library. See docs/NEXT-SESSION.md: the bar the design
                     // system specifies costs exactly the vertical slack Home has
@@ -4468,44 +5010,36 @@ int main(int argc, char** argv) {
                     }
                     if (e.key.key == SDLK_RETURN || e.key.key == SDLK_SPACE) {
                         pressing = true;
-                        if (!playing) activateHome();
+                        if (!playing) navigate(screens::Nav::Activate);
                     }
                     break;
                 case SDL_EVENT_KEY_UP:
+                    if (e.key.key == SDLK_LEFT) releaseNav(screens::Nav::Left);
+                    if (e.key.key == SDLK_RIGHT) releaseNav(screens::Nav::Right);
+                    if (e.key.key == SDLK_UP) releaseNav(screens::Nav::Up);
+                    if (e.key.key == SDLK_DOWN) releaseNav(screens::Nav::Down);
                     if (e.key.key == SDLK_RETURN || e.key.key == SDLK_SPACE) pressing = false;
                     break;
                 case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
-                    if (keyboard.isOpen()) {
+                    if (owner == InputOwner::Keyboard) {
                         switch (e.gbutton.button) {
                             case SDL_GAMEPAD_BUTTON_DPAD_LEFT: keyboard.moveFocus(-1, 0); break;
                             case SDL_GAMEPAD_BUTTON_DPAD_RIGHT: keyboard.moveFocus(+1, 0); break;
-                            case SDL_GAMEPAD_BUTTON_DPAD_UP: keyboard.moveFocus(0, -1); break;
+                            case SDL_GAMEPAD_BUTTON_DPAD_UP: keyboardUp(); break;
                             case SDL_GAMEPAD_BUTTON_DPAD_DOWN: keyboard.moveFocus(0, +1); break;
-                            case SDL_GAMEPAD_BUTTON_SOUTH: keyboard.pressKey(); break;
+                            case SDL_GAMEPAD_BUTTON_SOUTH: keyboardResult(keyboard.pressKey()); break;
                             case SDL_GAMEPAD_BUTTON_WEST: keyboard.backspace(); break;
                             case SDL_GAMEPAD_BUTTON_NORTH: keyboard.toggleShift(); break;
                             case SDL_GAMEPAD_BUTTON_START:
                                 std::fprintf(stderr, "[keyboard] committed: %s\n",
                                              keyboard.value().c_str());
-                                keyboard.commit();
+                                keyboardResult(keyboard.commit());
                                 break;
-                            case SDL_GAMEPAD_BUTTON_EAST: keyboard.cancel(); break;
+                            case SDL_GAMEPAD_BUTTON_EAST:
+                                keyboardResult(keyboard.cancel()); break;
                             default: break;
                         }
                         break;
-                    }
-                    // Guarded by the owner and by which screen is in front. It
-                    // was neither, which meant a d-pad left moved Home's focus
-                    // while a game was running — the same shape as the bug the
-                    // input-owner rule above exists to prevent.
-                    if (owner == InputOwner::UI && here() == Screen::Home) {
-                        if (e.gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_LEFT) moveFocus(-1);
-                        if (e.gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_RIGHT) moveFocus(+1);
-                    } else if (owner == InputOwner::UI) {
-                        if (e.gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_LEFT)
-                            navigate(screens::Nav::Left);
-                        if (e.gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_RIGHT)
-                            navigate(screens::Nav::Right);
                     }
                     // BOTH STICK CLICKS, NOT START. Start is the pause button
                     // on nearly every system this console emulates, and taking
@@ -4544,29 +5078,96 @@ int main(int argc, char** argv) {
                         break;
                     }
                     if (owner != InputOwner::UI) break;
-                    if (here() != Screen::Home) {
-                        switch (e.gbutton.button) {
-                            case SDL_GAMEPAD_BUTTON_DPAD_UP:
-                                navigate(screens::Nav::Up); break;
-                            case SDL_GAMEPAD_BUTTON_DPAD_DOWN:
-                                navigate(screens::Nav::Down); break;
-                            case SDL_GAMEPAD_BUTTON_SOUTH:
-                                navigate(screens::Nav::Activate); break;
-                            // East is Back everywhere in this product, which is
-                            // the rule the in-game overlay already follows.
-                            case SDL_GAMEPAD_BUTTON_EAST:
-                                navigate(screens::Nav::Back); break;
-                            default: break;
-                        }
+                    // The shoulders first, because they are the one input that
+                    // means the same thing on every screen that has them.
+                    if (e.gbutton.button == SDL_GAMEPAD_BUTTON_LEFT_SHOULDER) {
+                        switchDestination(-1);
                         break;
                     }
-                    if (e.gbutton.button == SDL_GAMEPAD_BUTTON_SOUTH) activateHome();
-                    if (e.gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_UP) moveRow(-1);
-                    if (e.gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_DOWN) moveRow(+1);
-                    if (e.gbutton.button == SDL_GAMEPAD_BUTTON_SOUTH) pressing = true;
-                    if (e.gbutton.button == SDL_GAMEPAD_BUTTON_START) running = false;
+                    if (e.gbutton.button == SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER) {
+                        switchDestination(+1);
+                        break;
+                    }
+                    // ONE DIRECTION HANDLER FOR EVERY SCREEN — 2026-09-21.
+                    //
+                    // There were three: Left and Right were handled early and
+                    // split by screen, Up and Down were handled once for the
+                    // pushed screens and again for Home, and only Home's copy
+                    // ever started the hold. So `holdNav` existed and MMagTech
+                    // was right that *"holding down isnt working"* — it worked
+                    // on Home and nowhere else, which is the worst kind of
+                    // working. Everything below is one switch, and there is now
+                    // no way to add a direction to one screen and forget it on
+                    // another.
+                    switch (e.gbutton.button) {
+                        case SDL_GAMEPAD_BUTTON_DPAD_LEFT:
+                            navigate(screens::Nav::Left);
+                            holdNav(screens::Nav::Left);
+                            break;
+                        case SDL_GAMEPAD_BUTTON_DPAD_RIGHT:
+                            navigate(screens::Nav::Right);
+                            holdNav(screens::Nav::Right);
+                            break;
+                        case SDL_GAMEPAD_BUTTON_DPAD_UP:
+                            navigate(screens::Nav::Up);
+                            holdNav(screens::Nav::Up);
+                            break;
+                        case SDL_GAMEPAD_BUTTON_DPAD_DOWN:
+                            navigate(screens::Nav::Down);
+                            holdNav(screens::Nav::Down);
+                            break;
+                        case SDL_GAMEPAD_BUTTON_SOUTH:
+                            navigate(screens::Nav::Activate);
+                            pressing = true;
+                            break;
+                        // East is Back everywhere in this product, which is the
+                        // rule the in-game overlay already follows. On Home it
+                        // is the root and `homeKey` answers with the edge cue.
+                        case SDL_GAMEPAD_BUTTON_EAST:
+                            navigate(screens::Nav::Back);
+                            break;
+                        case SDL_GAMEPAD_BUTTON_START:
+                            if (here() == Screen::Home) running = false;
+                            break;
+                        default: break;
+                    }
                     break;
+                // THE TRIGGERS ARE FAST NAVIGATION BY LETTER, and they are an
+                // AXIS rather than a button: a trigger reports how far it is
+                // pulled, from 0 to 32767, so it has to be edge-detected here
+                // or one pull would fire a hundred jumps on its way down.
+                //
+                // The threshold is deliberately high and the release threshold
+                // deliberately lower. A trigger at rest on a worn pad does not
+                // read zero, and a single threshold turns that into a jump
+                // every time the pad is picked up.
+                case SDL_EVENT_GAMEPAD_AXIS_MOTION: {
+                    if (owner != InputOwner::UI) break;
+                    const bool left = e.gaxis.axis == SDL_GAMEPAD_AXIS_LEFT_TRIGGER;
+                    const bool right = e.gaxis.axis == SDL_GAMEPAD_AXIS_RIGHT_TRIGGER;
+                    if (!left && !right) break;
+                    bool& held = left ? l2Held : r2Held;
+                    const int v = e.gaxis.value;
+                    if (!held && v > 20000) {
+                        held = true;
+                        if (here() == Screen::Grid) gridScreen.jumpLetter(left ? -1 : +1);
+                    } else if (held && v < 8000) {
+                        held = false;
+                    }
+                    break;
+                }
                 case SDL_EVENT_GAMEPAD_BUTTON_UP:
+                    switch (e.gbutton.button) {
+                        case SDL_GAMEPAD_BUTTON_DPAD_LEFT:
+                            releaseNav(screens::Nav::Left); break;
+                        case SDL_GAMEPAD_BUTTON_DPAD_RIGHT:
+                            releaseNav(screens::Nav::Right); break;
+                        case SDL_GAMEPAD_BUTTON_DPAD_UP:
+                            releaseNav(screens::Nav::Up); break;
+                        case SDL_GAMEPAD_BUTTON_DPAD_DOWN:
+                            releaseNav(screens::Nav::Down); break;
+                        default: break;
+                    }
                     if (e.gbutton.button == SDL_GAMEPAD_BUTTON_LEFT_STICK)
                         l3Down = false;
                     if (e.gbutton.button == SDL_GAMEPAD_BUTTON_RIGHT_STICK)
@@ -4584,6 +5185,20 @@ int main(int argc, char** argv) {
         // A stall must not teleport an animation; the reference implementation
         // caps its own accumulator for the same reason.
         dt = std::min(dt, 0.1f);
+
+        // The held direction, repeating and speeding up. Driven from the frame
+        // loop rather than from the event queue, because the pad sends nothing
+        // at all while a button is held down.
+        if (navHeld && inputOwner() == InputOwner::UI && !keyboard.isOpen()) {
+            heldFor += dt;
+            if (heldFor >= nextRepeat) {
+                navigate(heldNav);
+                const float t = std::clamp(heldFor / kRepeatRamp, 0.0f, 1.0f);
+                nextRepeat = heldFor + (kRepeatStart + (kRepeatFast - kRepeatStart) * t);
+            }
+        } else {
+            navHeld = false;
+        }
 
         if (evictTest && frame == 5) {
             // Five covers requested once and never asked for again: the shelf
@@ -4842,8 +5457,11 @@ int main(int argc, char** argv) {
         // them cost a debugging pass: the scroll target was computed correctly
         // every frame and then discarded, because an Animated whose elapsed
         // never advances returns its start value forever.
-        resumeFocus.tick(dt);
         scrollY.tick(dt);
+        backdropMix.tick(dt);
+        // Reset the moment it stops, so the next launch starts its own clock
+        // and a second press cannot inherit the first one's patience.
+        launchJob.busyFor = launchJob.busy() ? launchJob.busyFor + dt : 0.0f;
         overlayFade.tick(dt);
         overlayFocus.tick(dt);
         {
@@ -4853,6 +5471,41 @@ int main(int argc, char** argv) {
             screens::Ctx ctx{renderer, text, images, renderer.scale(), &cards};
             libraryScreen.tick(dt);
             gridScreen.tick(dt, ctx);
+            searchScreen.tick(dt, ctx);
+
+            // The launch screen is told what its own game is doing. Only its
+            // own: a background download of something else belongs in the bar's
+            // corner, not on this game's Play button.
+            screens::DetailScreen::Progress prog;
+            if (launchJob.busy() && launchJob.busyFor >= kProgressDelay &&
+                launchJob.romId == detailScreen.game().romId) {
+                prog.active = true;
+                // WHICH ROW LIT UP IS DECIDED BY WHAT WAS PRESSED. A download
+                // started by "Download and keep" must not make Play look busy,
+                // and a Play that joined a running download must.
+                prog.action = launchJob.playWhenReady ? screens::Action::Play
+                                                      : screens::Action::Download;
+                prog.got = launchJob.got.load();
+                prog.total = launchJob.total.load();
+                prog.unpacking =
+                    launchJob.stage.load() == LaunchJob::Stage::Unpacking;
+            }
+            detailScreen.setProgress(prog);
+
+            // THE SEARCH LOOP, and it is this short because the whole library
+            // is already in memory: read what the docked keyboard holds, and if
+            // it changed, re-filter. No debounce, no request, no spinner.
+            if (here() == Screen::Search && keyboard.isOpen() &&
+                keyboard.value() != searchTyped) {
+                searchTyped = keyboard.value();
+                searchScreen.setQuery(searchTyped, cards);
+            }
+            // The results are sized to the room the keyboard leaves, and the
+            // keyboard's height depends on its own layout — so it is asked
+            // rather than assumed.
+            if (here() == Screen::Search)
+                searchScreen.setResultsBottom(keyboard.isOpen() ? keyboard.panelTop()
+                                                                : ui::kCanvasHeight);
             detailScreen.tick(dt);
         }
         if (Card* pc = cardAt(focusRow, focusSlot))
@@ -4871,8 +5524,9 @@ int main(int argc, char** argv) {
         renderer.beginFrame(dw, dh);
         // Declared here rather than inside the Home branch: the hero's glass
         // cannot be drawn until after presentScene, which is outside it.
-        ui::Rect heroBand{}, heroCardRect{};
-        bool heroDrawn = false;
+        // The top bar belongs to HOME. It used to be drawn inside the hero's
+        // block, which meant a console with nothing playable in its recent
+        // history had no way to reach Library at all.
         const float sc = renderer.scale();
         if (playing) {
             // BLACK behind a running game, not the menu's backdrop. The
@@ -4894,6 +5548,129 @@ int main(int argc, char** argv) {
             renderer.drawBackdrop(ui::Gradient{ui::palette::kBackdropTop,
                                                ui::palette::kBackdropMid,
                                                ui::palette::kBackdropBottom, 0.55f});
+
+        // ---- THE BACKDROP FOLLOWS FOCUS, ON EVERY BROWSING SCREEN ----------
+        //
+        // The design system's kHomeBackdrop* block has the reasoning and the
+        // three numbers to argue about. What happens here is the mechanism:
+        //
+        //  1. Ask what focus is pointing at. On Home that is a card; on the
+        //     Library it is the focused tile; in a platform's grid it is the
+        //     focused game. The TOP BAR is not a game and neither is a switcher
+        //     pill, so walking onto one changes nothing — the room stays lit by
+        //     whatever you were on rather than blanking on the way past.
+        //  2. Do nothing until that answer has held still for kHomeBackdropDelay.
+        //     A controller crosses a shelf far faster than the 180ms focus
+        //     tempo and a backdrop chasing it frame for frame is a strobe.
+        //  3. Cross-fade, old under new. One texture replacing another with a
+        //     cut is the failure this is built to avoid.
+        //
+        // IT RUNS OUTSIDE ANY ONE SCREEN, and that is the second reason it is
+        // here rather than in Home. MMagTech, on the panel: *"after this
+        // transition to the library it isnt smooth."* It was a cut in two ways
+        // at once — the Library's content appeared between one frame and the
+        // next, AND the lit room vanished with Home, so the whole screen
+        // changed colour instantly. The content now fades (Renderer::
+        // setContentAlpha) and the room does not go anywhere: it simply
+        // re-lights from the tile you land on. The ground staying put while the
+        // content changes is most of what makes a move read as a move.
+        //
+        // THE LARGE COVER, NOT THE SHELF'S THUMBNAIL. Filling 1920x1080 from a
+        // 162x216 PNG is a 12x upscale of an image that was already a
+        // thumbnail; the 810x1080 original costs about 1.5x the bytes and is
+        // the only reason this looks like anything. romm.h has the measurement.
+        if (!playing && here() != Screen::Detail) {
+            // The launch screen is excluded because it already IS this idea,
+            // at full strength: a game's cover filled, blurred and scrimmed
+            // across the whole screen. Two of them would fight.
+            std::string want = backdropWant;
+            if (here() == Screen::Home) {
+                const Card* lit = cardAt(focusRow, focusSlot);
+                if (lit) want = lit->coverLarge.empty() ? lit->cover : lit->coverLarge;
+            } else if (here() == Screen::Library) {
+                const std::string tile = libraryScreen.focusedCover();
+                if (!tile.empty()) want = tile;
+            } else if (here() == Screen::Grid) {
+                const int ci = gridScreen.focusedCard();
+                if (ci >= 0 && ci < static_cast<int>(cards.size()))
+                    want = cards[ci].coverLarge.empty() ? cards[ci].cover
+                                                        : cards[ci].coverLarge;
+            } else if (here() == Screen::Search) {
+                // The room follows the results here too. A search that found
+                // nothing leaves it lit by whatever was there before rather
+                // than blanking, the same rule the top bar gets.
+                const int ci = searchScreen.focusedCard();
+                if (ci >= 0 && ci < static_cast<int>(cards.size()))
+                    want = cards[ci].coverLarge.empty() ? cards[ci].cover
+                                                        : cards[ci].coverLarge;
+            }
+            if (want != backdropWant) {
+                backdropWant = want;
+                backdropSettle = 0.0f;
+            } else if (backdropWant != backdropKey &&
+                       backdropMix.elapsed >= backdropMix.duration) {
+                // AND NEVER INTERRUPT A FADE THAT IS STILL RUNNING. Committing
+                // mid-flight drops the outgoing layer at whatever alpha it had
+                // reached — at a third of the way through, a picture showing at
+                // 70% vanishes in one frame, which is a pop in the middle of
+                // the very transition that exists to avoid one. Two layers can
+                // cross-fade; three cannot, so the third waits its turn.
+                backdropSettle += dt;
+                // A CAPTURE HAS NO WALL CLOCK TO WAIT ON. `--frames N` on the
+                // A9's Radeon goes by in well under the 220ms this delay
+                // wants — the same trap `--launch-after` fell into, recorded in
+                // docs/NEXT-SESSION.md — so a screenshot would show the screen
+                // with no backdrop at all and look like the feature was not
+                // built. Every other animation here already settles for a
+                // capture; this one joins them.
+                if (shotMode) backdropSettle = backdropDelay;
+                if (backdropSettle >= backdropDelay) {
+                    backdropPrevKey = backdropKey;
+                    backdropKey = backdropWant;
+                    backdropMix.from = 0.0f;
+                    backdropMix.to = 0.0f;
+                    backdropMix.elapsed = 0.0f;
+                    backdropMix.retarget(1.0f, backdropFade);
+                    // And arrive, rather than being caught half way in.
+                    if (shotMode) backdropMix.elapsed = backdropMix.duration;
+                }
+            }
+
+            // One cover, cropped to the screen rather than stretched across it.
+            // A 3:4 cover mapped 0..1 over 16:9 is a smear that is no longer
+            // the art's colours, which is the only thing it is here to be.
+            auto drawLit = [&](const std::string& key, float alpha) {
+                if (key.empty() || alpha <= 0.001f) return;
+                const ui::Image& art = images.get(key);
+                if (!art.ready) return;
+                const float boxAspect = ui::kCanvasWidth / ui::kCanvasHeight;
+                const float imgAspect = art.aspect();
+                float u0 = 0, v0 = 0, u1 = 1, v1 = 1;
+                if (imgAspect < boxAspect) {
+                    const float span = imgAspect / boxAspect;
+                    v0 = (1.0f - span) * 0.5f;
+                    v1 = v0 + span;
+                } else {
+                    const float span = boxAspect / imgAspect;
+                    u0 = (1.0f - span) * 0.5f;
+                    u1 = u0 + span;
+                }
+                renderer.drawTextured(
+                    0, 0, ui::kCanvasWidth, ui::kCanvasHeight, art.texture, u0, v0, u1, v1,
+                    ui::Color{1, 1, 1, alpha * art.fade * backdropFill}, false,
+                    blurToTexels(static_cast<float>(art.width) * (u1 - u0),
+                                 backdropTexels));
+            };
+            const float mix = backdropMix.value();
+            drawLit(backdropPrevKey, 1.0f - mix);
+            drawLit(backdropKey, mix);
+            // The scrim goes on whether or not there is art, so the content
+            // sits on the same ground either way and a game with no cover is
+            // not a brighter screen than one with.
+            if (!backdropKey.empty())
+                renderer.draw(ui::Rect{0, 0, ui::kCanvasWidth, ui::kCanvasHeight, 0,
+                                       ui::Color::black(backdropScrim)});
+        }
         }
 
         if (playing) {
@@ -4960,7 +5737,34 @@ int main(int argc, char** argv) {
                 // the panel can show. The dot grid argument that earns integer
                 // scaling a Game Boy is worth less here than the 33% of the
                 // screen it costs.
-                const bool integerScale = !core.hardwareRendered() && !quarterTurn;
+                // EVERY SYSTEM FILLS THE HEIGHT NOW — changed 2026-09-21.
+                //
+                // MMagTech: *"all systems should go to top and bottom of the
+                // screen."* Integer scaling was the default and it cost real
+                // screen: a 320x240 core on a 1080 canvas scaled by 4 rather
+                // than 4.5, so a 960-point picture sat inside 120 points of
+                // black bar for no reason a person watching it would accept.
+                //
+                // WHAT IS GIVEN UP, because it is not nothing. An integer scale
+                // makes every source pixel exactly the same size; 4.5 makes
+                // some of them five rows tall and some four. On a Game Boy at
+                // 160x144 that is a 7.5x scale and the unevenness is visible if
+                // you go looking for it. The argument for integer scaling is
+                // that those pixels were each a deliberate choice; the argument
+                // against is that a third of the screen is a bigger price, and
+                // it is the one MMagTech is paying.
+                //
+                // THE VERTICAL ARCADE BOARDS ALREADY WORKED THIS WAY and the
+                // reasoning recorded for them is the same one, reached first:
+                // "the dot grid argument that earns integer scaling a Game Boy
+                // is worth less here than the 33% of the screen it costs". This
+                // is that decision applied everywhere rather than in one place.
+                //
+                // `--integer-scale` puts it back, for comparing the two on a
+                // television, which is the only place the question can be
+                // settled.
+                const bool integerScale =
+                    integerScaling && !core.hardwareRendered() && !quarterTurn;
                 float scale = std::min(ui::kCanvasWidth / (shownRows * shownAspect),
                                        ui::kCanvasHeight / shownRows);
                 if (integerScale) {
@@ -5061,7 +5865,24 @@ int main(int argc, char** argv) {
                 case Screen::Library: libraryScreen.draw(ctx); break;
                 case Screen::Grid: gridScreen.draw(ctx); break;
                 case Screen::Detail: detailScreen.draw(ctx); break;
+                case Screen::Search: searchScreen.draw(ctx); break;
                 case Screen::Home: break;   // unreachable, and the compiler asks
+            }
+            // A screen sets the transition alpha and its own scroll window for
+            // its drawing, and owns neither for the rest of the frame. Reset
+            // both here rather than trusting each screen to, so a new screen
+            // cannot silently fade or clip the bar drawn on top of it.
+            renderer.setContentAlpha(1.0f);
+            renderer.clearScissor();
+
+            // The top vignette, over the clipped content and under the bar that
+            // is drawn later. See design::kScrollFade*.
+            if (here() == Screen::Library || here() == Screen::Grid) {
+                ui::Rect fade{0, 0, ui::kCanvasWidth, kScrollFadeHeight, 0,
+                              ui::Color::black(kScrollFadeAlpha)};
+                fade.gradient = true;
+                fade.fillBottom = ui::Color::black(0.0f);
+                renderer.draw(fade);
             }
         } else {
 
@@ -5071,139 +5892,34 @@ int main(int argc, char** argv) {
         // instead, which is what makes Home fit in one screen — see the
         // budget in design.h.
         const float shelfBlockHeight =
-            text.lineHeight(ui::TextStyle::Title3, sc) + 12.0f + kShelfHeadroom +
+            text.lineHeight(ui::TextStyle::Title3, sc) + kShelfHeaderGap + kShelfHeadroom +
             kShelfCoverHeight + kShelfHeadroom;
 
-        const float heroHeight = haveHero ? kHeroHeight : 0.0f;
-        const float recentTop = haveHero ? kHeroTop + heroHeight + kHeroGapBelow : kHeroTop;
+        const float recentTop = barTop + barHeight + barGapBelow;
         const float favoritesTop = recentTop + shelfBlockHeight;
 
-        // Scroll only as far as the focused row needs. On the hero or Recent
-        // that is not at all — Home should not drift under the cursor.
+        // Scroll only as far as the focused row needs. On the bar or Recent
+        // that is not at all — Home should not drift under the cursor. With
+        // the hero gone it does not scroll at all at 1080, and the machinery
+        // stays because a shelf's cover height is a number people change.
         //
         // And never past the end of the content. Pinning the last row to the
         // top of the screen leaves half a screen of nothing under it, which is
         // not what a scroll view does and reads as the layout having broken.
         const float contentHeight =
             (haveFavorites ? favoritesTop + shelfBlockHeight : recentTop + shelfBlockHeight) +
-            kHeroTop;
+            kHomeBottomPad;
         const float maxScroll = std::max(0.0f, contentHeight - ui::kCanvasHeight);
         float wantScroll = 0.0f;
         if (focusRow == RowFavorites)
-            wantScroll = std::min(favoritesTop - kHeroTop, maxScroll);
+            wantScroll = std::min(favoritesTop - recentTop, maxScroll);
         if (std::fabs(wantScroll - scrollY.to) > 0.5f)
             scrollY.retarget(wantScroll, kFocusDuration);
         const float scroll = scrollY.value();
 
         // ---- The hero -------------------------------------------------------
         //
-        // Home is resume-first: the hero is what you were playing, and it is
-        // focused on arrival. Numbers are tvOS's, read from Cabinet's
-        // HomeView.swift and recorded in docs/PROJECT.md — including the
-        // warning that the height was settled on real hardware after four
-        // rejected values, because a television's overscan eats more vertical
-        // room than a framebuffer capture shows. DO NOT tune this on the VM.
-        float shelfHeaderY = kHeroTop - scroll;
-        if (heroIndex >= 0 && heroIndex < static_cast<int>(cards.size())) {
-            const Card& hero = cards[heroIndex];
-            const float heroH = heroHeight;
-            // RESERVED HEADROOM, which the design system calls a layout
-            // obligation rather than a style one: "every container holding
-            // focusable elements has to budget for their focused size." The
-            // hero grows by 3% when focused, so its resting width is the
-            // content width DIVIDED by that — otherwise the focused card is
-            // 1854 wide in an 1800 space and runs under the overscan of a real
-            // television, which is precisely where nobody can see it.
-            const float heroW = (ui::kCanvasWidth - kContentInset * 2.0f) / kRowFocusScale;
-            const float heroX = kContentInset +
-                                ((ui::kCanvasWidth - kContentInset * 2.0f) - heroW) * 0.5f;
-            const float heroY = kHeroTop - scroll;
-
-            // Computed from the two line heights rather than hardcoded, so the
-            // band grows with the type ramp instead of clipping it.
-            const float bandH = text.lineHeight(ui::TextStyle::Headline, sc) +
-                                text.lineHeight(ui::TextStyle::Caption1, sc) +
-                                2.0f + kHeroBandPadY * 2.0f;
-            // THE ART FILLS THE HERO. The title used to sit in a full-width
-            // strip across the bottom, which cost about 106 of the hero's 340
-            // points — a third of the artwork — to carry two short lines.
-            // MMagTech, 2026-09-19: "the long strip where the title is for
-            // the hero is taking a lot of space that could be used if we
-            // found a better way to format/visualise that area." It is a
-            // plate sized to its own text now, at the bottom left, with the
-            // art running the full height behind it.
-            const float artH = heroH;
-
-            // The hero's focus treatment, and both halves of it are the design
-            // system's rather than invented:
-            //
-            //  - SCALE 1.03, not a cover's 1.10. "The scale shrinks as the
-            //    element grows", and a full-width card growing 10% would run
-            //    off the screen it sits on.
-            //  - NO RIM. The rim is suppressed on composite elements — anything
-            //    whose label mixes art with its own text — and the hero's band
-            //    is exactly that.
-            //
-            // The shadow stays: it is what lifts the card off the canvas.
-            const float hf = (focusRow == RowHero && focusSlot == 0)
-                                 ? hero.focus.value() : 0.0f;
-            const float hs = 1.0f + hf * (kRowFocusScale - 1.0f);
-            const float hw = heroW * hs, hh = heroH * hs;
-            const float hx = heroX - (hw - heroW) * 0.5f;
-            const float hy = heroY - (hh - heroH) * 0.5f;
-
-            // The card's own ground, so a hero whose art has not arrived is a
-            // card rather than a hole.
-            ui::Rect heroPlate{hx, hy, hw, hh, kHeroRadius, hero.art};
-            heroPlate.shadowBlur = hf * kFocusShadowBlur;
-            heroPlate.shadowOffsetY = hf * kFocusShadowOffsetY;
-            heroPlate.shadowColor = ui::Color::black(0.55f * hf);
-            renderer.draw(heroPlate);
-
-            if (!hero.cover.empty() && images.get(hero.cover).ready) {
-                const ui::Image& art = images.get(hero.cover);
-                // The backdrop: the SAME artwork, FILLED and blurred, so the
-                // space the fitted art does not cover is the art's own colours
-                // rather than letterbox bars. A high mip sampled back up — a
-                // box blur the GPU already built, not a blur pass.
-                //
-                // Filled means CROPPED, not stretched. Mapping a 3:4 cover
-                // across an 1800x420 card by UV 0..1 smears it horizontally
-                // into a grey band that is no longer the art's colours at all —
-                // which is the whole point of the backdrop. So the source rect
-                // is cropped to the card's aspect instead, taking a horizontal
-                // slice through the middle of the cover.
-                const float boxAspect = hw / hh;
-                const float imgAspect = art.aspect();
-                float u0 = 0.0f, v0 = 0.0f, u1 = 1.0f, v1 = 1.0f;
-                if (imgAspect < boxAspect) {
-                    // Taller than the box: keep full width, crop top and bottom.
-                    const float span = imgAspect / boxAspect;
-                    v0 = (1.0f - span) * 0.5f;
-                    v1 = v0 + span;
-                } else {
-                    const float span = boxAspect / imgAspect;
-                    u0 = (1.0f - span) * 0.5f;
-                    u1 = u0 + span;
-                }
-                renderer.drawTextured(hx, hy, hw, hh, art.texture, u0, v0, u1, v1,
-                                      ui::Color{1, 1, 1, art.fade}, false, 5.0f,
-                                      hx, hy, hw, hh, kHeroRadius);
-                renderer.draw(ui::Rect{hx, hy, hw, hh, kHeroRadius,
-                                       ui::Color::black(0.15f * art.fade)});
-
-                // FITTED, not filled. Box art is tall and the hero is wide, so
-                // filling slices the art to a strip of its middle. The top
-                // inset keeps it off the card's rounded corners, which
-                // otherwise clip a sliver from flush art.
-                ui::drawImage(renderer, art, hx, hy + kHeroArtInsetTop, hw,
-                              artH * hs - kHeroArtInsetTop, ui::Fit::Contain, 1.0f, 0.0f);
-            }
-            heroBand = ui::Rect{hx, hy + hh - bandH * hs, hw, bandH * hs, 0, ui::Color::white(0)};
-            heroCardRect = ui::Rect{hx, hy, hw, hh, kHeroRadius, ui::Color::white(0)};
-            heroDrawn = true;
-            shelfHeaderY = heroY + heroH + kHeroGapBelow;
-        }
+        float shelfHeaderY = recentTop - scroll;
 
         // One shelf, drawn twice: Recent and Favorites are the same component in
         // different arrangements, which is what the design system says every
@@ -5249,18 +5965,33 @@ int main(int argc, char** argv) {
             if (rowFocused && !cards.empty()) {
                 const size_t slot = static_cast<size_t>(
                     std::clamp(focusSlot, 0, static_cast<int>(count) - 1));
-                const std::string& title = cards[at(slot)].title;
-                const float titleX = kContentInset + headerWidth + 10.0f +
-                                     text.measure("\xE2\x80\xBA", ui::TextStyle::Callout, sc) +
-                                     24.0f;
+                const Card& fc = cards[at(slot)];
+                float titleX = kContentInset + headerWidth + 10.0f +
+                               text.measure("\xE2\x80\xBA", ui::TextStyle::Callout, sc) +
+                               24.0f;
+                // RESUME IS SAID, NOT IMPLIED. This one card launches straight
+                // into the game where every other cover on Home opens a launch
+                // screen, and the objection recorded against that was exactly
+                // that nothing on the screen would say so. Now something does.
+                if (rowId == RowRecent && slot == 0 && haveResume) {
+                    const char* kResume = "\xE2\x96\xB6  Resume";
+                    text.draw(renderer, kResume, titleX, headerBaseline,
+                              ui::TextStyle::Callout, ui::Color::white(0.95f), sc);
+                    titleX += text.measure(kResume, ui::TextStyle::Callout, sc) + 20.0f;
+                }
                 const float room = ui::kCanvasWidth - kContentInset - titleX;
-                text.draw(renderer, text.truncate(title, ui::TextStyle::Callout, sc, room),
+                std::string line = fc.title;
+                // The platform after the name, which the hero's band used to
+                // carry and nothing has carried since. A library with a Game
+                // Boy and a Genesis "Altered Beast" in it needs this said.
+                if (!fc.platform.empty()) line += "   \xC2\xB7   " + fc.platform;
+                text.draw(renderer, text.truncate(line, ui::TextStyle::Callout, sc, room),
                           titleX, headerBaseline, ui::TextStyle::Callout,
                           ui::Color::white(0.60f), sc);
             }
 
             const float shelfTop =
-                top + text.lineHeight(ui::TextStyle::Title3, sc) + 12.0f + kShelfHeadroom;
+                top + text.lineHeight(ui::TextStyle::Title3, sc) + kShelfHeaderGap + kShelfHeadroom;
 
             // CULL TO WHAT IS ON SCREEN, and do it before touching the cover
             // cache. This loop used to run over every card: invisible with a
@@ -5319,6 +6050,25 @@ int main(int argc, char** argv) {
                     // blurred-echo by itself when the cover is the wrong shape.
                     ui::drawImage(renderer, images.get(card.cover), x, y, w, h,
                                   ui::Fit::Fill, 1.0f, kCoverRadius * scale);
+                    // Unfocused artwork sits back. See design::kRestArtDim.
+                    if (f < 1.0f)
+                        renderer.draw(ui::Rect{x, y, w, h, kCoverRadius * scale,
+                                               ui::Color::black(kRestArtDim * (1.0f - f))});
+                    // The kept mark, the same as the grid draws. A mark that
+                    // appeared on a game in one screen and not in another is
+                    // exactly the drift the shared design system exists to
+                    // prevent.
+                    if (card.kept) {
+                        const float d = kKeptMarkSize * scale;
+                        const float mx = x + w - kKeptMarkInset * scale - d;
+                        const float my = y + kKeptMarkInset * scale;
+                        const float r = kKeptMarkRing * scale;
+                        renderer.draw(ui::Rect{mx - r, my - r, d + r * 2.0f, d + r * 2.0f,
+                                               (d + r * 2.0f) * 0.5f,
+                                               ui::Color::black(0.55f)});
+                        renderer.draw(ui::Rect{mx, my, d, d, d * 0.5f,
+                                               ui::palette::kScreenCyan});
+                    }
                     // The rim again, over the art: it is the focus indicator and
                     // nothing may sit on top of it.
                     if (f > 0.0f) {
@@ -5364,8 +6114,13 @@ int main(int argc, char** argv) {
                 case Screen::Library: libraryScreen.drawGlass(ctx); break;
                 case Screen::Grid: gridScreen.drawGlass(ctx); break;
                 case Screen::Detail: detailScreen.drawGlass(ctx); break;
+                // Search has no glass: the keyboard docked under it is the only
+                // material on the screen and the app draws that itself.
+                case Screen::Search: break;
                 case Screen::Home: break;
             }
+            renderer.setContentAlpha(1.0f);
+            renderer.clearScissor();
         }
 
         // ---- The in-game overlay -------------------------------------------
@@ -5462,195 +6217,183 @@ int main(int argc, char** argv) {
             }
         }
 
-        // ---- A download in progress ----------------------------------------
+        // THE DOWNLOAD PANEL IS GONE — 2026-09-21.
         //
-        // Drawn after presentScene because it is glass, and over everything
-        // because it is the only thing that matters while it is up. Not a modal
-        // — Home stays visible and animating behind it, which is the difference
-        // between "working" and "hung".
-        if (launchJob.busy()) {
-            const int64_t got = launchJob.got.load();
-            const int64_t total = launchJob.total.load();
-            const bool unpacking = launchJob.stage.load() == LaunchJob::Stage::Unpacking;
-
-            const float panelW = 900.0f, panelH = 190.0f;
-            const float px = (ui::kCanvasWidth - panelW) * 0.5f;
-            const float py = (ui::kCanvasHeight - panelH) * 0.5f;
-            renderer.draw(ui::Rect{0, 0, ui::kCanvasWidth, ui::kCanvasHeight, 0,
-                                   ui::Color::black(0.45f)});
-            renderer.drawGlass(ui::Rect{px, py, panelW, panelH, 24.0f, ui::Color::white(0)},
-                               6.0f, ui::Color::black(0.22f));
-
-            text.draw(renderer, launchJob.title, px + 32.0f,
-                      py + 28.0f + text.ascent(ui::TextStyle::Title3, sc),
-                      ui::TextStyle::Title3, ui::Color::white(1.0f), sc);
-
-            // A bar only when the server said how big it is. It often does not,
-            // and a progress bar that invents its own total is a lie — so the
-            // honest fallback is to show what has arrived and no bar at all.
-            const float barY = py + panelH - 62.0f;
-            const float barW = panelW - 64.0f;
-            if (!unpacking && total > 0) {
-                const float frac = std::clamp(static_cast<float>(got) /
-                                              static_cast<float>(total), 0.0f, 1.0f);
-                renderer.draw(ui::Rect{px + 32.0f, barY, barW, 8.0f, 4.0f,
-                                       ui::Color::white(0.18f)});
-                renderer.draw(ui::Rect{px + 32.0f, barY, barW * frac, 8.0f, 4.0f,
-                                       ui::palette::kFocusRim});
-            }
-
-            char line[160];
-            if (unpacking) {
-                std::snprintf(line, sizeof line, "Unpacking\xE2\x80\xA6");
-            } else if (total > 0) {
-                std::snprintf(line, sizeof line, "%.0f of %.0f MB",
-                              static_cast<double>(got) / 1e6,
-                              static_cast<double>(total) / 1e6);
-            } else {
-                std::snprintf(line, sizeof line, "%.0f MB",
-                              static_cast<double>(got) / 1e6);
-            }
-            text.draw(renderer, line, px + 32.0f,
-                      barY + 28.0f + text.ascent(ui::TextStyle::Callout, sc),
-                      ui::TextStyle::Callout, ui::Color::white(0.60f), sc);
-        }
-
-        // ---- The hero's glass, which can only be drawn now ------------------
+        // It was a glass panel over a 45% scrim in the middle of the screen,
+        // and the thing that settled it is that IT NEVER BLOCKED ANYTHING:
+        // `inputOwner` knows about the keyboard, the overlay and a running
+        // game and has never known about a download, so every key still
+        // reached the screen underneath. It was obstruction with no behaviour
+        // behind it, which is the worst of both.
         //
-        // A frosted band, NOT a black gradient. The gradient paints over the
-        // very backdrop that makes the card worth looking at, leaving a slab of
-        // black under the artwork; a material keeps the game's colours showing
-        // through while still giving the text a surface to be read against.
-        // Cabinet learned this on tvOS and the note is in its source.
-        if (heroDrawn) {
-            const Card& hero = cards[heroIndex];
-            ui::Rect band = heroBand;
-            band.radius = 0.0f;
+        // MMagTech, asked whether it should be its own window or shown on the
+        // normal screen, chose the screen. Progress is on the ROW that started
+        // it — see DetailScreen::setProgress — and, for somebody who walked
+        // away from it, in the corner of the top bar below.
 
-            // A PLATE SIZED TO ITS TEXT, not a strip across the whole hero.
-            // Wide enough for the longer of the two lines and no wider, so
-            // the artwork carries the rest of the width. Still a material
-            // rather than flat black: Cabinet learned on tvOS that a
-            // material keeps the game's colours showing through while giving
-            // the text a surface to be read against.
-            const float titleW = text.measure(hero.title, ui::TextStyle::Headline, sc);
-            const float platW = text.measure(heroPlatform, ui::TextStyle::Caption1, sc);
-            ui::Rect plate = band;
-            plate.w = std::min(std::max(titleW, platW) + kHeroBandPadX * 2.0f,
-                               band.w * 0.55f);
-            plate.radius = kHeroRadius;
-            renderer.drawGlass(plate, kHeroBandBlur, ui::Color::black(0.32f));
-
-            const float titleBaseline =
-                band.y + kHeroBandPadY + text.ascent(ui::TextStyle::Headline, sc);
-            text.draw(renderer, hero.title, band.x + kHeroBandPadX, titleBaseline,
-                      ui::TextStyle::Headline, ui::Color::white(1.0f), sc);
-            const float subBaseline = titleBaseline +
-                                      text.lineHeight(ui::TextStyle::Headline, sc) * 0.0f +
-                                      text.lineHeight(ui::TextStyle::Caption1, sc);
-            text.draw(renderer, heroPlatform, band.x + kHeroBandPadX, subBaseline,
-                      ui::TextStyle::Caption1, ui::Color::white(0.60f), sc);
-
-            // Resume is a SECOND REAL BUTTON, not decoration inside the first.
-            // It goes straight into the game; the artwork opens the detail
-            // screen. Stopping at a screen with a Play button on it is two
-            // actions, not one, and Home promises one.
-            // CALLOUT, NOT TITLE 3, changed on the panel 2026-09-19: at Title
-            // 3 with a 180-point floor this read as a primary action on a
-            // detail screen rather than a button in the corner of a banner,
-            // and it was the loudest thing on Home. Callout is the design
-            // system's floor for anything a person reads rather than glances
-            // at, so it is as small as this may go.
-            const char* kResume = "\xE2\x96\xB6  Resume";
-            const float pillTextW = text.measure(kResume, ui::TextStyle::Callout, sc);
-            // Treatment 2, the text-control one: tinted blur at white 25%,
-            // scale 1.06, text to full white. A pill growing a cover's 10%
-            // would read as a bug; 3% on something this small would not read
-            // at all.
-            const float rf = (focusRow == RowHero && focusSlot == 1)
-                                 ? resumeFocus.value() : 0.0f;
-            const float rs = 1.0f + rf * (kPillFocusScale - 1.0f);
-            const float pillW0 = std::max(pillTextW + 24.0f, 150.0f);
-            const float pillH0 = text.lineHeight(ui::TextStyle::Callout, sc) + 12.0f;
-            const float pillW = pillW0 * rs, pillH = pillH0 * rs;
-            // IN THE TITLE BAND, NOT THE TOP-RIGHT CORNER. That corner now
-            // belongs to the account chip, which is where the reference
-            // implementation reserves it — and Resume reads better here
-            // anyway, beside the name of the game it resumes rather than
-            // floating in a corner it does not own.
-            const float pillX = band.x + band.w - pillW0 - kHeroBandPadX -
-                                (pillW - pillW0) * 0.5f;
-            const float pillY = band.y + (band.h - pillH0) * 0.5f -
-                                (pillH - pillH0) * 0.5f;
-            renderer.drawGlass(ui::Rect{pillX, pillY, pillW, pillH, pillH * 0.5f,
-                                        ui::Color::white(0)},
-                               kHeroPillBlur,
-                               ui::Color::white(0.18f + 0.07f * rf));
-            text.draw(renderer, kResume, pillX + (pillW - pillTextW) * 0.5f,
-                      pillY + 6.0f * rs + text.ascent(ui::TextStyle::Callout, sc),
-                      ui::TextStyle::Callout, ui::Color::white(0.75f + 0.25f * rf), sc);
-
-            // --- The top bar, drawn OVER the hero -------------------------
-            //
-            // A scrim first, because this is text on artwork and some covers
-            // are bright at the top. It is the cheapest way to keep the
-            // destinations legible without dimming the whole hero — and it
-            // is the part most likely to need tuning on a television, where
-            // contrast and overscan both bite hardest at the top edge.
-            const float barH = 64.0f;
-            renderer.draw(ui::Rect{heroCardRect.x, heroCardRect.y, heroCardRect.w, barH,
-                                   kHeroRadius, ui::Color::black(0.45f)});
-
+        // ---- The top bar, which is its own strip ----------------------------
+        //
+        // MMagTech, 2026-09-21: *"the top bar with library settings and search
+        // should not be on the hero and be its own separate thing at the top."*
+        //
+        // It used to be drawn over the hero's top edge on a black scrim, and
+        // the scrim was the tell: a strip of black laid across a piece of
+        // artwork to make text readable is a header bar that has been put
+        // somewhere it does not belong. It has its own room now, at the safe
+        // inset, and NO SURFACE UNDER IT — which is the one thing worth taking
+        // from how Valve handle chrome. The destinations sit on the backdrop
+        // like the shelf headings do, and the backdrop is already blurred and
+        // scrimmed for exactly that reason.
+        //
+        // IT DRAWS ON EVERY BROWSING SCREEN, not only on Home — 2026-09-21.
+        // MMagTech: *"when you switch from home to library the bar text at the
+        // top should be the same."* It is chrome, and chrome that appears and
+        // disappears as you move between destinations is not chrome, it is
+        // decoration on one screen. Keeping it fixed also does half the work of
+        // making the move to the Library read as smooth: the frame stays still
+        // and only what is inside it changes.
+        //
+        // NOT ON THE LAUNCH SCREEN. docs/PROJECT.md is explicit that game
+        // detail "is a full-screen cover, not a push — it replaces the screen
+        // entirely, with the artwork as its own backdrop". A bar across the top
+        // of it would make it a page, which is the thing it is deliberately not.
+        //
+        // A console whose recent history holds nothing this machine can play
+        // once drew no hero, and the bar vanished with it — which left Library
+        // unreachable on the one screen that is meant to reach everything.
+        if (!playing && here() != Screen::Detail) {
+            // SELECTION IS NOT FOCUS, and the design system has had both since
+            // the switcher pills: a SELECTED destination is where you are, a
+            // FOCUSED one is what you would open. Standing in the Library, the
+            // bar says Library without pretending the cursor is up there.
+            const int selected = (here() == Screen::Library || here() == Screen::Grid)
+                                     ? BarLibrary
+                                     : (here() == Screen::Search ? BarSearch : -1);
+            const float barX = kContentInset;
+            const float barW = ui::kCanvasWidth - kContentInset * 2.0f;
             const float barBaseline =
-                heroCardRect.y + (barH - text.lineHeight(ui::TextStyle::Callout, sc)) * 0.5f +
+                barTop + (barHeight - text.lineHeight(ui::TextStyle::Callout, sc)) * 0.5f +
                 text.ascent(ui::TextStyle::Callout, sc);
-            float bx = heroCardRect.x + 24.0f;
+            float bx = barX;
             for (int i = 0; i < BarCount; ++i) {
-                const bool on = (focusRow == RowBar && focusSlot == i);
+                const bool on = barFocused && barSlot == i;
+                const bool sel = (i == selected);
                 const float w = text.measure(kBarLabels[i], ui::TextStyle::Callout, sc);
-                if (on) {
-                    // Treatment 2, the text-control one, the same as Resume:
-                    // a tinted pill rather than a scale, because a
-                    // destination growing would shove its neighbours along.
-                    renderer.draw(ui::Rect{bx - 14.0f, heroCardRect.y + 10.0f,
-                                           w + 28.0f, barH - 20.0f,
-                                           (barH - 20.0f) * 0.5f,
-                                           ui::Color::white(kFocusedTint)});
+                // SELECTED AND FOCUSED ARE BOTH A CAPSULE, at the design
+                // system's two tints. A cyan underline under the selected one
+                // was tried on 2026-09-21 and withdrawn the same minute —
+                // MMagTech, looking at it: *"nevermind drop that looks bad."*
+                //
+                // The objection it was answering is still open and written down
+                // here rather than lost: 0.35 against 0.25 is a difference you
+                // can measure and can barely see from a sofa, so which
+                // destination you are standing in is weakly said. Whatever
+                // answers it next, it is not a second colour on the bar.
+                if (on || sel) {
+                    // Treatment 2, the text-control one, the same as Resume: a
+                    // tinted pill rather than a scale, because a destination
+                    // growing would shove its neighbours along.
+                    renderer.draw(ui::Rect{bx - 14.0f, barTop + 8.0f,
+                                           w + 28.0f, barHeight - 16.0f,
+                                           (barHeight - 16.0f) * 0.5f,
+                                           ui::Color::white(on ? kFocusedTint
+                                                               : kSelectedTint)});
                 }
                 text.draw(renderer, kBarLabels[i], bx, barBaseline, ui::TextStyle::Callout,
-                          ui::Color::white(on ? 1.0f : 0.65f), sc);
+                          ui::Color::white(on || sel ? 1.0f : 0.65f), sc);
                 bx += w + 44.0f;
+            }
+
+            // A DOWNLOAD IN FLIGHT, IN THE CORNER. For the person who started
+            // one and walked away: without it a background fetch of a 1.78 GB
+            // arcade set is completely invisible the moment you leave the
+            // screen that started it, which is exactly when you want to know.
+            //
+            // It is a readout and not a control — nothing is reached by
+            // pointing at it — so it is small, quiet, and says only the two
+            // things worth knowing: that something is coming, and how far.
+            float rightEdge = barX + barW;
+            if (launchJob.busy() && launchJob.busyFor >= kProgressDelay) {
+                const int64_t got = launchJob.got.load();
+                const int64_t total = launchJob.total.load();
+                char pct[64];
+                if (launchJob.stage.load() == LaunchJob::Stage::Unpacking)
+                    std::snprintf(pct, sizeof pct, "Unpacking\xE2\x80\xA6");
+                else if (total > 0)
+                    std::snprintf(pct, sizeof pct, "%.0f%%",
+                                  100.0 * static_cast<double>(got) /
+                                      static_cast<double>(total));
+                else
+                    std::snprintf(pct, sizeof pct, "%.0f MB",
+                                  static_cast<double>(got) / 1e6);
+                const float pw = text.measure(pct, ui::TextStyle::Callout, sc);
+                const float trackW = 140.0f;
+                const float trackY = barTop + barHeight * 0.5f - 3.0f;
+                float px = rightEdge - pw;
+                text.draw(renderer, pct, px, barBaseline, ui::TextStyle::Callout,
+                          ui::Color::white(0.75f), sc);
+                px -= 14.0f + trackW;
+                renderer.draw(ui::Rect{px, trackY, trackW, 6.0f, 3.0f,
+                                       ui::Color::white(0.16f)});
+                if (total > 0) {
+                    const float frac = std::clamp(
+                        static_cast<float>(got) / static_cast<float>(total), 0.0f, 1.0f);
+                    renderer.draw(ui::Rect{px, trackY, trackW * frac, 6.0f, 3.0f,
+                                           ui::palette::kScreenCyan});
+                }
+                rightEdge = px - 32.0f;
             }
 
             // The account, at the far right — the corner the reference
             // implementation reserves for it. `TVAccountChip`: "the signed-in
-            // RomM username beside a small circular avatar, in Home's
-            // top-right corner". Name and avatar, as MMagTech asked for.
+            // RomM username beside a small circular avatar, in Home's top-right
+            // corner". Name and avatar, as MMagTech asked for.
             //
-            // A lettered disc stands in until the real avatar is fetched,
-            // which is Cabinet's fallback too — it uses a person glyph.
-            // Account switching is its own topic and nothing here is
-            // focusable yet.
+            // A lettered disc stands in until the real avatar is fetched, which
+            // is Cabinet's fallback too — it uses a person glyph. Account
+            // switching is its own topic and nothing here is focusable yet.
             const storage::User me = storage::currentUser();
             const std::string who = me.valid() ? me.name : std::string("Not signed in");
-            const float discD = barH - 26.0f;
-            const float discX = heroCardRect.x + heroCardRect.w - 24.0f - discD;
+            const float discD = barHeight - 26.0f;
+            const float discX = rightEdge - discD;
+            const float discY = barTop + (barHeight - discD) * 0.5f;
             const float nameW = text.measure(who, ui::TextStyle::Callout, sc);
-            renderer.draw(ui::Rect{discX, heroCardRect.y + 13.0f, discD, discD,
-                                   discD * 0.5f, ui::Color::white(0.22f)});
-            if (!who.empty()) {
+            // THE PERSON'S OWN PICTURE, when RomM has one — new 2026-09-21.
+            // MMagTech: *"i also noticed my user login isnt showing its image
+            // from romm."* It never did: the comment below promised a lettered
+            // disc "until the real avatar is fetched" and nothing ever fetched
+            // one. It comes from `/api/users/<id>/avatar`, through the same
+            // cache and the same authenticated client as every cover.
+            //
+            // The disc is drawn either way, as the ground under a picture with
+            // transparency and as the fallback when there is none.
+            renderer.draw(ui::Rect{discX, discY, discD, discD, discD * 0.5f,
+                                   ui::Color::white(0.22f)});
+            const ui::Image* face = nullptr;
+            if (!me.avatar.empty()) {
+                const ui::Image& img = images.get(me.avatar);
+                if (img.ready) face = &img;
+            }
+            if (face) {
+                // FILLED AND ROUND. A profile picture is not always square —
+                // the one on the live server is 1200x1200 but nothing promises
+                // that — and a contained fit inside a circle leaves bars that
+                // the circle then slices into crescents.
+                ui::drawImage(renderer, *face, discX, discY, discD, discD,
+                              ui::Fit::Fill, face->fade, discD * 0.5f);
+            } else if (!who.empty()) {
                 const std::string initial(1, static_cast<char>(std::toupper(
                     static_cast<unsigned char>(who[0]))));
                 const float iw = text.measure(initial, ui::TextStyle::Callout, sc);
                 text.draw(renderer, initial, discX + (discD - iw) * 0.5f,
-                          heroCardRect.y + 13.0f +
-                              (discD - text.lineHeight(ui::TextStyle::Callout, sc)) * 0.5f +
+                          discY + (discD - text.lineHeight(ui::TextStyle::Callout, sc)) * 0.5f +
                               text.ascent(ui::TextStyle::Callout, sc),
                           ui::TextStyle::Callout, ui::Color::white(0.90f), sc);
             }
             text.draw(renderer, who, discX - 12.0f - nameW, barBaseline,
                       ui::TextStyle::Callout, ui::Color::white(0.65f), sc);
         }
+
         keyboard.draw(renderer, text, renderer.scale());
         if (safeGuides) renderer.drawSafeAreaGuides();
 

@@ -1,5 +1,7 @@
 #include "screens.h"
 
+#include "sound.h"
+
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -73,13 +75,42 @@ void applyArtworkFocus(ui::Rect& rect, float f, bool rim) {
 // A cover drawn into a box: the coloured panel that shows while the art decodes
 // or if there is none, the art over it, and the rim on top — the rim is the
 // focus indicator and nothing may sit above it.
+// The kept mark, top-right of a cover. See design::kKeptMark*.
+//
+// TOP-RIGHT AND NOT BOTTOM-RIGHT: box art puts its title at the top and its
+// publisher logos and rating badges along the bottom, so the bottom corners are
+// where a mark is most likely to land on something that matters. The top right
+// is nearly always sky, or a border, or nothing.
+void drawKeptMark(Ctx& c, const Card& card, float x, float y, float w, float radius) {
+    if (!card.kept) return;
+    const float d = design::kKeptMarkSize;
+    const float mx = x + w - design::kKeptMarkInset - d;
+    const float my = y + design::kKeptMarkInset;
+    // The ring first and wider, so the dot reads against pale artwork too.
+    const float r = design::kKeptMarkRing;
+    c.r.draw(ui::Rect{mx - r, my - r, d + r * 2.0f, d + r * 2.0f,
+                      (d + r * 2.0f) * 0.5f, ui::Color::black(0.55f)});
+    c.r.draw(ui::Rect{mx, my, d, d, d * 0.5f, ui::palette::kScreenCyan});
+}
+
 void drawCover(Ctx& c, const Card& card, float x, float y, float w, float h,
-               float radius, float f, bool rim) {
+               float radius, float f, bool rim, bool large = false) {
     ui::Rect panel{x, y, w, h, radius, card.art};
     applyArtworkFocus(panel, f, rim);
     c.r.draw(panel);
-    if (card.cover.empty()) return;
-    ui::drawImage(c.r, c.images.get(card.cover), x, y, w, h, ui::Fit::Fill, 1.0f, radius);
+    // `large` asks for the 810x1080 original instead of the 162x216 thumbnail,
+    // and only the launch screen does: it draws a 340x460 cover, which is 680
+    // real pixels wide on a 4K panel. A shelf or a grid cover is small enough
+    // that the thumbnail holds up and cheap enough that dozens stay resident.
+    const std::string& key =
+        (large && !card.coverLarge.empty()) ? card.coverLarge : card.cover;
+    if (key.empty()) return;
+    ui::drawImage(c.r, c.images.get(key), x, y, w, h, ui::Fit::Fill, 1.0f, radius);
+    // Unfocused artwork sits back. See design::kRestArtDim.
+    if (f < 1.0f)
+        c.r.draw(ui::Rect{x, y, w, h, radius,
+                          ui::Color::black(design::kRestArtDim * (1.0f - f))});
+    drawKeptMark(c, card, x, y, w, radius);
     if (f > 0.0f && rim) {
         ui::Rect edge{x, y, w, h, radius, ui::Color::white(0)};
         edge.border = f * design::kFocusRimWidth;
@@ -100,24 +131,48 @@ float pillHeight(ui::TextRenderer& text, float sc) {
     return text.lineHeight(ui::TextStyle::Title3, sc) + design::kPillPadY * 2.0f;
 }
 
+// THE SWITCHER IS TEXT, AND THE CAPSULE ONLY APPEARS UNDER FOCUS — 2026-09-21.
+//
+// It used to be a filled capsule at rest, which made the Library's first row a
+// pair of controls where Home's first row is a pair of headings. MMagTech:
+// *"the library and collection text dont seem to match home now either."*
+// Home's "Recent" and "Favorites" are Title 3 on the backdrop with nothing
+// behind them; these are the same words doing the same job and they are Title 3
+// on the backdrop now too.
+//
+// It also settles the margin. A capsule cannot be aligned two ways at once —
+// box-aligned puts its label 14 points inside everything else on the screen,
+// text-aligned hangs the capsule 14 points outside the tiles below it — and
+// text with no box behind it simply starts where the margin is, the way the
+// heading on Home does.
+//
+// SELECTION IS STILL NOT FOCUS AND BOTH ARE STILL VISIBLE AT ONCE, which is the
+// rule this has to keep: the SELECTED tab is full white and the other is dimmed
+// to 45%, so which tab you are looking at survives focus walking away from it;
+// FOCUS is the capsule, which appears only under the thing the cursor is on.
+// The two signals are now different in kind rather than different in strength,
+// which reads better from a sofa than two tints of the same white did.
 void drawPill(Ctx& c, const std::string& label, float x, float y, bool selected,
               float f) {
     const float w0 = pillWidth(c.text, label, c.sc);
     const float h0 = pillHeight(c.text, c.sc);
     const float s = 1.0f + f * (design::kPillFocusScale - 1.0f);
     const float w = w0 * s, h = h0 * s;
-    const float px = x - (w - w0) * 0.5f;
+    // `x` is the TEXT's left edge; the capsule is drawn a padding-width outside
+    // it, so it grows around the label rather than pushing it along.
+    const float px = x - design::kPillPadX - (w - w0) * 0.5f;
     const float py = y - (h - h0) * 0.5f;
 
-    const float tint = (selected ? design::kSelectedTint : 0.0f) +
-                       f * design::kFocusedTint;
-    c.r.drawGlass(ui::Rect{px, py, w, h, h * 0.5f, ui::Color::white(0)},
-                  design::kHeroPillBlur, ui::Color::white(tint));
-    const float tw = c.text.measure(label, ui::TextStyle::Title3, c.sc);
-    c.text.draw(c.r, label, px + (w - tw) * 0.5f,
+    if (f > 0.001f)
+        c.r.drawGlass(ui::Rect{px, py, w, h, h * 0.5f, ui::Color::white(0)},
+                      design::kThinMaterialBlur,
+                      ui::Color::white(f * design::kFocusedTint));
+    // The label does not move when the capsule grows: a focus scale that shoved
+    // the words along would make the pair jitter as focus crossed them.
+    c.text.draw(c.r, label, x,
                 py + design::kPillPadY * s + c.text.ascent(ui::TextStyle::Title3, c.sc),
                 ui::TextStyle::Title3,
-                ui::Color::white(selected || f > 0.5f ? 1.0f : 0.60f), c.sc);
+                ui::Color::white(selected ? 1.0f : 0.45f), c.sc);
 }
 
 }  // namespace
@@ -132,11 +187,28 @@ void LibraryScreen::build(std::vector<Tile> platforms, std::vector<Tile> collect
 }
 
 void LibraryScreen::enter() {
-    if (entered_) return;    // and ONLY the first time
+    // ARRIVING IS ANIMATED EVERY TIME, and it is outside the guard below on
+    // purpose: coming back from a platform's grid is an arrival too, and a
+    // screen that faded in the first time and cut in afterwards would be worse
+    // than one that always cut. 280ms ease-out is the design system's own
+    // transition duration.
+    appear_.from = appear_.to = 0.0f;
+    appear_.elapsed = 0.0f;
+    appear_.retarget(1.0f, 0.280f);
+
+    if (entered_) return;    // focus lands here ONLY the first time
     entered_ = true;
     row_ = 0;
     slot_ = 0;
     pillFocus_[0].settle(1.0f);
+}
+
+std::string LibraryScreen::focusedCover() const {
+    const auto& tiles = visible();
+    if (tiles.empty()) return {};
+    const int i = (row_ == 0) ? 0 : slot_;
+    if (i < 0 || i >= static_cast<int>(tiles.size())) return {};
+    return tiles[i].cover;
 }
 
 void LibraryScreen::focusTile(int index) {
@@ -173,6 +245,7 @@ int LibraryScreen::tileRows() const {
 }
 
 void LibraryScreen::tick(float dt) {
+    appear_.tick(dt);
     for (auto& p : pillFocus_) p.tick(dt);
     tabChange_.tick(dt);
     scroll_.tick(dt);
@@ -192,6 +265,10 @@ void LibraryScreen::moveFocus(int dx, int dy) {
     auto arrive = [&]() {
         if (row_ == 0) pillFocus_[slot_].retarget(1.0f, design::kFocusDuration);
         else if (slot_ < count) tiles[slot_].focus.retarget(1.0f, design::kFocusDuration);
+        // THE SCREENS PLAY THEIR OWN MOVE CUE. The app cannot tell a focus move
+        // from a press that did nothing — both come back as Action::None — so
+        // the only place that knows a move happened is the place that made it.
+        sound::play(sound::Cue::Move);
     };
 
     if (row_ == 0) {
@@ -246,7 +323,11 @@ Result LibraryScreen::key(Nav n) {
     switch (n) {
         case Nav::Left:  moveFocus(-1, 0); break;
         case Nav::Right: moveFocus(+1, 0); break;
-        case Nav::Up:    moveFocus(0, -1); break;
+        // Up out of the switcher is the bar, which is drawn above this screen
+        // and belongs to the app rather than to it.
+        case Nav::Up:    if (row_ == 0) return {Action::FocusBar, 0};
+                         moveFocus(0, -1);
+                         break;
         case Nav::Down:  moveFocus(0, +1); break;
         case Nav::Back:  return {Action::Back, 0};
         case Nav::Activate:
@@ -276,6 +357,14 @@ Result LibraryScreen::key(Nav n) {
 }
 
 void LibraryScreen::draw(Ctx& c) {
+    // Everything this screen draws is multiplied by the arrival. The backdrop
+    // underneath is NOT — it belongs to the app and stays put, which is what
+    // the content is fading in against.
+    c.r.setContentAlpha(appear_.value());
+    // Everything below scrolls, so it is clipped to the window under the bar.
+    // See design::kScrollClipTop.
+    c.r.setScissor(0, design::kScrollClipTop, ui::kCanvasWidth,
+                   ui::kCanvasHeight - design::kScrollClipTop);
     const auto& tiles = visible();
     const int cols = columns();
     const float tw = tileWidth();
@@ -287,7 +376,7 @@ void LibraryScreen::draw(Ctx& c) {
     // content: pinning the last row to the top leaves half a screen of nothing
     // under it, which reads as the layout having broken.
     const float contentH = gridTop + static_cast<float>(tileRows()) * rowPitch +
-                           design::kSwitcherTop;
+                           design::kScreenBottomPad;
     const float maxScroll = std::max(0.0f, contentH - ui::kCanvasHeight);
     float want = 0.0f;
     if (row_ > 0) {
@@ -295,8 +384,8 @@ void LibraryScreen::draw(Ctx& c) {
         const float rowTop = gridTop + static_cast<float>(r) * rowPitch;
         const float rowBottom = rowTop + design::kTileHeight;
         const float current = scroll_.to;
-        if (rowBottom - current > ui::kCanvasHeight - design::kSwitcherTop)
-            want = rowBottom - (ui::kCanvasHeight - design::kSwitcherTop);
+        if (rowBottom - current > ui::kCanvasHeight - design::kScreenBottomPad)
+            want = rowBottom - (ui::kCanvasHeight - design::kScreenBottomPad);
         else if (rowTop - current < gridTop)
             want = std::max(0.0f, rowTop - gridTop);
         else
@@ -418,6 +507,9 @@ void LibraryScreen::draw(Ctx& c) {
 }
 
 void LibraryScreen::drawGlass(Ctx& c) {
+    c.r.setContentAlpha(appear_.value());
+    c.r.setScissor(0, design::kScrollClipTop, ui::kCanvasWidth,
+                   ui::kCanvasHeight - design::kScrollClipTop);
     // The switcher: Platforms and Collections as capsule pills. It is the only
     // heading this screen gets — the navigation bar already says "Library", and
     // a screen title that repeats the tab is chrome the reference
@@ -430,6 +522,11 @@ void LibraryScreen::drawGlass(Ctx& c) {
     static const char* kLabels[2] = {"Platforms", "Collections"};
     const float y = design::kSwitcherTop - scroll_.value();
     if (y + pillHeight(c.text, c.sc) < 0.0f) return;
+    // OPTICALLY ALIGNED, not box-aligned: the capsule starts a padding-width
+    // LEFT of the margin so that "Platforms" begins exactly where the bar's
+    // "Library" and the tiles below do. See kContentInset.
+    // The TEXT starts on the margin, the same as Home's shelf headings and the
+    // bar above. drawPill puts its focus capsule outside that.
     float x = design::kLibraryInset;
     for (int i = 0; i < 2; ++i) {
         const float f = (row_ == 0 && slot_ == i) ? pillFocus_[i].value() : 0.0f;
@@ -442,10 +539,39 @@ void LibraryScreen::drawGlass(Ctx& c) {
 // A grid of games
 // ---------------------------------------------------------------------------
 
-void GridScreen::open(std::string title, std::vector<int> cards) {
+void GridScreen::open(std::string title, std::vector<int> cards,
+                      const std::vector<design::Card>& all) {
     title_ = std::move(title);
     cards_ = std::move(cards);
     slot_ = 0;
+
+    // The letter index, built once. The list arrives sorted by name — that is
+    // the Library's doing, not this screen's — so the distinct initials come
+    // out in order by walking it.
+    //
+    // ANYTHING THAT IS NOT A LETTER IS '#', which is one bucket rather than
+    // several: a library holds "1080 Snowboarding", "3D Lemmings" and
+    // "@Home", and three buckets of one game each at the top of the index
+    // would be three targets nobody wants to land on separately.
+    letters_.clear();
+    letterFirst_.clear();
+    for (size_t i = 0; i < cards_.size(); ++i) {
+        const int idx = cards_[i];
+        if (idx < 0 || idx >= static_cast<int>(all.size())) continue;
+        const std::string& n = all[static_cast<size_t>(idx)].title;
+        char c = n.empty() ? '#' : static_cast<char>(std::toupper(
+            static_cast<unsigned char>(n[0])));
+        if (c < 'A' || c > 'Z') c = '#';
+        if (letters_.empty() || letters_.back() != c) {
+            letters_.push_back(c);
+            letterFirst_.push_back(static_cast<int>(i));
+        }
+    }
+    index_.from = index_.to = 0.0f;
+    index_.elapsed = index_.duration;
+    appear_.from = appear_.to = 0.0f;
+    appear_.elapsed = 0.0f;
+    appear_.retarget(1.0f, 0.280f);
     scroll_.retarget(0.0f, 0.0f);
     scroll_.elapsed = scroll_.duration;
 }
@@ -464,8 +590,49 @@ float GridScreen::coverWidth() const {
            static_cast<float>(n);
 }
 
+int GridScreen::letterOf(int slot) const {
+    int at = -1;
+    for (size_t i = 0; i < letterFirst_.size(); ++i)
+        if (letterFirst_[i] <= slot) at = static_cast<int>(i);
+    return at;
+}
+
+void GridScreen::jumpLetter(int dir) {
+    if (letters_.empty()) { sound::play(sound::Cue::Edge); return; }
+    const int at = letterOf(slot_);
+    // GOING BACK FROM THE MIDDLE OF A LETTER GOES TO ITS OWN START FIRST, the
+    // way a track-skip button does: pressing back inside the M's should reach
+    // the first M, not jump past every one of them into the L's.
+    int want = at;
+    if (dir > 0) {
+        want = at + 1;
+    } else {
+        if (at >= 0 && letterFirst_[static_cast<size_t>(at)] < slot_) want = at;
+        else want = at - 1;
+    }
+    if (want < 0 || want >= static_cast<int>(letters_.size())) {
+        sound::play(sound::Cue::Edge);
+        // Still show the index: hitting the end of the alphabet is an answer,
+        // and the index is what makes it a legible one.
+        index_.retarget(1.0f, 0.150f);
+        indexHold_ = 1.600f;
+        return;
+    }
+    slot_ = letterFirst_[static_cast<size_t>(want)];
+    sound::play(sound::Cue::Move);
+    index_.retarget(1.0f, 0.150f);
+    indexHold_ = 1.600f;
+}
+
 void GridScreen::tick(float dt, Ctx& c) {
+    appear_.tick(dt);
     scroll_.tick(dt);
+    index_.tick(dt);
+    // It stays up while it is being used and goes when it is not.
+    if (indexHold_ > 0.0f) {
+        indexHold_ -= dt;
+        if (indexHold_ <= 0.0f) index_.retarget(0.0f, 0.600f);
+    }
     if (!c.cards) return;
     for (int i : cards_) {
         if (i >= 0 && i < static_cast<int>(c.cards->size())) {
@@ -482,6 +649,9 @@ Result GridScreen::key(Nav n) {
     if (n == Nav::Activate) return {Action::OpenGame, cards_[slot_]};
 
     const int cols = columns();
+    // Up out of the top row of covers is the bar, the same as it is on every
+    // other screen the bar is drawn over.
+    if (n == Nav::Up && slot_ < cols) return {Action::FocusBar, 0};
     int next = slot_;
     if (n == Nav::Left || n == Nav::Right) {
         const int d = (n == Nav::Right) ? 1 : -1;
@@ -495,13 +665,18 @@ Result GridScreen::key(Nav n) {
         // have should land on its last entry rather than refusing to move.
         if (d > 0 && next >= count && slot_ / cols < (count - 1) / cols)
             next = count - 1;
-        if (next < 0 || next >= count) return {};
+        if (next < 0 || next >= count) { sound::play(sound::Cue::Edge); return {}; }
     }
+    if (next == slot_) sound::play(sound::Cue::Edge);
+    else sound::play(sound::Cue::Move);
     slot_ = next;
     return {};
 }
 
 void GridScreen::draw(Ctx& c) {
+    c.r.setContentAlpha(appear_.value());
+    c.r.setScissor(0, design::kScrollClipTop, ui::kCanvasWidth,
+                   ui::kCanvasHeight - design::kScrollClipTop);
     if (!c.cards) return;
     auto& cards = *c.cards;
     const int cols = columns();
@@ -532,8 +707,8 @@ void GridScreen::draw(Ctx& c) {
     float want = scroll_.to;
     if (rowTop - want < gridTop) want = std::max(0.0f, rowTop - gridTop);
     const float rowBottom = rowTop + ch + design::kGridCaptionGap + captionH + lift;
-    if (rowBottom - want > ui::kCanvasHeight - design::kSwitcherTop)
-        want = rowBottom - (ui::kCanvasHeight - design::kSwitcherTop);
+    if (rowBottom - want > ui::kCanvasHeight - design::kScreenBottomPad)
+        want = rowBottom - (ui::kCanvasHeight - design::kScreenBottomPad);
     want = std::clamp(want, 0.0f, maxScroll);
     if (std::fabs(want - scroll_.to) > 0.5f)
         scroll_.retarget(want, design::kFocusDuration);
@@ -568,45 +743,250 @@ void GridScreen::draw(Ctx& c) {
 
             drawCover(c, card, x, y, w, h, design::kGridCoverRadius * s, f, /*rim=*/true);
 
-            // Two lines with the space reserved either way, and riding down
-            // with the lift so the grown card cannot bury them.
-            const std::vector<std::string> lines =
-                wrapTwoLines(c.text, card.title, ui::TextStyle::Callout, c.sc, cw);
-            float baseline = by + ch + design::kGridCaptionGap +
-                             c.text.ascent(ui::TextStyle::Callout, c.sc) +
-                             design::captionSlide(f, ch);
-            for (const std::string& line : lines) {
-                c.text.draw(c.r, line, bx, baseline, ui::TextStyle::Callout,
-                            ui::Color::white(isFocused ? 1.0f : 0.60f), c.sc);
-                baseline += c.text.lineHeight(ui::TextStyle::Callout, c.sc);
+            // NO CAPTION HERE. The focused card's title is drawn once, beside
+            // the screen's heading — see drawGlass and design::kGridCaptionLines
+            // for what that bought and what it cost. Kept behind the constant
+            // rather than deleted, so putting it back is one number.
+            if (design::kGridCaptionLines > 0) {
+                const std::vector<std::string> lines =
+                    wrapTwoLines(c.text, card.title, ui::TextStyle::Callout, c.sc, cw);
+                float baseline = by + ch + design::kGridCaptionGap +
+                                 c.text.ascent(ui::TextStyle::Callout, c.sc) +
+                                 design::captionSlide(f, ch);
+                for (const std::string& line : lines) {
+                    c.text.draw(c.r, line, bx, baseline, ui::TextStyle::Callout,
+                                ui::Color::white(isFocused ? 1.0f : 0.60f), c.sc);
+                    baseline += c.text.lineHeight(ui::TextStyle::Callout, c.sc);
+                }
             }
         }
     }
 }
 
 void GridScreen::drawGlass(Ctx& c) {
-    // A STATIC GLASS CAPSULE, NOT A BUTTON. It is the screen's title carried as
-    // ordinary content at the top of its own scroll view; on tvOS the system
-    // version of this painted straight over the artwork.
+    c.r.setContentAlpha(appear_.value());
+    c.r.setScissor(0, design::kScrollClipTop, ui::kCanvasWidth,
+                   ui::kCanvasHeight - design::kScrollClipTop);
+    // THE TITLE IS TEXT, NOT A CHIP — changed 2026-09-21, and this is a
+    // DEPARTURE FROM docs/PROJECT.md, which describes it as "a static glass
+    // capsule, not a button". That description was right when it was written:
+    // on tvOS this title painted straight over scrolling artwork and the glass
+    // was what kept it readable.
     //
-    // 40 bold is the one hardcoded size in the whole reference UI, and it sits
-    // between Title 2 and Large Title deliberately: a grid title should not
-    // shout as loudly as a game's own name does.
-    const float tw = c.text.measure(title_, ui::TextStyle::ScreenTitle, c.sc);
-    const float w = tw + design::kScreenChipPadX * 2.0f;
+    // Two things changed underneath it. The screen now has a scrimmed backdrop
+    // of its own, so a title on it is legible without a surface; and the
+    // Library's switcher lost its capsule for consistency with Home's shelf
+    // headings, which left this the only capsule in the product hanging off the
+    // left margin to keep its own label aligned. A heading is a heading on all
+    // three screens now. PROJECT.md's design system section needs this.
+    //
+    // 40 bold stays. It is the one hardcoded size in the whole reference UI and
+    // it sits between Title 2 and Large Title deliberately: a grid title should
+    // not shout as loudly as a game's own name does.
     const float h = c.text.lineHeight(ui::TextStyle::ScreenTitle, c.sc) +
                     design::kScreenChipPadY * 2.0f;
     // Scrolls away with the covers, for the same reason the Library's switcher
     // does: it is content at the top of a scroll view, not chrome over it.
     const float y = design::kSwitcherTop - scroll_.value();
     if (y + h < 0.0f) return;
-    c.r.drawGlass(ui::Rect{design::kLibraryInset, y, w, h, h * 0.5f,
-                           ui::Color::white(0)},
-                  design::kHeroPillBlur, ui::Color::white(0.18f));
-    c.text.draw(c.r, title_, design::kLibraryInset + design::kScreenChipPadX,
-                y + design::kScreenChipPadY +
-                    c.text.ascent(ui::TextStyle::ScreenTitle, c.sc),
+    const float baseline = y + design::kScreenChipPadY +
+                           c.text.ascent(ui::TextStyle::ScreenTitle, c.sc);
+    c.text.draw(c.r, title_, design::kLibraryInset, baseline,
                 ui::TextStyle::ScreenTitle, ui::Color::white(1.0f), c.sc);
+
+    // THE FOCUSED GAME'S NAME, BESIDE THE HEADING, which is where Home puts the
+    // focused card's title and for the same reason: it costs no vertical space
+    // and it is the only one of forty names anybody is reading. With it, the
+    // count — the Library's tile knew how many games a platform holds and this
+    // screen used to forget it on the way in.
+    if (!c.cards || cards_.empty()) return;
+    float x = design::kLibraryInset +
+              c.text.measure(title_, ui::TextStyle::ScreenTitle, c.sc) + 28.0f;
+    char count[48];
+    std::snprintf(count, sizeof count, "%zu game%s", cards_.size(),
+                  cards_.size() == 1 ? "" : "s");
+    c.text.draw(c.r, count, x, baseline, ui::TextStyle::Callout,
+                ui::Color::white(0.45f), c.sc);
+    x += c.text.measure(count, ui::TextStyle::Callout, c.sc) + 24.0f;
+
+    const int idx = focusedCard();
+    if (idx >= 0 && idx < static_cast<int>(c.cards->size())) {
+        const std::string& name = (*c.cards)[idx].title;
+        const float room = ui::kCanvasWidth - design::kLibraryInset - x -
+                           design::kLetterIndexWidth;
+        c.text.draw(c.r, c.text.truncate(name, ui::TextStyle::Callout, c.sc, room), x,
+                    baseline, ui::TextStyle::Callout, ui::Color::white(0.95f), c.sc);
+    }
+
+    // --- The letter index, down the right ---------------------------------
+    //
+    // OUTSIDE THE SCROLL WINDOW, because it is not part of the list: it is a
+    // readout of where you are in it. It is also the one thing on this screen
+    // that may sit beside the bar rather than under it.
+    const float a = index_.value();
+    if (a <= 0.01f || letters_.empty()) return;
+    c.r.clearScissor();
+    const int here = letterOf(slot_);
+    const float lineH = c.text.lineHeight(ui::TextStyle::Callout, c.sc);
+    const float colH = lineH * static_cast<float>(letters_.size());
+    const float top = (ui::kCanvasHeight - colH) * 0.5f;
+    const float cx = ui::kCanvasWidth - design::kLibraryInset -
+                     design::kLetterIndexWidth * 0.5f;
+    // A soft plate behind it, so letters stay legible over pale artwork.
+    c.r.draw(ui::Rect{cx - design::kLetterIndexWidth * 0.5f, top - 20.0f,
+                      design::kLetterIndexWidth, colH + 40.0f,
+                      design::kLetterIndexWidth * 0.5f,
+                      ui::Color::black(0.45f * a)});
+    for (size_t i = 0; i < letters_.size(); ++i) {
+        const bool on = (static_cast<int>(i) == here);
+        const std::string ch(1, letters_[i]);
+        const float lw = c.text.measure(ch, ui::TextStyle::Callout, c.sc);
+        c.text.draw(c.r, ch, cx - lw * 0.5f,
+                    top + lineH * static_cast<float>(i) +
+                        c.text.ascent(ui::TextStyle::Callout, c.sc),
+                    ui::TextStyle::Callout,
+                    ui::Color::white((on ? 1.0f : 0.40f) * a), c.sc);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Search
+// ---------------------------------------------------------------------------
+
+void SearchScreen::open() {
+    query_.clear();
+    results_.clear();
+    slot_ = 0;
+    focused_ = false;
+    scroll_.from = scroll_.to = 0.0f;
+    scroll_.elapsed = scroll_.duration;
+}
+
+void SearchScreen::setQuery(const std::string& q, const std::vector<design::Card>& all) {
+    if (q == query_) return;
+    query_ = q;
+    results_.clear();
+    slot_ = 0;
+    scroll_.retarget(0.0f, design::kFocusDuration);
+    if (query_.empty()) return;
+
+    // Case-insensitive substring, and nothing cleverer on purpose. Fuzzy
+    // matching on a controller sounds helpful and is not: a person types three
+    // letters at a time here, and a matcher that finds "Sonic Adventure" for
+    // "sad" makes the three letters mean something they did not intend.
+    std::string needle = query_;
+    for (char& c : needle) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    for (size_t i = 0; i < all.size(); ++i) {
+        std::string hay = all[i].title;
+        for (char& c : hay) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        if (hay.find(needle) != std::string::npos)
+            results_.push_back(static_cast<int>(i));
+    }
+}
+
+void SearchScreen::tick(float dt, Ctx& c) {
+    scroll_.tick(dt);
+    if (!c.cards) return;
+    for (int i : results_) {
+        if (i >= 0 && i < static_cast<int>(c.cards->size())) {
+            (*c.cards)[i].focus.tick(dt);
+            (*c.cards)[i].press.tick(dt);
+        }
+    }
+}
+
+Result SearchScreen::key(Nav n) {
+    const int count = static_cast<int>(results_.size());
+    if (n == Nav::Back) return {Action::Back, 0};
+    if (count == 0) return {};
+    if (n == Nav::Activate) return {Action::OpenGame, results_[slot_]};
+    // Up out of the results is the bar, the same as every other screen.
+    if (n == Nav::Up) return {Action::FocusBar, 0};
+    // Down goes back to the keyboard, which is the app's to hand focus to.
+    if (n == Nav::Down) return {Action::FocusKeyboard, 0};
+    const int d = (n == Nav::Right) ? 1 : -1;
+    const int next = std::clamp(slot_ + d, 0, count - 1);
+    if (next == slot_) { sound::play(sound::Cue::Edge); return {}; }
+    slot_ = next;
+    sound::play(sound::Cue::Move);
+    return {};
+}
+
+void SearchScreen::draw(Ctx& c) {
+    if (!c.cards) return;
+    const float top = design::kContentTop;
+    const float headingH = c.text.lineHeight(ui::TextStyle::Title3, c.sc) + 12.0f;
+
+    // The covers are sized to the room the keyboard leaves, not to a constant.
+    // The panel's height depends on its layout and whether it is docked, so a
+    // hardcoded cover size would be correct until somebody added a row of keys.
+    const float room = resultsBottom_ - (top + headingH) - design::kShelfBreathing * 2.0f;
+    const float ch = std::clamp(room, 120.0f, 320.0f);
+    const float cw = ch * 0.75f;
+    const float coversTop = top + headingH + design::kShelfBreathing;
+
+    // The heading says what happened, because an empty screen that says nothing
+    // is indistinguishable from one that is broken.
+    char line[96];
+    if (c.text.measure(query_, ui::TextStyle::Title3, c.sc) >= 0 && query_.empty())
+        std::snprintf(line, sizeof line, "Search");
+    else if (results_.empty())
+        std::snprintf(line, sizeof line, "Nothing matches");
+    else
+        std::snprintf(line, sizeof line, "%zu game%s", results_.size(),
+                      results_.size() == 1 ? "" : "s");
+    c.text.draw(c.r, line, design::kContentInset,
+                top + c.text.ascent(ui::TextStyle::Title3, c.sc),
+                ui::TextStyle::Title3, ui::Color::white(1.0f), c.sc);
+
+    // The focused game's name beside it, the way Home's shelf header and the
+    // grid's heading both do it.
+    const int fi = focusedCard();
+    if (focused_ && fi >= 0 && fi < static_cast<int>(c.cards->size())) {
+        const float x = design::kContentInset +
+                        c.text.measure(line, ui::TextStyle::Title3, c.sc) + 24.0f;
+        const float roomW = ui::kCanvasWidth - design::kContentInset - x;
+        c.text.draw(c.r, c.text.truncate((*c.cards)[fi].title, ui::TextStyle::Callout,
+                                         c.sc, roomW),
+                    x, top + c.text.ascent(ui::TextStyle::Title3, c.sc),
+                    ui::TextStyle::Callout, ui::Color::white(0.60f), c.sc);
+    }
+
+    if (results_.empty()) return;
+
+    // One row, scrolling sideways under the focus. A grid would need the height
+    // the keyboard is standing on.
+    const float pitch = cw + design::kShelfSpacing;
+    const float usable = ui::kCanvasWidth - design::kContentInset * 2.0f;
+    const float focusX = static_cast<float>(slot_) * pitch;
+    float want = scroll_.to;
+    if (focusX - want < 0.0f) want = focusX;
+    if (focusX + cw - want > usable) want = focusX + cw - usable;
+    want = std::max(0.0f, want);
+    if (std::fabs(want - scroll_.to) > 0.5f)
+        scroll_.retarget(want, design::kFocusDuration);
+    const float scroll = scroll_.value();
+
+    for (int pass = 0; pass < 2; ++pass) {
+        for (size_t i = 0; i < results_.size(); ++i) {
+            const bool isFocused = focused_ && static_cast<int>(i) == slot_;
+            if ((pass == 0) == isFocused) continue;
+            const int idx = results_[i];
+            if (idx < 0 || idx >= static_cast<int>(c.cards->size())) continue;
+            const float bx = design::kContentInset +
+                             static_cast<float>(i) * pitch - scroll;
+            if (bx + cw < -pitch) continue;
+            if (bx > ui::kCanvasWidth + pitch) break;
+
+            design::Card& card = (*c.cards)[static_cast<size_t>(idx)];
+            card.focus.retarget(isFocused ? 1.0f : 0.0f, design::kFocusDuration);
+            const float f = card.focus.value();
+            const float s = 1.0f + f * (design::kFocusScale - 1.0f);
+            const float w = cw * s, h = ch * s;
+            drawCover(c, card, bx - (w - cw) * 0.5f, coversTop - (h - ch) * 0.5f, w, h,
+                      design::kGridCoverRadius * s, f, /*rim=*/true);
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -676,6 +1056,20 @@ void DetailScreen::draw(Ctx& c) {
     // with the game's cover filled and blurred behind everything and a scrim
     // over it — so the leftovers are the art's own colours rather than a flat
     // panel, and the text still has something to be read against.
+    // THE BACKDROP IS THE THUMBNAIL, AT THE ORIGINAL BLUR, and that is a
+    // decision rather than an oversight — 2026-09-21.
+    //
+    // It was changed to the 810x1080 original, which made it a legible picture
+    // of the game rather than a wash of its colours. Two attempts at it, sharp
+    // and softened, and MMagTech on both: *"no that is not what was there for
+    // the launch screen backdrop before you started."*
+    //
+    // So it keeps the small cover and `kBackdropBlur`'s fixed mip bias. Five
+    // texels across a 162-wide source is exactly the muddy average the rest of
+    // this session has been removing elsewhere — and here it is what the screen
+    // wants, because everything in FRONT of it is the same artwork sharp: the
+    // cover, at the original resolution, and the title. The backdrop's job here
+    // is to be a colour, not a second copy of the picture.
     const ui::Image* art = nullptr;
     if (!game_.cover.empty()) {
         const ui::Image& img = c.images.get(game_.cover);
@@ -711,7 +1105,7 @@ void DetailScreen::draw(Ctx& c) {
         game_.cardIndex < static_cast<int>(c.cards->size())) {
         drawCover(c, (*c.cards)[game_.cardIndex], coverX, coverY,
                   design::kDetailCoverWidth, design::kDetailCoverHeight,
-                  design::kDetailRadius, 0.0f, /*rim=*/false);
+                  design::kDetailRadius, /*f=*/1.0f, /*rim=*/false, /*large=*/true);
     } else {
         c.r.draw(ui::Rect{coverX, coverY, design::kDetailCoverWidth,
                           design::kDetailCoverHeight, design::kDetailRadius, game_.art});
@@ -773,12 +1167,41 @@ void DetailScreen::drawGlass(Ctx& c) {
         const float ry = y - (h - rowH) * 0.5f;
 
         c.r.drawGlass(ui::Rect{x, ry, w, h, design::kRowRadius, ui::Color::white(0)},
-                      design::kHeroBandBlur,
+                      design::kRegularMaterialBlur,
                       ui::Color::white((0.08f + 0.14f * f) * a));
-        c.text.draw(c.r, rows_[i].label, x + design::kRowPadX,
+
+        // THE ROW IS THE PROGRESS BAR. Not a bar drawn inside the row — the
+        // row's own surface fills from the left, so the thing you pressed is
+        // the thing that is loading rather than a widget that appeared on it.
+        const bool busy = progress_.active && progress_.action == rows_[i].action;
+        std::string label = rows_[i].label;
+        if (busy) {
+            if (progress_.total > 0) {
+                const float frac = std::clamp(
+                    static_cast<float>(progress_.got) /
+                        static_cast<float>(progress_.total), 0.0f, 1.0f);
+                // Clipped to the row's own rounded rectangle, so the fill has
+                // the row's corners rather than square ones poking out of them.
+                ui::Rect fill{x, ry, w * frac, h, design::kRowRadius,
+                              ui::Color::white(0.22f * a)};
+                c.r.draw(fill);
+            }
+            char buf[96];
+            const double g = static_cast<double>(progress_.got);
+            const double t = static_cast<double>(progress_.total);
+            if (progress_.unpacking)
+                std::snprintf(buf, sizeof buf, "Unpacking\xE2\x80\xA6");
+            else if (progress_.total > 0)
+                std::snprintf(buf, sizeof buf, "%.0f of %.0f MB", g / 1e6, t / 1e6);
+            else
+                std::snprintf(buf, sizeof buf, "%.0f MB", g / 1e6);
+            label = buf;
+        }
+
+        c.text.draw(c.r, label, x + design::kRowPadX,
                     ry + design::kRowPadY * s + c.text.ascent(ui::TextStyle::Title3, c.sc),
                     ui::TextStyle::Title3,
-                    ui::Color::white((on ? 1.0f : 0.60f) * a), c.sc);
+                    ui::Color::white((on || busy ? 1.0f : 0.60f) * a), c.sc);
         y += rowH + design::kDetailRowGap;
     }
 

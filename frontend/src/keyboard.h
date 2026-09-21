@@ -51,7 +51,33 @@ public:
         // Extra keys worth having for this particular field. A URL wants
         // ".com" and "/"; a Wi-Fi passphrase wants neither.
         std::vector<std::string> shortcuts;
+
+        // A PANEL THAT SHARES THE SCREEN RATHER THAN COVERING IT — new
+        // 2026-09-21, for Search.
+        //
+        // Everything that opened this before was a question with one answer:
+        // an address, a passphrase. Nothing else needed to be visible, so the
+        // panel sat in the middle of a dimmed screen and owned it.
+        //
+        // Search is the opposite. The results are the point and they change on
+        // every key, so the keyboard has to live at the bottom of the screen
+        // with the results above it, and nothing may be dimmed. Its title and
+        // hint go too: the field IS the title when you can see what it is
+        // filtering.
+        bool dockedBottom = false;
     };
+
+    // Whether focus is on the top row of keys, so a caller can decide what UP
+    // means. It means nothing here — this keyboard deliberately does not wrap —
+    // and on Search it means "leave the keyboard and go to the results".
+    bool atTopRow() const { return row_ == 0; }
+
+    // Where the panel's top edge is, in canvas points, from the last time it
+    // was drawn. A docked keyboard shares the screen, so whatever is above it
+    // has to know where "above it" ends — and the panel's height depends on the
+    // layout, the shift state and whether it is docked, so nothing outside can
+    // work it out for itself.
+    float panelTop() const { return panelTop_; }
 
     void open(const Config& config);
     bool isOpen() const { return open_; }
@@ -137,6 +163,7 @@ private:
     bool shifted_ = false;
     bool conceal_ = false;
     int row_ = 0, col_ = 0;
+    float panelTop_ = 0.0f;
     std::vector<std::vector<Key>> lower_, upper_;
 };
 

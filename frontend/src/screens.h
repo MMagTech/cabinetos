@@ -57,6 +57,19 @@ enum class Action {
     Play,              // value is a rom id
     Download,          // value is a rom id — fetch it AND keep it
     RemoveDownload,    // value is a rom id — release the keep AND delete the game
+    // UP OUT OF THE TOP ROW, INTO THE BAR. MMagTech: *"if the library has the
+    // top bar in view shouldnt i be able to up and access it."* Yes — chrome
+    // that is on screen and cannot be reached is worse than chrome that is
+    // hidden, because it looks like the console stopped responding.
+    //
+    // The screen says "focus left me upwards" and the app decides what is up
+    // there, which is the same division every other Action here follows: the
+    // screen knows its own rows and nothing about the product around it.
+    FocusBar,
+    // Down out of the search results, back into the keyboard docked under
+    // them. Only Search sends this, and only the app can act on it: the
+    // keyboard belongs to the app, not to a screen.
+    FocusKeyboard,
 };
 
 struct Result {
@@ -115,6 +128,16 @@ public:
         return tab_ == 0 ? platforms_ : collections_;
     }
 
+    // The cover of whatever focus is on, so the app can keep lighting the room
+    // with it. The backdrop follows focus on Home and it follows focus here for
+    // the same reason and to the same rule — and the continuity is most of what
+    // makes arriving at this screen read as a move rather than a cut.
+    //
+    // On the switcher row it answers the first tile rather than nothing: the
+    // grid below is still what the screen is about, and a backdrop that blanked
+    // whenever focus touched a pill would flicker on the way past.
+    std::string focusedCover() const;
+
 private:
     int columns() const;
     int tileRows() const;
@@ -129,6 +152,7 @@ private:
     int row_ = 0;
     int slot_ = 0;
     int rememberedTileSlot_ = 0;
+    design::Animated appear_;
     design::Animated pillFocus_[2];
     design::Animated tabChange_;
     design::Animated scroll_;
@@ -138,8 +162,38 @@ private:
 
 class GridScreen {
 public:
-    // `title` is drawn as ordinary content in a glass chip, never as chrome.
-    void open(std::string title, std::vector<int> cards);
+    // `title` is drawn as ordinary content at the top of the scroll view,
+    // never as chrome. `all` is the card table the indices point into — the
+    // screen needs the NAMES once, at open, to build its letter index, and
+    // holding a reference to the table would outlive the call.
+    void open(std::string title, std::vector<int> cards,
+              const std::vector<design::Card>& all);
+
+    // FAST NAVIGATION BY LETTER — new 2026-09-21.
+    //
+    // MMagTech: *"when holding down or maybe r2 and l2 it should be fast nav
+    // with the letters showing on the right side of the screen."* A platform
+    // with 141 games is 21 rows, and reaching the S's a row at a time is the
+    // kind of thing that makes a person stop browsing their own library.
+    //
+    // The TRIGGERS rather than a held direction, and both were on the table.
+    // A held d-pad already means "keep moving one at a time" and giving it a
+    // second meaning after some interval makes the first one feel broken while
+    // you wait for it. The triggers mean nothing else anywhere in this product.
+    //
+    // `dir` is -1 or +1. Moves focus to the first game of the previous or next
+    // letter, and shows the index for as long as somebody is using it.
+    void jumpLetter(int dir);
+
+    // The letters this list actually contains, for the index on the right, and
+    // which of them focus is inside. Empty when there is nothing to show.
+    const std::vector<char>& letters() const { return letters_; }
+
+    // The Ctx::cards index focus is on, or -1. The app turns it into a cover
+    // for the backdrop; this screen holds indices and no opinion about art.
+    int focusedCard() const {
+        return (slot_ >= 0 && slot_ < static_cast<int>(cards_.size())) ? cards_[slot_] : -1;
+    }
     void tick(float dt, Ctx& c);
     Result key(Nav n);
     void draw(Ctx& c);
@@ -149,9 +203,79 @@ private:
     int columns() const;
     float coverWidth() const;
 
+    int letterOf(int slot) const;
+
     std::string title_;
     std::vector<int> cards_;
+    // The distinct initials, in order, and the first slot of each. Built once
+    // at open: a 141-game platform is scanned once rather than per keypress.
+    std::vector<char> letters_;
+    std::vector<int> letterFirst_;
     int slot_ = 0;
+    design::Animated appear_;
+    design::Animated scroll_;
+    // The index fades in when it is used and out when it is not. It is a
+    // navigation aid, not chrome, and a permanent alphabet down the side of a
+    // screen of artwork is a menu bar nobody asked for.
+    design::Animated index_;
+    // Seconds the index stays up after the last jump, before it starts to go.
+    // Separate from the animation so a run of jumps holds it steady instead of
+    // restarting a fade that has not begun.
+    float indexHold_ = 0.0f;
+};
+
+// --- Search -----------------------------------------------------------------
+
+// MMagTech, 2026-09-21: *"we also need to implement the search as well."* The
+// bar has said "Search" since the bar existed and pressing it printed a line to
+// stderr saying it was not built.
+//
+// IT FILTERS THE LIBRARY THIS CONSOLE ALREADY HOLDS, rather than asking the
+// server. Every game is already in memory — the whole catalogue is loaded at
+// startup to build Home and the Library — so a substring match over 1644 titles
+// is free, it answers on every keystroke with no round trip, and it works when
+// the server is away. A search that went to RomM would be slower, would need
+// debouncing, and would be the one screen in the product that stops working
+// offline. If searching for games this console has NOT catalogued ever becomes
+// the point, that is a different feature and it can sit beside this one.
+//
+// THE KEYBOARD IS DOCKED AND THE RESULTS ARE LIVE. Typing blind and pressing
+// Done to find out what you got is the thing that makes console search
+// miserable; see ui::Keyboard::Config::dockedBottom for what that cost.
+class SearchScreen {
+public:
+    void open();
+
+    // Re-runs the filter. Cheap enough to call on every keystroke — it is a
+    // case-insensitive substring over titles already in memory.
+    void setQuery(const std::string& q, const std::vector<design::Card>& all);
+    const std::string& query() const { return query_; }
+
+    // Where the results have to stop, in canvas points: the top of the docked
+    // keyboard. The covers are sized to the room that leaves rather than to a
+    // constant, so the layout survives the keyboard changing height.
+    void setResultsBottom(float y) { resultsBottom_ = y; }
+
+    // Whether focus is in the results rather than in the keyboard. The app owns
+    // this because the app owns the keyboard.
+    void setFocused(bool on) { focused_ = on; }
+    bool focused() const { return focused_; }
+
+    void tick(float dt, Ctx& c);
+    Result key(Nav n);
+    void draw(Ctx& c);
+
+    int focusedCard() const {
+        return (slot_ >= 0 && slot_ < static_cast<int>(results_.size())) ? results_[slot_] : -1;
+    }
+    size_t resultCount() const { return results_.size(); }
+
+private:
+    std::string query_;
+    std::vector<int> results_;
+    int slot_ = 0;
+    bool focused_ = false;
+    float resultsBottom_ = ui::kCanvasHeight;
     design::Animated scroll_;
 };
 
@@ -166,6 +290,12 @@ struct GameDetail {
     std::string title;
     std::string platform;
     std::string cover;
+    // THE BIG ONE, because this screen draws the biggest cover in the product.
+    // 340x460 design points is 680x920 real pixels on a 4K panel, and it was
+    // being drawn from RomM's 162x216 thumbnail — a 4.2x upscale, the worst
+    // anywhere. The backdrop behind it was the same 162 pixels blurred, which
+    // is why it came out as mud rather than as the art's own colours.
+    std::string coverLarge;
     ui::Color art;
     int64_t sizeBytes = 0;
     // A game on a platform this console cannot play gets the screen and not the
@@ -194,7 +324,33 @@ public:
     // shows it under the actions until they do something else.
     void setNotice(std::string notice) { notice_ = std::move(notice); }
 
+    // PROGRESS BELONGS ON THE ROW THAT STARTED IT — 2026-09-21.
+    //
+    // MMagTech asked whether a download should be its own window or shown on
+    // the normal screen. It was a centred panel over a dimmed screen, and the
+    // fact that settled it is that the panel never blocked anything: input
+    // still reached the screen underneath, so it was obstruction with no
+    // behaviour behind it — the worst of both.
+    //
+    // Now the row fills. Press Play and the Play row becomes the progress; press
+    // Download and keep and that one does. Nothing is covered, nothing is
+    // blocked, and the thing that is loading is the thing you pressed.
+    //
+    // `action` says which row, so that a background download started by Download
+    // does not light up Play. `total` of zero means the server did not say how
+    // big it is, which is common — the row then says what has arrived and draws
+    // no bar, because a progress bar that invents its own total is a lie.
+    struct Progress {
+        bool active = false;
+        Action action = Action::Play;
+        int64_t got = 0, total = 0;
+        bool unpacking = false;
+    };
+    void setProgress(const Progress& p) { progress_ = p; }
+
 private:
+    Progress progress_;
+
     struct Row {
         Action action = Action::None;
         std::string label;
