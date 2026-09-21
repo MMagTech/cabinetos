@@ -629,16 +629,46 @@ double buffer makes that a pointer swap. Entirely our own code.
   serial and CRC rather than a buffer. Open question 12b: whatever this console
   does there is new work, and nothing crossing between machines today constrains
   it.
-- **NOTHING IS IN CI OR IN THE IMAGE.** The image would need PCSX2's resources
-  at `/usr/share/cabinetos/system/pcsx2/resources`, and the emulator and its two
-  bundled libraries at `/usr/lib/cabinetos/cores/`. Today they live in
-  `~/assets-dev` and `~/cores-dev` and the drop-in points at them.
-- **The emulator carries two libraries the image lacks** — `libryml` and
-  `libc4core`. **That needs RPATH, not the modern RUNPATH**, because RUNPATH is
-  not inherited: libryml was found and then could not find libc4core sitting in
-  the same directory.
-- **The two open bugs in item 1b have NOT been re-tested against this.** That
-  was the reason for building it and it is now possible.
+- ~~**NOTHING IS IN CI OR IN THE IMAGE.**~~ **IT IS IN BOTH, 2026-09-21, AND
+  THE IMAGE BUILD ASSERTS ALL FOUR PIECES.** `.github/workflows/build-pcsx2.yml`
+  builds it at the pinned v2.8.2 and uploads it in the same three-folder shape
+  every other payload job uses; `ci/stage-image-payload.sh` **refuses to build
+  an image without it**. Proved by running, not by reading the workflow:
+
+  ```
+  cores     21 in 287M
+  ps2       28M emulator, 2 libraries, 9.5M resources
+  [cabinetos] ok: the PlayStation 2 emulator (/usr/lib/cabinetos/cores/cabinetos-ps2.so)
+  [cabinetos] ok: PCSX2's rapidyaml / c4core / resources
+  ```
+
+  **WHAT IS STILL OWED IS THE LAST MILE AND IT IS NOT SMALL.** Images publish
+  from `main` only — a branch build ends with `Push to GHCR: skipped` — so
+  nothing has yet BOOTED this image. Until the A9 is rebased onto it, the
+  drop-in removed, and a PlayStation 2 game played with nothing hand-built on
+  the disk, "it is in the image" means "CI says the files are in the image".
+  That is a much weaker claim and this file should not pretend otherwise.
+- ~~**The emulator carries two libraries the image lacks.**~~ Handled.
+  `frontend/ps2/compile.sh` already linked with `-Wl,-rpath,$ORIGIN
+  -Wl,--disable-new-dtags` — **RPATH and not the modern RUNPATH**, because
+  RUNPATH is not inherited and libryml was found and then could not find
+  libc4core sitting in the same directory. **The manifest it writes was EMPTY
+  on any rebuild**, though, because it skipped recording a library it had
+  skipped copying — so anything staging from it would have shipped an emulator
+  that cannot dlopen. Found on 2026-09-21 by looking at the file rather than
+  trusting it; it is now written from what is actually beside the emulator.
+- ~~**The two open bugs in item 1b have NOT been re-tested against this.**~~
+  **BOTH ARE CLOSED, 2026-09-21.** The tunnel went with the move to upstream
+  PCSX2 — it belonged to the deleted libretro core. The pause-menu exit hang has
+  not recurred: MMagTech, *"you can consider the hang done as we havent hit it
+  again so i think switching cores or some other work fixed it."*
+
+  **RECORDED AS NOT REPRODUCED, NOT AS FIXED**, and the difference matters. No
+  change was made that targeted it, so the suspect —`vk::destroyContext` calling
+  `deviceWaitIdle` on a device the core created and may already have torn down —
+  was never eliminated. It outlived a change rather than being killed by one. If
+  it returns, that is still where to look, and the instruction stands: **leave
+  the console stuck** and take `gdb -p <pid> -batch -ex "thread apply all bt 12"`.
 
 #### THREE FAULTS FOUND BY PLAYING IT, AND ALL THREE WERE SILENT
 
