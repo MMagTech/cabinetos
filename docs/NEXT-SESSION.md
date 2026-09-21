@@ -1463,6 +1463,14 @@ These are ordered. **Do not begin any of them in the VM.**
   `build.yml` ignores `**.md` and `docs/**`. That is expected and is a different
   thing from the fault above — check WHAT the pull request touches before
   deciding which one you are looking at.
+- **AND THERE IS A THIRD CAUSE, WHICH IS JUST A RACE.** `gh pr checks` says
+  *"no checks reported"* for the first few seconds after a push, between the
+  workflow run being created and its jobs registering against the new commit.
+  It is indistinguishable from the real fault by that command alone. **Tell them
+  apart with `gh run list --branch <branch>`**: a run in `in_progress` means
+  wait, and no run at all for the new head means the event did not fire — which
+  is the one that needs the pull request closed and reopened. Seen 2026-09-21,
+  where it briefly looked like the dangerous case and was not.
 - **The weekly base bump needs two clicks, not none.** It opens a pull request,
   but the build on it lands as `action_required` and waits for approval —
   `gh api -X POST /repos/MMagTech/cabinetos/actions/runs/<id>/approve`. And
