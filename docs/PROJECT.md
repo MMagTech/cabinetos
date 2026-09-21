@@ -10667,3 +10667,88 @@ overlay planes — is exactly what makes this possible is worth a moment's
 reflection before the next instrument is trusted or discarded.**
 
 The reproduction is `tools/gamescope-overlay-test.sh` and `tools/overlay-probe.c`.
+
+### 25. Save states, and whether the modern systems should have them at all
+**Raised by MMagTech, 2026-09-21, while asking whether PlayStation 2 saves work.
+DECIDED for PS2 and everything after it. OPEN for the cartridge era.**
+
+#### What prompted it
+
+`Core::stateSize()` returns 0 for PlayStation 2 and says so honestly, because
+PCSX2 keeps its states as its own slot files keyed by disc serial and CRC rather
+than as a buffer this console can hold. That was written down as work owed —
+"whatever this console does there is new work" — and the obvious next step was
+to go and find out whether PCSX2 can serialise to memory.
+
+**The right question turned out to be the one before it.** MMagTech: *"should
+these more modern system even have save and load states or just the memory
+cards"*, and then: *"that seems like a nightmare to plan for and something i
+dont even think modern systems allow you to do."*
+
+**He is right on the second point and it is the whole argument.** No console
+made in the last twenty years exposes a save state. The Switch suspends, the
+PS5 has Rest Mode, the Xbox has Quick Resume. None of them offers a slot to save
+into. A pause menu with "Save state" on it is an emulator's idea, not a
+console's, and this project's whole premise is that it is building a console.
+
+#### DECIDED: no visible save states for PlayStation 2, GameCube, or anything after
+
+Three reasons, in order of how much they cost if ignored:
+
+1. **THE STATE BREAKS WHEN THE IMAGE UPDATES.** A PCSX2 state is tied to the
+   emulator build as well as to the disc. Push an image, PCSX2 moves, and
+   everyone's states silently stop loading. **That is data loss on this
+   project's release schedule rather than on the player's** — and it is the kind
+   that is discovered long after the update, by someone who cannot get back to
+   what they had. A memory card survives an emulator upgrade. This alone settles
+   it.
+2. **These consoles have real save systems and every game uses them.** A PS2 or
+   GameCube game has save points. The problem save states were invented for —
+   a cartridge with no battery, where a state is the only way to stop mid-level
+   — does not exist here.
+3. **States do not travel and the library is meant to.** A memory card opens on
+   the Mac and on an Apple TV. A PCSX2 state from this build does not open
+   anywhere else, so shipping it through RomM would put a file in the library
+   that only one machine can read.
+
+**So item 2 on the PlayStation 2 list is closed by DELETION rather than by
+work**, which is the outcome this project keeps arriving at when MMagTech
+simplifies something.
+
+#### WHAT PEOPLE ACTUALLY WANT IS RESUME, WHICH IS A DIFFERENT FEATURE
+
+The thing a person wants on a television is not a slot. It is: turn the console
+off mid-race, come back tomorrow, still be mid-race. **That is suspend and
+resume, and it is exactly what the modern consoles named above do instead.**
+
+The mechanism is the same — a snapshot of the machine — and the product is not:
+
+| | Save state | Suspend |
+|---|---|---|
+| How many | Slots the player manages | Exactly one, per game, invisible |
+| How long it lives | Forever, and is curated | Until next launch |
+| If an update invalidates it | A save is lost | Last night's resume point is lost |
+| In the menu | Two items | None |
+
+**That difference in lifetime is what makes the update problem tolerable.**
+Losing a resume point is an annoyance; losing a save someone deliberately made
+is a fault.
+
+#### STILL OPEN: the twenty-one cartridge-era cores, where states DO work today
+
+"Save state" and "Load latest state" are two of the four items in the pause
+menu right now, and for a Mega Drive or a NES game they are the right answer —
+there a state is often the only way to stop mid-level, and it is the idiom every
+emulator frontend on every platform uses.
+
+**So the menu would offer different items on different systems, and that needs
+deciding rather than assuming.** The defensible principle is *states exist where
+the system has no save of its own*, which is roughly the cartridge/disc line —
+but it is per-GAME rather than per-platform in truth, and a rule that is nearly
+right is how a console ends up feeling arbitrary.
+
+**Do not resolve this inside a PlayStation 2 change.** It touches 21 working
+cores, the pause menu's shape, and what Cabinet's other platforms expect to find
+in a RomM row. It belongs with open question 23 and the UI pass, and all three
+are really one conversation about what this console is rather than three
+separate features.
