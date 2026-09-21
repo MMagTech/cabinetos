@@ -369,14 +369,18 @@ shaderc 2026.1.
 
 #### WHAT TO DO NEXT, IN ORDER
 
-1. **Point `pcsx2-gsrunner` at a real disc.** It is already built and it takes
-   a `--` argument. That is the cheapest possible "does this emulate anything"
-   measurement and it needs no host layer at all. The PS2 BIOS is already on
-   the A9 at `/var/lib/cabinetos/bios/pcsx2/bios/`.
-2. **Write the host layer**, gsrunner's `Main.cpp` beside Cabinet's
-   `CabinetPS2Host.cpp`. Stub the 47 that are stubs, then do the six.
-3. **Make it `dlopen`.** That is the milestone that turns this from a library
-   into the `.so` open question 12's correction asks for.
+1. **Write the host layer. There is no cheaper step in front of it** — see the
+   warning below about gsrunner, which was tried. Read gsrunner's `Main.cpp`
+   beside Cabinet's `CabinetPS2Host.cpp`. Stub the ~47 that are stubs, then do
+   the six that are the display path.
+2. **Make it `dlopen`.** That is the milestone that turns this from a library
+   into the `.so` open question 12's correction asks for, and `g_host_hotkeys`
+   is the symbol it will fail on first.
+3. **Then boot Homura**, which is already on the A9 at
+   `/var/lib/cabinetos/cache/Sony Playstation 2/630 - Homura/`, with the PS2
+   BIOS at `/var/lib/cabinetos/bios/pcsx2/bios/`. **Not Burnout 3** — rom 604
+   holds the only real PS2 save on the server and nothing this session touches
+   should go near `cabinet-604.ps2`.
 4. **Then, and only then, CI and the image.** `ci/base-watch.txt` needs
    `libshaderc_shared`, `libSPIRV-Tools`, `libplutovg`, `libplutosvg`,
    `libryml`, `libpcap` and `libharfbuzz` adding the day PS2 ships — a base bump
@@ -384,8 +388,18 @@ shaderc 2026.1.
 
 #### WHAT THIS DOES NOT SHOW, SAID PLAINLY
 
-- **Nothing has been emulated.** A library that links and a binary that
-  initialises are not a PS2 game.
+- **NOTHING HAS BEEN EMULATED, AND `pcsx2-gsrunner` CANNOT GET YOU THERE.** It
+  is a **renderer regression harness that only replays GS dumps**, not a game
+  booter. Handed Homura's CHD with the BIOS in place it refuses at
+  `VMManager::IsGSDumpFileName`. **This was tried on the A9, not assumed**, and
+  an earlier draft of this page said the opposite.
+- **AND IT REFUSES SILENTLY, WHICH IS THE PART THAT COSTS TIME.** Everything
+  after `InitializeConfig` talks through `Console`, and
+  `LoadStartupSettings()` resets the console log level from deliberately empty
+  settings — so the whole of argument parsing is mute. A bad argument gives
+  **exit 1 and not one word**, after forty lines of directory listing that make
+  it look like it got much further. `-help` is the tell: it works, because it
+  uses `fprintf(stderr, ...)` and bypasses `Console` entirely.
 - **No host layer exists.** 57 symbols are named; none is written.
 - **Nothing is in CI**, deliberately — see step 4.
 - **Save states are still new work.** Cabinet's Mac PS2 state is PCSX2's own
@@ -1296,6 +1310,19 @@ These are ordered. **Do not begin any of them in the VM.**
 - **PCSX2 REFUSES TO START WITHOUT ITS `bin/resources` FOLDER** — game database,
   fonts, GS shaders. It does not degrade, it says "Resources directory is
   missing" and stops. The same shape as PPSSPP's 13 MB of system files.
+- **UPSTREAM'S SECOND FRONTEND IS A LINK TEST, NOT A SHORTCUT TO A RUNNING
+  GAME.** `pcsx2-gsrunner` looks like a headless PCSX2 and is not one: it
+  replays GS dumps and refuses anything else at
+  `VMManager::IsGSDumpFileName`. It proved the library links and it is the best
+  `Host` reference there is; it will not boot a disc. **Check what upstream's
+  harness is FOR before planning a measurement around it.**
+- **A TOOL THAT PRINTS FORTY LINES AND THEN EXITS 1 HAS NOT NECESSARILY GOT
+  FAR.** gsrunner's `LoadStartupSettings()` resets the console log level from
+  empty settings at the end of config init, so every `Console.Error` after that
+  point reaches nobody — including the one naming the actual problem. The
+  directory listing that precedes it is the last thing you see and it looks
+  like progress. **When a program goes quiet at exactly the same place every
+  time, suspect the logger before the logic.**
 - **A SEPARATE BUILDER CONTAINER WAS THE RIGHT CALL.** PCSX2 needs about thirty
   packages the frontend does not. Putting them in `frontend/Containerfile` would
   have slowed every one of the twenty-one core builds to serve one thing.

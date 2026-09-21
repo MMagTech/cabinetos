@@ -80,6 +80,34 @@ cannot go stale against the version we pin. Cabinet's `CabinetPS2Host.cpp` is
 the better guide to *what a console frontend wants*; gsrunner is the better
 guide to *what this version of PCSX2 requires*. Read both.
 
+### BUT IT CANNOT BOOT A DISC, AND THAT WAS TRIED RATHER THAN ASSUMED
+
+**`pcsx2-gsrunner` is a RENDERER REGRESSION HARNESS, not a game booter.** It
+replays recorded GS command streams. Handed Homura's CHD with the PS2 BIOS in
+place on the A9, it refuses:
+
+```c
+if (!VMManager::IsGSDumpFileName(params.filename))
+    { Console.Error("Provided filename is not a GS dump."); return false; }
+```
+
+**So it is a link test and a `Host` reference and nothing more** — it does not
+shorten the path to a running game, and the first thing that emulates a PS2 game
+on this console will be CabinetOS's own host layer. An earlier draft of this
+document and of the handover said gsrunner could be pointed at a disc as the
+cheap next measurement. **It cannot, and that is why the attempt is written down
+instead of the guess.**
+
+**AND IT FAILS SILENTLY, WHICH COST THE TIME RATHER THAN THE REFUSAL ITSELF.**
+Everything after `InitializeConfig` goes to `Console`, and
+`VMManager::Internal::LoadStartupSettings()` resets the console log level from
+settings that are deliberately empty — so `Console.Error` reaches nobody. The
+whole of argument parsing is mute: a bad argument produces **exit 1 and not one
+word**, after forty lines of directory listing that make it look like it got
+further than it did. `-help` is the exception and the tell, because
+`PrintCommandLineHelp` uses `fprintf(stderr, ...)` and bypasses `Console`
+entirely.
+
 **PCSX2 will not start without its resources folder** — `bin/resources`, holding
 the game database, fonts and GS shaders. It does not degrade, it refuses. That
 folder has to ship, the same way PPSSPP's 13 MB already do at
@@ -189,9 +217,10 @@ and a console that cannot start a PlayStation 2 game.
 
 ## What this does NOT answer
 
-- **Nothing has been emulated.** A library that links and a binary that
-  initialises are not a PS2 game. The gsrunner binary could be pointed at a
-  disc, and that is the cheapest next measurement.
+- **Nothing has been emulated**, and there is no shortcut to it. A library that
+  links and a binary that initialises are not a PS2 game, and gsrunner cannot
+  bridge the gap because it only replays GS dumps — tried, not assumed, see
+  above. **The first thing that boots a PS2 game here will be the host layer.**
 - **No host layer exists.** 57 symbols are named; none is written.
 - **Nothing is in CI**, deliberately. Adding a PCSX2 build to the image workflow
   before there is anything to ship would add minutes to every build and prove
