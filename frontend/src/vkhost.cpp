@@ -1,5 +1,7 @@
 #include "vkhost.h"
 
+#include <SDL3/SDL.h>
+
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
 #include <GLES2/gl2ext.h>
@@ -146,6 +148,7 @@ VkDeviceMemory gSharedMemory = VK_NULL_HANDLE;
 unsigned gSharedWidth = 0, gSharedHeight = 0;
 bool gSharedInitialised = false;  // has it ever been written, i.e. is a layout known
 EGLImage gEglImage = EGL_NO_IMAGE;
+GLuint gMemoryObject = 0;
 GLuint gTexture = 0;
 unsigned gFrameWidth = 0, gFrameHeight = 0;
 
@@ -174,6 +177,61 @@ const retro_hw_render_context_negotiation_interface_vulkan* gNegotiation = nullp
 PFNEGLCREATEIMAGEPROC gEglCreateImage = nullptr;
 PFNEGLDESTROYIMAGEPROC gEglDestroyImage = nullptr;
 PFNGLEGLIMAGETARGETTEXTURE2DOESPROC gGlEglImageTargetTexture2D = nullptr;
+
+// GL_EXT_memory_object_fd, AND IT IS THE PRIMARY ROUTE RATHER THAN A FALLBACK.
+//
+// THE REASON IS WHAT THE CONSOLE ACTUALLY RUNS ON. Under gamescope, SDL picks
+// the **x11** video driver — gamescope embeds an Xwayland server — so the GL
+// context is GLX and there is no EGL display in the process at all. The first
+// version of this file imported the picture as an EGLImage, which worked
+// perfectly under SDL's offscreen driver and failed on the television with
+// `EGL_NOT_INITIALIZED`, sixty times a second, while a PlayStation 2 game
+// played with sound and a black screen.
+//
+// A GL memory object does not care which windowing API made the context. It
+// is also the FASTER route: an opaque handle lets the image keep
+// VK_IMAGE_TILING_OPTIMAL, where the dmabuf path has to fall back to linear.
+//
+// The EGLImage path stays for a machine whose GL lacks these two extensions.
+PFNGLCREATEMEMORYOBJECTSEXTPROC gGlCreateMemoryObjects = nullptr;
+PFNGLDELETEMEMORYOBJECTSEXTPROC gGlDeleteMemoryObjects = nullptr;
+PFNGLIMPORTMEMORYFDEXTPROC gGlImportMemoryFd = nullptr;
+PFNGLTEXSTORAGEMEM2DEXTPROC gGlTexStorageMem2D = nullptr;
+PFNGLMEMORYOBJECTPARAMETERIVEXTPROC gGlMemoryObjectParameteriv = nullptr;
+bool gHaveMemoryObject = false;
+
+// THE DISPLAY IS SDL'S, NOT EGL'S, AND THAT DISTINCTION COST A BLACK SCREEN.
+//
+// `eglGetCurrentDisplay()` worked under SDL's offscreen driver and returned
+// EGL_NO_DISPLAY in the real session under gamescope, so the console booted a
+// PlayStation 2 game, made sound, and drew nothing — sixty failed imports a
+// second into the journal.
+//
+// core.cpp already had the rule and this did not follow it: "SDL's, not EGL's:
+// SDL created this context, and on a driver where the two disagree the one
+// that made the context is the one to ask." Same rule, same reason, one file
+// along.
+EGLDisplay currentDisplay() {
+    EGLDisplay fromSdl = reinterpret_cast<EGLDisplay>(SDL_EGL_GetCurrentDisplay());
+    EGLDisplay fromEgl = eglGetCurrentDisplay();
+    // The default display, which is what SDL itself would have initialised.
+    // Asking for it does not create a second one: eglGetDisplay returns the
+    // same handle for the same native display, and SDL has already
+    // initialised it.
+    EGLDisplay fromDefault = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+    static bool said = false;
+    if (!said) {
+        said = true;
+        std::fprintf(stderr,
+                     "[vulkan] EGL display: SDL says %p, eglGetCurrentDisplay says %p, "
+                     "EGL_DEFAULT_DISPLAY is %p, video driver is %s\n",
+                     fromSdl, fromEgl, fromDefault,
+                     SDL_GetCurrentVideoDriver() ? SDL_GetCurrentVideoDriver() : "none");
+    }
+    if (fromSdl) return fromSdl;
+    if (fromEgl != EGL_NO_DISPLAY) return fromEgl;
+    return fromDefault;
+}
 
 // --- Callbacks the core calls ----------------------------------------------
 
@@ -407,12 +465,16 @@ bool loadDeviceApi(std::string* err) {
 
 void destroyShared() {
     if (gEglImage != EGL_NO_IMAGE && gEglDestroyImage) {
-        gEglDestroyImage(eglGetCurrentDisplay(), gEglImage);
+        gEglDestroyImage(currentDisplay(), gEglImage);
         gEglImage = EGL_NO_IMAGE;
     }
     if (gTexture) {
         glDeleteTextures(1, &gTexture);
         gTexture = 0;
+    }
+    if (gMemoryObject) {
+        gGlDeleteMemoryObjects(1, &gMemoryObject);
+        gMemoryObject = 0;
     }
     if (gShared != VK_NULL_HANDLE) {
         gApi.destroyImage(gDevice, gShared, nullptr);
@@ -463,9 +525,20 @@ void destroyShared() {
 bool createShared(unsigned width, unsigned height, std::string* err) {
     destroyShared();
 
+    // THE TWO ROUTES DIFFER IN THE HANDLE AND THEREFORE IN THE TILING.
+    //
+    // An OPAQUE fd is the driver's own handle, so the image keeps
+    // VK_IMAGE_TILING_OPTIMAL and GL is told the same. A dmabuf is a handle
+    // anything on the machine can understand, and that generality is paid for
+    // in linear tiling. Optimal is both faster and simpler here, which is why
+    // the memory-object route is preferred when GL has it.
+    const VkExternalMemoryHandleTypeFlagBits handleType =
+        gHaveMemoryObject ? VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT
+                          : VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT;
+
     VkExternalMemoryImageCreateInfo ext{};
     ext.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO;
-    ext.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT;
+    ext.handleTypes = handleType;
 
     VkImageCreateInfo ici{};
     ici.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -476,7 +549,7 @@ bool createShared(unsigned width, unsigned height, std::string* err) {
     ici.mipLevels = 1;
     ici.arrayLayers = 1;
     ici.samples = VK_SAMPLE_COUNT_1_BIT;
-    ici.tiling = VK_IMAGE_TILING_LINEAR;
+    ici.tiling = gHaveMemoryObject ? VK_IMAGE_TILING_OPTIMAL : VK_IMAGE_TILING_LINEAR;
     ici.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
     ici.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     ici.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
@@ -507,7 +580,7 @@ bool createShared(unsigned width, unsigned height, std::string* err) {
 
     VkExportMemoryAllocateInfo exportInfo{};
     exportInfo.sType = VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO;
-    exportInfo.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT;
+    exportInfo.handleTypes = handleType;
 
     // Dedicated, because a dmabuf is a whole allocation. Exporting a
     // suballocation hands EGL a file descriptor for memory that also holds
@@ -532,45 +605,148 @@ bool createShared(unsigned width, unsigned height, std::string* err) {
         return false;
     }
 
-    VkImageSubresource sub{};
-    sub.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    // Only the dmabuf route needs a layout: a memory object carries the
+    // driver's own tiling and GL never asks how the rows are arranged.
     VkSubresourceLayout layout{};
-    gApi.getImageSubresourceLayout(gDevice, gShared, &sub, &layout);
-    if (layout.rowPitch == 0) {
-        *err = "the driver reported a zero row pitch for the exported image";
-        return false;
+    if (!gHaveMemoryObject) {
+        VkImageSubresource sub{};
+        sub.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        gApi.getImageSubresourceLayout(gDevice, gShared, &sub, &layout);
+        if (layout.rowPitch == 0) {
+            *err = "the driver reported a zero row pitch for the exported image";
+            return false;
+        }
     }
 
     VkMemoryGetFdInfoKHR fdInfo{};
     fdInfo.sType = VK_STRUCTURE_TYPE_MEMORY_GET_FD_INFO_KHR;
     fdInfo.memory = gSharedMemory;
-    fdInfo.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT;
+    fdInfo.handleType = handleType;
     int fd = -1;
     if (gApi.getMemoryFdKHR(gDevice, &fdInfo, &fd) != VK_SUCCESS || fd < 0) {
         *err = "the device would not export the picture as a dmabuf";
         return false;
     }
 
-    // EGL takes ownership of the descriptor on success, so it is closed here
-    // only on the failure paths.
-    const EGLAttrib attribs[] = {
+    // --- Route one: a GL memory object ------------------------------------
+    //
+    // GL takes ownership of the descriptor on success, exactly as EGL does
+    // below, so it is closed here only on the failure paths.
+    if (gHaveMemoryObject) {
+        while (glGetError() != GL_NO_ERROR) {
+        }  // start from a clean slate, so the checks below mean something
+
+        gGlCreateMemoryObjects(1, &gMemoryObject);
+        // DEDICATED, and it has to match how the memory was allocated. The
+        // allocation above carries VkMemoryDedicatedAllocateInfo; importing it
+        // as non-dedicated is undefined and on radeonsi it is a black texture.
+        const GLint dedicated = GL_TRUE;
+        gGlMemoryObjectParameteriv(gMemoryObject, GL_DEDICATED_MEMORY_OBJECT_EXT,
+                                   &dedicated);
+        gGlImportMemoryFd(gMemoryObject, req.size, GL_HANDLE_TYPE_OPAQUE_FD_EXT, fd);
+        if (GLenum e = glGetError(); e != GL_NO_ERROR) {
+            ::close(fd);
+            char buf[160];
+            std::snprintf(buf, sizeof(buf),
+                          "GL would not import the picture's memory: 0x%04x "
+                          "(%llu bytes)",
+                          e, static_cast<unsigned long long>(req.size));
+            *err = buf;
+            return false;
+        }
+
+        glGenTextures(1, &gTexture);
+        glBindTexture(GL_TEXTURE_2D, gTexture);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        // The tiling has to be declared before the storage is attached, and it
+        // has to be the same one the VkImage was created with.
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_TILING_EXT, GL_OPTIMAL_TILING_EXT);
+        gGlTexStorageMem2D(GL_TEXTURE_2D, 1, GL_RGBA8, static_cast<GLsizei>(width),
+                           static_cast<GLsizei>(height), gMemoryObject, 0);
+        const GLenum storageError = glGetError();
+        glBindTexture(GL_TEXTURE_2D, 0);
+        if (storageError != GL_NO_ERROR) {
+            char buf[160];
+            std::snprintf(buf, sizeof(buf),
+                          "GL imported the memory and would not make a texture of "
+                          "it: 0x%04x (%ux%u)",
+                          storageError, width, height);
+            *err = buf;
+            return false;
+        }
+
+        gSharedWidth = width;
+        gSharedHeight = height;
+        std::fprintf(stderr,
+                     "[vulkan] picture target %ux%u, shared as a GL memory object, "
+                     "optimally tiled\n",
+                     width, height);
+        return true;
+    }
+
+    // --- Route two: an EGLImage from a dmabuf ------------------------------
+    //
+    // For a context EGL actually owns. Tried without a modifier first: naming
+    // one is only legal where that EGL advertises it for the format, and the
+    // answer differs between displays on the same machine.
+    EGLDisplay dpy = currentDisplay();
+    if (dpy == EGL_NO_DISPLAY) {
+        ::close(fd);
+        *err = "there is no EGL display to import the picture into";
+        return false;
+    }
+
+    const EGLAttrib implicitAttribs[] = {
         EGL_WIDTH, static_cast<EGLAttrib>(width),
         EGL_HEIGHT, static_cast<EGLAttrib>(height),
         EGL_LINUX_DRM_FOURCC_EXT, static_cast<EGLAttrib>(kDrmFormatAbgr8888),
         EGL_DMA_BUF_PLANE0_FD_EXT, static_cast<EGLAttrib>(fd),
         EGL_DMA_BUF_PLANE0_OFFSET_EXT, static_cast<EGLAttrib>(layout.offset),
         EGL_DMA_BUF_PLANE0_PITCH_EXT, static_cast<EGLAttrib>(layout.rowPitch),
-        EGL_DMA_BUF_PLANE0_MODIFIER_LO_EXT,
-        static_cast<EGLAttrib>(kDrmModifierLinear & 0xffffffffu),
-        EGL_DMA_BUF_PLANE0_MODIFIER_HI_EXT,
-        static_cast<EGLAttrib>(kDrmModifierLinear >> 32),
         EGL_NONE};
 
-    gEglImage = gEglCreateImage(eglGetCurrentDisplay(), EGL_NO_CONTEXT,
-                                EGL_LINUX_DMA_BUF_EXT, nullptr, attribs);
+    gEglImage = gEglCreateImage(dpy, EGL_NO_CONTEXT, EGL_LINUX_DMA_BUF_EXT, nullptr,
+                                implicitAttribs);
+    const EGLint implicitError = eglGetError();
+
+    EGLint explicitError = EGL_SUCCESS;
+    if (gEglImage == EGL_NO_IMAGE) {
+        const EGLAttrib explicitAttribs[] = {
+            EGL_WIDTH, static_cast<EGLAttrib>(width),
+            EGL_HEIGHT, static_cast<EGLAttrib>(height),
+            EGL_LINUX_DRM_FOURCC_EXT, static_cast<EGLAttrib>(kDrmFormatAbgr8888),
+            EGL_DMA_BUF_PLANE0_FD_EXT, static_cast<EGLAttrib>(fd),
+            EGL_DMA_BUF_PLANE0_OFFSET_EXT, static_cast<EGLAttrib>(layout.offset),
+            EGL_DMA_BUF_PLANE0_PITCH_EXT, static_cast<EGLAttrib>(layout.rowPitch),
+            EGL_DMA_BUF_PLANE0_MODIFIER_LO_EXT,
+            static_cast<EGLAttrib>(kDrmModifierLinear & 0xffffffffu),
+            EGL_DMA_BUF_PLANE0_MODIFIER_HI_EXT,
+            static_cast<EGLAttrib>(kDrmModifierLinear >> 32),
+            EGL_NONE};
+        gEglImage = gEglCreateImage(dpy, EGL_NO_CONTEXT, EGL_LINUX_DMA_BUF_EXT,
+                                    nullptr, explicitAttribs);
+        explicitError = eglGetError();
+    }
+
     if (gEglImage == EGL_NO_IMAGE) {
         ::close(fd);
-        *err = "EGL would not import the picture's memory as an image";
+        // SAYING WHICH ERROR, because the first version of this line said only
+        // that the import failed, and that cost a black screen on the
+        // television with no way to tell a bad descriptor from a rejected
+        // layout from an EGL that was never initialised. A probe that reports
+        // a failure without reporting its cause is the fourth lying instrument
+        // this project has had to fix.
+        char buf[256];
+        std::snprintf(buf, sizeof(buf),
+                      "EGL would not import the picture as an image: 0x%04x with the "
+                      "dmabuf's own layout, 0x%04x with an explicit linear one "
+                      "(%ux%u, pitch %llu)",
+                      implicitError, explicitError, width, height,
+                      static_cast<unsigned long long>(layout.rowPitch));
+        *err = buf;
         return false;
     }
 
@@ -623,14 +799,43 @@ bool createContext(std::string* err) {
         return false;
     }
 
+    // SDL's loader, not EGL's, for the same reason core.cpp gives: SDL made
+    // this context, and on x11 it may not have made it with EGL at all.
+    auto glProc = [](const char* name) { return SDL_GL_GetProcAddress(name); };
+    gGlCreateMemoryObjects =
+        reinterpret_cast<PFNGLCREATEMEMORYOBJECTSEXTPROC>(glProc("glCreateMemoryObjectsEXT"));
+    gGlDeleteMemoryObjects =
+        reinterpret_cast<PFNGLDELETEMEMORYOBJECTSEXTPROC>(glProc("glDeleteMemoryObjectsEXT"));
+    gGlImportMemoryFd =
+        reinterpret_cast<PFNGLIMPORTMEMORYFDEXTPROC>(glProc("glImportMemoryFdEXT"));
+    gGlTexStorageMem2D =
+        reinterpret_cast<PFNGLTEXSTORAGEMEM2DEXTPROC>(glProc("glTexStorageMem2DEXT"));
+    gGlMemoryObjectParameteriv = reinterpret_cast<PFNGLMEMORYOBJECTPARAMETERIVEXTPROC>(
+        glProc("glMemoryObjectParameterivEXT"));
+    gHaveMemoryObject = gGlCreateMemoryObjects && gGlDeleteMemoryObjects &&
+                        gGlImportMemoryFd && gGlTexStorageMem2D &&
+                        gGlMemoryObjectParameteriv;
+
     gEglCreateImage =
         reinterpret_cast<PFNEGLCREATEIMAGEPROC>(eglGetProcAddress("eglCreateImage"));
     gEglDestroyImage =
         reinterpret_cast<PFNEGLDESTROYIMAGEPROC>(eglGetProcAddress("eglDestroyImage"));
     gGlEglImageTargetTexture2D = reinterpret_cast<PFNGLEGLIMAGETARGETTEXTURE2DOESPROC>(
         eglGetProcAddress("glEGLImageTargetTexture2DOES"));
-    if (!gEglCreateImage || !gEglDestroyImage || !gGlEglImageTargetTexture2D) {
-        *err = "this EGL cannot import a dmabuf, so a Vulkan core could not be seen";
+    const bool haveEglImage =
+        gEglCreateImage && gEglDestroyImage && gGlEglImageTargetTexture2D;
+
+    std::fprintf(stderr,
+                 "[vulkan] picture route: %s (video driver %s)\n",
+                 gHaveMemoryObject ? "GL memory object, optimally tiled"
+                 : haveEglImage    ? "EGLImage from a dmabuf, linear"
+                                   : "NONE",
+                 SDL_GetCurrentVideoDriver() ? SDL_GetCurrentVideoDriver() : "none");
+
+    if (!gHaveMemoryObject && !haveEglImage) {
+        *err =
+            "this GL can neither import a memory object nor a dmabuf, so nothing "
+            "a Vulkan core drew could reach the screen";
         return false;
     }
 
@@ -876,7 +1081,14 @@ bool present() {
         std::string err;
         if (!createShared(wantW > gSharedWidth ? wantW : gSharedWidth,
                           wantH > gSharedHeight ? wantH : gSharedHeight, &err)) {
-            std::fprintf(stderr, "[vulkan] %s\n", err.c_str());
+            // ONCE. This is called every frame, and the first version of this
+            // printed the same line sixty times a second into the journal of a
+            // console somebody was trying to read.
+            static std::string lastSaid;
+            if (lastSaid != err) {
+                lastSaid = err;
+                std::fprintf(stderr, "[vulkan] %s\n", err.c_str());
+            }
             return false;
         }
     }
