@@ -51,45 +51,45 @@ as the VM, sudo password `cabinet`. It boots into the frontend on
 **gamescope/drm** — the top compositor rung, which the VM has never reached —
 on its own Radeon 890M at the panel's native **3840x2160**, with Vulkan
 present (RADV STRIX1). **The UI freeze is lifted and what is on that television
-is the real thing.** 1147 playable games on the image alone, **1232 as it is
-running today** — see the next paragraph.
+is the real thing.** **1232 playable games**, PlayStation 2 and GameCube
+included, off the image alone.
 
-**IT RUNS THE IMAGE AND NOTHING BY HAND, AS OF 2026-09-21 — and this reverses
-the paragraph that followed, twice in one day.** PlayStation 2 is IN the image
-now: the emulator, its two libraries and PCSX2's resources all ship, CI asserts
-all four, and the A9 has booted `sha256:ce25da80…` and played Homura on Vulkan
-off `/usr/bin/cabinetos-frontend` with **no drop-ins at all**. There is no
-longer any reason to run a hand-built binary, and no `20-heavy-systems.conf` to
-remove. **The paragraph below is kept only because it explains what the drop-in
-was for and how to tell if somebody has put one back.**
+**IT RUNS THE IMAGE AND NOTHING BY HAND. THESE FIVE FACTS WERE READ OFF THE
+MACHINE ON 2026-09-21, not carried across from an earlier paragraph** — every
+one of them had a stale answer somewhere in this file and the machine settled
+each one:
 
-**~~IT IS RUNNING A HAND-BUILT BINARY, ON PURPOSE, AS OF 2026-09-21.~~** MMagTech's
-call this session, and it reverses the instruction that used to be here. The
-drop-in at
-`/etc/systemd/system/cabinetos-session.service.d/20-heavy-systems.conf` stays,
-because it is what puts PlayStation 2 and GameCube on the television — 1232
-playable games instead of 1147 — and removing it costs 85 games to buy nothing
-while the embed work is in progress. **The confusion it used to cause was a
-documentation problem, and this paragraph is the fix.**
+| Probe | Answer |
+|---|---|
+| `systemctl is-active cabinetos-session` | `active` |
+| `ps -eo args \| grep [c]abinetos-frontend` | **`/usr/bin/cabinetos-frontend`** — the image's, under `gamescope --backend drm --output-width 3840 --output-height 2160` |
+| `ls /etc/systemd/system/cabinetos-session.service.d/` | **empty. No drop-ins at all.** |
+| `bootc status` | booted **`sha256:ceafc2bb…`**, with `sha256:ce25da80…` as the rollback |
+| `journalctl -b -o cat \| grep '^\[ps2\]'` | `renderer Vulkan, **upscale 1x, anisotropy 0**` |
 
-```
-ps -eo args | grep [c]abinetos-frontend
-```
+**THE TWO NUMBERS THIS FILE USED TO CARRY ARE NOW ONE.** It said "1147 on the
+image, 1232 as it is running today", and the whole of that difference WAS the
+drop-in: PlayStation 2 and GameCube are in the image now, so 1232 is both. (The
+1232 is the audit's figure, not one recounted today; the audit's own totals need
+a pass — see the note at the end of the platform audit.)
 
-**Verified 2026-09-21 07:22:** `gamescope --backend drm --output-width 3840
---output-height 2160 --ready-fd 3 -- /var/home/cabinet/cabinetos-frontend-dev
---core-dir /var/home/cabinet/cores-dev --core-option
-pcsx2_analog_mode1=enabled`, on `gamescope (drm) is up` at 3840x2160.
+**`sha256:78e43b5a…` IS NOT ON THAT MACHINE AND HAS NOT BEEN FOR TWO
+DEPLOYMENTS.** It was #30 and this file quoted it as the booted digest until
+today. If a digest here disagrees with `bootc status`, `bootc status` is right.
 
 **THE SESSION HAD BEEN DEAD FOR TEN HOURS AND NOTHING SAID SO.** It was found
-`inactive` at the start of this session — stopped at 21:31 the night before and
+`inactive` at the start of a session — stopped at 21:31 the night before and
 never restarted, so the television had been showing nothing at all. Neither the
-image nor the hand-built binary was running. **`systemctl is-active
+image nor a hand-built binary was running. **`systemctl is-active
 cabinetos-session` is the first thing to check, before `ps`**, because a dead
 session and a session running the wrong thing look identical to every other
 probe on this page.
 
-Putting the machine back on the image, when that is what you want:
+**IF SOMEBODY HAS PUT A DROP-IN BACK**, that is what
+`/etc/systemd/system/cabinetos-session.service.d/20-heavy-systems.conf` was: it
+pointed the session at `/var/home/cabinet/cabinetos-frontend-dev` and
+`~/cores-dev`, which is how PlayStation 2 and GameCube reached the television
+before they were in the image. There is no reason to want one now. Removing it:
 
 ```
 sudo rm /etc/systemd/system/cabinetos-session.service.d/20-heavy-systems.conf
@@ -100,11 +100,12 @@ sudo systemctl daemon-reload && sudo systemctl restart cabinetos-session
 silently drops every argument after the path — which looks exactly like a
 console that ignored you.
 
-**WITH THAT DROP-IN REMOVED, the machine runs the image and nothing by hand**,
-as it did on 2026-09-20: `/usr/bin/cabinetos-frontend`, booted digest
-`sha256:78e43b5a…`, which is #30 merged. `/var/home/cabinet/cabinetos-frontend-dev`
-is the hand-built binary the drop-in points at; if you build a new one,
-overwrite it rather than adding a second.
+**THE HAND-BUILT BINARY AND ITS CORE DIRECTORY ARE STILL ON DISK** —
+`~/cabinetos-frontend-dev`, `~/cores-dev`, `~/assets-dev` — and nothing points
+at them. They are for running something by hand; if you build a new frontend,
+overwrite the existing one rather than adding a second. **A hand-run leaves
+`[ps2]` lines in the journal from `/var/home/cabinet/cores-dev/`, which is how
+to tell one apart from the session** — the session's say `/usr/lib/cabinetos/`.
 
 **ALWAYS CHECK WHICH COMPOSITOR RUNG IT LANDED ON BEFORE JUDGING ANYTHING.**
 
@@ -422,9 +423,11 @@ upstream PCSX2 2.8.2, inside the console — your library, your pause menu, your
 pad, your saves.** Not a separate program borrowing the screen. Verified under
 gamescope on the reference console at 3840x2160, not only headlessly.
 
-**IT IS ON THE TELEVISION RIGHT NOW**, through the drop-in described at the top
-of this file. Two lines in the journal say what is actually running, and both
-are facts rather than restatements of what was asked for:
+**IT IS ON THE TELEVISION RIGHT NOW, OFF THE IMAGE** — this said "through the
+drop-in described at the top of this file" and that was true for a few hours of
+2026-09-21, before the emulator shipped. There is no drop-in; see the table at
+the top. Two lines in the journal say what is actually running, and both are
+facts rather than restatements of what was asked for:
 
 ```
 [ps2] /var/home/cabinet/cores-dev/cabinetos-ps2.so (PCSX2 v2.8.2)
@@ -549,12 +552,19 @@ PRODUCT**, and main.cpp says so beside them. How this is really exposed is open
 question 23 — one quality setting for the whole console. Nobody should build a
 settings screen on these two flags.
 
-**Currently on the reference console: `--ps2-upscale 4 --ps2-aniso 16`**, left
-there deliberately at the end of the session rather than dropped to 3x.
-MMagTech played at 4x, said it "looked way better", and noticed some stutter —
-and the reason not to quietly lower it is item 1: **the stutter may be this
+**THE REFERENCE CONSOLE IS AT 1x AND ANISOTROPY 0 — checked on the machine
+2026-09-21.** This paragraph used to say `--ps2-upscale 4 --ps2-aniso 16` was
+"left there deliberately at the end of the session"; it was, and then the
+drop-in carrying those flags was deleted when PlayStation 2 went into the image,
+which reset both to their defaults. **Nothing chose 1x.** The journal is the
+check: `[ps2] renderer Vulkan, upscale 1x, anisotropy 0`.
+
+**WHAT MMagTech ACTUALLY PLAYED AND LIKED WAS 4x**, and he noticed some stutter
+at it. The reason not to simply put 4x back is item 1: **the stutter may be this
 console's own picture path rather than the machine running out of room**, and
-lowering the setting would hide the question rather than answer it.
+setting it either way by hand hides the question rather than answering it. This
+is open question 23 arriving with a face on it — those two flags were always a
+test instrument and nothing yet exposes quality as a real setting.
 
 **MEASURE IT CAPPED TO 60 Hz, NOT UNCAPPED, AND THE FIRST TABLE HERE WAS WRONG
 FOR EXACTLY THAT REASON.** Uncapped, the emulator runs flat out, the readback
@@ -676,9 +686,10 @@ double buffer makes that a pointer swap. Entirely our own code.
   [cabinetos] ok: PCSX2's rapidyaml / c4core / resources
   ```
 
-  **AND IT HAS BEEN BOOTED AND PLAYED, 2026-09-21.** The A9 is on
-  `sha256:ce25da80…`, `20-heavy-systems.conf` is DELETED, and the session runs
-  `/usr/bin/cabinetos-frontend` with **no drop-ins at all**:
+  **AND IT HAS BEEN BOOTED AND PLAYED, 2026-09-21.** That happened on
+  `sha256:ce25da80…`, which is now the ROLLBACK deployment — the machine has
+  since moved to `sha256:ceafc2bb…`. `20-heavy-systems.conf` is DELETED and the
+  session runs `/usr/bin/cabinetos-frontend` with **no drop-ins at all**:
 
   ```
   [ps2] VM starting
@@ -847,6 +858,14 @@ core set — all 21, no gaps.
 | ~~Cabinet solved it on macOS, we have not~~ | ~~85~~ **0** | **PS2 71 and GameCube 14 are both in the image as of 2026-09-21.** PS2 has been played off it; GameCube has not — see below. |
 | Nobody has solved it | **174** | Switch 109, PS3 32, Vita 27, Xbox 4, Wii 2 |
 | **Will never be built** | 171 | Game & Watch — *"too small on a tv"* |
+
+**THE TOTALS IN THIS FILE DISAGREE WITH EACH OTHER AND NOBODY HAS RECOUNTED.**
+This audit says **1650** games; *Where things stand* says **1147 of 1644**; a
+first-run note says "sixteen hundred". The 1147 and the 1232 are consistent
+everywhere and are the numbers that matter, but the library total is carried
+rather than measured and one of these is wrong. **Recount it against the server
+before quoting a total anywhere it matters** — it is one query, and this file
+has been quoting all three for days.
 
 **GAMECUBE IS PINNED AND IN THE IMAGE, 2026-09-21 — AND HAS NOT BEEN PLAYED OFF
 IT.** `dolphin` at `1a0f97270b70`, merged as #43. The pin was chosen by reading
