@@ -298,6 +298,34 @@ public:
 
     void setPad(int port, const PadState& pad);
 
+    // --- PlayStation 2 ---------------------------------------------------
+    //
+    // PCSX2 is a whole emulator rather than a libretro core, so three things
+    // have to be said before a game starts that no core needs told. See
+    // frontend/src/ps2.h.
+    //
+    //   resourcesDir  PCSX2's own game database, fonts and GS shaders. It
+    //                 REFUSES TO START without them rather than degrading,
+    //                 the same way PPSSPP needs its system files.
+    //   the card      NOT passed in. loadGame names it from the rom, by the
+    //                 same rule catalog::saveFiles uses — `<stem>.ps2` in the
+    //                 per-game save directory — so the existing save
+    //                 machinery works on it unchanged and the two cannot
+    //                 drift apart.
+    //   upscale       1.0 is the PlayStation 2's own resolution.
+    void setPs2(const std::string& resourcesDir, float upscale);
+
+    // Freezes the emulated machine. A NO-OP FOR EVERY LIBRETRO CORE, which
+    // stops simply because the frame loop stops stepping it — and not optional
+    // for PlayStation 2, which runs on a thread of its own and would otherwise
+    // go on being played behind the overlay.
+    void setPaused(bool paused);
+
+    // Whether the loaded emulator is PCSX2 rather than a libretro core. The
+    // frontend needs this in exactly two places: to know that pausing takes a
+    // call, and that a save state is not available yet.
+    bool isPs2() const;
+
     // --- Save states ---------------------------------------------------------
     //
     // The whole product rests on these. A state written on an Apple TV has to

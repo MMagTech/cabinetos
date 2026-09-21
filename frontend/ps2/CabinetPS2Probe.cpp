@@ -76,8 +76,16 @@ int main(int argc, char** argv)
 			config.disc_path = Param(argc, argv, i);
 		else if (!std::strcmp(argv[i], "--resources"))
 			config.resources_dir = Param(argc, argv, i);
-		else if (!std::strcmp(argv[i], "--data"))
-			config.data_root = Param(argc, argv, i);
+		else if (!std::strcmp(argv[i], "--data")) {
+			// One directory for the probe's convenience, laid out the way
+			// PCSX2 lays out a data root. The console sets each of these
+			// separately, because its BIOS, its saves and its scratch live in
+			// three different places for three different reasons.
+			const std::string root = Param(argc, argv, i);
+			config.bios_dir = root + "/bios";
+			config.memcards_dir = root + "/memcards";
+			config.scratch_dir = root;
+		}
 		else if (!std::strcmp(argv[i], "--memory-card"))
 			config.memory_card = Param(argc, argv, i);
 		else if (!std::strcmp(argv[i], "--frames"))
@@ -109,7 +117,7 @@ int main(int argc, char** argv)
 		}
 	}
 
-	if (config.disc_path.empty() || config.resources_dir.empty() || config.data_root.empty())
+	if (config.disc_path.empty() || config.resources_dir.empty() || config.bios_dir.empty())
 	{
 		Usage(argv[0]);
 		return 2;

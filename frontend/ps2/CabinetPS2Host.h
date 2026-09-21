@@ -31,24 +31,39 @@ namespace CabinetPS2
 		/// The disc image. CHD, ISO and the other formats CDVD knows.
 		std::string disc_path;
 
-		/// Where PCSX2 keeps BIOS, memory cards, save states and its cache.
-		/// CabinetOS lays this out; PCSX2 only reads it. On a console this is
-		/// under storage::root(), the same tree every other core already uses.
-		std::string data_root;
+		/// Where the PlayStation 2's firmware is. READ ONLY as far as this
+		/// console is concerned — it comes from RomM with the game.
+		std::string bios_dir;
 
-		/// PCSX2's own resources folder — the game database, the GS shaders and
-		/// the fonts. **Startup FAILS without it rather than degrading**, which
-		/// is worth knowing before blaming anything else: it prints "Resources
-		/// directory is missing" and stops.
-		std::string resources_dir;
+		/// Where the memory card goes. **THE PER-GAME, PER-USER SAVE
+		/// DIRECTORY**, which is what makes the whole existing save machinery
+		/// work unchanged: `catalog::saveFiles` already says a PlayStation 2
+		/// card is `<stem>.ps2` in the save directory, and `filesave.cpp`
+		/// already restores it before launch, captures it after, refuses to
+		/// upload an unformatted one, and files it on the server under the
+		/// name Cabinet's Mac uses.
+		std::string memcards_dir;
 
-		/// The memory card for this game, a bare filename PCSX2 resolves inside
-		/// its memcards folder. EMPTY MEANS NO CARD AT ALL, which is what the
-		/// probe wants: `pcsx2_shared_memory_cards` on the libretro core put
-		/// every game's save in one file belonging to no rom, and nothing that
-		/// runs before the save work is wired up should be able to write to a
-		/// real card by accident.
+		/// The card itself, a bare filename inside the directory above.
+		/// Empty means no card at all, which is safer than a wrong one.
 		std::string memory_card;
+
+		/// Somewhere PCSX2 may write things nobody has to keep — its log, its
+		/// shader cache, its snapshots.
+		///
+		/// **IT MUST BE WRITABLE BY THE SESSION USER AND THAT IS NOT FREE.**
+		/// The obvious home, beside the BIOS, is root-owned on the reference
+		/// console, so PCSX2 silently failed to make its own subdirectories
+		/// and then failed to create a memory card. It said so in three log
+		/// lines that each looked like a different problem.
+		std::string scratch_dir;
+
+		/// PCSX2's own resources folder — its game database, its fonts and its
+		/// GS shaders. **STARTUP FAILS WITHOUT IT RATHER THAN DEGRADING**,
+		/// which is worth knowing before blaming anything else: it prints
+		/// "Resources directory is missing" and stops. It ships with the
+		/// emulator, the way PPSSPP's system files already do.
+		std::string resources_dir;
 
 		/// Skips the BIOS splash, as every frontend does.
 		bool fast_boot = true;
@@ -163,13 +178,7 @@ namespace CabinetPS2
 	/// The rate PCSX2 is producing at — 48000 for a PlayStation 2.
 	unsigned AudioSampleRate();
 
-	/// Where PCSX2 will put the card named in `Config::memory_card`, given the
-	/// same data root. The frontend restores into this path before Run and
-	/// captures from it after Run returns — **after**, because PCSX2 flushes
-	/// the card during shutdown and a capture taken any earlier is the card as
-	/// it was when the game started. That is the same rule the libretro path
-	/// already follows with `retro_unload_game`, and it was paid for once.
-	std::string MemoryCardPath(const std::string& data_root, const std::string& name);
+
 
 	/// Boots the disc and runs until RequestStop, the frame limit, or the game
 	/// ending. BLOCKS — give it its own thread. Returns false and fills error
@@ -178,6 +187,15 @@ namespace CabinetPS2
 
 	/// Asks the running game to stop. Safe from any thread.
 	void RequestStop();
+
+	/// Pauses or resumes the emulated machine.
+	///
+	/// **THE OVERLAY NEEDS THIS AND NOT-CALLING-runFor IS NOT ENOUGH.** Every
+	/// libretro core stops simply because the frame loop stops stepping it —
+	/// that is how the in-game menu freezes a game, and it was a real fault
+	/// until 2026-09-19 that it did not. PCSX2 runs on a thread of its own and
+	/// will happily carry on playing behind the menu unless it is told.
+	void SetPaused(bool paused);
 
 	bool IsRunning();
 

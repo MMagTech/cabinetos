@@ -1024,6 +1024,23 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
     // core played on its declared defaults and the audit agreed with itself.
     // Invisible while the table was empty, wrong the moment it was not.
     core.setOptionOverrides(catalog::optionOverrides(job.coreName));
+
+    // PLAYSTATION 2 NEEDS THREE THINGS NO LIBRETRO CORE DOES, and the second
+    // is the one that matters most.
+    //
+    // PCSX2 refuses to start without its own resources folder — its game
+    // database, fonts and GS shaders — rather than degrading, so it ships with
+    // the emulator the way PPSSPP's system files already do.
+    //
+    // The memory card is NOT named here. Core::loadGame names it from the rom
+    // by the same rule catalog::saveFiles uses, so the existing save machinery
+    // — restore before launch, capture after, refuse an unformatted card, file
+    // it on the server under the name Cabinet's Mac uses — works on it
+    // unchanged.
+    if (cov.core && std::string(cov.core) == "pcsx2") {
+        core.setPs2(storage::imageAssetsDir() + "/pcsx2/resources", 1.0f);
+    }
+
     if (!core.load(job.corePath)) {
         *err = "core " + job.coreName + ": " + core.error();
         job.stage = LaunchJob::Stage::Idle;
@@ -4605,6 +4622,14 @@ int main(int argc, char** argv) {
             //
             // Not the game's own pause: the core stops being stepped, which
             // works for every system whether or not it has a pause button.
+            // AND FOR PLAYSTATION 2 THAT IS NOT ENOUGH, because PCSX2 is not
+            // stepped by this loop at all: it runs its own machine on a thread
+            // of its own and would carry on playing behind the menu exactly as
+            // every core did before 2026-09-19. It has to be TOLD. A no-op for
+            // all twenty-one libretro cores, so it is stated unconditionally
+            // rather than behind a test somebody has to remember.
+            core.setPaused(overlayOpen);
+
             if (overlayOpen) {
                 // Nothing to step. The last frame stays uploaded, so the
                 // menu sits over a frozen picture rather than a black one.

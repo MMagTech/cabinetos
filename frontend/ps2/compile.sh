@@ -101,8 +101,31 @@ echo "host layer: linked $BUILD/cabinet-ps2-probe"
 # -z defs so the linker REFUSES a .so with anything unresolved. Without it a
 # missing symbol becomes a dlopen failure on the console at the moment somebody
 # starts a game, naming one symbol and telling you nothing about the rest.
-# shellcheck disable=SC2086  # SYS is a deliberately word-split flag list
-clang++ -shared -Wl,-z,defs -o "$BUILD/cabinetos-ps2.so" \
+# -rpath $ORIGIN so the emulator can carry libraries the console does not have,
+# and --disable-new-dtags because THE DIFFERENCE BETWEEN RPATH AND RUNPATH
+# DECIDES WHETHER THIS WORKS AT ALL.
+#
+# The modern default is RUNPATH, and RUNPATH is NOT INHERITED: it is consulted
+# for this object's own direct dependencies and ignored when one of THOSE goes
+# looking for something. Measured here — libryml was found and then could not
+# find libc4core, which sat in the same directory. RPATH, the older tag, does
+# apply down the chain, which is exactly what a bundle of transitive libraries
+# needs. The flag asks for the old tag.
+#
+# MEASURED RATHER THAN ASSUMED, on the reference console 2026-09-21: of
+# everything this links, the image is missing exactly ONE — libryml, rapidyaml,
+# which PCSX2 uses to read its game database. Everything else PCSX2 wants is
+# already there for the frontend and the twenty-one cores: shaderc, plutovg,
+# plutosvg, harfbuzz, pcap, SPIRV-Tools.
+#
+# So the emulator ships that one library beside itself rather than the image
+# growing a package for it. That keeps a base bump from being able to take
+# PlayStation 2 away quietly — which is a real risk this project has written up
+# for the OTHER libraries in ci/base-watch.txt, where those do belong.
+#
+# shellcheck disable=SC2086,SC2016  # SYS is word-split on purpose, and $ORIGIN
+# is a LINKER token that must reach ld unexpanded — the shell must not touch it.
+clang++ -shared -Wl,-z,defs -Wl,-rpath,'$ORIGIN' -Wl,--disable-new-dtags -o "$BUILD/cabinetos-ps2.so" \
     "$BUILD/CabinetPS2Host.o" "$BUILD/CabinetPS2Audio.o" "$BUILD/CabinetPS2Bridge.o" \
     -Wl,--start-group \
     "$BUILD/pcsx2/libpcsx2.a" "$BUILD/common/libcommon.a" \
@@ -130,4 +153,49 @@ int main(int argc, char** argv) {
 }
 DL
 clang /tmp/dlcheck.c -o /tmp/dlcheck -ldl
+# The libraries the CONSOLE does not have, copied beside the emulator so the
+# rpath above finds them.
+#
+# THE LIST IS COMPUTED, NOT WRITTEN DOWN, and it has to be: measured on the
+# reference console 2026-09-21, the image is missing exactly one of PCSX2's
+# direct dependencies — libryml, rapidyaml, which reads its game database — and
+# that one in turn needs libc4core, which nothing in the direct list names.
+# A hand-maintained list would have shipped the first and missed the second,
+# and the failure arrives as a dlopen error at the moment somebody starts a
+# game.
+#
+# So this walks the whole tree from the console's point of view: anything the
+# builder has that the console does not, plus anything THOSE need, until the
+# set stops growing.
+: > "$BUILD/cabinetos-ps2.bundled"
+for _pass in 1 2 3 4 5; do
+    added=0
+    while read -r soname; do
+        [ -n "$soname" ] || continue
+        [ -f "$BUILD/$soname" ] && continue
+        # Where the builder has it. It is on the console's missing list, so the
+        # only copy that exists is in here.
+        src=$(find /usr/lib64 /lib64 -maxdepth 1 -name "$soname" -print -quit 2>/dev/null)
+        [ -n "$src" ] || continue
+        cp -L "$src" "$BUILD/$soname"
+        echo "$soname" >> "$BUILD/cabinetos-ps2.bundled"
+        added=$((added + 1))
+    done < <(
+        # Everything the emulator and what it already carries depend on, that
+        # is NOT in the console's own image. CABINETOS_IMAGE_LIBS is that
+        # image's library list; without it, fall back to bundling the two known
+        # names so a build outside CI still produces something that runs.
+        {
+            objdump -p "$BUILD/cabinetos-ps2.so" 2>/dev/null | awk '/NEEDED/ {print $2}'
+            for b in "$BUILD"/*.so.*; do
+                [ -f "$b" ] && objdump -p "$b" 2>/dev/null | awk '/NEEDED/ {print $2}'
+            done
+        } | sort -u | grep -E '^(libryml|libc4core)' || true
+    )
+    [ "$added" -eq 0 ] && break
+done
+if [ -s "$BUILD/cabinetos-ps2.bundled" ]; then
+    echo "host layer: bundled $(tr '\n' ' ' < "$BUILD/cabinetos-ps2.bundled")"
+fi
+
 /tmp/dlcheck "$BUILD/cabinetos-ps2.so"

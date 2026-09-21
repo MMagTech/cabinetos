@@ -1,4 +1,5 @@
 #include "core.h"
+#include "ps2.h"
 
 #include <dlfcn.h>
 #include <unistd.h>
@@ -1034,8 +1035,40 @@ void Core::setDirectories(const std::string& systemDir, const std::string& saveD
     gSaveDir = absoluteDir(saveDir);
 }
 
+// PLAYSTATION 2 IS NOT A LIBRETRO CORE, AND THESE FEW BRANCHES ARE THE WHOLE
+// PRICE OF THAT.
+//
+// PCSX2 is a complete emulator that runs its own machine on its own thread and
+// does not return until the game stops. The frame loop therefore cannot step
+// it, which is the one thing every other emulator here has in common. What it
+// CAN do is take the finished picture, take the finished sound, hand over the
+// pad and stop it — and those are the same four things this class already does
+// for the other twenty-one.
+//
+// So the branch lives here, at the bottom, rather than as a second Core the
+// screens have to know about. Everything above this file — the launch screen,
+// the overlay, the save sync, the frame loop in main.cpp — is unchanged and
+// does not learn a new concept. See ps2.h.
+static bool gIsPs2 = false;
+static std::string gPs2ResourcesDir;
+static float gPs2Upscale = 1.0f;
+
 bool Core::load(const std::string& soPath) {
     unload();
+
+    // The emulator is recognised by its filename, the same way every core is.
+    // catalog::coreFileName produces this for the `ps2` platform.
+    if (soPath.size() >= 16 &&
+        soPath.compare(soPath.size() - 16, 16, "cabinetos-ps2.so") == 0) {
+        if (!ps2::load(soPath)) {
+            error_ = ps2::error();
+            return false;
+        }
+        gIsPs2 = true;
+        handle_ = reinterpret_cast<void*>(1); // loaded() is asked about by name everywhere
+        return true;
+    }
+    gIsPs2 = false;
     // Whatever the last core asked for is not this one's business either.
     gHW = {};
     gHWWanted = false;
@@ -1186,6 +1219,13 @@ void Core::setRefuseHWRender(bool on) { gRefuseHWRender = on; }
 void Core::unload() {
     if (!handle_) return;
     if (gameLoaded_) unloadGame();
+    if (gIsPs2) {
+        ps2::unload();
+        gIsPs2 = false;
+        handle_ = nullptr;
+        if (texture_) { glDeleteTextures(1, &texture_); texture_ = 0; }
+        return;
+    }
     if (g.deinit) g.deinit();
     dlclose(handle_);
     handle_ = nullptr;
@@ -1206,6 +1246,55 @@ bool Core::loadGame(const std::string& romPath, const std::string& systemDir,
     if (!handle_) {
         error_ = "no core loaded";
         return false;
+    }
+    if (gIsPs2) {
+        // THE CARD IS NAMED FROM THE ROM, HERE, BY THE SAME RULE main.cpp USES
+        // FOR EVERY OTHER SAVE. `catalog::saveFiles` says a PlayStation 2 card
+        // is `<stem>.ps2` in the save directory, where the stem is the rom's
+        // filename without its extension — and `filesave.cpp` already restores
+        // that file before launch, captures it after, refuses to upload an
+        // unformatted one, and files it on the server under the name Cabinet's
+        // Mac uses.
+        //
+        // Deriving it here rather than being told means the two cannot drift.
+        // A card PCSX2 wrote under a name the save layer does not look for is
+        // a save that exists on disk and never reaches the server, and nothing
+        // would say so.
+        std::string stem = romPath;
+        if (const size_t slash = stem.find_last_of('/'); slash != std::string::npos)
+            stem.erase(0, slash + 1);
+        if (const size_t dot = stem.find_last_of('.'); dot != std::string::npos)
+            stem.erase(dot);
+
+        // Firmware is shared and comes from RomM; the card is this person's and
+        // this game's; the scratch is throwaway. Three places, deliberately.
+        // `bios/pcsx2/bios`, and the repetition is not a mistake. The outer
+        // one is this console's firmware directory for every system; the
+        // `pcsx2` folder is where the PlayStation 2's own BIOS files sit,
+        // which is where the save work already put them; and PCSX2 is handed
+        // that directory DIRECTLY rather than a root it appends `bios` to.
+        // Getting it one segment short produced a VM that started and was
+        // destroyed in the same twelve milliseconds, saying only "Searching
+        // for a BIOS image in ..." with no error after it.
+        const std::string biosDir = systemDir + "/pcsx2/bios";
+        const std::string scratchDir = saveDir + "/pcsx2-scratch";
+
+        if (!ps2::startGame(romPath, biosDir, saveDir, stem + ".ps2", scratchDir,
+                            gPs2ResourcesDir, gPs2Upscale)) {
+            error_ = ps2::error();
+            return false;
+        }
+        gameLoaded_ = true;
+        gFramesRun = 0;
+        gAudioFrames = 0;
+        frameWidth_ = 0;
+        frameHeight_ = 0;
+        // av_ is what the rest of the frontend reads for display. PCSX2 paces
+        // ITSELF, so nothing here drives the emulator; the 60 is the NTSC
+        // figure and a PAL disc simply runs at its own rate underneath.
+        av_.fps = 60.0;
+        av_.sampleRate = 48000.0;
+        return true;
     }
     gSystemDir = absoluteDir(systemDir);
     gSaveDir = absoluteDir(saveDir);
@@ -1359,6 +1448,16 @@ bool Core::loadGame(const std::string& romPath, const std::string& systemDir,
 }
 
 void Core::unloadGame() {
+    if (gIsPs2) {
+        if (!gameLoaded_) return;
+        // BLOCKS until PCSX2 has actually stopped, which is what makes the
+        // memory card capture that follows meaningful: the card is flushed
+        // during shutdown, so anything read before this returns is the card as
+        // it was when the game started.
+        ps2::stopGame();
+        gameLoaded_ = false;
+        return;
+    }
     if (!gameLoaded_) return;
     // The core frees its GL resources here, and it happens BEFORE the game is
     // unloaded — which is the order RetroArch uses, and it is not arbitrary: a
@@ -1390,6 +1489,21 @@ double Core::audioAhead() const {
 
 int Core::runFor(double dt) {
     if (!gameLoaded_) return 0;
+    if (gIsPs2) {
+        // NOTHING TO STEP, AND THAT IS NOT A GAP. PCSX2 runs its own machine
+        // on its own thread at its own pace, with its own frame limiter — so
+        // there is no "advance one frame" to call and no governor to run. The
+        // frame counter follows what actually arrived, which is what the rest
+        // of the frontend reads.
+        //
+        // The one thing that IS still this function's job on every other core
+        // — not stepping while the overlay is open — is handled by the caller
+        // simply not calling it, and for PlayStation 2 that is not enough: a
+        // thread does not stop because nobody asked it to. Pausing is wired
+        // separately, through setPaused.
+        (void)dt;
+        return 1;
+    }
 
     const double interval = 1.0 / std::max(av_.fps, 1.0);
     accumulator_ += dt;
@@ -1447,6 +1561,39 @@ int Core::runFor(double dt) {
 }
 
 bool Core::uploadFrame() {
+    if (gIsPs2) {
+        const uint32_t* pixels = nullptr;
+        unsigned w = 0, h = 0;
+        if (!ps2::takeFrame(&pixels, w, h)) {
+            // Nothing new. The last frame stays uploaded, which is what makes
+            // a paused game sit under the overlay rather than going black.
+            return texture_ != 0;
+        }
+        if (!texture_) {
+            glGenTextures(1, &texture_);
+            glBindTexture(GL_TEXTURE_2D, texture_);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        } else {
+            glBindTexture(GL_TEXTURE_2D, texture_);
+        }
+        // Reallocated only when the shape changes. It does change mid-game:
+        // Homura goes from 640x448 to 640x512 the moment it leaves its own
+        // video-mode menu, and a PAL game switching modes is ordinary.
+        if (w != frameWidth_ || h != frameHeight_) {
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, static_cast<GLsizei>(w), static_cast<GLsizei>(h),
+                         0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+            frameWidth_ = w;
+            frameHeight_ = h;
+        } else {
+            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, static_cast<GLsizei>(w), static_cast<GLsizei>(h),
+                            GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+        }
+        gFramesRun++;
+        return true;
+    }
     if (gHWVulkan) {
         // The one place the two APIs meet. present() copies whatever the core
         // last handed over into the exported image, which IS the GL texture —
@@ -1539,14 +1686,40 @@ bool Core::uploadFrame() {
 }
 
 const std::vector<int16_t>& Core::drainAudio() {
+    if (gIsPs2) {
+        gAudioDrain.clear();
+        ps2::drainAudio(gAudioDrain);
+        // Counted here rather than in the emulator, because this is the number
+        // `running()` is built on — audio is the one output that does not
+        // appear until the machine actually runs.
+        gAudioFrames += gAudioDrain.size() / 2;
+        return gAudioDrain;
+    }
     gAudioDrain.swap(gAudio);
     gAudio.clear();
     return gAudioDrain;
 }
 
+void Core::setPs2(const std::string& resourcesDir, float upscale) {
+    gPs2ResourcesDir = resourcesDir;
+    gPs2Upscale = upscale > 0.0f ? upscale : 1.0f;
+}
+
+void Core::setPaused(bool paused) {
+    // Every libretro core stops because main.cpp stops calling runFor. Only
+    // PCSX2 has a thread that needs telling.
+    if (gIsPs2) ps2::setPaused(paused);
+}
+
+bool Core::isPs2() const { return gIsPs2; }
+
 void Core::setPad(int port, const PadState& pad) {
     if (port < 0 || port >= kMaxPorts) return;
     gPads[port] = pad;
+    if (gIsPs2) {
+        ps2::setPad(port, pad.buttons, pad.leftX, pad.leftY, pad.rightX, pad.rightY,
+                    pad.leftTrigger, pad.rightTrigger);
+    }
 }
 
 size_t Core::stateSize() const {

@@ -88,6 +88,7 @@ namespace
 	// make against a number, and this is the number.
 	std::atomic<double> s_readback_us{0.0};
 	std::atomic<bool> s_stop_requested{false};
+	std::atomic<bool> s_paused{false};
 	std::atomic<uint64_t> s_frames{0};
 
 	// Owned by the GS thread.
@@ -474,7 +475,19 @@ void Host::PumpMessagesOnCPUThread()
 		s_stop_requested.store(true);
 
 	if (s_stop_requested.load() && VMManager::GetState() == VMState::Running)
+	{
 		VMManager::SetState(VMState::Stopping);
+		return;
+	}
+
+	// Pause and resume. Applied here rather than from the calling thread
+	// because VMManager::SetState expects the CPU thread, and this is the one
+	// place the emulator lends it out.
+	const VMState state = VMManager::GetState();
+	if (s_paused.load() && state == VMState::Running)
+		VMManager::SetState(VMState::Paused);
+	else if (!s_paused.load() && state == VMState::Paused)
+		VMManager::SetState(VMState::Running);
 }
 
 // ---------------------------------------------------------------------------
@@ -653,8 +666,43 @@ namespace
 			return false;
 		}
 
+		// EVERY FOLDER IS SET EXPLICITLY, AND THAT IS THE POINT.
+		//
+		// PCSX2 normally derives all of these from one data root. Doing that
+		// here put its memory cards, its log and its shader cache under the
+		// BIOS directory, which on the reference console is root-owned — so it
+		// silently failed to create any of them and then failed to create a
+		// card, in three log lines that each looked like a different problem.
+		//
+		// More importantly the card belongs in the PER-GAME, PER-USER SAVE
+		// DIRECTORY, because that is where the rest of this console already
+		// expects it: `catalog::saveFiles` says a PlayStation 2 card is
+		// `<stem>.ps2` in the save directory, and `filesave.cpp` restores it
+		// before launch, captures it after, refuses to upload an unformatted
+		// one, and files it on the server under the name Cabinet's Mac uses.
+		// Setting this one string is what makes all of that work unchanged.
 		EmuFolders::Resources = config.resources_dir;
-		EmuFolders::DataRoot = config.data_root;
+		EmuFolders::Bios = config.bios_dir;
+		EmuFolders::MemoryCards = config.memcards_dir;
+
+		// Everything PCSX2 writes that nobody has to keep. DataRoot is set as
+		// well because a few places still read it directly.
+		EmuFolders::DataRoot = config.scratch_dir;
+		EmuFolders::Cache = Path::Combine(config.scratch_dir, "cache");
+		EmuFolders::Logs = Path::Combine(config.scratch_dir, "logs");
+		EmuFolders::Snapshots = Path::Combine(config.scratch_dir, "snaps");
+		EmuFolders::Savestates = Path::Combine(config.scratch_dir, "sstates");
+		EmuFolders::Covers = Path::Combine(config.scratch_dir, "covers");
+		EmuFolders::Cheats = Path::Combine(config.scratch_dir, "cheats");
+		EmuFolders::Patches = Path::Combine(config.scratch_dir, "patches");
+		EmuFolders::Textures = Path::Combine(config.scratch_dir, "textures");
+		EmuFolders::GameSettings = Path::Combine(config.scratch_dir, "gamesettings");
+		EmuFolders::InputProfiles = Path::Combine(config.scratch_dir, "inputprofiles");
+		EmuFolders::Videos = Path::Combine(config.scratch_dir, "videos");
+		EmuFolders::UserResources = Path::Combine(config.scratch_dir, "resources");
+		EmuFolders::Settings = config.scratch_dir;
+		EmuFolders::DebuggerLayouts = Path::Combine(config.scratch_dir, "debuggerlayouts");
+		EmuFolders::DebuggerSettings = Path::Combine(config.scratch_dir, "debuggersettings");
 		return true;
 	}
 } // namespace
@@ -804,6 +852,15 @@ bool CabinetPS2::Run(const Config& config, std::string* error)
 	s_settings.SetBoolValue("EmuCore", "EnableFastBoot", config.fast_boot);
 
 	VMManager::Internal::LoadStartupSettings();
+
+	// AND AGAIN, BECAUSE LoadStartupSettings RE-DERIVES THEM. It reads the
+	// folder names out of the settings layer, which is deliberately empty
+	// here, and puts everything back under DataRoot — quietly undoing the
+	// block above. Setting them twice is not belt and braces; the second one
+	// is the one that survives.
+	if (!ConfigureFolders(config, error))
+		return false;
+
 	EmuFolders::EnsureFoldersExist();
 
 	if (!VMManager::Internal::CPUThreadInitialize())
@@ -841,15 +898,6 @@ bool CabinetPS2::Run(const Config& config, std::string* error)
 	return ok;
 }
 
-std::string CabinetPS2::MemoryCardPath(const std::string& data_root, const std::string& name)
-{
-	// EmuFolders::MemoryCards is only set once PCSX2 has started, and the
-	// frontend needs this before that — it restores the card from the server
-	// before the emulator exists. So the layout is stated here rather than
-	// read back, and `memcards` is PCSX2's own name for it.
-	return Path::Combine(Path::Combine(data_root, "memcards"), name);
-}
-
 void CabinetPS2::SetPad(unsigned port, const Pad& pad)
 {
 	if (port >= 2)
@@ -877,6 +925,11 @@ bool CabinetPS2::TakeFrame(Frame* out, uint64_t since)
 void CabinetPS2::RequestStop()
 {
 	s_stop_requested.store(true);
+}
+
+void CabinetPS2::SetPaused(bool paused)
+{
+	s_paused.store(paused);
 }
 
 bool CabinetPS2::IsRunning()

@@ -284,6 +284,17 @@ std::string gCoreDir = "cores/build";
 }  // namespace
 
 std::string coreFileName(const std::string& manifestCoreName) {
+    // PLAYSTATION 2 IS NOT A LIBRETRO CORE AND ITS FILE IS NOT NAMED LIKE ONE.
+    //
+    // PCSX2 is a whole emulator, embedded from upstream and built by
+    // cores/build-pcsx2.sh rather than cores/build-core.sh. The name says so
+    // deliberately: a file called `pcsx2_libretro.so` would be the libretro
+    // core, which this console DELIBERATELY DOES NOT SHIP — its source
+    // repository does not exist, so it can never be pinned, built in CI or
+    // audited. Seeing the two names side by side is how somebody tells at a
+    // glance which one a console is running. docs/PROJECT.md, open question 12b.
+    if (manifestCoreName == "pcsx2") return "cabinetos-ps2.so";
+
     // See the header. cores/build-core.sh has the same three lines and the
     // same comment; the two must agree.
     std::string stem = manifestCoreName;

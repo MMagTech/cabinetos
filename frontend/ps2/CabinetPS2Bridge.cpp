@@ -48,17 +48,19 @@ extern "C" {
 // Starts a game. Returns 1 on success. Blocks only long enough to get the VM
 // running; the emulator itself runs on a thread of its own from here on,
 // because PCSX2's VMManager::Execute does not return until the game stops.
-int cps2_start(const char* disc, const char* data_root, const char* resources, const char* memory_card,
-	float upscale, int fast_boot)
+int cps2_start(const char* disc, const char* bios_dir, const char* memcards_dir, const char* memory_card,
+	const char* scratch_dir, const char* resources, float upscale, int fast_boot)
 {
 	if (s_started.load())
 		return 0;
 
 	CabinetPS2::Config config;
 	config.disc_path = disc ? disc : "";
-	config.data_root = data_root ? data_root : "";
-	config.resources_dir = resources ? resources : "";
+	config.bios_dir = bios_dir ? bios_dir : "";
+	config.memcards_dir = memcards_dir ? memcards_dir : "";
 	config.memory_card = memory_card ? memory_card : "";
+	config.scratch_dir = scratch_dir ? scratch_dir : "";
+	config.resources_dir = resources ? resources : "";
 	config.upscale = upscale > 0.0f ? upscale : 1.0f;
 	config.fast_boot = fast_boot != 0;
 	config.stop_after = 0;
@@ -103,6 +105,15 @@ void cps2_stop(void)
 	if (s_vm_thread.joinable())
 		s_vm_thread.join();
 	s_started.store(false);
+}
+
+// Freezes the emulated machine. The frontend calls this when the in-game
+// overlay opens: every libretro core stops because the frame loop stops
+// stepping it, and a PlayStation 2 on a thread of its own would otherwise
+// carry on being played behind the menu.
+void cps2_set_paused(int paused)
+{
+	CabinetPS2::SetPaused(paused != 0);
 }
 
 void cps2_set_pad(unsigned port, uint32_t buttons, float left_x, float left_y, float right_x, float right_y,
@@ -152,18 +163,6 @@ unsigned cps2_drain_audio(int16_t* dest, unsigned max_frames)
 unsigned cps2_audio_sample_rate(void)
 {
 	return CabinetPS2::AudioSampleRate();
-}
-
-// Where the card named in cps2_start will be, so the frontend can restore it
-// beforehand and capture it afterwards. Writes into `out` and returns its
-// length, or 0 if it would not fit.
-unsigned cps2_memory_card_path(const char* data_root, const char* name, char* out, unsigned out_size)
-{
-	const std::string path = CabinetPS2::MemoryCardPath(data_root ? data_root : "", name ? name : "");
-	if (path.size() + 1 > out_size)
-		return 0;
-	std::memcpy(out, path.c_str(), path.size() + 1);
-	return static_cast<unsigned>(path.size());
 }
 
 // Live performance, for the frontend's own speed reading and for the readback
