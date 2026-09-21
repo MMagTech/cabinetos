@@ -1,0 +1,52 @@
+# The build environment for upstream PCSX2 on Linux x86-64.
+#
+# SEPARATE FROM frontend/Containerfile ON PURPOSE. That one is the frontend and
+# the twenty-one libretro cores, and it is small because a libretro core vendors
+# almost everything it needs. PCSX2 is a whole emulator with a whole emulator's
+# dependency list, and putting these thirty-odd packages into the frontend's
+# image would slow every core build on the project to serve one thing.
+#
+# Fedora 44 for the same reason frontend/Containerfile gives: it is what
+# Bazzite 44 is built from, so glibc and every runtime library match the image
+# this has to run inside. Move it when the base moves.
+FROM registry.fedoraproject.org/fedora:44
+
+# clang, not gcc. PCSX2's own top-level CMakeLists prints
+#   "PCSX2 only supports the Clang and MSVC compilers"
+# and warns that an unsupported compiler "may not even build successfully".
+# There is no reason to be the project testing that claim.
+RUN dnf install -y --setopt=install_weak_deps=False \
+        clang lld cmake ninja-build git make pkgconf-pkg-config nasm \
+        libpng-devel libjpeg-turbo-devel zlib-ng-compat-devel \
+        libzstd-devel lz4-devel libwebp-devel \
+        SDL3-devel freetype-devel harfbuzz-devel \
+        plutovg-devel plutosvg-devel rapidyaml-devel \
+        libcurl-devel libpcap-devel fontconfig-devel systemd-devel \
+        libX11-devel libXrandr-devel libXext-devel libXi-devel dbus-devel \
+        vulkan-headers vulkan-loader-devel libshaderc-devel \
+        mesa-libGL-devel mesa-libEGL-devel \
+    && dnf clean all
+
+# EVERY ONE OF THESE IS A dnf PACKAGE, AND THAT IS THE HEADLINE.
+#
+# Cabinet cross-compiled TEN of these by hand for Mac Catalyst, with pinned
+# tarballs and SHA sums, in tools/build-pcsx2-deps-mac.sh, because Catalyst had
+# no build of any of them. Measured against Fedora 44 on 2026-09-21, every
+# version constraint PCSX2 states is already satisfied:
+#
+#   libpng     needs >= 1.6.40   has 1.6.55
+#   zstd       needs >= 1.5.5    has 1.5.7
+#   SDL3       needs >= 3.2.6    has 3.4.0
+#   freetype   needs >= 2.10     has 2.14.1
+#   plutovg    needs >= 1.1.0    has 1.3.2
+#   plutosvg   needs >= 0.0.7    has 0.0.7
+#   ryml       no version stated has 0.10.0
+#
+# libXi-devel is the one that is easy to miss: find_package(X11) succeeds
+# without it and then common/CMakeLists.txt fails at GENERATE time on a missing
+# X11::Xi target, which reads like a CMake bug rather than a missing package.
+#
+# THE ONE THING FEDORA 44 DOES NOT HAVE is libbacktrace-devel, which is why the
+# build script passes -DUSE_BACKTRACE=OFF. It is a crash-reporter nicety and
+# PCSX2 makes it an option precisely because it is optional.
+WORKDIR /src

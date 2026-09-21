@@ -5627,6 +5627,20 @@ binary stays small and a core bump moves one image layer instead of all of them.
 Same process, same frame loop, same overlay; different linkage. See *The frontend
 toolkit*.
 
+**THE `.so` HALF OF THAT CORRECTION IS NOW MEASURED, 2026-09-21.** It was an
+assumption until then, and it had a way of being wrong that nobody had checked:
+a static library built without position-independent code cannot be linked into a
+shared object at all, and the failure comes at link time with a relocation error
+rather than anywhere useful. Upstream PCSX2 defaults `POSITION_INDEPENDENT_CODE`
+to ON, the build passes it explicitly rather than relying on that, and the whole
+emulator does link into a 28 MB `.so`. It does not yet `dlopen`, and the reason
+is the right one: the host layer that would resolve its 57 remaining symbols has
+not been written. See `docs/PCSX2-HOST-SURFACE.md`.
+
+**Upstream also answers the harder half of this entry for free**, which the
+original reasoning did not anticipate: `pcsx2-gsrunner` is a complete, in-tree,
+Linux-native, Qt-free frontend for the same library. Open question 12b.
+
 The remaining work is open question 13 — producing Linux builds of the same
 cores — not an architectural choice.
 
@@ -5783,6 +5797,62 @@ equivalents exist on the buildbot, and Cabinet did not take them. Nobody wrote
 down why, and a dedicated builder for exactly the two systems that have a
 libretro alternative is a decision somebody made after trying. **Read
 `tools/build-dolphin-mac.sh` before believing otherwise.**
+
+#### MEASURED 2026-09-21: UPSTREAM BUILDS AS A LIBRARY ON LINUX, WITH NO PATCHES
+
+**The first question this route had was answerable in one build, and the answer
+is the good one.** `docs/PCSX2-HOST-SURFACE.md` has the whole of it and
+`cores/build-pcsx2.sh` reproduces it in 43 seconds from a clean clone.
+
+**A BELIEF THIS DOCUMENT AND THE HANDOVER BOTH CARRIED IS WRONG, and it is
+worth correcting rather than quietly dropping.** Both said *"PCSX2's CMake
+builds an APPLICATION, not a library — Cabinet had to carve the frontend out"*.
+It does not and Cabinet did not:
+
+| | |
+|---|---|
+| `pcsx2/CMakeLists.txt` line 8 | **`add_library(PCSX2)`** — the emulator is a library target upstream |
+| The application | a **separate** target, `pcsx2-qt`, behind `if(ENABLE_QT_UI)` at the top level |
+| What `patch-pcsx2-mac.py` really does | replaces what **Catalyst cannot compile** — SDL3, cubeb, `CocoaTools.mm`, an `NSView`/`CAMetalLayer` seam, `pthread_jit_write_protect_np` through `dlsym`, Homebrew's FFmpeg. It never changed a target type. |
+
+**None of those is a Linux problem.** `-DENABLE_QT_UI=OFF` and nothing else
+produces `libpcsx2.a`, 35 MB, in 25 seconds on the A9, carrying the Vulkan
+renderer (220 symbols), the OpenGL fallback (127) and the x86-64 recompilers
+(318 for microVU alone). Zero Metal symbols, which is asserted rather than
+assumed.
+
+**AND UPSTREAM SHIPS A SECOND HOST LAYER TO READ.** `pcsx2-gsrunner` is 1332
+lines in one file, has no Qt, implements the whole `Host` contract, links
+against the library in 2.2 seconds and runs. It is Linux-native and maintained
+in-tree, so unlike Cabinet's it cannot go stale against the version we pin.
+**Read both**: Cabinet's `CabinetPS2Host.cpp` is the better guide to what a
+console frontend wants, gsrunner to what this PCSX2 requires.
+
+**THE HOST LAYER IS 57 SYMBOLS, COUNTED RATHER THAN ESTIMATED.** A shared
+object links with undefined symbols and then fails at `dlopen` naming only the
+first, so the count comes from `-Wl,-z,defs`, which makes the linker refuse and
+name them all. 53 are in `Host::`; the other four are three
+`InputManager::ConvertHostKeyboard*` functions and `g_host_hotkeys`, which is a
+**variable** and is the one a `dlopen` trips on first.
+
+**Three independent counts agree** — Cabinet answers 54, gsrunner implements 52,
+the linker demands 53 — and the majority of them are one-line stubs, because a
+console has no clipboard, no file selector, no achievements login and no game
+list of PCSX2's own. **Six are the real job**, all in the display path:
+`AcquireRenderWindow`, `ReleaseRenderWindow`, `BeginPresentFrame`,
+`RequestResizeHostDisplay`, `IsFullscreen`, `SetFullscreen` — and open question
+20's Vulkan host already owns the device, the queue and the crossing those need.
+
+**TEN HAND-BUILT DEPENDENCIES BECOME ONE `dnf` LINE.** Cabinet cross-compiled
+ten for Catalyst with pinned tarballs and SHA sums. Fedora 44 satisfies every
+version constraint PCSX2 states — libpng 1.6.55 against a required 1.6.40, SDL3
+3.4.0 against 3.2.6, plutovg 1.3.2 against 1.1.0, and so on. **The only gap is
+`libbacktrace-devel`**, and `USE_BACKTRACE=OFF` disposes of it.
+
+**What this does NOT show, stated plainly:** nothing has been emulated, no host
+layer is written, and none of it is in CI — deliberately, because a PCSX2 build
+in the image workflow before there is anything to ship costs every build minutes
+and proves nothing the script does not prove on demand.
 
 #### The saves, measured on the running console 2026-09-20
 

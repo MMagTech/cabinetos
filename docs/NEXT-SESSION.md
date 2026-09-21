@@ -43,43 +43,52 @@ are in PROJECT.md, *Constraints and principles*, item 7.
 as the VM, sudo password `cabinet`. It boots into the frontend on
 **gamescope/drm** — the top compositor rung, which the VM has never reached —
 on its own Radeon 890M at the panel's native **3840x2160**, with Vulkan
-present (RADV STRIX1) and 1147 playable games. **The UI freeze is lifted and
-what is on that television is the real thing.**
+present (RADV STRIX1). **The UI freeze is lifted and what is on that television
+is the real thing.** 1147 playable games on the image alone, **1232 as it is
+running today** — see the next paragraph.
 
-**IT IS RUNNING A HAND-BUILT BINARY RIGHT NOW, 2026-09-20, AND THAT IS THE
-FIRST THING TO UNDO.** PlayStation 2 and GameCube are on the television for
-testing before an image carries them, through a drop-in at
-`/etc/systemd/system/cabinetos-session.service.d/20-heavy-systems.conf`. While
-that file exists the paragraph below is FALSE. Putting the machine back:
+**IT IS RUNNING A HAND-BUILT BINARY, ON PURPOSE, AS OF 2026-09-21.** MMagTech's
+call this session, and it reverses the instruction that used to be here. The
+drop-in at
+`/etc/systemd/system/cabinetos-session.service.d/20-heavy-systems.conf` stays,
+because it is what puts PlayStation 2 and GameCube on the television — 1232
+playable games instead of 1147 — and removing it costs 85 games to buy nothing
+while the embed work is in progress. **The confusion it used to cause was a
+documentation problem, and this paragraph is the fix.**
+
+```
+ps -eo args | grep [c]abinetos-frontend
+```
+
+**Verified 2026-09-21 07:22:** `gamescope --backend drm --output-width 3840
+--output-height 2160 --ready-fd 3 -- /var/home/cabinet/cabinetos-frontend-dev
+--core-dir /var/home/cabinet/cores-dev --core-option
+pcsx2_analog_mode1=enabled`, on `gamescope (drm) is up` at 3840x2160.
+
+**THE SESSION HAD BEEN DEAD FOR TEN HOURS AND NOTHING SAID SO.** It was found
+`inactive` at the start of this session — stopped at 21:31 the night before and
+never restarted, so the television had been showing nothing at all. Neither the
+image nor the hand-built binary was running. **`systemctl is-active
+cabinetos-session` is the first thing to check, before `ps`**, because a dead
+session and a session running the wrong thing look identical to every other
+probe on this page.
+
+Putting the machine back on the image, when that is what you want:
 
 ```
 sudo rm /etc/systemd/system/cabinetos-session.service.d/20-heavy-systems.conf
 sudo systemctl daemon-reload && sudo systemctl restart cabinetos-session
 ```
 
-It points `CABINETOS_APP` at `~/cabinetos-frontend-dev` with
-`--core-dir ~/cores-dev` (the 21 image cores symlinked plus the two new ones)
-and `--core-option pcsx2_analog_mode1=enabled`. **`Environment=` must be
-QUOTED** or systemd splits the value on whitespace and silently drops every
-argument after the path — which looks exactly like a console that ignored you.
+**`Environment=` must be QUOTED** or systemd splits the value on whitespace and
+silently drops every argument after the path — which looks exactly like a
+console that ignored you.
 
-**THE PARAGRAPH BELOW DESCRIBES THE MACHINE WITH THAT DROP-IN REMOVED.**
-
-**IT RUNS THE IMAGE AND NOTHING BY HAND, as of 2026-09-20.** There is no
-drop-in in `/etc/systemd/system/cabinetos-session.service.d/` — the directory
-does not exist — and the running process is `/usr/bin/cabinetos-frontend`,
-launched by `gamescope --backend drm --output-width 3840 --output-height 2160
---ready-fd 3`. Booted digest `sha256:78e43b5a…`, which is #30 merged. **Check
-that before believing anything about the machine**, because this session began
-with a hand-built binary wired in and nobody able to say what was running:
-
-```
-ps -eo args | grep [c]abinetos-frontend
-```
-
-`/var/home/cabinet/cabinetos-frontend-dev` is still on disk and is now stale.
-It is a fine escape hatch — put a drop-in back to use it — but nothing depends
-on it, and if you build a new one, overwrite it rather than adding a second.
+**WITH THAT DROP-IN REMOVED, the machine runs the image and nothing by hand**,
+as it did on 2026-09-20: `/usr/bin/cabinetos-frontend`, booted digest
+`sha256:78e43b5a…`, which is #30 merged. `/var/home/cabinet/cabinetos-frontend-dev`
+is the hand-built binary the drop-in points at; if you build a new one,
+overwrite it rather than adding a second.
 
 **ALWAYS CHECK WHICH COMPOSITOR RUNG IT LANDED ON BEFORE JUDGING ANYTHING.**
 
@@ -236,74 +245,152 @@ both rules are measured and in `filesave.cpp`.
 
 - **Nobody has saved inside a game and watched it go up.** The download half is
   proved; the upload half is the same code Crazy Taxi 2 proved for Dreamcast.
-- **PLAYSTATION 2 CANNOT SHIP AS IT STANDS, and this is the single most
-  important thing on this page.** See *THE PS2 CORE IS UNPINNABLE* below. The
-  GameCube core can be pinned; the PS2 one cannot, at all.
+- **THE PS2 *LIBRETRO CORE* STILL CANNOT SHIP AND NEVER WILL** — its source
+  repository does not exist. **But PlayStation 2 is no longer blocked**, because
+  the embed route was measured on 2026-09-21 and is open: see item 1a. The
+  GameCube core can be pinned and that part is unchanged.
 - **TWO OPEN BUGS FROM ONE HOUR OF PLAY, both reported by MMagTech and neither
   reproducible from here.** See item 1b.
 
-### 1a. THE PS2 CORE IS UNPINNABLE AND MUST BE REPLACED — 2026-09-21
+### 1a. PLAYSTATION 2 IS EMBEDDED FROM UPSTREAM, AND THE BUILD IS DONE — 2026-09-21
 
-**`libretro/pcsx2` DOES NOT EXIST.** Not renamed, not moved, not a rate limit —
-checked three ways:
+**PLAIN VERSION: upstream PCSX2 builds as a library on Linux with no patches at
+all, and the job left is a host layer of 57 functions, most of them one-liners.**
+That is a much smaller thing than this page said it would be yesterday.
+
+**Run it yourself in 43 seconds from nothing:**
 
 ```
-git ls-remote https://github.com/libretro/pcsx2.git
-remote: Repository not found.
+cores/build-pcsx2.sh
 ```
 
-`libretro/dolphin` returns 200 from the same script in the same second;
-`libretro/pcsx2` returns **404**; the only mirror, `libretro-mirrors/pcsx2`,
-was last pushed in **2020**. libretro's own build recipe still points at the
-dead URL and their buildbot is producing binaries from a checkout nobody else
-can obtain.
+It clones `PCSX2/pcsx2` at **v2.8.2**, asserts the pin, builds `libpcsx2.a`,
+links upstream's own non-Qt frontend against it as a proof, runs that binary,
+and then counts exactly what a CabinetOS host layer still owes the library.
+`docs/PCSX2-HOST-SURFACE.md` is the full write-up.
 
-**So the PS2 core on the A9 right now cannot be pinned, cannot be built in CI,
-cannot go in the image, and cannot be reproduced by anybody.** It is a working
-proof and nothing more. Do not spend an hour trying to add it to
-`cores/build-core.sh` — that is why this section exists.
+**WHY THE ROUTE CHANGED, IN ONE LINE:** `libretro/pcsx2` does not exist —
+`git ls-remote` says *"Repository not found"*, the only mirror was last pushed
+in 2020, and libretro's buildbot builds from a checkout nobody can obtain. A
+core whose source cannot be cloned cannot be pinned, built in CI, put in the
+image or audited. The working `.so` on the A9 right now is a proof and nothing
+more. **That is a hard stop, not a quality trade-off, and it is not reopenable.**
 
-**It is also years out of date even if it could be obtained.** It reports
-`v2.0.0-afbcc8a` and its binary carries the string `1.7.1`; upstream PCSX2's
-current release is **v2.8.2** (2026-09-04), with dev builds at v2.9.78.
+#### THE THING TO UNLEARN, BECAUSE THIS PAGE TOLD YOU THE OPPOSITE
 
-**THE ROUTE FOR PS2 IS THE ONE THAT WAS ALREADY DECIDED: EMBED UPSTREAM
-`PCSX2/pcsx2`.** MMagTech, 2026-09-21, and he is right that it should never
-have been reinterpreted: *"what does macos use for ps2 and why did you not use
-it here"*. The Mac embeds real PCSX2 and so should this.
+This handover said *"PCSX2's CMake builds an APPLICATION, not a library —
+Cabinet had to carve the frontend out"*. **Both halves are wrong.**
 
-**The job, sized from Cabinet's own tree rather than guessed:**
+| | |
+|---|---|
+| `pcsx2/CMakeLists.txt` line 8 | **`add_library(PCSX2)`** — a library target upstream, and always was |
+| The application | a **separate** target, `pcsx2-qt`, behind `if(ENABLE_QT_UI)` |
+| What Cabinet's 546-line patch script really does | replaces what **Catalyst** cannot compile: SDL3, cubeb, `CocoaTools.mm`, an `NSView`/`CAMetalLayer` seam, `pthread_jit_write_protect_np` via `dlsym`, Homebrew's FFmpeg |
 
-| | lines | ports? |
-|---|---|---|
-| `CabinetPS2Host.cpp` — all 54 `Host` functions and the VM lifecycle | 811 | **yes**, plain C++ |
-| `CabinetPS2Bridge.cpp` — the flat C face | 150 | **yes** |
-| `CabinetInputSource.cpp` — the slot SDL vacated | 109 | **yes** |
-| `CabinetDrawableProbe.mm` — Metal drawable probing | 315 | no — does not exist here |
-| `CabinetCocoaTools.mm` — AppKit replaced with UIKit | 201 | no — not needed at all |
-| `CabinetAudioStream.mm` — AVAudioEngine | 165 | no — SDL audio already exists |
+**Not one of those is a Linux problem.** `-DENABLE_QT_UI=OFF` is the whole of
+it.
 
-**LINUX REMOVES MOST OF WHAT MADE IT HARD ON THE MAC.** Cabinet cross-compiled
-**ten** external dependencies for Catalyst by hand with pinned tarballs and SHA
-sums — on Linux they are `dnf install`. Metal becomes Vulkan, which PCSX2
-supports natively **and which this console now has**. SDL3 "does not survive
-Catalyst" and is already linked here. `pthread_jit_write_protect_np` reached
-through `dlsym` is nothing on Linux. PROJECT.md already counted nine of
-PCSX2's seventeen patch groups as Apple or Metal walls that do not exist here.
+#### WHAT THE BUILD ACTUALLY PRODUCED
 
-**TONIGHT'S VULKAN WORK IS THE FOUNDATION FOR THIS, NOT A DETOUR.** Cabinet's
-`CabinetPS2Host` presents into a `CAMetalLayer` and runs the VM on its own
-thread; `vkhost.cpp` is the same shape with a Vulkan device instead. An
-embedded PCSX2 needs exactly what was built for the libretro one.
+| | |
+|---|---|
+| `libpcsx2.a` | **35 MB**, plus `libcommon.a` and 16 vendored archives — 18, 49 MB |
+| Patches | **none** |
+| Wall clock | **25 s** on 20 of the A9's 24 cores |
+| Vulkan renderer | **220 symbols** — `USE_VULKAN=ON` took |
+| OpenGL renderer | 127 — the fallback for the VM, which has no Vulkan |
+| Metal | **0**, asserted rather than assumed |
+| microVU recompiler | 318, with `recRecompile`, `iopRec` and the vtlb dynarec beside it |
 
-**THE FIRST QUESTION, and it decides how hard the rest is:** PCSX2's CMake
-builds an APPLICATION, not a library — Cabinet had to carve the frontend out.
-Whether upstream will produce a linkable library on Linux without that surgery
-is answerable in one build. Do that first.
+**These are PCSX2's ORIGINAL x86-64 emitters**, not the machine-translated ARM64
+ones Cabinet had to pin a fork for. That is the whole argument for upstream over
+`isztldav/pcsx2` — the fork's reason for existing is simply absent here.
 
-**Pin `upstream PCSX2/pcsx2`, not the `isztldav` fork.** That fork exists to
-add an ARM64 recompiler for Apple Silicon; on x86-64 it is not a feature, it is
-291 commits of staleness.
+#### READ UPSTREAM'S OWN HOST LAYER, NOT ONLY CABINET'S
+
+**`pcsx2-gsrunner` is a second reference implementation and nobody had noticed
+it.** 1332 lines in one file, no Qt, implements the whole `Host` contract, links
+against the library in 2.2 seconds, and **runs** — it reaches full config init,
+printing its memory-card and BIOS directories.
+
+It is Linux-native and maintained in-tree, so **unlike Cabinet's it cannot go
+stale against the version we pin.** Read both: Cabinet's `CabinetPS2Host.cpp`
+(811 lines) is the better guide to what a *console* frontend wants; gsrunner is
+the better guide to what *this* PCSX2 requires.
+
+**PCSX2 refuses to start without its `bin/resources` folder** — game database,
+fonts, GS shaders. It does not degrade, it refuses. That has to ship the way
+PPSSPP's 13 MB already do at `/usr/share/cabinetos/system/`.
+
+#### THE JOB LEFT IS 57 SYMBOLS, AND SIX OF THEM ARE THE WORK
+
+Counted, not estimated. A shared object links happily with undefined symbols and
+then fails at `dlopen` naming only the **first** one, which tells you nothing
+about the size of the job — so the count comes from `-Wl,-z,defs`, which makes
+the linker refuse and name them all.
+
+**53 in `Host::`, plus three `InputManager::ConvertHostKeyboard*` and
+`g_host_hotkeys`** — and that last one is a **variable**, not a function, and is
+what a `dlopen` of the unfinished library trips on before mentioning any of the
+other 56.
+
+**Three independent counts agree**: Cabinet answers 54, gsrunner implements 52,
+the linker demands 53. **Most are one-line stubs** — a console has no clipboard,
+no file selector, no achievements login, no Big Picture mode and no game list of
+PCSX2's own.
+
+**THE SIX THAT ARE THE JOB ARE ALL THE DISPLAY PATH:**
+
+```
+AcquireRenderWindow  ReleaseRenderWindow  BeginPresentFrame
+RequestResizeHostDisplay  IsFullscreen  SetFullscreen
+```
+
+**`frontend/src/vkhost.cpp` ALREADY OWNS WHAT THOSE NEED** — a Vulkan device, a
+queue, and a picture that crosses into the GLES texture the UI draws. Cabinet's
+`CabinetPS2Host` runs the VM on its own thread and presents into a
+`CAMetalLayer`; this is the same shape with Vulkan instead, and PCSX2 supports
+Vulkan natively so there is no Metal wall. **Do not rebuild that host.**
+
+#### TEN HAND-BUILT DEPENDENCIES BECAME ONE `dnf` LINE
+
+Cabinet cross-compiled **ten** for Catalyst with pinned tarballs and SHA sums.
+Fedora 44 meets every version constraint PCSX2 states: libpng 1.6.55 against a
+required 1.6.40, SDL3 3.4.0 against 3.2.6, zstd 1.5.7 against 1.5.5, freetype
+2.14.1 against 2.10, plutovg 1.3.2 against 1.1.0, plutosvg 0.0.7, ryml 0.10.0,
+shaderc 2026.1.
+
+- **`libbacktrace-devel` is the only gap**, and `USE_BACKTRACE=OFF` disposes of
+  it — a crash-reporter nicety PCSX2 makes optional for that reason.
+- **`libXi-devel` WILL WASTE AN HOUR IF NOBODY SAYS IT.** `find_package(X11)`
+  succeeds without it, configure runs all the way to the last step, and then
+  `common/CMakeLists.txt` fails at GENERATE time on a missing `X11::Xi` target.
+  It reads like a CMake bug rather than a missing package.
+
+#### WHAT TO DO NEXT, IN ORDER
+
+1. **Point `pcsx2-gsrunner` at a real disc.** It is already built and it takes
+   a `--` argument. That is the cheapest possible "does this emulate anything"
+   measurement and it needs no host layer at all. The PS2 BIOS is already on
+   the A9 at `/var/lib/cabinetos/bios/pcsx2/bios/`.
+2. **Write the host layer**, gsrunner's `Main.cpp` beside Cabinet's
+   `CabinetPS2Host.cpp`. Stub the 47 that are stubs, then do the six.
+3. **Make it `dlopen`.** That is the milestone that turns this from a library
+   into the `.so` open question 12's correction asks for.
+4. **Then, and only then, CI and the image.** `ci/base-watch.txt` needs
+   `libshaderc_shared`, `libSPIRV-Tools`, `libplutovg`, `libplutosvg`,
+   `libryml`, `libpcap` and `libharfbuzz` adding the day PS2 ships — a base bump
+   that drops one gives a green build and a console that cannot start a PS2 game.
+
+#### WHAT THIS DOES NOT SHOW, SAID PLAINLY
+
+- **Nothing has been emulated.** A library that links and a binary that
+  initialises are not a PS2 game.
+- **No host layer exists.** 57 symbols are named; none is written.
+- **Nothing is in CI**, deliberately — see step 4.
+- **Save states are still new work.** Cabinet's Mac PS2 state is PCSX2's own
+  slot 1 through `VMManager::SaveStateToSlot`, keyed by disc serial and CRC: not
+  a buffer, not uploaded, not tagged. Unchanged by any of this.
 
 ### 1b. TWO BUGS FOUND BY PLAYING, NEITHER REPRODUCIBLE — OPEN
 
@@ -344,7 +431,7 @@ the right way up. Read this order before picking anything up.
 
 | | |
 |---|---|
-| **0** | **EMBED UPSTREAM PCSX2 — item 1a.** The libretro PS2 core cannot ship and cannot even be obtained. This is the decision that was already made before the last session and should never have been reinterpreted. |
+| **0** | **EMBED UPSTREAM PCSX2 — item 1a. THE BUILD IS DONE, 2026-09-21.** Upstream builds as a library on Linux with no patches; what is left is a host layer of 57 symbols, six of which are real work. Next step is to point the already-built `pcsx2-gsrunner` at a disc, which needs no host layer at all. |
 | **0b** | **THE TWO BUGS IN ITEM 1b**, which need MMagTech to catch them — leave the console stuck rather than restarting it. GameCube's core CAN be pinned into `cores/build-core.sh` and that part still stands. |
 | **1** | ~~PLAYSTATION 2 AND GAMECUBE~~ — **done to the point of playing**, see above. The original entry follows for its reasoning. **PLAYSTATION 2 AND GAMECUBE.** MMagTech's call, 2026-09-20, and the largest thing on this list: 85 games, and the only missing tier with a working implementation to copy. **Open question 12b has the order and 12 has the numbers.** Start by reading `tools/build-dolphin-mac.sh` in Cabinet — those two are NOT libretro cores and nobody wrote down why. |
 | **2** | **A GAME CAN GO BLACK AND NOBODY KNOWS WHY.** Six launches in one session drew nothing but the letterbox glow while the core ran and made sound. Not reproduced since. Two theories tested and both falsified. See item 3b — it has the instruments. |
@@ -1177,6 +1264,42 @@ These are ordered. **Do not begin any of them in the VM.**
   directory. Deleted 2026-09-20 with MMagTech's say-so, each re-verified empty
   immediately beforehand.
 
+### About building a whole emulator rather than a core — new 2026-09-21
+
+- **A LIBRARY THAT BUILDS TELLS YOU ALMOST NOTHING. A LIBRARY THAT LINKS TELLS
+  YOU EVERYTHING.** `libpcsx2.a` built on the first real attempt and that result
+  was nearly worthless on its own: a static archive resolves no symbols, so it
+  cannot report a single missing host function. Cabinet's own comment on
+  `CabinetPS2Smoke.cpp` says exactly this and it is why that file exists.
+- **THE CHEAPEST LINK TEST WAS ALREADY IN THE TREE.** `pcsx2-gsrunner` is
+  upstream's own Qt-free frontend, one file, 1332 lines, implementing the whole
+  `Host` contract. Building it proved linkability in 2.2 seconds and needed no
+  code from us. **Look for upstream's second frontend before writing a smoke
+  test** — PPSSPP, Dolphin and RPCS3 all have one too.
+- **A SHARED OBJECT LINKS HAPPILY WITH UNDEFINED SYMBOLS**, then fails at
+  `dlopen` naming only the FIRST one. That is the worst possible instrument for
+  sizing a job: it says "you are missing `g_host_hotkeys`" whether you are
+  missing one symbol or two hundred. **`-Wl,-z,defs` makes the linker refuse and
+  name them all**, which turned "some unknown amount of host layer" into 57.
+- **AND THE FIRST ONE IT NAMES IS A VARIABLE, NOT A FUNCTION.**
+  `g_host_hotkeys` is a global the frontend must define. Anybody grepping the
+  `Host::` namespace for it will not find it.
+- **`find_package(X11)` SUCCEEDS WITHOUT `libXi-devel`** and then the build
+  fails at CMake GENERATE time, after "Configuring done", on a missing
+  `X11::Xi` target. It reads like a CMake bug. It is a missing package.
+- **FEDORA SUPPLIES WHAT CATALYST COULD NOT.** Cabinet hand-cross-compiled ten
+  dependencies with pinned tarballs and SHA sums; Fedora 44 met every version
+  constraint PCSX2 states, with one exception (`libbacktrace`, which is an
+  option). **Check the distribution before believing a port is hard** — the
+  difficulty recorded in a reference implementation is usually the reference
+  platform's, not the problem's.
+- **PCSX2 REFUSES TO START WITHOUT ITS `bin/resources` FOLDER** — game database,
+  fonts, GS shaders. It does not degrade, it says "Resources directory is
+  missing" and stops. The same shape as PPSSPP's 13 MB of system files.
+- **A SEPARATE BUILDER CONTAINER WAS THE RIGHT CALL.** PCSX2 needs about thirty
+  packages the frontend does not. Putting them in `frontend/Containerfile` would
+  have slowed every one of the twenty-one core builds to serve one thing.
+
 ### About the product
 
 - **A truncated explanation is worse than none.** A tile's second line holds
@@ -1394,6 +1517,14 @@ connected. The console says it on stderr, once.
   real install this ships with the core at `/usr/share/cabinetos/system/`, the
   way PPSSPP's already does.
 - `~/cabinetos-frontend-dev` — the hand-built frontend the drop-in points at.
+- `~/pcsx2-lab/src/pcsx2-upstream/` — **new 2026-09-21**, the upstream PCSX2
+  checkout at v2.8.2 and its build tree. 151 MB of source, about 1.3 GB built.
+  It is a cache: `cores/build-pcsx2.sh` re-clones it. Delete it whenever.
+- `~/cabinetos-repo/` — **new 2026-09-21**, an rsync of this repository, because
+  the build script has to run on a machine with podman and the Mac is not one.
+  The A9 is now the better build machine by a distance: **24 cores, 25 GB of
+  free RAM and 1.9 TB free**, against the VM's 5 cores, 3 GB and 4.1 GB. The
+  whole PCSX2 library builds there in 25 seconds.
 
 ## The state that lives on the VM and not in git
 
