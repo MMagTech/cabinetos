@@ -2319,7 +2319,8 @@ at its draw site. This is a list, not the record.
   **The split that matters is not quick versus advanced, it is THIS GAME versus
   THIS CONSOLE** — and everything on that list is the console. Open question 23
   already says the quality setting is global; so are glow strength and shaders.
-  None of them is a property of Devil's Crush.
+  A shader is a look you either want or do not; a performance mode is how hard
+  the machine is allowed to work. Neither is a property of any one game.
 
   RetroArch's real usability problem is not depth, it is TWO MENUS WITH A
   BOUNDARY NOBODY CAN REMEMBER. A second in-game menu inherits that at a tenth
