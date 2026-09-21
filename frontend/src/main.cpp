@@ -7039,10 +7039,22 @@ int main(int argc, char** argv) {
             // switching is its own topic and nothing here is focusable yet.
             const storage::User me = storage::currentUser();
             const std::string who = me.valid() ? me.name : std::string("Not signed in");
-            const float discD = barHeight - 26.0f;
+            // A STEP DOWN THE RAMP FROM THE DESTINATIONS, and that is the
+            // whole of the sizing rule. MMagTech, looking at the first
+            // capture: *"chip seems a bit too big."* It was, and the reason
+            // was measurable rather than a matter of taste — the name was
+            // Callout, which is exactly what Library, Search and Settings
+            // are, so ambient state was typeset at destination weight and
+            // competed with the navigation it sits opposite.
+            //
+            // Caption1 against the bar's Callout, and a disc sized to the
+            // smaller text. The reference calls it "a SMALL circular avatar"
+            // and that word was doing work nobody had read.
+            const ui::TextStyle chipStyle = ui::TextStyle::Caption1;
+            const float discD = barHeight - 30.0f;
             const float discX = rightEdge - discD;
             const float discY = barTop + (barHeight - discD) * 0.5f;
-            const float nameW = text.measure(who, ui::TextStyle::Callout, sc);
+            const float nameW = text.measure(who, chipStyle, sc);
             // THE PERSON'S OWN PICTURE, when RomM has one — new 2026-09-21.
             // MMagTech: *"i also noticed my user login isnt showing its image
             // from romm."* It never did: the comment below promised a lettered
@@ -7082,14 +7094,21 @@ int main(int argc, char** argv) {
             } else if (!who.empty()) {
                 const std::string initial(1, static_cast<char>(std::toupper(
                     static_cast<unsigned char>(who[0]))));
-                const float iw = text.measure(initial, ui::TextStyle::Callout, sc);
+                const float iw = text.measure(initial, chipStyle, sc);
                 text.draw(renderer, initial, discX + (discD - iw) * 0.5f,
-                          discY + (discD - text.lineHeight(ui::TextStyle::Callout, sc)) * 0.5f +
-                              text.ascent(ui::TextStyle::Callout, sc),
-                          ui::TextStyle::Callout, ui::Color::white(0.90f), sc);
+                          discY + (discD - text.lineHeight(chipStyle, sc)) * 0.5f +
+                              text.ascent(chipStyle, sc),
+                          chipStyle, ui::Color::white(0.90f), sc);
             }
-            text.draw(renderer, who, discX - 12.0f - nameW, barBaseline,
-                      ui::TextStyle::Callout, ui::Color::white(0.65f), sc);
+            // Its own baseline, because it is no longer the bar's size and
+            // sharing `barBaseline` would sit it a few points low.
+            const float chipBaseline =
+                barTop + (barHeight - text.lineHeight(chipStyle, sc)) * 0.5f +
+                text.ascent(chipStyle, sc);
+            // Brighter when focused, because it just got smaller and a focus
+            // target you cannot find is worse than one that is too loud.
+            text.draw(renderer, who, discX - 10.0f - nameW, chipBaseline,
+                      chipStyle, ui::Color::white(chipOn ? 0.95f : 0.62f), sc);
         }
 
         // ---- The account switcher, over the screen and over the bar -------
