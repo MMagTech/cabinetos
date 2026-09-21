@@ -54,7 +54,16 @@ present (RADV STRIX1). **The UI freeze is lifted and what is on that television
 is the real thing.** 1147 playable games on the image alone, **1232 as it is
 running today** — see the next paragraph.
 
-**IT IS RUNNING A HAND-BUILT BINARY, ON PURPOSE, AS OF 2026-09-21.** MMagTech's
+**IT RUNS THE IMAGE AND NOTHING BY HAND, AS OF 2026-09-21 — and this reverses
+the paragraph that followed, twice in one day.** PlayStation 2 is IN the image
+now: the emulator, its two libraries and PCSX2's resources all ship, CI asserts
+all four, and the A9 has booted `sha256:ce25da80…` and played Homura on Vulkan
+off `/usr/bin/cabinetos-frontend` with **no drop-ins at all**. There is no
+longer any reason to run a hand-built binary, and no `20-heavy-systems.conf` to
+remove. **The paragraph below is kept only because it explains what the drop-in
+was for and how to tell if somebody has put one back.**
+
+**~~IT IS RUNNING A HAND-BUILT BINARY, ON PURPOSE, AS OF 2026-09-21.~~** MMagTech's
 call this session, and it reverses the instruction that used to be here. The
 drop-in at
 `/etc/systemd/system/cabinetos-session.service.d/20-heavy-systems.conf` stays,
@@ -642,12 +651,28 @@ double buffer makes that a pointer swap. Entirely our own code.
   [cabinetos] ok: PCSX2's rapidyaml / c4core / resources
   ```
 
-  **WHAT IS STILL OWED IS THE LAST MILE AND IT IS NOT SMALL.** Images publish
-  from `main` only — a branch build ends with `Push to GHCR: skipped` — so
-  nothing has yet BOOTED this image. Until the A9 is rebased onto it, the
-  drop-in removed, and a PlayStation 2 game played with nothing hand-built on
-  the disk, "it is in the image" means "CI says the files are in the image".
-  That is a much weaker claim and this file should not pretend otherwise.
+  **AND IT HAS BEEN BOOTED AND PLAYED, 2026-09-21.** The A9 is on
+  `sha256:ce25da80…`, `20-heavy-systems.conf` is DELETED, and the session runs
+  `/usr/bin/cabinetos-frontend` with **no drop-ins at all**:
+
+  ```
+  [ps2] VM starting
+  [ps2] game: "Homura" serial=SLES-53964 crc=69E02692
+  [ps2] renderer Vulkan, upscale 1x, anisotropy 0
+  ```
+
+  **So the instruction at the top of this file is reversed: the machine runs the
+  image and nothing by hand.** `ps -eo args | grep cabinetos-frontend` should
+  show `/usr/bin/cabinetos-frontend` and nothing from `/var/home`. If it shows
+  otherwise, somebody put a drop-in back.
+
+  **IT RENDERS AT 1x NOW, AND THAT IS NOT A REGRESSION.** `--ps2-upscale 4
+  --ps2-aniso 16` lived in the deleted drop-in, never in the image, and the
+  defaults are 1.0 and 0. A PlayStation 2 at 640x448 on a 4K panel looks
+  markedly worse than what MMagTech had been playing. **This is open question 23
+  arriving with a face on it** — those flags were always a test instrument and
+  nothing yet exposes quality as a real setting. It is now a concrete decision
+  to be made against a television rather than an abstract one.
 - ~~**The emulator carries two libraries the image lacks.**~~ Handled.
   `frontend/ps2/compile.sh` already linked with `-Wl,-rpath,$ORIGIN
   -Wl,--disable-new-dtags` — **RPATH and not the modern RUNPATH**, because
