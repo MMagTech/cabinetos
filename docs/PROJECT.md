@@ -10686,10 +10686,31 @@ cards"*, and then: *"that seems like a nightmare to plan for and something i
 dont even think modern systems allow you to do."*
 
 **He is right on the second point and it is the whole argument.** No console
-made in the last twenty years exposes a save state. The Switch suspends, the
-PS5 has Rest Mode, the Xbox has Quick Resume. None of them offers a slot to save
-into. A pause menu with "Save state" on it is an emulator's idea, not a
-console's, and this project's whole premise is that it is building a console.
+made in the last twenty years exposes a save state. A pause menu with "Save
+state" on it is an emulator's idea, not a console's, and this project's whole
+premise is that it is building a console.
+
+**BUT THEY ARE NOT ALL THE SAME THING, AND THE DIFFERENCE DECIDES WHAT WE WOULD
+BUILD.** An earlier version of this section lumped the three together, which
+MMagTech caught:
+
+| | What it survives |
+|---|---|
+| **Switch sleep** | Suspends to RAM. Days on battery, mid-race. **Lost** on a full power-off, a system update, or launching another game — one game at a time. |
+| **PS5 Rest Mode** | The same shape. One game, lost on a real shutdown. |
+| **Xbox Quick Resume** | Snapshots to **SSD**. Survives a full power-off, and holds several games at once. |
+
+**XBOX QUICK RESUME IS THE ONE TO COPY**, because a console people switch off at
+the wall is the normal case here — this is a box under a television, not a
+handheld that lives in standby. A resume that only survived sleep would be
+nearly useless on it.
+
+**AND THAT BRINGS BACK THE PROBLEM THIS SECTION USED TO ARGUE AGAINST STATES
+WITH, SO SAY IT OUT LOUD:** a resume that survives power-off is a file on disk,
+and a PCSX2 snapshot in a file is invalidated by an emulator upgrade exactly as
+a save state would be. **The difference is what is lost, not whether it can be
+lost** — one resume point that regenerates the next time somebody plays, against
+a save they deliberately made and expected to keep.
 
 #### DECIDED: no visible save states for PlayStation 2, GameCube, or anything after
 
