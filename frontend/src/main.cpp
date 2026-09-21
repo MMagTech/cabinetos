@@ -2364,6 +2364,9 @@ int main(int argc, char** argv) {
     int autoUnkeepId = 0;
     bool storageReport = false;
     bool coreOptionsAudit = false;
+    // The same audit with the prose and the value list, which is what turns
+    // "here are 78 keys" into something a person can decide from.
+    bool coreOptionsDetail = false;
     // One core option, set from the command line, for finding out what a value
     // actually does before writing it into catalog::optionOverrides.
     //
@@ -2556,6 +2559,9 @@ int main(int argc, char** argv) {
             // run: an unanswered option is not the default, it is zero, and
             // until this existed there was no way to see which were which.
             coreOptionsAudit = true;
+        } else if (SDL_strcmp(argv[i], "--core-options-detail") == 0) {
+            coreOptionsAudit = true;
+            coreOptionsDetail = true;
         } else if (SDL_strcmp(argv[i], "--core-option") == 0 && i + 1 < argc) {
             //   --core-option dolphin_shader_compilation_mode=Synchronous
             // Repeatable. See cliOptionOverrides.
@@ -2703,7 +2709,12 @@ int main(int argc, char** argv) {
     // case, not the clean one. It means either the core genuinely has none, or
     // it declares them through an API generation this host does not read — and
     // the second is indistinguishable from the first without going and looking.
-    if (coreOptionsAudit) {
+    // NOT when a specific core and ROM were named. --core-options-detail then
+    // means "show me THAT core's table with a game loaded", which is the only
+    // way to see the three that declare nothing until they know what they are
+    // running — Dolphin, FBNeo and MAME. Sweeping the directory instead would
+    // report zero for exactly the cores the question is about.
+    if (coreOptionsAudit && !(corePath && romPath) && autoLaunchId == 0) {
         DIR* d = opendir(coreDir);
         if (!d) {
             std::fprintf(stderr, "[options] no core directory at %s\n", coreDir);
@@ -2746,9 +2757,29 @@ int main(int argc, char** argv) {
             for (const auto& o : opts) {
                 totalOptions++;
                 if (o.overridden) totalOverridden++;
-                std::printf("  %-34s %-18s %s%s\n", o.key.c_str(), o.chosen.c_str(),
-                            o.overridden ? "OURS, core says " : "core default",
-                            o.overridden ? o.defaultValue.c_str() : "");
+                if (!coreOptionsDetail) {
+                    std::printf("  %-34s %-18s %s%s\n", o.key.c_str(), o.chosen.c_str(),
+                                o.overridden ? "OURS, core says " : "core default",
+                                o.overridden ? o.defaultValue.c_str() : "");
+                    continue;
+                }
+                // EVERYTHING THE CORE SAID, which is the difference between an
+                // audit and a list. A key and a value cannot answer "what
+                // would this do if I changed it" — that needs the prose the
+                // core wrote and every value it will accept, and both are
+                // already captured and were simply never printed.
+                std::printf("  %s\n", o.key.c_str());
+                if (!o.desc.empty()) std::printf("      what   %s\n", o.desc.c_str());
+                std::printf("      now    %s%s\n", o.chosen.c_str(),
+                            o.overridden ? "   (ours)" : "");
+                if (!o.defaultValue.empty() && o.overridden)
+                    std::printf("      core   %s\n", o.defaultValue.c_str());
+                if (!o.values.empty()) {
+                    std::printf("      takes ");
+                    for (size_t i = 0; i < o.values.size(); ++i)
+                        std::printf("%s%s", i ? " | " : " ", o.values[i].c_str());
+                    std::printf("\n");
+                }
             }
             for (const std::string& k : core.undeclaredOptionAsks())
                 std::printf("  !! asked but never declared: %s\n", k.c_str());
@@ -4004,6 +4035,27 @@ int main(int argc, char** argv) {
             for (const auto& o : opts) if (o.asked) ++asked;
             std::fprintf(stderr, "[options] %zu declared, %d asked for so far\n",
                          opts.size(), asked);
+            // AND THE WHOLE TABLE, when asked for. --core-options-detail
+            // cannot see these at all: a core that declares nothing until it
+            // knows what it is running is invisible to an audit taken at core
+            // load, and that is Dolphin, FBNeo and MAME — three of the most
+            // configurable things this console ships.
+            if (coreOptionsDetail) {
+                for (const auto& o : opts) {
+                    std::fprintf(stderr, "  %s\n", o.key.c_str());
+                    if (!o.desc.empty())
+                        std::fprintf(stderr, "      what   %s\n", o.desc.c_str());
+                    std::fprintf(stderr, "      now    %s%s\n", o.chosen.c_str(),
+                                 o.overridden ? "   (ours)" : "");
+                    if (!o.values.empty()) {
+                        std::fprintf(stderr, "      takes ");
+                        for (size_t i = 0; i < o.values.size(); ++i)
+                            std::fprintf(stderr, "%s%s", i ? " | " : " ",
+                                         o.values[i].c_str());
+                        std::fprintf(stderr, "\n");
+                    }
+                }
+            }
             for (const std::string& k : core.undeclaredOptionAsks())
                 std::fprintf(stderr, "[options] asked but never declared: %s\n",
                              k.c_str());
