@@ -67,6 +67,7 @@
 #include "screens.h"
 #include "sound.h"
 #include "setup.h"
+#include "accounts.h"
 #include "storage.h"
 #include "text.h"
 #include "overlaywin.h"
@@ -2168,6 +2169,132 @@ static int firstRunWriteTest() {
 //
 // It needs no network, no server, no pad and no screen, so it runs in CI and it
 // runs on a laptop.
+// Who this console knows, and which one it is acting as. Read-only: it writes
+// nothing and is safe on a machine somebody is playing on.
+static int accountsProbe() {
+    std::printf("list          %s\n", accounts::listPath().c_str());
+    {
+        // The shape, not a real path: 0 is never an account id.
+        const std::string one = accounts::tokenPath(0);
+        std::printf("tokens        %s<id>.json\n",
+                    one.substr(0, one.rfind('/') + 1).c_str());
+    }
+
+    if (accounts::needsAdoption()) {
+        // The state every console installed before this feature is in.
+        std::printf("\nADOPTION NEEDED — there is no account list and the single\n"
+                    "token from before accounts existed is on disk at\n  %s\n"
+                    "It becomes the first account, under whatever id /api/users/me\n"
+                    "returns. Nobody re-pairs to gain this.\n",
+                    accounts::legacyTokenPath().c_str());
+        return 0;
+    }
+
+    const std::vector<accounts::Account> list = accounts::all();
+    const int active = accounts::activeId();
+    if (list.empty()) {
+        std::printf("\nno accounts, and no old token to adopt — this console has "
+                    "not been paired\n");
+        return 0;
+    }
+
+    std::printf("\n%zu account%s:\n", list.size(), list.size() == 1 ? "" : "s");
+    for (const accounts::Account& a : list) {
+        struct stat st{};
+        const bool haveToken = ::stat(accounts::tokenPath(a.id).c_str(), &st) == 0;
+        std::printf("  %s %d - %s%s%s\n",
+                    a.id == active ? "*" : " ", a.id, a.name.c_str(),
+                    a.avatar.empty() ? "  (no avatar)" : "",
+                    haveToken ? "" : "  NO TOKEN ON DISK");
+    }
+    if (storage::currentUser().valid())
+        std::printf("\n* is the account this console acts as. Saves go to %s\n",
+                    storage::userDir(storage::currentUser()).c_str());
+    else
+        std::printf("\n* is the account this console acts as. No user is "
+                    "resolved in this process, so no save path to show.\n");
+    std::printf("PIN           %s\n", accounts::pinIsSet() ? "set" : "not set");
+    return 0;
+}
+
+// The store's rules, asserted against a scratch root rather than reasoned
+// about. Every case here is a REFUSAL, because the happy path is the part that
+// already works — the same argument --first-run-rules is built on, and it found
+// a real deadlock on its first run.
+static int accountsTest() {
+    int failures = 0;
+    auto check = [&](bool ok, const char* what) {
+        std::printf("  %s  %s\n", ok ? "ok  " : "FAIL", what);
+        if (!ok) ++failures;
+    };
+
+    char root[] = "/tmp/cabinetos-accounts-XXXXXX";
+    if (!mkdtemp(root)) {
+        std::fprintf(stderr, "[accounts] could not make a scratch root\n");
+        return 1;
+    }
+    // Both halves have to move: the list follows the storage root, the tokens
+    // follow HOME. Missing either one writes into the real console.
+    storage::setRoot(root);
+    setenv("HOME", root, 1);
+    std::string serr;
+    if (!storage::ensureTree(&serr)) {
+        std::fprintf(stderr, "[accounts] scratch root unusable: %s\n", serr.c_str());
+        return 1;
+    }
+    std::printf("scratch root  %s\n\n", root);
+
+    std::string err;
+    accounts::Account alice; alice.id = 1; alice.name = "MMagTech";
+    accounts::Account bob;   bob.id = 2;   bob.name = "Someone Else";
+
+    check(accounts::all().empty(), "a fresh console knows nobody");
+    check(accounts::activeId() == 0, "and is acting as nobody");
+    check(!accounts::needsAdoption(), "with no old token, there is nothing to adopt");
+
+    check(!accounts::add(alice, "", &err), "an account with no token is refused");
+    accounts::Account noId; noId.name = "nobody";
+    check(!accounts::add(noId, "t", &err), "an account with no id is refused");
+
+    check(accounts::add(alice, "alice-token", &err), "the first account is added");
+    check(accounts::activeId() == 1, "and becomes active, having nobody to take over from");
+
+    check(accounts::add(bob, "bob-token", &err), "a second account is added");
+    check(accounts::activeId() == 1,
+          "and does NOT take over from whoever is signed in");
+    check(accounts::all().size() == 2, "both are listed");
+
+    check(accounts::add(alice, "alice-again", &err), "re-pairing an existing id succeeds");
+    check(accounts::all().size() == 2, "and replaces rather than making a second row");
+
+    check(!accounts::remove(1, &err), "removing the ACTIVE account is refused");
+    check(!accounts::remove(99, &err), "removing an unknown account is refused");
+    check(accounts::remove(2, &err), "removing an inactive account works");
+    check(accounts::all().size() == 1, "and it is gone from the list");
+
+    check(!accounts::setActive(99, &err), "switching to an unknown account is refused");
+
+    // The list and the tokens can disagree if somebody has been in here by
+    // hand. That has to refuse rather than sign the console out silently.
+    accounts::add(bob, "bob-token", &err);
+    ::unlink(accounts::tokenPath(2).c_str());
+    check(!accounts::setActive(2, &err), "switching to an account whose token is gone is refused");
+
+    check(!accounts::adoptLegacyToken(noId, &err), "adoption without a server-given id is refused");
+
+    check(!accounts::pinIsSet(), "no PIN by default");
+    check(!accounts::checkPin("0000"), "and nothing matches when none is set");
+    check(accounts::setPin("4821", &err), "a PIN can be set");
+    check(accounts::pinIsSet() && accounts::checkPin("4821"), "and it matches");
+    check(!accounts::checkPin("4822"), "and a wrong one does not");
+    check(accounts::setPin("", &err) && !accounts::pinIsSet(), "an empty PIN clears it");
+
+    std::printf("\n%s (%d failure%s)\n", failures ? "FAILED" : "all good",
+                failures, failures == 1 ? "" : "s");
+    std::printf("scratch root left at %s\n", root);
+    return failures ? 1 : 0;
+}
+
 static int firstRunRules() {
     int cases = 0, failures = 0;
     auto fail = [&](const char* what, const firstrun::Facts& f) {
@@ -2635,6 +2762,8 @@ int main(int argc, char** argv) {
     // whether PlayStation 2 and GameCube can be played at all.
     bool gpuProbeMode = false;
     bool firstRunProbeMode = false;
+    bool accountsProbeMode = false;
+    bool accountsTestMode = false;
     bool firstRunRulesMode = false;
     bool firstRunWriteMode = false;
     // Runs the setup flow even on a console that is already configured, so it
@@ -2836,6 +2965,10 @@ int main(int argc, char** argv) {
             setupStep = argv[++i];
         } else if (SDL_strcmp(argv[i], "--no-setup") == 0) {
             noSetup = true;
+        } else if (SDL_strcmp(argv[i], "--accounts") == 0) {
+            accountsProbeMode = true;
+        } else if (SDL_strcmp(argv[i], "--accounts-test") == 0) {
+            accountsTestMode = true;
         } else if (SDL_strcmp(argv[i], "--first-run-rules") == 0) {
             firstRunRulesMode = true;
         } else if (SDL_strcmp(argv[i], "--first-run-writes") == 0) {
@@ -2960,6 +3093,7 @@ int main(int argc, char** argv) {
     // Neither of these needs a storage tree, a window, GL or a controller, so
     // they answer before anything is created on disk. --qr in particular should
     // not cost a console a directory it did not have.
+    if (accountsTestMode) return accountsTest();
     if (firstRunRulesMode) return firstRunRules();
     if (firstRunWriteMode) return firstRunWriteTest();
     if (qrText) return qrProbe(qrText, qrPbm);
@@ -3122,6 +3256,11 @@ int main(int argc, char** argv) {
     // they go looking, and when they do they should find it. Until that screen
     // exists this is how anyone — or anything in CI — checks that keeping,
     // eviction and the floors agree with each other.
+    // Read-only and needs no network: the list is on disk. It goes here rather
+    // than with --first-run-rules because it reports the REAL console, so it
+    // has to run after the storage root is settled.
+    if (accountsProbeMode) return accountsProbe();
+
     if (storageReport) {
         romm::Client sclient;
         if (rommAddress && sclient.setAddress(rommAddress, nullptr))
