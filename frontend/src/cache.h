@@ -282,8 +282,32 @@ bool keep(const storage::User& u, int romId, const std::string& record,
 //   game that was already on the disk before the keep was asked for, which
 //   throwing away over a failed firmware fetch would be its own small disaster.
 //
-// Returns false only when the record could not be removed.
-bool unkeep(const storage::User& u, int romId, bool keepTheBytes = false);
+// WHAT A RELEASE ACTUALLY DID, because the caller has to tell somebody.
+//
+// These four outcomes have always existed and until 2026-09-21 all four went to
+// stderr and nowhere else, so the screen said the same nothing for every one of
+// them. Two of them are a person pressing "Remove download" and getting no
+// space back, which is exactly the promise that row's wording was changed to
+// make. A release that quietly does not release is the same fault as a launch
+// refusal nobody can see.
+struct Release {
+    enum class What {
+        Nothing,       // nothing was released: no such keep, or it would not go
+        StillKept,     // somebody else keeps it, so the file did not move
+        Demoted,       // dropped into the cache; the space comes back later
+        Deleted,       // gone, and the space is back now
+        DeleteFailed,  // the keep went, the bytes would not
+    };
+    What what = What::Nothing;
+    int otherKeepers = 0;    // only meaningful for StillKept
+    int64_t bytesFreed = 0;  // only meaningful for Deleted
+};
+
+// Returns false only when the record could not be removed. `out` is optional
+// and says which of the outcomes above happened; pass it whenever a person is
+// watching.
+bool unkeep(const storage::User& u, int romId, bool keepTheBytes = false,
+            Release* out = nullptr);
 
 bool isKeptBy(const storage::User& u, int romId);
 bool isKeptByAnyone(int romId);

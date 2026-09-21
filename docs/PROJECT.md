@@ -11097,6 +11097,62 @@ per user. **Nothing that was true of the old account may still be on screen afte
 a switch.** Work out that list from `storage::userDir`'s children before writing
 the switch, not after somebody sees their sister's save.
 
+#### THE SHARED CACHE AND KEPT GAMES — asked 2026-09-21, and mostly already answered
+
+**MMagTech's question, and it is the right one: "we just need to make sure the
+same game kept by two different people isn't downloaded twice."** It is not, and
+that was built before accounts were discussed.
+
+**THE BYTES HAVE NO USER IN THEIR PATH.** A game lives at
+`<location>/roms/<platform>/<romId> - <title>` when kept and under `cache/` when
+not. A keep is `users/<id>/keeps/<romId>.json` — a small record beside the
+person, not a copy of the game. So one game is one copy however many people want
+it, structurally, rather than by a rule somebody has to remember.
+
+`cache.h` states the rule and the code enforces it: **"KEEPING IS A SET OF
+PEOPLE, NOT A FLAG. One kept game is one file however many people play it, so
+releasing must not take it from somebody else. When the LAST person releases it,
+the game is DELETED."** `keepers(romId)` walks every user directory, which is
+what makes one person's release safe for everyone else.
+
+**MEASURED 2026-09-21 on the test VM rather than reasoned about**, with a
+throwaway second user staged against a real 26.8 MB Dreamcast game and removed
+afterwards:
+
+```
+keepers       2 (users 1 and 2)      copies  1      on disk  26842401 bytes
+  -> user 1 releases
+[keep] 556 released by user 1, still kept by 1 other(s)
+keepers       1 (user 2)             copies  1      on disk  26842401 bytes
+```
+
+The game survived the first release and was never on the disk twice.
+`--keepers <romId>` is the probe and it exists for exactly this question.
+
+**WHAT WAS NOT RIGHT, AND IS NOW: the row went silent in that case.**
+"Remove download" called `unkeep` and then `setNotice("")`, so a person who
+released a game somebody else keeps saw the badge go out, no message, and no
+space come back — while the row's whole wording exists because MMagTech said
+*"most users would assume unkeeping a chosen game would free up space"*. The
+outcome only ever reached stderr. **This was unreachable with one account and
+goes live the day a second one exists**, which is why it is fixed inside this
+work: `cache::Release` now says which of the four things happened and the screen
+says so.
+
+#### Two more decided 2026-09-21, both about what the console SAYS rather than what it does
+
+**THE STORAGE FIGURES ARE THE MACHINE'S, AND THE SCREEN SAYS "THIS CONSOLE".**
+`allKeptRoms()` counts everybody's keeps, and both floors and the storage report
+already work that way. With shared bytes there is no honest way to bill a game
+two people keep to one of them, so the number stays machine-wide and the wording
+stops implying it is yours. **MMagTech's call:** say *this console*.
+
+**EVICTION STAYS MACHINE-WIDE AND OLDEST-FIRST**, across accounts. One person
+browsing can evict a game another person had cached, and that is accepted:
+everything in `cache/` is a copy of RomM, eviction is invisible by design, and
+the alternative — a per-account cache quota — is the partitioned-cache mistake
+this whole layout exists to avoid. **MMagTech's call, confirmed when asked.**
+
 #### Out of scope, explicitly
 
 - **Anything that assumes two people at once.** One account is active; this is

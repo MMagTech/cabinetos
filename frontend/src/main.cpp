@@ -2171,6 +2171,45 @@ static int firstRunWriteTest() {
 // runs on a laptop.
 // Who this console knows, and which one it is acting as. Read-only: it writes
 // nothing and is safe on a machine somebody is playing on.
+// One game: who keeps it, and how many copies of it are on this machine.
+//
+// EXISTS TO ANSWER ONE QUESTION AND IT IS THE RIGHT ONE TO BE ABLE TO ASK:
+// when two people keep the same game, is it on the disk twice? It must not be.
+// The bytes live at `<loc>/roms/<platform>/<romId> - <title>` with no user
+// anywhere in the path, so one game is one copy however many people want it —
+// but that is a structural argument, and this prints the fact instead.
+static int keepersProbe(int romId) {
+    const std::vector<int> who = cache::keepers(romId);
+    const std::vector<cache::Placement> copies = cache::findAll(romId);
+
+    std::printf("rom           %d\n", romId);
+    std::printf("keepers       %zu", who.size());
+    for (int id : who) std::printf(" %d", id);
+    std::printf("\n");
+
+    std::printf("copies        %zu\n", copies.size());
+    int64_t total = 0;
+    for (const cache::Placement& p : copies) {
+        const int64_t bytes = storage::treeBytes(p.entryPath);
+        total += bytes;
+        std::printf("  %-6s %s (%lld bytes)\n", p.kept ? "kept" : "cache",
+                    p.entryPath.c_str(), static_cast<long long>(bytes));
+    }
+    std::printf("on disk       %lld bytes\n", static_cast<long long>(total));
+
+    if (copies.size() > 1) {
+        // findAll's own comment says more than one is nobody's mistake — the
+        // drive-unplug case makes a second copy legitimately, and dedupe is
+        // what collapses it. So this is a finding to act on, not a failure.
+        std::printf("\nMORE THAN ONE COPY. See cache::dedupe — this is the "
+                    "unplugged-drive case, not a keep fault.\n");
+    } else if (who.size() > 1 && copies.size() == 1) {
+        std::printf("\n%zu people keep this game and there is ONE copy of it, "
+                    "which is the whole rule.\n", who.size());
+    }
+    return 0;
+}
+
 static int accountsProbe() {
     std::printf("list          %s\n", accounts::listPath().c_str());
     {
@@ -2762,6 +2801,7 @@ int main(int argc, char** argv) {
     // whether PlayStation 2 and GameCube can be played at all.
     bool gpuProbeMode = false;
     bool firstRunProbeMode = false;
+    int keepersRomId = 0;
     bool accountsProbeMode = false;
     bool accountsTestMode = false;
     bool firstRunRulesMode = false;
@@ -2965,6 +3005,8 @@ int main(int argc, char** argv) {
             setupStep = argv[++i];
         } else if (SDL_strcmp(argv[i], "--no-setup") == 0) {
             noSetup = true;
+        } else if (SDL_strcmp(argv[i], "--keepers") == 0 && i + 1 < argc) {
+            keepersRomId = SDL_atoi(argv[++i]);
         } else if (SDL_strcmp(argv[i], "--accounts") == 0) {
             accountsProbeMode = true;
         } else if (SDL_strcmp(argv[i], "--accounts-test") == 0) {
@@ -3260,6 +3302,7 @@ int main(int argc, char** argv) {
     // than with --first-run-rules because it reports the REAL console, so it
     // has to run after the storage root is settled.
     if (accountsProbeMode) return accountsProbe();
+    if (keepersRomId > 0) return keepersProbe(keepersRomId);
 
     if (storageReport) {
         romm::Client sclient;
@@ -4247,9 +4290,41 @@ int main(int argc, char** argv) {
     // second person still wanted it. cache::unkeep reports what it did.
     auto removeDownload = [&](int romId) {
         const bool nowPlaying = playing && session.romId == romId;
-        cache::unkeep(storage::currentUser(), romId, /*keepTheBytes=*/nowPlaying);
+        cache::Release r;
+        cache::unkeep(storage::currentUser(), romId, /*keepTheBytes=*/nowPlaying, &r);
         detailScreen.setKept(false);
-        detailScreen.setNotice("");
+
+        // SILENCE IS THE RIGHT ANSWER ONLY WHEN THE ROW DID WHAT IT SAYS. The
+        // badge going out is feedback enough for a game that is gone and a
+        // disk that has the room back. The other three outcomes all leave the
+        // bytes where they were, and saying nothing then is the row lying —
+        // the same fault as a launch refusal reaching stderr and no further.
+        switch (r.what) {
+            case cache::Release::What::Deleted:
+            case cache::Release::What::Nothing:
+                detailScreen.setNotice("");
+                break;
+            case cache::Release::What::StillKept:
+                // Unreachable until this console had more than one account,
+                // and the first thing that account switching makes real.
+                detailScreen.setNotice(
+                    r.otherKeepers == 1
+                        ? "Removed from your games. It stays on the console "
+                          "because somebody else is keeping it, so no space "
+                          "came back."
+                        : "Removed from your games. It stays on the console "
+                          "because other people are keeping it, so no space "
+                          "came back.");
+                break;
+            case cache::Release::What::Demoted:
+                detailScreen.setNotice("Removed from your games. The space "
+                                       "comes back when you stop playing it.");
+                break;
+            case cache::Release::What::DeleteFailed:
+                detailScreen.setNotice("Removed from your games, but the files "
+                                       "could not be deleted.");
+                break;
+        }
     };
 
     // Opening the launch screen for a card. Everything it shows is decided
