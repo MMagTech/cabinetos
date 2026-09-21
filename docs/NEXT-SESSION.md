@@ -252,6 +252,74 @@ both rules are measured and in `filesave.cpp`.
 - **TWO OPEN BUGS FROM ONE HOUR OF PLAY, both reported by MMagTech and neither
   reproducible from here.** See item 1b.
 
+### 1. START HERE: WILL GAMESCOPE PUT OUR MENU OVER A WINDOW WE DO NOT OWN?
+
+**One question, and it decides the whole shape of PlayStation 2 — and of every
+heavy system after it.** MMagTech's call, 2026-09-21, and he is right that it
+comes before any more measuring.
+
+**THE PROBLEM, PLAINLY.** PCSX2 renders the picture on the GPU. To get it onto
+the television this console copies it OFF the card, hands it over, and copies it
+BACK ON to draw it. A normal PCSX2 — on Windows, on Bazzite — never does this:
+it draws straight to the screen. We do it so the console can draw its own pause
+menu over the game.
+
+**MMagTech, 2026-09-21: "i didnt buy this mini pc to be gimped in performace
+especually compared to it running on windows."** He has seen this exact machine
+running PlayStation 2 at 5x on Windows. That is the right standard and the
+hardware is not the constraint: Linux and gamescope should be a LIGHTER path to
+the screen than the Windows desktop, not a heavier one.
+
+**THE QUESTION TO ANSWER FIRST, BEFORE BUILDING OR MEASURING ANYTHING:**
+
+> Can the frontend draw its overlay on top of a window that PCSX2 owns and
+> presents to directly?
+
+If yes, PlayStation 2 draws straight to the screen at full speed, nothing is
+copied, and no patch is needed. **That is how Bazzite runs emulators, how Steam
+draws its overlay over a game it does not own, and how Batocera works.** Ours is
+the unusual arrangement, not theirs.
+
+**WHAT IT WOULD COST IF IT WORKS, AND IT IS THE THING TO PROTECT.** The overlay
+is what makes this console different — one pause menu, one save-and-quit,
+identical for a Mega Drive and a PlayStation 2, working because the console
+draws the game itself. Handing the screen to PCSX2 means the overlay has to be
+composited on top instead. **If that does not work cleanly, the trade is the
+console's best feature for frame rate, and it is not worth it.**
+
+**DO NOT BUILD IT FIRST. FIND OUT WHETHER GAMESCOPE WILL DO IT** — that is a
+small experiment, not an integration, and everything else follows from the
+answer.
+
+#### THE NUMBERS THAT PROMPTED THIS, AND WHY THEY ARE NOT TRUSTWORTHY
+
+The picture path costs **6.1 ms on average and 12.2 ms at worst** at 4x, paced
+to 60 Hz. That is 37% and 73% of a frame budget.
+
+**BUT THAT FIGURE IS MEASURED AROUND THE WHOLE HANDOVER AND INCLUDES WAITING FOR
+PCSX2 TO FINISH DRAWING**, which Windows waits for too. The share that is
+actually OUR overhead has never been separated out, and this project has been
+fooled by exactly this before: when the Vulkan path was built for the libretro
+cores, the "expensive copy" turned out to be **twelve microseconds** of copying
+and everything else was waiting for the GPU. That is recorded in `vkhost.cpp`
+specifically so nobody repeats it, and this session repeated it.
+
+**So do not quote 6 ms as overhead.** If the compositing route above does not
+work, splitting that number is the next job — about twenty minutes — and only
+then is there a case for anything else.
+
+#### AND IF NEITHER WORKS, THE PATCH DECISION DESERVES REVISITING
+
+Open question 12b records MMagTech ruling out a second patch to PCSX2, and that
+decision stands on its own reasoning. **But it was made on a cost I described
+wrongly** — "true 4K is expensive" rather than "this may be slower than the same
+machine on Windows". A decision made on bad information is worth putting back in
+front of him with good information. **That is not the same as reinterpreting a
+settled decision because an easier path runs**, which this project forbids and
+was burned by a session ago.
+
+---
+
 ### 1a. PLAYSTATION 2 PLAYS FROM UPSTREAM PCSX2, IN THE CONSOLE — 2026-09-21
 
 **PLAIN VERSION: pick a PlayStation 2 game on the television and it plays, on
@@ -384,7 +452,12 @@ PRODUCT**, and main.cpp says so beside them. How this is really exposed is open
 question 23 — one quality setting for the whole console. Nobody should build a
 settings screen on these two flags.
 
-Currently on the reference console: `--ps2-upscale 4 --ps2-aniso 16`.
+**Currently on the reference console: `--ps2-upscale 4 --ps2-aniso 16`**, left
+there deliberately at the end of the session rather than dropped to 3x.
+MMagTech played at 4x, said it "looked way better", and noticed some stutter —
+and the reason not to quietly lower it is item 1: **the stutter may be this
+console's own picture path rather than the machine running out of room**, and
+lowering the setting would hide the question rather than answer it.
 
 **MEASURE IT CAPPED TO 60 Hz, NOT UNCAPPED, AND THE FIRST TABLE HERE WAS WRONG
 FOR EXACTLY THAT REASON.** Uncapped, the emulator runs flat out, the readback
@@ -559,7 +632,8 @@ the right way up. Read this order before picking anything up.
 
 | | |
 |---|---|
-| **0** | **EMBED UPSTREAM PCSX2 — item 1a. THE BUILD IS DONE, 2026-09-21.** Upstream builds as a library on Linux with **no patches**; `cores/build-pcsx2.sh` reproduces it in 43 seconds. What is left is the host layer — 55 `Host::` functions and four other symbols, most of them one-liners, with **six that are real work** and all six in the display path the Vulkan host already serves. **Write it: there is no cheaper step in front of it**, and gsrunner cannot stand in because it only replays GS dumps. |
+| **0** | **WILL GAMESCOPE COMPOSITE OUR OVERLAY OVER A WINDOW PCSX2 OWNS? — item 1.** One experiment, not an integration. It decides whether PlayStation 2 keeps copying its picture through the CPU or draws straight to the screen like it does on Windows, and it decides the same thing for every heavy system after it. **Do not measure or build anything else first.** |
+| **0a** | ~~EMBED UPSTREAM PCSX2~~ — **DONE AND PLAYING, see item 1a.** Upstream builds as a library on Linux with **no patches**; `cores/build-pcsx2.sh` reproduces it in 43 seconds. What is left is the host layer — 55 `Host::` functions and four other symbols, most of them one-liners, with **six that are real work** and all six in the display path the Vulkan host already serves. **Write it: there is no cheaper step in front of it**, and gsrunner cannot stand in because it only replays GS dumps. |
 | **0b** | **THE TWO BUGS IN ITEM 1b**, which need MMagTech to catch them — leave the console stuck rather than restarting it. GameCube's core CAN be pinned into `cores/build-core.sh` and that part still stands. |
 | **1** | ~~PLAYSTATION 2 AND GAMECUBE~~ — **done to the point of playing**, see above. The original entry follows for its reasoning. **PLAYSTATION 2 AND GAMECUBE.** MMagTech's call, 2026-09-20, and the largest thing on this list: 85 games, and the only missing tier with a working implementation to copy. **Open question 12b has the order and 12 has the numbers.** Start by reading `tools/build-dolphin-mac.sh` in Cabinet — those two are NOT libretro cores and nobody wrote down why. |
 | **2** | **A GAME CAN GO BLACK AND NOBODY KNOWS WHY.** Six launches in one session drew nothing but the letterbox glow while the core ran and made sound. Not reproduced since. Two theories tested and both falsified. See item 3b — it has the instruments. |
