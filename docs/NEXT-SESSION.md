@@ -2318,8 +2318,19 @@ account 1 rather than making a duplicate — which had only been asserted agains
 a scratch root until then. Sign in as the person being added, in a private
 window. `--romm-pair` says so before it prints the code.
 
-**STILL NOT EXERCISED:** the two refusals — switching while a game runs, and
-switching with a save still going up. Both are reasoned.
+**THE TWO REFUSALS ARE NOT EQUALLY LIVE, asked by MMagTech and checked rather
+than assumed.** *"Why or how would you switch mid game?"* — you cannot. While a
+game runs the core owns the pad (`InputOwner::Game`), the bar is not drawn at
+all, and the pause menu's four rows are Resume, Save state, Load latest and
+Exit. **Nothing but `--switch-account` can make that branch fire**, so do not
+read it as a tested guard. It is kept because the door is one row wide: the day
+anybody adds "Switch user" to the pause menu, it is what stops a running game's
+save being filed under the wrong person.
+
+**The upload refusal IS reachable and is the one that matters.** Exit a game,
+the save starts going up in the background, you land on Home, and the chip is
+right there. A few seconds wide, and anybody switching users would walk into
+it. Still unexercised, but it is a real path rather than a hypothetical one.
 
 **A SEGFAULT WORTH KEEPING.** `accounts::find` returns a pointer INTO the vector
 it is handed, which is why it takes one rather than hiding a static, and the

@@ -4450,15 +4450,35 @@ int main(int argc, char** argv) {
     // read that comment and skipped the refetch.
     //
     // TWO THINGS REFUSE THE SWITCH, and both are about a save reaching the
-    // wrong person rather than about tidiness:
+    // wrong person rather than about tidiness. **THEY ARE NOT EQUALLY LIVE AND
+    // THE DIFFERENCE IS WORTH KNOWING** — MMagTech asked how you would even
+    // switch mid-game, and the answer is that you cannot.
     auto switchAccount = [&](int id, std::string* why) -> bool {
-        // A RUNNING GAME'S SAVE BELONGS TO WHOEVER LAUNCHED IT. The core writes
-        // its card or its battery at unload, and `filesave` files that under
-        // `storage::currentUser()` — which this function is about to change.
+        // **UNREACHABLE THROUGH THE UI TODAY, AND KEPT ANYWAY.** While a game
+        // runs the core owns the pad outright (`InputOwner::Game`), the bar is
+        // not drawn at all (`if (!playing && ...)`), and the only overlay is
+        // the pause menu, whose four rows are Resume, Save state, Load latest
+        // and Exit. There is no way to reach the chip. Nothing but
+        // `--switch-account` can make this branch fire.
+        //
+        // It stays because the hazard it names is real and the door is one row
+        // wide: consoles do offer user switching from a pause menu, and the
+        // day anybody adds that row this is what stops a running game's save
+        // being filed under the wrong person — the core writes its card at
+        // unload and `filesave` puts it under `storage::currentUser()`, which
+        // a switch has just changed.
+        //
+        // **Do not read this as a tested guard.** It has never fired in
+        // anger and it cannot until something calls this while a game runs.
         if (playing) {
             if (why) *why = "Quit the game before switching accounts.";
             return false;
         }
+        // **THIS ONE IS REACHABLE AND IT IS THE ONE THAT MATTERS.** Exit a
+        // game, the save starts going up in the background, you land on Home,
+        // and the chip is right there — a window of a few seconds that anybody
+        // switching users would walk straight into.
+        //
         // AN UPLOAD IN FLIGHT WOULD GO UP AS THE NEW PERSON. The uploader holds
         // a pointer to this very client, so swapping the token underneath it
         // sends the previous account's save to the new account's library. An
