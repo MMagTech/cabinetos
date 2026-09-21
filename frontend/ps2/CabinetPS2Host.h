@@ -22,6 +22,7 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace CabinetPS2
 {
@@ -78,7 +79,39 @@ namespace CabinetPS2
 
 		/// The GS upscale multiplier. 1.0 is the PS2's native resolution.
 		float upscale = 1.0f;
+
 	};
+
+	/// The finished picture, as the GS produced it.
+	///
+	/// **THIS IS THE SAME SHAPE EIGHTEEN OF THE TWENTY-ONE LIBRETRO CORES
+	/// ALREADY HAND THE FRONTEND** — a buffer of pixels, a width and a height —
+	/// which is why PS2 needs no new picture path in the UI at all. PCSX2
+	/// renders surfacelessly on its own thread and the finished frame is read
+	/// back here; the frontend uploads it exactly as it uploads a Mega Drive's.
+	///
+	/// The alternative was sharing PCSX2's Vulkan image with the frontend
+	/// directly, which is faster and needs upstream to enable two external
+	/// memory extensions it does not. That is a real option and it is written
+	/// up in docs/PCSX2-HOST-SURFACE.md; it is not the first thing to build,
+	/// because this one costs nothing to try and the cost of the readback is a
+	/// measurement rather than a guess.
+	struct Frame
+	{
+		std::vector<uint32_t> pixels; // RGBA, `width * height` of them.
+		unsigned width = 0;
+		unsigned height = 0;
+		uint64_t serial = 0; // Bumped every time a new frame lands.
+	};
+
+	/// Takes the newest frame if there is one newer than `since`. Safe from any
+	/// thread; returns false and touches nothing when there is nothing new.
+	///
+	/// Copies rather than lending, deliberately: the GS thread overwrites its
+	/// side whenever it likes, and a frontend holding a borrowed buffer across
+	/// a draw call is a data race that would show up as tearing on a
+	/// television and as nothing at all in a capture.
+	bool TakeFrame(Frame* out, uint64_t since);
 
 	/// Boots the disc and runs until RequestStop, the frame limit, or the game
 	/// ending. BLOCKS — give it its own thread. Returns false and fills error
@@ -96,6 +129,9 @@ namespace CabinetPS2
 		float fps;
 		float speed;
 		uint64_t frames;
+		/// What reading one finished frame back out of the GS costs. The whole
+		/// picture path rests on this being small enough; see TakeFrame.
+		double readback_us;
 	};
 
 	Metrics GetMetrics();

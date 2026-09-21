@@ -66,6 +66,19 @@ namespace
 
 	CabinetPS2::Config s_config;
 	std::atomic<bool> s_running{false};
+
+	// The frame handover. The GS thread writes, any other thread reads.
+	std::mutex s_frame_lock;
+	CabinetPS2::Frame s_frame;
+	std::atomic<uint64_t> s_frame_serial{0};
+
+	// What the readback costs, in microseconds, as an exponential average.
+	// **KEPT BECAUSE THE DESIGN RESTS ON IT.** Reading the finished picture
+	// back through the CPU is the simple way to get a PS2 into this frontend
+	// and it may turn out to be too slow at a high upscale, in which case the
+	// answer is to share PCSX2's Vulkan image instead. That is a decision to
+	// make against a number, and this is the number.
+	std::atomic<double> s_readback_us{0.0};
 	std::atomic<bool> s_stop_requested{false};
 	std::atomic<uint64_t> s_frames{0};
 
@@ -188,17 +201,25 @@ std::optional<WindowInfo> Host::GetTopLevelWindowInfo()
 	// — but implemented because upstream's gsrunner and Cabinet's host both do,
 	// and building only what the linker complains about leaves this layer one
 	// configuration change from a link error.
-	WindowInfo wi;
-	wi.type = WindowInfo::Type::Surfaceless;
-	return wi;
+	return Host::AcquireRenderWindow(false);
 }
 
 std::optional<WindowInfo> Host::AcquireRenderWindow(bool recreate_window)
 {
+	// SURFACELESS, ALWAYS, AND THAT IS THE DESIGN RATHER THAN A LIMITATION.
+	//
+	// PCSX2 never gets a window on this console. The frontend owns the one
+	// window there is, draws every screen in it and draws the in-game overlay
+	// on top — which is what makes Pause, Save state and Exit to Home work the
+	// same way for a PlayStation 2 game as for a Mega Drive one. A PCSX2 with
+	// its own surface would be a second thing on the television that the
+	// console could not draw over.
+	//
+	// It still RENDERS. The GS produces a finished picture every frame and
+	// BeginPresentFrame below reads it back; "surfaceless" means only that
+	// there is nowhere for PCSX2 to present it to.
 	WindowInfo wi;
 	wi.type = WindowInfo::Type::Surfaceless;
-	wi.surface_width = 0;
-	wi.surface_height = 0;
 	wi.surface_scale = 1.0f;
 	return wi;
 }
@@ -209,16 +230,54 @@ void Host::ReleaseRenderWindow()
 
 void Host::BeginPresentFrame()
 {
+	// CALLED ON THE GS THREAD, once per finished frame. It is the only point
+	// at which the picture is complete and still exists, which is why the
+	// handover happens here rather than anywhere more convenient.
 	const uint64_t frame = s_frames.fetch_add(1);
+
+	{
+		const auto started = std::chrono::steady_clock::now();
+
+		u32 width = 0, height = 0;
+		std::vector<u32> pixels;
+
+		// Zero for the window size asks for the GS's own internal resolution,
+		// and `apply_aspect = false` gives the raw pixels rather than a
+		// picture already stretched to some assumed shape.
+		//
+		// **BOTH OF THOSE ARE DELIBERATE AND THE SECOND ONE MATTERS MOST.**
+		// The frontend already owns aspect: it measures a core's declared
+		// ratio, fits a quad and prints the four numbers that have to agree.
+		// Letting PCSX2 correct the picture as well would be correcting it
+		// twice, which is exactly the fault the arcade rotation work paid for
+		// once — a turned board whose declared aspect was already turned, and
+		// inverting it stretched every vertical game.
+		if (GSSaveSnapshotToMemory(0, 0, false, false, &width, &height, &pixels) && width > 0 && height > 0)
+		{
+			std::lock_guard<std::mutex> lock(s_frame_lock);
+			s_frame.pixels = std::move(pixels);
+			s_frame.width = width;
+			s_frame.height = height;
+			s_frame.serial = s_frame_serial.fetch_add(1) + 1;
+		}
+
+		const double us =
+			std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - started).count();
+		// Exponential average. A single frame is noise — the first one after a
+		// resolution change compiles pipelines and is worth ten of the others.
+		const double prev = s_readback_us.load();
+		s_readback_us.store(prev == 0.0 ? us : (prev * 0.95 + us * 0.05));
+	}
 
 	if (s_config.dump_count == 0 || s_config.dump_dir.empty())
 		return;
 	if (frame < s_config.dump_first || s_dumped >= s_config.dump_count)
 		return;
 
-	// PCSX2's own snapshot, so what lands on disk is the picture the GS
-	// produced rather than anything this layer re-encoded. Same call gsrunner
-	// makes, for the same reason.
+	// PCSX2's own snapshot to disk, which is a different thing from the
+	// readback above: this one is the finished, aspect-corrected picture, and
+	// it is what a person looks at when asking whether the game renders
+	// correctly.
 	GSQueueSnapshot(Path::Combine(s_config.dump_dir, fmt::format("frame{:05}.png", frame)));
 	s_dumped++;
 }
@@ -560,17 +619,17 @@ bool CabinetPS2::Run(const Config& config, std::string* error)
 	s_settings.SetIntValue("EmuCore/GS", "Renderer", static_cast<int>(GSRendererType::VK));
 	s_settings.SetFloatValue("EmuCore/GS", "upscale_multiplier", s_config.upscale);
 
-	// PCSX2's own input is off entirely. Every pad on this console reaches a
-	// game through the frontend, and a second path onto the same hardware is
-	// how a button ends up doing two things.
+	// PCSX2's own input is off entirely, and stays off. Every pad on this
+	// console reaches a game through the frontend, and a second path onto the
+	// same hardware is how one button ends up doing two things.
 	s_settings.SetBoolValue("InputSources", "SDL", false);
 	s_settings.SetBoolValue("InputSources", "XInput", false);
 	Pad::ClearPortBindings(s_settings, 0);
 	s_settings.ClearSection("Hotkeys");
 
 	// Audio is the frontend's, as it is for all twenty-one libretro cores.
-	// Null rather than absent: the emulator runs correctly and silently rather
-	// than pretending.
+	// Null rather than absent: it is a real backend that produces silence, so
+	// the emulator runs correctly rather than pretending.
 	s_settings.SetStringValue("SPU2/Output", "OutputModule", "nullout");
 
 	// NO MEMORY CARDS. Deliberate and load-bearing while the save work is not
@@ -641,6 +700,19 @@ bool CabinetPS2::Run(const Config& config, std::string* error)
 	return ok;
 }
 
+bool CabinetPS2::TakeFrame(Frame* out, uint64_t since)
+{
+	if (s_frame_serial.load() <= since)
+		return false;
+
+	std::lock_guard<std::mutex> lock(s_frame_lock);
+	if (s_frame.serial <= since || s_frame.width == 0)
+		return false;
+
+	*out = s_frame; // A copy. See the header for why it is not a loan.
+	return true;
+}
+
 void CabinetPS2::RequestStop()
 {
 	s_stop_requested.store(true);
@@ -660,5 +732,6 @@ CabinetPS2::Metrics CabinetPS2::GetMetrics()
 
 	m.fps = PerformanceMetrics::GetFPS();
 	m.speed = PerformanceMetrics::GetSpeed();
+	m.readback_us = s_readback_us.load();
 	return m;
 }

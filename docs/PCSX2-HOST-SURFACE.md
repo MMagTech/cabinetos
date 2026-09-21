@@ -191,6 +191,56 @@ Cabinet's `CabinetPS2Host` runs the VM on its own thread and presents into a
 `CAMetalLayer`; this is the same shape with Vulkan instead, and PCSX2 supports
 Vulkan natively so there is no Metal wall to climb.
 
+## How the picture reaches the frontend — DECIDED AND MEASURED 2026-09-21
+
+**PCSX2 never gets a window on this console, and that is the design rather than
+a limitation.** The frontend owns the one window there is, draws every screen in
+it and draws the in-game overlay on top — which is what makes Pause, Save state
+and Exit to Home work the same way for a PlayStation 2 game as for a Mega Drive
+one. A PCSX2 with its own surface would be a second thing on the television that
+the console could not draw over.
+
+So PCSX2 runs **surfaceless on its own thread**. It still renders; there is
+simply nowhere for it to present. `Host::BeginPresentFrame` — the GS thread,
+once per finished frame, the only moment the picture is complete and still
+exists — reads it back with `GSSaveSnapshotToMemory` and hands the frontend a
+buffer of RGBA pixels, a width and a height.
+
+**THAT IS EXACTLY THE SHAPE EIGHTEEN OF THE TWENTY-ONE LIBRETRO CORES ALREADY
+HAND THE FRONTEND**, which is the whole reason this is cheap: PlayStation 2
+needs no new picture path in the UI at all, and `Core::texture()` does not
+change meaning.
+
+Two arguments were needed and both are settled by measurement rather than taste.
+
+**Is the readback fast enough?** Burnout 3 on the A9, 4000 frames each:
+
+| Upscale | Frame | Readback | Of a 60 Hz frame |
+|---|---|---|---|
+| native | 640x448 | **690 us** | 4.1% |
+| 4x | 2560x1792 | **3043 us** | 18.2% |
+
+**Yes at native, and workable at 4x.** The emulator ran at about 500% of
+realtime throughout, so the headroom is there either way. The number is kept
+live in `CabinetPS2::Metrics::readback_us` because the design rests on it, and
+because a high upscale on a weaker machine is the case that would change the
+answer.
+
+**Is it a real picture?** The brightest channel in the last frame is **248** at
+both settings. That check exists because this project has twice mistaken a
+plausible dark rendering for a working one, and once spent a day on a game that
+"did not work" because the frame was lost at sampling.
+
+**THE FASTER ALTERNATIVE, AND WHY IT IS NOT FIRST.** PCSX2's Vulkan image could
+be shared with the frontend directly, the way `vkhost.cpp` already shares one —
+`GSDeviceVK` exposes its instance, physical device, device and queue family, and
+`GSDevice::GetCurrent()` is the finished texture. **It does not work as it
+stands**: PCSX2's `s_required_device_extensions` holds one entry,
+`VK_KHR_push_descriptor`, and none of the external-memory extensions, so its
+images cannot be exported. That is a four-line change to upstream and this
+project's first patch to PCSX2 — worth making the day a measurement says the
+readback is too slow, and not before.
+
 ## Dependencies: ten hand-built tarballs become one `dnf` line
 
 Cabinet cross-compiled **ten** external dependencies for Catalyst by hand, with

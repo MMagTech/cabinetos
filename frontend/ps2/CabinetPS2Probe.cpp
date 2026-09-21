@@ -30,6 +30,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <algorithm>
 #include <string>
 #include <thread>
 
@@ -132,8 +133,12 @@ int main(int argc, char** argv)
 		const double secs = std::chrono::duration<double>(now - last).count();
 		if (m.frames != last_frames)
 		{
-			std::printf("[probe] frames=%llu fps=%.1f speed=%.0f%% (+%llu in %.1fs)\n",
-				static_cast<unsigned long long>(m.frames), m.fps, m.speed,
+			// readback is the number the picture path rests on: it is what
+			// reading one finished frame out of the GS costs, and whether it
+			// is small enough decides whether PS2 can reach the frontend this
+			// way or needs PCSX2's Vulkan image shared directly.
+			std::printf("[probe] frames=%llu fps=%.1f speed=%.0f%% readback=%.0fus (+%llu in %.1fs)\n",
+				static_cast<unsigned long long>(m.frames), m.fps, m.speed, m.readback_us,
 				static_cast<unsigned long long>(m.frames - last_frames), secs);
 			std::fflush(stdout);
 			last_frames = m.frames;
@@ -151,5 +156,26 @@ int main(int argc, char** argv)
 
 	const CabinetPS2::Metrics m = CabinetPS2::GetMetrics();
 	std::printf("[probe] done, %llu frames\n", static_cast<unsigned long long>(m.frames));
+
+	// The last frame that reached the handover, proving the readback produced
+	// a real picture and not an empty buffer — the distinction this project has
+	// misread more than once.
+	CabinetPS2::Frame frame;
+	if (CabinetPS2::TakeFrame(&frame, 0))
+	{
+		uint32_t brightest = 0;
+		for (uint32_t px : frame.pixels)
+		{
+			const uint32_t r = px & 0xFF, g = (px >> 8) & 0xFF, b = (px >> 16) & 0xFF;
+			brightest = std::max(brightest, std::max(r, std::max(g, b)));
+		}
+		std::printf("[probe] last frame %ux%u, brightest channel %u\n", frame.width, frame.height, brightest);
+		if (brightest == 0)
+			std::printf("[probe] THAT IS A BLACK FRAME. The readback ran and the picture is empty.\n");
+	}
+	else
+	{
+		std::printf("[probe] no frame ever reached the handover\n");
+	}
 	return 0;
 }

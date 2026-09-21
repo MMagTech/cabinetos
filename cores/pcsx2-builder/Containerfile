@@ -25,6 +25,7 @@ RUN dnf install -y --setopt=install_weak_deps=False \
         libX11-devel libXrandr-devel libXext-devel libXi-devel dbus-devel \
         vulkan-headers vulkan-loader-devel libshaderc-devel \
         mesa-vulkan-drivers gdb \
+        pulseaudio-libs-devel alsa-lib-devel \
         mesa-libGL-devel mesa-libEGL-devel \
     && dnf clean all
 
@@ -60,4 +61,13 @@ RUN dnf install -y --setopt=install_weak_deps=False \
 #
 # gdb is here because a SIGBUS in a recompiler is not something to reason about
 # from a log line. It found the /dev/shm limit below in one run.
+#
+# THE AUDIO PACKAGES ARE NOT OPTIONAL EITHER, AND THEIR ABSENCE IS SILENT IN THE
+# WORST WAY. PCSX2 vendors cubeb and cubeb picks its backends at CONFIGURE time
+# by looking for headers. Without pulseaudio-libs-devel and alsa-lib-devel it
+# finds none — the configure log says "Looking for include file
+# pulse/pulseaudio.h - not found" among forty other lines — and builds a cubeb
+# with no way to make a sound. Nothing fails. The emulator runs perfectly and
+# the television is silent, which is exactly the fault this project has already
+# paid for once with a PS2 game that played with sound and a black screen.
 WORKDIR /src
