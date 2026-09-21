@@ -927,13 +927,39 @@ proven by round trip rather than by play — 3DO, Sega CD, Neo Geo Pocket, DS an
 both arcade emulators. The mechanism is now known to work end to end, so those
 are a matter of playing them.
 
-### 3b. A game that draws nothing, and is not reproducible — **OPEN**
+### 3b. A game that draws nothing — **SOLVED 2026-09-21. It was the SECOND game.**
 
-**Found by MMagTech on the television, 2026-09-19.** Six FBNeo launches in one
-session — DoDonPachi, Deathsmiles, Pink Sweets, ESP Ra.De., Mushihime-sama
-Futari — drew a black picture while the core ran normally and played sound.
-Every launch in every process since has been fine, including deliberate
-attempts to reproduce it.
+**THE RULE IS: PLAY A GAME, LEAVE IT, PLAY ANOTHER OF THE SAME PIXEL SIZE.**
+That is the whole of it, and it is why two days of deliberate attempts failed —
+everybody was reproducing "launch this game" and the trigger was the game
+BEFORE it.
+
+`Core::load()` calls `unload()`, which deletes the frame texture and sets
+`texture_ = 0` while leaving `frameWidth_`/`frameHeight_` at the previous game's
+values. The next game generates a fresh texture with NO STORAGE, `sizeChanged`
+comes out false because the dimensions match, and the upload calls
+`glTexSubImage2D` on it: `GL_INVALID_OPERATION`, nothing uploaded, a texture
+that samples black — while the core runs perfectly and plays perfect audio.
+
+Six FBNeo boards in one session all share a resolution. Air Zonk then Devil's
+Crush are both 256x240 and the second was black; Air Zonk then a SNES game is
+256x240 then 256x224, so `sizeChanged` was true and it worked. The first game
+after a restart always worked, because those fields start at zero.
+
+**Fixed** by zeroing them where the texture is generated — the only place that
+knows the texture has no storage, and correct however the texture came to be
+missing. Confirmed by MMagTech on TurboGrafx and 3DO.
+
+**Everything the 2026-09-19 investigation established was true and none of it
+was wrong** — the core was innocent, the upload "succeeded", the texture was on
+the right unit. It was looking at the second game and measuring the first.
+
+**Original report, kept because the shape of it is the lesson.** Found by
+MMagTech on the television, 2026-09-19: six FBNeo launches in one session —
+DoDonPachi, Deathsmiles, Pink Sweets, ESP Ra.De., Mushihime-sama Futari — drew a
+black picture while the core ran normally and played sound. Every launch in
+every fresh process since was fine, including deliberate attempts to reproduce
+it.
 
 **What was established, and it is a lot:**
 
@@ -1271,7 +1297,19 @@ Where to start when somebody does:
   it cannot be the cause; but it is a second stream on one device and is worth
   ruling out with `--ui-sound off` before blaming the core.
 
-### 9c. A BLACK SCREEN ON LAUNCH, WITH AUDIO — 2026-09-21, and it did not reproduce
+### 9c. A BLACK SCREEN ON LAUNCH, WITH AUDIO — SOLVED, see item 3b
+
+**This was the second-game fault and it is fixed.** Everything below was measured
+before the cause was known and is left as a record of what ruling things out
+looked like — every measurement in it is correct and none of it found the bug,
+because every one of them launched a game into a FRESH PROCESS, which is the one
+case that always worked.
+
+**The lesson worth keeping: a headless test cannot reproduce a fault whose
+trigger is the previous game.** `--launch` on a cold process was the wrong
+instrument, used four times.
+
+#### What was measured before the cause was found
 
 MMagTech, during the UI session: two platforms *"launching with a black screen"*
 and, a moment later, *"i hear audio"* — so the core is running and the picture is

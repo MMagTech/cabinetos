@@ -1630,6 +1630,36 @@ bool Core::uploadFrame() {
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        // A BRAND NEW TEXTURE HAS NO STORAGE, WHATEVER THE LAST GAME'S SIZE WAS.
+        //
+        // THIS IS THE SECOND-GAME BLACK SCREEN — found 2026-09-21, reported as
+        // "black with audio" against 3DO, TurboGrafx and Dreamcast over several
+        // days and recorded in docs/NEXT-SESSION.md as not reproducible.
+        //
+        // It is entirely reproducible once you know the rule: PLAY ONE GAME,
+        // LEAVE IT, AND PLAY ANOTHER OF THE SAME PIXEL DIMENSIONS.
+        //
+        //   unload() deletes this texture and sets texture_ to 0. It does NOT
+        //   reset frameWidth_/frameHeight_ — the only place those are cleared
+        //   is the PlayStation 2 branch of loadGame, which no libretro core
+        //   takes. So the next game arrives with the PREVIOUS game's size still
+        //   recorded, `sizeChanged` comes out false, and the upload below calls
+        //   glTexSubImage2D on a texture that has just been generated and never
+        //   allocated. That is GL_INVALID_OPERATION: nothing is uploaded, the
+        //   texture samples as black, and the core carries on producing perfect
+        //   frames and perfectly good audio into a picture nobody can see.
+        //
+        // Which is why it looked like a per-game fault and was not: Air Zonk
+        // then Devil's Crush are both 256x240 and the second is black; Air Zonk
+        // then a SNES game is 256x240 then 256x224, `sizeChanged` is true, and
+        // it works. The first game after a restart always works, because these
+        // start at zero.
+        //
+        // Fixed here rather than in unload(), because this is the only place
+        // that knows the texture has no storage — and it stays correct however
+        // the texture came to be missing.
+        frameWidth_ = 0;
+        frameHeight_ = 0;
     }
     glBindTexture(GL_TEXTURE_2D, texture_);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
