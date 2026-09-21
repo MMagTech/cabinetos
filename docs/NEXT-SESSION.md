@@ -1411,6 +1411,31 @@ then `~/cabinetos/.core-src`.
 
 ## Three things the user wants discussed, each in its own session
 
+### One quality setting for the whole console — open question 23, NEW
+
+Raised 2026-09-20: *"I hate messing with settings in emulators. What I'd want
+me or anyone to experience is something like a performance and quality setting
+that affects all cores."* **Surveyed the same day and the scope is much smaller
+than it sounds: seven systems, six cores.** The other seventeen either have
+only a look filter or nothing to choose at all.
+
+Two things the survey corrected, both of which would have been guessed wrong:
+
+- **It is NOT "the hardware-rendered cores".** PlayStation renders in software
+  through `pcsx_rearmed` and still has four real levers. Dolphin declares no
+  options at all until a game is loaded, so it is invisible to a survey taken
+  at load time.
+- **The 2D cores' `overclock` options are ACCURACY, not quality**, and a SNES
+  is not a performance problem on any machine this runs on. Dragging them in
+  would make the setting mean two different things.
+
+**The obstacle is not the code, it is that there is only one machine to tune
+against and it has 6 to 10x more headroom than it needs.** A Performance level
+tuned on hardware that never needs it is a guess wearing a number. Get the
+DEFAULT right per platform first.
+
+
+
 ### Sleep, screen blanking, and what a console does when nobody is playing
 
 Raised 2026-09-20: *"we currently have no screen or sleep behaviour, the console

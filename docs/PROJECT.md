@@ -9916,6 +9916,103 @@ Two more open edges:
   Xbox and 109 Switch titles, and Switch is the one with games. They are in the
   manifest to prove the mechanism generalises, which was the requirement.
 
+### 23. One quality setting for the whole console, instead of emulator menus
+**Raised by MMagTech 2026-09-20. Surveyed the same day against all 23 cores.
+Not designed, not built.**
+
+> I hate messing with settings in emulators. What I'd want me or anyone to
+> experience is something like a performance and quality setting that affects
+> all cores.
+
+**This is the difference between a console and a frontend, and it is the right
+instinct.** RetroArch's answer to "should this look better" is a menu per core;
+a console's answer is that somebody already decided. Everything below is about
+making that decision once, per platform, rather than asking.
+
+#### THE SURVEY, because the problem is much smaller than it looks
+
+Every option every core declares, read off the running console 2026-09-20:
+
+| | |
+|---|---|
+| **A real resolution lever** | **7 systems, 6 cores** — PS2, GameCube, PSP, N64, Dreamcast/Naomi, PlayStation |
+| Only a LOOK filter | Mega Drive's NTSC filter, Game Boy's LCD filter, Master System, 7800, 2600 |
+| Nothing to choose | Saturn, Neo Geo Pocket, Virtual Boy, DS, NES, arcade, Vectrex, Virtual Boy |
+
+So it is not "a setting that affects all cores". It is **a setting that affects
+the seven systems where it means anything**, and that is a line a person
+already understands without being taught it.
+
+**AND IT IS NOT "THE HARDWARE-RENDERED CORES", which was the obvious wrong
+answer.** `pcsx_rearmed` renders PlayStation in SOFTWARE and still has
+`neon_enhancement_enable`, `scale_hires`, `dithering` and
+`gpu_thread_rendering` — four real levers. Meanwhile Dolphin declares *nothing*
+until a game is loaded, so a survey of what a core reports at load time misses
+it entirely. The right test is whether the SYSTEM has an internal resolution
+worth raising, not how the core draws.
+
+**The 2D cores' options are a different kind of thing and must not be dragged
+in.** `snes9x_overclock_cycles` and `genesis_plus_gx_overclock` trade accuracy
+for compatibility, not quality for speed, and on any machine this OS runs on a
+SNES is not a performance problem. Those get set correctly once and are never
+part of a performance choice. `blargg_ntsc_filter` is a LOOK, free, and belongs
+wherever the shader and glow settings end up — not here.
+
+#### The hardware is unknown and that is not the problem it looks like
+
+The worry is real — this runs on whatever AMD machine somebody installs it on,
+from a small APU to a large card, and open question 11 adds NVIDIA later. A
+hardware database would be wrong about the first chip nobody tested, and a
+synthetic benchmark at first run does not predict emulator speed.
+
+**The console already knows how fast it is going.** `core.h`: *"audio against
+the core's own sample rate is the only direct read on whether emulated time is
+advancing at realtime"*. That is the emulated machine reporting its own speed
+on the actual game, which is the only measurement that matters and it needs no
+table of GPUs.
+
+Measured on the A9 Max, 2026-09-20: **PS2 10.1x realtime at native and 6.3x at
+a 4x upscale; GameCube 4.6x.** A machine with a quarter of that headroom shows
+it in the same number.
+
+#### The recommendation
+
+1. **Three levels in console language — Performance, Balanced, Quality.** Never
+   an emulator's vocabulary. "Upscale multiplier" is not a thing a person
+   should have to have an opinion about.
+2. **A per-platform table mapping each level to real option values, with a
+   reason recorded per line.** This is open question 7's existing ask given a
+   better shape: `catalog::optionOverrides` takes a core today, and taking a
+   core AND a level is a change of shape rather than a new subsystem.
+3. **Apply at launch, never mid-game.** Dropping resolution in the middle of a
+   race is worse than a slightly low frame rate — it is visible and it reads as
+   broken. Measure during play; act at the next launch, or say *"this ran at
+   72%, try Performance?"* and let the person decide. A console that changes
+   itself underneath somebody is not calm, it is haunted.
+4. **A per-game override**, because one game is always the exception. Cabinet
+   has the precedent and the reason: it keeps renderer and aspect per game for
+   PS2 because *"which renderer a title needs is a fact about the title"*.
+
+#### THE HONEST OBSTACLE, AND IT IS NOT THE CODE
+
+**There is only one machine to tune against, and it has 6 to 10x more headroom
+than it needs.** A Performance level cannot be tuned on hardware that never
+needs it — anything written for it would be a guess wearing a number. So the
+first version of this is **getting the DEFAULT right per platform**, which the
+A9 can answer, and the lower tiers wait for either a second machine or a report
+from somebody running one.
+
+That also sets the acceptance test, and it is not a screenshot: **a person
+plays each of the seven systems and nobody reaches for a menu.**
+
+#### What makes it cheaper than it sounds
+
+The instruments went in with the PS2 and GameCube work. `--core-option
+key=value` tries any candidate value on a real game with no rebuild, and
+`--core-options` dumps what every core actually offers. The measuring is
+already possible; the expensive part is the DECIDING, one platform at a time,
+with a game in front of you.
+
 ### 22. What the console does when the server is away
 **Raised by the A9 Max's first reboot, 2026-09-19. Partly decided the same day.
 Not built.**
