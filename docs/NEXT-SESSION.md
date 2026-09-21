@@ -46,6 +46,25 @@ on its own Radeon 890M at the panel's native **3840x2160**, with Vulkan
 present (RADV STRIX1) and 1147 playable games. **The UI freeze is lifted and
 what is on that television is the real thing.**
 
+**IT IS RUNNING A HAND-BUILT BINARY RIGHT NOW, 2026-09-20, AND THAT IS THE
+FIRST THING TO UNDO.** PlayStation 2 and GameCube are on the television for
+testing before an image carries them, through a drop-in at
+`/etc/systemd/system/cabinetos-session.service.d/20-heavy-systems.conf`. While
+that file exists the paragraph below is FALSE. Putting the machine back:
+
+```
+sudo rm /etc/systemd/system/cabinetos-session.service.d/20-heavy-systems.conf
+sudo systemctl daemon-reload && sudo systemctl restart cabinetos-session
+```
+
+It points `CABINETOS_APP` at `~/cabinetos-frontend-dev` with
+`--core-dir ~/cores-dev` (the 21 image cores symlinked plus the two new ones)
+and `--core-option pcsx2_analog_mode1=enabled`. **`Environment=` must be
+QUOTED** or systemd splits the value on whitespace and silently drops every
+argument after the path — which looks exactly like a console that ignored you.
+
+**THE PARAGRAPH BELOW DESCRIBES THE MACHINE WITH THAT DROP-IN REMOVED.**
+
 **IT RUNS THE IMAGE AND NOTHING BY HAND, as of 2026-09-20.** There is no
 drop-in in `/etc/systemd/system/cabinetos-session.service.d/` — the directory
 does not exist — and the running process is `/usr/bin/cabinetos-frontend`,
@@ -178,6 +197,84 @@ states, and leave — with the save syncing on the way out.
 
 ## Pick up with these, in this order
 
+### PLAYSTATION 2 AND GAMECUBE PLAY — 2026-09-20
+
+**1232 playable games, up from 1147.** Both systems draw a picture on the
+television off the A9's Radeon. The work is in the `vulkan-host` branch.
+
+**It was never about the emulators.** Both libretro cores existed, both already
+had Vulkan compiled in, and `catalog.cpp` has routed `ps2 -> pcsx2` and
+`ngc -> dolphin` since the table was written — so two `.so` files in a core
+directory turned "not built on this console yet" into 85 playable games with
+no code change at all. What was missing was **this frontend's half of a
+contract libretro already specifies**: the instance, the device, the queue and
+somewhere to put the picture. RetroArch implements that end; this console owns
+its frontend and had only ever done the OpenGL ES half.
+
+See open question 20 for the whole thing. The three one-line faults:
+
+1. `GET_PREFERRED_HW_RENDER` was hard-wired to GLES, so **Dolphin never asked
+   for the Vulkan it has compiled in**.
+2. `SET_HW_RENDER` refused Vulkan by name.
+3. **Dolphin checks for a `VkSurfaceKHR` to decide whether it has a display.**
+   With none it renders and never presents — fifty seconds of emulated Mario
+   Kart, correct audio, a black screen. It gets a `VK_EXT_headless_surface`.
+
+**MEMORY CARDS: PS2 TRAVELS, GAMECUBE DOES NOT YET.** A card written on the Mac
+lands on the console and the game reads it — proved with Burnout 3, which is
+the only real save that exists for either system. GameCube saves and syncs but
+uses this console's own row naming; see open question 12b for why that is
+deliberate.
+
+**SIX OF THE SEVEN CARDS ON THE SERVER WERE EMPTY** and were deleted at
+MMagTech's request on 2026-09-20. Cabinet for Mac uploads a card on first play
+regardless of content and has no freshness rule for either platform — the same
+fault `catalog.h` records for Dreamcast, worse ratio. **CabinetOS now refuses**;
+both rules are measured and in `filesave.cpp`.
+
+**WHAT IS NOT DONE, and none of it is hidden:**
+
+- **Nobody has saved inside a game and watched it go up.** The download half is
+  proved; the upload half is the same code Crazy Taxi 2 proved for Dreamcast.
+- **The cores are buildbot downloads**, not pinned builds in
+  `cores/build-core.sh`. They are a hard fork each — LRPS2 and
+  `libretro/dolphin` — so the rule that commits come from Cabinet's manifest
+  cannot apply and the exception has to be written down.
+- **TWO OPEN BUGS FROM ONE HOUR OF PLAY, both reported by MMagTech and neither
+  reproducible from here.** See item 1b.
+
+### 1b. TWO BUGS FOUND BY PLAYING, NEITHER REPRODUCIBLE — OPEN
+
+**"It looks like I was looking through a tunnel when racing"**, Burnout 3 on
+the television. **Every capture taken here measures a correct 4:3 picture
+exactly filling its quad** — at 1920x1080 and 3840x2160, in a menu and in
+gameplay, on both bridge routes, with the widescreen hint on and off. The new
+`[picture]` line prints the four numbers that have to agree and they agree:
+
+```
+[picture] core 640x448 aspect 1.3333 -> quad 1440x1080 (1.3333) at 240,0
+          uv 0.0000,0.0000..0.8333,0.8750
+```
+
+**So it is not the layout and not the texture coordinates.** "Tunnel" describes
+a FIELD OF VIEW rather than an aspect, which points at the emulator's own
+settings rather than the frontend — start with the 78 core options, and ask
+which game and whether it happens from a cold boot or only after loading the
+Mac's memory card. **Do not trust a bounding-box measurement here**: the first
+three this session were confounded by the game's own black borders and by the
+pause menu's dimming, and one of them sent an hour the wrong way.
+
+**THE PAUSE MENU'S EXIT LEFT THE CONSOLE STUCK.** The menu was on screen with
+"Exit to Home" focused and the process was **asleep at 0% CPU** — and the UI
+loop is unpaced, so 0% means the frame loop had STOPPED, not that a button was
+ignored. That is a hang in teardown. **It does not reproduce**: exiting at 1500
+frames in works headlessly and under gamescope when driven from code. The
+suspect is `Core::unloadGame` on a threaded core —
+`vk::destroyContext` calls `deviceWaitIdle` on a device the CORE created and
+may already have torn down in its own `context_destroy`. **Get a backtrace next
+time rather than theorising**: the process is still there, so
+`gdb -p <pid> -batch -ex "thread apply all bt 12"`.
+
 ### 1. WHAT TO DO NEXT
 
 The A9 works, runs at 4K on its own GPU, and now plays vertical arcade games
@@ -185,7 +282,8 @@ the right way up. Read this order before picking anything up.
 
 | | |
 |---|---|
-| **1** | **PLAYSTATION 2 AND GAMECUBE.** MMagTech's call, 2026-09-20, and the largest thing on this list: 85 games, and the only missing tier with a working implementation to copy. **Open question 12b has the order and 12 has the numbers.** Start by reading `tools/build-dolphin-mac.sh` in Cabinet — those two are NOT libretro cores and nobody wrote down why. |
+| **0** | **THE TWO BUGS IN ITEM 1b**, because they are the only things stopping somebody playing 85 games. Then finish the list under *PLAYSTATION 2 AND GAMECUBE PLAY* — the cores need pinning into `cores/build-core.sh`, and an in-game save needs to be watched reaching RomM. |
+| **1** | ~~PLAYSTATION 2 AND GAMECUBE~~ — **done to the point of playing**, see above. The original entry follows for its reasoning. **PLAYSTATION 2 AND GAMECUBE.** MMagTech's call, 2026-09-20, and the largest thing on this list: 85 games, and the only missing tier with a working implementation to copy. **Open question 12b has the order and 12 has the numbers.** Start by reading `tools/build-dolphin-mac.sh` in Cabinet — those two are NOT libretro cores and nobody wrote down why. |
 | **2** | **A GAME CAN GO BLACK AND NOBODY KNOWS WHY.** Six launches in one session drew nothing but the letterbox glow while the core ran and made sound. Not reproduced since. Two theories tested and both falsified. See item 3b — it has the instruments. |
 | **3** | **Judge the TATE look, and Home, on the 65-inch.** Both are on the machine and neither has been looked at properly. |
 | **4** | **Atari Jaguar and ColecoVision** — 73 games, ordinary libretro cores, no architectural question at all. The cheapest games available. See 12b. |
@@ -952,6 +1050,70 @@ These are ordered. **Do not begin any of them in the VM.**
   the code read as correct. Assert the REFUSALS — the happy path is the part
   that already works.
 
+### About Vulkan, the two heavy systems, and their saves — all new 2026-09-20
+
+- **THE CONSOLE RUNS ON X11, NOT WAYLAND.** gamescope embeds an Xwayland
+  server and SDL picks the `x11` driver, so the GL context is GLX and **there
+  is no EGL display in the process at all**. A picture handed over as an
+  EGLImage fails with `EGL_NOT_INITIALIZED` on the television while working
+  perfectly under `SDL_VIDEODRIVER=offscreen`, where SDL does use EGL. It cost
+  a PlayStation 2 game that played with sound and a black screen.
+- **AN OFFSCREEN CAPTURE DOES NOT PROVE THE SESSION WORKS, AND THIS IS THE
+  SECOND TIME.** The existing note about `presentScene()` is the same lesson
+  one layer down. **Anything touching the display path has to be run under
+  gamescope before it is believed** — put `--launch <id> --launch-after 0` in
+  the session drop-in, which is how both of these were finally caught.
+- **`Environment=` IN A SYSTEMD DROP-IN SPLITS ON WHITESPACE.** An unquoted
+  `CABINETOS_APP=/path --core-dir x` sets the path and silently discards every
+  argument, and the console comes up looking correct on the default core
+  directory. Quote the whole value.
+- **`sudo -S ... | tail -0` HIDES A FAILED SUDO.** Three restarts in a row did
+  nothing and the journal kept showing the old process, because the output
+  that would have said so was thrown away. Print the exit status.
+- **A BINARY THAT IS RUNNING CANNOT BE OVERWRITTEN** — `cp` fails with "Text
+  file busy" and the restart brings back the OLD build, which reads exactly
+  like the fix not working. Stop the session, copy, start.
+- **THE COPY BETWEEN VULKAN AND GL COSTS TWELVE MICROSECONDS.** Everything else
+  in that path is the frontend waiting for the EMULATOR to finish drawing,
+  because the core's work is queued ahead of ours. Both obvious optimisations
+  — an optimally-tiled destination through `VK_EXT_image_drm_format_modifier`,
+  and an exported semaphore instead of the fence — were reasoned about, one was
+  BUILT and measured, and neither is worth anything. The tables are in
+  `vkhost.cpp`'s `createShared`. **Do not rebuild either without a number that
+  contradicts them.**
+- **`dolphin_renderer` IS NOT AN API SELECTOR.** It takes "Hardware" and
+  nothing else in a release build; setting it to "Vulkan" silently turns
+  hardware rendering OFF. The API comes from what the frontend advertises in
+  `GET_PREFERRED_HW_RENDER`.
+- **DOLPHIN DECLARES ZERO CORE OPTIONS UNTIL A GAME IS LOADED**, so
+  `--core-options` reports none for it. That is the suspicious case, not the
+  clean one — the same shape as FBNeo and MAME.
+- **DOLPHIN'S USER DIRECTORY IS UNDER THE SAVE DIRECTORY, NOT THE SYSTEM ONE.**
+  `Boot.cpp` prefers `<saveDir>/User` when the frontend gives it a save
+  directory, and only falls back to `<system>/dolphin-emu/User`. An hour went
+  on a `Dolphin.ini` written in the second place and read from the first.
+- **`pcsx2_shared_memory_cards` DEFAULTS TO ON** and puts every game's save in
+  one `Mcd001.ps2` in the system directory — a card that belongs to no rom and
+  therefore cannot be synced at all. **`pcsx2_analog_mode1` DEFAULTS TO OFF**,
+  which is the DualShock's analogue mode disabled and reads as dead sticks.
+  Both are in `catalog::optionOverrides` now.
+- **ROMM MATCHES A SAVE ROW BY FILENAME ALONE, AND THE MAC'S SPELLING IS
+  DIFFERENT FROM THIS CONSOLE'S.** `cabinet-604.ps2` against
+  `Burnout 3 Takedown (Cabinet).srm`. Four separate things had to agree before
+  one card could travel — the format, the name, the region extension and the
+  emulator tag — and three of them were wrong. See open question 12b.
+- **DOLPHIN PUTS THE REGION *AND THE CARD SIZE* IN THE FILENAME.** Ask for
+  `cabinet-937.raw` and get `cabinet-937.USA.raw`, or `cabinet-937.USA.251.raw`
+  for a 2 MB card. With the name goes the row's identity on the server, so
+  `MemoryCardSize` is pinned here. **Cabinet for Mac leaves it at -1** and has
+  the same latent fault — see the Cabinet-side debts.
+- **A FRESHNESS RULE IS NOT OPTIONAL FOR A PLATFORM WHOSE CORE CREATES ITS OWN
+  CARD.** Six of the seven PS2 and GameCube rows on the reference server held
+  nothing: three PS2 cards were 8,650,752 bytes of `0xFF` with no format header
+  at all, and three GameCube cards had nothing in either copy of their
+  directory. Deleted 2026-09-20 with MMagTech's say-so, each re-verified empty
+  immediately beforehand.
+
 ### About the product
 
 - **A truncated explanation is worse than none.** A tile's second line holds
@@ -1155,6 +1317,21 @@ not a copy — proved by device and inode, `58:82064` both times.
 **The one thing still missing is the screen** that says a drive is not
 connected. The console says it on stderr, once.
 
+## The state that lives on the A9 and not in git — new 2026-09-20
+
+- `~/cores-dev/` — the 21 image cores SYMLINKED plus `pcsx2_libretro.so` and
+  `dolphin_libretro.so` copied in. This is what `--core-dir` points at.
+- `~/heavy/` — the scratch tree the two systems were brought up in: the two
+  cores, the PS2 BIOS pulled off RomM, Dolphin's `Sys` folder, a few ROMs and
+  a pile of `.bmp` captures. Delete it whenever; nothing depends on it.
+- `/var/lib/cabinetos/bios/pcsx2/bios/` — the two PS2 BIOS files. **These come
+  from RomM with the game on a real install** and are here by hand only because
+  no image carries the core yet.
+- `/var/lib/cabinetos/bios/dolphin-emu/Sys/` — Dolphin's 15 MB Sys folder. On a
+  real install this ships with the core at `/usr/share/cabinetos/system/`, the
+  way PPSSPP's already does.
+- `~/cabinetos-frontend-dev` — the hand-built frontend the drop-in points at.
+
 ## The state that lives on the VM and not in git
 
 - `~/frontend/` — the frontend source, built with
@@ -1186,9 +1363,11 @@ connected. The console says it on stderr, once.
   nothing else on the disk.
 - `~/cabinetos/` — a clone of this repo, where `cores/build-core.sh` runs. Its
   `cores/build/` has twenty, not twenty-one.
-- `~/cabinetos/.core-src/` — per-core checkouts, **4.8 GB, of which PPSSPP is
-  3.4 GB**. They are a cache: delete any to make room and the next build
-  re-clones.
+- `~/cabinetos/.core-src/` — **now a SYMLINK to `/var/mnt/games/core-src`**,
+  moved there 2026-09-20 because `/var` had fallen to 605 MB free and the
+  builder container would not rebuild. Same 4.8 GB, of which PPSSPP is 3.4 GB,
+  on the disk that has 65 GB. Still a cache: delete any of it to make room and
+  the next build re-clones. `/var` is back to about 5 GB free.
 - `~/run-frontend.sh` — the session launcher, used via `CABINETOS_APP`. The
   original is `run-frontend.sh.bak`. **The drop-in that pointed the session at
   it was moved aside on 2026-09-19** to `~/10-frontend.conf.disabled`: its own
@@ -1337,7 +1516,36 @@ own rule is that a fact carried across is a fact nobody has checked.
    more are probably sitting in the shipping archives.
 6. **melonDS's archives carry no revision** while the same upstream built here
    reports one, so something in Cabinet's build is losing `GIT_VERSION`.
-7. **`PS2PlayerView.swift`'s header says the screen has no pause menu and no
+7. **NEITHER PS2 NOR GAMECUBE HAS A FRESHNESS RULE, AND IT HAS PUT SIX EMPTY
+   CARDS ON THE SERVER.** Measured 2026-09-20: of seven rows, only Burnout 3
+   held a save. `PS2MemoryCard.store` and `GCMemoryCard.store` both force the
+   first upload for a game regardless of content —
+
+   ```swift
+   let neverUploaded = stamp(romId: rom.id) == nil
+   guard neverUploaded || digest(bytes) != digestBefore else { return }
+   ```
+
+   — and nothing anywhere asks whether the card holds anything. The
+   `neverUploaded` clause exists for a good reason (a card adopted from PCSX2's
+   shared `Mcd001` arrives already containing a save and never looks "changed")
+   but it opens this hole. **Same fault the Dreamcast path has**, which
+   `catalog.h` already records; worse ratio. CabinetOS's two rules are in
+   `filesave.cpp` and are cheap to port: a PS2 card without the
+   `Sony PS2 Memory Card Format` magic is untouched, and a GameCube card with
+   no directory entry in blocks 1 or 2 is untouched.
+
+8. **`MAIN_MEMORY_CARD_SIZE` IS NOT PINNED, AND THE CARD'S SIZE IS IN ITS
+   FILENAME.** `CabinetDolphinHost.cpp` sets `MAIN_SLOT_A` and
+   `MAIN_MEMCARD_A_PATH` and leaves the size at -1, so Dolphin decides — and
+   one of the three cards on the reference server is `cabinet-934.USA.251.raw`,
+   a 2 MB card, beside two 16 MB ones. RomM matches a row by filename, so the
+   day Dolphin changes its mind about a game's card size the save lands under a
+   new name, gets a new row, and the old one is orphaned. **Not observed**, and
+   the same shape as the `.USA.` suffix the existing comment describes finding
+   by accident. CabinetOS pins it.
+
+9. **`PS2PlayerView.swift`'s header says the screen has no pause menu and no
    save state. It has both.** The file opens with *"there is no sound, no
    controller, no pause menu, and no save state or memory card sync — this
    screen exists to put a picture on the display"*, and forty lines later there
