@@ -112,14 +112,14 @@ google-noto-sans-cjk-fonts
 google-noto-fonts-common
 
 # --- The CORES' runtime, added 2026-09-19 ----------------------------------
-# The image carries twenty-one emulator cores from that day. Their library
+# The image carries twenty-two emulator cores from that day. Their library
 # dependencies had never been written down anywhere, and three of the
 # frontend's own — named in build_files/require-frontend-libs.sh with a reason
 # each — were not on this list either, which is precisely the gap the header
 # above warns about.
 #
 # What makes them urgent rather than tidy: build_files/install-frontend.sh now
-# runs `ldd` over the binary and all twenty-one cores and FAILS THE BUILD if
+# runs `ldd` over the binary and all twenty-two cores and FAILS THE BUILD if
 # anything is unresolved. So a base bump that drops one of these no longer
 # ships a broken console — it produces a red image build with no obvious
 # cause. Listing them here is what turns that into a base-bump pull request

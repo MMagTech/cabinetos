@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Put the console into the image: the frontend, the twenty-one libretro cores,
+# Put the console into the image: the frontend, the twenty-two libretro cores,
 # and the system files that ship with one of them.
 #
 # ===========================================================================
@@ -105,8 +105,8 @@ log "installed ${cores} cores into /usr/lib/cabinetos/cores ($(du -sh /usr/lib/c
 # proves is that the contents of it reached the image. A copy that silently
 # does nothing leaves a green build, which is the exact failure the
 # system_files overlay in build.sh was written to catch after it happened.
-if [[ "${cores}" -ne 21 ]]; then
-    log "ERROR: expected 21 cores in the image, found ${cores}"
+if [[ "${cores}" -ne 22 ]]; then
+    log "ERROR: expected 22 cores in the image, found ${cores}"
     exit 1
 fi
 
@@ -162,7 +162,7 @@ group_end
 #
 # The one check that is worth more than all the others here, because it is the
 # only one that asks the question the console actually depends on: can the
-# binary, and each of the twenty-one cores, find everything it links against in
+# binary, and each of the twenty-two cores, find everything it links against in
 # the image it is about to ship in?
 #
 # The frontend is compiled in a Fedora 44 container to match Bazzite 44, so the

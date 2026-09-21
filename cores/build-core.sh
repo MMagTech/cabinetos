@@ -37,7 +37,7 @@ CORE="${1:-}"
 # what is lost is only the ability to read it back out.
 VERIFY_REVISION=1
 
-# make is how eighteen of the twenty-one cores build. Three have no
+# make is how eighteen of the twenty-two cores build. Four have no
 # Makefile.libretro at all — mGBA's upstream dropped it, Flycast and PPSSPP
 # never had one — and set BUILDSYS=cmake with CMAKEARGS and CMAKE_TARGET
 # instead.
@@ -47,7 +47,7 @@ BUILDSYS="make"
 # frontend's system directory, in ASSET_DIR — the folder name the core itself
 # looks for, which is not necessarily the manifest's name for it.
 #
-# Empty for twenty of the twenty-one: their firmware is a console's, and it
+# Empty for twenty-one of the twenty-two: their firmware is a console's, and it
 # comes from RomM with the game. PPSSPP is the exception and its case arm says
 # why.
 ASSETS=()
@@ -523,6 +523,45 @@ ppsspp)
             flash0 font_atlas.meta font_atlas.zim knownfuncs.ini langregion.ini
             ppge_atlas.meta ppge_atlas.zim vfpu)
     ;;
+dolphin)
+    REPO=https://github.com/libretro/dolphin.git
+    COMMIT=1a0f97270b703c71625c87dee178d778348e540b
+    # GameCube — and Wii later, for free, because Dolphin is both. The
+    # twenty-second core, and the first added since the image started carrying
+    # them.
+    #
+    # THE PLATFORM AUDIT SAID THIS WAS THE CHEAP HALF OF THE 85 MISSING GAMES
+    # and it was right: `catalog.cpp` has routed `ngc -> dolphin` since the
+    # table was written, so this needs no frontend change at all. What it
+    # needed was a pinned revision and a place to build it, which is this.
+    #
+    # It was running on the reference console for a day before this arm
+    # existed, from a .so built by hand and copied into a home directory — the
+    # same state PlayStation 2 was in, and the same reason it had to stop:
+    # nobody could say what revision it was without reading strings out of the
+    # binary. That is how this commit was chosen, in fact. It is what the
+    # hand-built copy turned out to be.
+    #
+    # CMake, and the argument list is short because upstream's own `LIBRETRO`
+    # option does the work: it forces ALSA, Qt, SDL, evdev, PulseAudio,
+    # analytics, the updater, the CLI tool, Discord, UPnP and the test suite
+    # off by itself. Adding those here would be restating upstream's own
+    # if(LIBRETRO) block and would rot the moment it changed.
+    #
+    # VULKAN IS WHY THIS CORE WORKS HERE AT ALL, and it is not a build flag.
+    # Dolphin renders from a thread of its own, which a GLES context cannot
+    # serve because a GL context belongs to one thread at a time — measured on
+    # the A9, where on GLES it drew nothing and sometimes crashed. The frontend
+    # hands it Vulkan instead; see docs/PROJECT.md open question 20 and
+    # `vkhost.cpp`. Nothing here selects that. The core asks through
+    # GET_PREFERRED_HW_RENDER and the frontend answers.
+    BUILDSYS=cmake
+    CMAKE_TARGET=dolphin_libretro
+    CMAKEARGS=(
+        -DCMAKE_BUILD_TYPE=Release
+        -DLIBRETRO=ON
+    )
+    ;;
 *)
     echo "unknown core: $CORE" >&2
     exit 1
@@ -758,7 +797,7 @@ mkdir -p "$OUT"
 #
 # Upstream output names do not match manifest names and there is no rule to it:
 # beetle_ngp builds mednafen_ngp_libretro.so, beetle_pce_fast builds
-# mednafen_pce_fast_libretro.so. Hand-maintaining that list for twenty-one cores
+# mednafen_pce_fast_libretro.so. Hand-maintaining that list for twenty-two cores
 # is a table that goes stale, and the frontend would need a second copy of it to
 # find anything.
 #

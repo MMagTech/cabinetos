@@ -176,6 +176,9 @@ jobs:
           - mupen64plus
           - flycast
           - ppsspp
+          # GameCube, added 2026-09-21. Wii comes free from the same core when
+          # somebody has Wii games to try it with.
+          - dolphin
 
     steps:
       - name: Checkout
