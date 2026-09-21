@@ -555,11 +555,26 @@ dolphin)
     # hands it Vulkan instead; see docs/PROJECT.md open question 20 and
     # `vkhost.cpp`. Nothing here selects that. The core asks through
     # GET_PREFERRED_HW_RENDER and the frontend answers.
+    #
+    # ENABLE_X11=OFF, AND IT IS CORRECT RATHER THAN A WORKAROUND. Upstream
+    # defaults it ON and then `pkg_check_modules(X11_INPUT REQUIRED xi>=1.5.0)`
+    # fails the configure outright in a container that has no X11 headers —
+    # which is what this core did on its first CI run.
+    #
+    # The tempting fix is to put libXrandr-devel and libXi-devel in the builder
+    # container, and it would be the wrong one: it grows the container every
+    # other core also builds in, to satisfy a dependency this core does not
+    # actually have. CHECKED RATHER THAN ASSUMED — every "X11" in
+    # Source/Core/DolphinLibretro is DX11, Direct3D 11, and not X11 at all. The
+    # X11 support upstream means here is Dolphin's own desktop windowing and
+    # input, which a libretro core never reaches: the frontend owns the window
+    # and hands the core a graphics context.
     BUILDSYS=cmake
     CMAKE_TARGET=dolphin_libretro
     CMAKEARGS=(
         -DCMAKE_BUILD_TYPE=Release
         -DLIBRETRO=ON
+        -DENABLE_X11=OFF
     )
     ;;
 *)
