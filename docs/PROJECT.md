@@ -9959,6 +9959,49 @@ making the picture worse and fixing nothing.
 improvement means the cause is not the lever, and the honest response is to
 leave the picture alone rather than keep pulling.
 
+##### WHY THE MEASUREMENT IS AUDIO, AND THE ONE WAY IT LIES
+
+It is worth writing down why, because the obvious instrument is frames and
+frames cannot answer the question at all.
+
+**A REAL PLAYSTATION 2 GAME DROPPING TO 30 fps IN A HEAVY SCENE IS CORRECT.**
+That is what it did on the console. *Our* emulator dropping to 30 fps is a
+fault. Count frames and there is no way to tell those two apart, so an adaptive
+system would lower the picture quality of a game that is behaving exactly as it
+always did.
+
+Audio has no such ambiguity. A PlayStation 2 produces 48000 samples per second
+of EMULATED time, always. If the core has produced 48000 samples then one second
+of emulated time has passed, and there is nothing to interpret. `core.h` puts it
+as *"audio is the one output whose rate the emulated machine decides rather than
+us"*.
+
+**AND AUDIO CANNOT BE QUIETLY SKIPPED.** A dropped video frame is usually
+unnoticed; dropped samples crackle immediately. So the emulator is forced to
+produce audio at the right rate or the sound audibly breaks, which is what makes
+it the stream that tells the truth when the machine cannot keep up.
+
+It is also the clock the system already runs on — most emulators pace against
+the audio buffer draining — so this reads an existing clock rather than adding a
+second one that can disagree with it. `core.h` records a third use: audio is how
+the frontend knows the machine is RUNNING rather than still being built, because
+a picture arrives while a core is still initialising.
+
+**THE TRAP: COUNT WHAT THE CORE PRODUCED, NEVER WHAT THE FRONTEND CONSUMED.**
+
+This is the one way the whole scheme fails silently, and it is not hypothetical
+— this project shipped exactly this bug for a day. The PlayStation 2 audio drain
+asked for 170 ms of samples on every frontend frame, about a thousand times a
+second, and PCSX2's `ReadFrames` **does not refuse: it pads with silence**. The
+consumer side therefore saw a perfectly healthy stream of samples, most of which
+were invented, while the game was silent.
+
+**A speed measurement reading the consumed side would have reported a
+contentedly-at-realtime emulator throughout.** Any host that pads, resamples or
+stretches on starvation lies the same way. The number has to come from the
+core's own production counter — `Core::audioFramesTotal`, against the core's own
+declared sample rate — and never from what the audio device took.
+
 ##### BUILD THE STATIC HALF FIRST, AND THE REASON IS NOT CAUTION
 
 **None of the adaptive behaviour can be exercised on either machine this project
