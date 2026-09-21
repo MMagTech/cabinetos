@@ -2272,10 +2272,63 @@ looking for a token and a user, and a half-added account fails that test); and
 favourites and recents are the server's and belong to the account, and this
 console also holds a per-user download queue, pending uploads and keep list.
 
-**The existing single token is adopted, not orphaned.** Both machines here are
-paired at `~/.config/cabinetos/romm.json`; on first read with no `accounts.json`
-that file becomes the first account, filed under whatever id the server returns.
-Nobody re-pairs to gain a feature they did not ask for.
+**THERE IS NO ADOPTION AND THERE IS NOT GOING TO BE.** MMagTech, 2026-09-21:
+nobody else is running this. The two machines here were written into
+`accounts.json` **by hand, once**, and both start as account 1. This is the same
+call the folder layout already made and recorded — *"there is no migration tool
+in the tree and there should not be"*. If somebody adds one, it should be a
+one-shot probe that is deleted afterwards, not a branch in the startup path.
+
+#### WHAT IS BUILT AND MEASURED, 2026-09-21
+
+| | |
+|---|---|
+| `frontend/src/accounts.{h,cpp}` | the store: the list, one token per account, and the rules |
+| the list | `<storage config>/accounts.json` — cached identity, same tier as `user.json` |
+| a token | `~/.config/cabinetos/accounts/<rommUserId>.json`, 0600 |
+| pairing | `accounts::recordPairing` is the ONE place a pairing becomes an account, from both first run's screen and `--romm-pair`. It asks `/api/users/me` rather than being told, because that id is what the save path is built from. |
+| startup | the ACTIVE account's token, and the console says `[accounts] acting as 1 - MMagTech` |
+| the switch | `switchAccount` in main.cpp — activate, re-resolve, `loadLibrary`, `refreshKeeps` |
+| `--accounts` | what this console knows, read-only |
+| `--accounts-test` | 25 assertions against a scratch root, all refusals |
+| `--switch-account <id>` | exercises the switch with no switcher screen yet |
+| `--keepers <romId>` | who keeps a game and how many copies are on disk |
+
+**WHAT REFUSES A SWITCH, and both are about a save reaching the wrong person:**
+a **running game**, because the core writes its card at unload and `filesave`
+files it under whoever is current; and **an upload in flight**, because the
+uploader holds a pointer to the very client whose token is being swapped, so it
+would send the previous account's save to the new account's library.
+
+**WHAT IS NOT VERIFIED, and it is the obvious one:** a switch between two
+DIFFERENT accounts. There is one RomM user on that server. The two refusals
+above are reasoned and unexercised for the same reason. **Make a second RomM
+user before believing any of this** — it is the first thing to do here.
+
+**A SEGFAULT WORTH KEEPING.** `accounts::find` returns a pointer INTO the vector
+it is handed, which is why it takes one rather than hiding a static, and the
+header says so — and the first call site passed `accounts::all()` inline, so the
+temporary died at the end of the `if` condition. It crashed on the first run.
+**An API shaped to prevent a mistake does not prevent it.**
+
+#### WHAT IS LEFT, and it is the visible half
+
+- **The account chip on Home**, top-right. `storage::User::avatar` has been
+  waiting for it with a comment saying so; `romm::User::avatarPath` records
+  which URL actually serves the picture and which is a 404.
+- **The switcher screen**: every account a row, the active one marked and not
+  re-selectable, an Add row at the bottom.
+- **Adding an account from the console.** `recordPairing` is ready; what is
+  missing is a screen that pairs on a SEPARATE `romm::Client` so adding somebody
+  mid-session cannot throw the console back into setup.
+- **Removing one**, with the active account's row disabled — `accounts::remove`
+  already refuses it, so the row is the hint and the store is the enforcement.
+- **The PIN pad.** `accounts::setPin`/`checkPin` exist and are off by default. A
+  full-screen number pad a controller can drive, not a text field in a dialog.
+  **The PIN is stored as typed in a 0600 file** and `accounts.h` says plainly
+  what that is worth: a deterrent against a sibling with a controller, not a
+  secret against somebody with a shell. Do not "fix" that with a hand-rolled
+  digest.
 
 ## Licensing, which is now written down
 
