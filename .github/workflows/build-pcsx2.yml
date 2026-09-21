@@ -18,16 +18,23 @@
 #
 # What this asserts, beyond "the compiler exited 0":
 #
-#   * the source is at the pinned commit, v2.8.2, not at a moving tag
-#     (cores/build-pcsx2.sh checks it back out of git);
-#   * the emulator runs a real frame rather than merely linking — the probe in
-#     build-pcsx2.sh boots the VM and reads the picture back;
+#   * the source is at the pinned commit, v2.8.2, not at a moving tag —
+#     cores/build-pcsx2.sh reads it back out of git and refuses otherwise;
+#   * the library carries the renderers and recompilers this console needs,
+#     and CabinetOS's host layer links against it with every symbol resolved;
 #   * the libraries the console's image does NOT have are carried beside it,
 #     from a list compile.sh computes rather than one written down here.
 #
-# What it does NOT assert, and cannot here: that a game plays. That needs a
-# disc and a BIOS, and neither belongs in this repository. The reference console
-# is where that is checked.
+# WHAT IT DOES NOT ASSERT, AND AN EARLIER VERSION OF THIS HEADER CLAIMED IT DID:
+# that the emulator boots a virtual machine and produces a frame. It cannot. A
+# running PlayStation 2 needs a BIOS and a disc, and neither belongs in this
+# repository — so everything here is a build-time and link-time check, and the
+# picture is only ever proved on the reference console.
+#
+# That matters because this project has been caught by exactly this shape
+# before: three faults in the PS2 work were found by PLAYING it and none by the
+# headless harness. A green check here means it compiled, linked and was pinned.
+# It does not mean a game runs.
 
 name: Build PlayStation 2
 
