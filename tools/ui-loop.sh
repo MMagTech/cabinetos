@@ -21,6 +21,12 @@
 #   tools/ui-loop.sh --no-build          deploy and capture what is already built
 #   tools/ui-loop.sh --restore           put the console back on the image
 #
+#   tools/ui-loop.sh --args "--home-backdrop 0.6,0.22,28"
+#       Anything else the frontend takes, appended to its command line. This is
+#       what makes a tuning pass cheap: a number behind a flag is a redeploy
+#       (about 25 seconds with --no-build) instead of a rebuild. Whatever wins
+#       goes back into frontend/src/design.h, which is still the record.
+#
 # THE CAPTURE IS THE FRONTEND'S OWN, not gamescope's. `kill -USR1` makes it
 # write its framebuffer to /tmp/cabinetos-frame.bmp. That matters for a reason
 # worth remembering: **gamescopectl screenshot does not capture the overlay
@@ -41,6 +47,7 @@ GAME=""
 MENU=""
 SHOT=""
 RESTORE=0
+EXTRA=""
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -48,6 +55,7 @@ while [ $# -gt 0 ]; do
         --game)     GAME="$2"; shift ;;
         --menu)     MENU="--overlay 400" ;;
         --shot)     SHOT="$2"; shift ;;
+        --args)     EXTRA="$2"; shift ;;
         --restore)  RESTORE=1 ;;
         *) echo "unknown argument: $1" >&2; exit 1 ;;
     esac
@@ -74,11 +82,18 @@ fi
 if [ "$BUILD" -eq 1 ]; then
     say "building on the VM"
     rsync -az -e "ssh -i $KEY -o ConnectTimeout=20" "$ROOT/frontend/src/" "$VM:~/frontend/src/" || exit 1
+    # DELETE THE ARTIFACT FIRST. `test -f` on a binary that was already there
+    # passes after a failed compile, and then the deploy below cheerfully ships
+    # the PREVIOUS build with a checksum that matches itself — which is exactly
+    # the "stale binary looks like a change that did not work" failure the
+    # checksum was added to catch. It happened on 2026-09-21, one compile error
+    # and a full deploy-and-capture cycle that showed the old screen.
+    "${SSH[@]}" "$VM" 'rm -f ~/frontend/build/cabinetos-frontend'
     "${SSH[@]}" "$VM" 'cd ~/frontend && podman run --rm -v "$PWD":/src:Z -w /src cabinetos-builder make 2>&1 | grep -E "error|Error|warning: unused|built " | head -20'
-    # `make` above prints "built ..." on success. A compile error prints an
-    # error line and no "built", so check for the artifact rather than trusting
-    # a grep of the log.
-    "${SSH[@]}" "$VM" 'test -f ~/frontend/build/cabinetos-frontend' || { echo "build failed"; exit 1; }
+    "${SSH[@]}" "$VM" 'test -f ~/frontend/build/cabinetos-frontend' || {
+        echo "build failed — nothing was deployed, the console still runs what it had" >&2
+        exit 1
+    }
 fi
 
 # --- deploy, to the A9 -----------------------------------------------------
@@ -104,6 +119,7 @@ echo "deployed ${SUM_LOCAL:0:12}"
 APP="/var/home/cabinet/cabinetos-frontend-dev --core-dir /var/home/cabinet/cores-dev"
 [ -n "$GAME" ] && APP="$APP --launch $GAME"
 [ -n "$MENU" ] && APP="$APP $MENU"
+[ -n "$EXTRA" ] && APP="$APP $EXTRA"
 
 "${SSH[@]}" "$A9" "printf '[Service]\nEnvironment=\"CABINETOS_APP=$APP\"\n' > /tmp/50-ui-loop.conf
                    echo $PW | sudo -S cp /tmp/50-ui-loop.conf $DROPIN >/dev/null 2>&1

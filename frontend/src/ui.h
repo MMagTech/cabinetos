@@ -133,6 +133,42 @@ public:
     // rasterise at device resolution to be crisp on a 4K set, so it needs this.
     float scale() const { return scale_; }
 
+    // A GLOBAL ALPHA ON CONTENT, for screen transitions — new 2026-09-21.
+    //
+    // Every shape and every picture is multiplied by this. It exists because a
+    // screen arriving used to be a hard cut: Home was replaced by the Library
+    // between one frame and the next, with nothing in between, and MMagTech on
+    // the panel: *"after this transition to the library it isnt smooth."*
+    //
+    // It is applied in C++ rather than in the shaders, so nothing about the
+    // rendering changes when it is 1 — which it is for all but 280ms at a time.
+    //
+    // THE BACKDROP DOES NOT HONOUR IT, deliberately. The gradient and the lit
+    // artwork behind it are the GROUND, and a ground that fades out leaves a
+    // hole; they stay put while the content on them changes. That continuity is
+    // half of why the transition reads as smooth at all.
+    void setContentAlpha(float a) { contentAlpha_ = a < 0 ? 0 : (a > 1 ? 1 : a); }
+    float contentAlpha() const { return contentAlpha_; }
+
+    // A SCISSOR, IN DESIGN POINTS — new 2026-09-21.
+    //
+    // A scrolling screen is a window onto a list, and until now nothing said
+    // so: the Library's tiles and a platform grid's covers simply scrolled up
+    // the canvas and out of the top of it. That was invisible while the top of
+    // the screen was empty. It stopped being invisible the moment the top bar
+    // became permanent chrome — the grid's title rode up THROUGH "Library
+    // Search Settings" and the two drew over each other.
+    //
+    // So a screen clips its own scrolling region and the bar sits outside it.
+    // glScissor rather than a shader clip, because it costs nothing and it
+    // applies to shapes, pictures and text alike — text is the one that
+    // matters here and the one a per-draw clip rectangle would have missed.
+    //
+    // The rectangle is in canvas points; the viewport transform and the
+    // letterbox offset are applied here so callers never see device pixels.
+    void setScissor(float x, float y, float w, float h);
+    void clearScissor();
+
     // DRAW ONTO NOTHING INSTEAD OF ONTO BLACK.
     //
     // For the one case where this console is not the only thing on the screen:
@@ -202,6 +238,7 @@ private:
     GLuint backdropProgram_ = 0;
     GLuint texturedProgram_ = 0;
     float scale_ = 1.0f;
+    float contentAlpha_ = 1.0f;
     GLuint vao_ = 0;
     GLuint vbo_ = 0;
     GLuint targetFBO_ = 0;    // 0 is the window; an offscreen render redirects it

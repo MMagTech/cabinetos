@@ -471,7 +471,11 @@ void Renderer::drawTextured(float x, float y, float w, float h, GLuint texture,
     glUniform2f(tloc_.canvas, kCanvasWidth, kCanvasHeight);
     glUniform4f(tloc_.rect, x, y, w, h);
     glUniform4f(tloc_.uv, u0, v0, u1, v1);
-    glUniform4f(tloc_.tint, tint.r, tint.g, tint.b, tint.a);
+    // The transition alpha, the same as Renderer::draw applies to a shape.
+    // `opaque` is the one thing it must not touch: a running game's frame has
+    // its alpha thrown away on purpose, and fading it would be fading the game.
+    glUniform4f(tloc_.tint, tint.r, tint.g, tint.b,
+                opaque ? tint.a : tint.a * contentAlpha_);
     glUniform1i(tloc_.single, singleChannel ? 1 : 0);
     glUniform1f(tloc_.lod, lodBias);
     glUniform4f(tloc_.clip, clipX, clipY, clipW, clipH);
@@ -483,6 +487,20 @@ void Renderer::drawTextured(float x, float y, float w, float h, GLuint texture,
     glUniform1i(tloc_.tex, 0);
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 }
+
+void Renderer::setScissor(float x, float y, float w, float h) {
+    // Canvas points to device pixels, through the same letterboxed viewport
+    // beginFrame set up. GL's origin is the BOTTOM left and the canvas's is the
+    // top left, so the y is flipped here rather than at every call site.
+    const int px = vx_ + static_cast<int>(x * scale_);
+    const int pw = static_cast<int>(w * scale_);
+    const int ph = static_cast<int>(h * scale_);
+    const int py = vy_ + static_cast<int>((kCanvasHeight - y - h) * scale_);
+    glEnable(GL_SCISSOR_TEST);
+    glScissor(px, py, pw > 0 ? pw : 0, ph > 0 ? ph : 0);
+}
+
+void Renderer::clearScissor() { glDisable(GL_SCISSOR_TEST); }
 
 bool Renderer::beginOffscreen(int width, int height) {
     if (offscreenFBO_ && (offscreenW_ != width || offscreenH_ != height)) endOffscreen();
