@@ -194,6 +194,27 @@ enum class Untouched {
     // and root directory, all inside the first 176 bytes. Data past that is
     // what distinguishes a real save.
     ThreeDONvram,
+    // A PlayStation 2 card that has never been written to. MEASURED against
+    // the reference server 2026-09-20 and it is not a subtle test: PCSX2
+    // creates the file as 8,650,752 bytes of 0xFF and only the console's own
+    // BIOS writes the format header, so an untouched card carries no magic at
+    // all. Three of the four PS2 cards on that server were exactly this.
+    //
+    // THE RULE IS THE MAGIC AND NOTHING MORE, ON PURPOSE. The one real card
+    // available to measure — Burnout 3 — has its save data out at 8,384 KB
+    // while its FAT and directory sit in the first 128 KB, and a threshold
+    // invented from ONE sample is how a rule silently refuses somebody's save.
+    // A false negative loses a save; a false positive uploads a formatted
+    // empty card, which is what the old behaviour did anyway. The weaker rule
+    // is the safe direction until there is a second card to measure.
+    Ps2Format,
+    // A GameCube card with nothing in its directory. Block 0 is the header,
+    // blocks 1 and 2 are the directory and its backup: 127 entries of 64
+    // bytes, and an entry's first four bytes are the game code, 0xFF when the
+    // slot is free. Measured both ways on 2026-09-20 — the three cards on the
+    // reference server had zero entries in use, and a card Ikaruga had saved
+    // to carried `GIKE`/`70`/`ikaruga_save_data`.
+    GameCubeDirectory,
     // A VMU's own directory, and the one guard this project did not inherit.
     // MEASURED, 2026-09-19: three of the thirteen Dreamcast cards on the
     // reference server — Cannon Spike, Re-Volt, San Francisco Rush 2049 — hold
@@ -255,6 +276,20 @@ struct SaveFile {
     // lives in `bios/dc/` at rest is `dc_nvmem.bin`, the console's own clock
     // and language, which rebuilds itself if it is lost.
     bool inSystemDir = false;
+    // NAMED THE WAY THE MAC NAMES IT, rather than this console's own
+    // `<game> (Cabinet).<region>`.
+    //
+    // PlayStation 2 and GameCube are the only platforms where a save already
+    // exists on the server written by a DIFFERENT implementation of this same
+    // product, and RomM matches a row for overwrite by filename alone. Cabinet
+    // for Mac calls a PS2 card `cabinet-604.ps2`; this console would call it
+    // `Burnout 3 Takedown (Cabinet).srm`. Same bytes, same emulator tag, two
+    // rows — and a restore that never finds the card the person actually made.
+    //
+    // So for these two the Mac's convention wins, because matching it is the
+    // entire point. It is a deliberate exception to the naming rule above and
+    // not a drift into one.
+    bool macRowName = false;
 };
 
 // --- Firmware a core can actually find --------------------------------------

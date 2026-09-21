@@ -236,6 +236,24 @@ const char* saveTag(const char* core) {
         // says nothing. A 128 KB VMU image in the VMU's own format is not
         // something an unscripted edit can change the shape of.
         {"flycast", "flycast-native"},
+        // PlayStation 2's memory card and GameCube's, and these two tags were
+        // READ OFF THE ROWS ALREADY ON THE SERVER rather than derived from the
+        // pattern above — they are plainly `pcsx2` and `dolphin`, with no
+        // `-native` suffix, because Cabinet for Mac tags them that way and its
+        // comment says why: "PCSX2 rather than Cabinet, because the format is
+        // PCSX2's and another PCSX2 could read it."
+        //
+        // Matching them is the whole point. A card written here has to land in
+        // the row a Mac already reads, and RomM matches a row by filename with
+        // the tag NOT included — so the tag is what stops two emulators'
+        // uploads being confused for one another, and the name is what decides
+        // which row is overwritten.
+        //
+        // NOTE these are not state tags and must never become them. The
+        // libretro cores here are hard forks — LRPS2 and libretro/dolphin —
+        // and a state written by either will not load in the Mac's build.
+        {"pcsx2", "pcsx2"},
+        {"dolphin", "dolphin"},
         // 3DO NVRAM. Same commit as every platform the reference ships
         // (a501a278), no patches and no build arguments on either side — this
         // one would pass the state rule too and simply has not been through
@@ -427,6 +445,24 @@ std::map<std::string, std::string> optionOverrides(const std::string& core) {
     // filename — `opera/shared/nvram.0.srm` — that the save sync can rely on,
     // and each game already has its own save directory here so shared IS per
     // game. catalog::saveFiles depends on this being set.
+    // PlayStation 2, and both of these are faults rather than preferences.
+    //
+    // `shared_memory_cards` defaults to ON, which puts every game's save in
+    // one `Mcd001.ps2` that belongs to no rom — RomM stores a save against a
+    // rom, so a shared card cannot be synced at all. Cabinet for Mac makes the
+    // same choice and its comment says why.
+    //
+    // `analog_mode1` defaults to OFF, which is the DualShock's analogue mode
+    // disabled: the sticks do nothing. A PlayStation 2 game with dead sticks
+    // reads as a broken emulator, and it is one unanswered option — exactly
+    // the class of silent fault the note at the top of this function is about.
+    if (manifestName(coreName) == "pcsx2") {
+        return {
+            {"pcsx2_shared_memory_cards", "disabled"},
+            {"pcsx2_analog_mode1", "enabled"},
+            {"pcsx2_analog_mode2", "enabled"},
+        };
+    }
     if (coreName == "opera") {
         return {
             {"opera_bios", "panafz10.bin"},
@@ -593,6 +629,65 @@ std::vector<SaveFile> saveFiles(const std::string& slug, const std::string& fsSl
             return {f};
         }
         return {};
+    }
+
+    // PlayStation 2. LRPS2 keeps the card in the SAVE directory once shared
+    // cards are turned off — measured, not assumed: with
+    // `pcsx2_shared_memory_cards` at its default it writes `Mcd001.ps2` into
+    // the system directory, which is the arrangement Cabinet for Mac rejects
+    // in as many words ("a shared card belongs to no rom in particular").
+    // With it off the file is `<stem>.ps2` in the save directory, which is
+    // already per game, so per-game separation costs nothing extra.
+    //
+    // NAMED THE MAC'S WAY on the server, because the whole point is that the
+    // card travels — see SaveFile::macRowName.
+    if (slug == "ps2") {
+        SaveFile f;
+        f.path = stem + ".ps2";
+        f.captureSuffix = ".ps2";
+        f.region = "ps2";
+        f.untouched = Untouched::Ps2Format;
+        f.macRowName = true;
+        return {f};
+    }
+
+    // GameCube. Dolphin writes whatever its slot A device says, and the
+    // libretro core sets neither the device nor the path — so left alone it
+    // produces a GCI FOLDER of loose files while Cabinet for Mac produces a
+    // whole-card `.raw`. The console writes Dolphin's own config before launch
+    // to make the two agree; see writeDolphinConfig in main.cpp.
+    //
+    // THE NAME IS NOT PREDICTABLE FROM HERE and that is Dolphin's doing: ask
+    // for `card.raw` and it writes `card.USA.raw`, stamping the region in, and
+    // it stamps the SIZE in too when the card is not the default — one of the
+    // three cards on the reference server was `cabinet-934.USA.251.raw`. So
+    // the capture scans for the suffix rather than insisting on a name, the
+    // same as Dreamcast.
+    if (slug == "ngc") {
+        SaveFile f;
+        f.path = "card.raw";
+        f.captureSuffix = ".raw";
+        // The console's own clock and settings, which Dolphin keeps beside the
+        // card and which are not anybody's save.
+        f.captureExclude = "SRAM.raw";
+        f.region = "raw";
+        f.untouched = Untouched::GameCubeDirectory;
+        // THIS CONSOLE'S OWN NAMING, unlike PlayStation 2 above, and the
+        // reason is that there is nothing to be compatible with.
+        //
+        // All three GameCube rows on the reference server were EMPTY cards —
+        // measured 2026-09-20, 33 to 37 non-blank bytes in a 16 MB file, no
+        // directory entry in either copy — so there is no real save anywhere
+        // to match. And the Mac's spelling is not predictable from here:
+        // Dolphin stamps region and card size into the filename, so matching
+        // it means prefix-scanning the server's rows, which is logic with no
+        // test behind it.
+        //
+        // A guess with no test is how a save silently goes to the wrong row.
+        // When a real GameCube save exists on the Mac again, that is the
+        // moment to make the two agree — with something to check against.
+        f.macRowName = false;
+        return {f};
     }
 
     // PSP is in this class too and is already built, as a tree rather than a

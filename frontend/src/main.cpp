@@ -58,6 +58,8 @@
 #include "dirsave.h"
 #include "filesave.h"
 #include "firstrun.h"
+#include "gpu.h"
+#include "vkhost.h"
 #include "net.h"
 #include "qr.h"
 #include "romfile.h"
@@ -415,16 +417,42 @@ static std::string saveRowName(const std::string& fsStem, const std::string& cor
     return base + ")." + region;
 }
 
+// The same thing, spelled the way Cabinet for Mac spells it.
+//
+// `cabinet-604.ps2`, `cabinet-937.USA.raw`. Only PlayStation 2 and GameCube
+// use this, and only because a save for those two ALREADY EXISTS on the
+// server written by the Mac — RomM matches a row for overwrite by filename
+// alone, so a console that invented its own name would leave the person with
+// two cards per game and restore neither. See catalog::SaveFile::macRowName.
+static std::string macSaveRowName(int romId, const std::string& region,
+                                  const std::string& writtenName) {
+    // WHAT DOLPHIN ACTUALLY WROTE, where it wrote something. It stamps the
+    // region into the name, and the card SIZE too when the card is not the
+    // default — `cabinet-934.USA.251.raw` on the reference server. Neither is
+    // predictable from here, so the file on disk is the authority and this is
+    // only the fallback for a row that does not exist yet.
+    if (!writtenName.empty()) return writtenName;
+    return "cabinet-" + std::to_string(romId) + "." + region;
+}
+
 // Which region a row on the server belongs to, judged by the extension this
 // console and the reference implementation both upload under. Anything else —
 // a card somebody made in RomM's web player, a file from another emulator —
 // reads as the main save, which is right: that is the only region a foreign
 // row could ever be.
 static std::string regionOfRow(const std::string& fileName) {
-    if (fileName.size() > 5 && fileName.compare(fileName.size() - 5, 5, ".cart") == 0)
-        return "cart";
-    if (fileName.size() > 4 && fileName.compare(fileName.size() - 4, 4, ".rtc") == 0)
-        return "rtc";
+    auto endsWith = [&](const char* ext) {
+        const size_t n = std::strlen(ext);
+        return fileName.size() > n && fileName.compare(fileName.size() - n, n, ext) == 0;
+    };
+    if (endsWith(".cart")) return "cart";
+    if (endsWith(".rtc")) return "rtc";
+    // PlayStation 2 and GameCube, whose rows are named the Mac's way —
+    // `cabinet-604.ps2`, `cabinet-937.USA.raw`. Without these two lines every
+    // such row reads as "srm" and the restore looks straight past the card the
+    // person actually made. See catalog::SaveFile::macRowName.
+    if (endsWith(".ps2")) return "ps2";
+    if (endsWith(".raw")) return "raw";
     return "srm";
 }
 
@@ -443,6 +471,47 @@ static std::string regionOfRow(const std::string& fileName) {
 // launch after an offline session would fetch the older copy and write it over
 // the top. Otherwise the server's own row wins, because that is how a card
 // made on another device arrives. Failing both, whatever is on this disk plays.
+// Dolphin's own configuration, written before the core boots.
+//
+// WHY A FILE RATHER THAN A CORE OPTION: the libretro core does not expose the
+// slot A device or the memory card path at all, and left alone Dolphin uses
+// its default — a GCI FOLDER of loose files, one per save. Cabinet for Mac
+// sets MAIN_SLOT_A and MAIN_MEMCARD_A_PATH directly and so produces a
+// whole-card `.raw`. Those are two different save formats for one platform
+// across two halves of the same product, which is not a thing to leave to
+// chance. The core reads this file on startup, so writing it is how this side
+// makes the same two choices.
+//
+// MemoryCardSize IS PINNED, and that is the subtle one. Dolphin puts the
+// card's size in the FILENAME as well as its region — one of the cards on the
+// reference server is `cabinet-934.USA.251.raw`, a 2 MB card, beside two 16 MB
+// ones. RomM matches a save row by filename alone, so leaving the size to
+// Dolphin means the row's identity depends on a setting nobody controls: the
+// day it changes, the card lands under a new name, the old row is orphaned and
+// the save silently does not come back. Cabinet for Mac leaves it at -1 and
+// has the same latent fault.
+static void writeDolphinConfig(const std::string& saveDir) {
+    const std::string dir = saveDir + "/User/Config";
+    const std::string path = dir + "/Dolphin.ini";
+    std::string ini;
+    ini += "# Written by CabinetOS before every GameCube launch. See\n";
+    ini += "# writeDolphinConfig in frontend/src/main.cpp.\n";
+    ini += "[Core]\n";
+    // ExpansionInterface::EXIDeviceType::MemoryCard, and None for slot B.
+    ini += "SlotA = 1\n";
+    ini += "SlotB = 255\n";
+    ini += "MemcardAPath = " + saveDir + "/card.raw\n";
+    ini += "MemoryCardSize = 2\n";
+    if (!cab::writeBytes(path, std::vector<uint8_t>(ini.begin(), ini.end()))) {
+        // NOT fatal, and said out loud. The game still runs; it writes its
+        // save somewhere this console does not sync, which is exactly the kind
+        // of failure that looks like the save feature simply not working.
+        std::fprintf(stderr,
+                     "[save] could not write %s - GameCube will write loose GCI "
+                     "files and nothing will sync\n", path.c_str());
+    }
+}
+
 static std::vector<cab::FileSaveState> restoreFileSaves(
         const std::vector<catalog::SaveFile>& specs, const std::string& fsStem,
         const std::string& saveDir, int romId, const char* tag,
@@ -462,7 +531,9 @@ static std::vector<cab::FileSaveState> restoreFileSaves(
         cab::FileSaveState f;
         f.spec = spec;
         f.path = (spec.inSystemDir ? storage::biosDir() : saveDir) + "/" + spec.path;
-        const std::string name = saveRowName(fsStem, spec.coreRowName, spec.region);
+        const std::string name =
+            spec.macRowName ? macSaveRowName(romId, spec.region, std::string())
+                            : saveRowName(fsStem, spec.coreRowName, spec.region);
 
         // WHERE THIS PERSON'S COPY LIVES. For every platform but Dreamcast it
         // is the file the core writes, because the core was handed this
@@ -617,7 +688,21 @@ static void syncFileSaves(GameSession& sess, Uploader& up) {
         // guarantee holds for free. Dreamcast's card has to be copied across
         // out of the system directory, and that copy happens before a single
         // byte is offered to the network.
-        const std::string name = saveRowName(sess.fsStem, f.spec.coreRowName, f.spec.region);
+        // THE NAME DOLPHIN CHOSE, not the one that was asked for. `written`
+        // is what the capture actually found on disk — `card.USA.raw`, or
+        // `card.USA.251.raw` for a card that is not the default size — and for
+        // the platforms that follow the Mac's naming that spelling IS the row
+        // identity on the server. Uploading under the requested name instead
+        // would make a second row every time the size or region moved.
+        std::string writtenName = written;
+        if (const size_t slash = writtenName.find_last_of('/');
+            slash != std::string::npos)
+            writtenName.erase(0, slash + 1);
+        (void)writtenName;
+        const std::string name =
+            f.spec.macRowName
+                ? macSaveRowName(sess.romId, f.spec.region, std::string())
+                : saveRowName(sess.fsStem, f.spec.coreRowName, f.spec.region);
         const std::string local = sess.saveDir + "/" + name;
         if (f.spec.inSystemDir && !writeLocal(local, data)) {
             std::fprintf(stderr, "[save] could not write %s — leaving the card in %s\n",
@@ -2279,6 +2364,23 @@ int main(int argc, char** argv) {
     int autoUnkeepId = 0;
     bool storageReport = false;
     bool coreOptionsAudit = false;
+    // The same audit with the prose and the value list, which is what turns
+    // "here are 78 keys" into something a person can decide from.
+    bool coreOptionsDetail = false;
+    // One core option, set from the command line, for finding out what a value
+    // actually does before writing it into catalog::optionOverrides.
+    //
+    // It exists because the alternative is a rebuild per value, and an option
+    // is exactly the kind of thing that has to be tried rather than reasoned
+    // about — `catalog::optionOverrides` already says so, and open question 7
+    // asks for Cabinet's whole per-platform table to be brought across "with a
+    // reason recorded beside each choice", which means somebody has to be able
+    // to see the difference each one makes. Two of the four overrides in that
+    // table today were found by a launch failing, not by reading.
+    //
+    // These are applied ON TOP of catalog::optionOverrides, so this can also be
+    // used to take a shipped override back off and see what it was buying.
+    std::map<std::string, std::string> cliOptionOverrides;
     const char* initialScreen = nullptr;
     int initialTile = 0;
     int initialTab = 0;
@@ -2292,6 +2394,10 @@ int main(int argc, char** argv) {
     // See the probes above.
     bool networkProbeMode = false;
     bool networkScan = false;
+    // What this machine's graphics hardware can do, before anything is created.
+    // See gpu.h: the A9 and the test VM differ here in the one way that decides
+    // whether PlayStation 2 and GameCube can be played at all.
+    bool gpuProbeMode = false;
     bool firstRunProbeMode = false;
     bool firstRunRulesMode = false;
     bool firstRunWriteMode = false;
@@ -2395,6 +2501,8 @@ int main(int argc, char** argv) {
         } else if (SDL_strcmp(argv[i], "--network-scan") == 0) {
             networkProbeMode = true;
             networkScan = true;
+        } else if (SDL_strcmp(argv[i], "--gpu-probe") == 0) {
+            gpuProbeMode = true;
         } else if (SDL_strcmp(argv[i], "--qr") == 0 && i + 1 < argc) {
             qrText = argv[++i];
         } else if (SDL_strcmp(argv[i], "--qr-out") == 0 && i + 1 < argc) {
@@ -2442,12 +2550,29 @@ int main(int argc, char** argv) {
             // before it captured option tables, kept so the difference can be
             // measured rather than asserted.
             cab::Core::setAnswerOptions(false);
+        } else if (SDL_strcmp(argv[i], "--core-no-hw-render") == 0) {
+            // The other control. See core.h.
+            cab::Core::setRefuseHWRender(true);
         } else if (SDL_strcmp(argv[i], "--core-options") == 0) {
             // Every option every built core declares, and what it is answered
             // with. This is the audit docs/PROJECT.md asked for and nobody had
             // run: an unanswered option is not the default, it is zero, and
             // until this existed there was no way to see which were which.
             coreOptionsAudit = true;
+        } else if (SDL_strcmp(argv[i], "--core-options-detail") == 0) {
+            coreOptionsAudit = true;
+            coreOptionsDetail = true;
+        } else if (SDL_strcmp(argv[i], "--core-option") == 0 && i + 1 < argc) {
+            //   --core-option dolphin_shader_compilation_mode=Synchronous
+            // Repeatable. See cliOptionOverrides.
+            const std::string kv = argv[++i];
+            const size_t eq = kv.find('=');
+            if (eq == std::string::npos || eq == 0) {
+                std::fprintf(stderr, "[frontend] --core-option wants key=value, got '%s'\n",
+                             kv.c_str());
+                return 1;
+            }
+            cliOptionOverrides[kv.substr(0, eq)] = kv.substr(eq + 1);
         } else if (SDL_strcmp(argv[i], "--storage") == 0) {
             storageReport = true;
         } else if (SDL_strcmp(argv[i], "--tab") == 0 && i + 1 < argc) {
@@ -2517,6 +2642,10 @@ int main(int argc, char** argv) {
     if (firstRunWriteMode) return firstRunWriteTest();
     if (qrText) return qrProbe(qrText, qrPbm);
     if (networkProbeMode) return networkProbe(networkScan);
+    if (gpuProbeMode) {
+        cab::gpu::report();
+        return 0;
+    }
 
     // --- Where everything lives, decided before anything writes a byte ------
     //
@@ -2580,7 +2709,12 @@ int main(int argc, char** argv) {
     // case, not the clean one. It means either the core genuinely has none, or
     // it declares them through an API generation this host does not read — and
     // the second is indistinguishable from the first without going and looking.
-    if (coreOptionsAudit) {
+    // NOT when a specific core and ROM were named. --core-options-detail then
+    // means "show me THAT core's table with a game loaded", which is the only
+    // way to see the three that declare nothing until they know what they are
+    // running — Dolphin, FBNeo and MAME. Sweeping the directory instead would
+    // report zero for exactly the cores the question is about.
+    if (coreOptionsAudit && !(corePath && romPath) && autoLaunchId == 0) {
         DIR* d = opendir(coreDir);
         if (!d) {
             std::fprintf(stderr, "[options] no core directory at %s\n", coreDir);
@@ -2623,9 +2757,29 @@ int main(int argc, char** argv) {
             for (const auto& o : opts) {
                 totalOptions++;
                 if (o.overridden) totalOverridden++;
-                std::printf("  %-34s %-18s %s%s\n", o.key.c_str(), o.chosen.c_str(),
-                            o.overridden ? "OURS, core says " : "core default",
-                            o.overridden ? o.defaultValue.c_str() : "");
+                if (!coreOptionsDetail) {
+                    std::printf("  %-34s %-18s %s%s\n", o.key.c_str(), o.chosen.c_str(),
+                                o.overridden ? "OURS, core says " : "core default",
+                                o.overridden ? o.defaultValue.c_str() : "");
+                    continue;
+                }
+                // EVERYTHING THE CORE SAID, which is the difference between an
+                // audit and a list. A key and a value cannot answer "what
+                // would this do if I changed it" — that needs the prose the
+                // core wrote and every value it will accept, and both are
+                // already captured and were simply never printed.
+                std::printf("  %s\n", o.key.c_str());
+                if (!o.desc.empty()) std::printf("      what   %s\n", o.desc.c_str());
+                std::printf("      now    %s%s\n", o.chosen.c_str(),
+                            o.overridden ? "   (ours)" : "");
+                if (!o.defaultValue.empty() && o.overridden)
+                    std::printf("      core   %s\n", o.defaultValue.c_str());
+                if (!o.values.empty()) {
+                    std::printf("      takes ");
+                    for (size_t i = 0; i < o.values.size(); ++i)
+                        std::printf("%s%s", i ? " | " : " ", o.values[i].c_str());
+                    std::printf("\n");
+                }
             }
             for (const std::string& k : core.undeclaredOptionAsks())
                 std::printf("  !! asked but never declared: %s\n", k.c_str());
@@ -2993,7 +3147,13 @@ int main(int argc, char** argv) {
         core.setDirectories(storage::biosDir(), saveDir);
         // The same overrides the library path applies, so --core plays the
         // core the same way the product does. See beginLaunch.
-        core.setOptionOverrides(catalog::optionOverrides(corePath));
+        std::map<std::string, std::string> overrides = catalog::optionOverrides(corePath);
+        for (const auto& [key, value] : cliOptionOverrides) {
+            std::fprintf(stderr, "[core] option from the command line: %s = %s\n",
+                         key.c_str(), value.c_str());
+            overrides[key] = value;
+        }
+        core.setOptionOverrides(overrides);
         if (!core.load(corePath)) {
             std::fprintf(stderr, "[frontend] core: %s\n", core.error().c_str());
             return 1;
@@ -3795,6 +3955,10 @@ int main(int argc, char** argv) {
             saveSpecs = catalog::saveFiles(launchJob.platformSlug,
                                            launchJob.platformFsSlug, stem);
         }
+        // Before the restore, because the restore puts the card at the path
+        // this names and the core reads both on startup.
+        if (launchJob.platformSlug == "ngc") writeDolphinConfig(saveDir);
+
         std::vector<cab::FileSaveState> restored =
             restoreFileSaves(saveSpecs, launchJob.fsStem, saveDir, launchJob.romId,
                              launchTag, liveClient);
@@ -3871,6 +4035,27 @@ int main(int argc, char** argv) {
             for (const auto& o : opts) if (o.asked) ++asked;
             std::fprintf(stderr, "[options] %zu declared, %d asked for so far\n",
                          opts.size(), asked);
+            // AND THE WHOLE TABLE, when asked for. --core-options-detail
+            // cannot see these at all: a core that declares nothing until it
+            // knows what it is running is invisible to an audit taken at core
+            // load, and that is Dolphin, FBNeo and MAME — three of the most
+            // configurable things this console ships.
+            if (coreOptionsDetail) {
+                for (const auto& o : opts) {
+                    std::fprintf(stderr, "  %s\n", o.key.c_str());
+                    if (!o.desc.empty())
+                        std::fprintf(stderr, "      what   %s\n", o.desc.c_str());
+                    std::fprintf(stderr, "      now    %s%s\n", o.chosen.c_str(),
+                                 o.overridden ? "   (ours)" : "");
+                    if (!o.values.empty()) {
+                        std::fprintf(stderr, "      takes ");
+                        for (size_t i = 0; i < o.values.size(); ++i)
+                            std::fprintf(stderr, "%s%s", i ? " | " : " ",
+                                         o.values[i].c_str());
+                        std::fprintf(stderr, "\n");
+                    }
+                }
+            }
             for (const std::string& k : core.undeclaredOptionAsks())
                 std::fprintf(stderr, "[options] asked but never declared: %s\n",
                              k.c_str());
@@ -4654,6 +4839,24 @@ int main(int argc, char** argv) {
                 // the draw below has to know which.
                 float u0, v0, u1, v1;
                 core.frameUV(u0, v0, u1, v1);
+                // Said once per game. The picture's geometry is four numbers
+                // that have to agree — what the core hands back, what it says
+                // the shape is, the quad the layout builds, and the corner of
+                // the texture that is sampled — and when the picture comes out
+                // the wrong shape there is no way from outside to tell which
+                // of the four is lying.
+                {
+                    static int saidFor = -1;
+                    if (saidFor != session.romId) {
+                        saidFor = session.romId;
+                        std::fprintf(stderr,
+                                     "[picture] core %gx%g aspect %.4f%s -> quad %.0fx%.0f "
+                                     "(%.4f) at %.0f,%.0f  uv %.4f,%.4f..%.4f,%.4f\n",
+                                     srcW, srcH, core.avInfo().aspectRatio,
+                                     quarterTurn ? " TURNED" : "", dw, dh, dw / dh, px, py,
+                                     u0, v0, u1, v1);
+                    }
+                }
                 // Opaque, always. A game's frame is a picture, and whatever is
                 // in its alpha channel is the emulated machine's own state
                 // rather than a compositing instruction. Found on PPSSPP:
@@ -5310,6 +5513,29 @@ int main(int argc, char** argv) {
                      "[core] %llu frames, %llu audio frames = %.2fs of emulated time\n",
                      static_cast<unsigned long long>(core.framesRun()),
                      static_cast<unsigned long long>(core.audioFramesTotal()), realtime);
+        // What the bridge between Vulkan and GL cost, when there was one. The
+        // whole question "does handing a Vulkan picture to a GLES UI hurt"
+        // gets an answer here rather than an opinion. See vkhost.h.
+        {
+            uint64_t vframes = 0;
+            double vseconds = 0.0;
+            cab::vk::presentCost(vframes, vseconds);
+            if (vframes > 0)
+                std::fprintf(stderr,
+                             "[vulkan] %llu pictures crossed into GL in %.3fs "
+                             "= %.3f ms each\n",
+                             static_cast<unsigned long long>(vframes), vseconds,
+                             1000.0 * vseconds / static_cast<double>(vframes));
+            if (vframes > 0) {
+                double rec = 0.0, wait = 0.0;
+                cab::vk::presentCostSplit(rec, wait);
+                std::fprintf(stderr,
+                             "[vulkan]   of which %.3f ms recording the copy and "
+                             "%.3f ms waiting for the GPU\n",
+                             1000.0 * rec / static_cast<double>(vframes),
+                             1000.0 * wait / static_cast<double>(vframes));
+            }
+        }
         // Whether the second brake did anything. It is reported rather than
         // assumed, because a brake nobody can see is indistinguishable from a
         // brake that is not there — and this one has never engaged on either

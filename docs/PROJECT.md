@@ -5715,6 +5715,47 @@ Cabinet.** `PS2PlayerView` says so itself: *"PS2 shares no code with the libretr
 path: not the frontend, not the renderer, not the audio."* Whatever CabinetOS
 does here is new work, and nothing crossing between machines today constrains it.
 
+#### MEASURED 2026-09-20: BOTH LIBRETRO CORES RUN HERE, AND BOTH NOW DRAW
+
+Not a recommendation — the buildbot `.so`s were put on the reference console
+and driven by this frontend. What was found, in order:
+
+| | |
+|---|---|
+| **The catalog already routes them** | `catalog.cpp` has `ngc → dolphin` and `ps2 → pcsx2`, `Support::Playable`, and `coreFileName` resolves those to exactly the buildbot filenames. Two files in a core directory turned "not built on this console yet" into **85 playable games** with no code change at all. |
+| **Neither has a missing library** | `ldd` against the real image names none, for either. No base bump, no new package. |
+| **Both needed Vulkan and nothing else** | See open question 20. On GLES, PS2 drew nothing and GameCube drew nothing and sometimes crashed; on Vulkan both draw. |
+
+**And Cabinet's own hosts are the same shape, which corrects open question 12.**
+`CabinetDolphin::Run` and `CabinetPS2::Run` each say in their header that they
+*"block for the entire life of the game and must be given its own thread"*, and
+each emulator presents into a `CAMetalLayer` itself. So *"one overlay, one frame
+loop"* describes the twenty-one libretro cores and **was never true of Cabinet's
+PS2 or GameCube either**. Whichever route this console took, it had to learn to
+host an emulator that drives itself.
+
+#### Why Cabinet did not take the libretro cores — no written record, but the evidence is clear
+
+| | |
+|---|---|
+| The PS2 libretro core is **LRPS2** | libretro's own words: *"a hard fork/derivative"* of PCSX2. Its own version number, v2.0.0. Not upstream with a shim. |
+| Cabinet needed an **ARM64 recompiler** | which is why it pinned `isztldav/pcsx2`. Its commit message says the fork's ARM64 emitter was machine-translated, so *"the pin matters more than usual"*. LRPS2 would have hit the same Apple Silicon wall. |
+| The Dolphin libretro core | `libretro/dolphin`, **396 commits diverged** from upstream and 62 behind. Its own core info admits it *"exposes only a subset"*. |
+| Cabinet's release notes lead on | *"running PCSX2 and Dolphin with their real recompilers, at full speed"*, and PS2 *"gets its renderer remedy where you would look for it"* — per-game renderer, upscale and blending as real UI, not core options. |
+
+**It was a quality and parity decision, not an architectural one, and it was
+made on Apple hardware.** Neither binding constraint exists here: this is
+x86-64, where upstream PCSX2's recompiler and Dolphin's JIT64 are the
+originals rather than a translation. **That is why the question is open again
+on Linux, and it is the thing nobody had written down.**
+
+**WHAT THE LIBRETRO ROUTE COSTS, and it is not nothing.** The two cores follow
+libretro's forks rather than Cabinet's pinned manifest, which is a real
+exception to *Core parity is a hard constraint* and has to be recorded as one
+rather than drifted into. A save state written by LRPS2 will never load in the
+Mac's PCSX2. **The memory cards are the part that can still travel**, and they
+are the part that matters — see below.
+
 **AND THE MAC CORES ARE NOT LIBRETRO CORES, which is the thing to check before
 assuming this is a build job.** `dolphin` builds from `dolphin-emu/dolphin` and
 `pcsx2` from a fork, each with its own script — while all 23 other cores use one
@@ -5723,6 +5764,35 @@ equivalents exist on the buildbot, and Cabinet did not take them. Nobody wrote
 down why, and a dedicated builder for exactly the two systems that have a
 libretro alternative is a decision somebody made after trying. **Read
 `tools/build-dolphin-mac.sh` before believing otherwise.**
+
+#### The saves, measured on the running console 2026-09-20
+
+**Seven real rows already exist on the RomM server**, written by MMagTech
+playing on the Mac: four PS2 tagged `pcsx2` and three GameCube tagged
+`dolphin`. Not `-native` suffixed — those are the tags, and CabinetOS using
+the same ones is what would let a card travel between the Mac and the console.
+
+**Two things stand in the way, both found by looking at what the cores wrote
+rather than by reading:**
+
+- **PS2 writes the SHARED card.** `pcsx2_shared_memory_cards` defaults to
+  enabled and produced `Mcd001.ps2` and `Mcd002.ps2` in the system directory.
+  That is exactly the arrangement Cabinet's own `PS2MemoryCard.swift` rejects:
+  *"a shared card belongs to no rom in particular"*. Per-game cards named the
+  way the Mac names them is the work.
+- **GameCube's format DIFFERS FROM THE MAC'S.** Ikaruga saved after thirty
+  seconds of emulated time, to
+  `User/GC/USA/Card A/70-GIKE-ikaruga_save_data.gci` — Dolphin's **GCI-folder**
+  mode, loose files per save. The Mac writes a whole-card `.raw`, which is what
+  the three rows on the server are. **As things stand they would not
+  interchange.** It looks fixable without patching, because the core reads
+  `User/Config/Dolphin.ini` and the slot device can be written before launch,
+  but it is a decision rather than a detail.
+
+**And one trap already visible in the options:** `pcsx2_analog_mode1` defaults
+to **disabled**, which is the DualShock's analog mode off — the sticks do
+nothing. Exactly the class of silent fault *An unanswered core option is not
+the default* exists for.
 
 #### Game & Watch will not be built — decided 2026-09-20
 
@@ -9512,7 +9582,109 @@ corrected it twice.**
   console and nothing else. Progress still moves, because progress is save data.
 
 ### 20. Vulkan, and how the host should choose a graphics API
-**Raised by MMagTech 2026-09-17. Recommendation recorded; not built.**
+**Raised by MMagTech 2026-09-17. BUILT 2026-09-20, and it is what made
+PlayStation 2 and GameCube draw a picture.**
+
+#### What it bought, first, because that is the point
+
+**85 games.** PS2 71 and GameCube 14 — the largest missing tier in the library.
+Both cores already existed, both already had Vulkan compiled in, and
+`catalog` has routed `ps2 → pcsx2` and `ngc → dolphin` since the table was
+written. The only thing missing was the FRONTEND's half of a contract libretro
+already specifies. RetroArch implements that end; this console owns its
+frontend and had implemented the OpenGL ES half only.
+
+#### The two failures, measured before anything was written, had one cause
+
+- **PCSX2 refuses a GLES context outright** — `OpenGL is not supported. Only
+  OpenGL 3.2 was found` — and then runs the emulated machine perfectly, makes
+  48 kHz audio and draws nothing.
+- **Dolphin renders from a thread of its own.** Mario Kart booted, ran fifty
+  seconds of emulated time with correct audio, and left the entire 1920x1080
+  frame at the letterbox glow. Ikaruga did not get that far: it died in
+  Dolphin's PowerPC JIT, on a guest memory read through a 64 GiB fastmem arena,
+  with no signal handler in the process to catch it.
+
+**A GL CONTEXT BELONGS TO ONE THREAD AND VULKAN HAS NO CONTEXT AT ALL.** That
+is the whole difference and it is why this is the right answer rather than the
+cheap one: a device and a queue are objects any thread may use. Ikaruga's crash
+went away as a side effect of moving off GL.
+
+**The control proved it was not the picture path.** `--core-no-hw-render`
+refuses a core hardware rendering however serveable the ask was. Dolphin
+crashed identically with no picture at all, which is what separated "cannot
+get a picture out of this host" from "cannot run in this host".
+
+#### Three one-line faults, and the third is the one nobody would guess
+
+1. **`GET_PREFERRED_HW_RENDER` was hard-wired to `OPENGLES3`.** So Dolphin
+   asked what the frontend preferred, was told OpenGL ES, and dutifully took
+   it — never asking for the Vulkan it also has. **This one line decides which
+   API every multi-API core uses.** It now answers whichever the machine has.
+2. **`SET_HW_RENDER` refused Vulkan by name**, with a comment saying so.
+3. **Dolphin decides whether it has a display by whether the frontend handed
+   it a `VkSurfaceKHR`.** With none it renders and never presents. It gets a
+   **`VK_EXT_headless_surface`** — a real surface with no window — and every
+   surface and swapchain call is intercepted by the core anyway
+   (`DolphinLibretro/Vulkan.cpp` replaces `vkCreateSwapchainKHR`,
+   `vkAcquireNextImageKHR` and `vkQueuePresentKHR` wholesale). The surface is
+   a token meaning "there is a display".
+
+#### The UI stays on OpenGL ES, and that is a decision
+
+Every screen was drawn and judged in GLES, and **the test VM has no Vulkan
+device** — `--gpu-probe` reports *"the only Vulkan device here is a software
+one"*. A Vulkan-only frontend could not run on the machine this project is
+developed on. The picture crosses with no copy: Vulkan exports the image as a
+dmabuf and EGL imports the same memory as a texture, which the A9's radeonsi
+supports in both directions.
+
+#### What it costs, and TWO OPTIMISATIONS THAT ARE BOTH WRONG
+
+| | per picture | of a 60 Hz frame | emulated speed |
+|---|---|---|---|
+| PS2, native 640x448 | 0.262 ms | 1.6% | **10.1x realtime** |
+| PS2, 4x upscale | 1.309 ms | 7.9% | **6.3x realtime** |
+| GameCube, Mario Kart | 0.226 ms | 1.4% | **4.6x realtime** |
+
+**An optimally-tiled destination negotiated through
+`VK_EXT_image_drm_format_modifier` was BUILT AND MEASURED, and removed.** Four
+modifiers agreed between Vulkan and EGL, driver chose `0x200000010401b04`:
+
+| | linear | optimal |
+|---|---|---|
+| PS2 native | 0.269 ms | 0.247 ms |
+| PS2 4x | 1.323 ms | **1.349 ms** |
+| wall clock, 1800 frames | 5.71 s | **5.89 s** |
+
+Nothing, and worse at the resolution it was meant to help. **Splitting the cost
+says why, and kills the exported-semaphore idea in the same breath:**
+
+```
+1x native:   0.011 ms recording the copy,  0.250 ms waiting for the GPU
+4x upscale:  0.012 ms recording the copy,  1.297 ms waiting for the GPU
+```
+
+**The copy costs twelve microseconds.** The rest is the frontend discovering
+that the EMULATOR has not finished drawing, because the core's rendering is
+queued ahead of our copy on the same queue. A semaphore would not make the GPU
+finish sooner — it would only free a CPU whose next job is to draw the UI with
+the picture it is waiting for.
+
+**MMagTech, 2026-09-20: upscaling will be an option, and not everyone runs a
+powerful mini PC.** That was a good reason to go and look, and looking produced
+a better answer than the recommendation it was testing: **upscaling costs what
+it costs because the emulator draws more pixels, and none of that is interop
+overhead.** On a weaker machine the answer is to turn the upscale down.
+
+**Do not rebuild either optimisation without a measurement that contradicts
+the tables above.** The numbers live in `vkhost.cpp`'s `createShared` as well
+as here, because that is where somebody will be standing when they have the
+idea.
+
+#### The old recommendation, which held up
+
+
 
 Three cores render with hardware — Flycast, Mupen64Plus and PPSSPP. Everything
 else hands back a finished picture and none of this touches it.
@@ -9743,6 +9915,151 @@ Two more open edges:
 - **xemu and Eden serve zero games today** — the systems table above counts 0
   Xbox and 109 Switch titles, and Switch is the one with games. They are in the
   manifest to prove the mechanism generalises, which was the requirement.
+
+### 23. One quality setting for the whole console, instead of emulator menus
+**Raised by MMagTech 2026-09-20. Surveyed the same day against all 23 cores.
+Not designed, not built.**
+
+> I hate messing with settings in emulators. What I'd want me or anyone to
+> experience is something like a performance and quality setting that affects
+> all cores.
+
+**This is the difference between a console and a frontend, and it is the right
+instinct.** RetroArch's answer to "should this look better" is a menu per core;
+a console's answer is that somebody already decided. Everything below is about
+making that decision once, per platform, rather than asking.
+
+#### THE SURVEY, because the problem is much smaller than it looks
+
+Every option every core declares, read off the running console 2026-09-20:
+
+| | |
+|---|---|
+| **A real resolution lever** | **7 systems, 6 cores** — PS2, GameCube, PSP, N64, Dreamcast/Naomi, PlayStation |
+| Only a LOOK filter | Mega Drive's NTSC filter, Game Boy's LCD filter, Master System, 7800, 2600 |
+| Nothing to choose | Saturn, Neo Geo Pocket, Virtual Boy, DS, NES, arcade, Vectrex, Virtual Boy |
+
+So it is not "a setting that affects all cores". It is **a setting that affects
+the seven systems where it means anything**, and that is a line a person
+already understands without being taught it.
+
+**AND IT IS NOT "THE HARDWARE-RENDERED CORES", which was the obvious wrong
+answer.** `pcsx_rearmed` renders PlayStation in SOFTWARE and still has
+`neon_enhancement_enable`, `scale_hires`, `dithering` and
+`gpu_thread_rendering` — four real levers. Meanwhile Dolphin declares *nothing*
+until a game is loaded, so a survey of what a core reports at load time misses
+it entirely. The right test is whether the SYSTEM has an internal resolution
+worth raising, not how the core draws.
+
+**The 2D cores' options are a different kind of thing and must not be dragged
+in.** `snes9x_overclock_cycles` and `genesis_plus_gx_overclock` trade accuracy
+for compatibility, not quality for speed, and on any machine this OS runs on a
+SNES is not a performance problem. Those get set correctly once and are never
+part of a performance choice. `blargg_ntsc_filter` is a LOOK, free, and belongs
+wherever the shader and glow settings end up — not here.
+
+#### The hardware is unknown and that is not the problem it looks like
+
+The worry is real — this runs on whatever AMD machine somebody installs it on,
+from a small APU to a large card, and open question 11 adds NVIDIA later. A
+hardware database would be wrong about the first chip nobody tested, and a
+synthetic benchmark at first run does not predict emulator speed.
+
+**The console already knows how fast it is going.** `core.h`: *"audio against
+the core's own sample rate is the only direct read on whether emulated time is
+advancing at realtime"*. That is the emulated machine reporting its own speed
+on the actual game, which is the only measurement that matters and it needs no
+table of GPUs.
+
+Measured on the A9 Max, 2026-09-20: **PS2 10.1x realtime at native and 6.3x at
+a 4x upscale; GameCube 4.6x.** A machine with a quarter of that headroom shows
+it in the same number.
+
+#### The recommendation
+
+1. **Three levels in console language — Performance, Balanced, Quality.** Never
+   an emulator's vocabulary. "Upscale multiplier" is not a thing a person
+   should have to have an opinion about.
+2. **A per-platform table mapping each level to real option values, with a
+   reason recorded per line.** This is open question 7's existing ask given a
+   better shape: `catalog::optionOverrides` takes a core today, and taking a
+   core AND a level is a change of shape rather than a new subsystem.
+3. **Apply at launch, never mid-game.** Dropping resolution in the middle of a
+   race is worse than a slightly low frame rate — it is visible and it reads as
+   broken. Measure during play; act at the next launch, or say *"this ran at
+   72%, try Performance?"* and let the person decide. A console that changes
+   itself underneath somebody is not calm, it is haunted.
+4. **A per-game override**, because one game is always the exception. Cabinet
+   has the precedent and the reason: it keeps renderer and aspect per game for
+   PS2 because *"which renderer a title needs is a fact about the title"*.
+
+#### THE HONEST OBSTACLE, AND IT IS NOT THE CODE
+
+**There is only one machine to tune against, and it has 6 to 10x more headroom
+than it needs.** A Performance level cannot be tuned on hardware that never
+needs it — anything written for it would be a guess wearing a number. So the
+first version of this is **getting the DEFAULT right per platform**, which the
+A9 can answer, and the lower tiers wait for either a second machine or a report
+from somebody running one.
+
+That also sets the acceptance test, and it is not a screenshot: **a person
+plays each of the seven systems and nobody reaches for a menu.**
+
+#### THE AUDIT IS DONE — `docs/CORE-OPTIONS-AUDIT.md`
+
+All 23 cores, 825 options, read out of the loaded `.so` rather than out of
+upstream documentation. **Eight systems have a resolution worth raising and
+for each it is ONE option**; the other fifteen have nothing to move.
+
+| | |
+|---|---|
+| PlayStation 2 | `pcsx2_upscale_multiplier` — 1x / 2x / 4x / 8x |
+| GameCube | `dolphin_efb_scale` — 1 to 6 |
+| PSP | `ppsspp_internal_resolution` — 480x272 to 3840x2176 |
+| Dreamcast, Naomi | `reicast_internal_resolution` — 320x240 to 12800x9600 |
+| Nintendo 64 | `mupen64plus-43screensize` OR `-parallel-rdp-upscaling` |
+| PlayStation | `pcsx_rearmed_neon_enhancement_enable` |
+| 3DO | `opera_high_resolution` |
+| Arcade (FBNeo) | `fbneo-resolution` — 640x480 to 2880x2160 |
+
+**Three things the audit corrected that would have been guessed wrong:**
+
+- **It is not "the hardware-rendered cores".** PlayStation renders in SOFTWARE
+  and has a real lever; **3DO and FinalBurn Neo have one each** and were on
+  nobody's list.
+- **Three cores declare nothing until a game is loaded**, and they are three of
+  the most configurable: Dolphin reports **zero** options at load and **103**
+  with a disc in, and FBNeo and MAME are per-driver. An audit taken at core-load
+  time reports zero for exactly the cores the question is about.
+- **Nintendo 64 has TWO RENDERERS** — gliden64 and paraLLEl-RDP — which are
+  different emulations of the same chip with separate scaling options. "The N64
+  resolution setting" is two settings behind a choice of plugin, and this
+  document already lists graphics-plugin state as a suspect for N64's save
+  states not restoring exactly. Not one to move casually.
+
+#### AND A WARNING ABOUT MEASURING THE COST
+
+PlayStation 2, Homura, 1800 frames each, same machine, same session:
+
+| | realtime |
+|---|---|
+| 1x native | 6.02x |
+| 2x native | **2.33x** |
+| 4x native | **5.09x** |
+
+**Those numbers are wrong and they are kept here deliberately.** 2x cannot be
+slower than 4x. It is shader compilation on the first run at a new resolution,
+which means **a single run is not a measurement** — anyone building a tuning
+table from one will be tuning against their own shader cache. Warm runs, and
+repeats.
+
+#### What makes it cheaper than it sounds
+
+The instruments went in with the PS2 and GameCube work. `--core-option
+key=value` tries any candidate value on a real game with no rebuild, and
+`--core-options` dumps what every core actually offers. The measuring is
+already possible; the expensive part is the DECIDING, one platform at a time,
+with a game in front of you.
 
 ### 22. What the console does when the server is away
 **Raised by the A9 Max's first reboot, 2026-09-19. Partly decided the same day.

@@ -14,6 +14,24 @@
 #include <unordered_map>
 
 #include "libretro.h"
+#include "libretro_vulkan.h"
+#include "vkhost.h"
+
+// The vendored libretro.h stops at environment call 72 and this one is 73.
+//
+// Carried across by value rather than by updating the header: libretro.h is
+// 3,937 lines that every part of this host reads, and replacing it wholesale
+// to gain one constant is a change with a blast radius out of all proportion
+// to the gain. The guard means a later wholesale update simply wins, rather
+// than colliding with this.
+//
+// A core asks this to find out which version of the negotiation interface the
+// frontend understands, BEFORE it declares one. Answering matters: unanswered,
+// a core is entitled to assume the newest it knows.
+#ifndef RETRO_ENVIRONMENT_GET_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE_SUPPORT
+#define RETRO_ENVIRONMENT_GET_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE_SUPPORT \
+    (73 | RETRO_ENVIRONMENT_EXPERIMENTAL)
+#endif
 
 namespace cab {
 namespace {
@@ -168,6 +186,17 @@ std::vector<std::string> gUndeclaredAsks;
 // showing that a difference everyone believed in was the build id.
 bool gAnswerOptions = true;
 
+// The other control, and it is the same idea as gAnswerOptions: turn one thing
+// off so the difference can be measured rather than argued about.
+//
+// With this set, SET_HW_RENDER is refused no matter what the core asked for.
+// A core that draws with GL then falls back to whatever it does with no
+// picture — Dolphin selects its Null video backend and keeps emulating — which
+// separates "this core cannot get a picture out of this host" from "this core
+// cannot run in this host at all". Those two look identical from the outside
+// and they are a different amount of work.
+bool gRefuseHWRender = false;
+
 void resetOptions() {
     gDeclared.clear();
     gByKey.clear();
@@ -278,6 +307,11 @@ void captureV2(const retro_core_options_v2* opts) {
 // glGetIntegerv on the context that exists.
 retro_hw_render_callback gHW{};
 bool gHWWanted = false;        // the core asked, and it was accepted
+// WHICH API, because from here on almost nothing is shared. A GLES core draws
+// into an FBO this file owns, on this thread; a Vulkan core draws wherever it
+// likes on whatever thread it likes and hands over a finished image. See
+// vkhost.h for why that difference is the whole point.
+bool gHWVulkan = false;
 bool gHWContextLive = false;   // context_reset has run and context_destroy has not
 GLuint gHWFBO = 0, gHWColor = 0, gHWDepth = 0;
 unsigned gHWTargetW = 0, gHWTargetH = 0;   // what the target is sized to
@@ -350,9 +384,15 @@ bool canServe(const retro_hw_render_callback& cb) {
             return atLeast(3, 0);
         case RETRO_HW_CONTEXT_OPENGLES_VERSION:
             return atLeast(cb.version_major, cb.version_minor);
+        case RETRO_HW_CONTEXT_VULKAN:
+            // Served where the machine has a usable Vulkan device AND can
+            // export what it draws, which is one question with one answer —
+            // see gpu.h. On the test VM this is false and the core is refused
+            // by name, exactly as before.
+            return vk::available();
         default:
-            // Desktop GL, Vulkan, Direct3D. Not this context, and not
-            // something an environment callback should quietly paper over.
+            // Desktop GL and Direct3D. Not this context, and not something an
+            // environment callback should quietly paper over.
             return false;
     }
 }
@@ -508,6 +548,10 @@ void videoRefresh(const void* data, unsigned width, unsigned height, size_t pitc
         gFrameW = width;
         gFrameH = height;
         gFrameDirty = true;
+        // retro_vulkan_image carries no size, so this is the only place the
+        // frontend learns how much of the core's image is picture. See
+        // vkhost.h, setFrameSize.
+        if (gHWVulkan) vk::setFrameSize(width, height);
         announceRotation(width, height);
         return;
     }
@@ -809,6 +853,14 @@ bool environment(unsigned cmd, void* data) {
             auto* cb = static_cast<retro_hw_render_callback*>(data);
             if (!cb) return false;
             gHWContextName = contextName(*cb);
+            if (gRefuseHWRender) {
+                std::fprintf(stderr,
+                             "[core] refusing %s because --core-no-hw-render was "
+                             "asked for; this is the control, not a fault\n",
+                             gHWContextName.c_str());
+                gHWContextName += " (refused: the control)";
+                return false;
+            }
             if (!canServe(*cb)) {
                 // Named, not just refused. "Hardware rendering unavailable" is
                 // the kind of message that sends somebody looking at the core;
@@ -823,12 +875,22 @@ bool environment(unsigned cmd, void* data) {
                 gHWContextName += " (refused)";
                 return false;
             }
-            // The core keeps this struct and calls through it, so the two
-            // frontend-owned fields are written into the CORE's copy. Ours is
-            // for context_reset, context_destroy and the depth/stencil flags,
-            // which are read after the core has stopped looking at it.
-            cb->get_current_framebuffer = currentFramebuffer;
-            cb->get_proc_address = procAddress;
+            gHWVulkan = cb->context_type == RETRO_HW_CONTEXT_VULKAN;
+            if (!gHWVulkan) {
+                // The core keeps this struct and calls through it, so the two
+                // frontend-owned fields are written into the CORE's copy. Ours
+                // is for context_reset, context_destroy and the depth/stencil
+                // flags, which are read after the core has stopped looking at
+                // it.
+                //
+                // NEITHER FIELD MEANS ANYTHING IN VULKAN. There is no
+                // framebuffer object to name and no context to load symbols
+                // out of; the core gets the device and the queue through
+                // GET_HW_RENDER_INTERFACE instead. Filling them in anyway
+                // would hand a Vulkan core two GL function pointers.
+                cb->get_current_framebuffer = currentFramebuffer;
+                cb->get_proc_address = procAddress;
+            }
             gHW = *cb;
             gHWWanted = true;
             std::fprintf(stderr, "[core] hardware rendering: %s, %s origin\n",
@@ -845,8 +907,68 @@ bool environment(unsigned cmd, void* data) {
             // cannot serve. So this is the difference between Flycast asking
             // for something serveable and Flycast asking for something that
             // has to be turned down.
-            *static_cast<unsigned*>(data) = RETRO_HW_CONTEXT_OPENGLES3;
+            //
+            // THIS ONE LINE IS WHAT DECIDES WHICH API A CORE USES, and it is
+            // the "advertise whichever it got" half of docs/PROJECT.md open
+            // question 20. It was hard-wired to GLES, and that is why Dolphin
+            // spent fifty seconds of emulated Mario Kart drawing into a
+            // context its own render thread could not reach: the core asked
+            // what we preferred, was told OpenGL ES, and dutifully took it —
+            // and never asked for the Vulkan it also has compiled in.
+            //
+            // A core that cannot do Vulkan is unaffected: it ignores an answer
+            // it has no path for and asks for GLES anyway, which canServe
+            // still accepts. Nothing about the twenty-one cores changes.
+            *static_cast<unsigned*>(data) =
+                vk::available() ? RETRO_HW_CONTEXT_VULKAN : RETRO_HW_CONTEXT_OPENGLES3;
             return true;
+
+        case RETRO_ENVIRONMENT_SET_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE: {
+            // How a Vulkan core says which physical device it needs and which
+            // extensions must be on it. It can arrive either side of
+            // SET_HW_RENDER, so it is stored and acted on when the device is
+            // built. See vkhost.h.
+            auto* n = static_cast<const retro_hw_render_context_negotiation_interface*>(data);
+            if (!n || n->interface_type !=
+                          RETRO_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE_VULKAN)
+                return false;
+            vk::setNegotiation(
+                reinterpret_cast<const retro_hw_render_context_negotiation_interface_vulkan*>(n));
+            return true;
+        }
+
+        case RETRO_ENVIRONMENT_GET_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE_SUPPORT: {
+            auto* s = static_cast<retro_hw_render_context_negotiation_interface*>(data);
+            if (!s || s->interface_type !=
+                          RETRO_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE_VULKAN)
+                return false;
+            // Version 1. The v2 entry points hand the frontend a wrapper the
+            // core calls to create the instance and device, so that the
+            // frontend can add its own extensions to what the core asked for.
+            // This host does not need that yet — it passes its three required
+            // extensions straight to create_device — and claiming a version
+            // whose contract is not implemented is how a core ends up calling
+            // a null wrapper.
+            s->interface_version = 1;
+            return true;
+        }
+
+        case RETRO_ENVIRONMENT_GET_HW_RENDER_INTERFACE: {
+            // Logged because a core that cannot get this has no way to present
+            // and no way to say so — it simply runs and draws nothing, which
+            // is the single hardest failure in this area to tell apart from a
+            // broken game.
+            std::fprintf(stderr, "[vulkan] the core asked for the render interface: %s\n",
+                         !gHWVulkan            ? "refused, this core is not on Vulkan"
+                         : !vk::renderInterface() ? "refused, there is no device yet"
+                                                  : "handed over");
+            if (!gHWVulkan) return false;
+            const retro_hw_render_interface_vulkan* iface = vk::renderInterface();
+            if (!iface) return false;
+            *static_cast<const retro_hw_render_interface**>(data) =
+                reinterpret_cast<const retro_hw_render_interface*>(iface);
+            return true;
+        }
 
         case RETRO_ENVIRONMENT_SET_HW_SHARED_CONTEXT:
             // No. A shared context is for a core that renders from its own
@@ -917,6 +1039,7 @@ bool Core::load(const std::string& soPath) {
     // Whatever the last core asked for is not this one's business either.
     gHW = {};
     gHWWanted = false;
+    gHWVulkan = false;
     gHWFrame = false;
     gHWContextName.clear();
     // Whatever the last core declared is not this one's business. Cleared here
@@ -1057,6 +1180,7 @@ std::vector<std::string> Core::undeclaredOptionAsks() const {
 }
 
 void Core::setAnswerOptions(bool on) { gAnswerOptions = on; }
+void Core::setRefuseHWRender(bool on) { gRefuseHWRender = on; }
 
 
 void Core::unload() {
@@ -1071,7 +1195,9 @@ void Core::unload() {
         texture_ = 0;
     }
     destroyHWTarget();
+    if (gHWVulkan) vk::destroyContext();
     gHWWanted = false;
+    gHWVulkan = false;
     gHWFrame = false;
 }
 
@@ -1191,7 +1317,21 @@ bool Core::loadGame(const std::string& romPath, const std::string& systemDir,
         // facts exist.
         const unsigned w = std::max(av_.maxWidth, av_.baseWidth);
         const unsigned h = std::max(av_.maxHeight, av_.baseHeight);
-        if (!ensureHWTarget(w, h)) {
+        if (gHWVulkan) {
+            // NOTHING IS ALLOCATED HERE FOR THE PICTURE, and that is the
+            // difference. A Vulkan core renders into images it owns and hands
+            // one over per frame, so what this builds is the device, the queue
+            // and the one exported image the picture crosses on — sized later,
+            // from the frame the core actually produces, rather than from its
+            // declared maximum.
+            std::string verr;
+            if (!vk::createContext(&verr)) {
+                error_ = "this core wants Vulkan and " + verr;
+                g.unload_game();
+                gameLoaded_ = false;
+                return false;
+            }
+        } else if (!ensureHWTarget(w, h)) {
             error_ = "the core needs a render target this context cannot build";
             g.unload_game();
             gameLoaded_ = false;
@@ -1236,6 +1376,11 @@ void Core::unloadGame() {
     gameLoaded_ = false;
     gHWFrame = false;
     destroyHWTarget();
+    // AFTER unload_game, for the same reason context_destroy runs before it:
+    // the core's own Vulkan objects live on this device, and pulling the
+    // device out from under a core that has not finished tearing down is a
+    // crash inside the driver with no useful backtrace.
+    if (gHWVulkan) vk::destroyContext();
 }
 
 double Core::audioAhead() const {
@@ -1290,7 +1435,10 @@ int Core::runFor(double dt) {
                        static_cast<GLsizei>(gHWTargetH));
         }
         g.run();
-        if (gHWWanted) restoreGLState();
+        // Only the GLES path disturbs our GL state. A Vulkan core has not
+        // touched the context at all, and calling this for it would be a
+        // handful of redundant GL calls per frame for nothing.
+        if (gHWWanted && !gHWVulkan) restoreGLState();
         ++gFramesRun;
         ++ran;
         accumulator_ -= interval;
@@ -1299,6 +1447,18 @@ int Core::runFor(double dt) {
 }
 
 bool Core::uploadFrame() {
+    if (gHWVulkan) {
+        // The one place the two APIs meet. present() copies whatever the core
+        // last handed over into the exported image, which IS the GL texture —
+        // same memory, no readback. It runs here rather than in the frame loop
+        // because this is already the call every screen makes on the GL thread
+        // before it draws a picture.
+        frameWidth_ = gFrameW;
+        frameHeight_ = gFrameH;
+        gFrameDirty = false;
+        vk::present();
+        return vk::texture() != 0;
+    }
     if (gHWFrame) {
         // Nothing to do, and that is the whole point of sharing one context:
         // the core has already drawn into the texture the player is about to
@@ -1468,7 +1628,10 @@ bool Core::loadMemoryRegion(unsigned id, const std::vector<uint8_t>& data) {
     return true;
 }
 
-GLuint Core::texture() const { return gHWFrame ? gHWColor : texture_; }
+GLuint Core::texture() const {
+    if (gHWVulkan) return vk::texture();
+    return gHWFrame ? gHWColor : texture_;
+}
 
 bool Core::hardwareRendered() const { return gHWWanted; }
 
@@ -1481,6 +1644,10 @@ void Core::frameUV(float& u0, float& v0, float& u1, float& v1) const {
     v0 = 0;
     u1 = 1;
     v1 = 1;
+    if (gHWVulkan) {
+        vk::frameUV(u0, v0, u1, v1);
+        return;
+    }
     if (!gHWFrame || gHWTargetW == 0 || gHWTargetH == 0) return;
     // The picture is a corner of a target sized to the core's declared
     // maximum, so sampling the whole texture would draw a small picture inside
