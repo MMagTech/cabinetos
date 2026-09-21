@@ -2300,10 +2300,26 @@ files it under whoever is current; and **an upload in flight**, because the
 uploader holds a pointer to the very client whose token is being swapped, so it
 would send the previous account's save to the new account's library.
 
-**WHAT IS NOT VERIFIED, and it is the obvious one:** a switch between two
-DIFFERENT accounts. There is one RomM user on that server. The two refusals
-above are reasoned and unexercised for the same reason. **Make a second RomM
-user before believing any of this** — it is the first thing to do here.
+**VERIFIED WITH TWO REAL ACCOUNTS, 2026-09-21.** `12 - vivian` was created on
+the server and paired, and the switch has run both ways on the VM:
+`switched to 12 - vivian, 412 games` / `switched to 1 - MMagTech, 1147 games`,
+with `users/12 - vivian/` appearing beside MMagTech's tree.
+
+**AND IT PROVED A CLAIM IN OPEN QUESTION 26 WRONG.** That section said the
+catalogue is the same for everybody because there is one server per console.
+**RomM scopes the library to the user** — 1147 against 412, same server, same
+minute. The code was already right because `loadLibrary` replaces everything in
+one pass; the reasoning was not, and the next person to optimise a switch would
+have read it and skipped the refetch.
+
+**WHOEVER APPROVES THE PAIRING CODE IS WHO GETS ADDED.** The first attempt was
+approved in a browser still signed in as MMagTech and correctly re-paired
+account 1 rather than making a duplicate — which had only been asserted against
+a scratch root until then. Sign in as the person being added, in a private
+window. `--romm-pair` says so before it prints the code.
+
+**STILL NOT EXERCISED:** the two refusals — switching while a game runs, and
+switching with a save still going up. Both are reasoned.
 
 **A SEGFAULT WORTH KEEPING.** `accounts::find` returns a pointer INTO the vector
 it is handed, which is why it takes one rather than hiding a static, and the

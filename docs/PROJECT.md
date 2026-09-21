@@ -11153,6 +11153,41 @@ everything in `cache/` is a copy of RomM, eviction is invisible by design, and
 the alternative — a per-account cache quota — is the partitioned-cache mistake
 this whole layout exists to avoid. **MMagTech's call, confirmed when asked.**
 
+#### MEASURED WITH TWO REAL ACCOUNTS — 2026-09-21
+
+**The gap this section was written with is closed.** A second RomM user was
+created and paired through `--romm-pair`, and the switch has now run in both
+directions on the test VM:
+
+```
+[accounts] acting as 1 - MMagTech
+[storage] user 12 - vivian
+[accounts] switched to 12 - vivian, 412 games
+[accounts] switched to 1 - MMagTech, 1147 games
+```
+
+`users/12 - vivian/` appeared beside `users/1 - MMagTech/`, and the active
+account survived across processes.
+
+**AND IT CORRECTED A CLAIM THIS SECTION MADE.** The text above said the
+catalogue of games is the same for everybody because there is one server per
+console, and that reloading it on a switch was incidental. **It is not: RomM
+scopes the library to the user.** 1147 against 412 on the same server, same
+moment. The catalogue belongs on the list of things that change hands.
+
+**The code was already right** — `loadLibrary` fetches everything in one pass,
+so it was all being replaced anyway. What was wrong was the reasoning, and that
+is worth correcting rather than quietly leaving: the next person to optimise a
+switch would have read that sentence and skipped the refetch, and vivian would
+have been shown MMagTech's 1147 games.
+
+**One more thing the first attempt proved, by accident.** The first pairing was
+approved in a browser still signed in as MMagTech, so it re-paired account 1
+rather than adding a second. `accounts::add` replaced the row instead of making
+a duplicate, which until then had only been asserted against a scratch root.
+**Whoever approves the code is who gets added** — the console does not choose —
+and `--romm-pair` now says so before it prints the code.
+
 #### Out of scope, explicitly
 
 - **Anything that assumes two people at once.** One account is active; this is

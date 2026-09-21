@@ -2511,14 +2511,34 @@ static int rommProbe(const char* address, bool allowPairing) {
     std::printf("server      %s (RomM %s)\n", client.baseUrl().c_str(),
                 client.serverVersion().c_str());
 
-    const std::string tokenPath = rommTokenPath();
-    if (!client.loadToken(tokenPath)) {
-        if (!allowPairing) {
+    // `--romm-pair` MEANS PAIR, and since 2026-09-21 that means ADD SOMEBODY.
+    //
+    // It used to load `~/.config/cabinetos/romm.json` first and skip pairing
+    // whenever that file existed — which the handover recorded as "it does
+    // nothing if a token already exists", with a workaround of pointing HOME
+    // at an empty directory. That was a sensible shape when a console had one
+    // token and re-pairing was a mistake. With accounts it is exactly backwards:
+    // adding a second person to a console that already has one is the whole
+    // point of the flag, and every console that has been set up already has an
+    // account.
+    //
+    // So the flag pairs unconditionally, and without it the probe acts as
+    // whoever the console is acting as.
+    if (!allowPairing) {
+        if (!accounts::loadActiveToken(client)) {
             std::fprintf(stderr,
-                         "[romm] no token at %s — run again with --romm-pair\n",
-                         tokenPath.c_str());
+                         "[romm] no account on this console — run again with "
+                         "--romm-pair\n");
             return 1;
         }
+    } else {
+        // WHOEVER APPROVES THIS IS WHO GETS ADDED. The console does not choose;
+        // the browser session that approves the code does, and `recordPairing`
+        // then asks the server which user that was. Approving as somebody who
+        // already has an account here re-pairs them rather than making a second
+        // row — see `accounts::add`.
+        std::printf("\nSign in to RomM as the person you are ADDING before you\n"
+                    "approve this — whoever approves it is who gets added.\n");
         romm::Pairing p;
         if (!client.beginPairing(&p, &err)) {
             std::fprintf(stderr, "[romm] pairing failed: %s\n", err.c_str());
@@ -2557,17 +2577,31 @@ static int rommProbe(const char* address, bool allowPairing) {
         // genuinely succeeded; what failed is the only part that lasts.
         std::string aerr;
         if (accounts::recordPairing(client, &aerr)) {
-            std::printf("\npaired      account %d, token saved to %s\n",
-                        accounts::activeId(),
-                        accounts::tokenPath(accounts::activeId()).c_str());
+            // WHO WAS ACTUALLY ADDED, asked rather than assumed. Reporting
+            // `activeId()` here would name the wrong person for every account
+            // after the first, because adding somebody deliberately does not
+            // switch to them.
+            romm::User who;
+            std::string werr;
+            if (client.fetchCurrentUser(&who, &werr) && who.id > 0) {
+                std::printf("\npaired      %d - %s\n", who.id, who.username.c_str());
+                std::printf("token       %s\n", accounts::tokenPath(who.id).c_str());
+                if (who.id == accounts::activeId())
+                    std::printf("active      yes — this console was already acting as them\n");
+                else
+                    std::printf("active      no  — still acting as %d. Switch from the chip.\n",
+                                accounts::activeId());
+            } else {
+                std::printf("\npaired, and recorded\n");
+            }
         } else {
             std::printf("\n");
             std::fflush(stdout);
             std::fprintf(stderr,
-                         "[romm] PAIRED, BUT THE TOKEN COULD NOT BE SAVED to %s (%s).\n"
-                         "[romm] This console will not stay paired. Fix the path and\n"
+                         "[romm] PAIRED, BUT IT WAS NOT RECORDED: %s\n"
+                         "[romm] This console will not stay paired. Fix that and\n"
                          "[romm] run --romm-probe --romm-pair again.\n",
-                         tokenPath.c_str(), std::strerror(errno));
+                         aerr.empty() ? std::strerror(errno) : aerr.c_str());
             return 1;
         }
     }
@@ -4403,11 +4437,17 @@ int main(int argc, char** argv) {
     //   the hero, the shelf    they are per person, not per console
     //   the kept badges     -> refreshKeeps, which reads this person's keeps
     //
-    // The library of GAMES is not on that list and must not be refetched for
-    // the wrong reason: with one server per console it is the same catalogue
-    // for everybody. It comes back anyway because loadLibrary fetches the lot
-    // in one pass, and splitting that to save a few seconds would be an
-    // optimisation bought with a second code path.
+    // **THE CATALOGUE IS PER ACCOUNT TOO, AND I HAD THIS WRONG.** This comment
+    // used to say the library of games is the same for everybody because there
+    // is one server per console, and that the refetch was incidental. Measured
+    // 2026-09-21 on the real server: MMagTech sees 1147 games and vivian sees
+    // 412. RomM scopes a library to the user, so the catalogue belongs on the
+    // list above rather than beside it.
+    //
+    // The code was already right — `loadLibrary` fetches the lot in one pass,
+    // so everything was being replaced regardless. It is the REASONING that was
+    // wrong, which matters because the next person to optimise this would have
+    // read that comment and skipped the refetch.
     //
     // TWO THINGS REFUSE THE SWITCH, and both are about a save reaching the
     // wrong person rather than about tidiness:
@@ -6044,6 +6084,13 @@ int main(int argc, char** argv) {
             } else if (code && !shownPairCode) {
                 shownPairCode = true;
                 addAccountScreen.setPairing(url, user);
+                // SAID IN THE JOURNAL AS WELL AS ON THE TELEVISION. A code
+                // that exists only as pixels cannot be read back by anybody
+                // helping from a shell, and this is the one screen whose whole
+                // content is a string somebody has to act on within minutes.
+                // It is not a secret: the device code is, and that is not this.
+                std::fprintf(stderr, "[accounts] pair at %s (code %s)\n",
+                             url.c_str(), user.c_str());
             }
         }
         if (autoSwitchAccountId > 0) {
