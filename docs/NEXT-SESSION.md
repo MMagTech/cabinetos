@@ -2309,7 +2309,37 @@ at its draw site. This is a list, not the record.
   and compiled at the end of a long session and MMagTech had not yet retried it.
   **Do that first**: save in a game, load it back, and watch what the menu says
   at each step. The words are the feature as much as the bytes are.
-- **SETTINGS.** The last bar item that does nothing, and open question 23's one
+- **SETTINGS, AND IT IS ONE SCREEN REACHED FROM TWO PLACES.** MMagTech, at the
+  end of the session: *"what if we keep the pause as more of a quick menu but
+  then sort of like retroarch have a more advanced menu. I dont ever want to be
+  as in depth as [that], i want simplicity — but it would be ideal for things
+  like shaders and the performance mode for later on, maybe the glow strength as
+  well."*
+
+  **The split that matters is not quick versus advanced, it is THIS GAME versus
+  THIS CONSOLE** — and everything on that list is the console. Open question 23
+  already says the quality setting is global; so are glow strength and shaders.
+  None of them is a property of Devil's Crush.
+
+  RetroArch's real usability problem is not depth, it is TWO MENUS WITH A
+  BOUNDARY NOBODY CAN REMEMBER. A second in-game menu inherits that at a tenth
+  the size. So: one Settings screen, opened by the bar's Settings item from
+  Home, and opened by a fifth row in the pause menu over the paused game. Same
+  screen both ways. That is also strictly better for the things named —
+  adjusting a shader or the glow with the game sitting behind it is the best
+  preview there is, and it is the one thing a Settings screen reached only from
+  Home cannot do.
+
+  The pause menu stays a quick menu: Resume, Save state, Load latest, Settings,
+  Exit. The fifth row is a door, not a submenu. Anything genuinely PER-GAME — a
+  core option override for one title — belongs on that game's launch screen,
+  where the game is what the screen is about, and not in a third menu.
+
+- **SETTINGS' FIRST CONTENTS**, in the order they became real: the one quality
+  setting (open question 23), the interface sounds' off switch (built and
+  waiting for an owner — `sound::setEnabled`), the glow strength, and shaders.
+
+- **THE OLD SETTINGS NOTE.** The last bar item that does nothing, and open question 23's one
   quality control has nowhere to live until it exists. **This is the next UI
   session.**
 - **THE LAUNCH SCREEN IS TWO THIRDS EMPTY.** Reviewed and not acted on: the cover
