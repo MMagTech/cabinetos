@@ -1429,10 +1429,24 @@ Two things the survey corrected, both of which would have been guessed wrong:
   is not a performance problem on any machine this runs on. Dragging them in
   would make the setting mean two different things.
 
+**THE AUDIT IS DONE and it is `docs/CORE-OPTIONS-AUDIT.md`** — all 23 cores,
+825 options, read out of the loaded `.so`. **Eight systems have a resolution
+worth raising and for each it is ONE option**: PS2, GameCube, PSP, Dreamcast,
+N64, PlayStation, 3DO and FBNeo arcade. Everything else sorts into free-and-
+better, correctness-per-game, accuracy-set-once, or look — none of which
+belongs behind a performance tier.
+
 **The obstacle is not the code, it is that there is only one machine to tune
 against and it has 6 to 10x more headroom than it needs.** A Performance level
 tuned on hardware that never needs it is a guess wearing a number. Get the
-DEFAULT right per platform first.
+DEFAULT right per platform first — the console can already read its own speed
+off the core's audio and say "this ran at 72%" on a machine that cannot keep
+up, which is more useful than a settings page.
+
+**And when you measure the cost, do it with a WARM SHADER CACHE.** A single run
+lies: 2x native measured slower than 4x on the same machine in the same
+session, purely because the 2x run compiled shaders. The audit keeps that wrong
+table on purpose.
 
 
 

@@ -10005,6 +10005,54 @@ from somebody running one.
 That also sets the acceptance test, and it is not a screenshot: **a person
 plays each of the seven systems and nobody reaches for a menu.**
 
+#### THE AUDIT IS DONE — `docs/CORE-OPTIONS-AUDIT.md`
+
+All 23 cores, 825 options, read out of the loaded `.so` rather than out of
+upstream documentation. **Eight systems have a resolution worth raising and
+for each it is ONE option**; the other fifteen have nothing to move.
+
+| | |
+|---|---|
+| PlayStation 2 | `pcsx2_upscale_multiplier` — 1x / 2x / 4x / 8x |
+| GameCube | `dolphin_efb_scale` — 1 to 6 |
+| PSP | `ppsspp_internal_resolution` — 480x272 to 3840x2176 |
+| Dreamcast, Naomi | `reicast_internal_resolution` — 320x240 to 12800x9600 |
+| Nintendo 64 | `mupen64plus-43screensize` OR `-parallel-rdp-upscaling` |
+| PlayStation | `pcsx_rearmed_neon_enhancement_enable` |
+| 3DO | `opera_high_resolution` |
+| Arcade (FBNeo) | `fbneo-resolution` — 640x480 to 2880x2160 |
+
+**Three things the audit corrected that would have been guessed wrong:**
+
+- **It is not "the hardware-rendered cores".** PlayStation renders in SOFTWARE
+  and has a real lever; **3DO and FinalBurn Neo have one each** and were on
+  nobody's list.
+- **Three cores declare nothing until a game is loaded**, and they are three of
+  the most configurable: Dolphin reports **zero** options at load and **103**
+  with a disc in, and FBNeo and MAME are per-driver. An audit taken at core-load
+  time reports zero for exactly the cores the question is about.
+- **Nintendo 64 has TWO RENDERERS** — gliden64 and paraLLEl-RDP — which are
+  different emulations of the same chip with separate scaling options. "The N64
+  resolution setting" is two settings behind a choice of plugin, and this
+  document already lists graphics-plugin state as a suspect for N64's save
+  states not restoring exactly. Not one to move casually.
+
+#### AND A WARNING ABOUT MEASURING THE COST
+
+PlayStation 2, Homura, 1800 frames each, same machine, same session:
+
+| | realtime |
+|---|---|
+| 1x native | 6.02x |
+| 2x native | **2.33x** |
+| 4x native | **5.09x** |
+
+**Those numbers are wrong and they are kept here deliberately.** 2x cannot be
+slower than 4x. It is shader compilation on the first run at a new resolution,
+which means **a single run is not a measurement** — anyone building a tuning
+table from one will be tuning against their own shader cache. Warm runs, and
+repeats.
+
 #### What makes it cheaper than it sounds
 
 The instruments went in with the PS2 and GameCube work. `--core-option
