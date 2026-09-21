@@ -281,11 +281,24 @@ Confirmed on the reference console, 2026-09-21: `AMD Radeon 890M Graphics
 (RADV STRIX1)`, `Vulkan 1.4.354`, with a Vulkan shader cache warming across
 launches.
 
-**THE LIBRETRO PS2 CORE IS GONE** from the core directory, moved aside to
-`~/pcsx2_libretro.so.unused`. It can never ship — `libretro/pcsx2` does not
-exist, so it cannot be pinned, built in CI or audited — and leaving it beside
-the real one made "which PlayStation 2 is this" unanswerable at a glance.
-`catalog::coreFileName` now resolves `ps2` to `cabinetos-ps2.so`.
+**THE LIBRETRO PS2 CORE IS DELETED FROM THE REFERENCE CONSOLE — ALL FOUR
+COPIES.** Not moved aside: deleted. MMagTech's call, 2026-09-21, and it is the
+right one.
+
+It can never ship, because `libretro/pcsx2` does not exist and so it cannot be
+pinned, built in CI or audited. **Keeping a WORKING copy on disk leaves armed
+exactly the trap that cost the last session**, which reinterpreted this
+decision because a libretro core happened to run — and this page already says
+in capitals that a working binary is not authority to change route. A binary
+nobody can reproduce, sitting next to one they can, is an invitation.
+
+`~/heavy/` went with it: 859 MB of last session's scratch, holding three more
+copies plus duplicates of the PS2 BIOS and Dolphin's Sys folder that the
+console already has properly under `/var/lib/cabinetos/bios/`.
+
+**There is now exactly one PlayStation 2 emulator on that machine.**
+`catalog::coreFileName` resolves `ps2` to `cabinetos-ps2.so` and nothing looks
+for the other name.
 
 #### What was built, and how to rebuild it
 
@@ -1516,11 +1529,16 @@ connected. The console says it on stderr, once.
 
 ## The state that lives on the A9 and not in git — new 2026-09-20
 
-- `~/cores-dev/` — the 21 image cores SYMLINKED plus `pcsx2_libretro.so` and
-  `dolphin_libretro.so` copied in. This is what `--core-dir` points at.
-- `~/heavy/` — the scratch tree the two systems were brought up in: the two
-  cores, the PS2 BIOS pulled off RomM, Dolphin's `Sys` folder, a few ROMs and
-  a pile of `.bmp` captures. Delete it whenever; nothing depends on it.
+- `~/cores-dev/` — the 21 image cores SYMLINKED, plus **`cabinetos-ps2.so`**
+  (upstream PCSX2 embedded, with `libryml` and `libc4core` beside it) and
+  `dolphin_libretro.so`. This is what `--core-dir` points at.
+- `~/assets-dev/` — **new 2026-09-21.** PCSX2's resources, which it refuses to
+  start without, plus a symlink through to the image's own system files so the
+  other cores keep theirs. `CABINETOS_ASSETS` points here because `/usr` is
+  read-only on a bootc console.
+- ~~`~/heavy/`~~ — **deleted 2026-09-21.** 859 MB of scratch holding three
+  copies of the unshippable libretro PS2 core and duplicates of firmware the
+  console already has properly under `/var/lib/cabinetos/bios/`.
 - `/var/lib/cabinetos/bios/pcsx2/bios/` — the two PS2 BIOS files. **These come
   from RomM with the game on a real install** and are here by hand only because
   no image carries the core yet.
