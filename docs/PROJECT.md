@@ -9887,6 +9887,103 @@ document already lists *"graphics-plugin state that lives outside the state"* as
 one of three unresolved suspects for N64's save states not restoring exactly. So
 N64 deserves care, for reasons that have nothing to do with Vulkan.
 
+#### THE DESIGN, 2026-09-21 — and three versions that did not survive getting to it
+
+Worked out with MMagTech in one conversation, each step killing the one before
+it. **The dead ends are kept because every one of them is the obvious first
+idea**, and somebody will have them again.
+
+##### What it is
+
+**One control, in Settings, console-wide. Three intents, not three numbers.**
+Performance, Balanced, Quality. Behind them, a PER-SYSTEM table, because the
+systems differ by an order of magnitude on the same chip — measured on the A9:
+PS2 has **6.3x realtime** of headroom at a 4x upscale, GameCube 4.6x, and a PS3
+or Switch emulator would have about 1x on the same machine.
+
+**Every game starts at its system's table value, NOT at the floor.** The table
+is not a guess: PS2 starts at 3x because 3x is where the measured curve says the
+worst case turns — 3x to 4x buys 1.1 ms of average and costs 5 ms of spike.
+**Starting every game at minimum would mean PlayStation 2 opening at 1x on a
+machine with six times the headroom it needs**, which is precisely the picture
+MMagTech disliked when the drop-in came off. It would also make games improve
+over successive sessions, which reads as a fault rather than a feature.
+
+**The console learns per game, in both directions, and applies it at the NEXT
+launch.** Never mid-game on its own. Same shape as the shader cache: cold once,
+warm afterwards.
+
+**AND THE PERSON CAN CHANGE IT IN THE GAME, WHICH IS MMagTech'S OWN ADDITION AND
+THE BEST PART OF THIS.** One action in the pause menu, both directions — smoother
+or sharper. Because they asked for it, the renderer hitch that follows is
+explained rather than looking like a fault, which is exactly what makes an
+automatic mid-game change unacceptable and a requested one fine.
+
+**THEIR CHOICE OUTRANKS THE MEASUREMENT, PERMANENTLY, PER GAME.** Once somebody
+has said what they want for a game, the console stops adjusting it. Without that
+rule they set it, the console quietly moves it back, and they are arguing with
+their own television.
+
+##### WITHDRAWN 1: one global number for all cores
+
+The first shape. It cannot work, and MMagTech is the one who said why:
+PlayStation 2 at "Performance" has headroom to spare while a Switch emulator at
+the same setting is still underwater. A single number robs one system of quality
+it can trivially afford and does nowhere near enough for the other.
+
+##### WITHDRAWN 2: measure for a few seconds at launch, then pick
+
+Proposed and killed within one message, by this document's own words: Burnout 3's
+figures were recorded as *"a floor rather than a ceiling — real play is
+heavier"*. **The first seconds of a game are the cheapest part of it.** A boot
+logo says nothing about a pile-up, so a launch warm-up systematically picks too
+high and then stutters twenty minutes later — worse than guessing, because it
+looks like it was measured.
+
+##### WITHDRAWN 3: adjust automatically during play
+
+The obvious repair for the above, and it fails three ways. Changing PCSX2's
+internal resolution recreates render targets and recompiles pipelines, so **the
+fix causes the symptom**. A loop with no damping hunts, and the picture changes
+for reasons nobody can perceive. And it can chase a problem it cannot solve —
+see below.
+
+##### THE HOLE THAT IS IN ALL OF THEM, INCLUDING THIS ONE
+
+**"Not keeping up" does not say WHY.** PS2's EE recompiler is CPU-bound and
+upscaling is GPU-bound, so a game that is slow because of the recompiler gets no
+faster when the upscale drops. An automatic system would keep lowering it,
+making the picture worse and fixing nothing.
+
+**So whatever adapts must stop when it is not working.** Two drops with no
+improvement means the cause is not the lever, and the honest response is to
+leave the picture alone rather than keep pulling.
+
+##### BUILD THE STATIC HALF FIRST, AND THE REASON IS NOT CAUTION
+
+**None of the adaptive behaviour can be exercised on either machine this project
+has.** The A9 has too much headroom to trigger it — PS2 at 6.3x realtime never
+falls behind — and the test VM has no Vulkan at all, so it cannot run any of the
+seven systems this applies to. Every adaptive rule above would ship unrun, which
+is the specific failure this project keeps writing itself notes about.
+
+The table, the three intents and the one control in Settings are all measured
+and useful today. The adaptation is a design for a problem that cannot currently
+be reproduced, and it should wait for either a weaker machine or PlayStation 3,
+which will be near the limit on this one.
+
+##### WHERE IT LIVES, WHICH IS NOT YET DECIDED
+
+Settings, in the top bar — where it is drawn today and says "not built yet". So
+this needs the Settings screen, which does not exist, and that lands squarely in
+the UI pass. **Doing them together is the sensible order rather than bolting a
+screen on for one control.**
+
+The in-game action is the open question: always visible makes it a fifth item in
+a pause menu that has four and was just designed, and contextual-only means
+nobody can ask for a BETTER picture when everything is fine. That is a question
+about what that panel is allowed to hold, which is the UI pass again.
+
 #### Why this is worth building
 
 One piece of work serves three things at once: **PS3 needs it** (RPCS3's good
