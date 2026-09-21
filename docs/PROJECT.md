@@ -5857,6 +5857,49 @@ layer is written, and none of it is in CI — deliberately, because a PCSX2 buil
 in the image workflow before there is anything to ship costs every build minutes
 and proves nothing the script does not prove on demand.
 
+#### DECIDED 2026-09-21: ONE PATCH TO PCSX2, AND NO MORE
+
+**MMagTech: "audio seems like we had to or it wouldnt have worked for the
+others, id rather not have to patch and then maintain them."** That is the rule
+now, and it is a rule about maintenance rather than about taste.
+
+**The audio patch stands because there was no alternative.** PCSX2 picks its
+output from a fixed list of backends with no plugin mechanism, so the choice was
+three lines in `AudioStream::CreateStream` or letting PCSX2 open a sound device
+of its own — a second volume, a second latency, and nothing the in-game overlay
+could duck. Every other emulator on this console hands its samples to the
+frontend, and PlayStation 2 now does too.
+
+**WHAT THIS RULES OUT, EXPLICITLY.** Sharing PCSX2's Vulkan image with the
+frontend instead of copying the picture through the CPU needs two optional
+device extensions that upstream does not enable. That is a second patch, in the
+graphics device setup rather than a one-line factory switch, and it is
+**rejected on maintenance grounds** rather than on merit.
+
+**The cost of that decision, stated so nobody meets it as a surprise:** the
+readback scales badly — 4x to 6x is 2.25 times the pixels and 4.6 times the cost
+— so **4x is the practical ceiling and true 4K stays expensive.** Measured
+2026-09-21: 4x costs 2.7 ms a frame at 602% of realtime, 6x costs 12.5 ms at
+133%.
+
+**The reason this is the right trade rather than a reluctant one** is written
+across this project already. Cabinet's Mac build carries 546 lines of patches,
+and that is a large part of why `core-manifest.json` cannot honestly describe
+how its cores are built — the builder script became the only real record. Every
+patch is a thing to carry at each version bump, and this repository's own rule is
+that a fact carried across is a fact nobody has checked.
+
+**WHAT IS STILL OPEN, and it needs no patch at all:** the frame handover copies
+about 22 MB per frame at 4x, under a lock PCSX2's own thread also wants. A
+double buffer makes that a pointer swap and is entirely our own code. It is the
+first thing to try against the stutter MMagTech saw, and if it is not enough the
+next step is a measurement — how much of the readback is copying versus waiting
+for the GPU — not a patch.
+
+**And if upstream ever enables those extensions themselves, this decision is
+free to revisit.** Turning on an optional extension where the driver has it is a
+reasonable thing to propose to them; what is rejected is CARRYING it.
+
 #### The saves, measured on the running console 2026-09-20
 
 **Seven real rows already exist on the RomM server**, written by MMagTech

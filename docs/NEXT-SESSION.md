@@ -414,10 +414,19 @@ struggling. Two better suspects, in order:
    warm up, so the second run through the same area is the test.
 
 **AND THE READBACK SCALES WORSE THAN THE PIXELS.** 4x to 6x is 2.25 times the
-pixels and **4.6 times the cost**, which is a wall rather than a curve. That is
-the measurement that would justify sharing PCSX2's Vulkan image directly instead
-of copying it through the CPU — four lines to upstream, written up above. For
-6x it is already the right answer.
+pixels and **4.6 times the cost**, which is a wall rather than a curve.
+
+**DO NOT ANSWER THAT BY PATCHING PCSX2. DECIDED 2026-09-21.** Sharing PCSX2's
+Vulkan image instead of copying the picture through the CPU would need two
+device extensions upstream does not enable, and MMagTech has ruled out carrying
+a second patch: *"id rather not have to patch and then maintain them."* The
+audio patch stands only because PCSX2's backends are a fixed list and there was
+no other way. PROJECT.md, open question 12b, has the whole decision and the cost
+it accepts — **4x is the practical ceiling and true 4K stays expensive.**
+
+**The thing to try instead needs no patch**: the frame handover copies about
+22 MB per frame at 4x under a lock the emulator's own thread also wants, and a
+double buffer makes that a pointer swap. Entirely our own code.
 
 #### WHAT IS NOT DONE, and none of it is hidden
 
