@@ -218,7 +218,11 @@ states, and leave — with the save syncing on the way out.
 - **BIOS comes down with the game**, every file the platform lists — except
   PSP's, which is not a console's firmware and ships with the emulator.
 - **Dreamcast, Naomi, N64 and PSP play**, through a framebuffer inside the
-  frontend's own GLES context, with no pixel read back anywhere.
+  frontend's own GLES context, with no pixel read back anywhere — **except that
+  DREAMCAST NO LONGER LAUNCHES ON THE A9**, found 2026-09-21. It is a regression
+  and the console says why: the device will not export memory as a file
+  descriptor. N64 still launches on the same boot, so it is Flycast's path and
+  not all of hardware rendering. See item 9d.
 - **The interface makes sounds**, synthesised rather than recorded, with an off
   switch waiting for a Settings screen to own it.
 - **First run's mechanisms exist and none of them is a picture**, as of
@@ -363,10 +367,29 @@ alone, clean, at full resolution. Grab once when the menu opens, blur it
 ourselves, use it as the panel's backdrop. The game is paused so a still is
 correct, and the panel already fades in over 350 ms.
 
-#### WHAT IT SAVES, MEASURED — and the PS2 case is the WEAK one
+#### WHAT IT SAVES — MEASURED UNCAPPED, WHICH MAKES THIS TABLE UNSAFE
 
-Burnout 3, warm cache, uncapped, `CABINETOS_PS2_NO_READBACK` against normal. 4x
-run twice, reproduced within 3%.
+**READ THE WARNING BEFORE THE TABLE.** These numbers are UNCAPPED, and item 1a
+later establishes — on the same game, on the same machine — that uncapped runs
+understate the readback by more than half, because the emulator runs flat out
+and the readback hides inside its slack. Capped to 60 Hz, which is how a person
+plays, 4x costs 6.1 ms rather than the 1.9 ms this table credits it with.
+
+**SO THE CONCLUSION THIS SECTION USED TO DRAW — "at 3x it is free, do not sell
+compositing on PS2" — IS NOT ESTABLISHED.** Capped, 3x readback costs 5.0 ms
+average and 7.3 ms worst, so there may be a great deal to save at exactly the
+upscale this file calls the sweet spot. It may still be true that compositing is
+a weak case for PlayStation 2; nothing here shows it either way any more.
+**Re-measure capped before anybody decides on this.**
+
+**THIS IS THE THIRD TIME THIS PROJECT HAS MEASURED IN A CONFIGURATION NOBODY
+PLAYS IN**, after the cold shader cache and the unpaced frame loop, and it is
+kept rather than deleted because the pattern has now cost more than any one of
+the numbers. The warm-cache rule was already written down; "and pace it the way
+it actually runs" is the other half of it, and it had to be learned twice.
+
+Burnout 3, warm cache, **uncapped**, `CABINETOS_PS2_NO_READBACK` against normal.
+4x run twice, reproduced within 3%.
 
 | Upscale | readback on | off | saved |
 |---|---|---|---|
@@ -374,9 +397,11 @@ run twice, reproduced within 3%.
 | 4x | 5.08 / 5.21 ms | 3.21 / 3.25 ms | ~1.9 ms |
 | 6x | 13.16 ms | 4.17 ms | **~9.0 ms** (76 → 240 fps) |
 
-**AT 3x IT IS FREE** — measures 1.95 ms, costs 0.11 ms, because it overlaps with
-the emulator's other threads. **So at the upscale this file calls the sweet spot,
-compositing buys PlayStation 2 nothing.** Do not sell it on PS2.
+**AT 3x IT MEASURES FREE HERE** — 1.95 ms of work costing 0.11 ms, because it
+overlaps with the emulator's other threads. **That overlap is exactly what
+disappears when the emulator is paced to 60 Hz and has no slack to hide in**, so
+this row is the one the warning above is really about. It was read as
+"compositing buys PlayStation 2 nothing"; it does not support that.
 
 **The case is true 4K and the systems that do not exist yet**, which is
 MMagTech's argument and the numbers back it better than they back the PS2 one.
@@ -389,8 +414,11 @@ in*. A PS3 at native 1080p pushes what a PS2 pushes at 3x, with no slack at all.
 has not been split, PCSX2 has not been given a window, no emulator has run this
 way, and our own renderer has never drawn into a transparent surface.
 
-**Nobody has measured what it saves.** 6.1 ms is what the CURRENT path costs.
-The compositing path's own cost has not been measured at all. It should be near
+**NOBODY HAS MEASURED WHAT COMPOSITING ITSELF COSTS**, which is the other half
+of the sum and the half that decides it. 6.1 ms is what the CURRENT path costs,
+capped; the table above says what removing the readback saved in an uncapped run
+and is not to be trusted for this. The compositing path's own cost has not been
+measured at all. It should be near
 nothing — and *should be* is how this project has been wrong before, twice, in
 exactly this area.
 
@@ -511,8 +539,14 @@ The emulator ran at about 500% of realtime throughout. The number is live in
 is what would change the answer. **The faster route is written up and
 deliberately not taken**: PCSX2's Vulkan image could be shared directly, the way
 `vkhost.cpp` already shares one, but its required device extension list holds
-one entry and none of the external-memory ones. Four lines, worth spending the
-day a measurement says the readback is too slow.
+one entry and none of the external-memory ones. **It is four lines and it is
+RULED OUT** — MMagTech declined a second PCSX2 patch on 2026-09-21, *"id rather
+not have to patch and then maintain them"*, open question 12b. An earlier
+version of this sentence said it was "worth spending the day a measurement says
+the readback is too slow"; the measurement then came in at 6.1 ms and the
+decision still stands. **Do not treat the number as permission.** If it is to be
+revisited it is revisited with MMagTech, as a decision, not as a consequence of
+a benchmark.
 
 #### One patch to PCSX2, and the headline is corrected rather than dropped
 
@@ -628,8 +662,11 @@ at worst, out of 16.7. Two other suspects remain but neither is first:
 
 **THE ONLY THING THAT REMOVES THE 6 MS IS THE PATCH THAT IS RULED OUT**, so the
 lever that is actually available is the upscale itself. Lowering it is not a
-consolation prize — the cost is roughly proportional to pixels, so 3x is about
-half of 4x.
+consolation prize — 3x costs about 5.0 ms against 4x's 6.1 ms average, and 7.3
+against 12.2 at worst. **(This sentence used to say "roughly proportional to
+pixels, so 3x is about half of 4x", four paragraphs after the sentence
+establishing that proportionality was a guess and was wrong. It is the worst
+case that moves, not the mean.)**
 
 **AND THE READBACK SCALES WORSE THAN THE PIXELS.** 4x to 6x is 2.25 times the
 pixels and **4.6 times the cost**, which is a wall rather than a curve.
@@ -764,7 +801,7 @@ picture somebody has to squint at. **And check the binary's checksum against
 the one you built before believing a deploy**; nothing does that automatically
 yet.
 
-### 1b. ONE BUG LEFT OF THE TWO FOUND BY PLAYING — THE TUNNEL IS GONE
+### 1b. BOTH BUGS FOUND BY PLAYING ARE CLOSED — one fixed, one not reproduced
 
 #### THE TUNNEL IS FIXED — MMagTech, 2026-09-21: *"tunnel was gone on new core"*
 
@@ -795,7 +832,13 @@ Mac's memory card. **Do not trust a bounding-box measurement here**: the first
 three this session were confounded by the game's own black borders and by the
 pause menu's dimming, and one of them sent an hour the wrong way.
 
-#### STILL OPEN: THE PAUSE MENU'S EXIT LEAVES THE CONSOLE STUCK
+#### NOT REPRODUCED, WHICH IS NOT THE SAME AS FIXED: THE PAUSE MENU'S EXIT
+
+**This heading said STILL OPEN and the entry above it said closed.** Both were
+written the same day and the second is right: MMagTech, *"you can consider the
+hang done as we havent hit it again."* **No change was made that targeted it**,
+so the suspect below was never eliminated — it outlived a change rather than
+being killed by one. If it comes back, this is still where to look.
 
 **THE PAUSE MENU'S EXIT LEFT THE CONSOLE STUCK.** The menu was on screen with
 "Exit to Home" focused and the process was **asleep at 0% CPU** — and the UI
@@ -810,13 +853,19 @@ time rather than theorising**: the process is still there, so
 
 ### 1. WHAT TO DO NEXT
 
-**THE NEXT SESSION IS THE UI PASS. MMagTech's call, 2026-09-21:** *"i want the
-next session to be ui focused so we can tweak it."* Everything below it is
-still true and still queued; none of it is what to open tomorrow.
+**THE UI PASS HAPPENED on 2026-09-21 and this entry is what it left.** It was
+asked for as *"i want the next session to be ui focused so we can tweak it"*,
+and it ran — about forty builds, each looked at on the panel. **What is queued
+now is the SETTINGS screen**, which is the last bar item that does nothing and
+the only place open question 23's quality control and the interface sounds'
+off switch can live.
 
 **Read *A pass over the whole UI* further down this file before anything else** —
-it has what exists, what was decided today, and the two screens that are drawn
-and do nothing.
+it has what exists, what the pass decided, and the short list it left. Two items
+on that list are decisions rather than drawing: whether the cartridge-era cores
+keep "Save state" in the pause menu (open question 25), and the one quality
+setting (open question 23). Everything below is still true and still queued; none
+of it is what to open tomorrow.
 
 **THE ONE THING THAT IS NOT MINE TO FINISH** is PlayStation 2's first real
 in-game save reaching the server, which needs somebody to play. It is item **U0**
@@ -830,7 +879,7 @@ below and it takes ten minutes of somebody's evening, not a session.
 | **0a** | ~~EMBED UPSTREAM PCSX2~~ — **DONE AND PLAYING, see item 1a.** Upstream builds as a library on Linux with **no patches**; `cores/build-pcsx2.sh` reproduces it in 43 seconds. What is left is the host layer — 55 `Host::` functions and four other symbols, most of them one-liners, with **six that are real work** and all six in the display path the Vulkan host already serves. **Write it: there is no cheaper step in front of it**, and gsrunner cannot stand in because it only replays GS dumps. |
 | **0b** | ~~THE TWO BUGS IN ITEM 1b~~ — **BOTH CLOSED 2026-09-21.** The tunnel went with the move to upstream PCSX2. The exit hang is recorded as **not reproduced**, not fixed, so if it returns the suspect in item 1b is still where to look. ~~GameCube's core can be pinned~~ — **PINNED AND BUILT BY CI**, `dolphin` at `1a0f97270b70`, merged as #43. |
 | **1** | ~~PLAYSTATION 2 AND GAMECUBE~~ — **done to the point of playing**, see above. The original entry follows for its reasoning. **PLAYSTATION 2 AND GAMECUBE.** MMagTech's call, 2026-09-20, and the largest thing on this list: 85 games, and the only missing tier with a working implementation to copy. **Open question 12b has the order and 12 has the numbers.** Start by reading `tools/build-dolphin-mac.sh` in Cabinet — those two are NOT libretro cores and nobody wrote down why. |
-| **2** | **A GAME CAN GO BLACK AND NOBODY KNOWS WHY.** Six launches in one session drew nothing but the letterbox glow while the core ran and made sound. Not reproduced since. Two theories tested and both falsified. See item 3b — it has the instruments. |
+| **2** | ~~A GAME CAN GO BLACK AND NOBODY KNOWS WHY~~ — **SOLVED 2026-09-21, item 3b.** It was the SECOND game: `Core::load` left the previous game's dimensions behind, so `sizeChanged` came out false and the upload hit a texture with no storage. Confirmed by MMagTech on TurboGrafx and 3DO. Nothing is owed here. |
 | **3** | **Judge the TATE look, and Home, on the 65-inch.** Both are on the machine and neither has been looked at properly. **This is really part of the UI pass** and should be done inside it rather than as its own errand. |
 | **4** | **Atari Jaguar and ColecoVision** — 73 games, ordinary libretro cores, no architectural question at all. The cheapest games available. See 12b. |
 | **5** | Then the core options (item 7). |
