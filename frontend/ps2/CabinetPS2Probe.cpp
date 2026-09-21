@@ -62,6 +62,13 @@ int main(int argc, char** argv)
 	config.fast_boot = true;
 	config.stop_after = 900;
 
+	// Taps Start and Cross, once a second, from this frame on. It is how a
+	// game gets past its own menus with nobody holding a pad, and it is the
+	// only end-to-end check there is that input reaches the emulated machine
+	// at all: everything upstream of the DualShock 2 can be correct and the
+	// picture still never changes.
+	uint32_t press_from = 0;
+
 	for (int i = 1; i < argc; i++)
 	{
 		if (!std::strcmp(argv[i], "--disc"))
@@ -84,6 +91,8 @@ int main(int argc, char** argv)
 			config.upscale = static_cast<float>(std::atof(Param(argc, argv, i)));
 		else if (!std::strcmp(argv[i], "--uncapped"))
 			config.unlimited = true;
+		else if (!std::strcmp(argv[i], "--press-from"))
+			press_from = static_cast<uint32_t>(std::atoi(Param(argc, argv, i)));
 		else if (!std::strcmp(argv[i], "--verbose"))
 			config.verbose_log = true;
 		else if (!std::strcmp(argv[i], "--help"))
@@ -125,9 +134,23 @@ int main(int argc, char** argv)
 
 	auto last = std::chrono::steady_clock::now();
 	uint64_t last_frames = 0;
+	bool held = false;
 	while (!finished.load())
 	{
-		std::this_thread::sleep_for(std::chrono::milliseconds(500));
+		std::this_thread::sleep_for(std::chrono::milliseconds(press_from ? 120 : 500));
+
+		const CabinetPS2::Metrics mid = CabinetPS2::GetMetrics();
+		if (press_from != 0 && mid.frames >= press_from)
+		{
+			// Alternate held and released. A button that is never let go is a
+			// button most menus ignore after the first frame.
+			held = !held;
+			CabinetPS2::Pad pad;
+			pad.buttons[3] = held;  // Start
+			pad.buttons[0] = held;  // Cross
+			CabinetPS2::SetPad(0, pad);
+		}
+
 		const CabinetPS2::Metrics m = CabinetPS2::GetMetrics();
 		const auto now = std::chrono::steady_clock::now();
 		const double secs = std::chrono::duration<double>(now - last).count();

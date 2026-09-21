@@ -113,6 +113,39 @@ namespace CabinetPS2
 	/// television and as nothing at all in a capture.
 	bool TakeFrame(Frame* out, uint64_t since);
 
+	/// A controller, in the shape the frontend already speaks.
+	///
+	/// **LIBRETRO'S RetroPad NUMBERING, DELIBERATELY**, even though PCSX2 has
+	/// nothing to do with libretro. The frontend produces this shape for all
+	/// twenty-one cores; making PlayStation 2 speak a second one would mean a
+	/// second input path to keep in step, and the console already learned what
+	/// that costs. This layer does the translation to PCSX2's DualShock 2
+	/// numbering, which is a table in one place rather than a concept anywhere
+	/// else.
+	struct Pad
+	{
+		/// RetroPad order: B Y Select Start Up Down Left Right A X L R L2 R2 L3 R3.
+		bool buttons[16] = {};
+
+		/// L2 and R2 AS ANALOGUE VALUES, 0..1, not as the button bits above.
+		///
+		/// **THESE ARE A SEPARATE CHANNEL ON PURPOSE AND IT IS NOT PEDANTRY.**
+		/// `RETRO_DEVICE_INDEX_ANALOG_BUTTON` is libretro's third analogue
+		/// index and its id is a joypad button id — L2 is 12, R2 is 13. Code
+		/// that tests for the LEFT index and treats everything else as the
+		/// right stick answers "how far is the trigger pressed" with the right
+		/// stick's Y axis, which is exactly what this console did until
+		/// 2026-09-19 and is why Crazy Taxi could not be driven.
+		float triggers[2] = {};
+
+		/// Left X, left Y, right X, right Y, each -1..1, Y positive downwards.
+		float sticks[4] = {};
+	};
+
+	/// Hands a controller's state to the running game. Safe from any thread;
+	/// the state is applied on PCSX2's own CPU thread between frames.
+	void SetPad(unsigned port, const Pad& pad);
+
 	/// Boots the disc and runs until RequestStop, the frame limit, or the game
 	/// ending. BLOCKS — give it its own thread. Returns false and fills error
 	/// if the VM never started.
