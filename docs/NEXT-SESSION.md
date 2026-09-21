@@ -774,17 +774,28 @@ time rather than theorising**: the process is still there, so
 
 ### 1. WHAT TO DO NEXT
 
-The A9 works, runs at 4K on its own GPU, and now plays vertical arcade games
-the right way up. Read this order before picking anything up.
+**THE NEXT SESSION IS THE UI PASS. MMagTech's call, 2026-09-21:** *"i want the
+next session to be ui focused so we can tweak it."* Everything below it is
+still true and still queued; none of it is what to open tomorrow.
+
+**Read *A pass over the whole UI* further down this file before anything else** —
+it has what exists, what was decided today, and the two screens that are drawn
+and do nothing.
+
+**THE ONE THING THAT IS NOT MINE TO FINISH** is PlayStation 2's first real
+in-game save reaching the server, which needs somebody to play. It is item **U0**
+below and it takes ten minutes of somebody's evening, not a session.
 
 | | |
 |---|---|
-| **0** | ~~WILL GAMESCOPE COMPOSITE OUR OVERLAY?~~ — **ANSWERED YES, item 1.** It composites, the game shows through our transparency, and our overlay takes the pad and gives it back while the game keeps the screen. **The next step is a DECISION, not a test:** the route costs two paths to the screen — the libretro cores keep rendering into our own texture and must not move — and nobody has yet measured what it saves. **That measurement is the cheapest thing on this list** and it is about twenty minutes: split the 6.1 ms into "waiting for PCSX2" and "our own overhead" before designing anything around it. |
+| **U** | **THE UI PASS — START HERE.** Keep the Cabinet look, take the lessons from SteamOS. See *A pass over the whole UI*. |
+| **U0** | **PLAY BURNOUT 3, SAVE INSIDE THE GAME, AND EXIT TO HOME.** The whole save path is proved EXCEPT the upload, and the upload has never once been watched for PlayStation 2. Restore works — 8.6 MB comes off the server and PCSX2 reads the card as `Formatted`. The freshness rule means an unchanged card is correctly NOT sent, which is why no test here can stand in: **it needs a card that actually changed.** Look for `[save] uploaded pcsx2` in the journal, and for rom 604's row on the server to move off its 2026-09-11 timestamp, which is the Mac's. |
+| **0** | ~~WILL GAMESCOPE COMPOSITE OUR OVERLAY?~~ — **ANSWERED YES, item 1.** It composites, the game shows through our transparency, and our overlay takes the pad and gives it back while the game keeps the screen. **What it saves is now MEASURED too** — free at 3x, ~1.9 ms at 4x, ~9 ms at 6x — so the remaining step is a DECISION rather than a test. Two paths to the screen are **accepted** (open question 24), and the menu already works on both. Nothing is built. |
 | **0a** | ~~EMBED UPSTREAM PCSX2~~ — **DONE AND PLAYING, see item 1a.** Upstream builds as a library on Linux with **no patches**; `cores/build-pcsx2.sh` reproduces it in 43 seconds. What is left is the host layer — 55 `Host::` functions and four other symbols, most of them one-liners, with **six that are real work** and all six in the display path the Vulkan host already serves. **Write it: there is no cheaper step in front of it**, and gsrunner cannot stand in because it only replays GS dumps. |
 | **0b** | ~~THE TWO BUGS IN ITEM 1b~~ — **BOTH CLOSED 2026-09-21.** The tunnel went with the move to upstream PCSX2. The exit hang is recorded as **not reproduced**, not fixed, so if it returns the suspect in item 1b is still where to look. ~~GameCube's core can be pinned~~ — **PINNED AND BUILT BY CI**, `dolphin` at `1a0f97270b70`, merged as #43. |
 | **1** | ~~PLAYSTATION 2 AND GAMECUBE~~ — **done to the point of playing**, see above. The original entry follows for its reasoning. **PLAYSTATION 2 AND GAMECUBE.** MMagTech's call, 2026-09-20, and the largest thing on this list: 85 games, and the only missing tier with a working implementation to copy. **Open question 12b has the order and 12 has the numbers.** Start by reading `tools/build-dolphin-mac.sh` in Cabinet — those two are NOT libretro cores and nobody wrote down why. |
 | **2** | **A GAME CAN GO BLACK AND NOBODY KNOWS WHY.** Six launches in one session drew nothing but the letterbox glow while the core ran and made sound. Not reproduced since. Two theories tested and both falsified. See item 3b — it has the instruments. |
-| **3** | **Judge the TATE look, and Home, on the 65-inch.** Both are on the machine and neither has been looked at properly. |
+| **3** | **Judge the TATE look, and Home, on the 65-inch.** Both are on the machine and neither has been looked at properly. **This is really part of the UI pass** and should be done inside it rather than as its own errand. |
 | **4** | **Atari Jaguar and ColecoVision** — 73 games, ordinary libretro cores, no architectural question at all. The cheapest games available. See 12b. |
 | **5** | Then the core options (item 7). |
 
@@ -2050,6 +2061,52 @@ kind of surface from the browsing screens.
 The renderer gained two things in that work which the rest of the UI can use and
 does not yet: a vertical gradient fill on any shape, and a top-edge highlight
 that is not the focus rim. Both are off by default.
+
+#### WHAT EXISTS TO WORK ON, so nobody has to go and find it
+
+**Five screens, and two of them are lies.** Home, Library, Grid, Detail and the
+launch screen are real. **Search and Settings are drawn in the top bar and say
+"not built yet"** — that was deliberate and is now the most interesting thing on
+the list, because open question 23's one quality control has nowhere to live
+until Settings exists.
+
+**The design system is already written down** and it is not vague: PROJECT.md
+has the three treatments — *Artwork: lift, shadow, rim*, *Text controls*, *Rows*
+— with exact numbers and, for two of them, the bug that produced the number.
+`frontend/src/design.h` holds 82 tokens. **Read those before changing anything**:
+several are load-bearing in a way that is not obvious, e.g. the caption slides
+down by `coverHeight x 0.05 + 2` on focus because a 1.10 scale about the centre
+would otherwise bury it, and that 0.05 is half of `1.10 - 1`.
+
+**Focus is a RIM everywhere.** `kFocusRim`, white at 85%, 4pt, drawn INSET so a
+focused thing does not grow by its own border. Cards, pills, the setup boxes and
+now the pause menu. A light-filled focus bar was tried on 2026-09-21 and
+withdrawn for inventing a second idiom on one screen.
+
+#### THE FIRST QUESTIONS, WHICH ARE ALREADY ON THE TABLE
+
+1. **Does the rest of the UI follow the pause menu off glass?** That panel is now
+   a lit, translucent surface because it has to work over a picture this console
+   did not draw. Home, Library, Grid and Detail are still glass. **MMagTech's
+   call was "we will stick to just the menu for now"** — so this is the open
+   question and not a settled direction.
+2. **Where does the quality control live, and what is the pause menu allowed to
+   hold?** Open question 23 needs Settings to exist, and it wants ONE in-game
+   action in a panel that currently has four items and was just redesigned.
+3. **Search and Settings, or one of them?** Both are drawn. Neither does
+   anything.
+4. **Judge TATE and Home on the 65-inch.** Both have been on the machine for days
+   and neither has been looked at properly. That was item 3 on the old list and
+   it belongs in here.
+
+#### WHAT "LESSONS FROM STEAMOS" MIGHT MEAN, as a starting list and not a plan
+
+Nobody has surveyed this yet, so treat these as prompts: how far the eye travels
+to reach a game, how much of the screen a single row is allowed to take, whether
+focus is legible from a sofa without moving, how quickly a person gets from cold
+to playing, and what the console does with the space around artwork. **Cabinet's
+look is the constraint, not the subject** — this is about how it is implemented,
+which is MMagTech's own framing.
 
 ### One quality setting for the whole console — open question 23, NEW
 
