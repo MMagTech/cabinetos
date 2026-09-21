@@ -24,6 +24,7 @@ RUN dnf install -y --setopt=install_weak_deps=False \
         libcurl-devel libpcap-devel fontconfig-devel systemd-devel \
         libX11-devel libXrandr-devel libXext-devel libXi-devel dbus-devel \
         vulkan-headers vulkan-loader-devel libshaderc-devel \
+        mesa-vulkan-drivers gdb \
         mesa-libGL-devel mesa-libEGL-devel \
     && dnf clean all
 
@@ -49,4 +50,14 @@ RUN dnf install -y --setopt=install_weak_deps=False \
 # THE ONE THING FEDORA 44 DOES NOT HAVE is libbacktrace-devel, which is why the
 # build script passes -DUSE_BACKTRACE=OFF. It is a crash-reporter nicety and
 # PCSX2 makes it an option precisely because it is optional.
+# mesa-vulkan-drivers IS NOT OPTIONAL AND IS EASY TO MISS. vulkan-loader gives
+# the loader, and `--device /dev/dri` gives the device node, but without the
+# ICD there is no Vulkan DRIVER in the container and PCSX2 fails with
+# VK_ERROR_INCOMPATIBLE_DRIVER followed by fifteen lines of "failed to load
+# required instance function", which reads like a broken build rather than a
+# missing package. The console itself has RADV already; this is for the
+# container only.
+#
+# gdb is here because a SIGBUS in a recompiler is not something to reason about
+# from a log line. It found the /dev/shm limit below in one run.
 WORKDIR /src

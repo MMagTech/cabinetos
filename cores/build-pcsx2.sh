@@ -160,6 +160,22 @@ if [ "$PROBE_ONLY" -eq 0 ]; then
     echo "wrote $OUT ($(du -sh "$OUT" | cut -f1), $(find "$OUT" -name '*.a' | wc -l) archives)"
 fi
 
+# --- CabinetOS's host layer ------------------------------------------------
+# Compiled OUTSIDE PCSX2's own CMake, against the flags its build used. That is
+# the whole reason this script still says "zero patches": adding our sources to
+# PCSX2's CMakeLists — which is what Cabinet had to do on the Mac — would mean
+# editing upstream's tree, and there is no need to on Linux. The include paths
+# and defines come out of compile_commands.json for a real PCSX2 translation
+# unit, so they cannot drift from what the library was built with.
+if [ "$PROBE_ONLY" -eq 0 ] && [ -d "$ROOT/frontend/ps2" ]; then
+    cp -r "$ROOT/frontend/ps2" "$SRC/cabinet-ps2"
+    run_in_builder "bash /src/cabinet-ps2/compile.sh $BUILD" || {
+        echo "the host layer did not build" >&2
+        exit 1
+    }
+    cp "$SRC/$BUILD/cabinet-ps2-probe" "$OUT/" 2>/dev/null || true
+fi
+
 # --- the probe -------------------------------------------------------------
 # THREE THINGS ARE ASSERTED, AND EACH ONE FAILED A DIFFERENT WAY WHEN IT WAS
 # FIRST RUN BY HAND, WHICH IS WHY ALL THREE ARE HERE RATHER THAN JUST THE FIRST.
