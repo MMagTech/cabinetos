@@ -2213,6 +2213,17 @@ Two consequences worth holding on to:
 - **Non-16:9 panels letterbox rather than stretch.** Verified: the VM's own
   1280×800 output produces correct bars. A console puts the slack in bars; it
   does not distort the picture.
+- **AND A GAME'S PICTURE FILLS THE HEIGHT, at its true aspect** — changed
+  2026-09-21. MMagTech: *"all systems should go to top and bottom of the screen
+  ... i want them to maintain their correct aspect ratios."* Integer scaling was
+  the default and it was computed in DESIGN POINTS, which is the part worth
+  remembering: `floor(1080 / 240) = 4` is 8 real pixels per source row on a 4K
+  panel, so it threw away half the panel's precision AND 240 rows of screen to
+  buy an exactness it already had. Filling gives 240-line systems 9.0× and Game
+  Boy 15.0× — exact, and bigger. SNES at 224 rows and GBA at 160 get a
+  non-integer scale, where `GL_LINEAR` on the frame texture makes the cost a
+  slight softening rather than an uneven dot grid. `--integer-scale` restores
+  the old behaviour for comparison.
 - **4K costs real fill rate.** Drawing rectangles at 3840×2160 is free, but
   Phase 8 should decide deliberately whether the *game* is upscaled by gamescope
   from its native resolution or rendered larger. That is a performance decision
@@ -2289,35 +2300,67 @@ own screen title inside its glass chip. It sits between Title 2 and Large Title
 because a grid title should not shout as loudly as a game's name does. Everything
 else names a style.
 
-One rule is recorded as a mistake already made: **shelf captions and grid
+One rule was recorded as a mistake already made: **shelf captions and grid
 captions must be the same style.** Home's shelves ran at Title 3 while the
-library grid ran at Callout, "not a deliberate size difference." Both are
-Callout now.
+library grid ran at Callout, "not a deliberate size difference."
+
+**Both are gone as of 2026-09-21** and the rule survives them in a stronger
+form: there is one place a game's name appears on a browsing screen, and it is
+the screen's own heading. See "Spacing and sizing".
 
 ### Spacing and sizing
 
-Everything below is from `TenFoot` and the tvOS views, in points.
+Everything below started as `TenFoot` and the tvOS views, in points. **Several
+of these values were changed on 2026-09-21 and the reference implementation's
+number is kept beside them**, because the reason for a change is worth more
+than the number it produced. `frontend/src/design.h` is the code's copy and it
+carries the argument for each one.
 
-| | Value |
-|---|---|
-| **Content inset**, horizontal | 60 (Home) / 80 (Library, grid, detail, settings) |
-| **Shelf cover** | 260 × 347 (3:4) |
-| **Shelf spacing** | 40 |
-| **Shelf vertical padding** | 24 — headroom for the focus scale, not decoration |
-| **Caption gap** below a shelf cover | 6 |
-| **Grid cover** | adaptive, minimum 260 |
-| **Grid column spacing** | 48 |
-| **Grid row spacing** | 44 |
-| **Caption gap** below a grid cover | 10 |
-| **Platform tile** | adaptive minimum 380 wide, **200 tall**, spacing 36 both axes |
-| **Settings column** | max width **1100**, rows 16 apart |
-| **Settings row padding** | 32 horizontal, 22 vertical |
-| **Hero card** | full content width, height `min(screenHeight × 0.40, 420)` |
-| **Detail cover** | 340 × 460 |
-| **Pause panel** | max width 560, padding 40 |
+| | Value | Cabinet's |
+|---|---|---|
+| **Content inset**, horizontal | **60, everywhere** | 60 Home / 80 pushed |
+| **Shelf cover** | **240 × 320** (3:4) | 260 × 347 |
+| **Shelf spacing** | 40 | 40 |
+| **Shelf vertical padding** | **derived**: `coverHeight × (focusScale − 1) ÷ 2 + 18` | 24 |
+| **Caption below a shelf cover** | **none** | 6 gap |
+| **Grid cover** | adaptive, minimum **210** | minimum 260 |
+| **Grid column spacing** | 48 | 48 |
+| **Grid row spacing** | 44 | 44 |
+| **Caption below a grid cover** | **none** | 10 gap, two lines |
+| **Platform tile** | adaptive minimum 380 wide, **200 tall**, spacing 36 both axes | same |
+| **Settings column** | max width **1100**, rows 16 apart | same |
+| **Settings row padding** | 32 horizontal, 22 vertical | same |
+| **Hero card** | **removed** | full width, `min(h × 0.40, 420)` |
+| **Top bar** | **44 from the top, 56 tall, 68 of gap under it** | — |
+| **Detail cover** | 340 × 460 | same |
+| **Pause panel** | max width 560, padding 40 | same |
 
-`TenFoot` declares `gridCoverMinimum = 240` but the grid that uses it hardcodes
-260. **Take 260** — the hardcoded value is the one that shipped and was looked at.
+**ONE LEFT MARGIN, NOT TWO.** The 60/80 split was Cabinet's own and its
+reasoning was sound on tvOS — "Home is a wall of artwork and the pushed screens
+are content to be read" — but nothing spans screens there. The top bar spans
+every screen here, so two margins under one bar put the bar, a switcher and a
+row of tiles on three different left edges.
+
+**HEADROOM IS DERIVED, NOT TYPED.** A hardcoded 24 was right for a 210-point
+cover and silently wrong the moment covers grew: at 347 a focused card cleared
+the next heading by about two points. It is computed from the cover and the
+focus scale now, so changing either follows.
+
+**NO CAPTIONS UNDER COVERS, ANYWHERE.** The focused item's title rides in the
+screen's own heading instead — Home's shelf header, the grid's title line, the
+search heading — where it costs no vertical space and is the only one of forty
+titles anybody is reading. This is what made two whole rows fit in a grid: a
+two-line caption reserve was 80 points of every row, and 772 points of usable
+height divided by a 481-point row is 1.6 rows, so no scroll position could ever
+show two whole ones.
+
+**THE HERO IS GONE.** Home was bar / hero / Recent / Favorites, where the hero
+was the most recently played game lifted out of Recent into an 1800 × 340 card.
+The card was mostly not artwork — a 3:4 cover fitted into a 16:5 box with the
+same cover blurred either side to fill what it could not. The most recent game
+is simply the first card on Recent again, and resume-first is now one rule
+rather than a separate object: focus opens there, and A launches it instead of
+opening its launch screen.
 
 ### Corner radii
 
@@ -2330,7 +2373,7 @@ the seriousness of the thing.**
 | 10 | Shelf cover art |
 | 12 | Grid cover art |
 | 16 | Detail-screen cover; settings rows |
-| 18 | Hero card; platform tiles; pause-menu buttons |
+| 18 | Platform tiles; pause-menu buttons |
 | 32 | The pause-menu panel |
 | capsule | Pills, chips, the Resume button, the library switcher |
 
@@ -4779,18 +4822,37 @@ row, so none is drawn.
 
 ##### The navigation bar is NOT built, and the reason is a measurement
 
-The design system specifies four destinations in a bar across the top. It is not
-there, and the Library is reached with a temporary key.
+**BUILT 2026-09-21, and the answer was the third option.** This section used to
+say the bar was not there, that Home had about 85 points of vertical slack and
+the bar needed about 85, and that the choice was "either the bar fits, or Home's
+hero comes down, or the bar lives somewhere else". Home's hero came down. It was
+not a compromise — see "Spacing and sizing" for what that card actually was.
 
-**Home has about 85 points of vertical slack and the bar needs about 85.** Hero
-at 40 + 420 + 20, Recent's block at roughly 515, against a 1080 canvas. A bar at
-Title 3 plus its gap consumes very nearly all of it, which would put Recent's
-caption exactly on the bottom edge — and a physical television's overscan eats
-more vertical room than a framebuffer capture shows. That is the trap Cabinet's
-hero fell into three times, once while the simulator showed it fitting.
+What exists now:
 
-**So this needs the SER5 and a real panel, not a decision.** Either the bar
-fits, or Home's hero comes down, or the bar lives somewhere else.
+- **Three destinations are drawn: Library, Search, Settings.** Home is not one
+  of them, because it is the root and Back returns to it; a destination that
+  does nothing when you are already there teaches people the bar is decorative.
+- **Library and Search work. Settings does not exist** and says nothing when
+  pressed rather than pretending.
+- **THE BAR IS CHROME ON EVERY BROWSING SCREEN**, not a row on Home. Its cursor
+  belongs to the app rather than to any screen, every screen hands focus up to
+  it the same way (`screens::Action::FocusBar`), and Down or Back leaves it
+  without leaving the screen underneath. Chrome that appears on one screen and
+  vanishes on the next is not chrome.
+- **NOT on the launch screen**, which remains a full-screen cover rather than a
+  page.
+- **L1/R1 walk the destinations from anywhere**, and going to one resets it to
+  its root — so walking into a platform's grid and pressing R1 twice does not
+  bury that grid under two more screens.
+- **Scrolling screens are clipped to a window under the bar** and fade into it,
+  rather than passing through it. `Renderer::setScissor` exists for this.
+
+**The vertical arithmetic that was warned about here was real and it did bite**,
+twice, in the shape the warning predicted: the bar's first three numbers put its
+gap above itself instead of below, and a shelf heading ended up equidistant
+between the chrome above it and the artwork below it, belonging to neither. Both
+were found on the television and neither was visible in a capture.
 
 #### Core options: every one of them was unanswered — fixed and measured 2026-09-16
 

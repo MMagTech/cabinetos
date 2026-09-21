@@ -184,9 +184,13 @@ states, and leave — with the save syncing on the way out.
   `/usr/share/cabinetos/system/` (PPSSPP's 13 MB). 273 MB added. Every image
   build now also asserts all twenty-one pinned core revisions, because it calls
   `build-core.yml` rather than repeating it.
-- **Home is real**: a hero from RomM's own play history, Recent, Favorites.
-- **Library, a grid, and a launch screen.** Every system including the ones this
-  console cannot play, each saying why.
+- **Home is a top bar, Recent and Favorites**, lit by whatever game focus is on.
+  The hero card was removed on 2026-09-21 — see the UI section for what it was
+  and why. The first card on Recent is the game you were playing and A launches
+  it straight.
+- **Library, a grid, a launch screen and Search.** Every system including the
+  ones this console cannot play, each saying why. The navigation bar is on all
+  of them and L1/R1 walk between destinations.
 - **Download is the one deliberate storage act**, and it keeps the game. The
   cache stays invisible; Play fetches silently and says nothing. **"Remove
   download" removes it and gives the space back.**
@@ -214,6 +218,8 @@ states, and leave — with the save syncing on the way out.
   PSP's, which is not a console's firmware and ships with the emulator.
 - **Dreamcast, Naomi, N64 and PSP play**, through a framebuffer inside the
   frontend's own GLES context, with no pixel read back anywhere.
+- **The interface makes sounds**, synthesised rather than recorded, with an off
+  switch waiting for a Settings screen to own it.
 - **First run's mechanisms exist and none of them is a picture**, as of
   2026-09-20: `firstrun.{h,cpp}`, `qr.{h,cpp}`, `net.{h,cpp}` and a polkit rule.
   The chain is enforced rather than described — `--first-run-rules` walks every
@@ -1236,6 +1242,163 @@ warms up in a tight `retro_run` loop with no frame in it and this core makes no
 progress there. **Fixing the instrument is the work**, and the diagnosis above
 is the fix: give the warm-up a real frame loop.
 
+### 9b. GameCube audio is wrong — REPORTED 2026-09-21, NOT INVESTIGATED
+
+MMagTech, playing on the A9 during the UI session: *"gamecube audio is messed
+up."* Recorded here and deliberately not chased, because it arrived in the
+middle of a UI pass and guessing at it would have cost that session.
+
+**Nothing is known beyond the sentence.** Not which game, not how it is wrong —
+crackling, wrong pitch, stuttering, missing channels and desynced-from-video are
+five different faults with five different causes, and the first job is to find
+out which one this is. Ask before reading any code.
+
+Where to start when somebody does:
+
+- **The core is Dolphin's**, and GameCube arrived on the A9 on 2026-09-20 along
+  with PlayStation 2 — see the Vulkan notes. Both were about getting a PICTURE
+  on the screen; nobody listened to either of them carefully.
+- **The frontend's audio path is one place**, `SDL_OpenAudioDeviceStream` at the
+  core's declared sample rate with the frame loop pushing. A core whose real
+  output rate differs from `av_info.timing.sample_rate` produces exactly the
+  family of faults above, and Dolphin's is 32000 or 48000 depending on the
+  game and on its own settings.
+- **Compare against Dreamcast**, which is the other heavy hardware-rendered core
+  and is known good. If Dreamcast is clean on the same television and the same
+  session, the fault is Dolphin's configuration and not the console's output.
+- **The UI sounds now share that device** — `frontend/src/sound.cpp` opens its
+  own stream at 48000. It was added on 2026-09-21, AFTER this was reported, so
+  it cannot be the cause; but it is a second stream on one device and is worth
+  ruling out with `--ui-sound off` before blaming the core.
+
+### 9c. A BLACK SCREEN ON LAUNCH, WITH AUDIO — 2026-09-21, and it did not reproduce
+
+MMagTech, during the UI session: two platforms *"launching with a black screen"*
+and, a moment later, *"i hear audio"* — so the core is running and the picture is
+not arriving. This is almost certainly the same fault as item 3b, which is
+already recorded as real and not reproducible.
+
+**WHAT WAS MEASURED, so nobody repeats it:**
+
+- **3DO renders correctly HEADLESS.** `SDL_VIDEODRIVER=offscreen --launch 3068
+  --frames 900 --render-size 1280x720 --screenshot` gives a frame whose extrema
+  are (0,247) per channel. Not black, and the geometry is right: 320x240 at
+  59.94 fps integer-scaled to a 1280x960 quad at 320,60 of the 1920x1080 canvas.
+- **3DO renders correctly IN THE LIVE SESSION TOO**, on the same build, launched
+  through `tools/ui-loop.sh --game 3068`. Ballz reaches its character-select
+  screen and photographs cleanly.
+
+So it is intermittent rather than per-platform, which is exactly what item 3b
+says. **The two reported platforms are not written down here** because the
+message said "msn snd 3d0" and only the 3DO half is certain — ask before
+assuming which the other one was.
+
+**Do not start from the frontend's draw path.** It was measured above and it is
+correct. The next useful thing is a capture taken AT THE MOMENT it is black,
+which the UI loop can now take without restarting the session: signal the
+running frontend with `kill -USR1` and fetch `/tmp/cabinetos-frame.bmp`. A frame
+that is black in that capture and a frame that is black only on the television
+are two different faults — the second one is gamescope's.
+
+### 9d. DREAMCAST WILL NOT LAUNCH ON THE A9 — FOUND 2026-09-21, HALF FIXED
+
+MMagTech: *"dreamcast game downloaded and didnt auto launch and clicking play
+didnt launch it either."* The console knew exactly why. From the journal:
+
+```
+[launch] Zero Gunner 2 (Dreamcast) via flycast
+[launch] already downloaded, 356293045 bytes
+[launch] this core wants Vulkan and this device will not export memory as a
+         file descriptor, so nothing it draws could reach the screen
+```
+
+**THE UI HALF IS FIXED.** A refusal now reaches the launch screen through
+`setNotice`, and a press from somewhere with nowhere to put a message — Home's
+Resume card — opens the game's own screen to say it. A refusal the person cannot
+see is indistinguishable from a console that has stopped responding, and it is
+worse than a crash: pressing the button again does the same nothing forever.
+
+**THE REAL HALF IS OPEN AND IT IS NOT A UI PROBLEM.** `vkhost.cpp` requires
+`vkGetMemoryFdKHR` and the A9's driver is not exporting it, so the Vulkan path
+cannot hand Flycast's picture to the GL context. Things worth knowing before
+somebody starts:
+
+- **This is the `vulkan-host` work**, the same machinery PlayStation 2 and
+  GameCube arrived on. Whether THEY still launch on this device is the first
+  question — if they do, the extension is present and Flycast is asking for it
+  in a way the others do not.
+- **Dreamcast played before.** "Dreamcast, Naomi, N64 and PSP play, through a
+  framebuffer inside the frontend's own GLES context" is recorded in this file
+  as done, and one of the platform sweeps launched a Dreamcast game and read its
+  pixels. So this is a REGRESSION or a device/driver change, not a thing that
+  never worked — find out which before redesigning anything.
+- **N64 still launches**: the same journal shows `1080° Snowboarding` running on
+  mupen64plus immediately afterwards. So it is Flycast's path and not all of
+  hardware rendering.
+
+### 9e. N64 TEXTURES ARE WRONG — and they are wrong on CABINET too
+
+MMagTech, 2026-09-21: *"same issue as other n64 on cabinet some textures arent
+rendering correctly."*
+
+**THE SECOND HALF OF THAT SENTENCE IS THE WHOLE LEAD.** Cabinet is the tvOS app,
+a completely different frontend on completely different hardware with a
+different graphics API, and it shows the same fault with the same core. That
+rules out almost everything CabinetOS owns — the GLES context, the framebuffer
+path, the texture upload, gamescope — because none of it exists on the other
+side. What both have in common is mupen64plus-next and the options it is given.
+
+So start at **item 7, the core options**, which is recorded there as half done.
+`mupen64plus-next` carries a large options surface and several of them decide
+exactly this: which RDP/RSP plugin is used, the texture filtering and
+enhancement settings, and whether the high-level emulation path is taken at all.
+An option left unanswered is NOT the core's default — that is the fault the
+options work already exists to fix, and it is the most likely cause here.
+
+**What is NOT known:** which games, and what "wrong" looks like — missing,
+stretched, wrong colours, flickering and low-resolution are five different
+faults. Ask before reading any code. Also worth knowing whether it is every N64
+game or some, because per-game is a different problem from per-platform.
+
+### 9f. NES AUDIO IS OUT OF SYNC — reported 2026-09-21
+
+MMagTech: *"just noticed audio isnt syned on nes."*
+
+**Two faults wear this description and they are not related**, so establish which
+one it is before touching anything:
+
+- **Audio LATE or EARLY against the picture, steadily.** That is a buffering
+  problem and it lives in this frontend: `SDL_OpenAudioDeviceStream` at the
+  core's declared rate with the frame loop pushing, and nothing anywhere
+  measures or bounds the queue depth. A queue that grows by a few samples a
+  second is inaudible for a minute and half a second behind after ten.
+- **Audio DRIFTING further out the longer it runs.** That is a rate mismatch —
+  the core produces samples at its own clock and the device consumes at the
+  panel's 60 Hz, and the two are not the same 60. Every emulator frontend solves
+  this with dynamic rate control, and this one has none.
+
+**`SDL_GetAudioStreamQueued` answers which**, and it is already used in
+`sound.cpp` for a different reason. Log it once a second during a game: flat
+means fault one, climbing means fault two.
+
+**RELATED, AND WORTH DOING FIRST:** GameCube audio is item 9b and was reported
+the same day. If both are the same shape, it is the frontend's audio path and
+not two cores — which would be good news, because it is one fix.
+
+### AND THE LOGS ARE READABLE AFTER ALL — worth knowing, it cost time today
+
+`journalctl -u cabinetos-session` shows ONLY systemd's own start/stop lines and
+none of the frontend's output, which reads exactly like a console that does not
+log. It does. The frontend's lines are in the journal without that unit
+attached, so ask for the journal itself and grep it:
+
+```
+sudo journalctl --since "-40 min" -o cat | grep -aE "\[launch\]|\[core\]|\[frontend\]"
+```
+
+That one command is the difference between diagnosing a launch failure in a
+minute and guessing at it for twenty.
+
 ### 10. Nothing warns that a system's BIOS is missing
 
 Until a game fails to start. `catalog` is where it belongs — a fifth answer, and
@@ -2032,111 +2195,90 @@ then `~/cabinetos/.core-src`.
 
 ## Things the user wants discussed, each in its own session
 
-### A pass over the whole UI, taking lessons from SteamOS — NEW 2026-09-21
+### THE UI PASS HAPPENED — 2026-09-21. This is what it left.
 
-MMagTech, after the pause menu was restyled: *"what id also like to probably
-move to after the ps2 is wrapped up is just tweaking the whole ui in general. I
-think we could still keep the cabinet look while taking lessons from steamos on
-how to better implement it."*
+It was a whole session, driven from the television, and the loop it was built for
+(`tools/ui-loop.sh`) is what made it possible: about forty builds, each one
+looked at on the panel before the next.
 
-**The constraint is in his own sentence and it is the important half: KEEP THE
-CABINET LOOK.** This is not a redesign and not a move to SteamOS's visual
-language. It is taking what Valve got right about a console UI operated from a
-sofa with a pad — density, focus legibility, how far the eye travels, how
-quickly a thing can be reached — and applying it to a look that already exists
-and that Cabinet ships on three platforms.
+**THE CONSTRAINT HELD.** MMagTech, early on: *"these are just lessons i want this
+to still remain cabinet distinct."* Nothing here is Valve's look. The purple is
+still the ground, focus is still a rim, and the one place a Steam idea was taken
+whole — the focused thing lighting the screen — was deliberately made to sit
+UNDER the Cabinet gradient rather than replace it.
 
-**AFTER PLAYSTATION 2 IS WRAPPED UP**, which is his sequencing and is right: the
-PS2 work has a finish line in sight and a UI pass has no natural end.
+#### What changed, and where the reasoning is
 
-**IT HAS ALREADY STARTED, IN ONE PLACE, AND THAT PLACE IS NOW INCONSISTENT.**
-The pause menu was moved off glass to a lit, translucent surface on 2026-09-21,
-because it has to work over a picture this console did not draw. Home, Library,
-Grid and Detail are still glass. **That split is deliberate and defensible for
-now** — MMagTech: *"we will stick to just the menu for now"* — but it is the
-obvious first question for the UI session, and the honest options are to move
-the rest to the new treatment or to accept that the pause menu is a different
-kind of surface from the browsing screens.
+Every one of these is argued for at its definition in `frontend/src/design.h` or
+at its draw site. This is a list, not the record.
 
-The renderer gained two things in that work which the rest of the UI can use and
-does not yet: a vertical gradient fill on any shape, and a top-edge highlight
-that is not the focus rim. Both are off by default.
+- **HOME LOST ITS HERO.** It was an 1800 × 340 card holding a 3:4 cover with the
+  same cover blurred either side to fill what it could not. The most recent game
+  is the first card on Recent again, focus opens there, and A launches it
+  straight — resume-first is one rule now instead of a separate object with its
+  own button. Covers grew from 158 × 210 to 240 × 320 with the room it freed.
+- **THE FOCUSED GAME LIGHTS THE ROOM.** Its cover, blurred to a colour field, over
+  the purple gradient and under a scrim, on Home, the Library, the grid and
+  Search. It waits 220 ms before it moves so a controller running along a shelf
+  does not strobe it, and cross-fades over 600 ms of ease-in-out.
+- **THE TOP BAR IS CHROME ON EVERY BROWSING SCREEN**, with its cursor owned by
+  the app. L1/R1 walk the destinations. See PROJECT.md's navigation section.
+- **SEARCH EXISTS.** Live substring filter over the library already in memory,
+  with the keyboard docked at the bottom of the screen — `Keyboard::Config::
+  dockedBottom`, which is also where four rejected panel treatments are recorded.
+- **THE GRID FITS TWO WHOLE ROWS**, which it could not before: captions were 80
+  points of every row and 772 of usable height over a 481-point row is 1.6.
+- **A KEPT GAME IS MARKED** on its cover, everywhere a cover is drawn.
+- **NAVIGATION SOUNDS**, synthesised rather than sampled — `frontend/src/sound.h`
+  has the three reasons. The off switch is built; Settings will own it.
+- **HOLDING A DIRECTION REPEATS AND ACCELERATES**, which it never did — the pad
+  sends one event per press and nothing was driving a repeat.
+- **L2/R2 JUMP BY LETTER** in a grid, with an index down the right.
+- **THE ART WAS A THUMBNAIL EVERYWHERE.** RomM keeps covers at 162 × 216 and
+  810 × 1080 and this console asked for the small one — including for the launch
+  screen's 340 × 460 cover, a 4.2× upscale. Fixed where it is drawn large.
+- **YOUR AVATAR IS ON SCREEN.** It never was; see `romm::User::avatarPath` for
+  why the obvious path is a 404 and what actually serves it.
+- **A DOWNLOAD NO LONGER COVERS THE SCREEN.** Progress is on the row that started
+  it, plus a corner readout in the bar. It auto-launches only if you are still on
+  the screen you pressed Play from.
+- **A LAUNCH REFUSAL IS VISIBLE.** It used to go to stderr only — which is how
+  item 9d went unexplained.
+- **EVERY SYSTEM FILLS THE HEIGHT** at its true aspect. PROJECT.md, "The canvas".
+- **THE RENDERER GAINED TWO THINGS**: `setContentAlpha` for screen transitions and
+  `setScissor` for scroll windows.
 
-#### THE LOOP IS ONE COMMAND, AND USE IT — `tools/ui-loop.sh`
+#### What is left, and it is short
 
-**MMagTech, on what this session will be like:** *"its going to be all over the
-place i have alot to tweak on the ui."* So the loop matters more than the plan.
+- **SETTINGS.** The last bar item that does nothing, and open question 23's one
+  quality control has nowhere to live until it exists. **This is the next UI
+  session.**
+- **THE LAUNCH SCREEN IS TWO THIRDS EMPTY.** Reviewed and not acted on: the cover
+  is centred with about 300 points of nothing above it, the rows stop 340 short
+  of the right edge, and the metadata is two facts. The server holds `summary`,
+  IGDB genres, release date and player count, and **six screenshots per game**
+  — measured, 40 of 40 — and this console asks for none of it.
+- **THE BAR SAYS WHICH DESTINATION YOU ARE IN TOO WEAKLY.** Selected and focused
+  are two tints of one capsule, 0.35 against 0.25, which is a difference you can
+  measure and barely see from a sofa. A cyan underline was tried and withdrawn
+  the same minute — *"nevermind drop that looks bad"*. Whatever answers it, it
+  is not a second colour on the bar.
+- **THE PLATFORM TILES WERE NEVER REVIEWED.** The session turned to the game grid
+  instead. They are still a box with a small picture in it, which is the idiom
+  Home just stopped using.
 
-```
-tools/ui-loop.sh                     Home: build, deploy, show, capture
-tools/ui-loop.sh --game 305 --menu   a game with the pause menu over it
-tools/ui-loop.sh --no-build          deploy and capture what is already built
-tools/ui-loop.sh --restore           put the console back on the image
-```
+#### Two things about how this session worked, worth keeping
 
-**46 seconds, measured, against about two minutes of doing it by hand.** It
-rsyncs to the VM, builds in the container, copies to the A9, **checks the
-binary's checksum against the one it just built**, restarts the session behind a
-drop-in of its own, signals the frontend for a capture and fetches the PNG.
+**THE LOOP PAID FOR ITSELF IN THE FIRST HOUR** and then twice more: a stale
+deploy after a failed compile cost a cycle before `ui-loop.sh` was taught to
+delete the artifact first, and a capture that showed the previous build sent a
+complaint chasing a fault that was already fixed.
 
-**The checksum check is not decoration.** A stale binary that ignores the flag
-you just added looks exactly like a change that did not work, and cost an hour
-on 2026-09-21 before anybody suspected the deploy rather than the code.
+**JUDGE ON THE PANEL, AND THE PANEL DISAGREED WITH THE CAPTURE REPEATEDLY.** The
+bar's spacing, the backdrop's strength, the keyboard's background and the
+guillotine at the top of a scrolling screen were all invisible in a PNG and
+obvious on a television. The rule at the top of this file is not a formality.
 
-**THE CAPTURE IS THE FRONTEND PHOTOGRAPHING ITSELF** (`kill -USR1`), not
-`gamescopectl screenshot`, and that is deliberate: gamescope's screenshot does
-not capture the overlay planes with any type, so anything composited is
-invisible to it. **Read the PNG for layout. Judge colour, contrast and motion on
-the television** — that rule predates this file and has not stopped being true.
-
-**Run `--restore` when you finish.** The console should be left running the
-image with no drop-ins, which is what the top of this file now promises.
-
-#### WHAT EXISTS TO WORK ON, so nobody has to go and find it
-
-**Five screens, and two of them are lies.** Home, Library, Grid, Detail and the
-launch screen are real. **Search and Settings are drawn in the top bar and say
-"not built yet"** — that was deliberate and is now the most interesting thing on
-the list, because open question 23's one quality control has nowhere to live
-until Settings exists.
-
-**The design system is already written down** and it is not vague: PROJECT.md
-has the three treatments — *Artwork: lift, shadow, rim*, *Text controls*, *Rows*
-— with exact numbers and, for two of them, the bug that produced the number.
-`frontend/src/design.h` holds 82 tokens. **Read those before changing anything**:
-several are load-bearing in a way that is not obvious, e.g. the caption slides
-down by `coverHeight x 0.05 + 2` on focus because a 1.10 scale about the centre
-would otherwise bury it, and that 0.05 is half of `1.10 - 1`.
-
-**Focus is a RIM everywhere.** `kFocusRim`, white at 85%, 4pt, drawn INSET so a
-focused thing does not grow by its own border. Cards, pills, the setup boxes and
-now the pause menu. A light-filled focus bar was tried on 2026-09-21 and
-withdrawn for inventing a second idiom on one screen.
-
-#### THE FIRST QUESTIONS, WHICH ARE ALREADY ON THE TABLE
-
-1. **Does the rest of the UI follow the pause menu off glass?** That panel is now
-   a lit, translucent surface because it has to work over a picture this console
-   did not draw. Home, Library, Grid and Detail are still glass. **MMagTech's
-   call was "we will stick to just the menu for now"** — so this is the open
-   question and not a settled direction.
-2. **Where does the quality control live, and what is the pause menu allowed to
-   hold?** Open question 23 needs Settings to exist, and it wants ONE in-game
-   action in a panel that currently has four items and was just redesigned.
-3. **Search and Settings, or one of them?** Both are drawn. Neither does
-   anything.
-4. **Judge TATE and Home on the 65-inch.** Both have been on the machine for days
-   and neither has been looked at properly. That was item 3 on the old list and
-   it belongs in here.
-
-#### WHAT "LESSONS FROM STEAMOS" MIGHT MEAN, as a starting list and not a plan
-
-Nobody has surveyed this yet, so treat these as prompts: how far the eye travels
-to reach a game, how much of the screen a single row is allowed to take, whether
-focus is legible from a sofa without moving, how quickly a person gets from cold
-to playing, and what the console does with the space around artwork. **Cabinet's
-look is the constraint, not the subject** — this is about how it is implemented,
-which is MMagTech's own framing.
 
 ### One quality setting for the whole console — open question 23, NEW
 
