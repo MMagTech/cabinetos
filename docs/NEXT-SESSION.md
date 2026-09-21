@@ -396,6 +396,27 @@ it costs more than twice as much. The same run, same game, same upscale:
 | uncapped, 602% of realtime | 2.7 ms | not measured |
 | **capped to 60 Hz, how it is played** | **6.1 ms** | **12.2 ms** |
 
+**THE WHOLE CURVE, capped, warm cache, Burnout 3:**
+
+| Upscale | Internal | average | worst | of a 60 Hz frame |
+|---|---|---|---|---|
+| 1x | 640x448 | 0.8 ms | 4.5 ms | 5% |
+| 2x | 1280x896 | 2.3 ms | 5.5 ms | 14% |
+| **3x** | 1920x1344 | **5.0 ms** | **7.3 ms** | 30% |
+| 4x | 2560x1792 | 6.1 ms | **12.2 ms** | 37% |
+
+**3x IS THE SWEET SPOT AND THE REASON IS THE WORST CASE, NOT THE AVERAGE.**
+Going 3x to 4x buys 1.1 ms of average and costs **5 ms of worst case** — the
+spikes nearly double while the mean barely moves. Stutter is a worst case, so
+that is the column to read. 3x is also 1920x1344, close to what Cabinet renders
+at on the Mac.
+
+**"Roughly proportional to pixels" was a guess and it was wrong.** The cost is
+worse than linear at 4x and it shows up in the spikes rather than the mean.
+
+**AND ALL OF IT IS A FLOOR RATHER THAN A CEILING**: measured in Burnout 3's
+attract mode, not in a race. Real play is heavier.
+
 **6.1 ms is 37% of a frame budget and the worst case is 73% of one.** Nothing
 dropped a frame in that run, but it was a menu rather than a pile-up, and there
 is very little room left. **That is a plausible cause of the stutter MMagTech
