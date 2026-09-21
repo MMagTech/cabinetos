@@ -781,7 +781,7 @@ the right way up. Read this order before picking anything up.
 |---|---|
 | **0** | ~~WILL GAMESCOPE COMPOSITE OUR OVERLAY?~~ — **ANSWERED YES, item 1.** It composites, the game shows through our transparency, and our overlay takes the pad and gives it back while the game keeps the screen. **The next step is a DECISION, not a test:** the route costs two paths to the screen — the libretro cores keep rendering into our own texture and must not move — and nobody has yet measured what it saves. **That measurement is the cheapest thing on this list** and it is about twenty minutes: split the 6.1 ms into "waiting for PCSX2" and "our own overhead" before designing anything around it. |
 | **0a** | ~~EMBED UPSTREAM PCSX2~~ — **DONE AND PLAYING, see item 1a.** Upstream builds as a library on Linux with **no patches**; `cores/build-pcsx2.sh` reproduces it in 43 seconds. What is left is the host layer — 55 `Host::` functions and four other symbols, most of them one-liners, with **six that are real work** and all six in the display path the Vulkan host already serves. **Write it: there is no cheaper step in front of it**, and gsrunner cannot stand in because it only replays GS dumps. |
-| **0b** | **THE REMAINING BUG IN ITEM 1b** — the pause menu's Exit leaving the console asleep at 0% CPU. It needs MMagTech to catch it: **leave the console stuck rather than restarting it**, and take a backtrace. The tunnel is GONE, fixed by the new core. GameCube's core CAN be pinned into `cores/build-core.sh` and that part still stands. |
+| **0b** | ~~THE TWO BUGS IN ITEM 1b~~ — **BOTH CLOSED 2026-09-21.** The tunnel went with the move to upstream PCSX2. The exit hang is recorded as **not reproduced**, not fixed, so if it returns the suspect in item 1b is still where to look. ~~GameCube's core can be pinned~~ — **PINNED AND BUILT BY CI**, `dolphin` at `1a0f97270b70`, merged as #43. |
 | **1** | ~~PLAYSTATION 2 AND GAMECUBE~~ — **done to the point of playing**, see above. The original entry follows for its reasoning. **PLAYSTATION 2 AND GAMECUBE.** MMagTech's call, 2026-09-20, and the largest thing on this list: 85 games, and the only missing tier with a working implementation to copy. **Open question 12b has the order and 12 has the numbers.** Start by reading `tools/build-dolphin-mac.sh` in Cabinet — those two are NOT libretro cores and nobody wrote down why. |
 | **2** | **A GAME CAN GO BLACK AND NOBODY KNOWS WHY.** Six launches in one session drew nothing but the letterbox glow while the core ran and made sound. Not reproduced since. Two theories tested and both falsified. See item 3b — it has the instruments. |
 | **3** | **Judge the TATE look, and Home, on the 65-inch.** Both are on the machine and neither has been looked at properly. |
@@ -808,9 +808,29 @@ core set — all 21, no gaps.
 | | Games | |
 |---|---|---|
 | Libretro core exists, nobody added it | **73** | Jaguar 48, ColecoVision 25 |
-| Cabinet solved it on macOS, we have not | **85** | PS2 71, GameCube 14 |
+| ~~Cabinet solved it on macOS, we have not~~ | ~~85~~ **0** | **PS2 71 and GameCube 14 are both in the image as of 2026-09-21.** PS2 has been played off it; GameCube has not — see below. |
 | Nobody has solved it | **174** | Switch 109, PS3 32, Vita 27, Xbox 4, Wii 2 |
 | **Will never be built** | 171 | Game & Watch — *"too small on a tv"* |
+
+**GAMECUBE IS PINNED AND IN THE IMAGE, 2026-09-21 — AND HAS NOT BEEN PLAYED OFF
+IT.** `dolphin` at `1a0f97270b70`, merged as #43. The pin was chosen by reading
+the revision out of the hand-built `.so` that had been sitting in a home
+directory on the A9, which is the same unshippable state PlayStation 2 was in
+that morning. It needed no frontend change — `catalog.cpp` has routed
+`ngc -> dolphin` since the table was written.
+
+**`-DENABLE_X11=OFF` and it is correct rather than a workaround.** Upstream
+defaults it ON and then requires `xi>=1.5.0`, which failed the configure in a
+container with no X11 headers. Every "X11" in `Source/Core/DolphinLibretro` is
+**DX11**, Direct3D 11 — checked, not assumed. What upstream means by X11 support
+is Dolphin's own desktop windowing, which a libretro core never reaches.
+
+**WHAT IS OWED: launch a GameCube game off the image.** The hand-built core at
+this exact revision has been played, and this is that revision built somewhere
+reproducible — a good reason to expect it to work and not a substitute for
+pressing the button. **Vulkan is why this core works at all** and nothing in the
+build selects it: Dolphin renders from a thread of its own, which a GLES context
+cannot serve. Check the journal says so.
 
 **THE HEAVY SYSTEMS ARE COMING.** MMagTech, 2026-09-20: *"switch, ps3 and xbox
 will be brought to the OS because we have less constraints to work with in linux
