@@ -41,7 +41,7 @@ echo "host layer: compiling with $(echo "$FLAGS" | wc -w) flags from PCSX2's own
 
 # -I/src/cabinet-ps2 so the two files find their own header; everything else is
 # PCSX2's.
-for f in CabinetPS2Host CabinetPS2Probe; do
+for f in CabinetPS2Host CabinetPS2Audio CabinetPS2Probe; do
     # shellcheck disable=SC2086  # FLAGS is a deliberately word-split flag list
     clang++ $FLAGS -I/src/cabinet-ps2 -c "/src/cabinet-ps2/$f.cpp" -o "$BUILD/$f.o"
 done
@@ -71,7 +71,7 @@ mapfile -t THIRDPARTY < <(find "$BUILD/3rdparty" -name '*.a')
 
 # shellcheck disable=SC2086  # SYS is a deliberately word-split flag list
 clang++ -o "$BUILD/cabinet-ps2-probe" \
-    "$BUILD/CabinetPS2Host.o" "$BUILD/CabinetPS2Probe.o" \
+    "$BUILD/CabinetPS2Host.o" "$BUILD/CabinetPS2Audio.o" "$BUILD/CabinetPS2Probe.o" \
     -Wl,--start-group \
     "$BUILD/pcsx2/libpcsx2.a" "$BUILD/common/libcommon.a" \
     "${THIRDPARTY[@]}" \

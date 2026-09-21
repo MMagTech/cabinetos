@@ -33,6 +33,7 @@
 #include <algorithm>
 #include <string>
 #include <thread>
+#include <vector>
 
 namespace
 {
@@ -135,9 +136,28 @@ int main(int argc, char** argv)
 	auto last = std::chrono::steady_clock::now();
 	uint64_t last_frames = 0;
 	bool held = false;
+
+	// Drain the sound the way the frontend's mixer will, and keep the loudest
+	// sample seen. **A SILENT EMULATOR THAT RUNS PERFECTLY IS A REAL FAILURE
+	// MODE ON THIS PROJECT** — it happened with a PlayStation 2 game that
+	// played with sound and a black screen, and the mirror image is just as
+	// easy to ship. Counting samples proves the pipe is connected; the peak
+	// proves something is actually in it.
+	uint64_t audio_frames = 0;
+	int16_t audio_peak = 0;
+	std::vector<int16_t> audio;
 	while (!finished.load())
 	{
 		std::this_thread::sleep_for(std::chrono::milliseconds(press_from ? 120 : 500));
+
+		// 48000 Hz stereo, and this loop runs about eight times a second at
+		// most, so ask for a generous slice. Anything not produced yet simply
+		// comes back as the silence AudioStream pads with.
+		audio.clear();
+		CabinetPS2::DrainAudio(&audio, 4096);
+		audio_frames += audio.size() / 2;
+		for (int16_t s : audio)
+			audio_peak = std::max<int16_t>(audio_peak, static_cast<int16_t>(s < 0 ? -s : s));
 
 		const CabinetPS2::Metrics mid = CabinetPS2::GetMetrics();
 		if (press_from != 0 && mid.frames >= press_from)
@@ -146,8 +166,8 @@ int main(int argc, char** argv)
 			// button most menus ignore after the first frame.
 			held = !held;
 			CabinetPS2::Pad pad;
-			pad.buttons[3] = held;  // Start
-			pad.buttons[0] = held;  // Cross
+			if (held)
+				pad.buttons = (1u << 3) | (1u << 0); // Start and Cross (B)
 			CabinetPS2::SetPad(0, pad);
 		}
 
@@ -183,6 +203,11 @@ int main(int argc, char** argv)
 	// The last frame that reached the handover, proving the readback produced
 	// a real picture and not an empty buffer — the distinction this project has
 	// misread more than once.
+	std::printf("[probe] audio: %llu frames drained at %u Hz, loudest sample %d\n",
+		static_cast<unsigned long long>(audio_frames), CabinetPS2::AudioSampleRate(), audio_peak);
+	if (audio_peak == 0)
+		std::printf("[probe] THAT IS SILENCE. The pipe is connected and nothing is coming through.\n");
+
 	CabinetPS2::Frame frame;
 	if (CabinetPS2::TakeFrame(&frame, 0))
 	{

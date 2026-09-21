@@ -432,15 +432,16 @@ namespace
 			for (int i = 0; i < 16; i++)
 			{
 				// L2 and R2 come from the analogue channel instead, below. A
-				// digital press still registers because the frontend sets the
-				// trigger to 1.0 when the button is down.
+				// digital press still registers, because the frontend sets the
+				// trigger to 1.0 when the button is down — `PadState` says so.
 				if (i == 12 || i == 13)
 					continue;
-				::Pad::SetControllerState(port, static_cast<u32>(kRetroToPS2[i]), pad.buttons[i] ? 1.0f : 0.0f);
+				const bool down = ((pad.buttons >> i) & 1u) != 0;
+				::Pad::SetControllerState(port, static_cast<u32>(kRetroToPS2[i]), down ? 1.0f : 0.0f);
 			}
 
-			::Pad::SetControllerState(port, PadDualshock2::Inputs::PAD_L2, pad.triggers[0]);
-			::Pad::SetControllerState(port, PadDualshock2::Inputs::PAD_R2, pad.triggers[1]);
+			::Pad::SetControllerState(port, PadDualshock2::Inputs::PAD_L2, pad.leftTrigger);
+			::Pad::SetControllerState(port, PadDualshock2::Inputs::PAD_R2, pad.rightTrigger);
 
 			// PCSX2 splits every stick axis into two half-axes, each 0..1,
 			// rather than one signed value. So each of the four numbers the
@@ -452,9 +453,10 @@ namespace
 				{PadDualshock2::Inputs::PAD_R_LEFT, PadDualshock2::Inputs::PAD_R_RIGHT},
 				{PadDualshock2::Inputs::PAD_R_UP, PadDualshock2::Inputs::PAD_R_DOWN},
 			};
+			const float sticks[4] = {pad.leftX, pad.leftY, pad.rightX, pad.rightY};
 			for (int a = 0; a < 4; a++)
 			{
-				const float v = pad.sticks[a];
+				const float v = sticks[a];
 				::Pad::SetControllerState(port, static_cast<u32>(kAxis[a][0]), v < 0.0f ? -v : 0.0f);
 				::Pad::SetControllerState(port, static_cast<u32>(kAxis[a][1]), v > 0.0f ? v : 0.0f);
 			}
@@ -722,7 +724,20 @@ bool CabinetPS2::Run(const Config& config, std::string* error)
 	// Audio is the frontend's, as it is for all twenty-one libretro cores.
 	// Null rather than absent: it is a real backend that produces silence, so
 	// the emulator runs correctly rather than pretending.
-	s_settings.SetStringValue("SPU2/Output", "OutputModule", "nullout");
+	// "SDL" NAMES CABINET'S STREAM HERE, NOT SDL'S. The patch in
+	// cores/build-pcsx2.sh points that case at CabinetCreateAudioStream, so
+	// SPU2 fills a buffer the frontend drains rather than opening a device.
+	// Null would be a real backend that produces silence; this one produces
+	// sound and gives it to the console.
+	//
+	// **THE KEY IS `Backend`, AND GETTING IT WRONG IS SILENT.** An earlier
+	// version of this line wrote `OutputModule`, which PCSX2 does not read, so
+	// the setting had no effect and SPU2 quietly used its own default. The
+	// emulator ran perfectly and no sound ever reached the frontend. That is
+	// the same class of fault as an unanswered libretro core option, which
+	// this project already has a rule about: a key nobody reads is not the
+	// value you asked for, it is whatever the default happens to be.
+	s_settings.SetStringValue("SPU2/Output", "Backend", "SDL");
 
 	// NO MEMORY CARDS. Deliberate and load-bearing while the save work is not
 	// wired up: a card PCSX2 chose for itself belongs to no rom, cannot be

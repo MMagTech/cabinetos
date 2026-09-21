@@ -113,38 +113,55 @@ namespace CabinetPS2
 	/// television and as nothing at all in a capture.
 	bool TakeFrame(Frame* out, uint64_t since);
 
-	/// A controller, in the shape the frontend already speaks.
+	/// A controller, in **exactly** the shape the frontend already produces.
 	///
-	/// **LIBRETRO'S RetroPad NUMBERING, DELIBERATELY**, even though PCSX2 has
-	/// nothing to do with libretro. The frontend produces this shape for all
-	/// twenty-one cores; making PlayStation 2 speak a second one would mean a
-	/// second input path to keep in step, and the console already learned what
-	/// that costs. This layer does the translation to PCSX2's DualShock 2
-	/// numbering, which is a table in one place rather than a concept anywhere
-	/// else.
+	/// This mirrors `PadState` in frontend/src/core.h field for field, and
+	/// deliberately so: the frontend fills one of those in for all twenty-one
+	/// libretro cores, and PlayStation 2 taking a different shape would mean
+	/// two input paths to keep in step. This layer does the translation to
+	/// PCSX2's DualShock 2 numbering, which is one table in one file.
+	///
+	/// `buttons` is a bitmask using **libretro's RetroPad ids as bit
+	/// positions** — B is bit 0, Start is bit 3, and so on — which is what the
+	/// frontend already builds and tests with `(buttons >> id) & 1`.
 	struct Pad
 	{
-		/// RetroPad order: B Y Select Start Up Down Left Right A X L R L2 R2 L3 R3.
-		bool buttons[16] = {};
+		uint32_t buttons = 0;
+		float leftX = 0, leftY = 0;
+		float rightX = 0, rightY = 0;
 
-		/// L2 and R2 AS ANALOGUE VALUES, 0..1, not as the button bits above.
+		/// HOW FAR THE TRIGGERS ARE PRESSED, 0 to 1, as well as the L2/R2 bits
+		/// above — both, for the reason `PadState` gives: a trigger is two
+		/// things at once, and the same physical pull has to serve a game that
+		/// reads it as a continuous value and one that reads it as a switch.
 		///
-		/// **THESE ARE A SEPARATE CHANNEL ON PURPOSE AND IT IS NOT PEDANTRY.**
-		/// `RETRO_DEVICE_INDEX_ANALOG_BUTTON` is libretro's third analogue
-		/// index and its id is a joypad button id — L2 is 12, R2 is 13. Code
-		/// that tests for the LEFT index and treats everything else as the
-		/// right stick answers "how far is the trigger pressed" with the right
-		/// stick's Y axis, which is exactly what this console did until
-		/// 2026-09-19 and is why Crazy Taxi could not be driven.
-		float triggers[2] = {};
-
-		/// Left X, left Y, right X, right Y, each -1..1, Y positive downwards.
-		float sticks[4] = {};
+		/// **ANSWERING THIS FROM THE RIGHT STICK IS A REAL BUG THIS CONSOLE
+		/// SHIPPED.** `RETRO_DEVICE_INDEX_ANALOG_BUTTON` is libretro's third
+		/// analogue index and its id is a joypad button id, so code that tests
+		/// for the LEFT index and treats everything else as the right stick
+		/// answers "how far is the trigger pressed" with the stick's Y axis.
+		/// That is why Crazy Taxi could not be driven until 2026-09-19.
+		float leftTrigger = 0, rightTrigger = 0;
 	};
 
 	/// Hands a controller's state to the running game. Safe from any thread;
-	/// the state is applied on PCSX2's own CPU thread between frames.
+	/// it is applied on PCSX2's own CPU thread between frames.
 	void SetPad(unsigned port, const Pad& pad);
+
+	/// Drains the sound made since the last call, as interleaved 16-bit stereo
+	/// — the same shape and the same contract as `Core::drainAudio()`, so the
+	/// frontend's mixer needs to learn nothing new.
+	///
+	/// **THE CONSOLE OWNS AUDIO, AS IT DOES FOR EVERY OTHER CORE.** PCSX2 can
+	/// make its own sound through cubeb or SDL and must not here: a second
+	/// device open on the same hardware is a second volume, a second latency,
+	/// and nothing the in-game overlay can duck. Getting PCSX2 to hand its
+	/// sound over instead is this project's one patch to the emulator, and
+	/// `cores/build-pcsx2.sh` says why beside it.
+	void DrainAudio(std::vector<int16_t>* out, unsigned frames);
+
+	/// The rate PCSX2 is producing at — 48000 for a PlayStation 2.
+	unsigned AudioSampleRate();
 
 	/// Boots the disc and runs until RequestStop, the frame limit, or the game
 	/// ending. BLOCKS — give it its own thread. Returns false and fills error

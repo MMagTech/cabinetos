@@ -89,10 +89,59 @@ if [ "$PROBE_ONLY" -eq 0 ]; then
     fi
     echo "pcsx2 @ $COMMIT ($TAG)"
 
-    # NO PATCH STEP, AND ITS ABSENCE IS THE RESULT. If a patch ever becomes
-    # necessary it goes here, asserts its own anchor the way build-core.sh's do,
-    # and the comment above about zero patches has to be corrected rather than
-    # left to rot.
+    # ONE PATCH, AND THE HEADLINE ABOVE IS CORRECTED ACCORDINGLY: upstream
+    # builds as a library with NO patches, which is what that claim was about
+    # and is still true. This one is not needed to build PCSX2. It is needed to
+    # stop PCSX2 making its own sound.
+    #
+    # THE CONSOLE OWNS AUDIO. All twenty-one libretro cores hand their samples
+    # to the frontend, which owns one device, one volume and one latency, and
+    # lets the in-game overlay duck it. PCSX2 would otherwise open a second
+    # device of its own through cubeb or SDL, which is none of those things and
+    # is the same shape of fault as a second input path onto the same pad.
+    #
+    # Three lines: SPU2's SDL backend is pointed at CabinetCreateAudioStream,
+    # which frontend/ps2/CabinetPS2Audio.cpp defines and which resolves at link
+    # time. Cabinet makes the same edit on the Mac, for the same reason.
+    #
+    # It asserts its own anchor, because a scripted edit that silently matches
+    # nothing leaves a green build with the change absent — which has happened
+    # twice on this project and is why every patch in cores/build-core.sh does
+    # the same.
+    AUDIO_CPP="$SRC/pcsx2/Host/AudioStream.cpp"
+    AUDIO_H="$SRC/pcsx2/Host/AudioStream.h"
+
+    if ! grep -q CABINET_AUDIO "$AUDIO_CPP"; then
+        python3 - "$AUDIO_CPP" <<'PATCH'
+import sys, pathlib
+p = pathlib.Path(sys.argv[1])
+t = p.read_text()
+old = ("\t\tcase AudioBackend::SDL:\n"
+       "\t\t\treturn CreateSDLAudioStream(sample_rate, parameters, stretch_enabled, error);")
+new = ("\t\tcase AudioBackend::SDL:\n"
+       "\t\t\t// CABINET_AUDIO: the console owns audio, so SPU2's samples go to\n"
+       "\t\t\t// the frontend rather than to a device of PCSX2's own. See\n"
+       "\t\t\t// frontend/ps2/CabinetPS2Audio.cpp and cores/build-pcsx2.sh.\n"
+       "\t\t\treturn CabinetCreateAudioStream(sample_rate, parameters, stretch_enabled, error);")
+if old not in t:
+    raise SystemExit("CABINET_AUDIO: the SDL backend case has moved; patch not applied")
+p.write_text(t.replace(old, new, 1))
+PATCH
+        grep -q CABINET_AUDIO "$AUDIO_CPP" || { echo "audio patch did not apply" >&2; exit 1; }
+        echo "patched: SPU2's SDL backend hands its samples to the frontend"
+    fi
+
+    if ! grep -q CabinetCreateAudioStream "$AUDIO_H"; then
+        cat >> "$AUDIO_H" <<'DECL'
+
+// CABINET_AUDIO: defined in frontend/ps2/CabinetPS2Audio.cpp and resolved at
+// link time. Appended rather than placed beside the other factories, which sit
+// above the class this returns and cannot name it.
+std::unique_ptr<AudioStream> CabinetCreateAudioStream(
+	u32 sample_rate, const AudioStreamParameters& parameters, bool stretch_enabled, Error* error);
+DECL
+        echo "patched: declared CabinetCreateAudioStream"
+    fi
 fi
 
 # --- configure and build ---------------------------------------------------
@@ -167,7 +216,12 @@ fi
 # editing upstream's tree, and there is no need to on Linux. The include paths
 # and defines come out of compile_commands.json for a real PCSX2 translation
 # unit, so they cannot drift from what the library was built with.
-if [ "$PROBE_ONLY" -eq 0 ] && [ -d "$ROOT/frontend/ps2" ]; then
+if [ -d "$ROOT/frontend/ps2" ]; then
+    # rm FIRST. `cp -r src dst` copies INTO dst when dst already exists, so a
+    # second run produced cabinet-ps2/ps2/ and went on compiling the previous
+    # run's files — a stale build that looks exactly like a change that did not
+    # take. It cost one confusing link error before anybody looked.
+    rm -rf "$SRC/cabinet-ps2"
     cp -r "$ROOT/frontend/ps2" "$SRC/cabinet-ps2"
     run_in_builder "bash /src/cabinet-ps2/compile.sh $BUILD" || {
         echo "the host layer did not build" >&2
@@ -211,18 +265,25 @@ printf "  %-26s %s\n" "microVU recompiler" "$rec symbols"
 [ "$rec" -gt 0 ] || fail "no recompiler — the whole point of x86-64"
 [ "$mtl" -eq 0 ] || fail "Metal renderer on Linux, which cannot be right"
 
-echo "--- 2. does it link? upstream's own non-Qt frontend ---"
-cmake --build . --target pcsx2-gsrunner --parallel "$(nproc)" >/dev/null 2>&1 \
-    || fail "pcsx2-gsrunner did not link against the library"
-[ -x bin/pcsx2-gsrunner ] || fail "no pcsx2-gsrunner binary"
-echo "  linked: bin/pcsx2-gsrunner ($(du -h bin/pcsx2-gsrunner | cut -f1))"
-# And it must RUN, not merely link. Its own resources folder is not optional:
-# PCSX2 reads its game database, fonts and shaders from it and refuses to start.
-cp -r ../bin/resources bin/resources 2>/dev/null || true
-bin/pcsx2-gsrunner -help >/tmp/run.txt 2>&1 || true
-grep -q "MemoryCards Directory" /tmp/run.txt \
-    || fail "the binary linked but did not initialise; see /tmp/run.txt"
-echo "  ran: reached full config init"
+echo "--- 2. does CabinetOS's host layer link? ---"
+# **THIS USED TO BUILD UPSTREAM'S OWN pcsx2-gsrunner AND NO LONGER CAN.** That
+# was the right test while there was no host layer here: a static library
+# resolves nothing, so linking SOMETHING was the only way to find a Host
+# function we had forgotten, and gsrunner already implements all 55.
+#
+# The audio patch ends that. libpcsx2.a now references CabinetCreateAudioStream,
+# which is ours, so upstream's frontend cannot link it — correctly. Our own
+# probe is the link test now, and it is a better one, because it is the layer
+# that actually ships rather than a stand-in for it.
+bash /src/cabinet-ps2/compile.sh "$1" >/tmp/link.txt 2>&1 \
+    || fail "the host layer did not link; see /tmp/link.txt$(printf '\n'; tail -5 /tmp/link.txt)"
+[ -x cabinet-ps2-probe ] || fail "no cabinet-ps2-probe binary"
+echo "  linked: cabinet-ps2-probe ($(du -h cabinet-ps2-probe | cut -f1))"
+# And it must RUN, not merely link. PCSX2's resources folder is not optional:
+# it reads its game database, fonts and shaders from it and refuses to start.
+./cabinet-ps2-probe --help >/tmp/run.txt 2>&1 || true
+grep -q "usage:" /tmp/run.txt || fail "the binary linked but would not start"
+echo "  ran: the binary starts"
 
 echo "--- 3. what a CabinetOS host layer still owes it ---"
 SYS="-lpng -ljpeg -lz -lzstd -llz4 -lwebp -lsharpyuv -lfreetype -lharfbuzz"
