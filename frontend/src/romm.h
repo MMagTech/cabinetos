@@ -183,6 +183,9 @@ public:
 
     bool haveToken() const { return !token_.empty(); }
     void setToken(std::string token) { token_ = std::move(token); }
+    // For `accounts::recordPairing`, which files this under the id the server
+    // says it belongs to. A credential: it is never printed and never logged.
+    const std::string& token() const { return token_; }
 
     // Token persistence. The file is written 0600 and holds a credential, so
     // it does not belong anywhere near the repository.

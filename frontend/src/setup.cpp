@@ -15,6 +15,7 @@
 #include "net.h"
 #include "qr.h"
 #include "romm.h"
+#include "accounts.h"
 #include "storage.h"
 #include "text.h"
 #include "ui.h"
@@ -941,14 +942,19 @@ void Flow::pollPairing() {
             // The token is only ever written here, on the one path where the
             // server said yes. Saving it anywhere else is how a console ends up
             // holding a credential it never earned.
-            const char* home = getenv("HOME");
-            const std::string dir = std::string(home ? home : ".") + "/.config/cabinetos";
-            storage::makeDirs(dir);
-            if (!c.saveToken(dir + "/romm.json")) {
+            //
+            // IT BECOMES AN ACCOUNT RATHER THAN A LONE TOKEN, since 2026-09-21.
+            // `recordPairing` asks the server who the token belongs to and
+            // files it under that id — the same id the save directory is built
+            // from. A console whose first run wrote a bare token would have a
+            // credential and no account, which is the state open question 26
+            // removed the migration path for.
+            std::string aerr;
+            if (!accounts::recordPairing(c, &aerr)) {
                 // PAIRED, BUT NOT SAVED, IS NOT "PAIRED". Calling it success
                 // here is exactly how the first console ever installed came up
                 // on the stand-in library with nobody able to say why.
-                err = "paired, but the token could not be written to " + dir;
+                err = aerr;
                 out = -1;
                 return false;
             }

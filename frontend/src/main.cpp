@@ -2219,21 +2219,10 @@ static int accountsProbe() {
                     one.substr(0, one.rfind('/') + 1).c_str());
     }
 
-    if (accounts::needsAdoption()) {
-        // The state every console installed before this feature is in.
-        std::printf("\nADOPTION NEEDED — there is no account list and the single\n"
-                    "token from before accounts existed is on disk at\n  %s\n"
-                    "It becomes the first account, under whatever id /api/users/me\n"
-                    "returns. Nobody re-pairs to gain this.\n",
-                    accounts::legacyTokenPath().c_str());
-        return 0;
-    }
-
     const std::vector<accounts::Account> list = accounts::all();
     const int active = accounts::activeId();
     if (list.empty()) {
-        std::printf("\nno accounts, and no old token to adopt — this console has "
-                    "not been paired\n");
+        std::printf("\nno accounts — this console has not been paired\n");
         return 0;
     }
 
@@ -2289,7 +2278,6 @@ static int accountsTest() {
 
     check(accounts::all().empty(), "a fresh console knows nobody");
     check(accounts::activeId() == 0, "and is acting as nobody");
-    check(!accounts::needsAdoption(), "with no old token, there is nothing to adopt");
 
     check(!accounts::add(alice, "", &err), "an account with no token is refused");
     accounts::Account noId; noId.name = "nobody";
@@ -2319,7 +2307,6 @@ static int accountsTest() {
     ::unlink(accounts::tokenPath(2).c_str());
     check(!accounts::setActive(2, &err), "switching to an account whose token is gone is refused");
 
-    check(!accounts::adoptLegacyToken(noId, &err), "adoption without a server-given id is refused");
 
     check(!accounts::pinIsSet(), "no PIN by default");
     check(!accounts::checkPin("0000"), "and nothing matches when none is set");
@@ -2568,8 +2555,11 @@ static int rommProbe(const char* address, bool allowPairing) {
         // exactly how the first console ever installed came up on the
         // stand-in library with nobody able to say why. The pairing itself
         // genuinely succeeded; what failed is the only part that lasts.
-        if (client.saveToken(tokenPath)) {
-            std::printf("\npaired      token saved to %s\n", tokenPath.c_str());
+        std::string aerr;
+        if (accounts::recordPairing(client, &aerr)) {
+            std::printf("\npaired      account %d, token saved to %s\n",
+                        accounts::activeId(),
+                        accounts::tokenPath(accounts::activeId()).c_str());
         } else {
             std::printf("\n");
             std::fflush(stdout);
@@ -2763,6 +2753,7 @@ int main(int argc, char** argv) {
     // exits without opening a window, which is what a headless machine and a
     // CI job can do.
     int autoDownloadId = 0;
+    int autoSwitchAccountId = 0;
     int autoUnkeepId = 0;
     bool storageReport = false;
     bool coreOptionsAudit = false;
@@ -2961,6 +2952,9 @@ int main(int argc, char** argv) {
             // would press is to press it from here. It calls exactly what the
             // launch screen's row calls, guards and all.
             autoDownloadId = SDL_atoi(argv[++i]);
+        } else if (SDL_strcmp(argv[i], "--switch-account") == 0 && i + 1 < argc) {
+            // No switcher screen yet, so this is how the teardown is exercised.
+            autoSwitchAccountId = SDL_atoi(argv[++i]);
         } else if (SDL_strcmp(argv[i], "--unkeep") == 0 && i + 1 < argc) {
             autoUnkeepId = SDL_atoi(argv[++i]);
         } else if (SDL_strcmp(argv[i], "--overlay-exit") == 0) {
@@ -3601,11 +3595,25 @@ int main(int argc, char** argv) {
             }
             if (said) std::fprintf(stderr, "[romm] the server answered\n");
         }
-        if (!liveClient.loadToken(rommTokenPath())) {
-            std::fprintf(stderr, "[romm] no token at %s — pair first with --romm-probe --romm-pair\n",
-                         rommTokenPath().c_str());
+        // WHOEVER PLAYED LAST. The active account's token is what this console
+        // starts as — open question 26, decision 2. No account means a machine
+        // that has not been paired, which is first run's job and not something
+        // to paper over here.
+        if (!accounts::loadActiveToken(liveClient)) {
+            std::fprintf(stderr,
+                         "[romm] no account on this console — pair first with "
+                         "--romm-probe --romm-pair\n");
             return 1;
         }
+        // THE LIST IS HELD IN A NAMED LOCAL AND IT HAS TO BE. `accounts::find`
+        // returns a pointer INTO the vector it is given — which is why it takes
+        // one rather than hiding a static — so passing `accounts::all()` inline
+        // leaves the pointer dangling at the end of the condition. It segfaulted
+        // on the first run, in the first place the function was ever called.
+        const std::vector<accounts::Account> known = accounts::all();
+        if (const accounts::Account* who = accounts::find(known, accounts::activeId()))
+            std::fprintf(stderr, "[accounts] acting as %d - %s\n", who->id,
+                         who->name.c_str());
         adoptUser(liveClient);
         // The long one: platforms, every game, collections, recents and
         // favourites. Sixteen hundred games take several seconds on the
@@ -4370,6 +4378,85 @@ int main(int argc, char** argv) {
         for (int romId : kept)
             for (Card& c : cards)
                 if (c.id == romId) { c.kept = true; break; }
+    };
+
+    // SWITCHING WHO THE CONSOLE IS. Open question 26, and the half that
+    // `accounts::activate` deliberately does not do.
+    //
+    // THE LIST OF WHAT BELONGS TO AN ACCOUNT WAS WORKED OUT FROM
+    // `storage::userDir`'s children AND FROM WHAT THE STARTUP PATH BUILDS,
+    // before this was written rather than after somebody saw their sister's
+    // save. It is:
+    //
+    //   the token           -> accounts::activate
+    //   who we are          -> adoptUser, which asks /api/users/me again
+    //   recents, favourites -> loadLibrary; they are RomM's play history and
+    //   the hero, the shelf    they are per person, not per console
+    //   the kept badges     -> refreshKeeps, which reads this person's keeps
+    //
+    // The library of GAMES is not on that list and must not be refetched for
+    // the wrong reason: with one server per console it is the same catalogue
+    // for everybody. It comes back anyway because loadLibrary fetches the lot
+    // in one pass, and splitting that to save a few seconds would be an
+    // optimisation bought with a second code path.
+    //
+    // TWO THINGS REFUSE THE SWITCH, and both are about a save reaching the
+    // wrong person rather than about tidiness:
+    auto switchAccount = [&](int id, std::string* why) -> bool {
+        // A RUNNING GAME'S SAVE BELONGS TO WHOEVER LAUNCHED IT. The core writes
+        // its card or its battery at unload, and `filesave` files that under
+        // `storage::currentUser()` — which this function is about to change.
+        if (playing) {
+            if (why) *why = "Quit the game before switching accounts.";
+            return false;
+        }
+        // AN UPLOAD IN FLIGHT WOULD GO UP AS THE NEW PERSON. The uploader holds
+        // a pointer to this very client, so swapping the token underneath it
+        // sends the previous account's save to the new account's library. An
+        // unsent save is described elsewhere in this file as the one
+        // irreplaceable thing on the machine; misfiling one is worse than
+        // making somebody wait.
+        if (const int owed = uploader.pending(); owed > 0) {
+            if (why)
+                *why = owed == 1 ? "A save is still going up. One moment."
+                                 : "Saves are still going up. One moment.";
+            return false;
+        }
+
+        std::string err;
+        if (!accounts::activate(id, liveClient, &err)) {
+            if (why) *why = err;
+            return false;
+        }
+        // ASKED AGAIN, NOT ASSUMED. The token changed, so the answer to "who is
+        // this" changed, and every save path below is built from it.
+        if (!adoptUser(liveClient)) {
+            if (why) *why = "Switched, but the server would not say who that is.";
+            return false;
+        }
+
+        Library lib = loadLibrary(liveClient);
+        if (lib.cards.empty()) {
+            // Left as it was rather than blanked: an empty Home is worse than
+            // the previous person's, and this is recoverable by switching back.
+            if (why) *why = "That account's library came back empty.";
+            return false;
+        }
+        cards = std::move(lib.cards);
+        heroIndex = lib.heroIndex;
+        heroPlatform = lib.heroPlatform;
+        shelf = std::move(lib.shelf);
+        favorites = std::move(lib.favorites);
+        games = std::move(lib.games);
+        platformTiles = std::move(lib.platformTiles);
+        collectionTiles = std::move(lib.collectionTiles);
+        libraryScreen.build(platformTiles, collectionTiles);
+        refreshKeeps();
+
+        const storage::User& now = storage::currentUser();
+        std::fprintf(stderr, "[accounts] switched to %d - %s, %zu games\n", now.id,
+                     now.name.c_str(), cards.size());
+        return true;
     };
 
     // WHERE THE BAR'S FOCUS LIVES. Not in Home's row model and not in any
@@ -5739,6 +5826,13 @@ int main(int argc, char** argv) {
             const int id = autoDownloadId;
             autoDownloadId = 0;
             downloadById(id);
+        }
+        if (autoSwitchAccountId > 0) {
+            const int id = autoSwitchAccountId;
+            autoSwitchAccountId = 0;
+            std::string why;
+            if (!switchAccount(id, &why))
+                std::fprintf(stderr, "[accounts] refused: %s\n", why.c_str());
         }
         if (autoUnkeepId > 0) {
             const int id = autoUnkeepId;

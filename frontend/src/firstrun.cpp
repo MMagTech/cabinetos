@@ -13,6 +13,7 @@
 
 #include "net.h"
 #include "romm.h"
+#include "accounts.h"
 #include "storage.h"
 
 namespace firstrun {
@@ -25,10 +26,16 @@ std::string serverPath() { return storage::configDir() + "/server.json"; }
 // in the console's storage tree. Same path main.cpp uses; kept in step with it
 // deliberately rather than shared, because this file must not drag main's
 // argument handling in behind it.
-std::string tokenPath() {
-    const char* home = getenv("HOME");
-    return std::string(home ? home : ".") + "/.config/cabinetos/romm.json";
-}
+// WHAT "PAIRED" MEANS, AND IT CHANGED ON 2026-09-21. It used to be the single
+// `~/.config/cabinetos/romm.json`. Pairing now writes an ACCOUNT, so the fact
+// to test is whether this console has one — `accounts::activeId()` is true
+// only when the list holds somebody and one of them is active.
+//
+// There is deliberately no fallback to the old file. Open question 26: nobody
+// else is running this, the two machines here were written into accounts.json
+// by hand, and a permanent branch serving users who do not exist is the
+// migration tool the folder layout already refused to add.
+bool havePairedAccount() { return accounts::activeId() > 0; }
 
 bool fileExists(const std::string& path) {
     struct stat st;
@@ -100,7 +107,7 @@ std::string jsonString(const std::string& body, const char* key) {
 // the rule that stops a machine set up by hand booting into a wizard.
 bool alreadyConfigured() {
     const bool haveAddress = !serverAddress().empty();
-    const bool haveToken = fileExists(tokenPath());
+    const bool haveToken = havePairedAccount();
     // A cached user means a token that was actually USED — somebody reached
     // /api/users/me with it — which is a stronger fact than a file existing,
     // and it is what the save tree is namespaced on.
@@ -416,7 +423,7 @@ Facts observeLocal(const romm::Client& client, int gamepadCount) {
     f.haveServerAddress = !serverAddress().empty();
     // Only something that has tried can set these two; see the header.
     f.serverChecked = false;
-    f.havePairedToken = client.haveToken() || fileExists(tokenPath());
+    f.havePairedToken = client.haveToken() || havePairedAccount();
     // Left to the caller: only something that has tried can say. See the
     // header.
     f.serverAnswered = false;

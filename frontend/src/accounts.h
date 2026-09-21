@@ -74,7 +74,6 @@ struct Account {
 // need to build these paths itself.
 std::string listPath();              // <storage config>/accounts.json
 std::string tokenPath(int id);       // ~/.config/cabinetos/accounts/<id>.json
-std::string legacyTokenPath();       // ~/.config/cabinetos/romm.json
 
 // --- Reading ---------------------------------------------------------------
 
@@ -133,26 +132,34 @@ bool update(int id, const std::string& name, const std::string& avatar);
 // that teardown, and it has to happen before anything is drawn again.
 bool activate(int id, romm::Client& client, std::string* err);
 
-// --- Adoption of the single token that came before this file ----------------
+// --- Pairing, and the token the console starts with -------------------------
 
-// True when there is no account list but the old single token is on disk.
-//
-// Every console installed before this feature is in that state, including both
-// machines here. Nobody should have to re-pair to gain something they did not
-// ask for.
-bool needsAdoption();
+// Puts the ACTIVE account's token into `client`. False when this console has
+// no account, which is a machine that has not been paired — first run's job,
+// not this file's.
+bool loadActiveToken(romm::Client& client);
 
-// Files the existing `~/.config/cabinetos/romm.json` as the first account,
-// under whatever id the server says it belongs to, and makes it active.
+// Turns a client that has just been through pairing into an account.
 //
-// `who` must have come from /api/users/me rather than from the cached
-// `config/user.json`: filing a credential under a guessed id is how somebody
-// ends up writing into another person's save directory. The caller resolves the
-// user first and passes the answer in.
+// THIS IS THE ONE PLACE A PAIRING BECOMES AN ACCOUNT, and it asks the server
+// who the token belongs to rather than being told: the id it files the
+// credential under is the same id `storage::userDir` builds a save path from,
+// and filing it under a guess is how somebody writes into another person's
+// directory. `client` must already hold a token.
 //
-// The old file is left where it is. It costs nothing, and a console that has to
-// be rolled back to an image without accounts still needs it.
-bool adoptLegacyToken(const Account& who, std::string* err);
+// The first account on a console with none becomes active. A later one does
+// not, because adding somebody must not sign out whoever is playing.
+bool recordPairing(romm::Client& client, std::string* err);
+
+// THERE IS NO MIGRATION FROM THE SINGLE TOKEN THAT CAME BEFORE THIS, AND THAT
+// IS DELIBERATE — MMagTech, 2026-09-21: nobody else is running this. The two
+// machines here were written into `accounts.json` by hand, once. It is the same
+// call the folder layout made: "there is no migration tool in the tree and
+// there should not be — the one machine that needed moving has been moved."
+//
+// If that ever stops being true, the honest fix is a one-shot probe that is
+// deleted afterwards, not a permanent branch in the startup path serving users
+// who do not exist.
 
 // --- The PIN ---------------------------------------------------------------
 //

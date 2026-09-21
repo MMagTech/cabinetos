@@ -165,8 +165,6 @@ std::string tokenPath(int id) {
     return homeDir() + "/.config/cabinetos/accounts/" + std::to_string(id) + ".json";
 }
 
-std::string legacyTokenPath() { return homeDir() + "/.config/cabinetos/romm.json"; }
-
 std::vector<Account> all() { return load().list; }
 
 int activeId() { return load().active; }
@@ -276,30 +274,31 @@ bool activate(int id, romm::Client& client, std::string* err) {
     return true;
 }
 
-bool needsAdoption() {
-    if (fileExists(listPath())) return false;
-    return fileExists(legacyTokenPath());
+bool loadActiveToken(romm::Client& client) {
+    const int id = activeId();
+    if (id <= 0) return false;
+    return client.loadToken(tokenPath(id));
 }
 
-bool adoptLegacyToken(const Account& who, std::string* err) {
-    if (!who.valid()) {
-        if (err) *err = "adoption needs the id the server gave, not a guess";
+bool recordPairing(romm::Client& client, std::string* err) {
+    if (!client.haveToken()) {
+        if (err) *err = "recordPairing was given a client with no token";
         return false;
     }
-    const std::string body = readFile(legacyTokenPath());
-    if (body.empty()) {
-        if (err) *err = "no token at " + legacyTokenPath();
+    // ASKED, NOT ASSUMED. The id decides where this person's saves go.
+    romm::User me;
+    std::string e;
+    if (!client.fetchCurrentUser(&me, &e) || me.id <= 0) {
+        if (err)
+            *err = "paired, but the server would not say who the token belongs to" +
+                   (e.empty() ? std::string() : " (" + e + ")");
         return false;
     }
-    json_object* root = json_tokener_parse(body.c_str());
-    const std::string token = root ? jstr(root, "access_token") : std::string();
-    if (root) json_object_put(root);
-    if (token.empty()) {
-        if (err) *err = legacyTokenPath() + " holds no access_token";
-        return false;
-    }
-    if (!add(who, token, err)) return false;
-    return setActive(who.id, err);
+    Account a;
+    a.id = me.id;
+    a.name = me.username;
+    a.avatar = me.avatarPath;
+    return add(a, client.token(), err);
 }
 
 bool pinIsSet() { return !trimmed(readFile(pinPath())).empty(); }
