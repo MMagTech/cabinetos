@@ -186,6 +186,11 @@ std::string imageAssetsDir();
 struct User {
     int id = 0;
     std::string name;
+    // Where the person's picture is, for the account chip on Home. Empty when
+    // they have not set one, which is a normal state: the chip falls back to a
+    // lettered disc, the way the reference implementation falls back to a
+    // person glyph.
+    std::string avatar;
     // "1 - MMagTech". The directory name, and the only thing on disk that
     // encodes both halves of the convention.
     std::string dirName() const;

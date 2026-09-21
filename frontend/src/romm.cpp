@@ -125,8 +125,14 @@ bool parseGame(json_object* o, Game* g) {
     g->name = jstr(o, "name");
     g->fsName = jstr(o, "fs_name");
     g->sizeBytes = jint(o, "fs_size_bytes");
+    // BOTH SIZES, because they are for different jobs. See romm.h: `small` is
+    // a 162x216 thumbnail and `big` is 810x1080. Either may be absent — a game
+    // the server never matched has neither — so each falls back to the other
+    // and a caller can use one field without checking two.
     g->coverPath = jstr(o, "path_cover_small");
-    if (g->coverPath.empty()) g->coverPath = jstr(o, "path_cover_large");
+    g->coverLargePath = jstr(o, "path_cover_large");
+    if (g->coverPath.empty()) g->coverPath = g->coverLargePath;
+    if (g->coverLargePath.empty()) g->coverLargePath = g->coverPath;
     return true;
 }
 
@@ -402,6 +408,12 @@ bool Client::fetchCurrentUser(User* out, std::string* err) {
     // preferences, and none of them are this console's business.
     out->id = static_cast<int>(jint(root, "id"));
     out->username = jstr(root, "username");
+    // `avatar_path` is used only as a FLAG — it says whether this person has a
+    // picture at all. Its value is a path into RomM's asset tree that nothing
+    // serves; see the note on User::avatarPath. The endpoint is built from the
+    // id instead, which is the only thing that answers.
+    if (!jstr(root, "avatar_path").empty() && jint(root, "id") > 0)
+        out->avatarPath = "/api/users/" + std::to_string(jint(root, "id")) + "/avatar";
     json_object_put(root);
     if (out->id <= 0) {
         if (err) *err = "users/me carried no id";

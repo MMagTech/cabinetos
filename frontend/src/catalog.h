@@ -107,6 +107,21 @@ Coverage coverageFor(const romm::Platform& p);
 // everything else is left exactly as the server named it.
 std::string displayName(const romm::Platform& p);
 
+// THE QUALIFIER, ON ITS OWN. "Arcade (FinalBurn Neo)" is one string where a
+// title is wanted — a grid's heading, a launch screen — and two facts where a
+// tile is: a NAME and the thing that tells it apart from the other tile with
+// the same name.
+//
+// Keeping them joined cost more than tidiness. At the width a library tile
+// gives a Title 3 name, "Arcade (FinalBurn Neo)" and "Arcade (MAME 2003-Plus)"
+// both came out as "Arcade" over "(FinalBurn ..." and "(MAME 200..." — so the
+// qualifier that exists SOLELY to tell two tiles apart was the part being cut
+// off. Split, the name fits on one line and the qualifier goes to the line
+// that has room for it.
+//
+// Empty for every platform that was never ambiguous, which is most of them.
+std::string displayQualifier(const romm::Platform& p);
+
 // The same answer in a handful of words, for a place that has a handful of
 // words' worth of room — a library tile's second line.
 //

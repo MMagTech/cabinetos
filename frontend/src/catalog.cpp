@@ -725,18 +725,25 @@ const char* shortReason(Support s) {
     return "Not playable here";
 }
 
-std::string displayName(const romm::Platform& p) {
-    const std::string base = p.name.empty() ? p.slug : p.name;
+std::string displayQualifier(const romm::Platform& p) {
     const Entry* e = lookup(p.slug, p.fsSlug);
     // Only the ambiguous rows carry a system name, so everything else comes
-    // back exactly as the server named it. Qualifying a platform nobody can
-    // confuse would be noise.
-    if (e && e->system) return base + " (" + e->system + ")";
+    // back empty. Qualifying a platform nobody can confuse would be noise.
+    if (e && e->system) return e->system;
     // An arcade set this table does not recognise is still ambiguous to a
     // person — two tiles saying "Arcade" — so fall back to the one field that
     // actually distinguishes them on the server.
-    if (!p.fsSlug.empty() && p.slug == "arcade") return base + " (" + p.fsSlug + ")";
-    return base;
+    if (!p.fsSlug.empty() && p.slug == "arcade") return p.fsSlug;
+    return {};
+}
+
+std::string displayName(const romm::Platform& p) {
+    // The joined form, for the places that want one string: a grid's heading,
+    // a launch screen, a line of output. A tile wants the two halves and calls
+    // displayQualifier for the second.
+    const std::string base = p.name.empty() ? p.slug : p.name;
+    const std::string q = displayQualifier(p);
+    return q.empty() ? base : base + " (" + q + ")";
 }
 
 }  // namespace catalog

@@ -81,7 +81,20 @@ struct Game {
     std::string fsName;
     // Path on the server, not a URL: the cover fetch goes through the same
     // authenticated client, so callers hand this straight to ImageCache.
+    //
+    // TWO SIZES, AND THE SMALL ONE IS A THUMBNAIL. RomM keeps `small` at
+    // 162x216 and `big` at 810x1080, for about double the bytes — the small
+    // ones are inefficiently encoded PNGs, so 5x the pixels costs 1.5x the
+    // transfer. Measured against the live server 2026-09-21.
+    //
+    // 162 points wide is not enough for anything on a 4K television: a shelf
+    // cover is 158 design points, which is 316 real pixels, so even the
+    // SMALLEST place art appears is a 2x upscale. Everywhere else is worse.
+    // Ask for the size the drawing needs rather than the one that arrives
+    // first — `coverLargePath` where a cover is big or full-screen, and the
+    // thumbnail where it is a thumbnail.
     std::string coverPath;
+    std::string coverLargePath;
     int64_t sizeBytes = 0;
 };
 
@@ -133,6 +146,15 @@ struct Asset {
 struct User {
     int id = 0;
     std::string username;
+    // The avatar, as a path this client can fetch, or empty when the person
+    // never set one. NOT the `avatar_path` the server reports — that is a
+    // location inside RomM's own asset tree ("users/<hash>/profile/<name>.png")
+    // and it is not served anywhere underneath /assets, which is where every
+    // other picture in this product comes from. Measured against the live
+    // server 2026-09-21: all four spellings of that path are 404 and the file
+    // is only reachable through `/api/users/<id>/avatar`, which answers a
+    // 1200x1200 PNG. So the endpoint is what gets stored.
+    std::string avatarPath;
 };
 
 // An in-flight pairing. Short-lived: RomM expires these in minutes.

@@ -426,6 +426,10 @@ void setCurrentUser(const User& u) {
     json_object* o = json_object_new_object();
     json_object_object_add(o, "id", json_object_new_int(u.id));
     json_object_object_add(o, "username", json_object_new_string(u.name.c_str()));
+    // Cached with the rest of them, so a console that cannot reach its server
+    // still draws the right face rather than falling back to a letter.
+    if (!u.avatar.empty())
+        json_object_object_add(o, "avatar", json_object_new_string(u.avatar.c_str()));
     const char* text = json_object_to_json_string_ext(o, JSON_C_TO_STRING_PRETTY);
     const std::string tmp = userCachePath() + ".part";
     if (FILE* f = std::fopen(tmp.c_str(), "wb")) {
@@ -445,6 +449,7 @@ bool resolveCurrentUser(romm::Client& client, std::string* err) {
         User u;
         u.id = me.id;
         u.name = me.username;
+        u.avatar = me.avatarPath;
         setCurrentUser(u);
         return true;
     }
@@ -464,6 +469,8 @@ bool resolveCurrentUser(romm::Client& client, std::string* err) {
                 u.id = json_object_get_int(v);
             if (json_object_object_get_ex(o, "username", &v) && v)
                 u.name = json_object_get_string(v);
+            if (json_object_object_get_ex(o, "avatar", &v) && v)
+                u.avatar = json_object_get_string(v);
             json_object_put(o);
             if (u.valid()) {
                 gUser = u;
