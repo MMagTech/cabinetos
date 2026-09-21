@@ -530,7 +530,7 @@ void Renderer::presentScene() {
     // showed as a ghost strip of the last frame across the top of the screen.
     glViewport(0, 0, drawableW_, drawableH_);
     glDisable(GL_SCISSOR_TEST);
-    glClearColor(0, 0, 0, 1);
+    glClearColor(0, 0, 0, transparentBackground_ ? 0.0f : 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
     glViewport(vx_, vy_, vw_, vh_);
     glDisable(GL_BLEND);
@@ -654,7 +654,7 @@ void Renderer::beginFrame(int drawableWidth, int drawableHeight) {
     glEnable(GL_BLEND);
     glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE,
                         GL_ONE_MINUS_SRC_ALPHA);
-    glClearColor(0, 0, 0, 1);
+    glClearColor(0, 0, 0, transparentBackground_ ? 0.0f : 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
     glBindVertexArray(vao_);
 }

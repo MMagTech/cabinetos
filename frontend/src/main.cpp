@@ -68,6 +68,7 @@
 #include "setup.h"
 #include "storage.h"
 #include "text.h"
+#include "overlaywin.h"
 #include "ui.h"
 
 namespace {
@@ -2468,6 +2469,8 @@ int main(int argc, char** argv) {
     // upload it, then fetch the newest one back and restore it. Headless, so
     // the sync can be proved on a machine nobody is sitting at.
     bool syncTest = false;
+    // See --overlay-test below. A test instrument for open question 24.
+    bool overlayTest = false;
     // Opens the overlay once the game is up, so it can be looked at on a
     // machine with nothing attached to it.
     bool overlayDemo = false;
@@ -2501,6 +2504,20 @@ int main(int argc, char** argv) {
             rommAddress = argv[++i];
         } else if (SDL_strcmp(argv[i], "--core-dir") == 0 && i + 1 < argc) {
             coreDir = argv[++i];
+        } else if (SDL_strcmp(argv[i], "--overlay-test") == 0) {
+            // CAN THIS CONSOLE'S OWN MENU BE DRAWN ONTO NOTHING?
+            //
+            // A TEST INSTRUMENT, not a product mode, and the one thing that
+            // could kill the compositing route in open question 24. Everything
+            // proved there was proved with flat rectangles pushed through X11.
+            // The pause menu is signed-distance fields in a GLES context that
+            // has always had an opaque frame to draw onto, and a renderer that
+            // gets premultiplied alpha wrong produces dark haloes around every
+            // letter — invisible to any assertion, obvious on a television.
+            //
+            // It puts the pause menu up, over nothing, as a gamescope overlay.
+            // Put a game under it with tools/gamescope-overlay-test.sh and LOOK.
+            overlayTest = true;
         } else if (SDL_strcmp(argv[i], "--ps2-upscale") == 0 && i + 1 < argc) {
             // HOW MANY TIMES THE PLAYSTATION 2'S OWN RESOLUTION TO RENDER AT.
             //
@@ -2910,6 +2927,14 @@ int main(int argc, char** argv) {
 
     std::signal(SIGUSR1, requestCapture);
 
+    // THE OVERLAY SLOT IS AN X11 IDEA, so the test mode has to be an X11
+    // client. gamescope's STEAM_OVERLAY and STEAM_INPUT_FOCUS are window
+    // properties its Xwayland half reads; a native Wayland client can reach the
+    // external-overlay plane but not the one that takes input. Under gamescope
+    // Xwayland is always there, so this costs nothing — but it is a real
+    // constraint on the design and not an artefact of the test.
+    if (overlayTest) SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "x11");
+
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD | SDL_INIT_AUDIO)) {
         std::fprintf(stderr, "[frontend] SDL_Init failed: %s\n", SDL_GetError());
         return 1;
@@ -2928,12 +2953,25 @@ int main(int argc, char** argv) {
     SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, 8);
     SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE, 8);
 
-    SDL_Window* window = SDL_CreateWindow(
-        "CabinetOS", 1920, 1080, SDL_WINDOW_OPENGL | SDL_WINDOW_FULLSCREEN);
+    // CREATED HIDDEN IN OVERLAY MODE, because gamescope classifies a window
+    // when it MAPS. Set the properties afterwards and they land on a window
+    // nothing re-examines, and the overlay never appears — which looks exactly
+    // like a compositor that refused. Hidden, marked, then shown.
+    SDL_WindowFlags windowFlags = SDL_WINDOW_OPENGL | SDL_WINDOW_FULLSCREEN;
+    if (overlayTest) windowFlags |= SDL_WINDOW_TRANSPARENT | SDL_WINDOW_HIDDEN;
+
+    SDL_Window* window = SDL_CreateWindow("CabinetOS", 1920, 1080, windowFlags);
     if (!window) {
         std::fprintf(stderr, "[frontend] SDL_CreateWindow failed: %s\n", SDL_GetError());
         SDL_Quit();
         return 1;
+    }
+
+    if (overlayTest) {
+        if (!cab::overlaywin::mark(window, /*takeInput=*/true))
+            std::fprintf(stderr, "[overlay] could not mark the window — it will "
+                                 "come up as an ordinary one\n");
+        SDL_ShowWindow(window);
     }
 
     SDL_GLContext gl = SDL_GL_CreateContext(window);
@@ -2959,6 +2997,10 @@ int main(int argc, char** argv) {
         std::fprintf(stderr, "[frontend] renderer init failed\n");
         return 1;
     }
+
+    // Draw onto nothing rather than onto black. Only the two clears change —
+    // the blend function was already correct for it.
+    if (overlayTest) renderer.setTransparentBackground(true);
 
     ui::TextRenderer text;
     // Regular, Medium, SemiBold, Bold, then the CJK fallback. All five are
@@ -4717,6 +4759,19 @@ int main(int argc, char** argv) {
         pumpExit();
         pumpStateLoad(stateLoad);
         if (overlayDemo && playing && !overlayOpen) { overlayDemo = false; toggleOverlay(); }
+
+        // --overlay-test: hold the pause menu open over a game this console did
+        // not draw. `playing` is asserted so the whole world — backdrop, hero,
+        // shelves, screens — is skipped; there is no core, so no game picture is
+        // drawn either, and what reaches the screen is the scrim and the panel
+        // over transparency. That is the thing being looked at.
+        if (overlayTest) {
+            playing = true;
+            if (!overlayOpen) {
+                overlayOpen = true;
+                overlayFade.retarget(1.0f, kOverlayFade);
+            }
+        }
         if (overlayExitDemo && playing) {
             static int t = 0;
             // How long the game is left running before the overlay quits it.
@@ -4813,8 +4868,15 @@ int main(int argc, char** argv) {
             // with the thing you are looking at, and the letterbox glow is
             // bias lighting, which means light against black. On a purple
             // backdrop it is neither.
-            renderer.draw(ui::Rect{0, 0, ui::kCanvasWidth, ui::kCanvasHeight, 0,
-                                   ui::Color::black(1.0f)});
+            //
+            // EXCEPT WHEN THE GAME IS NOT OURS TO DRAW. On the composited path
+            // the emulator owns its own window and gamescope puts our frame on
+            // top, so this fill would black the game out. Drawing nothing is
+            // what lets it through — the scrim below still dims it, because a
+            // translucent black rectangle composites exactly as it should.
+            if (!overlayTest)
+                renderer.draw(ui::Rect{0, 0, ui::kCanvasWidth, ui::kCanvasHeight, 0,
+                                       ui::Color::black(1.0f)});
         } else {
             renderer.drawBackdrop(ui::Gradient{ui::palette::kBackdropTop,
                                                ui::palette::kBackdropMid,

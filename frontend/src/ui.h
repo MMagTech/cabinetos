@@ -121,6 +121,21 @@ public:
     // rasterise at device resolution to be crisp on a 4K set, so it needs this.
     float scale() const { return scale_; }
 
+    // DRAW ONTO NOTHING INSTEAD OF ONTO BLACK.
+    //
+    // For the one case where this console is not the only thing on the screen:
+    // an emulator that owns its own window and presents for itself, with our
+    // menu composited on top by gamescope. There the frame we produce must be
+    // TRANSPARENT wherever we have not drawn, or we would black the game out.
+    //
+    // It changes the two clears and nothing else. The blend function is already
+    // right — glBlendFuncSeparate keeps a correct destination alpha — which is
+    // why this is a flag and not a second renderer.
+    //
+    // docs/PROJECT.md, open question 24.
+    void setTransparentBackground(bool on) { transparentBackground_ = on; }
+    bool transparentBackground() const { return transparentBackground_; }
+
     // --- Frosted glass -------------------------------------------------------
     //
     // The single largest contributor to what the reference implementation
@@ -170,6 +185,7 @@ public:
     void endOffscreen();
 
 private:
+    bool transparentBackground_ = false;
     GLuint program_ = 0;
     GLuint backdropProgram_ = 0;
     GLuint texturedProgram_ = 0;

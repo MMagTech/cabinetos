@@ -322,6 +322,51 @@ And the overlay is painted **`NoScale`**, at its own pixel size — the frontend
 would render its menu at the panel's full resolution itself. glxgears landing
 300x300 in the corner of a 4K screen is what getting that wrong looks like.
 
+#### THE MENU ALREADY DRAWS CORRECTLY ONTO NOTHING — 2026-09-21
+
+`cabinetos-frontend --overlay-test` puts the REAL pause menu up as a gamescope
+overlay over a game the console did not draw. MMagTech, watching: *"everything
+looks pretty solid except the menu itself is not glass."*
+
+**The risk that could have killed this is gone.** Clean text, clean edges, no
+premultiplied-alpha haloing, scrim dims correctly. **It needed no shader work** —
+the blend function was already right, so the change is two clears going to alpha
+0 and one black fill being skipped.
+
+**The one casualty is the glass panel.** `drawGlass` blurs by sampling our own
+scene texture; on this path the game is on another plane and is not in it.
+
+**gamescope's own blur was tried and did not work** — `GAMESCOPE_BLUR_MODE` 1 and
+2, with radius, fade and forced composition. `composite_debug` proved gamescope
+really was compositing. **Abandoned, not solved**; do not record it as
+unavailable.
+
+**The route to try is one grab at the moment of pause, and the ingredient is
+proved:** a base-plane screenshot taken WHILE the overlay is up returns the game
+alone, clean, at full resolution. Grab once when the menu opens, blur it
+ourselves, use it as the panel's backdrop. The game is paused so a still is
+correct, and the panel already fades in over 350 ms.
+
+#### WHAT IT SAVES, MEASURED — and the PS2 case is the WEAK one
+
+Burnout 3, warm cache, uncapped, `CABINETOS_PS2_NO_READBACK` against normal. 4x
+run twice, reproduced within 3%.
+
+| Upscale | readback on | off | saved |
+|---|---|---|---|
+| 3x | 3.36 ms | 3.25 ms | **0.11 ms — free** |
+| 4x | 5.08 / 5.21 ms | 3.21 / 3.25 ms | ~1.9 ms |
+| 6x | 13.16 ms | 4.17 ms | **~9.0 ms** (76 → 240 fps) |
+
+**AT 3x IT IS FREE** — measures 1.95 ms, costs 0.11 ms, because it overlaps with
+the emulator's other threads. **So at the upscale this file calls the sweet spot,
+compositing buys PlayStation 2 nothing.** Do not sell it on PS2.
+
+**The case is true 4K and the systems that do not exist yet**, which is
+MMagTech's argument and the numbers back it better than they back the PS2 one.
+The readback is free at 3x *because PCSX2 runs at 300% and has slack to hide it
+in*. A PS3 at native 1080p pushes what a PS2 pushes at 3x, with no slack at all.
+
 #### WHAT THIS DOES NOT SETTLE, AND IT IS MOST OF THE WORK
 
 **Nothing has been built.** One test program and a stand-in game. The frontend
