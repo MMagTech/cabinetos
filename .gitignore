@@ -42,3 +42,4 @@ image_payload/
 
 # macOS
 .DS_Store
+.ui-loop.png

@@ -2062,6 +2062,36 @@ The renderer gained two things in that work which the rest of the UI can use and
 does not yet: a vertical gradient fill on any shape, and a top-edge highlight
 that is not the focus rim. Both are off by default.
 
+#### THE LOOP IS ONE COMMAND, AND USE IT — `tools/ui-loop.sh`
+
+**MMagTech, on what this session will be like:** *"its going to be all over the
+place i have alot to tweak on the ui."* So the loop matters more than the plan.
+
+```
+tools/ui-loop.sh                     Home: build, deploy, show, capture
+tools/ui-loop.sh --game 305 --menu   a game with the pause menu over it
+tools/ui-loop.sh --no-build          deploy and capture what is already built
+tools/ui-loop.sh --restore           put the console back on the image
+```
+
+**46 seconds, measured, against about two minutes of doing it by hand.** It
+rsyncs to the VM, builds in the container, copies to the A9, **checks the
+binary's checksum against the one it just built**, restarts the session behind a
+drop-in of its own, signals the frontend for a capture and fetches the PNG.
+
+**The checksum check is not decoration.** A stale binary that ignores the flag
+you just added looks exactly like a change that did not work, and cost an hour
+on 2026-09-21 before anybody suspected the deploy rather than the code.
+
+**THE CAPTURE IS THE FRONTEND PHOTOGRAPHING ITSELF** (`kill -USR1`), not
+`gamescopectl screenshot`, and that is deliberate: gamescope's screenshot does
+not capture the overlay planes with any type, so anything composited is
+invisible to it. **Read the PNG for layout. Judge colour, contrast and motion on
+the television** — that rule predates this file and has not stopped being true.
+
+**Run `--restore` when you finish.** The console should be left running the
+image with no drop-ins, which is what the top of this file now promises.
+
 #### WHAT EXISTS TO WORK ON, so nobody has to go and find it
 
 **Five screens, and two of them are lies.** Home, Library, Grid, Detail and the
