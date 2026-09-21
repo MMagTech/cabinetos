@@ -10975,3 +10975,131 @@ cores, the pause menu's shape, and what Cabinet's other platforms expect to find
 in a RomM row. It belongs with open question 23 and the UI pass, and all three
 are really one conversation about what this console is rather than three
 separate features.
+
+### 26. Account switching, and what a console's version of it is
+**Raised by MMagTech 2026-09-16 with the words "we would implement it slightly
+different", deferred to a session of its own, and DECIDED 2026-09-21.** Four
+questions were put and answered; the shape below is settled and the work is
+scoped. Nothing is built yet.
+
+#### The half that was already right, and nobody said so
+
+`storage.h` has carried this table since the folder layout landed:
+
+```
+per user              shared by the machine
+saves, save states    the downloaded game files
+screenshots           BIOS and firmware
+preferences           cores
+the decision to keep  shader caches
+```
+
+**That is the same call Cabinet's own design doc spends its longest section
+making, for the same reason.** tvOS has a real system-level multi-user
+entitlement and Cabinet ruled it out on a concrete technical ground rather than
+a stylistic one: per-user containers partition the ROM cache, so everyone in the
+house re-downloads the same Dreamcast disc into their own copy. A ROM is not
+user-specific. CabinetOS's `users/<id> - <name>/` beside a shared `roms/` and
+`cache/` already does exactly this, so **the storage half of account switching is
+finished and was finished before the feature was discussed.**
+
+Two other things are already in place and worth knowing before anyone starts:
+`storage::User` carries an `avatar` field whose comment says it is "for the
+account chip on Home", and `currentUser()`/`setCurrentUser()` is a single global
+with one seam.
+
+#### THE TOKEN IS THE IDENTITY, AND THAT IS WHAT MAKES THIS SMALL
+
+`storage::resolveCurrentUser` asks the server `/api/users/me` using whatever
+token the client holds, and caches the answer. **So the console does not decide
+who it is; the token does.** Switching accounts is therefore: put a different
+token in the client, re-resolve, reload what was drawn from the old answer.
+
+That is precisely what Cabinet's `TVProfileStore.activate` does — copy the
+chosen profile's token into the slot `Session` reads from, then reload — and its
+comment says the useful part out loud: *"nothing downstream needs to know
+profiles exist at all."*
+
+#### What was decided
+
+**1. ONE SERVER PER CONSOLE.** Every account is a user on the one paired server.
+`/etc/cabinetos/session.env` stays machine-wide and first run stays a linear path
+to pairing one server.
+
+**This is a deliberate divergence from Cabinet and the reason is that the two
+products are shaped differently.** A `TVProfile` carries its own
+`serverURLString` because an Apple TV app might be pointed anywhere; a console in
+a house has one library. **The saving is not cosmetic:** it means a RomM user id
+is unique across everything this console will ever see, so **the account key can
+BE the RomM user id** — no locally-generated UUID, and `users/<id> - <name>`
+needs no change at all. Cabinet needs UUIDs precisely because two profiles on one
+host collide on a host-keyed token, and that collision cannot arise here.
+
+**If this is ever reversed**, the folder name is what breaks first: user 1 on two
+different servers is one directory. Say so before changing it.
+
+**2. THE CONSOLE BOOTS AS WHOEVER PLAYED LAST**, and the account chip on Home
+opens the switcher. Not a picker at boot. **The common case in a house is one
+person and a boot picker taxes every boot to serve the exception** — and this
+console's whole premise is that it starts up like a console rather than asking
+questions. It also agrees with what open question 22 already decided for the
+offline case: the console stays as the last user it knew and offers no switcher
+it cannot honour.
+
+**3. ALL FOUR PARTS SHIP IN THE FIRST PASS**: switch between paired accounts,
+add one from the console, remove one, and an optional PIN on switching.
+
+**4. THE PIN IS OPTIONAL AND OFF BY DEFAULT**, which is what Cabinet settled
+after leaving it open. A full-screen number pad the pad can drive, not a text
+field in a dialog.
+
+#### The shape to build
+
+| | |
+|---|---|
+| `frontend/src/accounts.{h,cpp}` | the store: the list, which one is active, and one token per account |
+| token, per account | `~/.config/cabinetos/accounts/<rommUserId>.json` at 0600, replacing the single `romm.json` |
+| the list | `~/.config/cabinetos/accounts.json` — id, name, avatar, and the active id |
+| `accounts::activate(id)` | put that token in the client, `resolveCurrentUser`, reload |
+| the chip | Home's top-right, avatar or a lettered disc, opening the switcher |
+
+**ADDING AN ACCOUNT MUST NOT RE-ENTER FIRST RUN.** Cabinet pairs a new profile
+through its own standalone client rather than the live session, explicitly so
+that adding somebody mid-session cannot throw the app back to setup screens out
+from under whoever is signed in. This console has the same hazard and a worse
+version of it: `firstrun.cpp` decides whether setup is needed by asking whether
+there is a server address, a token and a user, and a half-added account is a
+machine that can fail that test. **Pair a new account with a separate
+`romm::Client`, and write nothing until it has answered `/api/users/me`.**
+
+**REMOVING THE ACTIVE ACCOUNT IS REFUSED**, the way Cabinet disables that row:
+removing who you are signed in as leaves the console holding a token nothing has
+a copy of.
+
+**THE OLD SINGLE TOKEN HAS TO BE ADOPTED, NOT ORPHANED.** Both machines here have
+a paired `~/.config/cabinetos/romm.json`, and so does every console anybody has
+installed. On first read with no `accounts.json`, that file is the first account
+and gets filed under whatever id `/api/users/me` returns. **Nobody should have to
+re-pair to gain a feature they did not ask for.**
+
+#### WHAT SWITCHING HAS TO TEAR DOWN, AND THIS IS THE PART THAT WILL BITE
+
+**Home is assembled from RomM's play history, and favourites and recents are the
+server's rather than local.** So they belong to the account and every one of them
+is wrong the instant it changes. Cabinet wipes its top shelf inside `activate`
+rather than rewriting it, and its comment says why: the new profile's recents take
+a round trip to arrive and Home must not be showing the previous person's games in
+the meantime.
+
+**The same rule applies here and the list is longer**, because this console also
+holds a download queue, a pending-upload directory and a keep list, all of them
+per user. **Nothing that was true of the old account may still be on screen after
+a switch.** Work out that list from `storage::userDir`'s children before writing
+the switch, not after somebody sees their sister's save.
+
+#### Out of scope, explicitly
+
+- **Anything that assumes two people at once.** One account is active; this is
+  switching, not multi-seat.
+- **Syncing which account is active between consoles.** Cabinet rules this out
+  per device and the same holds here.

@@ -2236,20 +2236,46 @@ storage question: **a single 37 GB title is larger than the free space this
 console keeps in reserve**, and the cache, both floors and Download All were
 all designed against cartridge and disc-sized games.
 
-### Account switching
+### Account switching — DESIGNED 2026-09-21, open question 26. Not built.
 
-RomM has users; tvOS already switches between them. Raised 2026-09-16 with the
-words "we would implement it slightly different", and explicitly deferred to a
-session of its own. Read Cabinet's tvOS account handling and
-`Auth/Keychain.swift` first (the token is already keyed by server host), then
-**ask what the difference is** before writing anything. It touches things
-already built: Home is assembled from RomM's play history, and favourites and
-recents are RomM's rather than local.
+**The question this entry used to end on has been asked and answered.** It said
+to read Cabinet and then *"ask what the difference is"* before writing anything.
+That happened: Cabinet's `TVProfileStore`, `TVAccountSwitcher` and its own
+`docs/scope-tvos-account-switching.md` were read, four questions were put to
+MMagTech, and **open question 26 has the decisions and the shape to build.** The
+short version:
 
-**And it now has a second half.** The token lives at
-`~/.config/cabinetos/romm.json` under the session user, and the server address
-lives in `/etc/cabinetos/session.env`, which is one machine-wide file. Neither
-shape has anywhere to put a second account.
+| | |
+|---|---|
+| **One server per console** | Every account is a user on the one paired server. A divergence from Cabinet, and it pays: a RomM user id is then unique, so **the account key is the RomM user id** and `users/<id> - <name>` needs no change. |
+| **Boots as whoever played last** | The chip on Home opens the switcher. No picker at boot — one person is the common case and a picker taxes every boot to serve the exception. |
+| **All four parts in the first pass** | Switch, add from the console, remove, and an optional PIN. |
+| **PIN off by default** | Cabinet's own answer after leaving it open. A number pad the pad can drive. |
+
+**THE STORAGE HALF WAS ALREADY FINISHED AND NOBODY HAD SAID SO.** `storage.h`'s
+per-user/shared table — saves and keeps per person, ROMs and BIOS and cores
+shared — is the same call Cabinet's design doc spends its longest section
+making, for the same reason: per-user containers would partition the ROM cache
+and make everyone in the house re-download the same disc. It is already right
+here.
+
+**AND THE TOKEN IS THE IDENTITY, WHICH IS WHAT MAKES THIS SMALL.**
+`resolveCurrentUser` asks `/api/users/me` with whatever token the client holds.
+Switching is: swap the token, re-resolve, reload. Cabinet's own comment on the
+equivalent: *"nothing downstream needs to know profiles exist at all."*
+
+**The two things that will bite, both in open question 26 in full:** adding an
+account must not re-enter first run (pair on a separate client and write nothing
+until `/api/users/me` answers, because `firstrun.cpp` decides setup is needed by
+looking for a token and a user, and a half-added account fails that test); and
+**everything on screen after a switch has to be torn down**, because Home,
+favourites and recents are the server's and belong to the account, and this
+console also holds a per-user download queue, pending uploads and keep list.
+
+**The existing single token is adopted, not orphaned.** Both machines here are
+paired at `~/.config/cabinetos/romm.json`; on first read with no `accounts.json`
+that file becomes the first account, filed under whatever id the server returns.
+Nobody re-pairs to gain a feature they did not ask for.
 
 ## Licensing, which is now written down
 
