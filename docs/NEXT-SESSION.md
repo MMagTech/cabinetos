@@ -484,9 +484,11 @@ cd frontend && make           the console, which dlopens it
 #### The shape, and why it is this one
 
 **PCSX2 NEVER GETS A WINDOW.** The frontend owns the one window there is, draws
-every screen in it and draws the overlay on top — which is what makes Pause,
-Save state and Exit to Home work the same for a PlayStation 2 game as for a
-Mega Drive one.
+every screen in it and draws the overlay on top — which is what makes Pause and
+Exit to Home work the same for a PlayStation 2 game as for a Mega Drive one.
+**Save state is deliberately NOT on that list**: open question 25 decided PS2
+does not get one. The point stands without it — one window, one overlay, one
+way out.
 
 So PCSX2 runs **surfaceless on its own thread** and hands over the finished
 frame as a buffer of pixels, a width and a height — **exactly what eighteen of
@@ -639,11 +641,28 @@ double buffer makes that a pointer swap. Entirely our own code.
 - ~~**NOBODY HAS PLAYED IT WITH A PAD YET.**~~ **PLAYED, 2026-09-21**, and it
   found three faults nothing here had caught — see below. What is still owed is
   a long session rather than a first look.
-- **SAVE STATES DO NOT WORK AND REPORT SO HONESTLY.** `Core::stateSize()` is 0
-  for PlayStation 2, because PCSX2's states are its own slot files keyed by disc
-  serial and CRC rather than a buffer. Open question 12b: whatever this console
-  does there is new work, and nothing crossing between machines today constrains
-  it.
+- **PLAYSTATION 2 HAS NO SAVE STATES AND IS NOT GOING TO — DECIDED 2026-09-21,
+  OPEN QUESTION 25.** `Core::stateSize()` returns 0 for PlayStation 2 and says
+  so honestly, and **that is the finished answer rather than work owed.** An
+  earlier version of this entry said "whatever this console does there is new
+  work"; MMagTech asked the question before that one — *"should these more
+  modern system even have save and load states or just the memory cards"* — and
+  the answer for PS2, GameCube and everything after them is no.
+
+  **THE REASON THAT SETTLES IT ON ITS OWN: a PCSX2 state is tied to the emulator
+  build, so pushing an image would silently stop everyone's states loading.**
+  That is data loss on this project's release schedule rather than on the
+  player's. The other two reasons are that these machines have real save systems
+  every game uses, and that a state from this build opens on no other machine
+  while the library is meant to travel. **Memory cards are the save story here
+  and they already work.**
+
+  **DO NOT GO AND MAKE PCSX2 SERIALISE TO MEMORY.** It is the obvious next step,
+  it is why this entry used to point at open question 12b, and it is the step
+  that was deliberately not taken. Open question 25 has the whole argument,
+  including what a *resume* feature would be instead — one invisible snapshot
+  per game, Xbox Quick Resume's shape, which is a different feature and is not
+  queued.
 - ~~**NOTHING IS IN CI OR IN THE IMAGE.**~~ **IT IS IN BOTH, 2026-09-21, AND
   THE IMAGE BUILD ASSERTS ALL FOUR PIECES.** `.github/workflows/build-pcsx2.yml`
   builds it at the pinned v2.8.2 and uploads it in the same three-folder shape
@@ -1244,7 +1263,10 @@ into the launch path as well as the audit. Two things are left:
 
 Reproducible to the digit, the instrument was checked, and three candidate
 causes are written down with none established. It blocks nothing today, and it
-matters because portable save states are the premise the whole product rests on.
+matters because portable save states are the premise the CARTRIDGE-ERA half of
+this product rests on — **bounded by open question 25 on 2026-09-21**, which
+removed them from PS2, GameCube and everything after. N64 is on the side where
+they stay, so this is still worth fixing.
 The cheapest discriminating experiment is in PROJECT.md.
 
 ### 9. PSP's save state, and a crash that is understood but not closed
@@ -2304,6 +2326,21 @@ at its draw site. This is a list, not the record.
   server with nothing for this core falls back to this machine's newest state.
 
 #### What is left, and it is short
+
+- **WHETHER THE CARTRIDGE-ERA CORES KEEP "SAVE STATE" IN THE PAUSE MENU IS OPEN,
+  AND IT IS A UI DECISION.** Open question 25 removed save states from PS2,
+  GameCube and everything after on 2026-09-21, and **explicitly left the
+  twenty-one older cores open** — there a state is often the only way to stop
+  mid-level, and it is the idiom every emulator frontend uses. So the menu would
+  offer different items on different systems, which needs deciding rather than
+  assuming. **The defensible principle is *states exist where the system has no
+  save of its own*** — roughly the cartridge/disc line, but per-GAME in truth,
+  and a rule that is nearly right is how a console ends up feeling arbitrary.
+
+  **It belongs in this session, not in an emulator change.** Open question 25
+  says so directly: it touches 21 working cores, the pause menu's shape and what
+  Cabinet's other platforms expect in a RomM row, and it is one conversation
+  with open question 23 and the UI pass rather than three features.
 
 - **SAVE AND LOAD STATE ARE UNVERIFIED BY A PERSON.** Everything above was built
   and compiled at the end of a long session and MMagTech had not yet retried it.
