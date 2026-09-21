@@ -34,6 +34,13 @@ an address, a token and a user is adopted rather than walked through a wizard.
 That rule matters more than the marker file: the reference console was set up by
 hand and must never be shown a setup screen.
 
+**GAMESCOPE WILL COMPOSITE OUR MENU OVER A WINDOW WE DO NOT OWN — ANSWERED
+2026-09-21, and it is a yes.** Item 1 has it and PROJECT.md open question 24 has
+all of it. The one thing to carry in your head before you go near it:
+**`gamescopectl screenshot` DOES NOT CAPTURE THE OVERLAY PLANES**, with any
+type, so a capture showing "no overlay" means nothing at all. Look at the
+television. Most of a session went to that.
+
 **THE HANDOVER GOES IN THE WORK'S OWN PULL REQUEST.** Write it inside the
 branch that does the work it describes, so there is never a handover-only push
 and never a handover-only pull request. The rule and the one narrow exception
@@ -252,85 +259,92 @@ both rules are measured and in `filesave.cpp`.
 - **TWO OPEN BUGS FROM ONE HOUR OF PLAY, both reported by MMagTech and neither
   reproducible from here.** See item 1b.
 
-### 1. START HERE: WILL GAMESCOPE PUT OUR MENU OVER A WINDOW WE DO NOT OWN?
+### 1. GAMESCOPE WILL COMPOSITE OUR MENU OVER A WINDOW WE DO NOT OWN — ANSWERED 2026-09-21
 
-**One question, and it decides the whole shape of PlayStation 2 — and of every
-heavy system after it.** MMagTech's call, 2026-09-21, and he is right that it
-comes before any more measuring.
+**Yes, on all three counts, proved on the reference console's own television at
+3840x2160.** This was the question at the top of this file and it is settled.
+The whole thing is written up in PROJECT.md, open question 24; this is the short
+version and the traps.
 
-**THE PROBLEM, PLAINLY.** PCSX2 renders the picture on the GPU. To get it onto
-the television this console copies it OFF the card, hands it over, and copies it
-BACK ON to draw it. A normal PCSX2 — on Windows, on Bazzite — never does this:
-it draws straight to the screen. We do it so the console can draw its own pause
-menu over the game.
+| | |
+|---|---|
+| Composites a window we do not own | **Yes.** glxgears drew over a vkcube it has no relationship with. |
+| The game shows through our transparency | **Yes.** MMagTech, looking at the set: *"i can see through the green"*. |
+| Our overlay takes the pad, and gives it back | **Yes**, one atom, while the game keeps the screen. |
 
-**MMagTech, 2026-09-21: "i didnt buy this mini pc to be gimped in performace
-especually compared to it running on windows."** He has seen this exact machine
-running PlayStation 2 at 5x on Windows. That is the right standard and the
-hardware is not the constraint: Linux and gamescope should be a LIGHTER path to
-the screen than the Windows desktop, not a heavier one.
+All three confirmed together in the `STEAM_OVERLAY` slot, MMagTech watching the
+set: *"yes magenta is therre and i can see throught the green bar and the cube
+keeps spinning"*. **The cube still spinning is the part that matters** — the game
+goes on rendering while the overlay holds the pad.
 
-**THE QUESTION TO ANSWER FIRST, BEFORE BUILDING OR MEASURING ANYTHING:**
+The input result is exactly a pause menu:
 
-> Can the frontend draw its overlay on top of a window that PCSX2 owns and
-> presents to directly?
+```
+Global focus window:          0x400000 (Vkcube X11)            <- game keeps presenting
+Global input focus window:    0x600002 (cabinetos overlay probe)
+Global keyboard focus window: 0x600002 (cabinetos overlay probe)
+```
 
-If yes, PlayStation 2 draws straight to the screen at full speed, nothing is
-copied, and no patch is needed. **That is how Bazzite runs emulators, how Steam
-draws its overlay over a game it does not own, and how Batocera works.** Ours is
-the unusual arrangement, not theirs.
+Reproduce it with `tools/gamescope-overlay-test.sh steam`, on the A9. It borrows
+the television and puts it back on every exit path.
 
-#### IT IS NOT JUST PLAYSTATION 2 — IT IS THE WHOLE HEAVY-SYSTEMS TIER
+#### THE SLOT IS NOT THE OBVIOUS ONE
 
-MMagTech asked whether every emulator should move to this if it works. **No, and
-the line is sharp and worth knowing.**
+`GAMESCOPE_EXTERNAL_OVERLAY` is the one everything documents and it is **wrong
+for this**. It composites and it can never take input — gamescope grants input
+focus only under `if (w->isOverlay && w->inputFocusMode)`, and `isOverlay` is the
+`STEAM_OVERLAY` atom. External is the HUD slot; mangoapp lives there and a HUD
+never needs the pad. **A pause menu has to be `STEAM_OVERLAY` + `STEAM_INPUT_FOCUS`**
+— the slot Steam's own overlay uses to draw over a game it does not own.
 
-**THE TWENTY-ONE LIBRETRO CORES DO NOT HAVE THIS PROBLEM AND MUST NOT BE
-MOVED.** There the FRONTEND creates the graphics device and lends it to the
-core, so the core renders straight into a texture the console already owns.
-Nothing is copied and nothing waits. Dreamcast, N64 and PSP have never paid this
-cost. Moving them to a composited window would trade a working single path for
-two.
+#### THE TRAP THAT COST MOST OF THE SESSION
 
-**IT IS THE EMULATORS THAT ARE NOT LIBRETRO CORES.** PCSX2 makes its own device
-and refuses one from outside — checked, on both its Vulkan and its OpenGL paths.
-So does standalone Dolphin, and so do RPCS3, xemu and Eden.
+**`gamescopectl screenshot` DOES NOT CAPTURE EITHER OVERLAY PLANE.** Not the
+default type 1, and not type 2, whose own description says "the game +
+overlays". A capture taken with a working overlay on screen comes back showing
+only the game. Hours went into chasing an overlay that was on the television the
+whole time, and it ended because MMagTech looked up and said the gears were in
+the top left.
 
-**SO THIS TEST IS THE PATTERN FOR EVERY HEAVY SYSTEM, NOT A PLAYSTATION 2
-FIX.** PlayStation 3, Switch, Xbox and Wii U are all standalone emulators with
-exactly this shape, and MMagTech has said all of them are coming — open question
-12b. Whatever answer this question gets is the answer for all of them, which is
-most of why it is worth doing before anything else.
+**There is no capture path that shows this. Look at the television, or
+photograph it.** Same lesson as "judge the look only on the A9", in a new
+costume: the instrument was lying, and lying plausibly.
 
-**WHAT IT WOULD COST IF IT WORKS, AND IT IS THE THING TO PROTECT.** The overlay
-is what makes this console different — one pause menu, one save-and-quit,
-identical for a Mega Drive and a PlayStation 2, working because the console
-draws the game itself. Handing the screen to PCSX2 means the overlay has to be
-composited on top instead. **If that does not work cleanly, the trade is the
-console's best feature for frame rate, and it is not worth it.**
+Two more that each look like a compositor refusing:
 
-**DO NOT BUILD IT FIRST. FIND OUT WHETHER GAMESCOPE WILL DO IT** — that is a
-small experiment, not an integration, and everything else follows from the
-answer.
+- **Both slots are read only from the ROOT Xwayland context.** A window on any
+  other server carries the atom correctly and is silently never consulted.
+- **The atoms must be set BEFORE the window maps.** Afterwards sets a flag on a
+  window nothing re-examines. Poking `_NET_WM_WINDOW_OPACITY` forces the rescan,
+  which is a testing lever and not a design.
 
-#### THE NUMBERS THAT PROMPTED THIS, AND WHY THEY ARE NOT TRUSTWORTHY
+And the overlay is painted **`NoScale`**, at its own pixel size — the frontend
+would render its menu at the panel's full resolution itself. glxgears landing
+300x300 in the corner of a 4K screen is what getting that wrong looks like.
 
-The picture path costs **6.1 ms on average and 12.2 ms at worst** at 4x, paced
-to 60 Hz. That is 37% and 73% of a frame budget.
+#### WHAT THIS DOES NOT SETTLE, AND IT IS MOST OF THE WORK
 
-**BUT THAT FIGURE IS MEASURED AROUND THE WHOLE HANDOVER AND INCLUDES WAITING FOR
-PCSX2 TO FINISH DRAWING**, which Windows waits for too. The share that is
-actually OUR overhead has never been separated out, and this project has been
-fooled by exactly this before: when the Vulkan path was built for the libretro
-cores, the "expensive copy" turned out to be **twelve microseconds** of copying
-and everything else was waiting for the GPU. That is recorded in `vkhost.cpp`
-specifically so nobody repeats it, and this session repeated it.
+**Nothing has been built.** One test program and a stand-in game. The frontend
+has not been split, PCSX2 has not been given a window, no emulator has run this
+way, and our own renderer has never drawn into a transparent surface.
 
-**So do not quote 6 ms as overhead.** If the compositing route above does not
-work, splitting that number is the next job — about twenty minutes — and only
-then is there a case for anything else.
+**Nobody has measured what it saves.** 6.1 ms is what the CURRENT path costs.
+The compositing path's own cost has not been measured at all. It should be near
+nothing — and *should be* is how this project has been wrong before, twice, in
+exactly this area.
 
-#### AND IF NEITHER WORKS, THE PATCH DECISION DESERVES REVISITING
+**THE PRICE IS TWO PATHS TO THE SCREEN, not the atoms.** The twenty-one libretro
+cores must NOT move: there the frontend creates the device and lends it to the
+core, which renders into a texture we already own, and nothing is copied.
+Dreamcast, N64 and PSP have never paid this cost. So taking this route means the
+console keeps one path for cores and gains another for standalone emulators. That
+is the thing to weigh, and it is a design decision rather than a measurement.
+
+**It applies to every heavy system, which is why it was worth doing first.** PS3,
+Switch, Xbox and Wii U are all standalone emulators of exactly this shape and
+MMagTech has said all of them are coming — open question 12b.
+
+#### AND THE PATCH DECISION IS STILL WORTH REVISITING, SEPARATELY
 
 Open question 12b records MMagTech ruling out a second patch to PCSX2, and that
 decision stands on its own reasoning. **But it was made on a cost I described
@@ -339,7 +353,6 @@ machine on Windows". A decision made on bad information is worth putting back in
 front of him with good information. **That is not the same as reinterpreting a
 settled decision because an easier path runs**, which this project forbids and
 was burned by a session ago.
-
 ---
 
 ### 1a. PLAYSTATION 2 PLAYS FROM UPSTREAM PCSX2, IN THE CONSOLE — 2026-09-21
@@ -615,7 +628,17 @@ picture somebody has to squint at. **And check the binary's checksum against
 the one you built before believing a deploy**; nothing does that automatically
 yet.
 
-### 1b. TWO BUGS FOUND BY PLAYING, NEITHER REPRODUCIBLE — OPEN
+### 1b. ONE BUG LEFT OF THE TWO FOUND BY PLAYING — THE TUNNEL IS GONE
+
+#### THE TUNNEL IS FIXED — MMagTech, 2026-09-21: *"tunnel was gone on new core"*
+
+It went away with the move to upstream PCSX2, so it belonged to the libretro
+core that has since been deleted from the machine — which is also why it never
+reproduced from here: **every measurement was taken against the emulator that
+did not have the fault.** No change was made to chase it and none is needed.
+
+The investigation is kept below because its conclusion was right for the wrong
+reason, and the warning at the end of it is still good advice.
 
 **"It looks like I was looking through a tunnel when racing"**, Burnout 3 on
 the television. **Every capture taken here measures a correct 4:3 picture
@@ -636,6 +659,8 @@ Mac's memory card. **Do not trust a bounding-box measurement here**: the first
 three this session were confounded by the game's own black borders and by the
 pause menu's dimming, and one of them sent an hour the wrong way.
 
+#### STILL OPEN: THE PAUSE MENU'S EXIT LEAVES THE CONSOLE STUCK
+
 **THE PAUSE MENU'S EXIT LEFT THE CONSOLE STUCK.** The menu was on screen with
 "Exit to Home" focused and the process was **asleep at 0% CPU** — and the UI
 loop is unpaced, so 0% means the frame loop had STOPPED, not that a button was
@@ -654,9 +679,9 @@ the right way up. Read this order before picking anything up.
 
 | | |
 |---|---|
-| **0** | **WILL GAMESCOPE COMPOSITE OUR OVERLAY OVER A WINDOW PCSX2 OWNS? — item 1.** One experiment, not an integration. It decides whether PlayStation 2 keeps copying its picture through the CPU or draws straight to the screen like it does on Windows, and it decides the same thing for every heavy system after it. **Do not measure or build anything else first.** |
+| **0** | ~~WILL GAMESCOPE COMPOSITE OUR OVERLAY?~~ — **ANSWERED YES, item 1.** It composites, the game shows through our transparency, and our overlay takes the pad and gives it back while the game keeps the screen. **The next step is a DECISION, not a test:** the route costs two paths to the screen — the libretro cores keep rendering into our own texture and must not move — and nobody has yet measured what it saves. **That measurement is the cheapest thing on this list** and it is about twenty minutes: split the 6.1 ms into "waiting for PCSX2" and "our own overhead" before designing anything around it. |
 | **0a** | ~~EMBED UPSTREAM PCSX2~~ — **DONE AND PLAYING, see item 1a.** Upstream builds as a library on Linux with **no patches**; `cores/build-pcsx2.sh` reproduces it in 43 seconds. What is left is the host layer — 55 `Host::` functions and four other symbols, most of them one-liners, with **six that are real work** and all six in the display path the Vulkan host already serves. **Write it: there is no cheaper step in front of it**, and gsrunner cannot stand in because it only replays GS dumps. |
-| **0b** | **THE TWO BUGS IN ITEM 1b**, which need MMagTech to catch them — leave the console stuck rather than restarting it. GameCube's core CAN be pinned into `cores/build-core.sh` and that part still stands. |
+| **0b** | **THE REMAINING BUG IN ITEM 1b** — the pause menu's Exit leaving the console asleep at 0% CPU. It needs MMagTech to catch it: **leave the console stuck rather than restarting it**, and take a backtrace. The tunnel is GONE, fixed by the new core. GameCube's core CAN be pinned into `cores/build-core.sh` and that part still stands. |
 | **1** | ~~PLAYSTATION 2 AND GAMECUBE~~ — **done to the point of playing**, see above. The original entry follows for its reasoning. **PLAYSTATION 2 AND GAMECUBE.** MMagTech's call, 2026-09-20, and the largest thing on this list: 85 games, and the only missing tier with a working implementation to copy. **Open question 12b has the order and 12 has the numbers.** Start by reading `tools/build-dolphin-mac.sh` in Cabinet — those two are NOT libretro cores and nobody wrote down why. |
 | **2** | **A GAME CAN GO BLACK AND NOBODY KNOWS WHY.** Six launches in one session drew nothing but the letterbox glow while the core ran and made sound. Not reproduced since. Two theories tested and both falsified. See item 3b — it has the instruments. |
 | **3** | **Judge the TATE look, and Home, on the 65-inch.** Both are on the machine and neither has been looked at properly. |
