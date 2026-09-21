@@ -2204,10 +2204,43 @@ question 10 assumes *"a machine that stays awake and blanks its display"* is the
 likely default, and the image deliberately keeps `ds-inhibit`, whose entire job
 is making idle detection behave properly on a machine that does not detect idle.
 
-**Take it with the CEC work**, because the console turns the television on and is
-woken by it, and blanking our output while the set stays on is a different
-behaviour from letting the set sleep while we stay lit. The two answers have to
-agree.
+**BLANKING DOES NOT NEED CEC, AND THAT SPLITS THIS IN TWO — asked and answered
+2026-09-21.** MMagTech: *"if computers don't have CEC then how does my monitor
+wake and sleep on my computer?"* It does not use CEC. **DPMS** is power
+management on the VIDEO link — the machine stops sending a picture and the
+display sleeps by itself. **CEC** is a control bus that sends commands, and it
+is only needed to turn a set back ON and pick its input.
+
+| | Needs CEC |
+|---|---|
+| Blank the screen, let the set sleep | **No** |
+| Turn the television on and select the input | **Yes** |
+
+So **half of this is not blocked on the CEC work**, which the old text implied
+it was. `/sys/class/drm/card1-HDMI-A-1/dpms` is present and writable on the A9
+and nothing ever writes to it.
+
+**AND THERE IS NO CEC ADAPTER ON THAT MACHINE AT ALL** — no `/dev/cec*`
+devices, measured 2026-09-21. CEC over HDMI on PC graphics is often not wired
+up by the driver, so this may be impossible on this hardware rather than merely
+unwritten. **Check before planning around it.**
+
+**BURN-IN IS THE REASON TO DO IT.** MMagTech's framing, and it is the right
+one: not tidiness, hardware damage on somebody's television. The risk here is
+specific — the top bar, the account chip and the shelf headers are bright,
+static and in fixed positions, on a console that sits on Home for hours. **A
+paused game is the second case and is worse**, because a frozen HUD is brighter
+and nothing dims it.
+
+Cheapest first, and the order matters: **pixel shift** (nudge the canvas a few
+points every few minutes — nearly free, since everything is already drawn
+against a canvas origin, and it needs no idle detection at all), then **dim
+then blank on idle** (the dim is ours, the blank is the DPMS node, and this is
+the part that needs the idle detection that does not exist), and **a
+screensaver last** — it looks like the answer and is the weakest, because the
+panel stays lit.
+
+Open question 10b has all of it.
 
 ### Switch, or Xbox
 

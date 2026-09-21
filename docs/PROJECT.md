@@ -5636,6 +5636,78 @@ a decision and something to make it.
 survivable and honest. It wants a session of its own, with the CEC work, because
 the two answers have to agree.
 
+#### BLANKING DOES NOT NEED CEC, AND THAT SPLITS THIS IN TWO — 2026-09-21
+
+**MMagTech asked the question that unpicks it:** *"if computers don't have CEC
+then how does my monitor wake and sleep on my computer?"* It does not use CEC,
+and neither would we for the half that matters.
+
+**They are different mechanisms on the same cable.**
+
+- **DPMS** is display power management on the VIDEO link. The machine simply
+  stops sending a picture; the display sees no active video and enters standby
+  on its own, then wakes when signal returns. No command is sent and none is
+  needed. This is why every desktop monitor in the world sleeps.
+- **CEC** is a slow control bus on pin 13 that sends devices actual commands —
+  *turn on*, *switch to HDMI 2*, *I am going to standby*. It is what a
+  streaming stick uses to wake a television and select its input.
+
+**So the asymmetry is the whole finding:**
+
+| | Needs CEC |
+|---|---|
+| Blank the screen, let the set sleep | **No** |
+| Turn the television on and select the input | **Yes** |
+
+**THIS PARTLY CONTRADICTS "the two answers have to agree", above.** They still
+have to agree about *suspending the machine* and about waking a set that has
+gone to standby — but **blanking our own output is available today, on this
+hardware, with no CEC work in front of it.** Half of this open question is not
+blocked on the other half, and the paragraph above reads as though it were.
+
+**AND THERE IS NO CEC ADAPTER ON THIS HARDWARE AT ALL.** Measured on the A9,
+2026-09-21: no `/dev/cec*` devices exist. CEC over HDMI on PC graphics is
+patchy and frequently not wired up by the driver at all, so **"we do not have
+CEC" may be a fact about the machine rather than a feature nobody has written
+yet.** Check that before planning anything around it — the work might be
+impossible on this hardware rather than merely unstarted.
+
+The DPMS node, by contrast, is present and writable:
+
+```
+/sys/class/drm/card1-HDMI-A-1/dpms = On     and nothing ever writes to it
+```
+
+#### BURN-IN IS THE REASON TO DO THIS, AND IT RAISES THE PRIORITY
+
+The bullet above calls burn-in "a real cost". **MMagTech's framing is stronger
+and it is the right one:** this is not a tidiness problem, it is hardware
+damage on somebody's television, and it is the argument for doing the work
+rather than a side effect of it.
+
+**What is actually at risk is specific rather than general.** This frontend
+holds bright static elements in fixed positions — the top bar, the account
+chip, the "Recent" and "Favorites" headers — on a console that may sit on Home
+for hours. That is the burn-in shape exactly. **A paused game is the second
+case and nobody has considered it**: a HUD frozen on screen indefinitely is
+worse than a menu, because it is brighter and nothing dims it.
+
+Three mitigations, cheapest first, and the first is nearly free here:
+
+1. **PIXEL SHIFT.** Nudge the whole canvas a few points every few minutes.
+   Everything is already drawn per frame against a canvas origin, so this is an
+   offset rather than a feature. No idle detection required — it can run always.
+2. **DIM ON A SHORT IDLE, BLANK ON A LONGER ONE.** The dim is entirely inside
+   our renderer; the blank is the DPMS node above. This is the one that needs
+   idle detection, which is the part that does not exist.
+3. **A screensaver.** More work, and arguably WORSE than blanking for burn-in,
+   because the panel stays lit. Do not reach for it first because it is the
+   most visible.
+
+**The order matters.** Pixel shift needs nothing this console lacks and helps
+every case including a paused game; blanking needs idle detection and helps
+most; a screensaver looks like the answer and is the weakest of the three.
+
 ### 11. NVIDIA hardware
 **Raised: Phase 1. Out of scope until there is hardware that needs it.**
 
