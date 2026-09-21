@@ -1930,7 +1930,37 @@ should change; it is a one-line edit nobody has made.
 `podman image prune -f` is still the first thing to try when `/var` gets tight,
 then `~/cabinetos/.core-src`.
 
-## Three things the user wants discussed, each in its own session
+## Things the user wants discussed, each in its own session
+
+### A pass over the whole UI, taking lessons from SteamOS — NEW 2026-09-21
+
+MMagTech, after the pause menu was restyled: *"what id also like to probably
+move to after the ps2 is wrapped up is just tweaking the whole ui in general. I
+think we could still keep the cabinet look while taking lessons from steamos on
+how to better implement it."*
+
+**The constraint is in his own sentence and it is the important half: KEEP THE
+CABINET LOOK.** This is not a redesign and not a move to SteamOS's visual
+language. It is taking what Valve got right about a console UI operated from a
+sofa with a pad — density, focus legibility, how far the eye travels, how
+quickly a thing can be reached — and applying it to a look that already exists
+and that Cabinet ships on three platforms.
+
+**AFTER PLAYSTATION 2 IS WRAPPED UP**, which is his sequencing and is right: the
+PS2 work has a finish line in sight and a UI pass has no natural end.
+
+**IT HAS ALREADY STARTED, IN ONE PLACE, AND THAT PLACE IS NOW INCONSISTENT.**
+The pause menu was moved off glass to a lit, translucent surface on 2026-09-21,
+because it has to work over a picture this console did not draw. Home, Library,
+Grid and Detail are still glass. **That split is deliberate and defensible for
+now** — MMagTech: *"we will stick to just the menu for now"* — but it is the
+obvious first question for the UI session, and the honest options are to move
+the rest to the new treatment or to accept that the pause menu is a different
+kind of surface from the browsing screens.
+
+The renderer gained two things in that work which the rest of the UI can use and
+does not yet: a vertical gradient fill on any shape, and a top-edge highlight
+that is not the focus rim. Both are off by default.
 
 ### One quality setting for the whole console — open question 23, NEW
 

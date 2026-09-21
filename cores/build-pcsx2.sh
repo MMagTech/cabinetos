@@ -230,6 +230,46 @@ if [ -d "$ROOT/frontend/ps2" ]; then
     cp "$SRC/$BUILD/cabinet-ps2-probe" "$OUT/" 2>/dev/null || true
     # The file the console loads. Named the way catalog.cpp will look for it.
     cp "$SRC/$BUILD/cabinetos-ps2.so" "$OUT/" 2>/dev/null || true
+
+    # --- EVERYTHING ELSE THE CONSOLE NEEDS TO RUN IT ------------------------
+    #
+    # This script used to stop at the .so, and for as long as PlayStation 2 was
+    # only ever run by hand on the reference console that was enough: the two
+    # bundled libraries and PCSX2's resources had been put beside it by hand,
+    # once, and nothing wrote down that they had been. An image built from this
+    # script's output would have carried an emulator that cannot dlopen and,
+    # if it had, one that refuses to start because its resources are absent.
+    #
+    # So the OUTPUT OF THIS SCRIPT IS NOW THE WHOLE PAYLOAD, which is what CI
+    # uploads and what ci/stage-image-payload.sh installs.
+
+    # The libraries the console's image does not have. compile.sh works out
+    # which those are rather than being told — see the long comment there — and
+    # writes the list it acted on, so this copies what it actually bundled and
+    # cannot drift from it.
+    if [ -f "$SRC/$BUILD/cabinetos-ps2.bundled" ]; then
+        cp "$SRC/$BUILD/cabinetos-ps2.bundled" "$OUT/"
+        while read -r soname; do
+            [ -n "$soname" ] || continue
+            cp -L "$SRC/$BUILD/$soname" "$OUT/" || {
+                echo "compile.sh said it bundled $soname and it is not there" >&2
+                exit 1
+            }
+        done < "$SRC/$BUILD/cabinetos-ps2.bundled"
+        echo "bundled libraries: $(tr '\n' ' ' < "$OUT/cabinetos-ps2.bundled")"
+    fi
+
+    # PCSX2 REFUSES TO START WITHOUT ITS RESOURCES — its game database, its
+    # fonts and its GS shaders. Not a warning and not a degraded picture: it
+    # does not boot. They are upstream's own bin/resources and they are 9.4 MB.
+    if [ -d "$SRC/bin/resources" ]; then
+        rm -rf "$OUT/resources"
+        cp -R "$SRC/bin/resources" "$OUT/resources"
+        echo "resources: $(du -sh "$OUT/resources" | cut -f1)"
+    else
+        echo "upstream has no bin/resources — PCSX2 would not start" >&2
+        exit 1
+    fi
 fi
 
 # --- the probe -------------------------------------------------------------

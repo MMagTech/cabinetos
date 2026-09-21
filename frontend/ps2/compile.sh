@@ -194,8 +194,21 @@ for _pass in 1 2 3 4 5; do
     )
     [ "$added" -eq 0 ] && break
 done
+
+# THE MANIFEST IS WRITTEN FROM WHAT IS ACTUALLY BESIDE THE EMULATOR, not from
+# what this run happened to copy.
+#
+# The loop above skips a library that is already present — correctly, there is
+# nothing to do — but it skipped RECORDING it too, so a second build in a tree
+# that already had them copied nothing and wrote an EMPTY manifest while both
+# libraries sat right there. That is invisible until something stages from the
+# manifest, and then it ships an emulator that cannot dlopen, with the failure
+# arriving when a person starts a game. Found 2026-09-21, before it shipped,
+# only because the file was looked at rather than trusted.
+ls "$BUILD"/lib*.so.* 2>/dev/null | xargs -r -n1 basename | sort -u \
+    > "$BUILD/cabinetos-ps2.bundled"
 if [ -s "$BUILD/cabinetos-ps2.bundled" ]; then
-    echo "host layer: bundled $(tr '\n' ' ' < "$BUILD/cabinetos-ps2.bundled")"
+    echo "host layer: carries $(tr '\n' ' ' < "$BUILD/cabinetos-ps2.bundled")"
 fi
 
 /tmp/dlcheck "$BUILD/cabinetos-ps2.so"

@@ -121,9 +121,24 @@ jobs:
       packages: write
     uses: ./.github/workflows/build-core.yml
 
+  # PLAYSTATION 2 IS NOT A CORE, which is why it is a separate workflow rather
+  # than a twenty-second arm of the matrix — see the header of build-pcsx2.yml.
+  # It produces an artifact of the same shape, so the download below needs no
+  # special case, and ci/stage-image-payload.sh REFUSES TO BUILD AN IMAGE
+  # WITHOUT IT. That refusal is the point: a missing emulator does not break
+  # this console, it makes catalog.cpp report PlayStation 2 as "not built on
+  # this console yet" and quietly costs the library 71 games.
+  playstation2:
+    name: PlayStation 2
+    needs: lint
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/build-pcsx2.yml
+
   build_push:
     name: Build and push image
-    needs: [lint, frontend, cores]
+    needs: [lint, frontend, cores, playstation2]
     runs-on: ubuntu-24.04
 
     permissions:
@@ -142,11 +157,12 @@ jobs:
         with:
           remove-codeql: true
 
-      # The frontend and the twenty-one cores, from the jobs above. Merged
-      # into one directory, which works because each artifact was staged into
-      # the same three folders and no two of them hold a file of the same
-      # name: bin/ comes from the frontend, cores/ has one .so per core, and
-      # system/ exists in PPSSPP's artifact alone.
+      # The frontend, the twenty-one cores and PlayStation 2, from the jobs
+      # above. Merged into one directory, which works because each artifact was
+      # staged into the same three folders and no two of them hold a file of
+      # the same name: bin/ comes from the frontend, cores/ has one .so per
+      # core plus the PS2 emulator and its two libraries, and system/ has
+      # PPSSPP's files and PCSX2's resources under different directories.
       - name: Fetch the frontend and the cores
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7.0.0
         with:
