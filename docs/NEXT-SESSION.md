@@ -280,6 +280,28 @@ copied, and no patch is needed. **That is how Bazzite runs emulators, how Steam
 draws its overlay over a game it does not own, and how Batocera works.** Ours is
 the unusual arrangement, not theirs.
 
+#### IT IS NOT JUST PLAYSTATION 2 — IT IS THE WHOLE HEAVY-SYSTEMS TIER
+
+MMagTech asked whether every emulator should move to this if it works. **No, and
+the line is sharp and worth knowing.**
+
+**THE TWENTY-ONE LIBRETRO CORES DO NOT HAVE THIS PROBLEM AND MUST NOT BE
+MOVED.** There the FRONTEND creates the graphics device and lends it to the
+core, so the core renders straight into a texture the console already owns.
+Nothing is copied and nothing waits. Dreamcast, N64 and PSP have never paid this
+cost. Moving them to a composited window would trade a working single path for
+two.
+
+**IT IS THE EMULATORS THAT ARE NOT LIBRETRO CORES.** PCSX2 makes its own device
+and refuses one from outside — checked, on both its Vulkan and its OpenGL paths.
+So does standalone Dolphin, and so do RPCS3, xemu and Eden.
+
+**SO THIS TEST IS THE PATTERN FOR EVERY HEAVY SYSTEM, NOT A PLAYSTATION 2
+FIX.** PlayStation 3, Switch, Xbox and Wii U are all standalone emulators with
+exactly this shape, and MMagTech has said all of them are coming — open question
+12b. Whatever answer this question gets is the answer for all of them, which is
+most of why it is worth doing before anything else.
+
 **WHAT IT WOULD COST IF IT WORKS, AND IT IS THE THING TO PROTECT.** The overlay
 is what makes this console different — one pause menu, one save-and-quit,
 identical for a Mega Drive and a PlayStation 2, working because the console
