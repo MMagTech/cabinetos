@@ -87,6 +87,18 @@ namespace
 	// answer is to share PCSX2's Vulkan image instead. That is a decision to
 	// make against a number, and this is the number.
 	std::atomic<double> s_readback_us{0.0};
+	std::atomic<double> s_readback_worst{0.0};
+	std::atomic<uint64_t> s_readback_over{0};
+
+	// Skips the readback entirely, for one experiment: is the picture path what
+	// makes a game hitch, or is it the emulator? With this on, PCSX2 renders
+	// and nothing is taken off it, so anything still stuttering is not ours.
+	// Set CABINETOS_PS2_NO_READBACK to use it. Costs nothing when unset.
+	bool NoReadback()
+	{
+		static const bool off = std::getenv("CABINETOS_PS2_NO_READBACK") != nullptr;
+		return off;
+	}
 	std::atomic<bool> s_stop_requested{false};
 	std::atomic<bool> s_paused{false};
 	std::atomic<uint64_t> s_frames{0};
@@ -244,6 +256,7 @@ void Host::BeginPresentFrame()
 	// handover happens here rather than anywhere more convenient.
 	const uint64_t frame = s_frames.fetch_add(1);
 
+	if (!NoReadback())
 	{
 		const auto started = std::chrono::steady_clock::now();
 
@@ -281,6 +294,13 @@ void Host::BeginPresentFrame()
 		// resolution change compiles pipelines and is worth ten of the others.
 		const double prev = s_readback_us.load();
 		s_readback_us.store(prev == 0.0 ? us : (prev * 0.95 + us * 0.05));
+
+		// The worst one and how often it blew a 60Hz budget. An average cannot
+		// describe a stutter; a maximum can.
+		if (us > s_readback_worst.load())
+			s_readback_worst.store(us);
+		if (us > 16666.0)
+			s_readback_over.fetch_add(1);
 	}
 
 	if (s_config.dump_count == 0 || s_config.dump_dir.empty())
@@ -995,11 +1015,21 @@ CabinetPS2::Metrics CabinetPS2::GetMetrics()
 {
 	Metrics m{};
 	m.frames = s_frames.load();
+
+	// THE READBACK FIGURES ARE ABOVE THE EARLY RETURN ON PURPOSE. They describe
+	// the run that happened, not a machine that is still going, so asking for
+	// them after the game has stopped — which is exactly when a summary is
+	// printed — must not answer zero. The first version had them below and
+	// reported "avg 0us WORST 0us" for a run that had plainly done the work.
+	m.readback_us = s_readback_us.load();
+	m.readback_worst_us = s_readback_worst.load();
+	m.readback_over_budget = s_readback_over.load();
+
+	// These two are live readings and are honestly zero when nothing is running.
 	if (!s_running.load())
 		return m;
 
 	m.fps = PerformanceMetrics::GetFPS();
 	m.speed = PerformanceMetrics::GetSpeed();
-	m.readback_us = s_readback_us.load();
 	return m;
 }

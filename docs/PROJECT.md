@@ -5876,11 +5876,22 @@ device extensions that upstream does not enable. That is a second patch, in the
 graphics device setup rather than a one-line factory switch, and it is
 **rejected on maintenance grounds** rather than on merit.
 
-**The cost of that decision, stated so nobody meets it as a surprise:** the
-readback scales badly — 4x to 6x is 2.25 times the pixels and 4.6 times the cost
-— so **4x is the practical ceiling and true 4K stays expensive.** Measured
-2026-09-21: 4x costs 2.7 ms a frame at 602% of realtime, 6x costs 12.5 ms at
-133%.
+**The cost of that decision is larger than it first appeared, and the first
+version of this paragraph understated it.** Measured 2026-09-21 UNCAPPED, 4x
+cost 2.7 ms a frame. Measured again CAPPED TO 60 Hz, which is how a person
+plays, the same thing costs **6.1 ms on average and 12.2 ms at worst** — 37% and
+73% of a frame budget. Uncapped the emulator runs flat out and the readback
+overlaps other work and hides inside it.
+
+So the accepted cost is not "true 4K is expensive". It is that **4x already
+spends a third of every frame moving the picture around**, and the only thing
+that removes it is the patch this entry rejects. The lever that remains is the
+upscale itself, and it is roughly proportional to pixels: 3x costs about half
+of 4x.
+
+**A MEASUREMENT TAKEN IN A CONFIGURATION NOBODY PLAYS IN IS NOT A MEASUREMENT
+OF THE PRODUCT.** This project already had the warm-cache rule written down;
+this is its other half.
 
 **The reason this is the right trade rather than a reluctant one** is written
 across this project already. Cabinet's Mac build carries 546 lines of patches,

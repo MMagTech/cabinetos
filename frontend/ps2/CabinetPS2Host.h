@@ -218,6 +218,13 @@ namespace CabinetPS2
 		/// What reading one finished frame back out of the GS costs. The whole
 		/// picture path rests on this being small enough; see TakeFrame.
 		double readback_us;
+
+		/// **THE WORST ONE, NOT THE AVERAGE, BECAUSE STUTTER IS A WORST CASE.**
+		/// An average hides exactly the thing somebody feels: a mean of 2.7 ms
+		/// with an occasional 40 ms in it reads as "fine" and looks like a
+		/// hitch. Reported alongside how many frames went over a 60 Hz budget.
+		double readback_worst_us;
+		uint64_t readback_over_budget;
 	};
 
 	Metrics GetMetrics();

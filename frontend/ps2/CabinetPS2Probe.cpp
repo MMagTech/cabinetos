@@ -207,6 +207,8 @@ int main(int argc, char** argv)
 
 	const CabinetPS2::Metrics m = CabinetPS2::GetMetrics();
 	std::printf("[probe] done, %llu frames\n", static_cast<unsigned long long>(m.frames));
+	std::printf("[probe] readback avg %.0fus  WORST %.0fus  over 16.7ms: %llu frames\n",
+		m.readback_us, m.readback_worst_us, static_cast<unsigned long long>(m.readback_over_budget));
 
 	// The last frame that reached the handover, proving the readback produced
 	// a real picture and not an empty buffer — the distinction this project has

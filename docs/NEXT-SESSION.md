@@ -386,32 +386,49 @@ settings screen on these two flags.
 
 Currently on the reference console: `--ps2-upscale 4 --ps2-aniso 16`.
 
-| Upscale | Internal | Readback | Burnout 3, uncapped |
-|---|---|---|---|
-| 1x | 640x448 | 0.7 ms | — |
-| 4x | 2560x1920 | 2.7 ms | **602%** |
-| 6x | 3840x2880 | **12.5 ms** | **133%** |
+**MEASURE IT CAPPED TO 60 Hz, NOT UNCAPPED, AND THE FIRST TABLE HERE WAS WRONG
+FOR EXACTLY THAT REASON.** Uncapped, the emulator runs flat out, the readback
+overlaps other work and hides inside it; capped — which is how a person plays —
+it costs more than twice as much. The same run, same game, same upscale:
 
-Measured with a WARM shader cache — two runs at each, the first discarded —
-because this project has already measured 2x as slower than 4x off a single
-cold run.
+| Burnout 3, 4x | readback average | worst |
+|---|---|---|
+| uncapped, 602% of realtime | 2.7 ms | not measured |
+| **capped to 60 Hz, how it is played** | **6.1 ms** | **12.2 ms** |
+
+**6.1 ms is 37% of a frame budget and the worst case is 73% of one.** Nothing
+dropped a frame in that run, but it was a menu rather than a pile-up, and there
+is very little room left. **That is a plausible cause of the stutter MMagTech
+felt and it should be treated as the leading suspect.**
+
+The lesson is the one this project keeps relearning in a new costume: a
+measurement taken in a configuration nobody plays in is not a measurement of
+the product. The warm-cache rule was already written down here; "and pace it
+the way it actually runs" is the other half of it.
 
 **5x IS THE FIRST GENUINELY 4K VALUE.** A PlayStation 2 renders 640x448 and a
 4:3 picture on a 3840x2160 panel is 2880x2160 of real screen, so the arithmetic
 is 2160/448 = 4.8. Below that the panel is stretching.
 
-**THE STUTTER IS PROBABLY NOT THE EMULATOR, AND THE NUMBERS SAY SO.** At 4x it
-ran at six times realtime with 2.7 ms of readback — that is not a machine
-struggling. Two better suspects, in order:
+**THE STUTTER IS PROBABLY THE READBACK ITSELF, and an earlier version of this
+paragraph said the opposite off the uncapped number.** At the pacing a person
+plays at, getting the picture off the GPU costs 6.1 ms on average and 12.2 ms
+at worst, out of 16.7. Two other suspects remain but neither is first:
 
 1. **The frame handover copies 22 MB per frame under a lock the GS thread also
    wants.** `CabinetPS2::TakeFrame` copies rather than lends, deliberately, so
    the frontend cannot hold a buffer the emulator is overwriting — but at 4x
-   that copy is 2730x2048x4 bytes, sixty times a second, with the emulator
-   blocked behind it. A double buffer would make the lock a pointer swap.
+   that copy is 2730x2048x4 bytes, sixty times a second. A double buffer makes
+   it a pointer swap. **It is worth doing and it will not be the fix**: it
+   removes the smaller half, not the 6 ms.
 2. **Shader compilation.** PCSX2 compiles pipelines as new effects appear, and
-   Burnout 3 in traffic is where they appear. The cache is per game and it does
-   warm up, so the second run through the same area is the test.
+   Burnout 3 in traffic is where they appear. The cache is per game and warms
+   up, so the second run through the same area is the test.
+
+**THE ONLY THING THAT REMOVES THE 6 MS IS THE PATCH THAT IS RULED OUT**, so the
+lever that is actually available is the upscale itself. Lowering it is not a
+consolation prize — the cost is roughly proportional to pixels, so 3x is about
+half of 4x.
 
 **AND THE READBACK SCALES WORSE THAN THE PIXELS.** 4x to 6x is 2.25 times the
 pixels and **4.6 times the cost**, which is a wall rather than a curve.
