@@ -78,6 +78,18 @@ struct Rect {
     float shadowBlur = 0;
     float shadowOffsetY = 0;
     Color shadowColor = Color::black(0);
+
+    // A VERTICAL GRADIENT between `fill` at the top and `fillBottom` at the
+    // bottom. Off by default, and when off the shape draws exactly as it did
+    // before this existed. A large flat panel reads as a hole punched in the
+    // screen; a few per cent of gradient reads as a surface.
+    bool gradient = false;
+    Color fillBottom = Color::white(0);
+
+    // A highlight along the TOP EDGE ONLY, as if lit from above. Alpha 0 is
+    // off. This is not the same thing as `border`: a rim of even weight all the
+    // way round says "outline", where a top-only highlight says "edge".
+    Color edgeLight = Color::white(0);
 };
 
 // A three-stop vertical gradient, which is exactly what the backdrop is and
@@ -214,7 +226,7 @@ private:
 
     struct {
         GLint canvas, rect, radius, fill, border, borderColor, shadow, shadowColor,
-            shadowVS;
+            shadowVS, fillBottom, edgeLight;
     } loc_{};
     struct {
         GLint top, mid, bottom, midStop;

@@ -2472,8 +2472,10 @@ int main(int argc, char** argv) {
     // See --overlay-test below. A test instrument for open question 24.
     bool overlayTest = false;
     // Opens the overlay once the game is up, so it can be looked at on a
-    // machine with nothing attached to it.
+    // machine with nothing attached to it. See --overlay for the frame count,
+    // which is what makes the picture underneath it a GAME rather than black.
     bool overlayDemo = false;
+    int overlayDemoAfter = 0;
     // Opens the overlay and takes Exit to Home, so the whole leave-a-game path
     // can be proved on a machine with nothing attached.
     bool overlayExitDemo = false;
@@ -2560,6 +2562,13 @@ int main(int argc, char** argv) {
             if (i + 1 < argc && argv[i + 1][0] != '-') overlayExitAfter = SDL_atoi(argv[++i]);
         } else if (SDL_strcmp(argv[i], "--overlay") == 0) {
             overlayDemo = true;
+            // Optional frame count: --overlay 300 PLAYS FIRST and opens the
+            // menu after 300 frames. Without it the menu opens the instant the
+            // game is up, which pauses the core before it has drawn anything —
+            // so the panel appears over black and looks like the game failed to
+            // render. That cost a confusing ten minutes on 2026-09-21; the game
+            // was fine and the flag was the fault.
+            if (i + 1 < argc && argv[i + 1][0] != '-') overlayDemoAfter = SDL_atoi(argv[++i]);
         } else if (SDL_strcmp(argv[i], "--sync-test") == 0) {
             syncTest = true;
         } else if (SDL_strcmp(argv[i], "--launch-after") == 0 && i + 1 < argc) {
@@ -4758,7 +4767,11 @@ int main(int argc, char** argv) {
         pumpLaunch();
         pumpExit();
         pumpStateLoad(stateLoad);
-        if (overlayDemo && playing && !overlayOpen) { overlayDemo = false; toggleOverlay(); }
+        if (overlayDemo && playing && !overlayOpen &&
+            cab::Core::shared().framesRun() >= static_cast<uint64_t>(overlayDemoAfter)) {
+            overlayDemo = false;
+            toggleOverlay();
+        }
 
         // --overlay-test: hold the pause menu open over a game this console did
         // not draw. `playing` is asserted so the whole world — backdrop, hero,
@@ -5373,9 +5386,33 @@ int main(int argc, char** argv) {
             // Rises slightly as it arrives rather than only fading: a panel that
             // just materialises reads as a glitch.
             const float py = (ui::kCanvasHeight - panelH) * 0.5f + (1.0f - ovl) * 24.0f;
-            renderer.drawGlass(ui::Rect{px, py, kOverlayPanelWidth, panelH,
-                                        kOverlayPanelRadius, ui::Color::white(0)},
-                               6.0f, ui::Color::black(0.30f * ovl));
+            // SOLID, NOT GLASS. See design.h, kOverlayPanelFill, for why — in
+            // short, glass blurs the console's own scene texture, and on the
+            // composited path the game is not in it. A panel that is frosted on
+            // one path and flat on the other is the exact difference this
+            // console cannot afford between a Mega Drive and a PlayStation 2.
+            //
+            // The shadow is what separates it from the game now that the blur
+            // does not, and it costs nothing on either path.
+            ui::Color panelFill = kOverlayPanelSurface;
+            panelFill.a = kOverlayPanelFill * ovl;
+            ui::Rect panel{px, py, kOverlayPanelWidth, panelH,
+                           kOverlayPanelRadius, panelFill};
+            // Lit from above: a little lighter at the head, denser and darker
+            // at the foot, with a highlight on the top edge only.
+            panel.gradient = true;
+            panel.fillBottom =
+                ui::Color{panelFill.r * kOverlayPanelBottomDarken,
+                          panelFill.g * kOverlayPanelBottomDarken,
+                          panelFill.b * kOverlayPanelBottomDarken,
+                          kOverlayPanelFillBottom * ovl};
+            panel.edgeLight = ui::Color::white(kOverlayPanelEdgeLight * ovl);
+            panel.border = kOverlayPanelBorder;
+            panel.borderColor = ui::Color::white(kOverlayPanelBorderAlpha * ovl);
+            panel.shadowBlur = kOverlayPanelShadowBlur;
+            panel.shadowOffsetY = kOverlayPanelShadowY;
+            panel.shadowColor = ui::Color::black(kOverlayPanelShadowAlpha * ovl);
+            renderer.draw(panel);
 
             for (int i = 0; i < OvCount; ++i) {
                 const bool on = (i == overlaySlot);
@@ -5390,17 +5427,38 @@ int main(int argc, char** argv) {
                                  i * (kOverlayButtonHeight + kOverlayButtonGap) -
                                  (bh - kOverlayButtonHeight) * 0.5f;
 
-                ui::Rect btn{bx, by, bw, bh, 16.0f,
-                             ui::Color::white((on ? 0.22f : 0.08f) * ovl)};
+                // FOCUS IS A RIM, the same one every card and pill in this
+                // console uses. See design.h — a light-filled bar was tried and
+                // it both shouted and invented a second focus idiom for one
+                // screen.
+                ui::Rect btn{bx, by, bw, bh, kOverlayButtonRadius,
+                             ui::Color::white(
+                                 (kOverlayButtonRestFill +
+                                  f * (kOverlayButtonFocusFill - kOverlayButtonRestFill)) * ovl)};
+                if (f > 0.0f) {
+                    btn.border = f * kFocusRimWidth;
+                    btn.borderColor = ui::palette::kFocusRim;
+                    btn.shadowBlur = kOverlayButtonFocusShadowBlur;
+                    btn.shadowOffsetY = kOverlayButtonFocusShadowY;
+                    btn.shadowColor =
+                        ui::Color::black(kOverlayButtonFocusShadowAlpha * f * ovl);
+                }
                 renderer.draw(btn);
 
                 const char* label = kOverlayLabels[i];
                 const float tw = text.measure(label, ui::TextStyle::Title3, sc);
+                // Dark on the light row, light on the dark ones. Crossfaded by
+                // the focus animation so the text does not snap between them.
+                // Note Color::white(a) is WHITE AT ALPHA a, not a grey. A
+                // build that wanted dark text asked for white(0.06) and got a
+                // six-per-cent white, which was invisible. It reads like a
+                // brightness and is not one.
+                const ui::Color labelColor = ui::Color::white(
+                    (kOverlayButtonRestText + f * (1.0f - kOverlayButtonRestText)) * ovl);
                 text.draw(renderer, label, bx + (bw - tw) * 0.5f,
                           by + (bh - text.lineHeight(ui::TextStyle::Title3, sc)) * 0.5f +
                               text.ascent(ui::TextStyle::Title3, sc),
-                          ui::TextStyle::Title3,
-                          ui::Color::white((on ? 1.0f : 0.60f) * ovl), sc);
+                          ui::TextStyle::Title3, labelColor, sc);
             }
         }
 
