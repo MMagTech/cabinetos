@@ -825,12 +825,26 @@ container with no X11 headers. Every "X11" in `Source/Core/DolphinLibretro` is
 **DX11**, Direct3D 11 — checked, not assumed. What upstream means by X11 support
 is Dolphin's own desktop windowing, which a libretro core never reaches.
 
-**WHAT IS OWED: launch a GameCube game off the image.** The hand-built core at
-this exact revision has been played, and this is that revision built somewhere
-reproducible — a good reason to expect it to work and not a substitute for
-pressing the button. **Vulkan is why this core works at all** and nothing in the
-build selects it: Dolphin renders from a thread of its own, which a GLES context
-cannot serve. Check the journal says so.
+**PLAYED OFF THE IMAGE, 2026-09-21**, on `sha256:ceafc2bb…` with no drop-ins:
+
+```
+[core] hardware rendering: Vulkan, bottom-left origin
+[core] first hardware frame: 640x528 into the 0x0 target
+[core] loaded .../930 - Ikaruga/Ikaruga.rvz
+[core] 640x528, 59.9401 fps, 32029 Hz, aspect 1.3333
+[launch] running dolphin-emu
+```
+
+**Vulkan is why this core works at all and nothing in the build selects it:**
+Dolphin renders from a thread of its own, which a GLES context cannot serve. The
+core asks through `GET_PREFERRED_HW_RENDER` and the frontend answers — the line
+above is the frontend saying what it actually gave, not what was asked for.
+
+**ONE THING NOBODY HAS EXPLAINED.** The CI-built core is **28.4 MB** and the
+hand-built one that had been sitting in `~/cores-dev` was **16.5 MB**, at the
+same revision. Both run. The likeliest answer is debug symbols — nothing strips
+it and `CMAKE_BUILD_TYPE=Release` does not — but that is a guess and it has not
+been checked. Worth a minute before anyone worries about image size.
 
 **THE HEAVY SYSTEMS ARE COMING.** MMagTech, 2026-09-20: *"switch, ps3 and xbox
 will be brought to the OS because we have less constraints to work with in linux
