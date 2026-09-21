@@ -7,7 +7,7 @@
 #
 # The gaming stack comes from Bazzite and is kept as-is; the desktop and Steam
 # are stripped out, the session is wired in, and the console itself — the
-# frontend, the twenty-one cores and one core's system files — is installed
+# frontend, the twenty-two cores and one core's system files — is installed
 # from image_payload/ near the end. See install-frontend.sh.
 
 set -euo pipefail
@@ -68,7 +68,7 @@ done
 # The licences, INSIDE the image.
 # ---------------------------------------------------------------------------
 #
-# This image contains twenty-one emulator cores. Most are GPL and six are free
+# This image contains twenty-two emulator cores. Most are GPL and six are free
 # for non-commercial use only, and the person most likely to redistribute it is
 # the one who does `docker pull` and never sees this repository at all. Terms
 # that live only beside the binaries are terms that do not travel with them.
@@ -259,7 +259,7 @@ log "base image has $(wc -l < /usr/share/cabinetos/packages-before-strip.txt) pa
 # The console itself.
 # ---------------------------------------------------------------------------
 #
-# The frontend, the twenty-one cores and PPSSPP's system files. Immediately
+# The frontend, the twenty-two cores and PPSSPP's system files. Immediately
 # after the library check above and deliberately so: that one names three
 # libraries and says why each is needed, so when one has gone missing its error
 # is the legible one. This script's own ldd sweep then catches everything that

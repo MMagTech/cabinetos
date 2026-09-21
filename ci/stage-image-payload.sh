@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Assemble everything the image has to carry that is not in this repository:
-# the frontend binary, the twenty-one libretro cores, and the one core's worth
+# the frontend binary, the twenty-two libretro cores, and the one core's worth
 # of system files that ships with an emulator rather than coming off RomM.
 #
 # WHY THIS EXISTS AT ALL. Until 2026-09-19 the image contained none of it. The
@@ -34,7 +34,7 @@
 # Output, always, at image_payload/ in the repository root:
 #
 #   bin/cabinetos-frontend
-#   cores/<core>_libretro.so      x21
+#   cores/<core>_libretro.so      x22
 #   system/PPSSPP/...             PPSSPP's fonts and lookup tables
 #
 # image_payload/ is gitignored, which also keeps `git status -s` clean — the
@@ -66,7 +66,10 @@ mapfile -t CORE_NAMES < <(grep -oE '^[a-z0-9_]+\)' "$ROOT/cores/build-core.sh" |
 # Cross-check on the line above, not a second copy of the list. If somebody
 # reshapes that case statement, this says so instead of quietly shipping an
 # image with nineteen emulators in it.
-EXPECTED=21
+# 22 since 2026-09-21, when GameCube was pinned. This number is not decoration:
+# it catches a core silently vanishing from build-core.sh's case arms, which is
+# where the list is READ from rather than repeated.
+EXPECTED=22
 if [ "${#CORE_NAMES[@]}" -ne "$EXPECTED" ]; then
     echo "expected $EXPECTED cores in cores/build-core.sh, found ${#CORE_NAMES[@]}" >&2
     printf '  %s\n' "${CORE_NAMES[@]}" >&2
@@ -101,7 +104,7 @@ fi
 # catalog::coreFileName, and all three must agree: the frontend looks the file
 # up by this name, and when it does not find one it reports the platform as
 # "the core for this system is not built on this console yet". A wrong name
-# here is twenty-one working emulators the console says it does not have.
+# here is twenty-two working emulators the console says it does not have.
 missing=()
 for core in "${CORE_NAMES[@]}"; do
     so="${core%_libretro}_libretro.so"
@@ -118,7 +121,7 @@ if [ "${#missing[@]}" -ne 0 ]; then
     exit 1
 fi
 
-# Anything in the source directory that is NOT one of the twenty-one. Not an
+# Anything in the source directory that is NOT one of the twenty-two. Not an
 # error — a stale .so from a rename would be — but it does not go in the image,
 # and saying so beats it vanishing silently.
 for f in "$CORES"/*.so; do
