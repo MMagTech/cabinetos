@@ -322,7 +322,32 @@ void Host::OnVMStarting()
 void Host::OnVMStarted()
 {
 	s_running.store(true);
-	Console.WriteLn("[ps2] VM started");
+
+	// SAY WHICH RENDERER ACTUALLY TOOK, EVERY TIME.
+	//
+	// Asking for Vulkan and getting it are different things: PCSX2 falls back
+	// to its software renderer when a device cannot be created, and a software
+	// PlayStation 2 on a machine with a Radeon in it looks like nothing at all
+	// until somebody wonders why a game is slow. This console has been caught
+	// by a silent fallback more than once — a compositor that reported "no
+	// Vulkan-capable GPU" four seconds after selecting one, and a core that
+	// substitutes its own boot ROM and says nothing at any log level.
+	//
+	// So it is printed rather than assumed, and it is printed as a fact about
+	// what happened rather than a restatement of what was asked for.
+	const char* renderer = "unknown";
+	switch (GSConfig.Renderer)
+	{
+		case GSRendererType::VK: renderer = "Vulkan"; break;
+		case GSRendererType::OGL: renderer = "OpenGL"; break;
+		case GSRendererType::SW: renderer = "software"; break;
+		case GSRendererType::Null: renderer = "null"; break;
+		default: break;
+	}
+	Console.WriteLnFmt("[ps2] VM started, renderer {}{}", renderer,
+		(GSConfig.Renderer == GSRendererType::SW || GSConfig.Renderer == GSRendererType::Null)
+			? " — THAT IS NOT THE HARDWARE RENDERER THIS CONSOLE ASKED FOR"
+			: "");
 }
 
 void Host::OnVMDestroyed()

@@ -252,173 +252,135 @@ both rules are measured and in `filesave.cpp`.
 - **TWO OPEN BUGS FROM ONE HOUR OF PLAY, both reported by MMagTech and neither
   reproducible from here.** See item 1b.
 
-### 1a. PLAYSTATION 2 IS EMBEDDED FROM UPSTREAM, AND THE BUILD IS DONE — 2026-09-21
+### 1a. PLAYSTATION 2 PLAYS FROM UPSTREAM PCSX2, IN THE CONSOLE — 2026-09-21
 
-**PLAIN VERSION: upstream PCSX2 builds as a library on Linux with no patches at
-all, and the job left is a host layer — 55 `Host::` functions and four other
-symbols, most of them one-liners, with six that are real work.** That is a much
-smaller thing than this page said it would be yesterday.
+**PLAIN VERSION: pick a PlayStation 2 game on the television and it plays, on
+upstream PCSX2 2.8.2, inside the console — your library, your pause menu, your
+pad, your saves.** Not a separate program borrowing the screen. Verified under
+gamescope on the reference console at 3840x2160, not only headlessly.
 
-**Run it yourself in 43 seconds from nothing:**
+**IT IS ON THE TELEVISION RIGHT NOW**, through the drop-in described at the top
+of this file. Two lines in the journal say what is actually running, and both
+are facts rather than restatements of what was asked for:
 
 ```
-cores/build-pcsx2.sh
+[ps2] /var/home/cabinet/cores-dev/cabinetos-ps2.so (PCSX2 v2.8.2)
+[ps2] VM started, renderer Vulkan
 ```
 
-It clones `PCSX2/pcsx2` at **v2.8.2**, asserts the pin, builds `libpcsx2.a`,
-links upstream's own non-Qt frontend against it as a proof, runs that binary,
-and then counts exactly what a CabinetOS host layer still owes the library.
-`docs/PCSX2-HOST-SURFACE.md` is the full write-up.
+**THE SECOND ONE EXISTS BECAUSE ASKING FOR VULKAN AND GETTING IT ARE DIFFERENT
+THINGS.** PCSX2 falls back to its software renderer when a device cannot be
+created, and a software PlayStation 2 on a machine with a Radeon in it looks
+like nothing at all until somebody wonders why a game is slow. This console has
+been caught by a silent fallback twice already — a compositor reporting "no
+Vulkan-capable GPU" four seconds after selecting one, and a core that
+substitutes its own boot ROM and says nothing at any log level. If it ever says
+`software` it also says, in capitals, that that is not what was asked for.
 
-**WHY THE ROUTE CHANGED, IN ONE LINE:** `libretro/pcsx2` does not exist —
-`git ls-remote` says *"Repository not found"*, the only mirror was last pushed
-in 2020, and libretro's buildbot builds from a checkout nobody can obtain. A
-core whose source cannot be cloned cannot be pinned, built in CI, put in the
-image or audited. The working `.so` on the A9 right now is a proof and nothing
-more. **That is a hard stop, not a quality trade-off, and it is not reopenable.**
+Confirmed on the reference console, 2026-09-21: `AMD Radeon 890M Graphics
+(RADV STRIX1)`, `Vulkan 1.4.354`, with a Vulkan shader cache warming across
+launches.
 
-#### THE THING TO UNLEARN, BECAUSE THIS PAGE TOLD YOU THE OPPOSITE
+**THE LIBRETRO PS2 CORE IS GONE** from the core directory, moved aside to
+`~/pcsx2_libretro.so.unused`. It can never ship — `libretro/pcsx2` does not
+exist, so it cannot be pinned, built in CI or audited — and leaving it beside
+the real one made "which PlayStation 2 is this" unanswerable at a glance.
+`catalog::coreFileName` now resolves `ps2` to `cabinetos-ps2.so`.
 
-This handover said *"PCSX2's CMake builds an APPLICATION, not a library —
-Cabinet had to carve the frontend out"*. **Both halves are wrong.**
+#### What was built, and how to rebuild it
+
+```
+cores/build-pcsx2.sh          the emulator: libpcsx2.a, then cabinetos-ps2.so
+cd frontend && make           the console, which dlopens it
+```
+
+43 seconds for the first from a clean clone on the A9.
 
 | | |
 |---|---|
-| `pcsx2/CMakeLists.txt` line 8 | **`add_library(PCSX2)`** — a library target upstream, and always was |
-| The application | a **separate** target, `pcsx2-qt`, behind `if(ENABLE_QT_UI)` |
-| What Cabinet's 546-line patch script really does | replaces what **Catalyst** cannot compile: SDL3, cubeb, `CocoaTools.mm`, an `NSView`/`CAMetalLayer` seam, `pthread_jit_write_protect_np` via `dlsym`, Homebrew's FFmpeg |
+| `frontend/ps2/CabinetPS2Host.cpp` | all 55 `Host` functions, the VM lifecycle, the frame readback, the pad translation |
+| `frontend/ps2/CabinetPS2Audio.cpp` | SPU2's samples, handed to the console instead of to a sound card |
+| `frontend/ps2/CabinetPS2Bridge.cpp` | the flat C face the console `dlopen`s |
+| `frontend/ps2/CabinetPS2Probe.cpp` | the headless harness, for measuring without a television |
+| `frontend/src/ps2.{h,cpp}` | the console's side of that wire |
+| `frontend/src/core.cpp` | seven small branches, and nothing above them changed |
 
-**Not one of those is a Linux problem.** `-DENABLE_QT_UI=OFF` is the whole of
-it.
+#### The shape, and why it is this one
 
-#### WHAT THE BUILD ACTUALLY PRODUCED
+**PCSX2 NEVER GETS A WINDOW.** The frontend owns the one window there is, draws
+every screen in it and draws the overlay on top — which is what makes Pause,
+Save state and Exit to Home work the same for a PlayStation 2 game as for a
+Mega Drive one.
 
-| | |
-|---|---|
-| `libpcsx2.a` | **35 MB**, plus `libcommon.a` and 16 vendored archives — 18, 49 MB |
-| Patches | **none** |
-| Wall clock | **25 s** on 20 of the A9's 24 cores |
-| Vulkan renderer | **220 symbols** — `USE_VULKAN=ON` took |
-| OpenGL renderer | 127 — the fallback for the VM, which has no Vulkan |
-| Metal | **0**, asserted rather than assumed |
-| microVU recompiler | 318, with `recRecompile`, `iopRec` and the vtlb dynarec beside it |
+So PCSX2 runs **surfaceless on its own thread** and hands over the finished
+frame as a buffer of pixels, a width and a height — **exactly what eighteen of
+the twenty-one libretro cores already give the frontend.** That is why
+PlayStation 2 needed no new picture path in the UI and why `Core::texture()`
+and `frameUV()` did not change at all.
 
-**These are PCSX2's ORIGINAL x86-64 emitters**, not the machine-translated ARM64
-ones Cabinet had to pin a fork for. That is the whole argument for upstream over
-`isztldav/pcsx2` — the fork's reason for existing is simply absent here.
+**Measured on Burnout 3, because the design rests on it:**
 
-#### READ UPSTREAM'S OWN HOST LAYER, NOT ONLY CABINET'S
+| Upscale | Frame | Readback | Of a 60 Hz frame |
+|---|---|---|---|
+| native | 640x448 | **690 us** | 4.1% |
+| 4x | 2560x1792 | **3043 us** | 18.2% |
 
-**`pcsx2-gsrunner` is a second reference implementation and nobody had noticed
-it.** 1332 lines in one file, no Qt, implements the whole `Host` contract, links
-against the library in 2.2 seconds, and **runs** — it reaches full config init,
-printing its memory-card and BIOS directories.
+The emulator ran at about 500% of realtime throughout. The number is live in
+`CabinetPS2::Metrics::readback_us`, because a high upscale on a weaker machine
+is what would change the answer. **The faster route is written up and
+deliberately not taken**: PCSX2's Vulkan image could be shared directly, the way
+`vkhost.cpp` already shares one, but its required device extension list holds
+one entry and none of the external-memory ones. Four lines, worth spending the
+day a measurement says the readback is too slow.
 
-It is Linux-native and maintained in-tree, so **unlike Cabinet's it cannot go
-stale against the version we pin.** Read both: Cabinet's `CabinetPS2Host.cpp`
-(811 lines) is the better guide to what a *console* frontend wants; gsrunner is
-the better guide to what *this* PCSX2 requires.
+#### One patch to PCSX2, and the headline is corrected rather than dropped
 
-**IT WILL NOT BOOT A GAME, SO DO NOT PLAN A MEASUREMENT AROUND IT.** It is a
-renderer regression harness that replays GS dumps and refuses anything else —
-tried on the A9 with Homura and the real BIOS, not assumed. See *what this does
-not show* below, which also explains why it refuses without printing a word.
+**"Upstream builds as a library with NO patches" was about the BUILD and is
+still true.** There is now exactly one patch and it is not needed to build
+PCSX2 — only to stop it making its own sound. Three lines in
+`AudioStream::CreateStream`, asserting its own anchor the way every patch in
+`cores/build-core.sh` does. Cabinet makes the same edit on the Mac.
 
-**PCSX2 refuses to start without its `bin/resources` folder** — game database,
-fonts, GS shaders. It does not degrade, it refuses. That has to ship the way
-PPSSPP's 13 MB already do at `/usr/share/cabinetos/system/`.
+**The console owns audio and input, as it does for every other core.** One
+device, one volume, one latency, an overlay that can duck it, and one path onto
+the pad.
 
-#### THE JOB LEFT IS 55 FUNCTIONS PLUS FOUR SYMBOLS, AND SIX OF THEM ARE THE WORK
+#### The memory card needed no new machinery at all
 
-Counted, not estimated. A shared object links happily with undefined symbols and
-then fails at `dlopen` naming only the **first** one, which tells you nothing
-about the size of the job — so the count comes from `-Wl,-z,defs`, which makes
-the linker refuse and name them all.
+`catalog::saveFiles` already says a PlayStation 2 card is `<stem>.ps2` in the
+per-game save directory, and `filesave.cpp` already restores it before launch,
+captures it after, refuses to upload an unformatted one, and files it on the
+server under the name Cabinet's Mac uses. **Pointing PCSX2's memory-card folder
+at that directory was the whole of it.**
 
-**53 in `Host::`, plus three `InputManager::ConvertHostKeyboard*` and
-`g_host_hotkeys`** — and that last one is a **variable**, not a function, and is
-what a `dlopen` of the unfinished library trips on before mentioning any of the
-other 56.
+The name is derived inside `Core::loadGame` from the rom path rather than passed
+in, so the two cannot drift — a card written under a name the save layer does
+not look for is a save that never reaches the server, and nothing would say so.
 
-**IMPLEMENT 55, NOT THE 53 THE LINKER ASKS FOR.** Cabinet's
-`CabinetPS2Host.cpp` and upstream's gsrunner define the **same 55 `Host::`
-functions, set-for-set** — nothing in either that the other lacks, which is a
-much better guarantee than two similar-looking counts. The linker asks for 53
-because `Host::GetTopLevelWindowInfo` and `Host::InBatchMode` are unreferenced
-in this configuration, and **both reference frontends implement them anyway.**
-Building only what the linker complains about leaves you one configuration
-change from a link error.
+**Burnout 3 is rom 604 and its card is the only real PlayStation 2 save on the
+server.** Nothing in this work went near it: every test used Homura.
 
-**Most are one-line stubs** — a console has no clipboard, no file selector, no
-achievements login, no Big Picture mode and no game list of PCSX2's own.
+#### WHAT IS NOT DONE, and none of it is hidden
 
-**THE SIX THAT ARE THE JOB ARE ALL THE DISPLAY PATH:**
-
-```
-AcquireRenderWindow  ReleaseRenderWindow  BeginPresentFrame
-RequestResizeHostDisplay  IsFullscreen  SetFullscreen
-```
-
-**`frontend/src/vkhost.cpp` ALREADY OWNS WHAT THOSE NEED** — a Vulkan device, a
-queue, and a picture that crosses into the GLES texture the UI draws. Cabinet's
-`CabinetPS2Host` runs the VM on its own thread and presents into a
-`CAMetalLayer`; this is the same shape with Vulkan instead, and PCSX2 supports
-Vulkan natively so there is no Metal wall. **Do not rebuild that host.**
-
-#### TEN HAND-BUILT DEPENDENCIES BECAME ONE `dnf` LINE
-
-Cabinet cross-compiled **ten** for Catalyst with pinned tarballs and SHA sums.
-Fedora 44 meets every version constraint PCSX2 states: libpng 1.6.55 against a
-required 1.6.40, SDL3 3.4.0 against 3.2.6, zstd 1.5.7 against 1.5.5, freetype
-2.14.1 against 2.10, plutovg 1.3.2 against 1.1.0, plutosvg 0.0.7, ryml 0.10.0,
-shaderc 2026.1.
-
-- **`libbacktrace-devel` is the only gap**, and `USE_BACKTRACE=OFF` disposes of
-  it — a crash-reporter nicety PCSX2 makes optional for that reason.
-- **`libXi-devel` WILL WASTE AN HOUR IF NOBODY SAYS IT.** `find_package(X11)`
-  succeeds without it, configure runs all the way to the last step, and then
-  `common/CMakeLists.txt` fails at GENERATE time on a missing `X11::Xi` target.
-  It reads like a CMake bug rather than a missing package.
-
-#### WHAT TO DO NEXT, IN ORDER
-
-1. **Write the host layer. There is no cheaper step in front of it** — see the
-   warning below about gsrunner, which was tried. Read gsrunner's `Main.cpp`
-   beside Cabinet's `CabinetPS2Host.cpp`. All **55**, not the 53 the linker
-   names. Stub the ~49 that are stubs, then do the six that are the display
-   path.
-2. **Make it `dlopen`.** That is the milestone that turns this from a library
-   into the `.so` open question 12's correction asks for, and `g_host_hotkeys`
-   is the symbol it will fail on first.
-3. **Then boot Homura**, which is already on the A9 at
-   `/var/lib/cabinetos/cache/Sony Playstation 2/630 - Homura/`, with the PS2
-   BIOS at `/var/lib/cabinetos/bios/pcsx2/bios/`. **Not Burnout 3** — rom 604
-   holds the only real PS2 save on the server and nothing this session touches
-   should go near `cabinet-604.ps2`.
-4. **Then, and only then, CI and the image.** `ci/base-watch.txt` needs
-   `libshaderc_shared`, `libSPIRV-Tools`, `libplutovg`, `libplutosvg`,
-   `libryml`, `libpcap` and `libharfbuzz` adding the day PS2 ships — a base bump
-   that drops one gives a green build and a console that cannot start a PS2 game.
-
-#### WHAT THIS DOES NOT SHOW, SAID PLAINLY
-
-- **NOTHING HAS BEEN EMULATED, AND `pcsx2-gsrunner` CANNOT GET YOU THERE.** It
-  is a **renderer regression harness that only replays GS dumps**, not a game
-  booter. Handed Homura's CHD with the BIOS in place it refuses at
-  `VMManager::IsGSDumpFileName`. **This was tried on the A9, not assumed**, and
-  an earlier draft of this page said the opposite.
-- **AND IT REFUSES SILENTLY, WHICH IS THE PART THAT COSTS TIME.** Everything
-  after `InitializeConfig` talks through `Console`, and
-  `LoadStartupSettings()` resets the console log level from deliberately empty
-  settings — so the whole of argument parsing is mute. A bad argument gives
-  **exit 1 and not one word**, after forty lines of directory listing that make
-  it look like it got much further. `-help` is the tell: it works, because it
-  uses `fprintf(stderr, ...)` and bypasses `Console` entirely.
-- **No host layer exists.** 57 symbols are named; none is written.
-- **Nothing is in CI**, deliberately — see step 4.
-- **Save states are still new work.** Cabinet's Mac PS2 state is PCSX2's own
-  slot 1 through `VMManager::SaveStateToSlot`, keyed by disc serial and CRC: not
-  a buffer, not uploaded, not tagged. Unchanged by any of this.
+- **NOBODY HAS PLAYED IT WITH A PAD YET.** The picture, the input path, the
+  sound and the card are each proved, and the whole chain has been driven from
+  code — but a person with a controller in front of the television has not sat
+  down with it. **That is the next thing and it is the point of all of this.**
+- **SAVE STATES DO NOT WORK AND REPORT SO HONESTLY.** `Core::stateSize()` is 0
+  for PlayStation 2, because PCSX2's states are its own slot files keyed by disc
+  serial and CRC rather than a buffer. Open question 12b: whatever this console
+  does there is new work, and nothing crossing between machines today constrains
+  it.
+- **NOTHING IS IN CI OR IN THE IMAGE.** The image would need PCSX2's resources
+  at `/usr/share/cabinetos/system/pcsx2/resources`, and the emulator and its two
+  bundled libraries at `/usr/lib/cabinetos/cores/`. Today they live in
+  `~/assets-dev` and `~/cores-dev` and the drop-in points at them.
+- **The emulator carries two libraries the image lacks** — `libryml` and
+  `libc4core`. **That needs RPATH, not the modern RUNPATH**, because RUNPATH is
+  not inherited: libryml was found and then could not find libc4core sitting in
+  the same directory.
+- **The two open bugs in item 1b have NOT been re-tested against this.** That
+  was the reason for building it and it is now possible.
 
 ### 1b. TWO BUGS FOUND BY PLAYING, NEITHER REPRODUCIBLE — OPEN
 
