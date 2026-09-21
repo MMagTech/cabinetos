@@ -341,15 +341,6 @@ public:
     // a save still going up — so it owns the words for them too.
     void setNotice(std::string s);
 
-    // --- Adding somebody, which happens inside this panel --------------------
-    //
-    // The app does the pairing; this only shows it. `setPairing` is called when
-    // the server has issued a code, and again with empty strings when the flow
-    // ends either way.
-    void setPairing(const std::string& url, const std::string& code);
-    void setPairingBusy(bool on);
-    bool pairing() const { return pairingBusy_ || !pairCode_.empty(); }
-
     void tick(float dt);
     Result key(Nav n);
     void draw(Ctx& c);
@@ -367,10 +358,42 @@ private:
     std::string notice_;
     float anchorRight_ = ui::kCanvasWidth - 60.0f;
     float anchorTop_ = 150.0f;
-    std::string pairUrl_;
-    std::string pairCode_;
-    bool pairingBusy_ = false;
     design::Animated focus_;
+    design::Animated appear_;
+};
+
+// --- Adding an account ------------------------------------------------------
+
+// PAIRING SOMEBODY NEW, AND IT IS A SCREEN RATHER THAN PART OF THE PANEL.
+// MMagTech agreed the split, 2026-09-21: *"when you click add user i agree to
+// another screen."* The reason is the QR — a code has to be big enough to
+// photograph from a sofa, and a 520-point panel hanging off the corner cannot
+// hold one. The list and the switch stay in the panel; this takes the screen.
+//
+// IT SHOWS, IT DOES NOT PAIR. The app owns the client, the worker and the
+// polling, for the same reason it owns the switch's refusals: this file does
+// no networking and starts no threads.
+class AddAccountScreen {
+public:
+    void open();
+
+    // The server has issued a code. Encodes the QR here, on the frame thread,
+    // because that is where the GL context is.
+    void setPairing(const std::string& url, const std::string& code);
+    // Before the server has answered, and again if it never does.
+    void setBusy(bool on);
+    void setError(const std::string& err);
+
+    void tick(float dt);
+    Result key(Nav n);
+    void draw(Ctx& c);
+
+private:
+    std::string url_;
+    std::string code_;
+    std::string error_;
+    bool busy_ = false;
+    ui::QrTexture qr_;
     design::Animated appear_;
 };
 

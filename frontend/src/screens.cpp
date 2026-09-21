@@ -1246,9 +1246,6 @@ int AccountScreen::firstSelectable() const {
 void AccountScreen::open() {
     slot_ = firstSelectable();
     notice_.clear();
-    pairUrl_.clear();
-    pairCode_.clear();
-    pairingBusy_ = false;
     appear_.retarget(0.0f, 0.0f);
     appear_.retarget(1.0f, 0.24f);
     focus_.retarget(1.0f, design::kFocusDuration);
@@ -1256,25 +1253,12 @@ void AccountScreen::open() {
 
 void AccountScreen::setNotice(std::string s) { notice_ = std::move(s); }
 
-void AccountScreen::setPairing(const std::string& url, const std::string& code) {
-    pairUrl_ = url;
-    pairCode_ = code;
-    if (!code.empty()) pairingBusy_ = false;
-}
-
-void AccountScreen::setPairingBusy(bool on) { pairingBusy_ = on; }
-
 void AccountScreen::tick(float dt) {
     focus_.tick(dt);
     appear_.tick(dt);
 }
 
 Result AccountScreen::key(Nav n) {
-    // WHILE A CODE IS ON SCREEN THE ONLY WAY OUT IS BACK. Moving the focus
-    // under a pairing somebody is halfway through typing into a phone would
-    // throw the code away for no reason they could see.
-    if (pairing() && n != Nav::Back) return {};
-
     auto step = [&](int d) -> Result {
         int at = slot_;
         for (int tries = 0; tries < rowCount(); ++tries) {
@@ -1321,51 +1305,12 @@ void AccountScreen::draw(Ctx& c) {
     // expansion. Everything inside is clipped to it by being drawn after.
     const int rows = rowCount();
     const float bodyH = rows * rowH + (rows - 1) * 10.0f + 28.0f * 2.0f +
-                        (pairing() ? 150.0f : 0.0f) +
                         (notice_.empty() ? 0.0f : 54.0f);
     c.r.drawGlass(ui::Rect{x, top, w, bodyH * a, design::kRowRadius,
                            ui::Color::white(0)},
                   design::kRegularMaterialBlur, ui::Color::white(0.10f * a));
 
     float y = top + 28.0f;
-
-    // WHILE PAIRING, THE PANEL IS THE CODE AND NOTHING ELSE. A list of accounts
-    // under a pairing code invites somebody to wander off it mid-pair.
-    if (pairing()) {
-        const char* head = pairingBusy_ ? "Asking the server for a code…"
-                                        : "Add somebody to this console";
-        c.text.draw(c.r, head, x + 28.0f,
-                    y + c.text.ascent(ui::TextStyle::Title3, c.sc),
-                    ui::TextStyle::Title3, ui::Color::white(0.95f * a), c.sc);
-        y += rowH;
-        if (!pairCode_.empty()) {
-            // The address first, because it is the thing somebody has to type,
-            // and the code second, because it is the thing they are asked for
-            // once they are there. A QR belongs here and is the next step —
-            // setup.cpp draws one already and its QrTexture is private to that
-            // file, so sharing it is a refactor rather than a copy.
-            c.text.draw(c.r, "On a phone, open", x + 28.0f,
-                        y + c.text.ascent(ui::TextStyle::Callout, c.sc),
-                        ui::TextStyle::Callout, ui::Color::white(0.6f * a), c.sc);
-            y += 34.0f;
-            c.text.draw(c.r, pairUrl_, x + 28.0f,
-                        y + c.text.ascent(ui::TextStyle::Callout, c.sc),
-                        ui::TextStyle::Callout, ui::Color::white(0.9f * a), c.sc);
-            y += 44.0f;
-            c.text.draw(c.r, "and enter", x + 28.0f,
-                        y + c.text.ascent(ui::TextStyle::Callout, c.sc),
-                        ui::TextStyle::Callout, ui::Color::white(0.6f * a), c.sc);
-            y += 34.0f;
-            c.text.draw(c.r, pairCode_, x + 28.0f,
-                        y + c.text.ascent(ui::TextStyle::Title1, c.sc),
-                        ui::TextStyle::Title1, ui::Color::white(0.98f * a), c.sc);
-        }
-        if (!notice_.empty())
-            c.text.draw(c.r, notice_, x + 28.0f,
-                        top + bodyH - 40.0f + c.text.ascent(ui::TextStyle::Callout, c.sc),
-                        ui::TextStyle::Callout, ui::Color::white(0.8f * a), c.sc);
-        return;
-    }
 
     for (int i = 0; i < rows; ++i) {
         const bool on = (i == slot_);
@@ -1429,6 +1374,97 @@ void AccountScreen::draw(Ctx& c) {
     if (!notice_.empty())
         c.text.draw(c.r, notice_, x + 28.0f,
                     y + 8.0f + c.text.ascent(ui::TextStyle::Callout, c.sc),
+                    ui::TextStyle::Callout, ui::Color::white(0.85f * a), c.sc);
+}
+
+// --- Adding an account ------------------------------------------------------
+
+void AddAccountScreen::open() {
+    url_.clear();
+    code_.clear();
+    error_.clear();
+    busy_ = true;
+    appear_.retarget(0.0f, 0.0f);
+    appear_.retarget(1.0f, 0.3f);
+}
+
+void AddAccountScreen::setPairing(const std::string& url, const std::string& code) {
+    url_ = url;
+    code_ = code;
+    busy_ = false;
+    std::string err;
+    // THE QR IS THE SERVER'S URL AND NOT A SHAPE WE GUESSED. `romm.h` records
+    // what happens otherwise: a fabricated one scans perfectly and lands on a
+    // page saying the code does not exist.
+    const qr::Code c = qr::encode(url, &err);
+    if (c.valid()) qr_.set(c);
+    else error_ = err;   // the address and the code below are still usable
+}
+
+void AddAccountScreen::setBusy(bool on) { busy_ = on; }
+void AddAccountScreen::setError(const std::string& err) { error_ = err; busy_ = false; }
+
+void AddAccountScreen::tick(float dt) { appear_.tick(dt); }
+
+Result AddAccountScreen::key(Nav n) {
+    // ONE WAY OUT AND IT IS BACK. Nothing here is a choice — it is a code
+    // somebody is copying onto a phone — so a focus ring would have nowhere to
+    // go and would only invite a press that does nothing.
+    if (n == Nav::Back) return {Action::Back, 0};
+    return {};
+}
+
+void AddAccountScreen::draw(Ctx& c) {
+    const float a = appear_.value();
+    const float left = 140.0f;
+    float y = 190.0f;
+
+    c.text.draw(c.r, "Add somebody to this console", left,
+                y + c.text.ascent(ui::TextStyle::LargeTitle, c.sc),
+                ui::TextStyle::LargeTitle, ui::Color::white(0.96f * a), c.sc);
+    y += 120.0f;
+
+    if (busy_) {
+        c.text.draw(c.r, "Asking the server for a code…", left,
+                    y + c.text.ascent(ui::TextStyle::Title3, c.sc),
+                    ui::TextStyle::Title3, ui::Color::white(0.7f * a), c.sc);
+        return;
+    }
+    if (!code_.empty()) {
+        // THE COPY ASSUMES A COMPETENT ADULT — the rule first run was written
+        // to. It says the constraint and stops.
+        c.text.draw(c.r, "Scan this, or open the address below.", left,
+                    y + c.text.ascent(ui::TextStyle::Title3, c.sc),
+                    ui::TextStyle::Title3, ui::Color::white(0.75f * a), c.sc);
+        y += 90.0f;
+
+        // BIG ENOUGH TO PHOTOGRAPH FROM A SOFA, which is the whole reason this
+        // is a screen and not the panel.
+        const float side = 420.0f;
+        if (qr_.valid()) qr_.draw(c.r, left, y, side);
+
+        const float tx = left + side + 80.0f;
+        float ty = y + 40.0f;
+        c.text.draw(c.r, url_, tx, ty + c.text.ascent(ui::TextStyle::Title3, c.sc),
+                    ui::TextStyle::Title3, ui::Color::white(0.9f * a), c.sc);
+        ty += 80.0f;
+        c.text.draw(c.r, "and enter", tx, ty + c.text.ascent(ui::TextStyle::Callout, c.sc),
+                    ui::TextStyle::Callout, ui::Color::white(0.55f * a), c.sc);
+        ty += 56.0f;
+        c.text.draw(c.r, code_, tx, ty + c.text.ascent(ui::TextStyle::LargeTitle, c.sc),
+                    ui::TextStyle::LargeTitle, ui::Color::white(0.98f * a), c.sc);
+        ty += 130.0f;
+        // SAID BEFORE IT HAPPENS, because being added and being switched to are
+        // different things and somebody who expects the second will think this
+        // failed.
+        c.text.draw(c.r, "They are added to this console, not switched to.", tx,
+                    ty + c.text.ascent(ui::TextStyle::Callout, c.sc),
+                    ui::TextStyle::Callout, ui::Color::white(0.5f * a), c.sc);
+        y += side;
+    }
+
+    if (!error_.empty())
+        c.text.draw(c.r, error_, left, y + 40.0f + c.text.ascent(ui::TextStyle::Callout, c.sc),
                     ui::TextStyle::Callout, ui::Color::white(0.85f * a), c.sc);
 }
 

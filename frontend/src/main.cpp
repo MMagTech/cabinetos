@@ -4143,7 +4143,7 @@ int main(int argc, char** argv) {
     // over whatever was behind it, and the player is a cover over that — which
     // is what makes quitting a game return to the launch screen and backing out
     // again return to the browsing.
-    enum class Screen { Home, Library, Grid, Detail, Search };
+    enum class Screen { Home, Library, Grid, Detail, Search, AddAccount };
     std::vector<Screen> stack{Screen::Home};
     auto here = [&]() { return stack.back(); };
 
@@ -4152,6 +4152,7 @@ int main(int argc, char** argv) {
     screens::DetailScreen detailScreen;
     screens::SearchScreen searchScreen;
     screens::AccountScreen accountScreen;
+    screens::AddAccountScreen addAccountScreen;
     // What the docked keyboard held last frame, so the filter is re-run when it
     // changes and not sixty times a second when it does not.
     std::string searchTyped;
@@ -4486,6 +4487,10 @@ int main(int argc, char** argv) {
         std::string err;
     };
     auto addJob = std::make_shared<AddJob>();
+    // The QR is encoded once, when the code first arrives, not per frame.
+    bool shownPairCode = false;
+    // Set by --screen add-account: hold the screenshot until there is a code.
+    bool waitForPairCode = false;
 
     auto startAddAccount = [&, addJob]() {
         if (addJob->running.load()) return;
@@ -4494,6 +4499,7 @@ int main(int argc, char** argv) {
             return;
         }
         addJob->running = true;
+        shownPairCode = false;
         { std::lock_guard<std::mutex> lk(addJob->m);
           addJob->haveCode = addJob->finished = addJob->ok = false;
           addJob->err.clear(); }
@@ -4538,7 +4544,7 @@ int main(int argc, char** argv) {
             if (addJob->err.empty()) addJob->err = "that code expired before anybody approved it";
             addJob->finished = true; addJob->running = false;
         });
-        accountScreen.setPairingBusy(true);
+        addAccountScreen.setBusy(true);
     };
 
     // Rebuilt from the store, which is the only thing that knows.
@@ -4652,6 +4658,13 @@ int main(int argc, char** argv) {
                 break;
             }
             case screens::Action::AddAccount:
+                // THE PANEL CLOSES AND A SCREEN OPENS. Leaving the panel up
+                // behind a pairing code would put the list somebody is about
+                // to change underneath the thing changing it.
+                accountsOpen = false;
+                barFocused = false;
+                addAccountScreen.open();
+                stack.push_back(Screen::AddAccount);
                 startAddAccount();
                 sound::play(sound::Cue::Activate);
                 break;
@@ -4867,6 +4880,7 @@ int main(int argc, char** argv) {
             case Screen::Grid: apply(gridScreen.key(n)); return true;
             case Screen::Detail: apply(detailScreen.key(n)); return true;
             case Screen::Search: apply(searchScreen.key(n)); return true;
+            case Screen::AddAccount: apply(addAccountScreen.key(n)); return true;
         }
         return false;
     };
@@ -4882,10 +4896,24 @@ int main(int argc, char** argv) {
     // THE SWITCHER IS REACHED THE WAY A PERSON REACHES IT: focus the bar, walk
     // to the chip, press it. A capture that called open() directly would be
     // photographing a panel the product might not be able to get to.
-    if (initialScreen && SDL_strcmp(initialScreen, "accounts") == 0) {
+    if (initialScreen && (SDL_strcmp(initialScreen, "accounts") == 0 ||
+                          SDL_strcmp(initialScreen, "add-account") == 0)) {
         barFocused = true;
         barSlot = BarAccount;
         barKey(screens::Nav::Activate);
+        if (SDL_strcmp(initialScreen, "add-account") == 0) {
+            // Presses the Add row the way a person would. It starts a REAL
+            // pairing against the real server — a device code that expires in
+            // minutes and creates nothing unless somebody approves it.
+            apply(accountScreen.key(screens::Nav::Activate));
+            // AND THE CAPTURE HAS TO WAIT FOR THE SERVER. This loop is not
+            // paced, so on the A9 four hundred frames go by in well under a
+            // second and the shot comes out with no code on it — the same trap
+            // `--launch-after` fell into and the same one that cost the setup
+            // pairing capture. Gate the shot on the fact rather than on a
+            // frame count.
+            waitForPairCode = true;
+        }
     } else if (initialScreen && SDL_strcmp(initialScreen, "search") == 0) {
         goToDestination(2);
         if (searchQuery) {
@@ -5990,7 +6018,7 @@ int main(int argc, char** argv) {
         }
         // The pairing worker's answer, picked up on the frame thread. Nothing
         // here touches the network — it reads what the thread published.
-        if (accountsOpen) {
+        if (here() == Screen::AddAccount) {
             bool code = false, fin = false, ok = false;
             std::string url, user, err;
             {
@@ -6001,20 +6029,21 @@ int main(int argc, char** argv) {
                 err = addJob->err;
             }
             if (fin) {
-                accountScreen.setPairing("", "");
-                accountScreen.setPairingBusy(false);
-                if (ok) {
-                    // Added, NOT switched to. The new account is a row in the
-                    // list now and whoever was playing is still playing.
-                    refreshAccountRows();
-                    accountScreen.setNotice("Added. Choose them to switch.");
-                } else {
-                    accountScreen.setNotice(err.empty() ? "That did not pair." : err);
-                }
                 std::lock_guard<std::mutex> lk(addJob->m);
                 addJob->finished = false;
-            } else if (code && !accountScreen.pairing()) {
-                accountScreen.setPairing(url, user);
+                if (ok) {
+                    // Added, NOT switched to. Back to the panel with the new
+                    // person in it, which is where the switch is.
+                    refreshAccountRows();
+                    if (stack.size() > 1) stack.pop_back();
+                    accountsOpen = true;
+                    accountScreen.setNotice("Added. Choose them to switch.");
+                } else {
+                    addAccountScreen.setError(err.empty() ? "That did not pair." : err);
+                }
+            } else if (code && !shownPairCode) {
+                shownPairCode = true;
+                addAccountScreen.setPairing(url, user);
             }
         }
         if (autoSwitchAccountId > 0) {
@@ -6138,6 +6167,7 @@ int main(int argc, char** argv) {
             screens::Ctx ctx{renderer, text, images, renderer.scale(), &cards};
             libraryScreen.tick(dt);
             accountScreen.tick(dt);
+            addAccountScreen.tick(dt);
             gridScreen.tick(dt, ctx);
             searchScreen.tick(dt, ctx);
 
@@ -6534,6 +6564,7 @@ int main(int argc, char** argv) {
                 case Screen::Grid: gridScreen.draw(ctx); break;
                 case Screen::Detail: detailScreen.draw(ctx); break;
                 case Screen::Search: searchScreen.draw(ctx); break;
+                case Screen::AddAccount: addAccountScreen.draw(ctx); break;
                 case Screen::Home: break;   // unreachable, and the compiler asks
             }
             // A screen sets the transition alpha and its own scroll window for
@@ -6785,6 +6816,9 @@ int main(int argc, char** argv) {
                 // Search has no glass: the keyboard docked under it is the only
                 // material on the screen and the app draws that itself.
                 case Screen::Search: break;
+                // The QR draws its own white card; there is nothing behind it
+                // on this screen for glass to blur.
+                case Screen::AddAccount: break;
                 case Screen::Home: break;
             }
             renderer.setContentAlpha(1.0f);
@@ -7138,7 +7172,8 @@ int main(int argc, char** argv) {
         ++frame;
         // Capture before the swap. After a swap the back buffer's contents are
         // undefined, so a readback taken there is whatever the driver left.
-        if (shotMode && frame >= shotAfterFrames) {
+        if (shotMode && frame >= shotAfterFrames &&
+            (!waitForPairCode || shownPairCode)) {
             renderer.saveFrame(shotPath, dw, dh);
             // Whether the running core can produce a state AT THIS POINT, which
             // is a different question from whether the round trip is exact and
