@@ -4053,8 +4053,15 @@ int main(int argc, char** argv) {
     // a shelf and a grid end up disagreeing about what focus looks like, which
     // is the same reason design.h exists.
     enum Row { RowRecent = 0, RowFavorites = 1 };
-    enum BarItem { BarLibrary = 0, BarSearch, BarSettings, BarCount };
-    const char* kBarLabels[BarCount] = { "Library", "Search", "Settings" };
+    // THE CHIP IS A BAR SLOT NOW, and it is the only one that is not a
+    // capsule: it is drawn as the avatar disc at the far right, so the label
+    // loop below stops at BarSettings and the chip takes its own focus rim.
+    // Everything else about it — L1/R1 walking onto it, Down leaving the bar —
+    // it gets for free by being in this list.
+    enum BarItem { BarLibrary = 0, BarSearch, BarSettings, BarAccount, BarCount };
+    const char* kBarLabels[BarCount] = { "Library", "Search", "Settings", "Account" };
+    // How many of those draw as labelled capsules. The chip draws itself.
+    constexpr int kBarCapsules = BarAccount;
 
     const size_t shelfSlots = shelf.empty() ? cards.size() : shelf.size();
     // Whether there is a game to resume. It is shelf slot 0 when there is.
@@ -4144,6 +4151,7 @@ int main(int argc, char** argv) {
     screens::GridScreen gridScreen;
     screens::DetailScreen detailScreen;
     screens::SearchScreen searchScreen;
+    screens::AccountScreen accountScreen;
     // What the docked keyboard held last frame, so the filter is re-run when it
     // changes and not sixty times a second when it does not.
     std::string searchTyped;
@@ -4459,10 +4467,107 @@ int main(int argc, char** argv) {
         return true;
     };
 
+    // ADDING SOMEBODY, ON A CLIENT OF ITS OWN.
+    //
+    // THE SEPARATE CLIENT IS THE WHOLE POINT and it is the reference
+    // implementation's rule too: pairing on the live client would swap the
+    // token under whoever is playing, and a half-finished pairing would leave
+    // `firstrun` looking at a console it cannot classify. Nothing here touches
+    // `liveClient` until `recordPairing` has succeeded — and even then it only
+    // writes the account, because adding somebody must not sign anybody out.
+    struct AddJob {
+        std::thread th;
+        std::mutex m;
+        std::atomic<bool> running{false};
+        romm::Pairing pairing;
+        bool haveCode = false;
+        bool finished = false;
+        bool ok = false;
+        std::string err;
+    };
+    auto addJob = std::make_shared<AddJob>();
+
+    auto startAddAccount = [&, addJob]() {
+        if (addJob->running.load()) return;
+        if (!rommAddress) {
+            accountScreen.setNotice("This console has no server address.");
+            return;
+        }
+        addJob->running = true;
+        { std::lock_guard<std::mutex> lk(addJob->m);
+          addJob->haveCode = addJob->finished = addJob->ok = false;
+          addJob->err.clear(); }
+        const std::string addr = rommAddress;
+        if (addJob->th.joinable()) addJob->th.join();
+        addJob->th = std::thread([addJob, addr]() {
+            romm::Client c;              // ITS OWN. See the comment above.
+            std::string err;
+            if (!c.setAddress(addr, &err)) {
+                std::lock_guard<std::mutex> lk(addJob->m);
+                addJob->err = err; addJob->finished = true; addJob->running = false;
+                return;
+            }
+            romm::Pairing p;
+            if (!c.beginPairing(&p, &err)) {
+                std::lock_guard<std::mutex> lk(addJob->m);
+                addJob->err = err; addJob->finished = true; addJob->running = false;
+                return;
+            }
+            { std::lock_guard<std::mutex> lk(addJob->m);
+              addJob->pairing = p; addJob->haveCode = true; }
+
+            // ON THE PAIRING'S OWN INTERVAL, and it expires in minutes — the
+            // loop ends rather than running for ever, because a code nobody
+            // approved is not an error worth blocking on.
+            const int tries = p.expiresIn > 0 ? (p.expiresIn / (p.intervalSeconds > 0 ? p.intervalSeconds : 5)) + 1 : 60;
+            for (int i = 0; i < tries; ++i) {
+                std::this_thread::sleep_for(
+                    std::chrono::seconds(p.intervalSeconds > 0 ? p.intervalSeconds : 5));
+                const int state = c.pollPairing(p, &err);
+                if (state == 0) continue;
+                if (state < 0) break;
+                std::string aerr;
+                const bool wrote = accounts::recordPairing(c, &aerr);
+                std::lock_guard<std::mutex> lk(addJob->m);
+                addJob->ok = wrote;
+                if (!wrote) addJob->err = aerr;
+                addJob->finished = true; addJob->running = false;
+                return;
+            }
+            std::lock_guard<std::mutex> lk(addJob->m);
+            if (addJob->err.empty()) addJob->err = "that code expired before anybody approved it";
+            addJob->finished = true; addJob->running = false;
+        });
+        accountScreen.setPairingBusy(true);
+    };
+
+    // Rebuilt from the store, which is the only thing that knows.
+    auto refreshAccountRows = [&]() {
+        // EVERYBODY EXCEPT WHOEVER IS SIGNED IN. The chip directly above the
+        // panel is that person's row already; listing them again is the
+        // redundancy MMagTech spotted in the first capture.
+        std::vector<screens::AccountRow> rows;
+        const int active = accounts::activeId();
+        for (const accounts::Account& a : accounts::all())
+            if (a.id != active) rows.push_back({a.id, a.name, a.avatar});
+        accountScreen.setRows(std::move(rows));
+    };
+
     // WHERE THE BAR'S FOCUS LIVES. Not in Home's row model and not in any
     // screen's: the bar is drawn over all of them, so its cursor belongs to the
     // app. Every screen gets into it the same way (Action::FocusBar) and out of
     // it the same way (Down, or Back).
+    // THE SWITCHER IS AN OVERLAY, NOT A DESTINATION, and that is the whole
+    // point of it being a panel. It was a stack screen for one build and the
+    // capture showed the fault immediately: pushing it made `here()` stop
+    // being Home, so Home stopped drawing and the panel hung over an empty
+    // purple field. A thing that "expands from the chip" has to have what it
+    // expanded over still behind it.
+    //
+    // So it lives beside `barFocused` rather than in the stack: the app owns
+    // it, every screen keeps drawing underneath it, and Back closes it and
+    // leaves you exactly where you were.
+    bool accountsOpen = false;
     bool barFocused = false;
     int barSlot = 0;
     // Trigger edge state. See the axis handler.
@@ -4503,8 +4608,17 @@ int main(int argc, char** argv) {
             case screens::Action::None:
                 break;
             case screens::Action::Back:
-                if (stack.size() > 1) { stack.pop_back(); sound::play(sound::Cue::Back); }
-                else sound::play(sound::Cue::Edge);
+                if (accountsOpen) {
+                    // Closes the panel and puts focus back ON THE CHIP, which
+                    // is where it came from. Dropping focus into the screen
+                    // underneath would lose the place the person was at.
+                    accountsOpen = false;
+                    barFocused = true;
+                    barSlot = BarAccount;
+                    sound::play(sound::Cue::Back);
+                } else if (stack.size() > 1) {
+                    stack.pop_back(); sound::play(sound::Cue::Back);
+                } else sound::play(sound::Cue::Edge);
                 break;
             case screens::Action::OpenTile: {
                 const auto& tiles = libraryScreen.visible();
@@ -4514,6 +4628,33 @@ int main(int argc, char** argv) {
                 sound::play(sound::Cue::Activate);
                 break;
             }
+            case screens::Action::SwitchAccount: {
+                // THE REFUSALS BELONG TO THE APP AND SO DO THEIR WORDS. The
+                // screen does not know whether a game is running or a save is
+                // still going up; it asked to become somebody and this decides.
+                std::string why;
+                if (switchAccount(res.value, &why)) {
+                    // Straight back to Home with the panel closed, because
+                    // everything behind it belonged to the last account.
+                    // Leaving the panel open over a Home that has just been
+                    // rebuilt for somebody else is the stale-screen fault in
+                    // miniature.
+                    accountsOpen = false;
+                    barFocused = false;
+                    stack.clear();
+                    stack.push_back(Screen::Home);
+                    accountScreen.setNotice("");
+                    sound::play(sound::Cue::Activate);
+                } else {
+                    accountScreen.setNotice(why);
+                    sound::play(sound::Cue::Edge);
+                }
+                break;
+            }
+            case screens::Action::AddAccount:
+                startAddAccount();
+                sound::play(sound::Cue::Activate);
+                break;
             case screens::Action::FocusKeyboard:
                 // Back into the keyboard under the results. Focus does not
                 // leave the screen, it moves down within it.
@@ -4680,6 +4821,18 @@ int main(int argc, char** argv) {
                 // its real contents. It says nothing when pressed rather than
                 // pretending — a destination that goes nowhere is a promise the
                 // product does not keep, and that screen does not exist.
+                if (barSlot == BarAccount) {
+                    // WHO IS PLAYING. Rebuilt from the store every time it
+                    // opens rather than cached: the list is three lines of
+                    // JSON and a stale switcher is a switcher that signs the
+                    // console in as somebody who has been removed.
+                    barFocused = false;
+                    refreshAccountRows();
+                    accountScreen.open();
+                    accountsOpen = true;
+                    sound::play(sound::Cue::Activate);
+                    return true;
+                }
                 if (barSlot == BarLibrary || barSlot == BarSearch) {
                     const int d = (barSlot == BarLibrary) ? 1 : 2;
                     barFocused = false;
@@ -4706,6 +4859,7 @@ int main(int argc, char** argv) {
 
     navigate = [&](screens::Nav n) -> bool {
         // The bar first, wherever it is focused. One place, one behaviour.
+        if (accountsOpen) { apply(accountScreen.key(n)); return true; }
         if (barFocused && barKey(n)) return true;
         switch (here()) {
             case Screen::Home: return homeKey ? homeKey(n) : false;
@@ -4725,7 +4879,14 @@ int main(int argc, char** argv) {
     // Library. `--screen search --query metal` types the query the way a person
     // would type it and leaves focus in the results, which is the state worth
     // photographing — an empty Search is a picture of a keyboard.
-    if (initialScreen && SDL_strcmp(initialScreen, "search") == 0) {
+    // THE SWITCHER IS REACHED THE WAY A PERSON REACHES IT: focus the bar, walk
+    // to the chip, press it. A capture that called open() directly would be
+    // photographing a panel the product might not be able to get to.
+    if (initialScreen && SDL_strcmp(initialScreen, "accounts") == 0) {
+        barFocused = true;
+        barSlot = BarAccount;
+        barKey(screens::Nav::Activate);
+    } else if (initialScreen && SDL_strcmp(initialScreen, "search") == 0) {
         goToDestination(2);
         if (searchQuery) {
             keyboard.typeText(searchQuery);
@@ -5827,6 +5988,35 @@ int main(int argc, char** argv) {
             autoDownloadId = 0;
             downloadById(id);
         }
+        // The pairing worker's answer, picked up on the frame thread. Nothing
+        // here touches the network — it reads what the thread published.
+        if (accountsOpen) {
+            bool code = false, fin = false, ok = false;
+            std::string url, user, err;
+            {
+                std::lock_guard<std::mutex> lk(addJob->m);
+                code = addJob->haveCode; fin = addJob->finished; ok = addJob->ok;
+                url = addJob->pairing.verificationUrl;
+                user = addJob->pairing.userCode;
+                err = addJob->err;
+            }
+            if (fin) {
+                accountScreen.setPairing("", "");
+                accountScreen.setPairingBusy(false);
+                if (ok) {
+                    // Added, NOT switched to. The new account is a row in the
+                    // list now and whoever was playing is still playing.
+                    refreshAccountRows();
+                    accountScreen.setNotice("Added. Choose them to switch.");
+                } else {
+                    accountScreen.setNotice(err.empty() ? "That did not pair." : err);
+                }
+                std::lock_guard<std::mutex> lk(addJob->m);
+                addJob->finished = false;
+            } else if (code && !accountScreen.pairing()) {
+                accountScreen.setPairing(url, user);
+            }
+        }
         if (autoSwitchAccountId > 0) {
             const int id = autoSwitchAccountId;
             autoSwitchAccountId = 0;
@@ -5947,6 +6137,7 @@ int main(int argc, char** argv) {
             // resuming mid-transition when the person comes back to it.
             screens::Ctx ctx{renderer, text, images, renderer.scale(), &cards};
             libraryScreen.tick(dt);
+            accountScreen.tick(dt);
             gridScreen.tick(dt, ctx);
             searchScreen.tick(dt, ctx);
 
@@ -6769,7 +6960,7 @@ int main(int argc, char** argv) {
                 barTop + (barHeight - text.lineHeight(ui::TextStyle::Callout, sc)) * 0.5f +
                 text.ascent(ui::TextStyle::Callout, sc);
             float bx = barX;
-            for (int i = 0; i < BarCount; ++i) {
+            for (int i = 0; i < kBarCapsules; ++i) {
                 const bool on = barFocused && barSlot == i;
                 const bool sel = (i == selected);
                 const float w = text.measure(kBarLabels[i], ui::TextStyle::Callout, sc);
@@ -6861,8 +7052,21 @@ int main(int argc, char** argv) {
             //
             // The disc is drawn either way, as the ground under a picture with
             // transparency and as the fallback when there is none.
+            // THE CHIP IS FOCUSABLE NOW. It is not a capsule like the other
+            // bar items, so it takes the focus treatment on its own disc — a
+            // rim, which is this design system's focus idiom everywhere else.
+            const bool chipOn = barFocused && barSlot == BarAccount;
+            if (chipOn) {
+                const float pad = 6.0f;
+                renderer.draw(ui::Rect{discX - pad, discY - pad, discD + pad * 2.0f,
+                                       discD + pad * 2.0f, (discD + pad * 2.0f) * 0.5f,
+                                       ui::Color::white(0.55f)});
+            }
             renderer.draw(ui::Rect{discX, discY, discD, discD, discD * 0.5f,
-                                   ui::Color::white(0.22f)});
+                                   ui::Color::white(chipOn ? 0.34f : 0.22f)});
+            // WHERE THE PANEL HANGS FROM. The app knows where the chip is; the
+            // screen must not guess, or the panel drifts the day the bar moves.
+            accountScreen.setAnchor(discX + discD, barTop + barHeight + 12.0f);
             const ui::Image* face = nullptr;
             if (!me.avatar.empty()) {
                 const ui::Image& img = images.get(me.avatar);
@@ -6886,6 +7090,16 @@ int main(int argc, char** argv) {
             }
             text.draw(renderer, who, discX - 12.0f - nameW, barBaseline,
                       ui::TextStyle::Callout, ui::Color::white(0.65f), sc);
+        }
+
+        // ---- The account switcher, over the screen and over the bar -------
+        //
+        // AFTER THE BAR, because it hangs from the chip the bar draws and has
+        // to sit on top of it rather than under. Before the curtain, because a
+        // curtain covers everything including this.
+        if (accountsOpen) {
+            screens::Ctx actx{renderer, text, images, sc, &cards};
+            accountScreen.draw(actx);
         }
 
         // ---- The curtain, over everything --------------------------------
