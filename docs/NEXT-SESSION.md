@@ -82,7 +82,7 @@ each one:
 | `systemctl is-active cabinetos-session` | `active` |
 | `ps -eo args \| grep [c]abinetos-frontend` | **`/usr/bin/cabinetos-frontend`** — the image's, under `gamescope --backend drm --output-width 3840 --output-height 2160` |
 | `ls /etc/systemd/system/cabinetos-session.service.d/` | **empty. No drop-ins at all.** |
-| `bootc status` | booted **`sha256:ceafc2bb…`**, with `sha256:ce25da80…` as the rollback |
+| `bootc status` | booted **`sha256:71b65e36…`**, with `sha256:ceafc2bb…` as the rollback |
 | `journalctl -b -o cat \| grep '^\[ps2\]'` | `renderer Vulkan, **upscale 1x, anisotropy 0**` |
 
 **THE TWO NUMBERS THIS FILE USED TO CARRY ARE NOW ONE.** It said "1147 on the
@@ -91,9 +91,28 @@ drop-in: PlayStation 2 and GameCube are in the image now, so 1232 is both. (The
 1232 is the audit's figure, not one recounted today; the audit's own totals need
 a pass — see the note at the end of the platform audit.)
 
-**`sha256:78e43b5a…` IS NOT ON THAT MACHINE AND HAS NOT BEEN FOR TWO
+**`sha256:78e43b5a…` IS NOT ON THAT MACHINE AND HAS NOT BEEN FOR SEVERAL
 DEPLOYMENTS.** It was #30 and this file quoted it as the booted digest until
 today. If a digest here disagrees with `bootc status`, `bootc status` is right.
+
+**UPGRADED 2026-09-21 21:15Z, which is why the digest above is newer than the
+one in the PlayStation 2 and GameCube entries below.** The console had been four
+commits behind — it was missing the second-game black fix (item 3b) and the
+pause menu's notices — so **item 3b's fix and the pause-menu work are on the
+television for the first time as of this upgrade, and neither has been looked
+at by a person on that panel.** The boot was clean: `gamescope (drm) is up`, no
+drop-ins, and the RomM retry did its job out loud —
+
+```
+[romm] nothing answered at 192.168.1.10:6005 over http or https — waiting up to 90s for it
+[romm] the server answered
+```
+
+— which is item 4's fix working on a real boot race rather than in a test.
+
+**A DIGEST IN THIS FILE GOES STALE THE MOMENT SOMEBODY UPGRADES**, and this one
+went stale within an hour of being written down. That is the argument for the
+state block being overwritten every session rather than appended to.
 
 **THE SESSION HAD BEEN DEAD FOR TEN HOURS AND NOTHING SAID SO.** It was found
 `inactive` at the start of a session — stopped at 21:31 the night before and
