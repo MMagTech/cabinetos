@@ -92,6 +92,25 @@ constexpr float kFocusDuration = 0.180f;
 // person reads the result as instant, above it silence reads as a hang.
 constexpr float kProgressDelay = 0.400f;
 
+// THE CURTAIN, which is what makes a game arrive rather than appear — 2026-09-21.
+//
+// MMagTech: *"when a game launches the transition to it is very abrupt any way
+// to smooth it."* There was nothing to smooth, and the reason is worth stating:
+// `Core::loadGame` BLOCKS THE FRAME THREAD. The sequence was a UI frame, a UI
+// frame, several hundred milliseconds of nothing at all, and then a game frame.
+// No animation can live in a gap where no frames are drawn.
+//
+// So the curtain closes FIRST and the load happens behind it. Down over 260 ms
+// while the interface is still drawing and still animating, then the blocking
+// work, then up over 420 ms onto the game. The slower lift is deliberate: going
+// dark is the console acknowledging a press and should be brisk; coming back is
+// the game arriving and is the part worth watching.
+//
+// It is ease-in-out both ways, which the design system reserves for "a change of
+// state the user asked for". Pressing Play is exactly that.
+constexpr float kCurtainDown = 0.260f;
+constexpr float kCurtainUp = 0.420f;
+
 constexpr float kRepeatDelay = 0.420f;    // before the second move
 constexpr float kRepeatStart = 0.120f;    // and between the ones after it
 constexpr float kRepeatFast = 0.045f;     // once it has been held a while

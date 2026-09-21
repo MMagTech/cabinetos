@@ -77,6 +77,24 @@ PS1 and N64 while iOS synced every platform. One engine, two callers.
   running core cannot restore. See PROJECT.md for the decision about whether
   CabinetOS shares these tags.
 
+**WHICH COPY "LOAD LATEST" TAKES — read before changing CabinetOS's.**
+`TVPlayerView.loadLatestState`, and its own comment says it: *"offline falls
+back to the newest local state, online the server stays the source of truth."*
+The guard is `kept && isOffline` — local is read ONLY when the game is kept and
+the device is offline. Everything else asks RomM, filters to this core's tag,
+sorts by `updatedAt` and takes the first.
+
+**And Cabinet's Save AWAITS its upload**, reporting `"Uploading…"` then either
+`"Saved to RomM."` or `"Waiting for signal to upload."` That is what makes the
+server safe to treat as the source of truth: by the time a person can press
+Load, the server has it.
+
+**CabinetOS queues its upload on a worker instead**, which is right for a
+machine that must not stall its frame loop — but it means save-then-load raced
+the upload and silently found nothing. Closed on 2026-09-21 in Save's reporting
+rather than by changing what "latest" means, plus a local fallback when the
+server has nothing for this core or cannot be reached.
+
 **Favourites and play state are RomM's, not the app's.** Favouriting in the app
 syncs up; recents come back down as `order_by=last_played`. CabinetOS should
 never keep a local notion of either.

@@ -2286,8 +2286,29 @@ at its draw site. This is a list, not the record.
 - **THE RENDERER GAINED TWO THINGS**: `setContentAlpha` for screen transitions and
   `setScissor` for scroll windows.
 
+- **A CURTAIN ON LAUNCH AND EXIT.** `Core::loadGame` blocks the frame thread, so
+  the old transition was a UI frame, a UI frame, several hundred milliseconds of
+  nothing, then a game frame — no animation can live in a gap where no frames
+  are drawn. The curtain closes over 260 ms FIRST, the blocking work happens
+  behind it, and it lifts over 420 ms. It does not close for a background
+  download, and it lifts again on a refusal.
+- **THE PAUSE MENU ANSWERS BACK.** Save state and Load latest were wired and had
+  been for days; every outcome of both went to stderr and nowhere else. See
+  MenuNotice, and docs/CABINET.md for the reference's own wording, which is
+  better than anything invented here.
+- **AND LOAD LATEST WAS ASKING THE WRONG MACHINE.** It only ever queried RomM, so
+  saving and immediately loading raced the background upload and found nothing,
+  in silence. The server is still the source of truth — that is Cabinet's rule
+  and it is right, because states live on RomM so "latest" can mean latest
+  across devices — but Save now reports when the upload actually lands, and a
+  server with nothing for this core falls back to this machine's newest state.
+
 #### What is left, and it is short
 
+- **SAVE AND LOAD STATE ARE UNVERIFIED BY A PERSON.** Everything above was built
+  and compiled at the end of a long session and MMagTech had not yet retried it.
+  **Do that first**: save in a game, load it back, and watch what the menu says
+  at each step. The words are the feature as much as the bytes are.
 - **SETTINGS.** The last bar item that does nothing, and open question 23's one
   quality control has nowhere to live until it exists. **This is the next UI
   session.**

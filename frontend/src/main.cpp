@@ -180,6 +180,17 @@ public:
 
     int pending() const { return pending_.load(); }
 
+    // THE OUTCOME OF THE MOST RECENT STATE UPLOAD, so the pause menu can say
+    // what happened rather than what was attempted. 0 nothing new, 1 it reached
+    // the server, 2 it did not and is still on the disk.
+    //
+    // Cabinet awaits its upload and reports "Saved to RomM." or "Waiting for
+    // signal to upload." This console queues on a worker instead, which is the
+    // right shape for a machine that must not stall its frame loop — but it
+    // meant Save said nothing at all, and then "load latest" went looking on a
+    // server that had not received it yet. One atomic closes that gap.
+    std::atomic<int> stateOutcome{0};
+
 private:
     void run() {
         for (;;) {
@@ -203,6 +214,7 @@ private:
             // is the point: the file is still on disk, it still has not reached
             // RomM, and the console still owes it.
             if (ok) cache::clearPending(storage::currentUser(), job.romId, job.fileName);
+            if (job.isState) stateOutcome.store(ok ? 1 : 2);
             std::fprintf(stderr, "[%s] %s %s\n", job.isState ? "state" : "save",
                          ok ? "uploaded" : "upload failed, kept locally:",
                          ok ? job.emulator.c_str() : err.c_str());
@@ -751,11 +763,35 @@ static void syncSave(GameSession& sess, Uploader& up) {
     up.push(Uploader::Job{sess.romId, sess.saveTag, name, std::move(ram), false});
 }
 
-static void saveStateNow(GameSession& sess, Uploader& up) {
+// WHAT THE PAUSE MENU SAYS BACK — new 2026-09-21.
+//
+// MMagTech, in the menu: *"are the save and load from the menu not wired in?"*
+// They were, and had been for days. Every outcome of both went to stderr and
+// nowhere else, so pressing Save state looked identical whether it wrote two
+// megabytes, refused because the core cannot serialise, or failed to write at
+// all — and "did that do anything?" is the one question a save button must
+// never leave a person asking.
+//
+// The same fault as the invisible launch refusal fixed earlier today, in the
+// one menu where somebody is most likely to be doing something they want
+// confirmed. It fades after a few seconds because it is a receipt, not a state.
+struct MenuNotice {
+    std::string text;
+    float life = 0.0f;
+    void say(std::string t) { text = std::move(t); life = 3.2f; }
+    void tick(float dt) { if (life > 0.0f) life -= dt; }
+    float alpha() const {
+        if (life <= 0.0f) return 0.0f;
+        return life < 0.5f ? life / 0.5f : 1.0f;   // the last half second fades
+    }
+};
+
+static void saveStateNow(GameSession& sess, Uploader& up, MenuNotice& notice) {
     cab::Core& core = cab::Core::shared();
     std::vector<uint8_t> st;
     if (!core.saveState(st) || st.empty()) {
         std::fprintf(stderr, "[state] this core cannot serialize\n");
+        notice.say("This system cannot save a state");
         return;
     }
     // Named with a timestamp because states accumulate on purpose; a save
@@ -768,14 +804,24 @@ static void saveStateNow(GameSession& sess, Uploader& up) {
     storage::makeDirs(sess.stateDir);
     if (!writeLocal(sess.stateDir + "/" + name, st)) {
         std::fprintf(stderr, "[state] could not write locally, not uploading\n");
+        notice.say("Could not write the state to this machine");
         return;
     }
     std::fprintf(stderr, "[state] %zu bytes saved locally\n", st.size());
 
     if (sess.stateTag.empty()) {
         std::fprintf(stderr, "[state] no settled tag for this core — not uploaded\n");
+        // SAVED, and honest about the half that did not happen. A state this
+        // console cannot tag is one no other device will be offered, which is
+        // worth knowing before somebody relies on it being there.
+        notice.say("State saved here — not to the server");
         return;
     }
+    // NOT "saved" YET. The bytes are on the disk, which is the guarantee that
+    // matters, but the sentence a person reads should not claim the server has
+    // it before the server has it. The frame loop finishes this sentence when
+    // the uploader reports back — see Uploader::stateOutcome.
+    notice.say("Saving\xE2\x80\xA6");
     up.push(Uploader::Job{sess.romId, sess.stateTag, name, std::move(st), true});
 }
 
@@ -789,16 +835,26 @@ static void saveStateNow(GameSession& sess, Uploader& up) {
 struct StateLoad {
     std::atomic<bool> running{false};
     std::atomic<bool> ready{false};
+    // The server had nothing for this core, or could not be asked. The frame
+    // thread then tries this machine's own newest state — reading it there
+    // rather than here because loading one touches the core.
+    bool tryLocal = false;
     std::vector<uint8_t> data;
     std::string note;
     std::thread worker;
     ~StateLoad() { if (worker.joinable()) worker.join(); }
 };
 
-static void beginLoadLatestState(StateLoad& load, GameSession& sess, romm::Client& client) {
+static void beginLoadLatestState(StateLoad& load, GameSession& sess,
+                                 romm::Client& client, MenuNotice& notice) {
     if (load.running.load()) return;
+
+    notice.say("Looking for a state\xE2\x80\xA6");
     if (sess.stateTag.empty()) {
         std::fprintf(stderr, "[state] no settled tag for this core — refusing to load\n");
+        // It used to return here in silence, which is half of why this looked
+        // unwired: no local state, no tag, nothing said.
+        notice.say("No state to load for this system");
         return;
     }
     if (load.worker.joinable()) load.worker.join();
@@ -810,7 +866,11 @@ static void beginLoadLatestState(StateLoad& load, GameSession& sess, romm::Clien
         std::vector<romm::Asset> states;
         std::string err;
         if (!client.fetchStates(romId, &states, &err)) {
+            // The server could not be reached or would not answer, which is
+            // Cabinet's offline case by another name. The newest state on this
+            // machine is what is left, and it is better than a refusal.
             load.note = err;
+            load.tryLocal = true;
             load.running = false;
             load.ready = true;
             return;
@@ -827,6 +887,7 @@ static void beginLoadLatestState(StateLoad& load, GameSession& sess, romm::Clien
         if (!best) {
             load.note = "none for " + tag + " (" + std::to_string(skipped) +
                         " for other emulators)";
+            load.tryLocal = true;
         } else {
             load.data = client.fetchAsset("states", best->id);
             load.note = best->fileName;
@@ -838,17 +899,84 @@ static void beginLoadLatestState(StateLoad& load, GameSession& sess, romm::Clien
 
 // Called once per frame. Applying the state is the only part that touches the
 // core, so it happens here and nowhere else.
-static void pumpStateLoad(StateLoad& load) {
+// The newest .state file this console wrote for this game, or empty.
+//
+// THE FALLBACK, NOT THE FIRST CHOICE — settled against the reference 2026-09-21.
+//
+// MMagTech: *"i just did save on a couple of games and it looked like nothing
+// happened even tried loading after saving."* Two faults with one symptom.
+// Nothing LOOKED like it happened because neither button said anything — see
+// MenuNotice. And loading after saving genuinely did nothing, because the
+// upload queued moments earlier had not landed and the server was asked.
+//
+// The first fix here was to read this file FIRST. That was wrong, and reading
+// Cabinet settled it — `TVPlayerView.loadLatestState`, whose own comment is
+// *"offline falls back to the newest local state, online the server stays the
+// source of truth"*. It is right, and the reason is that states live on RomM so
+// that "latest" can mean latest across every device a person owns. A console
+// that preferred its own copy would quietly stop being one of those devices.
+//
+// Cabinet gets away with it because its Save AWAITS the upload and only then
+// says "Saved to RomM.", so by the time you could press Load the server has it.
+// This console queues on a worker instead — right for a machine that must not
+// stall its frame loop — so the race was real here and not there. It is closed
+// where it belongs, in Save's own reporting, rather than by changing what
+// "latest" means.
+static std::string newestLocalState(const GameSession& sess) {
+    DIR* d = ::opendir(sess.stateDir.c_str());
+    if (!d) return {};
+    std::string best;
+    time_t bestAt = 0;
+    while (struct dirent* e = ::readdir(d)) {
+        const std::string name = e->d_name;
+        if (name.size() < 7 || name.compare(name.size() - 6, 6, ".state") != 0) continue;
+        const std::string full = sess.stateDir + "/" + name;
+        struct stat st;
+        if (::stat(full.c_str(), &st) != 0 || !S_ISREG(st.st_mode)) continue;
+        if (best.empty() || st.st_mtime > bestAt) { best = full; bestAt = st.st_mtime; }
+    }
+    ::closedir(d);
+    return best;
+}
+
+static void pumpStateLoad(StateLoad& load, const GameSession& sess,
+                          MenuNotice& notice) {
     if (!load.ready.load()) return;
     load.ready = false;
     if (load.worker.joinable()) load.worker.join();
     if (load.data.empty()) {
         std::fprintf(stderr, "[state] %s\n", load.note.c_str());
+        // THE FALLBACK. The server had nothing for this core or could not be
+        // asked; this machine's own newest state is what is left. Read here
+        // rather than on the worker because loading one touches the core.
+        if (load.tryLocal) {
+            load.tryLocal = false;
+            if (const std::string local = newestLocalState(sess); !local.empty()) {
+                const std::vector<uint8_t> bytes = cab::readBytes(local);
+                if (!bytes.empty()) {
+                    const bool ok = cab::Core::shared().loadState(bytes);
+                    std::fprintf(stderr, "[state] fell back to local %s -> %s\n",
+                                 local.c_str(), ok ? "restored" : "REFUSED");
+                    notice.say(ok ? "State loaded from this machine"
+                                  : "This state could not be loaded");
+                    return;
+                }
+            }
+        }
+        // `note` is already a sentence written for a person — "none for
+        // <core>", an error from the server — so it is shown rather than
+        // replaced with a vaguer one.
+        notice.say(load.note);
         return;
     }
+    const bool ok = cab::Core::shared().loadState(load.data);
     std::fprintf(stderr, "[state] %s (%zu bytes) -> %s\n", load.note.c_str(),
-                 load.data.size(),
-                 cab::Core::shared().loadState(load.data) ? "restored" : "REFUSED");
+                 load.data.size(), ok ? "restored" : "REFUSED");
+    // A REFUSED state is the one that matters most. It means the bytes were
+    // found and the core would not take them, which is a different problem from
+    // there being none — and silently carrying on with the game running from
+    // where it was is indistinguishable from nothing having happened.
+    notice.say(ok ? "State loaded" : "This state could not be loaded");
     load.data.clear();
 }
 
@@ -3856,6 +3984,7 @@ int main(int argc, char** argv) {
     Uploader uploader;
     uploader.start(&liveClient);
     StateLoad stateLoad;
+    MenuNotice menuNotice;
 
     // The in-game overlay: a scrim, a panel and buttons drawn over the game
     // surface. No compositing trick — the frontend owns the frame loop, which
@@ -4041,6 +4170,11 @@ int main(int argc, char** argv) {
     // pressing a second direction takes over rather than queueing, so a person
     // rolling their thumb around the pad never ends up with two repeats
     // fighting each other.
+    // THE CURTAIN. 0 is clear, 1 is black over everything. See design.h.
+    Animated curtain;
+    curtain.smooth = true;
+    curtain.from = curtain.to = 0.0f;
+
     bool navHeld = false;
     screens::Nav heldNav = screens::Nav::Down;
     float heldFor = 0.0f, nextRepeat = 0.0f;
@@ -4362,6 +4496,21 @@ int main(int argc, char** argv) {
             return;
         }
         if (st != LaunchJob::Stage::Ready) return;
+
+        // THE CURTAIN COMES DOWN BEFORE THE BLOCKING WORK, not after it. See
+        // design::kCurtainDown. The stage is deliberately NOT cleared here, so
+        // this runs again next frame and the frames in between are spent
+        // animating something a person can see rather than waiting inside
+        // Core::loadGame with nothing on the screen.
+        //
+        // Only for a launch. A download that was merely asked for must not
+        // black the screen out — the person is still browsing, and its progress
+        // is on the row they pressed.
+        if (launchJob.playWhenReady) {
+            curtain.retarget(1.0f, kCurtainDown);
+            if (curtain.value() < 0.995f) return;
+        }
+
         launchJob.stop();
         launchJob.stage = LaunchJob::Stage::Idle;
 
@@ -4520,6 +4669,9 @@ int main(int argc, char** argv) {
             }
             detailScreen.setNotice(core.error());
             sound::play(sound::Cue::Edge);
+            // The curtain came down for a game that is not going to start, so
+            // it goes straight back up onto the screen that says why.
+            curtain.retarget(0.0f, kCurtainUp);
             return;
         }
         // Played now, so it is the LAST thing eviction should take rather than
@@ -4530,6 +4682,9 @@ int main(int argc, char** argv) {
         // The session, and the game's own save restored into it BEFORE the
         // first frame. A battery save is the game's progress; it has to be in
         // place when the game boots, not offered as a choice afterwards.
+        // The game is loaded and the next frame is its first. Up it goes.
+        curtain.retarget(0.0f, kCurtainUp);
+
         session = GameSession{};
         session.romId = launchJob.romId;
         session.title = launchJob.title;
@@ -4804,6 +4959,12 @@ int main(int argc, char** argv) {
     uint64_t exitWaitStart = 0;
     auto finishExit = [&]() {
         syncSave(session, uploader);
+        // And the same curtain on the way out — `unloadGame` blocks too, and a
+        // game vanishing into Home mid-frame is the same cut in the other
+        // direction.
+        curtain.from = curtain.to = 1.0f;
+        curtain.elapsed = curtain.duration;
+        curtain.retarget(0.0f, kCurtainUp);
         cab::Core::shared().unloadGame();
         // AFTER the unload, for the one platform whose save is a tree. The
         // battery above is read out of the core's own memory and is finished
@@ -4865,8 +5026,8 @@ int main(int argc, char** argv) {
                 overlayOpen = false;
                 overlayFade.retarget(0.0f, kOverlayFade);
                 break;
-            case OvSaveState: saveStateNow(session, uploader); break;
-            case OvLoadState: beginLoadLatestState(stateLoad, session, liveClient); break;
+            case OvSaveState: saveStateNow(session, uploader, menuNotice); break;
+            case OvLoadState: beginLoadLatestState(stateLoad, session, liveClient, menuNotice); break;
             case OvExit: exitToHome(); break;
             default: break;
         }
@@ -4957,8 +5118,8 @@ int main(int argc, char** argv) {
                     // F5 writes a state, F8 restores the newest one THIS build can
                     // load, F6 pushes the game's own save. Quitting syncs the
                     // save by itself; F6 is for testing without quitting.
-                    if (playing && e.key.key == SDLK_F5) saveStateNow(session, uploader);
-                    if (playing && e.key.key == SDLK_F8) beginLoadLatestState(stateLoad, session, liveClient);
+                    if (playing && e.key.key == SDLK_F5) saveStateNow(session, uploader, menuNotice);
+                    if (playing && e.key.key == SDLK_F8) beginLoadLatestState(stateLoad, session, liveClient, menuNotice);
                     if (playing && e.key.key == SDLK_F6) syncSave(session, uploader);
                     if (owner != InputOwner::UI) break;
                     // Anything pushed on top of Home owns its own focus model,
@@ -5381,7 +5542,7 @@ int main(int argc, char** argv) {
 
         pumpLaunch();
         pumpExit();
-        pumpStateLoad(stateLoad);
+        pumpStateLoad(stateLoad, session, menuNotice);
         if (overlayDemo && playing && !overlayOpen &&
             cab::Core::shared().framesRun() >= static_cast<uint64_t>(overlayDemoAfter)) {
             overlayDemo = false;
@@ -5418,7 +5579,7 @@ int main(int argc, char** argv) {
             if (++sinceStart == 150) {
                 std::fprintf(stderr, "[sync-test] --- saving ---\n");
                 const uint64_t t0 = SDL_GetTicksNS();
-                saveStateNow(session, uploader);
+                saveStateNow(session, uploader, menuNotice);
                 // Forced: at a title screen with no input the battery has not
                 // changed, and "nothing to send" is the correct behaviour but
                 // proves nothing about whether sending works.
@@ -5444,7 +5605,7 @@ int main(int argc, char** argv) {
                 std::fprintf(stderr, "[sync-test] frame thread blocked %.2f ms\n",
                              (SDL_GetTicksNS() - t0) / 1e6);
                 std::fprintf(stderr, "[sync-test] --- loading back ---\n");
-                beginLoadLatestState(stateLoad, session, liveClient);
+                beginLoadLatestState(stateLoad, session, liveClient, menuNotice);
                 std::fprintf(stderr, "[sync-test] --- done ---\n");
             }
         }
@@ -5459,6 +5620,14 @@ int main(int argc, char** argv) {
         // never advances returns its start value forever.
         scrollY.tick(dt);
         backdropMix.tick(dt);
+        curtain.tick(dt);
+        menuNotice.tick(dt);
+        // The other half of the sentence Save started. Cabinet's own words,
+        // because they are better than anything invented here: it either
+        // reached the server or it is waiting for signal.
+        if (const int outcome = uploader.stateOutcome.exchange(0); outcome != 0)
+            menuNotice.say(outcome == 1 ? "State saved to the server"
+                                        : "State saved here — waiting for signal");
         // Reset the moment it stops, so the next launch starts its own clock
         // and a second press cannot inherit the first one's patience.
         launchJob.busyFor = launchJob.busy() ? launchJob.busyFor + dt : 0.0f;
@@ -6134,9 +6303,14 @@ int main(int argc, char** argv) {
         // game's own picture through itself.
         const float ovl = overlayFade.value();
         if (ovl > 0.001f) {
+            // The 64 is the padding above and below the buttons; the extra 44
+            // is the line the menu answers with. Reserved whether or not there
+            // is one, so the panel does not change height as a message arrives
+            // and leaves — a menu that resizes under a person's thumb is worse
+            // than one with a little space at the bottom.
             const float panelH = static_cast<float>(OvCount) * kOverlayButtonHeight +
                                  static_cast<float>(OvCount - 1) * kOverlayButtonGap +
-                                 64.0f;
+                                 64.0f + 44.0f;
             const float px = (ui::kCanvasWidth - kOverlayPanelWidth) * 0.5f;
             // Rises slightly as it arrives rather than only fading: a panel that
             // just materialises reads as a glitch.
@@ -6214,6 +6388,18 @@ int main(int argc, char** argv) {
                           by + (bh - text.lineHeight(ui::TextStyle::Title3, sc)) * 0.5f +
                               text.ascent(ui::TextStyle::Title3, sc),
                           ui::TextStyle::Title3, labelColor, sc);
+            }
+
+            // WHAT THE MENU SAYS BACK. Under the buttons, inside the panel, so
+            // it belongs to the thing that was pressed rather than floating
+            // somewhere else on the screen. See MenuNotice.
+            const float na = menuNotice.alpha() * ovl;
+            if (na > 0.01f && !menuNotice.text.empty()) {
+                const float nw = text.measure(menuNotice.text, ui::TextStyle::Callout, sc);
+                text.draw(renderer, menuNotice.text,
+                          px + (kOverlayPanelWidth - nw) * 0.5f,
+                          py + panelH - 34.0f + text.ascent(ui::TextStyle::Callout, sc),
+                          ui::TextStyle::Callout, ui::Color::white(0.75f * na), sc);
             }
         }
 
@@ -6392,6 +6578,17 @@ int main(int argc, char** argv) {
             }
             text.draw(renderer, who, discX - 12.0f - nameW, barBaseline,
                       ui::TextStyle::Callout, ui::Color::white(0.65f), sc);
+        }
+
+        // ---- The curtain, over everything --------------------------------
+        //
+        // Last, and over the keyboard and the in-game overlay as well: it is
+        // not part of any screen, it is the screen going away. See design.h.
+        {
+            const float c = curtain.value();
+            if (c > 0.001f)
+                renderer.draw(ui::Rect{0, 0, ui::kCanvasWidth, ui::kCanvasHeight, 0,
+                                       ui::Color::black(c)});
         }
 
         keyboard.draw(renderer, text, renderer.scale());
