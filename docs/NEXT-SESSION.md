@@ -43,43 +43,52 @@ are in PROJECT.md, *Constraints and principles*, item 7.
 as the VM, sudo password `cabinet`. It boots into the frontend on
 **gamescope/drm** — the top compositor rung, which the VM has never reached —
 on its own Radeon 890M at the panel's native **3840x2160**, with Vulkan
-present (RADV STRIX1) and 1147 playable games. **The UI freeze is lifted and
-what is on that television is the real thing.**
+present (RADV STRIX1). **The UI freeze is lifted and what is on that television
+is the real thing.** 1147 playable games on the image alone, **1232 as it is
+running today** — see the next paragraph.
 
-**IT IS RUNNING A HAND-BUILT BINARY RIGHT NOW, 2026-09-20, AND THAT IS THE
-FIRST THING TO UNDO.** PlayStation 2 and GameCube are on the television for
-testing before an image carries them, through a drop-in at
-`/etc/systemd/system/cabinetos-session.service.d/20-heavy-systems.conf`. While
-that file exists the paragraph below is FALSE. Putting the machine back:
+**IT IS RUNNING A HAND-BUILT BINARY, ON PURPOSE, AS OF 2026-09-21.** MMagTech's
+call this session, and it reverses the instruction that used to be here. The
+drop-in at
+`/etc/systemd/system/cabinetos-session.service.d/20-heavy-systems.conf` stays,
+because it is what puts PlayStation 2 and GameCube on the television — 1232
+playable games instead of 1147 — and removing it costs 85 games to buy nothing
+while the embed work is in progress. **The confusion it used to cause was a
+documentation problem, and this paragraph is the fix.**
+
+```
+ps -eo args | grep [c]abinetos-frontend
+```
+
+**Verified 2026-09-21 07:22:** `gamescope --backend drm --output-width 3840
+--output-height 2160 --ready-fd 3 -- /var/home/cabinet/cabinetos-frontend-dev
+--core-dir /var/home/cabinet/cores-dev --core-option
+pcsx2_analog_mode1=enabled`, on `gamescope (drm) is up` at 3840x2160.
+
+**THE SESSION HAD BEEN DEAD FOR TEN HOURS AND NOTHING SAID SO.** It was found
+`inactive` at the start of this session — stopped at 21:31 the night before and
+never restarted, so the television had been showing nothing at all. Neither the
+image nor the hand-built binary was running. **`systemctl is-active
+cabinetos-session` is the first thing to check, before `ps`**, because a dead
+session and a session running the wrong thing look identical to every other
+probe on this page.
+
+Putting the machine back on the image, when that is what you want:
 
 ```
 sudo rm /etc/systemd/system/cabinetos-session.service.d/20-heavy-systems.conf
 sudo systemctl daemon-reload && sudo systemctl restart cabinetos-session
 ```
 
-It points `CABINETOS_APP` at `~/cabinetos-frontend-dev` with
-`--core-dir ~/cores-dev` (the 21 image cores symlinked plus the two new ones)
-and `--core-option pcsx2_analog_mode1=enabled`. **`Environment=` must be
-QUOTED** or systemd splits the value on whitespace and silently drops every
-argument after the path — which looks exactly like a console that ignored you.
+**`Environment=` must be QUOTED** or systemd splits the value on whitespace and
+silently drops every argument after the path — which looks exactly like a
+console that ignored you.
 
-**THE PARAGRAPH BELOW DESCRIBES THE MACHINE WITH THAT DROP-IN REMOVED.**
-
-**IT RUNS THE IMAGE AND NOTHING BY HAND, as of 2026-09-20.** There is no
-drop-in in `/etc/systemd/system/cabinetos-session.service.d/` — the directory
-does not exist — and the running process is `/usr/bin/cabinetos-frontend`,
-launched by `gamescope --backend drm --output-width 3840 --output-height 2160
---ready-fd 3`. Booted digest `sha256:78e43b5a…`, which is #30 merged. **Check
-that before believing anything about the machine**, because this session began
-with a hand-built binary wired in and nobody able to say what was running:
-
-```
-ps -eo args | grep [c]abinetos-frontend
-```
-
-`/var/home/cabinet/cabinetos-frontend-dev` is still on disk and is now stale.
-It is a fine escape hatch — put a drop-in back to use it — but nothing depends
-on it, and if you build a new one, overwrite it rather than adding a second.
+**WITH THAT DROP-IN REMOVED, the machine runs the image and nothing by hand**,
+as it did on 2026-09-20: `/usr/bin/cabinetos-frontend`, booted digest
+`sha256:78e43b5a…`, which is #30 merged. `/var/home/cabinet/cabinetos-frontend-dev`
+is the hand-built binary the drop-in points at; if you build a new one,
+overwrite it rather than adding a second.
 
 **ALWAYS CHECK WHICH COMPOSITOR RUNG IT LANDED ON BEFORE JUDGING ANYTHING.**
 
@@ -236,74 +245,375 @@ both rules are measured and in `filesave.cpp`.
 
 - **Nobody has saved inside a game and watched it go up.** The download half is
   proved; the upload half is the same code Crazy Taxi 2 proved for Dreamcast.
-- **PLAYSTATION 2 CANNOT SHIP AS IT STANDS, and this is the single most
-  important thing on this page.** See *THE PS2 CORE IS UNPINNABLE* below. The
-  GameCube core can be pinned; the PS2 one cannot, at all.
+- **THE PS2 *LIBRETRO CORE* STILL CANNOT SHIP AND NEVER WILL** — its source
+  repository does not exist. **But PlayStation 2 is no longer blocked**, because
+  the embed route was measured on 2026-09-21 and is open: see item 1a. The
+  GameCube core can be pinned and that part is unchanged.
 - **TWO OPEN BUGS FROM ONE HOUR OF PLAY, both reported by MMagTech and neither
   reproducible from here.** See item 1b.
 
-### 1a. THE PS2 CORE IS UNPINNABLE AND MUST BE REPLACED — 2026-09-21
+### 1. START HERE: WILL GAMESCOPE PUT OUR MENU OVER A WINDOW WE DO NOT OWN?
 
-**`libretro/pcsx2` DOES NOT EXIST.** Not renamed, not moved, not a rate limit —
-checked three ways:
+**One question, and it decides the whole shape of PlayStation 2 — and of every
+heavy system after it.** MMagTech's call, 2026-09-21, and he is right that it
+comes before any more measuring.
+
+**THE PROBLEM, PLAINLY.** PCSX2 renders the picture on the GPU. To get it onto
+the television this console copies it OFF the card, hands it over, and copies it
+BACK ON to draw it. A normal PCSX2 — on Windows, on Bazzite — never does this:
+it draws straight to the screen. We do it so the console can draw its own pause
+menu over the game.
+
+**MMagTech, 2026-09-21: "i didnt buy this mini pc to be gimped in performace
+especually compared to it running on windows."** He has seen this exact machine
+running PlayStation 2 at 5x on Windows. That is the right standard and the
+hardware is not the constraint: Linux and gamescope should be a LIGHTER path to
+the screen than the Windows desktop, not a heavier one.
+
+**THE QUESTION TO ANSWER FIRST, BEFORE BUILDING OR MEASURING ANYTHING:**
+
+> Can the frontend draw its overlay on top of a window that PCSX2 owns and
+> presents to directly?
+
+If yes, PlayStation 2 draws straight to the screen at full speed, nothing is
+copied, and no patch is needed. **That is how Bazzite runs emulators, how Steam
+draws its overlay over a game it does not own, and how Batocera works.** Ours is
+the unusual arrangement, not theirs.
+
+#### IT IS NOT JUST PLAYSTATION 2 — IT IS THE WHOLE HEAVY-SYSTEMS TIER
+
+MMagTech asked whether every emulator should move to this if it works. **No, and
+the line is sharp and worth knowing.**
+
+**THE TWENTY-ONE LIBRETRO CORES DO NOT HAVE THIS PROBLEM AND MUST NOT BE
+MOVED.** There the FRONTEND creates the graphics device and lends it to the
+core, so the core renders straight into a texture the console already owns.
+Nothing is copied and nothing waits. Dreamcast, N64 and PSP have never paid this
+cost. Moving them to a composited window would trade a working single path for
+two.
+
+**IT IS THE EMULATORS THAT ARE NOT LIBRETRO CORES.** PCSX2 makes its own device
+and refuses one from outside — checked, on both its Vulkan and its OpenGL paths.
+So does standalone Dolphin, and so do RPCS3, xemu and Eden.
+
+**SO THIS TEST IS THE PATTERN FOR EVERY HEAVY SYSTEM, NOT A PLAYSTATION 2
+FIX.** PlayStation 3, Switch, Xbox and Wii U are all standalone emulators with
+exactly this shape, and MMagTech has said all of them are coming — open question
+12b. Whatever answer this question gets is the answer for all of them, which is
+most of why it is worth doing before anything else.
+
+**WHAT IT WOULD COST IF IT WORKS, AND IT IS THE THING TO PROTECT.** The overlay
+is what makes this console different — one pause menu, one save-and-quit,
+identical for a Mega Drive and a PlayStation 2, working because the console
+draws the game itself. Handing the screen to PCSX2 means the overlay has to be
+composited on top instead. **If that does not work cleanly, the trade is the
+console's best feature for frame rate, and it is not worth it.**
+
+**DO NOT BUILD IT FIRST. FIND OUT WHETHER GAMESCOPE WILL DO IT** — that is a
+small experiment, not an integration, and everything else follows from the
+answer.
+
+#### THE NUMBERS THAT PROMPTED THIS, AND WHY THEY ARE NOT TRUSTWORTHY
+
+The picture path costs **6.1 ms on average and 12.2 ms at worst** at 4x, paced
+to 60 Hz. That is 37% and 73% of a frame budget.
+
+**BUT THAT FIGURE IS MEASURED AROUND THE WHOLE HANDOVER AND INCLUDES WAITING FOR
+PCSX2 TO FINISH DRAWING**, which Windows waits for too. The share that is
+actually OUR overhead has never been separated out, and this project has been
+fooled by exactly this before: when the Vulkan path was built for the libretro
+cores, the "expensive copy" turned out to be **twelve microseconds** of copying
+and everything else was waiting for the GPU. That is recorded in `vkhost.cpp`
+specifically so nobody repeats it, and this session repeated it.
+
+**So do not quote 6 ms as overhead.** If the compositing route above does not
+work, splitting that number is the next job — about twenty minutes — and only
+then is there a case for anything else.
+
+#### AND IF NEITHER WORKS, THE PATCH DECISION DESERVES REVISITING
+
+Open question 12b records MMagTech ruling out a second patch to PCSX2, and that
+decision stands on its own reasoning. **But it was made on a cost I described
+wrongly** — "true 4K is expensive" rather than "this may be slower than the same
+machine on Windows". A decision made on bad information is worth putting back in
+front of him with good information. **That is not the same as reinterpreting a
+settled decision because an easier path runs**, which this project forbids and
+was burned by a session ago.
+
+---
+
+### 1a. PLAYSTATION 2 PLAYS FROM UPSTREAM PCSX2, IN THE CONSOLE — 2026-09-21
+
+**PLAIN VERSION: pick a PlayStation 2 game on the television and it plays, on
+upstream PCSX2 2.8.2, inside the console — your library, your pause menu, your
+pad, your saves.** Not a separate program borrowing the screen. Verified under
+gamescope on the reference console at 3840x2160, not only headlessly.
+
+**IT IS ON THE TELEVISION RIGHT NOW**, through the drop-in described at the top
+of this file. Two lines in the journal say what is actually running, and both
+are facts rather than restatements of what was asked for:
 
 ```
-git ls-remote https://github.com/libretro/pcsx2.git
-remote: Repository not found.
+[ps2] /var/home/cabinet/cores-dev/cabinetos-ps2.so (PCSX2 v2.8.2)
+[ps2] VM started, renderer Vulkan
 ```
 
-`libretro/dolphin` returns 200 from the same script in the same second;
-`libretro/pcsx2` returns **404**; the only mirror, `libretro-mirrors/pcsx2`,
-was last pushed in **2020**. libretro's own build recipe still points at the
-dead URL and their buildbot is producing binaries from a checkout nobody else
-can obtain.
+**THE SECOND ONE EXISTS BECAUSE ASKING FOR VULKAN AND GETTING IT ARE DIFFERENT
+THINGS.** PCSX2 falls back to its software renderer when a device cannot be
+created, and a software PlayStation 2 on a machine with a Radeon in it looks
+like nothing at all until somebody wonders why a game is slow. This console has
+been caught by a silent fallback twice already — a compositor reporting "no
+Vulkan-capable GPU" four seconds after selecting one, and a core that
+substitutes its own boot ROM and says nothing at any log level. If it ever says
+`software` it also says, in capitals, that that is not what was asked for.
 
-**So the PS2 core on the A9 right now cannot be pinned, cannot be built in CI,
-cannot go in the image, and cannot be reproduced by anybody.** It is a working
-proof and nothing more. Do not spend an hour trying to add it to
-`cores/build-core.sh` — that is why this section exists.
+Confirmed on the reference console, 2026-09-21: `AMD Radeon 890M Graphics
+(RADV STRIX1)`, `Vulkan 1.4.354`, with a Vulkan shader cache warming across
+launches.
 
-**It is also years out of date even if it could be obtained.** It reports
-`v2.0.0-afbcc8a` and its binary carries the string `1.7.1`; upstream PCSX2's
-current release is **v2.8.2** (2026-09-04), with dev builds at v2.9.78.
+**THE LIBRETRO PS2 CORE IS DELETED FROM THE REFERENCE CONSOLE — ALL FOUR
+COPIES.** Not moved aside: deleted. MMagTech's call, 2026-09-21, and it is the
+right one.
 
-**THE ROUTE FOR PS2 IS THE ONE THAT WAS ALREADY DECIDED: EMBED UPSTREAM
-`PCSX2/pcsx2`.** MMagTech, 2026-09-21, and he is right that it should never
-have been reinterpreted: *"what does macos use for ps2 and why did you not use
-it here"*. The Mac embeds real PCSX2 and so should this.
+It can never ship, because `libretro/pcsx2` does not exist and so it cannot be
+pinned, built in CI or audited. **Keeping a WORKING copy on disk leaves armed
+exactly the trap that cost the last session**, which reinterpreted this
+decision because a libretro core happened to run — and this page already says
+in capitals that a working binary is not authority to change route. A binary
+nobody can reproduce, sitting next to one they can, is an invitation.
 
-**The job, sized from Cabinet's own tree rather than guessed:**
+`~/heavy/` went with it: 859 MB of last session's scratch, holding three more
+copies plus duplicates of the PS2 BIOS and Dolphin's Sys folder that the
+console already has properly under `/var/lib/cabinetos/bios/`.
 
-| | lines | ports? |
+**There is now exactly one PlayStation 2 emulator on that machine.**
+`catalog::coreFileName` resolves `ps2` to `cabinetos-ps2.so` and nothing looks
+for the other name.
+
+#### What was built, and how to rebuild it
+
+```
+cores/build-pcsx2.sh          the emulator: libpcsx2.a, then cabinetos-ps2.so
+cd frontend && make           the console, which dlopens it
+```
+
+43 seconds for the first from a clean clone on the A9.
+
+| | |
+|---|---|
+| `frontend/ps2/CabinetPS2Host.cpp` | all 55 `Host` functions, the VM lifecycle, the frame readback, the pad translation |
+| `frontend/ps2/CabinetPS2Audio.cpp` | SPU2's samples, handed to the console instead of to a sound card |
+| `frontend/ps2/CabinetPS2Bridge.cpp` | the flat C face the console `dlopen`s |
+| `frontend/ps2/CabinetPS2Probe.cpp` | the headless harness, for measuring without a television |
+| `frontend/src/ps2.{h,cpp}` | the console's side of that wire |
+| `frontend/src/core.cpp` | seven small branches, and nothing above them changed |
+
+#### The shape, and why it is this one
+
+**PCSX2 NEVER GETS A WINDOW.** The frontend owns the one window there is, draws
+every screen in it and draws the overlay on top — which is what makes Pause,
+Save state and Exit to Home work the same for a PlayStation 2 game as for a
+Mega Drive one.
+
+So PCSX2 runs **surfaceless on its own thread** and hands over the finished
+frame as a buffer of pixels, a width and a height — **exactly what eighteen of
+the twenty-one libretro cores already give the frontend.** That is why
+PlayStation 2 needed no new picture path in the UI and why `Core::texture()`
+and `frameUV()` did not change at all.
+
+**Measured on Burnout 3, because the design rests on it:**
+
+| Upscale | Frame | Readback | Of a 60 Hz frame |
+|---|---|---|---|
+| native | 640x448 | **690 us** | 4.1% |
+| 4x | 2560x1792 | **3043 us** | 18.2% |
+
+The emulator ran at about 500% of realtime throughout. The number is live in
+`CabinetPS2::Metrics::readback_us`, because a high upscale on a weaker machine
+is what would change the answer. **The faster route is written up and
+deliberately not taken**: PCSX2's Vulkan image could be shared directly, the way
+`vkhost.cpp` already shares one, but its required device extension list holds
+one entry and none of the external-memory ones. Four lines, worth spending the
+day a measurement says the readback is too slow.
+
+#### One patch to PCSX2, and the headline is corrected rather than dropped
+
+**"Upstream builds as a library with NO patches" was about the BUILD and is
+still true.** There is now exactly one patch and it is not needed to build
+PCSX2 — only to stop it making its own sound. Three lines in
+`AudioStream::CreateStream`, asserting its own anchor the way every patch in
+`cores/build-core.sh` does. Cabinet makes the same edit on the Mac.
+
+**The console owns audio and input, as it does for every other core.** One
+device, one volume, one latency, an overlay that can duck it, and one path onto
+the pad.
+
+#### The memory card needed no new machinery at all
+
+`catalog::saveFiles` already says a PlayStation 2 card is `<stem>.ps2` in the
+per-game save directory, and `filesave.cpp` already restores it before launch,
+captures it after, refuses to upload an unformatted one, and files it on the
+server under the name Cabinet's Mac uses. **Pointing PCSX2's memory-card folder
+at that directory was the whole of it.**
+
+The name is derived inside `Core::loadGame` from the rom path rather than passed
+in, so the two cannot drift — a card written under a name the save layer does
+not look for is a save that never reaches the server, and nothing would say so.
+
+**Burnout 3 is rom 604 and its card is the only real PlayStation 2 save on the
+server.** Nothing in this work went near it: every test used Homura.
+
+#### PICTURE QUALITY: 4x LOOKS RIGHT AND STUTTERS A LITTLE — 2026-09-21
+
+**Played on the television. MMagTech: "that looked way better maybe we pushed
+it a bit too aggressive though as i did notice some stuttering."** Deliberately
+not chased — his call — but the leads are here so it is cheap to pick up.
+
+`--ps2-upscale N` and `--ps2-aniso N` exist **as a TEST INSTRUMENT AND NOT THE
+PRODUCT**, and main.cpp says so beside them. How this is really exposed is open
+question 23 — one quality setting for the whole console. Nobody should build a
+settings screen on these two flags.
+
+**Currently on the reference console: `--ps2-upscale 4 --ps2-aniso 16`**, left
+there deliberately at the end of the session rather than dropped to 3x.
+MMagTech played at 4x, said it "looked way better", and noticed some stutter —
+and the reason not to quietly lower it is item 1: **the stutter may be this
+console's own picture path rather than the machine running out of room**, and
+lowering the setting would hide the question rather than answer it.
+
+**MEASURE IT CAPPED TO 60 Hz, NOT UNCAPPED, AND THE FIRST TABLE HERE WAS WRONG
+FOR EXACTLY THAT REASON.** Uncapped, the emulator runs flat out, the readback
+overlaps other work and hides inside it; capped — which is how a person plays —
+it costs more than twice as much. The same run, same game, same upscale:
+
+| Burnout 3, 4x | readback average | worst |
 |---|---|---|
-| `CabinetPS2Host.cpp` — all 54 `Host` functions and the VM lifecycle | 811 | **yes**, plain C++ |
-| `CabinetPS2Bridge.cpp` — the flat C face | 150 | **yes** |
-| `CabinetInputSource.cpp` — the slot SDL vacated | 109 | **yes** |
-| `CabinetDrawableProbe.mm` — Metal drawable probing | 315 | no — does not exist here |
-| `CabinetCocoaTools.mm` — AppKit replaced with UIKit | 201 | no — not needed at all |
-| `CabinetAudioStream.mm` — AVAudioEngine | 165 | no — SDL audio already exists |
+| uncapped, 602% of realtime | 2.7 ms | not measured |
+| **capped to 60 Hz, how it is played** | **6.1 ms** | **12.2 ms** |
 
-**LINUX REMOVES MOST OF WHAT MADE IT HARD ON THE MAC.** Cabinet cross-compiled
-**ten** external dependencies for Catalyst by hand with pinned tarballs and SHA
-sums — on Linux they are `dnf install`. Metal becomes Vulkan, which PCSX2
-supports natively **and which this console now has**. SDL3 "does not survive
-Catalyst" and is already linked here. `pthread_jit_write_protect_np` reached
-through `dlsym` is nothing on Linux. PROJECT.md already counted nine of
-PCSX2's seventeen patch groups as Apple or Metal walls that do not exist here.
+**THE WHOLE CURVE, capped, warm cache, Burnout 3:**
 
-**TONIGHT'S VULKAN WORK IS THE FOUNDATION FOR THIS, NOT A DETOUR.** Cabinet's
-`CabinetPS2Host` presents into a `CAMetalLayer` and runs the VM on its own
-thread; `vkhost.cpp` is the same shape with a Vulkan device instead. An
-embedded PCSX2 needs exactly what was built for the libretro one.
+| Upscale | Internal | average | worst | of a 60 Hz frame |
+|---|---|---|---|---|
+| 1x | 640x448 | 0.8 ms | 4.5 ms | 5% |
+| 2x | 1280x896 | 2.3 ms | 5.5 ms | 14% |
+| **3x** | 1920x1344 | **5.0 ms** | **7.3 ms** | 30% |
+| 4x | 2560x1792 | 6.1 ms | **12.2 ms** | 37% |
 
-**THE FIRST QUESTION, and it decides how hard the rest is:** PCSX2's CMake
-builds an APPLICATION, not a library — Cabinet had to carve the frontend out.
-Whether upstream will produce a linkable library on Linux without that surgery
-is answerable in one build. Do that first.
+**3x IS THE SWEET SPOT AND THE REASON IS THE WORST CASE, NOT THE AVERAGE.**
+Going 3x to 4x buys 1.1 ms of average and costs **5 ms of worst case** — the
+spikes nearly double while the mean barely moves. Stutter is a worst case, so
+that is the column to read. 3x is also 1920x1344, close to what Cabinet renders
+at on the Mac.
 
-**Pin `upstream PCSX2/pcsx2`, not the `isztldav` fork.** That fork exists to
-add an ARM64 recompiler for Apple Silicon; on x86-64 it is not a feature, it is
-291 commits of staleness.
+**"Roughly proportional to pixels" was a guess and it was wrong.** The cost is
+worse than linear at 4x and it shows up in the spikes rather than the mean.
+
+**AND ALL OF IT IS A FLOOR RATHER THAN A CEILING**: measured in Burnout 3's
+attract mode, not in a race. Real play is heavier.
+
+**6.1 ms is 37% of a frame budget and the worst case is 73% of one.** Nothing
+dropped a frame in that run, but it was a menu rather than a pile-up, and there
+is very little room left. **That is a plausible cause of the stutter MMagTech
+felt and it should be treated as the leading suspect.**
+
+The lesson is the one this project keeps relearning in a new costume: a
+measurement taken in a configuration nobody plays in is not a measurement of
+the product. The warm-cache rule was already written down here; "and pace it
+the way it actually runs" is the other half of it.
+
+**5x IS THE FIRST GENUINELY 4K VALUE.** A PlayStation 2 renders 640x448 and a
+4:3 picture on a 3840x2160 panel is 2880x2160 of real screen, so the arithmetic
+is 2160/448 = 4.8. Below that the panel is stretching.
+
+**THE STUTTER IS PROBABLY THE READBACK ITSELF, and an earlier version of this
+paragraph said the opposite off the uncapped number.** At the pacing a person
+plays at, getting the picture off the GPU costs 6.1 ms on average and 12.2 ms
+at worst, out of 16.7. Two other suspects remain but neither is first:
+
+1. **The frame handover copies 22 MB per frame under a lock the GS thread also
+   wants.** `CabinetPS2::TakeFrame` copies rather than lends, deliberately, so
+   the frontend cannot hold a buffer the emulator is overwriting — but at 4x
+   that copy is 2730x2048x4 bytes, sixty times a second. A double buffer makes
+   it a pointer swap. **It is worth doing and it will not be the fix**: it
+   removes the smaller half, not the 6 ms.
+2. **Shader compilation.** PCSX2 compiles pipelines as new effects appear, and
+   Burnout 3 in traffic is where they appear. The cache is per game and warms
+   up, so the second run through the same area is the test.
+
+**THE ONLY THING THAT REMOVES THE 6 MS IS THE PATCH THAT IS RULED OUT**, so the
+lever that is actually available is the upscale itself. Lowering it is not a
+consolation prize — the cost is roughly proportional to pixels, so 3x is about
+half of 4x.
+
+**AND THE READBACK SCALES WORSE THAN THE PIXELS.** 4x to 6x is 2.25 times the
+pixels and **4.6 times the cost**, which is a wall rather than a curve.
+
+**DO NOT ANSWER THAT BY PATCHING PCSX2. DECIDED 2026-09-21.** Sharing PCSX2's
+Vulkan image instead of copying the picture through the CPU would need two
+device extensions upstream does not enable, and MMagTech has ruled out carrying
+a second patch: *"id rather not have to patch and then maintain them."* The
+audio patch stands only because PCSX2's backends are a fixed list and there was
+no other way. PROJECT.md, open question 12b, has the whole decision and the cost
+it accepts — **4x is the practical ceiling and true 4K stays expensive.**
+
+**The thing to try instead needs no patch**: the frame handover copies about
+22 MB per frame at 4x under a lock the emulator's own thread also wants, and a
+double buffer makes that a pointer swap. Entirely our own code.
+
+#### WHAT IS NOT DONE, and none of it is hidden
+
+- ~~**NOBODY HAS PLAYED IT WITH A PAD YET.**~~ **PLAYED, 2026-09-21**, and it
+  found three faults nothing here had caught — see below. What is still owed is
+  a long session rather than a first look.
+- **SAVE STATES DO NOT WORK AND REPORT SO HONESTLY.** `Core::stateSize()` is 0
+  for PlayStation 2, because PCSX2's states are its own slot files keyed by disc
+  serial and CRC rather than a buffer. Open question 12b: whatever this console
+  does there is new work, and nothing crossing between machines today constrains
+  it.
+- **NOTHING IS IN CI OR IN THE IMAGE.** The image would need PCSX2's resources
+  at `/usr/share/cabinetos/system/pcsx2/resources`, and the emulator and its two
+  bundled libraries at `/usr/lib/cabinetos/cores/`. Today they live in
+  `~/assets-dev` and `~/cores-dev` and the drop-in points at them.
+- **The emulator carries two libraries the image lacks** — `libryml` and
+  `libc4core`. **That needs RPATH, not the modern RUNPATH**, because RUNPATH is
+  not inherited: libryml was found and then could not find libc4core sitting in
+  the same directory.
+- **The two open bugs in item 1b have NOT been re-tested against this.** That
+  was the reason for building it and it is now possible.
+
+#### THREE FAULTS FOUND BY PLAYING IT, AND ALL THREE WERE SILENT
+
+Nothing in the headless harness caught any of them. Worth remembering next time
+somebody is tempted to call a thing finished off a capture.
+
+- **NO SOUND IN GAME, AND GARBAGE AFTER EXITING.** The audio drain asked for
+  170 ms of samples on every frontend frame, about a thousand times a second.
+  `ReadFrames` does not refuse — it pads with silence — so the buffer was
+  emptied on the first call and returned silence ever after, and the real
+  samples arrived at once when the stream was torn down. It now takes only what
+  `GetBufferedFramesRelaxed` says is there.
+- **THE PICTURE DID NOT REACH THE TOP OR BOTTOM OF THE SCREEN.** Integer
+  scaling: a 640x448 frame floored to 2x draws 896 rows of 1080. Right for a
+  Game Boy's pixel grid, wrong for a 3D machine — the console already knew that
+  for Dreamcast and simply did not count PCSX2 as hardware-rendered.
+  `Core::hardwareRendered()` says yes now, which is also true.
+- **AND CHASING THAT FOUND A THIRD NOBODY HAD SEEN.** The picture was 7% too
+  wide, because the frontend derived its shape from the pixel dimensions and a
+  PlayStation 2's pixels are not square. PCSX2 now returns an
+  already-correctly-shaped frame, which also makes widescreen games right.
+
+**A FOURTH WAS MINE AND IS THE MOST EMBARRASSING.** `--ps2-upscale 4` did
+nothing for an hour, because the frontend on the console was a STALE BUILD that
+did not know the flag and ignored it silently. It was reported as working off
+the command line I had typed rather than off anything the machine said.
+
+**That is why `[ps2] renderer ... upscale ... anisotropy ...` now prints on
+every launch, from `GSConfig`** — the APPLIED configuration, not the requested
+one. A setting that does not take shows up as a wrong number rather than as a
+picture somebody has to squint at. **And check the binary's checksum against
+the one you built before believing a deploy**; nothing does that automatically
+yet.
 
 ### 1b. TWO BUGS FOUND BY PLAYING, NEITHER REPRODUCIBLE — OPEN
 
@@ -344,7 +654,8 @@ the right way up. Read this order before picking anything up.
 
 | | |
 |---|---|
-| **0** | **EMBED UPSTREAM PCSX2 — item 1a.** The libretro PS2 core cannot ship and cannot even be obtained. This is the decision that was already made before the last session and should never have been reinterpreted. |
+| **0** | **WILL GAMESCOPE COMPOSITE OUR OVERLAY OVER A WINDOW PCSX2 OWNS? — item 1.** One experiment, not an integration. It decides whether PlayStation 2 keeps copying its picture through the CPU or draws straight to the screen like it does on Windows, and it decides the same thing for every heavy system after it. **Do not measure or build anything else first.** |
+| **0a** | ~~EMBED UPSTREAM PCSX2~~ — **DONE AND PLAYING, see item 1a.** Upstream builds as a library on Linux with **no patches**; `cores/build-pcsx2.sh` reproduces it in 43 seconds. What is left is the host layer — 55 `Host::` functions and four other symbols, most of them one-liners, with **six that are real work** and all six in the display path the Vulkan host already serves. **Write it: there is no cheaper step in front of it**, and gsrunner cannot stand in because it only replays GS dumps. |
 | **0b** | **THE TWO BUGS IN ITEM 1b**, which need MMagTech to catch them — leave the console stuck rather than restarting it. GameCube's core CAN be pinned into `cores/build-core.sh` and that part still stands. |
 | **1** | ~~PLAYSTATION 2 AND GAMECUBE~~ — **done to the point of playing**, see above. The original entry follows for its reasoning. **PLAYSTATION 2 AND GAMECUBE.** MMagTech's call, 2026-09-20, and the largest thing on this list: 85 games, and the only missing tier with a working implementation to copy. **Open question 12b has the order and 12 has the numbers.** Start by reading `tools/build-dolphin-mac.sh` in Cabinet — those two are NOT libretro cores and nobody wrote down why. |
 | **2** | **A GAME CAN GO BLACK AND NOBODY KNOWS WHY.** Six launches in one session drew nothing but the letterbox glow while the core ran and made sound. Not reproduced since. Two theories tested and both falsified. See item 3b — it has the instruments. |
@@ -1177,6 +1488,55 @@ These are ordered. **Do not begin any of them in the VM.**
   directory. Deleted 2026-09-20 with MMagTech's say-so, each re-verified empty
   immediately beforehand.
 
+### About building a whole emulator rather than a core — new 2026-09-21
+
+- **A LIBRARY THAT BUILDS TELLS YOU ALMOST NOTHING. A LIBRARY THAT LINKS TELLS
+  YOU EVERYTHING.** `libpcsx2.a` built on the first real attempt and that result
+  was nearly worthless on its own: a static archive resolves no symbols, so it
+  cannot report a single missing host function. Cabinet's own comment on
+  `CabinetPS2Smoke.cpp` says exactly this and it is why that file exists.
+- **THE CHEAPEST LINK TEST WAS ALREADY IN THE TREE.** `pcsx2-gsrunner` is
+  upstream's own Qt-free frontend, one file, 1332 lines, implementing the whole
+  `Host` contract. Building it proved linkability in 2.2 seconds and needed no
+  code from us. **Look for upstream's second frontend before writing a smoke
+  test** — PPSSPP, Dolphin and RPCS3 all have one too.
+- **A SHARED OBJECT LINKS HAPPILY WITH UNDEFINED SYMBOLS**, then fails at
+  `dlopen` naming only the FIRST one. That is the worst possible instrument for
+  sizing a job: it says "you are missing `g_host_hotkeys`" whether you are
+  missing one symbol or two hundred. **`-Wl,-z,defs` makes the linker refuse and
+  name them all**, which turned "some unknown amount of host layer" into 57.
+- **AND THE FIRST ONE IT NAMES IS A VARIABLE, NOT A FUNCTION.**
+  `g_host_hotkeys` is a global the frontend must define. Anybody grepping the
+  `Host::` namespace for it will not find it.
+- **`find_package(X11)` SUCCEEDS WITHOUT `libXi-devel`** and then the build
+  fails at CMake GENERATE time, after "Configuring done", on a missing
+  `X11::Xi` target. It reads like a CMake bug. It is a missing package.
+- **FEDORA SUPPLIES WHAT CATALYST COULD NOT.** Cabinet hand-cross-compiled ten
+  dependencies with pinned tarballs and SHA sums; Fedora 44 met every version
+  constraint PCSX2 states, with one exception (`libbacktrace`, which is an
+  option). **Check the distribution before believing a port is hard** — the
+  difficulty recorded in a reference implementation is usually the reference
+  platform's, not the problem's.
+- **PCSX2 REFUSES TO START WITHOUT ITS `bin/resources` FOLDER** — game database,
+  fonts, GS shaders. It does not degrade, it says "Resources directory is
+  missing" and stops. The same shape as PPSSPP's 13 MB of system files.
+- **UPSTREAM'S SECOND FRONTEND IS A LINK TEST, NOT A SHORTCUT TO A RUNNING
+  GAME.** `pcsx2-gsrunner` looks like a headless PCSX2 and is not one: it
+  replays GS dumps and refuses anything else at
+  `VMManager::IsGSDumpFileName`. It proved the library links and it is the best
+  `Host` reference there is; it will not boot a disc. **Check what upstream's
+  harness is FOR before planning a measurement around it.**
+- **A TOOL THAT PRINTS FORTY LINES AND THEN EXITS 1 HAS NOT NECESSARILY GOT
+  FAR.** gsrunner's `LoadStartupSettings()` resets the console log level from
+  empty settings at the end of config init, so every `Console.Error` after that
+  point reaches nobody — including the one naming the actual problem. The
+  directory listing that precedes it is the last thing you see and it looks
+  like progress. **When a program goes quiet at exactly the same place every
+  time, suspect the logger before the logic.**
+- **A SEPARATE BUILDER CONTAINER WAS THE RIGHT CALL.** PCSX2 needs about thirty
+  packages the frontend does not. Putting them in `frontend/Containerfile` would
+  have slowed every one of the twenty-one core builds to serve one thing.
+
 ### About the product
 
 - **A truncated explanation is worse than none.** A tile's second line holds
@@ -1299,6 +1659,14 @@ These are ordered. **Do not begin any of them in the VM.**
   `build.yml` ignores `**.md` and `docs/**`. That is expected and is a different
   thing from the fault above — check WHAT the pull request touches before
   deciding which one you are looking at.
+- **AND THERE IS A THIRD CAUSE, WHICH IS JUST A RACE.** `gh pr checks` says
+  *"no checks reported"* for the first few seconds after a push, between the
+  workflow run being created and its jobs registering against the new commit.
+  It is indistinguishable from the real fault by that command alone. **Tell them
+  apart with `gh run list --branch <branch>`**: a run in `in_progress` means
+  wait, and no run at all for the new head means the event did not fire — which
+  is the one that needs the pull request closed and reopened. Seen 2026-09-21,
+  where it briefly looked like the dangerous case and was not.
 - **The weekly base bump needs two clicks, not none.** It opens a pull request,
   but the build on it lands as `action_required` and waits for approval —
   `gh api -X POST /repos/MMagTech/cabinetos/actions/runs/<id>/approve`. And
@@ -1382,11 +1750,16 @@ connected. The console says it on stderr, once.
 
 ## The state that lives on the A9 and not in git — new 2026-09-20
 
-- `~/cores-dev/` — the 21 image cores SYMLINKED plus `pcsx2_libretro.so` and
-  `dolphin_libretro.so` copied in. This is what `--core-dir` points at.
-- `~/heavy/` — the scratch tree the two systems were brought up in: the two
-  cores, the PS2 BIOS pulled off RomM, Dolphin's `Sys` folder, a few ROMs and
-  a pile of `.bmp` captures. Delete it whenever; nothing depends on it.
+- `~/cores-dev/` — the 21 image cores SYMLINKED, plus **`cabinetos-ps2.so`**
+  (upstream PCSX2 embedded, with `libryml` and `libc4core` beside it) and
+  `dolphin_libretro.so`. This is what `--core-dir` points at.
+- `~/assets-dev/` — **new 2026-09-21.** PCSX2's resources, which it refuses to
+  start without, plus a symlink through to the image's own system files so the
+  other cores keep theirs. `CABINETOS_ASSETS` points here because `/usr` is
+  read-only on a bootc console.
+- ~~`~/heavy/`~~ — **deleted 2026-09-21.** 859 MB of scratch holding three
+  copies of the unshippable libretro PS2 core and duplicates of firmware the
+  console already has properly under `/var/lib/cabinetos/bios/`.
 - `/var/lib/cabinetos/bios/pcsx2/bios/` — the two PS2 BIOS files. **These come
   from RomM with the game on a real install** and are here by hand only because
   no image carries the core yet.
@@ -1394,6 +1767,21 @@ connected. The console says it on stderr, once.
   real install this ships with the core at `/usr/share/cabinetos/system/`, the
   way PPSSPP's already does.
 - `~/cabinetos-frontend-dev` — the hand-built frontend the drop-in points at.
+- `~/pcsx2-clean/pcsx2-upstream/` — **new 2026-09-21**, the upstream PCSX2
+  checkout at v2.8.2 and its build tree, 375 MB. It is a **cache**:
+  `cores/build-pcsx2.sh` re-clones and rebuilds it in 43 seconds, so delete it
+  whenever. Point the script at it with
+  `CABINETOS_CORE_SRC=/var/home/cabinet/pcsx2-clean`, or leave that unset and it
+  makes its own under the repo.
+- `~/pcsx2-lab/` — the PS2 BIOS and Homura's CHD, staged where a container can
+  read them. **`:ro` bind mounts of `/var/lib/cabinetos` do not work** — SELinux
+  denies the read and the container simply sees an empty directory, which reads
+  as a missing BIOS. Copy to a scratch directory and mount that with `:Z`.
+- `~/cabinetos-repo/` — **new 2026-09-21**, an rsync of this repository, because
+  the build script has to run on a machine with podman and the Mac is not one.
+  The A9 is now the better build machine by a distance: **24 cores, 25 GB of
+  free RAM and 1.9 TB free**, against the VM's 5 cores, 3 GB and 4.1 GB. The
+  whole PCSX2 library builds there in 25 seconds.
 
 ## The state that lives on the VM and not in git
 
