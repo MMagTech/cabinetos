@@ -255,8 +255,9 @@ both rules are measured and in `filesave.cpp`.
 ### 1a. PLAYSTATION 2 IS EMBEDDED FROM UPSTREAM, AND THE BUILD IS DONE — 2026-09-21
 
 **PLAIN VERSION: upstream PCSX2 builds as a library on Linux with no patches at
-all, and the job left is a host layer of 57 functions, most of them one-liners.**
-That is a much smaller thing than this page said it would be yesterday.
+all, and the job left is a host layer — 55 `Host::` functions and four other
+symbols, most of them one-liners, with six that are real work.** That is a much
+smaller thing than this page said it would be yesterday.
 
 **Run it yourself in 43 seconds from nothing:**
 
@@ -318,11 +319,16 @@ stale against the version we pin.** Read both: Cabinet's `CabinetPS2Host.cpp`
 (811 lines) is the better guide to what a *console* frontend wants; gsrunner is
 the better guide to what *this* PCSX2 requires.
 
+**IT WILL NOT BOOT A GAME, SO DO NOT PLAN A MEASUREMENT AROUND IT.** It is a
+renderer regression harness that replays GS dumps and refuses anything else —
+tried on the A9 with Homura and the real BIOS, not assumed. See *what this does
+not show* below, which also explains why it refuses without printing a word.
+
 **PCSX2 refuses to start without its `bin/resources` folder** — game database,
 fonts, GS shaders. It does not degrade, it refuses. That has to ship the way
 PPSSPP's 13 MB already do at `/usr/share/cabinetos/system/`.
 
-#### THE JOB LEFT IS 57 SYMBOLS, AND SIX OF THEM ARE THE WORK
+#### THE JOB LEFT IS 55 FUNCTIONS PLUS FOUR SYMBOLS, AND SIX OF THEM ARE THE WORK
 
 Counted, not estimated. A shared object links happily with undefined symbols and
 then fails at `dlopen` naming only the **first** one, which tells you nothing
@@ -453,7 +459,7 @@ the right way up. Read this order before picking anything up.
 
 | | |
 |---|---|
-| **0** | **EMBED UPSTREAM PCSX2 — item 1a. THE BUILD IS DONE, 2026-09-21.** Upstream builds as a library on Linux with no patches; what is left is a host layer of 57 symbols, six of which are real work. Next step is to point the already-built `pcsx2-gsrunner` at a disc, which needs no host layer at all. |
+| **0** | **EMBED UPSTREAM PCSX2 — item 1a. THE BUILD IS DONE, 2026-09-21.** Upstream builds as a library on Linux with **no patches**; `cores/build-pcsx2.sh` reproduces it in 43 seconds. What is left is the host layer — 55 `Host::` functions and four other symbols, most of them one-liners, with **six that are real work** and all six in the display path the Vulkan host already serves. **Write it: there is no cheaper step in front of it**, and gsrunner cannot stand in because it only replays GS dumps. |
 | **0b** | **THE TWO BUGS IN ITEM 1b**, which need MMagTech to catch them — leave the console stuck rather than restarting it. GameCube's core CAN be pinned into `cores/build-core.sh` and that part still stands. |
 | **1** | ~~PLAYSTATION 2 AND GAMECUBE~~ — **done to the point of playing**, see above. The original entry follows for its reasoning. **PLAYSTATION 2 AND GAMECUBE.** MMagTech's call, 2026-09-20, and the largest thing on this list: 85 games, and the only missing tier with a working implementation to copy. **Open question 12b has the order and 12 has the numbers.** Start by reading `tools/build-dolphin-mac.sh` in Cabinet — those two are NOT libretro cores and nobody wrote down why. |
 | **2** | **A GAME CAN GO BLACK AND NOBODY KNOWS WHY.** Six launches in one session drew nothing but the letterbox glow while the core ran and made sound. Not reproduced since. Two theories tested and both falsified. See item 3b — it has the instruments. |
@@ -1552,9 +1558,16 @@ connected. The console says it on stderr, once.
   real install this ships with the core at `/usr/share/cabinetos/system/`, the
   way PPSSPP's already does.
 - `~/cabinetos-frontend-dev` — the hand-built frontend the drop-in points at.
-- `~/pcsx2-lab/src/pcsx2-upstream/` — **new 2026-09-21**, the upstream PCSX2
-  checkout at v2.8.2 and its build tree. 151 MB of source, about 1.3 GB built.
-  It is a cache: `cores/build-pcsx2.sh` re-clones it. Delete it whenever.
+- `~/pcsx2-clean/pcsx2-upstream/` — **new 2026-09-21**, the upstream PCSX2
+  checkout at v2.8.2 and its build tree, 375 MB. It is a **cache**:
+  `cores/build-pcsx2.sh` re-clones and rebuilds it in 43 seconds, so delete it
+  whenever. Point the script at it with
+  `CABINETOS_CORE_SRC=/var/home/cabinet/pcsx2-clean`, or leave that unset and it
+  makes its own under the repo.
+- `~/pcsx2-lab/` — the PS2 BIOS and Homura's CHD, staged where a container can
+  read them. **`:ro` bind mounts of `/var/lib/cabinetos` do not work** — SELinux
+  denies the read and the container simply sees an empty directory, which reads
+  as a missing BIOS. Copy to a scratch directory and mount that with `:Z`.
 - `~/cabinetos-repo/` — **new 2026-09-21**, an rsync of this repository, because
   the build script has to run on a machine with podman and the Mac is not one.
   The A9 is now the better build machine by a distance: **24 cores, 25 GB of
