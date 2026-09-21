@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cerrno>
 #include <cstdio>
+#include <cstring>
 
 namespace cab {
 namespace {
@@ -56,6 +57,39 @@ bool vmuHoldsAFile(const std::vector<uint8_t>& d) {
     return false;
 }
 
+// A PlayStation 2 card the console's BIOS has formatted. An untouched one is
+// 8,650,752 bytes of 0xFF with no header at all — see catalog.h.
+bool ps2IsFormatted(const std::vector<uint8_t>& d) {
+    static const char kMagic[] = "Sony PS2 Memory Card Format";
+    const size_t n = sizeof(kMagic) - 1;
+    return d.size() > n && std::memcmp(d.data(), kMagic, n) == 0;
+}
+
+// A GameCube card with at least one save in its directory. Block 1 is the
+// directory and block 2 its backup, 127 entries of 64 bytes each, and an
+// entry's first four bytes are the game code with 0xFF meaning the slot is
+// free. Both copies are read because a card interrupted mid-write can have
+// one of them stale, and either naming a save is enough to keep the card.
+bool gameCubeHoldsASave(const std::vector<uint8_t>& d) {
+    constexpr size_t kBlock = 8192;
+    constexpr size_t kEntry = 64;
+    constexpr size_t kEntries = 127;
+    // A card smaller than its own metadata is not a card this can read, and
+    // refusing is the safe direction — the scan below would run off the end.
+    if (d.size() < 5 * kBlock) return false;
+    for (size_t blk = 1; blk <= 2; ++blk) {
+        const size_t base = blk * kBlock;
+        for (size_t e = 0; e < kEntries; ++e) {
+            const uint8_t* code = d.data() + base + e * kEntry;
+            const bool free =
+                (code[0] == 0xFF && code[1] == 0xFF && code[2] == 0xFF && code[3] == 0xFF) ||
+                (code[0] == 0x00 && code[1] == 0x00 && code[2] == 0x00 && code[3] == 0x00);
+            if (!free) return true;
+        }
+    }
+    return false;
+}
+
 bool anyRealByte(const std::vector<uint8_t>& d, size_t skipFront, size_t skipBack) {
     if (d.size() <= skipFront + skipBack) return false;
     for (size_t i = skipFront; i < d.size() - skipBack; ++i)
@@ -79,6 +113,10 @@ bool holdsASave(const std::vector<uint8_t>& d, catalog::Untouched rule) {
             return anyRealByte(d, 176, 0);
         case catalog::Untouched::VmuDirectory:
             return vmuHoldsAFile(d);
+        case catalog::Untouched::Ps2Format:
+            return ps2IsFormatted(d);
+        case catalog::Untouched::GameCubeDirectory:
+            return gameCubeHoldsASave(d);
     }
     return anyRealByte(d, 0, 0);
 }

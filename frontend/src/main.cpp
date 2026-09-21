@@ -417,16 +417,42 @@ static std::string saveRowName(const std::string& fsStem, const std::string& cor
     return base + ")." + region;
 }
 
+// The same thing, spelled the way Cabinet for Mac spells it.
+//
+// `cabinet-604.ps2`, `cabinet-937.USA.raw`. Only PlayStation 2 and GameCube
+// use this, and only because a save for those two ALREADY EXISTS on the
+// server written by the Mac — RomM matches a row for overwrite by filename
+// alone, so a console that invented its own name would leave the person with
+// two cards per game and restore neither. See catalog::SaveFile::macRowName.
+static std::string macSaveRowName(int romId, const std::string& region,
+                                  const std::string& writtenName) {
+    // WHAT DOLPHIN ACTUALLY WROTE, where it wrote something. It stamps the
+    // region into the name, and the card SIZE too when the card is not the
+    // default — `cabinet-934.USA.251.raw` on the reference server. Neither is
+    // predictable from here, so the file on disk is the authority and this is
+    // only the fallback for a row that does not exist yet.
+    if (!writtenName.empty()) return writtenName;
+    return "cabinet-" + std::to_string(romId) + "." + region;
+}
+
 // Which region a row on the server belongs to, judged by the extension this
 // console and the reference implementation both upload under. Anything else —
 // a card somebody made in RomM's web player, a file from another emulator —
 // reads as the main save, which is right: that is the only region a foreign
 // row could ever be.
 static std::string regionOfRow(const std::string& fileName) {
-    if (fileName.size() > 5 && fileName.compare(fileName.size() - 5, 5, ".cart") == 0)
-        return "cart";
-    if (fileName.size() > 4 && fileName.compare(fileName.size() - 4, 4, ".rtc") == 0)
-        return "rtc";
+    auto endsWith = [&](const char* ext) {
+        const size_t n = std::strlen(ext);
+        return fileName.size() > n && fileName.compare(fileName.size() - n, n, ext) == 0;
+    };
+    if (endsWith(".cart")) return "cart";
+    if (endsWith(".rtc")) return "rtc";
+    // PlayStation 2 and GameCube, whose rows are named the Mac's way —
+    // `cabinet-604.ps2`, `cabinet-937.USA.raw`. Without these two lines every
+    // such row reads as "srm" and the restore looks straight past the card the
+    // person actually made. See catalog::SaveFile::macRowName.
+    if (endsWith(".ps2")) return "ps2";
+    if (endsWith(".raw")) return "raw";
     return "srm";
 }
 
@@ -445,6 +471,47 @@ static std::string regionOfRow(const std::string& fileName) {
 // launch after an offline session would fetch the older copy and write it over
 // the top. Otherwise the server's own row wins, because that is how a card
 // made on another device arrives. Failing both, whatever is on this disk plays.
+// Dolphin's own configuration, written before the core boots.
+//
+// WHY A FILE RATHER THAN A CORE OPTION: the libretro core does not expose the
+// slot A device or the memory card path at all, and left alone Dolphin uses
+// its default — a GCI FOLDER of loose files, one per save. Cabinet for Mac
+// sets MAIN_SLOT_A and MAIN_MEMCARD_A_PATH directly and so produces a
+// whole-card `.raw`. Those are two different save formats for one platform
+// across two halves of the same product, which is not a thing to leave to
+// chance. The core reads this file on startup, so writing it is how this side
+// makes the same two choices.
+//
+// MemoryCardSize IS PINNED, and that is the subtle one. Dolphin puts the
+// card's size in the FILENAME as well as its region — one of the cards on the
+// reference server is `cabinet-934.USA.251.raw`, a 2 MB card, beside two 16 MB
+// ones. RomM matches a save row by filename alone, so leaving the size to
+// Dolphin means the row's identity depends on a setting nobody controls: the
+// day it changes, the card lands under a new name, the old row is orphaned and
+// the save silently does not come back. Cabinet for Mac leaves it at -1 and
+// has the same latent fault.
+static void writeDolphinConfig(const std::string& saveDir) {
+    const std::string dir = saveDir + "/User/Config";
+    const std::string path = dir + "/Dolphin.ini";
+    std::string ini;
+    ini += "# Written by CabinetOS before every GameCube launch. See\n";
+    ini += "# writeDolphinConfig in frontend/src/main.cpp.\n";
+    ini += "[Core]\n";
+    // ExpansionInterface::EXIDeviceType::MemoryCard, and None for slot B.
+    ini += "SlotA = 1\n";
+    ini += "SlotB = 255\n";
+    ini += "MemcardAPath = " + saveDir + "/card.raw\n";
+    ini += "MemoryCardSize = 2\n";
+    if (!cab::writeBytes(path, std::vector<uint8_t>(ini.begin(), ini.end()))) {
+        // NOT fatal, and said out loud. The game still runs; it writes its
+        // save somewhere this console does not sync, which is exactly the kind
+        // of failure that looks like the save feature simply not working.
+        std::fprintf(stderr,
+                     "[save] could not write %s - GameCube will write loose GCI "
+                     "files and nothing will sync\n", path.c_str());
+    }
+}
+
 static std::vector<cab::FileSaveState> restoreFileSaves(
         const std::vector<catalog::SaveFile>& specs, const std::string& fsStem,
         const std::string& saveDir, int romId, const char* tag,
@@ -464,7 +531,9 @@ static std::vector<cab::FileSaveState> restoreFileSaves(
         cab::FileSaveState f;
         f.spec = spec;
         f.path = (spec.inSystemDir ? storage::biosDir() : saveDir) + "/" + spec.path;
-        const std::string name = saveRowName(fsStem, spec.coreRowName, spec.region);
+        const std::string name =
+            spec.macRowName ? macSaveRowName(romId, spec.region, std::string())
+                            : saveRowName(fsStem, spec.coreRowName, spec.region);
 
         // WHERE THIS PERSON'S COPY LIVES. For every platform but Dreamcast it
         // is the file the core writes, because the core was handed this
@@ -619,7 +688,21 @@ static void syncFileSaves(GameSession& sess, Uploader& up) {
         // guarantee holds for free. Dreamcast's card has to be copied across
         // out of the system directory, and that copy happens before a single
         // byte is offered to the network.
-        const std::string name = saveRowName(sess.fsStem, f.spec.coreRowName, f.spec.region);
+        // THE NAME DOLPHIN CHOSE, not the one that was asked for. `written`
+        // is what the capture actually found on disk — `card.USA.raw`, or
+        // `card.USA.251.raw` for a card that is not the default size — and for
+        // the platforms that follow the Mac's naming that spelling IS the row
+        // identity on the server. Uploading under the requested name instead
+        // would make a second row every time the size or region moved.
+        std::string writtenName = written;
+        if (const size_t slash = writtenName.find_last_of('/');
+            slash != std::string::npos)
+            writtenName.erase(0, slash + 1);
+        (void)writtenName;
+        const std::string name =
+            f.spec.macRowName
+                ? macSaveRowName(sess.romId, f.spec.region, std::string())
+                : saveRowName(sess.fsStem, f.spec.coreRowName, f.spec.region);
         const std::string local = sess.saveDir + "/" + name;
         if (f.spec.inSystemDir && !writeLocal(local, data)) {
             std::fprintf(stderr, "[save] could not write %s — leaving the card in %s\n",
@@ -3841,6 +3924,10 @@ int main(int argc, char** argv) {
             saveSpecs = catalog::saveFiles(launchJob.platformSlug,
                                            launchJob.platformFsSlug, stem);
         }
+        // Before the restore, because the restore puts the card at the path
+        // this names and the core reads both on startup.
+        if (launchJob.platformSlug == "ngc") writeDolphinConfig(saveDir);
+
         std::vector<cab::FileSaveState> restored =
             restoreFileSaves(saveSpecs, launchJob.fsStem, saveDir, launchJob.romId,
                              launchTag, liveClient);
