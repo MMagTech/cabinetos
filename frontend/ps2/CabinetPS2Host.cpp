@@ -739,15 +739,36 @@ bool CabinetPS2::Run(const Config& config, std::string* error)
 	// value you asked for, it is whatever the default happens to be.
 	s_settings.SetStringValue("SPU2/Output", "Backend", "SDL");
 
-	// NO MEMORY CARDS. Deliberate and load-bearing while the save work is not
-	// wired up: a card PCSX2 chose for itself belongs to no rom, cannot be
-	// synced, and — worse — could be written over something real. Burnout 3's
-	// card is the only true PS2 save on the reference server.
-	for (u32 i = 0; i < 2; i++)
+	// THE MEMORY CARD, AND ITS NAME IS THE WHOLE POINT.
+	//
+	// One card, slot 1, named by the frontend after the rom — `cabinet-604.ps2`
+	// for Burnout 3. **RomM matches a save row BY FILENAME ALONE**, so that
+	// string is the difference between a card the Mac already reads and an
+	// orphan row nothing will ever find again. The frontend owns the name;
+	// this layer only places it.
+	//
+	// Slot 2 is DISABLED rather than enabled-and-empty, which is what an
+	// earlier version of this did. An enabled slot with no filename is a card
+	// PCSX2 names for itself, belonging to no rom, that cannot be synced —
+	// exactly the arrangement Cabinet's own PS2MemoryCard.swift rejects and
+	// the one the libretro core falls into through
+	// `pcsx2_shared_memory_cards`.
+	//
+	// An empty name means NO CARD AT ALL, which is what the probe uses. A game
+	// that cannot find a card says so and carries on; a game that writes to
+	// the wrong one is a save nobody can get back.
+	s_settings.SetBoolValue("MemoryCards", "Slot1_Enable", !config.memory_card.empty());
+	s_settings.SetStringValue("MemoryCards", "Slot1_Filename", config.memory_card.c_str());
+	s_settings.SetBoolValue("MemoryCards", "Slot2_Enable", false);
+	s_settings.SetStringValue("MemoryCards", "Slot2_Filename", "");
+	// Multitap cards would be four more of the same problem.
+	for (u32 port = 1; port <= 2; port++)
 	{
-		s_settings.SetBoolValue("MemoryCards", fmt::format("Slot{}_Enable", i + 1).c_str(), !config.memory_card.empty());
-		s_settings.SetStringValue("MemoryCards", fmt::format("Slot{}_Filename", i + 1).c_str(),
-			(i == 0) ? config.memory_card.c_str() : "");
+		for (u32 slot = 2; slot <= 4; slot++)
+		{
+			s_settings.SetBoolValue(
+				"MemoryCards", fmt::format("Multitap{}_Slot{}_Enable", port, slot).c_str(), false);
+		}
 	}
 
 	// PCSX2's on-screen messages are its frontend talking to its own users in
@@ -818,6 +839,15 @@ bool CabinetPS2::Run(const Config& config, std::string* error)
 	VMManager::Internal::CPUThreadShutdown();
 	s_running.store(false);
 	return ok;
+}
+
+std::string CabinetPS2::MemoryCardPath(const std::string& data_root, const std::string& name)
+{
+	// EmuFolders::MemoryCards is only set once PCSX2 has started, and the
+	// frontend needs this before that — it restores the card from the server
+	// before the emulator exists. So the layout is stated here rather than
+	// read back, and `memcards` is PCSX2's own name for it.
+	return Path::Combine(Path::Combine(data_root, "memcards"), name);
 }
 
 void CabinetPS2::SetPad(unsigned port, const Pad& pad)

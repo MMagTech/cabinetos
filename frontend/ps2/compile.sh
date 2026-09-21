@@ -12,6 +12,12 @@
 set -euo pipefail
 
 BUILD="${1:?build directory}"
+# The PCSX2 revision this was built from, stamped into the .so so the console
+# can print what it is ACTUALLY running. Every libretro core answers the same
+# question through retro_get_system_info, for the same reason: a core that
+# cannot say which revision it is cannot be audited, and this project has
+# already spent days recovering revisions from shipped binaries with `strings`.
+VERSION="${2:-unknown}"
 cd /src
 
 command -v python3 >/dev/null || { echo "python3 is needed to read compile_commands.json" >&2; exit 1; }
@@ -41,9 +47,10 @@ echo "host layer: compiling with $(echo "$FLAGS" | wc -w) flags from PCSX2's own
 
 # -I/src/cabinet-ps2 so the two files find their own header; everything else is
 # PCSX2's.
-for f in CabinetPS2Host CabinetPS2Audio CabinetPS2Probe; do
+for f in CabinetPS2Host CabinetPS2Audio CabinetPS2Bridge CabinetPS2Probe; do
     # shellcheck disable=SC2086  # FLAGS is a deliberately word-split flag list
-    clang++ $FLAGS -I/src/cabinet-ps2 -c "/src/cabinet-ps2/$f.cpp" -o "$BUILD/$f.o"
+    clang++ $FLAGS -I/src/cabinet-ps2 -DCABINETOS_PS2_VERSION="\"$VERSION\"" \
+        -c "/src/cabinet-ps2/$f.cpp" -o "$BUILD/$f.o"
 done
 
 # The link.
@@ -79,3 +86,48 @@ clang++ -o "$BUILD/cabinet-ps2-probe" \
     $SYS
 
 echo "host layer: linked $BUILD/cabinet-ps2-probe"
+
+# --- the shared object the console actually loads --------------------------
+#
+# THIS IS WHAT SHIPS. The probe above is a development tool; this is the file
+# the frontend dlopens, and it exists rather than a static link for two
+# reasons, either of which would decide it on its own.
+#
+# The licence is the hard one: PCSX2 is GPLv3 and this repository is MIT, and
+# docs/LICENCES.md rests its position on the emulators being dlopen'ed rather
+# than linked in. The practical one is that the frontend's builder image does
+# not carry PCSX2's thirty-odd dependencies and should not grow them.
+#
+# -z defs so the linker REFUSES a .so with anything unresolved. Without it a
+# missing symbol becomes a dlopen failure on the console at the moment somebody
+# starts a game, naming one symbol and telling you nothing about the rest.
+# shellcheck disable=SC2086  # SYS is a deliberately word-split flag list
+clang++ -shared -Wl,-z,defs -o "$BUILD/cabinetos-ps2.so" \
+    "$BUILD/CabinetPS2Host.o" "$BUILD/CabinetPS2Audio.o" "$BUILD/CabinetPS2Bridge.o" \
+    -Wl,--start-group \
+    "$BUILD/pcsx2/libpcsx2.a" "$BUILD/common/libcommon.a" \
+    "${THIRDPARTY[@]}" \
+    -Wl,--end-group \
+    $SYS
+
+echo "host layer: linked $BUILD/cabinetos-ps2.so ($(du -h "$BUILD/cabinetos-ps2.so" | cut -f1))"
+
+# It must LOAD, not merely link. A .so that satisfies the linker and fails at
+# dlopen is the exact failure this project hit with g_host_hotkeys, and it
+# reports one missing symbol at a time.
+cat > /tmp/dlcheck.c <<'DL'
+#include <dlfcn.h>
+#include <stdio.h>
+int main(int argc, char** argv) {
+    void* h = dlopen(argv[1], RTLD_NOW | RTLD_LOCAL);
+    if (!h) { printf("dlopen FAILED: %s\n", dlerror()); return 1; }
+    const char* needed[] = {"cps2_start","cps2_stop","cps2_running","cps2_set_pad",
+                            "cps2_take_frame","cps2_drain_audio","cps2_version", 0};
+    for (int i = 0; needed[i]; i++)
+        if (!dlsym(h, needed[i])) { printf("missing %s\n", needed[i]); return 1; }
+    printf("dlopen ok, every entry point resolves\n");
+    return 0;
+}
+DL
+clang /tmp/dlcheck.c -o /tmp/dlcheck -ldl
+/tmp/dlcheck "$BUILD/cabinetos-ps2.so"

@@ -223,11 +223,13 @@ if [ -d "$ROOT/frontend/ps2" ]; then
     # take. It cost one confusing link error before anybody looked.
     rm -rf "$SRC/cabinet-ps2"
     cp -r "$ROOT/frontend/ps2" "$SRC/cabinet-ps2"
-    run_in_builder "bash /src/cabinet-ps2/compile.sh $BUILD" || {
+    run_in_builder "bash /src/cabinet-ps2/compile.sh $BUILD $TAG" || {
         echo "the host layer did not build" >&2
         exit 1
     }
     cp "$SRC/$BUILD/cabinet-ps2-probe" "$OUT/" 2>/dev/null || true
+    # The file the console loads. Named the way catalog.cpp will look for it.
+    cp "$SRC/$BUILD/cabinetos-ps2.so" "$OUT/" 2>/dev/null || true
 fi
 
 # --- the probe -------------------------------------------------------------
@@ -275,7 +277,7 @@ echo "--- 2. does CabinetOS's host layer link? ---"
 # which is ours, so upstream's frontend cannot link it — correctly. Our own
 # probe is the link test now, and it is a better one, because it is the layer
 # that actually ships rather than a stand-in for it.
-bash /src/cabinet-ps2/compile.sh "$1" >/tmp/link.txt 2>&1 \
+bash /src/cabinet-ps2/compile.sh "$1" probe >/tmp/link.txt 2>&1 \
     || fail "the host layer did not link; see /tmp/link.txt$(printf '\n'; tail -5 /tmp/link.txt)"
 [ -x cabinet-ps2-probe ] || fail "no cabinet-ps2-probe binary"
 echo "  linked: cabinet-ps2-probe ($(du -h cabinet-ps2-probe | cut -f1))"

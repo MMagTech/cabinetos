@@ -163,6 +163,14 @@ namespace CabinetPS2
 	/// The rate PCSX2 is producing at — 48000 for a PlayStation 2.
 	unsigned AudioSampleRate();
 
+	/// Where PCSX2 will put the card named in `Config::memory_card`, given the
+	/// same data root. The frontend restores into this path before Run and
+	/// captures from it after Run returns — **after**, because PCSX2 flushes
+	/// the card during shutdown and a capture taken any earlier is the card as
+	/// it was when the game started. That is the same rule the libretro path
+	/// already follows with `retro_unload_game`, and it was paid for once.
+	std::string MemoryCardPath(const std::string& data_root, const std::string& name);
+
 	/// Boots the disc and runs until RequestStop, the frame limit, or the game
 	/// ending. BLOCKS — give it its own thread. Returns false and fills error
 	/// if the VM never started.
