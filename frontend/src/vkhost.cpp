@@ -815,6 +815,13 @@ bool createContext(std::string* err) {
     gHaveMemoryObject = gGlCreateMemoryObjects && gGlDeleteMemoryObjects &&
                         gGlImportMemoryFd && gGlTexStorageMem2D &&
                         gGlMemoryObjectParameteriv;
+    // The control, in the family of --core-options-off. There are two ways to
+    // get a Vulkan picture into a GL texture and they fail differently; being
+    // able to pick one from outside is what tells a bug in the bridge apart
+    // from a bug in the core.
+    if (const char* forced = SDL_getenv("CABINETOS_VK_ROUTE")) {
+        if (std::strcmp(forced, "egl") == 0) gHaveMemoryObject = false;
+    }
 
     gEglCreateImage =
         reinterpret_cast<PFNEGLCREATEIMAGEPROC>(eglGetProcAddress("eglCreateImage"));
@@ -1201,6 +1208,7 @@ bool present() {
 
     gSharedInitialised = true;
     gSyncIndex = (gSyncIndex + 1u) % kSyncIndices;
+
     return true;
 }
 

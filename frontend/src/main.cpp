@@ -4787,6 +4787,24 @@ int main(int argc, char** argv) {
                 // the draw below has to know which.
                 float u0, v0, u1, v1;
                 core.frameUV(u0, v0, u1, v1);
+                // Said once per game. The picture's geometry is four numbers
+                // that have to agree — what the core hands back, what it says
+                // the shape is, the quad the layout builds, and the corner of
+                // the texture that is sampled — and when the picture comes out
+                // the wrong shape there is no way from outside to tell which
+                // of the four is lying.
+                {
+                    static int saidFor = -1;
+                    if (saidFor != session.romId) {
+                        saidFor = session.romId;
+                        std::fprintf(stderr,
+                                     "[picture] core %gx%g aspect %.4f%s -> quad %.0fx%.0f "
+                                     "(%.4f) at %.0f,%.0f  uv %.4f,%.4f..%.4f,%.4f\n",
+                                     srcW, srcH, core.avInfo().aspectRatio,
+                                     quarterTurn ? " TURNED" : "", dw, dh, dw / dh, px, py,
+                                     u0, v0, u1, v1);
+                    }
+                }
                 // Opaque, always. A game's frame is a picture, and whatever is
                 // in its alpha channel is the emulated machine's own state
                 // rather than a compositing instruction. Found on PPSSPP:
