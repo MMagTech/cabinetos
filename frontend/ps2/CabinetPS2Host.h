@@ -92,6 +92,16 @@ namespace CabinetPS2
 		/// Stop after this many frames, 0 for no limit.
 		uint32_t stop_after = 0;
 
+		/// Anisotropic filtering, 0 (off) or 2/4/8/16.
+		///
+		/// **IT IS OFF IN PCSX2'S DEFAULTS AND IT IS THE ONE TEXTURE SETTING
+		/// WORTH TURNING ON.** It sharpens surfaces seen at a steep angle,
+		/// which on a PlayStation 2 is the road ahead in every racing game —
+		/// exactly what somebody is looking at when they say the picture is
+		/// blurry. It cannot add detail that was never rendered, so it is the
+		/// smaller of the two levers; the upscale below is the larger one.
+		int anisotropy = 0;
+
 		/// The GS upscale multiplier. 1.0 is the PS2's native resolution.
 		float upscale = 1.0f;
 

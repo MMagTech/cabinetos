@@ -80,9 +80,23 @@ namespace
 			AudioStream::SetPaused(paused);
 		}
 
-		/// Pulls `frames` stereo frames and converts them to 16-bit.
-		void Pull(std::vector<int16_t>* out, u32 frames)
+		/// Pulls up to `max_frames` stereo frames and converts them to 16-bit.
+		void Pull(std::vector<int16_t>* out, u32 max_frames)
 		{
+			// **ONLY WHAT IS ACTUALLY THERE, AND THIS IS THE WHOLE BUG.**
+			//
+			// The first version read `max_frames` every call regardless.
+			// ReadFrames does not refuse — it pads with silence — so at the
+			// frontend's frame rate, which on the A9 is around a thousand a
+			// second, this asked for about a hundred and seventy seconds of
+			// audio per second of wall clock. The buffer was drained empty on
+			// the first call and every call after it returned silence.
+			//
+			// MMagTech, 2026-09-21, playing it: "audio wasn't coming through
+			// in game even though after exit i heard weird things". That is
+			// exactly this — silence while playing, and the tail of the buffer
+			// arriving at once when the stream was torn down.
+			const u32 frames = std::min(max_frames, GetBufferedFramesRelaxed());
 			if (frames == 0)
 				return;
 

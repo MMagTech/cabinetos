@@ -1052,6 +1052,7 @@ void Core::setDirectories(const std::string& systemDir, const std::string& saveD
 static bool gIsPs2 = false;
 static std::string gPs2ResourcesDir;
 static float gPs2Upscale = 1.0f;
+static int gPs2Anisotropy = 0;
 
 bool Core::load(const std::string& soPath) {
     unload();
@@ -1280,7 +1281,7 @@ bool Core::loadGame(const std::string& romPath, const std::string& systemDir,
         const std::string scratchDir = saveDir + "/pcsx2-scratch";
 
         if (!ps2::startGame(romPath, biosDir, saveDir, stem + ".ps2", scratchDir,
-                            gPs2ResourcesDir, gPs2Upscale)) {
+                            gPs2ResourcesDir, gPs2Upscale, gPs2Anisotropy)) {
             error_ = ps2::error();
             return false;
         }
@@ -1700,9 +1701,10 @@ const std::vector<int16_t>& Core::drainAudio() {
     return gAudioDrain;
 }
 
-void Core::setPs2(const std::string& resourcesDir, float upscale) {
+void Core::setPs2(const std::string& resourcesDir, float upscale, int anisotropy) {
     gPs2ResourcesDir = resourcesDir;
     gPs2Upscale = upscale > 0.0f ? upscale : 1.0f;
+    gPs2Anisotropy = anisotropy;
 }
 
 void Core::setPaused(bool paused) {
@@ -1806,7 +1808,22 @@ GLuint Core::texture() const {
     return gHWFrame ? gHWColor : texture_;
 }
 
-bool Core::hardwareRendered() const { return gHWWanted; }
+bool Core::hardwareRendered() const {
+    // PLAYSTATION 2 COUNTS, AND SAYING SO FIXES A REAL FAULT ON THE TELEVISION.
+    //
+    // This answer is read in exactly one place: whether to INTEGER scale the
+    // picture. That is right for a Game Boy, whose pixels are a deliberate
+    // grid, and wrong for a machine rendering a 3D scene — the comment at that
+    // call site says so already, for Dreamcast.
+    //
+    // PCSX2 renders with Vulkan on the GPU, so it is hardware-rendered in every
+    // sense that matters here; it simply does not arrive through libretro's
+    // hardware-render path, which is what gHWWanted tracks. Left false, a
+    // 640x448 PlayStation 2 picture floored to 2x and drew 896 rows of 1080 —
+    // MMagTech, 2026-09-21: "the game didnt touch the top or bottum of the
+    // screen almost like it was windowed".
+    return gIsPs2 || gHWWanted;
+}
 
 unsigned Core::rotation() const { return gRotation; }
 

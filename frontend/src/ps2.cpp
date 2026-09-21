@@ -17,7 +17,7 @@ std::string gError;
 // crash on the television with no message, while a missing one found here is
 // one line saying which.
 struct Api {
-    int      (*start)(const char*, const char*, const char*, const char*, const char*, const char*, float, int) = nullptr;
+    int      (*start)(const char*, const char*, const char*, const char*, const char*, const char*, float, int, int) = nullptr;
     const char* (*error)() = nullptr;
     int      (*running)() = nullptr;
     void     (*stop)() = nullptr;
@@ -101,12 +101,12 @@ std::string ps2::version() {
 bool ps2::startGame(const std::string& discPath, const std::string& biosDir,
                     const std::string& memcardsDir, const std::string& memoryCard,
                     const std::string& scratchDir, const std::string& resourcesDir,
-                    float upscale) {
+                    float upscale, int anisotropy) {
     if (!gHandle) { gError = "no PlayStation 2 emulator is loaded"; return false; }
 
     gFrameSerial = 0;
     if (!gApi.start(discPath.c_str(), biosDir.c_str(), memcardsDir.c_str(), memoryCard.c_str(),
-                    scratchDir.c_str(), resourcesDir.c_str(), upscale, 1)) {
+                    scratchDir.c_str(), resourcesDir.c_str(), upscale, anisotropy, 1)) {
         gError = gApi.error();
         if (gError.empty()) gError = "PCSX2 would not start";
         return false;

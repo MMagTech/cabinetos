@@ -373,12 +373,57 @@ not look for is a save that never reaches the server, and nothing would say so.
 **Burnout 3 is rom 604 and its card is the only real PlayStation 2 save on the
 server.** Nothing in this work went near it: every test used Homura.
 
+#### PICTURE QUALITY: 4x LOOKS RIGHT AND STUTTERS A LITTLE — 2026-09-21
+
+**Played on the television. MMagTech: "that looked way better maybe we pushed
+it a bit too aggressive though as i did notice some stuttering."** Deliberately
+not chased — his call — but the leads are here so it is cheap to pick up.
+
+`--ps2-upscale N` and `--ps2-aniso N` exist **as a TEST INSTRUMENT AND NOT THE
+PRODUCT**, and main.cpp says so beside them. How this is really exposed is open
+question 23 — one quality setting for the whole console. Nobody should build a
+settings screen on these two flags.
+
+Currently on the reference console: `--ps2-upscale 4 --ps2-aniso 16`.
+
+| Upscale | Internal | Readback | Burnout 3, uncapped |
+|---|---|---|---|
+| 1x | 640x448 | 0.7 ms | — |
+| 4x | 2560x1920 | 2.7 ms | **602%** |
+| 6x | 3840x2880 | **12.5 ms** | **133%** |
+
+Measured with a WARM shader cache — two runs at each, the first discarded —
+because this project has already measured 2x as slower than 4x off a single
+cold run.
+
+**5x IS THE FIRST GENUINELY 4K VALUE.** A PlayStation 2 renders 640x448 and a
+4:3 picture on a 3840x2160 panel is 2880x2160 of real screen, so the arithmetic
+is 2160/448 = 4.8. Below that the panel is stretching.
+
+**THE STUTTER IS PROBABLY NOT THE EMULATOR, AND THE NUMBERS SAY SO.** At 4x it
+ran at six times realtime with 2.7 ms of readback — that is not a machine
+struggling. Two better suspects, in order:
+
+1. **The frame handover copies 22 MB per frame under a lock the GS thread also
+   wants.** `CabinetPS2::TakeFrame` copies rather than lends, deliberately, so
+   the frontend cannot hold a buffer the emulator is overwriting — but at 4x
+   that copy is 2730x2048x4 bytes, sixty times a second, with the emulator
+   blocked behind it. A double buffer would make the lock a pointer swap.
+2. **Shader compilation.** PCSX2 compiles pipelines as new effects appear, and
+   Burnout 3 in traffic is where they appear. The cache is per game and it does
+   warm up, so the second run through the same area is the test.
+
+**AND THE READBACK SCALES WORSE THAN THE PIXELS.** 4x to 6x is 2.25 times the
+pixels and **4.6 times the cost**, which is a wall rather than a curve. That is
+the measurement that would justify sharing PCSX2's Vulkan image directly instead
+of copying it through the CPU — four lines to upstream, written up above. For
+6x it is already the right answer.
+
 #### WHAT IS NOT DONE, and none of it is hidden
 
-- **NOBODY HAS PLAYED IT WITH A PAD YET.** The picture, the input path, the
-  sound and the card are each proved, and the whole chain has been driven from
-  code — but a person with a controller in front of the television has not sat
-  down with it. **That is the next thing and it is the point of all of this.**
+- ~~**NOBODY HAS PLAYED IT WITH A PAD YET.**~~ **PLAYED, 2026-09-21**, and it
+  found three faults nothing here had caught — see below. What is still owed is
+  a long session rather than a first look.
 - **SAVE STATES DO NOT WORK AND REPORT SO HONESTLY.** `Core::stateSize()` is 0
   for PlayStation 2, because PCSX2's states are its own slot files keyed by disc
   serial and CRC rather than a buffer. Open question 12b: whatever this console
@@ -394,6 +439,39 @@ server.** Nothing in this work went near it: every test used Homura.
   the same directory.
 - **The two open bugs in item 1b have NOT been re-tested against this.** That
   was the reason for building it and it is now possible.
+
+#### THREE FAULTS FOUND BY PLAYING IT, AND ALL THREE WERE SILENT
+
+Nothing in the headless harness caught any of them. Worth remembering next time
+somebody is tempted to call a thing finished off a capture.
+
+- **NO SOUND IN GAME, AND GARBAGE AFTER EXITING.** The audio drain asked for
+  170 ms of samples on every frontend frame, about a thousand times a second.
+  `ReadFrames` does not refuse — it pads with silence — so the buffer was
+  emptied on the first call and returned silence ever after, and the real
+  samples arrived at once when the stream was torn down. It now takes only what
+  `GetBufferedFramesRelaxed` says is there.
+- **THE PICTURE DID NOT REACH THE TOP OR BOTTOM OF THE SCREEN.** Integer
+  scaling: a 640x448 frame floored to 2x draws 896 rows of 1080. Right for a
+  Game Boy's pixel grid, wrong for a 3D machine — the console already knew that
+  for Dreamcast and simply did not count PCSX2 as hardware-rendered.
+  `Core::hardwareRendered()` says yes now, which is also true.
+- **AND CHASING THAT FOUND A THIRD NOBODY HAD SEEN.** The picture was 7% too
+  wide, because the frontend derived its shape from the pixel dimensions and a
+  PlayStation 2's pixels are not square. PCSX2 now returns an
+  already-correctly-shaped frame, which also makes widescreen games right.
+
+**A FOURTH WAS MINE AND IS THE MOST EMBARRASSING.** `--ps2-upscale 4` did
+nothing for an hour, because the frontend on the console was a STALE BUILD that
+did not know the flag and ignored it silently. It was reported as working off
+the command line I had typed rather than off anything the machine said.
+
+**That is why `[ps2] renderer ... upscale ... anisotropy ...` now prints on
+every launch, from `GSConfig`** — the APPLIED configuration, not the requested
+one. A setting that does not take shows up as a wrong number rather than as a
+picture somebody has to squint at. **And check the binary's checksum against
+the one you built before believing a deploy**; nothing does that automatically
+yet.
 
 ### 1b. TWO BUGS FOUND BY PLAYING, NEITHER REPRODUCIBLE — OPEN
 

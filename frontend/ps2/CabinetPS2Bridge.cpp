@@ -49,7 +49,7 @@ extern "C" {
 // running; the emulator itself runs on a thread of its own from here on,
 // because PCSX2's VMManager::Execute does not return until the game stops.
 int cps2_start(const char* disc, const char* bios_dir, const char* memcards_dir, const char* memory_card,
-	const char* scratch_dir, const char* resources, float upscale, int fast_boot)
+	const char* scratch_dir, const char* resources, float upscale, int anisotropy, int fast_boot)
 {
 	if (s_started.load())
 		return 0;
@@ -62,6 +62,7 @@ int cps2_start(const char* disc, const char* bios_dir, const char* memcards_dir,
 	config.scratch_dir = scratch_dir ? scratch_dir : "";
 	config.resources_dir = resources ? resources : "";
 	config.upscale = upscale > 0.0f ? upscale : 1.0f;
+	config.anisotropy = anisotropy;
 	config.fast_boot = fast_boot != 0;
 	config.stop_after = 0;
 

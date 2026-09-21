@@ -57,7 +57,7 @@ std::string version();
 bool startGame(const std::string& discPath, const std::string& biosDir,
                const std::string& memcardsDir, const std::string& memoryCard,
                const std::string& scratchDir, const std::string& resourcesDir,
-               float upscale);
+               float upscale, int anisotropy);
 
 // Asks the game to stop and WAITS. Blocking is the point: PCSX2 flushes the
 // memory card during shutdown, so a card captured before this returns is the

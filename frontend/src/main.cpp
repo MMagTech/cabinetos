@@ -966,6 +966,23 @@ static int countEntries(const std::string& dir) {
 // A game already on the disk is left exactly where it is — including when
 // somebody else keeps it, which is the case that makes "one kept game, two
 // people" true on disk rather than only in a comment.
+// PlayStation 2 picture quality.
+//
+// **THESE TWO FLAGS ARE A TEST INSTRUMENT AND NOT THE PRODUCT.** MMagTech,
+// 2026-09-21: they exist so a number can be tried in front of the television,
+// and how this is really exposed is open question 23 — ONE quality setting for
+// the whole console, not a per-emulator menu and not a command line. Nobody
+// should build a settings screen on top of these, and nobody should read a
+// value chosen here as a decision: the point of them is to find out what the
+// decision should be.
+//
+// Both default to what PCSX2 itself ships — native resolution, no anisotropic
+// filtering — so a console that is given neither flag behaves exactly as it
+// did. See --ps2-upscale in the argument parser for what the multiplier means
+// on a 4K panel.
+static float gPs2Upscale = 1.0f;
+static int gPs2Anisotropy = 0;
+
 static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& game,
                         const std::string& coreDir, std::string* err,
                         bool playWhenReady = true, bool keepWhenReady = false) {
@@ -1038,7 +1055,7 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
     // it on the server under the name Cabinet's Mac uses — works on it
     // unchanged.
     if (cov.core && std::string(cov.core) == "pcsx2") {
-        core.setPs2(storage::imageAssetsDir() + "/pcsx2/resources", 1.0f);
+        core.setPs2(storage::imageAssetsDir() + "/pcsx2/resources", gPs2Upscale, gPs2Anisotropy);
     }
 
     if (!core.load(job.corePath)) {
@@ -2484,6 +2501,28 @@ int main(int argc, char** argv) {
             rommAddress = argv[++i];
         } else if (SDL_strcmp(argv[i], "--core-dir") == 0 && i + 1 < argc) {
             coreDir = argv[++i];
+        } else if (SDL_strcmp(argv[i], "--ps2-upscale") == 0 && i + 1 < argc) {
+            // HOW MANY TIMES THE PLAYSTATION 2'S OWN RESOLUTION TO RENDER AT.
+            //
+            // It renders 640x448, so on a 3840x2160 panel showing a 4:3
+            // picture — 2880x2160 of real screen — the arithmetic is
+            // 2160/448 = 4.8. **FIVE IS THE FIRST VALUE THAT IS GENUINELY 4K
+            // AND SIX CLEARS IT.** Below that the panel is stretching.
+            //
+            // A flag rather than a constant because this is the single largest
+            // thing anybody can change about how a PlayStation 2 game looks,
+            // and finding the right number is a matter of sitting in front of
+            // the television rather than of reasoning. It is also the shape
+            // open question 23 will want — one quality setting for the whole
+            // console, not a per-emulator menu.
+            gPs2Upscale = static_cast<float>(SDL_atof(argv[++i]));
+        } else if (SDL_strcmp(argv[i], "--ps2-aniso") == 0 && i + 1 < argc) {
+            // Anisotropic filtering: 0, 2, 4, 8 or 16. PCSX2 ships it OFF.
+            // It sharpens surfaces seen at a steep angle, which on a
+            // PlayStation 2 is the road ahead in every racing game. It cannot
+            // add detail that was never rendered, so it is the smaller of the
+            // two levers.
+            gPs2Anisotropy = SDL_atoi(argv[++i]);
         } else if (SDL_strcmp(argv[i], "--storage-root") == 0 && i + 1 < argc) {
             storage::setRoot(argv[++i]);
         } else if (SDL_strcmp(argv[i], "--launch") == 0 && i + 1 < argc) {

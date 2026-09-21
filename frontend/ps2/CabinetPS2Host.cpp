@@ -250,18 +250,23 @@ void Host::BeginPresentFrame()
 		u32 width = 0, height = 0;
 		std::vector<u32> pixels;
 
-		// Zero for the window size asks for the GS's own internal resolution,
-		// and `apply_aspect = false` gives the raw pixels rather than a
-		// picture already stretched to some assumed shape.
+		// Zero for the window size asks for the GS's own internal resolution.
 		//
-		// **BOTH OF THOSE ARE DELIBERATE AND THE SECOND ONE MATTERS MOST.**
-		// The frontend already owns aspect: it measures a core's declared
-		// ratio, fits a quad and prints the four numbers that have to agree.
-		// Letting PCSX2 correct the picture as well would be correcting it
-		// twice, which is exactly the fault the arcade rotation work paid for
-		// once — a turned board whose declared aspect was already turned, and
-		// inverting it stretched every vertical game.
-		if (GSSaveSnapshotToMemory(0, 0, false, false, &width, &height, &pixels) && width > 0 && height > 0)
+		// **AND apply_aspect IS TRUE, WHICH AN EARLIER VERSION GOT WRONG.**
+		//
+		// The reasoning then was that the frontend owns aspect and letting
+		// PCSX2 correct it too would be correcting it twice — which sounds
+		// right and is not, because the frontend can only DERIVE an aspect
+		// from the pixel dimensions and a PlayStation 2's pixels are not
+		// square. A 640x448 frame drawn at 640/448 is seven per cent too wide,
+		// and a 16:9 game is far more wrong than that.
+		//
+		// PCSX2 knows the answer — it has the game's video mode and its
+		// widescreen setting — and hands back a buffer whose shape is already
+		// correct, expanded to the larger dimension. The frontend then treats
+		// it as square-pixel, which it now is, and needs no declared aspect at
+		// all. One correction, made by the half that has the information.
+		if (GSSaveSnapshotToMemory(0, 0, true, false, &width, &height, &pixels) && width > 0 && height > 0)
 		{
 			std::lock_guard<std::mutex> lock(s_frame_lock);
 			s_frame.pixels = std::move(pixels);
@@ -344,9 +349,24 @@ void Host::OnVMStarted()
 		case GSRendererType::Null: renderer = "null"; break;
 		default: break;
 	}
-	Console.WriteLnFmt("[ps2] VM started, renderer {}{}", renderer,
+	// REPORT WHAT PCSX2 ENDED UP WITH, NOT WHAT IT WAS ASKED FOR.
+	//
+	// `GSConfig` is the applied configuration, so a setting that did not take —
+	// a key nobody reads, a value clamped, a request refused — shows up here as
+	// a different number rather than as a picture somebody has to squint at.
+	// MMagTech, 2026-09-21: "something is off that didnt look much better", and
+	// a frame at native resolution looks identical whether the upscale was
+	// ignored or never asked for.
+	//
+	// ON stderr RATHER THAN THROUGH Console, and that is not a style choice.
+	// PCSX2's own console is configured from the settings layer during startup,
+	// so anything written before that reaches nobody — the first version of
+	// this line printed nothing at all, which is exactly how gsrunner hides its
+	// argument errors. stderr always works.
+	std::fprintf(stderr, "[ps2] renderer %s, upscale %gx, anisotropy %d%s\n", renderer,
+		static_cast<double>(GSConfig.UpscaleMultiplier), GSConfig.MaxAnisotropy,
 		(GSConfig.Renderer == GSRendererType::SW || GSConfig.Renderer == GSRendererType::Null)
-			? " — THAT IS NOT THE HARDWARE RENDERER THIS CONSOLE ASKED FOR"
+			? "  — THAT IS NOT THE HARDWARE RENDERER THIS CONSOLE ASKED FOR"
 			: "");
 }
 
@@ -778,7 +798,16 @@ bool CabinetPS2::Run(const Config& config, std::string* error)
 	// Vulkan. The A9 has it, PCSX2 supports it natively, and it is what the
 	// frontend's own host already speaks. Open question 20.
 	s_settings.SetIntValue("EmuCore/GS", "Renderer", static_cast<int>(GSRendererType::VK));
+	// THE UPSCALE, AND WHAT THE NUMBERS MEAN ON A 4K TELEVISION.
+	//
+	// A PlayStation 2 renders 640x448. The multiplier is against that, so on a
+	// 3840x2160 panel showing a 4:3 picture — 2880x2160 of actual screen — the
+	// arithmetic is 2160/448 = 4.8. **FIVE IS THE FIRST VALUE THAT IS GENUINELY
+	// 4K AND SIX CLEARS IT**; anything below is being stretched by the panel.
 	s_settings.SetFloatValue("EmuCore/GS", "upscale_multiplier", s_config.upscale);
+
+	// Anisotropic filtering. PCSX2 defaults it to 0, which is off.
+	s_settings.SetIntValue("EmuCore/GS", "MaxAnisotropy", s_config.anisotropy);
 
 	// PCSX2's own input is off entirely, and stays off. Every pad on this
 	// console reaches a game through the frontend, and a second path onto the

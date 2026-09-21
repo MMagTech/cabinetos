@@ -313,7 +313,7 @@ public:
     //                 machinery works on it unchanged and the two cannot
     //                 drift apart.
     //   upscale       1.0 is the PlayStation 2's own resolution.
-    void setPs2(const std::string& resourcesDir, float upscale);
+    void setPs2(const std::string& resourcesDir, float upscale, int anisotropy);
 
     // Freezes the emulated machine. A NO-OP FOR EVERY LIBRETRO CORE, which
     // stops simply because the frame loop stops stepping it — and not optional
