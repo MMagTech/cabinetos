@@ -2309,36 +2309,38 @@ at its draw site. This is a list, not the record.
   and compiled at the end of a long session and MMagTech had not yet retried it.
   **Do that first**: save in a game, load it back, and watch what the menu says
   at each step. The words are the feature as much as the bytes are.
-- **SETTINGS, AND IT IS ONE SCREEN REACHED FROM TWO PLACES.** MMagTech, at the
-  end of the session: *"what if we keep the pause as more of a quick menu but
-  then sort of like retroarch have a more advanced menu. I dont ever want to be
-  as in depth as [that], i want simplicity — but it would be ideal for things
-  like shaders and the performance mode for later on, maybe the glow strength as
-  well."*
+- **THE PAUSE MENU GETS SHADER AND GLOW, BECAUSE CABINET ALREADY DID.**
+  MMagTech asked whether to keep the pause menu quick and add a deeper
+  RetroArch-style one for shaders, the performance mode and glow strength. The
+  first answer given here argued from first principles that those belong to the
+  console and therefore to Settings. **That was wrong, and the reference had
+  already settled it** — MMagTech: *"in cabinet os we have shader and glow as
+  part of the menu and its not even in here."*
 
-  **The split that matters is not quick versus advanced, it is THIS GAME versus
-  THIS CONSOLE** — and everything on that list is the console. Open question 23
-  already says the quality setting is global; so are glow strength and shaders.
-  A shader is a look you either want or do not; a performance mode is how hard
-  the machine is allowed to work. Neither is a property of any one game.
+  `TVPlayerView.pauseMenu` is **Quit, Shader, Save state, Load latest state,
+  Resume**, in that order. Shader is a submenu of candidates; glow is an
+  Off/Subtle/Strong picker. Both sit over the paused game, which is the whole
+  point: you are adjusting how the picture looks and the picture is right there.
 
-  RetroArch's real usability problem is not depth, it is TWO MENUS WITH A
-  BOUNDARY NOBODY CAN REMEMBER. A second in-game menu inherits that at a tenth
-  the size. So: one Settings screen, opened by the bar's Settings item from
-  Home, and opened by a fifth row in the pause menu over the paused game. Same
-  screen both ways. That is also strictly better for the things named —
-  adjusting a shader or the glow with the game sitting behind it is the best
-  preview there is, and it is the one thing a Settings screen reached only from
-  Home cannot do.
+  **AND A SHADER IS PER PLATFORM, NOT GLOBAL.** `NativeShader.current(for:)` and
+  `setCurrent(_:for:)` are keyed on the platform. A CRT filter on Super Nintendo
+  and none on PlayStation is a real choice and the console is the wrong scope
+  for it. "Global versus per-game" was the wrong axis — the answer is PER
+  SYSTEM.
 
-  The pause menu stays a quick menu: Resume, Save state, Load latest, Settings,
-  Exit. The fifth row is a door, not a submenu. Anything genuinely PER-GAME — a
-  core option override for one title — belongs on that game's launch screen,
-  where the game is what the screen is about, and not in a third menu.
+- **THE GLOW ALREADY EXISTS HERE AND CANNOT BE REACHED.** `--glow off|normal|
+  strong`, peaks of 0.0 / 0.025 / 0.04, drawn by `Renderer::drawBiasGlow` with
+  its own shader program. A command-line flag and nothing else. Cabinet's three
+  levels were live-tuned on device with a slider on 2026-08-13 and then frozen
+  into a picker, so **reconcile the numbers against Cabinet's rather than
+  inventing a second set**.
 
-- **SETTINGS' FIRST CONTENTS**, in the order they became real: the one quality
-  setting (open question 23), the interface sounds' off switch (built and
-  waiting for an owner — `sound::setEnabled`), the glow strength, and shaders.
+- **WHAT IS STILL A SETTINGS SCREEN**, and it is short: the one quality setting
+  (open question 23, which really is global), and the interface sounds' off
+  switch — built and waiting for an owner, `sound::setEnabled`. That is not
+  enough to justify a second in-game menu, which was the one part of the first
+  answer worth keeping: RetroArch's problem is not depth, it is two menus with a
+  boundary nobody can remember.
 
 - **THE OLD SETTINGS NOTE.** The last bar item that does nothing, and open question 23's one
   quality control has nowhere to live until it exists. **This is the next UI
