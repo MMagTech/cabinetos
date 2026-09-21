@@ -10522,13 +10522,39 @@ is what that looks like when you get it wrong.
   capture blindness as item 1 was not separated out, because the DRM answer
   arrived first and made it moot.
 
-#### What it costs if we take it
+#### TWO PATHS ARE ACCEPTED — MMagTech, 2026-09-21. THE CONDITION IS THE POINT
 
-**The overlay is what makes this console different** — one pause menu, one
-save-and-quit, identical for a Mega Drive and a PlayStation 2, working because
-the console draws the game itself. Moving the heavy systems to a composited
-window means two paths to the screen instead of one: the libretro cores keep
-rendering into our texture, and the standalone emulators present for themselves
-with the menu blended on top. **Two paths is the real price**, not the atoms.
+The price of this route was never the atoms. It is that the console would have
+**two ways of getting a game onto the screen**: the twenty-one libretro cores
+rendering into a texture the frontend owns, and the standalone emulators
+presenting for themselves with our menu blended on top.
+
+**MMagTech's call: *"i dont mind if its two paths so long as they resemble each
+other closely."*** That settles the architecture question and replaces it with a
+design constraint, which is the harder and more useful half.
+
+**What "resemble each other closely" has to mean in practice**, so that this is
+a testable requirement rather than a sentiment:
+
+- **One menu, one set of code.** Pause, Save state, Exit to Home are drawn by
+  the same renderer from the same scene, whether the game underneath came from
+  our own texture or from another window's plane. If the composited path grows
+  its own copy of the menu, the constraint has been broken no matter how similar
+  they look.
+- **The same behaviour at the same moments.** The menu opens on the same button,
+  takes the pad at the same instant, dims the game the same amount, and ducks
+  the audio the same way. A PlayStation 2 game and a Mega Drive game should be
+  indistinguishable to the person holding the pad.
+- **The same save-and-quit.** Exit to Home syncs the save on the way out on both
+  paths, or the second path is a trap.
+- **The difference is confined to where the picture comes from.** Anything that
+  leaks above that line — different menu, different timing, different exit — is
+  the failure this constraint exists to prevent.
+
+**The honest risk is drift rather than design.** Two paths built together stay
+alike; two paths maintained for a year do not, and the one with 85 games gets
+less attention than the one with 1147. Whatever is built should make the shared
+half genuinely shared, so that the paths cannot diverge without something
+failing to compile.
 
 The reproduction is `tools/gamescope-overlay-test.sh` and `tools/overlay-probe.c`.
