@@ -41,9 +41,22 @@ enum class Support {
     NoCore,
     // The manifest has a core for this system, and this console does not have
     // it built. A different thing from NoCore and from Excluded: nothing is
-    // wrong, the core simply has not been built yet. All twenty-one libretro
-    // cores are built as of PPSSPP; the two rows that still answer this are
-    // GameCube and PS2, whose emulators are not libretro cores at all.
+    // wrong, the core simply has not been built yet.
+    //
+    // NOTHING ANSWERS THIS ON A HEALTHY CONSOLE, checked against the reference
+    // A9 2026-09-22: all 23 cores this table names are in
+    // /usr/lib/cabinetos/cores, 22 libretro plus PCSX2 as cabinetos-ps2.so.
+    // GameCube is dolphin_libretro.so and IS a libretro core; PPSSPP is built
+    // and PSP plays. An earlier version of this comment said otherwise on both
+    // counts and was believed for a fortnight, which is the argument for
+    // checking the disk rather than the comment.
+    //
+    // SO THIS IS A FAULT DETECTOR NOW, not a normal state. Cores ship in the
+    // image and the image is atomic, so the only ways here are a staging
+    // failure or a name that drifted out from under coreFileName — which is
+    // exactly what ci/stage-image-payload.sh checks for, and why it prints any
+    // .so it finds that is not on the list. Keep the stat. It is one syscall
+    // and it turns a tile that fails on tap into a tile that says why.
     // Found by the hero offering an arcade game with no FBNeo on disk.
     NotInstalled,
     // A core exists but CabinetOS deliberately does not ship it. There is
@@ -66,7 +79,10 @@ enum class Support {
     // running real games from the library. What remains is the narrower case
     // the value was always really about: a core that wants desktop GL or
     // Vulkan, which this context is not and which `core.cpp` turns down by
-    // name. PPSSPP is not built yet and is the next one to find out about.
+    // name. PPSSPP has since been built and PSP plays through the same
+    // framebuffer path, so all three of the original cores are measured
+    // running real games and none of them answers this. Nothing is queued
+    // behind them — the next core that wants desktop GL will be the first.
     NeedsHardwareRender,
 };
 
