@@ -442,6 +442,8 @@ bool Client::fetchPlatforms(std::vector<Platform>* out, std::string* err) {
         p.slug = jstr(o, "slug");
         p.fsSlug = jstr(o, "fs_slug");
         p.romCount = static_cast<int>(jint(o, "rom_count"));
+
+        p.updatedAt = jstr(o, "updated_at");
         if (p.id != 0) out->push_back(std::move(p));
     }
     json_object_put(root);

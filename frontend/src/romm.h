@@ -43,6 +43,11 @@ struct Platform {
     std::string slug;     // "arcade" — not unique either
     std::string fsSlug;   // "FBNEO" / "MAME2003" — what actually picks a core
     int romCount = 0;
+    // THE TWO FIELDS A CACHE VALIDATES AGAINST, and they cost nothing because
+    // the platform list is fetched at every boot anyway. `updatedAt` moves when
+    // the platform changes; `romCount` catches the case where it does not.
+    // Neither is used for anything else — see covercache and PROJECT.md 30.
+    std::string updatedAt;
 };
 
 // A collection: the person's own grouping of games, held by RomM so it is the

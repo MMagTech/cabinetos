@@ -191,6 +191,22 @@ public:
     void open(std::string title, std::vector<int> cards,
               const std::vector<design::Card>& all);
 
+    // More of the same grid, arriving after it was opened.
+    //
+    // A GRID IS PROPORTIONAL TO ITS OWN PLATFORM and boot is not — the fault
+    // open question 28 fixed one level down. About 1 ms a game, so 141 is
+    // fine and a full MAME set in one platform is ten seconds of staring at
+    // nothing. The first page is drawn and the rest arrive behind it.
+    //
+    // APPENDED, NEVER RE-SORTED. RomM returns roms in title order, so pages
+    // concatenate already in order; re-sorting here would move every card out
+    // from under the slot the person is focused on.
+    void append(const std::vector<int>& more, const std::vector<design::Card>& all);
+
+    // Whether more is still coming, so the heading can say so rather than
+    // showing a count that is about to change.
+    void setLoadingMore(bool on) { loadingMore_ = on; }
+
     // FAST NAVIGATION BY LETTER — new 2026-09-21.
     //
     // MMagTech: *"when holding down or maybe r2 and l2 it should be fast nav
@@ -222,6 +238,7 @@ public:
     void drawGlass(Ctx& c);
 
 private:
+    bool loadingMore_ = false;
     int columns() const;
     float coverWidth() const;
 

@@ -1601,6 +1601,10 @@ struct Library {
     // games and sees nothing will reasonably conclude the scan failed.
     std::vector<screens::Tile> platformTiles;
     std::vector<screens::Tile> collectionTiles;
+    // What a tile's cached cover is validated against: the platform's own
+    // `updated_at` and `rom_count`, as the server reported them this boot.
+    // Filled for playable platforms only, because nothing else gets a cover.
+    std::map<int, covercache::Tile> tileCache;
     // Every game this console has fetched so far, keyed by rom id, so a game
     // that is recent AND a favourite AND in a platform's grid is one card
     // rather than three. THE VALUE IS AN INDEX INTO `cards`, which is why
@@ -1648,7 +1652,7 @@ static int appendGame(Library& lib, const romm::Game& g) {
 // nothing this console can play returns true with an empty membership, which
 // is a different thing and reads differently on the screen.
 static bool loadTileGames(romm::Client& client, Library& lib, screens::Tile& tile,
-                          bool isCollection) {
+                          bool isCollection, bool* more = nullptr) {
     if (!tile.cards.empty()) return true;   // already walked into once
     const std::string filter =
         (isCollection ? "collection_id=" : "platform_ids=") + std::to_string(tile.id);
@@ -1665,21 +1669,21 @@ static bool loadTileGames(romm::Client& client, Library& lib, screens::Tile& til
     // this is not a hypothetical library.
     constexpr int kPage = 500;
     int total = 0;
-    for (;;) {
+    // ONLY THE FIRST PAGE, AND THE CALLER DRAWS IT. The rest is somebody
+    // else's job — see GridFill. A grid used to fetch the whole platform
+    // before anything appeared, which is fine at 141 games and is ten seconds
+    // for a full MAME set in one platform.
+    {
         std::vector<romm::Game> page;
         // fetchRoms writes the limit itself, so only the offset rides on the
         // filter.
-        if (!client.fetchRoms(filter + "&offset=" + std::to_string(games.size()),
-                              kPage, &page, &err, &total)) {
+        if (!client.fetchRoms(filter, kPage, &page, &err, &total)) {
             std::fprintf(stderr, "[library] %s: %s\n", tile.title.c_str(), err.c_str());
             return false;
         }
-        const size_t got = page.size();
-        games.insert(games.end(), std::make_move_iterator(page.begin()),
-                     std::make_move_iterator(page.end()));
-        if (got < static_cast<size_t>(kPage)) break;
-        if (total > 0 && games.size() >= static_cast<size_t>(total)) break;
+        games = std::move(page);
     }
+    if (more) *more = (total > static_cast<int>(games.size()));
     int unplayable = 0;
     for (const auto& g : games) {
         // A collection can hold games from systems this console cannot run.
@@ -1692,11 +1696,10 @@ static bool loadTileGames(romm::Client& client, Library& lib, screens::Tile& til
             if (!lib.cards[i].cover.empty()) tile.cover = lib.cards[i].cover;
         }
     }
-    // Alphabetical inside the grid, which is what the grid's letter-jump
-    // expects. Sorted here rather than in the store — see appendGame.
-    std::sort(tile.cards.begin(), tile.cards.end(), [&](int a, int b) {
-        return lib.cards[a].title < lib.cards[b].title;
-    });
+    // NOT SORTED HERE. RomM returns roms in title order already, which is what
+    // the grid's letter-jump needs, and a later page has to concatenate onto
+    // this one — a sort would fight the append and move cards out from under
+    // whoever is looking at them.
     if (unplayable > 0) {
         // Say what is missing rather than quietly showing a shorter list: a
         // collection of twelve that opens onto four looks like a bug unless
@@ -1784,6 +1787,7 @@ static Library loadLibrary(romm::Client& client) {
                       p.romCount == 1 ? "" : "s");
         tile.detail = qualifier.empty() ? std::string(count)
                                         : qualifier + "  \xC2\xB7  " + count;
+        lib.tileCache[p.id] = covercache::Tile{"", p.updatedAt, p.romCount};
         // `tile.cover` is deliberately left empty. It used to be the first
         // cover among the platform's games, which cost a fetch per platform —
         // 1.55 s of a 1.8 s boot, measured against the reference server. The
@@ -4403,8 +4407,41 @@ int main(int argc, char** argv) {
     };
     CoverFill coverFill;
     if (rommAddress) {
-        for (const screens::Tile& t : platformTiles)
-            if (t.enterable && t.cover.empty()) coverFill.want.push_back(t.id);
+        // THE TILE MAP FIRST, WHICH IS THE WHOLE POINT. Without it the console
+        // asks thirty-six times at every start which cover a tile should use
+        // and gets the same thirty-six answers — 1.07 s and a third of a
+        // megabyte to learn nothing new. A row is used when the platform's
+        // `updated_at` AND `rom_count` still match what they were when it was
+        // written; both ride on the platform list boot already fetched, so
+        // checking costs no request. See covercache.h for why this is not the
+        // library snapshot open question 22 rules out.
+        const std::map<int, covercache::Tile> saved = covercache::loadTiles();
+        int reused = 0;
+        for (screens::Tile& t : platformTiles) {
+            if (!t.enterable || !t.cover.empty()) continue;
+            auto mine = lib.tileCache.find(t.id);
+            auto was = saved.find(t.id);
+            if (mine != lib.tileCache.end() && was != saved.end() &&
+                !was->second.cover.empty() &&
+                was->second.updatedAt == mine->second.updatedAt &&
+                was->second.romCount == mine->second.romCount) {
+                t.cover = was->second.cover;
+                mine->second.cover = was->second.cover;
+                // AND THE SCREEN HAS TO BE TOLD, because it was built from
+                // these tiles before this ran and holds its own copies. The
+                // cold path gets this for free — every cover that arrives goes
+                // through learnedTile — so a remembered one that skipped it
+                // drew the colour and never the picture. Found by a warm boot
+                // requesting exactly one image, the avatar.
+                libraryScreen.learnedTile(t.id, "", was->second.cover);
+                ++reused;
+                continue;
+            }
+            coverFill.want.push_back(t.id);
+        }
+        if (reused || !coverFill.want.empty())
+            std::fprintf(stderr, "[covers] %d tile(s) remembered, %zu to ask about\n",
+                         reused, coverFill.want.size());
         // FOUR, THE SAME AS THE IMAGE CACHE, and for the same reason: these
         // are round trips rather than work, so the number that helps is the
         // number in flight. Thirty-six platforms one at a time is 1.55 s;
@@ -4430,6 +4467,59 @@ int main(int argc, char** argv) {
             });
         }
     }
+    // THE REST OF A BIG GRID, BEHIND THE FIRST PAGE.
+    //
+    // A grid is proportional to its own platform — about 1 ms a game — so the
+    // first page is drawn at once and the remainder arrives behind it. The
+    // worker returns GAMES and the frame loop is what puts them in the store
+    // and on the screen, for the same reason the cover fill returns paths:
+    // appending to the store from another thread would race every screen that
+    // draws from it.
+    struct GridFill {
+        std::mutex m;
+        std::vector<romm::Game> arrived;
+        std::atomic<bool> running{false};
+        std::atomic<bool> quit{false};
+        int tileId = 0;
+        std::thread th;
+        void stop() {
+            quit.store(true);
+            if (th.joinable()) th.join();
+            quit.store(false);
+            std::lock_guard<std::mutex> lk(m);
+            arrived.clear();
+        }
+    };
+    GridFill gridFill;
+    struct GridFillStop {
+        GridFill& f;
+        ~GridFillStop() { f.stop(); }
+    } gridFillStop{gridFill};
+
+    // THE SWEEP AND THE EVICTION, BEHIND EVERYTHING, ONCE PER BOOT.
+    //
+    // MMagTech's question, and the reason there is no TTL anywhere in this
+    // cache: what stops a deleted platform's art sitting on disk forever. A
+    // platform that is gone stops appearing in the platform list, so it is
+    // orphaned the FIRST time the console sees the server without it.
+    //
+    // IT IS GIVEN THE LIST THAT CAME BACK, and covercache::sweep refuses an
+    // empty one, because absence is not deletion when nothing answered — a
+    // sweep on a failed boot would wipe the cache that boot most wants.
+    std::thread coverTidy;
+    if (rommAddress && !platformTiles.empty()) {
+        std::vector<int> live;
+        for (const screens::Tile& t : platformTiles) live.push_back(t.id);
+        coverTidy = std::thread([live]() {
+            covercache::sweep(live);
+            covercache::evict(covercache::kBudgetBytes);
+        });
+    }
+    struct CoverTidyStop {
+        std::thread& t;
+        ~CoverTidyStop() { if (t.joinable()) t.join(); }
+    } coverTidyStop{coverTidy};
+
     // Stops the workers before anything they write into goes out of scope. A
     // thread outliving this frame would be writing into a dead mutex.
     struct CoverFillStop {
@@ -4952,14 +5042,13 @@ int main(int argc, char** argv) {
                 screens::Tile* t = nullptr;
                 for (auto& x : own) if (x.id == tileId) { t = &x; break; }
                 if (!t) break;
+                bool more = false;
                 if (t->cards.empty()) {
-                    // IT BLOCKS, and that is the honest shape of it for now:
-                    // the person has chosen a system and is waiting for one
-                    // request rather than for the whole library. The biggest
-                    // platform on the reference server is the one to watch —
-                    // if this ever reads as a stall it wants the same waiting
-                    // frame a launch already has, not a background thread.
-                    loadTileGames(liveClient, lib, *t, isCollection);
+                    // ONE PAGE, AND IT BLOCKS FOR THAT. The person has chosen
+                    // a system and is waiting for one request rather than for
+                    // the whole platform — 0.19 s for 141 games here, and the
+                    // same 0.19 s for a platform of thirty thousand.
+                    loadTileGames(liveClient, lib, *t, isCollection, &more);
                     libraryScreen.learnedTile(tileId, t->detail, t->cover);
                 }
                 if (t->cards.empty()) {
@@ -4970,6 +5059,42 @@ int main(int argc, char** argv) {
                     break;
                 }
                 gridScreen.open(t->title, t->cards, cards);
+                gridScreen.setLoadingMore(more);
+                // ONE FILLER AT A TIME. Walking into a second platform stops
+                // the first: nobody is looking at it any more, and two of
+                // these would be appending into two different tiles at once.
+                gridFill.stop();
+                if (more) {
+                    gridFill.tileId = tileId;
+                    gridFill.running.store(true);
+                    const std::string filter =
+                        (isCollection ? "collection_id=" : "platform_ids=") +
+                        std::to_string(tileId);
+                    const size_t from = t->cards.size();
+                    gridFill.th = std::thread([&gridFill, filter, from]() {
+                        constexpr int kPage = 500;
+                        size_t offset = from;
+                        for (;;) {
+                            if (gridFill.quit.load()) break;
+                            std::vector<romm::Game> page;
+                            std::string err;
+                            int total = 0;
+                            if (!liveClient.fetchRoms(
+                                    filter + "&offset=" + std::to_string(offset),
+                                    kPage, &page, &err, &total))
+                                break;
+                            if (page.empty()) break;
+                            offset += page.size();
+                            {
+                                std::lock_guard<std::mutex> lk(gridFill.m);
+                                for (auto& g : page)
+                                    gridFill.arrived.push_back(std::move(g));
+                            }
+                            if (total > 0 && offset >= static_cast<size_t>(total)) break;
+                        }
+                        gridFill.running.store(false);
+                    });
+                }
                 stack.push_back(Screen::Grid);
                 sound::play(sound::Cue::Activate);
                 break;
@@ -6617,6 +6742,32 @@ int main(int argc, char** argv) {
                     runSearch(q);
                 }
             }
+            // Pages of a big grid that arrived behind the first one. Applied
+            // here because this thread owns the store and the screen.
+            if (here() == Screen::Grid) {
+                std::vector<romm::Game> got;
+                {
+                    std::lock_guard<std::mutex> lk(gridFill.m);
+                    got.swap(gridFill.arrived);
+                }
+                if (!got.empty()) {
+                    std::vector<int> added;
+                    added.reserve(got.size());
+                    screens::Tile* t = nullptr;
+                    for (auto& v : {&platformTiles, &collectionTiles})
+                        for (screens::Tile& x : *v)
+                            if (x.id == gridFill.tileId) { t = &x; break; }
+                    for (const auto& g : got) {
+                        if (!catalog::playable(g)) continue;
+                        const int i = appendGame(lib, g);
+                        added.push_back(i);
+                        if (t) t->cards.push_back(i);
+                    }
+                    gridScreen.append(added, cards);
+                }
+                gridScreen.setLoadingMore(gridFill.running.load());
+            }
+
             // Covers that arrived behind Home. Applied here because this is
             // the thread that owns the tiles and the screen drawing them.
             {
@@ -6629,7 +6780,13 @@ int main(int argc, char** argv) {
                     for (screens::Tile& t : platformTiles)
                         if (t.id == id && t.cover.empty()) { t.cover = cover; break; }
                     libraryScreen.learnedTile(id, "", cover);
+                    auto it = lib.tileCache.find(id);
+                    if (it != lib.tileCache.end()) it->second.cover = cover;
                 }
+                // Written when the last one lands rather than per cover: this
+                // is thirty-six short lines and the next boot is what reads it.
+                if (!arrived.empty() && coverFill.next.load() >= coverFill.want.size())
+                    covercache::saveTiles(lib.tileCache);
             }
 
             // The results are sized to the room the keyboard leaves, and the

@@ -37,6 +37,7 @@
 #pragma once
 
 #include <cstdint>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -72,5 +73,59 @@ std::string dir();
 // listing rather than something the console says.
 struct Stats { int fromDisk = 0; int fetched = 0; int stored = 0; };
 Stats stats();
+
+// --- The tile map -----------------------------------------------------------
+//
+// Which picture a platform's TILE shows, remembered between boots.
+//
+// WHY IT IS NOT A LIBRARY SNAPSHOT, since that rule is open question 22's and
+// it matters: this records "platform 15's tile shows this picture". It does
+// not record which games exist, what they are called, or which platform they
+// are on, and nothing can be browsed from it. It is also only ever READ on a
+// boot where the platform list came back — the console exits before reaching
+// it otherwise — so it cannot change what an offline console shows.
+//
+// WITHOUT IT the console spends 1.07 s and about 0.33 MB at every single start
+// asking thirty-six times which cover a tile should use, and getting the same
+// thirty-six answers it got last time.
+//
+// VALIDATED, NOT EXPIRED. Each row carries the platform's `updated_at` and
+// `rom_count` as the server reported them when the row was written. Both come
+// free with the platform list that boot already fetches, so checking costs no
+// request. A platform whose either value has moved is re-asked; the rest are
+// not. There is no TTL here for the same reason there is none anywhere else in
+// this file.
+struct Tile {
+    std::string cover;      // the path to draw
+    std::string updatedAt;  // the platform's, when this was written
+    int romCount = 0;
+};
+std::map<int, Tile> loadTiles();
+void saveTiles(const std::map<int, Tile>& tiles);
+
+// --- Keeping it from growing forever ----------------------------------------
+
+// Deletes everything belonging to a platform the server no longer lists.
+//
+// THIS IS THE ANSWER TO "WHAT STOPS DELETED ART SITTING ON DISK FOREVER", and
+// it is a sweep rather than a clock: a platform that is gone stops appearing in
+// the platform list, so it is orphaned the FIRST time the console sees the
+// server without it, not whenever a timer happens to expire.
+//
+// CALL IT ONLY WITH A LIST THAT CAME BACK. Absence is not deletion when the
+// server could not be reached, and a sweep on a failed fetch would wipe the
+// cache on exactly the boot that most needs it.
+void sweep(const std::vector<int>& livePlatformIds);
+
+// Deletes least-recently-used files until the cache is under `budgetBytes`.
+// The reserve check on write is a backstop that keeps the console updatable;
+// this is the actual policy.
+void evict(int64_t budgetBytes);
+
+// What the cache is allowed to grow to. A library's whole art is about 332 MB
+// on the reference server and roughly 4 GB at twenty thousand games, so this
+// bites only on a large library or a small disk — which is the point, because
+// the alternative is that it bites on neither until the disk is full.
+inline constexpr int64_t kBudgetBytes = 1LL << 30;   // 1 GB
 
 }  // namespace covercache

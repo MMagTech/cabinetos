@@ -11911,20 +11911,62 @@ avatar comes from `/api/users/<id>/avatar` with no version in its path, so a
 cached one would be a stale face with no way to notice. An unrecognised key is
 passed through uncached rather than filed under a guess.
 
-**AND HERE IS WHAT IS NOT BUILT, STATED PLAINLY:**
+**AND THE REST OF IT WAS BUILT THE SAME DAY**, after MMagTech asked for the
+whole thing rather than a piece at a time.
 
-- **No sweep.** A deleted platform's art stays on disk. The design is above —
-  reconcile against `rom_id_index` on a SUCCESSFUL platform list, never on a
-  failed one — and it is not written.
-- **No LRU eviction.** The only bound is a refusal to write inside the 5 GB
-  system reserve, checked before every write. That is the backstop that keeps
-  a console updatable, not a cache policy. In practice the cache cannot exceed
-  the library's own art — about 332 MB here, 4 GB at twenty thousand games —
-  so the reserve is doing real work only on a small disk.
-- **No cached platform-to-cover-path map**, so the 1.07 s cover fill still
-  happens on every boot. Only the image BYTES are saved. That map is a small
-  catalogue snapshot and it is the piece that needs a decision against open
-  question 22 before anybody writes it.
+**THE TILE MAP.** `covers/<server>/tiles.tsv` — one line per platform holding
+its `updated_at`, its `rom_count` and the cover its tile should draw. Both
+validating fields ride on the platform list boot already fetches, so checking
+costs no request, and a platform whose either value moved is simply re-asked.
+
+```
+COLD    0 tile(s) remembered, 28 to ask about     5.46 s
+WARM   28 tile(s) remembered, 0 to ask about      3.84 s
+        20 covers from disk, 0 fetched
+```
+
+**A warm boot asks the server nothing at all about its tiles and downloads no
+artwork.** It is not the library snapshot open question 22 rules out: it holds
+no game names, no game ids and nothing browsable, and it is only ever READ on a
+boot where the platform list came back.
+
+**THE BUG IT SHIPPED WITH FOR ONE BUILD, because it is a good one.** The remembered
+covers were written into the app's tiles — and `LibraryScreen` was built from
+those tiles minutes earlier and holds its own COPIES. The cold path never
+noticed, because every arriving cover goes through `learnedTile`, which updates
+both. A warm boot drew colour tiles and requested exactly one image, the avatar.
+**Found by a counter reading zero while 7.3 MB of images sat resident** — the
+counter existed only because the alternative was inferring success from a
+directory listing.
+
+**THE SWEEP AND THE EVICTION.** A platform the server no longer lists has its
+art deleted the first time the console sees the server without it — not when a
+timer expires. `covercache::sweep` refuses an empty list, because absence is
+not deletion when nothing answered. Eviction is LRU against a 1 GB budget, on
+top of the write-time refusal to enter the system reserve.
+
+#### AND THE GRID IS PAGED — the fault this work left behind, fixed
+
+Boot became constant; a grid did not. **MMagTech, having looked at it on the
+panel: "I wouldn't say opening a platform looks bad — does that number hold no
+matter how many games are in the platform?" It does not.** About 1 ms a game,
+so 141 is 0.19 s and a full MAME set in one platform is ten seconds.
+
+The first page is drawn and the rest arrives behind it. `GridScreen::append`
+extends the letter index rather than rebuilding it, and focus and scroll are
+deliberately untouched — somebody looking at row three must not be moved
+because the list grew below them. The heading says `141 games…` while more is
+coming, because a number that silently climbs while somebody reads it is worse
+than one that admits it is unfinished.
+
+**TESTED BY SHRINKING THE PAGE, because this library cannot exercise it**: the
+largest platform here is 141 against a page of 500, so paging never triggers.
+Rebuilt with a page of 20, Arcade opened on 20 and filled to 141.
+
+**AND THE SORT HAD TO GO.** The grid used to sort its cards by title. Pages
+concatenate, so a sort would fight the append and move cards out from under
+whoever is looking at them. RomM returns roms in title order already, which is
+what the letter-jump needs.
 
 #### AND STOP REASONING ABOUT THE HOSTED CASE
 

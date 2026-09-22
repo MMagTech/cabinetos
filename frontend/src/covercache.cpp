@@ -1,8 +1,15 @@
 #include "covercache.h"
 
+#include <algorithm>
 #include <cstdio>
+#include <cstring>
 #include <mutex>
 #include <string>
+#include <vector>
+
+#include <dirent.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include "cache.h"
 #include "storage.h"
@@ -158,6 +165,182 @@ void write(const std::string& key, const std::vector<uint8_t>& bytes) {
     }
     std::lock_guard<std::mutex> lk(gMutex);
     ++gStats.stored;
+}
+
+
+// --- The tile map -----------------------------------------------------------
+
+namespace {
+
+std::string tilesPath() {
+    std::lock_guard<std::mutex> lk(gMutex);
+    if (gServer.empty()) return {};
+    return dir() + "/" + gServer + "/tiles.tsv";
+}
+
+}  // namespace
+
+std::map<int, Tile> loadTiles() {
+    std::map<int, Tile> out;
+    const std::string path = tilesPath();
+    if (path.empty()) return out;
+    FILE* f = std::fopen(path.c_str(), "rb");
+    if (!f) return out;
+    // Tab-separated rather than JSON: the fields are an int, two short strings
+    // and an int, none of which can contain a tab, and this file is read before
+    // anything else on a boot that is trying to be fast.
+    char line[1024];
+    while (std::fgets(line, sizeof line, f)) {
+        std::string l(line);
+        while (!l.empty() && (l.back() == '\n' || l.back() == '\r')) l.pop_back();
+        size_t a = l.find('\t');
+        if (a == std::string::npos) continue;
+        size_t b = l.find('\t', a + 1);
+        if (b == std::string::npos) continue;
+        size_t c = l.find('\t', b + 1);
+        if (c == std::string::npos) continue;
+        Tile t;
+        const int id = std::atoi(l.substr(0, a).c_str());
+        t.updatedAt = l.substr(a + 1, b - a - 1);
+        t.romCount = std::atoi(l.substr(b + 1, c - b - 1).c_str());
+        t.cover = l.substr(c + 1);
+        if (id > 0 && !t.cover.empty()) out.emplace(id, std::move(t));
+    }
+    std::fclose(f);
+    return out;
+}
+
+void saveTiles(const std::map<int, Tile>& tiles) {
+    const std::string path = tilesPath();
+    if (path.empty() || tiles.empty()) return;
+    std::string d = path.substr(0, path.rfind('/'));
+    {
+        std::lock_guard<std::mutex> lk(gMutex);
+        if (!storage::makeDirs(d)) return;
+    }
+    const std::string tmp = path + ".part";
+    FILE* f = std::fopen(tmp.c_str(), "wb");
+    if (!f) return;
+    bool ok = true;
+    for (const auto& [id, t] : tiles) {
+        if (std::fprintf(f, "%d\t%s\t%d\t%s\n", id, t.updatedAt.c_str(),
+                         t.romCount, t.cover.c_str()) < 0) { ok = false; break; }
+    }
+    ok = ok && (std::fflush(f) == 0);
+    std::fclose(f);
+    if (!ok || std::rename(tmp.c_str(), path.c_str()) != 0) std::remove(tmp.c_str());
+}
+
+// --- Sweep and eviction -----------------------------------------------------
+
+namespace {
+
+// Every regular file under a directory, with its size and last-used time.
+void walk(const std::string& root, std::vector<std::string>* files,
+          std::vector<struct stat>* stats) {
+    DIR* d = ::opendir(root.c_str());
+    if (!d) return;
+    while (dirent* e = ::readdir(d)) {
+        if (std::strcmp(e->d_name, ".") == 0 || std::strcmp(e->d_name, "..") == 0)
+            continue;
+        const std::string p = root + "/" + e->d_name;
+        struct stat st;
+        if (::stat(p.c_str(), &st) != 0) continue;
+        if (S_ISDIR(st.st_mode)) { walk(p, files, stats); continue; }
+        if (!S_ISREG(st.st_mode)) continue;
+        files->push_back(p);
+        stats->push_back(st);
+    }
+    ::closedir(d);
+}
+
+void removeTree(const std::string& path) {
+    DIR* d = ::opendir(path.c_str());
+    if (d) {
+        while (dirent* e = ::readdir(d)) {
+            if (std::strcmp(e->d_name, ".") == 0 || std::strcmp(e->d_name, "..") == 0)
+                continue;
+            removeTree(path + "/" + e->d_name);
+        }
+        ::closedir(d);
+        ::rmdir(path.c_str());
+        return;
+    }
+    ::remove(path.c_str());
+}
+
+}  // namespace
+
+void sweep(const std::vector<int>& livePlatformIds) {
+    // AN EMPTY LIST IS NOT AN EMPTY SERVER. The only caller that can honestly
+    // produce one is a console whose platform fetch failed, and sweeping on
+    // that would delete everything on the boot that most wants it.
+    if (livePlatformIds.empty()) return;
+    std::string base;
+    {
+        std::lock_guard<std::mutex> lk(gMutex);
+        if (gServer.empty()) return;
+        base = dir() + "/" + gServer;
+    }
+    DIR* d = ::opendir(base.c_str());
+    if (!d) return;
+    int gone = 0;
+    while (dirent* e = ::readdir(d)) {
+        if (std::strcmp(e->d_name, ".") == 0 || std::strcmp(e->d_name, "..") == 0)
+            continue;
+        const std::string p = base + "/" + e->d_name;
+        struct stat st;
+        if (::stat(p.c_str(), &st) != 0 || !S_ISDIR(st.st_mode)) continue;
+        const int id = std::atoi(e->d_name);
+        if (id <= 0) continue;
+        if (std::find(livePlatformIds.begin(), livePlatformIds.end(), id) !=
+            livePlatformIds.end())
+            continue;
+        removeTree(p);
+        ++gone;
+    }
+    ::closedir(d);
+    if (gone)
+        std::fprintf(stderr, "[covers] swept %d platform(s) the server no longer has\n",
+                     gone);
+}
+
+void evict(int64_t budgetBytes) {
+    std::string base;
+    {
+        std::lock_guard<std::mutex> lk(gMutex);
+        if (gServer.empty()) return;
+        base = dir() + "/" + gServer;
+    }
+    std::vector<std::string> files;
+    std::vector<struct stat> stats;
+    walk(base, &files, &stats);
+    int64_t total = 0;
+    for (const struct stat& st : stats) total += st.st_size;
+    if (total <= budgetBytes) return;
+
+    // LEAST RECENTLY USED, by atime where the filesystem keeps one and mtime
+    // otherwise. relatime gives a usable atime for this purpose: it is updated
+    // when a file is read after being a day stale, which is exactly the
+    // granularity a cover cache wants.
+    std::vector<size_t> order(files.size());
+    for (size_t i = 0; i < order.size(); ++i) order[i] = i;
+    std::sort(order.begin(), order.end(), [&](size_t a, size_t b) {
+        const time_t ta = std::max(stats[a].st_atime, stats[a].st_mtime);
+        const time_t tb = std::max(stats[b].st_atime, stats[b].st_mtime);
+        return ta < tb;
+    });
+    int64_t freed = 0;
+    int n = 0;
+    for (size_t i : order) {
+        if (total - freed <= budgetBytes) break;
+        if (::remove(files[i].c_str()) != 0) continue;
+        freed += stats[i].st_size;
+        ++n;
+    }
+    if (n)
+        std::fprintf(stderr, "[covers] evicted %d file(s), %.1f MB, to stay under %.0f MB\n",
+                     n, freed / 1048576.0, budgetBytes / 1048576.0);
 }
 
 }  // namespace covercache

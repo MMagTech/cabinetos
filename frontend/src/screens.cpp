@@ -591,6 +591,31 @@ void GridScreen::open(std::string title, std::vector<int> cards,
     scroll_.elapsed = scroll_.duration;
 }
 
+void GridScreen::append(const std::vector<int>& more,
+                        const std::vector<design::Card>& all) {
+    if (more.empty()) return;
+    // The letter index is EXTENDED rather than rebuilt, which is the whole
+    // reason appending is safe: `letterFirst_` holds positions into `cards_`,
+    // and every existing one still points at the same card after a push_back.
+    // Rebuilding would be correct too and is not worth the risk of a jump
+    // under somebody's thumb.
+    for (int idx : more) {
+        const size_t at = cards_.size();
+        cards_.push_back(idx);
+        if (idx < 0 || idx >= static_cast<int>(all.size())) continue;
+        const std::string& n = all[static_cast<size_t>(idx)].title;
+        char c = n.empty() ? '#' : static_cast<char>(std::toupper(
+            static_cast<unsigned char>(n[0])));
+        if (c < 'A' || c > 'Z') c = '#';
+        if (letters_.empty() || letters_.back() != c) {
+            letters_.push_back(c);
+            letterFirst_.push_back(static_cast<int>(at));
+        }
+    }
+    // Focus and scroll are deliberately untouched. Somebody is looking at row
+    // three; growing the list below them must not move them.
+}
+
 int GridScreen::columns() const {
     const float usable = ui::kCanvasWidth - design::kLibraryInset * 2.0f;
     const int n = static_cast<int>((usable + design::kGridColumnSpacing) /
@@ -817,9 +842,16 @@ void GridScreen::drawGlass(Ctx& c) {
     if (!c.cards || cards_.empty()) return;
     float x = design::kLibraryInset +
               c.text.measure(title_, ui::TextStyle::ScreenTitle, c.sc) + 28.0f;
-    char count[48];
-    std::snprintf(count, sizeof count, "%zu game%s", cards_.size(),
-                  cards_.size() == 1 ? "" : "s");
+    char count[64];
+    // A COUNT THAT IS STILL CLIMBING SAYS SO. A big platform arrives a page at
+    // a time, and a number that silently ticks upward while somebody reads it
+    // is worse than one that admits it is not finished.
+    if (loadingMore_)
+        std::snprintf(count, sizeof count, "%zu game%s\xE2\x80\xA6", cards_.size(),
+                      cards_.size() == 1 ? "" : "s");
+    else
+        std::snprintf(count, sizeof count, "%zu game%s", cards_.size(),
+                      cards_.size() == 1 ? "" : "s");
     c.text.draw(c.r, count, x, baseline, ui::TextStyle::Callout,
                 ui::Color::white(0.45f), c.sc);
     x += c.text.measure(count, ui::TextStyle::Callout, c.sc) + 24.0f;
