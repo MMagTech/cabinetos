@@ -11826,16 +11826,62 @@ commit's own arithmetic that a grid cover is 520 real pixels from a 216-pixel
 source. **Look at it on the panel before changing anything.** Not part of this
 question; noticed while answering it.
 
-#### THE CHEAPEST THING ON THIS LIST IS NOT ON THE LIST
+#### RUN 2026-09-22: THERE IS NO FIELD SELECTOR, AND THE 62 KB FIGURE ABOVE WAS WRONG
 
-**62 KB for one rom.** That is why learning thirty-six cover paths costs 1.55 s
-and one to two megabytes, why the catalogue is 15.76 MB, and why searching for
-"mario" pulls 441 KB.
+**The check was run against the live server. `/api/roms` has no field
+selector** — RomM is FastAPI, so its `/openapi.json` was read rather than
+parameter names being guessed, and there is no `fields`, `only` or `select`.
 
-**DOES `/api/roms` ACCEPT A FIELD SELECTOR?** If it does, boot, the cover fill,
-every grid and every search get cheaper at once, on every connection, with no
-cache, no validation and no new state to maintain. **One request with a control
-decides it, and it may make half of this question unnecessary.** Do it first.
+**AND THE "62 KB FOR ONE ROM" THAT MOTIVATED THE CHECK WAS A MEASUREMENT
+ERROR.** That was an UNFILTERED `?limit=1`, and only 5.9 KB of it was the rom:
+
+```
+limit=1, unfiltered        46.3 KB total
+    filter_values             35.6 KB      every genre, company and tag in the library
+    rom_id_index               8.7 KB      all 1,650 rom ids
+    char_index                 0.3 KB
+    items                      5.9 KB      <- the only part this client reads
+```
+
+**The real per-row cost is about 10 KB**, which the 500-row and whole-catalogue
+measurements already said and which nothing can reduce.
+
+**THREE FLAGS TURN THE EXTRAS OFF and they are worth having, but they are not a
+breakthrough and an interim draft of this entry nearly called them one.**
+`with_filter_values`, `with_rom_id_index` and `with_char_index` are all
+defaulted ON. Turning them off is 87% of an unfiltered `limit=1` — but
+`filter_values` is computed over the FILTERED set, so the requests this console
+actually makes are much smaller to begin with. Measured end to end:
+
+| | default | lean |
+|---|---|---|
+| Cover fill, 36 requests | 1.37 s, 0.40 MB | **1.07 s, 0.33 MB** |
+| Boot's four calls | 0.21 s, 0.58 MB | **0.17 s, 0.54 MB** |
+
+About 20%, for three query parameters. Taken. The control was run — a
+misspelled flag changes nothing.
+
+**SO THE PAYLOAD CANNOT BE MADE SMALL, WHICH MEANS THE ONLY LEVER IS FETCHING
+FEWER ROWS.** That is the opposite of what this section hoped for: it makes
+paging a grid and caching covers MORE important, not less.
+
+#### TWO THINGS THE SPEC HAD THAT ARE BETTER THAN WHAT WAS PROPOSED
+
+**`updated_after` — "filter roms updated after this datetime".** Verified with
+controls: unfiltered 1,650, `2026-09-01` gives 246, `2030-01-01` gives 0, and a
+misspelled `updatedafter` gives 1,650. **This is a better validation primitive
+than comparing `rom_count` and `updated_at` per platform** — one request asks
+the whole library what changed since the last sync.
+
+**`rom_id_index` — the complete ordered list of rom ids, 1,650 of them in
+8.7 KB, returned in 0.04 s.** That is the DELETION detector the sweep needs:
+`updated_after` finds what was added or changed and can never find what is
+gone, and this is the cheap whole-library id set to reconcile against.
+
+**So the cache design gets both halves from the server for almost nothing**,
+and neither was in the five tiers. Note the tension to resolve: the lean flags
+turn `rom_id_index` OFF for ordinary requests, so the reconciliation pass asks
+for it deliberately, once, rather than carrying it on every call.
 
 #### AND STOP REASONING ABOUT THE HOSTED CASE
 

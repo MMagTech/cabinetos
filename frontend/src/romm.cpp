@@ -506,6 +506,26 @@ bool Client::fetchCollections(std::vector<Collection>* out, std::string* err) {
     return true;
 }
 
+// THREE THINGS EVERY /api/roms RESPONSE CARRIES THAT THIS CLIENT NEVER READS.
+//
+// RomM returns `filter_values`, `rom_id_index` and `char_index` beside the
+// items, for a web UI that draws filter menus and an A-Z rail. This parses
+// `items` and `total` and has never looked at any of them.
+//
+// MEASURED 2026-09-22 rather than assumed, and the honest figure is smaller
+// than the first one looked. On an UNFILTERED `limit=1` the three are 44.6 KB
+// of a 46.3 KB response — 87% — because `filter_values` enumerates every
+// genre, company and tag in the whole library. But `filter_values` is computed
+// over the FILTERED set, so asking for one platform makes it small, and the
+// requests this console actually makes save about 20%: the cover fill went
+// 1.37 s to 1.07 s and 0.40 MB to 0.33 MB, boot's four calls 0.21 s to 0.17 s.
+//
+// Worth having for three query parameters, and not worth calling a
+// breakthrough. The control was run: a misspelled flag changes nothing, which
+// is the same trap `search_term` had.
+static const char* const kLeanRoms =
+    "&with_filter_values=false&with_rom_id_index=false&with_char_index=false";
+
 std::string Client::encodeQueryValue(const std::string& in) {
     static const char* kHex = "0123456789ABCDEF";
     std::string out;
@@ -530,7 +550,7 @@ bool Client::fetchRoms(const std::string& filter, int limit,
                        std::vector<Game>* out, std::string* err, int* total) {
     out->clear();
     if (total) *total = 0;
-    std::string path = "/api/roms?limit=" + std::to_string(limit);
+    std::string path = "/api/roms?limit=" + std::to_string(limit) + kLeanRoms;
     if (!filter.empty()) path += "&" + filter;
 
     std::string body;
@@ -569,7 +589,7 @@ bool Client::fetchGames(int platformId, std::vector<Game>* out, std::string* err
     int offset = 0;
     for (;;) {
         std::string path = "/api/roms?limit=" + std::to_string(kPage) +
-                           "&offset=" + std::to_string(offset);
+                           "&offset=" + std::to_string(offset) + kLeanRoms;
         if (platformId > 0) path += "&platform_ids=" + std::to_string(platformId);
 
         std::string body;
