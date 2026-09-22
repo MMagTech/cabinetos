@@ -4962,6 +4962,18 @@ int main(int argc, char** argv) {
         barSlot = BarAccount;
         barKey(screens::Nav::Activate);
         if (SDL_strcmp(initialScreen, "add-account") == 0) {
+            // WALKS DOWN TO THE ADD ROW FIRST, and not doing so switched the
+            // console to somebody else. This pressed Activate straight away,
+            // which was right while the panel held only the Add row and wrong
+            // the moment a second account existed — row 0 became a person, so
+            // the capture route signed the console in as them.
+            //
+            // The lesson is the one this project keeps paying for: a route
+            // that walks the way a person walks has to keep walking when the
+            // screen gains a row. Down until the focus stops moving, then
+            // press, which is what a person does.
+            for (int guard = 0; guard < 16; ++guard)
+                accountScreen.key(screens::Nav::Down);
             // Presses the Add row the way a person would. It starts a REAL
             // pairing against the real server — a device code that expires in
             // minutes and creates nothing unless somebody approves it.
@@ -6098,8 +6110,18 @@ int main(int argc, char** argv) {
                     if (stack.size() > 1) stack.pop_back();
                     accountsOpen = true;
                     accountScreen.setNotice("Added. Choose them to switch.");
+                    // SAID IN THE JOURNAL TOO. The outcome of this flow was
+                    // drawn and nowhere else, so nobody helping from a shell
+                    // could tell a completed pairing from a hung one — the
+                    // same fault as the launch refusal that only reached
+                    // stderr, in the other direction.
+                    std::fprintf(stderr, "[accounts] added, now %zu accounts, "
+                                         "still acting as %d\n",
+                                 accounts::all().size(), accounts::activeId());
                 } else {
                     addAccountScreen.setError(err.empty() ? "That did not pair." : err);
+                    std::fprintf(stderr, "[accounts] add failed: %s\n",
+                                 err.empty() ? "no reason given" : err.c_str());
                 }
             } else if (code && !shownPairCode) {
                 shownPairCode = true;
