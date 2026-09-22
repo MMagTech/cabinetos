@@ -11883,6 +11883,49 @@ and neither was in the five tiers. Note the tension to resolve: the lean flags
 turn `rom_id_index` OFF for ordinary requests, so the reconciliation pass asks
 for it deliberately, once, rather than carrying it on every call.
 
+#### BUILT 2026-09-22: THE BYTES ARE ON DISK. THE SWEEP IS NOT.
+
+`frontend/src/covercache.{h,cpp}`, wired in as a wrapper around the
+`ImageCache` loader — which is the whole of the change, because that loader is
+already the one place every cover comes through.
+
+```
+covers/192.168.1.10_6005/22/705/small.2026-08-20 10_45_28.img
+       └ server          └pid └rid └size └ the art's own ?ts=
+```
+
+**Organised rather than hashed, deliberately**: a flat directory of hashes
+answers none of the questions anybody asks of a cache. Proven by counter
+rather than by inference, which is why the counter exists:
+
+```
+COLD   0 from disk, 20 fetched, 20 stored     1.47 s
+WARM  20 from disk,  0 fetched,  0 stored     1.18 s
+```
+
+About 0.3 s and 1.3 MB for Home's twenty covers on a LAN. Modest here and the
+whole difference on a hosted server.
+
+**WHAT IS DELIBERATELY NOT CACHED**: anything that is not rom cover art. An
+avatar comes from `/api/users/<id>/avatar` with no version in its path, so a
+cached one would be a stale face with no way to notice. An unrecognised key is
+passed through uncached rather than filed under a guess.
+
+**AND HERE IS WHAT IS NOT BUILT, STATED PLAINLY:**
+
+- **No sweep.** A deleted platform's art stays on disk. The design is above —
+  reconcile against `rom_id_index` on a SUCCESSFUL platform list, never on a
+  failed one — and it is not written.
+- **No LRU eviction.** The only bound is a refusal to write inside the 5 GB
+  system reserve, checked before every write. That is the backstop that keeps
+  a console updatable, not a cache policy. In practice the cache cannot exceed
+  the library's own art — about 332 MB here, 4 GB at twenty thousand games —
+  so the reserve is doing real work only on a small disk.
+- **No cached platform-to-cover-path map**, so the 1.07 s cover fill still
+  happens on every boot. Only the image BYTES are saved. That map is a small
+  catalogue snapshot and it is the piece that needs a decision against open
+  question 22 before anybody writes it.
+
 #### AND STOP REASONING ABOUT THE HOSTED CASE
 
 Everything above about hosted RomM is inference, which this document's own rule

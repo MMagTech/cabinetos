@@ -55,6 +55,7 @@
 #include "keyboard.h"
 #include "cache.h"
 #include "catalog.h"
+#include "covercache.h"
 #include "dirsave.h"
 #include "filesave.h"
 #include "firstrun.h"
@@ -3788,8 +3789,21 @@ int main(int argc, char** argv) {
         }
         // Covers come from the server, authenticated. The cache never learns
         // what a server is — it was built to take exactly this.
+        //
+        // AND IT ASKS THE DISK FIRST. Nothing about a library survives a boot,
+        // so every start used to re-fetch every cover it drew. The path RomM
+        // hands out carries the art's own timestamp, so a cached file is only
+        // ever returned for the exact version that was asked for — see
+        // covercache.h. Art this console has already seen costs no network at
+        // all on the next boot, which matters most for the hosted server of
+        // open question 29.
+        covercache::setServer(rommAddress);
         images.init(imageBudget, 4, [](const std::string& key) {
-            return liveClient.fetchBytes(key);
+            if (std::vector<uint8_t> have = covercache::read(key); !have.empty())
+                return have;
+            std::vector<uint8_t> got = liveClient.fetchBytes(key);
+            covercache::write(key, got);
+            return got;
         });
     } else {
         // A key is not a path. Everything after '#' is stripped before reading,
@@ -7718,6 +7732,12 @@ int main(int argc, char** argv) {
         core.unload();
     }
     if (audioStream) SDL_DestroyAudioStream(audioStream);
+    {
+        const covercache::Stats cs = covercache::stats();
+        if (cs.fromDisk || cs.fetched)
+            std::fprintf(stderr, "[covers] %d from disk, %d fetched, %d stored\n",
+                         cs.fromDisk, cs.fetched, cs.stored);
+    }
     std::fprintf(stderr, "[image] resident %.1f MB, %d still pending\n",
                  images.bytesResident() / (1024.0 * 1024.0), images.pendingCount());
     // Drained rather than abandoned: anything still queued is a save somebody
