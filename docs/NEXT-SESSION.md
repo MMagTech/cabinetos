@@ -72,80 +72,32 @@ present (RADV STRIX1). **The UI freeze is lifted and what is on that television
 is the real thing.** **1232 playable games**, PlayStation 2 and GameCube
 included, off the image alone.
 
-**IT RUNS THE IMAGE AND NOTHING BY HAND. THESE FIVE FACTS WERE READ OFF THE
-MACHINE ON 2026-09-21, not carried across from an earlier paragraph** — every
-one of them had a stale answer somewhere in this file and the machine settled
-each one:
+**IT RUNS THE IMAGE AND NOTHING BY HAND. READ OFF THE MACHINE AT THE END OF
+2026-09-22**, and this block is OVERWRITTEN each session rather than edited —
+the digest line alone went stale three times in one evening, which is the
+argument for the rule.
 
 | Probe | Answer |
 |---|---|
 | `systemctl is-active cabinetos-session` | `active` |
-| `ps -eo args \| grep [c]abinetos-frontend` | **`/usr/bin/cabinetos-frontend`** — the image's, under `gamescope --backend drm --output-width 3840 --output-height 2160` |
-| `ls /etc/systemd/system/cabinetos-session.service.d/` | **empty. No drop-ins at all.** |
-| `bootc status` | booted **`sha256:7bffc801…`**, with `sha256:71b65e36…` as the rollback |
-| `journalctl -b -o cat \| grep '^\[ps2\]'` | `renderer Vulkan, **upscale 1x, anisotropy 0**` |
+| `ps -eo args \| grep [c]abinetos-frontend` | **`/usr/bin/cabinetos-frontend`**, under `gamescope --backend drm 3840x2160` |
+| drop-in directories, `/etc` and `/run` | **empty. No drop-ins.** |
+| `bootc status` | booted **`sha256:7bffc801…`**, rollback `sha256:71b65e36…` |
+| `journalctl -t cabinetos-session -b \| grep 'is up'` | `gamescope (drm) is up` |
+| accounts | **`1 - MMagTech` (active), `13 - claire`** |
 
-**THE TWO NUMBERS THIS FILE USED TO CARRY ARE NOW ONE.** It said "1147 on the
-image, 1232 as it is running today", and the whole of that difference WAS the
-drop-in: PlayStation 2 and GameCube are in the image now, so 1232 is both. (The
-1232 is the audit's figure, not one recounted today; the audit's own totals need
-a pass — see the note at the end of the platform audit.)
+**THERE ARE TWO ACCOUNTS ON THE REFERENCE CONSOLE NOW.** claire was added on
+the television by scanning the QR, which is the first time that whole path has
+run for real. The test VM has `1 - MMagTech` and `12 - vivian` for the same
+reason. **Switching between them on the A9 has NOT been done with a pad** —
+see the queue.
 
-**`sha256:78e43b5a…` IS NOT ON THAT MACHINE AND HAS NOT BEEN FOR SEVERAL
-DEPLOYMENTS.** It was #30 and this file quoted it as the booted digest until
-today. If a digest here disagrees with `bootc status`, `bootc status` is right.
+**IF A DIGEST HERE DISAGREES WITH `bootc status`, `bootc status` IS RIGHT.**
 
-**UPGRADED TWICE ON 2026-09-21, most recently at 00:27Z to the image carrying
-account switching — so the chip, the panel and Add user are on the television
-for the first time, and none of it has been touched by a person with a pad.
-This digest has now gone stale THREE TIMES in one evening, which is the whole
-argument for overwriting the state block every session rather than editing it.** The console had been four
-commits behind — it was missing the second-game black fix (item 3b) and the
-pause menu's notices — so **item 3b's fix and the pause-menu work are on the
-television for the first time as of this upgrade, and neither has been looked
-at by a person on that panel.** The boot was clean: `gamescope (drm) is up`, no
-drop-ins, and the RomM retry did its job out loud —
-
-```
-[romm] nothing answered at 192.168.1.10:6005 over http or https — waiting up to 90s for it
-[romm] the server answered
-```
-
-— which is item 4's fix working on a real boot race rather than in a test.
-
-**A DIGEST IN THIS FILE GOES STALE THE MOMENT SOMEBODY UPGRADES**, and this one
-went stale within an hour of being written down. That is the argument for the
-state block being overwritten every session rather than appended to.
-
-**THE SESSION HAD BEEN DEAD FOR TEN HOURS AND NOTHING SAID SO.** It was found
-`inactive` at the start of a session — stopped at 21:31 the night before and
-never restarted, so the television had been showing nothing at all. Neither the
-image nor a hand-built binary was running. **`systemctl is-active
-cabinetos-session` is the first thing to check, before `ps`**, because a dead
-session and a session running the wrong thing look identical to every other
-probe on this page.
-
-**IF SOMEBODY HAS PUT A DROP-IN BACK**, that is what
-`/etc/systemd/system/cabinetos-session.service.d/20-heavy-systems.conf` was: it
-pointed the session at `/var/home/cabinet/cabinetos-frontend-dev` and
-`~/cores-dev`, which is how PlayStation 2 and GameCube reached the television
-before they were in the image. There is no reason to want one now. Removing it:
-
-```
-sudo rm /etc/systemd/system/cabinetos-session.service.d/20-heavy-systems.conf
-sudo systemctl daemon-reload && sudo systemctl restart cabinetos-session
-```
-
-**`Environment=` must be QUOTED** or systemd splits the value on whitespace and
-silently drops every argument after the path — which looks exactly like a
-console that ignored you.
-
-**THE HAND-BUILT BINARY AND ITS CORE DIRECTORY ARE STILL ON DISK** —
-`~/cabinetos-frontend-dev`, `~/cores-dev`, `~/assets-dev` — and nothing points
-at them. They are for running something by hand; if you build a new frontend,
-overwrite the existing one rather than adding a second. **A hand-run leaves
-`[ps2]` lines in the journal from `/var/home/cabinet/cores-dev/`, which is how
-to tell one apart from the session** — the session's say `/usr/lib/cabinetos/`.
+**A THIRTY-SECOND LOOP EXISTS AND IT IS NOT AT THE TOP OF THIS FILE BY
+ACCIDENT** — `tools/ui-loop.sh`, documented in the lessons section. An evening
+was spent showing MMagTech software-rendered screenshots from the VM before
+anybody found it. **Use it before building an image to look at something.**
 
 **ALWAYS CHECK WHICH COMPOSITOR RUNG IT LANDED ON BEFORE JUDGING ANYTHING.**
 
@@ -386,6 +338,39 @@ states, and leave — with the save syncing on the way out.
 ## Pick up with these, in this order
 
 ### WHAT TO DO NEXT
+
+#### FIRST, AND IT IS FIVE MINUTES: CHECK WHETHER RomM CAN SEARCH
+
+Open question 28 — the boot is proportional to the library and nobody decided
+that. **Everything Home needs is four cheap calls; the catalogue walk exists
+for Search alone.** `fetchGames` already builds `/api/roms?limit=…&offset=…`,
+so **one request tells you whether that endpoint takes a search term.** If it
+does, boot stops being O(library size) and most of the startup screen's reason
+to exist goes with it. Do this before building anything on top of either.
+
+#### SECOND: THE ACCOUNT BRANCH IS ELEVEN COMMITS AND UNPUSHED
+
+`account-fixes`. Everything below was found by MMagTech on the television and
+none of it would have come out of a headless test: a console that said it had
+added somebody when it had not, focus lit in two places at once, the Add
+screen's whole presentation, a button label naming the button that does the
+opposite, the switcher at twice the scale of its own chip, the game backdrop
+bleeding onto a text screen, the startup screen drawing a quarter-size frame
+in the corner of every 4K boot, and the new startup screen itself.
+
+**It needs a pull request and about sixteen minutes.** Nothing depends on it.
+
+#### THEN, WITH A PAD, ON THE TELEVISION
+
+Three things are on that machine now and nobody has pressed them:
+
+| | |
+|---|---|
+| **Switch between MMagTech and claire** | Both accounts are on the A9. The switch has run on the VM in both directions; it has never been done with a pad on the panel. This is the last untested thing in the account feature. |
+| **Save and load state** | The pause-menu notices have been on the console since 2026-09-21 and have never been used. The handover's own top UI item. |
+| **The black-screen fix** | Play a game, leave, play another of the same pixel size. Fixed in code, unconfirmed on this image. |
+
+#### AND THEN THE SETTINGS SCREEN
 
 **THE UI PASS HAPPENED on 2026-09-21 and this entry is what it left.** It was
 asked for as *"i want the next session to be ui focused so we can tweak it"*,
