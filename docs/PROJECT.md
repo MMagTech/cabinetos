@@ -11502,3 +11502,180 @@ enough to look like a hang. **If boot stops loading the library, most of that
 screen's reason to exist goes with it** — which is worth knowing before anybody
 invests further in it. The server-wait countdown stays useful either way: a
 router coming back after a power cut is not something this can make faster.
+
+#### RAISED 2026-09-22: WHAT THIS DOES TO OFFLINE, WHEN OFFLINE IS EVENTUALLY BUILT
+
+**MMagTech, on reading the answer above: "how does this affect offline mode when
+we eventually implement it?" It costs offline nothing, and the reason is worth
+writing down because the code currently claims the opposite.**
+
+**THE IN-MEMORY CATALOGUE DOES NOT SURVIVE GOING OFFLINE TODAY.** The whole of
+what a console remembers between boots is the three files at the top of this
+question. The catalogue is in memory only because `loadLibrary` succeeded at
+boot. **So an offline boot already has zero games in memory and today's search
+filters an empty vector** — it has never worked offline, and nobody noticed
+because the startup screen sits on the server-wait countdown and Search is
+never reached.
+
+**`frontend/src/screens.h` says otherwise and is wrong on this point.** Its
+comment argues for filtering memory because a server search "would be the one
+screen in the product that stops working offline." **That is the one part of
+that comment that does not survive contact with the facts.** The debounce half
+of it stands: docked keyboard, live results, one request per keystroke, so
+moving to the server needs a debounce and in-flight cancellation that the
+substring filter never did. **The comment is a recorded decision and gets
+rewritten in the change that moves search, not before.**
+
+#### THE ONE CASE THAT REALLY CHANGES, AND IT IS A REGRESSION WORTH TAKING
+
+Booted online, network dies mid-session, then somebody searches. Today they
+filter a stale catalogue; with server search they get nothing.
+
+**Take it.** Offline the only launchable games are kept ones, so today's
+behaviour offers 1,600 results of which perhaps six can be opened. That is the
+failure `offlinePlatforms()` already forbids one scale down: a kept game that
+cannot start is hidden, because *"listing them would set up a tap that fails
+regardless of what is actually stored."* A whole catalogue offline is the same
+trap at 1,600x.
+
+#### SO OFFLINE SEARCH IS SEARCH OVER THE KEPT LIST — AND WOULD BE EITHER WAY
+
+| | |
+|---|---|
+| **One source, one signal** | Cabinet's `NetworkMonitor` folds real disconnection and a deliberate Offline Mode toggle into a single `isOffline`. Search asks that, like every other screen: online `?search_term=`, offline the substring match already written in `SearchScreen::setQuery`, pointed at the kept list instead of `all`. Same list Home and Library draw from, so the three can never draw a different picture. |
+| **Two failures, not one** | *Nothing matched* and *could not ask* must not read the same. Server search is the first place in this UI where both states exist, and collapsing them is the truncated-explanation trap. |
+| **The keep has four parts, and this console does none of them** | A keep must pull the ROM, the whole `Rom` record, the cover, **and the platform's firmware** — Cabinet pulls all four. Nothing about playability is stored in the record; that is asked live. |
+| **Counts split cleanly** | Online, `total` is in every response. Offline, the count is how many are kept, never the server's number, *"which would mean nothing without a connection to trust it."* |
+
+**AND IT DOES NOT TOUCH OPEN QUESTION 22.** Nothing here caches a catalogue.
+Offline search reads the kept records, which exist because somebody chose to
+keep a game — the same exception Cabinet already carved out for Home.
+
+#### FIRMWARE IS THE THING THAT IS NOT ON THE MACHINE, AND IT IS NOT THE CORE
+
+**MMagTech, pushing back on a draft of this: "how is a core absent, they're all
+baked into the OS?" Correct, and the draft was wrong. Checked against the
+reference A9 2026-09-22:**
+
+| | Where it lives | Absent when |
+|---|---|---|
+| **Core** | `/usr/lib/cabinetos/cores` — **the image** | never on a healthy console. All 23 present: 22 libretro plus PCSX2 as `cabinetos-ps2.so` |
+| **ROM** | the data drive, if kept | not kept |
+| **Firmware** | `/var/lib/cabinetos/bios` — **the data drive** | **this console has never launched that platform** |
+
+`LaunchJob::Stage::Firmware` runs before the download stage and fills `bios/`
+from `fetchFirmware(platformId)` and `/api/firmware/<id>`, skipping what is
+already there. **So it is a per-platform, once-ever fetch, and it needs the
+server.** The A9 holds PS2, GBA and Sega CD firmware because those platforms
+have been launched on it. A console that has never started a GBA game has no
+`gba_bios.bin` and no way to get one offline.
+
+**WHICH IS THE REAL OFFLINE FAILURE.** Keep a GBA game on a console that has
+never run one, go offline, tap it: ROM on the disk, core in the image, **BIOS
+on the server.** It does not start. PSP is the one exception — its system files
+are not a console's firmware and ship with the emulator at
+`/usr/share/cabinetos/system/`.
+
+**Cabinet solved this and the answer is already quoted in this document**, in
+*Prior art*: keeping a game pulls its ROM **and its platform's firmware**. That
+clause is the whole fix and it was read past twice.
+
+**THE STALE-COMMENT LESSON, since it cost most of this exchange.**
+`catalog.h`'s `NotInstalled` comment claimed GameCube and PS2 had no core built
+and that PPSSPP was not built yet. Both were false — `dolphin_libretro.so` is a
+libretro core and ships, and PSP plays. An offline argument was built on top of
+them and had to be withdrawn. **The comment was believed because it reads like
+a measurement. It was not one.** Both comments are corrected as of this entry.
+
+**THE DEFINITION THIS SECTION LEANS ON IS OPEN QUESTION 29.** Everything above
+says "offline" as though it were one fact. It is three, and which of them are
+independent depends on where that console's RomM is. Read 29 before building
+any of this.
+
+### 29. Offline is not one fact, and the console has three networks to be off
+**Raised by MMagTech 2026-09-22, in two pieces, while question 28's offline
+answer was being written. First: "when the update console option is implemented
+in the UI that would need a true internet connection separate of the romm server
+being able to be reached." Then: "romm might not always be on just the lan, its
+just the most likely setup to occur for a lot of users." Both are right and the
+second changes the shape of the first. NOT DECIDED — this records the facts and
+the predicate that already exists.**
+
+#### THREE FACTS, AND NONE IMPLIES THE NEXT
+
+| Fact | Where it lives | How the console learns it | What needs it |
+|---|---|---|---|
+| **Link up** | this machine | `net::status()` — nmcli, three or four round trips, costly | anything at all |
+| **RomM reachable** | wherever RomM is | **free** — every API call already answers it | library, search, firmware, saves, accounts |
+| **Registry reachable** | the internet, `ghcr.io` | nothing asks today | Phase 7 updates |
+
+**THE MIDDLE ROW IS NOT "THE LAN", AND AN EARLIER DRAFT OF THIS SAID IT WAS.**
+That was the error the second half of the question corrected.
+
+#### THE PREDICATE ALREADY EXISTS AND COSTS NOTHING
+
+`romm::looksLocal` classifies the configured address — RFC1918, `127.`,
+`.local`, `.lan`, a bare hostname are local; everything else is remote. It
+exists to pick a scheme order, http first for a self-hosted box and **https
+first for a remote one**, with an explicit scheme honoured as *"an instruction,
+not a hint"*. **So the transport layer has supported a hosted RomM all along,
+and the console can tell which kind it has from the address alone, with no
+network call.** Whatever answers "am I offline" should ask it.
+
+#### WHICH IS WHY THE THREE FACTS COLLAPSE DIFFERENTLY PER USER
+
+| Setup | Relationship | A dead uplink means |
+|---|---|---|
+| **RomM on the LAN** | all three independent | plays everything, cannot update |
+| **RomM hosted** | RomM reachable implies the internet is up | **nothing works, first run included** |
+
+#### AND THAT MAKES ONE OF `net.h`'S PREMISES CONDITIONAL
+
+`net::Status::online` is documented as *"deliberately not 'the internet is
+reachable'"*, justified by *"RomM is on the LAN; a console behind a dead uplink
+can still be set up."*
+
+**True for the first row and false for the second, and the gate never asks
+which it is.** A person with a hosted RomM and a dead uplink passes the network
+step, reaches the server step, and is told *"nothing answered at
+romm.example.com over http or https"* — which is true, unhelpful, and names the
+wrong cause. Not a crash. A bad explanation, which this document treats as a
+defect, and `looksLocal` is the whole fix.
+
+**THE EXCEPTION THAT IS NOT AN OFFLINE SIGNAL.** `managerMissing` means
+NetworkManager is not running, and *"every other field is meaningless when this
+is set."* The machine's networking may be perfectly good. It is a fourth
+explanation, never a fourth state.
+
+#### THE SAME RULE, FOR THE THIRD TIME
+
+*"No update available"* and *"could not check"* must not read the same, exactly
+as *"nothing matched"* and *"could not ask"* must not in question 28's search,
+and exactly as the startup screen's three failures must not. **It keeps
+recurring because it is one mistake wearing different clothes**, and the update
+screen has a fourth explanation that is not a network at all: a disk full of
+games is a console that cannot update itself.
+
+#### THE COUPLING NOBODY HAS PRICED
+
+Offline mode needs kept games. Keeping is what consumes the system reserve. The
+reserve is what leaves room for an image. **So the offline feature and the
+update feature contend for the same disk**, and the rule for that is already
+decided — the reserve is checked when KEEPING a game, never against the cache.
+Building offline without honouring it produces a console that plays everything
+with no network and can never be updated again.
+
+#### SMALL, AND NOT WORTH A DECISION
+
+`looksLocal` does not cover CGNAT, `100.64.0.0/10`, which is what Tailscale
+hands out. A tailnet RomM is probed https before http and connects on the second
+try. One wasted round trip, no failure. Worth a line in that function.
+
+#### WHAT THIS MEANS FOR CABINET'S ANSWER
+
+Cabinet folds real disconnection and a deliberate Offline Mode toggle into a
+single `isOffline` that every screen asks. **That is right for an app and
+insufficient for an operating system that updates itself**, because one bool
+cannot express "RomM is down and the registry is fine" — the case in which the
+update screen is the only thing on the console that works, and the case a single
+flag would grey out.
