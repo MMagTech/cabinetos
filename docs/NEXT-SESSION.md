@@ -1493,13 +1493,24 @@ the repository alone.
   documentation-only so it can never skip a change under `cores/`.
   **Do not narrow them to `branches: [main]`**: that is the 2026-09-16 hole
   where a stack of branches slipped past every check.
-- **THE IMAGE BUILD IS ABOUT SIX MINUTES, not the twenty-three this line used
-  to claim.** Measured 2026-09-22 on two consecutive runs: 27 jobs, cores at
-  20–34 seconds each because they hit a cache, and `Build and push image` at
-  209 seconds. The old number was written when the cores built from scratch and
-  it has been quoted at MMagTech as a reason to wait. **Re-measure before
-  quoting a build time; do not carry this one forward either.** What follows is
-  still the honest reason it is not thirteen: it That is the honest price of the image containing what
+- **THERE ARE TWO IMAGE BUILD TIMES AND THEY ARE NOT CLOSE. Measured
+  2026-09-22, both on the same change:**
+
+  | | |
+  |---|---|
+  | **A pull request** — builds the image and stops | **6m00s** |
+  | **A merge to `main`** — builds, signs with cosign, pushes 5 GB to ghcr | **16m05s** |
+
+  **The one that matters when somebody is waiting to test is the second**,
+  because a pull request deliberately does not push and produces nothing
+  installable. This line has now been wrong twice in one night: it said
+  twenty-three minutes, which was stale from when the cores built from scratch
+  rather than hitting a cache; and it was then corrected to "about six", which
+  is the convenient half. **Measure the case somebody is actually waiting on.**
+  That is the same mistake as the uncapped PlayStation 2 readback, in a smaller
+  costume, and this file now records it twice on one day.
+
+  The honest reason it is not thirteen minutes: it That is the honest price of the image containing what
   it claims to, and it buys an image build that proves all twenty-one pins. If
   it becomes a problem, cache `cores/build` on the hash of `cores/build-core.sh`
   — but keep the revision assertion running on a cache hit, or the check that
