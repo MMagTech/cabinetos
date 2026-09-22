@@ -7163,15 +7163,31 @@ int main(int argc, char** argv) {
                     // Treatment 2, the text-control one, the same as Resume: a
                     // tinted pill rather than a scale, because a destination
                     // growing would shove its neighbours along.
-                    renderer.draw(ui::Rect{bx - 14.0f, barTop + 8.0f,
-                                           w + 28.0f, barHeight - 16.0f,
-                                           (barHeight - 16.0f) * 0.5f,
+                    //
+                    // **kBarPillPadX AND kBarItemGap MOVE TOGETHER.** MMagTech,
+                    // 2026-09-22: *"can it have a bit more padding so the
+                    // letters aren't right to its edge."* They were — 14pt,
+                    // which at Callout is about half a character.
+                    //
+                    // Widening the pill alone would have closed the gap
+                    // between neighbours to nothing: the items are spaced
+                    // `w + kBarItemGap`, so the space BETWEEN two pills is
+                    // `kBarItemGap - 2 * kBarPillPadX`. At 14 and 44 that was
+                    // 16 points; at 22 and 44 it would have been zero and the
+                    // pills would have met. The gap is what keeps them reading
+                    // as separate destinations rather than one segmented
+                    // control, so the spacing goes up with the padding.
+                    constexpr float kBarPillPadX = 22.0f;
+                    constexpr float kBarPillInsetY = 6.0f;
+                    const float ph = barHeight - kBarPillInsetY * 2.0f;
+                    renderer.draw(ui::Rect{bx - kBarPillPadX, barTop + kBarPillInsetY,
+                                           w + kBarPillPadX * 2.0f, ph, ph * 0.5f,
                                            ui::Color::white(on ? kFocusedTint
                                                                : kSelectedTint)});
                 }
                 text.draw(renderer, kBarLabels[i], bx, barBaseline, ui::TextStyle::Callout,
                           ui::Color::white(on || sel ? 1.0f : 0.65f), sc);
-                bx += w + 44.0f;
+                bx += w + 60.0f;
             }
 
             // A DOWNLOAD IN FLIGHT, IN THE CORNER. For the person who started
