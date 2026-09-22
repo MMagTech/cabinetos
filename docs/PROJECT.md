@@ -5831,10 +5831,23 @@ press, `display awake: gamescope took it`. The test flags stay:
   `wakeup=disabled`; the Bluetooth radio (MediaTek 13d3:3604, on `usb1`, PCI
   `c6:00.4`, whose own wakeup is enabled) advertises remote wakeup in its
   descriptor (`bmAttributes e0`) but has **no `power/wakeup` file at all**.
-- **CONTROLLER WAKE IS STILL UNANSWERED.** One run with `usb1` wake enabled was
-  woken by the RTC alarm at exactly 121 s, but it was not clear to MMagTech
-  when to press the pad, so it proves nothing either way. **Rerun it with the
-  steps given in full before the machine sleeps.**
+- **THE 8BITDO OVER BLUETOOTH CANNOT WAKE THE A9 — tested 2026-09-22.** With
+  `usb1` wake enabled, s2idle, MMagTech pressing Home while the screen was
+  dark: the pad dropped its link as the machine slept, came back on scanning,
+  never connected, and the RTC alarm woke the machine at exactly 121 s (120 s
+  in hardware sleep). An earlier run was woken the same way but proved nothing,
+  because the steps had not been given clearly. **Next routes, in order of
+  cost:** the power button as a wake-from-rest key (`HandlePowerKey=suspend`,
+  and check that the wake press does not ALSO shut the machine down); a
+  controller with its own USB receiver, since USB wake is the well-trodden
+  path; and whether MediaTek's `btusb` path can wake at all, which is research
+  before it is a test. Until one works, rest is the screen-off state above.
+- **HOW TO RUN A SLEEP TEST WITH SOMEBODY AT THE TELEVISION.** Give the whole
+  sequence — what goes dark, when to press, what success looks like, how long
+  until the alarm — BEFORE the machine sleeps, and wait for "go". Twice today
+  the steps arrived while the screen was already black. Once asleep, only the
+  alarm or the power button can wake it, and the power button is still mapped
+  to power-off.
 - **Suspend is s2idle only** on this machine (`/sys/power/mem_sleep` offers no
   `deep`). **Whether a Bluetooth pad wakes it has not been tried**, and that
   single test decides whether "Sleep" can be offered at all or whether the
