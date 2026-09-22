@@ -339,14 +339,43 @@ states, and leave — with the save syncing on the way out.
 
 ### WHAT TO DO NEXT
 
-#### FIRST, AND IT IS FIVE MINUTES: CHECK WHETHER RomM CAN SEARCH
+#### FIRST: MAKE THE BOOT FAST — open question 28, AND MMagTech WANTS IT BUILT
 
-Open question 28 — the boot is proportional to the library and nobody decided
-that. **Everything Home needs is four cheap calls; the catalogue walk exists
-for Search alone.** `fetchGames` already builds `/api/roms?limit=…&offset=…`,
-so **one request tells you whether that endpoint takes a search term.** If it
-does, boot stops being O(library size) and most of the startup screen's reason
-to exist goes with it. Do this before building anything on top of either.
+**Asked for by name at the end of 2026-09-22: this is a piece of work for the
+next session, not just a question to think about.** The boot is proportional
+to the library — every start walks every platform and pages through all 1,650
+games before drawing anything — and MMagTech's library is small compared to
+what other people have.
+
+**STEP ONE IS FIVE MINUTES AND IT DECIDES THE REST. Do not skip it.**
+`fetchGames` already builds `/api/roms?limit=…&offset=…`, so **one request
+against the live server tells you whether that endpoint takes a SEARCH term.**
+
+| If the server can search | If it cannot |
+|---|---|
+| This console never needs the whole catalogue in memory. Boot becomes four cheap calls and Search asks the server. | Boot still becomes four cheap calls, and the catalogue loads in the BACKGROUND after Home is up, with Search saying it is not ready yet. |
+
+Either way the shape is the same and **needs no cache**, so it does not touch
+open question 22's "no snapshot of the library" rule:
+
+```
+fetchPlatforms     -> the Library's tiles, romCount ALREADY INCLUDED
+fetchRecent(16)    -> Home's Recent shelf
+fetchFavorites(40) -> Home's Favorites shelf
+fetchCollections   -> the collections row
+                      a platform's games: only when somebody opens it
+```
+
+**The tiles never needed the catalogue.** That is the whole finding — the
+count was already on the platform object, and boot was fetching sixteen
+hundred games to draw fourteen covers.
+
+**AND IT PROBABLY DELETES WORK DONE ON 2026-09-22.** The startup screen counts
+games as they arrive because that load is slow. Make the load fast and most of
+that screen has no reason to exist. **Do not polish it before doing this.**
+The server-wait countdown survives either way.
+
+Open question 28 has the measurements.
 
 #### SECOND: THE ACCOUNT BRANCH IS ELEVEN COMMITS AND UNPUSHED
 
