@@ -11679,3 +11679,170 @@ insufficient for an operating system that updates itself**, because one bool
 cannot express "RomM is down and the registry is fine" — the case in which the
 update screen is the only thing on the console that works, and the case a single
 flag would grey out.
+
+### 30. The console re-does work it already did, every boot
+**Raised by MMagTech 2026-09-22, after reading question 28's answer: "it seems
+to me like maybe a tiered boot… unless I'm missing something it would keep the
+intent of the fast boot." Five tiers were proposed. THREE ARE WORTH BUILDING,
+ONE NEEDS RESHAPING, ONE IS ANSWERED BY SOMETHING BETTER. NOT DECIDED — this
+records the verdicts and the measurements behind them.**
+
+The instinct is the same one that produced question 28: the console does work
+it has already done. 28 removed it from boot. This is about not doing it twice.
+
+#### THE FIVE, AND WHAT EACH IS WORTH
+
+| Proposed | Verdict |
+|---|---|
+| **Home first, then the rest** | **Yes, small.** Recents and favourites are 0.23 s of a 0.44 s boot; drawing Home when they land saves about 90 ms. Cheap, no downside, not exciting. |
+| **Background-fetch every platform** | **RESHAPE — see below.** It restores O(library) work per boot, which is the property 28 existed to remove. |
+| **Covers cached to disk** | **Yes**, and it is one piece of work with validation rather than two. |
+| **Validation for added and removed games** | **The best of the five**, and nearly free. |
+| **A TTL on cached items** | **Answered by something better** — see the sweep. |
+
+#### WHY BACKGROUND-FETCHING EVERY PLATFORM IS NOT FREE
+
+**Measured against the reference server 2026-09-22, and the payload is the
+argument.** RomM's rom JSON is fat:
+
+```
+one rom                     62 KB
+141 roms (Arcade)          969 KB     ~6.9 KB/rom
+40 search results          441 KB    ~11   KB/rom
+whole catalogue (1,650)  15.76 MB     ~9.8 KB/rom
+```
+
+**So prefetching everything is a 15.76 MB download on every boot here, and
+about 190 MB for a twenty-thousand-game library.** On a LAN that is background
+chatter. **Question 29 established that RomM is not always on the LAN** — on a
+hosted server over a domestic uplink that is six seconds for this library and
+over a minute for a large one, every time the console starts.
+
+**IT IS NOT A MEMORY PROBLEM, AND AN EARLIER DRAFT OF THIS SAID IT WAS.**
+Measured: `romm::Game` is 240 bytes, `design::Card` 200, and the string heap
+about 360 — cover paths average 73 characters and dominate it. **About 1 KB
+per game**, so 1.6 MB here and 19 MB at twenty thousand. Decoded covers are
+capped separately and do not grow with the library at all. The objection is
+the requests and the uplink, not the RAM.
+
+#### PREFETCH ON FOCUS INSTEAD
+
+Fetch a platform when its tile **gains focus**, not when it is pressed. A
+person takes 300–800 ms between landing on a tile and pressing it; a fetch is
+130–190 ms on a LAN. The wait disappears and the cost is one request per tile
+somebody actually looks at, rather than thirty-six per boot.
+
+Three things it has to get right, and the first is this file's third encounter
+with the same lesson:
+
+- **Focus needs a debounce**, exactly as search did. Holding the stick crosses
+  six tiles in a second, and a request per tile traversed is worse than no
+  prefetch at all. Fetch when focus SETTLES, 150–250 ms.
+- **A press must join the request already in flight**, never start a second.
+- **Superseded fetches are dropped**, the guard `SearchScreen::setResults`
+  already has.
+
+**AND IT DOES NOT REMOVE THE WAIT, IT MAKES IT RARE.** On a hosted server a
+quick press still lands on a grid that is not ready, so this is a complement to
+the waiting frame and not a substitute for it.
+
+#### THE SWEEP, WHICH IS WHY THERE IS NO TTL
+
+**MMagTech's reason for wanting a TTL was specific and good: "say I deleted a
+platform on RomM, the images wouldn't sit on disk forever."** They would not,
+and it takes no timer.
+
+**A deleted platform stops appearing in `fetchPlatforms`.** Anything cached
+whose owner is not in the server's current list is orphaned and is deleted
+then — on the FIRST boot after the deletion, deterministically. A TTL would
+leave those files for however long the TTL is, which is the opposite of what
+was wanted. The same applies to a deleted game: its platform's `rom_count` or
+`updated_at` moves, the platform re-fetches, the game is absent, its cover is
+swept.
+
+**AND STALENESS IS ALREADY SOLVED BY THE PATH.** RomM's cover paths carry the
+art's own timestamp:
+
+```
+/assets/romm/resources/roms/15/569/cover/small.png?ts=2025-03-11 06:56:03
+```
+
+So if the art changes the path changes, the old file is orphaned by the same
+sweep, and the new one is fetched. **The path is the version.** A TTL could
+only re-download unchanged 1994 box art on a timer.
+
+*(That path also contains a space, which is the exact bug `romm.cpp`'s
+`encodeUrl` was written for. A probe written during this discussion hit it.)*
+
+**TWO TRAPS, AND THEY MATTER MORE THAN THE TTL QUESTION:**
+
+1. **NEVER SWEEP ON A FAILED FETCH.** If the server is unreachable, absence is
+   not deletion. A sweep on an offline boot would wipe the whole cache — and
+   offline is when cached art is worth the most. Sweep only on a SUCCESSFUL
+   platform list.
+2. **Key the cache by server.** Point the console at a different RomM and
+   everything looks orphaned at once.
+
+#### VALIDATION COSTS NOTHING, WHICH IS WHY IT IS THE BEST OF THE FIVE
+
+Platform objects already carry **`rom_count` and `updated_at`**, and boot
+already calls `fetchPlatforms`. So per-platform invalidation rides on a request
+the console makes anyway. Unchanged platform, no fetch.
+
+**CHECK THAT `updated_at` ACTUALLY MOVES WHEN A ROM IS ADDED OR REMOVED**
+before building on it. It may only track platform metadata edits, and
+`rom_count` alone misses an equal add-and-remove. One experiment against the
+live server, with a control, exactly as `search_term` was checked — and the
+same trap applies, that an unrecognised parameter is ignored rather than
+refused.
+
+#### THE SIZE OF IT, AND WHY SMALL COVERS ARE NOT THE SHORTCUT
+
+Measured 2026-09-22: small covers average 58.8 KB, large 147.2 KB.
+
+| | Both sizes cached |
+|---|---|
+| This library, 1,650 | **~332 MB** |
+| Twenty thousand games | **~4 GB** |
+
+**That is DISK, not memory.** And caching only the small ones is NOT available:
+`ee5b507`, 2026-09-21, measured on the panel and moved the console OFF
+thumbnails — *"a shelf cover is 316 real pixels on a 4K panel, a grid cover
+520, and the launch screen's is 680 — a 4.2x upscale of an image that was
+already a reduction."* The originals cost about 1.5x the bytes, not 5x,
+because the small ones are inefficiently encoded PNGs. **Cache both.**
+
+So the bound is a SIZE bound, which is the part of the TTL instinct that was
+right: **LRU under the existing system reserve**, because a disk full of games
+is a console that cannot update itself.
+
+#### A THING THAT COMMIT LEFT HALF DONE, AND IS A LOOK QUESTION
+
+`ee5b507` fixed the launch screen. **Shelves and grids still draw from the
+162x216 thumbnail today** — `drawCover` defaults to `large=false` and exactly
+one caller passes true. Its comment asserts *"a shelf or a grid cover is small
+enough that the thumbnail holds up"*, which sits awkwardly against the same
+commit's own arithmetic that a grid cover is 520 real pixels from a 216-pixel
+source. **Look at it on the panel before changing anything.** Not part of this
+question; noticed while answering it.
+
+#### THE CHEAPEST THING ON THIS LIST IS NOT ON THE LIST
+
+**62 KB for one rom.** That is why learning thirty-six cover paths costs 1.55 s
+and one to two megabytes, why the catalogue is 15.76 MB, and why searching for
+"mario" pulls 441 KB.
+
+**DOES `/api/roms` ACCEPT A FIELD SELECTOR?** If it does, boot, the cover fill,
+every grid and every search get cheaper at once, on every connection, with no
+cache, no validation and no new state to maintain. **One request with a control
+decides it, and it may make half of this question unnecessary.** Do it first.
+
+#### AND STOP REASONING ABOUT THE HOSTED CASE
+
+Everything above about hosted RomM is inference, which this document's own rule
+says not to trust. **Shape the VM's link with `tc netem`** — 120 ms of latency
+and a domestic downstream — and point it at the same server. That turns
+"hosted" into something that can be run rather than argued about, and it would
+settle the debounce value, the waiting frame and whether focus-prefetch is
+enough, together. The VM, not the A9: it is a network measurement and needs no
+panel.
