@@ -358,6 +358,19 @@ between — the new code re-measured at 0.74 median with no change to it at all,
 which is how the drift was caught. **Measure A against B in the same minute or
 do not quote a ratio.** The old code was rebuilt from `522866e` to do it.
 
+**THE REST OF THE FEATURE IS ALSO BUILT, 2026-09-22.** Covers are kept on
+disk; a tile map means a warm boot asks the server nothing about its tiles and
+downloads no artwork; a platform the server no longer lists has its art swept
+the first time the console sees the server without it; and a grid draws its
+first page and fills in behind, so a full MAME set in one platform is no longer
+a ten-second wait. Question 30 has all of it with the measurements.
+
+**WHAT IS LEFT IS STILL THE SAME THING: LOOK AT IT ON THE PANEL.** MMagTech
+checked the grid open, the Library appearing and the search debounce on
+2026-09-22 and all three were fine — but that was BEFORE the cache and the
+paging landed. **A warm boot and a paged grid have never been seen on the
+television**, only in offscreen captures.
+
 **AND BOTH VERSIONS THROW OCCASIONAL LARGE OUTLIERS** — 15.1 s for the old code
 in that very batch, 12.8 s for the new one earlier. It is environmental and it
 is not this change. It has not been explained and it should be, because a
