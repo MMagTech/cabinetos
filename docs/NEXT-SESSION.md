@@ -1374,6 +1374,71 @@ These are ordered. **Do not begin any of them in the VM.**
   dangerous and reaching your own saves is a feature.
 - **Everything about motion, the letterbox glow and the safe area.**
 
+## SEEING A CHANGE ON THE TELEVISION IN THIRTY SECONDS — use this, it exists
+
+**`tools/ui-loop.sh` is the fast loop and I did not find it for most of a
+session.** MMagTech, 2026-09-22: *"i need a way to visualize ui additions and
+changes or test features or bugs on the a9 without waiting 50 minutes."* That
+tool already did it, and an evening of llvmpipe screenshots was spent because
+nobody had written it down anywhere a fresh assistant would look.
+
+```
+tools/ui-loop.sh                              Home, on the television, picture back
+tools/ui-loop.sh --args "--screen accounts"   any screen the frontend can open
+tools/ui-loop.sh --game 305 --menu            a game, with the pause menu over it
+tools/ui-loop.sh --args "--glow strong" --no-build    tune a number, no rebuild
+tools/ui-loop.sh --restore                    put the console back on the image
+```
+
+**About 28 seconds**, on the A9's own Radeon, under real gamescope, at
+3840x2160. The capture is the frontend's own `SIGUSR1` rather than
+`gamescopectl`, which cannot see overlay planes.
+
+**IT BUILDS ON THE CONSOLE NOW, 2026-09-22.** The A9 has 24 cores and 26 GB
+against the VM's 5 and 3, and a FULL clean frontend build there takes **6.5
+seconds** — less than an incremental one on the VM. The binary never crosses a
+machine. `--via-vm` keeps the old route for when somebody is watching
+television.
+
+**THE DROP-IN IS TRANSIENT.** It lives in `/run/systemd/system/`, so a
+forgotten `--restore` is undone by the next reboot rather than leaving the
+reference console on a hand-built binary for ever — which is the trap that was
+cleaned up on 2026-09-21.
+
+### WHAT THE LOOP IS FOR, AND WHAT IT IS NOT
+
+**Is it the frontend? Thirty seconds. Is it the operating system? Build an
+image.** Cores in `/usr/lib/cabinetos/cores`, systemd units, `tmpfiles.d`, the
+session script, base-image changes, first run on a virgin machine and the
+installer only exist in an image. Everything in `frontend/src` does not.
+
+A new core is a file copy: the loop launches with
+`--core-dir /var/home/cabinet/cores-dev`, so building a `.so` and dropping it
+there makes it playable on the television without an image.
+
+### AND THE RULE THAT MAKES THE FAST PATH SAFE
+
+**Do not conclude from something CI could not reproduce.** That is narrower
+than "be careful with hand-built binaries", and the difference matters —
+MMagTech made the point and the record backs it.
+
+**Seven of the lessons below are about judging in an environment that was not
+the real one** — llvmpipe, offscreen, no session, no gamescope — including one
+marked *"AND THIS IS THE SECOND TIME"*. **Not one is about a hand-built
+binary.** The loop removes that whole class, so using it more is the
+correction, not a new risk.
+
+The one case that did burn this project — an unshippable PlayStation 2 core
+sitting in a home directory, which a session concluded meant PS2 was solved —
+happened on the A9, with a GPU, and ran perfectly. What was wrong was that its
+source repository does not exist, so **CI could never build it.** A frontend
+compiled from `frontend/src` is the same source CI compiles; that is the line.
+
+**And nothing in this loop can reach an end user.** Checked 2026-09-22: no
+workflow, no script in `ci/` and nothing in `build_files/` references either
+machine, `scp`, `rsync` or `ssh`. The image is built by GitHub's runners from
+the repository alone.
+
 ## Things that will bite you
 
 ### About the image, which is new territory
@@ -1428,8 +1493,13 @@ These are ordered. **Do not begin any of them in the VM.**
   documentation-only so it can never skip a change under `cores/`.
   **Do not narrow them to `branches: [main]`**: that is the 2026-09-16 hole
   where a stack of branches slipped past every check.
-- **The image build is now about twenty-three minutes**, not thirteen: it
-  builds the cores first. That is the honest price of the image containing what
+- **THE IMAGE BUILD IS ABOUT SIX MINUTES, not the twenty-three this line used
+  to claim.** Measured 2026-09-22 on two consecutive runs: 27 jobs, cores at
+  20–34 seconds each because they hit a cache, and `Build and push image` at
+  209 seconds. The old number was written when the cores built from scratch and
+  it has been quoted at MMagTech as a reason to wait. **Re-measure before
+  quoting a build time; do not carry this one forward either.** What follows is
+  still the honest reason it is not thirteen: it That is the honest price of the image containing what
   it claims to, and it buys an image build that proves all twenty-one pins. If
   it becomes a problem, cache `cores/build` on the hash of `cores/build-core.sh`
   — but keep the revision assertion running on a cache hit, or the check that
