@@ -186,6 +186,21 @@ void LibraryScreen::build(std::vector<Tile> platforms, std::vector<Tile> collect
     collections_ = std::move(collections);
 }
 
+void LibraryScreen::learnedTile(int id, const std::string& detail,
+                                const std::string& cover) {
+    for (auto* v : {&platforms_, &collections_}) {
+        for (Tile& t : *v) {
+            if (t.id != id) continue;
+            if (!detail.empty()) t.detail = detail;
+            // A cover already on the tile is left alone: a collection carries
+            // its own from the server and must not be overwritten by whichever
+            // game happened to sort first inside it.
+            if (t.cover.empty()) t.cover = cover;
+            return;
+        }
+    }
+}
+
 void LibraryScreen::enter() {
     // ARRIVING IS ANIMATED EVERY TIME, and it is outside the guard below on
     // purpose: coming back from a platform's grid is an arrival too, and a
@@ -862,26 +877,51 @@ void SearchScreen::open() {
     scroll_.elapsed = scroll_.duration;
 }
 
-void SearchScreen::setQuery(const std::string& q, const std::vector<design::Card>& all) {
+void SearchScreen::setQuery(const std::string& q) {
     if (q == query_) return;
     query_ = q;
-    results_.clear();
     slot_ = 0;
     scroll_.retarget(0.0f, design::kFocusDuration);
-    if (query_.empty()) return;
-
-    // Case-insensitive substring, and nothing cleverer on purpose. Fuzzy
-    // matching on a controller sounds helpful and is not: a person types three
-    // letters at a time here, and a matcher that finds "Sonic Adventure" for
-    // "sad" makes the three letters mean something they did not intend.
-    std::string needle = query_;
-    for (char& c : needle) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    for (size_t i = 0; i < all.size(); ++i) {
-        std::string hay = all[i].title;
-        for (char& c : hay) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-        if (hay.find(needle) != std::string::npos)
-            results_.push_back(static_cast<int>(i));
+    if (query_.empty()) {
+        // Back to nothing typed, which is a different screen from "nothing
+        // matched" and has to drop the previous answer with it — results left
+        // standing under an empty box are the last query's, silently.
+        results_.clear();
+        resultsFor_.clear();
+        total_ = 0;
+        state_ = State::Empty;
+        failure_.clear();
     }
+}
+
+void SearchScreen::setWaiting() {
+    if (query_.empty()) return;
+    state_ = State::Waiting;
+    failure_.clear();
+}
+
+void SearchScreen::setFailed(const std::string& why) {
+    state_ = State::Failed;
+    failure_ = why;
+    results_.clear();
+    resultsFor_.clear();
+    total_ = 0;
+    slot_ = 0;
+}
+
+void SearchScreen::setResults(const std::string& forQuery, std::vector<int> results,
+                              int total) {
+    // AN ANSWER TO A QUESTION NOBODY IS ASKING ANY MORE IS DROPPED. Requests
+    // can land out of order, and showing the results for "mar" under a box
+    // that now reads "mario" is the failure this guard exists for.
+    if (forQuery != query_) return;
+    results_ = std::move(results);
+    resultsFor_ = forQuery;
+    total_ = total;
+    failure_.clear();
+    state_ = results_.empty() ? State::NoMatches : State::Results;
+    slot_ = 0;
+    scroll_.retarget(0.0f, design::kFocusDuration);
 }
 
 void SearchScreen::tick(float dt, Ctx& c) {
@@ -927,14 +967,39 @@ void SearchScreen::draw(Ctx& c) {
 
     // The heading says what happened, because an empty screen that says nothing
     // is indistinguishable from one that is broken.
+    // FIVE STATES AND FIVE SENTENCES. "Nothing matches" used to cover all of
+    // them, which was honest while the answer was a local substring match and
+    // became a lie the moment the answer came from a server: a console that
+    // could not ASK would have said the library held nothing like it.
     char line[96];
-    if (c.text.measure(query_, ui::TextStyle::Title3, c.sc) >= 0 && query_.empty())
-        std::snprintf(line, sizeof line, "Search");
-    else if (results_.empty())
-        std::snprintf(line, sizeof line, "Nothing matches");
-    else
-        std::snprintf(line, sizeof line, "%zu game%s", results_.size(),
-                      results_.size() == 1 ? "" : "s");
+    switch (state_) {
+        case State::Empty:
+            std::snprintf(line, sizeof line, "Search");
+            break;
+        case State::Waiting:
+            std::snprintf(line, sizeof line, "Searching\xE2\x80\xA6");
+            break;
+        case State::NoMatches:
+            std::snprintf(line, sizeof line, "Nothing matches");
+            break;
+        case State::Failed:
+            // Names the server, not the library. The person typed a word and
+            // the console could not go and look.
+            std::snprintf(line, sizeof line, "Could not reach your server");
+            break;
+        case State::Results:
+            // `total` is the server's count of what matched, which is larger
+            // than what came back whenever the first page was not the whole of
+            // it. Saying "20 games" for a search that found four hundred is
+            // the kind of quiet wrongness this project keeps paying for.
+            if (total_ > static_cast<int>(results_.size()))
+                std::snprintf(line, sizeof line, "%zu of %d games",
+                              results_.size(), total_);
+            else
+                std::snprintf(line, sizeof line, "%zu game%s", results_.size(),
+                              results_.size() == 1 ? "" : "s");
+            break;
+    }
     c.text.draw(c.r, line, design::kContentInset,
                 top + c.text.ascent(ui::TextStyle::Title3, c.sc),
                 ui::TextStyle::Title3, ui::Color::white(1.0f), c.sc);

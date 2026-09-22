@@ -224,6 +224,33 @@ public:
     bool fetchGames(int platformId, std::vector<Game>* out, std::string* err,
                     const std::function<void(int)>& onPage = {});
 
+    // ONE page of roms under whatever filter the caller needs, given as a raw
+    // query fragment: "platform_ids=5", "collection_id=2", "search_term=mario".
+    //
+    // WHY A FRAGMENT RATHER THAN A TYPED QUERY. Three callers want three
+    // different filters, each of them a single key the server already
+    // understands. A struct of optional fields would be the same string with
+    // more ceremony, and a fourth filter would have to edit it.
+    //
+    // AN UNKNOWN KEY IS IGNORED, NOT REFUSED, and that is the trap in this
+    // whole area. `?search=mario` returns the ENTIRE library with a 200 and is
+    // indistinguishable from a filter that worked if you count rows — it was
+    // very nearly reported as working. Anything added here is checked against
+    // `total` and against the names, never against the row count. See
+    // docs/PROJECT.md open question 28.
+    //
+    // `total` is what the server says matched, which is not what came back
+    // when `limit` cut it short. Search shows it so a person who typed three
+    // letters knows there are more than the twenty on screen.
+    bool fetchRoms(const std::string& filter, int limit,
+                   std::vector<Game>* out, std::string* err, int* total = nullptr);
+
+    // A value going INTO a query fragment, percent-encoded strictly. A search
+    // term is whatever somebody typed on a television keyboard, so it can hold
+    // a space, an ampersand or an apostrophe — all of which would otherwise
+    // end the value or start another parameter.
+    static std::string encodeQueryValue(const std::string& in);
+
     // The games with play history, most recent first — the same query RomM's
     // own web home screen makes, so CabinetOS agrees with the web UI and with
     // Cabinet about what you were last playing.

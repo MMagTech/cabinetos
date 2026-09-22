@@ -506,6 +506,59 @@ bool Client::fetchCollections(std::vector<Collection>* out, std::string* err) {
     return true;
 }
 
+std::string Client::encodeQueryValue(const std::string& in) {
+    static const char* kHex = "0123456789ABCDEF";
+    std::string out;
+    out.reserve(in.size() + 16);
+    for (unsigned char c : in) {
+        const bool unreserved = (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+                                (c >= '0' && c <= '9') ||
+                                c == '-' || c == '.' || c == '_' || c == '~';
+        if (unreserved) { out += static_cast<char>(c); continue; }
+        // NOT encodeUrl, which deliberately preserves & and = because it is
+        // encoding a PATH. Here those two characters are exactly the danger:
+        // a title with an ampersand in it would end the value and start a
+        // parameter the server may or may not ignore.
+        out += '%';
+        out += kHex[c >> 4];
+        out += kHex[c & 0x0F];
+    }
+    return out;
+}
+
+bool Client::fetchRoms(const std::string& filter, int limit,
+                       std::vector<Game>* out, std::string* err, int* total) {
+    out->clear();
+    if (total) *total = 0;
+    std::string path = "/api/roms?limit=" + std::to_string(limit);
+    if (!filter.empty()) path += "&" + filter;
+
+    std::string body;
+    if (!get(path, &body, err)) return false;
+    json_object* root = json_tokener_parse(body.c_str());
+    if (!root) { if (err) *err = "roms response was not JSON"; return false; }
+
+    json_object* items = nullptr;
+    if (!json_object_object_get_ex(root, "items", &items) ||
+        json_object_get_type(items) != json_type_array) {
+        json_object_put(root);
+        if (err) *err = "roms response had no items array";
+        return false;
+    }
+    json_object* t = nullptr;
+    if (total && json_object_object_get_ex(root, "total", &t))
+        *total = json_object_get_int(t);
+
+    const size_t n = json_object_array_length(items);
+    for (size_t i = 0; i < n; ++i) {
+        Game g;
+        if (parseGame(json_object_array_get_idx(items, i), &g))
+            out->push_back(std::move(g));
+    }
+    json_object_put(root);
+    return true;
+}
+
 bool Client::fetchGames(int platformId, std::vector<Game>* out, std::string* err,
                         const std::function<void(int)>& onPage) {
     out->clear();
