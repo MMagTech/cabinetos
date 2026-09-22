@@ -1879,9 +1879,29 @@ void showWaiting(const Deps& d, const char* title, const char* detail) {
     ui::Renderer& r = *d.renderer;
     ui::TextRenderer& t = *d.text;
 
+    // **PUMP FIRST, OR THIS DRAWS AT THE WRONG SIZE ON EVERY BOOT.**
+    //
+    // MMagTech, 2026-09-22: *"I see the starting up screen appear and it's a
+    // tinier image in the bottom left with the rest of the screen black."*
+    // Measured: the drawable reported 1920x1080 while the panel is 3840x2160,
+    // so this drew a quarter-size frame into a 4K framebuffer — in the bottom
+    // left, because that is where GL's origin is.
+    //
+    // SDL creates the window at its requested size and gamescope resizes it
+    // immediately afterwards; the size arrives as an EVENT. Nothing had pumped
+    // the queue by the time this ran, so `SDL_GetWindowSizeInPixels` answered
+    // with the size before the compositor had its say. The main loop pumps and
+    // gets it right, which is why only this screen was wrong.
+    //
+    // THIS IS NOT A TEST-RIG ARTEFACT. It is every boot on a 4K panel, and
+    // this screen exists precisely because the console used to show nothing
+    // for the seconds — up to ninety — that reaching the server and pulling
+    // sixteen hundred games takes.
+    SDL_PumpEvents();
     int dw = 0, dh = 0;
     SDL_GetWindowSizeInPixels(d.window, &dw, &dh);
     if (dw <= 0 || dh <= 0) return;
+    std::fprintf(stderr, "[waiting] drawable %dx%d\n", dw, dh);
     r.beginFrame(dw, dh);
     const float sc = r.scale();
 
