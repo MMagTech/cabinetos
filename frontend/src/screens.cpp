@@ -1551,13 +1551,25 @@ void AddAccountScreen::draw(Ctx& c) {
     const float qy = kPanelY + (kPanelH - side) * 0.5f;
     if (qr_.valid()) qr_.draw(c.r, qx, qy, side);
 
-    // --- along the bottom, where every setup screen puts its one line --------
-    c.text.draw(c.r, "They are added to this console. Switching to them is separate.",
-                kInset, kFooterY + c.text.ascent(ui::TextStyle::Callout, c.sc),
-                ui::TextStyle::Callout, ui::Color::white(0.45f * a), c.sc);
-    c.text.draw(c.r, "B to go back", kInset,
-                kFooterY + 44.0f + c.text.ascent(ui::TextStyle::Caption1, c.sc),
-                ui::TextStyle::Caption1, ui::Color::white(0.4f * a), c.sc);
+    // --- NOTHING ALONG THE BOTTOM, and both lines that were here are gone ---
+    //
+    // "They are added to this console. Switching to them is separate." was
+    // dropped at MMagTech's request: it answers a question nobody has asked
+    // yet, at the moment they are trying to scan a code, and the panel names
+    // who was added the instant it happens.
+    //
+    // **"B to go back" WAS WORSE — IT WAS WRONG.** MMagTech: *"b doesnt let me
+    // go back like it suggests."* It does not, because SDL maps face buttons
+    // by POSITION: `SDL_GAMEPAD_BUTTON_EAST` is Back everywhere in this
+    // product, and on a Switch Pro Controller the east button is physically
+    // **A**. South is Activate, and south is B. The screen was naming the one
+    // button that does the opposite of what it claimed.
+    //
+    // **SO NOTHING HERE NAMES A PHYSICAL BUTTON.** No other screen in this
+    // product does, and this is why: the letter depends on the pad, and a
+    // console that will meet Switch, Xbox and PlayStation controllers cannot
+    // put one in a string. If a hint is ever wanted here it has to come from
+    // the pad SDL actually reports, not from a constant.
 }
 
 }  // namespace screens
