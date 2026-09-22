@@ -1524,16 +1524,29 @@ void AddAccountScreen::draw(Ctx& c) {
     }
 
     // --- the right column: the thing you act on ------------------------------
-    c.r.drawGlass(ui::Rect{kPanelX, kPanelY, kPanelW, kPanelH, design::kRowRadius,
-                           ui::Color::white(0)},
-                  design::kRegularMaterialBlur, ui::Color::white(0.10f * a));
+    //
+    // **NO GLASS PANEL BEHIND THE CODE, AND THERE WAS ONE.** MMagTech, looking
+    // at it: *"why the giant white box around the qrcode."* Because there were
+    // two boxes — a white card inside a light glass panel — and only one of
+    // them earns its place.
+    //
+    // THE WHITE CARD IS NOT DECORATION. It is the quiet zone: four modules of
+    // real white around the symbol, which `qr.h` records as measured rather
+    // than assumed — the same code drawn flush to its edge does not decode at
+    // all, and with the margin it decodes every time. It cannot go.
+    //
+    // The panel could, and did. It was copied from setup.cpp's shape, where
+    // the same panel also holds rows of networks and controllers at the other
+    // steps; here it only ever holds the QR, so it was a box around a card
+    // holding nothing else. The card is the material on this side now.
 
     if (code_.empty()) return;
 
-    // THE PANEL HOLDS THE QR AND NOTHING ELSE, centred in it. Everything that
-    // is words lives in the column on the left; this side is the shortcut past
-    // typing them.
-    const float side = 470.0f;
+    // Everything that is words lives in the column on the left; this side is
+    // the shortcut past typing them. Bigger than it was, because it no longer
+    // has to leave room around itself inside something else — and a code that
+    // is photographed from a sofa cannot be too large.
+    const float side = 560.0f;
     const float qx = kPanelX + (kPanelW - side) * 0.5f;
     const float qy = kPanelY + (kPanelH - side) * 0.5f;
     if (qr_.valid()) qr_.draw(c.r, qx, qy, side);
