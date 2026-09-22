@@ -1292,10 +1292,21 @@ Result AccountScreen::key(Nav n) {
 
 void AccountScreen::draw(Ctx& c) {
     const float a = appear_.value();
-    const float rowH = c.text.lineHeight(ui::TextStyle::Title3, c.sc) +
-                       design::kRowPadY * 2.0f;
+    // **SIZED AGAINST THE CHIP, because it hangs off it.** MMagTech, 2026-09-22:
+    // *"that box for adding users and switching is way too big especially
+    // compared to the logged user."* It was — the rows were Title3 at 38pt
+    // with 60pt discs, opening from a chip that is Caption1 at 25pt with a
+    // 26pt disc. The thing you pressed was less than half the scale of the
+    // thing it produced, which is what made it read as a box landing on the
+    // screen rather than as the chip opening.
+    //
+    // A row is a list item and the chip is an indicator, so a row is allowed
+    // to be a little larger — but a little. Callout against the chip's
+    // Caption1 is one step on the ramp, and a 36pt disc against its 26.
+    const ui::TextStyle rowStyle = ui::TextStyle::Callout;
+    const float rowH = c.text.lineHeight(rowStyle, c.sc) + 26.0f;
     const float discD = rowH - 22.0f;
-    const float w = 520.0f;
+    const float w = 400.0f;
     // HUNG FROM THE CHIP, not centred. The panel's right edge lines up with the
     // chip's, so it reads as the chip opening rather than as a screen arriving.
     const float x = anchorRight_ - w;
@@ -1304,19 +1315,19 @@ void AccountScreen::draw(Ctx& c) {
     // The panel grows downward as it appears, which is what makes it read as an
     // expansion. Everything inside is clipped to it by being drawn after.
     const int rows = rowCount();
-    const float bodyH = rows * rowH + (rows - 1) * 10.0f + 28.0f * 2.0f +
-                        (notice_.empty() ? 0.0f : 54.0f);
+    const float bodyH = rows * rowH + (rows - 1) * 8.0f + 18.0f * 2.0f +
+                        (notice_.empty() ? 0.0f : 46.0f);
     c.r.drawGlass(ui::Rect{x, top, w, bodyH * a, design::kRowRadius,
                            ui::Color::white(0)},
                   design::kRegularMaterialBlur, ui::Color::white(0.10f * a));
 
-    float y = top + 28.0f;
+    float y = top + 18.0f;
 
     for (int i = 0; i < rows; ++i) {
         const bool on = (i == slot_);
         const float f = on ? focus_.value() : 0.0f;
-        const float rw = w - 24.0f;
-        const float rx = x + 12.0f;
+        const float rw = w - 16.0f;
+        const float rx = x + 8.0f;
         c.r.draw(ui::Rect{rx, y, rw, rowH, design::kRowRadius,
                           ui::Color::white((0.04f + 0.16f * f) * a)});
 
@@ -1324,19 +1335,19 @@ void AccountScreen::draw(Ctx& c) {
             // A PLUS ON A DISC, so it sits in the same column as the faces and
             // reads as one more entry in the same list rather than as a button
             // bolted underneath it.
-            const float dx = rx + 16.0f, dy = y + (rowH - discD) * 0.5f;
+            const float dx = rx + 12.0f, dy = y + (rowH - discD) * 0.5f;
             c.r.draw(ui::Rect{dx, dy, discD, discD, discD * 0.5f,
                               ui::Color::white(0.14f * a)});
-            const float pw = c.text.measure("+", ui::TextStyle::Title3, c.sc);
+            const float pw = c.text.measure("+", rowStyle, c.sc);
             c.text.draw(c.r, "+", dx + (discD - pw) * 0.5f,
-                        dy + (discD - c.text.lineHeight(ui::TextStyle::Title3, c.sc)) * 0.5f +
-                            c.text.ascent(ui::TextStyle::Title3, c.sc),
-                        ui::TextStyle::Title3, ui::Color::white(0.8f * a), c.sc);
-            c.text.draw(c.r, "Add user", dx + discD + 18.0f,
-                        y + (rowH - c.text.lineHeight(ui::TextStyle::Title3, c.sc)) * 0.5f +
-                            c.text.ascent(ui::TextStyle::Title3, c.sc),
-                        ui::TextStyle::Title3, ui::Color::white(0.92f * a), c.sc);
-            y += rowH + 10.0f;
+                        dy + (discD - c.text.lineHeight(rowStyle, c.sc)) * 0.5f +
+                            c.text.ascent(rowStyle, c.sc),
+                        rowStyle, ui::Color::white(0.8f * a), c.sc);
+            c.text.draw(c.r, "Add user", dx + discD + 14.0f,
+                        y + (rowH - c.text.lineHeight(rowStyle, c.sc)) * 0.5f +
+                            c.text.ascent(rowStyle, c.sc),
+                        rowStyle, ui::Color::white(0.92f * a), c.sc);
+            y += rowH + 8.0f;
             continue;
         }
 
@@ -1357,22 +1368,22 @@ void AccountScreen::draw(Ctx& c) {
         } else if (!row.name.empty()) {
             const std::string initial(1, static_cast<char>(std::toupper(
                 static_cast<unsigned char>(row.name[0]))));
-            const float iw = c.text.measure(initial, ui::TextStyle::Title3, c.sc);
+            const float iw = c.text.measure(initial, rowStyle, c.sc);
             c.text.draw(c.r, initial, dx + (discD - iw) * 0.5f,
-                        dy + (discD - c.text.lineHeight(ui::TextStyle::Title3, c.sc)) * 0.5f +
-                            c.text.ascent(ui::TextStyle::Title3, c.sc),
-                        ui::TextStyle::Title3, ui::Color::white(0.85f * a), c.sc);
+                        dy + (discD - c.text.lineHeight(rowStyle, c.sc)) * 0.5f +
+                            c.text.ascent(rowStyle, c.sc),
+                        rowStyle, ui::Color::white(0.85f * a), c.sc);
         }
 
-        c.text.draw(c.r, row.name, dx + discD + 18.0f,
-                    y + (rowH - c.text.lineHeight(ui::TextStyle::Title3, c.sc)) * 0.5f +
-                        c.text.ascent(ui::TextStyle::Title3, c.sc),
-                    ui::TextStyle::Title3, ui::Color::white(0.92f * a), c.sc);
-        y += rowH + 10.0f;
+        c.text.draw(c.r, row.name, dx + discD + 14.0f,
+                    y + (rowH - c.text.lineHeight(rowStyle, c.sc)) * 0.5f +
+                        c.text.ascent(rowStyle, c.sc),
+                    rowStyle, ui::Color::white(0.92f * a), c.sc);
+        y += rowH + 8.0f;
     }
 
     if (!notice_.empty())
-        c.text.draw(c.r, notice_, x + 28.0f,
+        c.text.draw(c.r, notice_, x + 18.0f,
                     y + 8.0f + c.text.ascent(ui::TextStyle::Callout, c.sc),
                     ui::TextStyle::Callout, ui::Color::white(0.85f * a), c.sc);
 }
