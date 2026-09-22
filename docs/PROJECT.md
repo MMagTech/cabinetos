@@ -5842,6 +5842,12 @@ press, `display awake: gamescope took it`. The test flags stay:
   controller with its own USB receiver, since USB wake is the well-trodden
   path; and whether MediaTek's `btusb` path can wake at all, which is research
   before it is a test. Until one works, rest is the screen-off state above.
+- **CONTROLLERS ARE BLUETOOTH OR WIRED. NOT DONGLES — MMagTech, 2026-09-22:**
+  *"i dont want to support controllers with recievers."* So the USB-receiver
+  route above is OUT, and controller wake means Bluetooth wake (research: can
+  MediaTek's and other common radios' drivers wake the machine at all) or a
+  wired pad's button (untested — no wired pad on hand, and it is the easy case
+  on Linux).
 - **HOW TO RUN A SLEEP TEST WITH SOMEBODY AT THE TELEVISION.** Give the whole
   sequence — what goes dark, when to press, what success looks like, how long
   until the alarm — BEFORE the machine sleeps, and wait for "go". Twice today
