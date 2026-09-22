@@ -82,7 +82,7 @@ each one:
 | `systemctl is-active cabinetos-session` | `active` |
 | `ps -eo args \| grep [c]abinetos-frontend` | **`/usr/bin/cabinetos-frontend`** — the image's, under `gamescope --backend drm --output-width 3840 --output-height 2160` |
 | `ls /etc/systemd/system/cabinetos-session.service.d/` | **empty. No drop-ins at all.** |
-| `bootc status` | booted **`sha256:71b65e36…`**, with `sha256:ceafc2bb…` as the rollback |
+| `bootc status` | booted **`sha256:7bffc801…`**, with `sha256:71b65e36…` as the rollback |
 | `journalctl -b -o cat \| grep '^\[ps2\]'` | `renderer Vulkan, **upscale 1x, anisotropy 0**` |
 
 **THE TWO NUMBERS THIS FILE USED TO CARRY ARE NOW ONE.** It said "1147 on the
@@ -95,8 +95,11 @@ a pass — see the note at the end of the platform audit.)
 DEPLOYMENTS.** It was #30 and this file quoted it as the booted digest until
 today. If a digest here disagrees with `bootc status`, `bootc status` is right.
 
-**UPGRADED 2026-09-21 21:15Z, which is why the digest above is newer than the
-one in the PlayStation 2 and GameCube entries below.** The console had been four
+**UPGRADED TWICE ON 2026-09-21, most recently at 00:27Z to the image carrying
+account switching — so the chip, the panel and Add user are on the television
+for the first time, and none of it has been touched by a person with a pad.
+This digest has now gone stale THREE TIMES in one evening, which is the whole
+argument for overwriting the state block every session rather than editing it.** The console had been four
 commits behind — it was missing the second-game black fix (item 3b) and the
 pause menu's notices — so **item 3b's fix and the pause-menu work are on the
 television for the first time as of this upgrade, and neither has been looked
@@ -1374,6 +1377,71 @@ These are ordered. **Do not begin any of them in the VM.**
   dangerous and reaching your own saves is a feature.
 - **Everything about motion, the letterbox glow and the safe area.**
 
+## SEEING A CHANGE ON THE TELEVISION IN THIRTY SECONDS — use this, it exists
+
+**`tools/ui-loop.sh` is the fast loop and I did not find it for most of a
+session.** MMagTech, 2026-09-22: *"i need a way to visualize ui additions and
+changes or test features or bugs on the a9 without waiting 50 minutes."* That
+tool already did it, and an evening of llvmpipe screenshots was spent because
+nobody had written it down anywhere a fresh assistant would look.
+
+```
+tools/ui-loop.sh                              Home, on the television, picture back
+tools/ui-loop.sh --args "--screen accounts"   any screen the frontend can open
+tools/ui-loop.sh --game 305 --menu            a game, with the pause menu over it
+tools/ui-loop.sh --args "--glow strong" --no-build    tune a number, no rebuild
+tools/ui-loop.sh --restore                    put the console back on the image
+```
+
+**About 28 seconds**, on the A9's own Radeon, under real gamescope, at
+3840x2160. The capture is the frontend's own `SIGUSR1` rather than
+`gamescopectl`, which cannot see overlay planes.
+
+**IT BUILDS ON THE CONSOLE NOW, 2026-09-22.** The A9 has 24 cores and 26 GB
+against the VM's 5 and 3, and a FULL clean frontend build there takes **6.5
+seconds** — less than an incremental one on the VM. The binary never crosses a
+machine. `--via-vm` keeps the old route for when somebody is watching
+television.
+
+**THE DROP-IN IS TRANSIENT.** It lives in `/run/systemd/system/`, so a
+forgotten `--restore` is undone by the next reboot rather than leaving the
+reference console on a hand-built binary for ever — which is the trap that was
+cleaned up on 2026-09-21.
+
+### WHAT THE LOOP IS FOR, AND WHAT IT IS NOT
+
+**Is it the frontend? Thirty seconds. Is it the operating system? Build an
+image.** Cores in `/usr/lib/cabinetos/cores`, systemd units, `tmpfiles.d`, the
+session script, base-image changes, first run on a virgin machine and the
+installer only exist in an image. Everything in `frontend/src` does not.
+
+A new core is a file copy: the loop launches with
+`--core-dir /var/home/cabinet/cores-dev`, so building a `.so` and dropping it
+there makes it playable on the television without an image.
+
+### AND THE RULE THAT MAKES THE FAST PATH SAFE
+
+**Do not conclude from something CI could not reproduce.** That is narrower
+than "be careful with hand-built binaries", and the difference matters —
+MMagTech made the point and the record backs it.
+
+**Seven of the lessons below are about judging in an environment that was not
+the real one** — llvmpipe, offscreen, no session, no gamescope — including one
+marked *"AND THIS IS THE SECOND TIME"*. **Not one is about a hand-built
+binary.** The loop removes that whole class, so using it more is the
+correction, not a new risk.
+
+The one case that did burn this project — an unshippable PlayStation 2 core
+sitting in a home directory, which a session concluded meant PS2 was solved —
+happened on the A9, with a GPU, and ran perfectly. What was wrong was that its
+source repository does not exist, so **CI could never build it.** A frontend
+compiled from `frontend/src` is the same source CI compiles; that is the line.
+
+**And nothing in this loop can reach an end user.** Checked 2026-09-22: no
+workflow, no script in `ci/` and nothing in `build_files/` references either
+machine, `scp`, `rsync` or `ssh`. The image is built by GitHub's runners from
+the repository alone.
+
 ## Things that will bite you
 
 ### About the image, which is new territory
@@ -1428,8 +1496,24 @@ These are ordered. **Do not begin any of them in the VM.**
   documentation-only so it can never skip a change under `cores/`.
   **Do not narrow them to `branches: [main]`**: that is the 2026-09-16 hole
   where a stack of branches slipped past every check.
-- **The image build is now about twenty-three minutes**, not thirteen: it
-  builds the cores first. That is the honest price of the image containing what
+- **THERE ARE TWO IMAGE BUILD TIMES AND THEY ARE NOT CLOSE. Measured
+  2026-09-22, both on the same change:**
+
+  | | |
+  |---|---|
+  | **A pull request** — builds the image and stops | **6m00s** |
+  | **A merge to `main`** — builds, signs with cosign, pushes 5 GB to ghcr | **16m05s** |
+
+  **The one that matters when somebody is waiting to test is the second**,
+  because a pull request deliberately does not push and produces nothing
+  installable. This line has now been wrong twice in one night: it said
+  twenty-three minutes, which was stale from when the cores built from scratch
+  rather than hitting a cache; and it was then corrected to "about six", which
+  is the convenient half. **Measure the case somebody is actually waiting on.**
+  That is the same mistake as the uncapped PlayStation 2 readback, in a smaller
+  costume, and this file now records it twice on one day.
+
+  The honest reason it is not thirteen minutes: it That is the honest price of the image containing what
   it claims to, and it buys an image build that proves all twenty-one pins. If
   it becomes a problem, cache `cores/build` on the hash of `cores/build-core.sh`
   — but keep the revision assertion running on a cache hit, or the check that
@@ -2190,6 +2274,38 @@ session, purely because the 2x run compiled shaders. The audit keeps that wrong
 table on purpose.
 
 
+
+### A one-line change ships half a gigabyte — open question 27, NEW
+
+MMagTech, 2026-09-22: *"a lot of these just seem like small updates to an OS,
+not upgrades. Windows and Linux do small updates all the time seamlessly."*
+Three things were tangled in that and only one is a fault.
+
+**The delivery is already incremental** — a real `bootc upgrade` reused 125 of
+128 layers and pulled 546 MB, applied in 25 seconds. **The 16 minutes is
+manufacturing** — build, cosign, push — and it is **not the price of
+iterating**: `tools/ui-loop.sh` puts a change on the television in 30 seconds.
+
+**THE FAULT IS THE LAYERING.** Everything CabinetOS adds is one `RUN`:
+
+```
+frontend   1.4M    changes constantly
+cores      314M    pinned, changes rarely
+system      23M    changes rarely
+```
+
+So 1.4 MB of frontend invalidates all of it and moves 546 MB — **a 390x
+amplification**, and why a one-line UI change costs what adding an emulator
+costs. The fix is layer ordering, not a new mechanism. Not done; it changes how
+the shipping image is assembled and wants its own branch.
+
+**AND THE CONSTRAINT THAT BOUNDS IT, which MMagTech set at the same time:** the
+console is to get **a console's update — one check, one button, one reboot**,
+Settings → System Update. It does not exist yet and this is recorded so nothing
+done for speed makes it impossible. **Splitting layers passes that test**
+(invisible, still one image, still one act). **Splitting artifacts fails it**
+and is ruled out — that is how a console gets version skew and "which
+combination is this machine running".
 
 ### Sleep, screen blanking, and what a console does when nobody is playing
 
