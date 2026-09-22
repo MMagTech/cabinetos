@@ -1602,7 +1602,8 @@ struct Library {
     std::vector<screens::Tile> collectionTiles;
 };
 
-static Library loadLibrary(romm::Client& client) {
+static Library loadLibrary(romm::Client& client,
+                           const std::function<void(int)>& onProgress = {}) {
     Library lib;
     std::vector<Card>& cards = lib.cards;
     std::string err;
@@ -1619,6 +1620,9 @@ static Library loadLibrary(romm::Client& client) {
     // than one boolean: "no core exists", "Cabinet does not ship it", "this
     // console has not built it yet" and "it is built and cannot be driven" lead
     // to different work and to different words on the screen.
+    // Games in hand across every platform so far, so the startup screen's
+    // count climbs once rather than restarting at each platform.
+    int loadedSoFar = 0;
     for (const auto& p : platforms) {
         const catalog::Coverage cov = catalog::coverageFor(p);
         screens::Tile tile;
@@ -1649,7 +1653,10 @@ static Library loadLibrary(romm::Client& client) {
         }
 
         std::vector<romm::Game> games;
-        if (!client.fetchGames(p.id, &games, &err)) {
+        if (!client.fetchGames(p.id, &games, &err,
+                               onProgress ? std::function<void(int)>([&](int n) {
+                                   onProgress(loadedSoFar + n);
+                               }) : std::function<void(int)>{})) {
             // One platform failing is not the library failing. Say so, give the
             // tile the truth rather than a count it does not have, and go on.
             std::fprintf(stderr, "[library] %s: %s\n", p.name.c_str(), err.c_str());
@@ -1658,6 +1665,7 @@ static Library loadLibrary(romm::Client& client) {
             lib.platformTiles.push_back(std::move(tile));
             continue;
         }
+        loadedSoFar += static_cast<int>(games.size());
         for (auto& g : games) {
             Card c;
             c.id = g.id;
@@ -2829,6 +2837,7 @@ int main(int argc, char** argv) {
     bool firstRunProbeMode = false;
     int keepersRomId = 0;
     int focusBarSlot = -1;
+    bool startupShot = false;
     bool accountsProbeMode = false;
     bool accountsTestMode = false;
     bool firstRunRulesMode = false;
@@ -3035,6 +3044,8 @@ int main(int argc, char** argv) {
             setupStep = argv[++i];
         } else if (SDL_strcmp(argv[i], "--no-setup") == 0) {
             noSetup = true;
+        } else if (SDL_strcmp(argv[i], "--startup-screen") == 0) {
+            startupShot = true;
         } else if (SDL_strcmp(argv[i], "--focus-bar") == 0) {
             // A capture of the bar's own focus, which nothing could take until
             // now — line 2716 has referred to this flag since the bar was
@@ -3587,6 +3598,24 @@ int main(int argc, char** argv) {
     waitDeps.renderer = &renderer;
     waitDeps.text = &text;
 
+    // A capture of the startup screen, which otherwise exists only for the few
+    // seconds between the window appearing and the library arriving — and on a
+    // fast server that is too short to photograph by hand. It draws the real
+    // thing through the real path rather than reconstructing it.
+    if (startupShot) {
+        int dw = 0, dh = 0;
+        SDL_GetWindowSizeInPixels(window, &dw, &dh);
+        // A representative line rather than the bare one: what this screen
+        // actually shows during a boot is a count that climbs, and a capture
+        // of it saying nothing would be a picture of a state that lasts a
+        // fraction of a second.
+        setup::showWaiting(waitDeps, "Starting up", "Loading your library — 640 games");
+        renderer.saveFrame(shotPath ? shotPath : "/tmp/cabinetos-startup.bmp", dw, dh);
+        renderer.shutdown();
+        SDL_Quit();
+        return 0;
+    }
+
     if (rommAddress) {
         std::string err;
         // Where the cores are, so the catalog can tell "the manifest has a core
@@ -3634,6 +3663,17 @@ int main(int argc, char** argv) {
                                  "[romm] %s — waiting up to %.0fs for it\n",
                                  err.c_str(), kWaitSeconds);
                 }
+                // A NUMBER THAT CHANGES, every two seconds, for as long as
+                // ninety. This is the longest a person can be looking at the
+                // startup screen and it used to say one unchanging sentence
+                // throughout, which is what a hung console looks like.
+                {
+                    char line[96];
+                    std::snprintf(line, sizeof line,
+                                  "Waiting for your server — %ds",
+                                  static_cast<int>((SDL_GetTicks() - start) / 1000));
+                    setup::showWaiting(waitDeps, "Starting up", line);
+                }
                 SDL_Delay(2000);
             }
             if (said) std::fprintf(stderr, "[romm] the server answered\n");
@@ -3661,8 +3701,16 @@ int main(int argc, char** argv) {
         // The long one: platforms, every game, collections, recents and
         // favourites. Sixteen hundred games take several seconds on the
         // reference machine.
-        setup::showWaiting(waitDeps, "Starting up", "Loading your library…");
-        Library lib = loadLibrary(liveClient);
+        setup::showWaiting(waitDeps, "Starting up", "Loading your library");
+        Library lib = loadLibrary(liveClient, [&](int loaded) {
+            // Redrawn per page, which on a real library is four or five times
+            // across several seconds. Not an animation — the number is the
+            // actual state, and it is the thing that proves the console is
+            // still working rather than a flourish that would run anyway.
+            char line[96];
+            std::snprintf(line, sizeof line, "Loading your library — %d games", loaded);
+            setup::showWaiting(waitDeps, "Starting up", line);
+        });
         cards = std::move(lib.cards);
         heroIndex = lib.heroIndex;
         heroPlatform = lib.heroPlatform;
