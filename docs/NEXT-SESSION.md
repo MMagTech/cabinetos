@@ -12,6 +12,24 @@ Rewrite it at the end of a session. It is meant to be current, not a log.
 
 ---
 
+---
+
+**HOW THIS FILE IS ORGANISED, and the rule that keeps it usable.** It grew past
+2,500 lines by being appended to across sessions, and by the end it carried two
+answers to the same question in several places — a booted digest two deployments
+old, a drop-in that had been deleted, an upscale nobody had chosen. Three kinds
+of thing live here and they age differently:
+
+| | |
+|---|---|
+| **State** — the first four sections | What is running, what is set, what is where. **Overwrite this every session.** It goes stale silently, and a wrong answer in it costs a day. |
+| **Work** — the queue and the detail behind it | What to do next and why. When an item is done, move it to *Solved* rather than leaving it in the queue struck through. |
+| **Lessons** — *Things that will bite you* | Accumulates and is never rewritten. These cost hours each and none is recoverable by reading the code. **Do not summarise one — a summary of a warning is not a warning.** |
+
+**The records of being wrong stay, including the measurements that were taken
+wrongly.** *Solved, and kept for the lesson*, at the back, holds finished work
+with its investigations intact.
+
 ## Before anything else
 
 **Everything is on `main`.** No other branches and no open pull requests.
@@ -51,45 +69,64 @@ as the VM, sudo password `cabinet`. It boots into the frontend on
 **gamescope/drm** — the top compositor rung, which the VM has never reached —
 on its own Radeon 890M at the panel's native **3840x2160**, with Vulkan
 present (RADV STRIX1). **The UI freeze is lifted and what is on that television
-is the real thing.** 1147 playable games on the image alone, **1232 as it is
-running today** — see the next paragraph.
+is the real thing.** **1232 playable games**, PlayStation 2 and GameCube
+included, off the image alone.
 
-**IT RUNS THE IMAGE AND NOTHING BY HAND, AS OF 2026-09-21 — and this reverses
-the paragraph that followed, twice in one day.** PlayStation 2 is IN the image
-now: the emulator, its two libraries and PCSX2's resources all ship, CI asserts
-all four, and the A9 has booted `sha256:ce25da80…` and played Homura on Vulkan
-off `/usr/bin/cabinetos-frontend` with **no drop-ins at all**. There is no
-longer any reason to run a hand-built binary, and no `20-heavy-systems.conf` to
-remove. **The paragraph below is kept only because it explains what the drop-in
-was for and how to tell if somebody has put one back.**
+**IT RUNS THE IMAGE AND NOTHING BY HAND. THESE FIVE FACTS WERE READ OFF THE
+MACHINE ON 2026-09-21, not carried across from an earlier paragraph** — every
+one of them had a stale answer somewhere in this file and the machine settled
+each one:
 
-**~~IT IS RUNNING A HAND-BUILT BINARY, ON PURPOSE, AS OF 2026-09-21.~~** MMagTech's
-call this session, and it reverses the instruction that used to be here. The
-drop-in at
-`/etc/systemd/system/cabinetos-session.service.d/20-heavy-systems.conf` stays,
-because it is what puts PlayStation 2 and GameCube on the television — 1232
-playable games instead of 1147 — and removing it costs 85 games to buy nothing
-while the embed work is in progress. **The confusion it used to cause was a
-documentation problem, and this paragraph is the fix.**
+| Probe | Answer |
+|---|---|
+| `systemctl is-active cabinetos-session` | `active` |
+| `ps -eo args \| grep [c]abinetos-frontend` | **`/usr/bin/cabinetos-frontend`** — the image's, under `gamescope --backend drm --output-width 3840 --output-height 2160` |
+| `ls /etc/systemd/system/cabinetos-session.service.d/` | **empty. No drop-ins at all.** |
+| `bootc status` | booted **`sha256:71b65e36…`**, with `sha256:ceafc2bb…` as the rollback |
+| `journalctl -b -o cat \| grep '^\[ps2\]'` | `renderer Vulkan, **upscale 1x, anisotropy 0**` |
+
+**THE TWO NUMBERS THIS FILE USED TO CARRY ARE NOW ONE.** It said "1147 on the
+image, 1232 as it is running today", and the whole of that difference WAS the
+drop-in: PlayStation 2 and GameCube are in the image now, so 1232 is both. (The
+1232 is the audit's figure, not one recounted today; the audit's own totals need
+a pass — see the note at the end of the platform audit.)
+
+**`sha256:78e43b5a…` IS NOT ON THAT MACHINE AND HAS NOT BEEN FOR SEVERAL
+DEPLOYMENTS.** It was #30 and this file quoted it as the booted digest until
+today. If a digest here disagrees with `bootc status`, `bootc status` is right.
+
+**UPGRADED 2026-09-21 21:15Z, which is why the digest above is newer than the
+one in the PlayStation 2 and GameCube entries below.** The console had been four
+commits behind — it was missing the second-game black fix (item 3b) and the
+pause menu's notices — so **item 3b's fix and the pause-menu work are on the
+television for the first time as of this upgrade, and neither has been looked
+at by a person on that panel.** The boot was clean: `gamescope (drm) is up`, no
+drop-ins, and the RomM retry did its job out loud —
 
 ```
-ps -eo args | grep [c]abinetos-frontend
+[romm] nothing answered at 192.168.1.10:6005 over http or https — waiting up to 90s for it
+[romm] the server answered
 ```
 
-**Verified 2026-09-21 07:22:** `gamescope --backend drm --output-width 3840
---output-height 2160 --ready-fd 3 -- /var/home/cabinet/cabinetos-frontend-dev
---core-dir /var/home/cabinet/cores-dev --core-option
-pcsx2_analog_mode1=enabled`, on `gamescope (drm) is up` at 3840x2160.
+— which is item 4's fix working on a real boot race rather than in a test.
+
+**A DIGEST IN THIS FILE GOES STALE THE MOMENT SOMEBODY UPGRADES**, and this one
+went stale within an hour of being written down. That is the argument for the
+state block being overwritten every session rather than appended to.
 
 **THE SESSION HAD BEEN DEAD FOR TEN HOURS AND NOTHING SAID SO.** It was found
-`inactive` at the start of this session — stopped at 21:31 the night before and
+`inactive` at the start of a session — stopped at 21:31 the night before and
 never restarted, so the television had been showing nothing at all. Neither the
-image nor the hand-built binary was running. **`systemctl is-active
+image nor a hand-built binary was running. **`systemctl is-active
 cabinetos-session` is the first thing to check, before `ps`**, because a dead
 session and a session running the wrong thing look identical to every other
 probe on this page.
 
-Putting the machine back on the image, when that is what you want:
+**IF SOMEBODY HAS PUT A DROP-IN BACK**, that is what
+`/etc/systemd/system/cabinetos-session.service.d/20-heavy-systems.conf` was: it
+pointed the session at `/var/home/cabinet/cabinetos-frontend-dev` and
+`~/cores-dev`, which is how PlayStation 2 and GameCube reached the television
+before they were in the image. There is no reason to want one now. Removing it:
 
 ```
 sudo rm /etc/systemd/system/cabinetos-session.service.d/20-heavy-systems.conf
@@ -100,11 +137,12 @@ sudo systemctl daemon-reload && sudo systemctl restart cabinetos-session
 silently drops every argument after the path — which looks exactly like a
 console that ignored you.
 
-**WITH THAT DROP-IN REMOVED, the machine runs the image and nothing by hand**,
-as it did on 2026-09-20: `/usr/bin/cabinetos-frontend`, booted digest
-`sha256:78e43b5a…`, which is #30 merged. `/var/home/cabinet/cabinetos-frontend-dev`
-is the hand-built binary the drop-in points at; if you build a new one,
-overwrite it rather than adding a second.
+**THE HAND-BUILT BINARY AND ITS CORE DIRECTORY ARE STILL ON DISK** —
+`~/cabinetos-frontend-dev`, `~/cores-dev`, `~/assets-dev` — and nothing points
+at them. They are for running something by hand; if you build a new frontend,
+overwrite the existing one rather than adding a second. **A hand-run leaves
+`[ps2]` lines in the journal from `/var/home/cabinet/cores-dev/`, which is how
+to tell one apart from the session** — the session's say `/usr/lib/cabinetos/`.
 
 **ALWAYS CHECK WHICH COMPOSITOR RUNG IT LANDED ON BEFORE JUDGING ANYTHING.**
 
@@ -170,6 +208,118 @@ ssh -i ~/.ssh/cabinetos cabinet@192.168.1.250 \
   'cd ~/frontend && podman run --rm -v "$PWD":/src:Z -w /src cabinetos-builder make'
 ```
 
+## The state that lives on the A9 and not in git — new 2026-09-20
+
+- `~/cores-dev/` — the 21 image cores SYMLINKED, plus **`cabinetos-ps2.so`**
+  (upstream PCSX2 embedded, with `libryml` and `libc4core` beside it) and
+  `dolphin_libretro.so`. This is what `--core-dir` points at.
+- `~/assets-dev/` — **new 2026-09-21.** PCSX2's resources, which it refuses to
+  start without, plus a symlink through to the image's own system files so the
+  other cores keep theirs. `CABINETOS_ASSETS` points here because `/usr` is
+  read-only on a bootc console.
+- ~~`~/heavy/`~~ — **deleted 2026-09-21.** 859 MB of scratch holding three
+  copies of the unshippable libretro PS2 core and duplicates of firmware the
+  console already has properly under `/var/lib/cabinetos/bios/`.
+- `/var/lib/cabinetos/bios/pcsx2/bios/` — the two PS2 BIOS files. **These come
+  from RomM with the game on a real install** and are here by hand only because
+  no image carries the core yet.
+- `/var/lib/cabinetos/bios/dolphin-emu/Sys/` — Dolphin's 15 MB Sys folder. On a
+  real install this ships with the core at `/usr/share/cabinetos/system/`, the
+  way PPSSPP's already does.
+- `~/cabinetos-frontend-dev` — the hand-built frontend the drop-in points at.
+- `~/pcsx2-clean/pcsx2-upstream/` — **new 2026-09-21**, the upstream PCSX2
+  checkout at v2.8.2 and its build tree, 375 MB. It is a **cache**:
+  `cores/build-pcsx2.sh` re-clones and rebuilds it in 43 seconds, so delete it
+  whenever. Point the script at it with
+  `CABINETOS_CORE_SRC=/var/home/cabinet/pcsx2-clean`, or leave that unset and it
+  makes its own under the repo.
+- `~/pcsx2-lab/` — the PS2 BIOS and Homura's CHD, staged where a container can
+  read them. **`:ro` bind mounts of `/var/lib/cabinetos` do not work** — SELinux
+  denies the read and the container simply sees an empty directory, which reads
+  as a missing BIOS. Copy to a scratch directory and mount that with `:Z`.
+- `~/cabinetos-repo/` — **new 2026-09-21**, an rsync of this repository, because
+  the build script has to run on a machine with podman and the Mac is not one.
+  The A9 is now the better build machine by a distance: **24 cores, 25 GB of
+  free RAM and 1.9 TB free**, against the VM's 5 cores, 3 GB and 4.1 GB. The
+  whole PCSX2 library builds there in 25 seconds.
+
+## The state that lives on the VM and not in git
+
+- `~/frontend/` — the frontend source, built with
+  `podman run --rm -v "$PWD":/src:Z -w /src cabinetos-builder make`
+- `~/frontend/cores/build/` — **twenty-one** built cores, where the frontend
+  looks when it is run from there
+- `~/frontend/` is **still the storage root for a build run by hand from that
+  directory**, and that is the dev loop. **It is no longer the session's root**:
+  the VM was upgraded onto the image that carries the console on 2026-09-19,
+  so `tmpfiles.d` now creates `/var/lib/cabinetos` and the session uses it.
+  Two consoles' worth of tree on one machine, deliberately. `~/frontend` holds:
+  - `bios/` — BIOS fetched from RomM, files the cores write into their system
+    directory, and **`PPSSPP/`**, 13 MB of PSP system files that came out of the
+    core build. Copy it from `~/cabinetos/cores/system/` after building that
+    core. **On a console this one comes from the image instead**, at
+    `/usr/share/cabinetos/system/`, and is symlinked in at startup.
+  - `cache/<platform>/` — downloaded games, and the only thing eviction touches
+  - `roms/<platform>/` — kept games. Also still holds one loose
+    `Dr. Mario (World) (Rev 1).gb` for `--core`.
+  - `users/1 - MMagTech/` — every save, state, keep and unsent upload, plus
+    `saves/unattributed/`, which is the two old shared save piles kept whole
+    because nothing in them says which game wrote them.
+  - `config/user.json` — the RomM user id and name, cached so a console with no
+    network still knows whose saves it is holding.
+  - `config/drives.json` — which games drives were here last time, and the ONLY
+    thing about storage that is remembered rather than read off the disk.
+- `/var/mnt/games/CabinetOS/` — **the VM's games drive**, claimed automatically,
+  holding its own `roms/` and `cache/`. The console claims that one folder and
+  nothing else on the disk.
+- `~/cabinetos/` — a clone of this repo, where `cores/build-core.sh` runs. Its
+  `cores/build/` has twenty, not twenty-one.
+- `~/cabinetos/.core-src/` — **now a SYMLINK to `/var/mnt/games/core-src`**,
+  moved there 2026-09-20 because `/var` had fallen to 605 MB free and the
+  builder container would not rebuild. Same 4.8 GB, of which PPSSPP is 3.4 GB,
+  on the disk that has 65 GB. Still a cache: delete any of it to make room and
+  the next build re-clones. `/var` is back to about 5 GB free.
+- `~/run-frontend.sh` — the session launcher, used via `CABINETOS_APP`. The
+  original is `run-frontend.sh.bak`. **The drop-in that pointed the session at
+  it was moved aside on 2026-09-19** to `~/10-frontend.conf.disabled`: its own
+  comment said it goes away once the binary ships in the image, and it does.
+  Put it back if you want the session running a hand-built frontend.
+- `/etc/cabinetos/session.env` — the RomM address, added 2026-09-19. Same file
+  as on the A9.
+- `~/.config/cabinetos/romm.json` — the RomM token, 0600
+- `/var/mnt/games/flatpak/` — **a flatpak user installation holding RPCS3**,
+  2.7 GB, reached with `FLATPAK_USER_DIR=/var/mnt/games/flatpak`. On the games
+  disk deliberately: the KDE runtime it needs is 1.1 GB and `/var` has 5 GB.
+- `/var/mnt/games/layout-backup/` — a tar and a `sha256sum` list of every save
+  the VM held before the folder layout moved them. Belt and braces; 11 MB,
+  delete it whenever.
+- `/var/mnt/games/ps3lab/` — the PS3 experiment. 195 MB of firmware, two
+  installed games, both `.rap`s, and the PUP. RPCS3's renderer is set to
+  **Null** because the VM has no Vulkan.
+
+### The VM has TWO disks, and the second one is the point
+
+| | |
+|---|---|
+| `/dev/vda4` → `/var` | 21.6 GB btrfs, **about 5.7 GB free**. The OS and everything above. |
+| `/dev/vdb` → `/var/mnt/games` | **100 GB btrfs**, label `cabinetos-games`, about 65 GB free. |
+
+In `/etc/fstab` by UUID with `nofail`, and **proved across a reboot**. `nofail`
+matters: a machine that will not boot because a games drive is missing is
+exactly what open question 14 forbids.
+
+**One of its four purposes is still untested.** *That a missing drive degrades
+rather than errors* cannot be exercised yet: `storage::locations()` returns one
+location, so there is no second one to remove. It becomes testable the day open
+question 14's second location is wired in.
+
+**`disk_config/disk.toml` still says `minsize = "20 GiB"`**, so a VM rebuilt
+from a fresh qcow2 comes out small again with no second disk. That number
+should change; it is a one-line edit nobody has made.
+
+`podman image prune -f` is still the first thing to try when `/var` gets tight,
+then `~/cabinetos/.core-src`.
+
 ## Where things stand
 
 **The whole loop works, the whole library is reachable, every emulator this
@@ -217,7 +367,11 @@ states, and leave — with the save syncing on the way out.
 - **BIOS comes down with the game**, every file the platform lists — except
   PSP's, which is not a console's firmware and ships with the emulator.
 - **Dreamcast, Naomi, N64 and PSP play**, through a framebuffer inside the
-  frontend's own GLES context, with no pixel read back anywhere.
+  frontend's own GLES context, with no pixel read back anywhere — **except that
+  DREAMCAST NO LONGER LAUNCHES ON THE A9**, found 2026-09-21. It is a regression
+  and the console says why: the device will not export memory as a file
+  descriptor. N64 still launches on the same boot, so it is Flycast's path and
+  not all of hardware rendering. See item 9d.
 - **The interface makes sounds**, synthesised rather than recorded, with an off
   switch waiting for a Settings screen to own it.
 - **First run's mechanisms exist and none of them is a picture**, as of
@@ -228,51 +382,49 @@ states, and leave — with the save syncing on the way out.
 
 ## Pick up with these, in this order
 
-### PLAYSTATION 2 AND GAMECUBE PLAY — 2026-09-20
+### WHAT TO DO NEXT
 
-**1232 playable games, up from 1147.** Both systems draw a picture on the
-television off the A9's Radeon. The work is in the `vulkan-host` branch.
+**THE UI PASS HAPPENED on 2026-09-21 and this entry is what it left.** It was
+asked for as *"i want the next session to be ui focused so we can tweak it"*,
+and it ran — about forty builds, each looked at on the panel. **What is queued
+now is the SETTINGS screen**, which is the last bar item that does nothing and
+the only place open question 23's quality control and the interface sounds'
+off switch can live.
 
-**It was never about the emulators.** Both libretro cores existed, both already
-had Vulkan compiled in, and `catalog.cpp` has routed `ps2 -> pcsx2` and
-`ngc -> dolphin` since the table was written — so two `.so` files in a core
-directory turned "not built on this console yet" into 85 playable games with
-no code change at all. What was missing was **this frontend's half of a
-contract libretro already specifies**: the instance, the device, the queue and
-somewhere to put the picture. RetroArch implements that end; this console owns
-its frontend and had only ever done the OpenGL ES half.
+**Read *A pass over the whole UI* further down this file before anything else** —
+it has what exists, what the pass decided, and the short list it left. Two items
+on that list are decisions rather than drawing: whether the cartridge-era cores
+keep "Save state" in the pause menu (open question 25), and the one quality
+setting (open question 23). Everything below is still true and still queued; none
+of it is what to open tomorrow.
 
-See open question 20 for the whole thing. The three one-line faults:
+**THE ONE THING THAT IS NOT MINE TO FINISH** is PlayStation 2's first real
+in-game save reaching the server, which needs somebody to play. It is item **U0**
+below and it takes ten minutes of somebody's evening, not a session.
 
-1. `GET_PREFERRED_HW_RENDER` was hard-wired to GLES, so **Dolphin never asked
-   for the Vulkan it has compiled in**.
-2. `SET_HW_RENDER` refused Vulkan by name.
-3. **Dolphin checks for a `VkSurfaceKHR` to decide whether it has a display.**
-   With none it renders and never presents — fifty seconds of emulated Mario
-   Kart, correct audio, a black screen. It gets a `VK_EXT_headless_surface`.
+| | |
+|---|---|
+| **U** | **THE UI PASS — START HERE.** Keep the Cabinet look, take the lessons from SteamOS. See *A pass over the whole UI*. |
+| **U0** | **PLAY BURNOUT 3, SAVE INSIDE THE GAME, AND EXIT TO HOME.** The whole save path is proved EXCEPT the upload, and the upload has never once been watched for PlayStation 2. Restore works — 8.6 MB comes off the server and PCSX2 reads the card as `Formatted`. The freshness rule means an unchanged card is correctly NOT sent, which is why no test here can stand in: **it needs a card that actually changed.** Look for `[save] uploaded pcsx2` in the journal, and for rom 604's row on the server to move off its 2026-09-11 timestamp, which is the Mac's. |
+| **0** | ~~WILL GAMESCOPE COMPOSITE OUR OVERLAY?~~ — **ANSWERED YES, item 1.** It composites, the game shows through our transparency, and our overlay takes the pad and gives it back while the game keeps the screen. **What it saves is now MEASURED too** — free at 3x, ~1.9 ms at 4x, ~9 ms at 6x — so the remaining step is a DECISION rather than a test. Two paths to the screen are **accepted** (open question 24), and the menu already works on both. Nothing is built. |
+| **0a** | ~~EMBED UPSTREAM PCSX2~~ — **DONE AND PLAYING, see item 1a.** Upstream builds as a library on Linux with **no patches**; `cores/build-pcsx2.sh` reproduces it in 43 seconds. What is left is the host layer — 55 `Host::` functions and four other symbols, most of them one-liners, with **six that are real work** and all six in the display path the Vulkan host already serves. **Write it: there is no cheaper step in front of it**, and gsrunner cannot stand in because it only replays GS dumps. |
+| **0b** | ~~THE TWO BUGS IN ITEM 1b~~ — **BOTH CLOSED 2026-09-21.** The tunnel went with the move to upstream PCSX2. The exit hang is recorded as **not reproduced**, not fixed, so if it returns the suspect in item 1b is still where to look. ~~GameCube's core can be pinned~~ — **PINNED AND BUILT BY CI**, `dolphin` at `1a0f97270b70`, merged as #43. |
+| **1** | ~~PLAYSTATION 2 AND GAMECUBE~~ — **done to the point of playing**, see above. The original entry follows for its reasoning. **PLAYSTATION 2 AND GAMECUBE.** MMagTech's call, 2026-09-20, and the largest thing on this list: 85 games, and the only missing tier with a working implementation to copy. **Open question 12b has the order and 12 has the numbers.** Start by reading `tools/build-dolphin-mac.sh` in Cabinet — those two are NOT libretro cores and nobody wrote down why. |
+| **2** | ~~A GAME CAN GO BLACK AND NOBODY KNOWS WHY~~ — **SOLVED 2026-09-21, item 3b.** It was the SECOND game: `Core::load` left the previous game's dimensions behind, so `sizeChanged` came out false and the upload hit a texture with no storage. Confirmed by MMagTech on TurboGrafx and 3DO. Nothing is owed here. |
+| **3** | **Judge the TATE look, and Home, on the 65-inch.** Both are on the machine and neither has been looked at properly. **This is really part of the UI pass** and should be done inside it rather than as its own errand. |
+| **4** | **Atari Jaguar and ColecoVision** — 73 games, ordinary libretro cores, no architectural question at all. The cheapest games available. See 12b. |
+| **5** | Then the core options (item 7). |
 
-**MEMORY CARDS: PS2 TRAVELS, GAMECUBE DOES NOT YET.** A card written on the Mac
-lands on the console and the game reads it — proved with Burnout 3, which is
-the only real save that exists for either system. GameCube saves and syncs but
-uses this console's own row naming; see open question 12b for why that is
-deliberate.
+**FIRST RUN IS DONE and is not on this list.** Built, walked on the television
+with a keyboard, a controller and a mouse, and the console was set up from
+nothing with no cable in it. See item 4b for what is left, which is small.
 
-**SIX OF THE SEVEN CARDS ON THE SERVER WERE EMPTY** and were deleted at
-MMagTech's request on 2026-09-20. Cabinet for Mac uploads a card on first play
-regardless of content and has no freshness rule for either platform — the same
-fault `catalog.h` records for Dreamcast, worse ratio. **CabinetOS now refuses**;
-both rules are measured and in `filesave.cpp`.
+**Item 2's old entry is gone because it is fixed**: the console no longer demotes
+itself to software rendering on a boot-time network race. The A9 has come up on
+`gamescope (drm)` on every boot since.
 
-**WHAT IS NOT DONE, and none of it is hidden:**
-
-- **Nobody has saved inside a game and watched it go up.** The download half is
-  proved; the upload half is the same code Crazy Taxi 2 proved for Dreamcast.
-- **THE PS2 *LIBRETRO CORE* STILL CANNOT SHIP AND NEVER WILL** — its source
-  repository does not exist. **But PlayStation 2 is no longer blocked**, because
-  the embed route was measured on 2026-09-21 and is open: see item 1a. The
-  GameCube core can be pinned and that part is unchanged.
-- **TWO OPEN BUGS FROM ONE HOUR OF PLAY, both reported by MMagTech and neither
-  reproducible from here.** See item 1b.
+**Search and Settings** are drawn in the top bar and say "not built yet"; that
+is deliberate and can stay.
 
 ### 1. GAMESCOPE WILL COMPOSITE OUR MENU OVER A WINDOW WE DO NOT OWN — ANSWERED 2026-09-21
 
@@ -362,10 +514,29 @@ alone, clean, at full resolution. Grab once when the menu opens, blur it
 ourselves, use it as the panel's backdrop. The game is paused so a still is
 correct, and the panel already fades in over 350 ms.
 
-#### WHAT IT SAVES, MEASURED — and the PS2 case is the WEAK one
+#### WHAT IT SAVES — MEASURED UNCAPPED, WHICH MAKES THIS TABLE UNSAFE
 
-Burnout 3, warm cache, uncapped, `CABINETOS_PS2_NO_READBACK` against normal. 4x
-run twice, reproduced within 3%.
+**READ THE WARNING BEFORE THE TABLE.** These numbers are UNCAPPED, and item 1a
+later establishes — on the same game, on the same machine — that uncapped runs
+understate the readback by more than half, because the emulator runs flat out
+and the readback hides inside its slack. Capped to 60 Hz, which is how a person
+plays, 4x costs 6.1 ms rather than the 1.9 ms this table credits it with.
+
+**SO THE CONCLUSION THIS SECTION USED TO DRAW — "at 3x it is free, do not sell
+compositing on PS2" — IS NOT ESTABLISHED.** Capped, 3x readback costs 5.0 ms
+average and 7.3 ms worst, so there may be a great deal to save at exactly the
+upscale this file calls the sweet spot. It may still be true that compositing is
+a weak case for PlayStation 2; nothing here shows it either way any more.
+**Re-measure capped before anybody decides on this.**
+
+**THIS IS THE THIRD TIME THIS PROJECT HAS MEASURED IN A CONFIGURATION NOBODY
+PLAYS IN**, after the cold shader cache and the unpaced frame loop, and it is
+kept rather than deleted because the pattern has now cost more than any one of
+the numbers. The warm-cache rule was already written down; "and pace it the way
+it actually runs" is the other half of it, and it had to be learned twice.
+
+Burnout 3, warm cache, **uncapped**, `CABINETOS_PS2_NO_READBACK` against normal.
+4x run twice, reproduced within 3%.
 
 | Upscale | readback on | off | saved |
 |---|---|---|---|
@@ -373,9 +544,11 @@ run twice, reproduced within 3%.
 | 4x | 5.08 / 5.21 ms | 3.21 / 3.25 ms | ~1.9 ms |
 | 6x | 13.16 ms | 4.17 ms | **~9.0 ms** (76 → 240 fps) |
 
-**AT 3x IT IS FREE** — measures 1.95 ms, costs 0.11 ms, because it overlaps with
-the emulator's other threads. **So at the upscale this file calls the sweet spot,
-compositing buys PlayStation 2 nothing.** Do not sell it on PS2.
+**AT 3x IT MEASURES FREE HERE** — 1.95 ms of work costing 0.11 ms, because it
+overlaps with the emulator's other threads. **That overlap is exactly what
+disappears when the emulator is paced to 60 Hz and has no slack to hide in**, so
+this row is the one the warning above is really about. It was read as
+"compositing buys PlayStation 2 nothing"; it does not support that.
 
 **The case is true 4K and the systems that do not exist yet**, which is
 MMagTech's argument and the numbers back it better than they back the PS2 one.
@@ -388,8 +561,11 @@ in*. A PS3 at native 1080p pushes what a PS2 pushes at 3x, with no slack at all.
 has not been split, PCSX2 has not been given a window, no emulator has run this
 way, and our own renderer has never drawn into a transparent surface.
 
-**Nobody has measured what it saves.** 6.1 ms is what the CURRENT path costs.
-The compositing path's own cost has not been measured at all. It should be near
+**NOBODY HAS MEASURED WHAT COMPOSITING ITSELF COSTS**, which is the other half
+of the sum and the half that decides it. 6.1 ms is what the CURRENT path costs,
+capped; the table above says what removing the readback saved in an uncapped run
+and is not to be trusted for this. The compositing path's own cost has not been
+measured at all. It should be near
 nothing — and *should be* is how this project has been wrong before, twice, in
 exactly this area.
 
@@ -422,9 +598,11 @@ upstream PCSX2 2.8.2, inside the console — your library, your pause menu, your
 pad, your saves.** Not a separate program borrowing the screen. Verified under
 gamescope on the reference console at 3840x2160, not only headlessly.
 
-**IT IS ON THE TELEVISION RIGHT NOW**, through the drop-in described at the top
-of this file. Two lines in the journal say what is actually running, and both
-are facts rather than restatements of what was asked for:
+**IT IS ON THE TELEVISION RIGHT NOW, OFF THE IMAGE** — this said "through the
+drop-in described at the top of this file" and that was true for a few hours of
+2026-09-21, before the emulator shipped. There is no drop-in; see the table at
+the top. Two lines in the journal say what is actually running, and both are
+facts rather than restatements of what was asked for:
 
 ```
 [ps2] /var/home/cabinet/cores-dev/cabinetos-ps2.so (PCSX2 v2.8.2)
@@ -484,9 +662,11 @@ cd frontend && make           the console, which dlopens it
 #### The shape, and why it is this one
 
 **PCSX2 NEVER GETS A WINDOW.** The frontend owns the one window there is, draws
-every screen in it and draws the overlay on top — which is what makes Pause,
-Save state and Exit to Home work the same for a PlayStation 2 game as for a
-Mega Drive one.
+every screen in it and draws the overlay on top — which is what makes Pause and
+Exit to Home work the same for a PlayStation 2 game as for a Mega Drive one.
+**Save state is deliberately NOT on that list**: open question 25 decided PS2
+does not get one. The point stands without it — one window, one overlay, one
+way out.
 
 So PCSX2 runs **surfaceless on its own thread** and hands over the finished
 frame as a buffer of pixels, a width and a height — **exactly what eighteen of
@@ -506,8 +686,14 @@ The emulator ran at about 500% of realtime throughout. The number is live in
 is what would change the answer. **The faster route is written up and
 deliberately not taken**: PCSX2's Vulkan image could be shared directly, the way
 `vkhost.cpp` already shares one, but its required device extension list holds
-one entry and none of the external-memory ones. Four lines, worth spending the
-day a measurement says the readback is too slow.
+one entry and none of the external-memory ones. **It is four lines and it is
+RULED OUT** — MMagTech declined a second PCSX2 patch on 2026-09-21, *"id rather
+not have to patch and then maintain them"*, open question 12b. An earlier
+version of this sentence said it was "worth spending the day a measurement says
+the readback is too slow"; the measurement then came in at 6.1 ms and the
+decision still stands. **Do not treat the number as permission.** If it is to be
+revisited it is revisited with MMagTech, as a decision, not as a consequence of
+a benchmark.
 
 #### One patch to PCSX2, and the headline is corrected rather than dropped
 
@@ -547,12 +733,19 @@ PRODUCT**, and main.cpp says so beside them. How this is really exposed is open
 question 23 — one quality setting for the whole console. Nobody should build a
 settings screen on these two flags.
 
-**Currently on the reference console: `--ps2-upscale 4 --ps2-aniso 16`**, left
-there deliberately at the end of the session rather than dropped to 3x.
-MMagTech played at 4x, said it "looked way better", and noticed some stutter —
-and the reason not to quietly lower it is item 1: **the stutter may be this
+**THE REFERENCE CONSOLE IS AT 1x AND ANISOTROPY 0 — checked on the machine
+2026-09-21.** This paragraph used to say `--ps2-upscale 4 --ps2-aniso 16` was
+"left there deliberately at the end of the session"; it was, and then the
+drop-in carrying those flags was deleted when PlayStation 2 went into the image,
+which reset both to their defaults. **Nothing chose 1x.** The journal is the
+check: `[ps2] renderer Vulkan, upscale 1x, anisotropy 0`.
+
+**WHAT MMagTech ACTUALLY PLAYED AND LIKED WAS 4x**, and he noticed some stutter
+at it. The reason not to simply put 4x back is item 1: **the stutter may be this
 console's own picture path rather than the machine running out of room**, and
-lowering the setting would hide the question rather than answer it.
+setting it either way by hand hides the question rather than answering it. This
+is open question 23 arriving with a face on it — those two flags were always a
+test instrument and nothing yet exposes quality as a real setting.
 
 **MEASURE IT CAPPED TO 60 Hz, NOT UNCAPPED, AND THE FIRST TABLE HERE WAS WRONG
 FOR EXACTLY THAT REASON.** Uncapped, the emulator runs flat out, the readback
@@ -616,8 +809,11 @@ at worst, out of 16.7. Two other suspects remain but neither is first:
 
 **THE ONLY THING THAT REMOVES THE 6 MS IS THE PATCH THAT IS RULED OUT**, so the
 lever that is actually available is the upscale itself. Lowering it is not a
-consolation prize — the cost is roughly proportional to pixels, so 3x is about
-half of 4x.
+consolation prize — 3x costs about 5.0 ms against 4x's 6.1 ms average, and 7.3
+against 12.2 at worst. **(This sentence used to say "roughly proportional to
+pixels, so 3x is about half of 4x", four paragraphs after the sentence
+establishing that proportionality was a guess and was wrong. It is the worst
+case that moves, not the mean.)**
 
 **AND THE READBACK SCALES WORSE THAN THE PIXELS.** 4x to 6x is 2.25 times the
 pixels and **4.6 times the cost**, which is a wall rather than a curve.
@@ -639,11 +835,28 @@ double buffer makes that a pointer swap. Entirely our own code.
 - ~~**NOBODY HAS PLAYED IT WITH A PAD YET.**~~ **PLAYED, 2026-09-21**, and it
   found three faults nothing here had caught — see below. What is still owed is
   a long session rather than a first look.
-- **SAVE STATES DO NOT WORK AND REPORT SO HONESTLY.** `Core::stateSize()` is 0
-  for PlayStation 2, because PCSX2's states are its own slot files keyed by disc
-  serial and CRC rather than a buffer. Open question 12b: whatever this console
-  does there is new work, and nothing crossing between machines today constrains
-  it.
+- **PLAYSTATION 2 HAS NO SAVE STATES AND IS NOT GOING TO — DECIDED 2026-09-21,
+  OPEN QUESTION 25.** `Core::stateSize()` returns 0 for PlayStation 2 and says
+  so honestly, and **that is the finished answer rather than work owed.** An
+  earlier version of this entry said "whatever this console does there is new
+  work"; MMagTech asked the question before that one — *"should these more
+  modern system even have save and load states or just the memory cards"* — and
+  the answer for PS2, GameCube and everything after them is no.
+
+  **THE REASON THAT SETTLES IT ON ITS OWN: a PCSX2 state is tied to the emulator
+  build, so pushing an image would silently stop everyone's states loading.**
+  That is data loss on this project's release schedule rather than on the
+  player's. The other two reasons are that these machines have real save systems
+  every game uses, and that a state from this build opens on no other machine
+  while the library is meant to travel. **Memory cards are the save story here
+  and they already work.**
+
+  **DO NOT GO AND MAKE PCSX2 SERIALISE TO MEMORY.** It is the obvious next step,
+  it is why this entry used to point at open question 12b, and it is the step
+  that was deliberately not taken. Open question 25 has the whole argument,
+  including what a *resume* feature would be instead — one invisible snapshot
+  per game, Xbox Quick Resume's shape, which is a different feature and is not
+  queued.
 - ~~**NOTHING IS IN CI OR IN THE IMAGE.**~~ **IT IS IN BOTH, 2026-09-21, AND
   THE IMAGE BUILD ASSERTS ALL FOUR PIECES.** `.github/workflows/build-pcsx2.yml`
   builds it at the pinned v2.8.2 and uploads it in the same three-folder shape
@@ -657,9 +870,10 @@ double buffer makes that a pointer swap. Entirely our own code.
   [cabinetos] ok: PCSX2's rapidyaml / c4core / resources
   ```
 
-  **AND IT HAS BEEN BOOTED AND PLAYED, 2026-09-21.** The A9 is on
-  `sha256:ce25da80…`, `20-heavy-systems.conf` is DELETED, and the session runs
-  `/usr/bin/cabinetos-frontend` with **no drop-ins at all**:
+  **AND IT HAS BEEN BOOTED AND PLAYED, 2026-09-21.** That happened on
+  `sha256:ce25da80…`, which is now the ROLLBACK deployment — the machine has
+  since moved to `sha256:ceafc2bb…`. `20-heavy-systems.conf` is DELETED and the
+  session runs `/usr/bin/cabinetos-frontend` with **no drop-ins at all**:
 
   ```
   [ps2] VM starting
@@ -734,88 +948,6 @@ picture somebody has to squint at. **And check the binary's checksum against
 the one you built before believing a deploy**; nothing does that automatically
 yet.
 
-### 1b. ONE BUG LEFT OF THE TWO FOUND BY PLAYING — THE TUNNEL IS GONE
-
-#### THE TUNNEL IS FIXED — MMagTech, 2026-09-21: *"tunnel was gone on new core"*
-
-It went away with the move to upstream PCSX2, so it belonged to the libretro
-core that has since been deleted from the machine — which is also why it never
-reproduced from here: **every measurement was taken against the emulator that
-did not have the fault.** No change was made to chase it and none is needed.
-
-The investigation is kept below because its conclusion was right for the wrong
-reason, and the warning at the end of it is still good advice.
-
-**"It looks like I was looking through a tunnel when racing"**, Burnout 3 on
-the television. **Every capture taken here measures a correct 4:3 picture
-exactly filling its quad** — at 1920x1080 and 3840x2160, in a menu and in
-gameplay, on both bridge routes, with the widescreen hint on and off. The new
-`[picture]` line prints the four numbers that have to agree and they agree:
-
-```
-[picture] core 640x448 aspect 1.3333 -> quad 1440x1080 (1.3333) at 240,0
-          uv 0.0000,0.0000..0.8333,0.8750
-```
-
-**So it is not the layout and not the texture coordinates.** "Tunnel" describes
-a FIELD OF VIEW rather than an aspect, which points at the emulator's own
-settings rather than the frontend — start with the 78 core options, and ask
-which game and whether it happens from a cold boot or only after loading the
-Mac's memory card. **Do not trust a bounding-box measurement here**: the first
-three this session were confounded by the game's own black borders and by the
-pause menu's dimming, and one of them sent an hour the wrong way.
-
-#### STILL OPEN: THE PAUSE MENU'S EXIT LEAVES THE CONSOLE STUCK
-
-**THE PAUSE MENU'S EXIT LEFT THE CONSOLE STUCK.** The menu was on screen with
-"Exit to Home" focused and the process was **asleep at 0% CPU** — and the UI
-loop is unpaced, so 0% means the frame loop had STOPPED, not that a button was
-ignored. That is a hang in teardown. **It does not reproduce**: exiting at 1500
-frames in works headlessly and under gamescope when driven from code. The
-suspect is `Core::unloadGame` on a threaded core —
-`vk::destroyContext` calls `deviceWaitIdle` on a device the CORE created and
-may already have torn down in its own `context_destroy`. **Get a backtrace next
-time rather than theorising**: the process is still there, so
-`gdb -p <pid> -batch -ex "thread apply all bt 12"`.
-
-### 1. WHAT TO DO NEXT
-
-**THE NEXT SESSION IS THE UI PASS. MMagTech's call, 2026-09-21:** *"i want the
-next session to be ui focused so we can tweak it."* Everything below it is
-still true and still queued; none of it is what to open tomorrow.
-
-**Read *A pass over the whole UI* further down this file before anything else** —
-it has what exists, what was decided today, and the two screens that are drawn
-and do nothing.
-
-**THE ONE THING THAT IS NOT MINE TO FINISH** is PlayStation 2's first real
-in-game save reaching the server, which needs somebody to play. It is item **U0**
-below and it takes ten minutes of somebody's evening, not a session.
-
-| | |
-|---|---|
-| **U** | **THE UI PASS — START HERE.** Keep the Cabinet look, take the lessons from SteamOS. See *A pass over the whole UI*. |
-| **U0** | **PLAY BURNOUT 3, SAVE INSIDE THE GAME, AND EXIT TO HOME.** The whole save path is proved EXCEPT the upload, and the upload has never once been watched for PlayStation 2. Restore works — 8.6 MB comes off the server and PCSX2 reads the card as `Formatted`. The freshness rule means an unchanged card is correctly NOT sent, which is why no test here can stand in: **it needs a card that actually changed.** Look for `[save] uploaded pcsx2` in the journal, and for rom 604's row on the server to move off its 2026-09-11 timestamp, which is the Mac's. |
-| **0** | ~~WILL GAMESCOPE COMPOSITE OUR OVERLAY?~~ — **ANSWERED YES, item 1.** It composites, the game shows through our transparency, and our overlay takes the pad and gives it back while the game keeps the screen. **What it saves is now MEASURED too** — free at 3x, ~1.9 ms at 4x, ~9 ms at 6x — so the remaining step is a DECISION rather than a test. Two paths to the screen are **accepted** (open question 24), and the menu already works on both. Nothing is built. |
-| **0a** | ~~EMBED UPSTREAM PCSX2~~ — **DONE AND PLAYING, see item 1a.** Upstream builds as a library on Linux with **no patches**; `cores/build-pcsx2.sh` reproduces it in 43 seconds. What is left is the host layer — 55 `Host::` functions and four other symbols, most of them one-liners, with **six that are real work** and all six in the display path the Vulkan host already serves. **Write it: there is no cheaper step in front of it**, and gsrunner cannot stand in because it only replays GS dumps. |
-| **0b** | ~~THE TWO BUGS IN ITEM 1b~~ — **BOTH CLOSED 2026-09-21.** The tunnel went with the move to upstream PCSX2. The exit hang is recorded as **not reproduced**, not fixed, so if it returns the suspect in item 1b is still where to look. ~~GameCube's core can be pinned~~ — **PINNED AND BUILT BY CI**, `dolphin` at `1a0f97270b70`, merged as #43. |
-| **1** | ~~PLAYSTATION 2 AND GAMECUBE~~ — **done to the point of playing**, see above. The original entry follows for its reasoning. **PLAYSTATION 2 AND GAMECUBE.** MMagTech's call, 2026-09-20, and the largest thing on this list: 85 games, and the only missing tier with a working implementation to copy. **Open question 12b has the order and 12 has the numbers.** Start by reading `tools/build-dolphin-mac.sh` in Cabinet — those two are NOT libretro cores and nobody wrote down why. |
-| **2** | **A GAME CAN GO BLACK AND NOBODY KNOWS WHY.** Six launches in one session drew nothing but the letterbox glow while the core ran and made sound. Not reproduced since. Two theories tested and both falsified. See item 3b — it has the instruments. |
-| **3** | **Judge the TATE look, and Home, on the 65-inch.** Both are on the machine and neither has been looked at properly. **This is really part of the UI pass** and should be done inside it rather than as its own errand. |
-| **4** | **Atari Jaguar and ColecoVision** — 73 games, ordinary libretro cores, no architectural question at all. The cheapest games available. See 12b. |
-| **5** | Then the core options (item 7). |
-
-**FIRST RUN IS DONE and is not on this list.** Built, walked on the television
-with a keyboard, a controller and a mouse, and the console was set up from
-nothing with no cable in it. See item 4b for what is left, which is small.
-
-**Item 2's old entry is gone because it is fixed**: the console no longer demotes
-itself to software rendering on a boot-time network race. The A9 has come up on
-`gamescope (drm)` on every boot since.
-
-**Search and Settings** are drawn in the top bar and say "not built yet"; that
-is deliberate and can stay.
-
 ### THE PLATFORM AUDIT, AND WHERE THE MISSING GAMES ARE
 
 Done 2026-09-20 against the running console and Cabinet's own manifest. **36
@@ -828,6 +960,14 @@ core set — all 21, no gaps.
 | ~~Cabinet solved it on macOS, we have not~~ | ~~85~~ **0** | **PS2 71 and GameCube 14 are both in the image as of 2026-09-21.** PS2 has been played off it; GameCube has not — see below. |
 | Nobody has solved it | **174** | Switch 109, PS3 32, Vita 27, Xbox 4, Wii 2 |
 | **Will never be built** | 171 | Game & Watch — *"too small on a tv"* |
+
+**THE TOTALS IN THIS FILE DISAGREE WITH EACH OTHER AND NOBODY HAS RECOUNTED.**
+This audit says **1650** games; *Where things stand* says **1147 of 1644**; a
+first-run note says "sixteen hundred". The 1147 and the 1232 are consistent
+everywhere and are the numbers that matter, but the library total is carried
+rather than measured and one of these is wrong. **Recount it against the server
+before quoting a total anywhere it matters** — it is one query, and this file
+has been quoting all three for days.
 
 **GAMECUBE IS PINNED AND IN THE IMAGE, 2026-09-21 — AND HAS NOT BEEN PLAYED OFF
 IT.** `dolphin` at `1a0f97270b70`, merged as #43. The pin was chosen by reading
@@ -869,134 +1009,6 @@ and more power. Same with Wii U if I get more games."* That settles a question
 this project had only ever discussed as a recommendation. **PS2 and GameCube
 first; Wii last and probably free, because Dolphin does both.** Open question
 12b has the reasoning.
-
-### 2. Vertical arcade games play the right way up — DONE 2026-09-19
-
-**`RETRO_ENVIRONMENT_SET_ROTATION` was in `libretro.h` and handled nowhere.**
-DoDonPachi and every other TATE board rendered sideways; 223 arcade games were
-affected. It is fixed, and PROJECT.md's *Vertical arcade boards, and the turn
-they ask for* has the whole thing. The three parts worth carrying:
-
-- **The turn goes on the quad's CORNER in the vertex shader**, before the
-  corner looks up a texture coordinate. It cannot go in `u0,v0,u1,v1` — those
-  flip, they never transpose.
-- **A turned board's declared aspect is ALREADY turned.** FBNeo says 0.75 for
-  DoDonPachi while handing back 448x224. Inverting it turns the picture twice;
-  Cabinet's own comment says that "stretched every vertical game". So a turned
-  picture takes its shape from raw pixels. Safe because **only arcade cores
-  ever rotate** — a console was built to output to a television — which is
-  MMagTech's point and what bounds the whole rule.
-- **A turned picture fills the height at its true shape**, MMagTech's call:
-  1080x2160 on the A9, 28% of the width. Upright games keep integer scaling.
-
-**What has NOT been done is look at it on the television.** Every check was a
-capture, including one at 3840x2160 off the A9's own Radeon. A person with a
-pad is still owed.
-
-### 3. One real in-game save, on Dreamcast — **DONE 2026-09-19**
-
-**A person played Crazy Taxi 2, saved inside it, quit through the overlay, and
-the VMU reached RomM.** No save in this class had ever been written by actually
-playing a game here; every round trip before this restored a real card, watched
-the core read it, and sent back byte-identical bytes, which is the correct
-answer for a session that saved nothing and is why forcing an upload needed
-`--sync-test`.
-
-```
-22:45:24  [save] 131072 bytes from the server into /var/lib/cabinetos/bios/dc/vmu_save_A1.bin
-22:48:19  [save] 131072 bytes from dc/vmu_save_A1.bin
-22:48:19  [overlay] exited to Home
-22:48:20  [save] uploaded flycast-native
-```
-
-The middle line is the whole result: it prints only when the card differs from
-the baseline taken at launch, so it is the console saying *this game wrote
-something*. On the server, `Crazy Taxi 2 (USA) (Cabinet).srm` now reads
-`updated 2026-09-20T02:48:19Z` against a `created 2026-08-16` — **the same row
-overwritten rather than a second one**, 131072 bytes, tagged `flycast-native`,
-which is the row an Apple TV already reads.
-
-**It could not have happened a day earlier**, and that is worth keeping: the
-Dreamcast's accelerator and brake are its analogue triggers, and this console
-answered "how far is the trigger pressed" with the right stick's Y axis until
-the same evening. Crazy Taxi literally could not be driven. See *Things that
-will bite you*.
-
-**What is still owed in this area:** every other file-writing platform is
-proven by round trip rather than by play — 3DO, Sega CD, Neo Geo Pocket, DS and
-both arcade emulators. The mechanism is now known to work end to end, so those
-are a matter of playing them.
-
-### 3b. A game that draws nothing — **SOLVED 2026-09-21. It was the SECOND game.**
-
-**THE RULE IS: PLAY A GAME, LEAVE IT, PLAY ANOTHER OF THE SAME PIXEL SIZE.**
-That is the whole of it, and it is why two days of deliberate attempts failed —
-everybody was reproducing "launch this game" and the trigger was the game
-BEFORE it.
-
-`Core::load()` calls `unload()`, which deletes the frame texture and sets
-`texture_ = 0` while leaving `frameWidth_`/`frameHeight_` at the previous game's
-values. The next game generates a fresh texture with NO STORAGE, `sizeChanged`
-comes out false because the dimensions match, and the upload calls
-`glTexSubImage2D` on it: `GL_INVALID_OPERATION`, nothing uploaded, a texture
-that samples black — while the core runs perfectly and plays perfect audio.
-
-Six FBNeo boards in one session all share a resolution. Air Zonk then Devil's
-Crush are both 256x240 and the second was black; Air Zonk then a SNES game is
-256x240 then 256x224, so `sizeChanged` was true and it worked. The first game
-after a restart always worked, because those fields start at zero.
-
-**Fixed** by zeroing them where the texture is generated — the only place that
-knows the texture has no storage, and correct however the texture came to be
-missing. Confirmed by MMagTech on TurboGrafx and 3DO.
-
-**Everything the 2026-09-19 investigation established was true and none of it
-was wrong** — the core was innocent, the upload "succeeded", the texture was on
-the right unit. It was looking at the second game and measuring the first.
-
-**Original report, kept because the shape of it is the lesson.** Found by
-MMagTech on the television, 2026-09-19: six FBNeo launches in one session —
-DoDonPachi, Deathsmiles, Pink Sweets, ESP Ra.De., Mushihime-sama Futari — drew a
-black picture while the core ran normally and played sound. Every launch in
-every fresh process since was fine, including deliberate attempts to reproduce
-it.
-
-**What was established, and it is a lot:**
-
-- **The core is innocent.** The probe read the buffer it hands over:
-  `rgbaMax=248`, a real picture, every frame.
-- **The upload is innocent.** `upload ok`, correct texture on the correct unit,
-  no GL error.
-- **The layout is innocent.** The letterbox glow was drawn from the picture
-  rect and its profile put the window at x 1120..2790 on a 3840x2160 panel,
-  which is exactly where a 240x320 board belongs.
-- **The loop is innocent.** 44% of a core, sleeping in poll, presenting.
-
-So **the frame reaches the texture intact and is lost at sampling**, and the
-console keeps drawing everything else perfectly — which is why it reads as
-"this game does not work" rather than as a fault.
-
-**Two theories, both killed by measurement**, recorded so nobody spends the day
-again: *Flycast poisons the cores after it* (the launch order fitted six for
-six, then Crazy Taxi 2 followed by Pink Sweets rendered fine), and *Flycast
-leaves a GLES sampler object bound* (it leaves none — probed).
-
-**One loose end**: the first upload after a Flycast session reports
-`errBefore=0x502`, a `GL_INVALID_OPERATION` left pending by the teardown.
-Unexplained, and not shown to be related.
-
-**THE INSTRUMENT THAT MAKES THIS TRACTABLE, AND IT IS NEW.** The television can
-be photographed directly, with the session running and undisturbed:
-
-```
-export XDG_RUNTIME_DIR=/run/user/$(id -u) GAMESCOPE_WAYLAND_DISPLAY=gamescope-1
-gamescopectl screenshot /var/home/cabinet/now.png
-```
-
-**`gamescope-1`, not `gamescope-0`** — the first socket refuses the connection.
-That turns "it looks black" into a number: a black game screen measures
-**max pixel 8**, which is not black at all, it is the bias glow at 0.025, and
-reading that is what proved the geometry was right.
 
 ### 4. The console dies if the server is away — **the machine half is FIXED**
 
@@ -1061,90 +1073,6 @@ second has anything to work with.** See open question 15b.
 fallback when no address is configured at all, and it is worse than an error:
 it looks like a working console showing somebody else's games.
 
-### 4b. First run — BUILT, start to finish
-
-**A person can now set this console up with a keyboard and a phone, and never
-touch SSH.** Five screens, the whole chain, on the reference machine.
-
-| | |
-|---|---|
-| `firstrun.{h,cpp}` | the chain, and every rule about what may be skipped |
-| `setup.{h,cpp}` | the five screens, and the workers that keep them drawing |
-| `qr.{h,cpp}` | byte mode, versions 1–10, error correction M |
-| `net.{h,cpp}` | status, scan, join, forget, and the polkit verdict |
-| `bluetooth.{h,cpp}` | the adapter, the scan, and pair/trust/connect |
-| `proc.{h,cpp}` | the one place that starts a process, argv only, never a shell |
-| `60-cabinetos-network.rules` | the grant that stops Phase 6 breaking Wi-Fi |
-
-**SEE IT WITHOUT DISTURBING THE TELEVISION:**
-
-```
-SDL_VIDEODRIVER=offscreen ./cabinetos-frontend --setup-step pair \
-  --screenshot /tmp/x.bmp --render-size 3840x2160 --frames 400
-```
-
-`--setup` forces the flow on a machine that is already configured and **never
-writes anything**, which is the only way anybody here can look at it — both
-machines are set up and taking that away to see a screen is a silly way to lose
-an afternoon.
-
-**THE CHAIN IS ENFORCED, NOT DESCRIBED.** `Machine` is handed a `Facts` and
-judges it; it never calls the network, the disk or a server. `observe()` is the
-one place that goes and looks. That is the same split `screens::` makes and it
-buys the same thing — the whole flow can be walked at any point in it, on a
-machine with nothing attached.
-
-**Which made the rules testable, and the test found a real deadlock on its first
-run.** `--first-run-rules` walks all 96 reachable combinations of facts and
-asserts the REFUSALS rather than the happy path. What it caught: the Wi-Fi
-step's skip was keyed on **Ethernet** being up rather than on being **online**,
-and those coincide only while this console knows about exactly two kinds of
-link. One `net.cpp` change later, a machine online over a third kind would pass
-the network gate and then sit at a Wi-Fi step it could neither satisfy nor skip.
-Reading the code again would not have found it.
-
-**THE A9 SAYS IT NEEDS NO SETUP, AND THAT IS THE RULE THAT MATTERS MOST.** A
-machine with a server address, a token and a user behind that token is ADOPTED
-rather than walked through a wizard, and the marker is back-filled saying so.
-Without that rule, the reference console — set up by hand over SSH, working for
-a day — would have presented a welcome screen the next time it booted. The
-question is *"is this machine configured"*, not *"has this flow been run"*.
-
-**THE QR IS PROVED ALL THE WAY TO THE GLASS.** A capture of the finished
-3840x2160 frame off the A9's own Radeon was handed to a decoder with no cropping
-and no help — exactly as a phone pointed at the television sees it — and read
-back the live pairing URL the server had issued seconds earlier.
-
-### THE WRITES ARE TESTED NOW — `--first-run-writes`
-
-**Completing setup had never written anything, ever.** Every walkthrough used
-`--setup`, which forces the flow on a configured machine and deliberately writes
-nothing — so `setServerAddress` and `markCompleted` had never once been executed
-by the product. **That is the worst failure this feature can have**: a marker
-that does not persist means a console completes setup and boots straight back
-into setup, for ever, on a machine somebody has just installed. It would look
-exactly like a console that cannot be set up at all.
-
-Given that three of 2026-09-20's faults were in code that looked correct and had
-simply never run, that was not a risk worth carrying. `--first-run-writes` runs
-against a scratch root, touches nothing real, passes nine checks and belongs in
-CI. **The token save is the one write not covered, and it is the one that is
-already proven** — both machines here were paired with `--romm-pair`, which
-calls the same `saveToken`.
-
-**MMagTech will not reinstall until the UI is finished and every core is built
-and tested** (2026-09-20), which is the right call — a fresh install is
-expensive and should be spent once on something complete. So the fresh install
-is the FINAL ACCEPTANCE TEST rather than a prerequisite, and most of what it
-would prove can be had sooner:
-
-| | |
-|---|---|
-| The writes | **done** — `--first-run-writes` |
-| An empty server field | **the VM**, with its config moved aside; nothing needs reinstalling |
-| An empty Bluetooth list | **the A9, reversibly** — `bluetoothctl remove` the Pro Controller and it has to be DISCOVERED, which is the real first-run case. Re-pairing it through the product is the test. |
-| The whole thing on a virgin machine | only a fresh install |
-
 ### WHAT THE FRESH INSTALL IS STILL FOR
 
 Everything here has been walked on the reference console — but that machine is
@@ -1207,19 +1135,6 @@ obvious and were both paid for:
 - **Capture after `retro_unload_game`.** A core buffers its writes and flushes
   at shutdown, and Flycast only closes the VMU in its device's destructor.
 
-### 6. The UI freeze IS LIFTED
-
-**Decided 2026-09-17: no more UI is designed or tuned until CabinetOS is
-installed on the reference machine.** The user's call, and **the condition is
-met**: the console runs the frontend on a television, on its own GPU, at the
-panel's native 3840x2160. Everything under *Available now that the console runs
-on a television* is available, in the order it is written.
-
-**The line is the acceptance test, not the subsystem.** If the test is "does
-this look right", it waits. If the test is a measurement or a behaviour, it
-goes ahead — and a screen that already exists is not frozen, because fixing
-something *wrong* is not the same as tuning something.
-
 ### 7. Finish the core options, which is half done
 
 The host answers every option a core declares, and the override table is wired
@@ -1244,7 +1159,10 @@ into the launch path as well as the audit. Two things are left:
 
 Reproducible to the digit, the instrument was checked, and three candidate
 causes are written down with none established. It blocks nothing today, and it
-matters because portable save states are the premise the whole product rests on.
+matters because portable save states are the premise the CARTRIDGE-ERA half of
+this product rests on — **bounded by open question 25 on 2026-09-21**, which
+removed them from PS2, GameCube and everything after. N64 is on the side where
+they stay, so this is still worth fixing.
 The cheapest discriminating experiment is in PROJECT.md.
 
 ### 9. PSP's save state, and a crash that is understood but not closed
@@ -1296,47 +1214,6 @@ Where to start when somebody does:
   own stream at 48000. It was added on 2026-09-21, AFTER this was reported, so
   it cannot be the cause; but it is a second stream on one device and is worth
   ruling out with `--ui-sound off` before blaming the core.
-
-### 9c. A BLACK SCREEN ON LAUNCH, WITH AUDIO — SOLVED, see item 3b
-
-**This was the second-game fault and it is fixed.** Everything below was measured
-before the cause was known and is left as a record of what ruling things out
-looked like — every measurement in it is correct and none of it found the bug,
-because every one of them launched a game into a FRESH PROCESS, which is the one
-case that always worked.
-
-**The lesson worth keeping: a headless test cannot reproduce a fault whose
-trigger is the previous game.** `--launch` on a cold process was the wrong
-instrument, used four times.
-
-#### What was measured before the cause was found
-
-MMagTech, during the UI session: two platforms *"launching with a black screen"*
-and, a moment later, *"i hear audio"* — so the core is running and the picture is
-not arriving. This is almost certainly the same fault as item 3b, which is
-already recorded as real and not reproducible.
-
-**WHAT WAS MEASURED, so nobody repeats it:**
-
-- **3DO renders correctly HEADLESS.** `SDL_VIDEODRIVER=offscreen --launch 3068
-  --frames 900 --render-size 1280x720 --screenshot` gives a frame whose extrema
-  are (0,247) per channel. Not black, and the geometry is right: 320x240 at
-  59.94 fps integer-scaled to a 1280x960 quad at 320,60 of the 1920x1080 canvas.
-- **3DO renders correctly IN THE LIVE SESSION TOO**, on the same build, launched
-  through `tools/ui-loop.sh --game 3068`. Ballz reaches its character-select
-  screen and photographs cleanly.
-
-So it is intermittent rather than per-platform, which is exactly what item 3b
-says. **The two reported platforms are not written down here** because the
-message said "msn snd 3d0" and only the 3DO half is certain — ask before
-assuming which the other one was.
-
-**Do not start from the frontend's draw path.** It was measured above and it is
-correct. The next useful thing is a capture taken AT THE MOMENT it is black,
-which the UI loop can now take without restarting the session: signal the
-running frontend with `kill -USR1` and fetch `/tmp/cabinetos-frame.bmp`. A frame
-that is black in that capture and a frame that is black only on the television
-are two different faults — the second one is gamescope's.
 
 ### 9d. DREAMCAST WILL NOT LAUNCH ON THE A9 — FOUND 2026-09-21, HALF FIXED
 
@@ -1422,20 +1299,6 @@ means fault one, climbing means fault two.
 **RELATED, AND WORTH DOING FIRST:** GameCube audio is item 9b and was reported
 the same day. If both are the same shape, it is the frontend's audio path and
 not two cores — which would be good news, because it is one fix.
-
-### AND THE LOGS ARE READABLE AFTER ALL — worth knowing, it cost time today
-
-`journalctl -u cabinetos-session` shows ONLY systemd's own start/stop lines and
-none of the frontend's output, which reads exactly like a console that does not
-log. It does. The frontend's lines are in the journal without that unit
-attached, so ask for the journal itself and grep it:
-
-```
-sudo journalctl --since "-40 min" -o cat | grep -aE "\[launch\]|\[core\]|\[frontend\]"
-```
-
-That one command is the difference between diagnosing a launch failure in a
-minute and guessing at it for twenty.
 
 ### 10. Nothing warns that a system's BIOS is missing
 
@@ -2068,6 +1931,20 @@ These are ordered. **Do not begin any of them in the VM.**
 - **`core-manifest.json` IS on GitHub**, at `docs/core-manifest.json` in
   Cabinet, and has been since `37ca75d`.
 
+### AND THE LOGS ARE READABLE AFTER ALL — worth knowing, it cost time today
+
+`journalctl -u cabinetos-session` shows ONLY systemd's own start/stop lines and
+none of the frontend's output, which reads exactly like a console that does not
+log. It does. The frontend's lines are in the journal without that unit
+attached, so ask for the journal itself and grep it:
+
+```
+sudo journalctl --since "-40 min" -o cat | grep -aE "\[launch\]|\[core\]|\[frontend\]"
+```
+
+That one command is the difference between diagnosing a launch failure in a
+minute and guessing at it for twenty.
+
 ## The answered questions people keep reopening
 
 ### PS3 STORAGE is answered. PS3 still cannot be PLAYED
@@ -2118,118 +1995,6 @@ not a copy — proved by device and inode, `58:82064` both times.
 
 **The one thing still missing is the screen** that says a drive is not
 connected. The console says it on stderr, once.
-
-## The state that lives on the A9 and not in git — new 2026-09-20
-
-- `~/cores-dev/` — the 21 image cores SYMLINKED, plus **`cabinetos-ps2.so`**
-  (upstream PCSX2 embedded, with `libryml` and `libc4core` beside it) and
-  `dolphin_libretro.so`. This is what `--core-dir` points at.
-- `~/assets-dev/` — **new 2026-09-21.** PCSX2's resources, which it refuses to
-  start without, plus a symlink through to the image's own system files so the
-  other cores keep theirs. `CABINETOS_ASSETS` points here because `/usr` is
-  read-only on a bootc console.
-- ~~`~/heavy/`~~ — **deleted 2026-09-21.** 859 MB of scratch holding three
-  copies of the unshippable libretro PS2 core and duplicates of firmware the
-  console already has properly under `/var/lib/cabinetos/bios/`.
-- `/var/lib/cabinetos/bios/pcsx2/bios/` — the two PS2 BIOS files. **These come
-  from RomM with the game on a real install** and are here by hand only because
-  no image carries the core yet.
-- `/var/lib/cabinetos/bios/dolphin-emu/Sys/` — Dolphin's 15 MB Sys folder. On a
-  real install this ships with the core at `/usr/share/cabinetos/system/`, the
-  way PPSSPP's already does.
-- `~/cabinetos-frontend-dev` — the hand-built frontend the drop-in points at.
-- `~/pcsx2-clean/pcsx2-upstream/` — **new 2026-09-21**, the upstream PCSX2
-  checkout at v2.8.2 and its build tree, 375 MB. It is a **cache**:
-  `cores/build-pcsx2.sh` re-clones and rebuilds it in 43 seconds, so delete it
-  whenever. Point the script at it with
-  `CABINETOS_CORE_SRC=/var/home/cabinet/pcsx2-clean`, or leave that unset and it
-  makes its own under the repo.
-- `~/pcsx2-lab/` — the PS2 BIOS and Homura's CHD, staged where a container can
-  read them. **`:ro` bind mounts of `/var/lib/cabinetos` do not work** — SELinux
-  denies the read and the container simply sees an empty directory, which reads
-  as a missing BIOS. Copy to a scratch directory and mount that with `:Z`.
-- `~/cabinetos-repo/` — **new 2026-09-21**, an rsync of this repository, because
-  the build script has to run on a machine with podman and the Mac is not one.
-  The A9 is now the better build machine by a distance: **24 cores, 25 GB of
-  free RAM and 1.9 TB free**, against the VM's 5 cores, 3 GB and 4.1 GB. The
-  whole PCSX2 library builds there in 25 seconds.
-
-## The state that lives on the VM and not in git
-
-- `~/frontend/` — the frontend source, built with
-  `podman run --rm -v "$PWD":/src:Z -w /src cabinetos-builder make`
-- `~/frontend/cores/build/` — **twenty-one** built cores, where the frontend
-  looks when it is run from there
-- `~/frontend/` is **still the storage root for a build run by hand from that
-  directory**, and that is the dev loop. **It is no longer the session's root**:
-  the VM was upgraded onto the image that carries the console on 2026-09-19,
-  so `tmpfiles.d` now creates `/var/lib/cabinetos` and the session uses it.
-  Two consoles' worth of tree on one machine, deliberately. `~/frontend` holds:
-  - `bios/` — BIOS fetched from RomM, files the cores write into their system
-    directory, and **`PPSSPP/`**, 13 MB of PSP system files that came out of the
-    core build. Copy it from `~/cabinetos/cores/system/` after building that
-    core. **On a console this one comes from the image instead**, at
-    `/usr/share/cabinetos/system/`, and is symlinked in at startup.
-  - `cache/<platform>/` — downloaded games, and the only thing eviction touches
-  - `roms/<platform>/` — kept games. Also still holds one loose
-    `Dr. Mario (World) (Rev 1).gb` for `--core`.
-  - `users/1 - MMagTech/` — every save, state, keep and unsent upload, plus
-    `saves/unattributed/`, which is the two old shared save piles kept whole
-    because nothing in them says which game wrote them.
-  - `config/user.json` — the RomM user id and name, cached so a console with no
-    network still knows whose saves it is holding.
-  - `config/drives.json` — which games drives were here last time, and the ONLY
-    thing about storage that is remembered rather than read off the disk.
-- `/var/mnt/games/CabinetOS/` — **the VM's games drive**, claimed automatically,
-  holding its own `roms/` and `cache/`. The console claims that one folder and
-  nothing else on the disk.
-- `~/cabinetos/` — a clone of this repo, where `cores/build-core.sh` runs. Its
-  `cores/build/` has twenty, not twenty-one.
-- `~/cabinetos/.core-src/` — **now a SYMLINK to `/var/mnt/games/core-src`**,
-  moved there 2026-09-20 because `/var` had fallen to 605 MB free and the
-  builder container would not rebuild. Same 4.8 GB, of which PPSSPP is 3.4 GB,
-  on the disk that has 65 GB. Still a cache: delete any of it to make room and
-  the next build re-clones. `/var` is back to about 5 GB free.
-- `~/run-frontend.sh` — the session launcher, used via `CABINETOS_APP`. The
-  original is `run-frontend.sh.bak`. **The drop-in that pointed the session at
-  it was moved aside on 2026-09-19** to `~/10-frontend.conf.disabled`: its own
-  comment said it goes away once the binary ships in the image, and it does.
-  Put it back if you want the session running a hand-built frontend.
-- `/etc/cabinetos/session.env` — the RomM address, added 2026-09-19. Same file
-  as on the A9.
-- `~/.config/cabinetos/romm.json` — the RomM token, 0600
-- `/var/mnt/games/flatpak/` — **a flatpak user installation holding RPCS3**,
-  2.7 GB, reached with `FLATPAK_USER_DIR=/var/mnt/games/flatpak`. On the games
-  disk deliberately: the KDE runtime it needs is 1.1 GB and `/var` has 5 GB.
-- `/var/mnt/games/layout-backup/` — a tar and a `sha256sum` list of every save
-  the VM held before the folder layout moved them. Belt and braces; 11 MB,
-  delete it whenever.
-- `/var/mnt/games/ps3lab/` — the PS3 experiment. 195 MB of firmware, two
-  installed games, both `.rap`s, and the PUP. RPCS3's renderer is set to
-  **Null** because the VM has no Vulkan.
-
-### The VM has TWO disks, and the second one is the point
-
-| | |
-|---|---|
-| `/dev/vda4` → `/var` | 21.6 GB btrfs, **about 5.7 GB free**. The OS and everything above. |
-| `/dev/vdb` → `/var/mnt/games` | **100 GB btrfs**, label `cabinetos-games`, about 65 GB free. |
-
-In `/etc/fstab` by UUID with `nofail`, and **proved across a reboot**. `nofail`
-matters: a machine that will not boot because a games drive is missing is
-exactly what open question 14 forbids.
-
-**One of its four purposes is still untested.** *That a missing drive degrades
-rather than errors* cannot be exercised yet: `storage::locations()` returns one
-location, so there is no second one to remove. It becomes testable the day open
-question 14's second location is wired in.
-
-**`disk_config/disk.toml` still says `minsize = "20 GiB"`**, so a VM rebuilt
-from a fresh qcow2 comes out small again with no second disk. That number
-should change; it is a one-line edit nobody has made.
-
-`podman image prune -f` is still the first thing to try when `/var` gets tight,
-then `~/cabinetos/.core-src`.
 
 ## Things the user wants discussed, each in its own session
 
@@ -2304,6 +2069,21 @@ at its draw site. This is a list, not the record.
   server with nothing for this core falls back to this machine's newest state.
 
 #### What is left, and it is short
+
+- **WHETHER THE CARTRIDGE-ERA CORES KEEP "SAVE STATE" IN THE PAUSE MENU IS OPEN,
+  AND IT IS A UI DECISION.** Open question 25 removed save states from PS2,
+  GameCube and everything after on 2026-09-21, and **explicitly left the
+  twenty-one older cores open** — there a state is often the only way to stop
+  mid-level, and it is the idiom every emulator frontend uses. So the menu would
+  offer different items on different systems, which needs deciding rather than
+  assuming. **The defensible principle is *states exist where the system has no
+  save of its own*** — roughly the cartridge/disc line, but per-GAME in truth,
+  and a rule that is nearly right is how a console ends up feeling arbitrary.
+
+  **It belongs in this session, not in an emulator change.** Open question 25
+  says so directly: it touches 21 working cores, the pause menu's shape and what
+  Cabinet's other platforms expect in a RomM row, and it is one conversation
+  with open question 23 and the UI pass rather than three features.
 
 - **SAVE AND LOAD STATE ARE UNVERIFIED BY A PERSON.** Everything above was built
   and compiled at the end of a long session and MMagTech had not yet retried it.
@@ -2424,10 +2204,43 @@ question 10 assumes *"a machine that stays awake and blanks its display"* is the
 likely default, and the image deliberately keeps `ds-inhibit`, whose entire job
 is making idle detection behave properly on a machine that does not detect idle.
 
-**Take it with the CEC work**, because the console turns the television on and is
-woken by it, and blanking our output while the set stays on is a different
-behaviour from letting the set sleep while we stay lit. The two answers have to
-agree.
+**BLANKING DOES NOT NEED CEC, AND THAT SPLITS THIS IN TWO — asked and answered
+2026-09-21.** MMagTech: *"if computers don't have CEC then how does my monitor
+wake and sleep on my computer?"* It does not use CEC. **DPMS** is power
+management on the VIDEO link — the machine stops sending a picture and the
+display sleeps by itself. **CEC** is a control bus that sends commands, and it
+is only needed to turn a set back ON and pick its input.
+
+| | Needs CEC |
+|---|---|
+| Blank the screen, let the set sleep | **No** |
+| Turn the television on and select the input | **Yes** |
+
+So **half of this is not blocked on the CEC work**, which the old text implied
+it was. `/sys/class/drm/card1-HDMI-A-1/dpms` is present and writable on the A9
+and nothing ever writes to it.
+
+**AND THERE IS NO CEC ADAPTER ON THAT MACHINE AT ALL** — no `/dev/cec*`
+devices, measured 2026-09-21. CEC over HDMI on PC graphics is often not wired
+up by the driver, so this may be impossible on this hardware rather than merely
+unwritten. **Check before planning around it.**
+
+**BURN-IN IS THE REASON TO DO IT.** MMagTech's framing, and it is the right
+one: not tidiness, hardware damage on somebody's television. The risk here is
+specific — the top bar, the account chip and the shelf headers are bright,
+static and in fixed positions, on a console that sits on Home for hours. **A
+paused game is the second case and is worse**, because a frozen HUD is brighter
+and nothing dims it.
+
+Cheapest first, and the order matters: **pixel shift** (nudge the canvas a few
+points every few minutes — nearly free, since everything is already drawn
+against a canvas origin, and it needs no idle detection at all), then **dim
+then blank on idle** (the dim is ours, the blank is the DPMS node, and this is
+the part that needs the idle detection that does not exist), and **a
+screensaver last** — it looks like the answer and is the weakest, because the
+panel stays lit.
+
+Open question 10b has all of it.
 
 ### Switch, or Xbox
 
@@ -2456,20 +2269,126 @@ storage question: **a single 37 GB title is larger than the free space this
 console keeps in reserve**, and the cache, both floors and Download All were
 all designed against cartridge and disc-sized games.
 
-### Account switching
+### Account switching — DESIGNED 2026-09-21, open question 26. Not built.
 
-RomM has users; tvOS already switches between them. Raised 2026-09-16 with the
-words "we would implement it slightly different", and explicitly deferred to a
-session of its own. Read Cabinet's tvOS account handling and
-`Auth/Keychain.swift` first (the token is already keyed by server host), then
-**ask what the difference is** before writing anything. It touches things
-already built: Home is assembled from RomM's play history, and favourites and
-recents are RomM's rather than local.
+**The question this entry used to end on has been asked and answered.** It said
+to read Cabinet and then *"ask what the difference is"* before writing anything.
+That happened: Cabinet's `TVProfileStore`, `TVAccountSwitcher` and its own
+`docs/scope-tvos-account-switching.md` were read, four questions were put to
+MMagTech, and **open question 26 has the decisions and the shape to build.** The
+short version:
 
-**And it now has a second half.** The token lives at
-`~/.config/cabinetos/romm.json` under the session user, and the server address
-lives in `/etc/cabinetos/session.env`, which is one machine-wide file. Neither
-shape has anywhere to put a second account.
+| | |
+|---|---|
+| **One server per console** | Every account is a user on the one paired server. A divergence from Cabinet, and it pays: a RomM user id is then unique, so **the account key is the RomM user id** and `users/<id> - <name>` needs no change. |
+| **Boots as whoever played last** | The chip on Home opens the switcher. No picker at boot — one person is the common case and a picker taxes every boot to serve the exception. |
+| **All four parts in the first pass** | Switch, add from the console, remove, and an optional PIN. |
+| **PIN off by default** | Cabinet's own answer after leaving it open. A number pad the pad can drive. |
+
+**THE STORAGE HALF WAS ALREADY FINISHED AND NOBODY HAD SAID SO.** `storage.h`'s
+per-user/shared table — saves and keeps per person, ROMs and BIOS and cores
+shared — is the same call Cabinet's design doc spends its longest section
+making, for the same reason: per-user containers would partition the ROM cache
+and make everyone in the house re-download the same disc. It is already right
+here.
+
+**AND THE TOKEN IS THE IDENTITY, WHICH IS WHAT MAKES THIS SMALL.**
+`resolveCurrentUser` asks `/api/users/me` with whatever token the client holds.
+Switching is: swap the token, re-resolve, reload. Cabinet's own comment on the
+equivalent: *"nothing downstream needs to know profiles exist at all."*
+
+**The two things that will bite, both in open question 26 in full:** adding an
+account must not re-enter first run (pair on a separate client and write nothing
+until `/api/users/me` answers, because `firstrun.cpp` decides setup is needed by
+looking for a token and a user, and a half-added account fails that test); and
+**everything on screen after a switch has to be torn down**, because Home,
+favourites and recents are the server's and belong to the account, and this
+console also holds a per-user download queue, pending uploads and keep list.
+
+**THERE IS NO ADOPTION AND THERE IS NOT GOING TO BE.** MMagTech, 2026-09-21:
+nobody else is running this. The two machines here were written into
+`accounts.json` **by hand, once**, and both start as account 1. This is the same
+call the folder layout already made and recorded — *"there is no migration tool
+in the tree and there should not be"*. If somebody adds one, it should be a
+one-shot probe that is deleted afterwards, not a branch in the startup path.
+
+#### WHAT IS BUILT AND MEASURED, 2026-09-21
+
+| | |
+|---|---|
+| `frontend/src/accounts.{h,cpp}` | the store: the list, one token per account, and the rules |
+| the list | `<storage config>/accounts.json` — cached identity, same tier as `user.json` |
+| a token | `~/.config/cabinetos/accounts/<rommUserId>.json`, 0600 |
+| pairing | `accounts::recordPairing` is the ONE place a pairing becomes an account, from both first run's screen and `--romm-pair`. It asks `/api/users/me` rather than being told, because that id is what the save path is built from. |
+| startup | the ACTIVE account's token, and the console says `[accounts] acting as 1 - MMagTech` |
+| the switch | `switchAccount` in main.cpp — activate, re-resolve, `loadLibrary`, `refreshKeeps` |
+| `--accounts` | what this console knows, read-only |
+| `--accounts-test` | 25 assertions against a scratch root, all refusals |
+| `--switch-account <id>` | exercises the switch with no switcher screen yet |
+| `--keepers <romId>` | who keeps a game and how many copies are on disk |
+
+**WHAT REFUSES A SWITCH, and both are about a save reaching the wrong person:**
+a **running game**, because the core writes its card at unload and `filesave`
+files it under whoever is current; and **an upload in flight**, because the
+uploader holds a pointer to the very client whose token is being swapped, so it
+would send the previous account's save to the new account's library.
+
+**VERIFIED WITH TWO REAL ACCOUNTS, 2026-09-21.** `12 - vivian` was created on
+the server and paired, and the switch has run both ways on the VM:
+`switched to 12 - vivian, 412 games` / `switched to 1 - MMagTech, 1147 games`,
+with `users/12 - vivian/` appearing beside MMagTech's tree.
+
+**AND IT PROVED A CLAIM IN OPEN QUESTION 26 WRONG.** That section said the
+catalogue is the same for everybody because there is one server per console.
+**RomM scopes the library to the user** — 1147 against 412, same server, same
+minute. The code was already right because `loadLibrary` replaces everything in
+one pass; the reasoning was not, and the next person to optimise a switch would
+have read it and skipped the refetch.
+
+**WHOEVER APPROVES THE PAIRING CODE IS WHO GETS ADDED.** The first attempt was
+approved in a browser still signed in as MMagTech and correctly re-paired
+account 1 rather than making a duplicate — which had only been asserted against
+a scratch root until then. Sign in as the person being added, in a private
+window. `--romm-pair` says so before it prints the code.
+
+**THE TWO REFUSALS ARE NOT EQUALLY LIVE, asked by MMagTech and checked rather
+than assumed.** *"Why or how would you switch mid game?"* — you cannot. While a
+game runs the core owns the pad (`InputOwner::Game`), the bar is not drawn at
+all, and the pause menu's four rows are Resume, Save state, Load latest and
+Exit. **Nothing but `--switch-account` can make that branch fire**, so do not
+read it as a tested guard. It is kept because the door is one row wide: the day
+anybody adds "Switch user" to the pause menu, it is what stops a running game's
+save being filed under the wrong person.
+
+**The upload refusal IS reachable and is the one that matters.** Exit a game,
+the save starts going up in the background, you land on Home, and the chip is
+right there. A few seconds wide, and anybody switching users would walk into
+it. Still unexercised, but it is a real path rather than a hypothetical one.
+
+**A SEGFAULT WORTH KEEPING.** `accounts::find` returns a pointer INTO the vector
+it is handed, which is why it takes one rather than hiding a static, and the
+header says so — and the first call site passed `accounts::all()` inline, so the
+temporary died at the end of the `if` condition. It crashed on the first run.
+**An API shaped to prevent a mistake does not prevent it.**
+
+#### WHAT IS LEFT, and it is the visible half
+
+- **The account chip on Home**, top-right. `storage::User::avatar` has been
+  waiting for it with a comment saying so; `romm::User::avatarPath` records
+  which URL actually serves the picture and which is a 404.
+- **The switcher screen**: every account a row, the active one marked and not
+  re-selectable, an Add row at the bottom.
+- **Adding an account from the console.** `recordPairing` is ready; what is
+  missing is a screen that pairs on a SEPARATE `romm::Client` so adding somebody
+  mid-session cannot throw the console back into setup.
+- **Removing one**, with the active account's row disabled — `accounts::remove`
+  already refuses it, so the row is the hint and the store is the enforcement.
+- **The PIN pad.** `accounts::setPin`/`checkPin` exist and are off by default. A
+  full-screen number pad a controller can drive, not a text field in a dialog.
+  **The PIN is stored as typed in a 0600 file** and `accounts.h` says plainly
+  what that is worth: a deterrent against a sibling with a controller, not a
+  secret against somebody with a shell. Do not "fix" that with a hand-rolled
+  digest.
 
 ## Licensing, which is now written down
 
@@ -2557,6 +2476,380 @@ own rule is that a fact carried across is a fact nobody has checked.
    exactly like a current one, and the comment is what got remembered rather
    than the code. The memory-card half of that sentence IS still true, which is
    what makes the rest of it convincing.
+
+## Solved, and kept for the lesson
+
+**Finished work, with its investigations intact. Nothing here is queued and
+nothing here is owed.** It sits at the back so the queue above holds only live
+work, and it is kept rather than deleted because several of these records are
+worth more than the fault they closed — what ruling something out actually
+looked like, and three separate cases of measuring in a configuration nobody
+plays in.
+
+**Cross-references elsewhere in this file still point here by number** — "see
+item 3b", "item 9c", "item 1b". No item was renumbered when it moved.
+
+### PLAYSTATION 2 AND GAMECUBE PLAY — 2026-09-20
+
+**1232 playable games, up from 1147.** Both systems draw a picture on the
+television off the A9's Radeon. The work is in the `vulkan-host` branch.
+
+**It was never about the emulators.** Both libretro cores existed, both already
+had Vulkan compiled in, and `catalog.cpp` has routed `ps2 -> pcsx2` and
+`ngc -> dolphin` since the table was written — so two `.so` files in a core
+directory turned "not built on this console yet" into 85 playable games with
+no code change at all. What was missing was **this frontend's half of a
+contract libretro already specifies**: the instance, the device, the queue and
+somewhere to put the picture. RetroArch implements that end; this console owns
+its frontend and had only ever done the OpenGL ES half.
+
+See open question 20 for the whole thing. The three one-line faults:
+
+1. `GET_PREFERRED_HW_RENDER` was hard-wired to GLES, so **Dolphin never asked
+   for the Vulkan it has compiled in**.
+2. `SET_HW_RENDER` refused Vulkan by name.
+3. **Dolphin checks for a `VkSurfaceKHR` to decide whether it has a display.**
+   With none it renders and never presents — fifty seconds of emulated Mario
+   Kart, correct audio, a black screen. It gets a `VK_EXT_headless_surface`.
+
+**MEMORY CARDS: PS2 TRAVELS, GAMECUBE DOES NOT YET.** A card written on the Mac
+lands on the console and the game reads it — proved with Burnout 3, which is
+the only real save that exists for either system. GameCube saves and syncs but
+uses this console's own row naming; see open question 12b for why that is
+deliberate.
+
+**SIX OF THE SEVEN CARDS ON THE SERVER WERE EMPTY** and were deleted at
+MMagTech's request on 2026-09-20. Cabinet for Mac uploads a card on first play
+regardless of content and has no freshness rule for either platform — the same
+fault `catalog.h` records for Dreamcast, worse ratio. **CabinetOS now refuses**;
+both rules are measured and in `filesave.cpp`.
+
+**WHAT IS NOT DONE, and none of it is hidden:**
+
+- **Nobody has saved inside a game and watched it go up.** The download half is
+  proved; the upload half is the same code Crazy Taxi 2 proved for Dreamcast.
+- **THE PS2 *LIBRETRO CORE* STILL CANNOT SHIP AND NEVER WILL** — its source
+  repository does not exist. **But PlayStation 2 is no longer blocked**, because
+  the embed route was measured on 2026-09-21 and is open: see item 1a. The
+  GameCube core can be pinned and that part is unchanged.
+- **TWO OPEN BUGS FROM ONE HOUR OF PLAY, both reported by MMagTech and neither
+  reproducible from here.** See item 1b.
+
+### 1b. BOTH BUGS FOUND BY PLAYING ARE CLOSED — one fixed, one not reproduced
+
+#### THE TUNNEL IS FIXED — MMagTech, 2026-09-21: *"tunnel was gone on new core"*
+
+It went away with the move to upstream PCSX2, so it belonged to the libretro
+core that has since been deleted from the machine — which is also why it never
+reproduced from here: **every measurement was taken against the emulator that
+did not have the fault.** No change was made to chase it and none is needed.
+
+The investigation is kept below because its conclusion was right for the wrong
+reason, and the warning at the end of it is still good advice.
+
+**"It looks like I was looking through a tunnel when racing"**, Burnout 3 on
+the television. **Every capture taken here measures a correct 4:3 picture
+exactly filling its quad** — at 1920x1080 and 3840x2160, in a menu and in
+gameplay, on both bridge routes, with the widescreen hint on and off. The new
+`[picture]` line prints the four numbers that have to agree and they agree:
+
+```
+[picture] core 640x448 aspect 1.3333 -> quad 1440x1080 (1.3333) at 240,0
+          uv 0.0000,0.0000..0.8333,0.8750
+```
+
+**So it is not the layout and not the texture coordinates.** "Tunnel" describes
+a FIELD OF VIEW rather than an aspect, which points at the emulator's own
+settings rather than the frontend — start with the 78 core options, and ask
+which game and whether it happens from a cold boot or only after loading the
+Mac's memory card. **Do not trust a bounding-box measurement here**: the first
+three this session were confounded by the game's own black borders and by the
+pause menu's dimming, and one of them sent an hour the wrong way.
+
+#### NOT REPRODUCED, WHICH IS NOT THE SAME AS FIXED: THE PAUSE MENU'S EXIT
+
+**This heading said STILL OPEN and the entry above it said closed.** Both were
+written the same day and the second is right: MMagTech, *"you can consider the
+hang done as we havent hit it again."* **No change was made that targeted it**,
+so the suspect below was never eliminated — it outlived a change rather than
+being killed by one. If it comes back, this is still where to look.
+
+**THE PAUSE MENU'S EXIT LEFT THE CONSOLE STUCK.** The menu was on screen with
+"Exit to Home" focused and the process was **asleep at 0% CPU** — and the UI
+loop is unpaced, so 0% means the frame loop had STOPPED, not that a button was
+ignored. That is a hang in teardown. **It does not reproduce**: exiting at 1500
+frames in works headlessly and under gamescope when driven from code. The
+suspect is `Core::unloadGame` on a threaded core —
+`vk::destroyContext` calls `deviceWaitIdle` on a device the CORE created and
+may already have torn down in its own `context_destroy`. **Get a backtrace next
+time rather than theorising**: the process is still there, so
+`gdb -p <pid> -batch -ex "thread apply all bt 12"`.
+
+### 2. Vertical arcade games play the right way up — DONE 2026-09-19
+
+**`RETRO_ENVIRONMENT_SET_ROTATION` was in `libretro.h` and handled nowhere.**
+DoDonPachi and every other TATE board rendered sideways; 223 arcade games were
+affected. It is fixed, and PROJECT.md's *Vertical arcade boards, and the turn
+they ask for* has the whole thing. The three parts worth carrying:
+
+- **The turn goes on the quad's CORNER in the vertex shader**, before the
+  corner looks up a texture coordinate. It cannot go in `u0,v0,u1,v1` — those
+  flip, they never transpose.
+- **A turned board's declared aspect is ALREADY turned.** FBNeo says 0.75 for
+  DoDonPachi while handing back 448x224. Inverting it turns the picture twice;
+  Cabinet's own comment says that "stretched every vertical game". So a turned
+  picture takes its shape from raw pixels. Safe because **only arcade cores
+  ever rotate** — a console was built to output to a television — which is
+  MMagTech's point and what bounds the whole rule.
+- **A turned picture fills the height at its true shape**, MMagTech's call:
+  1080x2160 on the A9, 28% of the width. Upright games keep integer scaling.
+
+**What has NOT been done is look at it on the television.** Every check was a
+capture, including one at 3840x2160 off the A9's own Radeon. A person with a
+pad is still owed.
+
+### 3. One real in-game save, on Dreamcast — **DONE 2026-09-19**
+
+**A person played Crazy Taxi 2, saved inside it, quit through the overlay, and
+the VMU reached RomM.** No save in this class had ever been written by actually
+playing a game here; every round trip before this restored a real card, watched
+the core read it, and sent back byte-identical bytes, which is the correct
+answer for a session that saved nothing and is why forcing an upload needed
+`--sync-test`.
+
+```
+22:45:24  [save] 131072 bytes from the server into /var/lib/cabinetos/bios/dc/vmu_save_A1.bin
+22:48:19  [save] 131072 bytes from dc/vmu_save_A1.bin
+22:48:19  [overlay] exited to Home
+22:48:20  [save] uploaded flycast-native
+```
+
+The middle line is the whole result: it prints only when the card differs from
+the baseline taken at launch, so it is the console saying *this game wrote
+something*. On the server, `Crazy Taxi 2 (USA) (Cabinet).srm` now reads
+`updated 2026-09-20T02:48:19Z` against a `created 2026-08-16` — **the same row
+overwritten rather than a second one**, 131072 bytes, tagged `flycast-native`,
+which is the row an Apple TV already reads.
+
+**It could not have happened a day earlier**, and that is worth keeping: the
+Dreamcast's accelerator and brake are its analogue triggers, and this console
+answered "how far is the trigger pressed" with the right stick's Y axis until
+the same evening. Crazy Taxi literally could not be driven. See *Things that
+will bite you*.
+
+**What is still owed in this area:** every other file-writing platform is
+proven by round trip rather than by play — 3DO, Sega CD, Neo Geo Pocket, DS and
+both arcade emulators. The mechanism is now known to work end to end, so those
+are a matter of playing them.
+
+### 3b. A game that draws nothing — **SOLVED 2026-09-21. It was the SECOND game.**
+
+**THE RULE IS: PLAY A GAME, LEAVE IT, PLAY ANOTHER OF THE SAME PIXEL SIZE.**
+That is the whole of it, and it is why two days of deliberate attempts failed —
+everybody was reproducing "launch this game" and the trigger was the game
+BEFORE it.
+
+`Core::load()` calls `unload()`, which deletes the frame texture and sets
+`texture_ = 0` while leaving `frameWidth_`/`frameHeight_` at the previous game's
+values. The next game generates a fresh texture with NO STORAGE, `sizeChanged`
+comes out false because the dimensions match, and the upload calls
+`glTexSubImage2D` on it: `GL_INVALID_OPERATION`, nothing uploaded, a texture
+that samples black — while the core runs perfectly and plays perfect audio.
+
+Six FBNeo boards in one session all share a resolution. Air Zonk then Devil's
+Crush are both 256x240 and the second was black; Air Zonk then a SNES game is
+256x240 then 256x224, so `sizeChanged` was true and it worked. The first game
+after a restart always worked, because those fields start at zero.
+
+**Fixed** by zeroing them where the texture is generated — the only place that
+knows the texture has no storage, and correct however the texture came to be
+missing. Confirmed by MMagTech on TurboGrafx and 3DO.
+
+**Everything the 2026-09-19 investigation established was true and none of it
+was wrong** — the core was innocent, the upload "succeeded", the texture was on
+the right unit. It was looking at the second game and measuring the first.
+
+**Original report, kept because the shape of it is the lesson.** Found by
+MMagTech on the television, 2026-09-19: six FBNeo launches in one session —
+DoDonPachi, Deathsmiles, Pink Sweets, ESP Ra.De., Mushihime-sama Futari — drew a
+black picture while the core ran normally and played sound. Every launch in
+every fresh process since was fine, including deliberate attempts to reproduce
+it.
+
+**What was established, and it is a lot:**
+
+- **The core is innocent.** The probe read the buffer it hands over:
+  `rgbaMax=248`, a real picture, every frame.
+- **The upload is innocent.** `upload ok`, correct texture on the correct unit,
+  no GL error.
+- **The layout is innocent.** The letterbox glow was drawn from the picture
+  rect and its profile put the window at x 1120..2790 on a 3840x2160 panel,
+  which is exactly where a 240x320 board belongs.
+- **The loop is innocent.** 44% of a core, sleeping in poll, presenting.
+
+So **the frame reaches the texture intact and is lost at sampling**, and the
+console keeps drawing everything else perfectly — which is why it reads as
+"this game does not work" rather than as a fault.
+
+**Two theories, both killed by measurement**, recorded so nobody spends the day
+again: *Flycast poisons the cores after it* (the launch order fitted six for
+six, then Crazy Taxi 2 followed by Pink Sweets rendered fine), and *Flycast
+leaves a GLES sampler object bound* (it leaves none — probed).
+
+**One loose end**: the first upload after a Flycast session reports
+`errBefore=0x502`, a `GL_INVALID_OPERATION` left pending by the teardown.
+Unexplained, and not shown to be related.
+
+**THE INSTRUMENT THAT MAKES THIS TRACTABLE, AND IT IS NEW.** The television can
+be photographed directly, with the session running and undisturbed:
+
+```
+export XDG_RUNTIME_DIR=/run/user/$(id -u) GAMESCOPE_WAYLAND_DISPLAY=gamescope-1
+gamescopectl screenshot /var/home/cabinet/now.png
+```
+
+**`gamescope-1`, not `gamescope-0`** — the first socket refuses the connection.
+That turns "it looks black" into a number: a black game screen measures
+**max pixel 8**, which is not black at all, it is the bias glow at 0.025, and
+reading that is what proved the geometry was right.
+
+### 4b. First run — BUILT, start to finish
+
+**A person can now set this console up with a keyboard and a phone, and never
+touch SSH.** Five screens, the whole chain, on the reference machine.
+
+| | |
+|---|---|
+| `firstrun.{h,cpp}` | the chain, and every rule about what may be skipped |
+| `setup.{h,cpp}` | the five screens, and the workers that keep them drawing |
+| `qr.{h,cpp}` | byte mode, versions 1–10, error correction M |
+| `net.{h,cpp}` | status, scan, join, forget, and the polkit verdict |
+| `bluetooth.{h,cpp}` | the adapter, the scan, and pair/trust/connect |
+| `proc.{h,cpp}` | the one place that starts a process, argv only, never a shell |
+| `60-cabinetos-network.rules` | the grant that stops Phase 6 breaking Wi-Fi |
+
+**SEE IT WITHOUT DISTURBING THE TELEVISION:**
+
+```
+SDL_VIDEODRIVER=offscreen ./cabinetos-frontend --setup-step pair \
+  --screenshot /tmp/x.bmp --render-size 3840x2160 --frames 400
+```
+
+`--setup` forces the flow on a machine that is already configured and **never
+writes anything**, which is the only way anybody here can look at it — both
+machines are set up and taking that away to see a screen is a silly way to lose
+an afternoon.
+
+**THE CHAIN IS ENFORCED, NOT DESCRIBED.** `Machine` is handed a `Facts` and
+judges it; it never calls the network, the disk or a server. `observe()` is the
+one place that goes and looks. That is the same split `screens::` makes and it
+buys the same thing — the whole flow can be walked at any point in it, on a
+machine with nothing attached.
+
+**Which made the rules testable, and the test found a real deadlock on its first
+run.** `--first-run-rules` walks all 96 reachable combinations of facts and
+asserts the REFUSALS rather than the happy path. What it caught: the Wi-Fi
+step's skip was keyed on **Ethernet** being up rather than on being **online**,
+and those coincide only while this console knows about exactly two kinds of
+link. One `net.cpp` change later, a machine online over a third kind would pass
+the network gate and then sit at a Wi-Fi step it could neither satisfy nor skip.
+Reading the code again would not have found it.
+
+**THE A9 SAYS IT NEEDS NO SETUP, AND THAT IS THE RULE THAT MATTERS MOST.** A
+machine with a server address, a token and a user behind that token is ADOPTED
+rather than walked through a wizard, and the marker is back-filled saying so.
+Without that rule, the reference console — set up by hand over SSH, working for
+a day — would have presented a welcome screen the next time it booted. The
+question is *"is this machine configured"*, not *"has this flow been run"*.
+
+**THE QR IS PROVED ALL THE WAY TO THE GLASS.** A capture of the finished
+3840x2160 frame off the A9's own Radeon was handed to a decoder with no cropping
+and no help — exactly as a phone pointed at the television sees it — and read
+back the live pairing URL the server had issued seconds earlier.
+
+### THE WRITES ARE TESTED NOW — `--first-run-writes`
+
+**Completing setup had never written anything, ever.** Every walkthrough used
+`--setup`, which forces the flow on a configured machine and deliberately writes
+nothing — so `setServerAddress` and `markCompleted` had never once been executed
+by the product. **That is the worst failure this feature can have**: a marker
+that does not persist means a console completes setup and boots straight back
+into setup, for ever, on a machine somebody has just installed. It would look
+exactly like a console that cannot be set up at all.
+
+Given that three of 2026-09-20's faults were in code that looked correct and had
+simply never run, that was not a risk worth carrying. `--first-run-writes` runs
+against a scratch root, touches nothing real, passes nine checks and belongs in
+CI. **The token save is the one write not covered, and it is the one that is
+already proven** — both machines here were paired with `--romm-pair`, which
+calls the same `saveToken`.
+
+**MMagTech will not reinstall until the UI is finished and every core is built
+and tested** (2026-09-20), which is the right call — a fresh install is
+expensive and should be spent once on something complete. So the fresh install
+is the FINAL ACCEPTANCE TEST rather than a prerequisite, and most of what it
+would prove can be had sooner:
+
+| | |
+|---|---|
+| The writes | **done** — `--first-run-writes` |
+| An empty server field | **the VM**, with its config moved aside; nothing needs reinstalling |
+| An empty Bluetooth list | **the A9, reversibly** — `bluetoothctl remove` the Pro Controller and it has to be DISCOVERED, which is the real first-run case. Re-pairing it through the product is the test. |
+| The whole thing on a virgin machine | only a fresh install |
+
+### 6. The UI freeze IS LIFTED
+
+**Decided 2026-09-17: no more UI is designed or tuned until CabinetOS is
+installed on the reference machine.** The user's call, and **the condition is
+met**: the console runs the frontend on a television, on its own GPU, at the
+panel's native 3840x2160. Everything under *Available now that the console runs
+on a television* is available, in the order it is written.
+
+**The line is the acceptance test, not the subsystem.** If the test is "does
+this look right", it waits. If the test is a measurement or a behaviour, it
+goes ahead — and a screen that already exists is not frozen, because fixing
+something *wrong* is not the same as tuning something.
+
+### 9c. A BLACK SCREEN ON LAUNCH, WITH AUDIO — SOLVED, see item 3b
+
+**This was the second-game fault and it is fixed.** Everything below was measured
+before the cause was known and is left as a record of what ruling things out
+looked like — every measurement in it is correct and none of it found the bug,
+because every one of them launched a game into a FRESH PROCESS, which is the one
+case that always worked.
+
+**The lesson worth keeping: a headless test cannot reproduce a fault whose
+trigger is the previous game.** `--launch` on a cold process was the wrong
+instrument, used four times.
+
+#### What was measured before the cause was found
+
+MMagTech, during the UI session: two platforms *"launching with a black screen"*
+and, a moment later, *"i hear audio"* — so the core is running and the picture is
+not arriving. This is almost certainly the same fault as item 3b, which is
+already recorded as real and not reproducible.
+
+**WHAT WAS MEASURED, so nobody repeats it:**
+
+- **3DO renders correctly HEADLESS.** `SDL_VIDEODRIVER=offscreen --launch 3068
+  --frames 900 --render-size 1280x720 --screenshot` gives a frame whose extrema
+  are (0,247) per channel. Not black, and the geometry is right: 320x240 at
+  59.94 fps integer-scaled to a 1280x960 quad at 320,60 of the 1920x1080 canvas.
+- **3DO renders correctly IN THE LIVE SESSION TOO**, on the same build, launched
+  through `tools/ui-loop.sh --game 3068`. Ballz reaches its character-select
+  screen and photographs cleanly.
+
+So it is intermittent rather than per-platform, which is exactly what item 3b
+says. **The two reported platforms are not written down here** because the
+message said "msn snd 3d0" and only the 3DO half is certain — ask before
+assuming which the other one was.
+
+**Do not start from the frontend's draw path.** It was measured above and it is
+correct. The next useful thing is a capture taken AT THE MOMENT it is black,
+which the UI loop can now take without restarting the session: signal the
+running frontend with `kill -USR1` and fetch `/tmp/cabinetos-frame.bmp`. A frame
+that is black in that capture and a frame that is black only on the television
+are two different faults — the second one is gamescope's.
 
 ## How the user wants this done
 

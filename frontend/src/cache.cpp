@@ -417,7 +417,11 @@ bool keep(const storage::User& u, int romId, const std::string& record,
     return true;
 }
 
-bool unkeep(const storage::User& u, int romId, bool keepTheBytes) {
+bool unkeep(const storage::User& u, int romId, bool keepTheBytes, Release* out) {
+    Release scratch;
+    Release& r = out ? *out : scratch;
+    r = Release{};
+
     if (!u.valid()) return false;
     const std::string path = keepPath(u, romId);
     struct stat st;
@@ -430,6 +434,8 @@ bool unkeep(const storage::User& u, int romId, bool keepTheBytes) {
     if (!rest.empty()) {
         std::fprintf(stderr, "[keep] %d released by user %d, still kept by %zu other(s)\n",
                      romId, u.id, rest.size());
+        r.what = Release::What::StillKept;
+        r.otherKeepers = static_cast<int>(rest.size());
         return true;
     }
 
@@ -442,6 +448,7 @@ bool unkeep(const storage::User& u, int romId, bool keepTheBytes) {
         // cache and eviction takes it in the ordinary way.
         relocate(p, /*toKept=*/false);
         std::fprintf(stderr, "[keep] %d released to the cache\n", romId);
+        r.what = Release::What::Demoted;
         return true;
     }
 
@@ -451,6 +458,7 @@ bool unkeep(const storage::User& u, int romId, bool keepTheBytes) {
     if (!removeTree(p.entryPath)) {
         std::fprintf(stderr, "[keep] %d released but %s could not be removed\n", romId,
                      p.entryPath.c_str());
+        r.what = Release::What::DeleteFailed;
         return true;
     }
     // WITHOUT THIS THE SPACE DOES NOT APPEAR TO COME BACK, which is the exact
@@ -464,6 +472,8 @@ bool unkeep(const storage::User& u, int romId, bool keepTheBytes) {
     }
     std::fprintf(stderr, "[keep] %d released and removed, %lld bytes back\n", romId,
                  static_cast<long long>(bytes));
+    r.what = Release::What::Deleted;
+    r.bytesFreed = bytes;
     return true;
 }
 

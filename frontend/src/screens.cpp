@@ -1223,4 +1223,249 @@ void DetailScreen::drawGlass(Ctx& c) {
     }
 }
 
+
+// --- Accounts ---------------------------------------------------------------
+
+void AccountScreen::setRows(std::vector<AccountRow> rows) {
+    rows_ = std::move(rows);
+    slot_ = firstSelectable();
+}
+
+void AccountScreen::setAnchor(float rightX, float topY) {
+    anchorRight_ = rightX;
+    anchorTop_ = topY;
+}
+
+int AccountScreen::firstSelectable() const {
+    // The first other account, or the Add row when there is nobody else —
+    // which is every console with one account, so it is the common case and
+    // the reason this panel is never a page of things you cannot press.
+    return rows_.empty() ? 0 : 0;
+}
+
+void AccountScreen::open() {
+    slot_ = firstSelectable();
+    notice_.clear();
+    appear_.retarget(0.0f, 0.0f);
+    appear_.retarget(1.0f, 0.24f);
+    focus_.retarget(1.0f, design::kFocusDuration);
+}
+
+void AccountScreen::setNotice(std::string s) { notice_ = std::move(s); }
+
+void AccountScreen::tick(float dt) {
+    focus_.tick(dt);
+    appear_.tick(dt);
+}
+
+Result AccountScreen::key(Nav n) {
+    auto step = [&](int d) -> Result {
+        int at = slot_;
+        for (int tries = 0; tries < rowCount(); ++tries) {
+            at += d;
+            if (at < 0 || at >= rowCount()) return {};
+            {
+                if (at != slot_) {
+                    slot_ = at;
+                    focus_.retarget(0.0f, 0.0f);
+                    focus_.retarget(1.0f, design::kFocusDuration);
+                }
+                return {};
+            }
+        }
+        return {};
+    };
+
+    switch (n) {
+        case Nav::Up:   return step(-1);
+        case Nav::Down: return step(1);
+        case Nav::Back: return {Action::Back, 0};
+        case Nav::Activate:
+            if (slot_ < 0 || slot_ >= rowCount()) return {};
+            if (isAddRow(slot_)) return {Action::AddAccount, 0};
+            // THE ID, NOT THE ROW. A list that changed underneath this screen
+            // must not be able to switch the console to the wrong person.
+            return {Action::SwitchAccount, rows_[slot_].id};
+        default: return {};
+    }
+}
+
+void AccountScreen::draw(Ctx& c) {
+    const float a = appear_.value();
+    const float rowH = c.text.lineHeight(ui::TextStyle::Title3, c.sc) +
+                       design::kRowPadY * 2.0f;
+    const float discD = rowH - 22.0f;
+    const float w = 520.0f;
+    // HUNG FROM THE CHIP, not centred. The panel's right edge lines up with the
+    // chip's, so it reads as the chip opening rather than as a screen arriving.
+    const float x = anchorRight_ - w;
+    const float top = anchorTop_;
+
+    // The panel grows downward as it appears, which is what makes it read as an
+    // expansion. Everything inside is clipped to it by being drawn after.
+    const int rows = rowCount();
+    const float bodyH = rows * rowH + (rows - 1) * 10.0f + 28.0f * 2.0f +
+                        (notice_.empty() ? 0.0f : 54.0f);
+    c.r.drawGlass(ui::Rect{x, top, w, bodyH * a, design::kRowRadius,
+                           ui::Color::white(0)},
+                  design::kRegularMaterialBlur, ui::Color::white(0.10f * a));
+
+    float y = top + 28.0f;
+
+    for (int i = 0; i < rows; ++i) {
+        const bool on = (i == slot_);
+        const float f = on ? focus_.value() : 0.0f;
+        const float rw = w - 24.0f;
+        const float rx = x + 12.0f;
+        c.r.draw(ui::Rect{rx, y, rw, rowH, design::kRowRadius,
+                          ui::Color::white((0.04f + 0.16f * f) * a)});
+
+        if (isAddRow(i)) {
+            // A PLUS ON A DISC, so it sits in the same column as the faces and
+            // reads as one more entry in the same list rather than as a button
+            // bolted underneath it.
+            const float dx = rx + 16.0f, dy = y + (rowH - discD) * 0.5f;
+            c.r.draw(ui::Rect{dx, dy, discD, discD, discD * 0.5f,
+                              ui::Color::white(0.14f * a)});
+            const float pw = c.text.measure("+", ui::TextStyle::Title3, c.sc);
+            c.text.draw(c.r, "+", dx + (discD - pw) * 0.5f,
+                        dy + (discD - c.text.lineHeight(ui::TextStyle::Title3, c.sc)) * 0.5f +
+                            c.text.ascent(ui::TextStyle::Title3, c.sc),
+                        ui::TextStyle::Title3, ui::Color::white(0.8f * a), c.sc);
+            c.text.draw(c.r, "Add user", dx + discD + 18.0f,
+                        y + (rowH - c.text.lineHeight(ui::TextStyle::Title3, c.sc)) * 0.5f +
+                            c.text.ascent(ui::TextStyle::Title3, c.sc),
+                        ui::TextStyle::Title3, ui::Color::white(0.92f * a), c.sc);
+            y += rowH + 10.0f;
+            continue;
+        }
+
+        const AccountRow& row = rows_[i];
+        // The disc is drawn either way: the ground under a picture with
+        // transparency, and the fallback when there is none. Same rule as the
+        // chip in the bar, and the same reason.
+        const float dx = rx + 16.0f, dy = y + (rowH - discD) * 0.5f;
+        c.r.draw(ui::Rect{dx, dy, discD, discD, discD * 0.5f, ui::Color::white(0.22f * a)});
+        const ui::Image* face = nullptr;
+        if (!row.avatar.empty()) {
+            const ui::Image& img = c.images.get(row.avatar);
+            if (img.ready) face = &img;
+        }
+        if (face) {
+            ui::drawImage(c.r, *face, dx, dy, discD, discD, ui::Fit::Fill,
+                          face->fade * a, discD * 0.5f);
+        } else if (!row.name.empty()) {
+            const std::string initial(1, static_cast<char>(std::toupper(
+                static_cast<unsigned char>(row.name[0]))));
+            const float iw = c.text.measure(initial, ui::TextStyle::Title3, c.sc);
+            c.text.draw(c.r, initial, dx + (discD - iw) * 0.5f,
+                        dy + (discD - c.text.lineHeight(ui::TextStyle::Title3, c.sc)) * 0.5f +
+                            c.text.ascent(ui::TextStyle::Title3, c.sc),
+                        ui::TextStyle::Title3, ui::Color::white(0.85f * a), c.sc);
+        }
+
+        c.text.draw(c.r, row.name, dx + discD + 18.0f,
+                    y + (rowH - c.text.lineHeight(ui::TextStyle::Title3, c.sc)) * 0.5f +
+                        c.text.ascent(ui::TextStyle::Title3, c.sc),
+                    ui::TextStyle::Title3, ui::Color::white(0.92f * a), c.sc);
+        y += rowH + 10.0f;
+    }
+
+    if (!notice_.empty())
+        c.text.draw(c.r, notice_, x + 28.0f,
+                    y + 8.0f + c.text.ascent(ui::TextStyle::Callout, c.sc),
+                    ui::TextStyle::Callout, ui::Color::white(0.85f * a), c.sc);
+}
+
+// --- Adding an account ------------------------------------------------------
+
+void AddAccountScreen::open() {
+    url_.clear();
+    code_.clear();
+    error_.clear();
+    busy_ = true;
+    appear_.retarget(0.0f, 0.0f);
+    appear_.retarget(1.0f, 0.3f);
+}
+
+void AddAccountScreen::setPairing(const std::string& url, const std::string& code) {
+    url_ = url;
+    code_ = code;
+    busy_ = false;
+    std::string err;
+    // THE QR IS THE SERVER'S URL AND NOT A SHAPE WE GUESSED. `romm.h` records
+    // what happens otherwise: a fabricated one scans perfectly and lands on a
+    // page saying the code does not exist.
+    const qr::Code c = qr::encode(url, &err);
+    if (c.valid()) qr_.set(c);
+    else error_ = err;   // the address and the code below are still usable
+}
+
+void AddAccountScreen::setBusy(bool on) { busy_ = on; }
+void AddAccountScreen::setError(const std::string& err) { error_ = err; busy_ = false; }
+
+void AddAccountScreen::tick(float dt) { appear_.tick(dt); }
+
+Result AddAccountScreen::key(Nav n) {
+    // ONE WAY OUT AND IT IS BACK. Nothing here is a choice — it is a code
+    // somebody is copying onto a phone — so a focus ring would have nowhere to
+    // go and would only invite a press that does nothing.
+    if (n == Nav::Back) return {Action::Back, 0};
+    return {};
+}
+
+void AddAccountScreen::draw(Ctx& c) {
+    const float a = appear_.value();
+    const float left = 140.0f;
+    float y = 190.0f;
+
+    c.text.draw(c.r, "Add somebody to this console", left,
+                y + c.text.ascent(ui::TextStyle::LargeTitle, c.sc),
+                ui::TextStyle::LargeTitle, ui::Color::white(0.96f * a), c.sc);
+    y += 120.0f;
+
+    if (busy_) {
+        c.text.draw(c.r, "Asking the server for a code…", left,
+                    y + c.text.ascent(ui::TextStyle::Title3, c.sc),
+                    ui::TextStyle::Title3, ui::Color::white(0.7f * a), c.sc);
+        return;
+    }
+    if (!code_.empty()) {
+        // THE COPY ASSUMES A COMPETENT ADULT — the rule first run was written
+        // to. It says the constraint and stops.
+        c.text.draw(c.r, "Scan this, or open the address below.", left,
+                    y + c.text.ascent(ui::TextStyle::Title3, c.sc),
+                    ui::TextStyle::Title3, ui::Color::white(0.75f * a), c.sc);
+        y += 90.0f;
+
+        // BIG ENOUGH TO PHOTOGRAPH FROM A SOFA, which is the whole reason this
+        // is a screen and not the panel.
+        const float side = 420.0f;
+        if (qr_.valid()) qr_.draw(c.r, left, y, side);
+
+        const float tx = left + side + 80.0f;
+        float ty = y + 40.0f;
+        c.text.draw(c.r, url_, tx, ty + c.text.ascent(ui::TextStyle::Title3, c.sc),
+                    ui::TextStyle::Title3, ui::Color::white(0.9f * a), c.sc);
+        ty += 80.0f;
+        c.text.draw(c.r, "and enter", tx, ty + c.text.ascent(ui::TextStyle::Callout, c.sc),
+                    ui::TextStyle::Callout, ui::Color::white(0.55f * a), c.sc);
+        ty += 56.0f;
+        c.text.draw(c.r, code_, tx, ty + c.text.ascent(ui::TextStyle::LargeTitle, c.sc),
+                    ui::TextStyle::LargeTitle, ui::Color::white(0.98f * a), c.sc);
+        ty += 130.0f;
+        // SAID BEFORE IT HAPPENS, because being added and being switched to are
+        // different things and somebody who expects the second will think this
+        // failed.
+        c.text.draw(c.r, "They are added to this console, not switched to.", tx,
+                    ty + c.text.ascent(ui::TextStyle::Callout, c.sc),
+                    ui::TextStyle::Callout, ui::Color::white(0.5f * a), c.sc);
+        y += side;
+    }
+
+    if (!error_.empty())
+        c.text.draw(c.r, error_, left, y + 40.0f + c.text.ascent(ui::TextStyle::Callout, c.sc),
+                    ui::TextStyle::Callout, ui::Color::white(0.85f * a), c.sc);
+}
+
 }  // namespace screens

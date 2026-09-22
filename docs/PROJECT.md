@@ -5636,6 +5636,78 @@ a decision and something to make it.
 survivable and honest. It wants a session of its own, with the CEC work, because
 the two answers have to agree.
 
+#### BLANKING DOES NOT NEED CEC, AND THAT SPLITS THIS IN TWO — 2026-09-21
+
+**MMagTech asked the question that unpicks it:** *"if computers don't have CEC
+then how does my monitor wake and sleep on my computer?"* It does not use CEC,
+and neither would we for the half that matters.
+
+**They are different mechanisms on the same cable.**
+
+- **DPMS** is display power management on the VIDEO link. The machine simply
+  stops sending a picture; the display sees no active video and enters standby
+  on its own, then wakes when signal returns. No command is sent and none is
+  needed. This is why every desktop monitor in the world sleeps.
+- **CEC** is a slow control bus on pin 13 that sends devices actual commands —
+  *turn on*, *switch to HDMI 2*, *I am going to standby*. It is what a
+  streaming stick uses to wake a television and select its input.
+
+**So the asymmetry is the whole finding:**
+
+| | Needs CEC |
+|---|---|
+| Blank the screen, let the set sleep | **No** |
+| Turn the television on and select the input | **Yes** |
+
+**THIS PARTLY CONTRADICTS "the two answers have to agree", above.** They still
+have to agree about *suspending the machine* and about waking a set that has
+gone to standby — but **blanking our own output is available today, on this
+hardware, with no CEC work in front of it.** Half of this open question is not
+blocked on the other half, and the paragraph above reads as though it were.
+
+**AND THERE IS NO CEC ADAPTER ON THIS HARDWARE AT ALL.** Measured on the A9,
+2026-09-21: no `/dev/cec*` devices exist. CEC over HDMI on PC graphics is
+patchy and frequently not wired up by the driver at all, so **"we do not have
+CEC" may be a fact about the machine rather than a feature nobody has written
+yet.** Check that before planning anything around it — the work might be
+impossible on this hardware rather than merely unstarted.
+
+The DPMS node, by contrast, is present and writable:
+
+```
+/sys/class/drm/card1-HDMI-A-1/dpms = On     and nothing ever writes to it
+```
+
+#### BURN-IN IS THE REASON TO DO THIS, AND IT RAISES THE PRIORITY
+
+The bullet above calls burn-in "a real cost". **MMagTech's framing is stronger
+and it is the right one:** this is not a tidiness problem, it is hardware
+damage on somebody's television, and it is the argument for doing the work
+rather than a side effect of it.
+
+**What is actually at risk is specific rather than general.** This frontend
+holds bright static elements in fixed positions — the top bar, the account
+chip, the "Recent" and "Favorites" headers — on a console that may sit on Home
+for hours. That is the burn-in shape exactly. **A paused game is the second
+case and nobody has considered it**: a HUD frozen on screen indefinitely is
+worse than a menu, because it is brighter and nothing dims it.
+
+Three mitigations, cheapest first, and the first is nearly free here:
+
+1. **PIXEL SHIFT.** Nudge the whole canvas a few points every few minutes.
+   Everything is already drawn per frame against a canvas origin, so this is an
+   offset rather than a feature. No idle detection required — it can run always.
+2. **DIM ON A SHORT IDLE, BLANK ON A LONGER ONE.** The dim is entirely inside
+   our renderer; the blank is the DPMS node above. This is the one that needs
+   idle detection, which is the part that does not exist.
+3. **A screensaver.** More work, and arguably WORSE than blanking for burn-in,
+   because the panel stays lit. Do not reach for it first because it is the
+   most visible.
+
+**The order matters.** Pixel shift needs nothing this console lacks and helps
+every case including a paused game; blanking needs idle detection and helps
+most; a screensaver looks like the answer and is the weakest of the three.
+
 ### 11. NVIDIA hardware
 **Raised: Phase 1. Out of scope until there is hardware that needs it.**
 
@@ -10975,3 +11047,222 @@ cores, the pause menu's shape, and what Cabinet's other platforms expect to find
 in a RomM row. It belongs with open question 23 and the UI pass, and all three
 are really one conversation about what this console is rather than three
 separate features.
+
+### 26. Account switching, and what a console's version of it is
+**Raised by MMagTech 2026-09-16 with the words "we would implement it slightly
+different", deferred to a session of its own, and DECIDED 2026-09-21.** Four
+questions were put and answered; the shape below is settled and the work is
+scoped. Nothing is built yet.
+
+#### The half that was already right, and nobody said so
+
+`storage.h` has carried this table since the folder layout landed:
+
+```
+per user              shared by the machine
+saves, save states    the downloaded game files
+screenshots           BIOS and firmware
+preferences           cores
+the decision to keep  shader caches
+```
+
+**That is the same call Cabinet's own design doc spends its longest section
+making, for the same reason.** tvOS has a real system-level multi-user
+entitlement and Cabinet ruled it out on a concrete technical ground rather than
+a stylistic one: per-user containers partition the ROM cache, so everyone in the
+house re-downloads the same Dreamcast disc into their own copy. A ROM is not
+user-specific. CabinetOS's `users/<id> - <name>/` beside a shared `roms/` and
+`cache/` already does exactly this, so **the storage half of account switching is
+finished and was finished before the feature was discussed.**
+
+Two other things are already in place and worth knowing before anyone starts:
+`storage::User` carries an `avatar` field whose comment says it is "for the
+account chip on Home", and `currentUser()`/`setCurrentUser()` is a single global
+with one seam.
+
+#### THE TOKEN IS THE IDENTITY, AND THAT IS WHAT MAKES THIS SMALL
+
+`storage::resolveCurrentUser` asks the server `/api/users/me` using whatever
+token the client holds, and caches the answer. **So the console does not decide
+who it is; the token does.** Switching accounts is therefore: put a different
+token in the client, re-resolve, reload what was drawn from the old answer.
+
+That is precisely what Cabinet's `TVProfileStore.activate` does — copy the
+chosen profile's token into the slot `Session` reads from, then reload — and its
+comment says the useful part out loud: *"nothing downstream needs to know
+profiles exist at all."*
+
+#### What was decided
+
+**1. ONE SERVER PER CONSOLE.** Every account is a user on the one paired server.
+`/etc/cabinetos/session.env` stays machine-wide and first run stays a linear path
+to pairing one server.
+
+**This is a deliberate divergence from Cabinet and the reason is that the two
+products are shaped differently.** A `TVProfile` carries its own
+`serverURLString` because an Apple TV app might be pointed anywhere; a console in
+a house has one library. **The saving is not cosmetic:** it means a RomM user id
+is unique across everything this console will ever see, so **the account key can
+BE the RomM user id** — no locally-generated UUID, and `users/<id> - <name>`
+needs no change at all. Cabinet needs UUIDs precisely because two profiles on one
+host collide on a host-keyed token, and that collision cannot arise here.
+
+**If this is ever reversed**, the folder name is what breaks first: user 1 on two
+different servers is one directory. Say so before changing it.
+
+**2. THE CONSOLE BOOTS AS WHOEVER PLAYED LAST**, and the account chip on Home
+opens the switcher. Not a picker at boot. **The common case in a house is one
+person and a boot picker taxes every boot to serve the exception** — and this
+console's whole premise is that it starts up like a console rather than asking
+questions. It also agrees with what open question 22 already decided for the
+offline case: the console stays as the last user it knew and offers no switcher
+it cannot honour.
+
+**3. ALL FOUR PARTS SHIP IN THE FIRST PASS**: switch between paired accounts,
+add one from the console, remove one, and an optional PIN on switching.
+
+**4. THE PIN IS OPTIONAL AND OFF BY DEFAULT**, which is what Cabinet settled
+after leaving it open. A full-screen number pad the pad can drive, not a text
+field in a dialog.
+
+#### The shape to build
+
+| | |
+|---|---|
+| `frontend/src/accounts.{h,cpp}` | the store: the list, which one is active, and one token per account |
+| token, per account | `~/.config/cabinetos/accounts/<rommUserId>.json` at 0600, replacing the single `romm.json` |
+| the list | `~/.config/cabinetos/accounts.json` — id, name, avatar, and the active id |
+| `accounts::activate(id)` | put that token in the client, `resolveCurrentUser`, reload |
+| the chip | Home's top-right, avatar or a lettered disc, opening the switcher |
+
+**ADDING AN ACCOUNT MUST NOT RE-ENTER FIRST RUN.** Cabinet pairs a new profile
+through its own standalone client rather than the live session, explicitly so
+that adding somebody mid-session cannot throw the app back to setup screens out
+from under whoever is signed in. This console has the same hazard and a worse
+version of it: `firstrun.cpp` decides whether setup is needed by asking whether
+there is a server address, a token and a user, and a half-added account is a
+machine that can fail that test. **Pair a new account with a separate
+`romm::Client`, and write nothing until it has answered `/api/users/me`.**
+
+**REMOVING THE ACTIVE ACCOUNT IS REFUSED**, the way Cabinet disables that row:
+removing who you are signed in as leaves the console holding a token nothing has
+a copy of.
+
+**THE OLD SINGLE TOKEN HAS TO BE ADOPTED, NOT ORPHANED.** Both machines here have
+a paired `~/.config/cabinetos/romm.json`, and so does every console anybody has
+installed. On first read with no `accounts.json`, that file is the first account
+and gets filed under whatever id `/api/users/me` returns. **Nobody should have to
+re-pair to gain a feature they did not ask for.**
+
+#### WHAT SWITCHING HAS TO TEAR DOWN, AND THIS IS THE PART THAT WILL BITE
+
+**Home is assembled from RomM's play history, and favourites and recents are the
+server's rather than local.** So they belong to the account and every one of them
+is wrong the instant it changes. Cabinet wipes its top shelf inside `activate`
+rather than rewriting it, and its comment says why: the new profile's recents take
+a round trip to arrive and Home must not be showing the previous person's games in
+the meantime.
+
+**The same rule applies here and the list is longer**, because this console also
+holds a download queue, a pending-upload directory and a keep list, all of them
+per user. **Nothing that was true of the old account may still be on screen after
+a switch.** Work out that list from `storage::userDir`'s children before writing
+the switch, not after somebody sees their sister's save.
+
+#### THE SHARED CACHE AND KEPT GAMES — asked 2026-09-21, and mostly already answered
+
+**MMagTech's question, and it is the right one: "we just need to make sure the
+same game kept by two different people isn't downloaded twice."** It is not, and
+that was built before accounts were discussed.
+
+**THE BYTES HAVE NO USER IN THEIR PATH.** A game lives at
+`<location>/roms/<platform>/<romId> - <title>` when kept and under `cache/` when
+not. A keep is `users/<id>/keeps/<romId>.json` — a small record beside the
+person, not a copy of the game. So one game is one copy however many people want
+it, structurally, rather than by a rule somebody has to remember.
+
+`cache.h` states the rule and the code enforces it: **"KEEPING IS A SET OF
+PEOPLE, NOT A FLAG. One kept game is one file however many people play it, so
+releasing must not take it from somebody else. When the LAST person releases it,
+the game is DELETED."** `keepers(romId)` walks every user directory, which is
+what makes one person's release safe for everyone else.
+
+**MEASURED 2026-09-21 on the test VM rather than reasoned about**, with a
+throwaway second user staged against a real 26.8 MB Dreamcast game and removed
+afterwards:
+
+```
+keepers       2 (users 1 and 2)      copies  1      on disk  26842401 bytes
+  -> user 1 releases
+[keep] 556 released by user 1, still kept by 1 other(s)
+keepers       1 (user 2)             copies  1      on disk  26842401 bytes
+```
+
+The game survived the first release and was never on the disk twice.
+`--keepers <romId>` is the probe and it exists for exactly this question.
+
+**WHAT WAS NOT RIGHT, AND IS NOW: the row went silent in that case.**
+"Remove download" called `unkeep` and then `setNotice("")`, so a person who
+released a game somebody else keeps saw the badge go out, no message, and no
+space come back — while the row's whole wording exists because MMagTech said
+*"most users would assume unkeeping a chosen game would free up space"*. The
+outcome only ever reached stderr. **This was unreachable with one account and
+goes live the day a second one exists**, which is why it is fixed inside this
+work: `cache::Release` now says which of the four things happened and the screen
+says so.
+
+#### Two more decided 2026-09-21, both about what the console SAYS rather than what it does
+
+**THE STORAGE FIGURES ARE THE MACHINE'S, AND THE SCREEN SAYS "THIS CONSOLE".**
+`allKeptRoms()` counts everybody's keeps, and both floors and the storage report
+already work that way. With shared bytes there is no honest way to bill a game
+two people keep to one of them, so the number stays machine-wide and the wording
+stops implying it is yours. **MMagTech's call:** say *this console*.
+
+**EVICTION STAYS MACHINE-WIDE AND OLDEST-FIRST**, across accounts. One person
+browsing can evict a game another person had cached, and that is accepted:
+everything in `cache/` is a copy of RomM, eviction is invisible by design, and
+the alternative — a per-account cache quota — is the partitioned-cache mistake
+this whole layout exists to avoid. **MMagTech's call, confirmed when asked.**
+
+#### MEASURED WITH TWO REAL ACCOUNTS — 2026-09-21
+
+**The gap this section was written with is closed.** A second RomM user was
+created and paired through `--romm-pair`, and the switch has now run in both
+directions on the test VM:
+
+```
+[accounts] acting as 1 - MMagTech
+[storage] user 12 - vivian
+[accounts] switched to 12 - vivian, 412 games
+[accounts] switched to 1 - MMagTech, 1147 games
+```
+
+`users/12 - vivian/` appeared beside `users/1 - MMagTech/`, and the active
+account survived across processes.
+
+**AND IT CORRECTED A CLAIM THIS SECTION MADE.** The text above said the
+catalogue of games is the same for everybody because there is one server per
+console, and that reloading it on a switch was incidental. **It is not: RomM
+scopes the library to the user.** 1147 against 412 on the same server, same
+moment. The catalogue belongs on the list of things that change hands.
+
+**The code was already right** — `loadLibrary` fetches everything in one pass,
+so it was all being replaced anyway. What was wrong was the reasoning, and that
+is worth correcting rather than quietly leaving: the next person to optimise a
+switch would have read that sentence and skipped the refetch, and vivian would
+have been shown MMagTech's 1147 games.
+
+**One more thing the first attempt proved, by accident.** The first pairing was
+approved in a browser still signed in as MMagTech, so it re-paired account 1
+rather than adding a second. `accounts::add` replaced the row instead of making
+a duplicate, which until then had only been asserted against a scratch root.
+**Whoever approves the code is who gets added** — the console does not choose —
+and `--romm-pair` now says so before it prints the code.
+
+#### Out of scope, explicitly
+
+- **Anything that assumes two people at once.** One account is active; this is
+  switching, not multi-seat.
+- **Syncing which account is active between consoles.** Cabinet rules this out
+  per device and the same holds here.

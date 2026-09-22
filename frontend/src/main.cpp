@@ -67,6 +67,7 @@
 #include "screens.h"
 #include "sound.h"
 #include "setup.h"
+#include "accounts.h"
 #include "storage.h"
 #include "text.h"
 #include "overlaywin.h"
@@ -2168,6 +2169,158 @@ static int firstRunWriteTest() {
 //
 // It needs no network, no server, no pad and no screen, so it runs in CI and it
 // runs on a laptop.
+// Who this console knows, and which one it is acting as. Read-only: it writes
+// nothing and is safe on a machine somebody is playing on.
+// One game: who keeps it, and how many copies of it are on this machine.
+//
+// EXISTS TO ANSWER ONE QUESTION AND IT IS THE RIGHT ONE TO BE ABLE TO ASK:
+// when two people keep the same game, is it on the disk twice? It must not be.
+// The bytes live at `<loc>/roms/<platform>/<romId> - <title>` with no user
+// anywhere in the path, so one game is one copy however many people want it —
+// but that is a structural argument, and this prints the fact instead.
+static int keepersProbe(int romId) {
+    const std::vector<int> who = cache::keepers(romId);
+    const std::vector<cache::Placement> copies = cache::findAll(romId);
+
+    std::printf("rom           %d\n", romId);
+    std::printf("keepers       %zu", who.size());
+    for (int id : who) std::printf(" %d", id);
+    std::printf("\n");
+
+    std::printf("copies        %zu\n", copies.size());
+    int64_t total = 0;
+    for (const cache::Placement& p : copies) {
+        const int64_t bytes = storage::treeBytes(p.entryPath);
+        total += bytes;
+        std::printf("  %-6s %s (%lld bytes)\n", p.kept ? "kept" : "cache",
+                    p.entryPath.c_str(), static_cast<long long>(bytes));
+    }
+    std::printf("on disk       %lld bytes\n", static_cast<long long>(total));
+
+    if (copies.size() > 1) {
+        // findAll's own comment says more than one is nobody's mistake — the
+        // drive-unplug case makes a second copy legitimately, and dedupe is
+        // what collapses it. So this is a finding to act on, not a failure.
+        std::printf("\nMORE THAN ONE COPY. See cache::dedupe — this is the "
+                    "unplugged-drive case, not a keep fault.\n");
+    } else if (who.size() > 1 && copies.size() == 1) {
+        std::printf("\n%zu people keep this game and there is ONE copy of it, "
+                    "which is the whole rule.\n", who.size());
+    }
+    return 0;
+}
+
+static int accountsProbe() {
+    std::printf("list          %s\n", accounts::listPath().c_str());
+    {
+        // The shape, not a real path: 0 is never an account id.
+        const std::string one = accounts::tokenPath(0);
+        std::printf("tokens        %s<id>.json\n",
+                    one.substr(0, one.rfind('/') + 1).c_str());
+    }
+
+    const std::vector<accounts::Account> list = accounts::all();
+    const int active = accounts::activeId();
+    if (list.empty()) {
+        std::printf("\nno accounts — this console has not been paired\n");
+        return 0;
+    }
+
+    std::printf("\n%zu account%s:\n", list.size(), list.size() == 1 ? "" : "s");
+    for (const accounts::Account& a : list) {
+        struct stat st{};
+        const bool haveToken = ::stat(accounts::tokenPath(a.id).c_str(), &st) == 0;
+        std::printf("  %s %d - %s%s%s\n",
+                    a.id == active ? "*" : " ", a.id, a.name.c_str(),
+                    a.avatar.empty() ? "  (no avatar)" : "",
+                    haveToken ? "" : "  NO TOKEN ON DISK");
+    }
+    if (storage::currentUser().valid())
+        std::printf("\n* is the account this console acts as. Saves go to %s\n",
+                    storage::userDir(storage::currentUser()).c_str());
+    else
+        std::printf("\n* is the account this console acts as. No user is "
+                    "resolved in this process, so no save path to show.\n");
+    std::printf("PIN           %s\n", accounts::pinIsSet() ? "set" : "not set");
+    return 0;
+}
+
+// The store's rules, asserted against a scratch root rather than reasoned
+// about. Every case here is a REFUSAL, because the happy path is the part that
+// already works — the same argument --first-run-rules is built on, and it found
+// a real deadlock on its first run.
+static int accountsTest() {
+    int failures = 0;
+    auto check = [&](bool ok, const char* what) {
+        std::printf("  %s  %s\n", ok ? "ok  " : "FAIL", what);
+        if (!ok) ++failures;
+    };
+
+    char root[] = "/tmp/cabinetos-accounts-XXXXXX";
+    if (!mkdtemp(root)) {
+        std::fprintf(stderr, "[accounts] could not make a scratch root\n");
+        return 1;
+    }
+    // Both halves have to move: the list follows the storage root, the tokens
+    // follow HOME. Missing either one writes into the real console.
+    storage::setRoot(root);
+    setenv("HOME", root, 1);
+    std::string serr;
+    if (!storage::ensureTree(&serr)) {
+        std::fprintf(stderr, "[accounts] scratch root unusable: %s\n", serr.c_str());
+        return 1;
+    }
+    std::printf("scratch root  %s\n\n", root);
+
+    std::string err;
+    accounts::Account alice; alice.id = 1; alice.name = "MMagTech";
+    accounts::Account bob;   bob.id = 2;   bob.name = "Someone Else";
+
+    check(accounts::all().empty(), "a fresh console knows nobody");
+    check(accounts::activeId() == 0, "and is acting as nobody");
+
+    check(!accounts::add(alice, "", &err), "an account with no token is refused");
+    accounts::Account noId; noId.name = "nobody";
+    check(!accounts::add(noId, "t", &err), "an account with no id is refused");
+
+    check(accounts::add(alice, "alice-token", &err), "the first account is added");
+    check(accounts::activeId() == 1, "and becomes active, having nobody to take over from");
+
+    check(accounts::add(bob, "bob-token", &err), "a second account is added");
+    check(accounts::activeId() == 1,
+          "and does NOT take over from whoever is signed in");
+    check(accounts::all().size() == 2, "both are listed");
+
+    check(accounts::add(alice, "alice-again", &err), "re-pairing an existing id succeeds");
+    check(accounts::all().size() == 2, "and replaces rather than making a second row");
+
+    check(!accounts::remove(1, &err), "removing the ACTIVE account is refused");
+    check(!accounts::remove(99, &err), "removing an unknown account is refused");
+    check(accounts::remove(2, &err), "removing an inactive account works");
+    check(accounts::all().size() == 1, "and it is gone from the list");
+
+    check(!accounts::setActive(99, &err), "switching to an unknown account is refused");
+
+    // The list and the tokens can disagree if somebody has been in here by
+    // hand. That has to refuse rather than sign the console out silently.
+    accounts::add(bob, "bob-token", &err);
+    ::unlink(accounts::tokenPath(2).c_str());
+    check(!accounts::setActive(2, &err), "switching to an account whose token is gone is refused");
+
+
+    check(!accounts::pinIsSet(), "no PIN by default");
+    check(!accounts::checkPin("0000"), "and nothing matches when none is set");
+    check(accounts::setPin("4821", &err), "a PIN can be set");
+    check(accounts::pinIsSet() && accounts::checkPin("4821"), "and it matches");
+    check(!accounts::checkPin("4822"), "and a wrong one does not");
+    check(accounts::setPin("", &err) && !accounts::pinIsSet(), "an empty PIN clears it");
+
+    std::printf("\n%s (%d failure%s)\n", failures ? "FAILED" : "all good",
+                failures, failures == 1 ? "" : "s");
+    std::printf("scratch root left at %s\n", root);
+    return failures ? 1 : 0;
+}
+
 static int firstRunRules() {
     int cases = 0, failures = 0;
     auto fail = [&](const char* what, const firstrun::Facts& f) {
@@ -2358,14 +2511,34 @@ static int rommProbe(const char* address, bool allowPairing) {
     std::printf("server      %s (RomM %s)\n", client.baseUrl().c_str(),
                 client.serverVersion().c_str());
 
-    const std::string tokenPath = rommTokenPath();
-    if (!client.loadToken(tokenPath)) {
-        if (!allowPairing) {
+    // `--romm-pair` MEANS PAIR, and since 2026-09-21 that means ADD SOMEBODY.
+    //
+    // It used to load `~/.config/cabinetos/romm.json` first and skip pairing
+    // whenever that file existed — which the handover recorded as "it does
+    // nothing if a token already exists", with a workaround of pointing HOME
+    // at an empty directory. That was a sensible shape when a console had one
+    // token and re-pairing was a mistake. With accounts it is exactly backwards:
+    // adding a second person to a console that already has one is the whole
+    // point of the flag, and every console that has been set up already has an
+    // account.
+    //
+    // So the flag pairs unconditionally, and without it the probe acts as
+    // whoever the console is acting as.
+    if (!allowPairing) {
+        if (!accounts::loadActiveToken(client)) {
             std::fprintf(stderr,
-                         "[romm] no token at %s — run again with --romm-pair\n",
-                         tokenPath.c_str());
+                         "[romm] no account on this console — run again with "
+                         "--romm-pair\n");
             return 1;
         }
+    } else {
+        // WHOEVER APPROVES THIS IS WHO GETS ADDED. The console does not choose;
+        // the browser session that approves the code does, and `recordPairing`
+        // then asks the server which user that was. Approving as somebody who
+        // already has an account here re-pairs them rather than making a second
+        // row — see `accounts::add`.
+        std::printf("\nSign in to RomM as the person you are ADDING before you\n"
+                    "approve this — whoever approves it is who gets added.\n");
         romm::Pairing p;
         if (!client.beginPairing(&p, &err)) {
             std::fprintf(stderr, "[romm] pairing failed: %s\n", err.c_str());
@@ -2402,16 +2575,33 @@ static int rommProbe(const char* address, bool allowPairing) {
         // exactly how the first console ever installed came up on the
         // stand-in library with nobody able to say why. The pairing itself
         // genuinely succeeded; what failed is the only part that lasts.
-        if (client.saveToken(tokenPath)) {
-            std::printf("\npaired      token saved to %s\n", tokenPath.c_str());
+        std::string aerr;
+        if (accounts::recordPairing(client, &aerr)) {
+            // WHO WAS ACTUALLY ADDED, asked rather than assumed. Reporting
+            // `activeId()` here would name the wrong person for every account
+            // after the first, because adding somebody deliberately does not
+            // switch to them.
+            romm::User who;
+            std::string werr;
+            if (client.fetchCurrentUser(&who, &werr) && who.id > 0) {
+                std::printf("\npaired      %d - %s\n", who.id, who.username.c_str());
+                std::printf("token       %s\n", accounts::tokenPath(who.id).c_str());
+                if (who.id == accounts::activeId())
+                    std::printf("active      yes — this console was already acting as them\n");
+                else
+                    std::printf("active      no  — still acting as %d. Switch from the chip.\n",
+                                accounts::activeId());
+            } else {
+                std::printf("\npaired, and recorded\n");
+            }
         } else {
             std::printf("\n");
             std::fflush(stdout);
             std::fprintf(stderr,
-                         "[romm] PAIRED, BUT THE TOKEN COULD NOT BE SAVED to %s (%s).\n"
-                         "[romm] This console will not stay paired. Fix the path and\n"
+                         "[romm] PAIRED, BUT IT WAS NOT RECORDED: %s\n"
+                         "[romm] This console will not stay paired. Fix that and\n"
                          "[romm] run --romm-probe --romm-pair again.\n",
-                         tokenPath.c_str(), std::strerror(errno));
+                         aerr.empty() ? std::strerror(errno) : aerr.c_str());
             return 1;
         }
     }
@@ -2597,6 +2787,7 @@ int main(int argc, char** argv) {
     // exits without opening a window, which is what a headless machine and a
     // CI job can do.
     int autoDownloadId = 0;
+    int autoSwitchAccountId = 0;
     int autoUnkeepId = 0;
     bool storageReport = false;
     bool coreOptionsAudit = false;
@@ -2635,6 +2826,9 @@ int main(int argc, char** argv) {
     // whether PlayStation 2 and GameCube can be played at all.
     bool gpuProbeMode = false;
     bool firstRunProbeMode = false;
+    int keepersRomId = 0;
+    bool accountsProbeMode = false;
+    bool accountsTestMode = false;
     bool firstRunRulesMode = false;
     bool firstRunWriteMode = false;
     // Runs the setup flow even on a console that is already configured, so it
@@ -2792,6 +2986,9 @@ int main(int argc, char** argv) {
             // would press is to press it from here. It calls exactly what the
             // launch screen's row calls, guards and all.
             autoDownloadId = SDL_atoi(argv[++i]);
+        } else if (SDL_strcmp(argv[i], "--switch-account") == 0 && i + 1 < argc) {
+            // No switcher screen yet, so this is how the teardown is exercised.
+            autoSwitchAccountId = SDL_atoi(argv[++i]);
         } else if (SDL_strcmp(argv[i], "--unkeep") == 0 && i + 1 < argc) {
             autoUnkeepId = SDL_atoi(argv[++i]);
         } else if (SDL_strcmp(argv[i], "--overlay-exit") == 0) {
@@ -2836,6 +3033,12 @@ int main(int argc, char** argv) {
             setupStep = argv[++i];
         } else if (SDL_strcmp(argv[i], "--no-setup") == 0) {
             noSetup = true;
+        } else if (SDL_strcmp(argv[i], "--keepers") == 0 && i + 1 < argc) {
+            keepersRomId = SDL_atoi(argv[++i]);
+        } else if (SDL_strcmp(argv[i], "--accounts") == 0) {
+            accountsProbeMode = true;
+        } else if (SDL_strcmp(argv[i], "--accounts-test") == 0) {
+            accountsTestMode = true;
         } else if (SDL_strcmp(argv[i], "--first-run-rules") == 0) {
             firstRunRulesMode = true;
         } else if (SDL_strcmp(argv[i], "--first-run-writes") == 0) {
@@ -2960,6 +3163,7 @@ int main(int argc, char** argv) {
     // Neither of these needs a storage tree, a window, GL or a controller, so
     // they answer before anything is created on disk. --qr in particular should
     // not cost a console a directory it did not have.
+    if (accountsTestMode) return accountsTest();
     if (firstRunRulesMode) return firstRunRules();
     if (firstRunWriteMode) return firstRunWriteTest();
     if (qrText) return qrProbe(qrText, qrPbm);
@@ -3122,6 +3326,12 @@ int main(int argc, char** argv) {
     // they go looking, and when they do they should find it. Until that screen
     // exists this is how anyone — or anything in CI — checks that keeping,
     // eviction and the floors agree with each other.
+    // Read-only and needs no network: the list is on disk. It goes here rather
+    // than with --first-run-rules because it reports the REAL console, so it
+    // has to run after the storage root is settled.
+    if (accountsProbeMode) return accountsProbe();
+    if (keepersRomId > 0) return keepersProbe(keepersRomId);
+
     if (storageReport) {
         romm::Client sclient;
         if (rommAddress && sclient.setAddress(rommAddress, nullptr))
@@ -3419,11 +3629,25 @@ int main(int argc, char** argv) {
             }
             if (said) std::fprintf(stderr, "[romm] the server answered\n");
         }
-        if (!liveClient.loadToken(rommTokenPath())) {
-            std::fprintf(stderr, "[romm] no token at %s — pair first with --romm-probe --romm-pair\n",
-                         rommTokenPath().c_str());
+        // WHOEVER PLAYED LAST. The active account's token is what this console
+        // starts as — open question 26, decision 2. No account means a machine
+        // that has not been paired, which is first run's job and not something
+        // to paper over here.
+        if (!accounts::loadActiveToken(liveClient)) {
+            std::fprintf(stderr,
+                         "[romm] no account on this console — pair first with "
+                         "--romm-probe --romm-pair\n");
             return 1;
         }
+        // THE LIST IS HELD IN A NAMED LOCAL AND IT HAS TO BE. `accounts::find`
+        // returns a pointer INTO the vector it is given — which is why it takes
+        // one rather than hiding a static — so passing `accounts::all()` inline
+        // leaves the pointer dangling at the end of the condition. It segfaulted
+        // on the first run, in the first place the function was ever called.
+        const std::vector<accounts::Account> known = accounts::all();
+        if (const accounts::Account* who = accounts::find(known, accounts::activeId()))
+            std::fprintf(stderr, "[accounts] acting as %d - %s\n", who->id,
+                         who->name.c_str());
         adoptUser(liveClient);
         // The long one: platforms, every game, collections, recents and
         // favourites. Sixteen hundred games take several seconds on the
@@ -3863,8 +4087,15 @@ int main(int argc, char** argv) {
     // a shelf and a grid end up disagreeing about what focus looks like, which
     // is the same reason design.h exists.
     enum Row { RowRecent = 0, RowFavorites = 1 };
-    enum BarItem { BarLibrary = 0, BarSearch, BarSettings, BarCount };
-    const char* kBarLabels[BarCount] = { "Library", "Search", "Settings" };
+    // THE CHIP IS A BAR SLOT NOW, and it is the only one that is not a
+    // capsule: it is drawn as the avatar disc at the far right, so the label
+    // loop below stops at BarSettings and the chip takes its own focus rim.
+    // Everything else about it — L1/R1 walking onto it, Down leaving the bar —
+    // it gets for free by being in this list.
+    enum BarItem { BarLibrary = 0, BarSearch, BarSettings, BarAccount, BarCount };
+    const char* kBarLabels[BarCount] = { "Library", "Search", "Settings", "Account" };
+    // How many of those draw as labelled capsules. The chip draws itself.
+    constexpr int kBarCapsules = BarAccount;
 
     const size_t shelfSlots = shelf.empty() ? cards.size() : shelf.size();
     // Whether there is a game to resume. It is shelf slot 0 when there is.
@@ -3946,7 +4177,7 @@ int main(int argc, char** argv) {
     // over whatever was behind it, and the player is a cover over that — which
     // is what makes quitting a game return to the launch screen and backing out
     // again return to the browsing.
-    enum class Screen { Home, Library, Grid, Detail, Search };
+    enum class Screen { Home, Library, Grid, Detail, Search, AddAccount };
     std::vector<Screen> stack{Screen::Home};
     auto here = [&]() { return stack.back(); };
 
@@ -3954,6 +4185,8 @@ int main(int argc, char** argv) {
     screens::GridScreen gridScreen;
     screens::DetailScreen detailScreen;
     screens::SearchScreen searchScreen;
+    screens::AccountScreen accountScreen;
+    screens::AddAccountScreen addAccountScreen;
     // What the docked keyboard held last frame, so the filter is re-run when it
     // changes and not sixty times a second when it does not.
     std::string searchTyped;
@@ -4108,9 +4341,41 @@ int main(int argc, char** argv) {
     // second person still wanted it. cache::unkeep reports what it did.
     auto removeDownload = [&](int romId) {
         const bool nowPlaying = playing && session.romId == romId;
-        cache::unkeep(storage::currentUser(), romId, /*keepTheBytes=*/nowPlaying);
+        cache::Release r;
+        cache::unkeep(storage::currentUser(), romId, /*keepTheBytes=*/nowPlaying, &r);
         detailScreen.setKept(false);
-        detailScreen.setNotice("");
+
+        // SILENCE IS THE RIGHT ANSWER ONLY WHEN THE ROW DID WHAT IT SAYS. The
+        // badge going out is feedback enough for a game that is gone and a
+        // disk that has the room back. The other three outcomes all leave the
+        // bytes where they were, and saying nothing then is the row lying —
+        // the same fault as a launch refusal reaching stderr and no further.
+        switch (r.what) {
+            case cache::Release::What::Deleted:
+            case cache::Release::What::Nothing:
+                detailScreen.setNotice("");
+                break;
+            case cache::Release::What::StillKept:
+                // Unreachable until this console had more than one account,
+                // and the first thing that account switching makes real.
+                detailScreen.setNotice(
+                    r.otherKeepers == 1
+                        ? "Removed from your games. It stays on the console "
+                          "because somebody else is keeping it, so no space "
+                          "came back."
+                        : "Removed from your games. It stays on the console "
+                          "because other people are keeping it, so no space "
+                          "came back.");
+                break;
+            case cache::Release::What::Demoted:
+                detailScreen.setNotice("Removed from your games. The space "
+                                       "comes back when you stop playing it.");
+                break;
+            case cache::Release::What::DeleteFailed:
+                detailScreen.setNotice("Removed from your games, but the files "
+                                       "could not be deleted.");
+                break;
+        }
     };
 
     // Opening the launch screen for a card. Everything it shows is decided
@@ -4158,10 +4423,217 @@ int main(int argc, char** argv) {
                 if (c.id == romId) { c.kept = true; break; }
     };
 
+    // SWITCHING WHO THE CONSOLE IS. Open question 26, and the half that
+    // `accounts::activate` deliberately does not do.
+    //
+    // THE LIST OF WHAT BELONGS TO AN ACCOUNT WAS WORKED OUT FROM
+    // `storage::userDir`'s children AND FROM WHAT THE STARTUP PATH BUILDS,
+    // before this was written rather than after somebody saw their sister's
+    // save. It is:
+    //
+    //   the token           -> accounts::activate
+    //   who we are          -> adoptUser, which asks /api/users/me again
+    //   recents, favourites -> loadLibrary; they are RomM's play history and
+    //   the hero, the shelf    they are per person, not per console
+    //   the kept badges     -> refreshKeeps, which reads this person's keeps
+    //
+    // **THE CATALOGUE IS PER ACCOUNT TOO, AND I HAD THIS WRONG.** This comment
+    // used to say the library of games is the same for everybody because there
+    // is one server per console, and that the refetch was incidental. Measured
+    // 2026-09-21 on the real server: MMagTech sees 1147 games and vivian sees
+    // 412. RomM scopes a library to the user, so the catalogue belongs on the
+    // list above rather than beside it.
+    //
+    // The code was already right — `loadLibrary` fetches the lot in one pass,
+    // so everything was being replaced regardless. It is the REASONING that was
+    // wrong, which matters because the next person to optimise this would have
+    // read that comment and skipped the refetch.
+    //
+    // TWO THINGS REFUSE THE SWITCH, and both are about a save reaching the
+    // wrong person rather than about tidiness. **THEY ARE NOT EQUALLY LIVE AND
+    // THE DIFFERENCE IS WORTH KNOWING** — MMagTech asked how you would even
+    // switch mid-game, and the answer is that you cannot.
+    auto switchAccount = [&](int id, std::string* why) -> bool {
+        // **UNREACHABLE THROUGH THE UI TODAY, AND KEPT ANYWAY.** While a game
+        // runs the core owns the pad outright (`InputOwner::Game`), the bar is
+        // not drawn at all (`if (!playing && ...)`), and the only overlay is
+        // the pause menu, whose four rows are Resume, Save state, Load latest
+        // and Exit. There is no way to reach the chip. Nothing but
+        // `--switch-account` can make this branch fire.
+        //
+        // It stays because the hazard it names is real and the door is one row
+        // wide: consoles do offer user switching from a pause menu, and the
+        // day anybody adds that row this is what stops a running game's save
+        // being filed under the wrong person — the core writes its card at
+        // unload and `filesave` puts it under `storage::currentUser()`, which
+        // a switch has just changed.
+        //
+        // **Do not read this as a tested guard.** It has never fired in
+        // anger and it cannot until something calls this while a game runs.
+        if (playing) {
+            if (why) *why = "Quit the game before switching accounts.";
+            return false;
+        }
+        // **THIS ONE IS REACHABLE AND IT IS THE ONE THAT MATTERS.** Exit a
+        // game, the save starts going up in the background, you land on Home,
+        // and the chip is right there — a window of a few seconds that anybody
+        // switching users would walk straight into.
+        //
+        // AN UPLOAD IN FLIGHT WOULD GO UP AS THE NEW PERSON. The uploader holds
+        // a pointer to this very client, so swapping the token underneath it
+        // sends the previous account's save to the new account's library. An
+        // unsent save is described elsewhere in this file as the one
+        // irreplaceable thing on the machine; misfiling one is worse than
+        // making somebody wait.
+        if (const int owed = uploader.pending(); owed > 0) {
+            if (why)
+                *why = owed == 1 ? "A save is still going up. One moment."
+                                 : "Saves are still going up. One moment.";
+            return false;
+        }
+
+        std::string err;
+        if (!accounts::activate(id, liveClient, &err)) {
+            if (why) *why = err;
+            return false;
+        }
+        // ASKED AGAIN, NOT ASSUMED. The token changed, so the answer to "who is
+        // this" changed, and every save path below is built from it.
+        if (!adoptUser(liveClient)) {
+            if (why) *why = "Switched, but the server would not say who that is.";
+            return false;
+        }
+
+        Library lib = loadLibrary(liveClient);
+        if (lib.cards.empty()) {
+            // Left as it was rather than blanked: an empty Home is worse than
+            // the previous person's, and this is recoverable by switching back.
+            if (why) *why = "That account's library came back empty.";
+            return false;
+        }
+        cards = std::move(lib.cards);
+        heroIndex = lib.heroIndex;
+        heroPlatform = lib.heroPlatform;
+        shelf = std::move(lib.shelf);
+        favorites = std::move(lib.favorites);
+        games = std::move(lib.games);
+        platformTiles = std::move(lib.platformTiles);
+        collectionTiles = std::move(lib.collectionTiles);
+        libraryScreen.build(platformTiles, collectionTiles);
+        refreshKeeps();
+
+        const storage::User& now = storage::currentUser();
+        std::fprintf(stderr, "[accounts] switched to %d - %s, %zu games\n", now.id,
+                     now.name.c_str(), cards.size());
+        return true;
+    };
+
+    // ADDING SOMEBODY, ON A CLIENT OF ITS OWN.
+    //
+    // THE SEPARATE CLIENT IS THE WHOLE POINT and it is the reference
+    // implementation's rule too: pairing on the live client would swap the
+    // token under whoever is playing, and a half-finished pairing would leave
+    // `firstrun` looking at a console it cannot classify. Nothing here touches
+    // `liveClient` until `recordPairing` has succeeded — and even then it only
+    // writes the account, because adding somebody must not sign anybody out.
+    struct AddJob {
+        std::thread th;
+        std::mutex m;
+        std::atomic<bool> running{false};
+        romm::Pairing pairing;
+        bool haveCode = false;
+        bool finished = false;
+        bool ok = false;
+        std::string err;
+    };
+    auto addJob = std::make_shared<AddJob>();
+    // The QR is encoded once, when the code first arrives, not per frame.
+    bool shownPairCode = false;
+    // Set by --screen add-account: hold the screenshot until there is a code.
+    bool waitForPairCode = false;
+
+    auto startAddAccount = [&, addJob]() {
+        if (addJob->running.load()) return;
+        if (!rommAddress) {
+            accountScreen.setNotice("This console has no server address.");
+            return;
+        }
+        addJob->running = true;
+        shownPairCode = false;
+        { std::lock_guard<std::mutex> lk(addJob->m);
+          addJob->haveCode = addJob->finished = addJob->ok = false;
+          addJob->err.clear(); }
+        const std::string addr = rommAddress;
+        if (addJob->th.joinable()) addJob->th.join();
+        addJob->th = std::thread([addJob, addr]() {
+            romm::Client c;              // ITS OWN. See the comment above.
+            std::string err;
+            if (!c.setAddress(addr, &err)) {
+                std::lock_guard<std::mutex> lk(addJob->m);
+                addJob->err = err; addJob->finished = true; addJob->running = false;
+                return;
+            }
+            romm::Pairing p;
+            if (!c.beginPairing(&p, &err)) {
+                std::lock_guard<std::mutex> lk(addJob->m);
+                addJob->err = err; addJob->finished = true; addJob->running = false;
+                return;
+            }
+            { std::lock_guard<std::mutex> lk(addJob->m);
+              addJob->pairing = p; addJob->haveCode = true; }
+
+            // ON THE PAIRING'S OWN INTERVAL, and it expires in minutes — the
+            // loop ends rather than running for ever, because a code nobody
+            // approved is not an error worth blocking on.
+            const int tries = p.expiresIn > 0 ? (p.expiresIn / (p.intervalSeconds > 0 ? p.intervalSeconds : 5)) + 1 : 60;
+            for (int i = 0; i < tries; ++i) {
+                std::this_thread::sleep_for(
+                    std::chrono::seconds(p.intervalSeconds > 0 ? p.intervalSeconds : 5));
+                const int state = c.pollPairing(p, &err);
+                if (state == 0) continue;
+                if (state < 0) break;
+                std::string aerr;
+                const bool wrote = accounts::recordPairing(c, &aerr);
+                std::lock_guard<std::mutex> lk(addJob->m);
+                addJob->ok = wrote;
+                if (!wrote) addJob->err = aerr;
+                addJob->finished = true; addJob->running = false;
+                return;
+            }
+            std::lock_guard<std::mutex> lk(addJob->m);
+            if (addJob->err.empty()) addJob->err = "that code expired before anybody approved it";
+            addJob->finished = true; addJob->running = false;
+        });
+        addAccountScreen.setBusy(true);
+    };
+
+    // Rebuilt from the store, which is the only thing that knows.
+    auto refreshAccountRows = [&]() {
+        // EVERYBODY EXCEPT WHOEVER IS SIGNED IN. The chip directly above the
+        // panel is that person's row already; listing them again is the
+        // redundancy MMagTech spotted in the first capture.
+        std::vector<screens::AccountRow> rows;
+        const int active = accounts::activeId();
+        for (const accounts::Account& a : accounts::all())
+            if (a.id != active) rows.push_back({a.id, a.name, a.avatar});
+        accountScreen.setRows(std::move(rows));
+    };
+
     // WHERE THE BAR'S FOCUS LIVES. Not in Home's row model and not in any
     // screen's: the bar is drawn over all of them, so its cursor belongs to the
     // app. Every screen gets into it the same way (Action::FocusBar) and out of
     // it the same way (Down, or Back).
+    // THE SWITCHER IS AN OVERLAY, NOT A DESTINATION, and that is the whole
+    // point of it being a panel. It was a stack screen for one build and the
+    // capture showed the fault immediately: pushing it made `here()` stop
+    // being Home, so Home stopped drawing and the panel hung over an empty
+    // purple field. A thing that "expands from the chip" has to have what it
+    // expanded over still behind it.
+    //
+    // So it lives beside `barFocused` rather than in the stack: the app owns
+    // it, every screen keeps drawing underneath it, and Back closes it and
+    // leaves you exactly where you were.
+    bool accountsOpen = false;
     bool barFocused = false;
     int barSlot = 0;
     // Trigger edge state. See the axis handler.
@@ -4202,8 +4674,17 @@ int main(int argc, char** argv) {
             case screens::Action::None:
                 break;
             case screens::Action::Back:
-                if (stack.size() > 1) { stack.pop_back(); sound::play(sound::Cue::Back); }
-                else sound::play(sound::Cue::Edge);
+                if (accountsOpen) {
+                    // Closes the panel and puts focus back ON THE CHIP, which
+                    // is where it came from. Dropping focus into the screen
+                    // underneath would lose the place the person was at.
+                    accountsOpen = false;
+                    barFocused = true;
+                    barSlot = BarAccount;
+                    sound::play(sound::Cue::Back);
+                } else if (stack.size() > 1) {
+                    stack.pop_back(); sound::play(sound::Cue::Back);
+                } else sound::play(sound::Cue::Edge);
                 break;
             case screens::Action::OpenTile: {
                 const auto& tiles = libraryScreen.visible();
@@ -4213,6 +4694,40 @@ int main(int argc, char** argv) {
                 sound::play(sound::Cue::Activate);
                 break;
             }
+            case screens::Action::SwitchAccount: {
+                // THE REFUSALS BELONG TO THE APP AND SO DO THEIR WORDS. The
+                // screen does not know whether a game is running or a save is
+                // still going up; it asked to become somebody and this decides.
+                std::string why;
+                if (switchAccount(res.value, &why)) {
+                    // Straight back to Home with the panel closed, because
+                    // everything behind it belonged to the last account.
+                    // Leaving the panel open over a Home that has just been
+                    // rebuilt for somebody else is the stale-screen fault in
+                    // miniature.
+                    accountsOpen = false;
+                    barFocused = false;
+                    stack.clear();
+                    stack.push_back(Screen::Home);
+                    accountScreen.setNotice("");
+                    sound::play(sound::Cue::Activate);
+                } else {
+                    accountScreen.setNotice(why);
+                    sound::play(sound::Cue::Edge);
+                }
+                break;
+            }
+            case screens::Action::AddAccount:
+                // THE PANEL CLOSES AND A SCREEN OPENS. Leaving the panel up
+                // behind a pairing code would put the list somebody is about
+                // to change underneath the thing changing it.
+                accountsOpen = false;
+                barFocused = false;
+                addAccountScreen.open();
+                stack.push_back(Screen::AddAccount);
+                startAddAccount();
+                sound::play(sound::Cue::Activate);
+                break;
             case screens::Action::FocusKeyboard:
                 // Back into the keyboard under the results. Focus does not
                 // leave the screen, it moves down within it.
@@ -4379,6 +4894,18 @@ int main(int argc, char** argv) {
                 // its real contents. It says nothing when pressed rather than
                 // pretending — a destination that goes nowhere is a promise the
                 // product does not keep, and that screen does not exist.
+                if (barSlot == BarAccount) {
+                    // WHO IS PLAYING. Rebuilt from the store every time it
+                    // opens rather than cached: the list is three lines of
+                    // JSON and a stale switcher is a switcher that signs the
+                    // console in as somebody who has been removed.
+                    barFocused = false;
+                    refreshAccountRows();
+                    accountScreen.open();
+                    accountsOpen = true;
+                    sound::play(sound::Cue::Activate);
+                    return true;
+                }
                 if (barSlot == BarLibrary || barSlot == BarSearch) {
                     const int d = (barSlot == BarLibrary) ? 1 : 2;
                     barFocused = false;
@@ -4405,6 +4932,7 @@ int main(int argc, char** argv) {
 
     navigate = [&](screens::Nav n) -> bool {
         // The bar first, wherever it is focused. One place, one behaviour.
+        if (accountsOpen) { apply(accountScreen.key(n)); return true; }
         if (barFocused && barKey(n)) return true;
         switch (here()) {
             case Screen::Home: return homeKey ? homeKey(n) : false;
@@ -4412,6 +4940,7 @@ int main(int argc, char** argv) {
             case Screen::Grid: apply(gridScreen.key(n)); return true;
             case Screen::Detail: apply(detailScreen.key(n)); return true;
             case Screen::Search: apply(searchScreen.key(n)); return true;
+            case Screen::AddAccount: apply(addAccountScreen.key(n)); return true;
         }
         return false;
     };
@@ -4424,7 +4953,40 @@ int main(int argc, char** argv) {
     // Library. `--screen search --query metal` types the query the way a person
     // would type it and leaves focus in the results, which is the state worth
     // photographing — an empty Search is a picture of a keyboard.
-    if (initialScreen && SDL_strcmp(initialScreen, "search") == 0) {
+    // THE SWITCHER IS REACHED THE WAY A PERSON REACHES IT: focus the bar, walk
+    // to the chip, press it. A capture that called open() directly would be
+    // photographing a panel the product might not be able to get to.
+    if (initialScreen && (SDL_strcmp(initialScreen, "accounts") == 0 ||
+                          SDL_strcmp(initialScreen, "add-account") == 0)) {
+        barFocused = true;
+        barSlot = BarAccount;
+        barKey(screens::Nav::Activate);
+        if (SDL_strcmp(initialScreen, "add-account") == 0) {
+            // WALKS DOWN TO THE ADD ROW FIRST, and not doing so switched the
+            // console to somebody else. This pressed Activate straight away,
+            // which was right while the panel held only the Add row and wrong
+            // the moment a second account existed — row 0 became a person, so
+            // the capture route signed the console in as them.
+            //
+            // The lesson is the one this project keeps paying for: a route
+            // that walks the way a person walks has to keep walking when the
+            // screen gains a row. Down until the focus stops moving, then
+            // press, which is what a person does.
+            for (int guard = 0; guard < 16; ++guard)
+                accountScreen.key(screens::Nav::Down);
+            // Presses the Add row the way a person would. It starts a REAL
+            // pairing against the real server — a device code that expires in
+            // minutes and creates nothing unless somebody approves it.
+            apply(accountScreen.key(screens::Nav::Activate));
+            // AND THE CAPTURE HAS TO WAIT FOR THE SERVER. This loop is not
+            // paced, so on the A9 four hundred frames go by in well under a
+            // second and the shot comes out with no code on it — the same trap
+            // `--launch-after` fell into and the same one that cost the setup
+            // pairing capture. Gate the shot on the fact rather than on a
+            // frame count.
+            waitForPairCode = true;
+        }
+    } else if (initialScreen && SDL_strcmp(initialScreen, "search") == 0) {
         goToDestination(2);
         if (searchQuery) {
             keyboard.typeText(searchQuery);
@@ -5526,6 +6088,60 @@ int main(int argc, char** argv) {
             autoDownloadId = 0;
             downloadById(id);
         }
+        // The pairing worker's answer, picked up on the frame thread. Nothing
+        // here touches the network — it reads what the thread published.
+        if (here() == Screen::AddAccount) {
+            bool code = false, fin = false, ok = false;
+            std::string url, user, err;
+            {
+                std::lock_guard<std::mutex> lk(addJob->m);
+                code = addJob->haveCode; fin = addJob->finished; ok = addJob->ok;
+                url = addJob->pairing.verificationUrl;
+                user = addJob->pairing.userCode;
+                err = addJob->err;
+            }
+            if (fin) {
+                std::lock_guard<std::mutex> lk(addJob->m);
+                addJob->finished = false;
+                if (ok) {
+                    // Added, NOT switched to. Back to the panel with the new
+                    // person in it, which is where the switch is.
+                    refreshAccountRows();
+                    if (stack.size() > 1) stack.pop_back();
+                    accountsOpen = true;
+                    accountScreen.setNotice("Added. Choose them to switch.");
+                    // SAID IN THE JOURNAL TOO. The outcome of this flow was
+                    // drawn and nowhere else, so nobody helping from a shell
+                    // could tell a completed pairing from a hung one — the
+                    // same fault as the launch refusal that only reached
+                    // stderr, in the other direction.
+                    std::fprintf(stderr, "[accounts] added, now %zu accounts, "
+                                         "still acting as %d\n",
+                                 accounts::all().size(), accounts::activeId());
+                } else {
+                    addAccountScreen.setError(err.empty() ? "That did not pair." : err);
+                    std::fprintf(stderr, "[accounts] add failed: %s\n",
+                                 err.empty() ? "no reason given" : err.c_str());
+                }
+            } else if (code && !shownPairCode) {
+                shownPairCode = true;
+                addAccountScreen.setPairing(url, user);
+                // SAID IN THE JOURNAL AS WELL AS ON THE TELEVISION. A code
+                // that exists only as pixels cannot be read back by anybody
+                // helping from a shell, and this is the one screen whose whole
+                // content is a string somebody has to act on within minutes.
+                // It is not a secret: the device code is, and that is not this.
+                std::fprintf(stderr, "[accounts] pair at %s (code %s)\n",
+                             url.c_str(), user.c_str());
+            }
+        }
+        if (autoSwitchAccountId > 0) {
+            const int id = autoSwitchAccountId;
+            autoSwitchAccountId = 0;
+            std::string why;
+            if (!switchAccount(id, &why))
+                std::fprintf(stderr, "[accounts] refused: %s\n", why.c_str());
+        }
         if (autoUnkeepId > 0) {
             const int id = autoUnkeepId;
             autoUnkeepId = 0;
@@ -5639,6 +6255,8 @@ int main(int argc, char** argv) {
             // resuming mid-transition when the person comes back to it.
             screens::Ctx ctx{renderer, text, images, renderer.scale(), &cards};
             libraryScreen.tick(dt);
+            accountScreen.tick(dt);
+            addAccountScreen.tick(dt);
             gridScreen.tick(dt, ctx);
             searchScreen.tick(dt, ctx);
 
@@ -6035,6 +6653,7 @@ int main(int argc, char** argv) {
                 case Screen::Grid: gridScreen.draw(ctx); break;
                 case Screen::Detail: detailScreen.draw(ctx); break;
                 case Screen::Search: searchScreen.draw(ctx); break;
+                case Screen::AddAccount: addAccountScreen.draw(ctx); break;
                 case Screen::Home: break;   // unreachable, and the compiler asks
             }
             // A screen sets the transition alpha and its own scroll window for
@@ -6286,6 +6905,9 @@ int main(int argc, char** argv) {
                 // Search has no glass: the keyboard docked under it is the only
                 // material on the screen and the app draws that itself.
                 case Screen::Search: break;
+                // The QR draws its own white card; there is nothing behind it
+                // on this screen for glass to blur.
+                case Screen::AddAccount: break;
                 case Screen::Home: break;
             }
             renderer.setContentAlpha(1.0f);
@@ -6461,7 +7083,7 @@ int main(int argc, char** argv) {
                 barTop + (barHeight - text.lineHeight(ui::TextStyle::Callout, sc)) * 0.5f +
                 text.ascent(ui::TextStyle::Callout, sc);
             float bx = barX;
-            for (int i = 0; i < BarCount; ++i) {
+            for (int i = 0; i < kBarCapsules; ++i) {
                 const bool on = barFocused && barSlot == i;
                 const bool sel = (i == selected);
                 const float w = text.measure(kBarLabels[i], ui::TextStyle::Callout, sc);
@@ -6540,10 +7162,22 @@ int main(int argc, char** argv) {
             // switching is its own topic and nothing here is focusable yet.
             const storage::User me = storage::currentUser();
             const std::string who = me.valid() ? me.name : std::string("Not signed in");
-            const float discD = barHeight - 26.0f;
+            // A STEP DOWN THE RAMP FROM THE DESTINATIONS, and that is the
+            // whole of the sizing rule. MMagTech, looking at the first
+            // capture: *"chip seems a bit too big."* It was, and the reason
+            // was measurable rather than a matter of taste — the name was
+            // Callout, which is exactly what Library, Search and Settings
+            // are, so ambient state was typeset at destination weight and
+            // competed with the navigation it sits opposite.
+            //
+            // Caption1 against the bar's Callout, and a disc sized to the
+            // smaller text. The reference calls it "a SMALL circular avatar"
+            // and that word was doing work nobody had read.
+            const ui::TextStyle chipStyle = ui::TextStyle::Caption1;
+            const float discD = barHeight - 30.0f;
             const float discX = rightEdge - discD;
             const float discY = barTop + (barHeight - discD) * 0.5f;
-            const float nameW = text.measure(who, ui::TextStyle::Callout, sc);
+            const float nameW = text.measure(who, chipStyle, sc);
             // THE PERSON'S OWN PICTURE, when RomM has one — new 2026-09-21.
             // MMagTech: *"i also noticed my user login isnt showing its image
             // from romm."* It never did: the comment below promised a lettered
@@ -6553,8 +7187,21 @@ int main(int argc, char** argv) {
             //
             // The disc is drawn either way, as the ground under a picture with
             // transparency and as the fallback when there is none.
+            // THE CHIP IS FOCUSABLE NOW. It is not a capsule like the other
+            // bar items, so it takes the focus treatment on its own disc — a
+            // rim, which is this design system's focus idiom everywhere else.
+            const bool chipOn = barFocused && barSlot == BarAccount;
+            if (chipOn) {
+                const float pad = 6.0f;
+                renderer.draw(ui::Rect{discX - pad, discY - pad, discD + pad * 2.0f,
+                                       discD + pad * 2.0f, (discD + pad * 2.0f) * 0.5f,
+                                       ui::Color::white(0.55f)});
+            }
             renderer.draw(ui::Rect{discX, discY, discD, discD, discD * 0.5f,
-                                   ui::Color::white(0.22f)});
+                                   ui::Color::white(chipOn ? 0.34f : 0.22f)});
+            // WHERE THE PANEL HANGS FROM. The app knows where the chip is; the
+            // screen must not guess, or the panel drifts the day the bar moves.
+            accountScreen.setAnchor(discX + discD, barTop + barHeight + 12.0f);
             const ui::Image* face = nullptr;
             if (!me.avatar.empty()) {
                 const ui::Image& img = images.get(me.avatar);
@@ -6570,14 +7217,31 @@ int main(int argc, char** argv) {
             } else if (!who.empty()) {
                 const std::string initial(1, static_cast<char>(std::toupper(
                     static_cast<unsigned char>(who[0]))));
-                const float iw = text.measure(initial, ui::TextStyle::Callout, sc);
+                const float iw = text.measure(initial, chipStyle, sc);
                 text.draw(renderer, initial, discX + (discD - iw) * 0.5f,
-                          discY + (discD - text.lineHeight(ui::TextStyle::Callout, sc)) * 0.5f +
-                              text.ascent(ui::TextStyle::Callout, sc),
-                          ui::TextStyle::Callout, ui::Color::white(0.90f), sc);
+                          discY + (discD - text.lineHeight(chipStyle, sc)) * 0.5f +
+                              text.ascent(chipStyle, sc),
+                          chipStyle, ui::Color::white(0.90f), sc);
             }
-            text.draw(renderer, who, discX - 12.0f - nameW, barBaseline,
-                      ui::TextStyle::Callout, ui::Color::white(0.65f), sc);
+            // Its own baseline, because it is no longer the bar's size and
+            // sharing `barBaseline` would sit it a few points low.
+            const float chipBaseline =
+                barTop + (barHeight - text.lineHeight(chipStyle, sc)) * 0.5f +
+                text.ascent(chipStyle, sc);
+            // Brighter when focused, because it just got smaller and a focus
+            // target you cannot find is worse than one that is too loud.
+            text.draw(renderer, who, discX - 10.0f - nameW, chipBaseline,
+                      chipStyle, ui::Color::white(chipOn ? 0.95f : 0.62f), sc);
+        }
+
+        // ---- The account switcher, over the screen and over the bar -------
+        //
+        // AFTER THE BAR, because it hangs from the chip the bar draws and has
+        // to sit on top of it rather than under. Before the curtain, because a
+        // curtain covers everything including this.
+        if (accountsOpen) {
+            screens::Ctx actx{renderer, text, images, sc, &cards};
+            accountScreen.draw(actx);
         }
 
         // ---- The curtain, over everything --------------------------------
@@ -6597,7 +7261,8 @@ int main(int argc, char** argv) {
         ++frame;
         // Capture before the swap. After a swap the back buffer's contents are
         // undefined, so a readback taken there is whatever the driver left.
-        if (shotMode && frame >= shotAfterFrames) {
+        if (shotMode && frame >= shotAfterFrames &&
+            (!waitForPairCode || shownPairCode)) {
             renderer.saveFrame(shotPath, dw, dh);
             // Whether the running core can produce a state AT THIS POINT, which
             // is a different question from whether the round trip is exact and
