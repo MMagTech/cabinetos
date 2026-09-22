@@ -408,6 +408,15 @@ Bluetooth pad) before anything offers "Sleep". Then a Power menu, which needs a
 polkit rule, and a SIGTERM handler so the power button stops skipping the save
 upload.
 
+**UPDATED LATER THE SAME EVENING — 10b's *What is still open* is the record.**
+The 8BitDo over Bluetooth CANNOT wake the A9 from s2idle (tested, with
+MMagTech pressing Home). Controllers are Bluetooth or wired, never a dongle.
+The agreed order: merge #49 → SIGTERM so power-off uploads the save → power
+button *press rests, hold shuts down* → Bluetooth wake research. **Start on
+Home opens the Power menu** (Rest, Restart, Power off) — it currently quits
+the frontend, which is the line to replace. Idle never falls into rest by
+itself while no controller can wake the machine.
+
 #### THEN, WITH A PAD, ON THE TELEVISION
 
 Three things are on that machine now and nobody has pressed them:

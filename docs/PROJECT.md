@@ -5865,6 +5865,15 @@ press, `display awake: gamescope took it`. The test flags stay:
   the bar is on. Later, **holding the pad's Home button** opens the same menu
   from anywhere including a game. Needs a polkit rule for logind's three
   actions.
+- **DECIDED, MMagTech 2026-09-22: START ON HOME OPENS THE POWER MENU.** *"Sort
+  of how like hitting start in game has exit, this is just exiting the
+  system."* Start in a game opens the pause menu with Exit to Home; Start on
+  Home opens Rest, Restart, Power off — the same gesture one level up.
+  **Today Start on Home quits the frontend outright** (`running = false`,
+  `main.cpp`, the Start case in the UI's pad handler) — a development
+  leftover, and on the console it just gets the session restarted under
+  whoever is watching. That line is what this replaces. The top-bar icon above
+  is the discoverable companion to it, not a substitute.
 - **HOW TO RUN A SLEEP TEST WITH SOMEBODY AT THE TELEVISION.** Give the whole
   sequence — what goes dark, when to press, what success looks like, how long
   until the alarm — BEFORE the machine sleeps, and wait for "go". Twice today
