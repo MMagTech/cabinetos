@@ -11947,10 +11947,15 @@ top of the write-time refusal to enter the system reserve.
 
 #### AND THE GRID IS PAGED — the fault this work left behind, fixed
 
-Boot became constant; a grid did not. **MMagTech, having looked at it on the
-panel: "I wouldn't say opening a platform looks bad — does that number hold no
-matter how many games are in the platform?" It does not.** About 1 ms a game,
-so 141 is 0.19 s and a full MAME set in one platform is ten seconds.
+Boot became constant; a grid did not. **MMagTech, asked whether 0.19 s to open
+a grid held: "does that number hold no matter how many games are in the
+platform?" It does not.** About 1 ms a game, so 141 is 0.19 s and a full MAME
+set in one platform is ten seconds.
+
+*(An earlier draft attributed that to his having looked at it on the panel. He
+had not — the television runs the image's frontend and has never run any of
+this. The question was asked of the numbers and it was the right question
+either way.)*
 
 The first page is drawn and the rest arrives behind it. `GridScreen::append`
 extends the letter index rather than rebuilding it, and focus and scroll are

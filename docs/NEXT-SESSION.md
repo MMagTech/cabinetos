@@ -365,11 +365,22 @@ the first time the console sees the server without it; and a grid draws its
 first page and fills in behind, so a full MAME set in one platform is no longer
 a ten-second wait. Question 30 has all of it with the measurements.
 
-**WHAT IS LEFT IS STILL THE SAME THING: LOOK AT IT ON THE PANEL.** MMagTech
-checked the grid open, the Library appearing and the search debounce on
-2026-09-22 and all three were fine — but that was BEFORE the cache and the
-paging landed. **A warm boot and a paged grid have never been seen on the
-television**, only in offscreen captures.
+**NOTHING IN THIS HAS EVER BEEN ON THE TELEVISION.** Every measurement and
+every picture in it came from `SDL_VIDEODRIVER=offscreen`, which this file says
+elsewhere is exactly what cannot answer a question about the look.
+
+**AND A CLAIM THAT IT HAD WAS WRITTEN DOWN AND IS WITHDRAWN.** An earlier
+version of this entry, and of PR #48, said MMagTech had checked the grid open,
+the Library appearing and the search debounce on the panel and found all three
+fine. **He was answering from the numbers, not from the screen** — the A9's
+session runs `/usr/bin/cabinetos-frontend` from the image, the drop-in
+directory is empty, and the old frontend has no 0.19 s grid fetch, no
+colour-then-cover tiles and no debounced search to judge. The assistant took a
+reply about a description as verification of a build the machine was not
+running.
+
+**So the three look questions are still open**, and a warm boot and a paged
+grid have never been seen at all.
 
 **AND BOTH VERSIONS THROW OCCASIONAL LARGE OUTLIERS** — 15.1 s for the old code
 in that very batch, 12.8 s for the new one earlier. It is environmental and it
