@@ -346,8 +346,22 @@ states, and leave — with the save syncing on the way out.
 
 **THE BOOT WORK IS BUILT AND MEASURED, 2026-09-22, on branch `faster-boot`.**
 Open question 28 asked for it by name and it is done: boot no longer fetches
-the catalogue. **First frame on the A9 against the live server went from 3.0 s
-to 0.44 s** — eight runs, 0.41 to 0.63.
+the catalogue.
+
+**First frame on the A9 against the live server: 3.16 s → 0.81 s, 3.9x.** Six
+runs of each, **alternating, back to back**, both built from source on the same
+machine in the same minute.
+
+**AN EARLIER FIGURE OF 3.0 s → 0.44 s WAS PUBLISHED AND IT WAS NOT FAIR.** The
+two halves were measured about an hour apart, and the server got slower in
+between — the new code re-measured at 0.74 median with no change to it at all,
+which is how the drift was caught. **Measure A against B in the same minute or
+do not quote a ratio.** The old code was rebuilt from `522866e` to do it.
+
+**AND BOTH VERSIONS THROW OCCASIONAL LARGE OUTLIERS** — 15.1 s for the old code
+in that very batch, 12.8 s for the new one earlier. It is environmental and it
+is not this change. It has not been explained and it should be, because a
+fifteen-second boot is not a rounding error.
 
 | | |
 |---|---|

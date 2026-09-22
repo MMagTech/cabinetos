@@ -1653,13 +1653,31 @@ static bool loadTileGames(romm::Client& client, Library& lib, screens::Tile& til
         (isCollection ? "collection_id=" : "platform_ids=") + std::to_string(tile.id);
     std::vector<romm::Game> games;
     std::string err;
-    // No limit worth the name: this is one platform, and the caller has already
-    // decided it is worth a wait. kPage matches fetchGames so a platform bigger
-    // than one page is not silently truncated — see the warning there.
-    constexpr int kAll = 10000;
-    if (!client.fetchRoms(filter, kAll, &games, &err)) {
-        std::fprintf(stderr, "[library] %s: %s\n", tile.title.c_str(), err.c_str());
-        return false;
+    // PAGED, AND CHECKED AGAINST `total`. This asked for ten thousand in one
+    // request and called that enough, with a comment claiming it matched
+    // fetchGames. It did not: one request is not paging, and a platform past
+    // the limit would have come back SHORT AND SUCCESSFUL — the exact failure
+    // fetchGames' own comment calls the worst possible one, because the grid
+    // would simply show fewer games and say nothing.
+    //
+    // A full MAME set is tens of thousands of roms in a single platform, so
+    // this is not a hypothetical library.
+    constexpr int kPage = 500;
+    int total = 0;
+    for (;;) {
+        std::vector<romm::Game> page;
+        // fetchRoms writes the limit itself, so only the offset rides on the
+        // filter.
+        if (!client.fetchRoms(filter + "&offset=" + std::to_string(games.size()),
+                              kPage, &page, &err, &total)) {
+            std::fprintf(stderr, "[library] %s: %s\n", tile.title.c_str(), err.c_str());
+            return false;
+        }
+        const size_t got = page.size();
+        games.insert(games.end(), std::make_move_iterator(page.begin()),
+                     std::make_move_iterator(page.end()));
+        if (got < static_cast<size_t>(kPage)) break;
+        if (total > 0 && games.size() >= static_cast<size_t>(total)) break;
     }
     int unplayable = 0;
     for (const auto& g : games) {
