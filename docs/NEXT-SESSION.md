@@ -82,7 +82,7 @@ each one:
 | `systemctl is-active cabinetos-session` | `active` |
 | `ps -eo args \| grep [c]abinetos-frontend` | **`/usr/bin/cabinetos-frontend`** — the image's, under `gamescope --backend drm --output-width 3840 --output-height 2160` |
 | `ls /etc/systemd/system/cabinetos-session.service.d/` | **empty. No drop-ins at all.** |
-| `bootc status` | booted **`sha256:71b65e36…`**, with `sha256:ceafc2bb…` as the rollback |
+| `bootc status` | booted **`sha256:7bffc801…`**, with `sha256:71b65e36…` as the rollback |
 | `journalctl -b -o cat \| grep '^\[ps2\]'` | `renderer Vulkan, **upscale 1x, anisotropy 0**` |
 
 **THE TWO NUMBERS THIS FILE USED TO CARRY ARE NOW ONE.** It said "1147 on the
@@ -95,8 +95,11 @@ a pass — see the note at the end of the platform audit.)
 DEPLOYMENTS.** It was #30 and this file quoted it as the booted digest until
 today. If a digest here disagrees with `bootc status`, `bootc status` is right.
 
-**UPGRADED 2026-09-21 21:15Z, which is why the digest above is newer than the
-one in the PlayStation 2 and GameCube entries below.** The console had been four
+**UPGRADED TWICE ON 2026-09-21, most recently at 00:27Z to the image carrying
+account switching — so the chip, the panel and Add user are on the television
+for the first time, and none of it has been touched by a person with a pad.
+This digest has now gone stale THREE TIMES in one evening, which is the whole
+argument for overwriting the state block every session rather than editing it.** The console had been four
 commits behind — it was missing the second-game black fix (item 3b) and the
 pause menu's notices — so **item 3b's fix and the pause-menu work are on the
 television for the first time as of this upgrade, and neither has been looked
