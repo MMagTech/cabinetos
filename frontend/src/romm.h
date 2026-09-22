@@ -216,7 +216,13 @@ public:
     // platformId <= 0 fetches across every platform. Pages internally: RomM
     // caps a response and a library of thousands would otherwise arrive
     // truncated, silently.
-    bool fetchGames(int platformId, std::vector<Game>* out, std::string* err);
+    // `onPage` is called after each page arrives, with how many games are in
+    // hand so far. It exists so the startup screen can show a number that
+    // moves: this call takes several seconds on a real library and a screen
+    // that says the same thing throughout is indistinguishable from a hang.
+    // Optional, and the pages are fetched on the calling thread either way.
+    bool fetchGames(int platformId, std::vector<Game>* out, std::string* err,
+                    const std::function<void(int)>& onPage = {});
 
     // The games with play history, most recent first — the same query RomM's
     // own web home screen makes, so CabinetOS agrees with the web UI and with

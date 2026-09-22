@@ -1292,10 +1292,21 @@ Result AccountScreen::key(Nav n) {
 
 void AccountScreen::draw(Ctx& c) {
     const float a = appear_.value();
-    const float rowH = c.text.lineHeight(ui::TextStyle::Title3, c.sc) +
-                       design::kRowPadY * 2.0f;
+    // **SIZED AGAINST THE CHIP, because it hangs off it.** MMagTech, 2026-09-22:
+    // *"that box for adding users and switching is way too big especially
+    // compared to the logged user."* It was — the rows were Title3 at 38pt
+    // with 60pt discs, opening from a chip that is Caption1 at 25pt with a
+    // 26pt disc. The thing you pressed was less than half the scale of the
+    // thing it produced, which is what made it read as a box landing on the
+    // screen rather than as the chip opening.
+    //
+    // A row is a list item and the chip is an indicator, so a row is allowed
+    // to be a little larger — but a little. Callout against the chip's
+    // Caption1 is one step on the ramp, and a 36pt disc against its 26.
+    const ui::TextStyle rowStyle = ui::TextStyle::Callout;
+    const float rowH = c.text.lineHeight(rowStyle, c.sc) + 26.0f;
     const float discD = rowH - 22.0f;
-    const float w = 520.0f;
+    const float w = 400.0f;
     // HUNG FROM THE CHIP, not centred. The panel's right edge lines up with the
     // chip's, so it reads as the chip opening rather than as a screen arriving.
     const float x = anchorRight_ - w;
@@ -1304,19 +1315,19 @@ void AccountScreen::draw(Ctx& c) {
     // The panel grows downward as it appears, which is what makes it read as an
     // expansion. Everything inside is clipped to it by being drawn after.
     const int rows = rowCount();
-    const float bodyH = rows * rowH + (rows - 1) * 10.0f + 28.0f * 2.0f +
-                        (notice_.empty() ? 0.0f : 54.0f);
+    const float bodyH = rows * rowH + (rows - 1) * 8.0f + 18.0f * 2.0f +
+                        (notice_.empty() ? 0.0f : 46.0f);
     c.r.drawGlass(ui::Rect{x, top, w, bodyH * a, design::kRowRadius,
                            ui::Color::white(0)},
                   design::kRegularMaterialBlur, ui::Color::white(0.10f * a));
 
-    float y = top + 28.0f;
+    float y = top + 18.0f;
 
     for (int i = 0; i < rows; ++i) {
         const bool on = (i == slot_);
         const float f = on ? focus_.value() : 0.0f;
-        const float rw = w - 24.0f;
-        const float rx = x + 12.0f;
+        const float rw = w - 16.0f;
+        const float rx = x + 8.0f;
         c.r.draw(ui::Rect{rx, y, rw, rowH, design::kRowRadius,
                           ui::Color::white((0.04f + 0.16f * f) * a)});
 
@@ -1324,19 +1335,19 @@ void AccountScreen::draw(Ctx& c) {
             // A PLUS ON A DISC, so it sits in the same column as the faces and
             // reads as one more entry in the same list rather than as a button
             // bolted underneath it.
-            const float dx = rx + 16.0f, dy = y + (rowH - discD) * 0.5f;
+            const float dx = rx + 12.0f, dy = y + (rowH - discD) * 0.5f;
             c.r.draw(ui::Rect{dx, dy, discD, discD, discD * 0.5f,
                               ui::Color::white(0.14f * a)});
-            const float pw = c.text.measure("+", ui::TextStyle::Title3, c.sc);
+            const float pw = c.text.measure("+", rowStyle, c.sc);
             c.text.draw(c.r, "+", dx + (discD - pw) * 0.5f,
-                        dy + (discD - c.text.lineHeight(ui::TextStyle::Title3, c.sc)) * 0.5f +
-                            c.text.ascent(ui::TextStyle::Title3, c.sc),
-                        ui::TextStyle::Title3, ui::Color::white(0.8f * a), c.sc);
-            c.text.draw(c.r, "Add user", dx + discD + 18.0f,
-                        y + (rowH - c.text.lineHeight(ui::TextStyle::Title3, c.sc)) * 0.5f +
-                            c.text.ascent(ui::TextStyle::Title3, c.sc),
-                        ui::TextStyle::Title3, ui::Color::white(0.92f * a), c.sc);
-            y += rowH + 10.0f;
+                        dy + (discD - c.text.lineHeight(rowStyle, c.sc)) * 0.5f +
+                            c.text.ascent(rowStyle, c.sc),
+                        rowStyle, ui::Color::white(0.8f * a), c.sc);
+            c.text.draw(c.r, "Add user", dx + discD + 14.0f,
+                        y + (rowH - c.text.lineHeight(rowStyle, c.sc)) * 0.5f +
+                            c.text.ascent(rowStyle, c.sc),
+                        rowStyle, ui::Color::white(0.92f * a), c.sc);
+            y += rowH + 8.0f;
             continue;
         }
 
@@ -1357,22 +1368,22 @@ void AccountScreen::draw(Ctx& c) {
         } else if (!row.name.empty()) {
             const std::string initial(1, static_cast<char>(std::toupper(
                 static_cast<unsigned char>(row.name[0]))));
-            const float iw = c.text.measure(initial, ui::TextStyle::Title3, c.sc);
+            const float iw = c.text.measure(initial, rowStyle, c.sc);
             c.text.draw(c.r, initial, dx + (discD - iw) * 0.5f,
-                        dy + (discD - c.text.lineHeight(ui::TextStyle::Title3, c.sc)) * 0.5f +
-                            c.text.ascent(ui::TextStyle::Title3, c.sc),
-                        ui::TextStyle::Title3, ui::Color::white(0.85f * a), c.sc);
+                        dy + (discD - c.text.lineHeight(rowStyle, c.sc)) * 0.5f +
+                            c.text.ascent(rowStyle, c.sc),
+                        rowStyle, ui::Color::white(0.85f * a), c.sc);
         }
 
-        c.text.draw(c.r, row.name, dx + discD + 18.0f,
-                    y + (rowH - c.text.lineHeight(ui::TextStyle::Title3, c.sc)) * 0.5f +
-                        c.text.ascent(ui::TextStyle::Title3, c.sc),
-                    ui::TextStyle::Title3, ui::Color::white(0.92f * a), c.sc);
-        y += rowH + 10.0f;
+        c.text.draw(c.r, row.name, dx + discD + 14.0f,
+                    y + (rowH - c.text.lineHeight(rowStyle, c.sc)) * 0.5f +
+                        c.text.ascent(rowStyle, c.sc),
+                    rowStyle, ui::Color::white(0.92f * a), c.sc);
+        y += rowH + 8.0f;
     }
 
     if (!notice_.empty())
-        c.text.draw(c.r, notice_, x + 28.0f,
+        c.text.draw(c.r, notice_, x + 18.0f,
                     y + 8.0f + c.text.ascent(ui::TextStyle::Callout, c.sc),
                     ui::TextStyle::Callout, ui::Color::white(0.85f * a), c.sc);
 }
@@ -1416,56 +1427,160 @@ Result AddAccountScreen::key(Nav n) {
 
 void AddAccountScreen::draw(Ctx& c) {
     const float a = appear_.value();
-    const float left = 140.0f;
-    float y = 190.0f;
 
-    c.text.draw(c.r, "Add somebody to this console", left,
+    // THE SAME SHAPE AS FIRST RUN'S PAIRING STEP, and the first version of this
+    // screen was not. MMagTech, 2026-09-22: *"the add user screen seemed way
+    // too jarring visually in presentation and text."* It was bare text on the
+    // gradient — the only screen in the console with no material under it —
+    // with a 76pt title and a 76pt code competing, and a raw URL at 38pt bold
+    // dominating the middle of it.
+    //
+    // setup.cpp already solved this screen: prose on the left, the thing you
+    // act on in a panel on the right, one line along the bottom. Its own
+    // comment says why the shape is constant — *"so the flow does not appear
+    // to jump between five unrelated screens"* — and adding somebody is the
+    // same job as pairing the first somebody. The numbers below are its
+    // numbers, deliberately.
+    constexpr float kInset = 80.0f;
+    constexpr float kTitleTop = 150.0f;
+    constexpr float kProseWidth = 760.0f;
+    constexpr float kPanelX = 1020.0f;
+    constexpr float kPanelY = 168.0f;
+    constexpr float kPanelW = ui::kCanvasWidth - kPanelX - kInset;
+    constexpr float kPanelH = 660.0f;
+    constexpr float kFooterY = 900.0f;
+
+    // --- the left column: what is happening and why --------------------------
+    float y = kTitleTop;
+    c.text.draw(c.r, "Add a user", kInset,
                 y + c.text.ascent(ui::TextStyle::LargeTitle, c.sc),
                 ui::TextStyle::LargeTitle, ui::Color::white(0.96f * a), c.sc);
-    y += 120.0f;
+    y += c.text.lineHeight(ui::TextStyle::LargeTitle, c.sc) + 28.0f;
 
+    // PROSE IS `Body`, WHICH IS WHAT setup.cpp USES AND WHAT THIS SCREEN DID
+    // NOT. It was Title3 — 38pt against the 76pt title — and two near-headline
+    // sizes stacked is most of why it read as shouting.
+    //
+    // Written as short lines rather than wrapped, because `wrap` lives in
+    // setup.cpp behind `hardWrap` and this does not need either: the strings
+    // are fixed, they are mine, and they are well inside a 760pt column at
+    // 29pt. **If a line here ever grows, measure it** — that is the rule a
+    // truncated tile caption already bought once.
+    const char* lines[3] = {nullptr, nullptr, nullptr};
     if (busy_) {
-        c.text.draw(c.r, "Asking the server for a code…", left,
-                    y + c.text.ascent(ui::TextStyle::Title3, c.sc),
-                    ui::TextStyle::Title3, ui::Color::white(0.7f * a), c.sc);
-        return;
+        lines[0] = "Asking the server for a code.";
+    } else {
+        lines[0] = "Scan the code with a phone.";
+        lines[1] = "Sign in as the person you are adding,";
+        lines[2] = "not as yourself.";
     }
+    for (const char* line : lines) {
+        if (!line) continue;
+        c.text.draw(c.r, line, kInset, y + c.text.ascent(ui::TextStyle::Body, c.sc),
+                    ui::TextStyle::Body, ui::Color::white(0.72f * a), c.sc);
+        y += c.text.lineHeight(ui::TextStyle::Body, c.sc);
+    }
+
+    // THE ADDRESS AND THE CODE GO IN THE PROSE COLUMN, and putting them in the
+    // panel was the second mistake on this screen. setup.cpp says why in its
+    // own words: *"the pairing step puts the address and the code in the prose
+    // column, because they are the things somebody reads out or types — the QR
+    // is only a shortcut past typing them."* In the panel they were also white
+    // text over a light glass card, which is the contrast the QR's own white
+    // background creates, and the address was touching the panel's bottom edge.
     if (!code_.empty()) {
-        // THE COPY ASSUMES A COMPETENT ADULT — the rule first run was written
-        // to. It says the constraint and stops.
-        c.text.draw(c.r, "Scan this, or open the address below.", left,
-                    y + c.text.ascent(ui::TextStyle::Title3, c.sc),
-                    ui::TextStyle::Title3, ui::Color::white(0.75f * a), c.sc);
-        y += 90.0f;
-
-        // BIG ENOUGH TO PHOTOGRAPH FROM A SOFA, which is the whole reason this
-        // is a screen and not the panel.
-        const float side = 420.0f;
-        if (qr_.valid()) qr_.draw(c.r, left, y, side);
-
-        const float tx = left + side + 80.0f;
-        float ty = y + 40.0f;
-        c.text.draw(c.r, url_, tx, ty + c.text.ascent(ui::TextStyle::Title3, c.sc),
-                    ui::TextStyle::Title3, ui::Color::white(0.9f * a), c.sc);
-        ty += 80.0f;
-        c.text.draw(c.r, "and enter", tx, ty + c.text.ascent(ui::TextStyle::Callout, c.sc),
-                    ui::TextStyle::Callout, ui::Color::white(0.55f * a), c.sc);
-        ty += 56.0f;
-        c.text.draw(c.r, code_, tx, ty + c.text.ascent(ui::TextStyle::LargeTitle, c.sc),
-                    ui::TextStyle::LargeTitle, ui::Color::white(0.98f * a), c.sc);
-        ty += 130.0f;
-        // SAID BEFORE IT HAPPENS, because being added and being switched to are
-        // different things and somebody who expects the second will think this
-        // failed.
-        c.text.draw(c.r, "They are added to this console, not switched to.", tx,
-                    ty + c.text.ascent(ui::TextStyle::Callout, c.sc),
-                    ui::TextStyle::Callout, ui::Color::white(0.5f * a), c.sc);
-        y += side;
+        y += 30.0f;
+        if (!url_.empty()) {
+            // Without the code repeated on the end of it: it is printed below,
+            // at four times the size, and once is enough.
+            std::string shown = url_;
+            if (const size_t q = shown.find("?user_code="); q != std::string::npos)
+                shown = shown.substr(0, q);
+            if (shown.rfind("http://", 0) == 0) shown = shown.substr(7);
+            c.text.draw(c.r, shown, kInset,
+                        y + c.text.ascent(ui::TextStyle::Body, c.sc),
+                        ui::TextStyle::Body, ui::palette::kScreenCyan, c.sc);
+            y += c.text.lineHeight(ui::TextStyle::Body, c.sc);
+        }
+        y += 20.0f;
+        // THE BIGGEST THING AFTER THE TITLE, for setup.cpp's reason: it is what
+        // somebody reads off the screen and checks against their phone, and
+        // RomM shows the same characters on the page they are approving.
+        c.text.draw(c.r, "Code " + code_, kInset,
+                    y + c.text.ascent(ui::TextStyle::Title1, c.sc),
+                    ui::TextStyle::Title1, ui::Color::white(0.97f * a), c.sc);
+        y += c.text.lineHeight(ui::TextStyle::Title1, c.sc);
     }
 
-    if (!error_.empty())
-        c.text.draw(c.r, error_, left, y + 40.0f + c.text.ascent(ui::TextStyle::Callout, c.sc),
-                    ui::TextStyle::Callout, ui::Color::white(0.85f * a), c.sc);
+    // AN OUTCOME BELONGS IN THE PROSE COLUMN, not over the code. This is where
+    // "nobody was added" lands, and it is the whole reason that case stays on
+    // this screen instead of returning to a panel that looks unchanged.
+    if (!error_.empty()) {
+        y += 30.0f;
+        std::string rest = error_;
+        for (int guard = 0; guard < 6 && !rest.empty(); ++guard) {
+            size_t cut = rest.size();
+            while (cut > 0 &&
+                   c.text.measure(rest.substr(0, cut), ui::TextStyle::Callout, c.sc) > kProseWidth) {
+                const size_t sp = rest.rfind(' ', cut - 1);
+                if (sp == std::string::npos) break;
+                cut = sp;
+            }
+            c.text.draw(c.r, rest.substr(0, cut), kInset,
+                        y + c.text.ascent(ui::TextStyle::Callout, c.sc),
+                        ui::TextStyle::Callout, ui::Color::white(0.92f * a), c.sc);
+            y += c.text.lineHeight(ui::TextStyle::Callout, c.sc);
+            rest = (cut >= rest.size()) ? std::string() : rest.substr(cut + 1);
+        }
+    }
+
+    // --- the right column: the thing you act on ------------------------------
+    //
+    // **NO GLASS PANEL BEHIND THE CODE, AND THERE WAS ONE.** MMagTech, looking
+    // at it: *"why the giant white box around the qrcode."* Because there were
+    // two boxes — a white card inside a light glass panel — and only one of
+    // them earns its place.
+    //
+    // THE WHITE CARD IS NOT DECORATION. It is the quiet zone: four modules of
+    // real white around the symbol, which `qr.h` records as measured rather
+    // than assumed — the same code drawn flush to its edge does not decode at
+    // all, and with the margin it decodes every time. It cannot go.
+    //
+    // The panel could, and did. It was copied from setup.cpp's shape, where
+    // the same panel also holds rows of networks and controllers at the other
+    // steps; here it only ever holds the QR, so it was a box around a card
+    // holding nothing else. The card is the material on this side now.
+
+    if (code_.empty()) return;
+
+    // Everything that is words lives in the column on the left; this side is
+    // the shortcut past typing them. Bigger than it was, because it no longer
+    // has to leave room around itself inside something else — and a code that
+    // is photographed from a sofa cannot be too large.
+    const float side = 560.0f;
+    const float qx = kPanelX + (kPanelW - side) * 0.5f;
+    const float qy = kPanelY + (kPanelH - side) * 0.5f;
+    if (qr_.valid()) qr_.draw(c.r, qx, qy, side);
+
+    // --- NOTHING ALONG THE BOTTOM, and both lines that were here are gone ---
+    //
+    // "They are added to this console. Switching to them is separate." was
+    // dropped at MMagTech's request: it answers a question nobody has asked
+    // yet, at the moment they are trying to scan a code, and the panel names
+    // who was added the instant it happens.
+    //
+    // **"B to go back" WAS WORSE — IT WAS WRONG.** MMagTech: *"b doesnt let me
+    // go back like it suggests."* It does not, because SDL maps face buttons
+    // by POSITION: `SDL_GAMEPAD_BUTTON_EAST` is Back everywhere in this
+    // product, and on a Switch Pro Controller the east button is physically
+    // **A**. South is Activate, and south is B. The screen was naming the one
+    // button that does the opposite of what it claimed.
+    //
+    // **SO NOTHING HERE NAMES A PHYSICAL BUTTON.** No other screen in this
+    // product does, and this is why: the letter depends on the pad, and a
+    // console that will meet Switch, Xbox and PlayStation controllers cannot
+    // put one in a string. If a hint is ever wanted here it has to come from
+    // the pad SDL actually reports, not from a constant.
 }
 
 }  // namespace screens

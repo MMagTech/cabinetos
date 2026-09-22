@@ -506,7 +506,8 @@ bool Client::fetchCollections(std::vector<Collection>* out, std::string* err) {
     return true;
 }
 
-bool Client::fetchGames(int platformId, std::vector<Game>* out, std::string* err) {
+bool Client::fetchGames(int platformId, std::vector<Game>* out, std::string* err,
+                        const std::function<void(int)>& onPage) {
     out->clear();
     // RomM caps a page. A library of thousands arrives truncated unless this
     // pages, and truncated-but-successful is the worst possible failure: the
@@ -539,6 +540,10 @@ bool Client::fetchGames(int platformId, std::vector<Game>* out, std::string* err
         }
         json_object_put(root);
 
+        // Said after each page rather than at the end: a library of sixteen
+        // hundred arrives in four of these and the screen waiting on it has
+        // to show something moving in between.
+        if (onPage) onPage(static_cast<int>(out->size()));
         if (n < static_cast<size_t>(kPage)) break;
         offset += kPage;
     }

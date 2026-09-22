@@ -121,8 +121,23 @@ constexpr float kPressDuration = 0.120f;
 // pill is tinted white 35%; a focused one is tinted white 25% and scaled. A
 // controller UI where focus can move away from the current selection has to
 // show both or the person loses their place.
-constexpr float kSelectedTint = 0.35f;
-constexpr float kFocusedTint = 0.25f;
+// THE CURSOR IS THE STRONGEST THING ON THE BAR, AND IT WAS THE PALEST.
+//
+// These were 0.35 selected against 0.25 focused — so the destination you are
+// STANDING IN was drawn more solidly than the one the cursor is ON, which is
+// backwards, and both were a white wash on a purple gradient. MMagTech,
+// 2026-09-22: *"the pill that highlights them is a bit too light."*
+//
+// It is also the answer to a complaint recorded a day earlier and left open:
+// *"0.35 against 0.25 is a difference you can measure and can barely see from
+// a sofa."* Two tints ten points apart cannot say two different things.
+//
+// Focus is now unmistakable and selection is a quiet ground under it. The gap
+// is 22 points rather than 10, and the hierarchy is the right way round. Both
+// still get full-white text, so selection is never invisible — it is the pill
+// that stops competing with the cursor.
+constexpr float kSelectedTint = 0.20f;
+constexpr float kFocusedTint = 0.42f;
 
 // UNFOCUSED ARTWORK SITS BACK — new 2026-09-21.
 //

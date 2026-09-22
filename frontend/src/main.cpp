@@ -1602,7 +1602,8 @@ struct Library {
     std::vector<screens::Tile> collectionTiles;
 };
 
-static Library loadLibrary(romm::Client& client) {
+static Library loadLibrary(romm::Client& client,
+                           const std::function<void(int)>& onProgress = {}) {
     Library lib;
     std::vector<Card>& cards = lib.cards;
     std::string err;
@@ -1619,6 +1620,9 @@ static Library loadLibrary(romm::Client& client) {
     // than one boolean: "no core exists", "Cabinet does not ship it", "this
     // console has not built it yet" and "it is built and cannot be driven" lead
     // to different work and to different words on the screen.
+    // Games in hand across every platform so far, so the startup screen's
+    // count climbs once rather than restarting at each platform.
+    int loadedSoFar = 0;
     for (const auto& p : platforms) {
         const catalog::Coverage cov = catalog::coverageFor(p);
         screens::Tile tile;
@@ -1649,7 +1653,10 @@ static Library loadLibrary(romm::Client& client) {
         }
 
         std::vector<romm::Game> games;
-        if (!client.fetchGames(p.id, &games, &err)) {
+        if (!client.fetchGames(p.id, &games, &err,
+                               onProgress ? std::function<void(int)>([&](int n) {
+                                   onProgress(loadedSoFar + n);
+                               }) : std::function<void(int)>{})) {
             // One platform failing is not the library failing. Say so, give the
             // tile the truth rather than a count it does not have, and go on.
             std::fprintf(stderr, "[library] %s: %s\n", p.name.c_str(), err.c_str());
@@ -1658,6 +1665,7 @@ static Library loadLibrary(romm::Client& client) {
             lib.platformTiles.push_back(std::move(tile));
             continue;
         }
+        loadedSoFar += static_cast<int>(games.size());
         for (auto& g : games) {
             Card c;
             c.id = g.id;
@@ -2576,24 +2584,25 @@ static int rommProbe(const char* address, bool allowPairing) {
         // stand-in library with nobody able to say why. The pairing itself
         // genuinely succeeded; what failed is the only part that lasts.
         std::string aerr;
-        if (accounts::recordPairing(client, &aerr)) {
+        accounts::Paired paired;
+        if (accounts::recordPairing(client, &paired, &aerr)) {
             // WHO WAS ACTUALLY ADDED, asked rather than assumed. Reporting
             // `activeId()` here would name the wrong person for every account
             // after the first, because adding somebody deliberately does not
             // switch to them.
-            romm::User who;
-            std::string werr;
-            if (client.fetchCurrentUser(&who, &werr) && who.id > 0) {
-                std::printf("\npaired      %d - %s\n", who.id, who.username.c_str());
-                std::printf("token       %s\n", accounts::tokenPath(who.id).c_str());
-                if (who.id == accounts::activeId())
-                    std::printf("active      yes — this console was already acting as them\n");
-                else
-                    std::printf("active      no  — still acting as %d. Switch from the chip.\n",
-                                accounts::activeId());
-            } else {
-                std::printf("\npaired, and recorded\n");
-            }
+            std::printf("\n%s   %d - %s\n",
+                        paired.isNew ? "added      " : "RE-PAIRED  ",
+                        paired.id, paired.name.c_str());
+            if (!paired.isNew)
+                std::printf("            NOBODY WAS ADDED — that account was already\n"
+                            "            here, so its token was refreshed instead.\n"
+                            "            Approve as the person you are ADDING.\n");
+            std::printf("token       %s\n", accounts::tokenPath(paired.id).c_str());
+            if (paired.id == accounts::activeId())
+                std::printf("active      yes — this console was already acting as them\n");
+            else
+                std::printf("active      no  — still acting as %d. Switch from the chip.\n",
+                            accounts::activeId());
         } else {
             std::printf("\n");
             std::fflush(stdout);
@@ -2827,6 +2836,8 @@ int main(int argc, char** argv) {
     bool gpuProbeMode = false;
     bool firstRunProbeMode = false;
     int keepersRomId = 0;
+    int focusBarSlot = -1;
+    bool startupShot = false;
     bool accountsProbeMode = false;
     bool accountsTestMode = false;
     bool firstRunRulesMode = false;
@@ -3033,6 +3044,15 @@ int main(int argc, char** argv) {
             setupStep = argv[++i];
         } else if (SDL_strcmp(argv[i], "--no-setup") == 0) {
             noSetup = true;
+        } else if (SDL_strcmp(argv[i], "--startup-screen") == 0) {
+            startupShot = true;
+        } else if (SDL_strcmp(argv[i], "--focus-bar") == 0) {
+            // A capture of the bar's own focus, which nothing could take until
+            // now — line 2716 has referred to this flag since the bar was
+            // built and it was never actually added. An optional slot follows:
+            // 0 Library, 1 Search, 2 Settings, 3 the account chip.
+            focusBarSlot = 0;
+            if (i + 1 < argc && argv[i + 1][0] != '-') focusBarSlot = SDL_atoi(argv[++i]);
         } else if (SDL_strcmp(argv[i], "--keepers") == 0 && i + 1 < argc) {
             keepersRomId = SDL_atoi(argv[++i]);
         } else if (SDL_strcmp(argv[i], "--accounts") == 0) {
@@ -3578,6 +3598,24 @@ int main(int argc, char** argv) {
     waitDeps.renderer = &renderer;
     waitDeps.text = &text;
 
+    // A capture of the startup screen, which otherwise exists only for the few
+    // seconds between the window appearing and the library arriving — and on a
+    // fast server that is too short to photograph by hand. It draws the real
+    // thing through the real path rather than reconstructing it.
+    if (startupShot) {
+        int dw = 0, dh = 0;
+        SDL_GetWindowSizeInPixels(window, &dw, &dh);
+        // A representative line rather than the bare one: what this screen
+        // actually shows during a boot is a count that climbs, and a capture
+        // of it saying nothing would be a picture of a state that lasts a
+        // fraction of a second.
+        setup::showWaiting(waitDeps, "Starting up", "Loading your library — 640 games");
+        renderer.saveFrame(shotPath ? shotPath : "/tmp/cabinetos-startup.bmp", dw, dh);
+        renderer.shutdown();
+        SDL_Quit();
+        return 0;
+    }
+
     if (rommAddress) {
         std::string err;
         // Where the cores are, so the catalog can tell "the manifest has a core
@@ -3625,6 +3663,17 @@ int main(int argc, char** argv) {
                                  "[romm] %s — waiting up to %.0fs for it\n",
                                  err.c_str(), kWaitSeconds);
                 }
+                // A NUMBER THAT CHANGES, every two seconds, for as long as
+                // ninety. This is the longest a person can be looking at the
+                // startup screen and it used to say one unchanging sentence
+                // throughout, which is what a hung console looks like.
+                {
+                    char line[96];
+                    std::snprintf(line, sizeof line,
+                                  "Waiting for your server — %ds",
+                                  static_cast<int>((SDL_GetTicks() - start) / 1000));
+                    setup::showWaiting(waitDeps, "Starting up", line);
+                }
                 SDL_Delay(2000);
             }
             if (said) std::fprintf(stderr, "[romm] the server answered\n");
@@ -3652,8 +3701,16 @@ int main(int argc, char** argv) {
         // The long one: platforms, every game, collections, recents and
         // favourites. Sixteen hundred games take several seconds on the
         // reference machine.
-        setup::showWaiting(waitDeps, "Starting up", "Loading your library…");
-        Library lib = loadLibrary(liveClient);
+        setup::showWaiting(waitDeps, "Starting up", "Loading your library");
+        Library lib = loadLibrary(liveClient, [&](int loaded) {
+            // Redrawn per page, which on a real library is four or five times
+            // across several seconds. Not an animation — the number is the
+            // actual state, and it is the thing that proves the console is
+            // still working rather than a flourish that would run anyway.
+            char line[96];
+            std::snprintf(line, sizeof line, "Loading your library — %d games", loaded);
+            setup::showWaiting(waitDeps, "Starting up", line);
+        });
         cards = std::move(lib.cards);
         heroIndex = lib.heroIndex;
         heroPlatform = lib.heroPlatform;
@@ -4544,6 +4601,7 @@ int main(int argc, char** argv) {
         bool haveCode = false;
         bool finished = false;
         bool ok = false;
+        accounts::Paired who;
         std::string err;
     };
     auto addJob = std::make_shared<AddJob>();
@@ -4593,9 +4651,11 @@ int main(int argc, char** argv) {
                 if (state == 0) continue;
                 if (state < 0) break;
                 std::string aerr;
-                const bool wrote = accounts::recordPairing(c, &aerr);
+                accounts::Paired who;
+                const bool wrote = accounts::recordPairing(c, &who, &aerr);
                 std::lock_guard<std::mutex> lk(addJob->m);
                 addJob->ok = wrote;
+                addJob->who = who;
                 if (!wrote) addJob->err = aerr;
                 addJob->finished = true; addJob->running = false;
                 return;
@@ -4899,7 +4959,15 @@ int main(int argc, char** argv) {
                     // opens rather than cached: the list is three lines of
                     // JSON and a stale switcher is a switcher that signs the
                     // console in as somebody who has been removed.
-                    barFocused = false;
+                    //
+                    // **barFocused STAYS TRUE, and setting it false was a bug.**
+                    // MMagTech, 2026-09-22: *"when i click the user image the
+                    // recent game expands like its being selected."* It was —
+                    // dropping bar focus told everything underneath that focus
+                    // had come back to it, so Home lit its card while the panel
+                    // was open, and the chip that had just been pressed lost
+                    // its own rim. Focus is on the chip; the panel is what the
+                    // chip opened.
                     refreshAccountRows();
                     accountScreen.open();
                     accountsOpen = true;
@@ -4956,6 +5024,10 @@ int main(int argc, char** argv) {
     // THE SWITCHER IS REACHED THE WAY A PERSON REACHES IT: focus the bar, walk
     // to the chip, press it. A capture that called open() directly would be
     // photographing a panel the product might not be able to get to.
+    if (focusBarSlot >= 0) {
+        barFocused = true;
+        barSlot = std::clamp(focusBarSlot, 0, BarCount - 1);
+    }
     if (initialScreen && (SDL_strcmp(initialScreen, "accounts") == 0 ||
                           SDL_strcmp(initialScreen, "add-account") == 0)) {
         barFocused = true;
@@ -6093,31 +6165,43 @@ int main(int argc, char** argv) {
         if (here() == Screen::AddAccount) {
             bool code = false, fin = false, ok = false;
             std::string url, user, err;
+            accounts::Paired who;
             {
                 std::lock_guard<std::mutex> lk(addJob->m);
                 code = addJob->haveCode; fin = addJob->finished; ok = addJob->ok;
                 url = addJob->pairing.verificationUrl;
                 user = addJob->pairing.userCode;
                 err = addJob->err;
+                who = addJob->who;
             }
             if (fin) {
-                std::lock_guard<std::mutex> lk(addJob->m);
-                addJob->finished = false;
-                if (ok) {
+                { std::lock_guard<std::mutex> lk(addJob->m); addJob->finished = false; }
+                if (ok && who.isNew) {
                     // Added, NOT switched to. Back to the panel with the new
                     // person in it, which is where the switch is.
                     refreshAccountRows();
                     if (stack.size() > 1) stack.pop_back();
                     accountsOpen = true;
-                    accountScreen.setNotice("Added. Choose them to switch.");
-                    // SAID IN THE JOURNAL TOO. The outcome of this flow was
-                    // drawn and nowhere else, so nobody helping from a shell
-                    // could tell a completed pairing from a hung one — the
-                    // same fault as the launch refusal that only reached
-                    // stderr, in the other direction.
-                    std::fprintf(stderr, "[accounts] added, now %zu accounts, "
+                    barFocused = true;
+                    barSlot = BarAccount;
+                    accountScreen.setNotice(who.name + " was added. Choose them to switch.");
+                    std::fprintf(stderr, "[accounts] added %d - %s, now %zu accounts, "
                                          "still acting as %d\n",
-                                 accounts::all().size(), accounts::activeId());
+                                 who.id, who.name.c_str(), accounts::all().size(),
+                                 accounts::activeId());
+                } else if (ok) {
+                    // **THE CASE THAT LIED.** The pairing worked and wrote a
+                    // valid token, and it added nobody: whoever approved it
+                    // already has an account here. Staying on this screen and
+                    // saying so is right — going back to a panel that looks
+                    // exactly as it did is what made this look broken.
+                    addAccountScreen.setError(
+                        who.name + " is already on this console, so nobody was added. "
+                        "Sign in to RomM as the person you are adding — a private "
+                        "window is easiest — and try again.");
+                    std::fprintf(stderr, "[accounts] NOT ADDED: approved as %d - %s, "
+                                         "who is already here. %zu accounts.\n",
+                                 who.id, who.name.c_str(), accounts::all().size());
                 } else {
                     addAccountScreen.setError(err.empty() ? "That did not pair." : err);
                     std::fprintf(stderr, "[accounts] add failed: %s\n",
@@ -6390,6 +6474,28 @@ int main(int argc, char** argv) {
                 if (ci >= 0 && ci < static_cast<int>(cards.size()))
                     want = cards[ci].coverLarge.empty() ? cards[ci].cover
                                                         : cards[ci].coverLarge;
+            } else if (here() == Screen::AddAccount) {
+                // **A TEXT SCREEN GETS THE PLAIN GRADIENT.** MMagTech,
+                // 2026-09-22: *"i preferred the purple background that went
+                // with the first run setup better. The current background
+                // isn't ideal for a text heavy screen."*
+                //
+                // Every other screen here is a wall of covers, and a colour
+                // field lifted from the focused one sits under them. This one
+                // is prose, an address and a code — things that have to be
+                // READ, and read off a television — and a blurred game cover
+                // behind them is contrast nobody chose, different on every
+                // visit depending on what happened to be lit on Home.
+                //
+                // Clearing it rather than excluding this screen from the block
+                // above: leaving `want` alone would keep whatever Home was lit
+                // by, which is exactly the bleed-through being complained
+                // about. It fades out on the same cross-fade everything else
+                // uses, so it goes as deliberately as it arrives.
+                //
+                // It also puts this screen where first run already is, which
+                // is the point — the two do the same job minutes apart.
+                want.clear();
             }
             if (want != backdropWant) {
                 backdropWant = want;
@@ -6715,7 +6821,11 @@ int main(int argc, char** argv) {
         // stack the next one under it without either knowing the other's size.
         auto drawShelf = [&](const char* label, const std::vector<int>& indices,
                              int rowId, float top) -> float {
-            const bool rowFocused = (focusRow == rowId);
+            // FOCUS IS IN ONE PLACE AT A TIME. When it is up in the bar — or
+            // in the panel the chip opened — Home must stop drawing a focused
+            // card, or two things look selected at once and pressing A appears
+            // to do something to the wrong one.
+            const bool rowFocused = (focusRow == rowId) && !barFocused && !accountsOpen;
             const size_t count = indices.empty() ? cards.size() : indices.size();
             if (count == 0) return 0.0f;
             auto at = [&](size_t slot) -> size_t {
@@ -7101,15 +7211,31 @@ int main(int argc, char** argv) {
                     // Treatment 2, the text-control one, the same as Resume: a
                     // tinted pill rather than a scale, because a destination
                     // growing would shove its neighbours along.
-                    renderer.draw(ui::Rect{bx - 14.0f, barTop + 8.0f,
-                                           w + 28.0f, barHeight - 16.0f,
-                                           (barHeight - 16.0f) * 0.5f,
+                    //
+                    // **kBarPillPadX AND kBarItemGap MOVE TOGETHER.** MMagTech,
+                    // 2026-09-22: *"can it have a bit more padding so the
+                    // letters aren't right to its edge."* They were — 14pt,
+                    // which at Callout is about half a character.
+                    //
+                    // Widening the pill alone would have closed the gap
+                    // between neighbours to nothing: the items are spaced
+                    // `w + kBarItemGap`, so the space BETWEEN two pills is
+                    // `kBarItemGap - 2 * kBarPillPadX`. At 14 and 44 that was
+                    // 16 points; at 22 and 44 it would have been zero and the
+                    // pills would have met. The gap is what keeps them reading
+                    // as separate destinations rather than one segmented
+                    // control, so the spacing goes up with the padding.
+                    constexpr float kBarPillPadX = 22.0f;
+                    constexpr float kBarPillInsetY = 6.0f;
+                    const float ph = barHeight - kBarPillInsetY * 2.0f;
+                    renderer.draw(ui::Rect{bx - kBarPillPadX, barTop + kBarPillInsetY,
+                                           w + kBarPillPadX * 2.0f, ph, ph * 0.5f,
                                            ui::Color::white(on ? kFocusedTint
                                                                : kSelectedTint)});
                 }
                 text.draw(renderer, kBarLabels[i], bx, barBaseline, ui::TextStyle::Callout,
                           ui::Color::white(on || sel ? 1.0f : 0.65f), sc);
-                bx += w + 44.0f;
+                bx += w + 60.0f;
             }
 
             // A DOWNLOAD IN FLIGHT, IN THE CORNER. For the person who started
@@ -7173,7 +7299,17 @@ int main(int argc, char** argv) {
             // Caption1 against the bar's Callout, and a disc sized to the
             // smaller text. The reference calls it "a SMALL circular avatar"
             // and that word was doing work nobody had read.
-            const ui::TextStyle chipStyle = ui::TextStyle::Caption1;
+            // THE NAME MATCHES THE DESTINATIONS; THE DISC DOES NOT NEED TO.
+            // MMagTech, 2026-09-22: *"the username is sized different to
+            // library, settings and search."* It was, because "the chip seems
+            // a bit too big" the day before had been read as the TEXT when it
+            // was the disc — a 30pt avatar beside 31pt labels is a heavy
+            // object in the corner, and a 26pt one is not.
+            //
+            // So the name goes back to Callout, level with the bar it sits in,
+            // and the disc stays small. The chip is quiet because the picture
+            // is small, not because the name is shrunken.
+            const ui::TextStyle chipStyle = ui::TextStyle::Callout;
             const float discD = barHeight - 30.0f;
             const float discX = rightEdge - discD;
             const float discY = barTop + (barHeight - discD) * 0.5f;
