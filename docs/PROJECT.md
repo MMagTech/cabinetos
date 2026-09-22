@@ -5807,6 +5807,34 @@ press, `display awake: gamescope took it`. The test flags stay:
   logind answers `challenge` to the console user for `CanSuspend`,
   `CanPowerOff` and `CanReboot`. The same shape as the NetworkManager rule
   first run already carries.
+- **WHAT REST MODE IS FOR — MMagTech, 2026-09-22, and it is the goal:** *the
+  lowest power state the system can go in while still allowing a controller to
+  be turned on or plugged in and have a button press wake it* — a console's
+  instant-on, not a PC's sleep. Burn-in is the other half and is built above.
+- **IT MUST BE DECIDED PER MACHINE, NOT FROM THE A9.** MMagTech: *"we have to
+  consider the states available or not for other systems people may have."* So
+  the console probes, on the machine it is running on: which sleep states
+  `/sys/power/mem_sleep` offers, whether a sleep actually reached hardware
+  sleep (`/sys/power/suspend_stats/last_hw_sleep`), and whether a controller
+  can wake it. It offers the deepest state that passes all three and otherwise
+  falls back to staying awake with the screen off, which works everywhere.
+- **GOVERNORS ARE FOR EMULATOR SPEED ONLY** — MMagTech, same day: power saving
+  is not the aim of a governor choice here. The menu-power measurement below
+  closes that angle; what remains is whether `performance` makes the heavy
+  cores faster.
+- **s2idle WORKS ON THE A9 AND REACHES REAL LOW POWER**, measured 2026-09-22
+  with `rtcwake -m freeze`: 59.6 s of a 60 s sleep and 119 s of a 121 s sleep
+  in hardware sleep, the session intact on wake, the 8BitDo reconnecting by
+  itself about a second later. RAPL's counter resets across the sleep, so there
+  is no watt figure for it; a wall meter is the only way to get one.
+- **WAKE SOURCES ARE ALL OFF BY DEFAULT.** Every xHCI root hub reads
+  `wakeup=disabled`; the Bluetooth radio (MediaTek 13d3:3604, on `usb1`, PCI
+  `c6:00.4`, whose own wakeup is enabled) advertises remote wakeup in its
+  descriptor (`bmAttributes e0`) but has **no `power/wakeup` file at all**.
+- **CONTROLLER WAKE IS STILL UNANSWERED.** One run with `usb1` wake enabled was
+  woken by the RTC alarm at exactly 121 s, but it was not clear to MMagTech
+  when to press the pad, so it proves nothing either way. **Rerun it with the
+  steps given in full before the machine sleeps.**
 - **Suspend is s2idle only** on this machine (`/sys/power/mem_sleep` offers no
   `deep`). **Whether a Bluetooth pad wakes it has not been tried**, and that
   single test decides whether "Sleep" can be offered at all or whether the
