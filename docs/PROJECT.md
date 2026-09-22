@@ -5614,8 +5614,9 @@ What remains for Phase 6, with real hardware and a Pulse-Eight adapter present:
   a machine that stays awake and blanks its display is still the likely default.
 
 ### 10b. The console never sleeps, and never blanks the screen
-**Raised by MMagTech 2026-09-20, for a later discussion. NOT DECIDED — this
-records what the machine does today and why it is not an accident.**
+**Raised by MMagTech 2026-09-20. PIXEL SHIFT, DIM AND BLANK BUILT 2026-09-22 —
+see *Built* at the end of this question. Suspending the machine, a power menu
+and the governor are still open, and are listed there.**
 
 > we currently have no screen or sleep behaviour, the console just stays active
 > all the time
@@ -5710,6 +5711,11 @@ The DPMS node, by contrast, is present and writable:
 /sys/class/drm/card1-HDMI-A-1/dpms = On     and nothing ever writes to it
 ```
 
+**THAT WAS WRONG, and it is kept here as the record of being wrong.** Checked
+2026-09-22: every connector's `dpms` file is `-r--r--r-- root`. It reports the
+state and cannot set it — nothing can write it, which is why nothing did. The
+route is gamescope, below.
+
 #### BURN-IN IS THE REASON TO DO THIS, AND IT RAISES THE PRIORITY
 
 The bullet above calls burn-in "a real cost". **MMagTech's framing is stronger
@@ -5739,6 +5745,72 @@ Three mitigations, cheapest first, and the first is nearly free here:
 **The order matters.** Pixel shift needs nothing this console lacks and helps
 every case including a paused game; blanking needs idle detection and helps
 most; a screensaver looks like the answer and is the weakest of the three.
+
+#### BUILT, 2026-09-22 — pixel shift, then dim, then blank
+
+`frontend/src/idle.{h,cpp}`, a viewport offset in `ui.cpp`, and about sixty
+lines in the frame loop. No screensaver, as agreed.
+
+**THE BLANK GOES THROUGH GAMESCOPE, BECAUSE GAMESCOPE OWNS THE DISPLAY.**
+`gamescopectl drm_sleep_external_screen 1` puts the output to sleep and `0`
+wakes it. Tried by hand on the A9 first: the sysfs node read `Off` while
+asleep, and MMagTech watched the LG go black and come back **on its own, with
+no remote**. On the first try the set briefly reported itself unplugged on
+wake and gamescope reselected 3840x2160@60 within a second; on the second try
+it did not. Either way the session carried on.
+
+| | Starting value | Why |
+|---|---|---|
+| Pixel shift | ±2 points (±4 px at 4K), one point every 3 minutes, a 25-position walk that starts centred | runs always, in menus AND games — every game's picture, PS2 and GameCube included, is drawn by our renderer, so it moves with the rest |
+| Menus, and a PAUSED game | dim at 5 min, blank at 15 min | a paused game is a menu over a frozen HUD |
+| A game running unpaused | dim at 20 min, **never blank** | an attract loop or a cut-scene is not idle |
+| Dim | black at 60% over everything, 2 s fade down, 0.25 s back up | whether that reads as "resting" or "broken" is still MMagTech's to judge on the panel |
+| Waking | any button, key, or a stick past 12000/32767 | a drifting stick must not hold the console awake |
+
+**The press that wakes a dark menu does nothing else**, so it cannot launch
+whatever had focus unseen. In a running game nothing is swallowed, because the
+game reads the pad's state rather than its events.
+
+**Blanked, the loop draws ten frames a second instead of sixty**, and the
+program wakes the set on its way out if it exits while asleep.
+
+**What it saves, measured on the A9 with RAPL, package power only** (a wall
+meter would read more; nothing here can see the brick, disk or fan):
+
+| | Package |
+|---|---|
+| Home, lit | **10.1 W** |
+| Blank | **4.9 W** |
+
+**Seen on the television, 2026-09-22**, with `--idle-scale 0.02 --shift-every
+3`: dim at 6 s, blank at 18 s, `display asleep: gamescope took it`, a button
+press, `display awake: gamescope took it`. The test flags stay:
+`--idle-scale`, `--shift-every`, `--no-idle`.
+
+#### What is still open
+
+- **Does the dim read as broken?** Not yet judged.
+- **Does the LG go to standby on its own after a long blank?** It showed no
+  "no signal" banner in 15 seconds. Burn-in does not care — the panel is black
+  either way — but the energy half of a blank depends on it.
+- **A CPU governor per context is NOT worth it in menus.** Home measured
+  **10.05 W** at the current `balance_performance`, **10.06 W** at `power` and
+  **11.02 W** at `performance` (amd-pstate-epp, active mode; `tuned` is on
+  `balanced`; the GPU is on `auto`). The CPU is already idle on a menu; the
+  draw is the GPU redrawing 4K. **Whether `performance` helps INSIDE a heavy
+  game is a separate, speed question** — measure it on PS2 against the Windows
+  standard before doing anything.
+- **The power button already powers off** — logind's `HandlePowerKey=poweroff`
+  — **but the frontend has no SIGTERM handler**, so a press mid-game skips the
+  save upload on the way out. That is the real content of Phase 2 item 12.
+- **A Power menu in the UI** (Sleep, Restart, Power off) needs a polkit rule:
+  logind answers `challenge` to the console user for `CanSuspend`,
+  `CanPowerOff` and `CanReboot`. The same shape as the NetworkManager rule
+  first run already carries.
+- **Suspend is s2idle only** on this machine (`/sys/power/mem_sleep` offers no
+  `deep`). **Whether a Bluetooth pad wakes it has not been tried**, and that
+  single test decides whether "Sleep" can be offered at all or whether the
+  console stays awake with its screen off, as open question 10 expected.
 
 ### 11. NVIDIA hardware
 **Raised: Phase 1. Out of scope until there is hardware that needs it.**

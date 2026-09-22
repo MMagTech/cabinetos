@@ -104,6 +104,11 @@ see the queue.
 
 **IF A DIGEST HERE DISAGREES WITH `bootc status`, `bootc status` IS RIGHT.**
 
+**AT THE END OF 2026-09-22 THE A9 WAS LEFT ON A `tools/ui-loop.sh` BUILD** of
+the idle-handling branch, real timers, so it could be lived with overnight. The
+drop-in is in `/run`, so any reboot puts it back on the image. Once the branch
+merges, `bootc upgrade` makes the table above true again.
+
 **A THIRTY-SECOND LOOP EXISTS AND IT IS NOT AT THE TOP OF THIS FILE BY
 ACCIDENT** — `tools/ui-loop.sh`, documented in the lessons section. An evening
 was spent showing MMagTech software-rendered screenshots from the VM before
@@ -393,6 +398,15 @@ The handover and PR #48 both said MMagTech had checked three of them on the
 panel. He had not — the television was still running the image's frontend, and
 he was answering from the numbers. **A reply about a description is not a
 measurement of a build the machine is not running.**
+
+#### IDLE HANDLING IS BUILT — judge the dim, then decide Sleep
+
+Pixel shift, dim and blank, open question 10b. Seen working on the panel with
+the timers sped up. **Owed:** MMagTech's verdict on whether a 60% dim reads as
+resting or broken, and a suspend test (`systemctl suspend`, then press a
+Bluetooth pad) before anything offers "Sleep". Then a Power menu, which needs a
+polkit rule, and a SIGTERM handler so the power button stops skipping the save
+upload.
 
 #### THEN, WITH A PAD, ON THE TELEVISION
 
@@ -2389,8 +2403,10 @@ is only needed to turn a set back ON and pick its input.
 | Turn the television on and select the input | **Yes** |
 
 So **half of this is not blocked on the CEC work**, which the old text implied
-it was. `/sys/class/drm/card1-HDMI-A-1/dpms` is present and writable on the A9
-and nothing ever writes to it.
+it was. ~~`/sys/class/drm/card1-HDMI-A-1/dpms` is present and writable on the A9
+and nothing ever writes to it.~~ **Wrong: that file is read-only (0444) and
+only reports.** The blank goes through gamescope — `gamescopectl
+drm_sleep_external_screen 1` — which owns the display. See below.
 
 **AND THERE IS NO CEC ADAPTER ON THAT MACHINE AT ALL** — no `/dev/cec*`
 devices, measured 2026-09-21. CEC over HDMI on PC graphics is often not wired
@@ -2413,6 +2429,17 @@ screensaver last** — it looks like the answer and is the weakest, because the
 panel stays lit.
 
 Open question 10b has all of it.
+
+**PIXEL SHIFT, DIM AND BLANK WERE BUILT ON 2026-09-22** — `frontend/src/idle.{h,cpp}`
+— and seen working on the television end to end: dim, blank, gamescope putting
+the LG to sleep, a button waking it. Package power **10.1 W on Home, 4.9 W
+blanked.** What is left is in 10b's *What is still open*: whether the dim reads
+as broken, whether the LG goes to standby on a long blank, the SIGTERM gap that
+makes the power button skip a save upload, a polkit rule for a Power menu, and
+**whether a Bluetooth pad wakes the machine from s2idle** — the one test that
+decides whether "Sleep" can be offered. A per-context CPU governor was measured
+and **saves nothing in menus**; whether `performance` speeds up PS2 is a
+separate question.
 
 ### Switch, or Xbox
 

@@ -51,6 +51,7 @@
 
 #include "core.h"
 #include "design.h"
+#include "idle.h"
 #include "image.h"
 #include "keyboard.h"
 #include "cache.h"
@@ -2835,6 +2836,13 @@ int main(int argc, char** argv) {
     // through a first-run flow that does not exist yet.
     bool keyboardDemo = false;
     bool safeGuides = false;
+    // Idle handling — idle.h. `--idle-scale 0.01` shrinks every idle timer a
+    // hundredfold so a dim can be looked at in seconds; `--shift-every 5`
+    // walks the pixel shift fast enough to watch; `--no-idle` turns the dim
+    // and the blank off, for a capture that has to stay lit.
+    double idleScale = 1.0;
+    double shiftEvery = idle::kShiftEverySeconds;
+    bool idleOff = false;
     // Off / subtle / strong, the reference implementation's own three levels.
     float glowPeak = 0.025f;
     // Running a core. Both are needed: a core without a ROM has nothing to do.
@@ -2947,6 +2955,12 @@ int main(int argc, char** argv) {
             shotPath = argv[++i];
         } else if (SDL_strcmp(argv[i], "--frames") == 0 && i + 1 < argc) {
             shotAfterFrames = SDL_atoi(argv[++i]);
+        } else if (SDL_strcmp(argv[i], "--idle-scale") == 0 && i + 1 < argc) {
+            idleScale = SDL_atof(argv[++i]);
+        } else if (SDL_strcmp(argv[i], "--shift-every") == 0 && i + 1 < argc) {
+            shiftEvery = SDL_atof(argv[++i]);
+        } else if (SDL_strcmp(argv[i], "--no-idle") == 0) {
+            idleOff = true;
         } else if (SDL_strcmp(argv[i], "--integer-scale") == 0) {
             integerScaling = true;
             std::fprintf(stderr, "[picture] integer scaling, with bars\n");
@@ -6025,10 +6039,40 @@ int main(int argc, char** argv) {
         overlayFocus.elapsed = kOverlayFocusDuration;
     };
 
+    // ---- Idle: pixel shift, dim, blank — idle.h, open question 10b -------
+    idle::Watch idleWatch;
+    idleWatch.setTimeScale(idleScale);
+    idleWatch.setEnabled(!idleOff);
+    idle::Level idleShown = idle::Level::Awake;
+    Animated dimLayer;
+    dimLayer.smooth = true;
+    idle::Offset shiftShown;
+    auto clockSeconds = [] { return SDL_GetTicksNS() / 1e9; };
+
     while (running) {
         SDL_Event e;
         while (SDL_PollEvent(&e)) {
             const InputOwner owner = inputOwner();
+            // ANY TOUCH WAKES THE SCREEN, AND ON A DARK SCREEN THAT IS ALL IT
+            // DOES. The press that lights a dimmed or blank Home is swallowed,
+            // so it cannot also launch whatever had focus, which nobody could
+            // see. A running game is the exception: its pad is read by state
+            // rather than by these events, so nothing is lost from play.
+            bool touched = false;
+            switch (e.type) {
+                case SDL_EVENT_KEY_DOWN:
+                case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+                case SDL_EVENT_MOUSE_BUTTON_DOWN:
+                    touched = true;
+                    break;
+                case SDL_EVENT_GAMEPAD_AXIS_MOTION:
+                    touched = std::abs(static_cast<int>(e.gaxis.value)) > idle::kAxisDeadzone;
+                    break;
+                default:
+                    break;
+            }
+            if (touched && idleWatch.input(clockSeconds()) && owner != InputOwner::Game)
+                continue;
             switch (e.type) {
                 case SDL_EVENT_QUIT:
                     running = false;
@@ -6329,6 +6373,32 @@ int main(int argc, char** argv) {
         // A stall must not teleport an animation; the reference implementation
         // caps its own accumulator for the same reason.
         dt = std::min(dt, 0.1f);
+
+        // Idle, once a frame. The timers only ever deepen here; input() is
+        // what lifts them, above.
+        {
+            const double t = clockSeconds();
+            const idle::Level lvl = idleWatch.update(t, playing && !overlayOpen);
+            if (lvl != idleShown) {
+                std::fprintf(stderr, "[idle] %s -> %s after %.0fs without input\n",
+                             idle::name(idleShown), idle::name(lvl), idleWatch.idleFor(t));
+                if (lvl == idle::Level::Blank) idle::setDisplayAsleep(true);
+                else if (idleShown == idle::Level::Blank) idle::setDisplayAsleep(false);
+                const float depth = lvl == idle::Level::Awake ? 0.0f
+                                    : lvl == idle::Level::Dim ? idle::kDimDepth
+                                                              : 1.0f;
+                dimLayer.retarget(depth, lvl == idle::Level::Awake ? idle::kWakeFadeSeconds
+                                                                   : idle::kDimFadeSeconds);
+                idleShown = lvl;
+            }
+            dimLayer.tick(dt);
+            const idle::Offset o = idle::pixelShift(t, renderer.scale(), shiftEvery);
+            if (o.dx != shiftShown.dx || o.dy != shiftShown.dy) {
+                std::fprintf(stderr, "[idle] pixel shift %+d,%+d px\n", o.dx, o.dy);
+                renderer.setPixelShift(o.dx, o.dy);
+                shiftShown = o;
+            }
+        }
 
         // The held direction, repeating and speeding up. Driven from the frame
         // loop rather than from the event queue, because the pad sends nothing
@@ -7812,6 +7882,22 @@ int main(int argc, char** argv) {
         keyboard.draw(renderer, text, renderer.scale());
         if (safeGuides) renderer.drawSafeAreaGuides();
 
+        // ---- The dim, over absolutely everything --------------------------
+        //
+        // After the keyboard and the guides, because it is not part of the
+        // interface; it is the television resting. At full depth it is also
+        // the blank wherever gamescope cannot put the output to sleep.
+        {
+            const float d = dimLayer.value();
+            if (d > 0.001f) {
+                const float keep = renderer.contentAlpha();
+                renderer.setContentAlpha(1.0f);
+                renderer.draw(ui::Rect{0, 0, ui::kCanvasWidth, ui::kCanvasHeight, 0,
+                                       ui::Color::black(d)});
+                renderer.setContentAlpha(keep);
+            }
+        }
+
         ++frame;
         // Capture before the swap. After a swap the back buffer's contents are
         // undefined, so a readback taken there is whatever the driver left.
@@ -7847,7 +7933,16 @@ int main(int argc, char** argv) {
         } else {
             SDL_GL_SwapWindow(window);
         }
+
+        // A BLANK SCREEN DOES NOT NEED SIXTY PICTURES A SECOND. Ten keeps the
+        // background jobs polled and a wake within a tenth of a second, and
+        // lets the GPU stop redrawing 4K for nobody.
+        if (idleShown == idle::Level::Blank && dimLayer.value() >= 0.999f) SDL_Delay(100);
     }
+
+    // Never leave the television asleep behind us: the next thing on it —
+    // this program restarting, or a person at a console — must be seen.
+    if (idleShown == idle::Level::Blank) idle::setDisplayAsleep(false, /*wait=*/true);
 
     if (playing) {
         cab::Core& core = cab::Core::shared();

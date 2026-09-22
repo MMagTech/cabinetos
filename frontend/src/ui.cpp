@@ -492,10 +492,13 @@ void Renderer::setScissor(float x, float y, float w, float h) {
     // Canvas points to device pixels, through the same letterboxed viewport
     // beginFrame set up. GL's origin is the BOTTOM left and the canvas's is the
     // top left, so the y is flipped here rather than at every call site.
-    const int px = vx_ + static_cast<int>(x * scale_);
+    // Relative to the viewport IN FORCE, not to the letterbox: inside the
+    // scene target the canvas starts at 0, and on the window it starts at the
+    // letterbox plus the pixel shift.
+    const int px = ox_ + static_cast<int>(x * scale_);
     const int pw = static_cast<int>(w * scale_);
     const int ph = static_cast<int>(h * scale_);
-    const int py = vy_ + static_cast<int>((kCanvasHeight - y - h) * scale_);
+    const int py = oy_ + static_cast<int>((kCanvasHeight - y - h) * scale_);
     glEnable(GL_SCISSOR_TEST);
     glScissor(px, py, pw > 0 ? pw : 0, ph > 0 ? ph : 0);
 }
@@ -575,7 +578,13 @@ void Renderer::presentScene() {
     glDisable(GL_SCISSOR_TEST);
     glClearColor(0, 0, 0, transparentBackground_ ? 0.0f : 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
-    glViewport(vx_, vy_, vw_, vh_);
+    // The pixel shift lands HERE, on the finished picture, and nowhere else:
+    // the scene was drawn unshifted, and everything drawn after this point —
+    // glass, text, the overlay — goes through this same viewport, so the whole
+    // frame moves as one. The strip it uncovers was cleared to black above.
+    ox_ = vx_ + shiftX_;
+    oy_ = vy_ - shiftY_;   // GL's y runs up; the canvas's runs down
+    glViewport(ox_, oy_, vw_, vh_);
     glDisable(GL_BLEND);
     drawTextured(0, 0, kCanvasWidth, kCanvasHeight, sceneTex_, 0, 1, 1, 0,
                  Color{1, 1, 1, 1}, false);
@@ -688,9 +697,12 @@ void Renderer::beginFrame(int drawableWidth, int drawableHeight) {
     }
     if (sceneFBO_) {
         glBindFramebuffer(GL_FRAMEBUFFER, sceneFBO_);
+        ox_ = oy_ = 0;
         glViewport(0, 0, vw, vh);
     } else {
-        glViewport(vx_, vy_, vw, vh);
+        ox_ = vx_ + shiftX_;
+        oy_ = vy_ - shiftY_;
+        glViewport(ox_, oy_, vw, vh);
     }
 
     glDisable(GL_DEPTH_TEST);
