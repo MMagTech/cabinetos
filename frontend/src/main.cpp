@@ -55,6 +55,7 @@
 #include "keyboard.h"
 #include "cache.h"
 #include "catalog.h"
+#include "covercache.h"
 #include "dirsave.h"
 #include "filesave.h"
 #include "firstrun.h"
@@ -1600,12 +1601,141 @@ struct Library {
     // games and sees nothing will reasonably conclude the scan failed.
     std::vector<screens::Tile> platformTiles;
     std::vector<screens::Tile> collectionTiles;
+    // What a tile's cached cover is validated against: the platform's own
+    // `updated_at` and `rom_count`, as the server reported them this boot.
+    // Filled for playable platforms only, because nothing else gets a cover.
+    std::map<int, covercache::Tile> tileCache;
+    // Every game this console has fetched so far, keyed by rom id, so a game
+    // that is recent AND a favourite AND in a platform's grid is one card
+    // rather than three. THE VALUE IS AN INDEX INTO `cards`, which is why
+    // `cards` is append-only — see below.
+    std::map<int, int> byRomId;
 };
 
-static Library loadLibrary(romm::Client& client,
-                           const std::function<void(int)>& onProgress = {}) {
+// Adds a game to the store if it is not already there, and answers where it is.
+//
+// `cards` IS APPEND-ONLY, AND THIS IS THE REASON. Every shelf, every tile and
+// the hero hold plain indices into it, so sorting or erasing would silently
+// re-point all of them at the wrong game. Ordering belongs to each list rather
+// than to the store: the Recent shelf is in recency order, a platform grid is
+// alphabetical, and neither needs the store itself to be either.
+//
+// The library used to be sorted wholesale and the membership lists rebuilt
+// afterwards, with a comment explaining that the sort had to come first. That
+// worked because everything arrived in one pass. Nothing arrives in one pass
+// any more.
+static int appendGame(Library& lib, const romm::Game& g) {
+    auto it = lib.byRomId.find(g.id);
+    if (it != lib.byRomId.end()) return it->second;
+    Card c;
+    c.id = g.id;
+    c.title = g.name.empty() ? g.fsName : g.name;
+    c.cover = g.coverPath;
+    c.coverLarge = g.coverLargePath;
+    c.platform = g.platformName;
+    c.art = colorForTitle(c.title);
+    const int idx = static_cast<int>(lib.cards.size());
+    lib.cards.push_back(std::move(c));
+    lib.games.push_back(g);
+    lib.byRomId.emplace(g.id, idx);
+    return idx;
+}
+
+// The games behind one tile, fetched when somebody opens it and not before.
+//
+// THIS IS THE WHOLE POINT OF OPEN QUESTION 28. A tile knows its own count from
+// the server without holding a single game — `romCount` on the platform, and
+// on the collection — so boot draws the Library screen having fetched nothing,
+// and a grid costs one request at the moment it is walked into.
+//
+// Returns false only when the request failed. A tile that legitimately holds
+// nothing this console can play returns true with an empty membership, which
+// is a different thing and reads differently on the screen.
+static bool loadTileGames(romm::Client& client, Library& lib, screens::Tile& tile,
+                          bool isCollection, bool* more = nullptr) {
+    if (!tile.cards.empty()) return true;   // already walked into once
+    const std::string filter =
+        (isCollection ? "collection_id=" : "platform_ids=") + std::to_string(tile.id);
+    std::vector<romm::Game> games;
+    std::string err;
+    // PAGED, AND CHECKED AGAINST `total`. This asked for ten thousand in one
+    // request and called that enough, with a comment claiming it matched
+    // fetchGames. It did not: one request is not paging, and a platform past
+    // the limit would have come back SHORT AND SUCCESSFUL — the exact failure
+    // fetchGames' own comment calls the worst possible one, because the grid
+    // would simply show fewer games and say nothing.
+    //
+    // A full MAME set is tens of thousands of roms in a single platform, so
+    // this is not a hypothetical library.
+    constexpr int kPage = 500;
+    int total = 0;
+    // ONLY THE FIRST PAGE, AND THE CALLER DRAWS IT. The rest is somebody
+    // else's job — see GridFill. A grid used to fetch the whole platform
+    // before anything appeared, which is fine at 141 games and is ten seconds
+    // for a full MAME set in one platform.
+    {
+        std::vector<romm::Game> page;
+        // fetchRoms writes the limit itself, so only the offset rides on the
+        // filter.
+        if (!client.fetchRoms(filter, kPage, &page, &err, &total)) {
+            std::fprintf(stderr, "[library] %s: %s\n", tile.title.c_str(), err.c_str());
+            return false;
+        }
+        games = std::move(page);
+    }
+    if (more) *more = (total > static_cast<int>(games.size()));
+    int unplayable = 0;
+    for (const auto& g : games) {
+        // A collection can hold games from systems this console cannot run.
+        // Platform grids cannot, since the tile would not be enterable, but
+        // the check is cheap and the two paths share it.
+        if (!catalog::playable(g)) { ++unplayable; continue; }
+        tile.cards.push_back(appendGame(lib, g));
+        if (tile.cover.empty()) {
+            const int i = tile.cards.back();
+            if (!lib.cards[i].cover.empty()) tile.cover = lib.cards[i].cover;
+        }
+    }
+    // NOT SORTED HERE. RomM returns roms in title order already, which is what
+    // the grid's letter-jump needs, and a later page has to concatenate onto
+    // this one — a sort would fight the append and move cards out from under
+    // whoever is looking at them.
+    if (unplayable > 0) {
+        // Say what is missing rather than quietly showing a shorter list: a
+        // collection of twelve that opens onto four looks like a bug unless
+        // the tile already said why. Short, because a tile's second line holds
+        // about sixteen characters beside a cover.
+        char count[96];
+        std::snprintf(count, sizeof count, "%zu of %zu",
+                      tile.cards.size(), tile.cards.size() + unplayable);
+        tile.detail = count;
+    }
+    std::fprintf(stderr, "[library] %s: %zu game(s)%s\n", tile.title.c_str(),
+                 tile.cards.size(),
+                 unplayable ? " (some not playable here)" : "");
+    return true;
+}
+
+// What the console knows the moment it finishes booting.
+//
+// FOUR CALLS, AND NOT ONE OF THEM IS THE CATALOGUE — open question 28. This
+// used to walk every platform and page through all of them, sixteen hundred
+// games on the reference server, before anything was drawn. It was the
+// dominant cost of a boot and it was PROPORTIONAL TO THE LIBRARY, so somebody
+// with twenty thousand games waited proportionally longer every single time
+// they turned the console on, and nothing in the design had noticed.
+//
+// Nothing needed it. A platform tile's count was already on the platform
+// object; a collection's was already on the collection. Home shows about
+// fourteen covers and every one of them comes from the recents and favourites
+// calls, which are bounded. A grid does not exist until somebody walks into
+// it, and search asks the server.
+//
+// So boot is CONSTANT rather than proportional, which is the whole prize: the
+// person with twenty thousand games boots as fast as the person with two
+// hundred.
+static Library loadLibrary(romm::Client& client) {
     Library lib;
-    std::vector<Card>& cards = lib.cards;
     std::string err;
 
     std::vector<romm::Platform> platforms;
@@ -1620,9 +1750,6 @@ static Library loadLibrary(romm::Client& client,
     // than one boolean: "no core exists", "Cabinet does not ship it", "this
     // console has not built it yet" and "it is built and cannot be driven" lead
     // to different work and to different words on the screen.
-    // Games in hand across every platform so far, so the startup screen's
-    // count climbs once rather than restarting at each platform.
-    int loadedSoFar = 0;
     for (const auto& p : platforms) {
         const catalog::Coverage cov = catalog::coverageFor(p);
         screens::Tile tile;
@@ -1652,79 +1779,22 @@ static Library loadLibrary(romm::Client& client,
             continue;
         }
 
-        std::vector<romm::Game> games;
-        if (!client.fetchGames(p.id, &games, &err,
-                               onProgress ? std::function<void(int)>([&](int n) {
-                                   onProgress(loadedSoFar + n);
-                               }) : std::function<void(int)>{})) {
-            // One platform failing is not the library failing. Say so, give the
-            // tile the truth rather than a count it does not have, and go on.
-            std::fprintf(stderr, "[library] %s: %s\n", p.name.c_str(), err.c_str());
-            tile.enterable = false;
-            tile.detail = "could not be read from the server";
-            lib.platformTiles.push_back(std::move(tile));
-            continue;
-        }
-        loadedSoFar += static_cast<int>(games.size());
-        for (auto& g : games) {
-            Card c;
-            c.id = g.id;
-            c.title = g.name.empty() ? g.fsName : g.name;
-            c.cover = g.coverPath;
-            c.coverLarge = g.coverLargePath;
-            c.platform = g.platformName;
-            c.art = colorForTitle(c.title);
-            // The tile's own artwork is the first cover in it that exists. Not
-            // every platform has any — Game & Watch has none of 171 — and a
-            // tile with no art is a normal state rather than a fault.
-            if (tile.cover.empty() && !c.cover.empty()) tile.cover = c.cover;
-            cards.push_back(std::move(c));
-            lib.games.push_back(g);
-        }
+        // THE COUNT COMES OFF THE PLATFORM, which is the finding that made all
+        // of this cheap: it was there the whole time, and boot was fetching
+        // sixteen hundred games to draw a number the server had already sent.
         char count[48];
-        std::snprintf(count, sizeof count, "%zu game%s", games.size(),
-                      games.size() == 1 ? "" : "s");
-        // The qualifier rides on the second line, where there is room for it,
-        // in front of the count.
+        std::snprintf(count, sizeof count, "%d game%s", p.romCount,
+                      p.romCount == 1 ? "" : "s");
         tile.detail = qualifier.empty() ? std::string(count)
                                         : qualifier + "  \xC2\xB7  " + count;
+        lib.tileCache[p.id] = covercache::Tile{"", p.updatedAt, p.romCount};
+        // `tile.cover` is deliberately left empty. It used to be the first
+        // cover among the platform's games, which cost a fetch per platform —
+        // 1.55 s of a 1.8 s boot, measured against the reference server. The
+        // tiles come up in their colour and the covers are filled in behind
+        // Home; see fillTileCovers. MMagTech chose that over both paying for
+        // them at boot and using RomM's platform logo, 2026-09-22.
         lib.platformTiles.push_back(std::move(tile));
-    }
-
-    // Sorted together, so index i of one is index i of the other. Two parallel
-    // vectors sorted independently is a bug waiting for its first duplicate
-    // title, and this library has those.
-    std::vector<size_t> order(cards.size());
-    for (size_t i = 0; i < order.size(); ++i) order[i] = i;
-    std::sort(order.begin(), order.end(), [&](size_t a, size_t b) {
-        return cards[a].title < cards[b].title;
-    });
-    std::vector<Card> sortedCards;
-    std::vector<romm::Game> sortedGames;
-    sortedCards.reserve(order.size());
-    sortedGames.reserve(order.size());
-    for (size_t i : order) {
-        sortedCards.push_back(std::move(cards[i]));
-        sortedGames.push_back(std::move(lib.games[i]));
-    }
-    cards = std::move(sortedCards);
-    lib.games = std::move(sortedGames);
-
-    // The membership of each tile, filled AFTER the sort because the sort moves
-    // every card and an index taken before it points at the wrong game. Keyed
-    // on platform id, which is the only unique field — two platforms in the
-    // reference library share a name AND a slug.
-    {
-        std::vector<std::pair<int, size_t>> byPlatform;   // platform id -> tile
-        for (size_t t = 0; t < lib.platformTiles.size(); ++t)
-            byPlatform.emplace_back(lib.platformTiles[t].id, t);
-        for (size_t i = 0; i < lib.games.size(); ++i) {
-            for (const auto& [id, t] : byPlatform) {
-                if (id != lib.games[i].platformId) continue;
-                lib.platformTiles[t].cards.push_back(static_cast<int>(i));
-                break;
-            }
-        }
     }
 
     // Playable systems first, then alphabetically inside each group. The
@@ -1738,10 +1808,10 @@ static Library loadLibrary(romm::Client& client,
                          return a.title < b.title;
                      });
 
-    // Collections. A collection is a list of rom ids rather than a property of
-    // each game, so it is resolved by looking those ids up in the library that
-    // is already here — no second request, and a collection containing games
-    // this console cannot play simply comes out shorter.
+    // Collections. The membership used to be resolved against a catalogue that
+    // was already in memory — "no second request", said the comment, and that
+    // was true only because boot had paid for all of them. It is one request
+    // now, made when the collection is opened, exactly like a platform.
     std::vector<romm::Collection> collections;
     if (client.fetchCollections(&collections, &err)) {
         for (const auto& col : collections) {
@@ -1750,29 +1820,14 @@ static Library loadLibrary(romm::Client& client,
             tile.title = col.name;
             tile.cover = col.coverPath;
             tile.art = colorForTitle(tile.title);
-            for (int romId : col.romIds) {
-                for (size_t i = 0; i < cards.size(); ++i) {
-                    if (cards[i].id != romId) continue;
-                    tile.cards.push_back(static_cast<int>(i));
-                    break;
-                }
-            }
-            const size_t have = tile.cards.size();
-            char count[96];
-            if (have == static_cast<size_t>(col.romCount)) {
-                std::snprintf(count, sizeof count, "%zu game%s", have,
-                              have == 1 ? "" : "s");
-            } else {
-                // Say what is missing rather than quietly showing a shorter
-                // list: a collection of twelve that opens onto four looks like
-                // a bug unless the tile already said why.
-                // Short, because a tile's second line holds about sixteen
-                // characters beside a cover. "26 of 30 playable here" came back
-                // as "26 of 30 playabl...", which says less than "26 of 30".
-                std::snprintf(count, sizeof count, "%zu of %d", have, col.romCount);
-            }
+            char count[48];
+            std::snprintf(count, sizeof count, "%d game%s", col.romCount,
+                          col.romCount == 1 ? "" : "s");
             tile.detail = count;
-            tile.enterable = have > 0;
+            // The server's count, not how many are playable here — that is not
+            // known until it is opened, and loadTileGames rewrites the line to
+            // "4 of 12" at that point if the two differ.
+            tile.enterable = col.romCount > 0;
             lib.collectionTiles.push_back(std::move(tile));
         }
         std::fprintf(stderr, "[library] %zu collection(s)\n", lib.collectionTiles.size());
@@ -1782,15 +1837,16 @@ static Library loadLibrary(romm::Client& client,
         std::fprintf(stderr, "[library] no collections: %s\n", err.c_str());
     }
 
-    int withArt = 0;
-    for (const auto& c : cards) if (!c.cover.empty()) ++withArt;
-    std::fprintf(stderr, "[library] %zu playable games, %d with art; %d games skipped\n",
-                 cards.size(), withArt, skippedGames);
-
     // The hero, from the server's play history rather than from anything this
     // console remembers. A game played on an Apple TV is recent here the moment
     // this console is paired, which is what lets a machine that has never
     // launched anything still open on the right game.
+    //
+    // THE GAMES COME STRAIGHT OFF THIS CALL NOW. They used to be looked up in
+    // the catalogue and DROPPED IF NOT FOUND — which, once boot stopped
+    // fetching the catalogue, would have quietly emptied Home while every one
+    // of these calls still succeeded. That is the trap in this change and it
+    // is why the store is filled from here rather than searched.
     std::vector<romm::Game> recent;
     if (client.fetchRecent(16, &recent, &err)) {
         for (const auto& g : recent) {
@@ -1799,22 +1855,12 @@ static Library loadLibrary(romm::Client& client,
             // The reference library exercises this — the most recent "Altered
             // Beast" is the Game & Watch one, which Cabinet does not ship.
             if (!catalog::playable(g)) continue;
-            int idx = -1;
-            for (size_t i = 0; i < cards.size(); ++i) {
-                if (cards[i].id == g.id) { idx = static_cast<int>(i); break; }
-            }
-            if (idx < 0) continue;
+            const int idx = appendGame(lib, g);
             // THE MOST RECENT ONE STAYS ON THE SHELF — changed 2026-09-21.
             //
-            // It used to be lifted out and given its own hero card, with the
-            // shelf holding everything after it. The hero card is gone and the
-            // shelf holds all of them, with the most recent first, because
-            // that is what it already was before one of them was taken away.
-            //
-            // `heroIndex` is still recorded: it is what Home focuses on when it
-            // opens, which is the whole of "resume-first". It is now an index
-            // into the shelf's first slot rather than a separate object on the
-            // screen. See the Rows enum.
+            // `heroIndex` is what Home focuses on when it opens, which is the
+            // whole of "resume-first". It is an index into the shelf's first
+            // slot rather than a separate object on the screen.
             if (lib.heroIndex < 0) {
                 lib.heroIndex = idx;
                 lib.heroPlatform = g.platformName;
@@ -1829,15 +1875,23 @@ static Library loadLibrary(romm::Client& client,
     if (client.fetchFavorites(40, &favs, &err)) {
         for (const auto& g : favs) {
             if (!catalog::playable(g)) continue;
-            for (size_t i = 0; i < cards.size(); ++i) {
-                if (cards[i].id == g.id) { lib.favorites.push_back(static_cast<int>(i)); break; }
-            }
+            lib.favorites.push_back(appendGame(lib, g));
         }
         std::fprintf(stderr, "[library] %zu favourites\n", lib.favorites.size());
     }
+
+    int withArt = 0;
+    for (const auto& c : lib.cards) if (!c.cover.empty()) ++withArt;
+    // NOT "playable games" any more, and the wording matters: this is what the
+    // console is holding, which is Home's worth of it. The library's size is
+    // the server's business now.
+    std::fprintf(stderr, "[library] %zu game(s) in hand, %d with art; "
+                 "%zu platform tile(s), %d games on systems this console cannot play\n",
+                 lib.cards.size(), withArt, lib.platformTiles.size(), skippedGames);
+
     if (lib.heroIndex >= 0)
         std::fprintf(stderr, "[library] resume: %s (%s), %zu on the Recent shelf\n",
-                     cards[lib.heroIndex].title.c_str(), lib.heroPlatform.c_str(),
+                     lib.cards[lib.heroIndex].title.c_str(), lib.heroPlatform.c_str(),
                      lib.shelf.size());
     else
         std::fprintf(stderr, "[library] nothing recent is playable here\n");
@@ -3572,15 +3626,28 @@ int main(int argc, char** argv) {
     // a cover arrives. romm::Client is safe to call concurrently — each request
     // builds its own CURL handle, and nothing else mutates after setup.
     static romm::Client liveClient;
-    std::vector<Card> cards;
-    int heroIndex = -1;
-    std::string heroPlatform;
+    // THE STORE IS ONE OBJECT AND THE OLD NAMES ARE REFERENCES INTO IT.
+    //
+    // These were eight independent locals until open question 28, which was
+    // fine while the whole library arrived in a single call at boot and
+    // nothing ever grew afterwards. Grids, collections and search now each
+    // append to the store while the console is running, and `appendGame` has
+    // to be handed somewhere to append TO — so the pieces live together again.
+    //
+    // The names below are unchanged on purpose: several hundred lines of this
+    // file read `cards[i]` and `shelf`, and rewriting all of them to reach
+    // through `lib.` would be a large diff that changed nothing.
+    Library lib;
+    std::vector<Card>& cards = lib.cards;
+    int& heroIndex = lib.heroIndex;
+    std::string& heroPlatform = lib.heroPlatform;
     // Which cards the Recent row shows. Empty means "everything", which is what
     // the stand-in library wants — it has no play history to order by.
-    std::vector<int> shelf;
-    std::vector<int> favorites;
-    std::vector<romm::Game> games;
-    std::vector<screens::Tile> platformTiles, collectionTiles;
+    std::vector<int>& shelf = lib.shelf;
+    std::vector<int>& favorites = lib.favorites;
+    std::vector<romm::Game>& games = lib.games;
+    std::vector<screens::Tile>& platformTiles = lib.platformTiles;
+    std::vector<screens::Tile>& collectionTiles = lib.collectionTiles;
 
     // WHAT THE SCREEN SAYS WHILE THE CONSOLE IS BUSY.
     //
@@ -3698,35 +3765,49 @@ int main(int argc, char** argv) {
             std::fprintf(stderr, "[accounts] acting as %d - %s\n", who->id,
                          who->name.c_str());
         adoptUser(liveClient);
-        // The long one: platforms, every game, collections, recents and
-        // favourites. Sixteen hundred games take several seconds on the
-        // reference machine.
+        // FOUR SMALL CALLS NOW, not the catalogue — open question 28. This
+        // used to count games onto the screen as they arrived, because it took
+        // several seconds and a still sentence is indistinguishable from a
+        // hang. It no longer takes several seconds, so there is no longer a
+        // number worth putting on a screen nobody has time to read.
+        //
+        // THE COUNTING LINE IS GONE AND THAT IS THE POINT, not a loss. It
+        // existed to make a slow thing bearable; the slow thing was removed.
+        // The server-wait countdown above survives untouched, because a router
+        // coming back after a power cut is not something this can make faster.
         setup::showWaiting(waitDeps, "Starting up", "Loading your library");
-        Library lib = loadLibrary(liveClient, [&](int loaded) {
-            // Redrawn per page, which on a real library is four or five times
-            // across several seconds. Not an animation — the number is the
-            // actual state, and it is the thing that proves the console is
-            // still working rather than a flourish that would run anyway.
-            char line[96];
-            std::snprintf(line, sizeof line, "Loading your library — %d games", loaded);
-            setup::showWaiting(waitDeps, "Starting up", line);
-        });
-        cards = std::move(lib.cards);
-        heroIndex = lib.heroIndex;
-        heroPlatform = lib.heroPlatform;
-        shelf = std::move(lib.shelf);
-        favorites = std::move(lib.favorites);
-        games = std::move(lib.games);
-        platformTiles = std::move(lib.platformTiles);
-        collectionTiles = std::move(lib.collectionTiles);
-        if (cards.empty()) {
+        lib = loadLibrary(liveClient);
+        // The references above name lib's own members, so there is nothing to
+        // copy out any more.
+
+        // EMPTY CARDS IS NO LONGER AN EMPTY LIBRARY, and this check had to
+        // change with the rest. `cards` now holds recents and favourites
+        // rather than the catalogue, so a console whose server is fine but
+        // which has never played anything and has no favourites would have
+        // been told its library came back empty and refused to start. The
+        // question worth asking is whether the SERVER answered, and the
+        // platform list is what answers it.
+        if (platformTiles.empty()) {
             std::fprintf(stderr, "[romm] the library came back empty\n");
             return 1;
         }
         // Covers come from the server, authenticated. The cache never learns
         // what a server is — it was built to take exactly this.
+        //
+        // AND IT ASKS THE DISK FIRST. Nothing about a library survives a boot,
+        // so every start used to re-fetch every cover it drew. The path RomM
+        // hands out carries the art's own timestamp, so a cached file is only
+        // ever returned for the exact version that was asked for — see
+        // covercache.h. Art this console has already seen costs no network at
+        // all on the next boot, which matters most for the hosted server of
+        // open question 29.
+        covercache::setServer(rommAddress);
         images.init(imageBudget, 4, [](const std::string& key) {
-            return liveClient.fetchBytes(key);
+            if (std::vector<uint8_t> have = covercache::read(key); !have.empty())
+                return have;
+            std::vector<uint8_t> got = liveClient.fetchBytes(key);
+            covercache::write(key, got);
+            return got;
         });
     } else {
         // A key is not a path. Everything after '#' is stripped before reading,
@@ -4244,10 +4325,210 @@ int main(int argc, char** argv) {
     screens::SearchScreen searchScreen;
     screens::AccountScreen accountScreen;
     screens::AddAccountScreen addAccountScreen;
-    // What the docked keyboard held last frame, so the filter is re-run when it
+    // What the docked keyboard held last frame, so the query is re-run when it
     // changes and not sixty times a second when it does not.
     std::string searchTyped;
+    // Typed but not yet asked, and how long until it is. SEARCH GOES TO THE
+    // SERVER NOW — open question 28 — so the one thing the old in-memory
+    // filter never needed is the one thing this cannot do without: somebody
+    // typing "castlevania" on a pad must not fire eleven requests.
+    std::string searchPending;
+    float searchDebounce = 0.0f;
+    // Long enough to swallow a run of keypresses, short enough that stopping
+    // to look feels like the screen answering rather than catching up. The
+    // request itself is 40-80 ms against the reference server.
+    constexpr float kSearchDebounce = 0.25f;
+    // One page. A television search is somebody looking for a game they can
+    // name, not a person paging through four hundred results with a stick —
+    // and the heading says how many matched, so a query that is too broad
+    // says so rather than pretending the first forty are all of it.
+    constexpr int kSearchLimit = 40;
+
+    // Asks the server and hands the screen the answer. Shared by the live
+    // typing loop and by `--screen search --query`, so a capture exercises the
+    // same path a person does rather than a second implementation of it.
+    auto runSearch = [&](const std::string& q) {
+        if (q.empty()) return;
+        std::vector<romm::Game> found;
+        std::string err;
+        int total = 0;
+        if (!liveClient.fetchRoms("search_term=" + romm::Client::encodeQueryValue(q),
+                                  kSearchLimit, &found, &err, &total)) {
+            // NOT "nothing matches". The console could not go and look, and
+            // saying the library holds nothing like it would be a lie told
+            // confidently. See SearchScreen::State.
+            std::fprintf(stderr, "[search] %s: %s\n", q.c_str(), err.c_str());
+            searchScreen.setFailed(err);
+            return;
+        }
+        std::vector<int> idx;
+        idx.reserve(found.size());
+        for (const auto& g : found) {
+            // Same rule as Home's shelf and a collection's grid: a result this
+            // console cannot start must not be offered. The heading's "12 of
+            // 52" is what accounts for the difference.
+            if (!catalog::playable(g)) continue;
+            idx.push_back(appendGame(lib, g));
+        }
+        std::fprintf(stderr, "[search] %s: %zu of %d\n", q.c_str(), idx.size(), total);
+        searchScreen.setResults(q, std::move(idx), total);
+    };
     libraryScreen.build(platformTiles, collectionTiles);
+
+    // THE TILE COVERS, FETCHED BEHIND HOME RATHER THAN BEFORE IT.
+    //
+    // A platform tile's artwork is the first cover among its games, and until
+    // open question 28 it came for free because boot had fetched every game
+    // anyway. It is one request per platform on its own: 1.55 s against the
+    // reference server, measured, which is more than the whole of the rest of
+    // a boot. Paying it at startup would have handed most of the win back for
+    // thumbnails.
+    //
+    // MMagTech's call, 2026-09-22, given the choice between paying it, using
+    // RomM's platform logo instead, and this: the tiles come up in their
+    // colour — which the Library screen already treats as a normal state, not
+    // a fault — and the covers arrive a second or so later. The finished
+    // screen looks exactly as it did before.
+    //
+    // IT HAPPENS ON EVERY BOOT, because nothing about a library is kept
+    // between them. Within a session it happens once.
+    //
+    // THE WORKER TOUCHES NOTHING THE FRAME THREAD OWNS. It returns cover
+    // PATHS — two ints and a string — and the frame loop is what applies them.
+    // Appending to the store from another thread would be a data race against
+    // every screen that draws from it.
+    struct CoverFill {
+        std::mutex m;
+        std::vector<std::pair<int, std::string>> done;   // platform id -> cover
+        std::vector<int> want;
+        std::atomic<size_t> next{0};
+        std::atomic<bool> quit{false};
+        std::vector<std::thread> workers;
+    };
+    CoverFill coverFill;
+    if (rommAddress) {
+        // THE TILE MAP FIRST, WHICH IS THE WHOLE POINT. Without it the console
+        // asks thirty-six times at every start which cover a tile should use
+        // and gets the same thirty-six answers — 1.07 s and a third of a
+        // megabyte to learn nothing new. A row is used when the platform's
+        // `updated_at` AND `rom_count` still match what they were when it was
+        // written; both ride on the platform list boot already fetched, so
+        // checking costs no request. See covercache.h for why this is not the
+        // library snapshot open question 22 rules out.
+        const std::map<int, covercache::Tile> saved = covercache::loadTiles();
+        int reused = 0;
+        for (screens::Tile& t : platformTiles) {
+            if (!t.enterable || !t.cover.empty()) continue;
+            auto mine = lib.tileCache.find(t.id);
+            auto was = saved.find(t.id);
+            if (mine != lib.tileCache.end() && was != saved.end() &&
+                !was->second.cover.empty() &&
+                was->second.updatedAt == mine->second.updatedAt &&
+                was->second.romCount == mine->second.romCount) {
+                t.cover = was->second.cover;
+                mine->second.cover = was->second.cover;
+                // AND THE SCREEN HAS TO BE TOLD, because it was built from
+                // these tiles before this ran and holds its own copies. The
+                // cold path gets this for free — every cover that arrives goes
+                // through learnedTile — so a remembered one that skipped it
+                // drew the colour and never the picture. Found by a warm boot
+                // requesting exactly one image, the avatar.
+                libraryScreen.learnedTile(t.id, "", was->second.cover);
+                ++reused;
+                continue;
+            }
+            coverFill.want.push_back(t.id);
+        }
+        if (reused || !coverFill.want.empty())
+            std::fprintf(stderr, "[covers] %d tile(s) remembered, %zu to ask about\n",
+                         reused, coverFill.want.size());
+        // FOUR, THE SAME AS THE IMAGE CACHE, and for the same reason: these
+        // are round trips rather than work, so the number that helps is the
+        // number in flight. Thirty-six platforms one at a time is 1.55 s;
+        // four at a time is about a quarter of that, which is the difference
+        // between tiles that fill in and tiles you watch filling in.
+        const unsigned kWorkers = 4;
+        for (unsigned w = 0; w < kWorkers; ++w) {
+            coverFill.workers.emplace_back([&coverFill]() {
+                for (;;) {
+                    if (coverFill.quit.load()) return;
+                    const size_t i = coverFill.next.fetch_add(1);
+                    if (i >= coverFill.want.size()) return;
+                    std::vector<romm::Game> one;
+                    std::string err;
+                    if (!liveClient.fetchRoms(
+                            "platform_ids=" + std::to_string(coverFill.want[i]), 1,
+                            &one, &err) || one.empty())
+                        continue;
+                    if (one[0].coverPath.empty()) continue;
+                    std::lock_guard<std::mutex> lk(coverFill.m);
+                    coverFill.done.emplace_back(coverFill.want[i], one[0].coverPath);
+                }
+            });
+        }
+    }
+    // THE REST OF A BIG GRID, BEHIND THE FIRST PAGE.
+    //
+    // A grid is proportional to its own platform — about 1 ms a game — so the
+    // first page is drawn at once and the remainder arrives behind it. The
+    // worker returns GAMES and the frame loop is what puts them in the store
+    // and on the screen, for the same reason the cover fill returns paths:
+    // appending to the store from another thread would race every screen that
+    // draws from it.
+    struct GridFill {
+        std::mutex m;
+        std::vector<romm::Game> arrived;
+        std::atomic<bool> running{false};
+        std::atomic<bool> quit{false};
+        int tileId = 0;
+        std::thread th;
+        void stop() {
+            quit.store(true);
+            if (th.joinable()) th.join();
+            quit.store(false);
+            std::lock_guard<std::mutex> lk(m);
+            arrived.clear();
+        }
+    };
+    GridFill gridFill;
+    struct GridFillStop {
+        GridFill& f;
+        ~GridFillStop() { f.stop(); }
+    } gridFillStop{gridFill};
+
+    // THE SWEEP AND THE EVICTION, BEHIND EVERYTHING, ONCE PER BOOT.
+    //
+    // MMagTech's question, and the reason there is no TTL anywhere in this
+    // cache: what stops a deleted platform's art sitting on disk forever. A
+    // platform that is gone stops appearing in the platform list, so it is
+    // orphaned the FIRST time the console sees the server without it.
+    //
+    // IT IS GIVEN THE LIST THAT CAME BACK, and covercache::sweep refuses an
+    // empty one, because absence is not deletion when nothing answered — a
+    // sweep on a failed boot would wipe the cache that boot most wants.
+    std::thread coverTidy;
+    if (rommAddress && !platformTiles.empty()) {
+        std::vector<int> live;
+        for (const screens::Tile& t : platformTiles) live.push_back(t.id);
+        coverTidy = std::thread([live]() {
+            covercache::sweep(live);
+            covercache::evict(covercache::kBudgetBytes);
+        });
+    }
+    struct CoverTidyStop {
+        std::thread& t;
+        ~CoverTidyStop() { if (t.joinable()) t.join(); }
+    } coverTidyStop{coverTidy};
+
+    // Stops the workers before anything they write into goes out of scope. A
+    // thread outliving this frame would be writing into a dead mutex.
+    struct CoverFillStop {
+        CoverFill& f;
+        ~CoverFillStop() {
+            f.quit.store(true);
+            for (std::thread& t : f.workers) if (t.joinable()) t.join();
+        }
+    } coverFillStop{coverFill};
 
     // Any pad that is already plugged in. Hotplug is handled in the event loop,
     // so a controller connected later works without restarting anything.
@@ -4561,21 +4842,21 @@ int main(int argc, char** argv) {
             return false;
         }
 
-        Library lib = loadLibrary(liveClient);
-        if (lib.cards.empty()) {
+        // BUILT BESIDE THE LIVE ONE AND ONLY THEN SWAPPED IN. The store is a
+        // single object now, so a failed switch must not have half-replaced it.
+        Library fresh = loadLibrary(liveClient);
+        // NOT `cards.empty()`, which this asked until open question 28. Cards
+        // are recents and favourites now, so somebody who has played nothing
+        // and starred nothing has none — and a real account with a working
+        // server would have been refused. The platform list is what says the
+        // server answered.
+        if (fresh.platformTiles.empty()) {
             // Left as it was rather than blanked: an empty Home is worse than
             // the previous person's, and this is recoverable by switching back.
             if (why) *why = "That account's library came back empty.";
             return false;
         }
-        cards = std::move(lib.cards);
-        heroIndex = lib.heroIndex;
-        heroPlatform = lib.heroPlatform;
-        shelf = std::move(lib.shelf);
-        favorites = std::move(lib.favorites);
-        games = std::move(lib.games);
-        platformTiles = std::move(lib.platformTiles);
-        collectionTiles = std::move(lib.collectionTiles);
+        lib = std::move(fresh);
         libraryScreen.build(platformTiles, collectionTiles);
         refreshKeeps();
 
@@ -4749,7 +5030,71 @@ int main(int argc, char** argv) {
             case screens::Action::OpenTile: {
                 const auto& tiles = libraryScreen.visible();
                 if (res.value < 0 || res.value >= static_cast<int>(tiles.size())) break;
-                gridScreen.open(tiles[res.value].title, tiles[res.value].cards, cards);
+                // THE GAMES ARE FETCHED HERE AND NOWHERE EARLIER — open
+                // question 28. Boot draws this screen having fetched no games
+                // at all; a grid costs one request at the moment somebody
+                // walks into it, and nothing at all for the systems they never
+                // open. The second visit costs nothing: loadTileGames sees a
+                // membership it already filled and returns.
+                const bool isCollection = libraryScreen.tab() != 0;
+                const int tileId = tiles[res.value].id;
+                auto& own = isCollection ? collectionTiles : platformTiles;
+                screens::Tile* t = nullptr;
+                for (auto& x : own) if (x.id == tileId) { t = &x; break; }
+                if (!t) break;
+                bool more = false;
+                if (t->cards.empty()) {
+                    // ONE PAGE, AND IT BLOCKS FOR THAT. The person has chosen
+                    // a system and is waiting for one request rather than for
+                    // the whole platform — 0.19 s for 141 games here, and the
+                    // same 0.19 s for a platform of thirty thousand.
+                    loadTileGames(liveClient, lib, *t, isCollection, &more);
+                    libraryScreen.learnedTile(tileId, t->detail, t->cover);
+                }
+                if (t->cards.empty()) {
+                    // Nothing came back, or nothing in it can be played here.
+                    // Refusing is better than opening onto an empty grid with
+                    // no reason on it.
+                    sound::play(sound::Cue::Edge);
+                    break;
+                }
+                gridScreen.open(t->title, t->cards, cards);
+                gridScreen.setLoadingMore(more);
+                // ONE FILLER AT A TIME. Walking into a second platform stops
+                // the first: nobody is looking at it any more, and two of
+                // these would be appending into two different tiles at once.
+                gridFill.stop();
+                if (more) {
+                    gridFill.tileId = tileId;
+                    gridFill.running.store(true);
+                    const std::string filter =
+                        (isCollection ? "collection_id=" : "platform_ids=") +
+                        std::to_string(tileId);
+                    const size_t from = t->cards.size();
+                    gridFill.th = std::thread([&gridFill, filter, from]() {
+                        constexpr int kPage = 500;
+                        size_t offset = from;
+                        for (;;) {
+                            if (gridFill.quit.load()) break;
+                            std::vector<romm::Game> page;
+                            std::string err;
+                            int total = 0;
+                            if (!liveClient.fetchRoms(
+                                    filter + "&offset=" + std::to_string(offset),
+                                    kPage, &page, &err, &total))
+                                break;
+                            if (page.empty()) break;
+                            offset += page.size();
+                            {
+                                std::lock_guard<std::mutex> lk(gridFill.m);
+                                for (auto& g : page)
+                                    gridFill.arrived.push_back(std::move(g));
+                            }
+                            if (total > 0 && offset >= static_cast<size_t>(total)) break;
+                        }
+                        gridFill.running.store(false);
+                    });
+                }
                 stack.push_back(Screen::Grid);
                 sound::play(sound::Cue::Activate);
                 break;
@@ -5063,7 +5408,11 @@ int main(int argc, char** argv) {
         if (searchQuery) {
             keyboard.typeText(searchQuery);
             searchTyped = keyboard.value();
-            searchScreen.setQuery(searchTyped, cards);
+            searchScreen.setQuery(searchTyped);
+            // Asked straight away rather than waiting out the debounce: a
+            // capture has no typing to wait for, and a screenshot of the
+            // Searching… state is not what anybody asked for.
+            runSearch(searchTyped);
             if (searchScreen.resultCount() > 0) searchScreen.setFocused(true);
         }
     } else if (initialScreen) {
@@ -6363,14 +6712,83 @@ int main(int argc, char** argv) {
             }
             detailScreen.setProgress(prog);
 
-            // THE SEARCH LOOP, and it is this short because the whole library
-            // is already in memory: read what the docked keyboard holds, and if
-            // it changed, re-filter. No debounce, no request, no spinner.
+            // THE SEARCH LOOP. It used to be three lines because the whole
+            // library was in memory and a substring match was free. It asks
+            // the server now — open question 28 — so it is in two halves:
+            // notice what was typed, and some time after the typing stops, go
+            // and ask.
             if (here() == Screen::Search && keyboard.isOpen() &&
                 keyboard.value() != searchTyped) {
                 searchTyped = keyboard.value();
-                searchScreen.setQuery(searchTyped, cards);
+                searchScreen.setQuery(searchTyped);
+                searchPending = searchTyped;
+                searchDebounce = kSearchDebounce;
+                // Said immediately, not when the request goes out: the gap
+                // between the last keypress and the answer is exactly the
+                // stretch where a screen that says nothing looks broken.
+                searchScreen.setWaiting();
             }
+            if (!searchPending.empty()) {
+                searchDebounce -= dt;
+                if (searchDebounce <= 0.0f) {
+                    const std::string q = searchPending;
+                    searchPending.clear();
+                    // BLOCKING, ON THE FRAME THREAD, AND MEASURED RATHER THAN
+                    // ASSUMED: 40-80 ms against the reference server, which is
+                    // a few dropped frames once the typing has already
+                    // stopped. A worker thread would hide it and is what this
+                    // wants if the wait is ever felt on a slower server; the
+                    // shape to copy is ImageCache's, not a second event loop.
+                    runSearch(q);
+                }
+            }
+            // Pages of a big grid that arrived behind the first one. Applied
+            // here because this thread owns the store and the screen.
+            if (here() == Screen::Grid) {
+                std::vector<romm::Game> got;
+                {
+                    std::lock_guard<std::mutex> lk(gridFill.m);
+                    got.swap(gridFill.arrived);
+                }
+                if (!got.empty()) {
+                    std::vector<int> added;
+                    added.reserve(got.size());
+                    screens::Tile* t = nullptr;
+                    for (auto& v : {&platformTiles, &collectionTiles})
+                        for (screens::Tile& x : *v)
+                            if (x.id == gridFill.tileId) { t = &x; break; }
+                    for (const auto& g : got) {
+                        if (!catalog::playable(g)) continue;
+                        const int i = appendGame(lib, g);
+                        added.push_back(i);
+                        if (t) t->cards.push_back(i);
+                    }
+                    gridScreen.append(added, cards);
+                }
+                gridScreen.setLoadingMore(gridFill.running.load());
+            }
+
+            // Covers that arrived behind Home. Applied here because this is
+            // the thread that owns the tiles and the screen drawing them.
+            {
+                std::vector<std::pair<int, std::string>> arrived;
+                {
+                    std::lock_guard<std::mutex> lk(coverFill.m);
+                    arrived.swap(coverFill.done);
+                }
+                for (const auto& [id, cover] : arrived) {
+                    for (screens::Tile& t : platformTiles)
+                        if (t.id == id && t.cover.empty()) { t.cover = cover; break; }
+                    libraryScreen.learnedTile(id, "", cover);
+                    auto it = lib.tileCache.find(id);
+                    if (it != lib.tileCache.end()) it->second.cover = cover;
+                }
+                // Written when the last one lands rather than per cover: this
+                // is thirty-six short lines and the next boot is what reads it.
+                if (!arrived.empty() && coverFill.next.load() >= coverFill.want.size())
+                    covercache::saveTiles(lib.tileCache);
+            }
+
             // The results are sized to the room the keyboard leaves, and the
             // keyboard's height depends on its own layout — so it is asked
             // rather than assumed.
@@ -7471,6 +7889,12 @@ int main(int argc, char** argv) {
         core.unload();
     }
     if (audioStream) SDL_DestroyAudioStream(audioStream);
+    {
+        const covercache::Stats cs = covercache::stats();
+        if (cs.fromDisk || cs.fetched)
+            std::fprintf(stderr, "[covers] %d from disk, %d fetched, %d stored\n",
+                         cs.fromDisk, cs.fetched, cs.stored);
+    }
     std::fprintf(stderr, "[image] resident %.1f MB, %d still pending\n",
                  images.bytesResident() / (1024.0 * 1024.0), images.pendingCount());
     // Drained rather than abandoned: anything still queued is a save somebody

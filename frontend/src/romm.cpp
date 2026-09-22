@@ -442,6 +442,8 @@ bool Client::fetchPlatforms(std::vector<Platform>* out, std::string* err) {
         p.slug = jstr(o, "slug");
         p.fsSlug = jstr(o, "fs_slug");
         p.romCount = static_cast<int>(jint(o, "rom_count"));
+
+        p.updatedAt = jstr(o, "updated_at");
         if (p.id != 0) out->push_back(std::move(p));
     }
     json_object_put(root);
@@ -506,6 +508,79 @@ bool Client::fetchCollections(std::vector<Collection>* out, std::string* err) {
     return true;
 }
 
+// THREE THINGS EVERY /api/roms RESPONSE CARRIES THAT THIS CLIENT NEVER READS.
+//
+// RomM returns `filter_values`, `rom_id_index` and `char_index` beside the
+// items, for a web UI that draws filter menus and an A-Z rail. This parses
+// `items` and `total` and has never looked at any of them.
+//
+// MEASURED 2026-09-22 rather than assumed, and the honest figure is smaller
+// than the first one looked. On an UNFILTERED `limit=1` the three are 44.6 KB
+// of a 46.3 KB response — 87% — because `filter_values` enumerates every
+// genre, company and tag in the whole library. But `filter_values` is computed
+// over the FILTERED set, so asking for one platform makes it small, and the
+// requests this console actually makes save about 20%: the cover fill went
+// 1.37 s to 1.07 s and 0.40 MB to 0.33 MB, boot's four calls 0.21 s to 0.17 s.
+//
+// Worth having for three query parameters, and not worth calling a
+// breakthrough. The control was run: a misspelled flag changes nothing, which
+// is the same trap `search_term` had.
+static const char* const kLeanRoms =
+    "&with_filter_values=false&with_rom_id_index=false&with_char_index=false";
+
+std::string Client::encodeQueryValue(const std::string& in) {
+    static const char* kHex = "0123456789ABCDEF";
+    std::string out;
+    out.reserve(in.size() + 16);
+    for (unsigned char c : in) {
+        const bool unreserved = (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+                                (c >= '0' && c <= '9') ||
+                                c == '-' || c == '.' || c == '_' || c == '~';
+        if (unreserved) { out += static_cast<char>(c); continue; }
+        // NOT encodeUrl, which deliberately preserves & and = because it is
+        // encoding a PATH. Here those two characters are exactly the danger:
+        // a title with an ampersand in it would end the value and start a
+        // parameter the server may or may not ignore.
+        out += '%';
+        out += kHex[c >> 4];
+        out += kHex[c & 0x0F];
+    }
+    return out;
+}
+
+bool Client::fetchRoms(const std::string& filter, int limit,
+                       std::vector<Game>* out, std::string* err, int* total) {
+    out->clear();
+    if (total) *total = 0;
+    std::string path = "/api/roms?limit=" + std::to_string(limit) + kLeanRoms;
+    if (!filter.empty()) path += "&" + filter;
+
+    std::string body;
+    if (!get(path, &body, err)) return false;
+    json_object* root = json_tokener_parse(body.c_str());
+    if (!root) { if (err) *err = "roms response was not JSON"; return false; }
+
+    json_object* items = nullptr;
+    if (!json_object_object_get_ex(root, "items", &items) ||
+        json_object_get_type(items) != json_type_array) {
+        json_object_put(root);
+        if (err) *err = "roms response had no items array";
+        return false;
+    }
+    json_object* t = nullptr;
+    if (total && json_object_object_get_ex(root, "total", &t))
+        *total = json_object_get_int(t);
+
+    const size_t n = json_object_array_length(items);
+    for (size_t i = 0; i < n; ++i) {
+        Game g;
+        if (parseGame(json_object_array_get_idx(items, i), &g))
+            out->push_back(std::move(g));
+    }
+    json_object_put(root);
+    return true;
+}
+
 bool Client::fetchGames(int platformId, std::vector<Game>* out, std::string* err,
                         const std::function<void(int)>& onPage) {
     out->clear();
@@ -516,7 +591,7 @@ bool Client::fetchGames(int platformId, std::vector<Game>* out, std::string* err
     int offset = 0;
     for (;;) {
         std::string path = "/api/roms?limit=" + std::to_string(kPage) +
-                           "&offset=" + std::to_string(offset);
+                           "&offset=" + std::to_string(offset) + kLeanRoms;
         if (platformId > 0) path += "&platform_ids=" + std::to_string(platformId);
 
         std::string body;

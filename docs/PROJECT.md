@@ -11454,7 +11454,31 @@ not exist until somebody walks into it.
 prize: the person with twenty thousand games boots as fast as the person with
 two hundred.
 
-#### THE ONE THING THAT GENUINELY WANTS THE WHOLE CATALOGUE
+#### ANSWERED 2026-09-22: THE SERVER CAN SEARCH, SO THE CONSOLE NEED NOT HOLD THE CATALOGUE
+
+**The check below was run and the answer is the good one.** Against the live
+server, `/api/roms` accepts **`search_term`**:
+
+```
+?                     total: 1650   3-D Tetris, 3D Crazy Coaster, 3D Mine Storm
+?search_term=mario    total:   52   Dr. Mario, Dr. Mario, Mario & Luigi: Brothership
+?search=mario         total: 1650   3-D Tetris, 3D Crazy Coaster, 3D Mine Storm
+```
+
+**So option 2 wins and option 1 is unnecessary.** Search asks the server;
+nothing needs the whole catalogue in memory; boot becomes the four cheap calls
+above and stops being proportional to the library.
+
+**AND THE COUNT ALONE WOULD HAVE LIED.** All three of those requests returned
+five items at `limit=5`, because an unrecognised query parameter is IGNORED
+rather than refused — `search=` looks exactly like `search_term=` if you count
+rows. Only the `total` and the names show which one filtered. Run the control.
+
+**`total` is in every response** (1650 here), which is worth knowing
+separately: anything that ever does want a progress figure has one without
+counting pages.
+
+#### THE ONE THING THAT GENUINELY WANTED THE WHOLE CATALOGUE
 
 **Search is a live substring filter over the library in memory.** Take the
 catalogue out of boot and search has nothing to filter until it arrives. Two
@@ -11478,3 +11502,483 @@ enough to look like a hang. **If boot stops loading the library, most of that
 screen's reason to exist goes with it** — which is worth knowing before anybody
 invests further in it. The server-wait countdown stays useful either way: a
 router coming back after a power cut is not something this can make faster.
+
+#### RAISED 2026-09-22: WHAT THIS DOES TO OFFLINE, WHEN OFFLINE IS EVENTUALLY BUILT
+
+**MMagTech, on reading the answer above: "how does this affect offline mode when
+we eventually implement it?" It costs offline nothing, and the reason is worth
+writing down because the code currently claims the opposite.**
+
+**THE IN-MEMORY CATALOGUE DOES NOT SURVIVE GOING OFFLINE TODAY.** The whole of
+what a console remembers between boots is the three files at the top of this
+question. The catalogue is in memory only because `loadLibrary` succeeded at
+boot. **So an offline boot already has zero games in memory and today's search
+filters an empty vector** — it has never worked offline, and nobody noticed
+because the startup screen sits on the server-wait countdown and Search is
+never reached.
+
+**`frontend/src/screens.h` says otherwise and is wrong on this point.** Its
+comment argues for filtering memory because a server search "would be the one
+screen in the product that stops working offline." **That is the one part of
+that comment that does not survive contact with the facts.** The debounce half
+of it stands: docked keyboard, live results, one request per keystroke, so
+moving to the server needs a debounce and in-flight cancellation that the
+substring filter never did. **The comment is a recorded decision and gets
+rewritten in the change that moves search, not before.**
+
+#### THE ONE CASE THAT REALLY CHANGES, AND IT IS A REGRESSION WORTH TAKING
+
+Booted online, network dies mid-session, then somebody searches. Today they
+filter a stale catalogue; with server search they get nothing.
+
+**Take it.** Offline the only launchable games are kept ones, so today's
+behaviour offers 1,600 results of which perhaps six can be opened. That is the
+failure `offlinePlatforms()` already forbids one scale down: a kept game that
+cannot start is hidden, because *"listing them would set up a tap that fails
+regardless of what is actually stored."* A whole catalogue offline is the same
+trap at 1,600x.
+
+#### SO OFFLINE SEARCH IS SEARCH OVER THE KEPT LIST — AND WOULD BE EITHER WAY
+
+| | |
+|---|---|
+| **One source, one signal** | Cabinet's `NetworkMonitor` folds real disconnection and a deliberate Offline Mode toggle into a single `isOffline`. Search asks that, like every other screen: online `?search_term=`, offline the substring match already written in `SearchScreen::setQuery`, pointed at the kept list instead of `all`. Same list Home and Library draw from, so the three can never draw a different picture. |
+| **Two failures, not one** | *Nothing matched* and *could not ask* must not read the same. Server search is the first place in this UI where both states exist, and collapsing them is the truncated-explanation trap. |
+| **The keep has four parts, and this console does none of them** | A keep must pull the ROM, the whole `Rom` record, the cover, **and the platform's firmware** — Cabinet pulls all four. Nothing about playability is stored in the record; that is asked live. |
+| **Counts split cleanly** | Online, `total` is in every response. Offline, the count is how many are kept, never the server's number, *"which would mean nothing without a connection to trust it."* |
+
+**AND IT DOES NOT TOUCH OPEN QUESTION 22.** Nothing here caches a catalogue.
+Offline search reads the kept records, which exist because somebody chose to
+keep a game — the same exception Cabinet already carved out for Home.
+
+#### FIRMWARE IS THE THING THAT IS NOT ON THE MACHINE, AND IT IS NOT THE CORE
+
+**MMagTech, pushing back on a draft of this: "how is a core absent, they're all
+baked into the OS?" Correct, and the draft was wrong. Checked against the
+reference A9 2026-09-22:**
+
+| | Where it lives | Absent when |
+|---|---|---|
+| **Core** | `/usr/lib/cabinetos/cores` — **the image** | never on a healthy console. All 23 present: 22 libretro plus PCSX2 as `cabinetos-ps2.so` |
+| **ROM** | the data drive, if kept | not kept |
+| **Firmware** | `/var/lib/cabinetos/bios` — **the data drive** | **this console has never launched that platform** |
+
+`LaunchJob::Stage::Firmware` runs before the download stage and fills `bios/`
+from `fetchFirmware(platformId)` and `/api/firmware/<id>`, skipping what is
+already there. **So it is a per-platform, once-ever fetch, and it needs the
+server.** The A9 holds PS2, GBA and Sega CD firmware because those platforms
+have been launched on it. A console that has never started a GBA game has no
+`gba_bios.bin` and no way to get one offline.
+
+**WHICH IS THE REAL OFFLINE FAILURE.** Keep a GBA game on a console that has
+never run one, go offline, tap it: ROM on the disk, core in the image, **BIOS
+on the server.** It does not start. PSP is the one exception — its system files
+are not a console's firmware and ship with the emulator at
+`/usr/share/cabinetos/system/`.
+
+**Cabinet solved this and the answer is already quoted in this document**, in
+*Prior art*: keeping a game pulls its ROM **and its platform's firmware**. That
+clause is the whole fix and it was read past twice.
+
+**THE STALE-COMMENT LESSON, since it cost most of this exchange.**
+`catalog.h`'s `NotInstalled` comment claimed GameCube and PS2 had no core built
+and that PPSSPP was not built yet. Both were false — `dolphin_libretro.so` is a
+libretro core and ships, and PSP plays. An offline argument was built on top of
+them and had to be withdrawn. **The comment was believed because it reads like
+a measurement. It was not one.** Both comments are corrected as of this entry.
+
+**THE DEFINITION THIS SECTION LEANS ON IS OPEN QUESTION 29.** Everything above
+says "offline" as though it were one fact. It is three, and which of them are
+independent depends on where that console's RomM is. Read 29 before building
+any of this.
+
+### 29. Offline is not one fact, and the console has three networks to be off
+**Raised by MMagTech 2026-09-22, in two pieces, while question 28's offline
+answer was being written. First: "when the update console option is implemented
+in the UI that would need a true internet connection separate of the romm server
+being able to be reached." Then: "romm might not always be on just the lan, its
+just the most likely setup to occur for a lot of users." Both are right and the
+second changes the shape of the first. NOT DECIDED — this records the facts and
+the predicate that already exists.**
+
+#### THREE FACTS, AND NONE IMPLIES THE NEXT
+
+| Fact | Where it lives | How the console learns it | What needs it |
+|---|---|---|---|
+| **Link up** | this machine | `net::status()` — nmcli, three or four round trips, costly | anything at all |
+| **RomM reachable** | wherever RomM is | **free** — every API call already answers it | library, search, firmware, saves, accounts |
+| **Registry reachable** | the internet, `ghcr.io` | nothing asks today | Phase 7 updates |
+
+**THE MIDDLE ROW IS NOT "THE LAN", AND AN EARLIER DRAFT OF THIS SAID IT WAS.**
+That was the error the second half of the question corrected.
+
+#### THE PREDICATE ALREADY EXISTS AND COSTS NOTHING
+
+`romm::looksLocal` classifies the configured address — RFC1918, `127.`,
+`.local`, `.lan`, a bare hostname are local; everything else is remote. It
+exists to pick a scheme order, http first for a self-hosted box and **https
+first for a remote one**, with an explicit scheme honoured as *"an instruction,
+not a hint"*. **So the transport layer has supported a hosted RomM all along,
+and the console can tell which kind it has from the address alone, with no
+network call.** Whatever answers "am I offline" should ask it.
+
+#### WHICH IS WHY THE THREE FACTS COLLAPSE DIFFERENTLY PER USER
+
+| Setup | Relationship | A dead uplink means |
+|---|---|---|
+| **RomM on the LAN** | all three independent | plays everything, cannot update |
+| **RomM hosted** | RomM reachable implies the internet is up | **nothing works, first run included** |
+
+#### AND THAT MAKES ONE OF `net.h`'S PREMISES CONDITIONAL
+
+`net::Status::online` is documented as *"deliberately not 'the internet is
+reachable'"*, justified by *"RomM is on the LAN; a console behind a dead uplink
+can still be set up."*
+
+**True for the first row and false for the second, and the gate never asks
+which it is.** A person with a hosted RomM and a dead uplink passes the network
+step, reaches the server step, and is told *"nothing answered at
+romm.example.com over http or https"* — which is true, unhelpful, and names the
+wrong cause. Not a crash. A bad explanation, which this document treats as a
+defect, and `looksLocal` is the whole fix.
+
+**THE EXCEPTION THAT IS NOT AN OFFLINE SIGNAL.** `managerMissing` means
+NetworkManager is not running, and *"every other field is meaningless when this
+is set."* The machine's networking may be perfectly good. It is a fourth
+explanation, never a fourth state.
+
+#### THE SAME RULE, FOR THE THIRD TIME
+
+*"No update available"* and *"could not check"* must not read the same, exactly
+as *"nothing matched"* and *"could not ask"* must not in question 28's search,
+and exactly as the startup screen's three failures must not. **It keeps
+recurring because it is one mistake wearing different clothes**, and the update
+screen has a fourth explanation that is not a network at all: a disk full of
+games is a console that cannot update itself.
+
+#### THE COUPLING NOBODY HAS PRICED
+
+Offline mode needs kept games. Keeping is what consumes the system reserve. The
+reserve is what leaves room for an image. **So the offline feature and the
+update feature contend for the same disk**, and the rule for that is already
+decided — the reserve is checked when KEEPING a game, never against the cache.
+Building offline without honouring it produces a console that plays everything
+with no network and can never be updated again.
+
+#### SMALL, AND NOT WORTH A DECISION
+
+`looksLocal` does not cover CGNAT, `100.64.0.0/10`, which is what Tailscale
+hands out. A tailnet RomM is probed https before http and connects on the second
+try. One wasted round trip, no failure. Worth a line in that function.
+
+#### WHAT THIS MEANS FOR CABINET'S ANSWER
+
+Cabinet folds real disconnection and a deliberate Offline Mode toggle into a
+single `isOffline` that every screen asks. **That is right for an app and
+insufficient for an operating system that updates itself**, because one bool
+cannot express "RomM is down and the registry is fine" — the case in which the
+update screen is the only thing on the console that works, and the case a single
+flag would grey out.
+
+### 30. The console re-does work it already did, every boot
+**Raised by MMagTech 2026-09-22, after reading question 28's answer: "it seems
+to me like maybe a tiered boot… unless I'm missing something it would keep the
+intent of the fast boot." Five tiers were proposed. THREE ARE WORTH BUILDING,
+ONE NEEDS RESHAPING, ONE IS ANSWERED BY SOMETHING BETTER. NOT DECIDED — this
+records the verdicts and the measurements behind them.**
+
+The instinct is the same one that produced question 28: the console does work
+it has already done. 28 removed it from boot. This is about not doing it twice.
+
+#### THE FIVE, AND WHAT EACH IS WORTH
+
+| Proposed | Verdict |
+|---|---|
+| **Home first, then the rest** | **Yes, small.** Recents and favourites are 0.23 s of a 0.44 s boot; drawing Home when they land saves about 90 ms. Cheap, no downside, not exciting. |
+| **Background-fetch every platform** | **RESHAPE — see below.** It restores O(library) work per boot, which is the property 28 existed to remove. |
+| **Covers cached to disk** | **Yes**, and it is one piece of work with validation rather than two. |
+| **Validation for added and removed games** | **The best of the five**, and nearly free. |
+| **A TTL on cached items** | **Answered by something better** — see the sweep. |
+
+#### WHY BACKGROUND-FETCHING EVERY PLATFORM IS NOT FREE
+
+**Measured against the reference server 2026-09-22, and the payload is the
+argument.** RomM's rom JSON is fat:
+
+```
+one rom                     62 KB
+141 roms (Arcade)          969 KB     ~6.9 KB/rom
+40 search results          441 KB    ~11   KB/rom
+whole catalogue (1,650)  15.76 MB     ~9.8 KB/rom
+```
+
+**So prefetching everything is a 15.76 MB download on every boot here, and
+about 190 MB for a twenty-thousand-game library.** On a LAN that is background
+chatter. **Question 29 established that RomM is not always on the LAN** — on a
+hosted server over a domestic uplink that is six seconds for this library and
+over a minute for a large one, every time the console starts.
+
+**IT IS NOT A MEMORY PROBLEM, AND AN EARLIER DRAFT OF THIS SAID IT WAS.**
+Measured: `romm::Game` is 240 bytes, `design::Card` 200, and the string heap
+about 360 — cover paths average 73 characters and dominate it. **About 1 KB
+per game**, so 1.6 MB here and 19 MB at twenty thousand. Decoded covers are
+capped separately and do not grow with the library at all. The objection is
+the requests and the uplink, not the RAM.
+
+#### PREFETCH ON FOCUS INSTEAD
+
+Fetch a platform when its tile **gains focus**, not when it is pressed. A
+person takes 300–800 ms between landing on a tile and pressing it; a fetch is
+130–190 ms on a LAN. The wait disappears and the cost is one request per tile
+somebody actually looks at, rather than thirty-six per boot.
+
+Three things it has to get right, and the first is this file's third encounter
+with the same lesson:
+
+- **Focus needs a debounce**, exactly as search did. Holding the stick crosses
+  six tiles in a second, and a request per tile traversed is worse than no
+  prefetch at all. Fetch when focus SETTLES, 150–250 ms.
+- **A press must join the request already in flight**, never start a second.
+- **Superseded fetches are dropped**, the guard `SearchScreen::setResults`
+  already has.
+
+**AND IT DOES NOT REMOVE THE WAIT, IT MAKES IT RARE.** On a hosted server a
+quick press still lands on a grid that is not ready, so this is a complement to
+the waiting frame and not a substitute for it.
+
+#### THE SWEEP, WHICH IS WHY THERE IS NO TTL
+
+**MMagTech's reason for wanting a TTL was specific and good: "say I deleted a
+platform on RomM, the images wouldn't sit on disk forever."** They would not,
+and it takes no timer.
+
+**A deleted platform stops appearing in `fetchPlatforms`.** Anything cached
+whose owner is not in the server's current list is orphaned and is deleted
+then — on the FIRST boot after the deletion, deterministically. A TTL would
+leave those files for however long the TTL is, which is the opposite of what
+was wanted. The same applies to a deleted game: its platform's `rom_count` or
+`updated_at` moves, the platform re-fetches, the game is absent, its cover is
+swept.
+
+**AND STALENESS IS ALREADY SOLVED BY THE PATH.** RomM's cover paths carry the
+art's own timestamp:
+
+```
+/assets/romm/resources/roms/15/569/cover/small.png?ts=2025-03-11 06:56:03
+```
+
+So if the art changes the path changes, the old file is orphaned by the same
+sweep, and the new one is fetched. **The path is the version.** A TTL could
+only re-download unchanged 1994 box art on a timer.
+
+*(That path also contains a space, which is the exact bug `romm.cpp`'s
+`encodeUrl` was written for. A probe written during this discussion hit it.)*
+
+**TWO TRAPS, AND THEY MATTER MORE THAN THE TTL QUESTION:**
+
+1. **NEVER SWEEP ON A FAILED FETCH.** If the server is unreachable, absence is
+   not deletion. A sweep on an offline boot would wipe the whole cache — and
+   offline is when cached art is worth the most. Sweep only on a SUCCESSFUL
+   platform list.
+2. **Key the cache by server.** Point the console at a different RomM and
+   everything looks orphaned at once.
+
+#### VALIDATION COSTS NOTHING, WHICH IS WHY IT IS THE BEST OF THE FIVE
+
+Platform objects already carry **`rom_count` and `updated_at`**, and boot
+already calls `fetchPlatforms`. So per-platform invalidation rides on a request
+the console makes anyway. Unchanged platform, no fetch.
+
+**CHECK THAT `updated_at` ACTUALLY MOVES WHEN A ROM IS ADDED OR REMOVED**
+before building on it. It may only track platform metadata edits, and
+`rom_count` alone misses an equal add-and-remove. One experiment against the
+live server, with a control, exactly as `search_term` was checked — and the
+same trap applies, that an unrecognised parameter is ignored rather than
+refused.
+
+#### THE SIZE OF IT, AND WHY SMALL COVERS ARE NOT THE SHORTCUT
+
+Measured 2026-09-22: small covers average 58.8 KB, large 147.2 KB.
+
+| | Both sizes cached |
+|---|---|
+| This library, 1,650 | **~332 MB** |
+| Twenty thousand games | **~4 GB** |
+
+**That is DISK, not memory.** And caching only the small ones is NOT available:
+`ee5b507`, 2026-09-21, measured on the panel and moved the console OFF
+thumbnails — *"a shelf cover is 316 real pixels on a 4K panel, a grid cover
+520, and the launch screen's is 680 — a 4.2x upscale of an image that was
+already a reduction."* The originals cost about 1.5x the bytes, not 5x,
+because the small ones are inefficiently encoded PNGs. **Cache both.**
+
+So the bound is a SIZE bound, which is the part of the TTL instinct that was
+right: **LRU under the existing system reserve**, because a disk full of games
+is a console that cannot update itself.
+
+#### A THING THAT COMMIT LEFT HALF DONE, AND IS A LOOK QUESTION
+
+`ee5b507` fixed the launch screen. **Shelves and grids still draw from the
+162x216 thumbnail today** — `drawCover` defaults to `large=false` and exactly
+one caller passes true. Its comment asserts *"a shelf or a grid cover is small
+enough that the thumbnail holds up"*, which sits awkwardly against the same
+commit's own arithmetic that a grid cover is 520 real pixels from a 216-pixel
+source. **Look at it on the panel before changing anything.** Not part of this
+question; noticed while answering it.
+
+#### RUN 2026-09-22: THERE IS NO FIELD SELECTOR, AND THE 62 KB FIGURE ABOVE WAS WRONG
+
+**The check was run against the live server. `/api/roms` has no field
+selector** — RomM is FastAPI, so its `/openapi.json` was read rather than
+parameter names being guessed, and there is no `fields`, `only` or `select`.
+
+**AND THE "62 KB FOR ONE ROM" THAT MOTIVATED THE CHECK WAS A MEASUREMENT
+ERROR.** That was an UNFILTERED `?limit=1`, and only 5.9 KB of it was the rom:
+
+```
+limit=1, unfiltered        46.3 KB total
+    filter_values             35.6 KB      every genre, company and tag in the library
+    rom_id_index               8.7 KB      all 1,650 rom ids
+    char_index                 0.3 KB
+    items                      5.9 KB      <- the only part this client reads
+```
+
+**The real per-row cost is about 10 KB**, which the 500-row and whole-catalogue
+measurements already said and which nothing can reduce.
+
+**THREE FLAGS TURN THE EXTRAS OFF and they are worth having, but they are not a
+breakthrough and an interim draft of this entry nearly called them one.**
+`with_filter_values`, `with_rom_id_index` and `with_char_index` are all
+defaulted ON. Turning them off is 87% of an unfiltered `limit=1` — but
+`filter_values` is computed over the FILTERED set, so the requests this console
+actually makes are much smaller to begin with. Measured end to end:
+
+| | default | lean |
+|---|---|---|
+| Cover fill, 36 requests | 1.37 s, 0.40 MB | **1.07 s, 0.33 MB** |
+| Boot's four calls | 0.21 s, 0.58 MB | **0.17 s, 0.54 MB** |
+
+About 20%, for three query parameters. Taken. The control was run — a
+misspelled flag changes nothing.
+
+**SO THE PAYLOAD CANNOT BE MADE SMALL, WHICH MEANS THE ONLY LEVER IS FETCHING
+FEWER ROWS.** That is the opposite of what this section hoped for: it makes
+paging a grid and caching covers MORE important, not less.
+
+#### TWO THINGS THE SPEC HAD THAT ARE BETTER THAN WHAT WAS PROPOSED
+
+**`updated_after` — "filter roms updated after this datetime".** Verified with
+controls: unfiltered 1,650, `2026-09-01` gives 246, `2030-01-01` gives 0, and a
+misspelled `updatedafter` gives 1,650. **This is a better validation primitive
+than comparing `rom_count` and `updated_at` per platform** — one request asks
+the whole library what changed since the last sync.
+
+**`rom_id_index` — the complete ordered list of rom ids, 1,650 of them in
+8.7 KB, returned in 0.04 s.** That is the DELETION detector the sweep needs:
+`updated_after` finds what was added or changed and can never find what is
+gone, and this is the cheap whole-library id set to reconcile against.
+
+**So the cache design gets both halves from the server for almost nothing**,
+and neither was in the five tiers. Note the tension to resolve: the lean flags
+turn `rom_id_index` OFF for ordinary requests, so the reconciliation pass asks
+for it deliberately, once, rather than carrying it on every call.
+
+#### BUILT 2026-09-22: THE BYTES ARE ON DISK. THE SWEEP IS NOT.
+
+`frontend/src/covercache.{h,cpp}`, wired in as a wrapper around the
+`ImageCache` loader — which is the whole of the change, because that loader is
+already the one place every cover comes through.
+
+```
+covers/192.168.1.10_6005/22/705/small.2026-08-20 10_45_28.img
+       └ server          └pid └rid └size └ the art's own ?ts=
+```
+
+**Organised rather than hashed, deliberately**: a flat directory of hashes
+answers none of the questions anybody asks of a cache. Proven by counter
+rather than by inference, which is why the counter exists:
+
+```
+COLD   0 from disk, 20 fetched, 20 stored     1.47 s
+WARM  20 from disk,  0 fetched,  0 stored     1.18 s
+```
+
+About 0.3 s and 1.3 MB for Home's twenty covers on a LAN. Modest here and the
+whole difference on a hosted server.
+
+**WHAT IS DELIBERATELY NOT CACHED**: anything that is not rom cover art. An
+avatar comes from `/api/users/<id>/avatar` with no version in its path, so a
+cached one would be a stale face with no way to notice. An unrecognised key is
+passed through uncached rather than filed under a guess.
+
+**AND THE REST OF IT WAS BUILT THE SAME DAY**, after MMagTech asked for the
+whole thing rather than a piece at a time.
+
+**THE TILE MAP.** `covers/<server>/tiles.tsv` — one line per platform holding
+its `updated_at`, its `rom_count` and the cover its tile should draw. Both
+validating fields ride on the platform list boot already fetches, so checking
+costs no request, and a platform whose either value moved is simply re-asked.
+
+```
+COLD    0 tile(s) remembered, 28 to ask about     5.46 s
+WARM   28 tile(s) remembered, 0 to ask about      3.84 s
+        20 covers from disk, 0 fetched
+```
+
+**A warm boot asks the server nothing at all about its tiles and downloads no
+artwork.** It is not the library snapshot open question 22 rules out: it holds
+no game names, no game ids and nothing browsable, and it is only ever READ on a
+boot where the platform list came back.
+
+**THE BUG IT SHIPPED WITH FOR ONE BUILD, because it is a good one.** The remembered
+covers were written into the app's tiles — and `LibraryScreen` was built from
+those tiles minutes earlier and holds its own COPIES. The cold path never
+noticed, because every arriving cover goes through `learnedTile`, which updates
+both. A warm boot drew colour tiles and requested exactly one image, the avatar.
+**Found by a counter reading zero while 7.3 MB of images sat resident** — the
+counter existed only because the alternative was inferring success from a
+directory listing.
+
+**THE SWEEP AND THE EVICTION.** A platform the server no longer lists has its
+art deleted the first time the console sees the server without it — not when a
+timer expires. `covercache::sweep` refuses an empty list, because absence is
+not deletion when nothing answered. Eviction is LRU against a 1 GB budget, on
+top of the write-time refusal to enter the system reserve.
+
+#### AND THE GRID IS PAGED — the fault this work left behind, fixed
+
+Boot became constant; a grid did not. **MMagTech, asked whether 0.19 s to open
+a grid held: "does that number hold no matter how many games are in the
+platform?" It does not.** About 1 ms a game, so 141 is 0.19 s and a full MAME
+set in one platform is ten seconds.
+
+*(An earlier draft attributed that to his having looked at it on the panel. He
+had not — the television runs the image's frontend and has never run any of
+this. The question was asked of the numbers and it was the right question
+either way.)*
+
+The first page is drawn and the rest arrives behind it. `GridScreen::append`
+extends the letter index rather than rebuilding it, and focus and scroll are
+deliberately untouched — somebody looking at row three must not be moved
+because the list grew below them. The heading says `141 games…` while more is
+coming, because a number that silently climbs while somebody reads it is worse
+than one that admits it is unfinished.
+
+**TESTED BY SHRINKING THE PAGE, because this library cannot exercise it**: the
+largest platform here is 141 against a page of 500, so paging never triggers.
+Rebuilt with a page of 20, Arcade opened on 20 and filled to 141.
+
+**AND THE SORT HAD TO GO.** The grid used to sort its cards by title. Pages
+concatenate, so a sort would fight the append and move cards out from under
+whoever is looking at them. RomM returns roms in title order already, which is
+what the letter-jump needs.
+
+#### AND STOP REASONING ABOUT THE HOSTED CASE
+
+Everything above about hosted RomM is inference, which this document's own rule
+says not to trust. **Shape the VM's link with `tc netem`** — 120 ms of latency
+and a domestic downstream — and point it at the same server. That turns
+"hosted" into something that can be run rather than argued about, and it would
+settle the debounce value, the waiting frame and whether focus-prefetch is
+enough, together. The VM, not the A9: it is a network measurement and needs no
+panel.

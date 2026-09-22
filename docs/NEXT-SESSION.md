@@ -32,7 +32,10 @@ with its investigations intact.
 
 ## Before anything else
 
-**Everything is on `main`.** No other branches and no open pull requests.
+**WORK IN FLIGHT: branch `faster-boot`**, four commits, no pull request yet.
+The boot change (open question 28), open question 29, and two corrected
+comments in `catalog.h`. `main` is otherwise clean. **[PR #42](https://github.com/MMagTech/Cabinet-OS/pull/42), the Bazzite base
+bump, is open and independent of all of it.**
 
 **FIRST RUN IS BUILT, START TO FINISH, 2026-09-20.** A person can set this
 console up with a keyboard and a phone and never touch SSH: network, Wi-Fi, the
@@ -339,55 +342,85 @@ states, and leave — with the save syncing on the way out.
 
 ### WHAT TO DO NEXT
 
-#### FIRST: MAKE THE BOOT FAST — open question 28, AND MMagTech WANTS IT BUILT
+#### FIRST: PRESS THE NEW BOOT ON THE TELEVISION — the code is done, the look is not
 
-**Asked for by name at the end of 2026-09-22: this is a piece of work for the
-next session, not just a question to think about.** The boot is proportional
-to the library — every start walks every platform and pages through all 1,650
-games before drawing anything — and MMagTech's library is small compared to
-what other people have.
+**THE BOOT WORK IS BUILT AND MEASURED, 2026-09-22, on branch `faster-boot`.**
+Open question 28 asked for it by name and it is done: boot no longer fetches
+the catalogue.
 
-**STEP ONE IS FIVE MINUTES AND IT DECIDES THE REST. Do not skip it.**
-`fetchGames` already builds `/api/roms?limit=…&offset=…`, so **one request
-against the live server tells you whether that endpoint takes a SEARCH term.**
+**First frame on the A9 against the live server: 3.16 s → 0.81 s, 3.9x.** Six
+runs of each, **alternating, back to back**, both built from source on the same
+machine in the same minute.
 
-| If the server can search | If it cannot |
+**AN EARLIER FIGURE OF 3.0 s → 0.44 s WAS PUBLISHED AND IT WAS NOT FAIR.** The
+two halves were measured about an hour apart, and the server got slower in
+between — the new code re-measured at 0.74 median with no change to it at all,
+which is how the drift was caught. **Measure A against B in the same minute or
+do not quote a ratio.** The old code was rebuilt from `522866e` to do it.
+
+**THE REST OF THE FEATURE IS ALSO BUILT, 2026-09-22.** Covers are kept on
+disk; a tile map means a warm boot asks the server nothing about its tiles and
+downloads no artwork; a platform the server no longer lists has its art swept
+the first time the console sees the server without it; and a grid draws its
+first page and fills in behind, so a full MAME set in one platform is no longer
+a ten-second wait. Question 30 has all of it with the measurements.
+
+**NOTHING IN THIS HAS EVER BEEN ON THE TELEVISION.** Every measurement and
+every picture in it came from `SDL_VIDEODRIVER=offscreen`, which this file says
+elsewhere is exactly what cannot answer a question about the look.
+
+**AND A CLAIM THAT IT HAD WAS WRITTEN DOWN AND IS WITHDRAWN.** An earlier
+version of this entry, and of PR #48, said MMagTech had checked the grid open,
+the Library appearing and the search debounce on the panel and found all three
+fine. **He was answering from the numbers, not from the screen** — the A9's
+session runs `/usr/bin/cabinetos-frontend` from the image, the drop-in
+directory is empty, and the old frontend has no 0.19 s grid fetch, no
+colour-then-cover tiles and no debounced search to judge. The assistant took a
+reply about a description as verification of a build the machine was not
+running.
+
+**So the three look questions are still open**, and a warm boot and a paged
+grid have never been seen at all.
+
+**AND BOTH VERSIONS THROW OCCASIONAL LARGE OUTLIERS** — 15.1 s for the old code
+in that very batch, 12.8 s for the new one earlier. It is environmental and it
+is not this change. It has not been explained and it should be, because a
+fifteen-second boot is not a rounding error.
+
+| | |
 |---|---|
-| This console never needs the whole catalogue in memory. Boot becomes four cheap calls and Search asks the server. | Boot still becomes four cheap calls, and the catalogue loads in the BACKGROUND after Home is up, with Search saying it is not ready yet. |
+| Boot | four calls — platforms, collections, recents, favourites. None is the catalogue. |
+| A platform's grid | one request when somebody opens it. **0.13–0.19 s** on the largest platform here (Arcade, 141). Free on the second visit. |
+| A collection | the same, via `collection_id=`, which was checked against the live server with controls. |
+| Search | `search_term=`, debounced 250 ms, one page of 40, and its five states are distinct — including *could not ask*, which is not *nothing matched*. |
+| Tile covers | filled in behind Home by four workers. The tiles come up in their colour first. |
 
-Either way the shape is the same and **needs no cache**, so it does not touch
-open question 22's "no snapshot of the library" rule:
+**WHAT NOBODY HAS DONE IS LOOK AT IT ON THE PANEL.** Every measurement above
+is headless, off `SDL_VIDEODRIVER=offscreen`, which this file says elsewhere is
+exactly what cannot answer a question about the look. Three things to press:
 
-```
-fetchPlatforms     -> the Library's tiles, romCount ALREADY INCLUDED
-fetchRecent(16)    -> Home's Recent shelf
-fetchFavorites(40) -> Home's Favorites shelf
-fetchCollections   -> the collections row
-                      a platform's games: only when somebody opens it
-```
+- **The grid stall.** Opening a platform blocks the frame loop for up to
+  0.19 s with no indicator. On the VM's llvmpipe that would be invisible
+  against everything else; on the A9 it is the only pause in the product.
+  **If it reads as a stall it wants the waiting frame a launch already has, not
+  a thread.** Decide this by pressing it, not by reading the number.
+- **The covers arriving.** Tiles come up coloured and gain artwork about half a
+  second later, on every boot. MMagTech chose that over paying 1.55 s at boot
+  and over RomM's platform logo — but chose it from a description, not from the
+  television.
+- **Search on a pad.** The debounce is 250 ms and has never been typed into by
+  a person. Too long reads as lag; too short is a request per letter.
 
-**The tiles never needed the catalogue.** That is the whole finding — the
-count was already on the platform object, and boot was fetching sixteen
-hundred games to draw fourteen covers.
+**AND THE ONE THAT WOULD NOT SHOW UP HERE AT ALL: a library ten times this
+size.** Boot is constant now, but a GRID is proportional to its own platform.
+1,650 games across 36 platforms is a small library — the biggest single
+platform is 141. Somebody with three thousand games in one platform waits for
+all of them on open, and nothing in this design has noticed yet. That is the
+same shape as the fault this work just fixed, one level down.
 
-**AND IT PROBABLY DELETES WORK DONE ON 2026-09-22.** The startup screen counts
-games as they arrive because that load is slow. Make the load fast and most of
-that screen has no reason to exist. **Do not polish it before doing this.**
-The server-wait countdown survives either way.
-
-Open question 28 has the measurements.
-
-#### SECOND: THE ACCOUNT BRANCH IS ELEVEN COMMITS AND UNPUSHED
-
-`account-fixes`. Everything below was found by MMagTech on the television and
-none of it would have come out of a headless test: a console that said it had
-added somebody when it had not, focus lit in two places at once, the Add
-screen's whole presentation, a button label naming the button that does the
-opposite, the switcher at twice the scale of its own chip, the game backdrop
-bleeding onto a text screen, the startup screen drawing a quarter-size frame
-in the corner of every 4K boot, and the new startup screen itself.
-
-**It needs a pull request and about sixteen minutes.** Nothing depends on it.
+Open question 28 has the measurements and the offline answer; **29 is new and
+says what "offline" actually means** — three networks, not one — which the
+console will need before any of it is built.
 
 #### THEN, WITH A PAD, ON THE TELEVISION
 
