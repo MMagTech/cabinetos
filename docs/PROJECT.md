@@ -11393,3 +11393,88 @@ and one button?**
 worth fixing because a console that checks for updates should not pull half a
 gigabyte to change a menu — but only by the route that keeps the update a
 single act. Speed is the reason; one button is the constraint.
+
+### 28. The boot is proportional to the library, and nothing decided that
+**Raised by MMagTech 2026-09-22, looking at the startup screen counting to
+1,232: "it seems weird that the whole library is pulled and refreshed every
+time and slowing things down. My library is small compared to what other
+people have." NOT DECIDED — this records the measurement and the shape of the
+answer.**
+
+#### What happens today
+
+**Every boot fetches the entire catalogue from RomM.** Nothing about it is kept
+between boots: the whole of what a console remembers is three files —
+
+```
+/var/lib/cabinetos/config/    accounts.json   first-run.json   user.json
+```
+
+`loadLibrary` walks every platform and calls `fetchGames` for each, paging
+through all of them. On the reference server that is **1,650 games, of which
+1,232 are playable**, and it is the dominant cost of a boot — measured
+2026-09-22, the startup screen redrew **34 times** while it ran.
+
+**AND IT IS O(LIBRARY SIZE), WHICH IS THE PART THAT MATTERS.** MMagTech's
+library is small. Somebody with twenty thousand games waits proportionally
+longer, every single time they turn the console on, and nothing in the design
+notices.
+
+#### THE DECISION THAT EXISTS ANSWERS A DIFFERENT QUESTION
+
+Open question 22 settled that the library is **server-only** and quotes
+Cabinet's `OfflineNotice.swift`: *"no snapshot of it kept locally."* That is a
+decision about what you can browse with **no** server, and it is a good one.
+
+**It is not a decision about boot time.** Nobody asked whether a console that
+has booted fifty times should count to 1,232 on the fifty-first, and "fetch
+everything, every time, before drawing anything" was never weighed against
+anything — it is just what the first implementation did.
+
+#### THE GO-BETWEEN, AND IT IS NOT A CACHE
+
+The interesting finding is that this needs no snapshot at all, so it does not
+touch open question 22's rule. **The console already has everything Home needs
+without walking the catalogue:**
+
+| What a screen needs | Where it comes from | Cost |
+|---|---|---|
+| The Library's tiles — name and count | `fetchPlatforms`, which already returns `romCount` per platform | one call |
+| Home's Recent shelf | `fetchRecent(16)` | one bounded call |
+| Home's Favorites shelf | `fetchFavorites(40)` | one bounded call |
+| The collections row | `fetchCollections` | one call |
+| **A platform's grid** | `fetchGames(platformId)` — **only when somebody opens it** | one platform |
+
+**So boot needs four small calls, and then draws a Home screen showing about
+fourteen covers.** Instead it fetches sixteen hundred games first. The tiles
+never needed them — `romCount` was already on the platform — and the grid does
+not exist until somebody walks into it.
+
+**That makes boot constant rather than proportional**, which is the whole
+prize: the person with twenty thousand games boots as fast as the person with
+two hundred.
+
+#### THE ONE THING THAT GENUINELY WANTS THE WHOLE CATALOGUE
+
+**Search is a live substring filter over the library in memory.** Take the
+catalogue out of boot and search has nothing to filter until it arrives. Two
+ways out, and they should be measured rather than argued:
+
+1. **Load it in the background once Home is up.** Search says so until it is
+   ready, which is honest and costs one line. The catalogue still arrives, it
+   just stops being a thing anybody waits for.
+2. **Ask the server.** `fetchGames` already builds `/api/roms?limit=…&offset=…`,
+   so the endpoint takes parameters — **find out whether RomM accepts a search
+   term**. If it does, this console never needs the whole catalogue in memory
+   at all, and option 1 becomes unnecessary too.
+
+**Check 2 before building 1.** It is one request against the live server and it
+decides the shape of the rest.
+
+#### What this would do to the startup screen
+
+The counting line added on 2026-09-22 exists because the library load is slow
+enough to look like a hang. **If boot stops loading the library, most of that
+screen's reason to exist goes with it** — which is worth knowing before anybody
+invests further in it. The server-wait countdown stays useful either way: a
+router coming back after a power cut is not something this can make faster.

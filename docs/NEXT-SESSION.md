@@ -2275,6 +2275,43 @@ table on purpose.
 
 
 
+### THE BOOT IS PROPORTIONAL TO THE LIBRARY — open question 28, NEW
+
+MMagTech, 2026-09-22, watching the startup screen count to 1,232: *"it seems
+weird that the whole library is pulled and refreshed every time and slowing
+things down. My library is small compared to what other people have."*
+
+**Every boot fetches the entire catalogue.** A console remembers exactly three
+files — `accounts.json`, `first-run.json`, `user.json` — and nothing else, so
+`loadLibrary` walks every platform and pages through all 1,650 games before
+anything is drawn. **It is O(library size)**, which is fine at this size and
+is not fine at twenty thousand.
+
+**THE GO-BETWEEN NEEDS NO CACHE, so it does not touch open question 22's
+"no snapshot of the library" rule.** Everything Home needs is already cheap:
+
+```
+fetchPlatforms   -> the Library's tiles, INCLUDING romCount per platform
+fetchRecent(16)  -> Home's Recent shelf
+fetchFavorites(40) -> Home's Favorites shelf
+fetchCollections -> the collections row
+```
+
+Four small calls draw Home. A platform's games are only needed when somebody
+opens that platform. **The tiles never needed the catalogue** — the count was
+already on the platform — so boot becomes constant instead of proportional.
+
+**THE ONE OBSTACLE IS SEARCH**, which filters the library in memory. Before
+building anything: **find out whether RomM's `/api/roms` takes a search term.**
+`fetchGames` already builds that URL with `limit` and `offset`, so it is one
+request to check, and if the answer is yes this console never needs the whole
+catalogue in memory at all. If no, load it in the background after Home is up
+and have Search say it is not ready yet.
+
+**And it would make most of the new startup screen unnecessary** — the counting
+line exists because this load is slow. Worth knowing before investing further
+in that screen. The server-wait countdown survives either way.
+
 ### A one-line change ships half a gigabyte — open question 27, NEW
 
 MMagTech, 2026-09-22: *"a lot of these just seem like small updates to an OS,
