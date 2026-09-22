@@ -351,9 +351,17 @@ what other people have.
 `fetchGames` already builds `/api/roms?limit=…&offset=…`, so **one request
 against the live server tells you whether that endpoint takes a SEARCH term.**
 
-| If the server can search | If it cannot |
-|---|---|
-| This console never needs the whole catalogue in memory. Boot becomes four cheap calls and Search asks the server. | Boot still becomes four cheap calls, and the catalogue loads in the BACKGROUND after Home is up, with Search saying it is not ready yet. |
+**IT WAS RUN, 2026-09-22, AND THE ANSWER IS YES.** `/api/roms` takes
+**`search_term`** — `?search_term=mario` returns `total: 52` and every name
+matches, against 1650 unfiltered.
+
+**So the console never needs the whole catalogue in memory.** Search asks the
+server, boot is the four calls below, and the background-load fallback is not
+needed.
+
+**The count alone would have lied**: `?search=mario` returns the same five rows
+at `limit=5` as no filter at all, because an unknown parameter is ignored
+rather than refused. Only `total` and the names tell them apart.
 
 Either way the shape is the same and **needs no cache**, so it does not touch
 open question 22's "no snapshot of the library" rule:

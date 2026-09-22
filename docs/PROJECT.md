@@ -11454,7 +11454,31 @@ not exist until somebody walks into it.
 prize: the person with twenty thousand games boots as fast as the person with
 two hundred.
 
-#### THE ONE THING THAT GENUINELY WANTS THE WHOLE CATALOGUE
+#### ANSWERED 2026-09-22: THE SERVER CAN SEARCH, SO THE CONSOLE NEED NOT HOLD THE CATALOGUE
+
+**The check below was run and the answer is the good one.** Against the live
+server, `/api/roms` accepts **`search_term`**:
+
+```
+?                     total: 1650   3-D Tetris, 3D Crazy Coaster, 3D Mine Storm
+?search_term=mario    total:   52   Dr. Mario, Dr. Mario, Mario & Luigi: Brothership
+?search=mario         total: 1650   3-D Tetris, 3D Crazy Coaster, 3D Mine Storm
+```
+
+**So option 2 wins and option 1 is unnecessary.** Search asks the server;
+nothing needs the whole catalogue in memory; boot becomes the four cheap calls
+above and stops being proportional to the library.
+
+**AND THE COUNT ALONE WOULD HAVE LIED.** All three of those requests returned
+five items at `limit=5`, because an unrecognised query parameter is IGNORED
+rather than refused — `search=` looks exactly like `search_term=` if you count
+rows. Only the `total` and the names show which one filtered. Run the control.
+
+**`total` is in every response** (1650 here), which is worth knowing
+separately: anything that ever does want a progress figure has one without
+counting pages.
+
+#### THE ONE THING THAT GENUINELY WANTED THE WHOLE CATALOGUE
 
 **Search is a live substring filter over the library in memory.** Take the
 catalogue out of boot and search has nothing to filter until it arrives. Two
