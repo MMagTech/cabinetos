@@ -5848,6 +5848,23 @@ press, `display awake: gamescope took it`. The test flags stay:
   MediaTek's and other common radios' drivers wake the machine at all) or a
   wired pad's button (untested — no wired pad on hand, and it is the easy case
   on Linux).
+- **THE ORDER, AGREED 2026-09-22:** merge the idle work; then a SIGTERM handler
+  so a power-off mid-game still uploads the save; then the power button as
+  *press rests, hold shuts down* (`HandlePowerKey=suspend`,
+  `HandlePowerKeyLongPress=poweroff`); then Bluetooth wake research. **Idle does
+  NOT fall into rest by itself** while no controller can wake the machine —
+  rest is only ever the button, until controller wake works. Staying awake
+  with the screen off costs about 4 W of package power over rest: a few
+  dollars a year, not worth a controller that cannot wake the console.
+- **WHERE POWER LIVES IN THE UI — MMagTech wanted it on Home, and Switch agrees.**
+  Batocera puts it under Start → Quit; Steam's game mode under the Steam menu,
+  with a long press as a shortcut; PS5 in the control centre; Xbox on a held
+  guide button; **Switch on the home screen itself**, a Sleep icon beside
+  Settings. The plan: **a power icon at the right end of Home's top bar**, next
+  to the account chip — Rest, Restart, Power off — reachable from every screen
+  the bar is on. Later, **holding the pad's Home button** opens the same menu
+  from anywhere including a game. Needs a polkit rule for logind's three
+  actions.
 - **HOW TO RUN A SLEEP TEST WITH SOMEBODY AT THE TELEVISION.** Give the whole
   sequence — what goes dark, when to press, what success looks like, how long
   until the alarm — BEFORE the machine sleeps, and wait for "go". Twice today
