@@ -2828,6 +2828,7 @@ int main(int argc, char** argv) {
     bool gpuProbeMode = false;
     bool firstRunProbeMode = false;
     int keepersRomId = 0;
+    int focusBarSlot = -1;
     bool accountsProbeMode = false;
     bool accountsTestMode = false;
     bool firstRunRulesMode = false;
@@ -3034,6 +3035,13 @@ int main(int argc, char** argv) {
             setupStep = argv[++i];
         } else if (SDL_strcmp(argv[i], "--no-setup") == 0) {
             noSetup = true;
+        } else if (SDL_strcmp(argv[i], "--focus-bar") == 0) {
+            // A capture of the bar's own focus, which nothing could take until
+            // now — line 2716 has referred to this flag since the bar was
+            // built and it was never actually added. An optional slot follows:
+            // 0 Library, 1 Search, 2 Settings, 3 the account chip.
+            focusBarSlot = 0;
+            if (i + 1 < argc && argv[i + 1][0] != '-') focusBarSlot = SDL_atoi(argv[++i]);
         } else if (SDL_strcmp(argv[i], "--keepers") == 0 && i + 1 < argc) {
             keepersRomId = SDL_atoi(argv[++i]);
         } else if (SDL_strcmp(argv[i], "--accounts") == 0) {
@@ -4968,6 +4976,10 @@ int main(int argc, char** argv) {
     // THE SWITCHER IS REACHED THE WAY A PERSON REACHES IT: focus the bar, walk
     // to the chip, press it. A capture that called open() directly would be
     // photographing a panel the product might not be able to get to.
+    if (focusBarSlot >= 0) {
+        barFocused = true;
+        barSlot = std::clamp(focusBarSlot, 0, BarCount - 1);
+    }
     if (initialScreen && (SDL_strcmp(initialScreen, "accounts") == 0 ||
                           SDL_strcmp(initialScreen, "add-account") == 0)) {
         barFocused = true;
@@ -7223,7 +7235,17 @@ int main(int argc, char** argv) {
             // Caption1 against the bar's Callout, and a disc sized to the
             // smaller text. The reference calls it "a SMALL circular avatar"
             // and that word was doing work nobody had read.
-            const ui::TextStyle chipStyle = ui::TextStyle::Caption1;
+            // THE NAME MATCHES THE DESTINATIONS; THE DISC DOES NOT NEED TO.
+            // MMagTech, 2026-09-22: *"the username is sized different to
+            // library, settings and search."* It was, because "the chip seems
+            // a bit too big" the day before had been read as the TEXT when it
+            // was the disc — a 30pt avatar beside 31pt labels is a heavy
+            // object in the corner, and a 26pt one is not.
+            //
+            // So the name goes back to Callout, level with the bar it sits in,
+            // and the disc stays small. The chip is quiet because the picture
+            // is small, not because the name is shrunken.
+            const ui::TextStyle chipStyle = ui::TextStyle::Callout;
             const float discD = barHeight - 30.0f;
             const float discX = rightEdge - discD;
             const float discY = barTop + (barHeight - discD) * 0.5f;
