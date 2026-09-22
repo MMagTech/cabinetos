@@ -6414,6 +6414,28 @@ int main(int argc, char** argv) {
                 if (ci >= 0 && ci < static_cast<int>(cards.size()))
                     want = cards[ci].coverLarge.empty() ? cards[ci].cover
                                                         : cards[ci].coverLarge;
+            } else if (here() == Screen::AddAccount) {
+                // **A TEXT SCREEN GETS THE PLAIN GRADIENT.** MMagTech,
+                // 2026-09-22: *"i preferred the purple background that went
+                // with the first run setup better. The current background
+                // isn't ideal for a text heavy screen."*
+                //
+                // Every other screen here is a wall of covers, and a colour
+                // field lifted from the focused one sits under them. This one
+                // is prose, an address and a code — things that have to be
+                // READ, and read off a television — and a blurred game cover
+                // behind them is contrast nobody chose, different on every
+                // visit depending on what happened to be lit on Home.
+                //
+                // Clearing it rather than excluding this screen from the block
+                // above: leaving `want` alone would keep whatever Home was lit
+                // by, which is exactly the bleed-through being complained
+                // about. It fades out on the same cross-fade everything else
+                // uses, so it goes as deliberately as it arrives.
+                //
+                // It also puts this screen where first run already is, which
+                // is the point — the two do the same job minutes apart.
+                want.clear();
             }
             if (want != backdropWant) {
                 backdropWant = want;
