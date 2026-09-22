@@ -32,10 +32,16 @@ with its investigations intact.
 
 ## Before anything else
 
-**WORK IN FLIGHT: branch `faster-boot`**, four commits, no pull request yet.
-The boot change (open question 28), open question 29, and two corrected
-comments in `catalog.h`. `main` is otherwise clean. **[PR #42](https://github.com/MMagTech/Cabinet-OS/pull/42), the Bazzite base
-bump, is open and independent of all of it.**
+**EVERYTHING IS ON `main` AND ON THE TELEVISION.** PR #48 merged 2026-09-22 —
+the boot work, the cover cache and the paged grid, plus open questions 29 and
+30. The image built, the A9 took it with `bootc upgrade`, and it is running it.
+**[PR #42](https://github.com/MMagTech/Cabinet-OS/pull/42), the Bazzite base bump, is still open and independent of all
+of it.**
+
+**THE IMAGE BUILD IS NOT A REPORTED PR CHECK.** It runs on every pull request
+and it passes, but `statusCheckRollup` comes back empty — so nothing gates a
+merge on it and a broken build would merge just as smoothly as this one did.
+That is a fifth entry for *Automation that is half-working*.
 
 **FIRST RUN IS BUILT, START TO FINISH, 2026-09-20.** A person can set this
 console up with a keyboard and a phone and never touch SSH: network, Wi-Fi, the
@@ -75,8 +81,9 @@ present (RADV STRIX1). **The UI freeze is lifted and what is on that television
 is the real thing.** **1232 playable games**, PlayStation 2 and GameCube
 included, off the image alone.
 
-**IT RUNS THE IMAGE AND NOTHING BY HAND. READ OFF THE MACHINE AT THE END OF
-2026-09-22**, and this block is OVERWRITTEN each session rather than edited —
+**IT RUNS THE IMAGE AND NOTHING BY HAND. READ OFF THE MACHINE AFTER THE
+2026-09-22 UPGRADE**, and this block is OVERWRITTEN each session rather than
+edited —
 the digest line alone went stale three times in one evening, which is the
 argument for the rule.
 
@@ -85,7 +92,7 @@ argument for the rule.
 | `systemctl is-active cabinetos-session` | `active` |
 | `ps -eo args \| grep [c]abinetos-frontend` | **`/usr/bin/cabinetos-frontend`**, under `gamescope --backend drm 3840x2160` |
 | drop-in directories, `/etc` and `/run` | **empty. No drop-ins.** |
-| `bootc status` | booted **`sha256:7bffc801…`**, rollback `sha256:71b65e36…` |
+| `bootc status` | booted **`sha256:45893f8f…`**, rollback `sha256:c39ff4ec…` |
 | `journalctl -t cabinetos-session -b \| grep 'is up'` | `gamescope (drm) is up` |
 | accounts | **`1 - MMagTech` (active), `13 - claire`** |
 
@@ -342,85 +349,50 @@ states, and leave — with the save syncing on the way out.
 
 ### WHAT TO DO NEXT
 
-#### FIRST: PRESS THE NEW BOOT ON THE TELEVISION — the code is done, the look is not
+#### FIRST: THE NEW BOOT IS ON THE TELEVISION AND NOBODY HAS WATCHED IT
 
-**THE BOOT WORK IS BUILT AND MEASURED, 2026-09-22, on branch `faster-boot`.**
-Open question 28 asked for it by name and it is done: boot no longer fetches
-the catalogue.
+**IT IS LIVE AS OF 2026-09-22.** Boot no longer fetches the catalogue, covers
+are cached on disk, a warm boot asks the server nothing about its tiles, and a
+big grid draws its first page and fills in behind. Question 28 has the boot
+work, 30 has the caching and the paging, with every measurement.
 
-**First frame on the A9 against the live server: 3.16 s → 0.81 s, 3.9x.** Six
-runs of each, **alternating, back to back**, both built from source on the same
-machine in the same minute.
+**FROM THE JOURNAL OF THE FIRST BOOT ON THE NEW IMAGE:**
 
-**AN EARLIER FIGURE OF 3.0 s → 0.44 s WAS PUBLISHED AND IT WAS NOT FAIR.** The
-two halves were measured about an hour apart, and the server got slower in
-between — the new code re-measured at 0.74 median with no change to it at all,
-which is how the drift was caught. **Measure A against B in the same minute or
-do not quote a ratio.** The old code was rebuilt from `522866e` to do it.
+```
+18:51:13  gamescope (drm) is up
+18:51:13  [romm] nothing answered at 192.168.1.10:6005 — waiting up to 90s for it
+18:51:15  [romm] the server answered
+18:51:16  [library] 44 game(s) in hand, 36 platform tile(s)
+18:51:16  [covers] 28 tile(s) remembered, 0 to ask about
+```
 
-**THE REST OF THE FEATURE IS ALSO BUILT, 2026-09-22.** Covers are kept on
-disk; a tile map means a warm boot asks the server nothing about its tiles and
-downloads no artwork; a platform the server no longer lists has its art swept
-the first time the console sees the server without it; and a grid draws its
-first page and fills in behind, so a full MAME set in one platform is no longer
-a ten-second wait. Question 30 has all of it with the measurements.
+One second from the server answering to a library in hand, and it caught the
+boot-time network race and recovered from it on its own.
 
-**NOTHING IN THIS HAS EVER BEEN ON THE TELEVISION.** Every measurement and
-every picture in it came from `SDL_VIDEODRIVER=offscreen`, which this file says
-elsewhere is exactly what cannot answer a question about the look.
+**THE CACHE IS ALREADY WARM, SO WHAT IS ON THAT TELEVISION IS THE WARM PATH.**
+Offscreen test runs populated `/var/lib/cabinetos/covers` before the upgrade —
+6.8 MB of it — under the same user and the same server key. **Tiles should have
+their artwork immediately.** To see the cold path instead:
 
-**AND A CLAIM THAT IT HAD WAS WRITTEN DOWN AND IS WITHDRAWN.** An earlier
-version of this entry, and of PR #48, said MMagTech had checked the grid open,
-the Library appearing and the search debounce on the panel and found all three
-fine. **He was answering from the numbers, not from the screen** — the A9's
-session runs `/usr/bin/cabinetos-frontend` from the image, the drop-in
-directory is empty, and the old frontend has no 0.19 s grid fetch, no
-colour-then-cover tiles and no debounced search to judge. The assistant took a
-reply about a description as verification of a build the machine was not
-running.
+```
+rm -rf /var/lib/cabinetos/covers && sudo systemctl restart --no-block cabinetos-session
+```
 
-**So the three look questions are still open**, and a warm boot and a paged
-grid have never been seen at all.
+**WHAT STILL NEEDS A PAIR OF EYES, and none of it can be answered headlessly:**
 
-**AND BOTH VERSIONS THROW OCCASIONAL LARGE OUTLIERS** — 15.1 s for the old code
-in that very batch, 12.8 s for the new one earlier. It is environmental and it
-is not this change. It has not been explained and it should be, because a
-fifteen-second boot is not a rounding error.
-
-| | |
+| Press | The question |
 |---|---|
-| Boot | four calls — platforms, collections, recents, favourites. None is the catalogue. |
-| A platform's grid | one request when somebody opens it. **0.13–0.19 s** on the largest platform here (Arcade, 141). Free on the second visit. |
-| A collection | the same, via `collection_id=`, which was checked against the live server with controls. |
-| Search | `search_term=`, debounced 250 ms, one page of 40, and its five states are distinct — including *could not ask*, which is not *nothing matched*. |
-| Tile covers | filled in behind Home by four workers. The tiles come up in their colour first. |
+| **The Library, warm** | tiles with art immediately, no colour-then-cover. This is the whole point of the cache and it has only ever been a counter reading `28 remembered, 0 to ask about`. |
+| **The Library, cold** | tiles come up coloured and gain covers about half a second later. Chosen from a description, never seen. |
+| **Open a platform** | one request, 0.19 s for 141 games, **no indicator**. If it reads as a stall it wants the waiting frame a launch already has. |
+| **Search on a pad** | 250 ms debounce. Too long reads as lag, too short is a request per letter. |
+| **The grid covers** | `ee5b507` moved the launch screen off thumbnails and left shelves and grids on them — 520 real pixels from a 216-pixel source. Its comment says the thumbnail holds up. Nobody has checked that at 4K. |
 
-**WHAT NOBODY HAS DONE IS LOOK AT IT ON THE PANEL.** Every measurement above
-is headless, off `SDL_VIDEODRIVER=offscreen`, which this file says elsewhere is
-exactly what cannot answer a question about the look. Three things to press:
-
-- **The grid stall.** Opening a platform blocks the frame loop for up to
-  0.19 s with no indicator. On the VM's llvmpipe that would be invisible
-  against everything else; on the A9 it is the only pause in the product.
-  **If it reads as a stall it wants the waiting frame a launch already has, not
-  a thread.** Decide this by pressing it, not by reading the number.
-- **The covers arriving.** Tiles come up coloured and gain artwork about half a
-  second later, on every boot. MMagTech chose that over paying 1.55 s at boot
-  and over RomM's platform logo — but chose it from a description, not from the
-  television.
-- **Search on a pad.** The debounce is 250 ms and has never been typed into by
-  a person. Too long reads as lag; too short is a request per letter.
-
-**AND THE ONE THAT WOULD NOT SHOW UP HERE AT ALL: a library ten times this
-size.** Boot is constant now, but a GRID is proportional to its own platform.
-1,650 games across 36 platforms is a small library — the biggest single
-platform is 141. Somebody with three thousand games in one platform waits for
-all of them on open, and nothing in this design has noticed yet. That is the
-same shape as the fault this work just fixed, one level down.
-
-Open question 28 has the measurements and the offline answer; **29 is new and
-says what "offline" actually means** — three networks, not one — which the
-console will need before any of it is built.
+**AND A CLAIM THAT THESE HAD BEEN ANSWERED WAS WRITTEN DOWN AND WITHDRAWN.**
+The handover and PR #48 both said MMagTech had checked three of them on the
+panel. He had not — the television was still running the image's frontend, and
+he was answering from the numbers. **A reply about a description is not a
+measurement of a build the machine is not running.**
 
 #### THEN, WITH A PAD, ON THE TELEVISION
 
