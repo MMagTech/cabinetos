@@ -139,6 +139,25 @@ bool activate(int id, romm::Client& client, std::string* err);
 // not this file's.
 bool loadActiveToken(romm::Client& client);
 
+// WHAT A PAIRING TURNED OUT TO BE. The caller has to tell somebody, and the
+// two outcomes look identical from the inside — both are a successful pairing
+// that wrote a valid token.
+//
+// **THIS EXISTS BECAUSE THE CONSOLE LIED.** On 2026-09-22 MMagTech paired on
+// the television, was told "Added. Choose them to switch." and found nobody
+// new to choose. The approval had been made in a browser still signed in as
+// him, so `add` correctly replaced his own row rather than creating one — and
+// the journal said `added, now 1 accounts`, which is a success message for a
+// no-op. Reporting a thing that did not happen is worse than failing.
+struct Paired {
+    int id = 0;
+    std::string name;
+    // False when this id was already on the console. Not an error — re-pairing
+    // somebody is a legitimate way to refresh a token — but it is NOT adding
+    // anybody, and the difference is the whole point of this struct.
+    bool isNew = false;
+};
+
 // Turns a client that has just been through pairing into an account.
 //
 // THIS IS THE ONE PLACE A PAIRING BECOMES AN ACCOUNT, and it asks the server
@@ -149,7 +168,7 @@ bool loadActiveToken(romm::Client& client);
 //
 // The first account on a console with none becomes active. A later one does
 // not, because adding somebody must not sign out whoever is playing.
-bool recordPairing(romm::Client& client, std::string* err);
+bool recordPairing(romm::Client& client, Paired* out, std::string* err);
 
 // THERE IS NO MIGRATION FROM THE SINGLE TOKEN THAT CAME BEFORE THIS, AND THAT
 // IS DELIBERATE — MMagTech, 2026-09-21: nobody else is running this. The two

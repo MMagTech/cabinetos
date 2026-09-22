@@ -280,7 +280,8 @@ bool loadActiveToken(romm::Client& client) {
     return client.loadToken(tokenPath(id));
 }
 
-bool recordPairing(romm::Client& client, std::string* err) {
+bool recordPairing(romm::Client& client, Paired* out, std::string* err) {
+    if (out) *out = Paired{};
     if (!client.haveToken()) {
         if (err) *err = "recordPairing was given a client with no token";
         return false;
@@ -294,11 +295,18 @@ bool recordPairing(romm::Client& client, std::string* err) {
                    (e.empty() ? std::string() : " (" + e + ")");
         return false;
     }
+    // ASKED BEFORE THE WRITE, because `add` replaces in place and afterwards
+    // there is no way to tell the two cases apart.
+    const std::vector<Account> before = all();
+    const bool already = find(before, me.id) != nullptr;
+
     Account a;
     a.id = me.id;
     a.name = me.username;
     a.avatar = me.avatarPath;
-    return add(a, client.token(), err);
+    if (!add(a, client.token(), err)) return false;
+    if (out) { out->id = me.id; out->name = me.username; out->isNew = !already; }
+    return true;
 }
 
 bool pinIsSet() { return !trimmed(readFile(pinPath())).empty(); }

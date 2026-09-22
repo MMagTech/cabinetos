@@ -887,7 +887,8 @@ void Flow::pollPairing() {
             // credential and no account, which is the state open question 26
             // removed the migration path for.
             std::string aerr;
-            if (!accounts::recordPairing(c, &aerr)) {
+            accounts::Paired paired;
+            if (!accounts::recordPairing(c, &paired, &aerr)) {
                 // PAIRED, BUT NOT SAVED, IS NOT "PAIRED". Calling it success
                 // here is exactly how the first console ever installed came up
                 // on the stand-in library with nobody able to say why.

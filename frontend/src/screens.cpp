@@ -1416,56 +1416,135 @@ Result AddAccountScreen::key(Nav n) {
 
 void AddAccountScreen::draw(Ctx& c) {
     const float a = appear_.value();
-    const float left = 140.0f;
-    float y = 190.0f;
 
-    c.text.draw(c.r, "Add somebody to this console", left,
+    // THE SAME SHAPE AS FIRST RUN'S PAIRING STEP, and the first version of this
+    // screen was not. MMagTech, 2026-09-22: *"the add user screen seemed way
+    // too jarring visually in presentation and text."* It was bare text on the
+    // gradient — the only screen in the console with no material under it —
+    // with a 76pt title and a 76pt code competing, and a raw URL at 38pt bold
+    // dominating the middle of it.
+    //
+    // setup.cpp already solved this screen: prose on the left, the thing you
+    // act on in a panel on the right, one line along the bottom. Its own
+    // comment says why the shape is constant — *"so the flow does not appear
+    // to jump between five unrelated screens"* — and adding somebody is the
+    // same job as pairing the first somebody. The numbers below are its
+    // numbers, deliberately.
+    constexpr float kInset = 80.0f;
+    constexpr float kTitleTop = 150.0f;
+    constexpr float kProseWidth = 760.0f;
+    constexpr float kPanelX = 1020.0f;
+    constexpr float kPanelY = 168.0f;
+    constexpr float kPanelW = ui::kCanvasWidth - kPanelX - kInset;
+    constexpr float kPanelH = 660.0f;
+    constexpr float kFooterY = 900.0f;
+
+    // --- the left column: what is happening and why --------------------------
+    float y = kTitleTop;
+    c.text.draw(c.r, "Add a user", kInset,
                 y + c.text.ascent(ui::TextStyle::LargeTitle, c.sc),
                 ui::TextStyle::LargeTitle, ui::Color::white(0.96f * a), c.sc);
-    y += 120.0f;
+    y += c.text.lineHeight(ui::TextStyle::LargeTitle, c.sc) + 28.0f;
 
+    // PROSE IS `Body`, WHICH IS WHAT setup.cpp USES AND WHAT THIS SCREEN DID
+    // NOT. It was Title3 — 38pt against the 76pt title — and two near-headline
+    // sizes stacked is most of why it read as shouting.
+    //
+    // Written as short lines rather than wrapped, because `wrap` lives in
+    // setup.cpp behind `hardWrap` and this does not need either: the strings
+    // are fixed, they are mine, and they are well inside a 760pt column at
+    // 29pt. **If a line here ever grows, measure it** — that is the rule a
+    // truncated tile caption already bought once.
+    const char* lines[3] = {nullptr, nullptr, nullptr};
     if (busy_) {
-        c.text.draw(c.r, "Asking the server for a code…", left,
-                    y + c.text.ascent(ui::TextStyle::Title3, c.sc),
-                    ui::TextStyle::Title3, ui::Color::white(0.7f * a), c.sc);
-        return;
+        lines[0] = "Asking the server for a code.";
+    } else {
+        lines[0] = "Scan the code with a phone.";
+        lines[1] = "Sign in as the person you are adding,";
+        lines[2] = "not as yourself.";
     }
+    for (const char* line : lines) {
+        if (!line) continue;
+        c.text.draw(c.r, line, kInset, y + c.text.ascent(ui::TextStyle::Body, c.sc),
+                    ui::TextStyle::Body, ui::Color::white(0.72f * a), c.sc);
+        y += c.text.lineHeight(ui::TextStyle::Body, c.sc);
+    }
+
+    // THE ADDRESS AND THE CODE GO IN THE PROSE COLUMN, and putting them in the
+    // panel was the second mistake on this screen. setup.cpp says why in its
+    // own words: *"the pairing step puts the address and the code in the prose
+    // column, because they are the things somebody reads out or types — the QR
+    // is only a shortcut past typing them."* In the panel they were also white
+    // text over a light glass card, which is the contrast the QR's own white
+    // background creates, and the address was touching the panel's bottom edge.
     if (!code_.empty()) {
-        // THE COPY ASSUMES A COMPETENT ADULT — the rule first run was written
-        // to. It says the constraint and stops.
-        c.text.draw(c.r, "Scan this, or open the address below.", left,
-                    y + c.text.ascent(ui::TextStyle::Title3, c.sc),
-                    ui::TextStyle::Title3, ui::Color::white(0.75f * a), c.sc);
-        y += 90.0f;
-
-        // BIG ENOUGH TO PHOTOGRAPH FROM A SOFA, which is the whole reason this
-        // is a screen and not the panel.
-        const float side = 420.0f;
-        if (qr_.valid()) qr_.draw(c.r, left, y, side);
-
-        const float tx = left + side + 80.0f;
-        float ty = y + 40.0f;
-        c.text.draw(c.r, url_, tx, ty + c.text.ascent(ui::TextStyle::Title3, c.sc),
-                    ui::TextStyle::Title3, ui::Color::white(0.9f * a), c.sc);
-        ty += 80.0f;
-        c.text.draw(c.r, "and enter", tx, ty + c.text.ascent(ui::TextStyle::Callout, c.sc),
-                    ui::TextStyle::Callout, ui::Color::white(0.55f * a), c.sc);
-        ty += 56.0f;
-        c.text.draw(c.r, code_, tx, ty + c.text.ascent(ui::TextStyle::LargeTitle, c.sc),
-                    ui::TextStyle::LargeTitle, ui::Color::white(0.98f * a), c.sc);
-        ty += 130.0f;
-        // SAID BEFORE IT HAPPENS, because being added and being switched to are
-        // different things and somebody who expects the second will think this
-        // failed.
-        c.text.draw(c.r, "They are added to this console, not switched to.", tx,
-                    ty + c.text.ascent(ui::TextStyle::Callout, c.sc),
-                    ui::TextStyle::Callout, ui::Color::white(0.5f * a), c.sc);
-        y += side;
+        y += 30.0f;
+        if (!url_.empty()) {
+            // Without the code repeated on the end of it: it is printed below,
+            // at four times the size, and once is enough.
+            std::string shown = url_;
+            if (const size_t q = shown.find("?user_code="); q != std::string::npos)
+                shown = shown.substr(0, q);
+            if (shown.rfind("http://", 0) == 0) shown = shown.substr(7);
+            c.text.draw(c.r, shown, kInset,
+                        y + c.text.ascent(ui::TextStyle::Body, c.sc),
+                        ui::TextStyle::Body, ui::palette::kScreenCyan, c.sc);
+            y += c.text.lineHeight(ui::TextStyle::Body, c.sc);
+        }
+        y += 20.0f;
+        // THE BIGGEST THING AFTER THE TITLE, for setup.cpp's reason: it is what
+        // somebody reads off the screen and checks against their phone, and
+        // RomM shows the same characters on the page they are approving.
+        c.text.draw(c.r, "Code " + code_, kInset,
+                    y + c.text.ascent(ui::TextStyle::Title1, c.sc),
+                    ui::TextStyle::Title1, ui::Color::white(0.97f * a), c.sc);
+        y += c.text.lineHeight(ui::TextStyle::Title1, c.sc);
     }
 
-    if (!error_.empty())
-        c.text.draw(c.r, error_, left, y + 40.0f + c.text.ascent(ui::TextStyle::Callout, c.sc),
-                    ui::TextStyle::Callout, ui::Color::white(0.85f * a), c.sc);
+    // AN OUTCOME BELONGS IN THE PROSE COLUMN, not over the code. This is where
+    // "nobody was added" lands, and it is the whole reason that case stays on
+    // this screen instead of returning to a panel that looks unchanged.
+    if (!error_.empty()) {
+        y += 30.0f;
+        std::string rest = error_;
+        for (int guard = 0; guard < 6 && !rest.empty(); ++guard) {
+            size_t cut = rest.size();
+            while (cut > 0 &&
+                   c.text.measure(rest.substr(0, cut), ui::TextStyle::Callout, c.sc) > kProseWidth) {
+                const size_t sp = rest.rfind(' ', cut - 1);
+                if (sp == std::string::npos) break;
+                cut = sp;
+            }
+            c.text.draw(c.r, rest.substr(0, cut), kInset,
+                        y + c.text.ascent(ui::TextStyle::Callout, c.sc),
+                        ui::TextStyle::Callout, ui::Color::white(0.92f * a), c.sc);
+            y += c.text.lineHeight(ui::TextStyle::Callout, c.sc);
+            rest = (cut >= rest.size()) ? std::string() : rest.substr(cut + 1);
+        }
+    }
+
+    // --- the right column: the thing you act on ------------------------------
+    c.r.drawGlass(ui::Rect{kPanelX, kPanelY, kPanelW, kPanelH, design::kRowRadius,
+                           ui::Color::white(0)},
+                  design::kRegularMaterialBlur, ui::Color::white(0.10f * a));
+
+    if (code_.empty()) return;
+
+    // THE PANEL HOLDS THE QR AND NOTHING ELSE, centred in it. Everything that
+    // is words lives in the column on the left; this side is the shortcut past
+    // typing them.
+    const float side = 470.0f;
+    const float qx = kPanelX + (kPanelW - side) * 0.5f;
+    const float qy = kPanelY + (kPanelH - side) * 0.5f;
+    if (qr_.valid()) qr_.draw(c.r, qx, qy, side);
+
+    // --- along the bottom, where every setup screen puts its one line --------
+    c.text.draw(c.r, "They are added to this console. Switching to them is separate.",
+                kInset, kFooterY + c.text.ascent(ui::TextStyle::Callout, c.sc),
+                ui::TextStyle::Callout, ui::Color::white(0.45f * a), c.sc);
+    c.text.draw(c.r, "B to go back", kInset,
+                kFooterY + 44.0f + c.text.ascent(ui::TextStyle::Caption1, c.sc),
+                ui::TextStyle::Caption1, ui::Color::white(0.4f * a), c.sc);
 }
 
 }  // namespace screens

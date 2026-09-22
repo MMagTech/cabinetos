@@ -2576,24 +2576,25 @@ static int rommProbe(const char* address, bool allowPairing) {
         // stand-in library with nobody able to say why. The pairing itself
         // genuinely succeeded; what failed is the only part that lasts.
         std::string aerr;
-        if (accounts::recordPairing(client, &aerr)) {
+        accounts::Paired paired;
+        if (accounts::recordPairing(client, &paired, &aerr)) {
             // WHO WAS ACTUALLY ADDED, asked rather than assumed. Reporting
             // `activeId()` here would name the wrong person for every account
             // after the first, because adding somebody deliberately does not
             // switch to them.
-            romm::User who;
-            std::string werr;
-            if (client.fetchCurrentUser(&who, &werr) && who.id > 0) {
-                std::printf("\npaired      %d - %s\n", who.id, who.username.c_str());
-                std::printf("token       %s\n", accounts::tokenPath(who.id).c_str());
-                if (who.id == accounts::activeId())
-                    std::printf("active      yes — this console was already acting as them\n");
-                else
-                    std::printf("active      no  — still acting as %d. Switch from the chip.\n",
-                                accounts::activeId());
-            } else {
-                std::printf("\npaired, and recorded\n");
-            }
+            std::printf("\n%s   %d - %s\n",
+                        paired.isNew ? "added      " : "RE-PAIRED  ",
+                        paired.id, paired.name.c_str());
+            if (!paired.isNew)
+                std::printf("            NOBODY WAS ADDED — that account was already\n"
+                            "            here, so its token was refreshed instead.\n"
+                            "            Approve as the person you are ADDING.\n");
+            std::printf("token       %s\n", accounts::tokenPath(paired.id).c_str());
+            if (paired.id == accounts::activeId())
+                std::printf("active      yes — this console was already acting as them\n");
+            else
+                std::printf("active      no  — still acting as %d. Switch from the chip.\n",
+                            accounts::activeId());
         } else {
             std::printf("\n");
             std::fflush(stdout);
@@ -4544,6 +4545,7 @@ int main(int argc, char** argv) {
         bool haveCode = false;
         bool finished = false;
         bool ok = false;
+        accounts::Paired who;
         std::string err;
     };
     auto addJob = std::make_shared<AddJob>();
@@ -4593,9 +4595,11 @@ int main(int argc, char** argv) {
                 if (state == 0) continue;
                 if (state < 0) break;
                 std::string aerr;
-                const bool wrote = accounts::recordPairing(c, &aerr);
+                accounts::Paired who;
+                const bool wrote = accounts::recordPairing(c, &who, &aerr);
                 std::lock_guard<std::mutex> lk(addJob->m);
                 addJob->ok = wrote;
+                addJob->who = who;
                 if (!wrote) addJob->err = aerr;
                 addJob->finished = true; addJob->running = false;
                 return;
@@ -4899,7 +4903,15 @@ int main(int argc, char** argv) {
                     // opens rather than cached: the list is three lines of
                     // JSON and a stale switcher is a switcher that signs the
                     // console in as somebody who has been removed.
-                    barFocused = false;
+                    //
+                    // **barFocused STAYS TRUE, and setting it false was a bug.**
+                    // MMagTech, 2026-09-22: *"when i click the user image the
+                    // recent game expands like its being selected."* It was —
+                    // dropping bar focus told everything underneath that focus
+                    // had come back to it, so Home lit its card while the panel
+                    // was open, and the chip that had just been pressed lost
+                    // its own rim. Focus is on the chip; the panel is what the
+                    // chip opened.
                     refreshAccountRows();
                     accountScreen.open();
                     accountsOpen = true;
@@ -6093,31 +6105,43 @@ int main(int argc, char** argv) {
         if (here() == Screen::AddAccount) {
             bool code = false, fin = false, ok = false;
             std::string url, user, err;
+            accounts::Paired who;
             {
                 std::lock_guard<std::mutex> lk(addJob->m);
                 code = addJob->haveCode; fin = addJob->finished; ok = addJob->ok;
                 url = addJob->pairing.verificationUrl;
                 user = addJob->pairing.userCode;
                 err = addJob->err;
+                who = addJob->who;
             }
             if (fin) {
-                std::lock_guard<std::mutex> lk(addJob->m);
-                addJob->finished = false;
-                if (ok) {
+                { std::lock_guard<std::mutex> lk(addJob->m); addJob->finished = false; }
+                if (ok && who.isNew) {
                     // Added, NOT switched to. Back to the panel with the new
                     // person in it, which is where the switch is.
                     refreshAccountRows();
                     if (stack.size() > 1) stack.pop_back();
                     accountsOpen = true;
-                    accountScreen.setNotice("Added. Choose them to switch.");
-                    // SAID IN THE JOURNAL TOO. The outcome of this flow was
-                    // drawn and nowhere else, so nobody helping from a shell
-                    // could tell a completed pairing from a hung one — the
-                    // same fault as the launch refusal that only reached
-                    // stderr, in the other direction.
-                    std::fprintf(stderr, "[accounts] added, now %zu accounts, "
+                    barFocused = true;
+                    barSlot = BarAccount;
+                    accountScreen.setNotice(who.name + " was added. Choose them to switch.");
+                    std::fprintf(stderr, "[accounts] added %d - %s, now %zu accounts, "
                                          "still acting as %d\n",
-                                 accounts::all().size(), accounts::activeId());
+                                 who.id, who.name.c_str(), accounts::all().size(),
+                                 accounts::activeId());
+                } else if (ok) {
+                    // **THE CASE THAT LIED.** The pairing worked and wrote a
+                    // valid token, and it added nobody: whoever approved it
+                    // already has an account here. Staying on this screen and
+                    // saying so is right — going back to a panel that looks
+                    // exactly as it did is what made this look broken.
+                    addAccountScreen.setError(
+                        who.name + " is already on this console, so nobody was added. "
+                        "Sign in to RomM as the person you are adding — a private "
+                        "window is easiest — and try again.");
+                    std::fprintf(stderr, "[accounts] NOT ADDED: approved as %d - %s, "
+                                         "who is already here. %zu accounts.\n",
+                                 who.id, who.name.c_str(), accounts::all().size());
                 } else {
                     addAccountScreen.setError(err.empty() ? "That did not pair." : err);
                     std::fprintf(stderr, "[accounts] add failed: %s\n",
@@ -6715,7 +6739,11 @@ int main(int argc, char** argv) {
         // stack the next one under it without either knowing the other's size.
         auto drawShelf = [&](const char* label, const std::vector<int>& indices,
                              int rowId, float top) -> float {
-            const bool rowFocused = (focusRow == rowId);
+            // FOCUS IS IN ONE PLACE AT A TIME. When it is up in the bar — or
+            // in the panel the chip opened — Home must stop drawing a focused
+            // card, or two things look selected at once and pressing A appears
+            // to do something to the wrong one.
+            const bool rowFocused = (focusRow == rowId) && !barFocused && !accountsOpen;
             const size_t count = indices.empty() ? cards.size() : indices.size();
             if (count == 0) return 0.0f;
             auto at = [&](size_t slot) -> size_t {
