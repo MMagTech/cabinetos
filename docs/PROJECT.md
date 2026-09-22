@@ -11266,3 +11266,98 @@ and `--romm-pair` now says so before it prints the code.
   switching, not multi-seat.
 - **Syncing which account is active between consoles.** Cabinet rules this out
   per device and the same holds here.
+
+### 27. A one-line change ships half a gigabyte, because the image is one layer
+**Raised by MMagTech 2026-09-22, and the question was the right one: "a lot of
+these just seem like small updates to an OS, not upgrades. Windows and Linux do
+small updates all the time seamlessly. Why do these need the whole CI workflow
+and a long build?" NOT DECIDED — this records the measurement and the cause.**
+
+#### Three things were tangled in that question, and only one is a fault
+
+**THE DELIVERY IS ALREADY INCREMENTAL AND THAT PART WORKS.** From a real
+`bootc upgrade` on the A9, 2026-09-22:
+
+```
+Total new layers: 128   Size: 5.0 GB
+Added layers:     3     Size: 546.2 MB
+```
+
+125 of 128 layers were reused. It pulled 546 MB, not 5 GB, and applied it in
+about 25 seconds. Nobody is downloading the operating system every time.
+
+**THE DIFFERENCE FROM WINDOWS IS WHERE THE ASSEMBLY HAPPENS, AND IT IS THE
+POINT OF THE WHOLE PROJECT.** `dnf` and Windows Update patch files on the
+machine, so every machine ends up slightly different depending on its history
+and rollback is hard. This is image-based: nothing is patched, the whole `/usr`
+is swapped atomically and the machine reboots into it. **Two consoles on one
+digest are byte-identical and the previous deployment stays as a free
+rollback** — which is the property that makes "it works on the reference
+console" mean anything at all. It is not overhead; it is the thing being
+bought.
+
+**SO THE SIXTEEN MINUTES IS MANUFACTURING, NOT SIZE.** Build the container,
+sign it with cosign, push the changed layers. That is the price of
+reproducible and auditable, and **it is not the price of iterating** — see
+`tools/ui-loop.sh`, which puts a change on the television in about thirty
+seconds. The image is for shipping; the loop is for trying things. Conflating
+them cost an evening on 2026-09-21.
+
+#### THE ACTUAL FAULT, MEASURED
+
+```
+frontend :   1.4M      changes constantly
+cores    :   314M      pinned, changes rarely
+system   :    23M      changes rarely
+```
+
+**Everything CabinetOS adds is built in a single `RUN` in the `Containerfile`.**
+So changing 1.4 MB of frontend invalidates all of it and moves 546 MB. That is
+roughly a **390x amplification**, and it is why a one-line UI change costs the
+same sixteen minutes as adding an emulator.
+
+**The fix is layer ordering, not a new mechanism.** Base, then the cores, then
+the frontend last. A frontend-only change would then move a few megabytes:
+faster to push in CI, faster to pull on the console, and the cores layer stays
+cached for weeks because those revisions are pinned and the whole point of
+`build-core.yml` is that they do not move.
+
+**Not done, deliberately.** It changes how the shipping image is assembled, so
+it wants its own branch and a careful check that the split survives
+`bootc container lint` — and that the `RUN --mount=type=bind,from=ctx` pattern
+this inherits from the ublue template still keeps the build context out of the
+image when it is more than one step.
+
+#### THE REQUIREMENT THIS IS ALL IN SERVICE OF — MMagTech, 2026-09-22
+
+**THE CONSOLE GETS A CONSOLE'S UPDATE: one check, one button, one reboot.**
+Settings → System Update, the way a PlayStation does it. *"What I don't want to
+[lose] is the easy console-like update via one check in the UI."* It does not
+exist yet and nothing here builds it — **this records it as a requirement so
+that nothing done for speed quietly makes it impossible.**
+
+It is a reasonable thing to want and the machinery is already most of the way
+there: `bootc upgrade --check` answers "is there one" without committing to
+anything, `bootc upgrade` stages it, and a reboot applies it. A row in Settings
+is a thin layer over three commands this console can already run. **The hard
+parts of a console updater — atomicity, rollback, every machine ending up
+identical — are properties image-based booting already gives for free**, and
+they are exactly what a package-by-package updater would have to invent.
+
+**SO THE TEST FOR ANY BUILD OR PACKAGING CHANGE IS: can it still be one check
+and one button?**
+
+- **Splitting LAYERS passes.** It is invisible to whoever owns the console —
+  the same single image, the same single digest, stored and transferred more
+  cleverly. The update is still one act. Do this.
+- **Splitting ARTIFACTS fails.** Shipping the frontend and the cores as
+  separate things to update is how a console acquires version skew, partial
+  updates and "which combination is this machine running" — the exact failure
+  image-based booting exists to remove, and it would turn one button into a
+  matrix. **Ruled out, and if an optimisation ever requires it, it is not worth
+  it.**
+
+**AND IT BOUNDS THE LAYERING WORK USEFULLY.** The 390x amplification above is
+worth fixing because a console that checks for updates should not pull half a
+gigabyte to change a menu — but only by the route that keeps the update a
+single act. Speed is the reason; one button is the constraint.

@@ -2275,6 +2275,38 @@ table on purpose.
 
 
 
+### A one-line change ships half a gigabyte — open question 27, NEW
+
+MMagTech, 2026-09-22: *"a lot of these just seem like small updates to an OS,
+not upgrades. Windows and Linux do small updates all the time seamlessly."*
+Three things were tangled in that and only one is a fault.
+
+**The delivery is already incremental** — a real `bootc upgrade` reused 125 of
+128 layers and pulled 546 MB, applied in 25 seconds. **The 16 minutes is
+manufacturing** — build, cosign, push — and it is **not the price of
+iterating**: `tools/ui-loop.sh` puts a change on the television in 30 seconds.
+
+**THE FAULT IS THE LAYERING.** Everything CabinetOS adds is one `RUN`:
+
+```
+frontend   1.4M    changes constantly
+cores      314M    pinned, changes rarely
+system      23M    changes rarely
+```
+
+So 1.4 MB of frontend invalidates all of it and moves 546 MB — **a 390x
+amplification**, and why a one-line UI change costs what adding an emulator
+costs. The fix is layer ordering, not a new mechanism. Not done; it changes how
+the shipping image is assembled and wants its own branch.
+
+**AND THE CONSTRAINT THAT BOUNDS IT, which MMagTech set at the same time:** the
+console is to get **a console's update — one check, one button, one reboot**,
+Settings → System Update. It does not exist yet and this is recorded so nothing
+done for speed makes it impossible. **Splitting layers passes that test**
+(invisible, still one image, still one act). **Splitting artifacts fails it**
+and is ruled out — that is how a console gets version skew and "which
+combination is this machine running".
+
 ### Sleep, screen blanking, and what a console does when nobody is playing
 
 Raised 2026-09-20: *"we currently have no screen or sleep behaviour, the console
