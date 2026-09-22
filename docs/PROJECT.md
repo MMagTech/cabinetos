@@ -5874,6 +5874,28 @@ press, `display awake: gamescope took it`. The test flags stay:
   leftover, and on the console it just gets the session restarted under
   whoever is watching. That line is what this replaces. The top-bar icon above
   is the discoverable companion to it, not a substitute.
+- **DECIDED, MMagTech 2026-09-22: THE POWER BUTTON OPENS THE POWER MENU, IN A
+  GAME AS ON HOME.** *"it needs to be super easy. Press the button in game and
+  the power pause menu appears with a resume option. Let them choose."* The
+  worry it answers: a child hitting the button mid-game. **Resume is focused**,
+  so a stray press costs one A.
+  - **It must work for every emulator, present and future, with no per-core
+    work — and it does, because of two chokepoints that already exist.** The
+    pause overlay (`core.setPaused`, which also tells PCSX2 explicitly, and
+    which the composited path of question 24 already carries) is what the
+    button opens. `finishExit` — Exit to Home — is the one way out of a game
+    and it uploads battery saves, file saves and directory saves for every
+    platform. Restart, Power off and Rest from a game run `finishExit` first.
+  - **Rest from a game leaves the game** — saves uploaded, then rest, wake on
+    Home. Keeping the game in memory across a sleep would be nicer and depends
+    on every emulator surviving s2idle, which is exactly the per-emulator risk
+    this is meant to avoid. Revisit only after PS2 and GameCube have been seen
+    to survive a sleep.
+  - **Mechanism:** the frontend takes logind's `handle-power-key` inhibitor
+    lock and reads the key itself. **The lock dies with the process**, so a
+    hung or crashed frontend hands the button straight back to logind — the
+    button can never be made useless by our bug. A ~4 s hold is a firmware
+    power cut that no software sees; that one can only be made rare.
 - **HOW TO RUN A SLEEP TEST WITH SOMEBODY AT THE TELEVISION.** Give the whole
   sequence — what goes dark, when to press, what success looks like, how long
   until the alarm — BEFORE the machine sleeps, and wait for "go". Twice today
