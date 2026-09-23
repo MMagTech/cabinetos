@@ -368,40 +368,25 @@ states, and leave — with the save syncing on the way out.
 
 ### WHAT TO DO NEXT
 
-#### FIRST: MAKE A SMALL CHANGE SHIP SMALL. THE EXPERIMENT RAN AND HOLDS UP, 2026-09-23
+#### A SMALL CHANGE NOW SHIPS SMALL, 2026-09-23, if the PR is merged
 
-**Open question 27 has the whole record, with every number.** In short: on
-branch `layers-experiment`, with the Containerfile split into four layers and
-no rechunk, **a one-string frontend change downloads 0.7 MB instead of 546 MB,
-and the whole CI run takes six minutes instead of sixteen.** Test images went
-to `ghcr.io/mmagtech/cabinetos-test` only; nothing reached `cabinetos:latest`
-or the A9.
+**Open question 27 has the record.** The rechunk is gone and the Containerfile
+builds in four layers, least-changed first. **A frontend-only change downloads
+739 kB instead of 546 MB, counted by `bootc upgrade` itself on the test VM,
+and a whole CI run takes about six minutes instead of sixteen.**
 
-Two fixes were needed and both are on the branch: `podman build --timestamp 0`
-so an unchanged layer comes out as the same bytes, and deleting dnf5's dated
-transaction history, which alone made the 60 MB OS layer change on every
-build. Found by downloading two builds of that layer and comparing them file by
-file: three files differed.
-
-**WHAT IS LEFT, IN ORDER:**
-
-1. **Boot it on the test VM.** `sudo bootc switch
-   ghcr.io/mmagtech/cabinetos-test:experiment`, reboot, check the frontend
-   starts. About 2.6 GB the first time. Then push one more frontend-only change
-   (reverting the TEST ONLY log-string commit does it), `sudo bootc upgrade`,
-   and read the size bootc itself prints. Then `bootc switch` back to
-   `ghcr.io/mmagtech/cabinetos:latest`. **Asked for on 2026-09-23 and not yet
-   given**: the permission system blocked remote `sudo` on the VM, so it
-   waits on MMagTech.
-2. **Make it the shipping build**: drop the Rechunk step from `build.yml`
-   (and its comment, which claimed the opposite of what the ublue template
-   says), revert the TEST ONLY commit, delete `build-test-image.yml`, and
-   clear `/run/dnf` and `/run/selinux-policy` at the end of `build.sh` so the
-   one lint warning goes. **Merging it costs the A9 one 2.6 GB download**, once.
-3. Delete the `cabinetos-test` package from GHCR when done.
-
-**The constraint held:** the update stays one image, one digest, one check,
-one button, one reboot. Only the layers moved.
+- **The PR is branch `layers-experiment`.** Merging it costs every console one
+  2.6 GB download, once, as it moves off the rechunked format. The A9 too.
+- **The test VM is back on `cabinetos:latest`** after the test.
+- **`ghcr.io/mmagtech/cabinetos-test` can be deleted** in the GitHub package
+  settings. Nothing uses it now; the workflow that pushed it is deleted.
+- **Two things keep it working, and both are easy to undo by accident:**
+  `podman build --timestamp 0` in the Justfile, and `build.sh` deleting dnf's
+  dated transaction history. Without either, every layer, or the 59 MB OS
+  layer, changes on every build and ships again. **Each `main` build's summary
+  now says what a console on the previous image downloads**: if a
+  frontend-only change ever reads more than a megabyte, one of those two has
+  regressed.
 
 #### A SELF-HOSTED RUNNER ON UNRAID: RESEARCHED AND DECLINED — 2026-09-23
 

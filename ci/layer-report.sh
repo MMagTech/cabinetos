@@ -16,7 +16,9 @@
 # Reads the local container storage, so it runs after `just build` and before
 # anything is pushed. It builds nothing and changes nothing.
 #
-# Usage: ci/layer-report.sh <image>        e.g. localhost/cabinetos:experiment
+# Usage: ci/layer-report.sh <image>        e.g. localhost/cabinetos:latest
+#
+# Run by build.yml on every image build, pull requests included.
 
 set -euo pipefail
 

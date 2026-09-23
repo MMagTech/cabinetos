@@ -287,6 +287,12 @@ log "base image has $(wc -l < /usr/share/cabinetos/packages-before-strip.txt) pa
 rm -f /usr/lib/sysimage/libdnf5/transaction_history.sqlite*
 log "removed dnf's transaction history, which is dated and would change this layer every build"
 
+# And what dnf and the SELinux tools leave in /run. `bootc container lint`
+# warns about it (nonempty-run-tmp), and it was always there; the rechunk used
+# to drop it on the way out. /run is emptied at every boot, so a console never
+# sees these, and without them the lint has nothing to say.
+rm -rf /run/dnf /run/selinux-policy
+
 # ---------------------------------------------------------------------------
 # Record the result.
 # ---------------------------------------------------------------------------

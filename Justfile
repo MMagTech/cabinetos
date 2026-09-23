@@ -118,27 +118,6 @@ build $target_image=image_name $tag=default_tag:
       --file Containerfile \
       .
 
-# Re-layer the image so updates ship smaller deltas.
-[group('Build')]
-ostree-rechunk $target_image=image_name $tag=default_tag:
-    #!/usr/bin/env bash
-    set -xeuo pipefail
-
-    GRAPHROOT="$(podman info --format '{{ '{{.Store.GraphRoot}}' }}')"
-
-    podman run --rm --pull=never --privileged \
-      --mount=type=image,src="${target_image}:${tag}",target=/rpm-ostree \
-      --mount=type=bind,src=${GRAPHROOT},target=/run/host-container-storage,rw \
-      --mount=type=tmpfs,target=/run/rpm-ostree-storage \
-      --entrypoint /usr/bin/rpm-ostree \
-      "localhost/${target_image}:${tag}" \
-      compose build-chunked-oci \
-      --max-layers 127 \
-      --format-version=2 \
-      --bootc \
-      --rootfs /rpm-ostree \
-      --output "containers-storage:[overlay@/run/host-container-storage+/run/rpm-ostree-storage]localhost/${target_image}:${tag}"
-
 # Generate the set of tags to publish.
 [group('Utility')]
 generate-build-tags $target_image=image_name $tag=default_tag:

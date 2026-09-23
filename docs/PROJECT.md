@@ -11717,7 +11717,7 @@ the most expensive step there is, about 9 of the 16 minutes (measured
 - **Keep the rechunk and package the payload as RPMs**, so each gets its own
   chunk.
 
-#### THE EXPERIMENT RAN, 2026-09-23: SKIPPING THE RECHUNK HOLDS UP
+#### DECIDED 2026-09-23: NO RECHUNK, AND THE LAYERS IN THE CONTAINERFILE DO THE JOB
 
 **Branch `layers-experiment`, four CI runs, pushed to
 `ghcr.io/mmagtech/cabinetos-test` and never to `cabinetos`.** The Containerfile
@@ -11786,14 +11786,25 @@ provides better resumability" (a resumed download after a dropped
 connection). For an image that regroups by RPM package it does help people
 whose changes are packages. Ours are not, which is why it cost 546 MB.
 
-**NOT YET DONE, and the change should not ship until it is:**
+**AND ON A REAL MACHINE, THE SAME DAY.** The test VM was switched to the test
+image, rebooted, upgraded, rebooted again, and put back:
 
-- **Booting it.** Every number above is read from the registry. Nobody has yet
-  switched a machine to the test image, booted it, and read `bootc upgrade`'s
-  own count. That is the test VM's job, and after it the VM goes back to
-  `cabinetos:latest`.
-- **Whether bootc minds a 1970 creation date.** It compares digests, not
-  dates, as far as anyone knows. The same VM test answers it.
+| | bootc's own words |
+|---|---|
+| Switch from the rechunked image | `layers already present: 71; layers needed: 62 (2.6 GB)`, the registry's prediction exactly. Staged in 51 s; 0.4 GB of disk, since most files were already held |
+| First boot on it | session up, the frontend loaded its library, no failed units |
+| **Upgrade after a frontend-only change** | **`Added layers: 1  Size: 739.2 kB`** |
+| Second boot | the new digest, and the frontend printing the changed string |
+
+**bootc does not mind `--timestamp 0`.** `bootc status` shows the real build
+time, read from the label, not 1970.
+
+**MADE THE SHIPPING BUILD ON THE SAME BRANCH.** The Rechunk step and its
+recipe are gone. `ci/layer-report.sh` runs on every image build and fails it if
+build context reaches a layer, and every `main` build's summary now says what a
+console on the previous image downloads. `build.sh` also clears `/run/dnf` and
+`/run/selinux-policy`, which the rechunk used to drop, so the lint warning goes.
+**Merging costs each console the one 2.6 GB download**, the A9 included.
 
 **THE FALLBACK IS SMALLER THAN RECORDED.** Not RPMs. rpm-ostree's rechunker
 gives every distinct value of a `user.component` file attribute its own layer
