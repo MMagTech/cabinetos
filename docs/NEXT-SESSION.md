@@ -415,7 +415,9 @@ The agreed order: merge #49 → SIGTERM so power-off uploads the save → power
 button *press rests, hold shuts down* → Bluetooth wake research. **Start on
 Home opens the Power menu** (Rest, Restart, Power off) — it currently quits
 the frontend, which is the line to replace. Idle never falls into rest by
-itself while no controller can wake the machine.
+itself while no controller can wake the machine. **Rest from a game closes the game
+first (saves uploaded); resting with the game still open is rejected for
+good** — too many emulators, not all of them libretro.
 
 #### THEN, WITH A PAD, ON THE TELEVISION
 
