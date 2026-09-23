@@ -5836,6 +5836,17 @@ press, `display awake: gamescope took it`. The test flags stay:
 - **The power button already powers off** — logind's `HandlePowerKey=poweroff`
   — **but the frontend has no SIGTERM handler**, so a press mid-game skips the
   save upload on the way out. That is the real content of Phase 2 item 12.
+  **FIXED 2026-09-22, in two halves.** SDL already turns SIGTERM into a quit;
+  what was missing was the exit — the loop ended and the core was unloaded
+  with no upload. Now a quit from OUTSIDE (not a capture, not Start on Home)
+  with a game running goes through `finishExit`, so every save class uploads,
+  for every emulator. And the unit gains `ExecStop=cabinetos-session-stop`,
+  which TERMs the frontend alone and waits (45 s cap) before systemd kills
+  gamescope, plus `After=NetworkManager.service` so the network is still up on
+  the way down. **Proved on the A9 for the frontend half, with PS2:** Burnout
+  3 running, SIGTERM, `leaving the game the way Exit to Home does`, `VM
+  destroyed`, `exited to Home`. **Not yet proved:** the unit half, which only
+  exists in an image, and an actual upload, which needs a save that changed.
 - **A Power menu in the UI** (Sleep, Restart, Power off) needs a polkit rule:
   logind answers `challenge` to the console user for `CanSuspend`,
   `CanPowerOff` and `CanReboot`. The same shape as the NetworkManager rule
@@ -10923,6 +10934,16 @@ Retries happen **at the next launch**, not from a background service.
 **What exists here already**: `users/<id>/pending/` and a save path that
 writes locally before syncing. **What is missing**: the per-save bookkeeping —
 a pending flag and the server's stamp — and the precedence above.
+
+**AND A SHUTDOWN GOES THROUGH THIS PATH NOW — 2026-09-22, PR #50.** A power-off
+mid-game leaves through Exit to Home, so it writes the disk copy and the
+pending marker first and then tries the upload — offline, the save is safe and
+still owed. Two things offline mode must add for it: **skip the attempt when
+the console already knows it is offline**, because today each queued upload
+waits up to its 5-second connect timeout before failing, so a shutdown with no
+server takes about 5–10 seconds longer (never more than the stop script's 45);
+and **retry the owed saves when the server returns**, which is the missing
+bookkeeping above.
 
 **The accepted trade, so it is a decision rather than a discovery.** Rule 1
 means an unsent local save always beats the server, so playing offline on the

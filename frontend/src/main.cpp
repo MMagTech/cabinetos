@@ -4554,6 +4554,11 @@ int main(int argc, char** argv) {
     std::fprintf(stderr, "[frontend] gamepads at startup: %d\n", padCount);
 
     bool running = true;
+    // Set when something OUTSIDE the console asked it to stop — systemd on a
+    // shutdown or a restart, which SDL turns into SDL_EVENT_QUIT. Kept apart
+    // from `running` because a capture ending, or Start on Home, is not a
+    // shutdown and must not upload anything.
+    bool askedToStop = false;
     uint64_t previous = SDL_GetTicksNS();
     int frame = 0;
     bool pressing = false;
@@ -6076,6 +6081,9 @@ int main(int argc, char** argv) {
             switch (e.type) {
                 case SDL_EVENT_QUIT:
                     running = false;
+                    askedToStop = true;
+                    std::fprintf(stderr, "[shutdown] asked to stop%s\n",
+                                 playing ? " with a game running" : "");
                     break;
                 case SDL_EVENT_GAMEPAD_ADDED:
                     SDL_OpenGamepad(e.gdevice.which);
@@ -7943,6 +7951,24 @@ int main(int argc, char** argv) {
     // Never leave the television asleep behind us: the next thing on it —
     // this program restarting, or a person at a console — must be seen.
     if (idleShown == idle::Level::Blank) idle::setDisplayAsleep(false, /*wait=*/true);
+
+    // A SHUTDOWN MID-GAME LEAVES THE WAY EXIT TO HOME DOES — docs/PROJECT.md,
+    // open question 10b. Until 2026-09-22 it did not: the loop ended, the code
+    // below unloaded the core, and nothing uploaded, so pressing the power
+    // button during a game threw away whatever the game had saved since it
+    // started. finishExit is the one way out of a game and it carries every
+    // save class there is — battery, directory, file — so going through it is
+    // what makes this true for every emulator, present and future, rather
+    // than for the ones somebody remembered. The uploads it queues are
+    // drained below, before the process ends.
+    //
+    // Not while the machine is still being built: nothing has been played, and
+    // finishExit's own caller waits for exactly that case rather than calling
+    // it. And never for a capture, which is not a person's evening.
+    if (playing && askedToStop && !shotMode && cab::Core::shared().running()) {
+        std::fprintf(stderr, "[shutdown] leaving the game the way Exit to Home does\n");
+        finishExit();
+    }
 
     if (playing) {
         cab::Core& core = cab::Core::shared();
