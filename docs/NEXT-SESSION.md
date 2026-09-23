@@ -1563,7 +1563,11 @@ These are ordered. **Do not begin any of them in the VM.**
   **and as of 2026-09-20 so do the four that did not** — the state machine, the
   QR renderer, the NetworkManager plumbing and knowing it is the first run.
   What is left here is the look.
-- **The boot splash**, and the rest of the branding.
+- **The boot splash**, and the rest of the branding. **MMagTech, 2026-09-23:** on boot the A9 shows
+  GEEKOM's logo with *"Bazzite" and Bazzite's logo at the bottom*. He wants
+  CabinetOS and our logo there. **Not now, another session.** Most likely
+  Plymouth's firmware-logo (BGRT) theme drawing the OS name and watermark
+  under the manufacturer's logo; check which theme is active before assuming.
 - **The row in Settings that turns file access on**, decided 2026-09-19 and the
   answer to open question 9. A console ships listening to nothing; an ordinary
   visible row turns SFTP on and shows the address, the user name and a password

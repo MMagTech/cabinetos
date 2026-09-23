@@ -5847,6 +5847,26 @@ press, `display awake: gamescope took it`. The test flags stay:
   3 running, SIGTERM, `leaving the game the way Exit to Home does`, `VM
   destroyed`, `exited to Home`. **Not yet proved:** the unit half, which only
   exists in an image, and an actual upload, which needs a save that changed.
+  **THE UNIT HALF DOES NOT WORK — tested on the image, 2026-09-23.** A game
+  running (DoDonPachi DaiOuJou) and `systemctl reboot`: no `[shutdown]` line,
+  and the stop script printed nothing. **gamescope and the frontend do not live
+  in `cabinetos-session.service`'s cgroup.** `PAMName=login` puts them in the
+  logind session, `user-1000.slice/session-1.scope`, and on shutdown that scope
+  is stopped in parallel with the service, so `ExecStop` cannot run first.
+  gamescope took SIGTERM at the same instant (`reaper: Parent of
+  gamescopereaper was killed. Killing children.`), and by the time the stop
+  script ran there was nothing left to stop. `After=NetworkManager.service` did
+  order the network down after the session, which is moot.
+  **What does work:** Sleep, Restart and Power off chosen from the Power menu
+  run `finishExit` first. That was proved the same morning with a real upload,
+  `[save] uploaded fbneo-native` before sleeping, and the power button always
+  goes through that menu now.
+  **The fix:** a logind DELAY inhibitor on `shutdown:sleep`. The frontend
+  listens for `PrepareForShutdown`/`PrepareForSleep`, runs `finishExit` while
+  everything is still up, waits for the uploads, and then releases the lock. It
+  covers every way a shutdown can start. logind's `InhibitDelayMaxUSec` is
+  5 s on the A9; the image should raise it to about 30 s. **The stop script and
+  the ordering line become dead weight and should be deleted with it.**
 - **A Power menu in the UI** (Sleep, Restart, Power off) needs a polkit rule:
   logind answers `challenge` to the console user for `CanSuspend`,
   `CanPowerOff` and `CanReboot`. The same shape as the NetworkManager rule
