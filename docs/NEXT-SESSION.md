@@ -368,66 +368,40 @@ states, and leave — with the save syncing on the way out.
 
 ### WHAT TO DO NEXT
 
-#### FIRST: MAKE A SMALL CHANGE SHIP SMALL, AND TRY DROPPING THE RECHUNK — decided 2026-09-23
+#### FIRST: MAKE A SMALL CHANGE SHIP SMALL. THE EXPERIMENT RAN AND HOLDS UP, 2026-09-23
 
-**MMagTech chose this as the first thing next session**, ahead of offline mode
-and the sync gap below. It is open question 27, **with its recorded fix
-corrected** (PROJECT.md has the correction).
+**Open question 27 has the whole record, with every number.** In short: on
+branch `layers-experiment`, with the Containerfile split into four layers and
+no rechunk, **a one-string frontend change downloads 0.7 MB instead of 546 MB,
+and the whole CI run takes six minutes instead of sixteen.** Test images went
+to `ghcr.io/mmagtech/cabinetos-test` only; nothing reached `cabinetos:latest`
+or the A9.
 
-**The problem:** a 1.4 MB frontend change makes the A9 download 546 MB, and a
-`main` build takes 16–17 minutes.
+Two fixes were needed and both are on the branch: `podman build --timestamp 0`
+so an unchanged layer comes out as the same bytes, and deleting dnf5's dated
+transaction history, which alone made the 60 MB OS layer change on every
+build. Found by downloading two builds of that layer and comparing them file by
+file: three files differed.
 
-**Where the minutes go, measured 2026-09-23 on the last two `main` runs** (job
-"Build and push image", 880 s):
+**WHAT IS LEFT, IN ORDER:**
 
-| Step | Time | On a PR? |
-|---|---|---|
-| **Rechunk** (`just ostree-rechunk`, rpm-ostree `build-chunked-oci --max-layers 127`) | **~9 min** | no |
-| Build image (pulls ~10 GB of Bazzite) | ~3 min | yes |
-| Maximize build space | ~1¼ min | yes |
-| Push to GHCR | ~1 min | no |
-| Cores, frontend, PCSX2, all cached | ~2 min | yes |
+1. **Boot it on the test VM.** `sudo bootc switch
+   ghcr.io/mmagtech/cabinetos-test:experiment`, reboot, check the frontend
+   starts. About 2.6 GB the first time. Then push one more frontend-only change
+   (reverting the TEST ONLY log-string commit does it), `sudo bootc upgrade`,
+   and read the size bootc itself prints. Then `bootc switch` back to
+   `ghcr.io/mmagtech/cabinetos:latest`. **Asked for on 2026-09-23 and not yet
+   given**: the permission system blocked remote `sudo` on the VM, so it
+   waits on MMagTech.
+2. **Make it the shipping build**: drop the Rechunk step from `build.yml`
+   (and its comment, which claimed the opposite of what the ublue template
+   says), revert the TEST ONLY commit, delete `build-test-image.yml`, and
+   clear `/run/dnf` and `/run/selinux-policy` at the end of `build.sh` so the
+   one lint warning goes. **Merging it costs the A9 one 2.6 GB download**, once.
+3. Delete the `cabinetos-test` package from GHCR when done.
 
-PR builds are about 6 minutes because they skip the rechunk.
-
-**Why 546 MB, correctly this time:** the rechunk throws away the Containerfile's
-layer order and regroups the filesystem by RPM package. Our frontend, cores and
-system files belong to no package, so they land together in the leftover
-chunks. **Reordering the Containerfile, which was question 27's plan, would be
-undone by the rechunk.**
-
-**The experiment:**
-1. On a branch, split the single `RUN` so it goes base, then cores, then
-   system files, then frontend last.
-2. Skip the rechunk.
-3. Push to a TEST name (`ghcr.io/mmagtech/cabinetos-test`), never `latest`, so
-   nothing reaches the A9 unasked.
-4. Measure the `main` build time, and how much a frontend-only change
-   downloads: `bootc switch` the test VM to the test image, then change one
-   string.
-5. Check `bootc container lint`.
-6. Check that `--mount=type=bind,from=ctx` still keeps the build context out
-   of every layer.
-7. Find out why the rechunk was added. It came with the ublue template;
-   Bazzite's base arrives already chunked.
-
-**If it works:** roughly 16 minutes becomes about 7, and a frontend update
-becomes a few MB.
-
-**The fallback:** keep the rechunk and package the frontend, cores and system
-files as RPMs, so the rechunk gives each its own chunk. That keeps small
-updates but not the build-time saving.
-
-**Worth checking while in there, but not a blocker before release:** that the
-A9's current deployment can `bootc upgrade` to the new image, since the old
-bootc does the download. Nobody but MMagTech runs the console yet, and a
-stranded A9 can be reinstalled. From the public release on, it is a binding
-check. PROJECT.md question 27, *Any change must work for a console jumping from
-any older version*.
-
-**The constraint:** the update stays one check, one button, one reboot.
-Splitting layers passes that test. Splitting artifacts does not, and is ruled
-out (question 27).
+**The constraint held:** the update stays one image, one digest, one check,
+one button, one reboot. Only the layers moved.
 
 #### A SELF-HOSTED RUNNER ON UNRAID: RESEARCHED AND DECLINED — 2026-09-23
 
