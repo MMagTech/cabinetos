@@ -32,11 +32,25 @@ with its investigations intact.
 
 ## Before anything else
 
-**EVERYTHING IS ON `main` AND ON THE TELEVISION.** PR #48 merged 2026-09-22 —
-the boot work, the cover cache and the paged grid, plus open questions 29 and
-30. The image built, the A9 took it with `bootc upgrade`, and it is running it.
-**[PR #42](https://github.com/MMagTech/Cabinet-OS/pull/42), the Bazzite base bump, is still open and independent of all
-of it.**
+**THE SESSION OF 2026-09-22/23 MERGED THREE PRS AND LEFT ONE OPEN.** On `main`
+and on the television:
+
+- **#49**: pixel shift, dim at 5 minutes, screen off at 15.
+- **#50**: save on shutdown. Its stop script turned out not to work; see below.
+- **#51**: the Power menu (Sleep, Restart, Power off; Resume in a game), the
+  notification pill, and no save states on PS2 and GameCube.
+
+**The last PR of the session holds four things:**
+
+- Home's rows scroll to follow focus.
+- The shutdown fix: a logind delay lock replaces #50's stop script.
+- A new file, `logind.conf.d/50-cabinetos.conf`.
+- This handover.
+
+Its frontend half is proved on the A9. The logind setting only arrives with the
+image, and the A9 still reads logind's default 5 s until it is upgraded to
+that PR's build. **[PR #42](https://github.com/MMagTech/Cabinet-OS/pull/42),
+the Bazzite base bump, is still open and independent of all of it.**
 
 **THE IMAGE BUILD IS NOT A REPORTED PR CHECK.** It runs on every pull request
 and it passes, but `statusCheckRollup` comes back empty — so nothing gates a
@@ -92,7 +106,8 @@ argument for the rule.
 | `systemctl is-active cabinetos-session` | `active` |
 | `ps -eo args \| grep [c]abinetos-frontend` | **`/usr/bin/cabinetos-frontend`**, under `gamescope --backend drm 3840x2160` |
 | drop-in directories, `/etc` and `/run` | **empty. No drop-ins.** |
-| `bootc status` | booted **`sha256:1ecaa7d8…`** (#49, idle handling), rollback `sha256:45893f8f…` |
+| `bootc status` | booted **`sha256:c69f8d14…`** (#51), rollback `sha256:1ecaa7d8…` (#49) |
+| `InhibitDelayMaxUSec` | `5000000`, logind's default, until the image with `50-cabinetos.conf` is installed |
 | `journalctl -t cabinetos-session -b \| grep 'is up'` | `gamescope (drm) is up` |
 | accounts | **`1 - MMagTech` (active), `13 - claire`** |
 
@@ -104,13 +119,11 @@ see the queue.
 
 **IF A DIGEST HERE DISAGREES WITH `bootc status`, `bootc status` IS RIGHT.**
 
-**#49 MERGED AND IS ON THE A9 FROM THE IMAGE**, read off the machine after the
-2026-09-22 evening upgrade: `/usr/bin/cabinetos-frontend` carries the idle
-code, no drop-ins. **#50, save on shutdown, is open** — its frontend half is
-proved on the A9; its unit half needs the image, and then one real test: a
-game running, the A9's power button pressed, and `journalctl -b -1 -t
-cabinetos-session` read for `[shutdown] leaving the game` and
-`cabinetos-session-stop: the frontend stopped`.
+**Read off the A9 on 2026-09-23, after the last test reboot:** the image's own
+frontend, both drop-in directories empty, `gamescope (drm) is up`. Once the
+session's last PR merges, `sudo bootc upgrade && sudo systemctl reboot` brings
+the A9 level with `main`. Then check that `InhibitDelayMaxUSec` reads
+`30000000`.
 
 **A THIRTY-SECOND LOOP EXISTS AND IT IS NOT AT THE TOP OF THIS FILE BY
 ACCIDENT** — `tools/ui-loop.sh`, documented in the lessons section. An evening
@@ -449,7 +462,7 @@ The findings are kept only so the question never has to be researched twice:
      to GitHub.
 
 
-#### FIRST: THE NEW BOOT IS ON THE TELEVISION AND NOBODY HAS WATCHED IT
+#### STILL OWED: THE NEW BOOT, WATCHED ON THE TELEVISION (from 2026-09-22)
 
 **IT IS LIVE AS OF 2026-09-22.** Boot no longer fetches the catalogue, covers
 are cached on disk, a warm boot asks the server nothing about its tiles, and a
@@ -549,14 +562,26 @@ it is smaller and it is lost progress on the most-played systems.
 **Also noticed: Cabinet uploads a screenshot PNG with every state
 (`TVPlayerView.saveState`); CabinetOS uploads the state alone.**
 
-#### IDLE HANDLING IS BUILT — judge the dim, then decide Sleep
+#### THE BOOT-TO-HOME TRANSITION IS HARSH — reported 2026-09-23, not looked at
 
-Pixel shift, dim and blank, open question 10b. Seen working on the panel with
-the timers sped up. **Owed:** MMagTech's verdict on whether a 60% dim reads as
-resting or broken, and a suspend test (`systemctl suspend`, then press a
-Bluetooth pad) before anything offers "Sleep". Then a Power menu, which needs a
-polkit rule, and a SIGTERM handler so the power button stops skipping the save
-upload.
+MMagTech, watching the A9 boot: *"when you see the CabinetOS screen and it moves
+into Home the transition is extremely harsh."* The waiting screen gives way to
+Home with no fade, the same kind of hard cut the curtain fixed for launching a
+game (`kCurtainDown`/`kCurtainUp`, design.h). **Judge it on the panel, and use
+`tools/ui-loop.sh` for it**: the loop restarts the session, so every run shows
+the boot. It belongs with the text pass and the boot splash, all three being
+about what a person sees first.
+
+#### IDLE AND POWER ARE BUILT — what is left
+
+Open question 10b has all of it. **Done:** pixel shift, dim, screen off, the
+Power menu, save before Sleep/Restart/Power off, and save before any other
+shutdown (the delay lock). **Owed:**
+
+- The dim judged on the OLED, not the test LG.
+- Bluetooth wake waits on Bazzite shipping kernel ≥ 7.2.7. The test plan is in
+  10b.
+- The *Turn off screen after* row, when Settings is built.
 
 **UPDATED LATER THE SAME EVENING — 10b's *What is still open* is the record.**
 The 8BitDo over Bluetooth CANNOT wake the A9 from s2idle (tested, with
