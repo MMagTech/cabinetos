@@ -40,16 +40,15 @@ and on the television:
 - **#51**: the Power menu (Sleep, Restart, Power off; Resume in a game), the
   notification pill, and no save states on PS2 and GameCube.
 
-**The last PR of the session holds four things:**
+**#52, the last PR of the session, merged as `3b8fbc5` and is installed on the
+A9.** It holds four things:
 
 - Home's rows scroll to follow focus.
 - The shutdown fix: a logind delay lock replaces #50's stop script.
 - A new file, `logind.conf.d/50-cabinetos.conf`.
 - This handover.
 
-Its frontend half is proved on the A9. The logind setting only arrives with the
-image, and the A9 still reads logind's default 5 s until it is upgraded to
-that PR's build. **[PR #42](https://github.com/MMagTech/Cabinet-OS/pull/42),
+All of it is proved on the A9 from the image, including the logind setting. **[PR #42](https://github.com/MMagTech/Cabinet-OS/pull/42),
 the Bazzite base bump, is still open and independent of all of it.**
 
 **THE IMAGE BUILD IS NOT A REPORTED PR CHECK.** It runs on every pull request
@@ -106,8 +105,9 @@ argument for the rule.
 | `systemctl is-active cabinetos-session` | `active` |
 | `ps -eo args \| grep [c]abinetos-frontend` | **`/usr/bin/cabinetos-frontend`**, under `gamescope --backend drm 3840x2160` |
 | drop-in directories, `/etc` and `/run` | **empty. No drop-ins.** |
-| `bootc status` | booted **`sha256:c69f8d14…`** (#51), rollback `sha256:1ecaa7d8…` (#49) |
-| `InhibitDelayMaxUSec` | `5000000`, logind's default, until the image with `50-cabinetos.conf` is installed |
+| `bootc status` | booted **`sha256:d0bbf31b…`** (#52, `3b8fbc5`), rollback `sha256:c69f8d14…` (#51) |
+| `InhibitDelayMaxUSec` | **`30000000`**, from `50-cabinetos.conf` |
+| `systemd-inhibit --list` | CabinetOS holds `handle-power-key:handle-suspend-key` (block) and `shutdown:sleep` (delay) |
 | `journalctl -t cabinetos-session -b \| grep 'is up'` | `gamescope (drm) is up` |
 | accounts | **`1 - MMagTech` (active), `13 - claire`** |
 
@@ -119,11 +119,9 @@ see the queue.
 
 **IF A DIGEST HERE DISAGREES WITH `bootc status`, `bootc status` IS RIGHT.**
 
-**Read off the A9 on 2026-09-23, after the last test reboot:** the image's own
-frontend, both drop-in directories empty, `gamescope (drm) is up`. Once the
-session's last PR merges, `sudo bootc upgrade && sudo systemctl reboot` brings
-the A9 level with `main`. Then check that `InhibitDelayMaxUSec` reads
-`30000000`.
+**Read off the A9 on 2026-09-23 after installing #52:** it is level with
+`main`. The image's own frontend is running, both drop-in directories are
+empty, `gamescope (drm) is up`, and the stop script is gone from `/usr`.
 
 **A THIRTY-SECOND LOOP EXISTS AND IT IS NOT AT THE TOP OF THIS FILE BY
 ACCIDENT** — `tools/ui-loop.sh`, documented in the lessons section. An evening
