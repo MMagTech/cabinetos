@@ -10935,6 +10935,16 @@ Retries happen **at the next launch**, not from a background service.
 writes locally before syncing. **What is missing**: the per-save bookkeeping —
 a pending flag and the server's stamp — and the precedence above.
 
+**AND A SHUTDOWN GOES THROUGH THIS PATH NOW — 2026-09-22, PR #50.** A power-off
+mid-game leaves through Exit to Home, so it writes the disk copy and the
+pending marker first and then tries the upload — offline, the save is safe and
+still owed. Two things offline mode must add for it: **skip the attempt when
+the console already knows it is offline**, because today each queued upload
+waits up to its 5-second connect timeout before failing, so a shutdown with no
+server takes about 5–10 seconds longer (never more than the stop script's 45);
+and **retry the owed saves when the server returns**, which is the missing
+bookkeeping above.
+
 **The accepted trade, so it is a decision rather than a discovery.** Rule 1
 means an unsent local save always beats the server, so playing offline on the
 console and then playing the same game on an Apple TV before the console
