@@ -411,12 +411,13 @@ updates but not the build-time saving.
 Splitting layers passes that test. Splitting artifacts does not, and is ruled
 out (question 27).
 
-#### A SELF-HOSTED RUNNER ON UNRAID WAS RESEARCHED AND SET ASIDE — 2026-09-23
+#### A SELF-HOSTED RUNNER ON UNRAID: RESEARCHED AND DECLINED — 2026-09-23
 
 MMagTech asked whether the expensive jobs could run on the unRAID server (Ryzen
-9 3900X, 12 cores / 24 threads; `/dev/kvm` passes through to VMs). Researched
-and **not pursued; the rechunk experiment above is the cheaper win.** Kept so
-nobody has to redo it:
+9 3900X, 12 cores / 24 threads; `/dev/kvm` passes through to VMs). **MMagTech
+read the findings and declined it: "won't be trying it."** Do not propose it
+again unprompted. The rechunk experiment above is the route to faster builds.
+The findings are kept only so the question never has to be researched twice:
 
 - **Only "Build and push image" is worth moving.** The 22 core builds are cached
   and parallel on GitHub; one home runner would run them in series.
@@ -433,7 +434,7 @@ nobody has to redo it:
 - **The repo is public.** Fork pull requests must never reach a self-hosted
   runner: sudo, a shared podman store, and a later signed `main` build could
   pick up what they left behind.
-- **The plan, if it is ever revived:**
+- **The plan that was proposed and declined:**
   1. A test workflow pushing to a test name.
   2. Compare payload sha256s and `rpm -qa` plus a file-tree diff (image digests
      never match).
