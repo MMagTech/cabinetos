@@ -5789,6 +5789,20 @@ press, `display awake: gamescope took it`. The test flags stay:
 
 #### What is still open
 
+- **THE A9 IS ON A TEST TELEVISION, NOT THE ONE THIS IS FOR.** MMagTech,
+  2026-09-22: the LG it drives now is a test set, and the console moves to an
+  OLED later. So four things are **judged on the OLED, not signed off here**:
+  whether the dim reads as resting or broken (an OLED's black is truly off, so
+  60% may read deeper); whether pixel shift's uncovered edge, up to 4 px, is
+  hidden by that set's overscan; the OLED's own Screen Move stacking with ours
+  (harmless, but it explains more drift than expected); and whether that set
+  goes to standby on a long blank.
+- **Pixel shift is kept, and it is the smallest of the three protections.**
+  Discussed 2026-09-22: most OLEDs shift the picture themselves and LCDs barely
+  burn in, so ours mainly covers people who turned the TV's version off, OLEDs
+  without it, and long play sessions, where the dim and the blank never fire.
+  It costs nothing per frame — the finished picture lands a whole number of
+  pixels over, with no extra pass and no resampling.
 - **Does the dim read as broken?** Not yet judged.
 - **Does the LG go to standby on its own after a long blank?** It showed no
   "no signal" banner in 15 seconds. Burn-in does not care — the panel is black
