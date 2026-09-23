@@ -11724,6 +11724,40 @@ and one button?**
   matrix. **Ruled out, and if an optimisation ever requires it, it is not worth
   it.**
 
+#### ANY CHANGE MUST WORK FOR A CONSOLE JUMPING FROM ANY OLDER VERSION — 2026-09-23
+
+**MMagTech asked what happens to someone who misses several updates and then
+takes the newest one.** For the operating system itself, nothing goes wrong.
+An update is the whole image, not a chain of patches, so a console that skips
+five versions lands byte-identical to one that took every update. The only
+difference is a bigger download that one time. **The risk is in what survives
+an update, and there are three checks to make on every change:**
+
+1. **Data conversions work from ANY older version, not just the last one.**
+   `/var` (saves, the `users/` layout, the cover cache, `/var/lib/cabinetos`)
+   and `/etc` are carried across updates, and bootc three-way-merges `/etc`. If
+   a change alters how anything there is stored, the new code converts it on
+   startup from whatever it finds. **The "no migration tool" stance of
+   2026-09-18 was right before anyone ran this console. It stops being right
+   the day someone else does.**
+2. **The image format stays readable by an OLD console's update tool.** The
+   download is done by the bootc of the version being replaced. An image that
+   a far-behind console cannot read strands it silently. **This bears directly
+   on the rechunk experiment**, which changes how the image is assembled. Prove
+   that an older deployment can still `bootc upgrade` to the new image before
+   shipping it.
+3. **Signing stays acceptable to old consoles.** If the cosign key or the
+   verification policy ever changes, overlap the old and the new, so a console
+   that missed the switch can still take an update.
+
+**A known limit, not a check:** a save state may not load after a big jump,
+because the emulator it came from moved on. That is already true for someone
+who updates every time. Skipping updates does not make it worse, and the state
+tags exist to catch it.
+
+**Already jump-safe:** the flatpak emulators of question 21. Their installer
+re-runs whenever the image or its list changes.
+
 **AND IT BOUNDS THE LAYERING WORK USEFULLY.** The 390x amplification above is
 worth fixing because a console that checks for updates should not pull half a
 gigabyte to change a menu — but only by the route that keeps the update a

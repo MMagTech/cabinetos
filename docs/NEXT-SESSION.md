@@ -407,6 +407,11 @@ becomes a few MB.
 files as RPMs, so the rechunk gives each its own chunk. That keeps small
 updates but not the build-time saving.
 
+**And one more check before shipping it:** an OLDER deployment must still be
+able to `bootc upgrade` to the new image. The old console's bootc does the
+download, and an image it cannot read strands it. PROJECT.md question 27, *Any
+change must work for a console jumping from any older version*.
+
 **The constraint:** the update stays one check, one button, one reboot.
 Splitting layers passes that test. Splitting artifacts does not, and is ruled
 out (question 27).
