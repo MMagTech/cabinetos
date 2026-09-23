@@ -11333,6 +11333,32 @@ Three reasons, in order of how much they cost if ignored:
 work**, which is the outcome this project keeps arriving at when MMagTech
 simplifies something.
 
+#### MADE VISIBLE 2026-09-23, AND THE RULE STATED PRECISELY
+
+**The pause menu on PS2 and GameCube is now Resume and Exit to Home**, nothing
+to press that only says no. `catalog::snapshotsAllowed`, a list of two.
+MMagTech: *"even though it would anger most people we should follow the logic
+of no snapshots for these types of systems and keep them true to the
+consoles."*
+
+**"And anything after" is NOT the rule, and taken literally it was wrong:** PSP
+and DS are later than PS2, and their states are proven against Cabinet's and
+travel today. The two share a different property, recalled by MMagTech and
+confirmed in Cabinet's source the same day:
+
+- **PS2 is not a libretro core.** It is upstream PCSX2 embedded, and its states
+  are tied to that exact build, so an image update breaks them.
+- **GameCube runs a different Dolphin on each side.** Cabinet for Mac builds
+  upstream `dolphin-emu/dolphin` for Metal (`tools/build-dolphin-mac.sh`);
+  CabinetOS runs the libretro Dolphin core. A state from one does not open in
+  the other.
+
+**So the rule: no save states where they cannot be trusted to load, because
+they cannot travel to Cabinet or will break when the emulator updates, on a
+console that has a real save system of its own.** A new emulator is checked
+against that the day it lands (PS3, Switch and the like will fail it), and
+goes on the list if it does.
+
 #### WHAT PEOPLE ACTUALLY WANT IS RESUME, WHICH IS A DIFFERENT FEATURE
 
 The thing a person wants on a television is not a slot. It is: turn the console

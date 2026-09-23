@@ -86,7 +86,7 @@ const Entry kTable[] = {
     // games is the largest excluded row in the reference library, so it is the
     // tile most likely to be asked about.
     {"Game & Watch",         nullptr,     Support::Excluded, "gw",
-     "not built here — these games are too small to play on a television"},
+     "not built here. These games are too small to play on a television"},
 };
 
 bool eq(const char* a, const std::string& b) { return b == a; }
@@ -213,6 +213,15 @@ const char* emulatorTag(const char* core) {
     for (const auto& t : kTags)
         if (std::strcmp(t.core, core) == 0) return t.tag;
     return nullptr;
+}
+
+bool snapshotsAllowed(const char* core) {
+    if (!core) return true;
+    // True to the machines: memory-card consoles, and everything after them.
+    static const char* const kNoSnapshots[] = {"pcsx2", "dolphin"};
+    for (const char* c : kNoSnapshots)
+        if (std::strcmp(c, core) == 0) return false;
+    return true;
 }
 
 const char* saveTag(const char* core) {

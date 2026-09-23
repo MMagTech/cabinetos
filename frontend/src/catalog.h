@@ -447,4 +447,20 @@ const char* emulatorTag(const char* manifestCoreName);
 // Returns nullptr when even a save should stay local.
 const char* saveTag(const char* manifestCoreName);
 
+// WHETHER THIS SYSTEM OFFERS SAVE STATES AT ALL — docs/PROJECT.md, open
+// question 25. False for PlayStation 2, GameCube and anything later, and the
+// pause menu then has no Save state or Load latest state to press.
+//
+// DECIDED 2026-09-21 and made visible 2026-09-23, by MMagTech: *"even though it
+// would anger most people we should follow the logic of no snapshots for these
+// types of systems and keep them true to the consoles."* The reasons are in the
+// question: a PCSX2 state breaks when the image updates the emulator, these
+// consoles have memory cards every game uses, and their states open nowhere
+// else. PRECISELY: no states where they cannot be trusted to load, because
+// they cannot travel to Cabinet (GameCube: a different Dolphin on the Mac) or
+// break when the emulator updates (PS2: embedded PCSX2, not libretro). PSP and
+// DS are later consoles and keep theirs, because theirs are proven portable. A
+// new emulator is checked against that rule the day it lands.
+bool snapshotsAllowed(const char* manifestCoreName);
+
 }  // namespace catalog

@@ -265,6 +265,9 @@ struct GameSession {
     // Empty means: do not upload, we cannot vouch for it.
     std::string saveTag;
     std::string stateTag;
+    // False on PlayStation 2, GameCube and later: no Save state, no Load
+    // latest state, true to those consoles. See catalog::snapshotsAllowed.
+    bool snapshots = true;
     // Where this person's copies live, which is no longer beside the ROM.
     //
     //   users/<id> - <name>/saves/<platform>/<romId>/<core>/
@@ -779,15 +782,69 @@ static void syncSave(GameSession& sess, Uploader& up) {
 // The same fault as the invisible launch refusal fixed earlier today, in the
 // one menu where somebody is most likely to be doing something they want
 // confirmed. It fades after a few seconds because it is a receipt, not a state.
+//
+// A PILL NEAR THE FOOT OF THE SCREEN, NOT A LINE IN THE MENU — 2026-09-23.
+// It used to be small text in a strip reserved at the bottom of the pause
+// panel, and MMagTech: it *"looks like it was added there with no thought to
+// the visuals of the menu."* The strip also left the Power menu with an empty
+// band under its last button. So it is its own object now, the way PS5, Switch
+// and Apple TV confirm things, and it is not tied to the menu: an upload that
+// finishes after Resume still says so, over the game.
+//
+// ONE PLACE FOR EVERY SHORT-LIVED MESSAGE ON THE CONSOLE, so they all look the
+// same and `--notice-gallery` can show every one of them on the panel.
 struct MenuNotice {
+    // The dot's colour says which kind of answer it is before the words do.
+    enum class Tone { Done, Busy, Info, Problem };
     std::string text;
+    Tone tone = Tone::Info;
     float life = 0.0f;
-    void say(std::string t) { text = std::move(t); life = 3.2f; }
-    void tick(float dt) { if (life > 0.0f) life -= dt; }
+    float age = 0.0f;
+    void say(std::string t, Tone k) {
+        text = std::move(t);
+        tone = k;
+        // Busy holds until the answer replaces it; a stuck "Saving…" is still
+        // gone in fifteen seconds rather than for ever.
+        life = k == Tone::Busy ? 15.0f : 3.2f;
+        age = 0.0f;
+    }
+    void tick(float dt) {
+        if (life > 0.0f) {
+            life -= dt;
+            age += dt;
+        }
+    }
     float alpha() const {
         if (life <= 0.0f) return 0.0f;
-        return life < 0.5f ? life / 0.5f : 1.0f;   // the last half second fades
+        const float in = std::min(1.0f, age / 0.25f);
+        const float out = life < 0.5f ? life / 0.5f : 1.0f;   // the last half second fades
+        return std::min(in, out);
     }
+};
+using Tone = MenuNotice::Tone;
+
+// EVERY MESSAGE THE PILL CAN SHOW, for `--notice-gallery`, which walks through
+// them on the television one every four seconds so their words and their look
+// can be judged together — including the ones that are hard to cause for real.
+// A copy of the strings at their call sites: add a message there, add it here.
+struct GalleryNotice { const char* text; Tone tone; };
+constexpr GalleryNotice kNoticeGallery[] = {
+    {"Saving\xE2\x80\xA6", Tone::Busy},
+    {"Saved to RomM", Tone::Done},
+    {"Saved. Will upload when RomM is back", Tone::Info},
+    {"Saved on this console only", Tone::Info},
+    {"Save states aren't available for this system", Tone::Info},
+    {"Couldn't save the state", Tone::Problem},
+    {"Loading\xE2\x80\xA6", Tone::Busy},
+    {"State loaded", Tone::Done},
+    {"No saved state for this game", Tone::Info},
+    {"Couldn't reach RomM", Tone::Problem},
+    {"Couldn't load that state", Tone::Problem},
+    {"Download removed", Tone::Done},
+    {"Removed. Someone else keeps it, so no space came back", Tone::Info},
+    {"Removed. Others keep it, so no space came back", Tone::Info},
+    {"Removed. The space comes back when you stop playing it", Tone::Info},
+    {"Removed, but its files couldn't be deleted", Tone::Problem},
 };
 
 static void saveStateNow(GameSession& sess, Uploader& up, MenuNotice& notice) {
@@ -795,7 +852,7 @@ static void saveStateNow(GameSession& sess, Uploader& up, MenuNotice& notice) {
     std::vector<uint8_t> st;
     if (!core.saveState(st) || st.empty()) {
         std::fprintf(stderr, "[state] this core cannot serialize\n");
-        notice.say("This system cannot save a state");
+        notice.say("Save states aren't available for this system", Tone::Info);
         return;
     }
     // Named with a timestamp because states accumulate on purpose; a save
@@ -808,7 +865,7 @@ static void saveStateNow(GameSession& sess, Uploader& up, MenuNotice& notice) {
     storage::makeDirs(sess.stateDir);
     if (!writeLocal(sess.stateDir + "/" + name, st)) {
         std::fprintf(stderr, "[state] could not write locally, not uploading\n");
-        notice.say("Could not write the state to this machine");
+        notice.say("Couldn't save the state", Tone::Problem);
         return;
     }
     std::fprintf(stderr, "[state] %zu bytes saved locally\n", st.size());
@@ -818,14 +875,14 @@ static void saveStateNow(GameSession& sess, Uploader& up, MenuNotice& notice) {
         // SAVED, and honest about the half that did not happen. A state this
         // console cannot tag is one no other device will be offered, which is
         // worth knowing before somebody relies on it being there.
-        notice.say("State saved here — not to the server");
+        notice.say("Saved on this console only", Tone::Info);
         return;
     }
     // NOT "saved" YET. The bytes are on the disk, which is the guarantee that
     // matters, but the sentence a person reads should not claim the server has
     // it before the server has it. The frame loop finishes this sentence when
     // the uploader reports back — see Uploader::stateOutcome.
-    notice.say("Saving\xE2\x80\xA6");
+    notice.say("Saving\xE2\x80\xA6", Tone::Busy);
     up.push(Uploader::Job{sess.romId, sess.stateTag, name, std::move(st), true});
 }
 
@@ -843,27 +900,49 @@ struct StateLoad {
     // thread then tries this machine's own newest state — reading it there
     // rather than here because loading one touches the core.
     bool tryLocal = false;
+    // Set when a state went in. The menu closes on it: the person is back in
+    // the game at the point they loaded, which is what they pressed for.
+    bool loaded = false;
+    // The server could not be asked at all, as opposed to having nothing.
+    bool serverFailed = false;
     std::vector<uint8_t> data;
     std::string note;
     std::thread worker;
     ~StateLoad() { if (worker.joinable()) worker.join(); }
 };
 
+static std::string newestLocalState(const GameSession& sess);
+
 static void beginLoadLatestState(StateLoad& load, GameSession& sess,
                                  romm::Client& client, MenuNotice& notice) {
     if (load.running.load()) return;
 
-    notice.say("Looking for a state\xE2\x80\xA6");
+    notice.say("Loading\xE2\x80\xA6", Tone::Busy);
     if (sess.stateTag.empty()) {
-        std::fprintf(stderr, "[state] no settled tag for this core — refusing to load\n");
-        // It used to return here in silence, which is half of why this looked
-        // unwired: no local state, no tag, nothing said.
-        notice.say("No state to load for this system");
+        // THIS SYSTEM'S STATES NEVER LEAVE THE CONSOLE, so the newest one here
+        // IS the latest. Until 2026-09-23 this refused outright — so on NES,
+        // SNES, N64 and six others Save state wrote a state that Load latest
+        // state would then refuse to find.
+        const std::string local = newestLocalState(sess);
+        const std::vector<uint8_t> bytes =
+            local.empty() ? std::vector<uint8_t>{} : cab::readBytes(local);
+        if (bytes.empty()) {
+            std::fprintf(stderr, "[state] no settled tag and nothing saved here\n");
+            notice.say("No saved state for this game", Tone::Info);
+            return;
+        }
+        const bool ok = cab::Core::shared().loadState(bytes);
+        std::fprintf(stderr, "[state] local-only %s -> %s\n", local.c_str(),
+                     ok ? "restored" : "REFUSED");
+        notice.say(ok ? "State loaded" : "Couldn't load that state",
+                   ok ? Tone::Done : Tone::Problem);
+        load.loaded = ok;
         return;
     }
     if (load.worker.joinable()) load.worker.join();
     load.running = true;
     load.ready = false;
+    load.serverFailed = false;
     const int romId = sess.romId;
     const std::string tag = sess.stateTag;
     load.worker = std::thread([&load, &client, romId, tag]() {
@@ -874,6 +953,7 @@ static void beginLoadLatestState(StateLoad& load, GameSession& sess,
             // Cabinet's offline case by another name. The newest state on this
             // machine is what is left, and it is better than a refusal.
             load.note = err;
+            load.serverFailed = true;
             load.tryLocal = true;
             load.running = false;
             load.ready = true;
@@ -961,16 +1041,19 @@ static void pumpStateLoad(StateLoad& load, const GameSession& sess,
                     const bool ok = cab::Core::shared().loadState(bytes);
                     std::fprintf(stderr, "[state] fell back to local %s -> %s\n",
                                  local.c_str(), ok ? "restored" : "REFUSED");
-                    notice.say(ok ? "State loaded from this machine"
-                                  : "This state could not be loaded");
+                    notice.say(ok ? "State loaded" : "Couldn't load that state",
+                               ok ? Tone::Done : Tone::Problem);
+                    load.loaded = ok;
                     return;
                 }
             }
         }
-        // `note` is already a sentence written for a person — "none for
-        // <core>", an error from the server — so it is shown rather than
-        // replaced with a vaguer one.
-        notice.say(load.note);
+        // NOT `note` itself, which is a line for the journal ("none for
+        // gambatte-native (3 for other emulators)", or a server error) and was
+        // shown on the television raw until 2026-09-23. It stays in the log
+        // above; the person gets the sentence that means the same thing.
+        notice.say(load.serverFailed ? "Couldn't reach RomM" : "No saved state for this game",
+                   load.serverFailed ? Tone::Problem : Tone::Info);
         return;
     }
     const bool ok = cab::Core::shared().loadState(load.data);
@@ -980,7 +1063,9 @@ static void pumpStateLoad(StateLoad& load, const GameSession& sess,
     // found and the core would not take them, which is a different problem from
     // there being none — and silently carrying on with the game running from
     // where it was is indistinguishable from nothing having happened.
-    notice.say(ok ? "State loaded" : "This state could not be loaded");
+    notice.say(ok ? "State loaded" : "Couldn't load that state",
+               ok ? Tone::Done : Tone::Problem);
+    load.loaded = ok;
     load.data.clear();
 }
 
@@ -1474,7 +1559,7 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
                 ::unlink(dest.c_str());
                 if (!entryIsFile) ::rmdir(entryPath.c_str());
                 job.message =
-                    "this game's file is a web page, not a game — it needs "
+                    "this game's file is a web page, not a game. It needs "
                     "replacing on the server";
                 std::fprintf(stderr,
                              "[launch] %s is a web page, not a game; deleted rather than "
@@ -2846,6 +2931,8 @@ int main(int argc, char** argv) {
     bool idleOff = false;
     // Opens the Power menu at startup, so a capture can show it.
     bool powerMenuDemo = false;
+    // Walks the notification pill through every message it can show.
+    bool noticeGallery = false;
     // `--menu-fade 4` stretches the menus' fade so a person can watch it in
     // slow motion and say what is wrong with it. Tuning only.
     float overlayFadeSeconds = kOverlayFade;
@@ -2971,6 +3058,8 @@ int main(int argc, char** argv) {
             idleOff = true;
         } else if (SDL_strcmp(argv[i], "--power-menu") == 0) {
             powerMenuDemo = true;
+        } else if (SDL_strcmp(argv[i], "--notice-gallery") == 0) {
+            noticeGallery = true;
         } else if (SDL_strcmp(argv[i], "--menu-rise") == 0 && i + 1 < argc) {
             overlayRise = static_cast<float>(SDL_atof(argv[++i]));
         } else if (SDL_strcmp(argv[i], "--menu-fade") == 0 && i + 1 < argc) {
@@ -3704,7 +3793,7 @@ int main(int argc, char** argv) {
         // actually shows during a boot is a count that climbs, and a capture
         // of it saying nothing would be a picture of a state that lasts a
         // fraction of a second.
-        setup::showWaiting(waitDeps, "Starting up", "Loading your library — 640 games");
+        setup::showWaiting(waitDeps, "Starting up", "Loading your library. 640 games");
         renderer.saveFrame(shotPath ? shotPath : "/tmp/cabinetos-startup.bmp", dw, dh);
         renderer.shutdown();
         SDL_Quit();
@@ -4607,6 +4696,10 @@ int main(int argc, char** argv) {
     const char* kOverlayLabels[OvCount] = {
         "Resume", "Save state", "Load latest state", "Exit to Home",
     };
+    // The pause menu's items for THIS game, built each time it opens: the two
+    // state items only where the system has snapshots. PlayStation 2 and
+    // GameCube get Resume and Exit to Home and nothing to press that says no.
+    std::vector<OverlayItem> pauseItems{OvResume, OvSaveState, OvLoadState, OvExit};
 
     // ---- The Power menu — docs/PROJECT.md, open question 10b ------------
     //
@@ -4628,10 +4721,10 @@ int main(int argc, char** argv) {
     bool restPending = false;
     uint64_t restWaitStart = 0;
     auto ovCount = [&]() {
-        return powerMenu ? static_cast<int>(powerItems.size()) : static_cast<int>(OvCount);
+        return static_cast<int>(powerMenu ? powerItems.size() : pauseItems.size());
     };
     auto ovLabel = [&](int i) -> const char* {
-        if (!powerMenu) return kOverlayLabels[i];
+        if (!powerMenu) return kOverlayLabels[pauseItems[i]];
         switch (powerItems[i]) {
             case PwResume: return "Resume";
             // "Sleep", not "Rest": Rest is PlayStation's word alone, and
@@ -4713,7 +4806,7 @@ int main(int argc, char** argv) {
         if (!v.allowed) {
             // The one failure the person ever sees, and the number is what makes
             // it actionable: without it "the disk is full" is a dead end.
-            detailScreen.setNotice("Not enough room — the disk is full of things "
+            detailScreen.setNotice("Not enough room. The disk is full of things "
                                    "you asked me to keep. Remove " +
                                    gigabytes(v.shortfallBytes) + " to keep this one.");
             std::fprintf(stderr,
@@ -4758,29 +4851,33 @@ int main(int argc, char** argv) {
         // bytes where they were, and saying nothing then is the row lying —
         // the same fault as a launch refusal reaching stderr and no further.
         switch (r.what) {
+            // CONFIRMATIONS GO IN THE PILL — 2026-09-23 — with the rest of
+            // the console's short-lived messages. The screen's own notice is
+            // kept for what a person has to ACT on, like a full disk.
             case cache::Release::What::Deleted:
+                detailScreen.setNotice("");
+                menuNotice.say("Download removed", Tone::Done);
+                break;
             case cache::Release::What::Nothing:
                 detailScreen.setNotice("");
                 break;
             case cache::Release::What::StillKept:
                 // Unreachable until this console had more than one account,
                 // and the first thing that account switching makes real.
-                detailScreen.setNotice(
-                    r.otherKeepers == 1
-                        ? "Removed from your games. It stays on the console "
-                          "because somebody else is keeping it, so no space "
-                          "came back."
-                        : "Removed from your games. It stays on the console "
-                          "because other people are keeping it, so no space "
-                          "came back.");
+                detailScreen.setNotice("");
+                menuNotice.say(r.otherKeepers == 1
+                                   ? "Removed. Someone else keeps it, so no space came back"
+                                   : "Removed. Others keep it, so no space came back",
+                               Tone::Info);
                 break;
             case cache::Release::What::Demoted:
-                detailScreen.setNotice("Removed from your games. The space "
-                                       "comes back when you stop playing it.");
+                detailScreen.setNotice("");
+                menuNotice.say("Removed. The space comes back when you stop playing it",
+                               Tone::Info);
                 break;
             case cache::Release::What::DeleteFailed:
-                detailScreen.setNotice("Removed from your games, but the files "
-                                       "could not be deleted.");
+                detailScreen.setNotice("");
+                menuNotice.say("Removed, but its files couldn't be deleted", Tone::Problem);
                 break;
         }
     };
@@ -5746,6 +5843,9 @@ int main(int argc, char** argv) {
             user, launchJob.platformFsSlug, launchJob.romId, launchJob.coreName);
         session.fileSaves = std::move(restored);
         if (launchTag) session.saveTag = launchTag;
+        session.snapshots = catalog::snapshotsAllowed(launchJob.coreName.c_str());
+        if (!session.snapshots)
+            std::fprintf(stderr, "[state] no save states on this system, true to the console\n");
         if (const char* tag = catalog::emulatorTag(launchJob.coreName.c_str())) {
             session.stateTag = tag;
         } else {
@@ -6107,7 +6207,8 @@ int main(int argc, char** argv) {
                 powerActivate(powerItems[overlaySlot]);
             return;
         }
-        switch (overlaySlot) {
+        if (overlaySlot < 0 || overlaySlot >= static_cast<int>(pauseItems.size())) return;
+        switch (pauseItems[overlaySlot]) {
             case OvResume:
                 overlayOpen = false;
                 overlayFade.retarget(0.0f, overlayFadeSeconds);
@@ -6124,7 +6225,15 @@ int main(int argc, char** argv) {
         overlayOpen = !overlayOpen;
         // Only on the way IN: the list must not change under a panel that is
         // still fading out.
-        if (overlayOpen) powerMenu = false;
+        if (overlayOpen) {
+            powerMenu = false;
+            pauseItems = {OvResume};
+            if (session.snapshots) {
+                pauseItems.push_back(OvSaveState);
+                pauseItems.push_back(OvLoadState);
+            }
+            pauseItems.push_back(OvExit);
+        }
         overlaySlot = 0;
         overlayFade.retarget(overlayOpen ? 1.0f : 0.0f, overlayFadeSeconds);
         overlayFocus.retarget(1.0f, kOverlayFocusDuration);
@@ -6288,8 +6397,8 @@ int main(int argc, char** argv) {
                     // F5 writes a state, F8 restores the newest one THIS build can
                     // load, F6 pushes the game's own save. Quitting syncs the
                     // save by itself; F6 is for testing without quitting.
-                    if (playing && e.key.key == SDLK_F5) saveStateNow(session, uploader, menuNotice);
-                    if (playing && e.key.key == SDLK_F8) beginLoadLatestState(stateLoad, session, liveClient, menuNotice);
+                    if (playing && session.snapshots && e.key.key == SDLK_F5) saveStateNow(session, uploader, menuNotice);
+                    if (playing && session.snapshots && e.key.key == SDLK_F8) beginLoadLatestState(stateLoad, session, liveClient, menuNotice);
                     if (playing && e.key.key == SDLK_F6) syncSave(session, uploader);
                     if (owner != InputOwner::UI) break;
                     // Anything pushed on top of Home owns its own focus model,
@@ -6782,8 +6891,8 @@ int main(int argc, char** argv) {
                     // exactly as it did is what made this look broken.
                     addAccountScreen.setError(
                         who.name + " is already on this console, so nobody was added. "
-                        "Sign in to RomM as the person you are adding — a private "
-                        "window is easiest — and try again.");
+                        "Sign in to RomM as the person you are adding (a private "
+                        "window is easiest) and try again.");
                     std::fprintf(stderr, "[accounts] NOT ADDED: approved as %d - %s, "
                                          "who is already here. %zu accounts.\n",
                                  who.id, who.name.c_str(), accounts::all().size());
@@ -6828,6 +6937,10 @@ int main(int argc, char** argv) {
         pumpLaunch();
         pumpExit();
         pumpStateLoad(stateLoad, session, menuNotice);
+        if (stateLoad.loaded) {
+            stateLoad.loaded = false;
+            closeOverlay();
+        }
         if (overlayDemo && playing && !overlayOpen &&
             cab::Core::shared().framesRun() >= static_cast<uint64_t>(overlayDemoAfter)) {
             overlayDemo = false;
@@ -6853,7 +6966,10 @@ int main(int argc, char** argv) {
             // watch the transition and far too short for anything else. A PSP
             // game is still BOOTING at that point, and a save cannot be tested
             // at all because the game has not had time to write one.
-            if (++t == overlayExitAfter) { toggleOverlay(); overlaySlot = OvExit; }
+            if (++t == overlayExitAfter) {
+                toggleOverlay();
+                overlaySlot = static_cast<int>(pauseItems.size()) - 1;   // Exit to Home
+            }
             if (t == overlayExitAfter + 60) { overlayExitDemo = false; overlayActivate(); }
         }
 
@@ -6907,12 +7023,30 @@ int main(int argc, char** argv) {
         backdropMix.tick(dt);
         curtain.tick(dt);
         menuNotice.tick(dt);
+        if (noticeGallery) {
+            // Four seconds each, the first after two so the screen has settled.
+            static float galleryClock = -2.0f;
+            static int galleryNext = 0;
+            galleryClock += dt;
+            constexpr int kN = static_cast<int>(sizeof kNoticeGallery / sizeof kNoticeGallery[0]);
+            if (galleryClock >= 0.0f && galleryNext < kN * 100) {
+                const GalleryNotice& g = kNoticeGallery[galleryNext % kN];
+                std::fprintf(stderr, "[notice] gallery %d/%d: %s\n", galleryNext % kN + 1, kN,
+                             g.text);
+                menuNotice.say(g.text, g.tone);
+                // Hold it for the whole slot, including a Busy one.
+                menuNotice.life = 3.8f;
+                ++galleryNext;
+                galleryClock = -4.0f;
+            }
+        }
         // The other half of the sentence Save started. Cabinet's own words,
         // because they are better than anything invented here: it either
         // reached the server or it is waiting for signal.
         if (const int outcome = uploader.stateOutcome.exchange(0); outcome != 0)
-            menuNotice.say(outcome == 1 ? "State saved to the server"
-                                        : "State saved here — waiting for signal");
+            menuNotice.say(outcome == 1 ? "Saved to RomM"
+                                        : "Saved. Will upload when RomM is back",
+                           outcome == 1 ? Tone::Done : Tone::Info);
         // Reset the moment it stops, so the next launch starts its own clock
         // and a second press cannot inherit the first one's patience.
         launchJob.busyFor = launchJob.busy() ? launchJob.busyFor + dt : 0.0f;
@@ -7689,15 +7823,13 @@ int main(int argc, char** argv) {
         // game's own picture through itself.
         const float ovl = overlayFade.value();
         if (ovl > 0.001f) {
-            // The 64 is the padding above and below the buttons; the extra 44
-            // is the line the menu answers with. Reserved whether or not there
-            // is one, so the panel does not change height as a message arrives
-            // and leaves — a menu that resizes under a person's thumb is worse
-            // than one with a little space at the bottom.
+            // The 64 is the padding above and below the buttons. There used to
+            // be 44 more, reserved for the line the menu answered with; that
+            // answer is the notification pill now, so the panel is just its
+            // buttons and has no empty band at the foot.
             const int ovN = ovCount();
             const float panelH = static_cast<float>(ovN) * kOverlayButtonHeight +
-                                 static_cast<float>(ovN - 1) * kOverlayButtonGap +
-                                 64.0f + 44.0f;
+                                 static_cast<float>(ovN - 1) * kOverlayButtonGap + 64.0f;
             const float px = (ui::kCanvasWidth - kOverlayPanelWidth) * 0.5f;
             // Rises slightly as it arrives rather than only fading: a panel that
             // just materialises reads as a glitch.
@@ -7783,17 +7915,59 @@ int main(int argc, char** argv) {
                           ui::TextStyle::Title3, labelColor, sc);
             }
 
-            // WHAT THE MENU SAYS BACK. Under the buttons, inside the panel, so
-            // it belongs to the thing that was pressed rather than floating
-            // somewhere else on the screen. See MenuNotice.
-            const float na = menuNotice.alpha() * ovl;
+        }
+
+        // ---- The notification pill — see MenuNotice ------------------------
+        //
+        // Over the menus and over a game, under the curtain and the dim. Near
+        // the foot of the screen, inside the safe area, centred: where a
+        // console's confirmation is looked for, and clear of every menu's
+        // buttons. It rises a little as it arrives, like the panels do.
+        {
+            const float na = menuNotice.alpha();
+            const float keepAlpha = renderer.contentAlpha();
+            renderer.setContentAlpha(1.0f);   // not part of a screen's transition
             if (na > 0.01f && !menuNotice.text.empty()) {
-                const float nw = text.measure(menuNotice.text, ui::TextStyle::Callout, sc);
-                text.draw(renderer, menuNotice.text,
-                          px + (kOverlayPanelWidth - nw) * 0.5f,
-                          py + panelH - 34.0f + text.ascent(ui::TextStyle::Callout, sc),
-                          ui::TextStyle::Callout, ui::Color::white(0.75f * na), sc);
+                const ui::TextStyle st = ui::TextStyle::Callout;
+                const float tw = text.measure(menuNotice.text, st, sc);
+                constexpr float kPillH = 64.0f, kPad = 30.0f, kDot = 14.0f, kGap = 16.0f;
+                const float w = kPad + kDot + kGap + tw + kPad;
+                const float x = (ui::kCanvasWidth - w) * 0.5f;
+                const float y = ui::kCanvasHeight - ui::kSafeInset - kPillH - 24.0f +
+                                (1.0f - std::min(1.0f, menuNotice.age / 0.25f)) * 12.0f;
+                ui::Color fill = kOverlayPanelSurface;
+                fill.a = 0.96f * na;
+                ui::Rect pill{x, y, w, kPillH, kPillH * 0.5f, fill};
+                pill.border = 1.5f;
+                pill.borderColor = ui::Color::white(0.14f * na);
+                pill.edgeLight = ui::Color::white(0.18f * na);
+                pill.shadowBlur = 26.0f;
+                pill.shadowOffsetY = 10.0f;
+                pill.shadowColor = ui::Color::black(0.45f * na);
+                renderer.draw(pill);
+
+                // The dot says which kind of answer it is before the words do.
+                ui::Color dot = ui::Color::white(0.70f);
+                switch (menuNotice.tone) {
+                    case Tone::Done: dot = ui::palette::kScreenCyan; break;
+                    case Tone::Busy: {
+                        dot = ui::palette::kScreenCyan;
+                        // A slow breath, so "working" never reads as "done".
+                        const float t = static_cast<float>(SDL_GetTicks()) / 1000.0f;
+                        dot.a = 0.35f + 0.65f * (0.5f + 0.5f * std::sin(t * 4.2f));
+                        break;
+                    }
+                    case Tone::Info: break;
+                    case Tone::Problem: dot = ui::palette::kMarqueeAmber; break;
+                }
+                dot.a *= na;
+                renderer.draw(ui::Rect{x + kPad, y + (kPillH - kDot) * 0.5f, kDot, kDot,
+                                       kDot * 0.5f, dot});
+                text.draw(renderer, menuNotice.text, x + kPad + kDot + kGap,
+                          y + (kPillH - text.lineHeight(st, sc)) * 0.5f + text.ascent(st, sc),
+                          st, ui::Color::white(0.94f * na), sc);
             }
+            renderer.setContentAlpha(keepAlpha);
         }
 
         // THE DOWNLOAD PANEL IS GONE — 2026-09-21.

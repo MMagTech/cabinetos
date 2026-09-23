@@ -184,7 +184,7 @@ bool Client::get(const std::string& path, std::string* body, std::string* err) c
 
     if (rc != CURLE_OK) { if (err) *err = curl_easy_strerror(rc); return false; }
     if (status == 401 || status == 403) {
-        if (err) *err = "not authorised — the token is missing, expired or lacks the scope";
+        if (err) *err = "not authorised: the token is missing, expired or lacks the scope";
         return false;
     }
     if (status >= 400) {
