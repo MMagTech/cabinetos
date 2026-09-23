@@ -1972,7 +1972,7 @@ static Library loadLibrary(romm::Client& client) {
     // NOT "playable games" any more, and the wording matters: this is what the
     // console is holding, which is Home's worth of it. The library's size is
     // the server's business now.
-    std::fprintf(stderr, "[library] %zu game(s) in hand, %d with art; "
+    std::fprintf(stderr, "[library] %zu game(s) held, %d with art; "
                  "%zu platform tile(s), %d games on systems this console cannot play\n",
                  lib.cards.size(), withArt, lib.platformTiles.size(), skippedGames);
 
