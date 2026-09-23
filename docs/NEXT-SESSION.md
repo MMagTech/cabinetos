@@ -402,6 +402,31 @@ panel. He had not — the television was still running the image's frontend, and
 he was answering from the numbers. **A reply about a description is not a
 measurement of a build the machine is not running.**
 
+#### A TEXT PASS OVER EVERY SCREEN — asked for 2026-09-23, not started
+
+MMagTech, on the pause menu's "State saved here — not to the server": the
+message *"looks like it was added there with no thought to the visuals of the
+menu. And also I hate em dashes."* Short-lived messages are being moved into
+one notification pill, with a gallery mode to review them all. **What is left
+is the text that belongs to a screen's layout**, about seventy sentences,
+reviewed screen by screen as pictures rather than as strings:
+
+| Where | e.g. |
+|---|---|
+| First run | "Connect to RomM", "Enter the address", "Looking for your server at…", "Scan the code with a phone.", "You can unplug the keyboard" |
+| Pairing a controller | "Pair a Controller", "Looking for controllers…", "Scanning. Put a controller into pairing mode" |
+| Wi-Fi | "Looking for networks…", "The password for this network", "Nothing on the air" |
+| Library and tiles | "Loading your library", "No systems on this server", "Needs a 3D core", "No core for this system", "Not playable here" |
+| Search | "Searching…", "Nothing matches", "Nothing found yet" |
+| A game's page | "Download and keep", "Remove download" |
+| Adding an account | "Sign in as the person you are adding…", "They are added to this console. Switching to them is separate." |
+
+**How:** capture every screen in every state it has (the frontend already
+opens each with `--screen`, `--first-run`, `--query` and friends), lay them out
+on one review sheet, and go through it with MMagTech. Plain words, no em
+dashes, and the look judged on the panel. It overlaps the Settings screen,
+which will add its own text.
+
 #### NINE OF 23 EMULATORS SYNC NOTHING — found 2026-09-23, and it is the next candidate
 
 A Bionic Commando test on the Power menu logged `no settled tag for fceumm —
