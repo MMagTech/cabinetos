@@ -5939,10 +5939,12 @@ press, `display awake: gamescope took it`. The test flags stay:
     and it uploads battery saves, file saves and directory saves for every
     platform. Restart, Power off and Rest from a game run `finishExit` first.
   - **Rest from a game leaves the game** — saves uploaded, then rest, wake on
-    Home. Keeping the game in memory across a sleep would be nicer and depends
-    on every emulator surviving s2idle, which is exactly the per-emulator risk
-    this is meant to avoid. Revisit only after PS2 and GameCube have been seen
-    to survive a sleep.
+    Home. **Resting WITH the game still open is REJECTED, not deferred** —
+    MMagTech, 2026-09-22: it would be *"hard and painful to implement and
+    maintain because we are using so many different emulators and some won't be
+    libretro cores or already aren't."* Every emulator, PCSX2 and whatever
+    follows it, would need its own proof that it survives s2idle, for ever. Do
+    not reopen this because one emulator happens to survive a sleep.
   - **Mechanism:** the frontend takes logind's `handle-power-key` inhibitor
     lock and reads the key itself. **The lock dies with the process**, so a
     hung or crashed frontend hands the button straight back to logind — the
