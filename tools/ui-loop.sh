@@ -111,6 +111,9 @@ if [ "$BUILD" -eq 1 ]; then
     if [ "$VIA_VM" -eq 1 ]; then
         say "building on the VM"
         rsync -az -e "ssh -i $KEY -o ConnectTimeout=20" "$ROOT/frontend/src/" "$VM:~/frontend/src/" || exit 1
+        # The Makefile too: a new library in it (libsystemd, 2026-09-22) is
+        # otherwise a link error here that CI would never have.
+        rsync -az -e "ssh -i $KEY -o ConnectTimeout=20" "$ROOT/frontend/Makefile" "$VM:~/frontend/Makefile" || exit 1
         # DELETE THE ARTIFACT FIRST. `test -f` on a binary that was already
         # there passes after a failed compile, and then the deploy below
         # cheerfully ships the PREVIOUS build with a checksum that matches
@@ -126,6 +129,9 @@ if [ "$BUILD" -eq 1 ]; then
     else
         say "building on the console"
         rsync -az -e "ssh -i $KEY -o ConnectTimeout=20" "$ROOT/frontend/src/" "$A9:~/frontend/src/" || exit 1
+        # The Makefile too: a new library in it (libsystemd, 2026-09-22) is
+        # otherwise a link error here that CI would never have.
+        rsync -az -e "ssh -i $KEY -o ConnectTimeout=20" "$ROOT/frontend/Makefile" "$A9:~/frontend/Makefile" || exit 1
         # Same rule as above, and for the same reason.
         "${SSH[@]}" "$A9" 'rm -f ~/frontend/build/cabinetos-frontend'
         "${SSH[@]}" "$A9" 'cd ~/frontend && podman run --rm -v "$PWD":/src:Z -w /src cabinetos-builder make -j24 2>&1 | grep -E "error|Error|warning: unused|built " | head -20'

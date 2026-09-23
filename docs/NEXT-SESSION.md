@@ -402,6 +402,61 @@ panel. He had not — the television was still running the image's frontend, and
 he was answering from the numbers. **A reply about a description is not a
 measurement of a build the machine is not running.**
 
+#### A TEXT PASS OVER EVERY SCREEN — asked for 2026-09-23, not started
+
+MMagTech, on the pause menu's "State saved here — not to the server": the
+message *"looks like it was added there with no thought to the visuals of the
+menu. And also I hate em dashes."* Short-lived messages are being moved into
+one notification pill, with a gallery mode to review them all. **What is left
+is the text that belongs to a screen's layout**, about seventy sentences,
+reviewed screen by screen as pictures rather than as strings:
+
+| Where | e.g. |
+|---|---|
+| First run | "Connect to RomM", "Enter the address", "Looking for your server at…", "Scan the code with a phone.", "You can unplug the keyboard" |
+| Pairing a controller | "Pair a Controller", "Looking for controllers…", "Scanning. Put a controller into pairing mode" |
+| Wi-Fi | "Looking for networks…", "The password for this network", "Nothing on the air" |
+| Library and tiles | "Loading your library", "No systems on this server", "Needs a 3D core", "No core for this system", "Not playable here" |
+| Search | "Searching…", "Nothing matches", "Nothing found yet" |
+| A game's page | "Download and keep", "Remove download" |
+| Adding an account | "Sign in as the person you are adding…", "They are added to this console. Switching to them is separate." |
+
+**How:** capture every screen in every state it has (the frontend already
+opens each with `--screen`, `--first-run`, `--query` and friends), lay them out
+on one review sheet, and go through it with MMagTech. Plain words, no em
+dashes, and the look judged on the panel. It overlaps the Settings screen,
+which will add its own text.
+
+#### NINE OF 23 EMULATORS SYNC NOTHING — found 2026-09-23, and it is the next candidate
+
+A Bionic Commando test on the Power menu logged `no settled tag for fceumm —
+states stay local, and so do saves`. Counted from `catalog.cpp` against the
+cores the image ships:
+
+| | Game saves | States | Emulators |
+|---|---|---|---|
+| both travel | ✅ | ✅ | gambatte, mgba, genesis_plus_gx, picodrive, pcsx_rearmed, melonds, ppsspp |
+| saves only | ✅ | ❌ | flycast, pcsx2, dolphin, opera, fbneo, mame2003_plus, beetle_ngp |
+| **neither** | ❌ | ❌ | **fceumm (NES), snes9x (SNES), mupen64plus (N64)**, beetle_pce_fast, beetle_saturn, beetle_vb, prosystem, stella2014, vecx |
+
+**Cabinet has a tag for every one of the nine** (`RommApp/RommApp/Native/
+NativeCore.swift`: `fceumm-native`, `snes9x-native`, `mupen64plus-native`,
+`pcefast-native`, `saturn-native`, `beetle-vb-native`, `prosystem-native`,
+`stella2014-native`, `vecx-native`). They are missing here because nobody did
+the check, and the rule in `catalog.h` makes silence mean "stay local" — the
+safe failure, but it means SNES, NES and N64 progress never leaves the A9.
+
+**Saves are the cheap half**: a cartridge battery is the machine's format, the
+argument `saveTag` already makes for Dreamcast and arcade. **N64 is the one to
+read first** — mupen64plus-libretro packs EEPROM, mempak, SRAM and flash into
+one blob in its own layout. **States need the strict proof** (same pinned
+commit, same build arguments as Cabinet), as the seven that travel had.
+MMagTech asked for this to be weighed against offline mode as the next session;
+it is smaller and it is lost progress on the most-played systems.
+
+**Also noticed: Cabinet uploads a screenshot PNG with every state
+(`TVPlayerView.saveState`); CabinetOS uploads the state alone.**
+
 #### IDLE HANDLING IS BUILT — judge the dim, then decide Sleep
 
 Pixel shift, dim and blank, open question 10b. Seen working on the panel with

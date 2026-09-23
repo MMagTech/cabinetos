@@ -302,7 +302,7 @@ bool join(const std::string& ssid, const std::string& passphrase, bool hidden,
         if (why.find("not authorized") != std::string::npos ||
             why.find("Not authorized") != std::string::npos ||
             why.find("insufficient privileges") != std::string::npos) {
-            *err += " — this console is not permitted to save a network "
+            *err += ". This console is not permitted to save a network "
                     "(polkit says " + polkitVerdict() + "); see "
                     "60-cabinetos-network.rules";
         }

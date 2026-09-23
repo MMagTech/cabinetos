@@ -492,7 +492,13 @@ constexpr float kScrimOverlay = 0.55f;
 
 // --- The in-game overlay ----------------------------------------------------
 
-constexpr float kOverlayFade = 0.350f;
+// 620 ms, TUNED ON THE PANEL 2026-09-22 with the Power menu. The design
+// system's 350 ms read as the menu arriving "in pieces" — MMagTech could not
+// name it until the fade was slowed to four seconds and it turned out to be
+// speed: the slide up and the fade were over before the eye took the panel in
+// as one thing. 550 was still quick and 700 a touch slow; this is between.
+// Both the pause menu and the Power menu use it, so they cannot drift apart.
+constexpr float kOverlayFade = 0.620f;
 constexpr float kOverlayFocusScale = 1.04f;
 constexpr float kOverlayFocusDuration = 0.150f;
 constexpr float kOverlayPanelRadius = 32.0f;

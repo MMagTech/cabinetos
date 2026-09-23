@@ -227,7 +227,7 @@ bool pair(const std::string& address, std::string* err, int timeoutSeconds) {
     if (!p.ok() && !alreadyPaired) {
         if (err) {
             const std::string why = trimmed(p.err).empty() ? trimmed(p.out) : trimmed(p.err);
-            *err = p.timedOut ? "the controller did not answer — put it back "
+            *err = p.timedOut ? "the controller did not answer. Put it back "
                                 "into pairing mode and try again"
                    : why.empty() ? "could not pair with that controller"
                                  : why;
@@ -242,7 +242,7 @@ bool pair(const std::string& address, std::string* err, int timeoutSeconds) {
     if (!proc::run({"bluetoothctl", "trust", address}, 15).ok()) {
         if (err)
             *err = "paired, but this console could not mark the controller "
-                   "trusted — it may not reconnect on its own";
+                   "trusted, so it may not reconnect on its own";
         return false;
     }
 
@@ -251,7 +251,7 @@ bool pair(const std::string& address, std::string* err, int timeoutSeconds) {
     const proc::Result c = proc::run({"bluetoothctl", "connect", address}, timeoutSeconds);
     if (!c.ok()) {
         if (err)
-            *err = "paired and trusted, but it is not connected yet — press a "
+            *err = "paired and trusted, but it is not connected yet. Press a "
                    "button on the controller to wake it";
         // Deliberately NOT a failure. The lasting state — paired and trusted —
         // is correct, and a pad that is merely asleep is the commonest reason
