@@ -53,25 +53,28 @@
 # already does. Nothing here may go in /var — see
 # system_files/usr/lib/tmpfiles.d/cabinetos.conf for what that trap looks like.
 
+# THREE CALLS, ONE PER LAYER, 2026-09-23. The Containerfile runs this once
+# for each of `cores`, `system` and `frontend`, in that order, so each lands in
+# its own image layer and a console updating after a frontend change downloads
+# the frontend and nothing else. See the Containerfile and open question 27.
+#
+# The checks that need all three present, the library sweep and the final
+# list, run in the last call, `frontend`.
+
 set -euo pipefail
 
 source /ctx/lib.sh
 
 PAYLOAD=/ctx/payload
-
-group_start "Installing the frontend and the cores"
+PART="${1:-}"
 
 if [[ ! -d "${PAYLOAD}" ]]; then
     log "ERROR: ${PAYLOAD} is missing — ci/stage-image-payload.sh was not run"
     exit 1
 fi
 
-# --- The frontend ----------------------------------------------------------
-
-install -D -m 0755 "${PAYLOAD}/bin/cabinetos-frontend" /usr/bin/cabinetos-frontend
-log "installed /usr/bin/cabinetos-frontend ($(du -h /usr/bin/cabinetos-frontend | cut -f1))"
-
-# --- The cores -------------------------------------------------------------
+install_cores() {
+group_start "Installing the cores"
 
 mkdir -p /usr/lib/cabinetos/cores
 install -m 0644 "${PAYLOAD}"/cores/*.so /usr/lib/cabinetos/cores/
@@ -110,33 +113,15 @@ if [[ "${cores}" -ne 22 ]]; then
     exit 1
 fi
 
-# --- PPSSPP's system files -------------------------------------------------
-
-mkdir -p /usr/share/cabinetos/system
-cp -R "${PAYLOAD}/system/." /usr/share/cabinetos/system/
-log "installed the core system files ($(du -sh /usr/share/cabinetos/system | cut -f1))"
-
-# Named, not counted. Without compat.ini the core logs "Core system files
-# missing, expect bugs" at a level nothing reads and then runs a game that
-# renders no text — which is a working build, a green check, and a broken
-# console.
-if [[ ! -f /usr/share/cabinetos/system/PPSSPP/compat.ini ]]; then
-    log "ERROR: PPSSPP's system files did not land — PSP would run with no fonts"
-    exit 1
-fi
-
 # --- PlayStation 2 ---------------------------------------------------------
 #
 # Named individually, because each absence is silent in a different way and
-# none of them stops the image building. See build_files/build.sh, which checks
-# the same four things again once the image is assembled.
-for f in /usr/lib/cabinetos/cores/cabinetos-ps2.so \
-         /usr/share/cabinetos/system/pcsx2/resources/GameIndex.yaml; do
-    if [[ ! -f "${f}" ]]; then
-        log "ERROR: ${f} did not land — the image would lose PlayStation 2"
-        exit 1
-    fi
-done
+# none of them stops the image building. The `frontend` call checks all of
+# them again once every layer is down.
+if [[ ! -f /usr/lib/cabinetos/cores/cabinetos-ps2.so ]]; then
+    log "ERROR: cabinetos-ps2.so did not land — the image would lose PlayStation 2"
+    exit 1
+fi
 
 # The emulator's own libraries, read from the manifest compile.sh wrote rather
 # than from a list kept here — see ci/stage-image-payload.sh for why that list
@@ -152,7 +137,44 @@ if [[ -f "${PAYLOAD}/cores/cabinetos-ps2.bundled" ]]; then
     install -m 0644 "${PAYLOAD}/cores/cabinetos-ps2.bundled" \
         /usr/lib/cabinetos/cores/cabinetos-ps2.bundled
 fi
-log "installed PlayStation 2 ($(du -sh /usr/share/cabinetos/system/pcsx2 | cut -f1) of resources)"
+
+group_end
+}
+
+install_system() {
+group_start "Installing the core system files"
+
+# --- PPSSPP's system files -------------------------------------------------
+
+mkdir -p /usr/share/cabinetos/system
+cp -R "${PAYLOAD}/system/." /usr/share/cabinetos/system/
+log "installed the core system files ($(du -sh /usr/share/cabinetos/system | cut -f1))"
+
+# Named, not counted. Without compat.ini the core logs "Core system files
+# missing, expect bugs" at a level nothing reads and then runs a game that
+# renders no text — which is a working build, a green check, and a broken
+# console.
+if [[ ! -f /usr/share/cabinetos/system/PPSSPP/compat.ini ]]; then
+    log "ERROR: PPSSPP's system files did not land — PSP would run with no fonts"
+    exit 1
+fi
+
+# PCSX2 refuses to start without its resources. Not a warning, not a
+# degraded picture: it does not boot.
+if [[ ! -f /usr/share/cabinetos/system/pcsx2/resources/GameIndex.yaml ]]; then
+    log "ERROR: PCSX2's resources did not land — the image would lose PlayStation 2"
+    exit 1
+fi
+log "installed PlayStation 2's resources ($(du -sh /usr/share/cabinetos/system/pcsx2 | cut -f1))"
+
+group_end
+}
+
+install_frontend() {
+group_start "Installing the frontend"
+
+install -D -m 0755 "${PAYLOAD}/bin/cabinetos-frontend" /usr/bin/cabinetos-frontend
+log "installed /usr/bin/cabinetos-frontend ($(du -h /usr/bin/cabinetos-frontend | cut -f1))"
 
 group_end
 
@@ -203,5 +225,46 @@ if [[ "${unresolved}" -ne 0 ]]; then
     exit 1
 fi
 
-log "every library resolves: the frontend and all ${cores} cores"
+log "every library resolves: the frontend and all $(find /usr/lib/cabinetos/cores -name '*_libretro.so' | wc -l) cores"
 group_end
+
+# ---------------------------------------------------------------------------
+# The console, all of it, now that all three layers are down.
+# ---------------------------------------------------------------------------
+#
+# These were in build.sh's sanity block until the payload moved into layers of
+# its own. That block runs before any of it is installed now, so the list moved
+# here, to the one place that runs after all of it.
+group_start "The console is in the image"
+missing=0
+for expected in \
+    /usr/bin/cabinetos-frontend \
+    /usr/lib/cabinetos/cores/cabinetos-ps2.so \
+    /usr/lib/cabinetos/cores/libryml.so.0.10.0 \
+    /usr/lib/cabinetos/cores/libc4core.so.0.2.8 \
+    /usr/share/cabinetos/system/PPSSPP/compat.ini \
+    /usr/share/cabinetos/system/pcsx2/resources/GameIndex.yaml
+do
+    if [[ -e "${expected}" ]]; then
+        log "  ok: ${expected}"
+    else
+        log "  MISSING: ${expected}"
+        missing=1
+    fi
+done
+group_end
+if [[ "${missing}" -ne 0 ]]; then
+    log "ERROR: the image is missing part of the console"
+    exit 1
+fi
+}
+
+case "${PART}" in
+    cores)    install_cores ;;
+    system)   install_system ;;
+    frontend) install_frontend ;;
+    *)
+        log "ERROR: say which layer: cores, system or frontend (got '${PART}')"
+        exit 1
+        ;;
+esac
