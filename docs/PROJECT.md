@@ -5812,6 +5812,16 @@ press, `display awake: gamescope took it`. The test flags stay:
   first is invisible and free, so a switch only invites turning protection off
   for nothing; the second is judged once, on the OLED. Until Settings exists
   the constants in `idle.h` are the defaults.
+- **A GAME'S OWN PAUSE SCREEN IS THE KNOWN GAP, AND IT IS LEFT OPEN ON
+  PURPOSE — 2026-09-22.** The console's pause menu gets menu rules (dim 5,
+  off 15), but a game that pauses ITSELF looks, to us, exactly like a
+  cut-scene: the emulator is running. So it gets only the 20-minute dim and
+  pixel shift. **Considered and NOT added:** screen off after an hour of no
+  input even in a game, plus swallowing the first press after it (so an unseen
+  A cannot act in the game). Rare case, already covered by the dim, the shift
+  and the OLED's own static-image dimming, and it would add two behaviours for
+  it. The rule stays one sentence: *in a game the screen dims but never turns
+  off.* **Add it only if burn-in from a paused game is actually seen.**
 - **Does the dim read as broken?** Not yet judged.
 - **Does the LG go to standby on its own after a long blank?** It showed no
   "no signal" banner in 15 seconds. Burn-in does not care — the panel is black
