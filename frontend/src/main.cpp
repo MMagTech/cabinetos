@@ -6281,6 +6281,22 @@ int main(int argc, char** argv) {
         openPowerMenu();
     }
 
+    // FROM THE STARTUP SCREEN INTO HOME THROUGH THE DARK — 2026-09-23. The
+    // startup screen used to be replaced by Home between one frame and the
+    // next; MMagTech: *"extremely harsh."* Now it dims to black and Home rises
+    // behind the same curtain a game launch uses, which he already called
+    // smooth. Down briskly, up more slowly, for the same reason as a launch:
+    // going dark acknowledges, coming back is the arrival worth watching.
+    // Never for a capture, whose first frame must be the screen itself.
+    if (!shotMode && setup::waitingWasShown()) {
+        constexpr float kBootFadeOut = 0.35f;
+        constexpr float kBootFadeIn = 0.60f;
+        setup::fadeOutWaiting(waitDeps, "Loading your library", kBootFadeOut);
+        curtain.from = curtain.to = 1.0f;
+        curtain.elapsed = curtain.duration;
+        curtain.retarget(0.0f, kBootFadeIn);
+    }
+
     // ---- Idle: pixel shift, dim, blank — idle.h, open question 10b -------
     idle::Watch idleWatch;
     idleWatch.setTimeScale(idleScale);
