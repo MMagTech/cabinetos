@@ -5803,6 +5803,15 @@ press, `display awake: gamescope took it`. The test flags stay:
   without it, and long play sessions, where the dim and the blank never fire.
   It costs nothing per frame — the finished picture lands a whole number of
   pixels over, with no extra pass and no resampling.
+- **ONE SETTING, DECIDED 2026-09-22 — for the Settings screen, not built now.**
+  *Turn off screen after:* 10 min · **15 min** (default) · 30 min · 1 hour ·
+  Never. **The dim follows at a third of it** (15 → 5, 30 → 10, 60 → 20), so
+  the player makes one choice, not two. **Never** turns off both, in menus and
+  in games; it is their television. Otherwise a running game keeps its fixed
+  20-minute dim. **Pixel shift and the dim's depth stay hard-coded** — the
+  first is invisible and free, so a switch only invites turning protection off
+  for nothing; the second is judged once, on the OLED. Until Settings exists
+  the constants in `idle.h` are the defaults.
 - **Does the dim read as broken?** Not yet judged.
 - **Does the LG go to standby on its own after a long blank?** It showed no
   "no signal" banner in 15 seconds. Burn-in does not care — the panel is black
