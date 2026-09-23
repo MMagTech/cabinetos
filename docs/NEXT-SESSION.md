@@ -411,8 +411,9 @@ upload.
 **UPDATED LATER THE SAME EVENING — 10b's *What is still open* is the record.**
 The 8BitDo over Bluetooth CANNOT wake the A9 from s2idle (tested, with
 MMagTech pressing Home). Controllers are Bluetooth or wired, never a dongle.
-The agreed order: merge #49 → SIGTERM so power-off uploads the save → power
-button *press rests, hold shuts down* → Bluetooth wake research. **Start on
+The agreed order: merge #49 → SIGTERM so power-off uploads the save → the
+Power menu, which a SHORT press of the power button opens (long press left
+unassigned; it would race the firmware's hard cut) → Bluetooth wake research. **Start on
 Home opens the Power menu** (Rest, Restart, Power off) — it currently quits
 the frontend, which is the line to replace. Idle never falls into rest by
 itself while no controller can wake the machine. **Rest from a game closes the game

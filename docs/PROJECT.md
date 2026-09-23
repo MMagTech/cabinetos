@@ -5901,11 +5901,14 @@ press, `display awake: gamescope took it`. The test flags stay:
   wired pad's button (untested — no wired pad on hand, and it is the easy case
   on Linux).
 - **THE ORDER, AGREED 2026-09-22:** merge the idle work; then a SIGTERM handler
-  so a power-off mid-game still uploads the save; then the power button as
-  *press rests, hold shuts down* (`HandlePowerKey=suspend`,
-  `HandlePowerKeyLongPress=poweroff`); then Bluetooth wake research. **Idle does
+  so a power-off mid-game still uploads the save; then the Power menu and the
+  power button; then Bluetooth wake research. ~~The power button as *press
+  rests, hold shuts down*~~ — **superseded the same evening: a SHORT press
+  opens the Power menu** (below), and rest is chosen from it. **Long press is
+  deliberately left unassigned**: it would race the firmware's ~4 s hard power
+  cut, and with the menu there is nothing a hold needs to do. **Idle does
   NOT fall into rest by itself** while no controller can wake the machine —
-  rest is only ever the button, until controller wake works. Staying awake
+  rest is only ever chosen from the menu, until controller wake works. Staying awake
   with the screen off costs about 4 W of package power over rest: a few
   dollars a year, not worth a controller that cannot wake the console.
 - **WHERE POWER LIVES IN THE UI — MMagTech wanted it on Home, and Switch agrees.**
