@@ -357,6 +357,90 @@ states, and leave — with the save syncing on the way out.
 
 ### WHAT TO DO NEXT
 
+#### FIRST: MAKE A SMALL CHANGE SHIP SMALL, AND TRY DROPPING THE RECHUNK — decided 2026-09-23
+
+**MMagTech chose this as the first thing next session**, ahead of offline mode
+and the sync gap below. It is open question 27, **with its recorded fix
+corrected** (PROJECT.md has the correction).
+
+**The problem:** a 1.4 MB frontend change makes the A9 download 546 MB, and a
+`main` build takes 16–17 minutes.
+
+**Where the minutes go, measured 2026-09-23 on the last two `main` runs** (job
+"Build and push image", 880 s):
+
+| Step | Time | On a PR? |
+|---|---|---|
+| **Rechunk** (`just ostree-rechunk`, rpm-ostree `build-chunked-oci --max-layers 127`) | **~9 min** | no |
+| Build image (pulls ~10 GB of Bazzite) | ~3 min | yes |
+| Maximize build space | ~1¼ min | yes |
+| Push to GHCR | ~1 min | no |
+| Cores, frontend, PCSX2, all cached | ~2 min | yes |
+
+PR builds are about 6 minutes because they skip the rechunk.
+
+**Why 546 MB, correctly this time:** the rechunk throws away the Containerfile's
+layer order and regroups the filesystem by RPM package. Our frontend, cores and
+system files belong to no package, so they land together in the leftover
+chunks. **Reordering the Containerfile, which was question 27's plan, would be
+undone by the rechunk.**
+
+**The experiment:**
+1. On a branch, split the single `RUN` so it goes base, then cores, then
+   system files, then frontend last.
+2. Skip the rechunk.
+3. Push to a TEST name (`ghcr.io/mmagtech/cabinetos-test`), never `latest`, so
+   nothing reaches the A9 unasked.
+4. Measure the `main` build time, and how much a frontend-only change
+   downloads: `bootc switch` the test VM to the test image, then change one
+   string.
+5. Check `bootc container lint`.
+6. Check that `--mount=type=bind,from=ctx` still keeps the build context out
+   of every layer.
+7. Find out why the rechunk was added. It came with the ublue template;
+   Bazzite's base arrives already chunked.
+
+**If it works:** roughly 16 minutes becomes about 7, and a frontend update
+becomes a few MB.
+
+**The fallback:** keep the rechunk and package the frontend, cores and system
+files as RPMs, so the rechunk gives each its own chunk. That keeps small
+updates but not the build-time saving.
+
+**The constraint:** the update stays one check, one button, one reboot.
+Splitting layers passes that test. Splitting artifacts does not, and is ruled
+out (question 27).
+
+#### A SELF-HOSTED RUNNER ON UNRAID WAS RESEARCHED AND SET ASIDE — 2026-09-23
+
+MMagTech asked whether the expensive jobs could run on the unRAID server (Ryzen
+9 3900X, 12 cores / 24 threads; `/dev/kvm` passes through to VMs). Researched
+and **not pursued; the rechunk experiment above is the cheaper win.** Kept so
+nobody has to redo it:
+
+- **Only "Build and push image" is worth moving.** The 22 core builds are cached
+  and parallel on GitHub; one home runner would run them in series.
+- **It would have to be a dedicated Ubuntu 24.04 VM.** The workflows assume
+  apt, passwordless sudo and privileged podman.
+- **Two actions are destructive on a persistent machine.**
+  `ublue-os/remove-unwanted-software` runs `swapoff` and deletes `/swapfile`
+  and toolchains. `osbuild/bootc-image-builder-action` wipes
+  `/var/lib/containers/storage` and rewrites `storage.conf`.
+- **Nothing ever prunes images.**
+- **`build-pcsx2.sh` reuses any image named `cabinetos-pcsx2-builder`**, so a
+  stale toolchain could be used on a persistent store.
+- **Fixed `/tmp` paths collide between runs.**
+- **The repo is public.** Fork pull requests must never reach a self-hosted
+  runner: sudo, a shared podman store, and a later signed `main` build could
+  pick up what they left behind.
+- **The plan, if it is ever revived:**
+  1. A test workflow pushing to a test name.
+  2. Compare payload sha256s and `rpm -qa` plus a file-tree diff (image digests
+     never match).
+  3. Then a repository variable selects the runner for `main` only, defaulting
+     to GitHub.
+
+
 #### FIRST: THE NEW BOOT IS ON THE TELEVISION AND NOBODY HAS WATCHED IT
 
 **IT IS LIVE AS OF 2026-09-22.** Boot no longer fetches the catalogue, covers

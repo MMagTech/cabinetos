@@ -11671,6 +11671,24 @@ faster to push in CI, faster to pull on the console, and the cores layer stays
 cached for weeks because those revisions are pinned and the whole point of
 `build-core.yml` is that they do not move.
 
+**CORRECTION, 2026-09-23: REORDERING ALONE WOULD NOT WORK, BECAUSE OF THE
+RECHUNK.** `main` builds run `just ostree-rechunk`, which is rpm-ostree
+`compose build-chunked-oci --max-layers 127`. It rebuilds the image from its
+flattened filesystem and chunks it by RPM package, discarding the
+Containerfile's layers. Our payload is owned by no package, so it lands in the
+leftover chunks together wherever the Containerfile put it. The rechunk is also
+the most expensive step there is, about 9 of the 16 minutes (measured
+2026-09-23). **So there are two routes:**
+
+- **Skip the rechunk and order the layers.** Small updates and a much faster
+  build.
+- **Keep the rechunk and package the payload as RPMs**, so each gets its own
+  chunk.
+
+The first is next session's experiment (NEXT-SESSION.md, *What to do next*),
+pushed to a test image name. Nobody has yet recorded why the rechunk is there
+beyond the ublue template, and Bazzite's base already arrives chunked.
+
 **Not done, deliberately.** It changes how the shipping image is assembled, so
 it wants its own branch and a careful check that the split survives
 `bootc container lint` — and that the `RUN --mount=type=bind,from=ctx` pattern
