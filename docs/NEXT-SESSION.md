@@ -402,6 +402,36 @@ panel. He had not — the television was still running the image's frontend, and
 he was answering from the numbers. **A reply about a description is not a
 measurement of a build the machine is not running.**
 
+#### NINE OF 23 EMULATORS SYNC NOTHING — found 2026-09-23, and it is the next candidate
+
+A Bionic Commando test on the Power menu logged `no settled tag for fceumm —
+states stay local, and so do saves`. Counted from `catalog.cpp` against the
+cores the image ships:
+
+| | Game saves | States | Emulators |
+|---|---|---|---|
+| both travel | ✅ | ✅ | gambatte, mgba, genesis_plus_gx, picodrive, pcsx_rearmed, melonds, ppsspp |
+| saves only | ✅ | ❌ | flycast, pcsx2, dolphin, opera, fbneo, mame2003_plus, beetle_ngp |
+| **neither** | ❌ | ❌ | **fceumm (NES), snes9x (SNES), mupen64plus (N64)**, beetle_pce_fast, beetle_saturn, beetle_vb, prosystem, stella2014, vecx |
+
+**Cabinet has a tag for every one of the nine** (`RommApp/RommApp/Native/
+NativeCore.swift`: `fceumm-native`, `snes9x-native`, `mupen64plus-native`,
+`pcefast-native`, `saturn-native`, `beetle-vb-native`, `prosystem-native`,
+`stella2014-native`, `vecx-native`). They are missing here because nobody did
+the check, and the rule in `catalog.h` makes silence mean "stay local" — the
+safe failure, but it means SNES, NES and N64 progress never leaves the A9.
+
+**Saves are the cheap half**: a cartridge battery is the machine's format, the
+argument `saveTag` already makes for Dreamcast and arcade. **N64 is the one to
+read first** — mupen64plus-libretro packs EEPROM, mempak, SRAM and flash into
+one blob in its own layout. **States need the strict proof** (same pinned
+commit, same build arguments as Cabinet), as the seven that travel had.
+MMagTech asked for this to be weighed against offline mode as the next session;
+it is smaller and it is lost progress on the most-played systems.
+
+**Also noticed: Cabinet uploads a screenshot PNG with every state
+(`TVPlayerView.saveState`); CabinetOS uploads the state alone.**
+
 #### IDLE HANDLING IS BUILT — judge the dim, then decide Sleep
 
 Pixel shift, dim and blank, open question 10b. Seen working on the panel with

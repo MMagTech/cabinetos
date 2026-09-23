@@ -5959,6 +5959,33 @@ press, `display awake: gamescope took it`. The test flags stay:
   leftover, and on the console it just gets the session restarted under
   whoever is watching. That line is what this replaces. The top-bar icon above
   is the discoverable companion to it, not a substitute.
+- **THE POWER MENU IS BUILT — 2026-09-22/23, and tested on the A9 by
+  MMagTech.** `frontend/src/power.{h,cpp}`, over sd-bus (libsystemd; the
+  builder already carried systemd-devel and the image carries the runtime).
+  - **No polkit rule was needed.** Inhibiting the power key, suspend, reboot
+    and power-off are all `implicit active: yes` for the active local session,
+    which the console always is. The `challenge` answers recorded earlier came
+    from an SSH session, which is not active — they were never the console's.
+    This is stock logind/polkit, so it holds on any machine running the image.
+  - **Seen working:** the lock taken at startup (`the power button opens the
+    Power menu now`); a short press on Home and in a game opening it; Start and
+    B; Sleep chosen from a game — `leaving it first`, `exited to Home`, `logind
+    took it`, 21 of 22 s in hardware sleep — and the power button waking it
+    **without** reopening the menu (`power::justWoke`, CLOCK_BOOTTIME against
+    CLOCK_MONOTONIC).
+  - **"SLEEP", NOT "REST", ON SCREEN** — MMagTech: Rest is PlayStation's word
+    alone; Switch, Xbox, SteamOS, Windows and macOS say Sleep. The docs keep
+    "rest" for the state.
+  - **Sleep is listed only where logind says `CanSuspend=yes`**, and it waits
+    up to 20 s for the uploads finishExit queued before suspending.
+  - **CORRECTION to what was said in discussion: Start in a game is the GAME'S
+    button**, not the console's pause menu. The pause menu is L3+R3, decided
+    2026-09-19. So the parallel is: both sticks in a game, Start on Home, the
+    power button everywhere.
+  - **The menus fade in 620 ms, not 350** — tuned on the panel; see
+    `kOverlayFade`. "It opens in pieces" turned out to be speed, found by
+    slowing the fade to four seconds (`--menu-fade`). The focus rim also had
+    not been following the fade, and now does.
 - **DECIDED, MMagTech 2026-09-22: THE POWER BUTTON OPENS THE POWER MENU, IN A
   GAME AS ON HOME.** *"it needs to be super easy. Press the button in game and
   the power pause menu appears with a resume option. Let them choose."* The

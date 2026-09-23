@@ -73,6 +73,7 @@
 #include "storage.h"
 #include "text.h"
 #include "overlaywin.h"
+#include "power.h"
 #include "ui.h"
 
 namespace {
@@ -2843,6 +2844,13 @@ int main(int argc, char** argv) {
     double idleScale = 1.0;
     double shiftEvery = idle::kShiftEverySeconds;
     bool idleOff = false;
+    // Opens the Power menu at startup, so a capture can show it.
+    bool powerMenuDemo = false;
+    // `--menu-fade 4` stretches the menus' fade so a person can watch it in
+    // slow motion and say what is wrong with it. Tuning only.
+    float overlayFadeSeconds = kOverlayFade;
+    // `--menu-rise 0` drops the slide the menus arrive with. Tuning only.
+    float overlayRise = 24.0f;
     // Off / subtle / strong, the reference implementation's own three levels.
     float glowPeak = 0.025f;
     // Running a core. Both are needed: a core without a ROM has nothing to do.
@@ -2961,6 +2969,12 @@ int main(int argc, char** argv) {
             shiftEvery = SDL_atof(argv[++i]);
         } else if (SDL_strcmp(argv[i], "--no-idle") == 0) {
             idleOff = true;
+        } else if (SDL_strcmp(argv[i], "--power-menu") == 0) {
+            powerMenuDemo = true;
+        } else if (SDL_strcmp(argv[i], "--menu-rise") == 0 && i + 1 < argc) {
+            overlayRise = static_cast<float>(SDL_atof(argv[++i]));
+        } else if (SDL_strcmp(argv[i], "--menu-fade") == 0 && i + 1 < argc) {
+            overlayFadeSeconds = static_cast<float>(SDL_atof(argv[++i]));
         } else if (SDL_strcmp(argv[i], "--integer-scale") == 0) {
             integerScaling = true;
             std::fprintf(stderr, "[picture] integer scaling, with bars\n");
@@ -4593,6 +4607,42 @@ int main(int argc, char** argv) {
     const char* kOverlayLabels[OvCount] = {
         "Resume", "Save state", "Load latest state", "Exit to Home",
     };
+
+    // ---- The Power menu — docs/PROJECT.md, open question 10b ------------
+    //
+    // THE PAUSE MENU'S PANEL WITH A DIFFERENT LIST, not a second menu. The
+    // power button opens it everywhere, and Start opens it on Home. In a game
+    // the game is paused and Resume comes first and is focused, so a child
+    // pressing the button costs one press of A. Rest is listed only on a
+    // machine that can rest.
+    //
+    // Anything but Resume, from a game, leaves the game through finishExit
+    // first — the one way out of a game, which uploads every kind of save — so
+    // this is true for every emulator without any of them knowing.
+    bool powerMenu = false;
+    enum PowerItem { PwResume, PwRest, PwRestart, PwPowerOff };
+    std::vector<PowerItem> powerItems;
+    bool restAvailable = false;
+    // Rest waits for the uploads finishExit queued: a machine that sleeps
+    // mid-upload has sent nothing, and the save would sit owed until morning.
+    bool restPending = false;
+    uint64_t restWaitStart = 0;
+    auto ovCount = [&]() {
+        return powerMenu ? static_cast<int>(powerItems.size()) : static_cast<int>(OvCount);
+    };
+    auto ovLabel = [&](int i) -> const char* {
+        if (!powerMenu) return kOverlayLabels[i];
+        switch (powerItems[i]) {
+            case PwResume: return "Resume";
+            // "Sleep", not "Rest": Rest is PlayStation's word alone, and
+            // Switch, Xbox, SteamOS, Windows and macOS all say Sleep.
+            // MMagTech, 2026-09-22.
+            case PwRest: return "Sleep";
+            case PwRestart: return "Restart";
+            case PwPowerOff: return "Power off";
+        }
+        return "";
+    };
     auto launchById = [&](int romId) -> bool {
         // PRESSING PLAY ON SOMETHING ALREADY COMING JOINS IT — 2026-09-21.
         //
@@ -5901,13 +5951,15 @@ int main(int argc, char** argv) {
         // with one answer. On Search it shares the screen with the results, and
         // when focus is up in those results the keyboard is just something that
         // is still visible.
+        // The overlay takes the pad FROM the core while it is open, which is
+        // the whole rule: never both. tvOS does this by turning the focus
+        // engine off during play; here it is this one line. FIRST, ahead of the
+        // keyboard, since the Power menu can open over a screen that has the
+        // keyboard up, and a menu nobody can steer is a trap.
+        if (overlayOpen) return InputOwner::Overlay;
         if (keyboard.isOpen() &&
             !(here() == Screen::Search && searchScreen.focused()))
             return InputOwner::Keyboard;
-        // The overlay takes the pad FROM the core while it is open, which is
-        // the whole rule: never both. tvOS does this by turning the focus
-        // engine off during play; here it is this one line.
-        if (overlayOpen) return InputOwner::Overlay;
         if (playing) return InputOwner::Game;
         return InputOwner::UI;
     };
@@ -5985,7 +6037,7 @@ int main(int argc, char** argv) {
         syncFileSaves(session, uploader);
         playing = false;
         overlayOpen = false;
-        overlayFade.retarget(0.0f, kOverlayFade);
+        overlayFade.retarget(0.0f, overlayFadeSeconds);
         std::fprintf(stderr, "[overlay] exited to Home\n");
     };
 
@@ -5996,7 +6048,7 @@ int main(int argc, char** argv) {
             exitPending = true;
             exitWaitStart = SDL_GetTicksNS();
             overlayOpen = false;
-            overlayFade.retarget(0.0f, kOverlayFade);
+            overlayFade.retarget(0.0f, overlayFadeSeconds);
             std::fprintf(stderr, "[overlay] quit accepted; waiting for the core to boot\n");
             return;
         }
@@ -6022,11 +6074,43 @@ int main(int argc, char** argv) {
         }
     };
 
+    auto closeOverlay = [&]() {
+        overlayOpen = false;
+        overlayFade.retarget(0.0f, overlayFadeSeconds);
+    };
+
+    auto powerActivate = [&](PowerItem item) {
+        if (item == PwResume) {
+            closeOverlay();
+            return;
+        }
+        const power::Action act = item == PwRest      ? power::Action::Rest
+                                  : item == PwRestart ? power::Action::Restart
+                                                      : power::Action::PowerOff;
+        std::fprintf(stderr, "[power] %s chosen%s\n", power::name(act),
+                     playing ? " from a game; leaving it first" : "");
+        if (playing) finishExit();
+        closeOverlay();
+        if (act == power::Action::Rest) {
+            restPending = true;
+            restWaitStart = SDL_GetTicksNS();
+        } else {
+            // A restart or a power-off stops this process on its way down, and
+            // the uploads just queued are drained then — PR #50.
+            power::act(act);
+        }
+    };
+
     auto overlayActivate = [&]() {
+        if (powerMenu) {
+            if (overlaySlot >= 0 && overlaySlot < static_cast<int>(powerItems.size()))
+                powerActivate(powerItems[overlaySlot]);
+            return;
+        }
         switch (overlaySlot) {
             case OvResume:
                 overlayOpen = false;
-                overlayFade.retarget(0.0f, kOverlayFade);
+                overlayFade.retarget(0.0f, overlayFadeSeconds);
                 break;
             case OvSaveState: saveStateNow(session, uploader, menuNotice); break;
             case OvLoadState: beginLoadLatestState(stateLoad, session, liveClient, menuNotice); break;
@@ -6038,11 +6122,45 @@ int main(int argc, char** argv) {
     auto toggleOverlay = [&]() {
         if (!playing) return;
         overlayOpen = !overlayOpen;
+        // Only on the way IN: the list must not change under a panel that is
+        // still fading out.
+        if (overlayOpen) powerMenu = false;
         overlaySlot = 0;
-        overlayFade.retarget(overlayOpen ? 1.0f : 0.0f, kOverlayFade);
+        overlayFade.retarget(overlayOpen ? 1.0f : 0.0f, overlayFadeSeconds);
         overlayFocus.retarget(1.0f, kOverlayFocusDuration);
         overlayFocus.elapsed = kOverlayFocusDuration;
     };
+
+    // Pressed while it is already open, it closes, like Resume.
+    auto openPowerMenu = [&]() {
+        if (overlayOpen && powerMenu) {
+            closeOverlay();
+            return;
+        }
+        powerItems.clear();
+        if (playing) powerItems.push_back(PwResume);
+        if (restAvailable) powerItems.push_back(PwRest);
+        powerItems.push_back(PwRestart);
+        powerItems.push_back(PwPowerOff);
+        powerMenu = true;
+        overlayOpen = true;
+        overlaySlot = 0;
+        overlayFade.retarget(1.0f, overlayFadeSeconds);
+        overlayFocus.retarget(1.0f, kOverlayFocusDuration);
+        overlayFocus.elapsed = kOverlayFocusDuration;
+        std::fprintf(stderr, "[power] menu open%s\n", playing ? " over a game" : "");
+    };
+
+    // The button is borrowed for the life of this process — power.h. Not for a
+    // capture, which is not the console and must not take its button.
+    if (!shotMode) {
+        power::takeButtons();
+        restAvailable = power::canRest();
+    }
+    if (powerMenuDemo) {
+        if (shotMode) restAvailable = power::canRest();
+        openPowerMenu();
+    }
 
     // ---- Idle: pixel shift, dim, blank — idle.h, open question 10b -------
     idle::Watch idleWatch;
@@ -6076,8 +6194,23 @@ int main(int argc, char** argv) {
                 default:
                     break;
             }
-            if (touched && idleWatch.input(clockSeconds()) && owner != InputOwner::Game)
+            // The power and Sleep keys are never swallowed: on a dark screen
+            // they light it AND open the Power menu, which is what the person
+            // reaching for that button wants.
+            const bool powerKey = e.type == SDL_EVENT_KEY_DOWN &&
+                                  (e.key.key == SDLK_POWER || e.key.key == SDLK_SLEEP);
+            if (touched && idleWatch.input(clockSeconds()) && owner != InputOwner::Game &&
+                !powerKey)
                 continue;
+            if (powerKey) {
+                // The press that woke the machine from Rest arrives here too,
+                // and must not wake it straight into this menu.
+                if (power::justWoke())
+                    std::fprintf(stderr, "[power] ignoring the press that woke the machine\n");
+                else
+                    openPowerMenu();
+                continue;
+            }
             switch (e.type) {
                 case SDL_EVENT_QUIT:
                     running = false;
@@ -6123,8 +6256,10 @@ int main(int argc, char** argv) {
                         // Back, while there is anywhere to go back to. Quitting
                         // from the middle of the Library would throw away the
                         // whole stack the person had walked down.
+                        else if (overlayOpen) closeOverlay();
                         else if (stack.size() > 1) navigate(screens::Nav::Back);
-                        else running = false;
+                        // At the root, Escape is Start: the Power menu.
+                        else openPowerMenu();
                     }
                     // The shoulders, for a machine with no pad attached. `[`
                     // and `]` sit where L1 and R1 do on a controller and the
@@ -6141,7 +6276,7 @@ int main(int argc, char** argv) {
                     if (owner == InputOwner::Overlay) {
                         if (e.key.key == SDLK_UP || e.key.key == SDLK_DOWN) {
                             const int delta = (e.key.key == SDLK_DOWN) ? 1 : -1;
-                            overlaySlot = std::clamp(overlaySlot + delta, 0, OvCount - 1);
+                            overlaySlot = std::clamp(overlaySlot + delta, 0, ovCount() - 1);
                             overlayFocus.retarget(0.0f, 0.0f);
                             overlayFocus.elapsed = 0.0f;
                             overlayFocus.retarget(1.0f, kOverlayFocusDuration);
@@ -6267,10 +6402,15 @@ int main(int argc, char** argv) {
                         if (e.gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_UP)
                             overlaySlot = std::max(0, overlaySlot - 1);
                         if (e.gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_DOWN)
-                            overlaySlot = std::min(OvCount - 1, overlaySlot + 1);
+                            overlaySlot = std::min(ovCount() - 1, overlaySlot + 1);
                         if (e.gbutton.button == SDL_GAMEPAD_BUTTON_SOUTH) overlayActivate();
-                        // East is Back, and Back from the overlay is Resume.
-                        if (e.gbutton.button == SDL_GAMEPAD_BUTTON_EAST) toggleOverlay();
+                        // East is Back, and Back from the overlay is Resume —
+                        // or, from the Power menu on Home, just closing it.
+                        if (e.gbutton.button == SDL_GAMEPAD_BUTTON_EAST) closeOverlay();
+                        // Start closes the Power menu it opened on Home.
+                        if (e.gbutton.button == SDL_GAMEPAD_BUTTON_START && powerMenu &&
+                            !playing)
+                            closeOverlay();
                         break;
                     }
                     if (owner != InputOwner::UI) break;
@@ -6323,7 +6463,11 @@ int main(int argc, char** argv) {
                             navigate(screens::Nav::Back);
                             break;
                         case SDL_GAMEPAD_BUTTON_START:
-                            if (here() == Screen::Home) running = false;
+                            // START ON HOME IS THE POWER MENU — decided
+                            // 2026-09-22. It used to quit the frontend, a
+                            // development leftover that just got the session
+                            // restarted under whoever was watching.
+                            if (here() == Screen::Home) openPowerMenu();
                             break;
                         default: break;
                     }
@@ -6381,6 +6525,20 @@ int main(int argc, char** argv) {
         // A stall must not teleport an animation; the reference implementation
         // caps its own accumulator for the same reason.
         dt = std::min(dt, 0.1f);
+
+        // Kept current every frame, so it can tell a wake the moment one
+        // happens rather than only when a key asks.
+        power::justWoke();
+        if (restPending) {
+            const double waited = (SDL_GetTicksNS() - restWaitStart) / 1e9;
+            if (uploader.pending() == 0 || waited > 20.0) {
+                if (uploader.pending() > 0)
+                    std::fprintf(stderr, "[power] resting with %d upload(s) still owed\n",
+                                 uploader.pending());
+                restPending = false;
+                power::act(power::Action::Rest);
+            }
+        }
 
         // Idle, once a frame. The timers only ever deepen here; input() is
         // what lifts them, above.
@@ -6685,7 +6843,7 @@ int main(int argc, char** argv) {
             playing = true;
             if (!overlayOpen) {
                 overlayOpen = true;
-                overlayFade.retarget(1.0f, kOverlayFade);
+                overlayFade.retarget(1.0f, overlayFadeSeconds);
             }
         }
         if (overlayExitDemo && playing) {
@@ -7536,13 +7694,14 @@ int main(int argc, char** argv) {
             // is one, so the panel does not change height as a message arrives
             // and leaves — a menu that resizes under a person's thumb is worse
             // than one with a little space at the bottom.
-            const float panelH = static_cast<float>(OvCount) * kOverlayButtonHeight +
-                                 static_cast<float>(OvCount - 1) * kOverlayButtonGap +
+            const int ovN = ovCount();
+            const float panelH = static_cast<float>(ovN) * kOverlayButtonHeight +
+                                 static_cast<float>(ovN - 1) * kOverlayButtonGap +
                                  64.0f + 44.0f;
             const float px = (ui::kCanvasWidth - kOverlayPanelWidth) * 0.5f;
             // Rises slightly as it arrives rather than only fading: a panel that
             // just materialises reads as a glitch.
-            const float py = (ui::kCanvasHeight - panelH) * 0.5f + (1.0f - ovl) * 24.0f;
+            const float py = (ui::kCanvasHeight - panelH) * 0.5f + (1.0f - ovl) * overlayRise;
             // SOLID, NOT GLASS. See design.h, kOverlayPanelFill, for why — in
             // short, glass blurs the console's own scene texture, and on the
             // composited path the game is not in it. A panel that is frosted on
@@ -7571,7 +7730,7 @@ int main(int argc, char** argv) {
             panel.shadowColor = ui::Color::black(kOverlayPanelShadowAlpha * ovl);
             renderer.draw(panel);
 
-            for (int i = 0; i < OvCount; ++i) {
+            for (int i = 0; i < ovN; ++i) {
                 const bool on = (i == overlaySlot);
                 const float f = on ? overlayFocus.value() : 0.0f;
                 // 1.04, the pause menu's own tier. A full-width button growing
@@ -7594,7 +7753,13 @@ int main(int argc, char** argv) {
                                   f * (kOverlayButtonFocusFill - kOverlayButtonRestFill)) * ovl)};
                 if (f > 0.0f) {
                     btn.border = f * kFocusRimWidth;
+                    // FADED WITH THE PANEL. It was the one part of the menu
+                    // that did not follow `ovl`, so the focus rim arrived at
+                    // full strength on the first frame, floating over a panel
+                    // that had not faded in yet — MMagTech on the Power menu,
+                    // 2026-09-22: *"it opens in pieces."*
                     btn.borderColor = ui::palette::kFocusRim;
+                    btn.borderColor.a *= ovl;
                     btn.shadowBlur = kOverlayButtonFocusShadowBlur;
                     btn.shadowOffsetY = kOverlayButtonFocusShadowY;
                     btn.shadowColor =
@@ -7602,7 +7767,7 @@ int main(int argc, char** argv) {
                 }
                 renderer.draw(btn);
 
-                const char* label = kOverlayLabels[i];
+                const char* label = ovLabel(i);
                 const float tw = text.measure(label, ui::TextStyle::Title3, sc);
                 // Dark on the light row, light on the dark ones. Crossfaded by
                 // the focus animation so the text does not snap between them.
