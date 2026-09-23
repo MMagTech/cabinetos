@@ -11726,6 +11726,13 @@ and one button?**
 
 #### ANY CHANGE MUST WORK FOR A CONSOLE JUMPING FROM ANY OLDER VERSION — 2026-09-23
 
+**IT APPLIES FROM THE FIRST PUBLIC RELEASE, NOT BEFORE.** MMagTech: nobody uses
+this console yet. There is his A9 and the test VM, both for building, until he
+releases it and tells people on his Discord channel. Until then the 2026-09-18
+"no migration tool" stance stands, and a machine stranded by a change is
+reinstalled or fixed by hand. **From the release announcement on, the three
+checks below are binding.**
+
 **MMagTech asked what happens to someone who misses several updates and then
 takes the newest one.** For the operating system itself, nothing goes wrong.
 An update is the whole image, not a chain of patches, so a console that skips
@@ -11738,14 +11745,14 @@ an update, and there are three checks to make on every change:**
    and `/etc` are carried across updates, and bootc three-way-merges `/etc`. If
    a change alters how anything there is stored, the new code converts it on
    startup from whatever it finds. **The "no migration tool" stance of
-   2026-09-18 was right before anyone ran this console. It stops being right
-   the day someone else does.**
+   2026-09-18 holds until the public release, and ends that day.**
 2. **The image format stays readable by an OLD console's update tool.** The
    download is done by the bootc of the version being replaced. An image that
    a far-behind console cannot read strands it silently. **This bears directly
-   on the rechunk experiment**, which changes how the image is assembled. Prove
-   that an older deployment can still `bootc upgrade` to the new image before
-   shipping it.
+   on the rechunk experiment**, which changes how the image is assembled.
+   Before release it only matters for the A9 and the VM, which can be
+   reinstalled. After release, prove that an older deployment can still `bootc
+   upgrade` to a new image format before shipping it.
 3. **Signing stays acceptable to old consoles.** If the cosign key or the
    verification policy ever changes, overlap the old and the new, so a console
    that missed the switch can still take an update.

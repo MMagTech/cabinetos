@@ -407,10 +407,12 @@ becomes a few MB.
 files as RPMs, so the rechunk gives each its own chunk. That keeps small
 updates but not the build-time saving.
 
-**And one more check before shipping it:** an OLDER deployment must still be
-able to `bootc upgrade` to the new image. The old console's bootc does the
-download, and an image it cannot read strands it. PROJECT.md question 27, *Any
-change must work for a console jumping from any older version*.
+**Worth checking while in there, but not a blocker before release:** that the
+A9's current deployment can `bootc upgrade` to the new image, since the old
+bootc does the download. Nobody but MMagTech runs the console yet, and a
+stranded A9 can be reinstalled. From the public release on, it is a binding
+check. PROJECT.md question 27, *Any change must work for a console jumping from
+any older version*.
 
 **The constraint:** the update stays one check, one button, one reboot.
 Splitting layers passes that test. Splitting artifacts does not, and is ruled
