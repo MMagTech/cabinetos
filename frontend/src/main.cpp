@@ -4342,6 +4342,12 @@ int main(int argc, char** argv) {
     // a shelf and a grid end up disagreeing about what focus looks like, which
     // is the same reason design.h exists.
     enum Row { RowRecent = 0, RowFavorites = 1 };
+    // HOW FAR EACH HOME ROW HAS SCROLLED, in points — 2026-09-23. There was
+    // none: every card was drawn at its fixed slot, so moving right past the
+    // edge of the screen put focus on a card nobody could see, and A launched
+    // it. MMagTech, on the A9: *"this should scroll until the last one."* One
+    // per row, and each row keeps its own when focus leaves it.
+    Animated shelfScroll[2];
     // THE CHIP IS A BAR SLOT NOW, and it is the only one that is not a
     // capsule: it is drawn as the avatar disc at the far right, so the label
     // loop below stops at BarSettings and the chip takes its own focus rim.
@@ -6264,8 +6270,12 @@ int main(int argc, char** argv) {
     // capture, which is not the console and must not take its button.
     if (!shotMode) {
         power::takeButtons();
+        power::takeShutdownDelay();
         restAvailable = power::canRest();
     }
+    // Set while logind is waiting on us to leave a game before it proceeds.
+    bool releasePending = false;
+    uint64_t releaseWaitStart = 0;
     if (powerMenuDemo) {
         if (shotMode) restAvailable = power::canRest();
         openPowerMenu();
@@ -6638,6 +6648,34 @@ int main(int argc, char** argv) {
         // Kept current every frame, so it can tell a wake the moment one
         // happens rather than only when a key asks.
         power::justWoke();
+
+        // THE MACHINE IS ABOUT TO GO DOWN OR SLEEP, and logind is holding it
+        // for us. Leave the game the one way games are left — finishExit, every
+        // save class for every emulator — then let it go once the uploads are
+        // through, or at 25 s, inside the image's 30 s allowance.
+        switch (power::poll()) {
+            case power::Event::GoingDown:
+            case power::Event::GoingToSleep:
+                std::fprintf(stderr, "[shutdown] the machine is going down%s\n",
+                             playing ? "; leaving the game first" : "");
+                if (playing && cab::Core::shared().running()) finishExit();
+                releasePending = true;
+                releaseWaitStart = SDL_GetTicksNS();
+                break;
+            case power::Event::Woke:
+            case power::Event::None:
+                break;
+        }
+        if (releasePending) {
+            const double waited = (SDL_GetTicksNS() - releaseWaitStart) / 1e9;
+            if (uploader.pending() == 0 || waited > 25.0) {
+                if (uploader.pending() > 0)
+                    std::fprintf(stderr, "[shutdown] going down with %d upload(s) still owed\n",
+                                 uploader.pending());
+                releasePending = false;
+                power::releaseDelay();
+            }
+        }
         if (restPending) {
             const double waited = (SDL_GetTicksNS() - restWaitStart) / 1e9;
             if (uploader.pending() == 0 || waited > 20.0) {
@@ -7687,9 +7725,33 @@ int main(int argc, char** argv) {
             // the list. The margin keeps a card's art loading just before it
             // slides in, so the fade has somewhere to start.
             const float kCullMargin = (kShelfCoverWidth + kShelfSpacing) * 2.0f;
+            // THE ROW FOLLOWS FOCUS, and only as far as it has to. Moving
+            // right, the row slides once the focused card would cross the
+            // right edge, and it stops where the NEXT card still peeks in, so
+            // there is visibly more to come. Moving back left, it slides once
+            // focus would cross the left inset. The last card rests against
+            // the right edge; the first against the left inset.
+            const float pitch = kShelfCoverWidth + kShelfSpacing;
+            if (rowId == RowRecent || rowId == RowFavorites) {
+                Animated& rs = shelfScroll[rowId];
+                if (rowFocused) {
+                    const float left = kContentInset + static_cast<float>(focusSlot) * pitch;
+                    const bool last = focusSlot >= static_cast<int>(count) - 1;
+                    const float peek = last ? 0.0f : kShelfSpacing + kShelfCoverWidth * 0.35f;
+                    const float rightEdge = ui::kCanvasWidth - kContentInset - peek;
+                    float target = rs.to;
+                    if (left + kShelfCoverWidth - target > rightEdge)
+                        target = left + kShelfCoverWidth - rightEdge;
+                    if (left - target < kContentInset) target = left - kContentInset;
+                    target = std::max(0.0f, target);
+                    rs.retarget(target, kFocusDuration * 1.6f);
+                }
+                rs.tick(dt);
+            }
+            const float scroll =
+                (rowId == RowRecent || rowId == RowFavorites) ? shelfScroll[rowId].value() : 0.0f;
             auto cardBaseX = [&](size_t slot) {
-                return kContentInset +
-                       static_cast<float>(slot) * (kShelfCoverWidth + kShelfSpacing);
+                return kContentInset + static_cast<float>(slot) * pitch - scroll;
             };
 
         // Unfocused cards first, so a focused card's shadow and rim land on top

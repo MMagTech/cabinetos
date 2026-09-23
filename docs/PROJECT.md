@@ -5847,6 +5847,38 @@ press, `display awake: gamescope took it`. The test flags stay:
   3 running, SIGTERM, `leaving the game the way Exit to Home does`, `VM
   destroyed`, `exited to Home`. **Not yet proved:** the unit half, which only
   exists in an image, and an actual upload, which needs a save that changed.
+  **THE UNIT HALF DOES NOT WORK — tested on the image, 2026-09-23.** A game
+  running (DoDonPachi DaiOuJou) and `systemctl reboot`: no `[shutdown]` line,
+  and the stop script printed nothing. **gamescope and the frontend do not live
+  in `cabinetos-session.service`'s cgroup.** `PAMName=login` puts them in the
+  logind session, `user-1000.slice/session-1.scope`, and on shutdown that scope
+  is stopped in parallel with the service, so `ExecStop` cannot run first.
+  gamescope took SIGTERM at the same instant (`reaper: Parent of
+  gamescopereaper was killed. Killing children.`), and by the time the stop
+  script ran there was nothing left to stop. `After=NetworkManager.service` did
+  order the network down after the session, which is moot.
+  **What does work:** Sleep, Restart and Power off chosen from the Power menu
+  run `finishExit` first. That was proved the same morning with a real upload,
+  `[save] uploaded fbneo-native` before sleeping, and the power button always
+  goes through that menu now.
+  **The fix:** a logind DELAY inhibitor on `shutdown:sleep`. The frontend
+  listens for `PrepareForShutdown`/`PrepareForSleep`, runs `finishExit` while
+  everything is still up, waits for the uploads, and then releases the lock. It
+  covers every way a shutdown can start. logind's `InhibitDelayMaxUSec` is
+  5 s on the A9; the image should raise it to about 30 s. **The stop script and
+  the ordering line become dead weight and should be deleted with it.**
+  **BUILT AND PROVED THE SAME DAY.** `power::takeShutdownDelay`, which holds a
+  `shutdown:sleep` delay lock and polls sd-bus each frame, and
+  `usr/lib/systemd/logind.conf.d/50-cabinetos.conf` with
+  `InhibitDelayMaxSec=30`. The stop script, `ExecStop`, `TimeoutStopSec` and
+  `After=NetworkManager.service` are deleted. On the A9, with DoDonPachi
+  DaiOuJou running and `systemctl reboot`:
+  `[shutdown] the machine is going down; leaving the game first`, then
+  `[save] uploaded fbneo-native`, then `[power] released`, then logind's
+  `System is rebooting`, with NetworkManager stopping after. 133 ms from
+  warning to release. MMagTech's point stands: updates will be chosen from
+  Settings, never run mid-game. This is for everything else, like a remote
+  restart or a crash-and-reboot.
 - **A Power menu in the UI** (Sleep, Restart, Power off) needs a polkit rule:
   logind answers `challenge` to the console user for `CanSuspend`,
   `CanPowerOff` and `CanReboot`. The same shape as the NetworkManager rule
@@ -11671,6 +11703,24 @@ faster to push in CI, faster to pull on the console, and the cores layer stays
 cached for weeks because those revisions are pinned and the whole point of
 `build-core.yml` is that they do not move.
 
+**CORRECTION, 2026-09-23: REORDERING ALONE WOULD NOT WORK, BECAUSE OF THE
+RECHUNK.** `main` builds run `just ostree-rechunk`, which is rpm-ostree
+`compose build-chunked-oci --max-layers 127`. It rebuilds the image from its
+flattened filesystem and chunks it by RPM package, discarding the
+Containerfile's layers. Our payload is owned by no package, so it lands in the
+leftover chunks together wherever the Containerfile put it. The rechunk is also
+the most expensive step there is, about 9 of the 16 minutes (measured
+2026-09-23). **So there are two routes:**
+
+- **Skip the rechunk and order the layers.** Small updates and a much faster
+  build.
+- **Keep the rechunk and package the payload as RPMs**, so each gets its own
+  chunk.
+
+The first is next session's experiment (NEXT-SESSION.md, *What to do next*),
+pushed to a test image name. Nobody has yet recorded why the rechunk is there
+beyond the ublue template, and Bazzite's base already arrives chunked.
+
 **Not done, deliberately.** It changes how the shipping image is assembled, so
 it wants its own branch and a careful check that the split survives
 `bootc container lint` — and that the `RUN --mount=type=bind,from=ctx` pattern
@@ -11705,6 +11755,47 @@ and one button?**
   image-based booting exists to remove, and it would turn one button into a
   matrix. **Ruled out, and if an optimisation ever requires it, it is not worth
   it.**
+
+#### ANY CHANGE MUST WORK FOR A CONSOLE JUMPING FROM ANY OLDER VERSION — 2026-09-23
+
+**IT APPLIES FROM THE FIRST PUBLIC RELEASE, NOT BEFORE.** MMagTech: nobody uses
+this console yet. There is his A9 and the test VM, both for building, until he
+releases it and tells people on his Discord channel. Until then the 2026-09-18
+"no migration tool" stance stands, and a machine stranded by a change is
+reinstalled or fixed by hand. **From the release announcement on, the three
+checks below are binding.**
+
+**MMagTech asked what happens to someone who misses several updates and then
+takes the newest one.** For the operating system itself, nothing goes wrong.
+An update is the whole image, not a chain of patches, so a console that skips
+five versions lands byte-identical to one that took every update. The only
+difference is a bigger download that one time. **The risk is in what survives
+an update, and there are three checks to make on every change:**
+
+1. **Data conversions work from ANY older version, not just the last one.**
+   `/var` (saves, the `users/` layout, the cover cache, `/var/lib/cabinetos`)
+   and `/etc` are carried across updates, and bootc three-way-merges `/etc`. If
+   a change alters how anything there is stored, the new code converts it on
+   startup from whatever it finds. **The "no migration tool" stance of
+   2026-09-18 holds until the public release, and ends that day.**
+2. **The image format stays readable by an OLD console's update tool.** The
+   download is done by the bootc of the version being replaced. An image that
+   a far-behind console cannot read strands it silently. **This bears directly
+   on the rechunk experiment**, which changes how the image is assembled.
+   Before release it only matters for the A9 and the VM, which can be
+   reinstalled. After release, prove that an older deployment can still `bootc
+   upgrade` to a new image format before shipping it.
+3. **Signing stays acceptable to old consoles.** If the cosign key or the
+   verification policy ever changes, overlap the old and the new, so a console
+   that missed the switch can still take an update.
+
+**A known limit, not a check:** a save state may not load after a big jump,
+because the emulator it came from moved on. That is already true for someone
+who updates every time. Skipping updates does not make it worse, and the state
+tags exist to catch it.
+
+**Already jump-safe:** the flatpak emulators of question 21. Their installer
+re-runs whenever the image or its list changes.
 
 **AND IT BOUNDS THE LAYERING WORK USEFULLY.** The 390x amplification above is
 worth fixing because a console that checks for updates should not pull half a

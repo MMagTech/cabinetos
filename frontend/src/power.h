@@ -37,6 +37,30 @@ const char* name(Action a);
 // logind answered.
 void act(Action a);
 
+// ---- Being warned before the machine goes down ----------------------------
+//
+// A SHUTDOWN MID-GAME MUST LEAVE THE GAME FIRST, HOWEVER IT STARTS — 2026-09-23.
+// The Power menu already does, because it runs Exit to Home itself. Anything
+// else — a remote `systemctl reboot`, a crash-and-restart, an automatic update
+// one day — used to kill the game outright. PR #50 tried to fix that with an
+// ExecStop script, and on the A9 it could not work: gamescope and the frontend
+// live in the logind session's scope, which is stopped in parallel with the
+// service, so the game was dead before the script ran.
+//
+// This is the standard mechanism instead: a logind DELAY lock on
+// shutdown and sleep. logind announces PrepareForShutdown / PrepareForSleep
+// and then waits — while every service, the network included, is still up —
+// until the lock is released or InhibitDelayMaxSec runs out (30 s in the
+// image; logind's default is 5).
+bool takeShutdownDelay();
+
+enum class Event { None, GoingDown, GoingToSleep, Woke };
+// Non-blocking; call once a frame.
+Event poll();
+
+// Let the shutdown or sleep proceed. Taken again automatically on waking.
+void releaseDelay();
+
 // True for a few seconds after the machine comes back from a sleep. The press
 // that woke it reaches us as an ordinary power-key press, and without this the
 // console would wake straight into its own Power menu. Call once a frame.

@@ -23,6 +23,38 @@ constexpr const char* kManager = "org.freedesktop.login1.Manager";
 // what the kernel does for us when the process ends, however it ends.
 int gButtonLock = -1;
 
+// The delay lock, and the connection that hears logind's announcements. Kept
+// open for the life of the process.
+int gDelayLock = -1;
+sd_bus* gSignals = nullptr;
+Event gPending = Event::None;
+
+int onPrepare(sd_bus_message* m, void* userdata, sd_bus_error*) {
+    int starting = 0;
+    if (sd_bus_message_read(m, "b", &starting) < 0) return 0;
+    const bool sleep = userdata != nullptr;
+    gPending = !starting ? Event::Woke : (sleep ? Event::GoingToSleep : Event::GoingDown);
+    return 0;
+}
+
+int takeLock(sd_bus* bus, const char* what, const char* why, const char* mode) {
+    sd_bus_error err = SD_BUS_ERROR_NULL;
+    sd_bus_message* reply = nullptr;
+    int lock = -1;
+    if (sd_bus_call_method(bus, kLogind, kPath, kManager, "Inhibit", &err, &reply, "ssss",
+                           what, "CabinetOS", why, mode) >= 0) {
+        int fd = -1;
+        if (sd_bus_message_read(reply, "h", &fd) >= 0 && fd >= 0)
+            lock = fcntl(fd, F_DUPFD_CLOEXEC, 3);
+    } else {
+        std::fprintf(stderr, "[power] logind refused a %s lock: %s\n", mode,
+                     err.message ? err.message : "?");
+    }
+    sd_bus_error_free(&err);
+    sd_bus_message_unref(reply);
+    return lock;
+}
+
 double clockSeconds(clockid_t id) {
     timespec ts{};
     clock_gettime(id, &ts);
@@ -64,6 +96,48 @@ bool takeButtons() {
     sd_bus_message_unref(reply);
     sd_bus_unref(bus);
     return ok;
+}
+
+bool takeShutdownDelay() {
+    if (!gSignals) {
+        if (sd_bus_open_system(&gSignals) < 0) {
+            gSignals = nullptr;
+            std::fprintf(stderr, "[power] no system bus; a shutdown will not wait for the game\n");
+            return false;
+        }
+        // userdata marks which of the two it is: null for shutdown.
+        sd_bus_match_signal(gSignals, nullptr, kLogind, kPath, kManager,
+                            "PrepareForShutdown", onPrepare, nullptr);
+        static int sleepMarker = 1;
+        sd_bus_match_signal(gSignals, nullptr, kLogind, kPath, kManager,
+                            "PrepareForSleep", onPrepare, &sleepMarker);
+    }
+    if (gDelayLock < 0)
+        gDelayLock = takeLock(gSignals, "shutdown:sleep",
+                              "Leaving the game and sending its saves first", "delay");
+    std::fprintf(stderr, "[power] %s\n",
+                 gDelayLock >= 0 ? "a shutdown or sleep will wait for the game to be left"
+                                 : "no delay lock; a shutdown will not wait for the game");
+    return gDelayLock >= 0;
+}
+
+Event poll() {
+    if (!gSignals) return Event::None;
+    // Drain whatever arrived; each message runs onPrepare if it matches.
+    while (sd_bus_process(gSignals, nullptr) > 0) {
+    }
+    const Event e = gPending;
+    gPending = Event::None;
+    if (e == Event::Woke && gDelayLock < 0) takeShutdownDelay();
+    return e;
+}
+
+void releaseDelay() {
+    if (gDelayLock >= 0) {
+        close(gDelayLock);
+        gDelayLock = -1;
+        std::fprintf(stderr, "[power] released: the machine may go down now\n");
+    }
 }
 
 bool canRest() {

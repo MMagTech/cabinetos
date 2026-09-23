@@ -32,11 +32,25 @@ with its investigations intact.
 
 ## Before anything else
 
-**EVERYTHING IS ON `main` AND ON THE TELEVISION.** PR #48 merged 2026-09-22 —
-the boot work, the cover cache and the paged grid, plus open questions 29 and
-30. The image built, the A9 took it with `bootc upgrade`, and it is running it.
-**[PR #42](https://github.com/MMagTech/Cabinet-OS/pull/42), the Bazzite base bump, is still open and independent of all
-of it.**
+**THE SESSION OF 2026-09-22/23 MERGED THREE PRS AND LEFT ONE OPEN.** On `main`
+and on the television:
+
+- **#49**: pixel shift, dim at 5 minutes, screen off at 15.
+- **#50**: save on shutdown. Its stop script turned out not to work; see below.
+- **#51**: the Power menu (Sleep, Restart, Power off; Resume in a game), the
+  notification pill, and no save states on PS2 and GameCube.
+
+**The last PR of the session holds four things:**
+
+- Home's rows scroll to follow focus.
+- The shutdown fix: a logind delay lock replaces #50's stop script.
+- A new file, `logind.conf.d/50-cabinetos.conf`.
+- This handover.
+
+Its frontend half is proved on the A9. The logind setting only arrives with the
+image, and the A9 still reads logind's default 5 s until it is upgraded to
+that PR's build. **[PR #42](https://github.com/MMagTech/Cabinet-OS/pull/42),
+the Bazzite base bump, is still open and independent of all of it.**
 
 **THE IMAGE BUILD IS NOT A REPORTED PR CHECK.** It runs on every pull request
 and it passes, but `statusCheckRollup` comes back empty — so nothing gates a
@@ -92,7 +106,8 @@ argument for the rule.
 | `systemctl is-active cabinetos-session` | `active` |
 | `ps -eo args \| grep [c]abinetos-frontend` | **`/usr/bin/cabinetos-frontend`**, under `gamescope --backend drm 3840x2160` |
 | drop-in directories, `/etc` and `/run` | **empty. No drop-ins.** |
-| `bootc status` | booted **`sha256:1ecaa7d8…`** (#49, idle handling), rollback `sha256:45893f8f…` |
+| `bootc status` | booted **`sha256:c69f8d14…`** (#51), rollback `sha256:1ecaa7d8…` (#49) |
+| `InhibitDelayMaxUSec` | `5000000`, logind's default, until the image with `50-cabinetos.conf` is installed |
 | `journalctl -t cabinetos-session -b \| grep 'is up'` | `gamescope (drm) is up` |
 | accounts | **`1 - MMagTech` (active), `13 - claire`** |
 
@@ -104,13 +119,11 @@ see the queue.
 
 **IF A DIGEST HERE DISAGREES WITH `bootc status`, `bootc status` IS RIGHT.**
 
-**#49 MERGED AND IS ON THE A9 FROM THE IMAGE**, read off the machine after the
-2026-09-22 evening upgrade: `/usr/bin/cabinetos-frontend` carries the idle
-code, no drop-ins. **#50, save on shutdown, is open** — its frontend half is
-proved on the A9; its unit half needs the image, and then one real test: a
-game running, the A9's power button pressed, and `journalctl -b -1 -t
-cabinetos-session` read for `[shutdown] leaving the game` and
-`cabinetos-session-stop: the frontend stopped`.
+**Read off the A9 on 2026-09-23, after the last test reboot:** the image's own
+frontend, both drop-in directories empty, `gamescope (drm) is up`. Once the
+session's last PR merges, `sudo bootc upgrade && sudo systemctl reboot` brings
+the A9 level with `main`. Then check that `InhibitDelayMaxUSec` reads
+`30000000`.
 
 **A THIRTY-SECOND LOOP EXISTS AND IT IS NOT AT THE TOP OF THIS FILE BY
 ACCIDENT** — `tools/ui-loop.sh`, documented in the lessons section. An evening
@@ -357,7 +370,99 @@ states, and leave — with the save syncing on the way out.
 
 ### WHAT TO DO NEXT
 
-#### FIRST: THE NEW BOOT IS ON THE TELEVISION AND NOBODY HAS WATCHED IT
+#### FIRST: MAKE A SMALL CHANGE SHIP SMALL, AND TRY DROPPING THE RECHUNK — decided 2026-09-23
+
+**MMagTech chose this as the first thing next session**, ahead of offline mode
+and the sync gap below. It is open question 27, **with its recorded fix
+corrected** (PROJECT.md has the correction).
+
+**The problem:** a 1.4 MB frontend change makes the A9 download 546 MB, and a
+`main` build takes 16–17 minutes.
+
+**Where the minutes go, measured 2026-09-23 on the last two `main` runs** (job
+"Build and push image", 880 s):
+
+| Step | Time | On a PR? |
+|---|---|---|
+| **Rechunk** (`just ostree-rechunk`, rpm-ostree `build-chunked-oci --max-layers 127`) | **~9 min** | no |
+| Build image (pulls ~10 GB of Bazzite) | ~3 min | yes |
+| Maximize build space | ~1¼ min | yes |
+| Push to GHCR | ~1 min | no |
+| Cores, frontend, PCSX2, all cached | ~2 min | yes |
+
+PR builds are about 6 minutes because they skip the rechunk.
+
+**Why 546 MB, correctly this time:** the rechunk throws away the Containerfile's
+layer order and regroups the filesystem by RPM package. Our frontend, cores and
+system files belong to no package, so they land together in the leftover
+chunks. **Reordering the Containerfile, which was question 27's plan, would be
+undone by the rechunk.**
+
+**The experiment:**
+1. On a branch, split the single `RUN` so it goes base, then cores, then
+   system files, then frontend last.
+2. Skip the rechunk.
+3. Push to a TEST name (`ghcr.io/mmagtech/cabinetos-test`), never `latest`, so
+   nothing reaches the A9 unasked.
+4. Measure the `main` build time, and how much a frontend-only change
+   downloads: `bootc switch` the test VM to the test image, then change one
+   string.
+5. Check `bootc container lint`.
+6. Check that `--mount=type=bind,from=ctx` still keeps the build context out
+   of every layer.
+7. Find out why the rechunk was added. It came with the ublue template;
+   Bazzite's base arrives already chunked.
+
+**If it works:** roughly 16 minutes becomes about 7, and a frontend update
+becomes a few MB.
+
+**The fallback:** keep the rechunk and package the frontend, cores and system
+files as RPMs, so the rechunk gives each its own chunk. That keeps small
+updates but not the build-time saving.
+
+**Worth checking while in there, but not a blocker before release:** that the
+A9's current deployment can `bootc upgrade` to the new image, since the old
+bootc does the download. Nobody but MMagTech runs the console yet, and a
+stranded A9 can be reinstalled. From the public release on, it is a binding
+check. PROJECT.md question 27, *Any change must work for a console jumping from
+any older version*.
+
+**The constraint:** the update stays one check, one button, one reboot.
+Splitting layers passes that test. Splitting artifacts does not, and is ruled
+out (question 27).
+
+#### A SELF-HOSTED RUNNER ON UNRAID: RESEARCHED AND DECLINED — 2026-09-23
+
+MMagTech asked whether the expensive jobs could run on the unRAID server (Ryzen
+9 3900X, 12 cores / 24 threads; `/dev/kvm` passes through to VMs). **MMagTech
+read the findings and declined it: "won't be trying it."** Do not propose it
+again unprompted. The rechunk experiment above is the route to faster builds.
+The findings are kept only so the question never has to be researched twice:
+
+- **Only "Build and push image" is worth moving.** The 22 core builds are cached
+  and parallel on GitHub; one home runner would run them in series.
+- **It would have to be a dedicated Ubuntu 24.04 VM.** The workflows assume
+  apt, passwordless sudo and privileged podman.
+- **Two actions are destructive on a persistent machine.**
+  `ublue-os/remove-unwanted-software` runs `swapoff` and deletes `/swapfile`
+  and toolchains. `osbuild/bootc-image-builder-action` wipes
+  `/var/lib/containers/storage` and rewrites `storage.conf`.
+- **Nothing ever prunes images.**
+- **`build-pcsx2.sh` reuses any image named `cabinetos-pcsx2-builder`**, so a
+  stale toolchain could be used on a persistent store.
+- **Fixed `/tmp` paths collide between runs.**
+- **The repo is public.** Fork pull requests must never reach a self-hosted
+  runner: sudo, a shared podman store, and a later signed `main` build could
+  pick up what they left behind.
+- **The plan that was proposed and declined:**
+  1. A test workflow pushing to a test name.
+  2. Compare payload sha256s and `rpm -qa` plus a file-tree diff (image digests
+     never match).
+  3. Then a repository variable selects the runner for `main` only, defaulting
+     to GitHub.
+
+
+#### STILL OWED: THE NEW BOOT, WATCHED ON THE TELEVISION (from 2026-09-22)
 
 **IT IS LIVE AS OF 2026-09-22.** Boot no longer fetches the catalogue, covers
 are cached on disk, a warm boot asks the server nothing about its tiles, and a
@@ -457,14 +562,45 @@ it is smaller and it is lost progress on the most-played systems.
 **Also noticed: Cabinet uploads a screenshot PNG with every state
 (`TVPlayerView.saveState`); CabinetOS uploads the state alone.**
 
-#### IDLE HANDLING IS BUILT — judge the dim, then decide Sleep
+#### THE BOOT-TO-HOME TRANSITION IS HARSH — reported 2026-09-23, not looked at
 
-Pixel shift, dim and blank, open question 10b. Seen working on the panel with
-the timers sped up. **Owed:** MMagTech's verdict on whether a 60% dim reads as
-resting or broken, and a suspend test (`systemctl suspend`, then press a
-Bluetooth pad) before anything offers "Sleep". Then a Power menu, which needs a
-polkit rule, and a SIGTERM handler so the power button stops skipping the save
-upload.
+MMagTech, watching the A9 boot: *"when you see the CabinetOS screen and it moves
+into Home the transition is extremely harsh."* The waiting screen gives way to
+Home with no fade, the same kind of hard cut the curtain fixed for launching a
+game (`kCurtainDown`/`kCurtainUp`, design.h). **Judge it on the panel, and use
+`tools/ui-loop.sh` for it**: the loop restarts the session, so every run shows
+the boot. It belongs with the text pass and the boot splash, all three being
+about what a person sees first.
+
+**A FIRST ATTEMPT FROZE THE TELEVISION, AND IT WAS TAKEN BACK OUT, 2026-09-23.**
+The design was: the startup screen dims to black over 0.35 s
+(`setup::fadeOutWaiting`, which redraws `showWaiting` about twenty times with a
+black layer), then Home lifts behind the curtain over 0.6 s. The first deploy
+looked fine. On the second run (`tools/ui-loop.sh --no-build`, a session
+restart) MMagTech saw the television *"frozen on a weird distorted screen"*.
+At that moment:
+
+- The frontend was healthy and drawing Home. Its own SIGUSR1 capture was a
+  correct Home frame.
+- gamescope logged no error, and the connector read `On`/`connected`.
+- `--restore` to the image brought the panel back.
+
+**So the frame loop was fine and the picture was stuck between gamescope and
+the panel.** Not proven to be the fade: it could be the burst of 4K swaps at
+the handover, or a session restart landing badly. **Reproduce it first, with
+MMagTech watching, before changing anything.** The reverted commit is
+`1ac83e7`; its code is a one-command restore (`git show 1ac83e7`).
+
+#### IDLE AND POWER ARE BUILT — what is left
+
+Open question 10b has all of it. **Done:** pixel shift, dim, screen off, the
+Power menu, save before Sleep/Restart/Power off, and save before any other
+shutdown (the delay lock). **Owed:**
+
+- The dim judged on the OLED, not the test LG.
+- Bluetooth wake waits on Bazzite shipping kernel ≥ 7.2.7. The test plan is in
+  10b.
+- The *Turn off screen after* row, when Settings is built.
 
 **UPDATED LATER THE SAME EVENING — 10b's *What is still open* is the record.**
 The 8BitDo over Bluetooth CANNOT wake the A9 from s2idle (tested, with
@@ -1471,7 +1607,23 @@ These are ordered. **Do not begin any of them in the VM.**
   **and as of 2026-09-20 so do the four that did not** — the state machine, the
   QR renderer, the NetworkManager plumbing and knowing it is the first run.
   What is left here is the look.
-- **The boot splash**, and the rest of the branding.
+- **The boot splash**, and the rest of the branding. **MMagTech, 2026-09-23:** on boot the A9 shows
+  GEEKOM's logo with *"Bazzite" and Bazzite's logo at the bottom*. He wants
+  CabinetOS and our logo there. **MMagTech, 2026-09-23: do it WITH THE
+  INSTALLER REWORK** (open question 5: quicker, easier install steps, and
+  Bazzite's branding out of them), not on its own. **Found the same day:** the
+  theme is Plymouth `bgrt` (two-step, `WatermarkVerticalAlignment=.96`). The
+  firmware's GEEKOM logo is in the middle, and the bottom mark is
+  `/usr/share/plymouth/themes/spinner/watermark.png`, 149×43, which Bazzite
+  replaced; `rpm -qf` names fedora-logos. **The theme is inside the
+  initramfs**, so changing it means regenerating the initramfs in the image
+  build with dracut. That is the riskiest kind of image change, and the
+  installer work needs the same boot testing. `/usr/lib/os-release` still says
+  `NAME="Bazzite"` (open question 7). There is no logo file in the repo: the
+  frontend DRAWS the cabinet (`setup::drawCabinet`), so a watermark PNG can be
+  rendered by the frontend offscreen rather than taken from Cabinet's
+  Afterburner PNG. The designed splash (PROJECT.md, *The boot splash*) is the
+  destination; a swapped watermark is the stopgap.
 - **The row in Settings that turns file access on**, decided 2026-09-19 and the
   answer to open question 9. A console ships listening to nothing; an ordinary
   visible row turns SFTP on and shows the address, the user name and a password

@@ -8,12 +8,6 @@ Description=CabinetOS session
 StartLimitIntervalSec=0
 Documentation=https://github.com/MMagTech/cabinetos
 After=systemd-user-sessions.service systemd-logind.service
-# ORDERING ONLY, and it matters on the way DOWN: systemd stops units in the
-# reverse of their start order, so this keeps the network up until the session
-# has gone — which is how a game's saves reach the server when the power button
-# is pressed mid-game. It is deliberately not a Wants=network-online.target: the
-# frontend already waits for the server itself, and boot must not wait on Wi-Fi.
-After=NetworkManager.service
 Wants=systemd-logind.service
 
 # Takes tty1 instead of a login prompt. This is what makes the machine boot into
@@ -45,10 +39,6 @@ StandardOutput=journal
 StandardError=journal
 
 ExecStart=/usr/bin/cabinetos-session
-# The frontend first, alone, and waited for — see the script. Then systemd's
-# ordinary kill for whatever is left, bounded by the timeout below.
-ExecStop=/usr/libexec/cabinetos-session-stop
-TimeoutStopSec=60
 
 # A console that has crashed back to a black screen is indistinguishable from a
 # broken one. Always come back.
