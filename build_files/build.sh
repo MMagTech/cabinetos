@@ -6,9 +6,10 @@
 # system_files/ mounted at /system_files.
 #
 # The gaming stack comes from Bazzite and is kept as-is; the desktop and Steam
-# are stripped out, the session is wired in, and the console itself — the
-# frontend, the twenty-two cores and one core's system files — is installed
-# from image_payload/ near the end. See install-frontend.sh.
+# are stripped out, and the session is wired in. The console itself, the
+# frontend, the cores and their system files, is NOT installed here: the
+# Containerfile does that in three later layers of its own, through
+# install-frontend.sh.
 
 set -euo pipefail
 
@@ -257,18 +258,40 @@ log "base image has $(wc -l < /usr/share/cabinetos/packages-before-strip.txt) pa
 /ctx/require-frontend-libs.sh
 
 # ---------------------------------------------------------------------------
-# The console itself.
+# The console itself is NOT installed here, as of 2026-09-23.
 # ---------------------------------------------------------------------------
 #
-# The frontend, the twenty-two cores and PPSSPP's system files. Immediately
-# after the library check above and deliberately so: that one names three
-# libraries and says why each is needed, so when one has gone missing its error
-# is the legible one. This script's own ldd sweep then catches everything that
-# list does not cover, which is most of what the cores link against.
+# The frontend, the cores and their system files are three later RUN steps in
+# the Containerfile, each its own image layer, so that a frontend change ships
+# the frontend and not everything this script touched. See the Containerfile
+# and docs/PROJECT.md open question 27. The library check above still runs
+# first and is still the legible error: install-frontend.sh's ldd sweep runs
+# after it, in the last layer.
+
+# ---------------------------------------------------------------------------
+# dnf's transaction history, removed so this layer builds the same every time.
+# ---------------------------------------------------------------------------
 #
-# Before this, the image was the OS half only and an installed machine booted
-# to a black gamescope session. See the header of install-frontend.sh.
-/ctx/install-frontend.sh
+# MEASURED 2026-09-23: two builds from identical inputs produced an OS layer
+# that differed in exactly three files, these, because dnf5 stamps each
+# transaction with the time it ran. Everything else, the rpm database and the
+# SELinux policy included, came out byte-identical. Those 4 MB were enough to
+# give the whole 60 MB layer a new digest on every build, so every update
+# shipped it whether anything had changed or not. See docs/PROJECT.md open
+# question 27.
+#
+# Nothing reads it. This is an image-based console: nobody runs `dnf install`
+# on it, and `dnf history` on a deployed machine is not a thing anyone does.
+# dnf5 recreates the database, empty, if it is ever opened. The package list
+# itself is what the rpm database and packages-after-strip.txt record.
+rm -f /usr/lib/sysimage/libdnf5/transaction_history.sqlite*
+log "removed dnf's transaction history, which is dated and would change this layer every build"
+
+# And what dnf and the SELinux tools leave in /run. `bootc container lint`
+# warns about it (nonempty-run-tmp), and it was always there; the rechunk used
+# to drop it on the way out. /run is emptied at every boot, so a console never
+# sees these, and without them the lint has nothing to say.
+rm -rf /run/dnf /run/selinux-policy
 
 # ---------------------------------------------------------------------------
 # Record the result.
@@ -366,30 +389,12 @@ done
 
 check_present "emulator flatpak manifest" /usr/share/cabinetos/flatpaks.list || failed=1
 
-# The console. install-frontend.sh already asserts each of these as it puts it
-# there; they are here as well because this block is the list somebody reads to
-# find out what an image is supposed to contain, and "the frontend" belongs on
-# it more than anything else does.
-check_present "the frontend" /usr/bin/cabinetos-frontend || failed=1
-check_present "the cores" /usr/lib/cabinetos/cores || failed=1
-check_present "PPSSPP's system files" /usr/share/cabinetos/system/PPSSPP/compat.ini || failed=1
-
-# PLAYSTATION 2, WHICH IS NOT A CORE AND SO IS NOT COVERED BY THE LINE ABOVE.
-#
-# All four are checked rather than just the emulator, because each absence
-# fails differently and all of them fail QUIETLY:
-#
-#   the .so        catalog.cpp reports PlayStation 2 as "not built on this
-#                  console yet" and the library carries on — 71 games gone,
-#                  and the console looks entirely normal
-#   the libraries  it is there and cannot dlopen; the failure arrives at the
-#                  moment somebody starts a game
-#   the resources  PCSX2 refuses to start. Not a warning, not a degraded
-#                  picture: it does not boot
-check_present "the PlayStation 2 emulator" /usr/lib/cabinetos/cores/cabinetos-ps2.so || failed=1
-check_present "PCSX2's rapidyaml" /usr/lib/cabinetos/cores/libryml.so.0.10.0 || failed=1
-check_present "PCSX2's c4core" /usr/lib/cabinetos/cores/libc4core.so.0.2.8 || failed=1
-check_present "PCSX2's resources" /usr/share/cabinetos/system/pcsx2/resources/GameIndex.yaml || failed=1
+# THE CONSOLE ITSELF IS CHECKED IN install-frontend.sh's LAST CALL, not here.
+# The frontend, the cores and their files are installed in later layers, after
+# this script has finished, so this block cannot see them. The list moved
+# there whole: the frontend, the cores, PPSSPP's files, and PlayStation 2's
+# emulator, its two libraries and its resources, each of which fails quietly in
+# its own way when absent.
 
 # The session must actually RUN the frontend. It ran `sleep infinity` until
 # 2026-09-19, which is a session that starts, takes the display, and draws

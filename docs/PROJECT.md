@@ -11717,15 +11717,102 @@ the most expensive step there is, about 9 of the 16 minutes (measured
 - **Keep the rechunk and package the payload as RPMs**, so each gets its own
   chunk.
 
-The first is next session's experiment (NEXT-SESSION.md, *What to do next*),
-pushed to a test image name. Nobody has yet recorded why the rechunk is there
-beyond the ublue template, and Bazzite's base already arrives chunked.
+#### DECIDED 2026-09-23: NO RECHUNK, AND THE LAYERS IN THE CONTAINERFILE DO THE JOB
 
-**Not done, deliberately.** It changes how the shipping image is assembled, so
-it wants its own branch and a careful check that the split survives
-`bootc container lint` — and that the `RUN --mount=type=bind,from=ctx` pattern
-this inherits from the ublue template still keeps the build context out of the
-image when it is more than one step.
+**Branch `layers-experiment`, four CI runs, pushed to
+`ghcr.io/mmagtech/cabinetos-test` and never to `cabinetos`.** The Containerfile
+was split into four layers, least-changed first (the OS, the cores, their
+system files, the frontend), the rechunk was skipped, and
+`ci/compare-images.sh` read what a console on one test image would download to
+take the next.
+
+| Run | What changed | A console downloads | Image job |
+|---|---|---|---|
+| 1 | first push | 2.6 GB, once, coming from today's rechunked `latest` | 7 m 37 s |
+| 2 | **nothing**: same inputs, rebuilt from scratch | 60.3 MB | 4 m 19 s |
+| 3 | dnf's history removed (below) | 59.4 MB, the OS layer, once | 5 m 01 s |
+| 4 | **one frontend log string** | **0.7 MB** | 3 m 57 s |
+
+Against 546 MB and a 14 m 40 s image job with the rechunk. Run 4 took six
+minutes from push to finish, all jobs included, against 16 to 17.
+
+**TWO THINGS HAD TO BE TRUE, AND NEITHER WAS FREE.**
+
+1. **An unchanged layer must rebuild to the same bytes.** CI starts from
+   nothing each time, so a layer is only reused by a console if it comes out
+   identical. File timestamps prevent that, so `just build` passes
+   `podman build --timestamp 0`. ostree stores `/usr` with a timestamp of zero
+   anyway, so nothing is lost. The image's own creation time reads 1970 as a
+   result; the real date is in the `org.opencontainers.image.created` label.
+2. **dnf's transaction history had to go.** Run 2 changed nothing and still
+   shipped the whole 60 MB OS layer. Both copies of that layer were downloaded
+   and compared file by file: **exactly three files differed**, dnf5's
+   `transaction_history.sqlite*`, 4 MB, dated by the minute. The rpm database
+   and the SELinux policy came out byte-identical. `build.sh` now deletes the
+   history at the end of the OS step. Nothing reads it on an image-based
+   console, and dnf recreates it empty if asked.
+
+**The layers, compressed, which is what travels:** the OS 59 MB, the cores
+94 MB, their system files 12 MB, the frontend 0.7 MB, and 171 bytes from the
+lint step. Bazzite's own 128 layers sit under them, untouched.
+
+**WHAT IT COSTS.**
+
+- **One 2.6 GB download for each console, the first time it takes a
+  non-rechunked image.** Of the rechunked image's 128 chunks, 66 happen to
+  match Bazzite's own and 62 do not.
+- **The whole image is 160 MB bigger**, 5.20 GB against 5.04 GB. What the
+  strip removes is still inside Bazzite's layers underneath, where the rechunk
+  used to leave it out. That is a first install's download and some disk,
+  never an update's.
+- **Nothing on the update model.** One image, one digest, one `bootc upgrade`,
+  one reboot. The layers are how it is stored and fetched, not what is updated.
+
+**THE OTHER CHECKS.**
+
+- **`bootc container lint`: 12 passed, 1 warning**, `nonempty-run-tmp`, for
+  files dnf and the SELinux tools leave in `/run`. **The shipping build on
+  `main` has the same warning**; the rechunk hid the files and this ships them.
+  `/run` is emptied at every boot, so they are never seen.
+- **The build context is in no layer.** `ci/layer-report.sh` lists every file
+  in every layer we add and fails the build if anything under `ctx/` or the
+  payload is among them. None was, in any run.
+
+**WHY THE RECHUNK WAS THERE: NOBODY DECIDED IT.** It arrived in the first
+commit, `a79d966`, copied from the ublue image template with a comment saying
+it made updates download only what changed. **The template's own README says
+the opposite**: rechunking "does not make your image faster to download, just
+provides better resumability" (a resumed download after a dropped
+connection). For an image that regroups by RPM package it does help people
+whose changes are packages. Ours are not, which is why it cost 546 MB.
+
+**AND ON A REAL MACHINE, THE SAME DAY.** The test VM was switched to the test
+image, rebooted, upgraded, rebooted again, and put back:
+
+| | bootc's own words |
+|---|---|
+| Switch from the rechunked image | `layers already present: 71; layers needed: 62 (2.6 GB)`, the registry's prediction exactly. Staged in 51 s; 0.4 GB of disk, since most files were already held |
+| First boot on it | session up, the frontend loaded its library, no failed units |
+| **Upgrade after a frontend-only change** | **`Added layers: 1  Size: 739.2 kB`** |
+| Second boot | the new digest, and the frontend printing the changed string |
+
+**bootc does not mind `--timestamp 0`.** `bootc status` shows the real build
+time, read from the label, not 1970.
+
+**MADE THE SHIPPING BUILD ON THE SAME BRANCH.** The Rechunk step and its
+recipe are gone. `ci/layer-report.sh` runs on every image build and fails it if
+build context reaches a layer, and every `main` build's summary now says what a
+console on the previous image downloads. `build.sh` also clears `/run/dnf` and
+`/run/selinux-policy`, which the rechunk used to drop, so the lint warning goes.
+**Merging costs each console the one 2.6 GB download**, the A9 included.
+
+**THE FALLBACK IS SMALLER THAN RECORDED.** Not RPMs. rpm-ostree's rechunker
+gives every distinct value of a `user.component` file attribute its own layer
+("This will create a new layer for each unique `user.component` xattr value",
+its documentation on `build-chunked-oci`). So keeping the rechunk and running
+`setfattr -n user.component -v frontend /usr/bin/cabinetos-frontend`, and the
+same for the cores and their files, would keep small updates without packaging
+anything. It would not give back the nine minutes.
 
 #### THE REQUIREMENT THIS IS ALL IN SERVICE OF — MMagTech, 2026-09-22
 

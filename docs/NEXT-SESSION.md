@@ -368,66 +368,25 @@ states, and leave — with the save syncing on the way out.
 
 ### WHAT TO DO NEXT
 
-#### FIRST: MAKE A SMALL CHANGE SHIP SMALL, AND TRY DROPPING THE RECHUNK — decided 2026-09-23
+#### A SMALL CHANGE NOW SHIPS SMALL, 2026-09-23, if the PR is merged
 
-**MMagTech chose this as the first thing next session**, ahead of offline mode
-and the sync gap below. It is open question 27, **with its recorded fix
-corrected** (PROJECT.md has the correction).
+**Open question 27 has the record.** The rechunk is gone and the Containerfile
+builds in four layers, least-changed first. **A frontend-only change downloads
+739 kB instead of 546 MB, counted by `bootc upgrade` itself on the test VM,
+and a whole CI run takes about six minutes instead of sixteen.**
 
-**The problem:** a 1.4 MB frontend change makes the A9 download 546 MB, and a
-`main` build takes 16–17 minutes.
-
-**Where the minutes go, measured 2026-09-23 on the last two `main` runs** (job
-"Build and push image", 880 s):
-
-| Step | Time | On a PR? |
-|---|---|---|
-| **Rechunk** (`just ostree-rechunk`, rpm-ostree `build-chunked-oci --max-layers 127`) | **~9 min** | no |
-| Build image (pulls ~10 GB of Bazzite) | ~3 min | yes |
-| Maximize build space | ~1¼ min | yes |
-| Push to GHCR | ~1 min | no |
-| Cores, frontend, PCSX2, all cached | ~2 min | yes |
-
-PR builds are about 6 minutes because they skip the rechunk.
-
-**Why 546 MB, correctly this time:** the rechunk throws away the Containerfile's
-layer order and regroups the filesystem by RPM package. Our frontend, cores and
-system files belong to no package, so they land together in the leftover
-chunks. **Reordering the Containerfile, which was question 27's plan, would be
-undone by the rechunk.**
-
-**The experiment:**
-1. On a branch, split the single `RUN` so it goes base, then cores, then
-   system files, then frontend last.
-2. Skip the rechunk.
-3. Push to a TEST name (`ghcr.io/mmagtech/cabinetos-test`), never `latest`, so
-   nothing reaches the A9 unasked.
-4. Measure the `main` build time, and how much a frontend-only change
-   downloads: `bootc switch` the test VM to the test image, then change one
-   string.
-5. Check `bootc container lint`.
-6. Check that `--mount=type=bind,from=ctx` still keeps the build context out
-   of every layer.
-7. Find out why the rechunk was added. It came with the ublue template;
-   Bazzite's base arrives already chunked.
-
-**If it works:** roughly 16 minutes becomes about 7, and a frontend update
-becomes a few MB.
-
-**The fallback:** keep the rechunk and package the frontend, cores and system
-files as RPMs, so the rechunk gives each its own chunk. That keeps small
-updates but not the build-time saving.
-
-**Worth checking while in there, but not a blocker before release:** that the
-A9's current deployment can `bootc upgrade` to the new image, since the old
-bootc does the download. Nobody but MMagTech runs the console yet, and a
-stranded A9 can be reinstalled. From the public release on, it is a binding
-check. PROJECT.md question 27, *Any change must work for a console jumping from
-any older version*.
-
-**The constraint:** the update stays one check, one button, one reboot.
-Splitting layers passes that test. Splitting artifacts does not, and is ruled
-out (question 27).
+- **The PR is branch `layers-experiment`.** Merging it costs every console one
+  2.6 GB download, once, as it moves off the rechunked format. The A9 too.
+- **The test VM is back on `cabinetos:latest`** after the test.
+- **`ghcr.io/mmagtech/cabinetos-test` can be deleted** in the GitHub package
+  settings. Nothing uses it now; the workflow that pushed it is deleted.
+- **Two things keep it working, and both are easy to undo by accident:**
+  `podman build --timestamp 0` in the Justfile, and `build.sh` deleting dnf's
+  dated transaction history. Without either, every layer, or the 59 MB OS
+  layer, changes on every build and ships again. **Each `main` build's summary
+  now says what a console on the previous image downloads**: if a
+  frontend-only change ever reads more than a megabyte, one of those two has
+  regressed.
 
 #### A SELF-HOSTED RUNNER ON UNRAID: RESEARCHED AND DECLINED — 2026-09-23
 

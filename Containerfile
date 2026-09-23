@@ -59,11 +59,42 @@ ARG IMAGE_VENDOR="${IMAGE_VENDOR:-mmagtech}"
 # All customisation happens in build_files/build.sh, which calls the strip
 # scripts in order. Keeping it in scripts rather than in RUN layers means the
 # reasoning for each removal lives next to the removal.
+#
+# FOUR LAYERS, ORDERED BY HOW OFTEN EACH CHANGES, 2026-09-23. This was one RUN,
+# so a 1.4 MB frontend change rebuilt and re-shipped everything CabinetOS adds:
+# 546 MB to the console. See docs/PROJECT.md open question 27.
+#
+#   1. the OS        Bazzite stripped and configured. Moves on a base bump or a
+#                    change to build_files/ or system_files/.
+#   2. the cores     314 MB, pinned. Moves when a core is bumped.
+#   3. core files    23 MB of PPSSPP's and PCSX2's resources. Same.
+#   4. the frontend  1.4 MB. Moves with nearly every change.
+#
+# A console downloads only the layers whose bytes changed, so a frontend change
+# ships layer 4 — PROVIDED the layers before it rebuild to identical bytes. CI
+# builds from nothing every time, so that rests on `podman build --timestamp`
+# in the Justfile, and on there being NO RECHUNK, which throws this order away
+# and regroups the image by RPM package.
+#
+# One image, one digest, one update. Splitting layers changes how the image is
+# stored and fetched, never what a console updates as a unit.
 RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
     --mount=type=cache,dst=/var/cache \
     --mount=type=cache,dst=/var/log \
     --mount=type=tmpfs,dst=/tmp \
     /ctx/build.sh
+
+RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
+    --mount=type=tmpfs,dst=/tmp \
+    /ctx/install-frontend.sh cores
+
+RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
+    --mount=type=tmpfs,dst=/tmp \
+    /ctx/install-frontend.sh system
+
+RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
+    --mount=type=tmpfs,dst=/tmp \
+    /ctx/install-frontend.sh frontend
 
 # ---------------------------------------------------------------------------
 # Lint

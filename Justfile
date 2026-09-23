@@ -97,33 +97,26 @@ build $target_image=image_name $tag=default_tag:
     LABELS+=("--label" "org.opencontainers.image.vendor={{ repo_organization }}")
     LABELS+=("--label" "org.opencontainers.image.licenses=MIT")
 
+    # --timestamp 0 MAKES AN UNCHANGED LAYER COME OUT AS THE SAME BYTES.
+    #
+    # CI builds from nothing every time. Without this, every file a RUN writes
+    # carries the minute it was built, so every layer gets a new digest on every
+    # build and a console downloads all of them again, whether their contents
+    # moved or not. With it, every file in every layer is stamped 1970-01-01,
+    # and a layer whose inputs did not change is byte-identical to last time,
+    # so a console already holding it downloads nothing for it. See the layer
+    # order in the Containerfile and docs/PROJECT.md open question 27.
+    #
+    # Nothing is lost by it: ostree stores every file in /usr with a timestamp
+    # of zero anyway. It also stamps the image's own creation time as 1970;
+    # the real build date is in the org.opencontainers.image.created label.
     podman build \
       "${LABELS[@]}" \
+      --timestamp 0 \
       --pull=newer \
       --tag "${target_image}:${tag}" \
       --file Containerfile \
       .
-
-# Re-layer the image so updates ship smaller deltas.
-[group('Build')]
-ostree-rechunk $target_image=image_name $tag=default_tag:
-    #!/usr/bin/env bash
-    set -xeuo pipefail
-
-    GRAPHROOT="$(podman info --format '{{ '{{.Store.GraphRoot}}' }}')"
-
-    podman run --rm --pull=never --privileged \
-      --mount=type=image,src="${target_image}:${tag}",target=/rpm-ostree \
-      --mount=type=bind,src=${GRAPHROOT},target=/run/host-container-storage,rw \
-      --mount=type=tmpfs,target=/run/rpm-ostree-storage \
-      --entrypoint /usr/bin/rpm-ostree \
-      "localhost/${target_image}:${tag}" \
-      compose build-chunked-oci \
-      --max-layers 127 \
-      --format-version=2 \
-      --bootc \
-      --rootfs /rpm-ostree \
-      --output "containers-storage:[overlay@/run/host-container-storage+/run/rpm-ostree-storage]localhost/${target_image}:${tag}"
 
 # Generate the set of tags to publish.
 [group('Utility')]
