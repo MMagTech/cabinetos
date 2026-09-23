@@ -171,6 +171,12 @@ public:
     void setScissor(float x, float y, float w, float h);
     void clearScissor();
 
+    // PIXEL SHIFT, in whole device pixels, right and down — docs/PROJECT.md,
+    // open question 10b, and idle.h for the walk that sets it. Applied where
+    // the finished frame meets the window, so every screen and every game
+    // moves together and no call site knows it happened.
+    void setPixelShift(int dx, int dy) { shiftX_ = dx; shiftY_ = dy; }
+
     // DRAW ONTO NOTHING INSTEAD OF ONTO BLACK.
     //
     // For the one case where this console is not the only thing on the screen:
@@ -253,6 +259,8 @@ private:
     int sceneW_ = 0, sceneH_ = 0;
     bool scenePresented_ = false;
     int vx_ = 0, vy_ = 0, vw_ = 0, vh_ = 0;
+    int shiftX_ = 0, shiftY_ = 0;
+    int ox_ = 0, oy_ = 0;   // origin of the viewport in force, for the scissor
     int drawableW_ = 0, drawableH_ = 0;
     GLuint blurProgram_ = 0;
     GLuint glowProgram_ = 0;

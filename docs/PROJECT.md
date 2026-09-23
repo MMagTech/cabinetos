@@ -5614,8 +5614,9 @@ What remains for Phase 6, with real hardware and a Pulse-Eight adapter present:
   a machine that stays awake and blanks its display is still the likely default.
 
 ### 10b. The console never sleeps, and never blanks the screen
-**Raised by MMagTech 2026-09-20, for a later discussion. NOT DECIDED — this
-records what the machine does today and why it is not an accident.**
+**Raised by MMagTech 2026-09-20. PIXEL SHIFT, DIM AND BLANK BUILT 2026-09-22 —
+see *Built* at the end of this question. Suspending the machine, a power menu
+and the governor are still open, and are listed there.**
 
 > we currently have no screen or sleep behaviour, the console just stays active
 > all the time
@@ -5710,6 +5711,11 @@ The DPMS node, by contrast, is present and writable:
 /sys/class/drm/card1-HDMI-A-1/dpms = On     and nothing ever writes to it
 ```
 
+**THAT WAS WRONG, and it is kept here as the record of being wrong.** Checked
+2026-09-22: every connector's `dpms` file is `-r--r--r-- root`. It reports the
+state and cannot set it — nothing can write it, which is why nothing did. The
+route is gamescope, below.
+
 #### BURN-IN IS THE REASON TO DO THIS, AND IT RAISES THE PRIORITY
 
 The bullet above calls burn-in "a real cost". **MMagTech's framing is stronger
@@ -5739,6 +5745,243 @@ Three mitigations, cheapest first, and the first is nearly free here:
 **The order matters.** Pixel shift needs nothing this console lacks and helps
 every case including a paused game; blanking needs idle detection and helps
 most; a screensaver looks like the answer and is the weakest of the three.
+
+#### BUILT, 2026-09-22 — pixel shift, then dim, then blank
+
+`frontend/src/idle.{h,cpp}`, a viewport offset in `ui.cpp`, and about sixty
+lines in the frame loop. No screensaver, as agreed.
+
+**THE BLANK GOES THROUGH GAMESCOPE, BECAUSE GAMESCOPE OWNS THE DISPLAY.**
+`gamescopectl drm_sleep_external_screen 1` puts the output to sleep and `0`
+wakes it. Tried by hand on the A9 first: the sysfs node read `Off` while
+asleep, and MMagTech watched the LG go black and come back **on its own, with
+no remote**. On the first try the set briefly reported itself unplugged on
+wake and gamescope reselected 3840x2160@60 within a second; on the second try
+it did not. Either way the session carried on.
+
+| | Starting value | Why |
+|---|---|---|
+| Pixel shift | ±2 points (±4 px at 4K), one point every 3 minutes, a 25-position walk that starts centred | runs always, in menus AND games — every game's picture, PS2 and GameCube included, is drawn by our renderer, so it moves with the rest |
+| Menus, and a PAUSED game | dim at 5 min, blank at 15 min | a paused game is a menu over a frozen HUD |
+| A game running unpaused | dim at 20 min, **never blank** | an attract loop or a cut-scene is not idle |
+| Dim | black at 60% over everything, 2 s fade down, 0.25 s back up | whether that reads as "resting" or "broken" is still MMagTech's to judge on the panel |
+| Waking | any button, key, or a stick past 12000/32767 | a drifting stick must not hold the console awake |
+
+**The press that wakes a dark menu does nothing else**, so it cannot launch
+whatever had focus unseen. In a running game nothing is swallowed, because the
+game reads the pad's state rather than its events.
+
+**Blanked, the loop draws ten frames a second instead of sixty**, and the
+program wakes the set on its way out if it exits while asleep.
+
+**What it saves, measured on the A9 with RAPL, package power only** (a wall
+meter would read more; nothing here can see the brick, disk or fan):
+
+| | Package |
+|---|---|
+| Home, lit | **10.1 W** |
+| Blank | **4.9 W** |
+
+**Seen on the television, 2026-09-22**, with `--idle-scale 0.02 --shift-every
+3`: dim at 6 s, blank at 18 s, `display asleep: gamescope took it`, a button
+press, `display awake: gamescope took it`. The test flags stay:
+`--idle-scale`, `--shift-every`, `--no-idle`.
+
+#### What is still open
+
+- **THE A9 IS ON A TEST TELEVISION, NOT THE ONE THIS IS FOR.** MMagTech,
+  2026-09-22: the LG it drives now is a test set, and the console moves to an
+  OLED later. So four things are **judged on the OLED, not signed off here**:
+  whether the dim reads as resting or broken (an OLED's black is truly off, so
+  60% may read deeper); whether pixel shift's uncovered edge, up to 4 px, is
+  hidden by that set's overscan; the OLED's own Screen Move stacking with ours
+  (harmless, but it explains more drift than expected); and whether that set
+  goes to standby on a long blank.
+- **Pixel shift is kept, and it is the smallest of the three protections.**
+  Discussed 2026-09-22: most OLEDs shift the picture themselves and LCDs barely
+  burn in, so ours mainly covers people who turned the TV's version off, OLEDs
+  without it, and long play sessions, where the dim and the blank never fire.
+  It costs nothing per frame — the finished picture lands a whole number of
+  pixels over, with no extra pass and no resampling.
+- **ONE SETTING, DECIDED 2026-09-22 — for the Settings screen, not built now.**
+  *Turn off screen after:* 10 min · **15 min** (default) · 30 min · 1 hour ·
+  Never. **The dim follows at a third of it** (15 → 5, 30 → 10, 60 → 20), so
+  the player makes one choice, not two. **Never** turns off both, in menus and
+  in games; it is their television. Otherwise a running game keeps its fixed
+  20-minute dim. **Pixel shift and the dim's depth stay hard-coded** — the
+  first is invisible and free, so a switch only invites turning protection off
+  for nothing; the second is judged once, on the OLED. Until Settings exists
+  the constants in `idle.h` are the defaults.
+- **A GAME'S OWN PAUSE SCREEN IS THE KNOWN GAP, AND IT IS LEFT OPEN ON
+  PURPOSE — 2026-09-22.** The console's pause menu gets menu rules (dim 5,
+  off 15), but a game that pauses ITSELF looks, to us, exactly like a
+  cut-scene: the emulator is running. So it gets only the 20-minute dim and
+  pixel shift. **Considered and NOT added:** screen off after an hour of no
+  input even in a game, plus swallowing the first press after it (so an unseen
+  A cannot act in the game). Rare case, already covered by the dim, the shift
+  and the OLED's own static-image dimming, and it would add two behaviours for
+  it. The rule stays one sentence: *in a game the screen dims but never turns
+  off.* **Add it only if burn-in from a paused game is actually seen.**
+- **Does the dim read as broken?** Not yet judged.
+- **Does the LG go to standby on its own after a long blank?** It showed no
+  "no signal" banner in 15 seconds. Burn-in does not care — the panel is black
+  either way — but the energy half of a blank depends on it.
+- **A CPU governor per context is NOT worth it in menus.** Home measured
+  **10.05 W** at the current `balance_performance`, **10.06 W** at `power` and
+  **11.02 W** at `performance` (amd-pstate-epp, active mode; `tuned` is on
+  `balanced`; the GPU is on `auto`). The CPU is already idle on a menu; the
+  draw is the GPU redrawing 4K. **Whether `performance` helps INSIDE a heavy
+  game is a separate, speed question** — measure it on PS2 against the Windows
+  standard before doing anything.
+- **The power button already powers off** — logind's `HandlePowerKey=poweroff`
+  — **but the frontend has no SIGTERM handler**, so a press mid-game skips the
+  save upload on the way out. That is the real content of Phase 2 item 12.
+- **A Power menu in the UI** (Sleep, Restart, Power off) needs a polkit rule:
+  logind answers `challenge` to the console user for `CanSuspend`,
+  `CanPowerOff` and `CanReboot`. The same shape as the NetworkManager rule
+  first run already carries.
+- **WHAT REST MODE IS FOR — MMagTech, 2026-09-22, and it is the goal:** *the
+  lowest power state the system can go in while still allowing a controller to
+  be turned on or plugged in and have a button press wake it* — a console's
+  instant-on, not a PC's sleep. Burn-in is the other half and is built above.
+- **IT MUST BE DECIDED PER MACHINE, NOT FROM THE A9.** MMagTech: *"we have to
+  consider the states available or not for other systems people may have."* So
+  the console probes, on the machine it is running on: which sleep states
+  `/sys/power/mem_sleep` offers, whether a sleep actually reached hardware
+  sleep (`/sys/power/suspend_stats/last_hw_sleep`), and whether a controller
+  can wake it. It offers the deepest state that passes all three and otherwise
+  falls back to staying awake with the screen off, which works everywhere.
+- **GOVERNORS ARE FOR EMULATOR SPEED ONLY** — MMagTech, same day: power saving
+  is not the aim of a governor choice here. The menu-power measurement below
+  closes that angle; what remains is whether `performance` makes the heavy
+  cores faster.
+- **s2idle WORKS ON THE A9 AND REACHES REAL LOW POWER**, measured 2026-09-22
+  with `rtcwake -m freeze`: 59.6 s of a 60 s sleep and 119 s of a 121 s sleep
+  in hardware sleep, the session intact on wake, the 8BitDo reconnecting by
+  itself about a second later. RAPL's counter resets across the sleep, so there
+  is no watt figure for it; a wall meter is the only way to get one.
+- **WAKE SOURCES ARE ALL OFF BY DEFAULT.** Every xHCI root hub reads
+  `wakeup=disabled`; the Bluetooth radio (MediaTek 13d3:3604, on `usb1`, PCI
+  `c6:00.4`, whose own wakeup is enabled) advertises remote wakeup in its
+  descriptor (`bmAttributes e0`) but has **no `power/wakeup` file at all**.
+- **THE 8BITDO OVER BLUETOOTH CANNOT WAKE THE A9 — tested 2026-09-22.** With
+  `usb1` wake enabled, s2idle, MMagTech pressing Home while the screen was
+  dark: the pad dropped its link as the machine slept, came back on scanning,
+  never connected, and the RTC alarm woke the machine at exactly 121 s (120 s
+  in hardware sleep). An earlier run was woken the same way but proved nothing,
+  because the steps had not been given clearly. **Next routes, in order of
+  cost:** the power button as a wake-from-rest key (`HandlePowerKey=suspend`,
+  and check that the wake press does not ALSO shut the machine down); a
+  controller with its own USB receiver, since USB wake is the well-trodden
+  path; and whether MediaTek's `btusb` path can wake at all, which is research
+  before it is a test. Until one works, rest is the screen-off state above.
+- **WHY IT CANNOT WAKE: THE KERNEL SWITCHES IT OFF, NOT THE RADIO — researched
+  2026-09-22.** Kernel 7.2.0–7.2.6 carries `e31d761628ad` (*"Bluetooth: btmtk:
+  Disable remote wakeup for MT7922/MT7925"*), which marks the radio not
+  wake-capable every time Bluetooth powers on. That is exactly the missing
+  `1-1/power/wakeup` file measured above. With the host unable to wake, the
+  kernel drops every link and turns page scan OFF before sleeping
+  (`hci_suspend_sync`), so a pad pressing Home has nothing to reconnect to —
+  which is exactly what MMagTech saw. **Turning on `usb1`'s wake could never
+  have helped**; the switch that matters is on the radio itself.
+  - **The fix exists:** `dcaf83ead130`, in 7.3-rc3 and stable **7.2.7**
+    (2026-09-21). It keeps the radio wake-capable. **The A9 runs
+    `7.2.4-ogc3.1`, and PR #42's Bazzite bump does not change the kernel.**
+    Our kernel is Bazzite's, so this waits for Bazzite to ship ≥ 7.2.7 — or
+    for us to carry one patch, which is a much bigger decision than it sounds
+    and is not proposed.
+  - **Somebody has it working on near-identical hardware:** an MT7922 in an AMD
+    handheld woke from s2idle over Bluetooth with a DualSense and an Xbox Elite
+    2 once the device's `power/wakeup` was enabled (linux-bluetooth, March
+    2026).
+  - **BlueZ is already right:** the 8BitDo reads `WakeAllowed: yes` on the A9,
+    and bluez 5.87 sets it by default for HID.
+  - **Three unknowns remain, all only answerable by a test on a fixed kernel:**
+    whether the A9's firmware keeps that internal USB port awake in s2idle;
+    whether the 8BitDo in Switch-Pro mode pages a sleeping host at all (8BitDo
+    says most of its pads cannot wake a Switch 2 — a DualSense is the control
+    to test against); and the lock-up the original patch was protecting
+    against, where a Bluetooth wake leaves the radio dead until a cold boot.
+  - **Other machines:** every USB radio goes through the same btusb path, so
+    the per-machine probe is the right design — the kernel leaving the radio
+    wake-capable, `power/wakeup` enabled, and firmware keeping the port awake.
+    No chip list. Bazzite documents no Bluetooth wake recipe; SteamOS's Deck
+    OLED does it on a Qualcomm radio over UART, a different path entirely.
+  - **The test plan is written down** in the research (btmon for `Write Scan
+    Enable 0x02` before sleep, `pm_wakeup_irq`, `wakeup_sources`, then
+    `last_hw_sleep` to prove it still sleeps deeply). Run it the day the A9
+    boots a kernel ≥ 7.2.7. **The claims about commits come from the research
+    and match what the A9 shows; they have not been checked against the A9's
+    own kernel source.**
+- **CONTROLLERS ARE BLUETOOTH OR WIRED. NOT DONGLES — MMagTech, 2026-09-22:**
+  *"i dont want to support controllers with recievers."* So the USB-receiver
+  route above is OUT, and controller wake means Bluetooth wake (research: can
+  MediaTek's and other common radios' drivers wake the machine at all) or a
+  wired pad's button (untested — no wired pad on hand, and it is the easy case
+  on Linux).
+- **THE ORDER, AGREED 2026-09-22:** merge the idle work; then a SIGTERM handler
+  so a power-off mid-game still uploads the save; then the Power menu and the
+  power button; then Bluetooth wake research. ~~The power button as *press
+  rests, hold shuts down*~~ — **superseded the same evening: a SHORT press
+  opens the Power menu** (below), and rest is chosen from it. **Long press is
+  deliberately left unassigned**: it would race the firmware's ~4 s hard power
+  cut, and with the menu there is nothing a hold needs to do. **Idle does
+  NOT fall into rest by itself** while no controller can wake the machine —
+  rest is only ever chosen from the menu, until controller wake works. Staying awake
+  with the screen off costs about 4 W of package power over rest: a few
+  dollars a year, not worth a controller that cannot wake the console.
+- **WHERE POWER LIVES IN THE UI — MMagTech wanted it on Home, and Switch agrees.**
+  Batocera puts it under Start → Quit; Steam's game mode under the Steam menu,
+  with a long press as a shortcut; PS5 in the control centre; Xbox on a held
+  guide button; **Switch on the home screen itself**, a Sleep icon beside
+  Settings. The plan: **a power icon at the right end of Home's top bar**, next
+  to the account chip — Rest, Restart, Power off — reachable from every screen
+  the bar is on. Later, **holding the pad's Home button** opens the same menu
+  from anywhere including a game. Needs a polkit rule for logind's three
+  actions.
+- **DECIDED, MMagTech 2026-09-22: START ON HOME OPENS THE POWER MENU.** *"Sort
+  of how like hitting start in game has exit, this is just exiting the
+  system."* Start in a game opens the pause menu with Exit to Home; Start on
+  Home opens Rest, Restart, Power off — the same gesture one level up.
+  **Today Start on Home quits the frontend outright** (`running = false`,
+  `main.cpp`, the Start case in the UI's pad handler) — a development
+  leftover, and on the console it just gets the session restarted under
+  whoever is watching. That line is what this replaces. The top-bar icon above
+  is the discoverable companion to it, not a substitute.
+- **DECIDED, MMagTech 2026-09-22: THE POWER BUTTON OPENS THE POWER MENU, IN A
+  GAME AS ON HOME.** *"it needs to be super easy. Press the button in game and
+  the power pause menu appears with a resume option. Let them choose."* The
+  worry it answers: a child hitting the button mid-game. **Resume is focused**,
+  so a stray press costs one A.
+  - **It must work for every emulator, present and future, with no per-core
+    work — and it does, because of two chokepoints that already exist.** The
+    pause overlay (`core.setPaused`, which also tells PCSX2 explicitly, and
+    which the composited path of question 24 already carries) is what the
+    button opens. `finishExit` — Exit to Home — is the one way out of a game
+    and it uploads battery saves, file saves and directory saves for every
+    platform. Restart, Power off and Rest from a game run `finishExit` first.
+  - **Rest from a game leaves the game** — saves uploaded, then rest, wake on
+    Home. **Resting WITH the game still open is REJECTED, not deferred** —
+    MMagTech, 2026-09-22: it would be *"hard and painful to implement and
+    maintain because we are using so many different emulators and some won't be
+    libretro cores or already aren't."* Every emulator, PCSX2 and whatever
+    follows it, would need its own proof that it survives s2idle, for ever. Do
+    not reopen this because one emulator happens to survive a sleep.
+  - **Mechanism:** the frontend takes logind's `handle-power-key` inhibitor
+    lock and reads the key itself. **The lock dies with the process**, so a
+    hung or crashed frontend hands the button straight back to logind — the
+    button can never be made useless by our bug. A ~4 s hold is a firmware
+    power cut that no software sees; that one can only be made rare.
+- **HOW TO RUN A SLEEP TEST WITH SOMEBODY AT THE TELEVISION.** Give the whole
+  sequence — what goes dark, when to press, what success looks like, how long
+  until the alarm — BEFORE the machine sleeps, and wait for "go". Twice today
+  the steps arrived while the screen was already black. Once asleep, only the
+  alarm or the power button can wake it, and the power button is still mapped
+  to power-off.
+- **Suspend is s2idle only** on this machine (`/sys/power/mem_sleep` offers no
+  `deep`). **Whether a Bluetooth pad wakes it has not been tried**, and that
+  single test decides whether "Sleep" can be offered at all or whether the
+  console stays awake with its screen off, as open question 10 expected.
 
 ### 11. NVIDIA hardware
 **Raised: Phase 1. Out of scope until there is hardware that needs it.**
