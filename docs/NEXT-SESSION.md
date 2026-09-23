@@ -92,7 +92,7 @@ argument for the rule.
 | `systemctl is-active cabinetos-session` | `active` |
 | `ps -eo args \| grep [c]abinetos-frontend` | **`/usr/bin/cabinetos-frontend`**, under `gamescope --backend drm 3840x2160` |
 | drop-in directories, `/etc` and `/run` | **empty. No drop-ins.** |
-| `bootc status` | booted **`sha256:45893f8f…`**, rollback `sha256:c39ff4ec…` |
+| `bootc status` | booted **`sha256:1ecaa7d8…`** (#49, idle handling), rollback `sha256:45893f8f…` |
 | `journalctl -t cabinetos-session -b \| grep 'is up'` | `gamescope (drm) is up` |
 | accounts | **`1 - MMagTech` (active), `13 - claire`** |
 
@@ -104,10 +104,13 @@ see the queue.
 
 **IF A DIGEST HERE DISAGREES WITH `bootc status`, `bootc status` IS RIGHT.**
 
-**AT THE END OF 2026-09-22 THE A9 WAS LEFT ON A `tools/ui-loop.sh` BUILD** of
-the idle-handling branch, real timers, so it could be lived with overnight. The
-drop-in is in `/run`, so any reboot puts it back on the image. Once the branch
-merges, `bootc upgrade` makes the table above true again.
+**#49 MERGED AND IS ON THE A9 FROM THE IMAGE**, read off the machine after the
+2026-09-22 evening upgrade: `/usr/bin/cabinetos-frontend` carries the idle
+code, no drop-ins. **#50, save on shutdown, is open** — its frontend half is
+proved on the A9; its unit half needs the image, and then one real test: a
+game running, the A9's power button pressed, and `journalctl -b -1 -t
+cabinetos-session` read for `[shutdown] leaving the game` and
+`cabinetos-session-stop: the frontend stopped`.
 
 **A THIRTY-SECOND LOOP EXISTS AND IT IS NOT AT THE TOP OF THIS FILE BY
 ACCIDENT** — `tools/ui-loop.sh`, documented in the lessons section. An evening
