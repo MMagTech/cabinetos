@@ -52,7 +52,7 @@ for expected in \
     /usr/lib/tmpfiles.d/cabinetos.conf \
     /usr/lib/bootc/install/20-cabinetos.toml \
     /usr/libexec/cabinetos-flatpak-setup \
-    /usr/libexec/cabinetos-session-stop \
+    /usr/lib/systemd/logind.conf.d/50-cabinetos.conf \
     /usr/lib/systemd/system/cabinetos-flatpak-setup.service \
     /usr/lib/systemd/system/cabinetos-flatpak-setup.timer \
     /usr/share/cabinetos/flatpaks.list

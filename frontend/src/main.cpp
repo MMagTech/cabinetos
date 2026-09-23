@@ -6270,8 +6270,12 @@ int main(int argc, char** argv) {
     // capture, which is not the console and must not take its button.
     if (!shotMode) {
         power::takeButtons();
+        power::takeShutdownDelay();
         restAvailable = power::canRest();
     }
+    // Set while logind is waiting on us to leave a game before it proceeds.
+    bool releasePending = false;
+    uint64_t releaseWaitStart = 0;
     if (powerMenuDemo) {
         if (shotMode) restAvailable = power::canRest();
         openPowerMenu();
@@ -6644,6 +6648,34 @@ int main(int argc, char** argv) {
         // Kept current every frame, so it can tell a wake the moment one
         // happens rather than only when a key asks.
         power::justWoke();
+
+        // THE MACHINE IS ABOUT TO GO DOWN OR SLEEP, and logind is holding it
+        // for us. Leave the game the one way games are left — finishExit, every
+        // save class for every emulator — then let it go once the uploads are
+        // through, or at 25 s, inside the image's 30 s allowance.
+        switch (power::poll()) {
+            case power::Event::GoingDown:
+            case power::Event::GoingToSleep:
+                std::fprintf(stderr, "[shutdown] the machine is going down%s\n",
+                             playing ? "; leaving the game first" : "");
+                if (playing && cab::Core::shared().running()) finishExit();
+                releasePending = true;
+                releaseWaitStart = SDL_GetTicksNS();
+                break;
+            case power::Event::Woke:
+            case power::Event::None:
+                break;
+        }
+        if (releasePending) {
+            const double waited = (SDL_GetTicksNS() - releaseWaitStart) / 1e9;
+            if (uploader.pending() == 0 || waited > 25.0) {
+                if (uploader.pending() > 0)
+                    std::fprintf(stderr, "[shutdown] going down with %d upload(s) still owed\n",
+                                 uploader.pending());
+                releasePending = false;
+                power::releaseDelay();
+            }
+        }
         if (restPending) {
             const double waited = (SDL_GetTicksNS() - restWaitStart) / 1e9;
             if (uploader.pending() == 0 || waited > 20.0) {

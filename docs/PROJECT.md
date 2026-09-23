@@ -5867,6 +5867,18 @@ press, `display awake: gamescope took it`. The test flags stay:
   covers every way a shutdown can start. logind's `InhibitDelayMaxUSec` is
   5 s on the A9; the image should raise it to about 30 s. **The stop script and
   the ordering line become dead weight and should be deleted with it.**
+  **BUILT AND PROVED THE SAME DAY.** `power::takeShutdownDelay`, which holds a
+  `shutdown:sleep` delay lock and polls sd-bus each frame, and
+  `usr/lib/systemd/logind.conf.d/50-cabinetos.conf` with
+  `InhibitDelayMaxSec=30`. The stop script, `ExecStop`, `TimeoutStopSec` and
+  `After=NetworkManager.service` are deleted. On the A9, with DoDonPachi
+  DaiOuJou running and `systemctl reboot`:
+  `[shutdown] the machine is going down; leaving the game first`, then
+  `[save] uploaded fbneo-native`, then `[power] released`, then logind's
+  `System is rebooting`, with NetworkManager stopping after. 133 ms from
+  warning to release. MMagTech's point stands: updates will be chosen from
+  Settings, never run mid-game. This is for everything else, like a remote
+  restart or a crash-and-reboot.
 - **A Power menu in the UI** (Sleep, Restart, Power off) needs a polkit rule:
   logind answers `challenge` to the console user for `CanSuspend`,
   `CanPowerOff` and `CanReboot`. The same shape as the NetworkManager rule
