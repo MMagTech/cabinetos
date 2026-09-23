@@ -5842,6 +5842,44 @@ press, `display awake: gamescope took it`. The test flags stay:
   controller with its own USB receiver, since USB wake is the well-trodden
   path; and whether MediaTek's `btusb` path can wake at all, which is research
   before it is a test. Until one works, rest is the screen-off state above.
+- **WHY IT CANNOT WAKE: THE KERNEL SWITCHES IT OFF, NOT THE RADIO — researched
+  2026-09-22.** Kernel 7.2.0–7.2.6 carries `e31d761628ad` (*"Bluetooth: btmtk:
+  Disable remote wakeup for MT7922/MT7925"*), which marks the radio not
+  wake-capable every time Bluetooth powers on. That is exactly the missing
+  `1-1/power/wakeup` file measured above. With the host unable to wake, the
+  kernel drops every link and turns page scan OFF before sleeping
+  (`hci_suspend_sync`), so a pad pressing Home has nothing to reconnect to —
+  which is exactly what MMagTech saw. **Turning on `usb1`'s wake could never
+  have helped**; the switch that matters is on the radio itself.
+  - **The fix exists:** `dcaf83ead130`, in 7.3-rc3 and stable **7.2.7**
+    (2026-09-21). It keeps the radio wake-capable. **The A9 runs
+    `7.2.4-ogc3.1`, and PR #42's Bazzite bump does not change the kernel.**
+    Our kernel is Bazzite's, so this waits for Bazzite to ship ≥ 7.2.7 — or
+    for us to carry one patch, which is a much bigger decision than it sounds
+    and is not proposed.
+  - **Somebody has it working on near-identical hardware:** an MT7922 in an AMD
+    handheld woke from s2idle over Bluetooth with a DualSense and an Xbox Elite
+    2 once the device's `power/wakeup` was enabled (linux-bluetooth, March
+    2026).
+  - **BlueZ is already right:** the 8BitDo reads `WakeAllowed: yes` on the A9,
+    and bluez 5.87 sets it by default for HID.
+  - **Three unknowns remain, all only answerable by a test on a fixed kernel:**
+    whether the A9's firmware keeps that internal USB port awake in s2idle;
+    whether the 8BitDo in Switch-Pro mode pages a sleeping host at all (8BitDo
+    says most of its pads cannot wake a Switch 2 — a DualSense is the control
+    to test against); and the lock-up the original patch was protecting
+    against, where a Bluetooth wake leaves the radio dead until a cold boot.
+  - **Other machines:** every USB radio goes through the same btusb path, so
+    the per-machine probe is the right design — the kernel leaving the radio
+    wake-capable, `power/wakeup` enabled, and firmware keeping the port awake.
+    No chip list. Bazzite documents no Bluetooth wake recipe; SteamOS's Deck
+    OLED does it on a Qualcomm radio over UART, a different path entirely.
+  - **The test plan is written down** in the research (btmon for `Write Scan
+    Enable 0x02` before sleep, `pm_wakeup_irq`, `wakeup_sources`, then
+    `last_hw_sleep` to prove it still sleeps deeply). Run it the day the A9
+    boots a kernel ≥ 7.2.7. **The claims about commits come from the research
+    and match what the A9 shows; they have not been checked against the A9's
+    own kernel source.**
 - **CONTROLLERS ARE BLUETOOTH OR WIRED. NOT DONGLES — MMagTech, 2026-09-22:**
   *"i dont want to support controllers with recievers."* So the USB-receiver
   route above is OUT, and controller wake means Bluetooth wake (research: can
