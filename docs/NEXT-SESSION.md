@@ -1590,21 +1590,9 @@ These are ordered. **Do not begin any of them in the VM.**
   What is left here is the look.
 - **The boot splash**, and the rest of the branding. **MMagTech, 2026-09-23:** on boot the A9 shows
   GEEKOM's logo with *"Bazzite" and Bazzite's logo at the bottom*. He wants
-  CabinetOS and our logo there. **MMagTech, 2026-09-23: do it WITH THE
-  INSTALLER REWORK** (open question 5: quicker, easier install steps, and
-  Bazzite's branding out of them), not on its own. **Found the same day:** the
-  theme is Plymouth `bgrt` (two-step, `WatermarkVerticalAlignment=.96`). The
-  firmware's GEEKOM logo is in the middle, and the bottom mark is
-  `/usr/share/plymouth/themes/spinner/watermark.png`, 149×43, which Bazzite
-  replaced; `rpm -qf` names fedora-logos. **The theme is inside the
-  initramfs**, so changing it means regenerating the initramfs in the image
-  build with dracut. That is the riskiest kind of image change, and the
-  installer work needs the same boot testing. `/usr/lib/os-release` still says
-  `NAME="Bazzite"` (open question 7). There is no logo file in the repo: the
-  frontend DRAWS the cabinet (`setup::drawCabinet`), so a watermark PNG can be
-  rendered by the frontend offscreen rather than taken from Cabinet's
-  Afterburner PNG. The designed splash (PROJECT.md, *The boot splash*) is the
-  destination; a swapped watermark is the stopgap.
+  CabinetOS and our logo there. **Not now, another session.** Most likely
+  Plymouth's firmware-logo (BGRT) theme drawing the OS name and watermark
+  under the manufacturer's logo; check which theme is active before assuming.
 - **The row in Settings that turns file access on**, decided 2026-09-19 and the
   answer to open question 9. A console ships listening to nothing; an ordinary
   visible row turns SFTP on and shows the address, the user name and a password

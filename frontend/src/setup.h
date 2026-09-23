@@ -93,16 +93,7 @@ struct Options {
 // It is one frame, not a loop: the work it covers is synchronous, so there is
 // nothing to animate against. A still sentence that says what is happening
 // beats a picture that has stopped changing for no stated reason.
-void showWaiting(const Deps& d, const char* title, const char* detail,
-                 float fadeToBlack = 0.0f);
-
-// THE STARTUP SCREEN LEAVES, IT DOES NOT VANISH — 2026-09-23. Draws the last
-// startup frame dimming to black over `seconds`, so Home can rise out of the
-// dark behind the curtain the way a game does. MMagTech, on the A9: *"when you
-// see the CabinetOS screen and it moves into Home the transition is extremely
-// harsh."* A no-op if the startup screen was never shown.
-void fadeOutWaiting(const Deps& d, const char* detail, float seconds);
-bool waitingWasShown();
+void showWaiting(const Deps& d, const char* title, const char* detail);
 
 enum class Outcome {
     Completed,   // setup finished; the console is configured

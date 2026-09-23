@@ -4,7 +4,6 @@
 
 #include <SDL3/SDL.h>
 
-#include <algorithm>
 #include <atomic>
 #include <functional>
 #include <string>
@@ -1998,13 +1997,8 @@ static void drawCabinet(ui::Renderer& r, float ox, float oy, float s, float a) {
     R(303, 795, 419, 55, 14, panel);
 }
 
-static bool gWaitingShown = false;
-
-bool waitingWasShown() { return gWaitingShown; }
-
-void showWaiting(const Deps& d, const char* title, const char* detail, float fadeToBlack) {
+void showWaiting(const Deps& d, const char* title, const char* detail) {
     if (!d.window || !d.renderer || !d.text) return;
-    gWaitingShown = true;
     ui::Renderer& r = *d.renderer;
     ui::TextRenderer& t = *d.text;
 
@@ -2092,25 +2086,7 @@ void showWaiting(const Deps& d, const char* title, const char* detail, float fad
     // Without this the frame goes into the scene texture and never reaches the
     // window — see the note at the end of Flow::draw.
     r.presentScene();
-    if (fadeToBlack > 0.0f)
-        r.draw(ui::Rect{0, 0, ui::kCanvasWidth, ui::kCanvasHeight, 0,
-                        Color::black(std::min(1.0f, fadeToBlack))});
     SDL_GL_SwapWindow(d.window);
-}
-
-void fadeOutWaiting(const Deps& d, const char* detail, float seconds) {
-    if (!gWaitingShown || seconds <= 0.0f) return;
-    // Paced by the swap, which waits for the display, and measured by the
-    // clock rather than counted in frames, so it takes the same time at any
-    // refresh rate.
-    const uint64_t start = SDL_GetTicksNS();
-    for (;;) {
-        const float t = static_cast<float>(SDL_GetTicksNS() - start) / 1e9f / seconds;
-        if (t >= 1.0f) break;
-        // Ease in: going dark starts gently and finishes briskly.
-        showWaiting(d, "Starting up", detail, t * t);
-    }
-    showWaiting(d, "Starting up", detail, 1.0f);
 }
 
 Outcome run(const Deps& d, const Options& o) {
