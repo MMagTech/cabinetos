@@ -4342,6 +4342,12 @@ int main(int argc, char** argv) {
     // a shelf and a grid end up disagreeing about what focus looks like, which
     // is the same reason design.h exists.
     enum Row { RowRecent = 0, RowFavorites = 1 };
+    // HOW FAR EACH HOME ROW HAS SCROLLED, in points — 2026-09-23. There was
+    // none: every card was drawn at its fixed slot, so moving right past the
+    // edge of the screen put focus on a card nobody could see, and A launched
+    // it. MMagTech, on the A9: *"this should scroll until the last one."* One
+    // per row, and each row keeps its own when focus leaves it.
+    Animated shelfScroll[2];
     // THE CHIP IS A BAR SLOT NOW, and it is the only one that is not a
     // capsule: it is drawn as the avatar disc at the far right, so the label
     // loop below stops at BarSettings and the chip takes its own focus rim.
@@ -7687,9 +7693,33 @@ int main(int argc, char** argv) {
             // the list. The margin keeps a card's art loading just before it
             // slides in, so the fade has somewhere to start.
             const float kCullMargin = (kShelfCoverWidth + kShelfSpacing) * 2.0f;
+            // THE ROW FOLLOWS FOCUS, and only as far as it has to. Moving
+            // right, the row slides once the focused card would cross the
+            // right edge, and it stops where the NEXT card still peeks in, so
+            // there is visibly more to come. Moving back left, it slides once
+            // focus would cross the left inset. The last card rests against
+            // the right edge; the first against the left inset.
+            const float pitch = kShelfCoverWidth + kShelfSpacing;
+            if (rowId == RowRecent || rowId == RowFavorites) {
+                Animated& rs = shelfScroll[rowId];
+                if (rowFocused) {
+                    const float left = kContentInset + static_cast<float>(focusSlot) * pitch;
+                    const bool last = focusSlot >= static_cast<int>(count) - 1;
+                    const float peek = last ? 0.0f : kShelfSpacing + kShelfCoverWidth * 0.35f;
+                    const float rightEdge = ui::kCanvasWidth - kContentInset - peek;
+                    float target = rs.to;
+                    if (left + kShelfCoverWidth - target > rightEdge)
+                        target = left + kShelfCoverWidth - rightEdge;
+                    if (left - target < kContentInset) target = left - kContentInset;
+                    target = std::max(0.0f, target);
+                    rs.retarget(target, kFocusDuration * 1.6f);
+                }
+                rs.tick(dt);
+            }
+            const float scroll =
+                (rowId == RowRecent || rowId == RowFavorites) ? shelfScroll[rowId].value() : 0.0f;
             auto cardBaseX = [&](size_t slot) {
-                return kContentInset +
-                       static_cast<float>(slot) * (kShelfCoverWidth + kShelfSpacing);
+                return kContentInset + static_cast<float>(slot) * pitch - scroll;
             };
 
         // Unfocused cards first, so a focused card's shadow and rim land on top
