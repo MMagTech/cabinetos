@@ -43,22 +43,27 @@ LAYERS_JSON=$(mktemp)
 trap 'rm -f "$LAYERS_JSON"' EXIT
 jq -s 'add' "$GRAPHROOT"/overlay-layers/*layers.json > "$LAYERS_JSON"
 
-top=$(podman image inspect --format '{{.TopLayer}}' "$IMAGE")
-base_top=$(podman image inspect --format '{{.TopLayer}}' "$BASE_BY_DIGEST")
-
-# Walk down from the image's top layer to the base's, collecting ours.
-ours=()
-id="$top"
-while [[ -n "$id" && "$id" != "$base_top" ]]; do
-    ours=("$id" "${ours[@]}")
-    id=$(jq -r --arg id "$id" '.[] | select(.id == $id) | .parent // ""' "$LAYERS_JSON")
+# Ours are the layers after the base's, in order. Matched by position, then
+# checked: the image's first layers must be exactly the base's.
+mapfile -t image_diffs < <(podman image inspect --format '{{range .RootFS.Layers}}{{println .}}{{end}}' "$IMAGE" | grep .)
+mapfile -t base_diffs < <(podman image inspect --format '{{range .RootFS.Layers}}{{println .}}{{end}}' "$BASE_BY_DIGEST" | grep .)
+for i in "${!base_diffs[@]}"; do
+    if [[ "${image_diffs[$i]}" != "${base_diffs[$i]}" ]]; then
+        echo "layer $((i + 1)) of the image is not the base's layer $((i + 1))" >&2
+        exit 1
+    fi
 done
-if [[ "$id" != "$base_top" ]]; then
-    echo "walked off the bottom without meeting the base's top layer" >&2
-    exit 1
-fi
+ours=()
+for diff in "${image_diffs[@]:${#base_diffs[@]}}"; do
+    id=$(jq -r --arg d "$diff" 'first(.[] | select(."diff-digest" == $d) | .id) // ""' "$LAYERS_JSON")
+    if [[ -z "$id" ]]; then
+        echo "no layer in storage has diff $diff" >&2
+        exit 1
+    fi
+    ours+=("$id")
+done
 
-base_count=$(podman image inspect --format '{{len .RootFS.Layers}}' "$BASE_BY_DIGEST")
+base_count=${#base_diffs[@]}
 echo "base:   $BASE"
 echo "        $base_count layers"
 echo "ours:   ${#ours[@]} layers on top, bottom first"

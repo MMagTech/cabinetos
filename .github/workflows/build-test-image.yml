@@ -104,7 +104,11 @@ jobs:
         run: just build cabinetos "${TEST_TAG}"
 
       - name: What each layer holds
-        run: ci/layer-report.sh "localhost/cabinetos:${TEST_TAG}" | tee /tmp/layers.txt
+        # pipefail, or tee's success hides the script's failure. It did, on the
+        # first run: the step went green with an empty report.
+        run: |
+          set -euo pipefail
+          ci/layer-report.sh "localhost/cabinetos:${TEST_TAG}" | tee /tmp/layers.txt
 
       - name: Login to GHCR
         uses: docker/login-action@abd2ef45e78c5afb21d64d4ca52ee8550d9572c7  # v4.5.1
