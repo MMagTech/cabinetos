@@ -269,6 +269,25 @@ log "base image has $(wc -l < /usr/share/cabinetos/packages-before-strip.txt) pa
 # after it, in the last layer.
 
 # ---------------------------------------------------------------------------
+# dnf's transaction history, removed so this layer builds the same every time.
+# ---------------------------------------------------------------------------
+#
+# MEASURED 2026-09-23: two builds from identical inputs produced an OS layer
+# that differed in exactly three files, these, because dnf5 stamps each
+# transaction with the time it ran. Everything else, the rpm database and the
+# SELinux policy included, came out byte-identical. Those 4 MB were enough to
+# give the whole 60 MB layer a new digest on every build, so every update
+# shipped it whether anything had changed or not. See docs/PROJECT.md open
+# question 27.
+#
+# Nothing reads it. This is an image-based console: nobody runs `dnf install`
+# on it, and `dnf history` on a deployed machine is not a thing anyone does.
+# dnf5 recreates the database, empty, if it is ever opened. The package list
+# itself is what the rpm database and packages-after-strip.txt record.
+rm -f /usr/lib/sysimage/libdnf5/transaction_history.sqlite*
+log "removed dnf's transaction history, which is dated and would change this layer every build"
+
+# ---------------------------------------------------------------------------
 # Record the result.
 # ---------------------------------------------------------------------------
 rpm -qa | sort > /usr/share/cabinetos/packages-after-strip.txt
