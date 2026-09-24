@@ -9244,20 +9244,11 @@ int main(int argc, char** argv) {
         {
             const float c = curtain.value();
             if (c > 0.001f && switchCurtain) {
-                // The backdrop's two bands, overlapping by a point so no
-                // seam shows where they meet, faded as one.
-                const float W = ui::kCanvasWidth, H = ui::kCanvasHeight, mid = H * 0.55f;
-                ui::Color top = ui::palette::kBackdropTop, m = ui::palette::kBackdropMid,
-                          bot = ui::palette::kBackdropBottom;
-                top.a = m.a = bot.a = c;
-                ui::Rect upper{0, 0, W, mid + 1.0f, 0, top};
-                upper.gradient = true;
-                upper.fillBottom = m;
-                renderer.draw(upper);
-                ui::Rect lower{0, mid, W, H - mid, 0, m};
-                lower.gradient = true;
-                lower.fillBottom = bot;
-                renderer.draw(lower);
+                // The console's own backdrop, in one piece, faded. Two bands
+                // were drawn here first and left a line under the name where
+                // they met; MMagTech saw it on the TV.
+                renderer.drawBackdrop({ui::palette::kBackdropTop, ui::palette::kBackdropMid,
+                                       ui::palette::kBackdropBottom, 0.55f}, c);
             } else if (c > 0.001f) {
                 renderer.draw(ui::Rect{0, 0, ui::kCanvasWidth, ui::kCanvasHeight, 0,
                                        ui::Color::black(c)});
