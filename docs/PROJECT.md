@@ -12849,3 +12849,8 @@ green, red, graphite) as one row under Display and Sound: *"I think they should
 be per login when we get to them."* So the console takes on the colour of
 whoever is signed in, which also says who that is. The boot screen stays
 purple, being the brand. Not built.
+
+**It landed.** MMagTech on the television, 2026-09-24: *"hell yeah that slide
+nailed it."* The switch as it stands: the old frame dissolves (300 ms), Search's
+keyboard slides away over it (300 ms), and the new content waits 200 ms then
+rises 16 points while fading in (300 ms). Do not retune these from a capture.
