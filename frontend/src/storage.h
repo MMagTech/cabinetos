@@ -142,6 +142,21 @@ std::string keepLocation();
 // removed on purpose every time it boots is worse than one that says nothing.
 std::string missingDriveToReport();
 
+// What Settings > Storage shows for each location: how much room, and whether
+// it is a USB drive. Read fresh, like everything else here.
+//
+// USB IS READ FROM WHERE THE KERNEL HUNG THE DEVICE, not from its name: the
+// block device's sysfs path runs through the USB controller when it is on one.
+// A second SATA or NVMe disk is "Internal" and a stick is "External",
+// MMagTech's names, 2026-09-24.
+struct Space {
+    bool ok = false;
+    int64_t freeBytes = 0;
+    int64_t totalBytes = 0;
+};
+Space spaceOf(const std::string& location);
+bool isUsb(const std::string& location);
+
 // The location a game with this id is stored under, or the primary location
 // when it is not here yet.
 std::string locationFor(int romId);

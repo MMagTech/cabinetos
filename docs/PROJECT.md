@@ -12617,3 +12617,145 @@ and a domestic downstream — and point it at the same server. That turns
 settle the debounce value, the waiting frame and whether focus-prefetch is
 enough, together. The VM, not the A9: it is a network measurement and needs no
 panel.
+
+### 31. The Settings screen, decided in conversation
+**Raised 2026-09-24 from `docs/SETTINGS-INVENTORY.md`. A running record: each
+point is added as it is settled, in the order the conversation reached it.**
+
+**Settings may look different from the other screens.** MMagTech, 2026-09-24:
+it is *"the one screen where we can diverge a bit"*, and a new top-bar tab is
+welcome if the discussion finds a reason for one. So Cabinet tvOS's shape is a
+starting point here, not a rule.
+
+**RetroAchievements is wanted, later.** Not built and not designed. It belongs
+in the layout from the start so it does not have to be forced in: a
+RetroAchievements login is separate from the RomM login, so it is per account
+and most likely sits with Accounts.
+
+**Wi-Fi: already decided, restated.** Settings lists networks, joins another,
+forgets one and changes a password. `net.h` does all four for first run today.
+
+**Addressing is automatic only (DHCP). No manual IP, for now.** A person who
+wants a fixed address reserves one in their router. PlayStation, Xbox, Switch
+and Apple TV all do offer manual IP, behind an advanced page, so this is a
+choice and not a limit: it keeps four typed fields (address, mask, gateway,
+DNS) off an on-screen keyboard for the many people who will never need them.
+**The lockout argument does not hold and is not the reason**: Settings works
+with no network, so a wrong address could be corrected from the same screen.
+If people ask for it, it is one page under an "Advanced" row on the Network
+page. `net.h`'s header already says no static addressing and stays as it is.
+
+**File access (SFTP) lives under Storage**, because what it is for is reaching
+saves and games from a computer. One row, off by default; when on, it shows
+the address, the user name and the password. SFTP only, no shell, as open
+question 9 decided.
+
+**The user name is fixed. The password is generated, with a "New password"
+action; it cannot be typed in, for now.** Typing on a controller is painful and
+a typed password tends to be one reused everywhere. MMagTech, 2026-09-24:
+*"i dont care but i feel that someone is ultimately going to ask."* So
+**setting your own password is the expected first request**, recorded here so
+it is not a surprise: it would be a second action on the same page, next to
+"New password", and nothing in the first version should make that hard.
+
+**The account is `cabinet`**, the one the session already runs as
+(`system_files/usr/lib/sysusers.d/cabinetos.conf`).
+
+**The password is shown in plain text on the File access page while file
+access is on**, with no "show" button and no dots. It guards against other
+devices on the network, not against the room: anyone at the television can
+already turn file access on or make a new password. With file access off, no
+password is shown.
+
+**It is generated once, the first time file access is turned on, and kept.**
+It survives reboots and turning file access off and on, and changes only on
+"New password". A password that changed every boot would break the login a
+person's computer saved, every time. MMagTech, 2026-09-24: *"this is fine for
+now."*
+
+**Storage lists every drive with its space, and each external one has Eject.**
+One line per drive, used and free. Eject stops or finishes anything writing to
+that drive, then says "Safe to unplug", which is the PS5's shape. It protects
+the drive's own contents (a Windows-formatted stick pulled mid-write), not the
+console: a drive pulled without warning already just means a game is not found
+and comes down again. **Untested on real hardware**: rules 1 to 6 under the
+games drive above are written and coded, and have not yet been tried on the A9
+with a real drive.
+
+**Drive names, MMagTech 2026-09-24: the main drive is "CabinetOS", any other
+internal drive is "Internal", and a USB drive is "External".** With two of the
+same kind, the drive's own label tells them apart.
+
+**Through file access, an external drive shows only its `CabinetOS/` folder.**
+Nobody browsing from a computer can land in, or damage, the rest of somebody's
+drive. This is rule 1 (never take over the drive) carried through to SFTP, and
+it means the `cabinet` account's SFTP view is built from the console's own
+folders plus each drive's `CabinetOS/`, not the whole filesystem.
+
+**The main drive is restricted the same way.** Over file access a person sees
+the console's own saves and games folders (open question 18's layout) and
+nothing of the system underneath, so nobody can break the console by deleting
+the wrong thing from a computer. MMagTech agreed, 2026-09-24.
+
+**No Emulation category. Picture quality is one row under Display and Sound**,
+which answers the inventory's open question 1. The pause menu can still change
+it for one game, and that choice wins for that game (open question 23).
+Cabinet's per-core "Cores" pages have no equivalent here.
+
+**Cabinet's emulator options, sorted, 2026-09-24.** Read from Cabinet's
+`RommApp/Native/NativeCoreOptions.swift`, about twenty options in three kinds:
+
+1. **Looks and taste**: Virtual Boy 3D glasses and screen colour, Game Boy
+   colorization, GBA screen colours and interframe blending, Atari 2600
+   flicker blending, Vectrex overlays. **These go in the pause menu, per
+   system, next to shader and glow**, for the same reason those two do: the
+   picture is right there, and the choice is about a system, not the console.
+   Controller type (Mega Drive 3 or 6 button, PC Engine 2 or 6 button) goes in
+   the pause menu per system too.
+2. **Quality**, such as 3DO high resolution: covered by Picture quality.
+3. **Speed and compatibility** (CPU speed, frameskip, region, Saturn
+   deinterlacer): set correctly once in the per-platform table, never shown.
+
+**Every choice Cabinet offers is kept, only moved.** MMagTech's condition for
+Virtual Boy: all of Cabinet's glasses colours (off, red and blue, red and cyan,
+red and electric cyan, green and magenta, yellow and blue) and all of its
+screen colours must be there.
+
+**THE SHAPE: A SIDE LIST, BUILT TO BE JUDGED ON THE TELEVISION, 2026-09-24.**
+Categories down the left, the chosen category's rows on the right, both on
+screen at once; walking the list changes the right side with no open and no
+back. MMagTech chose to see it before deciding against Cabinet's pages. Seven
+categories: Accounts, Controllers, Network, Display and Sound, Storage, System,
+About. `frontend/src/settings.{h,cpp}`; the rows are built in `main.cpp`
+(`buildSettings`).
+
+- **Background: the plain purple gradient, no game art**, the same rule the
+  add-account screen already follows because MMagTech preferred it for a text
+  screen (2026-09-22).
+- **Rows that are agreed but not built are drawn dimmed with "Not built yet"
+  and focus skips them**, so the whole layout can be judged while keeping the
+  rule that focus never lands on a row that does nothing. A category with no
+  live rows keeps focus in the list.
+- **Live today**: Add an account (the chip's pairing screen), Interface sounds
+  (on or off, **this session only**: nothing saves it yet), and real values for
+  the account, network status and address, server, and each drive's space.
+- **Found while building: CabinetOS has no version number.** The image reports
+  only Bazzite's (`44.20260916`), so About > Version has nothing to show until
+  one is decided.
+- USB versus internal is read from the drive's sysfs path (`storage::isUsb`).
+  A drive whose filesystem has no single block device (btrfs) reads as
+  Internal. It only changes a label.
+
+**Moving across the top bar switches the screen under it**, MMagTech
+2026-09-24: the shoulders already switched, and the d-pad made you press A on
+each destination. It is the Apple TV's top bar; A only drops you into the
+screen. **Two exceptions**: arriving in the bar with Up switches nothing (Home
+stays Home while you look), and the account chip still needs A, because it
+opens a panel rather than going anywhere. On Search the docked keyboard does
+not take the pad while the bar has focus above it.
+
+Checked headless with the new `--nav` flag, which presses a route through the
+same `navigate` door a pad uses: `--nav up,right,right` from Home lands on
+Settings with the bar still focused. **Not checked headless**: the keyboard
+hand-off on Search, because `--nav` goes straight to `navigate` and skips the
+event path that decides who owns the pad. That one is for the television.

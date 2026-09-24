@@ -481,6 +481,22 @@ constexpr float kDetailRowGap = 16.0f;
 // 1920 leaves a label at one end and a value at the other with a third of the
 // screen empty between them.
 constexpr float kRowColumnMaxWidth = 1100.0f;
+
+// SETTINGS IS A SIDE LIST — 2026-09-24, docs/PROJECT.md open question 31.
+// Categories down the left, the chosen one's rows to the right. The list is
+// wide enough for "Display and Sound" at Title 3 with its padding and no
+// wider; the rows keep the settings column's 1100.
+//
+// Starting values, chosen to be looked at on the television rather than argued
+// from a capture.
+constexpr float kSettingsListWidth = 420.0f;
+constexpr float kSettingsListPadY = 16.0f;
+constexpr float kSettingsListGap = 8.0f;
+constexpr float kSettingsPaneGap = 60.0f;
+// Between a row's title and its detail line.
+constexpr float kSettingsDetailGap = 4.0f;
+// A row whose control is not built yet. Legible, clearly not live.
+constexpr float kSettingsUnbuiltAlpha = 0.38f;
 // The backdrop under a full-screen cover: the artwork itself, filled and
 // blurred, because the leftovers should be the art's own colours rather than
 // letterbox bars.

@@ -79,6 +79,9 @@ enum class Action {
     // happen on a SEPARATE client: adding an account mid-session must not be
     // able to throw the console back into setup.
     AddAccount,
+    // A Settings row was pressed. The value is the row's own id, which the
+    // app assigned when it built the rows; see settings.h.
+    Setting,
 };
 
 struct Result {

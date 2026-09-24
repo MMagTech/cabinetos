@@ -67,6 +67,7 @@
 #include "romfile.h"
 #include "romm.h"
 #include "screens.h"
+#include "settings.h"
 #include "sound.h"
 #include "setup.h"
 #include "accounts.h"
@@ -2976,6 +2977,7 @@ int main(int argc, char** argv) {
     std::map<std::string, std::string> cliOptionOverrides;
     const char* initialScreen = nullptr;
     int initialTile = 0;
+    const char* navScript = nullptr;
     int initialTab = 0;
     int initialGame = 0;
     bool rommProbeMode = false;
@@ -3319,6 +3321,11 @@ int main(int argc, char** argv) {
             initialScreen = argv[++i];
         } else if (SDL_strcmp(argv[i], "--tile") == 0 && i + 1 < argc) {
             initialTile = SDL_atoi(argv[++i]);
+        } else if (SDL_strcmp(argv[i], "--nav") == 0 && i + 1 < argc) {
+            // Presses, in order, after --screen has put the console somewhere:
+            // "up,right,a". For checking a route headless, the way a person
+            // would walk it, through the same door their pad goes through.
+            navScript = argv[++i];
         } else if (SDL_strcmp(argv[i], "--game") == 0 && i + 1 < argc) {
             initialGame = SDL_atoi(argv[++i]);
         }
@@ -4452,7 +4459,7 @@ int main(int argc, char** argv) {
     // over whatever was behind it, and the player is a cover over that — which
     // is what makes quitting a game return to the launch screen and backing out
     // again return to the browsing.
-    enum class Screen { Home, Library, Grid, Detail, Search, AddAccount };
+    enum class Screen { Home, Library, Grid, Detail, Search, AddAccount, Settings };
     std::vector<Screen> stack{Screen::Home};
     auto here = [&]() { return stack.back(); };
 
@@ -4462,6 +4469,7 @@ int main(int argc, char** argv) {
     screens::SearchScreen searchScreen;
     screens::AccountScreen accountScreen;
     screens::AddAccountScreen addAccountScreen;
+    screens::SettingsScreen settingsScreen;
     // What the docked keyboard held last frame, so the query is re-run when it
     // changes and not sixty times a second when it does not.
     std::string searchTyped;
@@ -5196,6 +5204,149 @@ int main(int argc, char** argv) {
     // moveRow exist.
     std::function<bool(screens::Nav)> homeKey;
 
+    // ---- Settings' rows -----------------------------------------------------
+    //
+    // docs/PROJECT.md, open question 31. The screen is handed rows and hands
+    // back an id; everything a row SHOWS is read here, fresh, each time
+    // Settings opens or a row changes. Rows marked Unbuilt are agreed and not
+    // built: they are there so the whole layout can be judged on the
+    // television, and focus never lands on them.
+    enum SettingId { SetAddAccount = 1, SetInterfaceSounds };
+    // THE NETWORK IS ASKED OFF THE FRAME THREAD. net::status() is three or four
+    // nmcli round trips, which is a visible hitch if the screen waits for it,
+    // so the row says "Checking" until the answer lands.
+    struct SettingsNet {
+        std::mutex m;
+        bool have = false;
+        bool fresh = false;       // arrived and not yet shown
+        net::Status st;
+        std::thread th;
+        ~SettingsNet() { if (th.joinable()) th.join(); }
+    };
+    SettingsNet settingsNet;
+    auto askNetwork = [&settingsNet]() {
+        if (settingsNet.th.joinable()) settingsNet.th.join();
+        settingsNet.th = std::thread([&settingsNet]() {
+            net::Status st = net::status();
+            std::lock_guard<std::mutex> lk(settingsNet.m);
+            settingsNet.st = st;
+            settingsNet.have = true;
+            settingsNet.fresh = true;
+        });
+    };
+    auto buildSettings = [&]() {
+        using Row = screens::SettingsRow;
+        using K = Row::Kind;
+        auto gb = [](int64_t b) {
+            char buf[32];
+            const double g = static_cast<double>(b) / 1e9;
+            if (g >= 1000.0) std::snprintf(buf, sizeof buf, "%.1f TB", g / 1000.0);
+            else std::snprintf(buf, sizeof buf, "%.0f GB", g);
+            return std::string(buf);
+        };
+        std::vector<screens::SettingsCategory> cats;
+
+        cats.push_back({"Accounts", {
+            {K::Info, 0, "Playing as", "", storage::currentUser().name},
+            {K::Action, SetAddAccount, "Add an account",
+             "Pair another RomM user with this console", ""},
+            {K::Unbuilt, 0, "Remove an account",
+             "The account playing now cannot be removed", ""},
+            {K::Unbuilt, 0, "Require a PIN to switch",
+             "Off to start. Entered with the controller", ""},
+            {K::Unbuilt, 0, "RetroAchievements",
+             "Sign in with your own RetroAchievements account", ""},
+        }});
+
+        cats.push_back({"Controllers", {
+            {K::Unbuilt, 0, "Connected controllers", "Which controller is which player", ""},
+            {K::Unbuilt, 0, "Add a controller", "The same pairing screen as first run", ""},
+            {K::Unbuilt, 0, "Button mapping",
+             "For controllers the console does not recognise", ""},
+        }});
+
+        std::string netValue = "Checking\xE2\x80\xA6", netDetail;
+        {
+            std::lock_guard<std::mutex> lk(settingsNet.m);
+            if (settingsNet.have) {
+                const net::Status& st = settingsNet.st;
+                if (st.managerMissing) netValue = "Unknown";
+                else if (!st.online) netValue = "Not connected";
+                else if (st.link == net::Link::Ethernet) netValue = "Connected over Ethernet";
+                else if (st.link == net::Link::WiFi)
+                    netValue = "Connected to " + (st.connection.empty() ? std::string("Wi-Fi")
+                                                                        : st.connection);
+                else netValue = "Connected";
+                if (!st.ipv4.empty()) {
+                    // "192.168.1.212/24" -> the address a person would type.
+                    netDetail = "Address " + st.ipv4.substr(0, st.ipv4.find('/'));
+                }
+            }
+        }
+        cats.push_back({"Network", {
+            {K::Info, 0, "Status", netDetail, netValue},
+            {K::Unbuilt, 0, "Wi-Fi", "Join a network, forget one, or change a password", ""},
+            {K::Info, 0, "RomM server", "", rommAddress ? rommAddress : ""},
+        }});
+
+        cats.push_back({"Display and Sound", {
+            {K::Unbuilt, 0, "Picture quality",
+             "Performance, Balanced or Quality, for the whole console", ""},
+            {K::Unbuilt, 0, "TV control (HDMI-CEC)",
+             "Turns the TV on and off with the console", ""},
+            {K::Toggle, SetInterfaceSounds, "Interface sounds",
+             "The clicks when you move around the menus",
+             sound::enabled() ? "On" : "Off"},
+        }});
+
+        // THE DRIVES, by MMagTech's names: the main drive is "CabinetOS", any
+        // other internal disk "Internal", a USB drive "External". With two of
+        // one kind the drive's own name tells them apart.
+        std::vector<Row> store;
+        const std::vector<std::string> locs = storage::locations();
+        int internals = 0, externals = 0;
+        for (size_t i = 1; i < locs.size(); ++i)
+            (storage::isUsb(locs[i]) ? externals : internals)++;
+        for (size_t i = 0; i < locs.size(); ++i) {
+            std::string name = "CabinetOS";
+            if (i > 0) {
+                const bool usb = storage::isUsb(locs[i]);
+                name = usb ? "External" : "Internal";
+                if ((usb ? externals : internals) > 1) {
+                    // <mount>/CabinetOS: the mount point is named for the drive.
+                    std::string mount = locs[i].substr(0, locs[i].rfind('/'));
+                    name += " (" + mount.substr(mount.rfind('/') + 1) + ")";
+                }
+            }
+            const storage::Space sp = storage::spaceOf(locs[i]);
+            store.push_back({K::Info, 0, name, "",
+                             sp.ok ? gb(sp.freeBytes) + " free of " + gb(sp.totalBytes)
+                                   : std::string("Unknown")});
+        }
+        if (externals > 0)
+            store.push_back({K::Unbuilt, 0, "Eject", "Makes a USB drive safe to unplug", ""});
+        store.push_back({K::Unbuilt, 0, "Kept and cached games",
+                         "What is on this console, and what it keeps", ""});
+        store.push_back({K::Unbuilt, 0, "File access",
+                         "Reach your saves and games from a computer. Off to start", ""});
+        cats.push_back({"Storage", std::move(store)});
+
+        cats.push_back({"System", {
+            {K::Unbuilt, 0, "System update", "One check, one button, one restart", ""},
+            {K::Unbuilt, 0, "Turn off screen after",
+             "10 min, 15 min, 30 min, 1 hour or never. 15 min to start", ""},
+        }});
+
+        cats.push_back({"About", {
+            {K::Unbuilt, 0, "Version", "CabinetOS has no version number yet", ""},
+            {K::Unbuilt, 0, "Credits",
+             "Bazzite, Universal Blue, ChimeraOS and the emulator projects", ""},
+            {K::Unbuilt, 0, "Licences", "Readable here, on the console", ""},
+        }});
+
+        settingsScreen.setCategories(std::move(cats));
+    };
+
     auto apply = [&](const screens::Result& res) {
         switch (res.action) {
             case screens::Action::None:
@@ -5319,6 +5470,23 @@ int main(int argc, char** argv) {
                 startAddAccount();
                 sound::play(sound::Cue::Activate);
                 break;
+            case screens::Action::Setting:
+                if (res.value == SetAddAccount) {
+                    // The same route as the chip's Add user. Back from the
+                    // pairing screen returns here, because it is pushed.
+                    addAccountScreen.open();
+                    stack.push_back(Screen::AddAccount);
+                    startAddAccount();
+                    sound::play(sound::Cue::Activate);
+                } else if (res.value == SetInterfaceSounds) {
+                    // THIS SESSION ONLY, FOR NOW: nothing writes it down, so a
+                    // restart puts it back to what the command line says.
+                    sound::setEnabled(!sound::enabled());
+                    buildSettings();
+                    // After the flip, so turning them ON is heard.
+                    sound::play(sound::Cue::Activate);
+                }
+                break;
             case screens::Action::FocusKeyboard:
                 // Back into the keyboard under the results. Focus does not
                 // leave the screen, it moves down within it.
@@ -5330,7 +5498,8 @@ int main(int argc, char** argv) {
                 // standing in, so walking up and straight back down is a no-op
                 // rather than a silent change of where you would go.
                 barSlot = (here() == Screen::Library || here() == Screen::Grid)
-                              ? BarLibrary : 0;
+                              ? BarLibrary
+                              : (here() == Screen::Settings ? BarSettings : 0);
                 barFocused = true;
                 sound::play(sound::Cue::Move);
                 break;
@@ -5407,8 +5576,7 @@ int main(int argc, char** argv) {
     // screens: each destination is entered fresh and Back from any of them
     // returns to Home.
     //
-    // 0 Home, 1 Library, 2 Search. Settings is drawn in the bar and does not
-    // exist; see barKey.
+    // 0 Home, 1 Library, 2 Search, 3 Settings.
     auto goToDestination = [&](int d) {
         if (keyboard.isOpen()) keyboard.cancel();
         stack.clear();
@@ -5425,6 +5593,13 @@ int main(int argc, char** argv) {
             cfg.placeholder = "Game name";
             cfg.dockedBottom = true;
             keyboard.open(cfg);
+        } else if (d == 3) {
+            // Rebuilt on every visit: the drives, the network and the account
+            // are read fresh, never remembered.
+            buildSettings();
+            askNetwork();
+            settingsScreen.enter();
+            stack.push_back(Screen::Settings);
         }
     };
 
@@ -5434,6 +5609,7 @@ int main(int argc, char** argv) {
             case Screen::Library:
             case Screen::Grid: return 1;
             case Screen::Search: return 2;
+            case Screen::Settings: return 3;
             default: return -1;      // the launch screen is inside a destination
         }
     };
@@ -5442,11 +5618,9 @@ int main(int argc, char** argv) {
         const int at = destinationHere();
         if (at < 0) return;
         const int want = at + delta;
-        // The range ends at Search, because Settings is drawn in the bar and
-        // does not exist. A bumper that went nowhere and said nothing would
-        // read as the button being broken rather than the screen being unbuilt,
-        // so it makes the edge sound instead.
-        if (want < 0 || want > 2 || want == at) {
+        // No wrapping: the ends make the edge sound, so a bumper that goes
+        // nowhere says so rather than reading as broken.
+        if (want < 0 || want > 3 || want == at) {
             sound::play(sound::Cue::Edge);
             return;
         }
@@ -5465,6 +5639,23 @@ int main(int argc, char** argv) {
                 const int next = std::clamp(barSlot + d, 0, BarCount - 1);
                 if (next == barSlot) { sound::play(sound::Cue::Edge); return true; }
                 barSlot = next;
+                // MOVING ACROSS THE BAR SWITCHES THE SCREEN UNDER IT — MMagTech,
+                // 2026-09-24: the shoulders already did, and the d-pad made
+                // you press A on each one. The Apple TV's top bar works this
+                // way too: A only drops you into the screen.
+                //
+                // Only a MOVE switches. Arriving in the bar with Up does not,
+                // or looking at the bar from Home would throw you off Home.
+                // And the account chip opens a panel rather than going
+                // anywhere, so sliding onto it opens nothing.
+                if (barSlot != BarAccount) {
+                    const int want = (barSlot == BarLibrary) ? 1
+                                   : (barSlot == BarSearch ? 2 : 3);
+                    if (destinationHere() != want) {
+                        goToDestination(want);
+                        barFocused = true;
+                    }
+                }
                 sound::play(sound::Cue::Move);
                 return true;
             }
@@ -5481,10 +5672,6 @@ int main(int argc, char** argv) {
                 sound::play(sound::Cue::Edge);
                 return true;
             case screens::Nav::Activate:
-                // Settings is drawn because the bar has to be laid out against
-                // its real contents. It says nothing when pressed rather than
-                // pretending — a destination that goes nowhere is a promise the
-                // product does not keep, and that screen does not exist.
                 if (barSlot == BarAccount) {
                     // WHO IS PLAYING. Rebuilt from the store every time it
                     // opens rather than cached: the list is three lines of
@@ -5505,8 +5692,10 @@ int main(int argc, char** argv) {
                     sound::play(sound::Cue::Activate);
                     return true;
                 }
-                if (barSlot == BarLibrary || barSlot == BarSearch) {
-                    const int d = (barSlot == BarLibrary) ? 1 : 2;
+                if (barSlot == BarLibrary || barSlot == BarSearch ||
+                    barSlot == BarSettings) {
+                    const int d = (barSlot == BarLibrary) ? 1
+                                : (barSlot == BarSearch ? 2 : 3);
                     barFocused = false;
                     // Already standing in it: drop back into the screen rather
                     // than rebuilding it under the person's feet.
@@ -5540,6 +5729,7 @@ int main(int argc, char** argv) {
             case Screen::Detail: apply(detailScreen.key(n)); return true;
             case Screen::Search: apply(searchScreen.key(n)); return true;
             case Screen::AddAccount: apply(addAccountScreen.key(n)); return true;
+            case Screen::Settings: apply(settingsScreen.key(n)); return true;
         }
         return false;
     };
@@ -5589,6 +5779,14 @@ int main(int argc, char** argv) {
             // frame count.
             waitForPairCode = true;
         }
+    } else if (initialScreen && SDL_strcmp(initialScreen, "settings") == 0) {
+        // `--screen settings --tile N` opens on category N; `--focus-row 1`
+        // puts focus in its rows. The network is waited for here, because a
+        // capture has no wall clock and would otherwise always say Checking.
+        goToDestination(3);
+        if (settingsNet.th.joinable()) settingsNet.th.join();
+        buildSettings();
+        settingsScreen.focusCategory(initialTile, initialRow > 0);
     } else if (initialScreen && SDL_strcmp(initialScreen, "search") == 0) {
         goToDestination(2);
         if (searchQuery) {
@@ -6077,8 +6275,11 @@ int main(int argc, char** argv) {
         // keyboard, since the Power menu can open over a screen that has the
         // keyboard up, and a menu nobody can steer is a trap.
         if (overlayOpen) return InputOwner::Overlay;
+        // NOR WHEN THE BAR HAS FOCUS ABOVE IT: walking across the bar onto
+        // Search opens its keyboard, and the next press still belongs to the
+        // bar until Down leaves it.
         if (keyboard.isOpen() &&
-            !(here() == Screen::Search && searchScreen.focused()))
+            !(here() == Screen::Search && (searchScreen.focused() || barFocused)))
             return InputOwner::Keyboard;
         if (playing) return InputOwner::Game;
         return InputOwner::UI;
@@ -6293,6 +6494,31 @@ int main(int argc, char** argv) {
     if (powerMenuDemo) {
         if (shotMode) restAvailable = power::canRest();
         openPowerMenu();
+    }
+
+    // Here rather than with --screen, because Home's keys are only wired up
+    // just above; walking before that pressed nothing.
+    if (navScript) {
+        std::string word;
+        for (const char* p = navScript;; ++p) {
+            if (*p && *p != ',') { word += *p; continue; }
+            screens::Nav n;
+            bool ok = true;
+            if (word == "up") n = screens::Nav::Up;
+            else if (word == "down") n = screens::Nav::Down;
+            else if (word == "left") n = screens::Nav::Left;
+            else if (word == "right") n = screens::Nav::Right;
+            else if (word == "a") n = screens::Nav::Activate;
+            else if (word == "b") n = screens::Nav::Back;
+            else ok = false;
+            if (ok) navigate(n);
+            else if (!word.empty()) std::fprintf(stderr, "[nav] unknown press '%s'\n", word.c_str());
+            word.clear();
+            if (!*p) break;
+        }
+        std::fprintf(stderr, "[nav] after '%s': screen %d, bar %s slot %d\n", navScript,
+                     static_cast<int>(here()), barFocused ? "focused" : "not focused",
+                     barSlot);
     }
 
     // ---- Idle: pixel shift, dim, blank — idle.h, open question 10b -------
@@ -7167,7 +7393,19 @@ int main(int argc, char** argv) {
             libraryScreen.tick(dt);
             accountScreen.tick(dt);
             addAccountScreen.tick(dt);
+            settingsScreen.tick(dt);
             gridScreen.tick(dt, ctx);
+            // The network's answer, when it lands. Rebuilt only if Settings is
+            // still what is on screen; the next visit asks again anyway.
+            {
+                bool fresh = false;
+                {
+                    std::lock_guard<std::mutex> lk(settingsNet.m);
+                    fresh = settingsNet.fresh;
+                    settingsNet.fresh = false;
+                }
+                if (fresh && here() == Screen::Settings) buildSettings();
+            }
             searchScreen.tick(dt, ctx);
 
             // The launch screen is told what its own game is doing. Only its
@@ -7390,6 +7628,10 @@ int main(int argc, char** argv) {
                 //
                 // It also puts this screen where first run already is, which
                 // is the point — the two do the same job minutes apart.
+                want.clear();
+            } else if (here() == Screen::Settings) {
+                // SETTINGS IS A TEXT SCREEN TOO, and gets the plain gradient
+                // for the reason above: rows to read, not covers to browse.
                 want.clear();
             }
             if (want != backdropWant) {
@@ -7655,6 +7897,7 @@ int main(int argc, char** argv) {
                 case Screen::Detail: detailScreen.draw(ctx); break;
                 case Screen::Search: searchScreen.draw(ctx); break;
                 case Screen::AddAccount: addAccountScreen.draw(ctx); break;
+                case Screen::Settings: settingsScreen.draw(ctx); break;
                 case Screen::Home: break;   // unreachable, and the compiler asks
             }
             // A screen sets the transition alpha and its own scroll window for
@@ -7937,6 +8180,7 @@ int main(int argc, char** argv) {
                 // The QR draws its own white card; there is nothing behind it
                 // on this screen for glass to blur.
                 case Screen::AddAccount: break;
+                case Screen::Settings: settingsScreen.drawGlass(ctx); break;
                 case Screen::Home: break;
             }
             renderer.setContentAlpha(1.0f);
@@ -8152,7 +8396,9 @@ int main(int argc, char** argv) {
             // bar says Library without pretending the cursor is up there.
             const int selected = (here() == Screen::Library || here() == Screen::Grid)
                                      ? BarLibrary
-                                     : (here() == Screen::Search ? BarSearch : -1);
+                                     : here() == Screen::Search   ? BarSearch
+                                     : here() == Screen::Settings ? BarSettings
+                                                                  : -1;
             const float barX = kContentInset;
             const float barW = ui::kCanvasWidth - kContentInset * 2.0f;
             const float barBaseline =

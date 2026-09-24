@@ -3,6 +3,9 @@
 #include <dirent.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <sys/statvfs.h>
+#include <sys/sysmacros.h>
+#include <climits>
 #include <unistd.h>
 
 #include <algorithm>
@@ -350,6 +353,33 @@ std::string missingDriveToReport() {
     // mentioned again.
     if (before != present) writeRememberedDrives(present);
     return gone;
+}
+
+Space spaceOf(const std::string& location) {
+    Space out;
+    struct statvfs v;
+    if (::statvfs(location.c_str(), &v) != 0) return out;
+    out.ok = true;
+    // f_bavail, not f_bfree: what an ordinary user may still write, which is
+    // what a download is. The difference is the root reserve on ext4.
+    out.freeBytes = static_cast<int64_t>(v.f_bavail) * static_cast<int64_t>(v.f_frsize);
+    out.totalBytes = static_cast<int64_t>(v.f_blocks) * static_cast<int64_t>(v.f_frsize);
+    return out;
+}
+
+bool isUsb(const std::string& location) {
+    // A partition's sysfs link resolves to a path under its disk, and the
+    // disk's under whatever bus carries it: .../usb2/2-1/.../block/sdb/sdb1.
+    // A filesystem with no single block device behind it (btrfs reports an
+    // anonymous one) resolves nowhere and is reported as internal, which is
+    // the safe answer: it only changes a label.
+    const dev_t d = deviceOf(location);
+    if (d == 0) return false;
+    char link[64];
+    std::snprintf(link, sizeof link, "/sys/dev/block/%u:%u", major(d), minor(d));
+    char resolved[PATH_MAX];
+    if (!::realpath(link, resolved)) return false;
+    return std::strstr(resolved, "/usb") != nullptr;
 }
 
 std::string romsDir(const std::string& location) { return location + "/roms"; }
