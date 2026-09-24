@@ -5430,26 +5430,30 @@ int main(int argc, char** argv) {
             {K::Unbuilt, 0, "Remove an account",
              "The account playing now cannot be removed", ""},
         }});
-        // THE PIN ROWS SAY WHAT IT PROTECTS. With none set, only the owner
-        // can set one: anybody else setting it would lock the owner out of
-        // their own console.
+        // THE PIN IS THE OWNER'S, AND ONLY THE OWNER SEES ITS CONTROLS.
+        // Anyone else sees whether there is one and whose it is, with nothing
+        // to press. MMagTech, 2026-09-24, signed in as claire and offered
+        // Change PIN and Turn off PIN: *"why would claire or anyone but me have
+        // the option to change the pin or turn it off"*. To change it while
+        // somebody else is signed in, the owner switches in, which asks for it.
         {
             auto& rows = cats.back().rows;
             const char* protects = "Asked for before Wi-Fi, sign out, removing accounts "
                                    "and file access";
-            if (accounts::pinIsSet()) {
+            const bool isOwner = accounts::activeId() == accounts::ownerId();
+            const std::vector<accounts::Account> list = accounts::all();
+            const accounts::Account* owner = accounts::find(list, accounts::ownerId());
+            const std::string ownerName = owner ? owner->name : std::string("the owner");
+            if (isOwner && accounts::pinIsSet()) {
                 rows.push_back({K::Action, SetPinChange, "Change PIN", protects, ""});
                 rows.push_back({K::Action, SetPinOff, "Turn off PIN",
                                 "Then anyone using this console can change them", ""});
-            } else if (accounts::activeId() == accounts::ownerId()) {
+            } else if (isOwner) {
                 rows.push_back({K::Action, SetPinSet, "Set a PIN", protects, ""});
+            } else if (accounts::pinIsSet()) {
+                rows.push_back({K::Info, 0, "PIN", "Set by " + ownerName, "On"});
             } else {
-                const std::vector<accounts::Account> list = accounts::all();
-                const accounts::Account* owner = accounts::find(list, accounts::ownerId());
-                rows.push_back({K::Info, 0, "PIN",
-                                "Only " + (owner ? owner->name : std::string("the owner")) +
-                                    " can set one",
-                                "Off"});
+                rows.push_back({K::Info, 0, "PIN", "Only " + ownerName + " can set one", "Off"});
             }
             rows.push_back({K::Unbuilt, 0, "RetroAchievements",
                             "Sign in with your own RetroAchievements account", ""});

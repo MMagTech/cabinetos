@@ -75,8 +75,17 @@ and says when it is right.
   - File access (turning it on, making a new password)
 
   Open to everyone: adding an account, sounds, picture quality, system update.
-  The same PIN stops anyone switching into the owner's account. **To build,
-  #57.**
+  The same PIN stops anyone switching into the owner's account. **Built, #57**
+  (a centred number pad; five wrong tries lock it for 30 seconds).
+- **Only the owner sees the PIN's controls.** Signed in as the owner:
+  Set a PIN, or Change PIN and Turn off PIN. Anyone else sees one row, "PIN",
+  On ("Set by MMagTech") or Off ("Only MMagTech can set one"), with nothing
+  to press. MMagTech, 2026-09-24. **Built.**
+- **One PIN, not one per person**, kept after comparing consoles on
+  2026-09-24: PlayStation and Xbox let each person lock their own account;
+  Nintendo and Apple TV (and so Cabinet) have only the one console PIN.
+  **Later, if wanted:** an optional lock per account that guards switching
+  into it, added beside the owner PIN without changing it.
 - **The PIN is offered when a second account is added**, not in first run.
   Right after the new person pairs: *"Anyone using this console can change
   Wi-Fi, sign out and remove accounts. Set a PIN so only you can?"* Set PIN /
