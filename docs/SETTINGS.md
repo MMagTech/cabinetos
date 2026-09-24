@@ -39,7 +39,7 @@ and says when it is right.
   them.** This is for judging the layout; they go away as each is built.
   **Built.**
 - **Changing category cross-fades the rows**, about 150 ms, no movement.
-  **Built, being judged.**
+  **Built.** MMagTech on the TV, 2026-09-24: good.
 - **No emulator settings page.** Emulator options are either covered by
   Picture quality, set once by us and never shown, or live in the pause menu
   (see below).

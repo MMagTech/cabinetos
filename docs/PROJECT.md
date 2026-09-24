@@ -12941,4 +12941,4 @@ cache and unsent saves when pairing to a different server?
 **Changing category cross-fades the rows**, 150 ms ease-in-out, no movement:
 the old rows fade out as the new ones fade in. MMagTech asked whether it should
 be instant; a person runs down that list quickly, so a slide would be busy and
-an instant swap makes the whole right side jump. Being judged on the TV.
+an instant swap makes the whole right side jump. MMagTech on the TV: good.

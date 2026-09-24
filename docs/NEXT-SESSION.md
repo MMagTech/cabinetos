@@ -411,7 +411,11 @@ after the remaining cores; the installer is step 6, last.
    MERGED ON PURPOSE**: MMagTech, *"I don't want a build until I have judged
    everything."* Judge on the television with `tools/ui-loop.sh` (the A9 may
    still be on that hand-built binary; `--restore` or a reboot puts it back).
-   Merge only when he says the whole of Settings is right.
+   Merge only when he says the whole of Settings is right. **Judged good on
+   the TV so far:** the side list, the top-bar dissolve with the sliding
+   keyboard, and the category cross-fade. **Suggested first builds:** #62
+   (interface sounds levels, and saving them), then #57 (owner and PIN),
+   which Wi-Fi, sign out and remove all depend on.
 
    **Tracked as GitHub issues #57 to #75, Settings milestone** (#74 and #75
    are `later`). The checklist below is the same list:
