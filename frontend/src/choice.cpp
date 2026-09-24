@@ -8,7 +8,7 @@ namespace screens {
 
 namespace {
 
-// The PIN pad's panel and keys (pin.cpp), so the two read as one family.
+// The PIN pad's panel sizes (pin.cpp), with the account panel's material.
 constexpr float kPanelPad = 40.0f;
 constexpr float kPanelRadius = 32.0f;
 constexpr float kPanelMaxW = 1200.0f;
@@ -93,8 +93,12 @@ void ChoiceScreen::draw(Ctx& c) {
     c.r.setContentAlpha(1.0f);
     c.r.draw(ui::Rect{0, 0, W, H, 0, ui::Color::black(0.45f * a)});
     c.r.setContentAlpha(a);
-    c.r.drawGlass(ui::Rect{px, py, panelW, panelH, kPanelRadius, ui::Color::white(0)}, 6.0f,
-                  ui::Color::black(0.68f));
+    // THE ACCOUNT PANEL'S MATERIAL, not the keyboard's. Frosted glass with
+    // a light tint, as the account panel and the Settings rows are. The
+    // keyboard's black slab was tried first; MMagTech, 2026-09-24: fine for a
+    // keyboard, but on these screens *"they just seem forgotten about"*.
+    c.r.drawGlass(ui::Rect{px, py, panelW, panelH, kPanelRadius, ui::Color::white(0)},
+                  design::kRegularMaterialBlur, ui::Color::white(0.12f));
 
     auto centred = [&](const std::string& s, float base, TextStyle st, float alpha) {
         const std::string t = c.text.truncate(s, st, sc, textMax);
@@ -119,7 +123,7 @@ void ChoiceScreen::draw(Ctx& c) {
         const float dw = kButtonW * s, dh = kButtonH * s;
         const float dx = bx - (dw - kButtonW) * 0.5f, dy = y - (dh - kButtonH) * 0.5f;
         ui::Rect cap{dx, dy, dw, dh, kButtonRadius * s,
-                     ui::Color::white(on ? 0.10f + 0.25f * f : 0.10f)};
+                     ui::Color::white(on ? 0.08f + 0.30f * f : 0.08f)};
         if (on) {
             cap.shadowBlur = 18.0f;
             cap.shadowOffsetY = 8.0f;

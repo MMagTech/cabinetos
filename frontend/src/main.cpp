@@ -5290,6 +5290,12 @@ int main(int argc, char** argv) {
     // shows on a fully black screen: in after the curtain is down, out before
     // it lifts.
     Animated switchText;
+    // AN ACCOUNT SWITCH'S CURTAIN IS THE CONSOLE'S PURPLE, not black: the
+    // plain gradient boot and Settings stand on. Black is a game's curtain;
+    // behind "Switching to vivian" it looked like a screen nobody had
+    // designed. MMagTech, 2026-09-24. Set with the switch, cleared once the
+    // curtain is fully up again.
+    bool switchCurtain = false;
     constexpr float kSwitchTextFade = 0.200f;   // a starting value
     bool switchDone = false;     // the switch has run; waiting out the hold
     bool switchOk = false;
@@ -5694,6 +5700,7 @@ int main(int argc, char** argv) {
                     const std::vector<accounts::Account> list = accounts::all();
                     const accounts::Account* a = accounts::find(list, id);
                     switchPendingId = id;
+                    switchCurtain = true;
                     switchLabel = "Switching to " + (a ? a->name : std::string("them"));
                     switchCurtainFrames = 0;
                     accountsOpen = false;
@@ -9227,9 +9234,26 @@ int main(int argc, char** argv) {
         // not part of any screen, it is the screen going away. See design.h.
         {
             const float c = curtain.value();
-            if (c > 0.001f)
+            if (c > 0.001f && switchCurtain) {
+                // The backdrop's two bands, overlapping by a point so no
+                // seam shows where they meet, faded as one.
+                const float W = ui::kCanvasWidth, H = ui::kCanvasHeight, mid = H * 0.55f;
+                ui::Color top = ui::palette::kBackdropTop, m = ui::palette::kBackdropMid,
+                          bot = ui::palette::kBackdropBottom;
+                top.a = m.a = bot.a = c;
+                ui::Rect upper{0, 0, W, mid + 1.0f, 0, top};
+                upper.gradient = true;
+                upper.fillBottom = m;
+                renderer.draw(upper);
+                ui::Rect lower{0, mid, W, H - mid, 0, m};
+                lower.gradient = true;
+                lower.fillBottom = bot;
+                renderer.draw(lower);
+            } else if (c > 0.001f) {
                 renderer.draw(ui::Rect{0, 0, ui::kCanvasWidth, ui::kCanvasHeight, 0,
                                        ui::Color::black(c)});
+            }
+            if (c <= 0.001f && switchPendingId == 0) switchCurtain = false;
             // WHO IT IS BECOMING, on the curtain, only while the curtain is
             // fully down (see switchText).
             const float ta = switchText.value();

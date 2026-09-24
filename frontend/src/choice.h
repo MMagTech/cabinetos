@@ -1,9 +1,8 @@
 // A question with a few answers, in a panel in the middle of the screen.
 //
 // "Who do you want to remove?", "Remove vivian from this console?" and, when
-// they are built, sign out and forgetting a network. It is the PIN pad's
-// panel (pin.h) with a column of buttons instead of a number pad: a scrim, one
-// piece of dark glass, and plain surfaces on it.
+// they are built, sign out and forgetting a network. A scrim, one panel of
+// the account panel's frosted glass, and a column of plain buttons on it.
 //
 // A LAYER, LIKE THE PIN PAD. It is opened over whatever is showing, takes
 // input first while it is open, and says which answer was chosen. What the

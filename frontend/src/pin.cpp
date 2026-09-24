@@ -27,9 +27,8 @@ bool isDelete(int r, int c) { return r == 3 && c == 2; }
 //
 // A PANEL IN THE MIDDLE, NOT A SCREEN. The first version covered the whole
 // screen in purple; MMagTech on the TV, 2026-09-24: *"do we really need a full
-// screen ui for a pin pad"*. It is the on-screen keyboard's own treatment now
-// (keyboard.cpp): a scrim, one piece of dark glass, keys as plain surfaces on
-// it. A PIN is a question with one answer, which is what that panel is for.
+// screen ui for a pin pad"*. It is the on-screen keyboard's own treatment
+// (keyboard.cpp): a scrim, one piece of dark glass, keys as plain surfaces.
 constexpr float kPanelPad = 40.0f;       // the keyboard's
 constexpr float kPanelRadius = 32.0f;    // the keyboard's, the pause panel's
 constexpr float kPanelMaxW = 1200.0f;
@@ -213,6 +212,9 @@ void PinScreen::draw(Ctx& c) {
     c.r.setContentAlpha(1.0f);
     c.r.draw(ui::Rect{0, 0, W, H, 0, ui::Color::black(0.45f * a)});
     c.r.setContentAlpha(a);
+    // THE KEYBOARD'S DARK GLASS, kept on purpose: a PIN is typed like any
+    // other field, and MMagTech is happy with it there. The question panel
+    // (choice.cpp) is the one that takes the account panel's frosted glass.
     c.r.drawGlass(ui::Rect{px, py, panelW, panelH, kPanelRadius, ui::Color::white(0)}, 6.0f,
                   ui::Color::black(0.68f));
 
