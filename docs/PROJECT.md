@@ -8039,7 +8039,7 @@ headlessly, so nothing was sent. The upload path is the same code seven other
 emulators use, and only the tag is new. NES and SNES have no saves on the
 server yet, so the first real one will come from a person playing.
 
-#### AND STATES, THE SAME DAY: SIXTEEN OF THE LIBRETRO CORES NOW SHARE THEM
+#### AND STATES, THE SAME DAY: EIGHTEEN OF THE 22 LIBRETRO CORES NOW SHARE THEM
 
 **MMagTech: states belong on every libretro core, and question 25 already said
 so.** They did exist on every one, on this console. What was missing was

@@ -498,7 +498,7 @@ played and quit, with every save on the server unchanged afterwards. The other
 four of the nine (Virtual Boy, Atari 2600, Atari 7800, Vectrex) have no save
 to carry.
 
-**STATES TOO, SAME DAY: sixteen libretro cores now send them.** Apple TV states
+**STATES TOO, SAME DAY: eighteen of the 22 libretro cores now send them.** Apple TV states
 for Aladdin and R.C. Pro-Am loaded here mid-game. **Saturn's was refused**, and
 Saturn, MAME 2003-Plus and Flycast states stay local, because **Cabinet's own
 Apple TV builds of those cores are not at the commit its manifest pins** (it
