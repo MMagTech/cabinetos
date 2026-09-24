@@ -12854,3 +12854,33 @@ purple, being the brand. Not built.
 nailed it."* The switch as it stands: the old frame dissolves (300 ms), Search's
 keyboard slides away over it (300 ms), and the new content waits 200 ms then
 rises 16 points while fading in (300 ms). Do not retune these from a capture.
+
+**HDMI-CEC IS SHELVED, AND ITS ROW IS GONE.** MMagTech, 2026-09-24: he does not
+expect to buy a CEC adapter to test with, and the current standby behaviour
+gets most of what CEC was for. **This reverses open question 10's "HDMI-CEC is
+a requirement"** and the inventory's CEC rows; it is recorded here rather than
+silently dropped. If CEC comes back, its row goes under Display and Sound.
+
+**Interface sounds gets a volume.** MMagTech, 2026-09-24. Proposed as one row
+changed with left and right: Off, Quiet, Medium, Loud, which folds the on/off
+switch into it. `sound::setVolume` already scales at play time. Not built.
+
+**Accounts, proposed (awaiting MMagTech):** switching and adding stay in the
+account chip's panel; Remove account and the PIN go in Settings only, because
+they are rare and a removal should not be one press from the corner of every
+screen. Settings keeps "Add an account" as well.
+
+**Server, proposed (awaiting MMagTech), from his own questions:** what does
+signing out do when the whole console needs a server, and what happens to the
+cache and unsent saves when pairing to a different server?
+
+- **Change server address**: the same server at a new address. The console
+  checks it is the same server before switching; otherwise it refuses and
+  points at Sign out.
+- **Sign out**: leave this server, including to join a friend's. (1) Upload
+  anything not yet uploaded; if the server cannot be reached, say how many
+  saves would be lost and ask. (2) Clear everything tied to that server:
+  cached and kept games (filed by that server's game ids, which mean different
+  games on another server) and the accounts. Wi-Fi and controllers stay.
+  (3) Back to first run's server step, reusing its screens.
+- **One server at a time.**

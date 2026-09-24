@@ -5301,8 +5301,6 @@ int main(int argc, char** argv) {
         cats.push_back({"Display and Sound", {
             {K::Unbuilt, 0, "Picture quality",
              "Performance, Balanced or Quality, for the whole console", ""},
-            {K::Unbuilt, 0, "TV control (HDMI-CEC)",
-             "Turns the TV on and off with the console", ""},
             {K::Toggle, SetInterfaceSounds, "Interface sounds",
              "The clicks when you move around the menus",
              sound::enabled() ? "On" : "Off"},
