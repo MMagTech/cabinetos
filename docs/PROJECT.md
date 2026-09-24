@@ -7985,6 +7985,66 @@ pipeline and to every screenshot taken before.
   stronger answer, and is worth building the day a server calls it something
   else.
 
+#### THE BATTERY SAVES OF FIVE MORE SYSTEMS TRAVEL, 2026-09-23
+
+**NES, SNES, N64, TurboGrafx CD and Saturn had no save tag, so `saveTag` said
+nothing and their progress never left the console.** Found by a Bionic Commando
+test logging `no settled tag for fceumm`. Cabinet has a tag for each
+(`NativeCore.swift`), and they are now `catalog::saveTag` entries.
+
+**Nine emulators had no tag. Four of them have no save to carry**, so they are
+left out and lose nothing: `beetle_vb` exposes no Virtual Boy battery,
+`prosystem` exposes no memory, and no Atari 2600 or Vectrex cartridge had one.
+Cabinet wires no save memory for any of the four either. What they lack is
+states, which is `emulatorTag`'s stricter question and separate work.
+
+**Why the five are safe to share:**
+
+- **Same mechanism on both ends.** Cabinet reads all five through
+  `RETRO_MEMORY_SAVE_RAM` (`LibretroFrontend.mm`), which is the battery path
+  this console already runs for seven other emulators. The only new code is
+  the tags.
+- **Same revision.** CabinetOS pins Cabinet's own Mac commit for all five.
+- **Four are the machine's own bytes**: NES WRAM, SNES SRAM, the PC Engine CD's
+  2 KB `HUBM` backup RAM, the Saturn's 32 KB `BackUpRam Format` RAM.
+- **N64 is the emulator's layout, and it matches.** mupen64plus packs EEPROM,
+  four controller paks, SRAM and flash into one 296,960-byte struct
+  (`save_memory_data`, `libretro/libretro_memory.h`), at `f275caf4`, which is
+  Cabinet's commit on every platform. Read off the seven N64 saves on the
+  server, each has data exactly where its game's chip is: Mario Kart 64,
+  Banjo-Kazooie and Wave Race in EEPROM, 1080° and F-Zero X in SRAM, Hydro
+  Thunder in the controller pak.
+- **Saturn needs one option**, `beetle_saturn_save_method = libretro`, or the
+  core keeps its own `.bkr` file and nothing reaches SAVE_RAM. It is the
+  default at our pin; `optionOverrides` forces it, as Cabinet does, so a core
+  bump cannot quietly change it.
+
+**MEASURED ON THE A9, headless, against the real server.** All eleven affected
+saves were backed up first. Mario Kart 64, Ys Book I & II and Sega Rally were
+each launched, their Apple TV save restored, played for 1,500 frames and quit
+through the pause menu:
+
+| Game | Restored | At the quit |
+|---|---|---|
+| Mario Kart 64 | 296,960 bytes | unchanged, nothing uploaded |
+| Ys Book I & II | 2,048 bytes | unchanged, nothing uploaded |
+| Sega Rally | 32,768 bytes | unchanged, nothing uploaded |
+
+A game that could not read its save would have reformatted it, and the change
+would have been uploaded over the Apple TV's copy. None did, and all eleven
+rows on the server were byte-identical to the backup afterwards.
+
+**NOT MEASURED: the upload direction for these five.** No game changed its save
+headlessly, so nothing was sent. The upload path is the same code seven other
+emulators use, and only the tag is new. NES and SNES have no saves on the
+server yet, so the first real one will come from a person playing.
+
+**Found in passing, not fixed:** Beetle Saturn also writes `<game>.bcr`, the
+Saturn's optional backup-memory CARTRIDGE, as a file beside the save. Neither
+Cabinet nor this console syncs it; only the internal RAM travels. It matters
+only for a save written to the cartridge, and nobody has checked how often a
+game does that.
+
 #### The test that answers the whole question, and can be run this week
 
 The parity risk is not theoretical and it does not need CabinetOS to exist to
