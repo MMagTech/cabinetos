@@ -6968,6 +6968,24 @@ int main(int argc, char** argv) {
             if (autoLaunchAfter <= 0.0f) {
                 const int id = autoLaunchId;
                 autoLaunchId = 0;
+                // NOT ON HOME, SO NOT IN THE LIBRARY, since 2026-09-22: boot
+                // stopped fetching the whole catalogue, and `--launch` quietly
+                // lost every game that is not Recent or a Favorite. It said
+                // "no game with id" and idled, which is how the save work of
+                // 2026-09-23 found it. Asked for by id instead, the way a
+                // platform grid or Search would have fetched it.
+                if (lib.byRomId.find(id) == lib.byRomId.end()) {
+                    romm::Game g;
+                    std::string err;
+                    if (liveClient.fetchGame(id, &g, &err)) {
+                        appendGame(lib, g);
+                        std::fprintf(stderr, "[launch] fetched %s by id\n",
+                                     g.name.c_str());
+                    } else {
+                        std::fprintf(stderr, "[launch] could not fetch rom %d: %s\n",
+                                     id, err.c_str());
+                    }
+                }
                 launchById(id);
             }
         }
