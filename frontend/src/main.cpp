@@ -74,6 +74,7 @@
 #include "storage.h"
 #include "text.h"
 #include "overlaywin.h"
+#include "pin.h"
 #include "power.h"
 #include "prefs.h"
 #include "ui.h"
@@ -5238,6 +5239,76 @@ int main(int argc, char** argv) {
     // moveRow exist.
     std::function<bool(screens::Nav)> homeKey;
 
+    // ---- The PIN ------------------------------------------------------------
+    //
+    // docs/SETTINGS.md, Accounts, issue #57. The pad is a layer over whatever
+    // is showing (pin.h); these decide what an entered PIN means.
+    //
+    // `askPin` is the one door every protected action goes through: with no
+    // PIN set it simply goes ahead, which is the rule that with no PIN every
+    // account can do everything. Wi-Fi, Sign out, Change server address,
+    // Remove an account and File access call it when they are built.
+    screens::PinScreen pinScreen;
+    std::function<void()> pinThen;
+    // FIVE WRONG TRIES, THEN THIRTY SECONDS. Enough to forgive fumbling with
+    // a d-pad, and enough to make guessing ten thousand PINs not worth it for
+    // the sibling the PIN is for. Starting values. Counted per console run,
+    // not saved: a restart is slower than the wait.
+    constexpr int kPinTries = 5;
+    constexpr float kPinLockSeconds = 30.0f;
+    int pinFails = 0;
+    auto askPin = [&](const std::string& title, std::function<void()> then) {
+        if (!accounts::pinIsSet()) { then(); return; }
+        pinThen = std::move(then);
+        pinScreen.open(screens::PinScreen::Mode::Check, title, "");
+        std::fprintf(stderr, "[pin] asked: %s\n", title.c_str());
+    };
+    auto choosePin = [&](const std::string& title, const std::string& detail,
+                         const std::string& cancel, std::function<void()> then) {
+        pinThen = std::move(then);
+        pinScreen.open(screens::PinScreen::Mode::Choose, title, detail, cancel);
+    };
+    auto pinOutcome = [&](screens::PinScreen::Outcome o) {
+        using O = screens::PinScreen::Outcome;
+        if (o == O::None) return;
+        if (o == O::Cancelled) {
+            pinScreen.close();
+            pinThen = nullptr;
+            std::fprintf(stderr, "[pin] left without one\n");
+            return;
+        }
+        if (pinScreen.mode() == screens::PinScreen::Mode::Check) {
+            if (!accounts::checkPin(pinScreen.pin())) {
+                ++pinFails;
+                sound::play(sound::Cue::Edge);
+                std::fprintf(stderr, "[pin] wrong, %d of %d\n", pinFails, kPinTries);
+                pinScreen.reject("That is not the PIN");
+                if (pinFails >= kPinTries) {
+                    pinFails = 0;
+                    pinScreen.lockFor(kPinLockSeconds);
+                }
+                return;
+            }
+            pinFails = 0;
+            std::fprintf(stderr, "[pin] accepted\n");
+        } else {
+            std::string err;
+            if (!accounts::setPin(pinScreen.pin(), &err)) {
+                pinScreen.reject("The PIN could not be saved");
+                std::fprintf(stderr, "[pin] could not save: %s\n", err.c_str());
+                return;
+            }
+            std::fprintf(stderr, "[pin] set\n");
+        }
+        // CLOSED BEFORE THE ACTION RUNS, so an action that opens the pad
+        // again (Change PIN: the old one, then the new one) opens it fresh.
+        pinScreen.close();
+        auto then = std::move(pinThen);
+        pinThen = nullptr;
+        sound::play(sound::Cue::Activate);
+        if (then) then();
+    };
+
     // ---- Settings' rows -----------------------------------------------------
     //
     // docs/PROJECT.md, open question 31. The screen is handed rows and hands
@@ -5245,7 +5316,8 @@ int main(int argc, char** argv) {
     // Settings opens or a row changes. Rows marked Unbuilt are agreed and not
     // built: they are there so the whole layout can be judged on the
     // television, and focus never lands on them.
-    enum SettingId { SetAddAccount = 1, SetInterfaceSounds };
+    enum SettingId { SetAddAccount = 1, SetInterfaceSounds, SetPinSet, SetPinChange,
+                     SetPinOff };
     // THE NETWORK IS ASKED OFF THE FRAME THREAD. net::status() is three or four
     // nmcli round trips, which is a visible hitch if the screen waits for it,
     // so the row says "Checking" until the answer lands.
@@ -5285,11 +5357,31 @@ int main(int argc, char** argv) {
              "Pair another RomM user with this console", ""},
             {K::Unbuilt, 0, "Remove an account",
              "The account playing now cannot be removed", ""},
-            {K::Unbuilt, 0, "Require a PIN to switch",
-             "Off to start. Entered with the controller", ""},
-            {K::Unbuilt, 0, "RetroAchievements",
-             "Sign in with your own RetroAchievements account", ""},
         }});
+        // THE PIN ROWS SAY WHAT IT PROTECTS. With none set, only the owner
+        // can set one: anybody else setting it would lock the owner out of
+        // their own console.
+        {
+            auto& rows = cats.back().rows;
+            const char* protects = "Asked for before Wi-Fi, sign out, removing accounts "
+                                   "and file access";
+            if (accounts::pinIsSet()) {
+                rows.push_back({K::Action, SetPinChange, "Change PIN", protects, ""});
+                rows.push_back({K::Action, SetPinOff, "Turn off PIN",
+                                "Then anyone using this console can change them", ""});
+            } else if (accounts::activeId() == accounts::ownerId()) {
+                rows.push_back({K::Action, SetPinSet, "Set a PIN", protects, ""});
+            } else {
+                const std::vector<accounts::Account> list = accounts::all();
+                const accounts::Account* owner = accounts::find(list, accounts::ownerId());
+                rows.push_back({K::Info, 0, "PIN",
+                                "Only " + (owner ? owner->name : std::string("the owner")) +
+                                    " can set one",
+                                "Off"});
+            }
+            rows.push_back({K::Unbuilt, 0, "RetroAchievements",
+                            "Sign in with your own RetroAchievements account", ""});
+        }
 
         cats.push_back({"Controllers", {
             {K::Unbuilt, 0, "Connected controllers", "Which controller is which player", ""},
@@ -5476,22 +5568,35 @@ int main(int argc, char** argv) {
                 // THE REFUSALS BELONG TO THE APP AND SO DO THEIR WORDS. The
                 // screen does not know whether a game is running or a save is
                 // still going up; it asked to become somebody and this decides.
-                std::string why;
-                if (switchAccount(res.value, &why)) {
-                    // Straight back to Home with the panel closed, because
-                    // everything behind it belonged to the last account.
-                    // Leaving the panel open over a Home that has just been
-                    // rebuilt for somebody else is the stale-screen fault in
-                    // miniature.
-                    accountsOpen = false;
-                    barFocused = false;
-                    stack.clear();
-                    stack.push_back(Screen::Home);
-                    accountScreen.setNotice("");
-                    sound::play(sound::Cue::Activate);
+                const int id = res.value;
+                auto go = [&, id]() {
+                    std::string why;
+                    if (switchAccount(id, &why)) {
+                        // Straight back to Home with the panel closed, because
+                        // everything behind it belonged to the last account.
+                        // Leaving the panel open over a Home that has just been
+                        // rebuilt for somebody else is the stale-screen fault in
+                        // miniature.
+                        accountsOpen = false;
+                        barFocused = false;
+                        stack.clear();
+                        stack.push_back(Screen::Home);
+                        accountScreen.setNotice("");
+                        sound::play(sound::Cue::Activate);
+                    } else {
+                        accountScreen.setNotice(why);
+                        sound::play(sound::Cue::Edge);
+                    }
+                };
+                // THE SAME PIN STOPS ANYBODY SWITCHING INTO THE OWNER.
+                // docs/SETTINGS.md, Accounts. With no PIN, askPin just goes.
+                if (id == accounts::ownerId() && accounts::activeId() != id) {
+                    const std::vector<accounts::Account> list = accounts::all();
+                    const accounts::Account* a = accounts::find(list, id);
+                    askPin("Enter the PIN to switch to " + (a ? a->name : std::string("them")),
+                           go);
                 } else {
-                    accountScreen.setNotice(why);
-                    sound::play(sound::Cue::Edge);
+                    go();
                 }
                 break;
             }
@@ -5513,6 +5618,24 @@ int main(int argc, char** argv) {
                     addAccountScreen.open();
                     stack.push_back(Screen::AddAccount);
                     startAddAccount();
+                    sound::play(sound::Cue::Activate);
+                } else if (res.value == SetPinSet) {
+                    choosePin("Choose a PIN", "Four digits", "Cancel",
+                              [&]() { buildSettings(); });
+                    sound::play(sound::Cue::Activate);
+                } else if (res.value == SetPinChange) {
+                    askPin("Enter your current PIN", [&]() {
+                        choosePin("Choose a new PIN", "Four digits", "Cancel",
+                                  [&]() { buildSettings(); });
+                    });
+                    sound::play(sound::Cue::Activate);
+                } else if (res.value == SetPinOff) {
+                    askPin("Enter the PIN to turn it off", [&]() {
+                        std::string err;
+                        if (accounts::setPin("", &err))
+                            std::fprintf(stderr, "[pin] turned off\n");
+                        buildSettings();
+                    });
                     sound::play(sound::Cue::Activate);
                 }
                 break;
@@ -5813,6 +5936,9 @@ int main(int argc, char** argv) {
     refreshKeeps();
 
     navigate = [&](screens::Nav n) -> bool {
+        // THE PIN PAD BEFORE ANYTHING. It covers the screen, so nothing under
+        // it may take a press.
+        if (pinScreen.isOpen()) { pinOutcome(pinScreen.key(n)); return true; }
         // The bar first, wherever it is focused. One place, one behaviour.
         if (accountsOpen) { apply(accountScreen.key(n)); return true; }
         if (barFocused && barKey(n)) return true;
@@ -6605,14 +6731,24 @@ int main(int argc, char** argv) {
             else if (word == "a") n = screens::Nav::Activate;
             else if (word == "b") n = screens::Nav::Back;
             else ok = false;
+            // A digit is a PIN pad key typed on a keyboard, so a whole PIN
+            // can be walked headless: "down,a,4,8,2,1,4,8,2,1".
+            if (!ok && word.size() == 1 && word[0] >= '0' && word[0] <= '9') {
+                pinOutcome(pinScreen.typeDigit(word[0]));
+                word.clear();
+                if (!*p) break;
+                continue;
+            }
             if (ok) navigate(n);
             else if (!word.empty()) std::fprintf(stderr, "[nav] unknown press '%s'\n", word.c_str());
             word.clear();
             if (!*p) break;
         }
-        std::fprintf(stderr, "[nav] after '%s': screen %d, bar %s slot %d\n", navScript,
+        std::fprintf(stderr, "[nav] after '%s': screen %d, bar %s slot %d%s\n", navScript,
                      static_cast<int>(here()), barFocused ? "focused" : "not focused",
-                     barSlot);
+                     barSlot, pinScreen.isOpen() ? ", PIN pad open" : "");
+        // A capture shows the pad at rest, not part-way through its fade.
+        if (pinScreen.isOpen()) pinScreen.settle();
     }
 
     // ---- Idle: pixel shift, dim, blank — idle.h, open question 10b -------
@@ -6681,6 +6817,21 @@ int main(int argc, char** argv) {
                     if (keyboard.isOpen()) keyboard.typeText(e.text.text);
                     break;
                 case SDL_EVENT_KEY_DOWN:
+                    // A physical keyboard's digits go into the PIN pad, the
+                    // same field the controller fills.
+                    if (pinScreen.isOpen() && owner == InputOwner::UI) {
+                        const SDL_Keycode k = e.key.key;
+                        char d = 0;
+                        if (k >= SDLK_0 && k <= SDLK_9) d = static_cast<char>('0' + (k - SDLK_0));
+                        else if (k >= SDLK_KP_1 && k <= SDLK_KP_9)
+                            d = static_cast<char>('1' + (k - SDLK_KP_1));
+                        else if (k == SDLK_KP_0) d = '0';
+                        if (d) { pinOutcome(pinScreen.typeDigit(d)); break; }
+                        if (k == SDLK_ESCAPE || k == SDLK_BACKSPACE) {
+                            navigate(screens::Nav::Back);
+                            break;
+                        }
+                    }
                     if (owner == InputOwner::Keyboard) {
                         // While it owns input it takes every key, the same way
                         // the core owns the pad while a game runs. A control
@@ -7269,6 +7420,21 @@ int main(int argc, char** argv) {
                                          "still acting as %d\n",
                                  who.id, who.name.c_str(), accounts::all().size(),
                                  accounts::activeId());
+                    // THE PIN IS OFFERED HERE, NOT IN FIRST RUN: the moment
+                    // a second person can use the console is the moment it
+                    // matters. Only to the owner, only while there is no PIN,
+                    // and only once, ever (config/settings.json). The pad IS
+                    // the offer: typing a PIN is "Set PIN", and the key that
+                    // leaves is "Not now".
+                    if (!accounts::pinIsSet() &&
+                        accounts::activeId() == accounts::ownerId() &&
+                        prefs::get("pin_offered", "") != "yes") {
+                        prefs::set("pin_offered", "yes");
+                        choosePin("Set a PIN so only you can?",
+                                  "Anyone using this console can change Wi-Fi, sign out "
+                                  "and remove accounts",
+                                  "Not now", [&]() { buildSettings(); });
+                    }
                 } else if (ok) {
                     // **THE CASE THAT LIED.** The pairing worked and wrote a
                     // valid token, and it added nobody: whoever approved it
@@ -7502,6 +7668,7 @@ int main(int argc, char** argv) {
             accountScreen.tick(dt);
             addAccountScreen.tick(dt);
             settingsScreen.tick(dt);
+            pinScreen.tick(dt);
             tabDissolve.tick(dt);
             keyboardSlide.tick(dt);
             if (keyboard.sliding() || keyboard.isOpen()) {
@@ -8749,6 +8916,13 @@ int main(int argc, char** argv) {
         if (accountsOpen) {
             screens::Ctx actx{renderer, text, images, sc, &cards};
             accountScreen.draw(actx);
+        }
+        // The PIN pad over all of it, the panel included: it can be opened
+        // from the panel, and it covers the screen.
+        if (pinScreen.isOpen() && !playing) {
+            screens::Ctx pctx{renderer, text, images, sc, &cards};
+            pinScreen.draw(pctx);
+            renderer.setContentAlpha(1.0f);
         }
 
         // ---- The curtain, over everything --------------------------------

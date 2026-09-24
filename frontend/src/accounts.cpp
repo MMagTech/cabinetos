@@ -309,6 +309,11 @@ bool recordPairing(romm::Client& client, Paired* out, std::string* err) {
     return true;
 }
 
+int ownerId() {
+    const std::vector<Account> list = all();
+    return list.empty() ? 0 : list.front().id;
+}
+
 bool pinIsSet() { return !trimmed(readFile(pinPath())).empty(); }
 
 bool setPin(const std::string& pin, std::string* err) {
