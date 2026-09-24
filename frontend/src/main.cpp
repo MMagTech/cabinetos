@@ -4430,6 +4430,12 @@ int main(int argc, char** argv) {
     // not the same as what is on screen until it has stopped asking for long
     // enough — see kHomeBackdropDelay.
     std::string backdropKey, backdropPrevKey, backdropWant;
+    // The last game art a BROWSING screen lit the room with. The plain
+    // screens (Settings, adding an account) clear the room, and Search with
+    // nothing found yet goes back to this rather than staying plain: MMagTech,
+    // 2026-09-24, one screen switching between plain and blurred "doesn't feel
+    // right".
+    std::string lastLitArt;
     float backdropSettle = 0.0f;
     Animated backdropMix;
     backdropMix.from = backdropMix.to = 1.0f;
@@ -4461,6 +4467,10 @@ int main(int argc, char** argv) {
     // again return to the browsing.
     enum class Screen { Home, Library, Grid, Detail, Search, AddAccount, Settings };
     std::vector<Screen> stack{Screen::Home};
+    // Which screen last set the room, so a change of screen can be told apart
+    // from focus moving within one. See the backdrop block in the frame loop.
+    Screen backdropScreen = Screen::Home;
+    bool backdropForScreen = false;
     auto here = [&]() { return stack.back(); };
 
     screens::LibraryScreen libraryScreen;
@@ -7614,13 +7624,18 @@ int main(int argc, char** argv) {
                     want = cards[ci].coverLarge.empty() ? cards[ci].cover
                                                         : cards[ci].coverLarge;
             } else if (here() == Screen::Search) {
-                // The room follows the results here too. A search that found
-                // nothing leaves it lit by whatever was there before rather
-                // than blanking, the same rule the top bar gets.
+                // The room follows the results here too. With nothing found,
+                // or nothing typed yet, it is lit by the last game art you
+                // were browsing, NOT by whatever the previous screen left: that
+                // was the plain purple when you came from Settings, so Search
+                // was sometimes plain and sometimes blurred. It is always
+                // blurred now.
                 const int ci = searchScreen.focusedCard();
                 if (ci >= 0 && ci < static_cast<int>(cards.size()))
                     want = cards[ci].coverLarge.empty() ? cards[ci].cover
                                                         : cards[ci].coverLarge;
+                else if (!lastLitArt.empty())
+                    want = lastLitArt;
             } else if (here() == Screen::AddAccount) {
                 // **A TEXT SCREEN GETS THE PLAIN GRADIENT.** MMagTech,
                 // 2026-09-22: *"i preferred the purple background that went
@@ -7648,9 +7663,23 @@ int main(int argc, char** argv) {
                 // for the reason above: rows to read, not covers to browse.
                 want.clear();
             }
+            // Which screen asked, so a change of screen can be told apart
+            // from focus moving within one.
+            if (want == backdropWant) backdropScreen = here();
+            if (!want.empty() && (here() == Screen::Home || here() == Screen::Library ||
+                                  here() == Screen::Grid || here() == Screen::Search))
+                lastLitArt = want;
             if (want != backdropWant) {
                 backdropWant = want;
                 backdropSettle = 0.0f;
+                // A NEW SCREEN CHANGES THE ROOM AT ONCE, AND AT THE SCREEN'S
+                // OWN SPEED. The wait exists for focus running along a shelf;
+                // applied to a screen change it left the old art showing for a
+                // moment after the new screen had arrived. MMagTech,
+                // 2026-09-24, Search to Settings: "you can see the colors
+                // before it goes all purple so it looks like a visual bug".
+                backdropForScreen = (here() != backdropScreen);
+                if (backdropForScreen) backdropSettle = backdropDelay;
             } else if (backdropWant != backdropKey &&
                        backdropMix.elapsed >= backdropMix.duration) {
                 // AND NEVER INTERRUPT A FADE THAT IS STILL RUNNING. Committing
@@ -7674,7 +7703,7 @@ int main(int argc, char** argv) {
                     backdropMix.from = 0.0f;
                     backdropMix.to = 0.0f;
                     backdropMix.elapsed = 0.0f;
-                    backdropMix.retarget(1.0f, backdropFade);
+                    backdropMix.retarget(1.0f, backdropForScreen ? 0.280f : backdropFade);
                     // And arrive, rather than being caught half way in.
                     if (shotMode) backdropMix.elapsed = backdropMix.duration;
                 }

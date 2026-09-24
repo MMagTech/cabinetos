@@ -12765,3 +12765,14 @@ R1 onto Search and neither shoulder got you off it, because the docked
 keyboard took every button. The shoulders now pass through Search's docked
 keyboard only; a keyboard asking a question (a Wi-Fi password) stays modal.
 Coming back to Search starts empty, as every destination is entered fresh.
+
+**Search is always blurred.** MMagTech, 2026-09-24: arriving on Search from
+Settings left it plain purple, and one screen with two backgrounds "doesn't
+feel right". With nothing found yet it now shows the last game art you were
+browsing (`lastLitArt`), never whatever the previous screen left.
+
+**A change of screen changes the background at once, at the screen's speed.**
+Search to Settings showed the old art's colours for a moment after Settings
+had arrived, which read as a bug. The 220 ms wait and 600 ms fade are for focus
+running along a shelf; a screen change now skips the wait and fades in 280 ms,
+the same as the content. Focus moving within a screen is unchanged.
