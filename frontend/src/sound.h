@@ -72,6 +72,9 @@ constexpr int kLevelCount = 4;
 // sounded like before there was a choice.
 void setLevel(Level l);
 Level level();
+// For tuning on the television (--ui-sound-levels): what Quiet, Medium and
+// Loud mean, 0..1. Whatever wins goes back into sound.cpp.
+void setLevelVolumes(float quiet, float medium, float loud);
 // As a person reads it on the row: "Off", "Quiet", ...
 const char* levelName(Level l);
 // As it is stored in config/settings.json: "off", "quiet", ...

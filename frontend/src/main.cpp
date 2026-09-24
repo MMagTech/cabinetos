@@ -2878,6 +2878,7 @@ int main(int argc, char** argv) {
     // implement.
     // --ui-sound overrides the saved level for this run only, for tests.
     bool uiSoundFlag = false;
+    const char* uiSoundLevels = nullptr;
     bool uiSound = true;
     float uiSoundVolume = 0.22f;
     // HOME'S BACKDROP, TUNABLE WITHOUT A COMPILER.
@@ -3093,6 +3094,9 @@ int main(int argc, char** argv) {
                                              : uiSoundVolume;
             std::fprintf(stderr, "[sound] %s, volume %.2f\n",
                          uiSound ? "on" : "off", uiSoundVolume);
+        } else if (SDL_strcmp(argv[i], "--ui-sound-levels") == 0 && i + 1 < argc) {
+            // quiet,medium,loud, e.g. --ui-sound-levels 0.07,0.22,0.65
+            uiSoundLevels = argv[++i];
         } else if (SDL_strcmp(argv[i], "--home-bar") == 0 && i + 1 < argc) {
             // top,height,gap — e.g. --home-bar 36,56,52
             float t = barTop, h = barHeight, g = barGapBelow;
@@ -3619,6 +3623,13 @@ int main(int argc, char** argv) {
     // first click a person hears should not be the second one they asked for —
     // and a console with no audio device says so once and stays silent.
     sound::init();
+    if (uiSoundLevels) {
+        float q = 0, m = 0, l = 0;
+        if (std::sscanf(uiSoundLevels, "%f,%f,%f", &q, &m, &l) == 3) {
+            sound::setLevelVolumes(q, m, l);
+            std::fprintf(stderr, "[sound] levels %.2f, %.2f, %.2f\n", q, m, l);
+        }
+    }
     if (uiSoundFlag) {
         sound::setEnabled(uiSound);
         sound::setVolume(uiSoundVolume);

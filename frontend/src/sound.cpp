@@ -118,10 +118,12 @@ void shutdown() {
 }
 
 // THE LEVELS, as volumes. Medium is the 0.22 the console always had. The steps
-// are about 5 dB apart (0.12, 0.22, 0.40), because loudness is heard as a
+// are about 10 dB apart (0.07, 0.22, 0.65), because loudness is heard as a
 // ratio: equal steps in volume would make Quiet to Medium sound like a much
-// bigger move than Medium to Loud. Starting values, judged on the television.
-constexpr float kLevelVolume[kLevelCount] = {0.0f, 0.12f, 0.22f, 0.40f};
+// bigger move than Medium to Loud. The first try was 5 dB (0.12, 0.40), and
+// MMagTech on the TV, 2026-09-24: "the steps are too close in volume".
+// The cues keep their own headroom, so anything up to 1.0 does not clip.
+float gLevelVolume[kLevelCount] = {0.0f, 0.07f, 0.22f, 0.65f};
 constexpr const char* kLevelName[kLevelCount] = {"Off", "Quiet", "Medium", "Loud"};
 constexpr const char* kLevelWord[kLevelCount] = {"off", "quiet", "medium", "loud"};
 Level gLevel = Level::Medium;
@@ -129,7 +131,7 @@ Level gLevel = Level::Medium;
 void setLevel(Level l) {
     gLevel = l;
     gEnabled = (l != Level::Off);
-    if (gEnabled) gVolume = kLevelVolume[static_cast<int>(l)];
+    if (gEnabled) gVolume = gLevelVolume[static_cast<int>(l)];
 }
 Level level() { return gLevel; }
 const char* levelName(Level l) { return kLevelName[static_cast<int>(l)]; }
@@ -138,6 +140,13 @@ bool levelFromWord(const std::string& word, Level* out) {
     for (int i = 0; i < kLevelCount; ++i)
         if (word == kLevelWord[i]) { *out = static_cast<Level>(i); return true; }
     return false;
+}
+
+void setLevelVolumes(float quiet, float medium, float loud) {
+    gLevelVolume[1] = quiet;
+    gLevelVolume[2] = medium;
+    gLevelVolume[3] = loud;
+    setLevel(gLevel);
 }
 
 void setEnabled(bool on) { gEnabled = on; }
