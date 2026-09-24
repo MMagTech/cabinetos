@@ -39,6 +39,12 @@ public:
     enum class Mode {
         Check,    // enter the PIN that is set
         Choose,   // choose a new one, then enter it again
+        // A QUESTION FIRST: title and detail with Set PIN and Not now. Set
+        // PIN turns this into Choose in place. The first version opened the
+        // pad straight away with "Not now" on its cancel key, and a number
+        // pad appearing read as the console demanding a PIN, not offering
+        // one. MMagTech, 2026-09-24.
+        Offer,
     };
     enum class Outcome {
         None,
@@ -81,6 +87,7 @@ public:
 
 private:
     Outcome add(char digit);
+    void drawOffer(Ctx& c, float a);
     Outcome deleteOne();
 
     bool open_ = false;
@@ -91,6 +98,7 @@ private:
     std::string entered_;      // what pin() returns
     std::string message_;      // under the dots: an error, or a prompt
     int row_ = 0, col_ = 0;    // focus on the pad, 4 rows of 3
+    int offerSlot_ = 0;        // Offer mode: 0 Set PIN, 1 Not now
     float lockLeft_ = 0.0f;
     design::Animated appear_;
     design::Animated focus_;

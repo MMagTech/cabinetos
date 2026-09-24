@@ -7574,18 +7574,18 @@ int main(int argc, char** argv) {
                                  accounts::activeId());
                     // THE PIN IS OFFERED HERE, NOT IN FIRST RUN: the moment
                     // a second person can use the console is the moment it
-                    // matters. Only to the owner, only while there is no PIN,
-                    // and only once, ever (config/settings.json). The pad IS
-                    // the offer: typing a PIN is "Set PIN", and the key that
-                    // leaves is "Not now".
+                    // matters. Only when the SECOND account is added (not a
+                    // third or later), only to the owner, and only while there
+                    // is no PIN. A question first, Set PIN or Not now; see
+                    // PinScreen::Mode::Offer.
                     if (!accounts::pinIsSet() &&
                         accounts::activeId() == accounts::ownerId() &&
-                        prefs::get("pin_offered", "") != "yes") {
-                        prefs::set("pin_offered", "yes");
-                        choosePin("Set a PIN so only you can?",
-                                  "Anyone using this console can change Wi-Fi, sign out "
-                                  "and remove accounts",
-                                  "Not now", [&]() { buildSettings(); });
+                        accounts::all().size() == 2) {
+                        pinThen = [&]() { buildSettings(); };
+                        pinScreen.open(screens::PinScreen::Mode::Offer,
+                                       "Set a PIN so only you can?",
+                                       "Anyone using this console can change Wi-Fi, sign "
+                                       "out and remove accounts");
                     }
                 } else if (ok) {
                     // **THE CASE THAT LIED.** The pairing worked and wrote a

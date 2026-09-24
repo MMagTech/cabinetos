@@ -59,6 +59,7 @@ void PinScreen::open(Mode mode, std::string title, std::string detail,
     message_.clear();
     row_ = 0;
     col_ = 0;
+    offerSlot_ = 0;
     shake_ = 0.0f;
     appear_.from = appear_.to = 0.0f;
     appear_.elapsed = 0.0f;
@@ -123,12 +124,51 @@ PinScreen::Outcome PinScreen::deleteOne() {
 }
 
 PinScreen::Outcome PinScreen::typeDigit(char c) {
-    if (!open_ || c < '0' || c > '9') return Outcome::None;
+    if (!open_ || mode_ == Mode::Offer || c < '0' || c > '9') return Outcome::None;
     return add(c);
 }
 
 PinScreen::Outcome PinScreen::key(Nav n) {
     if (!open_) return Outcome::None;
+    if (mode_ == Mode::Offer) {
+        switch (n) {
+            case Nav::Left:
+            case Nav::Right: {
+                const int next = (n == Nav::Right) ? 1 : 0;
+                if (next == offerSlot_) { sound::play(sound::Cue::Edge); return Outcome::None; }
+                offerSlot_ = next;
+                focus_.retarget(0.0f, 0.0f);
+                focus_.elapsed = 0.0f;
+                focus_.retarget(1.0f, design::kFocusDuration);
+                sound::play(sound::Cue::Move);
+                return Outcome::None;
+            }
+            case Nav::Up:
+            case Nav::Down:
+                sound::play(sound::Cue::Edge);
+                return Outcome::None;
+            case Nav::Activate:
+                if (offerSlot_ == 0) {
+                    // Set PIN: the same panel becomes the pad.
+                    mode_ = Mode::Choose;
+                    title_ = "Choose a PIN";
+                    detail_ = "Four digits";
+                    cancel_ = "Cancel";
+                    row_ = col_ = 0;
+                    typed_.clear();
+                    first_.clear();
+                    focus_.settle(1.0f);
+                    sound::play(sound::Cue::Activate);
+                    return Outcome::None;
+                }
+                sound::play(sound::Cue::Back);
+                return Outcome::Cancelled;
+            case Nav::Back:
+                sound::play(sound::Cue::Back);
+                return Outcome::Cancelled;
+        }
+        return Outcome::None;
+    }
     auto move = [&](int dr, int dc) {
         const int r = row_ + dr, c = col_ + dc;
         // NO WRAPPING. Three columns is short enough to cross, and a pad
@@ -173,9 +213,73 @@ void PinScreen::tick(float dt) {
     }
 }
 
+void PinScreen::drawOffer(Ctx& c, float a) {
+    const float W = ui::kCanvasWidth, H = ui::kCanvasHeight;
+    const float sc = c.sc;
+    using ui::TextStyle;
+    const char* labels[2] = {"Set PIN", "Not now"};
+    const float btnW = 260.0f, btnH = kKeyH, btnGap = 20.0f;
+    const float rowW = btnW * 2 + btnGap;
+    float innerW = rowW;
+    innerW = std::max(innerW, c.text.measure(title_, TextStyle::Title2, sc));
+    if (!detail_.empty())
+        innerW = std::max(innerW, c.text.measure(detail_, TextStyle::Callout, sc));
+    const float panelW = std::min(kPanelMaxW, innerW + kPanelPad * 2);
+    const float textMax = panelW - kPanelPad * 2;
+    const float titleH = c.text.lineHeight(TextStyle::Title2, sc);
+    const float lineH = c.text.lineHeight(TextStyle::Callout, sc);
+    const float detailH = detail_.empty() ? 0.0f : 8.0f + lineH;
+    const float panelH = kPanelPad + titleH + detailH + 40.0f + btnH + kPanelPad;
+    const float px = (W - panelW) * 0.5f, py = (H - panelH) * 0.5f;
+
+    c.r.setContentAlpha(1.0f);
+    c.r.draw(ui::Rect{0, 0, W, H, 0, ui::Color::black(0.45f * a)});
+    c.r.setContentAlpha(a);
+    c.r.drawGlass(ui::Rect{px, py, panelW, panelH, kPanelRadius, ui::Color::white(0)}, 6.0f,
+                  ui::Color::black(0.68f));
+    auto centred = [&](const std::string& s, float base, TextStyle st, float alpha) {
+        const std::string t = c.text.truncate(s, st, sc, textMax);
+        const float w = c.text.measure(t, st, sc);
+        c.text.draw(c.r, t, (W - w) * 0.5f, base, st, ui::Color::white(alpha), sc);
+    };
+    float y = py + kPanelPad;
+    centred(title_, y + c.text.ascent(TextStyle::Title2, sc), TextStyle::Title2, 1.0f);
+    y += titleH;
+    if (!detail_.empty()) {
+        centred(detail_, y + 8.0f + c.text.ascent(TextStyle::Callout, sc), TextStyle::Callout,
+                0.60f);
+        y += detailH;
+    }
+    y += 40.0f;
+    // Two buttons with a neighbour each, so the pad's key treatment reads:
+    // the focused one brighter and larger than the other.
+    const float f = focus_.value();
+    for (int i = 0; i < 2; ++i) {
+        const float x = (W - rowW) * 0.5f + i * (btnW + btnGap);
+        const bool focused = (i == offerSlot_);
+        const float s = focused ? 1.0f + (kKeyFocusScale - 1.0f) * f : 1.0f;
+        const float dw = btnW * s, dh = btnH * s;
+        const float dx = x - (dw - btnW) * 0.5f, dy = y - (dh - btnH) * 0.5f;
+        ui::Rect cap{dx, dy, dw, dh, kKeyRadius * s,
+                     ui::Color::white(focused ? 0.10f + 0.25f * f : 0.10f)};
+        if (focused) {
+            cap.shadowBlur = 18.0f;
+            cap.shadowOffsetY = 8.0f;
+            cap.shadowColor = ui::Color::black(0.45f * f);
+        }
+        c.r.draw(cap);
+        const float lw = c.text.measure(labels[i], TextStyle::Title3, sc);
+        c.text.draw(c.r, labels[i], dx + (dw - lw) * 0.5f,
+                    dy + dh * 0.5f + c.text.ascent(TextStyle::Title3, sc) * 0.40f,
+                    TextStyle::Title3, ui::Color::white(focused ? 1.0f : 0.65f), sc);
+    }
+    c.r.setContentAlpha(1.0f);
+}
+
 void PinScreen::draw(Ctx& c) {
     if (!open_) return;
     const float a = appear_.value();
+    if (mode_ == Mode::Offer) { drawOffer(c, a); return; }
     const float W = ui::kCanvasWidth, H = ui::kCanvasHeight;
     const float sc = c.sc;
     using ui::TextStyle;
