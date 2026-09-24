@@ -6153,6 +6153,18 @@ and they are excluded only because they are not in Cabinet's manifest. Cabinet
 never played them on any platform, so this is the first place CabinetOS would
 have more systems than its reference implementation. See open question 19.
 
+**DECIDED 2026-09-24: NEITHER WILL BE BUILT.** MMagTech: the controller, a
+number keypad, is too unconventional, unless one of them had exclusives worth
+the effort, and neither does. ColecoVision is mostly arcade ports that MAME and
+FBNeo already play better, and nearly every game starts by asking for a skill
+level on the keypad. The Jaguar's one real exclusive, Alien vs Predator, leans
+on the keypad; Tempest 2000 was later on PlayStation, Saturn and PC; and the
+only libretro Jaguar core, Virtual Jaguar, is slow and inaccurate, while the
+good emulator (BigPEmu) is closed and not libretro. **The row above is closed
+by decision, not pending.** Cabinet's tvOS app hides systems it cannot play,
+and CabinetOS will too once that filter is built (NEXT-SESSION.md, *The
+order*), so these two will simply not appear.
+
 #### THE HEAVY SYSTEMS ARE COMING TO THIS OS — decided 2026-09-20
 
 > switch, ps3 and xbox will be brought to the OS because we have less
