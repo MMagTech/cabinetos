@@ -151,9 +151,10 @@ PinScreen::Outcome PinScreen::key(Nav n) {
             if (isDelete(row_, col_)) return deleteOne();
             return add(kKeys[row_][col_][0]);
         case Nav::Back:
-            // B TAKES BACK A DIGIT FIRST, and leaves only when there is none,
-            // so a mistyped digit is one press to fix rather than a restart.
-            if (!typed_.empty()) return deleteOne();
+            // B LEAVES, as it does everywhere else. It used to take back a
+            // digit first, which only worked while a legend said so; the
+            // legend went (MMagTech, 2026-09-24: people know A and B) and the
+            // Delete key on the pad is how a digit comes back.
             sound::play(sound::Cue::Back);
             return Outcome::Cancelled;
     }
@@ -185,7 +186,6 @@ void PinScreen::draw(Ctx& c) {
         msg = "Too many tries. Try again in " + std::to_string(s) +
               (s == 1 ? " second" : " seconds");
     }
-    const char* legend = "A select     B delete, or go back";
 
     // ---- Measure, so the panel can be centred before anything is drawn ----
     const float padW = kKeyW * 3 + kKeyGap * 2;
@@ -194,7 +194,6 @@ void PinScreen::draw(Ctx& c) {
     innerW = std::max(innerW, c.text.measure(title, TextStyle::Title2, sc));
     if (!detail_.empty())
         innerW = std::max(innerW, c.text.measure(detail_, TextStyle::Callout, sc));
-    innerW = std::max(innerW, c.text.measure(legend, TextStyle::Callout, sc));
     const float panelW = std::min(kPanelMaxW, innerW + kPanelPad * 2);
     const float textMax = panelW - kPanelPad * 2;
 
@@ -204,7 +203,7 @@ void PinScreen::draw(Ctx& c) {
     const float dotsBlock = 32.0f + kDotSize;
     const float msgBlock = 16.0f + lineH;   // kept even when empty, so nothing jumps
     const float panelH = kPanelPad + titleH + detailH + dotsBlock + msgBlock + 16.0f + padH +
-                         24.0f + lineH + kPanelPad;
+                         kPanelPad;
     const float px = (W - panelW) * 0.5f;
     const float py = (H - panelH) * 0.5f;
 
@@ -275,9 +274,6 @@ void PinScreen::draw(Ctx& c) {
                         design::menuLabel(kf, 1.0f), sc);
         }
     }
-    y += padH;
-
-    centred(legend, y + 24.0f + c.text.ascent(TextStyle::Callout, sc), TextStyle::Callout, 0.55f);
     c.r.setContentAlpha(1.0f);
 }
 
