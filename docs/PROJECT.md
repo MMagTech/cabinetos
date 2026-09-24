@@ -3023,6 +3023,13 @@ invisible to anyone who has not deliberately turned it on.
 
 ## Phase plan
 
+> **THE STATUS LINES BELOW ARE HISTORICAL.** They were written as each phase
+> started and several were never updated: Phase 4 still says "not started",
+> though pairing, accounts and save sync to RomM are built and in use.
+> **What comes next, in order, is `docs/ROADMAP.md`** (GitHub milestones since
+> 2026-09-24), and the state of play is `docs/NEXT-SESSION.md`. The phases
+> below remain the record of what each part was for and how it was reasoned.
+
 ### Phase 0 — Design system spec
 **Status: COMPLETE, 2026-09-13.**
 
