@@ -12809,3 +12809,11 @@ out first, then the purple, then the text. Heading to Settings from a screen
 with art behind it: out (180 ms), background to plain (250 ms, nothing on
 screen), Settings in (320 ms). About three quarters of a second in all; the
 other switches keep two steps. `tabPhase` in `main.cpp`.
+
+**SUPERSEDES THE TWO ENTRIES ABOVE: the background arrives WITH the new
+screen, as one.** MMagTech, 2026-09-24: *"setting still fade in but its done as
+one instead of background then text."* So every top-bar switch is two steps:
+the old screen (and Search's keyboard) fades out in 180 ms, then the new
+background and the new screen fade in together in 320 ms. Clearing the room
+during the fade-out, and a separate background step between the two, were
+both tried on the television the same afternoon and dropped.

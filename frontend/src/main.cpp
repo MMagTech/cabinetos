@@ -5633,13 +5633,12 @@ int main(int argc, char** argv) {
     // Starting values, to be judged on the television.
     constexpr float kTabLeave = 0.180f;
     constexpr float kTabArrive = 0.320f;
-    // THREE STEPS WHEN THE BACKGROUND CHANGES TOO, MMagTech 2026-09-24: the
-    // old screen (and Search's keyboard) fades out, THEN the background turns
-    // to Settings' plain purple with nothing on it, THEN Settings fades in.
-    // Doing any two at once showed one through the other.
-    constexpr float kTabRoom = 0.250f;
-    int tabPhase = 0;            // 0 idle, 1 leaving, 2 changing the background
-    float tabRoomLeft = 0.0f;
+    // THE BACKGROUND CHANGES WITH THE NEW SCREEN, AS ONE, MMagTech
+    // 2026-09-24: the old screen (and Search's keyboard) fades out, then the
+    // new background and the new screen fade in together at the same speed.
+    // Tried and rejected the same day: the background changing while the old
+    // screen left (its colours showed behind Settings' rows), and a separate
+    // step for the background between the two ("done as one instead").
     int pendingDest = -1;
     Animated tabFade;
     tabFade.smooth = true;
@@ -5647,7 +5646,6 @@ int main(int argc, char** argv) {
     auto transitionTo = [&](int d) {
         if (shotMode) { goToDestination(d); return; }
         pendingDest = d;
-        if (tabPhase != 2) tabPhase = 1;
         tabFade.retarget(0.0f, kTabLeave);
     };
     // Where the console is, or is about to be.
@@ -7452,28 +7450,11 @@ int main(int argc, char** argv) {
             tabFade.tick(dt);
             if (pendingDest >= 0 && tabFade.to == 0.0f &&
                 tabFade.elapsed >= tabFade.duration) {
-                // Out. Heading to Settings from a screen with art behind it,
-                // the background changes next, on its own.
-                if (tabPhase == 1 && pendingDest == 3 && !backdropKey.empty()) {
-                    tabPhase = 2;
-                    tabRoomLeft = kTabRoom;
-                }
-                bool arrive = true;
-                if (tabPhase == 2 && pendingDest == 3) {
-                    tabRoomLeft -= dt;
-                    // Until the time is up AND the fade has actually finished;
-                    // a fade already running delays this one starting.
-                    const bool roomDone = backdropKey.empty() &&
-                                          backdropMix.elapsed >= backdropMix.duration;
-                    arrive = (tabRoomLeft <= 0.0f && roomDone) || tabRoomLeft < -1.0f;
-                }
-                if (arrive) {
-                    // Now build the new screen and bring it in.
-                    goToDestination(pendingDest);
-                    pendingDest = -1;
-                    tabPhase = 0;
-                    tabFade.retarget(1.0f, kTabArrive);
-                }
+                // Out; now build the new screen and bring it in. Its background
+                // follows in the backdrop block, at the same speed.
+                goToDestination(pendingDest);
+                pendingDest = -1;
+                tabFade.retarget(1.0f, kTabArrive);
             }
             gridScreen.tick(dt, ctx);
             // The network's answer, when it lands. Rebuilt only if Settings is
@@ -7720,12 +7701,6 @@ int main(int argc, char** argv) {
                 // for the reason above: rows to read, not covers to browse.
                 want.clear();
             }
-            // HEADING TO SETTINGS, THE ROOM CLEARS BETWEEN THE TWO SCREENS.
-            // Changing it on arrival meant the art's colours were still behind
-            // Settings' rows as they faded in. MMagTech, 2026-09-24. The order
-            // is: the old screen fades out, then this, with nothing on screen,
-            // then Settings fades in. See tabPhase.
-            if (pendingDest == 3 && tabPhase == 2) want.clear();
             // Which screen asked, so a change of screen can be told apart
             // from focus moving within one.
             if (want == backdropWant) backdropScreen = here();
@@ -7741,7 +7716,7 @@ int main(int argc, char** argv) {
                 // moment after the new screen had arrived. MMagTech,
                 // 2026-09-24, Search to Settings: "you can see the colors
                 // before it goes all purple so it looks like a visual bug".
-                backdropForScreen = (here() != backdropScreen) || pendingDest >= 0;
+                backdropForScreen = (here() != backdropScreen);
                 if (backdropForScreen) backdropSettle = backdropDelay;
             } else if (backdropWant != backdropKey &&
                        backdropMix.elapsed >= backdropMix.duration) {
@@ -7766,9 +7741,10 @@ int main(int argc, char** argv) {
                     backdropMix.from = 0.0f;
                     backdropMix.to = 0.0f;
                     backdropMix.elapsed = 0.0f;
-                    backdropMix.retarget(1.0f, !backdropForScreen ? backdropFade
-                                               : pendingDest >= 0 ? kTabRoom
-                                                                  : 0.280f);
+                    // A new screen's background arrives with the screen, at its
+                    // speed, so the two read as one change.
+                    backdropMix.retarget(1.0f, backdropForScreen ? kTabArrive
+                                                                 : backdropFade);
                     // And arrive, rather than being caught half way in.
                     if (shotMode) backdropMix.elapsed = backdropMix.duration;
                 }
