@@ -9060,15 +9060,21 @@ int main(int argc, char** argv) {
             //
             // The disc is drawn either way, as the ground under a picture with
             // transparency and as the fallback when there is none.
-            // THE CHIP IS FOCUSABLE NOW. It is not a capsule like the other
-            // bar items, so it takes the focus treatment on its own disc — a
-            // rim, which is this design system's focus idiom everywhere else.
+            // FOCUSED, THE CHIP GETS THE BAR'S OWN PILL, behind the name and
+            // the picture together, at the focused tint the destinations use.
+            // It used to take only a rim on its small disc, and MMagTech found
+            // it hard to tell when focus had arrived on it, 2026-09-24:
+            // *"can we make the text or some way grab your attention more
+            // beside just the little highlight of the icon"*.
             const bool chipOn = barFocused && barSlot == BarAccount;
             if (chipOn) {
-                const float pad = 6.0f;
-                renderer.draw(ui::Rect{discX - pad, discY - pad, discD + pad * 2.0f,
-                                       discD + pad * 2.0f, (discD + pad * 2.0f) * 0.5f,
-                                       ui::Color::white(0.55f)});
+                constexpr float kChipPillPadX = 22.0f;   // the bar pill's
+                constexpr float kChipPillInsetY = 6.0f;
+                const float ph = barHeight - kChipPillInsetY * 2.0f;
+                const float left = discX - 10.0f - nameW - kChipPillPadX;
+                const float right = discX + discD + 12.0f;
+                renderer.draw(ui::Rect{left, barTop + kChipPillInsetY, right - left, ph,
+                                       ph * 0.5f, ui::Color::white(kFocusedTint)});
             }
             renderer.draw(ui::Rect{discX, discY, discD, discD, discD * 0.5f,
                                    ui::Color::white(chipOn ? 0.34f : 0.22f)});
@@ -9104,7 +9110,7 @@ int main(int argc, char** argv) {
             // Brighter when focused, because it just got smaller and a focus
             // target you cannot find is worse than one that is too loud.
             text.draw(renderer, who, discX - 10.0f - nameW, chipBaseline,
-                      chipStyle, ui::Color::white(chipOn ? 0.95f : 0.62f), sc);
+                      chipStyle, ui::Color::white(chipOn ? 1.0f : 0.62f), sc);
         }
 
         // ---- The account switcher, over the screen and over the bar -------
