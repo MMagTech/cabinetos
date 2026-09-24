@@ -5623,8 +5623,32 @@ int main(int argc, char** argv) {
         }
     };
 
+    // SWITCHING TOP-BAR DESTINATIONS FADES THROUGH THE BACKGROUND — 2026-09-24.
+    // MMagTech: *"the switch between top tabs is too quick and visually
+    // snappy"*, most of all Search to Settings. It was a cut out and a 280 ms
+    // fade in, and only the words faded. Now the old screen fades out, the
+    // new one is built, and it fades in, both ease-in-out, over a background
+    // that stays put. A press during the fade just changes where it is going.
+    //
+    // Starting values, to be judged on the television.
+    constexpr float kTabLeave = 0.180f;
+    constexpr float kTabArrive = 0.320f;
+    int pendingDest = -1;
+    Animated tabFade;
+    tabFade.smooth = true;
+    tabFade.from = tabFade.to = 1.0f;
+    auto transitionTo = [&](int d) {
+        if (shotMode) { goToDestination(d); return; }
+        pendingDest = d;
+        tabFade.retarget(0.0f, kTabLeave);
+    };
+    // Where the console is, or is about to be.
+    auto destinationGoing = [&]() {
+        return pendingDest >= 0 ? pendingDest : destinationHere();
+    };
+
     auto switchDestination = [&](int delta) {
-        const int at = destinationHere();
+        const int at = destinationGoing();
         if (at < 0) return;
         const int want = at + delta;
         // No wrapping: the ends make the edge sound, so a bumper that goes
@@ -5633,7 +5657,7 @@ int main(int argc, char** argv) {
             sound::play(sound::Cue::Edge);
             return;
         }
-        goToDestination(want);
+        transitionTo(want);
         sound::play(want > at ? sound::Cue::Activate : sound::Cue::Back);
     };
 
@@ -5660,8 +5684,8 @@ int main(int argc, char** argv) {
                 if (barSlot != BarAccount) {
                     const int want = (barSlot == BarLibrary) ? 1
                                    : (barSlot == BarSearch ? 2 : 3);
-                    if (destinationHere() != want) {
-                        goToDestination(want);
+                    if (destinationGoing() != want) {
+                        transitionTo(want);
                         barFocused = true;
                     }
                 }
@@ -5708,11 +5732,11 @@ int main(int argc, char** argv) {
                     barFocused = false;
                     // Already standing in it: drop back into the screen rather
                     // than rebuilding it under the person's feet.
-                    if (destinationHere() == d) {
+                    if (destinationGoing() == d) {
                         sound::play(sound::Cue::Move);
                         return true;
                     }
-                    goToDestination(d);
+                    transitionTo(d);
                     sound::play(sound::Cue::Activate);
                     return true;
                 }
@@ -7417,6 +7441,14 @@ int main(int argc, char** argv) {
             accountScreen.tick(dt);
             addAccountScreen.tick(dt);
             settingsScreen.tick(dt);
+            tabFade.tick(dt);
+            if (pendingDest >= 0 && tabFade.to == 0.0f &&
+                tabFade.elapsed >= tabFade.duration) {
+                // Out; now build the new screen and bring it in.
+                goToDestination(pendingDest);
+                pendingDest = -1;
+                tabFade.retarget(1.0f, kTabArrive);
+            }
             gridScreen.tick(dt, ctx);
             // The network's answer, when it lands. Rebuilt only if Settings is
             // still what is on screen; the next visit asks again anyway.
@@ -7744,6 +7776,10 @@ int main(int argc, char** argv) {
                                        ui::Color::black(backdropScrim)});
         }
         }
+
+        // The tab switch's fade, over every screen's content and under the
+        // bar, which stays put. Reset before the bar below.
+        renderer.setContentFade(playing ? 1.0f : tabFade.value());
 
         if (playing) {
             cab::Core& core = cab::Core::shared();
@@ -8401,6 +8437,8 @@ int main(int argc, char** argv) {
         // it — see DetailScreen::setProgress — and, for somebody who walked
         // away from it, in the corner of the top bar below.
 
+        renderer.setContentFade(1.0f);
+
         // ---- The top bar, which is its own strip ----------------------------
         //
         // MMagTech, 2026-09-21: *"the top bar with library settings and search
@@ -8645,7 +8683,10 @@ int main(int argc, char** argv) {
                                        ui::Color::black(c)});
         }
 
+        // Search's docked keyboard is part of Search, so it leaves with it.
+        renderer.setContentFade(here() == Screen::Search ? tabFade.value() : 1.0f);
         keyboard.draw(renderer, text, renderer.scale());
+        renderer.setContentFade(1.0f);
         if (safeGuides) renderer.drawSafeAreaGuides();
 
         // ---- The dim, over absolutely everything --------------------------

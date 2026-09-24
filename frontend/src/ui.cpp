@@ -266,6 +266,8 @@ uniform float uRadius;
 uniform vec4 uTint;
 uniform sampler2D uScene;
 uniform float uLod;
+// The screen's transition, so a panel fades with the words on it.
+uniform float uAlpha;
 out vec4 fragColor;
 
 float glassSDF(vec2 p, vec2 halfSize, float r) {
@@ -290,7 +292,7 @@ void main() {
     // Tint OVER the blur, not mixed into it: the tint is a veil the art shows
     // through, which is what makes it read as glass rather than as paint.
     vec3 c = mix(behind, uTint.rgb, uTint.a);
-    fragColor = vec4(c, a);
+    fragColor = vec4(c, a * uAlpha);
 }
 )";
 
@@ -425,6 +427,7 @@ bool Renderer::init() {
     gloc_.tint = glGetUniformLocation(blurProgram_, "uTint");
     gloc_.tex = glGetUniformLocation(blurProgram_, "uScene");
     gloc_.lod = glGetUniformLocation(blurProgram_, "uLod");
+    gloc_.alpha = glGetUniformLocation(blurProgram_, "uAlpha");
 
     loc_.canvas = glGetUniformLocation(program_, "uCanvas");
     loc_.rect = glGetUniformLocation(program_, "uRect");
@@ -639,6 +642,7 @@ void Renderer::drawGlass(const Rect& r, float blur, const Color& tint) {
     glUniform1f(gloc_.radius, r.radius);
     glUniform4f(gloc_.tint, tint.r, tint.g, tint.b, tint.a);
     glUniform1f(gloc_.lod, blur);
+    glUniform1f(gloc_.alpha, contentAlpha_);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, sceneTex_);
     glUniform1i(gloc_.tex, 0);
@@ -728,18 +732,23 @@ void Renderer::draw(const Rect& r) {
     glUniform2f(loc_.canvas, kCanvasWidth, kCanvasHeight);
     glUniform4f(loc_.rect, r.x, r.y, r.w, r.h);
     glUniform1f(loc_.radius, r.radius);
-    glUniform4f(loc_.fill, r.fill.r, r.fill.g, r.fill.b, r.fill.a);
+    // THE SCREEN'S TRANSITION APPLIES TO SHAPES TOO. It used to reach only
+    // pictures and text, so a screen arriving drew its panels at full strength
+    // on the first frame and faded the words in on top of them — which is a
+    // large part of why switching tabs looked snappy. MMagTech, 2026-09-24.
+    const float k = contentAlpha_;
+    glUniform4f(loc_.fill, r.fill.r, r.fill.g, r.fill.b, r.fill.a * k);
     // Flat unless the caller asked for a gradient, so nothing else changes.
     const Color bottom = r.gradient ? r.fillBottom : r.fill;
-    glUniform4f(loc_.fillBottom, bottom.r, bottom.g, bottom.b, bottom.a);
+    glUniform4f(loc_.fillBottom, bottom.r, bottom.g, bottom.b, bottom.a * k);
     glUniform4f(loc_.edgeLight, r.edgeLight.r, r.edgeLight.g, r.edgeLight.b,
-                r.edgeLight.a);
+                r.edgeLight.a * k);
     glUniform1f(loc_.border, r.border);
     glUniform4f(loc_.borderColor, r.borderColor.r, r.borderColor.g, r.borderColor.b,
-                r.borderColor.a);
+                r.borderColor.a * k);
     glUniform2f(loc_.shadow, r.shadowBlur, r.shadowOffsetY);
     glUniform4f(loc_.shadowColor, r.shadowColor.r, r.shadowColor.g, r.shadowColor.b,
-                r.shadowColor.a);
+                r.shadowColor.a * k);
     // The vertex shader needs the blur too, to grow its own geometry enough
     // for the falloff to have somewhere to land.
     if (loc_.shadowVS >= 0) glUniform1f(loc_.shadowVS, r.shadowBlur);

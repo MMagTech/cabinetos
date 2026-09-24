@@ -12781,3 +12781,18 @@ the same as the content. Focus moving within a screen is unchanged.
 directly above already says who is signed in. The same fault as the account
 panel's first version (*"seems redundant to show my login twice"*), so the same
 answer: the chip is the only place that says it.
+
+**Switching top-bar destinations fades through the background.** MMagTech,
+2026-09-24: *"the switch between top tabs is too quick and visually snappy"*,
+most of all Search to Settings. Two causes, both fixed:
+
+1. **The screen fade only reached text and pictures.** `Renderer::draw` and
+   `drawGlass` ignored the content alpha, so a screen's panels and rows drew at
+   full strength on its first frame and the words faded in on top of them. The
+   renderer's own comment already said "every shape and every picture"; now it
+   is true.
+2. **The old screen cut out in one frame.** Now it fades out (180 ms), the new
+   one is built, then fades in (320 ms), both ease-in-out, over a background
+   and a bar that stay put. Search's keyboard leaves with Search. A press during
+   the fade only changes where it is going. `Renderer::setContentFade`, owned by
+   the app, so screens still only know about arriving. Starting values.

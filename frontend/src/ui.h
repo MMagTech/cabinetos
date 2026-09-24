@@ -149,8 +149,20 @@ public:
     // artwork behind it are the GROUND, and a ground that fades out leaves a
     // hole; they stay put while the content on them changes. That continuity is
     // half of why the transition reads as smooth at all.
-    void setContentAlpha(float a) { contentAlpha_ = a < 0 ? 0 : (a > 1 ? 1 : a); }
-    float contentAlpha() const { return contentAlpha_; }
+    void setContentAlpha(float a) {
+        contentRaw_ = a < 0 ? 0 : (a > 1 ? 1 : a);
+        contentAlpha_ = contentRaw_ * contentFade_;
+    }
+    float contentAlpha() const { return contentRaw_; }
+
+    // A SECOND MULTIPLIER, OWNED BY THE APP, for switching top-bar
+    // destinations — 2026-09-24. A screen sets its own arrival alpha above and
+    // knows nothing about leaving; this fades whatever screen is showing out,
+    // and the next one in, underneath whatever the screen itself asks for.
+    void setContentFade(float f) {
+        contentFade_ = f < 0 ? 0 : (f > 1 ? 1 : f);
+        contentAlpha_ = contentRaw_ * contentFade_;
+    }
 
     // A SCISSOR, IN DESIGN POINTS — new 2026-09-21.
     //
@@ -246,7 +258,9 @@ private:
     GLuint backdropProgram_ = 0;
     GLuint texturedProgram_ = 0;
     float scale_ = 1.0f;
-    float contentAlpha_ = 1.0f;
+    float contentAlpha_ = 1.0f;   // what draws use: the two below, multiplied
+    float contentRaw_ = 1.0f;
+    float contentFade_ = 1.0f;
     GLuint vao_ = 0;
     GLuint vbo_ = 0;
     GLuint targetFBO_ = 0;    // 0 is the window; an offscreen render redirects it
@@ -265,7 +279,7 @@ private:
     GLuint blurProgram_ = 0;
     GLuint glowProgram_ = 0;
     struct {
-        GLint canvas, rect, radius, tint, tex, lod;
+        GLint canvas, rect, radius, tint, tex, lod, alpha;
     } gloc_{};
     struct {
         GLint canvas, picture, peak, shadow, rect;
