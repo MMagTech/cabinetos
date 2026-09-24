@@ -398,6 +398,42 @@ states, and leave — with the save syncing on the way out.
    `docs/SETTINGS-INVENTORY.md`**: 36 settings with their state and source,
    Cabinet tvOS's Settings as it appears, the decisions that constrain it, and
    eight open questions. Do not design before that conversation.
+
+   **STATUS 2026-09-24: THE DISCUSSION HAPPENED; EVERY DECISION IS IN
+   `docs/PROJECT.md` OPEN QUESTION 31, IN ORDER.** The side-list layout and the
+   top-bar dissolve are built on branch `settings-side-list`, PR #56, **NOT
+   MERGED ON PURPOSE**: MMagTech, *"I don't want a build until I have judged
+   everything."* Judge on the television with `tools/ui-loop.sh` (the A9 may
+   still be on that hand-built binary; `--restore` or a reboot puts it back).
+   Merge only when he says the whole of Settings is right.
+
+   **Decided and still to build**, each with its reasoning in question 31:
+   - [ ] Interface sounds as one row: Off, Quiet, Medium, Loud (left/right),
+         and SAVED, which the current toggle is not.
+   - [ ] Owner (first setup account) and one PIN. PIN offered when the second
+         account is added. Protected with a PIN: Wi-Fi, Sign out, Change
+         server address, Remove an account, File access.
+   - [ ] Remove an account, in Settings > Accounts.
+   - [ ] Change server address (same-server check by token) and Sign out
+         (one confirmation, clear that server's games and accounts, back to
+         first run's server step).
+   - [ ] Wi-Fi page (join, forget, change password); `net.h` has the calls.
+   - [ ] File access: SFTP only, user `cabinet`, generated password shown in
+         plain text, "New password", restricted to CabinetOS folders on every
+         drive.
+   - [ ] Storage: drives CabinetOS / Internal / External with space (shown
+         today), Eject for USB, kept and cached games.
+   - [ ] Pause menu per system: Virtual Boy 3D glasses (all of Cabinet's
+         colours) and screen colour, GB/GBA colours, 2600 flicker blending,
+         Vectrex overlays, controller type. No emulator page in Settings.
+   - [ ] Picture quality row (question 23), Turn off screen after, System
+         update, About (CabinetOS has NO version number yet: decide one).
+   - [ ] Later: RetroAchievements sign-in per account; background colour per
+         account (purple, blue, green, red, graphite); an "Advanced" manual IP
+         page only if asked for; setting your own file-access password only if
+         asked for.
+   - Dropped: HDMI-CEC (shelved; reverses open question 10), static IP,
+     "Playing as" row.
 2. **The rest of the UI**: the harsh boot-to-Home cut, the text pass.
 3. **The remaining cores.**
 4. **THE TESTS COME NEAR THE END**, once the UI is finished and every core is

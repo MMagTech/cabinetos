@@ -1,5 +1,12 @@
 # CabinetOS Settings: an inventory
 
+> **2026-09-24: the discussion this was written for has happened.** Its
+> answers are in `docs/PROJECT.md`, open question 31, and the checklist of what
+> is decided and still to build is in `docs/NEXT-SESSION.md` under the order.
+> Where this file and question 31 disagree, question 31 wins: HDMI-CEC is
+> shelved, the server gets Sign out and Change server address, and there is no
+> Emulation category.
+
 This is an inventory for the Settings discussion, not a design. It lists what CabinetOS already needs a place for, what Cabinet's tvOS app shows today, the decisions that limit the choices, and the questions still open. Every row points at the line it came from. Nothing here says what the screen should look like.
 
 Paths: `PROJECT.md` and `NEXT-SESSION.md` are in `docs/`. Code files are in `frontend/src/` unless a path is given. `cabinetos-session` is `system_files/usr/bin/cabinetos-session`.
