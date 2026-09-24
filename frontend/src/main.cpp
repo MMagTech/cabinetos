@@ -4613,7 +4613,23 @@ int main(int argc, char** argv) {
         std::vector<std::thread> workers;
     };
     CoverFill coverFill;
-    if (rommAddress) {
+    // STARTED AGAIN BY AN ACCOUNT SWITCH, which builds new tiles with no
+    // covers. It used to run at boot only, so after a switch the Library's
+    // platforms stayed bare colour until each was opened. MMagTech, on the A9,
+    // 2026-09-24. Any fill still running for the last account is stopped and
+    // its results dropped first, so no cover lands on the wrong person's tile.
+    auto startCoverFill = [&]() {
+        coverFill.quit.store(true);
+        for (std::thread& w : coverFill.workers)
+            if (w.joinable()) w.join();
+        coverFill.workers.clear();
+        coverFill.quit.store(false);
+        coverFill.next.store(0);
+        coverFill.want.clear();
+        {
+            std::lock_guard<std::mutex> lk(coverFill.m);
+            coverFill.done.clear();
+        }
         // THE TILE MAP FIRST, WHICH IS THE WHOLE POINT. Without it the console
         // asks thirty-six times at every start which cover a tile should use
         // and gets the same thirty-six answers — 1.07 s and a third of a
@@ -4673,7 +4689,8 @@ int main(int argc, char** argv) {
                 }
             });
         }
-    }
+    };
+    if (rommAddress) startCoverFill();
     // THE REST OF A BIG GRID, BEHIND THE FIRST PAGE.
     //
     // A grid is proportional to its own platform — about 1 ms a game — so the
@@ -5114,6 +5131,7 @@ int main(int argc, char** argv) {
         }
         lib = std::move(fresh);
         libraryScreen.build(platformTiles, collectionTiles);
+        startCoverFill();
         // HOME STARTS OVER FOR THE NEW PERSON: the first card of Recent, every
         // row scrolled back. Where the last person was is meaningless in a
         // different set of cards, and was out of range whenever the new set
@@ -5926,12 +5944,6 @@ int main(int argc, char** argv) {
             // who walked up to look at it could not simply come back down.
             case screens::Nav::Down:
             case screens::Nav::Back:
-                // AN EMPTY HOME HAS NOWHERE TO GO DOWN TO, so focus stays in
-                // the bar rather than landing on nothing.
-                if (here() == Screen::Home && homeEmpty()) {
-                    sound::play(sound::Cue::Edge);
-                    return true;
-                }
                 barFocused = false;
                 sound::play(n == screens::Nav::Down ? sound::Cue::Move
                                                     : sound::Cue::Back);
@@ -6549,6 +6561,24 @@ int main(int argc, char** argv) {
     // Home's keys, routed through the same door as every other screen's so the
     // bar can be offered them first. See `navigate`.
     homeKey = [&](screens::Nav n) -> bool {
+        // AN EMPTY HOME HAS ONE THING ON IT, the Open Library button, and
+        // focus is on it. Up is still the bar; A goes to the Library.
+        if (homeEmpty()) {
+            switch (n) {
+                case screens::Nav::Up:
+                    barSlot = 0;
+                    barFocused = true;
+                    sound::play(sound::Cue::Move);
+                    return true;
+                case screens::Nav::Activate:
+                    transitionTo(1);
+                    sound::play(sound::Cue::Activate);
+                    return true;
+                default:
+                    sound::play(sound::Cue::Edge);
+                    return true;
+            }
+        }
         switch (n) {
             case screens::Nav::Left:  moveFocus(-1); return true;
             case screens::Nav::Right: moveFocus(+1); return true;
@@ -7610,15 +7640,6 @@ int main(int argc, char** argv) {
 
         pumpLaunch();
         pumpSwitch();
-        // ON AN EMPTY HOME, FOCUS LIVES ON LIBRARY IN THE BAR, however Home
-        // was reached: at boot, after a switch, or backing out of a screen.
-        // There is nothing else on it to focus, and A there is the way to the
-        // games.
-        if (!playing && here() == Screen::Home && homeEmpty() && !barFocused &&
-            !accountsOpen && !switchPendingId && !pinScreen.isOpen()) {
-            barFocused = true;
-            barSlot = BarLibrary;
-        }
         pumpExit();
         pumpStateLoad(stateLoad, session, menuNotice);
         if (stateLoad.loaded) {
@@ -8591,9 +8612,10 @@ int main(int argc, char** argv) {
         rowY += drawShelf("Recent", shelf, RowRecent, rowY);
         // Only when there are any. An empty Favorites row is worse than none.
         if (haveFavorites()) drawShelf("Favorites", favorites, RowFavorites, rowY);
-        // SAID, NOT LEFT BLANK. Focus is already on Library in the bar (the
-        // frame loop puts it there), so this only has to say why the screen is
-        // empty and where the games are.
+        // SAID, NOT LEFT BLANK, with the way out under it. The first version
+        // lit Library in the bar instead, which read as already being on the
+        // Library: MMagTech pressed A on what he took for a loaded Library and
+        // it only then opened. Home stays Home; the button is the suggestion.
         if (homeEmpty()) {
             const char* title = "Nothing played yet";
             // One line. A second, pointing at the Library, was dropped on
@@ -8607,6 +8629,21 @@ int main(int argc, char** argv) {
             text.draw(renderer, detail, (ui::kCanvasWidth - dw) * 0.5f,
                       ty + text.lineHeight(ui::TextStyle::Title2, sc) * 0.9f,
                       ui::TextStyle::Callout, ui::Color::white(0.60f), sc);
+            // The button: a capsule like the bar's, at the focused tint while
+            // focus is on it (not up in the bar or the account panel).
+            const bool on = !barFocused && !accountsOpen;
+            const char* label = "Open Library";
+            const float lw = text.measure(label, ui::TextStyle::Title3, sc);
+            const float bh = text.lineHeight(ui::TextStyle::Title3, sc) + 28.0f;
+            const float bw = lw + 72.0f;
+            const float by = ty + text.lineHeight(ui::TextStyle::Title2, sc) * 0.9f + 56.0f;
+            const float bs = on ? kRowFocusScale : 1.0f;
+            renderer.draw(ui::Rect{(ui::kCanvasWidth - bw * bs) * 0.5f, by - (bh * bs - bh) * 0.5f,
+                                   bw * bs, bh * bs, bh * bs * 0.5f,
+                                   ui::Color::white(on ? kFocusedTint : 0.10f)});
+            text.draw(renderer, label, (ui::kCanvasWidth - lw) * 0.5f,
+                      by + bh * 0.5f + text.ascent(ui::TextStyle::Title3, sc) * 0.5f,
+                      ui::TextStyle::Title3, ui::Color::white(on ? 1.0f : 0.75f), sc);
         }
         }  // end of the shelf branch
 
