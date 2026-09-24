@@ -425,13 +425,20 @@ notes here stay the detail.
    still be on that hand-built binary; `--restore` or a reboot puts it back).
    Merge only when he says the whole of Settings is right. **Judged good on
    the TV so far:** the side list, the top-bar dissolve with the sliding
-   keyboard, and the category cross-fade. **Suggested first builds:** #62
-   (interface sounds levels, and saving them), then #57 (owner and PIN),
-   which Wi-Fi, sign out and remove all depend on.
+   keyboard, and the category cross-fade.
+
+   **#62, INTERFACE SOUNDS, IS BUILT AND JUDGED ON THE TV, 2026-09-24**
+   (branch `settings-sound-levels`). Off, Quiet, Medium, Loud, saved in
+   `config/settings.json` through the new `prefs.{h,cpp}`, which the next
+   console-wide settings should use too. Settings has a new row kind,
+   `Choice`, for any left-and-right row. Volumes 0.07, 0.22, 0.65, after
+   MMagTech found 5 dB steps too close; `--ui-sound-levels q,m,l` tunes them
+   without a rebuild. **Next: #57 (owner and PIN)**, which Wi-Fi, sign out
+   and remove all depend on.
 
    **Tracked as GitHub issues #57 to #75, Settings milestone** (#74 and #75
    are `later`). The checklist below is the same list:
-   - [ ] Interface sounds as one row: Off, Quiet, Medium, Loud (left/right),
+   - [x] Interface sounds as one row: Off, Quiet, Medium, Loud (left/right),
          and SAVED, which the current toggle is not.
    - [ ] Owner (first setup account) and one PIN. PIN offered when the second
          account is added. Protected with a PIN: Wi-Fi, Sign out, Change

@@ -120,8 +120,9 @@ and says when it is right.
 - **Picture quality:** Performance, Balanced or Quality for the whole console,
   and a game's pause menu can override it for that game. **To build, #63.**
 - **Interface sounds:** one row changed with left and right: Off, Quiet,
-  Medium, Loud, and remembered. Today's test build has only On or Off and
-  forgets it on restart. **To build, #62.**
+  Medium, Loud, and remembered in `config/settings.json`. Left and right
+  change it; Back returns to the list. Judged on the TV 2026-09-24.
+  **Built, #62.**
 - **HDMI-CEC: dropped.** No adapter will be bought to test with, and standby
   already covers what it was for. This reverses the earlier "CEC is a
   requirement".
