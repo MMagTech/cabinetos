@@ -250,6 +250,11 @@ public:
     bool fetchRoms(const std::string& filter, int limit,
                    std::vector<Game>* out, std::string* err, int* total = nullptr);
 
+    // ONE game, by its id, whatever list it is or is not on. For `--launch`,
+    // which since 2026-09-22 can no longer find a game in the library unless
+    // it is on Home: boot stopped fetching the whole catalogue.
+    bool fetchGame(int romId, Game* out, std::string* err);
+
     // A value going INTO a query fragment, percent-encoded strictly. A search
     // term is whatever somebody typed on a television keyboard, so it can hold
     // a space, an ampersand or an apostrophe — all of which would otherwise

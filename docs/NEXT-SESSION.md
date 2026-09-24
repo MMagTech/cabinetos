@@ -489,35 +489,32 @@ on one review sheet, and go through it with MMagTech. Plain words, no em
 dashes, and the look judged on the panel. It overlaps the Settings screen,
 which will add its own text.
 
-#### NINE OF 23 EMULATORS SYNC NOTHING — found 2026-09-23, and it is the next candidate
+#### THE SAVE GAP IS CLOSED FOR THE FIVE SYSTEMS THAT HAVE SAVES, 2026-09-23
 
-A Bionic Commando test on the Power menu logged `no settled tag for fceumm —
-states stay local, and so do saves`. Counted from `catalog.cpp` against the
-cores the image ships:
+**NES, SNES, N64, TurboGrafx CD and Saturn saves now travel, with Cabinet's own
+tags.** PROJECT.md, *The battery saves of five more systems travel*, has why
+each is safe and what was measured: three Apple TV saves restored on the A9,
+played and quit, with every save on the server unchanged afterwards. The other
+four of the nine (Virtual Boy, Atari 2600, Atari 7800, Vectrex) have no save
+to carry.
 
-| | Game saves | States | Emulators |
-|---|---|---|---|
-| both travel | ✅ | ✅ | gambatte, mgba, genesis_plus_gx, picodrive, pcsx_rearmed, melonds, ppsspp |
-| saves only | ✅ | ❌ | flycast, pcsx2, dolphin, opera, fbneo, mame2003_plus, beetle_ngp |
-| **neither** | ❌ | ❌ | **fceumm (NES), snes9x (SNES), mupen64plus (N64)**, beetle_pce_fast, beetle_saturn, beetle_vb, prosystem, stella2014, vecx |
+**STATES TOO, SAME DAY: 21 of the 22 libretro cores send them**, all but
+GameCube. MMagTech decided every core with states uploads them under Cabinet's
+tag whether or not the other side can load them; he will check the Cabinet
+side himself. Apple TV states for Aladdin and R.C. Pro-Am loaded here mid-game;
+a Saturn one was refused. **Every core's own states load on this console**
+(`--state-check`, PROJECT.md), except Dreamcast and PSP, which cannot run
+headless on the A9 and are owed a check on the television.
+**Still owed:** a first real NES or SNES save uploaded by a person playing. **Also noticed: Cabinet uploads a screenshot PNG with every
+state (`TVPlayerView.saveState`); CabinetOS uploads the state alone.**
 
-**Cabinet has a tag for every one of the nine** (`RommApp/RommApp/Native/
-NativeCore.swift`: `fceumm-native`, `snes9x-native`, `mupen64plus-native`,
-`pcefast-native`, `saturn-native`, `beetle-vb-native`, `prosystem-native`,
-`stella2014-native`, `vecx-native`). They are missing here because nobody did
-the check, and the rule in `catalog.h` makes silence mean "stay local" — the
-safe failure, but it means SNES, NES and N64 progress never leaves the A9.
-
-**Saves are the cheap half**: a cartridge battery is the machine's format, the
-argument `saveTag` already makes for Dreamcast and arcade. **N64 is the one to
-read first** — mupen64plus-libretro packs EEPROM, mempak, SRAM and flash into
-one blob in its own layout. **States need the strict proof** (same pinned
-commit, same build arguments as Cabinet), as the seven that travel had.
-MMagTech asked for this to be weighed against offline mode as the next session;
-it is smaller and it is lost progress on the most-played systems.
-
-**Also noticed: Cabinet uploads a screenshot PNG with every state
-(`TVPlayerView.saveState`); CabinetOS uploads the state alone.**
+**`--launch <id>` WAS BROKEN FROM 2026-09-22 TO 2026-09-23 AND SAID ONLY "no
+game with id".** Boot stopped fetching the catalogue, so the library holds only
+Home's games and `--launch` could reach nothing else. It now fetches the game
+by id. **Two more things that cost time here:** a test run in a fresh
+`--storage-root` stops at first run unless `config/*.json` is copied in from
+`/var/lib/cabinetos/config/`; and a quit logs `[overlay] exited to Home`, not
+`quitting after`, which prints only when the quit has to wait.
 
 #### THE BOOT-TO-HOME TRANSITION IS HARSH — reported 2026-09-23, not looked at
 
@@ -2792,6 +2789,14 @@ carried across from Cabinet's list rather than checked here, and this project's
 own rule is that a fact carried across is a fact nobody has checked.
 
 ## Cabinet-side debts
+
+**CABINET'S APPLE TV CORES ARE NOT AT THE COMMITS ITS MANIFEST PINS**, found
+2026-09-23. `docs/core-manifest.json` pins the Mac's revision; the iOS and tvOS
+builds of snes9x, fceumm, beetle_pce_fast, beetle_saturn and mame2003_plus are
+older, and Saturn's tvOS revision is recorded as unrecoverable. CabinetOS
+matches the pin, so an Apple TV Saturn state is REFUSED here (Daytona USA,
+measured). **Rebuild Cabinet's Apple TV cores at the pinned commits** and
+Saturn and MAME 2003-Plus states can be shared (`catalog.cpp`, emulatorTag).
 
 1. **Flycast carries unscripted edits in its working tree**, so its pinned
    commit does not reproduce what ships, and **that is the only reason Flycast

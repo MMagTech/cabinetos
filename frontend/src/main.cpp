@@ -3039,6 +3039,16 @@ int main(int argc, char** argv) {
     // which is what makes the picture underneath it a GAME rather than black.
     bool overlayDemo = false;
     int overlayDemoAfter = 0;
+    // --load-state N: after N frames of play, what the pause menu's "Load
+    // latest state" does. The other half of --sync-test, which loads back the
+    // state it has just made; this loads whatever is newest on the server, so
+    // a state from an Apple TV can be tried here without a controller.
+    int loadStateAfter = 0;
+    // --state-check N: after N frames, save a state IN MEMORY, play on, load
+    // it, and save again at once. Equal bytes mean the load put the machine
+    // back exactly. Nothing is written to disk or sent anywhere; it asks only
+    // "does a state this console makes load on this console".
+    int stateCheckAfter = 0;
     // Opens the overlay and takes Exit to Home, so the whole leave-a-game path
     // can be proved on a machine with nothing attached.
     bool overlayExitDemo = false;
@@ -3188,6 +3198,10 @@ int main(int argc, char** argv) {
             // render. That cost a confusing ten minutes on 2026-09-21; the game
             // was fine and the flag was the fault.
             if (i + 1 < argc && argv[i + 1][0] != '-') overlayDemoAfter = SDL_atoi(argv[++i]);
+        } else if (SDL_strcmp(argv[i], "--state-check") == 0 && i + 1 < argc) {
+            stateCheckAfter = SDL_atoi(argv[++i]);
+        } else if (SDL_strcmp(argv[i], "--load-state") == 0 && i + 1 < argc) {
+            loadStateAfter = SDL_atoi(argv[++i]);
         } else if (SDL_strcmp(argv[i], "--sync-test") == 0) {
             syncTest = true;
         } else if (SDL_strcmp(argv[i], "--launch-after") == 0 && i + 1 < argc) {
@@ -6968,6 +6982,24 @@ int main(int argc, char** argv) {
             if (autoLaunchAfter <= 0.0f) {
                 const int id = autoLaunchId;
                 autoLaunchId = 0;
+                // NOT ON HOME, SO NOT IN THE LIBRARY, since 2026-09-22: boot
+                // stopped fetching the whole catalogue, and `--launch` quietly
+                // lost every game that is not Recent or a Favorite. It said
+                // "no game with id" and idled, which is how the save work of
+                // 2026-09-23 found it. Asked for by id instead, the way a
+                // platform grid or Search would have fetched it.
+                if (lib.byRomId.find(id) == lib.byRomId.end()) {
+                    romm::Game g;
+                    std::string err;
+                    if (liveClient.fetchGame(id, &g, &err)) {
+                        appendGame(lib, g);
+                        std::fprintf(stderr, "[launch] fetched %s by id\n",
+                                     g.name.c_str());
+                    } else {
+                        std::fprintf(stderr, "[launch] could not fetch rom %d: %s\n",
+                                     id, err.c_str());
+                    }
+                }
                 launchById(id);
             }
         }
@@ -7009,6 +7041,43 @@ int main(int argc, char** argv) {
                 overlaySlot = static_cast<int>(pauseItems.size()) - 1;   // Exit to Home
             }
             if (t == overlayExitAfter + 60) { overlayExitDemo = false; overlayActivate(); }
+        }
+
+        if (stateCheckAfter > 0 && playing) {
+            static std::vector<uint8_t> first;
+            static uint64_t savedAt = 0;
+            cab::Core& core = cab::Core::shared();
+            if (first.empty() && core.framesRun() >= static_cast<uint64_t>(stateCheckAfter)) {
+                if (!core.saveState(first) || first.empty()) {
+                    std::fprintf(stderr, "[state-check] %s cannot make a state\n",
+                                 launchJob.coreName.c_str());
+                    stateCheckAfter = 0;
+                } else {
+                    savedAt = core.framesRun();
+                }
+            } else if (!first.empty() && core.framesRun() >= savedAt + 120) {
+                const bool loaded = core.loadState(first);
+                std::vector<uint8_t> again;
+                core.saveState(again);
+                size_t same = 0;
+                for (size_t k = 0; k < std::min(first.size(), again.size()); ++k)
+                    if (first[k] == again[k]) ++same;
+                std::fprintf(stderr,
+                             "[state-check] %s: %zu bytes, load %s, re-save %s "
+                             "(%zu of %zu bytes equal)\n",
+                             launchJob.coreName.c_str(), first.size(),
+                             loaded ? "ACCEPTED" : "REFUSED",
+                             again == first ? "IDENTICAL" : "DIFFERS",
+                             same, first.size());
+                stateCheckAfter = 0;
+            }
+        }
+
+        if (loadStateAfter > 0 && playing &&
+            cab::Core::shared().framesRun() >= static_cast<uint64_t>(loadStateAfter)) {
+            loadStateAfter = 0;
+            std::fprintf(stderr, "[load-state] loading the newest state\n");
+            beginLoadLatestState(stateLoad, session, liveClient, menuNotice);
         }
 
         // The round trip, once, a couple of seconds into the game so there is

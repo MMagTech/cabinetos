@@ -581,6 +581,17 @@ bool Client::fetchRoms(const std::string& filter, int limit,
     return true;
 }
 
+bool Client::fetchGame(int romId, Game* out, std::string* err) {
+    std::string body;
+    if (!get("/api/roms/" + std::to_string(romId), &body, err)) return false;
+    json_object* root = json_tokener_parse(body.c_str());
+    if (!root) { if (err) *err = "rom response was not JSON"; return false; }
+    const bool ok = parseGame(root, out);
+    json_object_put(root);
+    if (!ok && err) *err = "rom response did not parse as a game";
+    return ok;
+}
+
 bool Client::fetchGames(int platformId, std::vector<Game>* out, std::string* err,
                         const std::function<void(int)>& onPage) {
     out->clear();

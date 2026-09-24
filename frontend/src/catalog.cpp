@@ -209,6 +209,69 @@ const char* emulatorTag(const char* core) {
         // every tag since rests on configuration parity rather than on its own
         // experiment.
         {"ppsspp", "ppsspp-native"},
+
+        // EIGHT MORE LIBRETRO CORES, 2026-09-23. Their states stayed on the
+        // console only because nobody had run the check above, and the check
+        // took a minute: every one is pinned at Cabinet's own commit, and all
+        // but mupen64plus are built with exactly Cabinet's arguments (none at
+        // all, or vecx's HAS_GPU=0 on both sides). The ninth of that group,
+        // beetle_saturn, is below with the ones that stay local. MMagTech, rightly:
+        // states belong on every libretro core, and open question 25 already
+        // said so. Their saves ride the same tags, through saveTag.
+        {"fceumm", "fceumm-native"},        // 236ccdfc
+        {"snes9x", "snes9x-native"},        // 890b5d44
+        {"beetle_pce_fast", "pcefast-native"},  // 2f623abd
+        {"beetle_vb", "beetle-vb-native"},  // 83ed4260
+        {"prosystem", "prosystem-native"},  // 8a880142
+        {"stella2014", "stella2014-native"},  // 4a7da825
+        {"vecx", "vecx-native"},            // 8f671cc9, HAS_GPU=0 both sides
+        // N64, THE ONE WITH A DIFFERENCE, said plainly. Same commit, f275caf4,
+        // on every platform Cabinet ships. But Cabinet's build flags do not
+        // link on Linux (see docs/PROJECT.md, *mupen64plus: it builds*), so
+        // this build is -O3 -ffast-math with the unix branch's RSP/RDP
+        // choices where Cabinet's is -Ofast with its own. A state holds the
+        // machine's memory and registers, which neither changes; if a state
+        // from here ever refuses to load on an Apple TV, this line is why.
+        //
+        // Its SAVE is safer than its state: mupen64plus packs EEPROM, four
+        // controller paks, SRAM and flash into one 296960-byte struct at this
+        // commit, and the seven N64 saves on the reference server each hold
+        // data exactly where their game's chip is.
+        {"mupen64plus", "mupen64plus-native"},
+
+        // AND THREE OF THE FIVE THAT HAD SAVES ONLY, the same day, for the
+        // same reason: same commit as Cabinet, no patches, no build arguments
+        // on either side. Their saves travelled already through saveTag.
+        {"opera", "opera-native"},            // a501a278
+        {"fbneo_libretro", "fbneo-native"},   // 2444fbe3
+        {"beetle_ngp", "ngp-native"},         // a50d5ac2, Cabinet's iOS commit
+
+        // AND THE LAST THREE, BY DECISION, 2026-09-23. MMagTech: every core
+        // that is supposed to have states uploads them under the tag Cabinet
+        // recognises, "regardless of if it will actually load". A state that
+        // does not load on the other device is refused there and costs
+        // nothing else; a state that never leaves the console is lost with
+        // it. So the tag says which emulator made it, and loading is the
+        // other side's question.
+        //
+        // What is known about each, so a refusal is not a surprise:
+        //   beetle_saturn  An Apple TV state (Daytona USA, 2026-08-07) was
+        //                  REFUSED here. Cabinet's Apple TV Saturn build is not
+        //                  at the commit its manifest pins, and was replaced
+        //                  on 2026-08-20, after that state was made. Which of
+        //                  the two refused it is not known.
+        //   mame2003_plus  Pinned at Cabinet's Mac commit, 21256d24; its Apple
+        //                  TV build is at 93159c0c. Never tested: there are no
+        //                  MAME states on the reference server.
+        //   flycast        Cabinet's build carries unscripted working-tree
+        //                  edits, so there is no revision to match. Never
+        //                  tested either.
+        {"beetle_saturn", "saturn-native"},        // ed549bda
+        {"mame2003_plus", "mame2003plus-native"},  // 21256d24
+        {"flycast", "flycast-native"},             // a172e000
+        //
+        // PS2 and GameCube have no states at all (snapshotsAllowed), by open
+        // question 25, so they need no tag here.
     };
     for (const auto& t : kTags)
         if (std::strcmp(t.core, core) == 0) return t.tag;
@@ -230,21 +293,17 @@ const char* saveTag(const char* core) {
     // the two, and every core that passes it writes both.
     if (const char* t = emulatorTag(core)) return t;
 
-    // The five the state rule refuses and a save has no reason to. Each one is
-    // the reference implementation's own string, so a card written here lands
-    // in the row an Apple TV already reads — which is the whole point, and is
-    // how the thirteen Dreamcast cards already on the server become testable.
+    // SINCE 2026-09-23 EVERY LIBRETRO CORE WITH STATES HAS A STATE TAG, so
+    // every one of them is answered by the line above, and this table is only
+    // for the two cores with no states at all. Until that day it also held
+    // Flycast, 3DO, FBNeo, MAME 2003-Plus, Beetle NGP and Beetle Saturn as
+    // saves-only, when their states stayed local; their history is in git and
+    // in docs/PROJECT.md, *The save audit*.
     //
-    // The bytes are the emulated machine's, not the emulator's. See the header
-    // for why that is the line, and docs/PROJECT.md, *The save audit*, for the
-    // measurement behind it.
+    // Whatever the tag, a save's bytes are the emulated machine's own (a VMU,
+    // a board's NVRAM, a cartridge's battery), which is why saves could travel
+    // before states did.
     struct { const char* core; const char* tag; } kSaveTags[] = {
-        // The VMU. Same pinned commit as the reference implementation
-        // (a172e000) but that build carries unscripted working-tree edits, so
-        // there is no revision for a STATE to match and emulatorTag correctly
-        // says nothing. A 128 KB VMU image in the VMU's own format is not
-        // something an unscripted edit can change the shape of.
-        {"flycast", "flycast-native"},
         // PlayStation 2's memory card and GameCube's, and these two tags were
         // READ OFF THE ROWS ALREADY ON THE SERVER rather than derived from the
         // pattern above — they are plainly `pcsx2` and `dolphin`, with no
@@ -258,29 +317,11 @@ const char* saveTag(const char* core) {
         // uploads being confused for one another, and the name is what decides
         // which row is overwritten.
         //
-        // NOTE these are not state tags and must never become them. The
-        // libretro cores here are hard forks — LRPS2 and libretro/dolphin —
-        // and a state written by either will not load in the Mac's build.
+        // NOTE these are not state tags and must never become them. Neither
+        // system has states on this console (open question 25), and a state
+        // from either would not load in the Mac's build anyway.
         {"pcsx2", "pcsx2"},
         {"dolphin", "dolphin"},
-        // 3DO NVRAM. Same commit as every platform the reference ships
-        // (a501a278), no patches and no build arguments on either side — this
-        // one would pass the state rule too and simply has not been through
-        // it. The save is the 3DO's own NVRAM either way.
-        {"opera", "opera-native"},
-        // Arcade NVRAM, FinalBurn Neo's half. Same commit (2444fbe3), one
-        // source tree serves every platform the reference builds, no patches
-        // and no build arguments.
-        {"fbneo_libretro", "fbneo-native"},
-        // Arcade NVRAM, MAME 2003-Plus's half. This is the one where the
-        // commits genuinely differ — CabinetOS pins 21256d24, which is the
-        // reference's MAC revision, while its iOS and tvOS builds are at
-        // 93159c0c. A board's NVRAM is its own chip's contents and travels
-        // across that; a state would not, and does not.
-        {"mame2003_plus", "mame2003plus-native"},
-        // Neo Geo Pocket flash. Same commit as the reference's iOS build
-        // (a50d5ac2), one source tree, no patches, no build arguments.
-        {"beetle_ngp", "ngp-native"},
     };
     const std::string name = manifestName(core);
     for (const auto& t : kSaveTags)
@@ -443,6 +484,21 @@ std::map<std::string, std::string> optionOverrides(const std::string& core) {
     // this console's second free ride from the core-options work.
     if (coreName == "genesis_plus_gx") {
         return {{"genesis_plus_gx_system_bram", "per game"}};
+    }
+
+    // Beetle Saturn, and this one also decides where the save is. "libretro"
+    // hands the Saturn's backup RAM to the frontend through SAVE_RAM, which
+    // is what saveTag's `saturn-native` rides; "mednafen" makes the core keep
+    // its own .bkr file instead, which nothing here reads, so every Saturn
+    // save would stay on this console and never reach the server.
+    //
+    // It is already the declared default at the pinned ed549bda. Forced
+    // anyway, because the reference forces it for exactly this reason
+    // (NativeCoreOptions.swift): its Saturn saves had nowhere to go once
+    // before, and a core bump that changed the default would strand them
+    // again without a word.
+    if (coreName == "beetle_saturn") {
+        return {{"beetle_saturn_save_method", "libretro"}};
     }
 
     // Opera, and both of these are the difference between 3DO working and
