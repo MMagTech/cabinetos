@@ -1,7 +1,8 @@
 # CabinetOS Settings: an inventory
 
-> **2026-09-24: the discussion this was written for has happened.** Its
-> answers are in `docs/PROJECT.md`, open question 31, and the checklist of what
+> **2026-09-24: the discussion this was written for has happened.** The
+> decisions are in `docs/SETTINGS.md`; the reasoning is in `docs/PROJECT.md`,
+> open question 31, and the checklist of what
 > is decided and still to build is in `docs/NEXT-SESSION.md` under the order.
 > Where this file and question 31 disagree, question 31 wins: HDMI-CEC is
 > shelved, the server gets Sign out and Change server address, and there is no

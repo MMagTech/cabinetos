@@ -11,9 +11,10 @@ using Kind = SettingsRow::Kind;
 
 namespace {
 
-// The design system's "a segmented choice" duration: the right side changing
-// because a different category was chosen.
-constexpr float kPaneChange = 0.220f;
+// The right side cross-fading to a different category. Quicker than the
+// design system's 220 ms segmented choice, because this happens once per step
+// down the list. A starting value.
+constexpr float kPaneChange = 0.150f;
 
 // The one arrow the product already uses for "this opens something": the
 // shelf headings on Home carry it.
@@ -55,6 +56,8 @@ void SettingsScreen::enter() {
     appear_.retarget(1.0f, 0.280f);
     row_ = -1;
     scroll_.settle(0.0f);
+    // Ease-in-out, so the two sets of rows cross at the middle.
+    paneChange_.smooth = true;
     paneChange_.settle(1.0f);
     focus_.settle(1.0f);
 }
@@ -112,6 +115,7 @@ Result SettingsScreen::key(Nav n) {
             case Nav::Down: {
                 const int next = cat_ + (n == Nav::Down ? 1 : -1);
                 if (next < 0 || next >= cats) { sound::play(sound::Cue::Edge); return {}; }
+                prevCat_ = cat_;
                 cat_ = next;
                 // THE RIGHT SIDE FOLLOWS AT ONCE. That is the whole reason for
                 // this shape: no open, no back, just look.
@@ -255,13 +259,18 @@ void SettingsScreen::drawGlass(Ctx& c) {
     want = std::clamp(want, 0.0f, maxScroll);
     if (std::fabs(want - scroll_.to) > 0.5f) scroll_.retarget(want, design::kFocusDuration);
 
-    const float pa = paneChange_.value();
-    c.r.setContentAlpha(a * pa);
-    y = top - scroll_.value();
-    for (int i = 0; i < static_cast<int>(rows.size()); ++i) {
-        const SettingsRow& row = rows[i];
+    // A CATEGORY CHANGE CROSS-FADES: the rows that were showing fade out as
+    // the new ones fade in, with no movement, because a person runs down this
+    // list quickly and anything that slid would be busy. MMagTech asked,
+    // 2026-09-24; the old rows used to vanish in one frame.
+    auto drawRows = [&](const std::vector<SettingsRow>& list, float alpha, int focusRow,
+                        float scrollY) {
+    c.r.setContentAlpha(a * alpha);
+    float y = top - scrollY;
+    for (int i = 0; i < static_cast<int>(list.size()); ++i) {
+        const SettingsRow& row = list[i];
         const float rh = rowHeight(c, row);
-        const bool on = (i == row_);
+        const bool on = (i == focusRow);
         const float rf = on ? f : 0.0f;
         const bool unbuilt = row.kind == Kind::Unbuilt;
         const float s = 1.0f + rf * (design::kRowFocusScale - 1.0f);
@@ -320,6 +329,12 @@ void SettingsScreen::drawGlass(Ctx& c) {
         }
         y += rh + gap;
     }
+    };
+    const float pa = paneChange_.value();
+    if (pa < 1.0f && prevCat_ >= 0 && prevCat_ < static_cast<int>(cats_.size()) &&
+        prevCat_ != cat_)
+        drawRows(cats_[prevCat_].rows, 1.0f - pa, -1, 0.0f);
+    drawRows(rows, pa, row_, scroll_.value());
 }
 
 }  // namespace screens

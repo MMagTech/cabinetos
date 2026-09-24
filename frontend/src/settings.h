@@ -77,6 +77,7 @@ private:
 
     std::vector<SettingsCategory> cats_;
     int cat_ = 0;
+    int prevCat_ = -1;         // the category fading out after a change
     int row_ = -1;             // -1 while focus is in the category list
     design::Animated appear_;
     design::Animated focus_;

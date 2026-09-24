@@ -399,8 +399,9 @@ states, and leave — with the save syncing on the way out.
    Cabinet tvOS's Settings as it appears, the decisions that constrain it, and
    eight open questions. Do not design before that conversation.
 
-   **STATUS 2026-09-24: THE DISCUSSION HAPPENED; EVERY DECISION IS IN
-   `docs/PROJECT.md` OPEN QUESTION 31, IN ORDER.** The side-list layout and the
+   **STATUS 2026-09-24: THE DISCUSSION HAPPENED. THE DECISIONS, FINAL STATE
+   ONLY, ARE IN `docs/SETTINGS.md`** (the reasoning, in order, is in
+   `docs/PROJECT.md` open question 31). The side-list layout and the
    top-bar dissolve are built on branch `settings-side-list`, PR #56, **NOT
    MERGED ON PURPOSE**: MMagTech, *"I don't want a build until I have judged
    everything."* Judge on the television with `tools/ui-loop.sh` (the A9 may

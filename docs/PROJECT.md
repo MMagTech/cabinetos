@@ -12620,7 +12620,9 @@ panel.
 
 ### 31. The Settings screen, decided in conversation
 **Raised 2026-09-24 from `docs/SETTINGS-INVENTORY.md`. A running record: each
-point is added as it is settled, in the order the conversation reached it.**
+point is added as it is settled, in the order the conversation reached it, so
+later entries supersede earlier ones. THE FINAL STATE, ORGANISED BY SCREEN, IS
+`docs/SETTINGS.md`: read that first.**
 
 **Settings may look different from the other screens.** MMagTech, 2026-09-24:
 it is *"the one screen where we can diverge a bit"*, and a new top-bar tab is
@@ -12928,3 +12930,8 @@ cache and unsent saves when pairing to a different server?
   games, the accounts; Wi-Fi and controllers stay) and the console goes back
   to first run's server step, reusing its screens.
 - **One server at a time.** A friend's server is sign out, then sign in.
+
+**Changing category cross-fades the rows**, 150 ms ease-in-out, no movement:
+the old rows fade out as the new ones fade in. MMagTech asked whether it should
+be instant; a person runs down that list quickly, so a slide would be busy and
+an instant swap makes the whole right side jump. Being judged on the TV.
