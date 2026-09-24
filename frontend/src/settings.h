@@ -78,6 +78,14 @@ public:
     // there is no such row.
     int choiceOf(int id) const;
 
+    // WHETHER FOCUS IS ON THIS SCREEN AT ALL. While it is up in the bar (or
+    // on the account panel), nothing here is lit: no category is focused and
+    // none has its ground. MMagTech, 2026-09-24, walking along the bar past
+    // Settings to the account chip: *"nothing on settings should be
+    // highlighted until moving down onto accounts"*. The app says so every
+    // frame; coming back grows the focus in rather than snapping it.
+    void setHasFocus(bool on);
+
     void tick(float dt);
     Result key(Nav n);
     void draw(Ctx& c);
@@ -93,6 +101,7 @@ private:
     int cat_ = 0;
     int prevCat_ = -1;         // the category fading out after a change
     int row_ = -1;             // -1 while focus is in the category list
+    bool hasFocus_ = true;
     design::Animated appear_;
     design::Animated focus_;
     design::Animated scroll_;

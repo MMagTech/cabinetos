@@ -7685,6 +7685,7 @@ int main(int argc, char** argv) {
             libraryScreen.tick(dt);
             accountScreen.tick(dt);
             addAccountScreen.tick(dt);
+            settingsScreen.setHasFocus(!barFocused && !accountsOpen);
             settingsScreen.tick(dt);
             pinScreen.tick(dt);
             tabDissolve.tick(dt);
