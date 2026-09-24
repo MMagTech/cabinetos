@@ -7665,6 +7665,10 @@ int main(int argc, char** argv) {
                     // Added, NOT switched to. Back to the panel with the new
                     // person in it, which is where the switch is.
                     refreshAccountRows();
+                    // AND SETTINGS UNDER IT, which it may have been opened
+                    // from: Remove an account stayed greyed out until Settings
+                    // was left and re-entered. MMagTech, on the A9.
+                    buildSettings();
                     if (stack.size() > 1) stack.pop_back();
                     accountsOpen = true;
                     barFocused = true;
