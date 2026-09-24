@@ -368,6 +368,36 @@ states, and leave — with the save syncing on the way out.
 
 ### WHAT TO DO NEXT
 
+#### THE ORDER, AS MMagTech SET IT ON 2026-09-24
+
+1. **The Settings screen, by discussion first.** *"It's going to need a good
+   discussion and your help to get it right."* CabinetOS's Settings holds more
+   than Cabinet's, including things not built yet. **Start from
+   `docs/SETTINGS-INVENTORY.md`**: 36 settings with their state and source,
+   Cabinet tvOS's Settings as it appears, the decisions that constrain it, and
+   eight open questions. Do not design before that conversation.
+2. **The rest of the UI**: the harsh boot-to-Home cut, the text pass.
+3. **The remaining cores.**
+4. **THE TESTS COME NEAR THE END**, once the UI is finished and every core is
+   in: the pad tests at the television (account switching, save and load
+   state, Dreamcast and PSP states, the black-screen fix, the boot and covers),
+   and MMagTech's own check that states from CabinetOS load in the Cabinet
+   apps. Do not push them earlier.
+
+**QUEUED, NOT NOW:** the Library shows only systems it can play, the way
+Cabinet's tvOS app does (`TVLibraryView.swift`, `supported`). A game from a
+hidden system reached through Search keeps a launch screen saying why.
+MMagTech: *"that's a lot of work I don't want to tackle right now."* It is
+smaller than first described: one filter on the Library, as on tvOS. Search
+and collections stay as they are.
+
+**DECIDED: NO ATARI JAGUAR AND NO COLECOVISION.** MMagTech, 2026-09-24: the
+controller, a number keypad, is too unconventional. Neither has an exclusive
+worth it: ColecoVision is mostly arcade ports MAME and FBNeo already play, and
+the Jaguar's one real exclusive, Alien vs Predator, leans on the keypad, while
+the only libretro Jaguar core (Virtual Jaguar) is weak. **Do not propose them
+again.** Once the Library filter above exists they simply do not show.
+
 #### A SMALL CHANGE NOW SHIPS SMALL, 2026-09-23, if the PR is merged
 
 **Open question 27 has the record.** The rechunk is gone and the Containerfile
@@ -608,7 +638,7 @@ below and it takes ten minutes of somebody's evening, not a session.
 | **1** | ~~PLAYSTATION 2 AND GAMECUBE~~ — **done to the point of playing**, see above. The original entry follows for its reasoning. **PLAYSTATION 2 AND GAMECUBE.** MMagTech's call, 2026-09-20, and the largest thing on this list: 85 games, and the only missing tier with a working implementation to copy. **Open question 12b has the order and 12 has the numbers.** Start by reading `tools/build-dolphin-mac.sh` in Cabinet — those two are NOT libretro cores and nobody wrote down why. |
 | **2** | ~~A GAME CAN GO BLACK AND NOBODY KNOWS WHY~~ — **SOLVED 2026-09-21, item 3b.** It was the SECOND game: `Core::load` left the previous game's dimensions behind, so `sizeChanged` came out false and the upload hit a texture with no storage. Confirmed by MMagTech on TurboGrafx and 3DO. Nothing is owed here. |
 | **3** | **Judge the TATE look, and Home, on the 65-inch.** Both are on the machine and neither has been looked at properly. **This is really part of the UI pass** and should be done inside it rather than as its own errand. |
-| **4** | **Atari Jaguar and ColecoVision** — 73 games, ordinary libretro cores, no architectural question at all. The cheapest games available. See 12b. |
+| **4** | ~~**Atari Jaguar and ColecoVision**~~ — **DECIDED AGAINST, 2026-09-24**, see the top of this section. |
 | **5** | Then the core options (item 7). |
 
 **FIRST RUN IS DONE and is not on this list.** Built, walked on the television
