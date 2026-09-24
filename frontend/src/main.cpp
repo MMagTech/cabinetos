@@ -6711,6 +6711,20 @@ int main(int argc, char** argv) {
                     if (e.key.key == SDLK_RETURN || e.key.key == SDLK_SPACE) pressing = false;
                     break;
                 case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+                    // THE SHOULDERS LEAVE SEARCH, keyboard or not. MMagTech,
+                    // 2026-09-24: R1 landed on Search and then neither shoulder
+                    // got you off it, because the docked keyboard took every
+                    // button. Only Search's docked keyboard: a keyboard asking
+                    // a question (a Wi-Fi password) is modal and keeps them.
+                    // Leaving clears the search, as entering any destination
+                    // starts it fresh.
+                    if (owner == InputOwner::Keyboard && here() == Screen::Search &&
+                        (e.gbutton.button == SDL_GAMEPAD_BUTTON_LEFT_SHOULDER ||
+                         e.gbutton.button == SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER)) {
+                        switchDestination(
+                            e.gbutton.button == SDL_GAMEPAD_BUTTON_LEFT_SHOULDER ? -1 : +1);
+                        break;
+                    }
                     if (owner == InputOwner::Keyboard) {
                         switch (e.gbutton.button) {
                             case SDL_GAMEPAD_BUTTON_DPAD_LEFT: keyboard.moveFocus(-1, 0); break;

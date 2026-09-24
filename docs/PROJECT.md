@@ -12759,3 +12759,9 @@ same `navigate` door a pad uses: `--nav up,right,right` from Home lands on
 Settings with the bar still focused. **Not checked headless**: the keyboard
 hand-off on Search, because `--nav` goes straight to `navigate` and skips the
 event path that decides who owns the pad. That one is for the television.
+
+**The shoulders leave Search, and leaving clears it.** MMagTech, 2026-09-24:
+R1 onto Search and neither shoulder got you off it, because the docked
+keyboard took every button. The shoulders now pass through Search's docked
+keyboard only; a keyboard asking a question (a Wi-Fi password) stays modal.
+Coming back to Search starts empty, as every destination is entered fresh.
