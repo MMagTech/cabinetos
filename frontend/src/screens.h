@@ -79,6 +79,9 @@ enum class Action {
     // happen on a SEPARATE client: adding an account mid-session must not be
     // able to throw the console back into setup.
     AddAccount,
+    // A Settings row was pressed. The value is the row's own id, which the
+    // app assigned when it built the rows; see settings.h.
+    Setting,
 };
 
 struct Result {
@@ -117,6 +120,9 @@ public:
     // put it. The reference implementation got this wrong first: forcing focus
     // on every appearance yanked it away whenever somebody came back.
     void enter();
+    // Arrived already, with no fade of its own: a top-bar dissolve is doing
+    // the arriving, and two fades at once dip through the background.
+    void settleArrival() { appear_.settle(1.0f); }
 
     // Puts focus on a given tile, for a capture. The unplayable systems sort
     // last, so without this the only part of this screen a screenshot can ever

@@ -45,6 +45,7 @@ void Keyboard::open(const Config& config) {
     row_ = 1;  // the letter row, not the digits: that is where typing starts
     col_ = 0;
     open_ = true;
+    ghost_ = false;
 
     // A FIXED 12-COLUMN GRID, every row totalling exactly 12 units.
     //
@@ -283,7 +284,7 @@ KeyboardResult Keyboard::cancel() {
 }
 
 void Keyboard::draw(Renderer& r, TextRenderer& text, float scale) {
-    if (!open_) return;
+    if (!open_ && !ghost_) return;
     const auto& rows = layout();
 
     // A DOCKED KEYBOARD IS SMALLER, and it has to be: at full size this panel
@@ -324,11 +325,13 @@ void Keyboard::draw(Renderer& r, TextRenderer& text, float scale) {
     // Bottom-anchored when docked, with the safe inset under it — this is text
     // and controls a person has to reach, so it obeys the same rule the top bar
     // does about the edges of a television.
-    const float panelY = config_.dockedBottom
-                             ? kCanvasHeight - panelH - kSafeInset * 0.5f
-                             : (kCanvasHeight - panelH) * 0.5f;
-
-    panelTop_ = panelY;
+    const float restY = config_.dockedBottom
+                            ? kCanvasHeight - panelH - kSafeInset * 0.5f
+                            : (kCanvasHeight - panelH) * 0.5f;
+    // Where the results stop is where the panel RESTS, not where a slide has
+    // it this frame, or the results would follow it down and back.
+    if (open_) panelTop_ = restY;
+    const float panelY = restY + slide_ * (kCanvasHeight - restY + 24.0f);
 
     // Scrim, then ONE piece of frosted glass.
     //

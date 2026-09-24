@@ -107,6 +107,19 @@ public:
 
     void draw(Renderer& r, TextRenderer& text, float scale);
 
+    // SLIDING A DOCKED KEYBOARD, 0 in place and 1 fully below the screen —
+    // 2026-09-24. Search's keyboard slides down as Search is left and up as it
+    // arrives, which is how an on-screen keyboard goes away; dissolving it
+    // with the rest of the screen was the big solid thing in a switch that
+    // otherwise only faded.
+    //
+    // keepForSlide() lets it go on drawing after cancel() so it can leave;
+    // it takes no input while it does, because it is not open.
+    void setSlide(float t) { slide_ = t; }
+    void keepForSlide() { if (open_) ghost_ = true; }
+    void endSlide() { ghost_ = false; slide_ = 0.0f; }
+    bool sliding() const { return ghost_; }
+
     // --- A pointer, which is a THIRD way in and takes nothing away ----------
     //
     // docs/PROJECT.md open question 16 gives the mouse focus and click and
@@ -158,6 +171,8 @@ private:
     std::vector<KeyRect> keyRects_;
 
     bool open_ = false;
+    bool ghost_ = false;     // closed, still drawing while it slides away
+    float slide_ = 0.0f;
     Config config_;
     std::string value_;
     bool shifted_ = false;

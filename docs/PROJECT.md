@@ -3023,6 +3023,13 @@ invisible to anyone who has not deliberately turned it on.
 
 ## Phase plan
 
+> **THE STATUS LINES BELOW ARE HISTORICAL.** They were written as each phase
+> started and several were never updated: Phase 4 still says "not started",
+> though pairing, accounts and save sync to RomM are built and in use.
+> **What comes next, in order, is `docs/ROADMAP.md`** (GitHub milestones since
+> 2026-09-24), and the state of play is `docs/NEXT-SESSION.md`. The phases
+> below remain the record of what each part was for and how it was reasoned.
+
 ### Phase 0 — Design system spec
 **Status: COMPLETE, 2026-09-13.**
 
@@ -12617,3 +12624,321 @@ and a domestic downstream — and point it at the same server. That turns
 settle the debounce value, the waiting frame and whether focus-prefetch is
 enough, together. The VM, not the A9: it is a network measurement and needs no
 panel.
+
+### 31. The Settings screen, decided in conversation
+**Raised 2026-09-24 from `docs/SETTINGS-INVENTORY.md`. A running record: each
+point is added as it is settled, in the order the conversation reached it, so
+later entries supersede earlier ones. THE FINAL STATE, ORGANISED BY SCREEN, IS
+`docs/SETTINGS.md`: read that first.**
+
+**Settings may look different from the other screens.** MMagTech, 2026-09-24:
+it is *"the one screen where we can diverge a bit"*, and a new top-bar tab is
+welcome if the discussion finds a reason for one. So Cabinet tvOS's shape is a
+starting point here, not a rule.
+
+**RetroAchievements is wanted, later.** Not built and not designed. It belongs
+in the layout from the start so it does not have to be forced in: a
+RetroAchievements login is separate from the RomM login, so it is per account
+and most likely sits with Accounts.
+
+**Wi-Fi: already decided, restated.** Settings lists networks, joins another,
+forgets one and changes a password. `net.h` does all four for first run today.
+
+**Addressing is automatic only (DHCP). No manual IP, for now.** A person who
+wants a fixed address reserves one in their router. PlayStation, Xbox, Switch
+and Apple TV all do offer manual IP, behind an advanced page, so this is a
+choice and not a limit: it keeps four typed fields (address, mask, gateway,
+DNS) off an on-screen keyboard for the many people who will never need them.
+**The lockout argument does not hold and is not the reason**: Settings works
+with no network, so a wrong address could be corrected from the same screen.
+If people ask for it, it is one page under an "Advanced" row on the Network
+page. `net.h`'s header already says no static addressing and stays as it is.
+
+**File access (SFTP) lives under Storage**, because what it is for is reaching
+saves and games from a computer. One row, off by default; when on, it shows
+the address, the user name and the password. SFTP only, no shell, as open
+question 9 decided.
+
+**The user name is fixed. The password is generated, with a "New password"
+action; it cannot be typed in, for now.** Typing on a controller is painful and
+a typed password tends to be one reused everywhere. MMagTech, 2026-09-24:
+*"i dont care but i feel that someone is ultimately going to ask."* So
+**setting your own password is the expected first request**, recorded here so
+it is not a surprise: it would be a second action on the same page, next to
+"New password", and nothing in the first version should make that hard.
+
+**The account is `cabinet`**, the one the session already runs as
+(`system_files/usr/lib/sysusers.d/cabinetos.conf`).
+
+**The password is shown in plain text on the File access page while file
+access is on**, with no "show" button and no dots. It guards against other
+devices on the network, not against the room: anyone at the television can
+already turn file access on or make a new password. With file access off, no
+password is shown.
+
+**It is generated once, the first time file access is turned on, and kept.**
+It survives reboots and turning file access off and on, and changes only on
+"New password". A password that changed every boot would break the login a
+person's computer saved, every time. MMagTech, 2026-09-24: *"this is fine for
+now."*
+
+**Storage lists every drive with its space, and each external one has Eject.**
+One line per drive, used and free. Eject stops or finishes anything writing to
+that drive, then says "Safe to unplug", which is the PS5's shape. It protects
+the drive's own contents (a Windows-formatted stick pulled mid-write), not the
+console: a drive pulled without warning already just means a game is not found
+and comes down again. **Untested on real hardware**: rules 1 to 6 under the
+games drive above are written and coded, and have not yet been tried on the A9
+with a real drive.
+
+**Drive names, MMagTech 2026-09-24: the main drive is "CabinetOS", any other
+internal drive is "Internal", and a USB drive is "External".** With two of the
+same kind, the drive's own label tells them apart.
+
+**Through file access, an external drive shows only its `CabinetOS/` folder.**
+Nobody browsing from a computer can land in, or damage, the rest of somebody's
+drive. This is rule 1 (never take over the drive) carried through to SFTP, and
+it means the `cabinet` account's SFTP view is built from the console's own
+folders plus each drive's `CabinetOS/`, not the whole filesystem.
+
+**The main drive is restricted the same way.** Over file access a person sees
+the console's own saves and games folders (open question 18's layout) and
+nothing of the system underneath, so nobody can break the console by deleting
+the wrong thing from a computer. MMagTech agreed, 2026-09-24.
+
+**No Emulation category. Picture quality is one row under Display and Sound**,
+which answers the inventory's open question 1. The pause menu can still change
+it for one game, and that choice wins for that game (open question 23).
+Cabinet's per-core "Cores" pages have no equivalent here.
+
+**Cabinet's emulator options, sorted, 2026-09-24.** Read from Cabinet's
+`RommApp/Native/NativeCoreOptions.swift`, about twenty options in three kinds:
+
+1. **Looks and taste**: Virtual Boy 3D glasses and screen colour, Game Boy
+   colorization, GBA screen colours and interframe blending, Atari 2600
+   flicker blending, Vectrex overlays. **These go in the pause menu, per
+   system, next to shader and glow**, for the same reason those two do: the
+   picture is right there, and the choice is about a system, not the console.
+   Controller type (Mega Drive 3 or 6 button, PC Engine 2 or 6 button) goes in
+   the pause menu per system too.
+2. **Quality**, such as 3DO high resolution: covered by Picture quality.
+3. **Speed and compatibility** (CPU speed, frameskip, region, Saturn
+   deinterlacer): set correctly once in the per-platform table, never shown.
+
+**Every choice Cabinet offers is kept, only moved.** MMagTech's condition for
+Virtual Boy: all of Cabinet's glasses colours (off, red and blue, red and cyan,
+red and electric cyan, green and magenta, yellow and blue) and all of its
+screen colours must be there.
+
+**THE SHAPE: A SIDE LIST, BUILT TO BE JUDGED ON THE TELEVISION, 2026-09-24.**
+Categories down the left, the chosen category's rows on the right, both on
+screen at once; walking the list changes the right side with no open and no
+back. MMagTech chose to see it before deciding against Cabinet's pages. Seven
+categories: Accounts, Controllers, Network, Display and Sound, Storage, System,
+About. `frontend/src/settings.{h,cpp}`; the rows are built in `main.cpp`
+(`buildSettings`).
+
+- **Background: the plain purple gradient, no game art**, the same rule the
+  add-account screen already follows because MMagTech preferred it for a text
+  screen (2026-09-22).
+- **Rows that are agreed but not built are drawn dimmed with "Not built yet"
+  and focus skips them**, so the whole layout can be judged while keeping the
+  rule that focus never lands on a row that does nothing. A category with no
+  live rows keeps focus in the list.
+- **Live today**: Add an account (the chip's pairing screen), Interface sounds
+  (on or off, **this session only**: nothing saves it yet), and real values for
+  the account, network status and address, server, and each drive's space.
+- **Found while building: CabinetOS has no version number.** The image reports
+  only Bazzite's (`44.20260916`), so About > Version has nothing to show until
+  one is decided.
+- USB versus internal is read from the drive's sysfs path (`storage::isUsb`).
+  A drive whose filesystem has no single block device (btrfs) reads as
+  Internal. It only changes a label.
+
+**Moving across the top bar switches the screen under it**, MMagTech
+2026-09-24: the shoulders already switched, and the d-pad made you press A on
+each destination. It is the Apple TV's top bar; A only drops you into the
+screen. **Two exceptions**: arriving in the bar with Up switches nothing (Home
+stays Home while you look), and the account chip still needs A, because it
+opens a panel rather than going anywhere. On Search the docked keyboard does
+not take the pad while the bar has focus above it.
+
+Checked headless with the new `--nav` flag, which presses a route through the
+same `navigate` door a pad uses: `--nav up,right,right` from Home lands on
+Settings with the bar still focused. **Not checked headless**: the keyboard
+hand-off on Search, because `--nav` goes straight to `navigate` and skips the
+event path that decides who owns the pad. That one is for the television.
+
+**The shoulders leave Search, and leaving clears it.** MMagTech, 2026-09-24:
+R1 onto Search and neither shoulder got you off it, because the docked
+keyboard took every button. The shoulders now pass through Search's docked
+keyboard only; a keyboard asking a question (a Wi-Fi password) stays modal.
+Coming back to Search starts empty, as every destination is entered fresh.
+
+**Search is always blurred.** MMagTech, 2026-09-24: arriving on Search from
+Settings left it plain purple, and one screen with two backgrounds "doesn't
+feel right". With nothing found yet it now shows the last game art you were
+browsing (`lastLitArt`), never whatever the previous screen left.
+
+**A change of screen changes the background at once, at the screen's speed.**
+Search to Settings showed the old art's colours for a moment after Settings
+had arrived, which read as a bug. The 220 ms wait and 600 ms fade are for focus
+running along a shelf; a screen change now skips the wait and fades in 280 ms,
+the same as the content. Focus moving within a screen is unchanged.
+
+**No "Playing as" row.** MMagTech, 2026-09-24: the account chip in the bar
+directly above already says who is signed in. The same fault as the account
+panel's first version (*"seems redundant to show my login twice"*), so the same
+answer: the chip is the only place that says it.
+
+**Switching top-bar destinations fades through the background.** MMagTech,
+2026-09-24: *"the switch between top tabs is too quick and visually snappy"*,
+most of all Search to Settings. Two causes, both fixed:
+
+1. **The screen fade only reached text and pictures.** `Renderer::draw` and
+   `drawGlass` ignored the content alpha, so a screen's panels and rows drew at
+   full strength on its first frame and the words faded in on top of them. The
+   renderer's own comment already said "every shape and every picture"; now it
+   is true.
+2. **The old screen cut out in one frame.** Now it fades out (180 ms), the new
+   one is built, then fades in (320 ms), both ease-in-out, over a background
+   and a bar that stay put. Search's keyboard leaves with Search. A press during
+   the fade only changes where it is going. `Renderer::setContentFade`, owned by
+   the app, so screens still only know about arriving. Starting values.
+
+**Settings stays plain, and its background changes while the old screen
+leaves.** MMagTech, 2026-09-24: still "something off" from Search to Settings
+because of the background change, and no blurred art on a text-heavy screen.
+Changed on arrival, the art's colours showed behind Settings' rows as they
+faded in. Heading to Settings the room now clears during the fade-out, in the
+same 180 ms, so Settings arrives on a background that has finished changing.
+
+**And then in three steps, not two.** MMagTech asked for the keyboard to fade
+out first, then the purple, then the text. Heading to Settings from a screen
+with art behind it: out (180 ms), background to plain (250 ms, nothing on
+screen), Settings in (320 ms). About three quarters of a second in all; the
+other switches keep two steps. `tabPhase` in `main.cpp`.
+
+**SUPERSEDES THE TWO ENTRIES ABOVE: the background arrives WITH the new
+screen, as one.** MMagTech, 2026-09-24: *"setting still fade in but its done as
+one instead of background then text."* So every top-bar switch is two steps:
+the old screen (and Search's keyboard) fades out in 180 ms, then the new
+background and the new screen fade in together in 320 ms. Clearing the room
+during the fade-out, and a separate background step between the two, were
+both tried on the television the same afternoon and dropped.
+
+**SUPERSEDES THE ENTRIES ABOVE AGAIN: top-bar switches are a dissolve.**
+MMagTech wanted Settings to arrive see-through, with the old screen showing
+through it. The app keeps one screen at a time and cannot draw the old one
+beside the new, so the last finished frame of the old screen is copied at the
+switch (`Renderer::captureSnapshot`, one copy, at the end of that frame) and
+drawn over the new screen fading away, 380 ms ease-in-out. Content, keyboard,
+background and the bar's highlight all dissolve together. The arriving screen
+skips its own fade-in (`settleArrival`), or the middle of the dissolve dips
+through the background. The fade-out-then-in machinery is gone.
+
+**The old screen goes first, then the new content.** MMagTech: *"can the search
+dissolve more before it goes to settings, i think its just the change from
+solidness of search to all the text on the settings."* The copy now fades in
+300 ms, and the new screen's content waits 200 ms (the copy is mostly gone by
+then) before fading in over 300 ms. The new background comes in under the copy
+straight away. Starting values.
+
+**And movement: the keyboard slides, the new content rises.** Opacity alone
+read as one picture turning into another. Search's keyboard now slides down off
+the screen as Search is left, over the dissolving copy (the copy is taken
+before the keyboard is drawn, so it holds no keyboard), and slides up as Search
+arrives, 300 ms. The arriving screen's content rises 16 points as it fades in.
+`Renderer::setContentOffsetY` moves shapes, glass and pictures; the backdrop
+and the scene's presentation do not move.
+
+**Background colour choices: wanted, and per account.** MMagTech, 2026-09-24,
+answering the proposal of four or five hand-picked backgrounds (purple, blue,
+green, red, graphite) as one row under Display and Sound: *"I think they should
+be per login when we get to them."* So the console takes on the colour of
+whoever is signed in, which also says who that is. The boot screen stays
+purple, being the brand. Not built.
+
+**It landed.** MMagTech on the television, 2026-09-24: *"hell yeah that slide
+nailed it."* The switch as it stands: the old frame dissolves (300 ms), Search's
+keyboard slides away over it (300 ms), and the new content waits 200 ms then
+rises 16 points while fading in (300 ms). Do not retune these from a capture.
+
+**HDMI-CEC IS SHELVED, AND ITS ROW IS GONE.** MMagTech, 2026-09-24: he does not
+expect to buy a CEC adapter to test with, and the current standby behaviour
+gets most of what CEC was for. **This reverses open question 10's "HDMI-CEC is
+a requirement"** and the inventory's CEC rows; it is recorded here rather than
+silently dropped. If CEC comes back, its row goes under Display and Sound.
+
+**Interface sounds gets a volume.** MMagTech, 2026-09-24. Proposed as one row
+changed with left and right: Off, Quiet, Medium, Loud, which folds the on/off
+switch into it. `sound::setVolume` already scales at play time. Not built.
+
+**Accounts, proposed (awaiting MMagTech):** switching and adding stay in the
+account chip's panel; Remove account and the PIN go in Settings only, because
+they are rare and a removal should not be one press from the corner of every
+screen. Settings keeps "Add an account" as well.
+
+**Server, proposed (awaiting MMagTech), from his own questions:** what does
+signing out do when the whole console needs a server, and what happens to the
+cache and unsent saves when pairing to a different server?
+
+- **Change server address**: the same server at a new address. The console
+  checks it is the same server before switching; otherwise it refuses and
+  points at Sign out.
+- **Sign out**: leave this server, including to join a friend's. (1) Upload
+  anything not yet uploaded; if the server cannot be reached, say how many
+  saves would be lost and ask. (2) Clear everything tied to that server:
+  cached and kept games (filed by that server's game ids, which mean different
+  games on another server) and the accounts. Wi-Fi and controllers stay.
+  (3) Back to first run's server step, reusing its screens.
+- **One server at a time.**
+
+**ACCOUNTS, OWNER AND PIN: DECIDED 2026-09-24, replacing the proposal above.**
+
+- **The first account from setup owns the console.** Not RomM's roles: it
+  works entirely on the console and needs nothing set up on the server.
+- **No PIN set: every account can do everything**, as today.
+- **The owner can set a PIN. With one, the protected actions ask for it**
+  rather than disappearing, so the owner can act while a child is signed in by
+  entering it on the child's account (the Switch's parental-controls shape).
+- **The same PIN guards switching into the owner's account.** One PIN.
+- **Protected:** Wi-Fi changes; Sign out and Change server address; Remove an
+  account; File access (turning it on, making a new password).
+  **Open to everyone:** adding an account, sounds, picture quality, system
+  update. None of them can lock anyone out or lose anything.
+- **Where the controls live:** the account chip's panel keeps switching and
+  adding. Remove an account and the PIN are in Settings > Accounts only.
+  Removing an account takes it off this console; the RomM user and its saves
+  are untouched.
+- **THE PIN IS OFFERED WHEN THE SECOND ACCOUNT IS ADDED**, not in first run,
+  because with one account a PIN protects nothing and first run should get a
+  person to their games. Right after the new person's pairing succeeds, before
+  returning to the panel: *"Anyone using this console can change Wi-Fi, sign
+  out and remove accounts. Set a PIN so only you can?"* Set PIN / Not now.
+  Only when no PIN exists, and only once. MMagTech first suggested enforcing
+  it in first run or warning there; this was his pick after the moment was
+  explained.
+
+**SERVER: DECIDED 2026-09-24, replacing the proposal above.**
+
+- **Change server address**: the same server at a new address. **How it knows
+  it is the same server:** each account's token is accepted only by the server
+  that issued it, so the console asks the new address who the active token
+  belongs to. Same user back means same server; a rejection means a different
+  one, and the console refuses and points at Sign out. Planned, not built or
+  tested.
+- **Sign out** is one confirmation screen: all cached and kept games on this
+  console will be removed, and saves are safe on the server. **By design there
+  is never anything waiting to upload** (MMagTech: leaving a game uploads, and
+  reaching Settings means the server is reachable), so the upload check runs
+  quietly first as a safety net and the screen only mentions it if something
+  failed. Then everything tied to that server is cleared (cached and kept
+  games, the accounts; Wi-Fi and controllers stay) and the console goes back
+  to first run's server step, reusing its screens.
+- **One server at a time.** A friend's server is sign out, then sign in.
+
+**Changing category cross-fades the rows**, 150 ms ease-in-out, no movement:
+the old rows fade out as the new ones fade in. MMagTech asked whether it should
+be instant; a person runs down that list quickly, so a slide would be busy and
+an instant swap makes the whole right side jump. MMagTech on the TV: good.

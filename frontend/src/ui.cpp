@@ -266,6 +266,8 @@ uniform float uRadius;
 uniform vec4 uTint;
 uniform sampler2D uScene;
 uniform float uLod;
+// The screen's transition, so a panel fades with the words on it.
+uniform float uAlpha;
 out vec4 fragColor;
 
 float glassSDF(vec2 p, vec2 halfSize, float r) {
@@ -290,7 +292,7 @@ void main() {
     // Tint OVER the blur, not mixed into it: the tint is a veil the art shows
     // through, which is what makes it read as glass rather than as paint.
     vec3 c = mix(behind, uTint.rgb, uTint.a);
-    fragColor = vec4(c, a);
+    fragColor = vec4(c, a * uAlpha);
 }
 )";
 
@@ -425,6 +427,7 @@ bool Renderer::init() {
     gloc_.tint = glGetUniformLocation(blurProgram_, "uTint");
     gloc_.tex = glGetUniformLocation(blurProgram_, "uScene");
     gloc_.lod = glGetUniformLocation(blurProgram_, "uLod");
+    gloc_.alpha = glGetUniformLocation(blurProgram_, "uAlpha");
 
     loc_.canvas = glGetUniformLocation(program_, "uCanvas");
     loc_.rect = glGetUniformLocation(program_, "uRect");
@@ -469,6 +472,8 @@ void Renderer::drawTextured(float x, float y, float w, float h, GLuint texture,
                             int rotation) {
     glUseProgram(texturedProgram_);
     glUniform2f(tloc_.canvas, kCanvasWidth, kCanvasHeight);
+    y += offsetY_;
+    if (clipW > 0) clipY += offsetY_;
     glUniform4f(tloc_.rect, x, y, w, h);
     glUniform4f(tloc_.uv, u0, v0, u1, v1);
     // The transition alpha, the same as Renderer::draw applies to a shape.
@@ -586,10 +591,50 @@ void Renderer::presentScene() {
     oy_ = vy_ - shiftY_;   // GL's y runs up; the canvas's runs down
     glViewport(ox_, oy_, vw_, vh_);
     glDisable(GL_BLEND);
+    // The finished scene goes back exactly where it was drawn: no switch's
+    // rise. (Blending is off here, so the fade cannot touch it either.)
+    const float keepOffset = offsetY_;
+    offsetY_ = 0.0f;
     drawTextured(0, 0, kCanvasWidth, kCanvasHeight, sceneTex_, 0, 1, 1, 0,
                  Color{1, 1, 1, 1}, false);
+    offsetY_ = keepOffset;
     glEnable(GL_BLEND);
     scenePresented_ = true;
+}
+
+void Renderer::captureSnapshot() {
+    if (vw_ <= 0 || vh_ <= 0) return;
+    if (!snapTex_) glGenTextures(1, &snapTex_);
+    glBindTexture(GL_TEXTURE_2D, snapTex_);
+    if (snapW_ != vw_ || snapH_ != vh_) {
+        // RGB, not RGBA: a copy may drop the framebuffer's alpha but may not
+        // invent one, and the window's may have none. It is drawn opaque.
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, vw_, vh_, 0, GL_RGB, GL_UNSIGNED_BYTE,
+                     nullptr);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        snapW_ = vw_;
+        snapH_ = vh_;
+    }
+    // The canvas's own rectangle of the finished frame, letterbox excluded,
+    // so drawing it back over 0..1920 x 0..1080 lands pixel for pixel.
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, targetFBO_);
+    glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, ox_, oy_, vw_, vh_);
+    glBindFramebuffer(GL_FRAMEBUFFER, targetFBO_);
+    glBindTexture(GL_TEXTURE_2D, 0);
+}
+
+void Renderer::drawSnapshot(float alpha) {
+    if (!snapTex_ || alpha <= 0.001f) return;
+    // Opaque: the copy has no alpha of its own, and the tint's alpha is the
+    // dissolve. Rows run bottom-up in a copied framebuffer, hence v 1 to 0.
+    const float keepOffset = offsetY_;
+    offsetY_ = 0.0f;
+    drawTextured(0, 0, kCanvasWidth, kCanvasHeight, snapTex_, 0, 1, 1, 0,
+                 Color{1, 1, 1, alpha}, false, 0.0f, 0, 0, 0, 0, 0, /*opaque=*/true);
+    offsetY_ = keepOffset;
 }
 
 void Renderer::drawBiasGlow(float x, float y, float w, float h, float peak) {
@@ -635,10 +680,11 @@ void Renderer::drawGlass(const Rect& r, float blur, const Color& tint) {
     }
     glUseProgram(blurProgram_);
     glUniform2f(gloc_.canvas, kCanvasWidth, kCanvasHeight);
-    glUniform4f(gloc_.rect, r.x, r.y, r.w, r.h);
+    glUniform4f(gloc_.rect, r.x, r.y + offsetY_, r.w, r.h);
     glUniform1f(gloc_.radius, r.radius);
     glUniform4f(gloc_.tint, tint.r, tint.g, tint.b, tint.a);
     glUniform1f(gloc_.lod, blur);
+    glUniform1f(gloc_.alpha, contentAlpha_);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, sceneTex_);
     glUniform1i(gloc_.tex, 0);
@@ -726,20 +772,25 @@ void Renderer::drawBackdrop(const Gradient& g) {
 void Renderer::draw(const Rect& r) {
     glUseProgram(program_);
     glUniform2f(loc_.canvas, kCanvasWidth, kCanvasHeight);
-    glUniform4f(loc_.rect, r.x, r.y, r.w, r.h);
+    glUniform4f(loc_.rect, r.x, r.y + offsetY_, r.w, r.h);
     glUniform1f(loc_.radius, r.radius);
-    glUniform4f(loc_.fill, r.fill.r, r.fill.g, r.fill.b, r.fill.a);
+    // THE SCREEN'S TRANSITION APPLIES TO SHAPES TOO. It used to reach only
+    // pictures and text, so a screen arriving drew its panels at full strength
+    // on the first frame and faded the words in on top of them — which is a
+    // large part of why switching tabs looked snappy. MMagTech, 2026-09-24.
+    const float k = contentAlpha_;
+    glUniform4f(loc_.fill, r.fill.r, r.fill.g, r.fill.b, r.fill.a * k);
     // Flat unless the caller asked for a gradient, so nothing else changes.
     const Color bottom = r.gradient ? r.fillBottom : r.fill;
-    glUniform4f(loc_.fillBottom, bottom.r, bottom.g, bottom.b, bottom.a);
+    glUniform4f(loc_.fillBottom, bottom.r, bottom.g, bottom.b, bottom.a * k);
     glUniform4f(loc_.edgeLight, r.edgeLight.r, r.edgeLight.g, r.edgeLight.b,
-                r.edgeLight.a);
+                r.edgeLight.a * k);
     glUniform1f(loc_.border, r.border);
     glUniform4f(loc_.borderColor, r.borderColor.r, r.borderColor.g, r.borderColor.b,
-                r.borderColor.a);
+                r.borderColor.a * k);
     glUniform2f(loc_.shadow, r.shadowBlur, r.shadowOffsetY);
     glUniform4f(loc_.shadowColor, r.shadowColor.r, r.shadowColor.g, r.shadowColor.b,
-                r.shadowColor.a);
+                r.shadowColor.a * k);
     // The vertex shader needs the blur too, to grow its own geometry enough
     // for the falloff to have somewhere to land.
     if (loc_.shadowVS >= 0) glUniform1f(loc_.shadowVS, r.shadowBlur);

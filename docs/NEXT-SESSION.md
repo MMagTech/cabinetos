@@ -392,12 +392,62 @@ states, and leave — with the save syncing on the way out.
 
 #### THE ORDER, AS MMagTech SET IT ON 2026-09-24
 
+**It is now `docs/ROADMAP.md`, with a GitHub milestone per step.** Five
+in-game features from his brainstorm (hotkey layer, fast forward, rewind,
+screenshots, save state undo) are issues #76 to #80, step 4 of the roadmap,
+after the emulator work; the installer is step 6, last. **The open problems
+numbered below (N64 textures, GameCube and NES audio, Dreamcast, N64 and PSP
+states, core options, the BIOS warning, offline) are issues #82 to #90**; the
+notes here stay the detail.
+
 1. **The Settings screen, by discussion first.** *"It's going to need a good
    discussion and your help to get it right."* CabinetOS's Settings holds more
    than Cabinet's, including things not built yet. **Start from
    `docs/SETTINGS-INVENTORY.md`**: 36 settings with their state and source,
    Cabinet tvOS's Settings as it appears, the decisions that constrain it, and
    eight open questions. Do not design before that conversation.
+
+   **STATUS 2026-09-24: THE DISCUSSION HAPPENED. THE DECISIONS, FINAL STATE
+   ONLY, ARE IN `docs/SETTINGS.md`** (the reasoning, in order, is in
+   `docs/PROJECT.md` open question 31). The side-list layout and the
+   top-bar dissolve are built on branch `settings-side-list`, PR #56, **NOT
+   MERGED ON PURPOSE**: MMagTech, *"I don't want a build until I have judged
+   everything."* Judge on the television with `tools/ui-loop.sh` (the A9 may
+   still be on that hand-built binary; `--restore` or a reboot puts it back).
+   Merge only when he says the whole of Settings is right. **Judged good on
+   the TV so far:** the side list, the top-bar dissolve with the sliding
+   keyboard, and the category cross-fade. **Suggested first builds:** #62
+   (interface sounds levels, and saving them), then #57 (owner and PIN),
+   which Wi-Fi, sign out and remove all depend on.
+
+   **Tracked as GitHub issues #57 to #75, Settings milestone** (#74 and #75
+   are `later`). The checklist below is the same list:
+   - [ ] Interface sounds as one row: Off, Quiet, Medium, Loud (left/right),
+         and SAVED, which the current toggle is not.
+   - [ ] Owner (first setup account) and one PIN. PIN offered when the second
+         account is added. Protected with a PIN: Wi-Fi, Sign out, Change
+         server address, Remove an account, File access.
+   - [ ] Remove an account, in Settings > Accounts.
+   - [ ] Change server address (same-server check by token) and Sign out
+         (one confirmation, clear that server's games and accounts, back to
+         first run's server step).
+   - [ ] Wi-Fi page (join, forget, change password); `net.h` has the calls.
+   - [ ] File access: SFTP only, user `cabinet`, generated password shown in
+         plain text, "New password", restricted to CabinetOS folders on every
+         drive.
+   - [ ] Storage: drives CabinetOS / Internal / External with space (shown
+         today), Eject for USB, kept and cached games.
+   - [ ] Pause menu per system: Virtual Boy 3D glasses (all of Cabinet's
+         colours) and screen colour, GB/GBA colours, 2600 flicker blending,
+         Vectrex overlays, controller type. No emulator page in Settings.
+   - [ ] Picture quality row (question 23), Turn off screen after, System
+         update, About (CabinetOS has NO version number yet: decide one).
+   - [ ] Later: RetroAchievements sign-in per account; background colour per
+         account (purple, blue, green, red, graphite); an "Advanced" manual IP
+         page only if asked for; setting your own file-access password only if
+         asked for.
+   - Dropped: HDMI-CEC (shelved; reverses open question 10), static IP,
+     "Playing as" row.
 2. **The rest of the UI**: the harsh boot-to-Home cut, the text pass.
 3. **The remaining cores.**
 4. **THE TESTS COME NEAR THE END**, once the UI is finished and every core is

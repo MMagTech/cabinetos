@@ -149,8 +149,26 @@ public:
     // artwork behind it are the GROUND, and a ground that fades out leaves a
     // hole; they stay put while the content on them changes. That continuity is
     // half of why the transition reads as smooth at all.
-    void setContentAlpha(float a) { contentAlpha_ = a < 0 ? 0 : (a > 1 ? 1 : a); }
-    float contentAlpha() const { return contentAlpha_; }
+    void setContentAlpha(float a) {
+        contentRaw_ = a < 0 ? 0 : (a > 1 ? 1 : a);
+        contentAlpha_ = contentRaw_ * contentFade_;
+    }
+    float contentAlpha() const { return contentRaw_; }
+
+    // A SECOND MULTIPLIER, OWNED BY THE APP, for switching top-bar
+    // destinations — 2026-09-24. A screen sets its own arrival alpha above and
+    // knows nothing about leaving; this fades whatever screen is showing out,
+    // and the next one in, underneath whatever the screen itself asks for.
+    // AND A RISE, in design points, for the same switch: the arriving screen
+    // starts this far down and comes up to where it belongs while it fades
+    // in. Shapes, glass and pictures all move; the backdrop and the scene's
+    // own presentation do not. Zero outside a switch.
+    void setContentOffsetY(float dy) { offsetY_ = dy; }
+
+    void setContentFade(float f) {
+        contentFade_ = f < 0 ? 0 : (f > 1 ? 1 : f);
+        contentAlpha_ = contentRaw_ * contentFade_;
+    }
 
     // A SCISSOR, IN DESIGN POINTS — new 2026-09-21.
     //
@@ -222,6 +240,18 @@ public:
     void presentScene();
     bool sceneCaptured() const { return scenePresented_; }
 
+    // A DISSOLVE BETWEEN TWO SCREENS — 2026-09-24. The app keeps one screen at
+    // a time, so the outgoing one cannot be drawn next to the incoming one.
+    // Instead the finished frame is copied, once, at the moment of the switch,
+    // and drawn over the new screen fading away. MMagTech asked for Settings to
+    // arrive see-through, with the old screen showing through it; this is that
+    // for every top-bar switch, background included.
+    //
+    // Call captureSnapshot() at the END of a frame, after everything is drawn
+    // and before the swap. drawSnapshot() draws it over the canvas at `alpha`.
+    void captureSnapshot();
+    void drawSnapshot(float alpha);
+
     // A rounded panel that blurs what is behind it. `blur` is a mip level:
     // roughly 4 is the "thin material" of a pill, 6 the "regular material" of
     // a panel. `tint` is composited over the blur.
@@ -246,7 +276,10 @@ private:
     GLuint backdropProgram_ = 0;
     GLuint texturedProgram_ = 0;
     float scale_ = 1.0f;
-    float contentAlpha_ = 1.0f;
+    float contentAlpha_ = 1.0f;   // what draws use: the two below, multiplied
+    float contentRaw_ = 1.0f;
+    float contentFade_ = 1.0f;
+    float offsetY_ = 0.0f;
     GLuint vao_ = 0;
     GLuint vbo_ = 0;
     GLuint targetFBO_ = 0;    // 0 is the window; an offscreen render redirects it
@@ -256,6 +289,8 @@ private:
 
     // The scene, captured so panels can blur it.
     GLuint sceneFBO_ = 0, sceneTex_ = 0;
+    GLuint snapTex_ = 0;
+    int snapW_ = 0, snapH_ = 0;
     int sceneW_ = 0, sceneH_ = 0;
     bool scenePresented_ = false;
     int vx_ = 0, vy_ = 0, vw_ = 0, vh_ = 0;
@@ -265,7 +300,7 @@ private:
     GLuint blurProgram_ = 0;
     GLuint glowProgram_ = 0;
     struct {
-        GLint canvas, rect, radius, tint, tex, lod;
+        GLint canvas, rect, radius, tint, tex, lod, alpha;
     } gloc_{};
     struct {
         GLint canvas, picture, peak, shadow, rect;
