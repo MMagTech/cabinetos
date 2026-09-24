@@ -12776,3 +12776,8 @@ Search to Settings showed the old art's colours for a moment after Settings
 had arrived, which read as a bug. The 220 ms wait and 600 ms fade are for focus
 running along a shelf; a screen change now skips the wait and fades in 280 ms,
 the same as the content. Focus moving within a screen is unchanged.
+
+**No "Playing as" row.** MMagTech, 2026-09-24: the account chip in the bar
+directly above already says who is signed in. The same fault as the account
+panel's first version (*"seems redundant to show my login twice"*), so the same
+answer: the chip is the only place that says it.

@@ -5257,7 +5257,6 @@ int main(int argc, char** argv) {
         std::vector<screens::SettingsCategory> cats;
 
         cats.push_back({"Accounts", {
-            {K::Info, 0, "Playing as", "", storage::currentUser().name},
             {K::Action, SetAddAccount, "Add an account",
              "Pair another RomM user with this console", ""},
             {K::Unbuilt, 0, "Remove an account",
