@@ -472,6 +472,8 @@ void Renderer::drawTextured(float x, float y, float w, float h, GLuint texture,
                             int rotation) {
     glUseProgram(texturedProgram_);
     glUniform2f(tloc_.canvas, kCanvasWidth, kCanvasHeight);
+    y += offsetY_;
+    if (clipW > 0) clipY += offsetY_;
     glUniform4f(tloc_.rect, x, y, w, h);
     glUniform4f(tloc_.uv, u0, v0, u1, v1);
     // The transition alpha, the same as Renderer::draw applies to a shape.
@@ -589,8 +591,13 @@ void Renderer::presentScene() {
     oy_ = vy_ - shiftY_;   // GL's y runs up; the canvas's runs down
     glViewport(ox_, oy_, vw_, vh_);
     glDisable(GL_BLEND);
+    // The finished scene goes back exactly where it was drawn: no switch's
+    // rise. (Blending is off here, so the fade cannot touch it either.)
+    const float keepOffset = offsetY_;
+    offsetY_ = 0.0f;
     drawTextured(0, 0, kCanvasWidth, kCanvasHeight, sceneTex_, 0, 1, 1, 0,
                  Color{1, 1, 1, 1}, false);
+    offsetY_ = keepOffset;
     glEnable(GL_BLEND);
     scenePresented_ = true;
 }
@@ -623,8 +630,11 @@ void Renderer::drawSnapshot(float alpha) {
     if (!snapTex_ || alpha <= 0.001f) return;
     // Opaque: the copy has no alpha of its own, and the tint's alpha is the
     // dissolve. Rows run bottom-up in a copied framebuffer, hence v 1 to 0.
+    const float keepOffset = offsetY_;
+    offsetY_ = 0.0f;
     drawTextured(0, 0, kCanvasWidth, kCanvasHeight, snapTex_, 0, 1, 1, 0,
                  Color{1, 1, 1, alpha}, false, 0.0f, 0, 0, 0, 0, 0, /*opaque=*/true);
+    offsetY_ = keepOffset;
 }
 
 void Renderer::drawBiasGlow(float x, float y, float w, float h, float peak) {
@@ -670,7 +680,7 @@ void Renderer::drawGlass(const Rect& r, float blur, const Color& tint) {
     }
     glUseProgram(blurProgram_);
     glUniform2f(gloc_.canvas, kCanvasWidth, kCanvasHeight);
-    glUniform4f(gloc_.rect, r.x, r.y, r.w, r.h);
+    glUniform4f(gloc_.rect, r.x, r.y + offsetY_, r.w, r.h);
     glUniform1f(gloc_.radius, r.radius);
     glUniform4f(gloc_.tint, tint.r, tint.g, tint.b, tint.a);
     glUniform1f(gloc_.lod, blur);
@@ -762,7 +772,7 @@ void Renderer::drawBackdrop(const Gradient& g) {
 void Renderer::draw(const Rect& r) {
     glUseProgram(program_);
     glUniform2f(loc_.canvas, kCanvasWidth, kCanvasHeight);
-    glUniform4f(loc_.rect, r.x, r.y, r.w, r.h);
+    glUniform4f(loc_.rect, r.x, r.y + offsetY_, r.w, r.h);
     glUniform1f(loc_.radius, r.radius);
     // THE SCREEN'S TRANSITION APPLIES TO SHAPES TOO. It used to reach only
     // pictures and text, so a screen arriving drew its panels at full strength

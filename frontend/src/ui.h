@@ -159,6 +159,12 @@ public:
     // destinations — 2026-09-24. A screen sets its own arrival alpha above and
     // knows nothing about leaving; this fades whatever screen is showing out,
     // and the next one in, underneath whatever the screen itself asks for.
+    // AND A RISE, in design points, for the same switch: the arriving screen
+    // starts this far down and comes up to where it belongs while it fades
+    // in. Shapes, glass and pictures all move; the backdrop and the scene's
+    // own presentation do not. Zero outside a switch.
+    void setContentOffsetY(float dy) { offsetY_ = dy; }
+
     void setContentFade(float f) {
         contentFade_ = f < 0 ? 0 : (f > 1 ? 1 : f);
         contentAlpha_ = contentRaw_ * contentFade_;
@@ -273,6 +279,7 @@ private:
     float contentAlpha_ = 1.0f;   // what draws use: the two below, multiplied
     float contentRaw_ = 1.0f;
     float contentFade_ = 1.0f;
+    float offsetY_ = 0.0f;
     GLuint vao_ = 0;
     GLuint vbo_ = 0;
     GLuint targetFBO_ = 0;    // 0 is the window; an offscreen render redirects it

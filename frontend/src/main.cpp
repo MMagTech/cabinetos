@@ -5651,6 +5651,15 @@ int main(int argc, char** argv) {
     constexpr float kTabContentIn = 0.300f;     // and takes this long
     constexpr float kTabArrive = kTabDissolve;  // the new background's fade
     float tabSince = -1.0f;      // seconds since the switch; negative when none
+    // THE NEW CONTENT RISES THIS FAR as it fades in, and SEARCH'S KEYBOARD
+    // SLIDES rather than dissolving: down and away as Search is left, up as it
+    // arrives. Opacity alone read as one picture turning into another; a
+    // little movement makes one screen leave and the next arrive.
+    constexpr float kTabRise = 16.0f;
+    constexpr float kKeyboardSlide = 0.300f;
+    Animated keyboardSlide;
+    keyboardSlide.smooth = true;
+    bool snapTaken = false;
     int pendingDest = -1;
     Animated tabDissolve;
     tabDissolve.smooth = true;
@@ -7460,6 +7469,16 @@ int main(int argc, char** argv) {
             addAccountScreen.tick(dt);
             settingsScreen.tick(dt);
             tabDissolve.tick(dt);
+            keyboardSlide.tick(dt);
+            if (keyboard.sliding() || keyboard.isOpen()) {
+                keyboard.setSlide(keyboardSlide.value());
+                if (keyboard.sliding() && keyboardSlide.elapsed >= keyboardSlide.duration) {
+                    keyboard.endSlide();
+                    // Back to "in place", so a keyboard opened any other way
+                    // later is not left waiting below the screen.
+                    keyboardSlide.settle(0.0f);
+                }
+            }
             if (tabSince >= 0.0f) {
                 tabSince += dt;
                 if (tabSince > kTabContentDelay + kTabContentIn) tabSince = -1.0f;
@@ -7804,6 +7823,7 @@ int main(int argc, char** argv) {
             return design::easeInOut(t);
         };
         renderer.setContentFade(tabContent());
+        renderer.setContentOffsetY(playing ? 0.0f : (1.0f - tabContent()) * kTabRise);
 
         if (playing) {
             cab::Core& core = cab::Core::shared();
@@ -8462,6 +8482,7 @@ int main(int argc, char** argv) {
         // away from it, in the corner of the top bar below.
 
         renderer.setContentFade(1.0f);
+        renderer.setContentOffsetY(0.0f);
 
         // ---- The top bar, which is its own strip ----------------------------
         //
@@ -8707,14 +8728,19 @@ int main(int argc, char** argv) {
                                        ui::Color::black(c)});
         }
 
-        // Search's keyboard is part of Search, so it arrives with it.
-        renderer.setContentFade(here() == Screen::Search ? tabContent() : 1.0f);
-        keyboard.draw(renderer, text, renderer.scale());
-        renderer.setContentFade(1.0f);
+        // A switch asked for this frame: copy it now, before the keyboard, so
+        // the keyboard can leave by sliding rather than dissolve with the copy.
+        if (pendingDest >= 0 && !playing && renderer.sceneCaptured()) {
+            renderer.captureSnapshot();
+            snapTaken = true;
+        }
 
-        // The old screen, dissolving away over the new one. Over the keyboard,
-        // because the keyboard belongs to whichever screen it was on.
+        // The keyboard of the screen that is here, then the old screen's copy
+        // dissolving over everything, then a keyboard that is leaving: over
+        // the copy, or the copy would hide it at the start of its slide.
+        if (!keyboard.sliding()) keyboard.draw(renderer, text, renderer.scale());
         if (!playing) renderer.drawSnapshot(tabDissolve.value());
+        if (keyboard.sliding()) keyboard.draw(renderer, text, renderer.scale());
         if (safeGuides) renderer.drawSafeAreaGuides();
 
         // ---- The dim, over absolutely everything --------------------------
@@ -8767,14 +8793,27 @@ int main(int argc, char** argv) {
         // copy it, THEN switch. The next frame draws the new screen with this
         // copy dissolving over it.
         if (pendingDest >= 0) {
-            if (!playing && renderer.sceneCaptured()) {
-                renderer.captureSnapshot();
+            if (snapTaken) {
+                snapTaken = false;
                 tabDissolve.from = tabDissolve.to = 1.0f;
                 tabDissolve.elapsed = 0.0f;
                 tabDissolve.retarget(0.0f, kTabDissolve);
                 tabSince = 0.0f;
             }
+            // Leaving Search: its keyboard goes on drawing, sliding down.
+            if (here() == Screen::Search && keyboard.isOpen()) {
+                keyboard.keepForSlide();
+                keyboardSlide.from = keyboardSlide.to = 0.0f;
+                keyboardSlide.elapsed = 0.0f;
+                keyboardSlide.retarget(1.0f, kKeyboardSlide);
+            }
             goToDestination(pendingDest);
+            // Arriving at Search: its keyboard comes up from below.
+            if (here() == Screen::Search && keyboard.isOpen()) {
+                keyboardSlide.from = keyboardSlide.to = 1.0f;
+                keyboardSlide.elapsed = 0.0f;
+                keyboardSlide.retarget(0.0f, kKeyboardSlide);
+            }
             if (tabDissolve.value() > 0.0f) {
                 libraryScreen.settleArrival();
                 settingsScreen.settleArrival();

@@ -12834,3 +12834,18 @@ solidness of search to all the text on the settings."* The copy now fades in
 300 ms, and the new screen's content waits 200 ms (the copy is mostly gone by
 then) before fading in over 300 ms. The new background comes in under the copy
 straight away. Starting values.
+
+**And movement: the keyboard slides, the new content rises.** Opacity alone
+read as one picture turning into another. Search's keyboard now slides down off
+the screen as Search is left, over the dissolving copy (the copy is taken
+before the keyboard is drawn, so it holds no keyboard), and slides up as Search
+arrives, 300 ms. The arriving screen's content rises 16 points as it fades in.
+`Renderer::setContentOffsetY` moves shapes, glass and pictures; the backdrop
+and the scene's presentation do not move.
+
+**Background colour choices: wanted, and per account.** MMagTech, 2026-09-24,
+answering the proposal of four or five hand-picked backgrounds (purple, blue,
+green, red, graphite) as one row under Display and Sound: *"I think they should
+be per login when we get to them."* So the console takes on the colour of
+whoever is signed in, which also says who that is. The boot screen stays
+purple, being the brand. Not built.
