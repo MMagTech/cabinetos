@@ -32,6 +32,18 @@ with its investigations intact.
 
 ## Before anything else
 
+**THE SESSION OF 2026-09-23/24 MERGED TWO PRS, AND THE A9 RUNS BOTH.**
+
+- **#53**: no rechunk; the image is built in layers, so a frontend change
+  downloads under 1 MB instead of 546 MB, and a build takes 7 minutes, not 16.
+- **#54**: saves sync for NES, SNES, N64, TurboGrafx CD and Saturn, and 21 of
+  the 22 libretro cores upload their states under Cabinet's tags.
+
+**The A9 took the one-time 2.6 GB move to the layered format on 2026-09-24**,
+about 15 minutes, limited by bootc unpacking layers one at a time rather than
+by the network. Every update after it is small. The handover from the
+2026-09-22/23 session follows.
+
 **THE SESSION OF 2026-09-22/23 MERGED THREE PRS AND LEFT ONE OPEN.** On `main`
 and on the television:
 
@@ -105,7 +117,7 @@ argument for the rule.
 | `systemctl is-active cabinetos-session` | `active` |
 | `ps -eo args \| grep [c]abinetos-frontend` | **`/usr/bin/cabinetos-frontend`**, under `gamescope --backend drm 3840x2160` |
 | drop-in directories, `/etc` and `/run` | **empty. No drop-ins.** |
-| `bootc status` | booted **`sha256:d0bbf31b…`** (#52, `3b8fbc5`), rollback `sha256:c69f8d14…` (#51) |
+| `bootc status` | booted **`sha256:bdf50d28…`** (#54, `f6f7e5c`, the first layered image), rollback `sha256:d0bbf31b…` (#52) |
 | `InhibitDelayMaxUSec` | **`30000000`**, from `50-cabinetos.conf` |
 | `systemd-inhibit --list` | CabinetOS holds `handle-power-key:handle-suspend-key` (block) and `shutdown:sleep` (delay) |
 | `journalctl -t cabinetos-session -b \| grep 'is up'` | `gamescope (drm) is up` |
@@ -118,6 +130,12 @@ reason. **Switching between them on the A9 has NOT been done with a pad** —
 see the queue.
 
 **IF A DIGEST HERE DISAGREES WITH `bootc status`, `bootc status` IS RIGHT.**
+
+**Read off the A9 on 2026-09-24 after installing #54:** the image's own
+frontend on `gamescope (drm)`, 44 games in hand, no failed units, the drop-in
+directory in `/etc` empty. **Sixteen SELinux denials of `chcon` (mac_admin) at
+every boot, on this image and on the one before it**: not new, not caused by
+this work, and not yet traced.
 
 **Read off the A9 on 2026-09-23 after installing #52:** it is level with
 `main`. The image's own frontend is running, both drop-in directories are
