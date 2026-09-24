@@ -5275,6 +5275,13 @@ int main(int argc, char** argv) {
     std::string switchLabel;
     int switchCurtainFrames = 0;
     Uint64 switchShownAt = 0;    // when the curtain was fully down
+    // THE NAME HAS ITS OWN FADE, inside the curtain's. It came in and went out
+    // with the curtain, so it sat over the old screen on the way down and over
+    // the new Home on the way up: MMagTech saw the two overlap. Now it only
+    // shows on a fully black screen: in after the curtain is down, out before
+    // it lifts.
+    Animated switchText;
+    constexpr float kSwitchTextFade = 0.200f;   // a starting value
     bool switchDone = false;     // the switch has run; waiting out the hold
     bool switchOk = false;
     std::string switchWhy;
@@ -6134,7 +6141,11 @@ int main(int argc, char** argv) {
         if (!switchPendingId) return;
         curtain.retarget(1.0f, kCurtainDown);
         if (curtain.value() < 0.995f) return;
-        if (switchShownAt == 0) switchShownAt = SDL_GetTicks();
+        if (switchShownAt == 0) {
+            switchShownAt = SDL_GetTicks();
+            switchText.smooth = true;
+            switchText.retarget(1.0f, kSwitchTextFade);
+        }
         if (!switchDone) {
             // Two frames at full curtain, so the name is on the television
             // before the frame loop stops for the network.
@@ -6159,6 +6170,9 @@ int main(int argc, char** argv) {
         // switch is not held any longer than it took. Starting value.
         constexpr Uint64 kSwitchHoldMs = 700;
         if (SDL_GetTicks() - switchShownAt < kSwitchHoldMs) return;
+        // The name goes before the curtain does.
+        switchText.retarget(0.0f, kSwitchTextFade);
+        if (switchText.value() > 0.01f) return;
         const bool ok = switchOk;
         const std::string why = switchWhy;
         switchPendingId = 0;
@@ -7764,6 +7778,7 @@ int main(int argc, char** argv) {
         scrollY.tick(dt);
         backdropMix.tick(dt);
         curtain.tick(dt);
+        switchText.tick(dt);
         menuNotice.tick(dt);
         if (noticeGallery) {
             // Four seconds each, the first after two so the screen has settled.
@@ -9103,14 +9118,15 @@ int main(int argc, char** argv) {
             if (c > 0.001f)
                 renderer.draw(ui::Rect{0, 0, ui::kCanvasWidth, ui::kCanvasHeight, 0,
                                        ui::Color::black(c)});
-            // WHO IT IS BECOMING, on the curtain, for as long as the curtain is
-            // there. Fades with it both ways.
-            if (c > 0.001f && !switchLabel.empty()) {
+            // WHO IT IS BECOMING, on the curtain, only while the curtain is
+            // fully down (see switchText).
+            const float ta = switchText.value();
+            if (ta > 0.001f && !switchLabel.empty()) {
                 const float lw = text.measure(switchLabel, ui::TextStyle::Title2, sc);
                 text.draw(renderer, switchLabel, (ui::kCanvasWidth - lw) * 0.5f,
                           ui::kCanvasHeight * 0.5f + text.ascent(ui::TextStyle::Title2, sc) * 0.5f,
-                          ui::TextStyle::Title2, ui::Color::white(0.9f * c), sc);
-            } else if (c <= 0.001f && switchPendingId == 0) {
+                          ui::TextStyle::Title2, ui::Color::white(0.9f * ta), sc);
+            } else if (ta <= 0.001f && switchPendingId == 0) {
                 switchLabel.clear();
             }
         }
