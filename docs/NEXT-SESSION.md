@@ -407,6 +407,11 @@ notes here stay the detail.
    Cabinet tvOS's Settings as it appears, the decisions that constrain it, and
    eight open questions. Do not design before that conversation.
 
+   **ALSO WAITING: PR #42, the weekly Bazzite base update
+   (`base-update/44.20260921`), open since 2026-09-21.** Review and merge it,
+   or let a newer one replace it; do not delete the branch. The merged
+   branches were deleted 2026-09-24; only `main` and that one remain.
+
    **MERGED AS #56, `0db5283`, AND THE A9 RUNS IT FROM THE IMAGE**
    (`latest.20260924-0db5283`, a 762 kB download; no test build left on it).
    The notes below about the PR being held are history.
