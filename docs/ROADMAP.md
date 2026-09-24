@@ -19,21 +19,24 @@ state of play for the next session is in `docs/NEXT-SESSION.md`.
    and the pass over on-screen text. Queued with it, not now: the Library
    showing only systems the console can play, as Cabinet's tvOS app does.
 3. **Remaining cores.** The emulators still to bring in.
-4. **Testing at the TV.** Near the end, once the UI is finished and every core
-   is in: the pad tests at the television (account switching, save and load
-   state, Dreamcast and PSP states, the black-screen fix, the boot and covers),
-   and MMagTech's check that states made on CabinetOS load in the Cabinet apps.
+4. **In-game features.** From a brainstorm on 2026-09-24: a modifier hotkey
+   layer (#76), fast forward (#77), rewind for libretro cores (#78),
+   screenshots uploaded to RomM (#79), and a save state undo (#80). Each issue
+   carries the decisions and the questions to settle when it is built. After
+   the cores because they touch every emulator; before the TV tests so those
+   test them too.
+5. **Testing at the TV.** Once the UI is finished and every core is in: the
+   pad tests at the television (account switching, save and load state,
+   Dreamcast and PSP states, the black-screen fix, the boot and covers), and
+   MMagTech's check that states made on CabinetOS load in the Cabinet apps.
    Not earlier.
+6. **Installer ready to ship.** What a real person hits installing CabinetOS,
+   found testing it on 2026-09-19, and the fixes agreed then. Last, because it
+   is what is fixed before CabinetOS is handed to anyone else. Not yet broken
+   into issues.
 
-## Not placed in the order yet
-
-- **In-game features.** From a brainstorm on 2026-09-24: a modifier hotkey
-  layer (#76), fast forward (#77), rewind for libretro cores (#78),
-  screenshots uploaded to RomM (#79), and a save state undo (#80). Each issue
-  carries the decisions and the questions to settle when it is built.
-- **Installer ready to ship.** What a real person hits installing CabinetOS,
-  found testing it on 2026-09-19, and the fixes agreed then. Not yet broken
-  into issues.
+Steps 4 and 6 were placed by Claude on 2026-09-24 at MMagTech's word
+("whatever you feel best"); move them if that changes.
 
 ## Later, not scheduled
 
