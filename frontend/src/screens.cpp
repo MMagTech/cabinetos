@@ -1421,9 +1421,14 @@ void AccountScreen::draw(Ctx& c) {
     const float bodyH = rows * rowH + (rows - 1) * 8.0f + 18.0f * 2.0f +
                         (noticeLines.empty() ? 0.0f
                                              : 8.0f + noticeLineH * noticeLines.size());
-    c.r.drawGlass(ui::Rect{x, top, w, bodyH * a, design::kRowRadius,
-                           ui::Color::white(0)},
-                  design::kRegularMaterialBlur, ui::Color::white(0.10f * a));
+    // THE POP-UPS' PANEL (design::menuPanel), the PIN pad's and the
+    // question panel's. It was frosted glass, the same material as the
+    // Settings rows it opens over, and melted into them; MMagTech, 2026-09-24:
+    // *"sort of clashing or blending in too much with what's behind it"*. The
+    // dark surface and the shadow are what put it on top.
+    ui::Rect panel = design::menuPanel(x, top, w, bodyH * a, a);
+    panel.radius = design::kRowRadius;
+    c.r.draw(panel);
 
     float y = top + 18.0f;
 
