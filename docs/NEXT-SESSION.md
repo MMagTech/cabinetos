@@ -32,12 +32,16 @@ with its investigations intact.
 
 ## Before anything else
 
-**THE SESSION OF 2026-09-23/24 MERGED TWO PRS, AND THE A9 RUNS BOTH.**
+**THE SESSION OF 2026-09-23/24 MERGED THREE PRS, AND THE A9 RUNS THEM.**
 
-- **#53**: no rechunk; the image is built in layers, so a frontend change
+- **#53** (`1e0c40f`): no rechunk; the image is built in layers, so a frontend change
   downloads under 1 MB instead of 546 MB, and a build takes 7 minutes, not 16.
-- **#54**: saves sync for NES, SNES, N64, TurboGrafx CD and Saturn, and 21 of
-  the 22 libretro cores upload their states under Cabinet's tags.
+- **#54** (`f6f7e5c`): saves sync for NES, SNES, N64, TurboGrafx CD and
+  Saturn, and 21 of the 22 libretro cores upload their states under Cabinet's
+  tags.
+- **#55** (`53a2dcb`): documentation only. `docs/SETTINGS-INVENTORY.md` for the
+  Settings discussion, the order MMagTech set, and the Jaguar/ColecoVision
+  decision.
 
 **The A9 took the one-time 2.6 GB move to the layered format on 2026-09-24**,
 about 15 minutes, limited by bootc unpacking layers one at a time rather than
@@ -416,16 +420,17 @@ the Jaguar's one real exclusive, Alien vs Predator, leans on the keypad, while
 the only libretro Jaguar core (Virtual Jaguar) is weak. **Do not propose them
 again.** Once the Library filter above exists they simply do not show.
 
-#### A SMALL CHANGE NOW SHIPS SMALL, 2026-09-23, if the PR is merged
+#### A SMALL CHANGE NOW SHIPS SMALL, 2026-09-23. MERGED AS #53, `1e0c40f`
 
 **Open question 27 has the record.** The rechunk is gone and the Containerfile
 builds in four layers, least-changed first. **A frontend-only change downloads
 739 kB instead of 546 MB, counted by `bootc upgrade` itself on the test VM,
 and a whole CI run takes about six minutes instead of sixteen.**
 
-- **The PR is branch `layers-experiment`.** Merging it costs every console one
-  2.6 GB download, once, as it moves off the rechunked format. The A9 too.
-- **The test VM is back on `cabinetos:latest`** after the test.
+- **Merged, and the A9 has taken it**: the one-time 2.6 GB move, 2026-09-24.
+- **The test VM has NOT.** It is on `sha256:d0bbf31b…`, the last rechunked
+  image (#52), so its next `bootc upgrade` is its own one-time 2.6 GB move. A
+  test switch on 2026-09-23 needed only 0.4 GB of its 4 GB free.
 - **`ghcr.io/mmagtech/cabinetos-test` can be deleted** in the GitHub package
   settings. Nothing uses it now; the workflow that pushed it is deleted.
 - **Two things keep it working, and both are easy to undo by accident:**
