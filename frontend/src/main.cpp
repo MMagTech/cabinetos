@@ -7076,10 +7076,8 @@ int main(int argc, char** argv) {
                             d = static_cast<char>('1' + (k - SDLK_KP_1));
                         else if (k == SDLK_KP_0) d = '0';
                         if (d) { pinOutcome(pinScreen.typeDigit(d)); break; }
-                        if (k == SDLK_ESCAPE || k == SDLK_BACKSPACE) {
-                            navigate(screens::Nav::Back);
-                            break;
-                        }
+                        if (k == SDLK_BACKSPACE) { pinScreen.deleteDigit(); break; }
+                        if (k == SDLK_ESCAPE) { navigate(screens::Nav::Back); break; }
                     }
                     if (owner == InputOwner::Keyboard) {
                         // While it owns input it takes every key, the same way
@@ -7217,6 +7215,13 @@ int main(int argc, char** argv) {
                          e.gbutton.button == SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER)) {
                         switchDestination(
                             e.gbutton.button == SDL_GAMEPAD_BUTTON_LEFT_SHOULDER ? -1 : +1);
+                        break;
+                    }
+                    // X TAKES A DIGIT OFF THE PIN, as it takes a letter off
+                    // the on-screen keyboard. B leaves the pad.
+                    if (pinScreen.isOpen() && owner == InputOwner::UI &&
+                        e.gbutton.button == SDL_GAMEPAD_BUTTON_WEST) {
+                        pinScreen.deleteDigit();
                         break;
                     }
                     if (owner == InputOwner::Keyboard) {

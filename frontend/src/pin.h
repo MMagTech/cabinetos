@@ -65,6 +65,9 @@ public:
     bool locked() const { return lockLeft_ > 0.0f; }
 
     Outcome key(Nav n);
+    // X on a pad, Backspace on a keyboard: one press to take a digit back,
+    // as on the on-screen keyboard (and Xbox's, and PlayStation's Square).
+    void deleteDigit() { deleteOne(); }
     // A digit from a physical keyboard, into the same field. Anything that is
     // not 0 to 9 is ignored.
     Outcome typeDigit(char c);
