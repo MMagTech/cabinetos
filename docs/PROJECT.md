@@ -12796,3 +12796,10 @@ most of all Search to Settings. Two causes, both fixed:
    and a bar that stay put. Search's keyboard leaves with Search. A press during
    the fade only changes where it is going. `Renderer::setContentFade`, owned by
    the app, so screens still only know about arriving. Starting values.
+
+**Settings stays plain, and its background changes while the old screen
+leaves.** MMagTech, 2026-09-24: still "something off" from Search to Settings
+because of the background change, and no blurred art on a text-heavy screen.
+Changed on arrival, the art's colours showed behind Settings' rows as they
+faded in. Heading to Settings the room now clears during the fade-out, in the
+same 180 ms, so Settings arrives on a background that has finished changing.

@@ -7694,6 +7694,12 @@ int main(int argc, char** argv) {
                 // for the reason above: rows to read, not covers to browse.
                 want.clear();
             }
+            // HEADING TO SETTINGS, THE ROOM CLEARS WHILE THE OLD SCREEN LEAVES.
+            // Changing it on arrival meant the art's colours were still behind
+            // Settings' rows as they faded in. MMagTech, 2026-09-24. The order
+            // is now: the old screen and its art go together, then Settings
+            // arrives on a background that has already finished changing.
+            if (pendingDest == 3) want.clear();
             // Which screen asked, so a change of screen can be told apart
             // from focus moving within one.
             if (want == backdropWant) backdropScreen = here();
@@ -7709,7 +7715,7 @@ int main(int argc, char** argv) {
                 // moment after the new screen had arrived. MMagTech,
                 // 2026-09-24, Search to Settings: "you can see the colors
                 // before it goes all purple so it looks like a visual bug".
-                backdropForScreen = (here() != backdropScreen);
+                backdropForScreen = (here() != backdropScreen) || pendingDest >= 0;
                 if (backdropForScreen) backdropSettle = backdropDelay;
             } else if (backdropWant != backdropKey &&
                        backdropMix.elapsed >= backdropMix.duration) {
@@ -7734,7 +7740,9 @@ int main(int argc, char** argv) {
                     backdropMix.from = 0.0f;
                     backdropMix.to = 0.0f;
                     backdropMix.elapsed = 0.0f;
-                    backdropMix.retarget(1.0f, backdropForScreen ? 0.280f : backdropFade);
+                    backdropMix.retarget(1.0f, !backdropForScreen ? backdropFade
+                                               : pendingDest >= 0 ? kTabLeave
+                                                                  : 0.280f);
                     // And arrive, rather than being caught half way in.
                     if (shotMode) backdropMix.elapsed = backdropMix.duration;
                 }
