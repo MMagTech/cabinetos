@@ -1412,8 +1412,15 @@ void AccountScreen::draw(Ctx& c) {
     // The panel grows downward as it appears, which is what makes it read as an
     // expansion. Everything inside is clipped to it by being drawn after.
     const int rows = rowCount();
+    // THE NOTICE WRAPS INSIDE THE PANEL. On one line "vivian was added.
+    // Choose them to switch." ran off the panel's right edge on the A9.
+    const std::vector<std::string> noticeLines =
+        notice_.empty() ? std::vector<std::string>{}
+                        : wrapTwoLines(c.text, notice_, ui::TextStyle::Callout, c.sc, w - 36.0f);
+    const float noticeLineH = c.text.lineHeight(ui::TextStyle::Callout, c.sc);
     const float bodyH = rows * rowH + (rows - 1) * 8.0f + 18.0f * 2.0f +
-                        (notice_.empty() ? 0.0f : 46.0f);
+                        (noticeLines.empty() ? 0.0f
+                                             : 8.0f + noticeLineH * noticeLines.size());
     c.r.drawGlass(ui::Rect{x, top, w, bodyH * a, design::kRowRadius,
                            ui::Color::white(0)},
                   design::kRegularMaterialBlur, ui::Color::white(0.10f * a));
@@ -1486,10 +1493,12 @@ void AccountScreen::draw(Ctx& c) {
         y += rowH + 8.0f;
     }
 
-    if (!notice_.empty())
-        c.text.draw(c.r, notice_, x + 18.0f,
-                    y + 8.0f + c.text.ascent(ui::TextStyle::Callout, c.sc),
-                    ui::TextStyle::Callout, ui::Color::white(0.85f * a), c.sc);
+    float nb = y + c.text.ascent(ui::TextStyle::Callout, c.sc);
+    for (const std::string& line : noticeLines) {
+        c.text.draw(c.r, line, x + 18.0f, nb, ui::TextStyle::Callout,
+                    ui::Color::white(0.85f * a), c.sc);
+        nb += noticeLineH;
+    }
 }
 
 // --- Adding an account ------------------------------------------------------

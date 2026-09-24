@@ -1,15 +1,15 @@
-// The PIN pad: four digits, entered with a controller, over the whole screen.
+// The PIN pad: four digits, entered with a controller, in a panel over the screen.
 //
 // docs/SETTINGS.md, Accounts, and issue #57. The owner of the console (the
 // first account from setup) can set one PIN. With one set, Wi-Fi changes, Sign
-// out, Change server address, Remove an account and File access ask for it,
-// and so does switching into the owner's account. The PIN is a deterrent
-// against a sibling with a controller; accounts.h says plainly what it is not.
+// out, Change server address, Adding or removing an account and File access
+// ask for it, and so does switching into the owner's account. The PIN is a
+// deterrent against a sibling with a controller; accounts.h says plainly what
+// it is not.
 //
-// IT IS MODAL AND IT COVERS EVERYTHING. It is asked for from the account
-// panel, from Settings, and straight after pairing somebody new, so it is not
-// a screen on the stack but a layer over whatever is there, the way the
-// account panel is. The app opens it, takes its input first while it is open,
+// IT IS A LAYER, NOT A SCREEN. It is asked for from the account panel and
+// from Settings, so it is not on the stack but drawn over whatever is there,
+// the way the account panel is. The app opens it, takes its input first while it is open,
 // and decides what an entered PIN means.
 //
 // IT HOLDS NO OPINION ABOUT THE PIN, the division every screen here follows.
@@ -39,12 +39,6 @@ public:
     enum class Mode {
         Check,    // enter the PIN that is set
         Choose,   // choose a new one, then enter it again
-        // A QUESTION FIRST: title and detail with Set PIN and Not now. Set
-        // PIN turns this into Choose in place. The first version opened the
-        // pad straight away with "Not now" on its cancel key, and a number
-        // pad appearing read as the console demanding a PIN, not offering
-        // one. MMagTech, 2026-09-24.
-        Offer,
     };
     enum class Outcome {
         None,
@@ -52,11 +46,9 @@ public:
         Cancelled,   // left without entering one
     };
 
-    // `title` says what the PIN is for, e.g. "Enter the PIN to switch to
-    // MMagTech". `detail` is a second line, or empty. `cancel` is the bottom
-    // left key's word: "Not now" when the pad is an offer rather than a door.
-    void open(Mode mode, std::string title, std::string detail,
-              std::string cancel = "Cancel");
+    // `title` says what is being asked, e.g. "Enter the PIN"; `detail` says
+    // what for ("To switch to MMagTech"), or is empty.
+    void open(Mode mode, std::string title, std::string detail);
     void close();
     bool isOpen() const { return open_; }
     Mode mode() const { return mode_; }
@@ -82,23 +74,21 @@ public:
 
     void tick(float dt);
     // Draws the whole layer, background included. Call it last, over
-    // everything, because it covers everything.
+    // everything, because it sits over everything.
     void draw(Ctx& c);
 
 private:
     Outcome add(char digit);
-    void drawOffer(Ctx& c, float a);
     Outcome deleteOne();
 
     bool open_ = false;
     Mode mode_ = Mode::Check;
-    std::string title_, detail_, cancel_ = "Cancel";
+    std::string title_, detail_;
     std::string typed_;        // the digits in the dots now
     std::string first_;        // Choose mode: the first entry, while confirming
     std::string entered_;      // what pin() returns
     std::string message_;      // under the dots: an error, or a prompt
     int row_ = 0, col_ = 0;    // focus on the pad, 4 rows of 3
-    int offerSlot_ = 0;        // Offer mode: 0 Set PIN, 1 Not now
     float lockLeft_ = 0.0f;
     design::Animated appear_;
     design::Animated focus_;

@@ -5336,9 +5336,9 @@ int main(int argc, char** argv) {
         std::fprintf(stderr, "[pin] asked: %s\n", title.c_str());
     };
     auto choosePin = [&](const std::string& title, const std::string& detail,
-                         const std::string& cancel, std::function<void()> then) {
+                         std::function<void()> then) {
         pinThen = std::move(then);
-        pinScreen.open(screens::PinScreen::Mode::Choose, title, detail, cancel);
+        pinScreen.open(screens::PinScreen::Mode::Choose, title, detail);
     };
     auto pinOutcome = [&](screens::PinScreen::Outcome o) {
         using O = screens::PinScreen::Outcome;
@@ -5438,8 +5438,8 @@ int main(int argc, char** argv) {
         // somebody else is signed in, the owner switches in, which asks for it.
         {
             auto& rows = cats.back().rows;
-            const char* protects = "Asked for before Wi-Fi, sign out, removing accounts "
-                                   "and file access";
+            const char* protects = "Asked for before adding or removing accounts, Wi-Fi, "
+                                   "sign out and file access";
             const bool isOwner = accounts::activeId() == accounts::ownerId();
             const std::vector<accounts::Account> list = accounts::all();
             const accounts::Account* owner = accounts::find(list, accounts::ownerId());
@@ -5675,31 +5675,40 @@ int main(int argc, char** argv) {
                 break;
             }
             case screens::Action::AddAccount:
-                // THE PANEL CLOSES AND A SCREEN OPENS. Leaving the panel up
-                // behind a pairing code would put the list somebody is about
-                // to change underneath the thing changing it.
-                accountsOpen = false;
-                barFocused = false;
-                addAccountScreen.open();
-                stack.push_back(Screen::AddAccount);
-                startAddAccount();
+                // WITH A PIN SET, ADDING SOMEBODY ASKS FOR IT, from here and
+                // from Settings alike. MMagTech, 2026-09-24: without it,
+                // anyone holding the controller could add themselves; with no
+                // PIN, anyone can, which is the no-PIN rule everywhere.
+                askPin("Enter the PIN", "To add an account", [&]() {
+                    // THE PANEL CLOSES AND A SCREEN OPENS. Leaving the panel
+                    // up behind a pairing code would put the list somebody is
+                    // about to change underneath the thing changing it.
+                    accountsOpen = false;
+                    barFocused = false;
+                    addAccountScreen.open();
+                    stack.push_back(Screen::AddAccount);
+                    startAddAccount();
+                });
                 sound::play(sound::Cue::Activate);
                 break;
             case screens::Action::Setting:
                 if (res.value == SetAddAccount) {
-                    // The same route as the chip's Add user. Back from the
-                    // pairing screen returns here, because it is pushed.
-                    addAccountScreen.open();
-                    stack.push_back(Screen::AddAccount);
-                    startAddAccount();
+                    // The same route as the chip's Add user, PIN included.
+                    // Back from the pairing screen returns here, because it
+                    // is pushed.
+                    askPin("Enter the PIN", "To add an account", [&]() {
+                        addAccountScreen.open();
+                        stack.push_back(Screen::AddAccount);
+                        startAddAccount();
+                    });
                     sound::play(sound::Cue::Activate);
                 } else if (res.value == SetPinSet) {
-                    choosePin("Choose a PIN", "Four digits", "Cancel",
+                    choosePin("Choose a PIN", "Four digits",
                               [&]() { buildSettings(); });
                     sound::play(sound::Cue::Activate);
                 } else if (res.value == SetPinChange) {
                     askPin("Enter your current PIN", "", [&]() {
-                        choosePin("Choose a new PIN", "Four digits", "Cancel",
+                        choosePin("Choose a new PIN", "Four digits",
                                   [&]() { buildSettings(); });
                     });
                     sound::play(sound::Cue::Activate);
@@ -7572,21 +7581,6 @@ int main(int argc, char** argv) {
                                          "still acting as %d\n",
                                  who.id, who.name.c_str(), accounts::all().size(),
                                  accounts::activeId());
-                    // THE PIN IS OFFERED HERE, NOT IN FIRST RUN: the moment
-                    // a second person can use the console is the moment it
-                    // matters. Only when the SECOND account is added (not a
-                    // third or later), only to the owner, and only while there
-                    // is no PIN. A question first, Set PIN or Not now; see
-                    // PinScreen::Mode::Offer.
-                    if (!accounts::pinIsSet() &&
-                        accounts::activeId() == accounts::ownerId() &&
-                        accounts::all().size() == 2) {
-                        pinThen = [&]() { buildSettings(); };
-                        pinScreen.open(screens::PinScreen::Mode::Offer,
-                                       "Set a PIN so only you can?",
-                                       "Anyone using this console can change Wi-Fi, sign "
-                                       "out and remove accounts");
-                    }
                 } else if (ok) {
                     // **THE CASE THAT LIED.** The pairing worked and wrote a
                     // valid token, and it added nobody: whoever approved it
