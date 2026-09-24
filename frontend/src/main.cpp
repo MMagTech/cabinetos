@@ -6579,8 +6579,8 @@ int main(int argc, char** argv) {
     // Home's keys, routed through the same door as every other screen's so the
     // bar can be offered them first. See `navigate`.
     homeKey = [&](screens::Nav n) -> bool {
-        // AN EMPTY HOME HAS ONE THING ON IT, the Open Library button, and
-        // focus is on it. Up is still the bar; A goes to the Library.
+        // AN EMPTY HOME SAYS "Press A to open the Library", and A does.
+        // Up is still the bar.
         if (homeEmpty()) {
             switch (n) {
                 case screens::Nav::Up:
@@ -8648,32 +8648,38 @@ int main(int argc, char** argv) {
             text.draw(renderer, detail, (ui::kCanvasWidth - dw) * 0.5f,
                       ty + text.lineHeight(ui::TextStyle::Title2, sc) * 0.9f,
                       ui::TextStyle::Callout, ui::Color::white(0.60f), sc);
-            // The button. FOCUSED IT IS WHITE WITH DARK TEXT, the Apple TV's
-            // own focused button, and not the product's usual quiet tint: a
-            // lone button has no neighbours to stand out from, and at the
-            // focused tint it read as a grey pill. MMagTech, 2026-09-24: *"it
-            // took me a minute to realize it was already highlighted"*. Dim
-            // while focus is up in the bar or the account panel.
+            // AN INSTRUCTION, NOT A BUTTON. A focused Open Library button was
+            // tried twice, quiet and then white, and neither read as selected,
+            // because nobody had moved focus onto it. MMagTech, 2026-09-24:
+            // *"since one didn't navigate to end up there it doesn't read as
+            // already being selected... it should Press A to Open Library."*
+            // The A is drawn as a button badge, the way consoles prompt. It
+            // dims while focus is up in the bar, where A means something else.
             const bool on = !barFocused && !accountsOpen;
-            const char* label = "Open Library";
-            const float lw = text.measure(label, ui::TextStyle::Title3, sc);
-            const float bh = text.lineHeight(ui::TextStyle::Title3, sc) + 28.0f;
-            const float bw = lw + 72.0f;
-            const float by = ty + text.lineHeight(ui::TextStyle::Title2, sc) * 0.9f + 56.0f;
-            const float bs = on ? 1.06f : 1.0f;
-            ui::Rect btn{(ui::kCanvasWidth - bw * bs) * 0.5f, by - (bh * bs - bh) * 0.5f,
-                         bw * bs, bh * bs, bh * bs * 0.5f,
-                         ui::Color::white(on ? 0.95f : 0.10f)};
-            if (on) {
-                btn.shadowBlur = 22.0f;
-                btn.shadowOffsetY = 8.0f;
-                btn.shadowColor = ui::Color::black(0.45f);
-            }
-            renderer.draw(btn);
-            text.draw(renderer, label, (ui::kCanvasWidth - lw) * 0.5f,
-                      by + bh * 0.5f + text.ascent(ui::TextStyle::Title3, sc) * 0.40f,
-                      ui::TextStyle::Title3,
-                      on ? ui::Color{0.07f, 0.05f, 0.12f, 1.0f} : ui::Color::white(0.75f), sc);
+            const ui::TextStyle st = ui::TextStyle::Title3;
+            const char* before = "Press";
+            const char* after = "to open the Library";
+            const float gap = 16.0f;
+            const float badge = text.lineHeight(st, sc) * 0.95f;
+            const float w1 = text.measure(before, st, sc);
+            const float w2 = text.measure(after, st, sc);
+            const float total = w1 + gap + badge + gap + w2;
+            const float base = ty + text.lineHeight(ui::TextStyle::Title2, sc) * 0.9f + 96.0f;
+            const float alpha = on ? 1.0f : 0.45f;
+            float x = (ui::kCanvasWidth - total) * 0.5f;
+            text.draw(renderer, before, x, base, st, ui::Color::white(0.92f * alpha), sc);
+            x += w1 + gap;
+            // The badge: a white disc with a dark A, centred on the text's
+            // x-height rather than its baseline.
+            const float capMid = base - text.ascent(st, sc) * 0.36f;
+            renderer.draw(ui::Rect{x, capMid - badge * 0.5f, badge, badge, badge * 0.5f,
+                                   ui::Color::white(0.95f * alpha)});
+            const float aw = text.measure("A", st, sc);
+            text.draw(renderer, "A", x + (badge - aw) * 0.5f,
+                      capMid + text.ascent(st, sc) * 0.36f, st,
+                      ui::Color{0.07f, 0.05f, 0.12f, alpha}, sc);
+            x += badge + gap;
+            text.draw(renderer, after, x, base, st, ui::Color::white(0.92f * alpha), sc);
         }
         }  // end of the shelf branch
 
