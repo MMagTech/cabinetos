@@ -4404,13 +4404,19 @@ int main(int argc, char** argv) {
     // How many of those draw as labelled capsules. The chip draws itself.
     constexpr int kBarCapsules = BarAccount;
 
-    const size_t shelfSlots = shelf.empty() ? cards.size() : shelf.size();
+    // ASKED, NOT REMEMBERED. These were constants worked out once at startup,
+    // and switching accounts replaces the library underneath them: a console
+    // that started as someone with an empty Home and switched to someone with
+    // sixteen cards could focus none of them (the d-pad clicked, nothing
+    // moved), and the other way round it reached for a card that no longer
+    // existed and crashed. Found on the A9, 2026-09-24.
+    auto shelfSlots = [&]() -> size_t { return shelf.empty() ? cards.size() : shelf.size(); };
     // Whether there is a game to resume. It is shelf slot 0 when there is.
-    const bool haveResume = heroIndex >= 0 && !shelf.empty();
-    const bool haveFavorites = !favorites.empty();
+    auto haveResume = [&]() { return heroIndex >= 0 && !shelf.empty(); };
+    auto haveFavorites = [&]() { return !favorites.empty(); };
 
     auto rowSlots = [&](int row) -> size_t {
-        if (row == RowRecent) return shelfSlots;
+        if (row == RowRecent) return shelfSlots();
         return favorites.size();
     };
     auto rowExists = [&](int row) { return rowSlots(row) > 0; };
@@ -4419,7 +4425,7 @@ int main(int argc, char** argv) {
     // items are destinations rather than cards.
     auto cardAt = [&](int row, int slot) -> Card* {
         if (row == RowRecent) {
-            if (slot < 0 || static_cast<size_t>(slot) >= shelfSlots) return nullptr;
+            if (slot < 0 || static_cast<size_t>(slot) >= shelfSlots()) return nullptr;
             return &cards[shelf.empty() ? static_cast<size_t>(slot)
                                         : static_cast<size_t>(shelf[slot])];
         }
@@ -4432,11 +4438,16 @@ int main(int argc, char** argv) {
     // game this console can play.
     int focusRow = RowRecent;
     int focusSlot = 0;
+    // Remembered focus per row, which is the behaviour tvOS gives free and the
+    // one people notice missing: leaving Recent at the sixth cover and coming
+    // back to the first is the kind of thing that feels broken without anyone
+    // being able to say why.
+    int rememberedSlot[2] = {0, 0};
     // --focus N still means "start on card N of Recent", which is what every
     // existing capture script passes it for.
     if (initialFocus >= 0) {
         focusRow = RowRecent;
-        focusSlot = std::clamp(initialFocus, 0, static_cast<int>(shelfSlots) - 1);
+        focusSlot = std::clamp(initialFocus, 0, static_cast<int>(shelfSlots()) - 1);
     }
     if (initialRow >= 0) {
         focusRow = std::clamp(initialRow, 0, static_cast<int>(RowFavorites));
@@ -5087,6 +5098,17 @@ int main(int argc, char** argv) {
         }
         lib = std::move(fresh);
         libraryScreen.build(platformTiles, collectionTiles);
+        // HOME STARTS OVER FOR THE NEW PERSON: the first card of Recent, every
+        // row scrolled back. Where the last person was is meaningless in a
+        // different set of cards, and was out of range whenever the new set
+        // was shorter.
+        focusRow = RowRecent;
+        focusSlot = 0;
+        rememberedSlot[0] = rememberedSlot[1] = 0;
+        shelfScroll[0].settle(0.0f);
+        shelfScroll[1].settle(0.0f);
+        scrollY.settle(0.0f);
+        if (Card* c = cardAt(focusRow, focusSlot)) c->focus.settle(1.0f);
         refreshKeeps();
 
         const storage::User& now = storage::currentUser();
@@ -5257,10 +5279,11 @@ int main(int argc, char** argv) {
     constexpr int kPinTries = 5;
     constexpr float kPinLockSeconds = 30.0f;
     int pinFails = 0;
-    auto askPin = [&](const std::string& title, std::function<void()> then) {
+    auto askPin = [&](const std::string& title, const std::string& detail,
+                      std::function<void()> then) {
         if (!accounts::pinIsSet()) { then(); return; }
         pinThen = std::move(then);
-        pinScreen.open(screens::PinScreen::Mode::Check, title, "");
+        pinScreen.open(screens::PinScreen::Mode::Check, title, detail);
         std::fprintf(stderr, "[pin] asked: %s\n", title.c_str());
     };
     auto choosePin = [&](const std::string& title, const std::string& detail,
@@ -5593,8 +5616,8 @@ int main(int argc, char** argv) {
                 if (id == accounts::ownerId() && accounts::activeId() != id) {
                     const std::vector<accounts::Account> list = accounts::all();
                     const accounts::Account* a = accounts::find(list, id);
-                    askPin("Enter the PIN to switch to " + (a ? a->name : std::string("them")),
-                           go);
+                    askPin("Enter the PIN",
+                           "To switch to " + (a ? a->name : std::string("them")), go);
                 } else {
                     go();
                 }
@@ -5624,13 +5647,13 @@ int main(int argc, char** argv) {
                               [&]() { buildSettings(); });
                     sound::play(sound::Cue::Activate);
                 } else if (res.value == SetPinChange) {
-                    askPin("Enter your current PIN", [&]() {
+                    askPin("Enter your current PIN", "", [&]() {
                         choosePin("Choose a new PIN", "Four digits", "Cancel",
                                   [&]() { buildSettings(); });
                     });
                     sound::play(sound::Cue::Activate);
                 } else if (res.value == SetPinOff) {
-                    askPin("Enter the PIN to turn it off", [&]() {
+                    askPin("Enter the PIN", "To turn it off", [&]() {
                         std::string err;
                         if (accounts::setPin("", &err))
                             std::fprintf(stderr, "[pin] turned off\n");
@@ -5706,7 +5729,7 @@ int main(int argc, char** argv) {
         // only card on Home that behaves this way.
         //
         // Home promises one action from cold to playing, and this is it.
-        if (haveResume && focusRow == RowRecent && focusSlot == 0) {
+        if (haveResume() && focusRow == RowRecent && focusSlot == 0) {
             launchById(cards[heroIndex].id);
             return;
         }
@@ -6395,11 +6418,6 @@ int main(int argc, char** argv) {
         playing = true;
     };
 
-    // Remembered focus per row, which is the behaviour tvOS gives free and the
-    // one people notice missing: leaving Recent at the sixth cover and coming
-    // back to the first is the kind of thing that feels broken without anyone
-    // being able to say why.
-    int rememberedSlot[2] = {0, 0};
 
     auto leaveFocus = [&]() {
         if (Card* c = cardAt(focusRow, focusSlot)) c->focus.retarget(0.0f, kFocusDuration);
@@ -8262,7 +8280,7 @@ int main(int argc, char** argv) {
         // top of the screen leaves half a screen of nothing under it, which is
         // not what a scroll view does and reads as the layout having broken.
         const float contentHeight =
-            (haveFavorites ? favoritesTop + shelfBlockHeight : recentTop + shelfBlockHeight) +
+            (haveFavorites() ? favoritesTop + shelfBlockHeight : recentTop + shelfBlockHeight) +
             kHomeBottomPad;
         const float maxScroll = std::max(0.0f, contentHeight - ui::kCanvasHeight);
         float wantScroll = 0.0f;
@@ -8332,7 +8350,7 @@ int main(int argc, char** argv) {
                 // into the game where every other cover on Home opens a launch
                 // screen, and the objection recorded against that was exactly
                 // that nothing on the screen would say so. Now something does.
-                if (rowId == RowRecent && slot == 0 && haveResume) {
+                if (rowId == RowRecent && slot == 0 && haveResume()) {
                     const char* kResume = "\xE2\x96\xB6  Resume";
                     text.draw(renderer, kResume, titleX, headerBaseline,
                               ui::TextStyle::Callout, ui::Color::white(0.95f), sc);
@@ -8475,7 +8493,7 @@ int main(int argc, char** argv) {
         float rowY = shelfHeaderY;
         rowY += drawShelf("Recent", shelf, RowRecent, rowY);
         // Only when there are any. An empty Favorites row is worse than none.
-        if (haveFavorites) drawShelf("Favorites", favorites, RowFavorites, rowY);
+        if (haveFavorites()) drawShelf("Favorites", favorites, RowFavorites, rowY);
         }  // end of the shelf branch
 
         // The overlay's scrim belongs to the WORLD, not to the overlay, so it

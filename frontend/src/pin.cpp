@@ -24,19 +24,22 @@ bool isCancel(int r, int c) { return r == 3 && c == 0; }
 bool isDelete(int r, int c) { return r == 3 && c == 2; }
 
 // Layout, in canvas points. Starting values, judged on the television.
-constexpr float kTitleBase = 190.0f;
-constexpr float kDetailBase = 248.0f;
-constexpr float kDotsY = 322.0f;         // centre line of the dots
-constexpr float kDotSize = 30.0f;
-constexpr float kDotSpacing = 64.0f;
-constexpr float kMessageBase = 400.0f;
-constexpr float kPadTop = 440.0f;
-constexpr float kKeyW = 200.0f;
-constexpr float kKeyH = 100.0f;
-constexpr float kKeyGap = 16.0f;
-constexpr float kKeyRadius = 16.0f;      // the keyboard's key radius
-constexpr float kKeyFocusScale = 1.06f;  // the keyboard's key focus
-constexpr float kLegendBase = 960.0f;
+//
+// A PANEL IN THE MIDDLE, NOT A SCREEN. The first version covered the whole
+// screen in purple; MMagTech on the TV, 2026-09-24: *"do we really need a full
+// screen ui for a pin pad"*. It is the on-screen keyboard's own treatment now
+// (keyboard.cpp): a scrim, one piece of dark glass, keys as plain surfaces on
+// it. A PIN is a question with one answer, which is what that panel is for.
+constexpr float kPanelPad = 40.0f;       // the keyboard's
+constexpr float kPanelRadius = 32.0f;    // the keyboard's, the pause panel's
+constexpr float kPanelMaxW = 1200.0f;
+constexpr float kDotSize = 26.0f;
+constexpr float kDotSpacing = 56.0f;
+constexpr float kKeyW = 150.0f;
+constexpr float kKeyH = 88.0f;
+constexpr float kKeyGap = 12.0f;         // the keyboard's
+constexpr float kKeyRadius = 16.0f;      // the keyboard's
+constexpr float kKeyFocusScale = 1.06f;  // the keyboard's
 
 constexpr float kAppear = 0.280f;        // Settings' own arrival
 constexpr float kShake = 0.40f;
@@ -173,42 +176,67 @@ void PinScreen::tick(float dt) {
 void PinScreen::draw(Ctx& c) {
     if (!open_) return;
     const float a = appear_.value();
-    c.r.setContentAlpha(1.0f);
     const float W = ui::kCanvasWidth, H = ui::kCanvasHeight;
+    const float sc = c.sc;
+    using ui::TextStyle;
 
-    // THE CONSOLE'S PLAIN PURPLE, the one first run and Settings stand on,
-    // faded in over whatever was there. Drawn as the backdrop's two bands so
-    // it matches it exactly and can still fade.
-    {
-        const float mid = H * 0.55f;
-        ui::Color top = ui::palette::kBackdropTop, m = ui::palette::kBackdropMid,
-                  bot = ui::palette::kBackdropBottom;
-        top.a = m.a = bot.a = a;
-        // The bands overlap by a point: two anti-aliased edges meeting
-        // exactly leave a faint dark seam across the middle of the pad.
-        ui::Rect upper{0, 0, W, mid + 1.0f, 0, top};
-        upper.gradient = true;
-        upper.fillBottom = m;
-        c.r.draw(upper);
-        ui::Rect lower{0, mid, W, H - mid, 0, m};
-        lower.gradient = true;
-        lower.fillBottom = bot;
-        c.r.draw(lower);
-    }
-    c.r.setContentAlpha(a);
-
-    auto centred = [&](const std::string& s, float base, ui::TextStyle st, float alpha) {
-        const float w = c.text.measure(s, st, c.sc);
-        c.text.draw(c.r, s, (W - w) * 0.5f, base, st, ui::Color::white(alpha), c.sc);
-    };
     std::string title = title_;
     if (mode_ == Mode::Choose && !first_.empty()) title = "Enter it again";
-    centred(title, kTitleBase, ui::TextStyle::Title2, 1.0f);
-    if (!detail_.empty()) centred(detail_, kDetailBase, ui::TextStyle::Callout, 0.60f);
+    std::string msg = message_;
+    if (locked()) {
+        const int s = static_cast<int>(std::ceil(lockLeft_));
+        msg = "Too many tries. Try again in " + std::to_string(s) +
+              (s == 1 ? " second" : " seconds");
+    }
+    const char* legend = "A select     B delete, or go back";
+
+    // ---- Measure, so the panel can be centred before anything is drawn ----
+    const float padW = kKeyW * 3 + kKeyGap * 2;
+    const float padH = kKeyH * 4 + kKeyGap * 3;
+    float innerW = padW;
+    innerW = std::max(innerW, c.text.measure(title, TextStyle::Title2, sc));
+    if (!detail_.empty())
+        innerW = std::max(innerW, c.text.measure(detail_, TextStyle::Callout, sc));
+    innerW = std::max(innerW, c.text.measure(legend, TextStyle::Callout, sc));
+    const float panelW = std::min(kPanelMaxW, innerW + kPanelPad * 2);
+    const float textMax = panelW - kPanelPad * 2;
+
+    const float titleH = c.text.lineHeight(TextStyle::Title2, sc);
+    const float lineH = c.text.lineHeight(TextStyle::Callout, sc);
+    const float detailH = detail_.empty() ? 0.0f : 8.0f + lineH;
+    const float dotsBlock = 32.0f + kDotSize;
+    const float msgBlock = 16.0f + lineH;   // kept even when empty, so nothing jumps
+    const float panelH = kPanelPad + titleH + detailH + dotsBlock + msgBlock + 16.0f + padH +
+                         24.0f + lineH + kPanelPad;
+    const float px = (W - panelW) * 0.5f;
+    const float py = (H - panelH) * 0.5f;
+
+    // ---- The scrim and the glass --------------------------------------
+    c.r.setContentAlpha(1.0f);
+    c.r.draw(ui::Rect{0, 0, W, H, 0, ui::Color::black(0.45f * a)});
+    c.r.setContentAlpha(a);
+    c.r.drawGlass(ui::Rect{px, py, panelW, panelH, kPanelRadius, ui::Color::white(0)}, 6.0f,
+                  ui::Color::black(0.68f));
+
+    auto centred = [&](const std::string& s, float base, TextStyle st, float alpha) {
+        const std::string t = c.text.truncate(s, st, sc, textMax);
+        const float w = c.text.measure(t, st, sc);
+        c.text.draw(c.r, t, (W - w) * 0.5f, base, st, ui::Color::white(alpha), sc);
+    };
+
+    float y = py + kPanelPad;
+    centred(title, y + c.text.ascent(TextStyle::Title2, sc), TextStyle::Title2, 1.0f);
+    y += titleH;
+    if (!detail_.empty()) {
+        centred(detail_, y + 8.0f + c.text.ascent(TextStyle::Callout, sc), TextStyle::Callout,
+                0.60f);
+        y += detailH;
+    }
 
     // The dots: filled for a digit typed, faint for one still to come. The
     // digits themselves are never drawn, because a PIN is typed with the
     // person it keeps out sitting on the same sofa.
+    y += 32.0f;
     float shakeX = 0.0f;
     if (shake_ > 0.0f) {
         const float t = kShake - shake_;
@@ -218,31 +246,26 @@ void PinScreen::draw(Ctx& c) {
     for (int i = 0; i < kLength; ++i) {
         const float cx = (W - dotsW) * 0.5f + i * kDotSpacing + shakeX;
         const bool on = i < static_cast<int>(typed_.size());
-        c.r.draw(ui::Rect{cx - kDotSize * 0.5f, kDotsY - kDotSize * 0.5f, kDotSize, kDotSize,
-                          kDotSize * 0.5f, ui::Color::white(on ? 1.0f : 0.30f)});
+        c.r.draw(ui::Rect{cx - kDotSize * 0.5f, y, kDotSize, kDotSize, kDotSize * 0.5f,
+                          ui::Color::white(on ? 1.0f : 0.25f)});
     }
+    y += kDotSize;
 
-    std::string msg = message_;
-    if (locked()) {
-        const int s = static_cast<int>(std::ceil(lockLeft_));
-        msg = "Too many tries. Try again in " + std::to_string(s) +
-              (s == 1 ? " second" : " seconds");
-    }
-    if (!msg.empty()) centred(msg, kMessageBase, ui::TextStyle::Callout, 0.85f);
+    if (!msg.empty())
+        centred(msg, y + 16.0f + c.text.ascent(TextStyle::Callout, sc), TextStyle::Callout, 0.85f);
+    y += msgBlock + 16.0f;
 
-    // The pad. Ordinary surfaces, not glass: the keyboard's own treatment,
-    // brighter and a little larger under focus.
+    // The pad: the keyboard's keys, brighter and a little larger under focus.
     const float f = focus_.value();
-    const float padW = kKeyW * 3 + kKeyGap * 2;
     const float padX = (W - padW) * 0.5f;
     for (int r = 0; r < 4; ++r) {
         for (int col = 0; col < 3; ++col) {
             const float x = padX + col * (kKeyW + kKeyGap);
-            const float y = kPadTop + r * (kKeyH + kKeyGap);
+            const float ky = y + r * (kKeyH + kKeyGap);
             const bool focused = (r == row_ && col == col_);
             const float s = focused ? 1.0f + (kKeyFocusScale - 1.0f) * f : 1.0f;
             const float dw = kKeyW * s, dh = kKeyH * s;
-            const float dx = x - (dw - kKeyW) * 0.5f, dy = y - (dh - kKeyH) * 0.5f;
+            const float dx = x - (dw - kKeyW) * 0.5f, dy = ky - (dh - kKeyH) * 0.5f;
             ui::Rect cap{dx, dy, dw, dh, kKeyRadius * s,
                          ui::Color::white(focused ? 0.10f + 0.20f * f : 0.10f)};
             if (focused) {
@@ -252,16 +275,17 @@ void PinScreen::draw(Ctx& c) {
             }
             c.r.draw(cap);
             const bool action = isCancel(r, col) || isDelete(r, col);
-            const ui::TextStyle st = action ? ui::TextStyle::Callout : ui::TextStyle::Title2;
+            const TextStyle st = action ? TextStyle::Callout : TextStyle::Title3;
             const std::string label = isCancel(r, col) ? cancel_ : kKeys[r][col];
-            const float lw = c.text.measure(label, st, c.sc);
+            const float lw = c.text.measure(label, st, sc);
             c.text.draw(c.r, label, dx + (dw - lw) * 0.5f,
-                        dy + dh * 0.5f + c.text.ascent(st, c.sc) * 0.5f, st,
-                        ui::Color::white(focused ? 1.0f : 0.75f), c.sc);
+                        dy + dh * 0.5f + c.text.ascent(st, sc) * 0.5f, st,
+                        ui::Color::white(focused ? 1.0f : 0.75f), sc);
         }
     }
+    y += padH;
 
-    centred("A select     B delete, or go back", kLegendBase, ui::TextStyle::Callout, 0.55f);
+    centred(legend, y + 24.0f + c.text.ascent(TextStyle::Callout, sc), TextStyle::Callout, 0.55f);
     c.r.setContentAlpha(1.0f);
 }
 
