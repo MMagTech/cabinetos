@@ -8072,7 +8072,40 @@ Flycast stays local too, for its unscripted edits. GameCube and PS2 have none,
 by question 25.
 
 **The fix is Cabinet's: build its Apple TV cores at the commit its manifest
-pins.** Then all three can share states. Recorded as a Cabinet-side debt.
+pins.** Recorded as a Cabinet-side debt.
+
+**THEN DECIDED, LATER THE SAME DAY: EVERY CORE WITH STATES UPLOADS THEM.**
+MMagTech: every core that is supposed to allow states uploads them under the
+tag Cabinet recognises, *"regardless of if it will actually load"*. So Saturn,
+MAME 2003-Plus and Flycast have state tags too: **21 of the 22 libretro cores**,
+all but GameCube, which has no states by question 25. `emulatorTag`'s old rule
+(share only where the build is proved identical) is replaced; the header says
+so. Proved on Sega Rally: `[state] uploaded saturn-native`. **Whether each
+state loads in Cabinet is MMagTech's to check on the Cabinet side.**
+
+#### DOES A STATE THIS CONSOLE MAKES LOAD ON THIS CONSOLE? Measured, 2026-09-23
+
+New switch `--state-check N`: after N frames, save a state in memory, play two
+seconds more, load it, and save again at once. Nothing touches disk or the
+server, and each run was killed afterwards so nothing uploaded. On the A9, the
+smallest game per core:
+
+| Result | Cores |
+|---|---|
+| **Loaded, and re-saved byte-identical** | 3DO, FBNeo, MAME 2003-Plus, Atari 2600, Atari 7800, Genesis Plus GX, Neo Geo Pocket, NES, Saturn, SNES, TurboGrafx, Vectrex, Virtual Boy |
+| **Loaded, re-save differs slightly** | Game Boy (15 of 26,882 bytes), GBA (12 of 405,568), PlayStation (5 of 4.4 MB), 32X (2 of 679,178), DS (267 of 6.5 MB), N64 (52,278 of 16.8 MB) |
+| **Not reachable headless** | Dreamcast (item 9d: no picture route without a screen on the A9), PSP (item 9: the headless PPSSPP boot problem; it crashed before the state step) |
+
+**A small difference after loading is not a failed load**: the state was
+accepted, and the bytes that move are most likely clocks and buffers the core
+writes fresh. That is not checked, and nobody has looked at which bytes they
+are. N64 moves the most.
+
+**MAME 2003-Plus: a state is per GAME.** Sea Wolf, the smallest, has none; its
+driver does not support states. Blasteroids, Space Harrier and Super Breakout
+all loaded exactly. The pause menu should say so for a game that has none.
+
+**Still owed:** Dreamcast and PSP states on the television, where both run.
 
 **Found in passing, not fixed:** Beetle Saturn also writes `<game>.bcr`, the
 Saturn's optional backup-memory CARTRIDGE, as a file beside the save. Neither

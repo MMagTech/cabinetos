@@ -405,14 +405,18 @@ inline bool playable(const romm::Game& g) {
 // machines. Those three together make a shared tag a fact rather than a hope,
 // and they are why a state written on an Apple TV loads on this console.
 //
-// The rule for adding a core: share Cabinet's tag ONLY where the build is
-// provably the same thing — same pinned commit AND the same build arguments.
-// Where CabinetOS pulls a different lever, it must use a different tag, or
-// Cabinet will offer someone a state that cannot load. Wrong in the safe
-// direction costs a greyed-out entry; wrong the other way costs progress.
+// THE RULE, AS DECIDED 2026-09-23: every core that has states uses Cabinet's
+// tag for that emulator, so its states upload and Cabinet recognises them,
+// whether or not the other device can load a particular one. MMagTech:
+// "regardless of if it will actually load". A state that will not load is
+// refused on the other side and costs nothing else; one that never leaves the
+// console is lost with it. Where a build is known to differ from Cabinet's,
+// the entry in catalog.cpp says how, so a refusal is not a mystery. This
+// REPLACES the earlier rule, which shared a tag only where the build was
+// proved identical and left most cores' states on the console.
 //
-// Returns nullptr for a core whose tag has not been settled, which is a refusal
-// to upload rather than a licence to guess.
+// Returns nullptr for a core with no states (PS2, GameCube) or one not yet in
+// the table, and a state from those stays on the console.
 const char* emulatorTag(const char* manifestCoreName);
 
 // The tag a SAVE travels under, which is not always the tag a STATE travels
@@ -428,21 +432,17 @@ const char* emulatorTag(const char* manifestCoreName);
 // uploads the emulator's own bytes, so anything that can read a save for those
 // platforms can read what is on this server."
 //
-// WHY IT MATTERS HERE. `emulatorTag` is deliberately silent for five of the
-// cores in the file-writing class — Flycast, Opera, FBNeo, MAME 2003-Plus and
-// Beetle NGP — and silence means "do not upload". Between them those five hold
-// 35 of the 47 file saves on the reference server, including all thirteen
-// Dreamcast cards. Applying the state rule to them would leave the majority of
-// this feature dead on arrival, and it would be the wrong rule: nothing about
-// a VMU image can be unloadable.
+// WHY IT MATTERED. `emulatorTag` used to be silent for five of the cores in
+// the file-writing class (Flycast, Opera, FBNeo, MAME 2003-Plus, Beetle NGP),
+// and those five held 35 of the 47 file saves on the reference server,
+// including all thirteen Dreamcast cards. Saves travelled under this rule
+// while their states stayed local.
 //
-// So states keep the strict rule and saves get this one. Flycast is the case
-// that shows the two apart: its pinned commit does not reproduce what the
-// reference implementation ships, because that build carries unscripted edits
-// in its working tree (docs/NEXT-SESSION.md, *Cabinet-side debts*). That is a
-// real reason to refuse a save STATE and no reason at all to refuse a memory
-// card, so `emulatorTag` still returns nullptr for it and this returns
-// `flycast-native`.
+// SINCE 2026-09-23 every libretro core with states has a state tag, by
+// MMagTech's decision that states upload under Cabinet's tag whether or not
+// the other device can load them (catalog.cpp, emulatorTag). So this answers
+// from emulatorTag for all of them, and holds its own tags only for PS2 and
+// GameCube, which have no states at all.
 //
 // Returns nullptr when even a save should stay local.
 const char* saveTag(const char* manifestCoreName);

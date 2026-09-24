@@ -498,11 +498,13 @@ played and quit, with every save on the server unchanged afterwards. The other
 four of the nine (Virtual Boy, Atari 2600, Atari 7800, Vectrex) have no save
 to carry.
 
-**STATES TOO, SAME DAY: eighteen of the 22 libretro cores now send them.** Apple TV states
-for Aladdin and R.C. Pro-Am loaded here mid-game. **Saturn's was refused**, and
-Saturn, MAME 2003-Plus and Flycast states stay local, because **Cabinet's own
-Apple TV builds of those cores are not at the commit its manifest pins** (it
-pins the Mac's). The fix is in Cabinet, below under *Cabinet-side debts*.
+**STATES TOO, SAME DAY: 21 of the 22 libretro cores send them**, all but
+GameCube. MMagTech decided every core with states uploads them under Cabinet's
+tag whether or not the other side can load them; he will check the Cabinet
+side himself. Apple TV states for Aladdin and R.C. Pro-Am loaded here mid-game;
+a Saturn one was refused. **Every core's own states load on this console**
+(`--state-check`, PROJECT.md), except Dreamcast and PSP, which cannot run
+headless on the A9 and are owed a check on the television.
 **Still owed:** a first real NES or SNES save uploaded by a person playing. **Also noticed: Cabinet uploads a screenshot PNG with every
 state (`TVPlayerView.saveState`); CabinetOS uploads the state alone.**
 
