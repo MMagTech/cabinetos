@@ -12827,3 +12827,10 @@ drawn over the new screen fading away, 380 ms ease-in-out. Content, keyboard,
 background and the bar's highlight all dissolve together. The arriving screen
 skips its own fade-in (`settleArrival`), or the middle of the dissolve dips
 through the background. The fade-out-then-in machinery is gone.
+
+**The old screen goes first, then the new content.** MMagTech: *"can the search
+dissolve more before it goes to settings, i think its just the change from
+solidness of search to all the text on the settings."* The copy now fades in
+300 ms, and the new screen's content waits 200 ms (the copy is mostly gone by
+then) before fading in over 300 ms. The new background comes in under the copy
+straight away. Starting values.

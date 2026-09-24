@@ -5638,9 +5638,19 @@ int main(int argc, char** argv) {
     // background and the bar's highlight. A press mid-dissolve copies the
     // frame as it is and starts again from there.
     //
-    // A starting value, to be judged on the television.
-    constexpr float kTabDissolve = 0.380f;
-    constexpr float kTabArrive = kTabDissolve;   // the new background's fade
+    // THE OLD SCREEN GOES FIRST, THEN THE NEW ONE'S CONTENT ARRIVES. MMagTech,
+    // same afternoon: "can the search dissolve more before it goes to
+    // settings", because a solid keyboard dissolving straight into a page of
+    // text read as one busy frame. So the copy fades out quickly, and the new
+    // screen's content waits until it is mostly gone before fading in. The
+    // new background comes with the dissolve, under the copy.
+    //
+    // Starting values, to be judged on the television.
+    constexpr float kTabDissolve = 0.300f;      // the old frame, away
+    constexpr float kTabContentDelay = 0.200f;  // then the new content starts
+    constexpr float kTabContentIn = 0.300f;     // and takes this long
+    constexpr float kTabArrive = kTabDissolve;  // the new background's fade
+    float tabSince = -1.0f;      // seconds since the switch; negative when none
     int pendingDest = -1;
     Animated tabDissolve;
     tabDissolve.smooth = true;
@@ -7450,6 +7460,10 @@ int main(int argc, char** argv) {
             addAccountScreen.tick(dt);
             settingsScreen.tick(dt);
             tabDissolve.tick(dt);
+            if (tabSince >= 0.0f) {
+                tabSince += dt;
+                if (tabSince > kTabContentDelay + kTabContentIn) tabSince = -1.0f;
+            }
             gridScreen.tick(dt, ctx);
             // The network's answer, when it lands. Rebuilt only if Settings is
             // still what is on screen; the next visit asks again anyway.
@@ -7780,6 +7794,16 @@ int main(int argc, char** argv) {
                                        ui::Color::black(backdropScrim)});
         }
         }
+
+        // The arriving screen's content, held back until the old frame has
+        // mostly dissolved. Under the bar, which does not fade; reset below.
+        auto tabContent = [&]() {
+            if (tabSince < 0.0f || playing) return 1.0f;
+            const float t = std::clamp((tabSince - kTabContentDelay) / kTabContentIn,
+                                       0.0f, 1.0f);
+            return design::easeInOut(t);
+        };
+        renderer.setContentFade(tabContent());
 
         if (playing) {
             cab::Core& core = cab::Core::shared();
@@ -8437,6 +8461,8 @@ int main(int argc, char** argv) {
         // it — see DetailScreen::setProgress — and, for somebody who walked
         // away from it, in the corner of the top bar below.
 
+        renderer.setContentFade(1.0f);
+
         // ---- The top bar, which is its own strip ----------------------------
         //
         // MMagTech, 2026-09-21: *"the top bar with library settings and search
@@ -8681,7 +8707,10 @@ int main(int argc, char** argv) {
                                        ui::Color::black(c)});
         }
 
+        // Search's keyboard is part of Search, so it arrives with it.
+        renderer.setContentFade(here() == Screen::Search ? tabContent() : 1.0f);
         keyboard.draw(renderer, text, renderer.scale());
+        renderer.setContentFade(1.0f);
 
         // The old screen, dissolving away over the new one. Over the keyboard,
         // because the keyboard belongs to whichever screen it was on.
@@ -8743,6 +8772,7 @@ int main(int argc, char** argv) {
                 tabDissolve.from = tabDissolve.to = 1.0f;
                 tabDissolve.elapsed = 0.0f;
                 tabDissolve.retarget(0.0f, kTabDissolve);
+                tabSince = 0.0f;
             }
             goToDestination(pendingDest);
             if (tabDissolve.value() > 0.0f) {
