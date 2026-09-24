@@ -315,6 +315,8 @@ void SettingsScreen::drawGlass(Ctx& c) {
         const bool on = (i == focusRow) && hasFocus_;
         const float rf = on ? f : 0.0f;
         const bool unbuilt = row.kind == Kind::Unbuilt;
+        // Dimmed either way; only an unbuilt row says why.
+        const bool dimmed = unbuilt || row.kind == Kind::Disabled;
         const float s = 1.0f + rf * (design::kRowFocusScale - 1.0f);
         const float w = pw * s, h = rh * s;
         const float x = px - (w - pw) * 0.5f;
@@ -325,9 +327,9 @@ void SettingsScreen::drawGlass(Ctx& c) {
         // reads as one list.
         c.r.drawGlass(ui::Rect{x, ry, w, h, design::kRowRadius, ui::Color::white(0)},
                       design::kRegularMaterialBlur,
-                      ui::Color::white(unbuilt ? 0.04f : 0.08f + 0.14f * rf));
+                      ui::Color::white(dimmed ? 0.04f : 0.08f + 0.14f * rf));
 
-        const float textA = unbuilt ? design::kSettingsUnbuiltAlpha : 1.0f;
+        const float textA = dimmed ? design::kSettingsUnbuiltAlpha : 1.0f;
         const bool chevron = row.kind == Kind::Action;
         const float chevW = chevron
             ? c.text.measure(kChevron, ui::TextStyle::Title3, c.sc) : 0.0f;

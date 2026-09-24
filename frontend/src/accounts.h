@@ -117,6 +117,9 @@ bool add(const Account& a, const std::string& token, std::string* err);
 // just been deleted, with no way back except re-pairing. The switcher disables
 // that row too; this is the enforcement rather than the hint.
 //
+// REFUSES THE OWNER too (the first account; see ownerId), for the same kind
+// of reason: ownership would pass silently to whoever was added next.
+//
 // Does NOT touch `users/<id> - <name>/`. Forgetting a login is not the same as
 // throwing away somebody's saves, and the second one needs its own deliberate
 // act somewhere that says so.

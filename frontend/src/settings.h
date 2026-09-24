@@ -35,6 +35,9 @@ struct SettingsRow {
         Toggle,    // On or Off, shown as the value; pressing flips it
         Choice,    // one of a few, shown as the value; left and right move it
         Unbuilt,   // agreed, not built; drawn dimmed, cannot be focused
+        Disabled,  // built, but nothing to do right now; dimmed, not focused,
+                   // and no explanation (MMagTech: "just gray out the menu
+                   // option")
     };
     SettingsRow() = default;
     SettingsRow(Kind k, int i, std::string t, std::string d, std::string v)

@@ -224,6 +224,13 @@ bool remove(int id, std::string* err) {
         if (err) *err = "cannot remove the account this console is signed in as";
         return false;
     }
+    // THE OWNER STAYS. Ownership is "first in the list" (ownerId), so removing
+    // them would hand the console, and the PIN's controls, to whoever was
+    // added next without anybody deciding that.
+    if (!b.list.empty() && id == b.list.front().id) {
+        if (err) *err = "cannot remove the console's owner";
+        return false;
+    }
     const size_t before = b.list.size();
     for (size_t i = 0; i < b.list.size(); ++i) {
         if (b.list[i].id != id) continue;
@@ -234,8 +241,11 @@ bool remove(int id, std::string* err) {
         if (err) *err = "no account with id " + std::to_string(id);
         return false;
     }
+    // The list first, then the token: if the list cannot be written the
+    // account is still whole, rather than listed with no credential.
+    if (!save(b, err)) return false;
     ::unlink(tokenPath(id).c_str());
-    return save(b, err);
+    return true;
 }
 
 bool setActive(int id, std::string* err) {

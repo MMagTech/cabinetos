@@ -75,6 +75,7 @@
 #include "text.h"
 #include "overlaywin.h"
 #include "pin.h"
+#include "choice.h"
 #include "power.h"
 #include "prefs.h"
 #include "ui.h"
@@ -2461,6 +2462,14 @@ static int accountsTest() {
     check(!accounts::remove(99, &err), "removing an unknown account is refused");
     check(accounts::remove(2, &err), "removing an inactive account works");
     check(accounts::all().size() == 1, "and it is gone from the list");
+
+    check(accounts::add(bob, "bob-token", &err) && accounts::setActive(2, &err),
+          "someone else can be added and signed in");
+    check(accounts::ownerId() == 1, "the first account added owns the console");
+    check(!accounts::remove(1, &err),
+          "removing the OWNER is refused, even with someone else signed in");
+    check(accounts::setActive(1, &err) && accounts::remove(2, &err),
+          "and the other one can go once the owner is back");
 
     check(!accounts::setActive(99, &err), "switching to an unknown account is refused");
 
@@ -5381,6 +5390,37 @@ int main(int argc, char** argv) {
         if (then) then();
     };
 
+    // ---- A question with a few answers (choice.h) -------------------------
+    //
+    // Same shape as the PIN: the app opens it with what to do with the
+    // answer, and the answer is acted on after it closes, so an answer can
+    // open another question ("who?" then "are you sure?").
+    screens::ChoiceScreen choiceScreen;
+    std::function<void(int)> choiceThen;
+    auto askChoice = [&](const std::string& title, const std::string& detail,
+                         std::vector<std::string> options, int focus,
+                         std::function<void(int)> then) {
+        choiceThen = std::move(then);
+        choiceScreen.open(title, detail, std::move(options), focus);
+    };
+    auto choiceOutcome = [&](screens::ChoiceScreen::Outcome o) {
+        using O = screens::ChoiceScreen::Outcome;
+        if (o == O::None) return;
+        choiceScreen.close();
+        auto then = std::move(choiceThen);
+        choiceThen = nullptr;
+        if (o == O::Chosen && then) then(choiceScreen.chosen());
+    };
+    // WHO CAN BE REMOVED: everybody but whoever is signed in (the store
+    // refuses them) and the owner (the store refuses them too).
+    auto removableAccounts = [&]() {
+        std::vector<accounts::Account> out;
+        const int active = accounts::activeId(), owner = accounts::ownerId();
+        for (const accounts::Account& a : accounts::all())
+            if (a.id != active && a.id != owner) out.push_back(a);
+        return out;
+    };
+
     // ---- Settings' rows -----------------------------------------------------
     //
     // docs/PROJECT.md, open question 31. The screen is handed rows and hands
@@ -5389,7 +5429,7 @@ int main(int argc, char** argv) {
     // built: they are there so the whole layout can be judged on the
     // television, and focus never lands on them.
     enum SettingId { SetAddAccount = 1, SetInterfaceSounds, SetPinSet, SetPinChange,
-                     SetPinOff };
+                     SetPinOff, SetRemoveAccount };
     // THE NETWORK IS ASKED OFF THE FRAME THREAD. net::status() is three or four
     // nmcli round trips, which is a visible hitch if the screen waits for it,
     // so the row says "Checking" until the answer lands.
@@ -5427,9 +5467,11 @@ int main(int argc, char** argv) {
         cats.push_back({"Accounts", {
             {K::Action, SetAddAccount, "Add an account",
              "Pair another RomM user with this console", ""},
-            {K::Unbuilt, 0, "Remove an account",
-             "The account playing now cannot be removed", ""},
         }});
+        // REMOVE AN ACCOUNT: from this console only. Greyed out when there is
+        // nobody it could remove (not the person signed in, not the owner).
+        cats.back().rows.push_back(Row{removableAccounts().empty() ? K::Disabled : K::Action,
+                                       SetRemoveAccount, "Remove an account", "", ""});
         // THE PIN IS THE OWNER'S, AND ONLY THE OWNER SEES ITS CONTROLS.
         // Anyone else sees whether there is one and whose it is, with nothing
         // to press. MMagTech, 2026-09-24, signed in as claire and offered
@@ -5438,16 +5480,14 @@ int main(int argc, char** argv) {
         // somebody else is signed in, the owner switches in, which asks for it.
         {
             auto& rows = cats.back().rows;
-            const char* protects = "Asked for before adding or removing accounts, Wi-Fi, "
-                                   "sign out and file access";
+            const char* protects = "Protects accounts, Wi-Fi, sign out and file access";
             const bool isOwner = accounts::activeId() == accounts::ownerId();
             const std::vector<accounts::Account> list = accounts::all();
             const accounts::Account* owner = accounts::find(list, accounts::ownerId());
             const std::string ownerName = owner ? owner->name : std::string("the owner");
             if (isOwner && accounts::pinIsSet()) {
                 rows.push_back({K::Action, SetPinChange, "Change PIN", protects, ""});
-                rows.push_back({K::Action, SetPinOff, "Turn off PIN",
-                                "Then anyone using this console can change them", ""});
+                rows.push_back({K::Action, SetPinOff, "Turn off PIN", "", ""});
             } else if (isOwner) {
                 rows.push_back({K::Action, SetPinSet, "Set a PIN", protects, ""});
             } else if (accounts::pinIsSet()) {
@@ -5702,13 +5742,52 @@ int main(int argc, char** argv) {
                         startAddAccount();
                     });
                     sound::play(sound::Cue::Activate);
+                } else if (res.value == SetRemoveAccount) {
+                    // PIN (if set), then who, then are you sure. With one
+                    // person to remove, "who" is skipped.
+                    askPin("Enter the PIN", "To remove an account", [&]() {
+                        auto confirm = [&](accounts::Account who) {
+                            // NO EXPLANATION. MMagTech, 2026-09-24: the people
+                            // using this are technical, "we don't need to spoon
+                            // feed them everything with an explanation".
+                            askChoice("Remove " + who.name + "?", "",
+                                      {"Remove", "Cancel"}, 1, [&, who](int i) {
+                                          if (i != 0) return;
+                                          std::string err;
+                                          if (accounts::remove(who.id, &err))
+                                              std::fprintf(stderr,
+                                                           "[accounts] removed %d - %s, "
+                                                           "now %zu accounts\n",
+                                                           who.id, who.name.c_str(),
+                                                           accounts::all().size());
+                                          else
+                                              std::fprintf(stderr,
+                                                           "[accounts] could not remove "
+                                                           "%d: %s\n", who.id, err.c_str());
+                                          refreshAccountRows();
+                                          buildSettings();
+                                      });
+                        };
+                        const std::vector<accounts::Account> people = removableAccounts();
+                        if (people.empty()) return;
+                        if (people.size() == 1) { confirm(people[0]); return; }
+                        std::vector<std::string> names;
+                        for (const auto& p : people) names.push_back(p.name);
+                        names.push_back("Cancel");
+                        askChoice("Remove an account", "", names, 0,
+                                  [&, people, confirm](int i) {
+                                      if (i >= 0 && i < static_cast<int>(people.size()))
+                                          confirm(people[i]);
+                                  });
+                    });
+                    sound::play(sound::Cue::Activate);
                 } else if (res.value == SetPinSet) {
-                    choosePin("Choose a PIN", "Four digits",
+                    choosePin("Choose a PIN", "",
                               [&]() { buildSettings(); });
                     sound::play(sound::Cue::Activate);
                 } else if (res.value == SetPinChange) {
                     askPin("Enter your current PIN", "", [&]() {
-                        choosePin("Choose a new PIN", "Four digits",
+                        choosePin("Choose a new PIN", "",
                                   [&]() { buildSettings(); });
                     });
                     sound::play(sound::Cue::Activate);
@@ -6022,6 +6101,7 @@ int main(int argc, char** argv) {
         // THE PIN PAD BEFORE ANYTHING. It covers the screen, so nothing under
         // it may take a press.
         if (pinScreen.isOpen()) { pinOutcome(pinScreen.key(n)); return true; }
+        if (choiceScreen.isOpen()) { choiceOutcome(choiceScreen.key(n)); return true; }
         // Nothing takes a press while an account switch is behind the curtain.
         if (switchPendingId) return true;
         // The bar first, wherever it is focused. One place, one behaviour.
@@ -6910,6 +6990,7 @@ int main(int argc, char** argv) {
                      barSlot, pinScreen.isOpen() ? ", PIN pad open" : "");
         // A capture shows the pad at rest, not part-way through its fade.
         if (pinScreen.isOpen()) pinScreen.settle();
+        if (choiceScreen.isOpen()) choiceScreen.settle();
     }
 
     // ---- Idle: pixel shift, dim, blank — idle.h, open question 10b -------
@@ -7822,6 +7903,7 @@ int main(int argc, char** argv) {
             settingsScreen.setHasFocus(!barFocused && !accountsOpen);
             settingsScreen.tick(dt);
             pinScreen.tick(dt);
+            choiceScreen.tick(dt);
             tabDissolve.tick(dt);
             keyboardSlide.tick(dt);
             if (keyboard.sliding() || keyboard.isOpen()) {
@@ -9128,6 +9210,11 @@ int main(int argc, char** argv) {
         }
         // The PIN pad over all of it, the panel included: it can be opened
         // from the panel, and it covers the screen.
+        if (choiceScreen.isOpen() && !playing) {
+            screens::Ctx cctx{renderer, text, images, sc, &cards};
+            choiceScreen.draw(cctx);
+            renderer.setContentAlpha(1.0f);
+        }
         if (pinScreen.isOpen() && !playing) {
             screens::Ctx pctx{renderer, text, images, sc, &cards};
             pinScreen.draw(pctx);
