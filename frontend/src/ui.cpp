@@ -595,6 +595,38 @@ void Renderer::presentScene() {
     scenePresented_ = true;
 }
 
+void Renderer::captureSnapshot() {
+    if (vw_ <= 0 || vh_ <= 0) return;
+    if (!snapTex_) glGenTextures(1, &snapTex_);
+    glBindTexture(GL_TEXTURE_2D, snapTex_);
+    if (snapW_ != vw_ || snapH_ != vh_) {
+        // RGB, not RGBA: a copy may drop the framebuffer's alpha but may not
+        // invent one, and the window's may have none. It is drawn opaque.
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, vw_, vh_, 0, GL_RGB, GL_UNSIGNED_BYTE,
+                     nullptr);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        snapW_ = vw_;
+        snapH_ = vh_;
+    }
+    // The canvas's own rectangle of the finished frame, letterbox excluded,
+    // so drawing it back over 0..1920 x 0..1080 lands pixel for pixel.
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, targetFBO_);
+    glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, ox_, oy_, vw_, vh_);
+    glBindFramebuffer(GL_FRAMEBUFFER, targetFBO_);
+    glBindTexture(GL_TEXTURE_2D, 0);
+}
+
+void Renderer::drawSnapshot(float alpha) {
+    if (!snapTex_ || alpha <= 0.001f) return;
+    // Opaque: the copy has no alpha of its own, and the tint's alpha is the
+    // dissolve. Rows run bottom-up in a copied framebuffer, hence v 1 to 0.
+    drawTextured(0, 0, kCanvasWidth, kCanvasHeight, snapTex_, 0, 1, 1, 0,
+                 Color{1, 1, 1, alpha}, false, 0.0f, 0, 0, 0, 0, 0, /*opaque=*/true);
+}
+
 void Renderer::drawBiasGlow(float x, float y, float w, float h, float peak) {
     if (peak <= 0.0f) return;
     glUseProgram(glowProgram_);

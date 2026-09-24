@@ -5623,30 +5623,32 @@ int main(int argc, char** argv) {
         }
     };
 
-    // SWITCHING TOP-BAR DESTINATIONS FADES THROUGH THE BACKGROUND — 2026-09-24.
-    // MMagTech: *"the switch between top tabs is too quick and visually
-    // snappy"*, most of all Search to Settings. It was a cut out and a 280 ms
-    // fade in, and only the words faded. Now the old screen fades out, the
-    // new one is built, and it fades in, both ease-in-out, over a background
-    // that stays put. A press during the fade just changes where it is going.
+    // SWITCHING TOP-BAR DESTINATIONS IS A DISSOLVE — 2026-09-24.
     //
-    // Starting values, to be judged on the television.
-    constexpr float kTabLeave = 0.180f;
-    constexpr float kTabArrive = 0.320f;
-    // THE BACKGROUND CHANGES WITH THE NEW SCREEN, AS ONE, MMagTech
-    // 2026-09-24: the old screen (and Search's keyboard) fades out, then the
-    // new background and the new screen fade in together at the same speed.
-    // Tried and rejected the same day: the background changing while the old
-    // screen left (its colours showed behind Settings' rows), and a separate
-    // step for the background between the two ("done as one instead").
+    // MMagTech: *"the switch between top tabs is too quick and visually
+    // snappy"*, most of all Search to Settings. It was a cut out and a fade in.
+    // Tried the same afternoon and dropped on the television: fading the old
+    // screen out and the new one in, with the background in between, then with
+    // the background alongside. What he asked for in the end was the new
+    // screen arriving see-through, with the old one showing through it.
+    //
+    // So the last frame of the old screen is copied at the moment of the
+    // switch and drawn over the new one, fading away (Renderer::
+    // captureSnapshot). Everything dissolves together: content, keyboard,
+    // background and the bar's highlight. A press mid-dissolve copies the
+    // frame as it is and starts again from there.
+    //
+    // A starting value, to be judged on the television.
+    constexpr float kTabDissolve = 0.380f;
+    constexpr float kTabArrive = kTabDissolve;   // the new background's fade
     int pendingDest = -1;
-    Animated tabFade;
-    tabFade.smooth = true;
-    tabFade.from = tabFade.to = 1.0f;
+    Animated tabDissolve;
+    tabDissolve.smooth = true;
+    tabDissolve.from = tabDissolve.to = 0.0f;
     auto transitionTo = [&](int d) {
         if (shotMode) { goToDestination(d); return; }
+        // Taken at the end of the next frame, which still shows the old screen.
         pendingDest = d;
-        tabFade.retarget(0.0f, kTabLeave);
     };
     // Where the console is, or is about to be.
     auto destinationGoing = [&]() {
@@ -7447,15 +7449,7 @@ int main(int argc, char** argv) {
             accountScreen.tick(dt);
             addAccountScreen.tick(dt);
             settingsScreen.tick(dt);
-            tabFade.tick(dt);
-            if (pendingDest >= 0 && tabFade.to == 0.0f &&
-                tabFade.elapsed >= tabFade.duration) {
-                // Out; now build the new screen and bring it in. Its background
-                // follows in the backdrop block, at the same speed.
-                goToDestination(pendingDest);
-                pendingDest = -1;
-                tabFade.retarget(1.0f, kTabArrive);
-            }
+            tabDissolve.tick(dt);
             gridScreen.tick(dt, ctx);
             // The network's answer, when it lands. Rebuilt only if Settings is
             // still what is on screen; the next visit asks again anyway.
@@ -7786,10 +7780,6 @@ int main(int argc, char** argv) {
                                        ui::Color::black(backdropScrim)});
         }
         }
-
-        // The tab switch's fade, over every screen's content and under the
-        // bar, which stays put. Reset before the bar below.
-        renderer.setContentFade(playing ? 1.0f : tabFade.value());
 
         if (playing) {
             cab::Core& core = cab::Core::shared();
@@ -8447,8 +8437,6 @@ int main(int argc, char** argv) {
         // it — see DetailScreen::setProgress — and, for somebody who walked
         // away from it, in the corner of the top bar below.
 
-        renderer.setContentFade(1.0f);
-
         // ---- The top bar, which is its own strip ----------------------------
         //
         // MMagTech, 2026-09-21: *"the top bar with library settings and search
@@ -8693,10 +8681,11 @@ int main(int argc, char** argv) {
                                        ui::Color::black(c)});
         }
 
-        // Search's docked keyboard is part of Search, so it leaves with it.
-        renderer.setContentFade(here() == Screen::Search ? tabFade.value() : 1.0f);
         keyboard.draw(renderer, text, renderer.scale());
-        renderer.setContentFade(1.0f);
+
+        // The old screen, dissolving away over the new one. Over the keyboard,
+        // because the keyboard belongs to whichever screen it was on.
+        if (!playing) renderer.drawSnapshot(tabDissolve.value());
         if (safeGuides) renderer.drawSafeAreaGuides();
 
         // ---- The dim, over absolutely everything --------------------------
@@ -8743,6 +8732,24 @@ int main(int argc, char** argv) {
         if (gCaptureRequested) {
             gCaptureRequested = 0;
             renderer.saveFrame("/tmp/cabinetos-frame.bmp", dw, dh);
+        }
+
+        // A top-bar switch asked for: this frame still shows the old screen, so
+        // copy it, THEN switch. The next frame draws the new screen with this
+        // copy dissolving over it.
+        if (pendingDest >= 0) {
+            if (!playing && renderer.sceneCaptured()) {
+                renderer.captureSnapshot();
+                tabDissolve.from = tabDissolve.to = 1.0f;
+                tabDissolve.elapsed = 0.0f;
+                tabDissolve.retarget(0.0f, kTabDissolve);
+            }
+            goToDestination(pendingDest);
+            if (tabDissolve.value() > 0.0f) {
+                libraryScreen.settleArrival();
+                settingsScreen.settleArrival();
+            }
+            pendingDest = -1;
         }
 
         if (offscreen) {

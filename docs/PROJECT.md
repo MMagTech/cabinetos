@@ -12817,3 +12817,13 @@ the old screen (and Search's keyboard) fades out in 180 ms, then the new
 background and the new screen fade in together in 320 ms. Clearing the room
 during the fade-out, and a separate background step between the two, were
 both tried on the television the same afternoon and dropped.
+
+**SUPERSEDES THE ENTRIES ABOVE AGAIN: top-bar switches are a dissolve.**
+MMagTech wanted Settings to arrive see-through, with the old screen showing
+through it. The app keeps one screen at a time and cannot draw the old one
+beside the new, so the last finished frame of the old screen is copied at the
+switch (`Renderer::captureSnapshot`, one copy, at the end of that frame) and
+drawn over the new screen fading away, 380 ms ease-in-out. Content, keyboard,
+background and the bar's highlight all dissolve together. The arriving screen
+skips its own fade-in (`settleArrival`), or the middle of the dissolve dips
+through the background. The fade-out-then-in machinery is gone.

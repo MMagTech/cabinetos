@@ -120,6 +120,9 @@ public:
     // put it. The reference implementation got this wrong first: forcing focus
     // on every appearance yanked it away whenever somebody came back.
     void enter();
+    // Arrived already, with no fade of its own: a top-bar dissolve is doing
+    // the arriving, and two fades at once dip through the background.
+    void settleArrival() { appear_.settle(1.0f); }
 
     // Puts focus on a given tile, for a capture. The unplayable systems sort
     // last, so without this the only part of this screen a screenshot can ever

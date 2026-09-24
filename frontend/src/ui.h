@@ -234,6 +234,18 @@ public:
     void presentScene();
     bool sceneCaptured() const { return scenePresented_; }
 
+    // A DISSOLVE BETWEEN TWO SCREENS — 2026-09-24. The app keeps one screen at
+    // a time, so the outgoing one cannot be drawn next to the incoming one.
+    // Instead the finished frame is copied, once, at the moment of the switch,
+    // and drawn over the new screen fading away. MMagTech asked for Settings to
+    // arrive see-through, with the old screen showing through it; this is that
+    // for every top-bar switch, background included.
+    //
+    // Call captureSnapshot() at the END of a frame, after everything is drawn
+    // and before the swap. drawSnapshot() draws it over the canvas at `alpha`.
+    void captureSnapshot();
+    void drawSnapshot(float alpha);
+
     // A rounded panel that blurs what is behind it. `blur` is a mip level:
     // roughly 4 is the "thin material" of a pill, 6 the "regular material" of
     // a panel. `tint` is composited over the blur.
@@ -270,6 +282,8 @@ private:
 
     // The scene, captured so panels can blur it.
     GLuint sceneFBO_ = 0, sceneTex_ = 0;
+    GLuint snapTex_ = 0;
+    int snapW_ = 0, snapH_ = 0;
     int sceneW_ = 0, sceneH_ = 0;
     bool scenePresented_ = false;
     int vx_ = 0, vy_ = 0, vw_ = 0, vh_ = 0;

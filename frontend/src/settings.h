@@ -57,6 +57,8 @@ public:
     // category that was last open, because a person coming back to Settings
     // usually came back for the same thing.
     void enter();
+    // See LibraryScreen::settleArrival.
+    void settleArrival() { appear_.settle(1.0f); }
 
     // For a capture: open on a category, with focus in its rows if it has one
     // that can be focused.
