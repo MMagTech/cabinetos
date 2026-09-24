@@ -1937,8 +1937,15 @@ static Library loadLibrary(romm::Client& client) {
     // fetching the catalogue, would have quietly emptied Home while every one
     // of these calls still succeeded. That is the trap in this change and it
     // is why the store is filled from here rather than searched.
+    // TIMED, because once on the A9 these two took eleven seconds during an
+    // account switch when they take a fifth of one at boot, and nothing else
+    // in the log said which.
+    const Uint64 tRecent = SDL_GetTicks();
     std::vector<romm::Game> recent;
-    if (client.fetchRecent(16, &recent, &err)) {
+    const bool gotRecent = client.fetchRecent(16, &recent, &err);
+    std::fprintf(stderr, "[library] play history in %llu ms\n",
+                 static_cast<unsigned long long>(SDL_GetTicks() - tRecent));
+    if (gotRecent) {
         for (const auto& g : recent) {
             // A recent game on a platform this console cannot play is skipped,
             // not shown greyed: Home must not offer a Resume that cannot run.
@@ -1961,8 +1968,12 @@ static Library loadLibrary(romm::Client& client) {
         std::fprintf(stderr, "[library] no play history: %s\n", err.c_str());
     }
 
+    const Uint64 tFavs = SDL_GetTicks();
     std::vector<romm::Game> favs;
-    if (client.fetchFavorites(40, &favs, &err)) {
+    const bool gotFavs = client.fetchFavorites(40, &favs, &err);
+    std::fprintf(stderr, "[library] favourites in %llu ms\n",
+                 static_cast<unsigned long long>(SDL_GetTicks() - tFavs));
+    if (gotFavs) {
         for (const auto& g : favs) {
             if (!catalog::playable(g)) continue;
             lib.favorites.push_back(appendGame(lib, g));
@@ -5236,6 +5247,10 @@ int main(int argc, char** argv) {
     // fighting each other.
     // THE CURTAIN. 0 is clear, 1 is black over everything. See design.h.
     Animated curtain;
+    // An account switch waiting behind the curtain; see pumpSwitch.
+    int switchPendingId = 0;
+    std::string switchLabel;
+    int switchCurtainFrames = 0;
     curtain.smooth = true;
     curtain.from = curtain.to = 0.0f;
 
@@ -5592,24 +5607,22 @@ int main(int argc, char** argv) {
                 // screen does not know whether a game is running or a save is
                 // still going up; it asked to become somebody and this decides.
                 const int id = res.value;
+                // NOT SWITCHED HERE. The switch asks the server who this is and
+                // reloads the library, which blocks the frame loop; done here,
+                // the screen froze mid-panel for as long as that took (eleven
+                // seconds once, on the A9). It is handed to pumpSwitch, which
+                // brings the curtain down with the person's name on it first.
                 auto go = [&, id]() {
-                    std::string why;
-                    if (switchAccount(id, &why)) {
-                        // Straight back to Home with the panel closed, because
-                        // everything behind it belonged to the last account.
-                        // Leaving the panel open over a Home that has just been
-                        // rebuilt for somebody else is the stale-screen fault in
-                        // miniature.
-                        accountsOpen = false;
-                        barFocused = false;
-                        stack.clear();
-                        stack.push_back(Screen::Home);
-                        accountScreen.setNotice("");
-                        sound::play(sound::Cue::Activate);
-                    } else {
-                        accountScreen.setNotice(why);
-                        sound::play(sound::Cue::Edge);
-                    }
+                    const std::vector<accounts::Account> list = accounts::all();
+                    const accounts::Account* a = accounts::find(list, id);
+                    switchPendingId = id;
+                    switchLabel = "Switching to " + (a ? a->name : std::string("them"));
+                    switchCurtainFrames = 0;
+                    accountsOpen = false;
+                    barFocused = false;
+                    accountScreen.setNotice("");
+                    curtain.retarget(1.0f, kCurtainDown);
+                    sound::play(sound::Cue::Activate);
                 };
                 // THE SAME PIN STOPS ANYBODY SWITCHING INTO THE OWNER.
                 // docs/SETTINGS.md, Accounts. With no PIN, askPin just goes.
@@ -5962,6 +5975,8 @@ int main(int argc, char** argv) {
         // THE PIN PAD BEFORE ANYTHING. It covers the screen, so nothing under
         // it may take a press.
         if (pinScreen.isOpen()) { pinOutcome(pinScreen.key(n)); return true; }
+        // Nothing takes a press while an account switch is behind the curtain.
+        if (switchPendingId) return true;
         // The bar first, wherever it is focused. One place, one behaviour.
         if (accountsOpen) { apply(accountScreen.key(n)); return true; }
         if (barFocused && barKey(n)) return true;
@@ -6079,6 +6094,47 @@ int main(int argc, char** argv) {
     // Picks up a finished job. Loading the game happens HERE, on the frame
     // thread, because the core is not thread-safe and the worker only ever
     // moved bytes.
+    // ---- An account switch, behind the curtain ---------------------------
+    //
+    // The request (the account panel's SwitchAccount) only sets these. Each
+    // frame this brings the curtain down; once it is fully down and a frame
+    // with the name on it has been shown, it runs the blocking switch, then
+    // lifts the curtain on the new person's Home. MMagTech, 2026-09-24: the UI
+    // stalled on a switch with nothing to say why.
+    // (switchPendingId, switchLabel and switchCurtainFrames are declared by
+    // the curtain, further up, because the account panel's apply sets them.)
+    auto pumpSwitch = [&]() {
+        if (!switchPendingId) return;
+        curtain.retarget(1.0f, kCurtainDown);
+        if (curtain.value() < 0.995f) return;
+        // Two frames at full curtain, so the name is on the television before
+        // the frame loop stops for the network.
+        if (++switchCurtainFrames < 3) return;
+        const int id = switchPendingId;
+        std::string why;
+        const Uint64 t0 = SDL_GetTicks();
+        const bool ok = switchAccount(id, &why);
+        std::fprintf(stderr, "[accounts] switch took %llu ms\n",
+                     static_cast<unsigned long long>(SDL_GetTicks() - t0));
+        switchPendingId = 0;
+        if (ok) {
+            // Straight to Home, because everything behind it belonged to the
+            // last account.
+            stack.clear();
+            stack.push_back(Screen::Home);
+        } else {
+            // Back to the panel, saying why, with the old person still in.
+            accountsOpen = true;
+            barFocused = true;
+            barSlot = BarAccount;
+            refreshAccountRows();
+            accountScreen.open();
+            accountScreen.setNotice(why);
+            sound::play(sound::Cue::Edge);
+        }
+        curtain.retarget(0.0f, kCurtainUp);
+    };
+
     auto pumpLaunch = [&]() {
         const LaunchJob::Stage st = launchJob.stage.load();
         if (st == LaunchJob::Stage::Failed) {
@@ -7523,6 +7579,7 @@ int main(int argc, char** argv) {
         }
 
         pumpLaunch();
+        pumpSwitch();
         pumpExit();
         pumpStateLoad(stateLoad, session, menuNotice);
         if (stateLoad.loaded) {
@@ -8953,6 +9010,16 @@ int main(int argc, char** argv) {
             if (c > 0.001f)
                 renderer.draw(ui::Rect{0, 0, ui::kCanvasWidth, ui::kCanvasHeight, 0,
                                        ui::Color::black(c)});
+            // WHO IT IS BECOMING, on the curtain, for as long as the curtain is
+            // there. Fades with it both ways.
+            if (c > 0.001f && !switchLabel.empty()) {
+                const float lw = text.measure(switchLabel, ui::TextStyle::Title2, sc);
+                text.draw(renderer, switchLabel, (ui::kCanvasWidth - lw) * 0.5f,
+                          ui::kCanvasHeight * 0.5f + text.ascent(ui::TextStyle::Title2, sc) * 0.5f,
+                          ui::TextStyle::Title2, ui::Color::white(0.9f * c), sc);
+            } else if (c <= 0.001f && switchPendingId == 0) {
+                switchLabel.clear();
+            }
         }
 
         // A switch asked for this frame: copy it now, before the keyboard, so
