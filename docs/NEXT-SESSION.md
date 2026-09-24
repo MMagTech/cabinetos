@@ -395,7 +395,10 @@ states, and leave — with the save syncing on the way out.
 **It is now `docs/ROADMAP.md`, with a GitHub milestone per step.** Five
 in-game features from his brainstorm (hotkey layer, fast forward, rewind,
 screenshots, save state undo) are issues #76 to #80, step 4 of the roadmap,
-after the remaining cores; the installer is step 6, last.
+after the emulator work; the installer is step 6, last. **The open problems
+numbered below (N64 textures, GameCube and NES audio, Dreamcast, N64 and PSP
+states, core options, the BIOS warning, offline) are issues #82 to #90**; the
+notes here stay the detail.
 
 1. **The Settings screen, by discussion first.** *"It's going to need a good
    discussion and your help to get it right."* CabinetOS's Settings holds more
