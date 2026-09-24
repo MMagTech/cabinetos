@@ -7592,7 +7592,7 @@ int main(int argc, char** argv) {
                     // saying so is right — going back to a panel that looks
                     // exactly as it did is what made this look broken.
                     addAccountScreen.setError(
-                        who.name + " is already on this console, so nobody was added. "
+                        who.name + " is already on this console. "
                         "Sign in to RomM as the person you are adding (a private "
                         "window is easiest) and try again.");
                     std::fprintf(stderr, "[accounts] NOT ADDED: approved as %d - %s, "
