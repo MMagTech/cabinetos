@@ -82,6 +82,9 @@ enum class Action {
     // A Settings row was pressed. The value is the row's own id, which the
     // app assigned when it built the rows; see settings.h.
     Setting,
+    // A Settings choice row moved to another choice. The value is the row's
+    // id; SettingsScreen::choiceOf says which choice it is on now.
+    SettingChoice,
 };
 
 struct Result {

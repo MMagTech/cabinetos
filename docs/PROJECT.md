@@ -12872,7 +12872,14 @@ silently dropped. If CEC comes back, its row goes under Display and Sound.
 
 **Interface sounds gets a volume.** MMagTech, 2026-09-24. Proposed as one row
 changed with left and right: Off, Quiet, Medium, Loud, which folds the on/off
-switch into it. `sound::setVolume` already scales at play time. Not built.
+switch into it. `sound::setVolume` already scales at play time. **Built,
+PR for #62:** saved as a word in `config/settings.json` (the console's own
+settings file, `prefs.{h,cpp}`, which Picture quality and Turn off screen
+after will share). The first volumes were about 5 dB apart (0.12, 0.22,
+0.40); on the TV MMagTech found *"the steps are too close in volume"*, and
+about 10 dB apart (0.07, 0.22, 0.65) was *"sounds good to me"*. Medium is the
+volume the console always had. On the row, left and right change the level
+and Back returns to the category list.
 
 **Accounts, proposed (awaiting MMagTech):** switching and adding stay in the
 account chip's panel; Remove account and the PIN go in Settings only, because

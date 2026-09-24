@@ -3,9 +3,8 @@
 //
 // MMagTech, 2026-09-21: *"i also think a navigation sound of some sort would be
 // nice and later we have the option in settings to turn it off."* Both halves
-// are built here — the sounds, and the switch. The switch has no screen to live
-// on yet, because Settings does not exist, so today it is a flag and a field;
-// when Settings arrives it sets `sound::setEnabled` and nothing else changes.
+// are built here: the sounds, and the switch. The switch is Settings' Interface
+// sounds row, Off, Quiet, Medium or Loud (`setLevel`), and it is remembered.
 //
 // THE SOUNDS ARE SYNTHESISED, NOT RECORDED, and that is a deliberate choice
 // with three reasons behind it:
@@ -30,6 +29,8 @@
 // Two streams on one device is what SDL3's audio model is for.
 
 #pragma once
+
+#include <string>
 
 namespace sound {
 
@@ -59,6 +60,28 @@ bool enabled();
 // else is happening, and a navigation click that competes with a game's music
 // is one nobody keeps switched on.
 void setVolume(float v);
+
+// THE ROW IN SETTINGS, docs/SETTINGS.md: one row, left and right, and saved.
+// What each level is in numbers lives in sound.cpp and nowhere else, so
+// retuning Quiet is a one-line change that every console picks up, because
+// what is saved is the word and not the number.
+enum class Level { Off, Quiet, Medium, Loud };
+constexpr int kLevelCount = 4;
+
+// Sets the switch and the volume together. Medium is what the console
+// sounded like before there was a choice.
+void setLevel(Level l);
+Level level();
+// For tuning on the television (--ui-sound-levels): what Quiet, Medium and
+// Loud mean, 0..1. Whatever wins goes back into sound.cpp.
+void setLevelVolumes(float quiet, float medium, float loud);
+// As a person reads it on the row: "Off", "Quiet", ...
+const char* levelName(Level l);
+// As it is stored in config/settings.json: "off", "quiet", ...
+const char* levelWord(Level l);
+// The stored word back to a level. False, and `out` untouched, for anything
+// else, so a hand-edited file cannot set something that is not on the row.
+bool levelFromWord(const std::string& word, Level* out);
 
 // Plays a cue, or does nothing if there is no device or the switch is off.
 // Safe to call from the frame loop as often as input arrives — a cue that is

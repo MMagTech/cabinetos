@@ -19,6 +19,14 @@ constexpr float kPaneChange = 0.150f;
 // The one arrow the product already uses for "this opens something": the
 // shelf headings on Home carry it.
 constexpr const char* kChevron = "\xE2\x80\xBA";
+// Its mirror, for a choice row's "left moves it this way".
+constexpr const char* kChevronBack = "\xE2\x80\xB9";
+
+// A choice row's arrows: bright where left or right still goes somewhere,
+// faint at the end it cannot pass. Starting values.
+constexpr float kChoiceArrowOn = 0.70f;
+constexpr float kChoiceArrowOff = 0.18f;
+constexpr float kChoiceArrowGap = 14.0f;
 
 float rowHeight(Ctx& c, const SettingsRow& row) {
     float h = design::kRowPadY * 2.0f + c.text.lineHeight(ui::TextStyle::Title3, c.sc);
@@ -77,7 +85,15 @@ bool SettingsScreen::focusable(int cat, int row) const {
     if (cat < 0 || cat >= static_cast<int>(cats_.size())) return false;
     const auto& rows = cats_[cat].rows;
     if (row < 0 || row >= static_cast<int>(rows.size())) return false;
-    return rows[row].kind == Kind::Action || rows[row].kind == Kind::Toggle;
+    return rows[row].kind == Kind::Action || rows[row].kind == Kind::Toggle ||
+           rows[row].kind == Kind::Choice;
+}
+
+int SettingsScreen::choiceOf(int id) const {
+    for (const auto& cat : cats_)
+        for (const auto& row : cat.rows)
+            if (row.kind == Kind::Choice && row.id == id) return row.choice;
+    return -1;
 }
 
 int SettingsScreen::firstFocusable(int cat) const {
@@ -150,7 +166,27 @@ Result SettingsScreen::key(Nav n) {
     }
 
     // ---- In the rows ----
-    const auto& rows = cats_[cat_].rows;
+    auto& rows = cats_[cat_].rows;
+
+    // A CHOICE ROW TAKES LEFT AND RIGHT FOR ITSELF, which is what makes it
+    // one row rather than a page: the level changes where you are standing.
+    // Back is the way out to the list from it. Nothing here sounds: the app
+    // applies the change first, so a sounds row is heard at its new level.
+    if (row_ >= 0 && rows[row_].kind == Kind::Choice &&
+        (n == Nav::Left || n == Nav::Right || n == Nav::Activate)) {
+        SettingsRow& row = rows[row_];
+        const int count = static_cast<int>(row.choices.size());
+        int next = row.choice + (n == Nav::Left ? -1 : 1);
+        // A walks forward and wraps, so the row also works from A alone.
+        if (n == Nav::Activate && next >= count) next = 0;
+        if (count == 0 || next < 0 || next >= count) {
+            sound::play(sound::Cue::Edge);
+            return {};
+        }
+        row.choice = next;
+        return {Action::SettingChoice, row.id};
+    }
+
     switch (n) {
         case Nav::Up:
         case Nav::Down: {
@@ -289,7 +325,12 @@ void SettingsScreen::drawGlass(Ctx& c) {
         const bool chevron = row.kind == Kind::Action;
         const float chevW = chevron
             ? c.text.measure(kChevron, ui::TextStyle::Title3, c.sc) : 0.0f;
-        const std::string value = unbuilt ? "Not built yet" : row.value;
+        const bool choice = row.kind == Kind::Choice && !row.choices.empty();
+        const int pick = choice ? std::clamp(row.choice, 0,
+                                             static_cast<int>(row.choices.size()) - 1)
+                                : 0;
+        const std::string value = unbuilt ? "Not built yet"
+                                          : (choice ? row.choices[pick] : row.value);
         const float valueW = value.empty()
             ? 0.0f : c.text.measure(value, ui::TextStyle::Callout, c.sc);
         float right = x + w - design::kRowPadX;
@@ -304,10 +345,31 @@ void SettingsScreen::drawGlass(Ctx& c) {
                         ui::Color::white(0.30f), c.sc);
             right -= 16.0f;
         }
+        // A CHOICE ROW UNDER FOCUS shows which way it can still go, an arrow
+        // either side of the value. Unfocused it reads like any other value,
+        // because the arrows only mean something when left and right do.
+        if (choice && rf > 0.0f) {
+            const float aw = c.text.measure(kChevron, ui::TextStyle::Callout, c.sc);
+            const bool canRight = pick + 1 < static_cast<int>(row.choices.size());
+            right -= aw;
+            c.text.draw(c.r, kChevron, right, titleBase, ui::TextStyle::Callout,
+                        ui::Color::white((canRight ? kChoiceArrowOn : kChoiceArrowOff) * rf),
+                        c.sc);
+            right -= kChoiceArrowGap;
+        }
         if (!value.empty()) {
             right -= valueW;
             c.text.draw(c.r, value, right, titleBase, ui::TextStyle::Callout,
                         ui::Color::white(0.60f * (unbuilt ? 0.8f : 1.0f)), c.sc);
+            right -= 24.0f;
+        }
+        if (choice && rf > 0.0f) {
+            const float aw = c.text.measure(kChevronBack, ui::TextStyle::Callout, c.sc);
+            right += 24.0f - kChoiceArrowGap;
+            right -= aw;
+            c.text.draw(c.r, kChevronBack, right, titleBase, ui::TextStyle::Callout,
+                        ui::Color::white((pick > 0 ? kChoiceArrowOn : kChoiceArrowOff) * rf),
+                        c.sc);
             right -= 24.0f;
         }
 

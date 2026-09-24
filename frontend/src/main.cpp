@@ -75,6 +75,7 @@
 #include "text.h"
 #include "overlaywin.h"
 #include "power.h"
+#include "prefs.h"
 #include "ui.h"
 
 namespace {
@@ -2875,6 +2876,9 @@ int main(int argc, char** argv) {
     // option in settings to turn it off."* The off half is built now so that
     // when the screen arrives it has something to set rather than something to
     // implement.
+    // --ui-sound overrides the saved level for this run only, for tests.
+    bool uiSoundFlag = false;
+    const char* uiSoundLevels = nullptr;
     bool uiSound = true;
     float uiSoundVolume = 0.22f;
     // HOME'S BACKDROP, TUNABLE WITHOUT A COMPILER.
@@ -3083,12 +3087,16 @@ int main(int argc, char** argv) {
             searchQuery = argv[++i];
         } else if (SDL_strcmp(argv[i], "--ui-sound") == 0 && i + 1 < argc) {
             const char* v = argv[++i];
+            uiSoundFlag = true;
             uiSound = !(SDL_strcmp(v, "off") == 0 || SDL_strcmp(v, "0") == 0);
             if (uiSound) uiSoundVolume = static_cast<float>(SDL_atof(v)) > 0
                                              ? static_cast<float>(SDL_atof(v))
                                              : uiSoundVolume;
             std::fprintf(stderr, "[sound] %s, volume %.2f\n",
                          uiSound ? "on" : "off", uiSoundVolume);
+        } else if (SDL_strcmp(argv[i], "--ui-sound-levels") == 0 && i + 1 < argc) {
+            // quiet,medium,loud, e.g. --ui-sound-levels 0.07,0.22,0.65
+            uiSoundLevels = argv[++i];
         } else if (SDL_strcmp(argv[i], "--home-bar") == 0 && i + 1 < argc) {
             // top,height,gap — e.g. --home-bar 36,56,52
             float t = barTop, h = barHeight, g = barGapBelow;
@@ -3615,8 +3623,24 @@ int main(int argc, char** argv) {
     // first click a person hears should not be the second one they asked for —
     // and a console with no audio device says so once and stays silent.
     sound::init();
-    sound::setEnabled(uiSound);
-    sound::setVolume(uiSoundVolume);
+    if (uiSoundLevels) {
+        float q = 0, m = 0, l = 0;
+        if (std::sscanf(uiSoundLevels, "%f,%f,%f", &q, &m, &l) == 3) {
+            sound::setLevelVolumes(q, m, l);
+            std::fprintf(stderr, "[sound] levels %.2f, %.2f, %.2f\n", q, m, l);
+        }
+    }
+    if (uiSoundFlag) {
+        sound::setEnabled(uiSound);
+        sound::setVolume(uiSoundVolume);
+    } else {
+        // The level Settings saved. Nothing saved, or a word this build does
+        // not know, is Medium: how the console always sounded.
+        sound::Level lv = sound::Level::Medium;
+        sound::levelFromWord(prefs::get("interface_sounds", ""), &lv);
+        sound::setLevel(lv);
+        std::fprintf(stderr, "[sound] interface sounds %s\n", sound::levelName(lv));
+    }
 
     // GLES 3.0, which is what the libretro hardware-rendered cores ask for via
     // RETRO_ENVIRONMENT_SET_HW_RENDER. The UI and the cores share one context
@@ -5301,9 +5325,14 @@ int main(int argc, char** argv) {
         cats.push_back({"Display and Sound", {
             {K::Unbuilt, 0, "Picture quality",
              "Performance, Balanced or Quality, for the whole console", ""},
-            {K::Toggle, SetInterfaceSounds, "Interface sounds",
-             "The clicks when you move around the menus",
-             sound::enabled() ? "On" : "Off"},
+            [] {
+                Row r{K::Choice, SetInterfaceSounds, "Interface sounds",
+                      "The clicks when you move around the menus", ""};
+                for (int i = 0; i < sound::kLevelCount; ++i)
+                    r.choices.push_back(sound::levelName(static_cast<sound::Level>(i)));
+                r.choice = static_cast<int>(sound::level());
+                return r;
+            }(),
         }});
 
         // THE DRIVES, by MMagTech's names: the main drive is "CabinetOS", any
@@ -5485,13 +5514,20 @@ int main(int argc, char** argv) {
                     stack.push_back(Screen::AddAccount);
                     startAddAccount();
                     sound::play(sound::Cue::Activate);
-                } else if (res.value == SetInterfaceSounds) {
-                    // THIS SESSION ONLY, FOR NOW: nothing writes it down, so a
-                    // restart puts it back to what the command line says.
-                    sound::setEnabled(!sound::enabled());
-                    buildSettings();
-                    // After the flip, so turning them ON is heard.
-                    sound::play(sound::Cue::Activate);
+                }
+                break;
+            case screens::Action::SettingChoice:
+                if (res.value == SetInterfaceSounds) {
+                    const int i = settingsScreen.choiceOf(SetInterfaceSounds);
+                    if (i >= 0 && i < sound::kLevelCount) {
+                        const auto lv = static_cast<sound::Level>(i);
+                        sound::setLevel(lv);
+                        prefs::set("interface_sounds", sound::levelWord(lv));
+                    }
+                    // AFTER the change, so each step is heard at the level it
+                    // just chose, which is how a person picks one. Off is
+                    // silent, which says it too.
+                    sound::play(sound::Cue::Move);
                 }
                 break;
             case screens::Action::FocusKeyboard:
