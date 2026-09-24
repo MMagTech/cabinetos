@@ -281,6 +281,49 @@ const char* saveTag(const char* core) {
         // Neo Geo Pocket flash. Same commit as the reference's iOS build
         // (a50d5ac2), one source tree, no patches, no build arguments.
         {"beetle_ngp", "ngp-native"},
+
+        // THE BATTERY SAVES OF FIVE MORE SYSTEMS, 2026-09-23. Until today these
+        // had no tag, so their progress never left the console: NES, SNES and
+        // N64 among them, which are the most-played systems in the library.
+        //
+        // All five are battery saves, read through RETRO_MEMORY_SAVE_RAM, and
+        // the reference reads every one of them through the same call
+        // (LibretroFrontend.mm). All five are pinned at the reference's own
+        // Mac revision. Neither of those is what makes the tag safe, though:
+        // the rule for a save is that the bytes are the emulated machine's, and
+        // for four of these they plainly are.
+        //
+        // NES battery WRAM. CabinetOS 236ccdfc, the reference's Mac commit.
+        {"fceumm", "fceumm-native"},
+        // SNES cartridge SRAM. 890b5d44, the reference's Mac commit.
+        {"snes9x", "snes9x-native"},
+        // PC Engine CD backup RAM, 2 KB, starting `HUBM` as the machine's own
+        // does. The reference's rows on the server read exactly that.
+        // 2f623abd, the reference's Mac commit.
+        {"beetle_pce_fast", "pcefast-native"},
+        // The Saturn's internal backup RAM, 32 KB, starting `BackUpRam
+        // Format`, which is the machine's own header; the reference's row on
+        // the server reads the same. It only arrives through SAVE_RAM while
+        // beetle_saturn_save_method is "libretro", which optionOverrides
+        // forces for that reason. ed549bda, the reference's Mac commit.
+        {"beetle_saturn", "saturn-native"},
+        // N64, AND THIS ONE IS THE EMULATOR'S LAYOUT, NOT THE MACHINE'S. An
+        // N64 cartridge saves to one of EEPROM, SRAM or flash, and a
+        // controller pak is its own thing; mupen64plus-libretro-nx packs all
+        // four into one struct, `save_memory_data` in
+        // libretro/libretro_memory.h: EEPROM, four paks, SRAM, flash, 296960
+        // bytes. So the layout, not the hardware, is what must agree, and it
+        // does: f275caf4 is the reference's commit on EVERY platform it ships,
+        // and the seven N64 rows on the reference server are all 296960 bytes.
+        // States still stay local; emulatorTag says why.
+        {"mupen64plus", "mupen64plus-native"},
+        //
+        // THE OTHER FOUR OF THE NINE HAVE NO SAVE TO CARRY, so they get no
+        // entry here and lose nothing: beetle_vb does not expose a Virtual
+        // Boy battery, prosystem exposes no memory at all, and no Atari 2600
+        // or Vectrex cartridge ever had a battery. The reference wires no
+        // save memory for any of the four. What they lack is STATES, which is
+        // emulatorTag's stricter question and a separate piece of work.
     };
     const std::string name = manifestName(core);
     for (const auto& t : kSaveTags)
@@ -443,6 +486,21 @@ std::map<std::string, std::string> optionOverrides(const std::string& core) {
     // this console's second free ride from the core-options work.
     if (coreName == "genesis_plus_gx") {
         return {{"genesis_plus_gx_system_bram", "per game"}};
+    }
+
+    // Beetle Saturn, and this one also decides where the save is. "libretro"
+    // hands the Saturn's backup RAM to the frontend through SAVE_RAM, which
+    // is what saveTag's `saturn-native` rides; "mednafen" makes the core keep
+    // its own .bkr file instead, which nothing here reads, so every Saturn
+    // save would stay on this console and never reach the server.
+    //
+    // It is already the declared default at the pinned ed549bda. Forced
+    // anyway, because the reference forces it for exactly this reason
+    // (NativeCoreOptions.swift): its Saturn saves had nowhere to go once
+    // before, and a core bump that changed the default would strand them
+    // again without a word.
+    if (coreName == "beetle_saturn") {
+        return {{"beetle_saturn_save_method", "libretro"}};
     }
 
     // Opera, and both of these are the difference between 3DO working and
