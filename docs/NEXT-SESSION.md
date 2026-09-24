@@ -408,7 +408,8 @@ states, and leave — with the save syncing on the way out.
    still be on that hand-built binary; `--restore` or a reboot puts it back).
    Merge only when he says the whole of Settings is right.
 
-   **Decided and still to build**, each with its reasoning in question 31:
+   **Tracked as GitHub issues #57 to #75, Settings milestone** (#74 and #75
+   are `later`). The checklist below is the same list:
    - [ ] Interface sounds as one row: Off, Quiet, Medium, Loud (left/right),
          and SAVED, which the current toggle is not.
    - [ ] Owner (first setup account) and one PIN. PIN offered when the second

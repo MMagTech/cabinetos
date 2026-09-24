@@ -13,6 +13,12 @@ now history.
 decided, not built. **Later** is wanted, not now. **Dropped** was decided
 against.
 
+**Tracking:** one GitHub issue per feature, under the **Settings** milestone
+(https://github.com/MMagTech/cabinetos/milestone/1), labelled `settings` or
+`pause-menu`; the **later** ones carry the `later` label and sit outside the
+milestone. Discuss on the issue; the PR that builds it closes it and flips its
+status here to Built.
+
 **Where the work is:** branch `settings-side-list`, PR #56, **not merged on
 purpose**. MMagTech judges it on the television with `tools/ui-loop.sh` first
 and says when it is right.
@@ -69,51 +75,53 @@ and says when it is right.
   - File access (turning it on, making a new password)
 
   Open to everyone: adding an account, sounds, picture quality, system update.
-  The same PIN stops anyone switching into the owner's account. **To build.**
+  The same PIN stops anyone switching into the owner's account. **To build,
+  #57.**
 - **The PIN is offered when a second account is added**, not in first run.
   Right after the new person pairs: *"Anyone using this console can change
   Wi-Fi, sign out and remove accounts. Set a PIN so only you can?"* Set PIN /
-  Not now. Only if no PIN exists, only once. **To build.**
+  Not now. Only if no PIN exists, only once. **To build, #57.**
 - **Remove an account** is in Settings only. It removes the account from this
   console; the RomM account and its saves are untouched. The account playing
-  now cannot be removed. **To build.**
-- **RetroAchievements**, a sign-in per account. **Later.**
+  now cannot be removed. **To build, #58.**
+- **RetroAchievements**, a sign-in per account. **Later, #74.**
 - **Background colour per account:** a few hand-picked choices (purple, blue,
   green, red, graphite), so the console takes on the colour of whoever is
-  signed in. The boot screen stays purple. **Later.**
+  signed in. The boot screen stays purple. **Later, #75.**
 
 ## Controllers
 
 - **Connected controllers** (which is which player), **Add a controller** (the
-  same pairing screen as first run), **Button mapping**. All **to build**.
+  same pairing screen as first run), **Button mapping**. All **to build**:
+  #64, #65, #66.
 
 ## Network
 
 - **Status** (connected over Ethernet or Wi-Fi, and the address). **Built.**
 - **RomM server** address shown. **Built.**
 - **Wi-Fi:** see networks, join, forget, change a password. **To build**; the
-  code underneath already works for first run.
+  code underneath already works for first run. #59.
 - **Addresses are automatic only.** A fixed address is set on the router.
   **Dropped: manual IP**, unless people ask, then it is one "Advanced" page.
 - **Change server address:** the same server at a new address. The console
   proves it is the same server by asking the new address who the account's
   sign-in token belongs to; only the server that issued a token accepts it. A
-  different server is refused and pointed at Sign out. **To build.**
+  different server is refused and pointed at Sign out. **To build, #60.**
 - **Sign out:** one confirmation screen. All cached and kept games on this
   console are removed; saves are safe on the server. Anything not yet
   uploaded is tried quietly first, and mentioned only if it failed (by design
   there never is any). Everything tied to that server is cleared: its games
   and the accounts. Wi-Fi and controllers stay. Then back to first run's
-  server step. **To build.**
+  server step. **To build, #61.**
 - **One server at a time.** A friend's server is sign out, then sign in.
 
 ## Display and Sound
 
 - **Picture quality:** Performance, Balanced or Quality for the whole console,
-  and a game's pause menu can override it for that game. **To build.**
+  and a game's pause menu can override it for that game. **To build, #63.**
 - **Interface sounds:** one row changed with left and right: Off, Quiet,
   Medium, Loud, and remembered. Today's test build has only On or Off and
-  forgets it on restart. **To build.**
+  forgets it on restart. **To build, #62.**
 - **HDMI-CEC: dropped.** No adapter will be bought to test with, and standby
   already covers what it was for. This reverses the earlier "CEC is a
   requirement".
@@ -124,9 +132,9 @@ and says when it is right.
   internal drive is **Internal**, a USB drive is **External**; two of one kind
   are told apart by the drive's name. **Built.**
 - **Eject** for a USB drive: finishes or stops anything writing to it, then
-  says "Safe to unplug". **To build.**
+  says "Safe to unplug". **To build, #67.**
 - **Kept and cached games:** see what is on the console, keep or release.
-  **To build.**
+  **To build, #68.**
 - **File access** (under Storage):
   - SFTP only, no shell. Off until turned on.
   - User name `cabinet`, fixed.
@@ -135,20 +143,20 @@ and says when it is right.
     password**.
   - From a computer you see only the console's saves and games folders, and
     only the `CabinetOS` folder on an external drive. Nothing of the system.
-  - **To build.** Setting your own password: **later**, if people ask.
+  - **To build, #69.** Setting your own password: **later**, if people ask.
 - **Plugging a drive in and it being used has not been tested on the A9 with a
   real drive yet.**
 
 ## System
 
-- **System update:** one check, one button, one restart. **To build.**
+- **System update:** one check, one button, one restart. **To build, #70.**
 - **Turn off screen after:** 10 min, 15 min (to start), 30 min, 1 hour, Never.
-  **To build.**
+  **To build, #71.**
 
 ## About
 
 - **Version:** CabinetOS has **no version number of its own yet**, only
-  Bazzite's. One has to be decided. **To build.**
+  Bazzite's. One has to be decided. **To build, #72.**
 - **Credits** (Bazzite, Universal Blue, ChimeraOS, the emulator projects) and
   **Licences**, readable on the console. **To build.**
 
@@ -165,4 +173,4 @@ right there and the choice is about a system:
 - Controller type: Mega Drive 3 or 6 button, PC Engine 2 or 6 button.
 - Shader and glow, as already decided.
 
-**To build.**
+**To build, #73.**
