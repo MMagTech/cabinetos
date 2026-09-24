@@ -12884,3 +12884,47 @@ cache and unsent saves when pairing to a different server?
   games on another server) and the accounts. Wi-Fi and controllers stay.
   (3) Back to first run's server step, reusing its screens.
 - **One server at a time.**
+
+**ACCOUNTS, OWNER AND PIN: DECIDED 2026-09-24, replacing the proposal above.**
+
+- **The first account from setup owns the console.** Not RomM's roles: it
+  works entirely on the console and needs nothing set up on the server.
+- **No PIN set: every account can do everything**, as today.
+- **The owner can set a PIN. With one, the protected actions ask for it**
+  rather than disappearing, so the owner can act while a child is signed in by
+  entering it on the child's account (the Switch's parental-controls shape).
+- **The same PIN guards switching into the owner's account.** One PIN.
+- **Protected:** Wi-Fi changes; Sign out and Change server address; Remove an
+  account; File access (turning it on, making a new password).
+  **Open to everyone:** adding an account, sounds, picture quality, system
+  update. None of them can lock anyone out or lose anything.
+- **Where the controls live:** the account chip's panel keeps switching and
+  adding. Remove an account and the PIN are in Settings > Accounts only.
+  Removing an account takes it off this console; the RomM user and its saves
+  are untouched.
+- **THE PIN IS OFFERED WHEN THE SECOND ACCOUNT IS ADDED**, not in first run,
+  because with one account a PIN protects nothing and first run should get a
+  person to their games. Right after the new person's pairing succeeds, before
+  returning to the panel: *"Anyone using this console can change Wi-Fi, sign
+  out and remove accounts. Set a PIN so only you can?"* Set PIN / Not now.
+  Only when no PIN exists, and only once. MMagTech first suggested enforcing
+  it in first run or warning there; this was his pick after the moment was
+  explained.
+
+**SERVER: DECIDED 2026-09-24, replacing the proposal above.**
+
+- **Change server address**: the same server at a new address. **How it knows
+  it is the same server:** each account's token is accepted only by the server
+  that issued it, so the console asks the new address who the active token
+  belongs to. Same user back means same server; a rejection means a different
+  one, and the console refuses and points at Sign out. Planned, not built or
+  tested.
+- **Sign out** is one confirmation screen: all cached and kept games on this
+  console will be removed, and saves are safe on the server. **By design there
+  is never anything waiting to upload** (MMagTech: leaving a game uploads, and
+  reaching Settings means the server is reachable), so the upload check runs
+  quietly first as a safety net and the screen only mentions it if something
+  failed. Then everything tied to that server is cleared (cached and kept
+  games, the accounts; Wi-Fi and controllers stay) and the console goes back
+  to first run's server step, reusing its screens.
+- **One server at a time.** A friend's server is sign out, then sign in.
