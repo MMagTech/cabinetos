@@ -498,9 +498,12 @@ played and quit, with every save on the server unchanged afterwards. The other
 four of the nine (Virtual Boy, Atari 2600, Atari 7800, Vectrex) have no save
 to carry.
 
-**Still owed:** states for all nine (the strict proof: same commit and same
-build arguments as Cabinet), and a first real NES or SNES save uploaded by a
-person playing. **Also noticed: Cabinet uploads a screenshot PNG with every
+**STATES TOO, SAME DAY: sixteen libretro cores now send them.** Apple TV states
+for Aladdin and R.C. Pro-Am loaded here mid-game. **Saturn's was refused**, and
+Saturn, MAME 2003-Plus and Flycast states stay local, because **Cabinet's own
+Apple TV builds of those cores are not at the commit its manifest pins** (it
+pins the Mac's). The fix is in Cabinet, below under *Cabinet-side debts*.
+**Still owed:** a first real NES or SNES save uploaded by a person playing. **Also noticed: Cabinet uploads a screenshot PNG with every
 state (`TVPlayerView.saveState`); CabinetOS uploads the state alone.**
 
 **`--launch <id>` WAS BROKEN FROM 2026-09-22 TO 2026-09-23 AND SAID ONLY "no
@@ -2784,6 +2787,14 @@ carried across from Cabinet's list rather than checked here, and this project's
 own rule is that a fact carried across is a fact nobody has checked.
 
 ## Cabinet-side debts
+
+**CABINET'S APPLE TV CORES ARE NOT AT THE COMMITS ITS MANIFEST PINS**, found
+2026-09-23. `docs/core-manifest.json` pins the Mac's revision; the iOS and tvOS
+builds of snes9x, fceumm, beetle_pce_fast, beetle_saturn and mame2003_plus are
+older, and Saturn's tvOS revision is recorded as unrecoverable. CabinetOS
+matches the pin, so an Apple TV Saturn state is REFUSED here (Daytona USA,
+measured). **Rebuild Cabinet's Apple TV cores at the pinned commits** and
+Saturn and MAME 2003-Plus states can be shared (`catalog.cpp`, emulatorTag).
 
 1. **Flycast carries unscripted edits in its working tree**, so its pinned
    commit does not reproduce what ships, and **that is the only reason Flycast

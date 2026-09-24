@@ -3039,6 +3039,11 @@ int main(int argc, char** argv) {
     // which is what makes the picture underneath it a GAME rather than black.
     bool overlayDemo = false;
     int overlayDemoAfter = 0;
+    // --load-state N: after N frames of play, what the pause menu's "Load
+    // latest state" does. The other half of --sync-test, which loads back the
+    // state it has just made; this loads whatever is newest on the server, so
+    // a state from an Apple TV can be tried here without a controller.
+    int loadStateAfter = 0;
     // Opens the overlay and takes Exit to Home, so the whole leave-a-game path
     // can be proved on a machine with nothing attached.
     bool overlayExitDemo = false;
@@ -3188,6 +3193,8 @@ int main(int argc, char** argv) {
             // render. That cost a confusing ten minutes on 2026-09-21; the game
             // was fine and the flag was the fault.
             if (i + 1 < argc && argv[i + 1][0] != '-') overlayDemoAfter = SDL_atoi(argv[++i]);
+        } else if (SDL_strcmp(argv[i], "--load-state") == 0 && i + 1 < argc) {
+            loadStateAfter = SDL_atoi(argv[++i]);
         } else if (SDL_strcmp(argv[i], "--sync-test") == 0) {
             syncTest = true;
         } else if (SDL_strcmp(argv[i], "--launch-after") == 0 && i + 1 < argc) {
@@ -7027,6 +7034,13 @@ int main(int argc, char** argv) {
                 overlaySlot = static_cast<int>(pauseItems.size()) - 1;   // Exit to Home
             }
             if (t == overlayExitAfter + 60) { overlayExitDemo = false; overlayActivate(); }
+        }
+
+        if (loadStateAfter > 0 && playing &&
+            cab::Core::shared().framesRun() >= static_cast<uint64_t>(loadStateAfter)) {
+            loadStateAfter = 0;
+            std::fprintf(stderr, "[load-state] loading the newest state\n");
+            beginLoadLatestState(stateLoad, session, liveClient, menuNotice);
         }
 
         // The round trip, once, a couple of seconds into the game so there is

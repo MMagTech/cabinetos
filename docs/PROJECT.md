@@ -8039,6 +8039,41 @@ headlessly, so nothing was sent. The upload path is the same code seven other
 emulators use, and only the tag is new. NES and SNES have no saves on the
 server yet, so the first real one will come from a person playing.
 
+#### AND STATES, THE SAME DAY: SIXTEEN OF THE LIBRETRO CORES NOW SHARE THEM
+
+**MMagTech: states belong on every libretro core, and question 25 already said
+so.** They did exist on every one, on this console. What was missing was
+sending them to the server, held back by `emulatorTag`'s rule: share a state
+tag only where the build is Cabinet's. That check took a minute. Every core
+was pinned at Cabinet's commit, and all but mupen64plus had Cabinet's build
+arguments. **Added: NES, SNES, N64, TurboGrafx, Virtual Boy, Atari 2600, Atari
+7800, Vectrex, 3DO, FBNeo and Neo Geo Pocket**, on top of the seven that
+already travelled. N64 carries its one recorded difference (compiler flags
+Cabinet's build cannot use on Linux) in a comment beside it.
+
+**MEASURED BOTH WAYS ON THE A9, headless.** New switch `--load-state N` does
+what the pause menu's "Load latest state" does after N frames:
+
+| | Result |
+|---|---|
+| Mario Kart 64, `--sync-test` | a 16.8 MB state saved and loaded back; the save uploaded and updated the Apple TV's own row in place (row 17, same name, same bytes) |
+| Aladdin (SNES), Apple TV state | **loaded**, at the Cave of Wonders |
+| R.C. Pro-Am (NES), Apple TV state | **loaded**, at the Level 3 upgrade screen |
+| Daytona USA (Saturn), Apple TV state | **REFUSED** |
+
+**WHY SATURN REFUSED, AND WHY MAME 2003-PLUS WOULD: CABINET DOES NOT MATCH
+ITSELF.** Cabinet's manifest pins one commit per core, and it is the Mac's.
+CabinetOS matches that exactly. **Cabinet's Apple TV builds of several cores
+are at older commits**: SNES `ed750a49`, NES `b5e35665`, MAME 2003-Plus
+`93159c0c`, and Saturn at a commit the manifest records as unrecoverable. NES
+and SNES states survive that difference; Saturn's did not. **So Saturn and
+MAME 2003-Plus states stay on the console, and their saves still travel.**
+Flycast stays local too, for its unscripted edits. GameCube and PS2 have none,
+by question 25.
+
+**The fix is Cabinet's: build its Apple TV cores at the commit its manifest
+pins.** Then all three can share states. Recorded as a Cabinet-side debt.
+
 **Found in passing, not fixed:** Beetle Saturn also writes `<game>.bcr`, the
 Saturn's optional backup-memory CARTRIDGE, as a file beside the save. Neither
 Cabinet nor this console syncs it; only the internal RAM travels. It matters
