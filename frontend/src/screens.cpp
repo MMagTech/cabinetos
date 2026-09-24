@@ -1423,16 +1423,23 @@ void AccountScreen::draw(Ctx& c) {
     for (int i = 0; i < rows; ++i) {
         const bool on = (i == slot_);
         const float f = on ? focus_.value() : 0.0f;
-        const float rw = w - 16.0f;
-        const float rx = x + 8.0f;
-        c.r.draw(ui::Rect{rx, y, rw, rowH, design::kRowRadius,
-                          ui::Color::white((0.04f + 0.16f * f) * a)});
+        // THE FOCUSED ROW AT THE DESIGN SYSTEM'S FOCUSED TINT, grown a little,
+        // and the others' names dimmed. It was a 20% wash on a panel already
+        // tinted 10%, with every name equally bright. MMagTech, 2026-09-24:
+        // *"a bit too dim and i cant make out who is selected if anything"*.
+        const float gs = 1.0f + f * (design::kRowFocusScale - 1.0f);
+        const float rw0 = w - 16.0f;
+        const float rw = rw0 * gs, rh = rowH * gs;
+        const float rx = x + 8.0f - (rw - rw0) * 0.5f;
+        c.r.draw(ui::Rect{rx, y - (rh - rowH) * 0.5f, rw, rh, design::kRowRadius,
+                          ui::Color::white((0.04f + (design::kFocusedTint - 0.04f) * f) * a)});
+        const float nameA = 0.70f + 0.30f * f;
 
         if (isAddRow(i)) {
             // A PLUS ON A DISC, so it sits in the same column as the faces and
             // reads as one more entry in the same list rather than as a button
             // bolted underneath it.
-            const float dx = rx + 12.0f, dy = y + (rowH - discD) * 0.5f;
+            const float dx = x + 20.0f, dy = y + (rowH - discD) * 0.5f;
             c.r.draw(ui::Rect{dx, dy, discD, discD, discD * 0.5f,
                               ui::Color::white(0.14f * a)});
             const float pw = c.text.measure("+", rowStyle, c.sc);
@@ -1443,7 +1450,7 @@ void AccountScreen::draw(Ctx& c) {
             c.text.draw(c.r, "Add user", dx + discD + 14.0f,
                         y + (rowH - c.text.lineHeight(rowStyle, c.sc)) * 0.5f +
                             c.text.ascent(rowStyle, c.sc),
-                        rowStyle, ui::Color::white(0.92f * a), c.sc);
+                        rowStyle, ui::Color::white(nameA * a), c.sc);
             y += rowH + 8.0f;
             continue;
         }
@@ -1452,7 +1459,7 @@ void AccountScreen::draw(Ctx& c) {
         // The disc is drawn either way: the ground under a picture with
         // transparency, and the fallback when there is none. Same rule as the
         // chip in the bar, and the same reason.
-        const float dx = rx + 16.0f, dy = y + (rowH - discD) * 0.5f;
+        const float dx = x + 24.0f, dy = y + (rowH - discD) * 0.5f;
         c.r.draw(ui::Rect{dx, dy, discD, discD, discD * 0.5f, ui::Color::white(0.22f * a)});
         const ui::Image* face = nullptr;
         if (!row.avatar.empty()) {
@@ -1475,7 +1482,7 @@ void AccountScreen::draw(Ctx& c) {
         c.text.draw(c.r, row.name, dx + discD + 14.0f,
                     y + (rowH - c.text.lineHeight(rowStyle, c.sc)) * 0.5f +
                         c.text.ascent(rowStyle, c.sc),
-                    rowStyle, ui::Color::white(0.92f * a), c.sc);
+                    rowStyle, ui::Color::white(nameA * a), c.sc);
         y += rowH + 8.0f;
     }
 
