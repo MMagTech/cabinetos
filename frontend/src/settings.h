@@ -21,6 +21,7 @@
 #pragma once
 
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "screens.h"
@@ -32,13 +33,22 @@ struct SettingsRow {
         Info,      // shows a value; cannot be focused
         Action,    // opens or does something; has a chevron
         Toggle,    // On or Off, shown as the value; pressing flips it
+        Choice,    // one of a few, shown as the value; left and right move it
         Unbuilt,   // agreed, not built; drawn dimmed, cannot be focused
     };
+    SettingsRow() = default;
+    SettingsRow(Kind k, int i, std::string t, std::string d, std::string v)
+        : kind(k), id(i), title(std::move(t)), detail(std::move(d)), value(std::move(v)) {}
+
     Kind kind = Kind::Info;
     int id = 0;               // what the app is handed back when it is pressed
     std::string title;
     std::string detail;       // the second line, or empty
     std::string value;        // right-aligned, or empty
+    // Choice rows only: what left and right walk through, and where it is.
+    // The value shown is choices[choice]; `value` is ignored.
+    std::vector<std::string> choices;
+    int choice = 0;
 };
 
 struct SettingsCategory {
@@ -63,6 +73,10 @@ public:
     // For a capture: open on a category, with focus in its rows if it has one
     // that can be focused.
     void focusCategory(int index, bool intoRows);
+
+    // Where a Choice row is now, after a SettingChoice came back for it. -1 if
+    // there is no such row.
+    int choiceOf(int id) const;
 
     void tick(float dt);
     Result key(Nav n);
