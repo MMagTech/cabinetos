@@ -8648,21 +8648,32 @@ int main(int argc, char** argv) {
             text.draw(renderer, detail, (ui::kCanvasWidth - dw) * 0.5f,
                       ty + text.lineHeight(ui::TextStyle::Title2, sc) * 0.9f,
                       ui::TextStyle::Callout, ui::Color::white(0.60f), sc);
-            // The button: a capsule like the bar's, at the focused tint while
-            // focus is on it (not up in the bar or the account panel).
+            // The button. FOCUSED IT IS WHITE WITH DARK TEXT, the Apple TV's
+            // own focused button, and not the product's usual quiet tint: a
+            // lone button has no neighbours to stand out from, and at the
+            // focused tint it read as a grey pill. MMagTech, 2026-09-24: *"it
+            // took me a minute to realize it was already highlighted"*. Dim
+            // while focus is up in the bar or the account panel.
             const bool on = !barFocused && !accountsOpen;
             const char* label = "Open Library";
             const float lw = text.measure(label, ui::TextStyle::Title3, sc);
             const float bh = text.lineHeight(ui::TextStyle::Title3, sc) + 28.0f;
             const float bw = lw + 72.0f;
             const float by = ty + text.lineHeight(ui::TextStyle::Title2, sc) * 0.9f + 56.0f;
-            const float bs = on ? kRowFocusScale : 1.0f;
-            renderer.draw(ui::Rect{(ui::kCanvasWidth - bw * bs) * 0.5f, by - (bh * bs - bh) * 0.5f,
-                                   bw * bs, bh * bs, bh * bs * 0.5f,
-                                   ui::Color::white(on ? kFocusedTint : 0.10f)});
+            const float bs = on ? 1.06f : 1.0f;
+            ui::Rect btn{(ui::kCanvasWidth - bw * bs) * 0.5f, by - (bh * bs - bh) * 0.5f,
+                         bw * bs, bh * bs, bh * bs * 0.5f,
+                         ui::Color::white(on ? 0.95f : 0.10f)};
+            if (on) {
+                btn.shadowBlur = 22.0f;
+                btn.shadowOffsetY = 8.0f;
+                btn.shadowColor = ui::Color::black(0.45f);
+            }
+            renderer.draw(btn);
             text.draw(renderer, label, (ui::kCanvasWidth - lw) * 0.5f,
-                      by + bh * 0.5f + text.ascent(ui::TextStyle::Title3, sc) * 0.5f,
-                      ui::TextStyle::Title3, ui::Color::white(on ? 1.0f : 0.75f), sc);
+                      by + bh * 0.5f + text.ascent(ui::TextStyle::Title3, sc) * 0.40f,
+                      ui::TextStyle::Title3,
+                      on ? ui::Color{0.07f, 0.05f, 0.12f, 1.0f} : ui::Color::white(0.75f), sc);
         }
         }  // end of the shelf branch
 
