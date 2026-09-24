@@ -7576,7 +7576,11 @@ int main(int argc, char** argv) {
                     accountsOpen = true;
                     barFocused = true;
                     barSlot = BarAccount;
-                    accountScreen.setNotice(who.name + " was added. Choose them to switch.");
+                    // NO NOTE. "<name> was added. Choose them to switch." used
+                    // to sit under the list; MMagTech, 2026-09-24: it looked
+                    // bad and said what scanning the code had just done. Their
+                    // name appearing in the list is the confirmation.
+                    accountScreen.setNotice("");
                     std::fprintf(stderr, "[accounts] added %d - %s, now %zu accounts, "
                                          "still acting as %d\n",
                                  who.id, who.name.c_str(), accounts::all().size(),
