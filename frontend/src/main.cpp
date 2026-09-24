@@ -4425,6 +4425,11 @@ int main(int argc, char** argv) {
     // Whether there is a game to resume. It is shelf slot 0 when there is.
     auto haveResume = [&]() { return heroIndex >= 0 && !shelf.empty(); };
     auto haveFavorites = [&]() { return !favorites.empty(); };
+    // A HOME WITH NOTHING ON IT: a new account that has played nothing and
+    // starred nothing. MMagTech, switching to one on the A9, 2026-09-24: the
+    // screen was "just purple", focus was nowhere, and finding the Library
+    // took pressing Up by accident. See the frame loop and drawShelf's caller.
+    auto homeEmpty = [&]() { return shelfSlots() == 0 && !haveFavorites(); };
 
     auto rowSlots = [&](int row) -> size_t {
         if (row == RowRecent) return shelfSlots();
@@ -5251,6 +5256,10 @@ int main(int argc, char** argv) {
     int switchPendingId = 0;
     std::string switchLabel;
     int switchCurtainFrames = 0;
+    Uint64 switchShownAt = 0;    // when the curtain was fully down
+    bool switchDone = false;     // the switch has run; waiting out the hold
+    bool switchOk = false;
+    std::string switchWhy;
     curtain.smooth = true;
     curtain.from = curtain.to = 0.0f;
 
@@ -5917,6 +5926,12 @@ int main(int argc, char** argv) {
             // who walked up to look at it could not simply come back down.
             case screens::Nav::Down:
             case screens::Nav::Back:
+                // AN EMPTY HOME HAS NOWHERE TO GO DOWN TO, so focus stays in
+                // the bar rather than landing on nothing.
+                if (here() == Screen::Home && homeEmpty()) {
+                    sound::play(sound::Cue::Edge);
+                    return true;
+                }
                 barFocused = false;
                 sound::play(n == screens::Nav::Down ? sound::Cue::Move
                                                     : sound::Cue::Back);
@@ -6107,22 +6122,37 @@ int main(int argc, char** argv) {
         if (!switchPendingId) return;
         curtain.retarget(1.0f, kCurtainDown);
         if (curtain.value() < 0.995f) return;
-        // Two frames at full curtain, so the name is on the television before
-        // the frame loop stops for the network.
-        if (++switchCurtainFrames < 3) return;
-        const int id = switchPendingId;
-        std::string why;
-        const Uint64 t0 = SDL_GetTicks();
-        const bool ok = switchAccount(id, &why);
-        std::fprintf(stderr, "[accounts] switch took %llu ms\n",
-                     static_cast<unsigned long long>(SDL_GetTicks() - t0));
-        switchPendingId = 0;
-        if (ok) {
+        if (switchShownAt == 0) switchShownAt = SDL_GetTicks();
+        if (!switchDone) {
+            // Two frames at full curtain, so the name is on the television
+            // before the frame loop stops for the network.
+            if (++switchCurtainFrames < 3) return;
+            const Uint64 t0 = SDL_GetTicks();
+            switchWhy.clear();
+            switchOk = switchAccount(switchPendingId, &switchWhy);
+            std::fprintf(stderr, "[accounts] switch took %llu ms\n",
+                         static_cast<unsigned long long>(SDL_GetTicks() - t0));
+            switchDone = true;
             // Straight to Home, because everything behind it belonged to the
-            // last account.
-            stack.clear();
-            stack.push_back(Screen::Home);
-        } else {
+            // last account. Behind the curtain, so it is ready when it lifts.
+            if (switchOk) {
+                stack.clear();
+                stack.push_back(Screen::Home);
+            }
+        }
+        // THE NAME STAYS UP LONG ENOUGH TO READ. A switch usually takes a
+        // quarter of a second, and the curtain dropping and lifting around
+        // that read as a glitch: MMagTech, 2026-09-24, *"the account switch
+        // text flash to fast that it just seems like a glitch"*. A slow
+        // switch is not held any longer than it took. Starting value.
+        constexpr Uint64 kSwitchHoldMs = 700;
+        if (SDL_GetTicks() - switchShownAt < kSwitchHoldMs) return;
+        const bool ok = switchOk;
+        const std::string why = switchWhy;
+        switchPendingId = 0;
+        switchDone = false;
+        switchShownAt = 0;
+        if (!ok) {
             // Back to the panel, saying why, with the old person still in.
             accountsOpen = true;
             barFocused = true;
@@ -7580,6 +7610,15 @@ int main(int argc, char** argv) {
 
         pumpLaunch();
         pumpSwitch();
+        // ON AN EMPTY HOME, FOCUS LIVES ON LIBRARY IN THE BAR, however Home
+        // was reached: at boot, after a switch, or backing out of a screen.
+        // There is nothing else on it to focus, and A there is the way to the
+        // games.
+        if (!playing && here() == Screen::Home && homeEmpty() && !barFocused &&
+            !accountsOpen && !switchPendingId && !pinScreen.isOpen()) {
+            barFocused = true;
+            barSlot = BarLibrary;
+        }
         pumpExit();
         pumpStateLoad(stateLoad, session, menuNotice);
         if (stateLoad.loaded) {
@@ -8552,6 +8591,23 @@ int main(int argc, char** argv) {
         rowY += drawShelf("Recent", shelf, RowRecent, rowY);
         // Only when there are any. An empty Favorites row is worse than none.
         if (haveFavorites()) drawShelf("Favorites", favorites, RowFavorites, rowY);
+        // SAID, NOT LEFT BLANK. Focus is already on Library in the bar (the
+        // frame loop puts it there), so this only has to say why the screen is
+        // empty and where the games are.
+        if (homeEmpty()) {
+            const char* title = "Nothing played yet";
+            // One line. A second, pointing at the Library, was dropped on
+            // MMagTech's word: Library is already lit in the bar.
+            const char* detail = "Games you play or favourite will show up here.";
+            const float tw = text.measure(title, ui::TextStyle::Title2, sc);
+            const float dw = text.measure(detail, ui::TextStyle::Callout, sc);
+            const float ty = ui::kCanvasHeight * 0.45f;
+            text.draw(renderer, title, (ui::kCanvasWidth - tw) * 0.5f, ty,
+                      ui::TextStyle::Title2, ui::Color::white(0.95f), sc);
+            text.draw(renderer, detail, (ui::kCanvasWidth - dw) * 0.5f,
+                      ty + text.lineHeight(ui::TextStyle::Title2, sc) * 0.9f,
+                      ui::TextStyle::Callout, ui::Color::white(0.60f), sc);
+        }
         }  // end of the shelf branch
 
         // The overlay's scrim belongs to the WORLD, not to the overlay, so it
