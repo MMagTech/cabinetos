@@ -407,6 +407,10 @@ notes here stay the detail.
    Cabinet tvOS's Settings as it appears, the decisions that constrain it, and
    eight open questions. Do not design before that conversation.
 
+   **MERGED AS #56, `0db5283`, AND THE A9 RUNS IT FROM THE IMAGE**
+   (`latest.20260924-0db5283`, a 762 kB download; no test build left on it).
+   The notes below about the PR being held are history.
+
    **STATUS 2026-09-24: THE DISCUSSION HAPPENED. THE DECISIONS, FINAL STATE
    ONLY, ARE IN `docs/SETTINGS.md`** (the reasoning, in order, is in
    `docs/PROJECT.md` open question 31). The side-list layout and the
