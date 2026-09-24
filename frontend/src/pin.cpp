@@ -27,8 +27,8 @@ bool isDelete(int r, int c) { return r == 3 && c == 2; }
 //
 // A PANEL IN THE MIDDLE, NOT A SCREEN. The first version covered the whole
 // screen in purple; MMagTech on the TV, 2026-09-24: *"do we really need a full
-// screen ui for a pin pad"*. It is the on-screen keyboard's own treatment
-// (keyboard.cpp): a scrim, one piece of dark glass, keys as plain surfaces.
+// screen ui for a pin pad"*. A scrim and the pause menu's panel and buttons
+// (design::menuPanel), shared with the question panel.
 constexpr float kPanelPad = 40.0f;       // the keyboard's
 constexpr float kPanelRadius = 32.0f;    // the keyboard's, the pause panel's
 constexpr float kPanelMaxW = 1200.0f;
@@ -210,13 +210,11 @@ void PinScreen::draw(Ctx& c) {
 
     // ---- The scrim and the glass --------------------------------------
     c.r.setContentAlpha(1.0f);
-    c.r.draw(ui::Rect{0, 0, W, H, 0, ui::Color::black(0.45f * a)});
+    c.r.draw(ui::Rect{0, 0, W, H, 0, ui::Color::black(0.55f * a)});
     c.r.setContentAlpha(a);
-    // THE KEYBOARD'S DARK GLASS, kept on purpose: a PIN is typed like any
-    // other field, and MMagTech is happy with it there. The question panel
-    // (choice.cpp) is the one that takes the account panel's frosted glass.
-    c.r.drawGlass(ui::Rect{px, py, panelW, panelH, kPanelRadius, ui::Color::white(0)}, 6.0f,
-                  ui::Color::black(0.68f));
+    // THE PAUSE MENU'S PANEL (design::menuPanel), shared with the question
+    // panel so a PIN followed by a question reads as one thing.
+    c.r.draw(design::menuPanel(px, py, panelW, panelH, 1.0f));
 
     auto centred = [&](const std::string& s, float base, TextStyle st, float alpha) {
         const std::string t = c.text.truncate(s, st, sc, textMax);
@@ -266,21 +264,15 @@ void PinScreen::draw(Ctx& c) {
             const float s = focused ? 1.0f + (kKeyFocusScale - 1.0f) * f : 1.0f;
             const float dw = kKeyW * s, dh = kKeyH * s;
             const float dx = x - (dw - kKeyW) * 0.5f, dy = ky - (dh - kKeyH) * 0.5f;
-            ui::Rect cap{dx, dy, dw, dh, kKeyRadius * s,
-                         ui::Color::white(focused ? 0.10f + 0.20f * f : 0.10f)};
-            if (focused) {
-                cap.shadowBlur = 18.0f;
-                cap.shadowOffsetY = 8.0f;
-                cap.shadowColor = ui::Color::black(0.45f * f);
-            }
-            c.r.draw(cap);
+            const float kf = focused ? f : 0.0f;
+            c.r.draw(design::menuButton(dx, dy, dw, dh, kKeyRadius * s, kf, 1.0f));
             const bool action = isCancel(r, col) || isDelete(r, col);
             const TextStyle st = action ? TextStyle::Callout : TextStyle::Title3;
             const std::string label = kKeys[r][col];
             const float lw = c.text.measure(label, st, sc);
             c.text.draw(c.r, label, dx + (dw - lw) * 0.5f,
                         dy + dh * 0.5f + c.text.ascent(st, sc) * 0.5f, st,
-                        ui::Color::white(focused ? 1.0f : 0.75f), sc);
+                        design::menuLabel(kf, 1.0f), sc);
         }
     }
     y += padH;

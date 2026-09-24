@@ -8,7 +8,7 @@ namespace screens {
 
 namespace {
 
-// The PIN pad's panel sizes (pin.cpp), with the account panel's material.
+// The PIN pad's panel sizes (pin.cpp); the look is design::menuPanel.
 constexpr float kPanelPad = 40.0f;
 constexpr float kPanelRadius = 32.0f;
 constexpr float kPanelMaxW = 1200.0f;
@@ -91,14 +91,12 @@ void ChoiceScreen::draw(Ctx& c) {
     const float px = (W - panelW) * 0.5f, py = (H - panelH) * 0.5f;
 
     c.r.setContentAlpha(1.0f);
-    c.r.draw(ui::Rect{0, 0, W, H, 0, ui::Color::black(0.45f * a)});
+    c.r.draw(ui::Rect{0, 0, W, H, 0, ui::Color::black(0.55f * a)});
     c.r.setContentAlpha(a);
-    // THE ACCOUNT PANEL'S MATERIAL, not the keyboard's. Frosted glass with
-    // a light tint, as the account panel and the Settings rows are. The
-    // keyboard's black slab was tried first; MMagTech, 2026-09-24: fine for a
-    // keyboard, but on these screens *"they just seem forgotten about"*.
-    c.r.drawGlass(ui::Rect{px, py, panelW, panelH, kPanelRadius, ui::Color::white(0)},
-                  design::kRegularMaterialBlur, ui::Color::white(0.12f));
+    // THE PAUSE MENU'S PANEL (design::menuPanel). The keyboard's black glass
+    // was tried first (*"forgotten about"*), then the account panel's frosted
+    // glass (*"too frosted or washed out"*). MMagTech, 2026-09-24.
+    c.r.draw(design::menuPanel(px, py, panelW, panelH, 1.0f));
 
     auto centred = [&](const std::string& s, float base, TextStyle st, float alpha) {
         const std::string t = c.text.truncate(s, st, sc, textMax);
@@ -122,20 +120,14 @@ void ChoiceScreen::draw(Ctx& c) {
         const float s = on ? 1.0f + (kFocusScale - 1.0f) * f : 1.0f;
         const float dw = kButtonW * s, dh = kButtonH * s;
         const float dx = bx - (dw - kButtonW) * 0.5f, dy = y - (dh - kButtonH) * 0.5f;
-        ui::Rect cap{dx, dy, dw, dh, kButtonRadius * s,
-                     ui::Color::white(on ? 0.08f + 0.30f * f : 0.08f)};
-        if (on) {
-            cap.shadowBlur = 18.0f;
-            cap.shadowOffsetY = 8.0f;
-            cap.shadowColor = ui::Color::black(0.45f * f);
-        }
-        c.r.draw(cap);
+        const float bf = on ? f : 0.0f;
+        c.r.draw(design::menuButton(dx, dy, dw, dh, kButtonRadius * s, bf, 1.0f));
         const std::string label =
             c.text.truncate(options_[i], TextStyle::Title3, sc, kButtonW - 40.0f);
         const float lw = c.text.measure(label, TextStyle::Title3, sc);
         c.text.draw(c.r, label, dx + (dw - lw) * 0.5f,
                     dy + dh * 0.5f + c.text.ascent(TextStyle::Title3, sc) * 0.40f,
-                    TextStyle::Title3, ui::Color::white(on ? 1.0f : 0.65f), sc);
+                    TextStyle::Title3, design::menuLabel(bf, 1.0f), sc);
         y += kButtonH + kButtonGap;
     }
     c.r.setContentAlpha(1.0f);

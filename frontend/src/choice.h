@@ -1,8 +1,8 @@
 // A question with a few answers, in a panel in the middle of the screen.
 //
 // "Who do you want to remove?", "Remove vivian from this console?" and, when
-// they are built, sign out and forgetting a network. A scrim, one panel of
-// the account panel's frosted glass, and a column of plain buttons on it.
+// they are built, sign out and forgetting a network. A scrim, the pause
+// menu's panel, and a column of its buttons (design::menuPanel).
 //
 // A LAYER, LIKE THE PIN PAD. It is opened over whatever is showing, takes
 // input first while it is open, and says which answer was chosen. What the
