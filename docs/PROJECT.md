@@ -12803,3 +12803,9 @@ because of the background change, and no blurred art on a text-heavy screen.
 Changed on arrival, the art's colours showed behind Settings' rows as they
 faded in. Heading to Settings the room now clears during the fade-out, in the
 same 180 ms, so Settings arrives on a background that has finished changing.
+
+**And then in three steps, not two.** MMagTech asked for the keyboard to fade
+out first, then the purple, then the text. Heading to Settings from a screen
+with art behind it: out (180 ms), background to plain (250 ms, nothing on
+screen), Settings in (320 ms). About three quarters of a second in all; the
+other switches keep two steps. `tabPhase` in `main.cpp`.
