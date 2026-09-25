@@ -1,0 +1,291 @@
+#!/usr/bin/env bash
+#
+# System update, the root half. docs/SETTINGS.md, System; issue #70.
+#
+#   cabinetos-update check      is there a newer image, what is it, how big
+#   cabinetos-update download   fetch it and stage it for the next restart
+#
+# Run only by cabinetos-update-check.service and cabinetos-update-download
+# .service, which the session starts through the polkit rule
+# 61-cabinetos-update.rules. The session runs as `cabinet` and cannot run bootc
+# itself; this script is the whole of what it is allowed to ask root for.
+#
+# IT ANSWERS IN ONE FILE, /run/cabinetos-update/status, key=value lines,
+# replaced whole (write a temporary file, rename it) so the frontend never
+# reads half of one. /run because none of it should outlive a boot: after a
+# restart the update has either applied or it has not, and the frontend works
+# that out from the version file (see the end of `download`).
+#
+#   state=checking | uptodate | available | downloading | installing | ready | failed
+#   op=check | download         which of the two wrote it
+#   version=2026.09.28          the image's org.opencontainers.image.version
+#   size=<bytes>                what a download will fetch (available)
+#   done=<bytes> total=<bytes>  downloading
+#   since=<epoch> written=<bytes>  installing
+#   reason=<short text>         failed
+#   at=<epoch>                  when this was written
+#
+# WHY THE SIZE IS WORKED OUT HERE AND NOT READ OFF BOOTC. `bootc upgrade
+# --check` says whether there is an update and its version, not how much of it
+# this console lacks. A console fetches exactly the layers whose digests it
+# does not already hold (docs/PROJECT.md, open question 27), and ostree keeps
+# one ref per layer it holds, so the sum is exact: new manifest's layers, minus
+# the refs, added up. Same arithmetic as ci/compare-images.sh.
+#
+# STALLS: nothing moving for 60 s. What counts as moving is the bootc process
+# and everything under it (skopeo does the fetching): CPU time, bytes read
+# (which includes the network, since a socket read is a read) and bytes
+# written. A slow connection keeps moving and is allowed; there is no overall
+# limit. MMagTech, 2026-09-25.
+
+set -uo pipefail
+
+DIR=/run/cabinetos-update
+STATUS="${DIR}/status"
+REPO=/sysroot/ostree/repo
+STALL_SECONDS=60
+TICK=2
+
+OP="${1:-}"
+case "${OP}" in
+    check|download) ;;
+    *) echo "usage: cabinetos-update check|download" >&2; exit 2 ;;
+esac
+
+mkdir -p "${DIR}"
+chmod 0755 "${DIR}"
+
+# One at a time. A second start while one is running is dropped, not queued:
+# the frontend only offers one thing at a time anyway.
+exec 9>"${DIR}/lock"
+if ! flock -n 9; then
+    echo "already running" >&2
+    exit 0
+fi
+
+say() {
+    local tmp
+    tmp=$(mktemp "${DIR}/.status.XXXXXX") || return
+    { printf 'op=%s\n' "${OP}"; printf '%s\n' "$@"; printf 'at=%s\n' "$(date +%s)"; } > "${tmp}"
+    chmod 0644 "${tmp}"
+    mv -f "${tmp}" "${STATUS}"
+}
+
+# The one line of a bootc failure a person can act on. bootc chains its
+# context ("error: Upgrading: Preparing import: Fetching manifest: ..."), so
+# the known causes are named and anything else is its last clause.
+reason_of() {
+    local log="$1" line
+    if grep -qiE 'no such host|network is unreachable|connection refused|i/o timeout|dial tcp|temporary failure in name resolution' "${log}"; then
+        echo "No connection"; return
+    fi
+    if grep -qi 'no space left' "${log}"; then
+        echo "Not enough space"; return
+    fi
+    line=$(grep -i 'error' "${log}" | tail -1)
+    [[ -n "${line}" ]] || line=$(tail -1 "${log}")
+    line="${line##*: }"
+    echo "${line:0:60}"
+}
+
+booted_ref() {
+    bootc status --json | jq -r '.status.booted.image.image.image // empty'
+}
+
+staged_version() {
+    bootc status --json | jq -r '.status.staged.image.version // empty'
+}
+
+# Bytes this console would fetch for the image at $1.
+bytes_needed() {
+    local ref="$1" raw digest
+    raw=$(skopeo inspect --raw "docker://${ref}") || return 1
+    # A multi-arch index points at the real manifest; follow it to amd64.
+    if jq -e '.manifests' >/dev/null <<<"${raw}"; then
+        digest=$(jq -r 'first(.manifests[] | select(.platform.architecture == "amd64") | .digest)' <<<"${raw}")
+        raw=$(skopeo inspect --raw "docker://${ref%:*}@${digest}") || return 1
+    fi
+    ostree refs --repo="${REPO}" ostree/container/blob \
+        | jq -R -s --argjson m "${raw}" '
+            (split("\n") | map(select(length > 0))) as $have
+            | [$m.layers[]
+               | select((.digest | sub(":"; "_3A_")) as $r | $have | index($r) | not)
+               | .size] | add // 0'
+}
+
+do_check() {
+    say state=checking
+
+    # Already downloaded and waiting for a restart: that is the answer.
+    local staged
+    staged=$(staged_version)
+    if [[ -n "${staged}" ]]; then
+        say state=ready "version=${staged}"
+        return 0
+    fi
+
+    local log out ref version size
+    log=$(mktemp)
+    if ! bootc upgrade --check >"${log}" 2>&1; then
+        say state=failed "reason=$(reason_of "${log}")"
+        cat "${log}" >&2
+        rm -f "${log}"
+        return 1
+    fi
+    out=$(cat "${log}")
+    rm -f "${log}"
+    echo "${out}"
+
+    if grep -q '^No changes in' <<<"${out}"; then
+        say state=uptodate
+        return 0
+    fi
+    version=$(sed -n 's/^ *Version: *//p' <<<"${out}" | head -1)
+    ref=$(booted_ref)
+    size=$(bytes_needed "${ref}") || size=0
+    say state=available "version=${version}" "size=${size}"
+}
+
+# ---------------------------------------------------------------------------
+# download
+# ---------------------------------------------------------------------------
+
+# bootc's progress, one JSON object per line, reduced to "phase done total".
+# Fetching is "pulling"; bootc sends its first step event once the last layer
+# is in, and everything from there (import, then staging) is installing.
+read_progress() {
+    local out="$1" line p
+    while IFS= read -r line; do
+        p=$(jq -r 'if .type == "ProgressBytes" and .task == "pulling"
+                   then "downloading \(.bytes) \(.bytesTotal)"
+                   elif .type == "ProgressSteps" then "installing 0 0"
+                   else empty end' <<<"${line}" 2>/dev/null)
+        [[ -n "${p}" ]] || continue
+        echo "${p}" > "${out}.new" && mv -f "${out}.new" "${out}"
+    done
+}
+
+# bootc and everything under it, parents first.
+tree_of() {
+    local pids=("$1") i=0 c k
+    while (( i < ${#pids[@]} )); do
+        for c in /proc/"${pids[i]}"/task/*/children; do
+            [[ -r "${c}" ]] || continue
+            for k in $(<"${c}"); do pids+=("${k}"); done
+        done
+        i=$(( i + 1 ))
+    done
+    printf '%s\n' "${pids[@]}"
+}
+
+# "cpu read written" summed over the tree: CPU in clock ticks, and the
+# process-level byte counters, which count sockets as well as disks.
+activity() {
+    local cpu=0 rd=0 wr=0 p stat f
+    for p in $(tree_of "$1"); do
+        stat=$(cat "/proc/${p}/stat" 2>/dev/null) || continue
+        # Fields 14 and 15 (utime, stime), counted after the ") " that ends
+        # the command name, which may itself hold spaces.
+        read -r -a f <<<"${stat##*) }"
+        cpu=$(( cpu + f[11] + f[12] ))
+        while read -r k v; do
+            case "${k}" in
+                rchar:) rd=$(( rd + v )) ;;
+                wchar:) wr=$(( wr + v )) ;;
+            esac
+        done 2>/dev/null < "/proc/${p}/io"
+    done
+    echo "${cpu} ${rd} ${wr}"
+}
+
+do_download() {
+    local ref version size
+    ref=$(booted_ref)
+    if [[ -z "${ref}" ]]; then
+        say state=failed "reason=Not a bootc system"
+        return 1
+    fi
+
+    # Checked again, so the version and size shown while it downloads are the
+    # image actually being fetched, even if a newer one appeared since.
+    say state=checking
+    local log
+    log=$(mktemp)
+    if ! bootc upgrade --check >"${log}" 2>&1; then
+        say state=failed "reason=$(reason_of "${log}")"
+        rm -f "${log}"
+        return 1
+    fi
+    if grep -q '^No changes in' "${log}"; then
+        rm -f "${log}"
+        local staged
+        staged=$(staged_version)
+        if [[ -n "${staged}" ]]; then say state=ready "version=${staged}"
+        else say state=uptodate; fi
+        return 0
+    fi
+    version=$(sed -n 's/^ *Version: *//p' "${log}" | head -1)
+    size=$(bytes_needed "${ref}") || size=0
+    : >"${log}"
+
+    # --progress-fd has to be a pipe; bootc refuses a file.
+    local phase="${DIR}/.phase"
+    echo "downloading 0 ${size}" > "${phase}"
+    bootc upgrade --progress-fd 3 3> >(read_progress "${phase}") >"${log}" 2>&1 &
+    local pid=$!
+
+    local last="" still=0 stalled=0 since="" wr0=0
+    say state=downloading "version=${version}" done=0 "total=${size}"
+    while kill -0 "${pid}" 2>/dev/null; do
+        sleep "${TICK}"
+        local now cpu rd wr p d t
+        read -r cpu rd wr <<<"$(activity "${pid}")"
+        now="${cpu} ${rd} ${wr}"
+        if [[ "${now}" == "${last}" ]]; then
+            still=$(( still + TICK ))
+        else
+            still=0
+        fi
+        last="${now}"
+        if (( still >= STALL_SECONDS )); then
+            echo "nothing moved for ${STALL_SECONDS}s: stopping" >&2
+            stalled=1
+            # Children first, so skopeo does not outlive bootc.
+            tree_of "${pid}" | tac | xargs -r kill -TERM 2>/dev/null
+            break
+        fi
+        read -r p d t < "${phase}" 2>/dev/null || continue
+        if [[ "${p}" == installing ]]; then
+            if [[ -z "${since}" ]]; then since=$(date +%s); wr0="${wr}"; fi
+            say state=installing "version=${version}" "since=${since}" \
+                "written=$(( wr > wr0 ? wr - wr0 : 0 ))"
+        else
+            say state=downloading "version=${version}" "done=${d}" "total=${t:-${size}}"
+        fi
+    done
+    wait "${pid}"
+    local rc=$?
+    cat "${log}"
+
+    if (( stalled )); then
+        say state=failed "version=${version}" "reason=Stalled"
+        rm -f "${log}"
+        return 1
+    fi
+    if (( rc != 0 )); then
+        say state=failed "version=${version}" "reason=$(reason_of "${log}")"
+        rm -f "${log}"
+        return 1
+    fi
+    rm -f "${log}"
+    # Read back, not assumed: what is staged is what the next boot runs.
+    local staged
+    staged=$(staged_version)
+    if [[ -z "${staged}" ]]; then
+        say state=failed "version=${version}" "reason=Nothing was staged"
+        return 1
+    fi
+    say state=ready "version=${staged}"
+}
+
+if [[ "${OP}" == check ]]; then do_check; else do_download; fi

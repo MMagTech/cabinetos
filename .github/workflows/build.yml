@@ -41,6 +41,13 @@ on:
   push:
     branches:
       - main
+      # THE TESTING CHANNEL. A push here publishes `cabinetos:testing`, never
+      # `latest`, for MMagTech's test console, which follows it (switched
+      # with `bootc switch`). An update can only be shown with an image newer
+      # than the installed one, and the root half of System update cannot run
+      # in tools/ui-loop.sh, so this is how both get tried on a television
+      # before anything reaches main. docs/SETTINGS.md, System.
+      - testing
     paths-ignore:
       - '**.md'
       - 'docs/**'
@@ -189,11 +196,25 @@ jobs:
 
       - name: Prepare environment
         run: |
+          set -euo pipefail
           IMAGE_NAME=$(just image_name)
           DEFAULT_TAG=$(just generate-default-tag)
+          # The testing branch publishes to its own tag. Everything else that
+          # publishes is main, and goes to `latest`.
+          if [[ "${GITHUB_REF}" == refs/heads/testing ]]; then
+            DEFAULT_TAG=testing
+          fi
+          # The version, 2026.09.28, numbered by the tags already published.
+          # A build that publishes must be able to read them; a pull request
+          # build publishes nothing and may guess.
+          strict=--strict
+          if [[ "${GITHUB_EVENT_NAME}" == pull_request ]]; then strict=""; fi
+          CABINETOS_VERSION=$(ci/next-version.sh ${strict} "${IMAGE_REGISTRY,,}/${IMAGE_NAME,,}")
+          echo "Version: ${CABINETOS_VERSION}, tag: ${DEFAULT_TAG}"
           echo "IMAGE_NAME=${IMAGE_NAME,,}" >> "${GITHUB_ENV}"
           echo "DEFAULT_TAG=${DEFAULT_TAG}" >> "${GITHUB_ENV}"
           echo "IMAGE_REGISTRY=${IMAGE_REGISTRY,,}" >> "${GITHUB_ENV}"
+          echo "CABINETOS_VERSION=${CABINETOS_VERSION}" >> "${GITHUB_ENV}"
 
       - name: Build image
         id: build-image
@@ -253,6 +274,15 @@ jobs:
           ALIAS_TAGS: ${{ steps.gen-build-tags.outputs.alias_tags }}
         run: |
           set -euo pipefail
+          # TWO BUILDS THE SAME DAY CAN PICK THE SAME NUMBER if they overlap
+          # (a testing push and a merge to main, say), because the number is
+          # read at the start and published at the end. The version is baked
+          # into the image, so it cannot be renumbered here: refuse, and let a
+          # re-run take the next one, rather than let two images share a name.
+          if skopeo inspect --raw "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:${CABINETOS_VERSION}" >/dev/null 2>&1; then
+            echo "::error::${CABINETOS_VERSION} was published by another build while this one ran. Re-run this workflow for the next number."
+            exit 1
+          fi
           for tag in ${ALIAS_TAGS}; do
             podman push --digestfile=/tmp/digestfile \
               "${IMAGE_NAME}:${tag}" \
@@ -309,6 +339,7 @@ jobs:
             echo "## CabinetOS image"
             echo
             echo "- Image: \`${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}\`"
+            echo "- Version: \`${CABINETOS_VERSION}\`"
             if [[ "${{ steps.signing.outputs.enabled }}" == "true" ]]; then
               echo "- Signed: yes"
             else

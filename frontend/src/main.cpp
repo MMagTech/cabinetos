@@ -79,6 +79,7 @@
 #include "power.h"
 #include "prefs.h"
 #include "server.h"
+#include "update.h"
 #include "ui.h"
 
 namespace {
@@ -850,6 +851,11 @@ constexpr GalleryNotice kNoticeGallery[] = {
     {"Removed. Others keep it, so no space came back", Tone::Info},
     {"Removed. The space comes back when you stop playing it", Tone::Info},
     {"Removed, but its files couldn't be deleted", Tone::Problem},
+    {"Update available", Tone::Info},
+    {"Updated to 2026.09.28", Tone::Done},
+    {"Update didn't apply", Tone::Problem},
+    {"Couldn't check for updates", Tone::Problem},
+    {"Couldn't update", Tone::Problem},
 };
 
 static void saveStateNow(GameSession& sess, Uploader& up, MenuNotice& notice) {
@@ -3463,6 +3469,12 @@ int main(int argc, char** argv) {
             navScript = argv[++i];
         } else if (SDL_strcmp(argv[i], "--game") == 0 && i + 1 < argc) {
             initialGame = SDL_atoi(argv[++i]);
+        } else if (SDL_strcmp(argv[i], "--update-dir") == 0 && i + 1 < argc) {
+            // System update's status read from here instead of /run, so each
+            // of its states can be put on the television by writing a file
+            // (tools/ui-loop.sh). A `version` file here stands in for the
+            // image's own. update.h.
+            update::setDir(argv[++i]);
         }
     }
 
@@ -5922,10 +5934,148 @@ int main(int argc, char** argv) {
     // built: they are there so the whole layout can be judged on the
     // television, and focus never lands on them.
     enum SettingId { SetAddAccount = 1, SetInterfaceSounds, SetPinSet, SetPinChange,
-                     SetPinOff, SetRemoveAccount, SetScreenOff, SetWifi, SetServer };
+                     SetPinOff, SetRemoveAccount, SetScreenOff, SetWifi, SetServer,
+                     SetUpdate, SetUpdateCheck };
 
     int screenOffIndex = savedScreenOff();
     std::fprintf(stderr, "[idle] screen off after %s\n", kScreenOff[screenOffIndex].name);
+
+    // ---- System update ------------------------------------------------------
+    //
+    // docs/SETTINGS.md, System; issue #70. Root does the work and writes one
+    // status file (update.h); the frame loop reads it twice a second and this
+    // decides what it means on screen. What has to outlive a boot is kept in
+    // settings.json: Manual or Weekly, when the last check succeeded and what
+    // it found, the version already announced, and the version waiting for a
+    // restart with the boot it was staged in, which is how the first start
+    // after a restart knows whether it applied.
+    update::Status upd;   // the first poll reads it, so a status already there is acted on
+    // A state said on screen before root has written it: "Checking…" the
+    // moment the row is pressed, or why systemd refused. Root's next write
+    // (at >= updSaidAt) replaces it.
+    int64_t updSaidAt = 0;
+    float updPoll = 0.0f;
+    bool updWeekly = prefs::get("update_check", "manual") == "weekly";
+    bool updAuto = false;            // the check running is the weekly one
+    float updAutoWait = 0.0f;        // before the weekly check may try again
+    bool updReadyPanel = false;      // "Update ready" waits to be asked
+    bool updReadyAfterGame = false;  // ...and it landed during a game
+    std::string updStartNotice;      // "Updated to", once Home is up
+    Tone updStartTone = Tone::Done;
+    auto prefNum = [](const char* key) {
+        return static_cast<int64_t>(std::strtoll(prefs::get(key, "0").c_str(), nullptr, 10));
+    };
+    // "0.9 MB", "1.4 GB": one decimal, because a frontend update is under a
+    // megabyte and a base image is gigabytes, and both have to read.
+    auto updBytes = [](int64_t b) {
+        char buf[32];
+        const double mb = static_cast<double>(b) / 1e6;
+        if (mb >= 1000.0) std::snprintf(buf, sizeof buf, "%.1f GB", mb / 1000.0);
+        else std::snprintf(buf, sizeof buf, "%.1f MB", mb);
+        return std::string(buf);
+    };
+    // "0.4 of 0.9 MB": one unit, the total's.
+    auto updOf = [](int64_t done, int64_t total) {
+        char buf[48];
+        const bool gb = total >= 1000000000;
+        const double d = static_cast<double>(done) / (gb ? 1e9 : 1e6);
+        const double t = static_cast<double>(total) / (gb ? 1e9 : 1e6);
+        std::snprintf(buf, sizeof buf, "%.1f of %.1f %s", d, t, gb ? "GB" : "MB");
+        return std::string(buf);
+    };
+    // "Checked today", by the calendar here, not by 24-hour periods.
+    auto updChecked = [&]() -> std::string {
+        const int64_t at = prefNum("update_checked");
+        if (at <= 0) return "Never checked";
+        auto dayOf = [](std::time_t t) {
+            std::tm tm{};
+            localtime_r(&t, &tm);
+            tm.tm_hour = 12;
+            tm.tm_min = tm.tm_sec = 0;
+            return static_cast<int64_t>(std::mktime(&tm) / 86400);
+        };
+        const int64_t days = dayOf(std::time(nullptr)) - dayOf(static_cast<std::time_t>(at));
+        if (days <= 0) return "Checked today";
+        if (days == 1) return "Checked yesterday";
+        return "Checked " + std::to_string(days) + " days ago";
+    };
+    // What the last successful check found, when nothing has run this boot:
+    // still newer than what is running, or not.
+    auto updFoundNewer = [&]() {
+        const std::string found = prefs::get("update_found", "");
+        return !found.empty() && found != update::bootedVersion();
+    };
+    auto updateRow = [&]() {
+        using K = screens::SettingsRow::Kind;
+        std::string value, detail;
+        switch (upd.state) {
+            case update::State::Checking:
+                value = "Checking\xE2\x80\xA6";
+                break;
+            case update::State::UpToDate:
+                value = "Up to date";
+                detail = updChecked();
+                break;
+            case update::State::Available:
+                value = "Update available";
+                detail = upd.version + " \xC2\xB7 " + updBytes(upd.size);
+                break;
+            case update::State::Downloading: {
+                const int pct = upd.total > 0
+                    ? static_cast<int>(std::min<int64_t>(100, upd.done * 100 / upd.total)) : 0;
+                value = std::to_string(pct) + "%";
+                detail = updOf(upd.done, upd.total);
+                break;
+            }
+            case update::State::Installing: {
+                // Time and bytes, because unpacking has no honest percentage
+                // and a spinner would not show it is not frozen.
+                const int64_t secs = std::max<int64_t>(0, std::time(nullptr) - upd.since);
+                value = "Installing\xE2\x80\xA6";
+                detail = (secs >= 60 ? std::to_string(secs / 60) + "m " : std::string()) +
+                         std::to_string(secs % 60) + "s, " + updBytes(upd.written) + " written";
+                break;
+            }
+            case update::State::Ready:
+                value = "Restart to update";
+                detail = upd.version;
+                break;
+            case update::State::Failed:
+                value = upd.download ? "Couldn't update" : "Couldn't check";
+                detail = upd.reason;
+                break;
+            case update::State::None:
+                if (updFoundNewer()) {
+                    value = "Update available";
+                    detail = prefs::get("update_found", "") + " \xC2\xB7 " +
+                             updBytes(prefNum("update_size"));
+                } else if (prefNum("update_checked") > 0) {
+                    value = "Up to date";
+                    detail = updChecked();
+                } else {
+                    detail = updChecked();
+                }
+                break;
+        }
+        return screens::SettingsRow{K::Action, SetUpdate, "System update", detail, value};
+    };
+    // AFTERWARDS: the first start after a restart compares the version the
+    // machine booted with the one that was staged. Said once Home is up.
+    {
+        const std::string pending = prefs::get("update_pending", "");
+        if (!pending.empty() && prefs::get("update_pending_boot", "") != update::bootId()) {
+            const std::string booted = update::bootedVersion();
+            const bool applied = booted == pending;
+            std::fprintf(stderr, "[update] staged %s, booted %s: %s\n", pending.c_str(),
+                         booted.empty() ? "(no version)" : booted.c_str(),
+                         applied ? "applied" : "did not apply");
+            updStartNotice = applied ? "Updated to " + pending : "Update didn't apply";
+            updStartTone = applied ? Tone::Done : Tone::Problem;
+            prefs::set("update_pending", "");
+            prefs::set("update_pending_boot", "");
+            if (applied) prefs::set("update_found", "");
+        }
+    }
     // THE NETWORK IS ASKED OFF THE FRAME THREAD. net::status() is three or four
     // nmcli round trips, which is a visible hitch if the screen waits for it,
     // so the row says "Checking" until the answer lands.
@@ -6294,7 +6444,14 @@ int main(int argc, char** argv) {
         cats.push_back({"Storage", std::move(store)});
 
         cats.push_back({"System", {
-            {K::Unbuilt, 0, "System update", "One check, one button, one restart", ""},
+            updateRow(),
+            [&] {
+                // Weekly only ever checks, never downloads.
+                Row r{K::Choice, SetUpdateCheck, "Check for updates", "", ""};
+                r.choices = {"Manual", "Weekly"};
+                r.choice = updWeekly ? 1 : 0;
+                return r;
+            }(),
         }});
 
         cats.push_back({"About", {
@@ -6305,6 +6462,37 @@ int main(int argc, char** argv) {
         }});
 
         settingsScreen.setCategories(std::move(cats));
+    };
+    // Start root's check or download, and say so at once rather than when
+    // root's first write lands. A refusal is said in the row: the unit is not
+    // in this image, or polkit said no.
+    auto startUpdate = [&](bool download, bool automatic) {
+        std::string why;
+        update::Status said;
+        said.download = download;
+        said.at = std::time(nullptr);
+        if (update::start(download, &why)) {
+            said.state = update::State::Checking;
+        } else {
+            said.state = update::State::Failed;
+            said.reason = why.find("not found") != std::string::npos ? "Not in this image" : why;
+            if (said.reason.size() > 60) said.reason.resize(60);
+        }
+        upd = said;
+        updSaidAt = said.at;
+        updAuto = automatic;
+        if (here() == Screen::Settings) buildSettings();
+    };
+    // "Update ready", once per staged version. Restart now is the Power
+    // menu's Restart: logind holds the machine while saves upload (PR #52),
+    // which is the "waits for saves" Sign out has. Later leaves it staged for
+    // the next Restart or Power off, and the row says "Restart to update".
+    auto askUpdateReady = [&]() {
+        askChoice("Update ready", upd.version, {"Restart now", "Later"}, 0, [&](int k) {
+            if (k != 0) return;
+            std::fprintf(stderr, "[update] restart now, into %s\n", upd.version.c_str());
+            power::act(power::Action::Restart);
+        });
     };
     askWifiPassword = [&](const std::string& ssid, bool forgetFirst, const std::string& why) {
         ui::Keyboard::Config cfg;
@@ -6612,6 +6800,27 @@ int main(int argc, char** argv) {
                         askWifi();
                     });
                     sound::play(sound::Cue::Activate);
+                } else if (res.value == SetUpdate) {
+                    // ONE ROW, AND WHAT IT DOES IS WHAT IT SAYS: check, fetch
+                    // (behind the PIN: an update can be gigabytes and replaces
+                    // the system, so the owner decides when), restart, or
+                    // retry. Busy, it does nothing. docs/SETTINGS.md, System.
+                    const bool available = upd.state == update::State::Available ||
+                                           (upd.state == update::State::None && updFoundNewer());
+                    const bool retryDownload = upd.state == update::State::Failed && upd.download;
+                    if (upd.busy()) {
+                        sound::play(sound::Cue::Edge);
+                    } else if (upd.state == update::State::Ready) {
+                        askUpdateReady();
+                        sound::play(sound::Cue::Activate);
+                    } else if (available || retryDownload) {
+                        askPin("Enter the PIN", "To update",
+                               [&]() { startUpdate(/*download=*/true, /*automatic=*/false); });
+                        sound::play(sound::Cue::Activate);
+                    } else {
+                        startUpdate(/*download=*/false, /*automatic=*/false);
+                        sound::play(sound::Cue::Activate);
+                    }
                 } else if (res.value == SetServer) {
                     // PIN FIRST, then what to do: the Wi-Fi row's shape.
                     // docs/SETTINGS.md, Network; issues #60 and #61.
@@ -6706,6 +6915,11 @@ int main(int argc, char** argv) {
                 }
                 break;
             case screens::Action::SettingChoice:
+                if (res.value == SetUpdateCheck) {
+                    updWeekly = settingsScreen.choiceOf(SetUpdateCheck) == 1;
+                    prefs::set("update_check", updWeekly ? "weekly" : "manual");
+                    sound::play(sound::Cue::Move);
+                }
                 if (res.value == SetScreenOff) {
                     const int i = settingsScreen.choiceOf(SetScreenOff);
                     if (i >= 0 && i < kScreenOffCount) {
@@ -8800,6 +9014,89 @@ int main(int argc, char** argv) {
         curtain.tick(dt);
         switchText.tick(dt);
         menuNotice.tick(dt);
+        // ---- System update: root's answers, the weekly check, the panel ----
+        updPoll -= dt;
+        updAutoWait -= dt;
+        if (updPoll <= 0.0f) {
+            updPoll = 0.5f;
+            const update::Status s = update::read();
+            const bool mine = updSaidAt == 0 || s.at >= updSaidAt;
+            const bool changed = s.state != upd.state || s.at != upd.at || s.done != upd.done ||
+                                 s.written != upd.written || s.version != upd.version ||
+                                 s.reason != upd.reason;
+            if (mine && changed) {
+                upd = s;
+                updSaidAt = 0;
+                std::fprintf(stderr, "[update] %s%s%s\n",
+                             s.state == update::State::Checking      ? "checking"
+                             : s.state == update::State::UpToDate    ? "up to date"
+                             : s.state == update::State::Available   ? "available "
+                             : s.state == update::State::Downloading ? "downloading "
+                             : s.state == update::State::Installing  ? "installing "
+                             : s.state == update::State::Ready       ? "ready "
+                             : s.state == update::State::Failed      ? "failed: "
+                                                                     : "none",
+                             s.version.c_str(), s.reason.c_str());
+                // A check that finished: remember when, and what it found.
+                // Both kinds of check write the "Checked" line.
+                if ((s.state == update::State::UpToDate || s.state == update::State::Available) &&
+                    s.at > prefNum("update_checked")) {
+                    prefs::set("update_checked", std::to_string(s.at));
+                    prefs::set("update_found",
+                               s.state == update::State::Available ? s.version : "");
+                    prefs::set("update_size", std::to_string(s.size));
+                    if (s.state == update::State::Available &&
+                        prefs::get("update_announced", "") != s.version) {
+                        // Once per new version, and only when nobody asked:
+                        // a check somebody pressed answers in its own row.
+                        if (updAuto) menuNotice.say("Update available", Tone::Info);
+                        prefs::set("update_announced", s.version);
+                    }
+                }
+                // Staged: ask once per version, remembering the boot it was
+                // staged in so the next boot can tell whether it applied.
+                if (s.state == update::State::Ready &&
+                    (prefs::get("update_pending", "") != s.version ||
+                     prefs::get("update_pending_boot", "") != update::bootId())) {
+                    prefs::set("update_pending", s.version);
+                    prefs::set("update_pending_boot", update::bootId());
+                    updReadyPanel = true;
+                    updReadyAfterGame = playing;
+                }
+                // The weekly check says nothing when it fails; it tries again
+                // later, which is how "offline skips it" and "reconnecting
+                // catches up" both happen with no separate trigger.
+                if (!s.busy()) updAuto = false;
+                if (here() == Screen::Settings) buildSettings();
+            } else if (upd.state == update::State::Installing && here() == Screen::Settings) {
+                buildSettings();   // the clock on "Installing…" moves by itself
+            }
+            // WEEKLY: on Home, no game, nothing else under way, more than seven
+            // days since the last check that worked, and not more than once
+            // every half hour while it keeps failing.
+            if (updWeekly && !playing && here() == Screen::Home && !upd.busy() &&
+                upd.state != update::State::Ready && updAutoWait <= 0.0f &&
+                std::time(nullptr) - prefNum("update_checked") > 7 * 86400) {
+                updAutoWait = 1800.0f;
+                std::fprintf(stderr, "[update] weekly check\n");
+                startUpdate(/*download=*/false, /*automatic=*/true);
+            }
+        }
+        // NEVER DURING A GAME. Ready while playing waits for the game to be
+        // closed, then asks once on Home; ready anywhere else asks at once,
+        // unless something else is already asking.
+        if (updReadyPanel && !playing && !overlayOpen && !choiceScreen.isOpen() &&
+            !pinScreen.isOpen() && !keyboard.isOpen() && !accountsOpen &&
+            leaving == Leave::None && switchPendingId == 0 && curtain.value() < 0.01f &&
+            (!updReadyAfterGame || here() == Screen::Home)) {
+            updReadyPanel = false;
+            askUpdateReady();
+        }
+        if (!updStartNotice.empty() && !playing && here() == Screen::Home &&
+            curtain.value() < 0.01f) {
+            menuNotice.say(updStartNotice, updStartTone);
+            updStartNotice.clear();
+        }
         if (noticeGallery) {
             // Four seconds each, the first after two so the screen has settled.
             static float galleryClock = -2.0f;

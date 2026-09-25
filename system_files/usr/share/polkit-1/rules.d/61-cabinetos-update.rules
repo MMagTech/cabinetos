@@ -1,0 +1,28 @@
+// Let the console start its own system update, and nothing else.
+//
+// The session runs as `cabinet` and an update needs root (bootc), so the root
+// half is two oneshot units, and this lets the session START those two units
+// by name. Not stop them, not any other unit, not `bootc` itself. What they
+// run is fixed in the image (/usr/libexec/cabinetos-update), so starting one
+// can only ever check for, or download, the image this console already
+// follows. docs/SETTINGS.md, System; issue #70.
+//
+// The PIN is asked by the frontend before it starts a download. It is not
+// enforced here: anybody who can run commands as `cabinet` is past the PIN
+// already.
+//
+// `subject.local`, for the reason 60-cabinetos-network.rules gives: the grant
+// belongs to the console on its own seat, not to an SSH session.
+
+polkit.addRule(function(action, subject) {
+    if (action.id == "org.freedesktop.systemd1.manage-units" &&
+        subject.user == "cabinet" &&
+        subject.local &&
+        action.lookup("verb") == "start") {
+        var unit = action.lookup("unit");
+        if (unit == "cabinetos-update-check.service" ||
+            unit == "cabinetos-update-download.service") {
+            return polkit.Result.YES;
+        }
+    }
+});
