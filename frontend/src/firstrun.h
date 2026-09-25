@@ -76,12 +76,16 @@ enum class Why {
     NotRun,          // no marker, and the machine is not configured either
     Completed,       // the marker says somebody walked the flow
     AdoptedExisting, // no marker, but the machine was already set up by hand
+    SignedOut,       // signed out in Settings; first run opens at the server
 };
 
 struct Completion {
     bool done = false;
     Why why = Why::NotRun;
     std::string when;    // ISO-8601, or empty
+    // SignedOut only: the games and accounts of the server that was left are
+    // still on the disk, and the start that reads this clears them first.
+    bool clearing = false;
 };
 
 // Reads the marker and, when there is none, judges the machine. Cheap: two
@@ -92,6 +96,14 @@ Completion completion();
 // there, because "somebody walked the flow" and "we found a configured machine"
 // are different facts and the difference will matter one day.
 bool markCompleted(bool adopted, std::string* err);
+
+// SIGNED OUT, docs/SETTINGS.md, Network, issue #61. Replaces the marker with
+// one saying so, which puts the console back into first run at the server
+// step. Written twice: `cleared` false by Settings, as the last thing before
+// the app restarts, and true by the next start once `server::finishSignOut`
+// has removed that server's games and accounts. A power cut between the two
+// leaves `cleared` false, so the clearing is done again rather than half done.
+bool markSignedOut(bool cleared, std::string* err);
 
 // --- The server address, which is first run's one lasting output ------------
 //
@@ -121,6 +133,10 @@ std::string serverAddress();
 std::string serverAddressSource();
 
 bool setServerAddress(const std::string& address, std::string* err);
+
+// Removes the address first run wrote, for signing out. Root's answer, if
+// there is one, is not this program's to remove and stays.
+void forgetServerAddress();
 
 // --- The steps --------------------------------------------------------------
 

@@ -133,6 +133,15 @@ const char* name(Step s) {
 Completion completion() {
     Completion c;
     const std::string body = readAll(markerPath());
+    if (const std::string out = jsonString(body, "signed_out"); !out.empty()) {
+        // Not done, whatever else is on the disk: alreadyConfigured() is not
+        // asked, because a console signed out on purpose must not be adopted
+        // back by the address and token it has not cleared yet.
+        c.why = Why::SignedOut;
+        c.when = out;
+        c.clearing = jsonString(body, "cleared") != "true";
+        return c;
+    }
     if (!body.empty()) {
         c.done = true;
         c.when = jsonString(body, "completed");
@@ -160,6 +169,20 @@ bool markCompleted(bool adopted, std::string* err) {
     // The version of the flow that wrote it. A console upgraded into a first
     // run that asks something new has to be able to tell that it never answered
     // the new question — and a marker with no version in it cannot say.
+    json_object_object_add(o, "flow", json_object_new_int(1));
+    const std::string body = json_object_to_json_string_ext(o, JSON_C_TO_STRING_PRETTY);
+    json_object_put(o);
+    return writeAll(markerPath(), body + "\n", err);
+}
+
+bool markSignedOut(bool cleared, std::string* err) {
+    if (!storage::makeDirs(storage::configDir())) {
+        if (err) *err = "cannot create " + storage::configDir();
+        return false;
+    }
+    json_object* o = json_object_new_object();
+    json_object_object_add(o, "signed_out", json_object_new_string(isoNow().c_str()));
+    json_object_object_add(o, "cleared", json_object_new_string(cleared ? "true" : "false"));
     json_object_object_add(o, "flow", json_object_new_int(1));
     const std::string body = json_object_to_json_string_ext(o, JSON_C_TO_STRING_PRETTY);
     json_object_put(o);
@@ -260,6 +283,8 @@ bool setServerAddress(const std::string& address, std::string* err) {
     }
     return true;
 }
+
+void forgetServerAddress() { ::unlink(serverPath().c_str()); }
 
 // --- The rules --------------------------------------------------------------
 

@@ -216,4 +216,13 @@ bool setPin(const std::string& pin, std::string* err);
 // that has none — check `pinIsSet` to decide whether to ask at all.
 bool checkPin(const std::string& pin);
 
+// --- Signing out -----------------------------------------------------------
+
+// Every account on this console, their tokens and the PIN, for signing out of
+// the server they belong to (issue #61). The next account paired, in first
+// run, owns the console and sets its own PIN. Also the single token from
+// before accounts existed (~/.config/cabinetos/romm.json), because it is a
+// credential for the same server. True when nothing is left.
+bool forgetEveryone();
+
 }  // namespace accounts

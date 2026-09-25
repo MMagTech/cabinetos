@@ -644,4 +644,9 @@ int64_t treeBytes(const std::string& path) {
     return total;
 }
 
+bool removeEntry(const std::string& path) {
+    removeTree(path);
+    return !exists(path);
+}
+
 }  // namespace storage

@@ -112,7 +112,6 @@ and says when it is right.
 ## Network
 
 - **Status** (connected over Ethernet or Wi-Fi, and the address). **Built.**
-- **RomM server** address shown. **Built.**
 - **Wi-Fi:** one row under Network, showing the network in use ("Off" or
   "Not connected" otherwise). Pressing it (PIN if set) opens a panel listing
   the networks in range, the one in use first ("Connected"), then saved
@@ -135,16 +134,82 @@ and says when it is right.
   can; Settings cannot yet).
 - **Addresses are automatic only.** A fixed address is set on the router.
   **Dropped: manual IP**, unless people ask, then it is one "Advanced" page.
-- **Change server address:** the same server at a new address. The console
-  proves it is the same server by asking the new address who the account's
-  sign-in token belongs to; only the server that issued a token accepts it. A
-  different server is refused and pointed at Sign out. **To build, #60.**
-- **Sign out:** one confirmation screen. All cached and kept games on this
-  console are removed; saves are safe on the server. Anything not yet
-  uploaded is tried quietly first, and mentioned only if it failed (by design
-  there never is any). Everything tied to that server is cleared: its games
-  and the accounts. Wi-Fi and controllers stay. Then back to first run's
-  server step. **To build, #61.**
+- **RomM server** is one row showing the address. Pressing it (PIN if set)
+  opens a panel titled with the address: Change address, Sign out, Cancel.
+  The Wi-Fi row's shape. **Built, #60 and #61**, judged on the TV with
+  MMagTech, 2026-09-25.
+- **Change server address:** the same server at a new address. The keyboard
+  opens holding the current address; Done checks the new one ("Checking…" in
+  the field, 700 ms at least so a quick answer does not flash). The console
+  proves it is the same server by asking the new address who the signed-in
+  account's token belongs to; only the server that issued a token accepts
+  it. Same user back: the address is saved, the covers move with it, and the
+  app starts again on it. Otherwise the field says "No RomM server there" or
+  "A different server: use Sign out", with the typed address kept behind the
+  message to correct. **Proved 2026-09-25** against a second, throwaway RomM
+  (5.3.1): it refused the real token. **Only the signed-in account's token is
+  tried**, deliberately: if that token is dead the console cannot load its
+  library on the old address either, so this screen is not where that is
+  fixed (MMagTech: tokens can be set never to expire). A server reinstalled
+  from scratch reads as a different one, which is right, since its game
+  numbers change. A new address for the same server never signs out.
+  **Built, #60.**
+- **And from the startup screen, when the server does not answer.** A
+  server whose IP changed is exactly the console that never reaches
+  Settings. So "Waiting for your server, 12s" gains a second, brighter line
+  after 10 s: "Press (A) to change the server address". A opens the PIN pad
+  if one is set, then the same keyboard and check as Settings. The same
+  server at the new address: the start carries on there, no restart. A
+  different server: a panel titled "A different server" with Sign out's two
+  lines, focus on Cancel, because Settings is out of reach. Settings keeps its
+  row for a move made while the old address still answers (a hostname,
+  https) and for a console already running when the server moves. MMagTech,
+  2026-09-25. **Built, #60**, judged on the TV the same day.
+  - **A server that is simply off loses nothing.** It is tried every 2 s and
+    the start carries on once it answers; the same address typed while it is
+    down says "No RomM server there", never "a different server".
+  - **It waits for as long as it takes**, with no give-up: it used to quit
+    at 90 s and the session started it again, a black flash every minute
+    and a half while a server was off, which bought nothing once this screen
+    retried by itself. The counter goes on in minutes ("4m 10s"). MMagTech,
+    2026-09-25; the (A) line is the cue to go and check the server.
+- **Sign out:** one question, "Sign out?", focus on Cancel:
+  "Removes every game and account from this console." then "Saves stay on
+  the server.", or, if any save never reached the server, "Saves waiting to
+  upload will be lost." Said, not counted (MMagTech, 2026-09-25). Nothing
+  re-sends an old unsent save from the disk (the marker records only a size);
+  that belongs with the offline console, open question 22. Uploads still in
+  flight are waited for, 20 s at most. Then everything tied to that server is
+  cleared: kept and cached games on every drive plugged in, every account's
+  saves, states and keeps on this console, its covers, the accounts, their
+  tokens, the PIN and the address. Wi-Fi, controllers, BIOS and the console's
+  own settings stay. Then first run, at the server step, then pairing, then
+  straight into the console: the network and the controllers stayed, so
+  their steps and the Ready screen are skipped (MMagTech, 2026-09-25: "we
+  just need the ip screen"; pairing cannot be skipped, the accounts are
+  gone). **Built, #61.** On the A9, 2026-09-25: 8.52 GB cleared in 0.05 s.
+  - **First run no longer freezes on "Start playing".** Its Bluetooth scan
+    was joined on the way out with nothing drawn: 17 s on a frozen Ready
+    screen, on every new console too. The startup screen now covers it.
+  - **Crash-left Dreamcast cards** (`saves/unattributed/`) go with it and
+    were never uploaded. MMagTech: fine to lose.
+  - **A games drive that is not plugged in keeps its games.** They are that
+    server's and nothing will use them; a wrong one is never launched,
+    because a file is only reused at its game's number, name and size.
+  - **Dropped: keeping games through Sign out** until the next pairing shows
+    whether it is the same server. It would protect a kept library from an
+    accidental sign out, but the one deliberate same-server case (a dead
+    token) is exactly where the check cannot work, it leaves a credential on
+    the disk after "Sign out", and the question would have to explain itself.
+    An accident takes five deliberate presses, and the PIN when set.
+- **Leaving is the startup screen, not black.** Sign out and a new address
+  both end with the app starting again (the address is read once, and first
+  run runs before the main loop). The curtain is the startup screen (the
+  cabinet, the name, "Signing out" or "Connecting to <address>"), and the app
+  replaces itself in place (exec), so gamescope stays up and the next picture
+  is the same screen. MMagTech, 2026-09-25: *"not just flat purple, the screen
+  you see with the logo."* Measured on the A9: 0.14 to 0.24 s between the
+  last frame and the next.
 - **One server at a time.** A friend's server is sign out, then sign in.
 
 ## Display and Sound
