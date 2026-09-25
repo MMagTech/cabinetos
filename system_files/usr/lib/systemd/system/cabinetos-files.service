@@ -1,0 +1,13 @@
+[Unit]
+Description=CabinetOS File access (SFTP on port 22)
+Documentation=https://github.com/MMagTech/cabinetos/blob/main/docs/SETTINGS.md
+# Started and stopped by the session, from Settings > Storage > File access,
+# through 62-cabinetos-files.rules; started again by the session at boot when
+# File access was left on. Not enabled: File access starts off.
+After=network.target local-fs.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/libexec/cabinetos-files on
+ExecStop=/usr/libexec/cabinetos-files off

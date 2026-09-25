@@ -80,6 +80,7 @@
 #include "prefs.h"
 #include "server.h"
 #include "update.h"
+#include "files.h"
 #include "ui.h"
 
 namespace {
@@ -3525,6 +3526,10 @@ int main(int argc, char** argv) {
             // (tools/ui-loop.sh). A `version` file here stands in for the
             // image's own. update.h.
             update::setDir(argv[++i]);
+        } else if (SDL_strcmp(argv[i], "--files-dir") == 0 && i + 1 < argc) {
+            // File access's state and password read from here instead, for
+            // the same reason as --update-dir. files.h.
+            files::setDir(argv[++i]);
         }
     }
 
@@ -5985,7 +5990,7 @@ int main(int argc, char** argv) {
     // television, and focus never lands on them.
     enum SettingId { SetAddAccount = 1, SetInterfaceSounds, SetPinSet, SetPinChange,
                      SetPinOff, SetRemoveAccount, SetScreenOff, SetWifi, SetServer,
-                     SetUpdate, SetUpdateCheck, SetCredits };
+                     SetUpdate, SetUpdateCheck, SetCredits, SetFiles, SetFilesPassword };
 
     int screenOffIndex = savedScreenOff();
     std::fprintf(stderr, "[idle] screen off after %s\n", kScreenOff[screenOffIndex].name);
@@ -6109,6 +6114,21 @@ int main(int argc, char** argv) {
         }
         return screens::SettingsRow{K::Action, SetUpdate, "System update", detail, value};
     };
+    // ---- File access (docs/SETTINGS.md, Storage; issue #69) -----------------
+    //
+    // Root's answer, read with the update status. `filesSaidAt` holds a state
+    // said on screen before root has written it ("Turning on…"), the way
+    // updSaidAt does. Whether it should be on is the owner's choice, kept in
+    // settings.json, so a console left with it on turns it on again at boot.
+    files::State filesState = files::read();
+    int64_t filesSaidAt = 0;
+    bool filesWant = prefs::get("file_access", "off") == "on";
+    if (filesWant && !filesState.on) {
+        std::string why;
+        if (files::turnOn(&why)) filesSaidAt = std::time(nullptr);
+        else std::fprintf(stderr, "[files] could not turn on at start: %s\n", why.c_str());
+    }
+
     // AFTERWARDS: the first start after a restart compares the version the
     // machine booted with the one that was staged. Said once Home is up.
     {
@@ -6489,8 +6509,33 @@ int main(int argc, char** argv) {
             store.push_back({K::Unbuilt, 0, "Eject", "Makes a USB drive safe to unplug", ""});
         store.push_back({K::Unbuilt, 0, "Kept and cached games",
                          "What is on this console, and what it keeps", ""});
-        store.push_back({K::Unbuilt, 0, "File access",
-                         "Reach your saves and games from a computer. Off to start", ""});
+        // FILE ACCESS: one switch, and while it is on, everything a computer
+        // needs to reach it, the password in plain text (anyone at the
+        // television can already turn it on or make a new one). SFTP, port
+        // 22, user `cabinet`, the saves and games folders only.
+        {
+            std::string value = filesState.on ? "On" : "Off";
+            std::string detail = "SFTP";
+            if (filesSaidAt != 0) value = filesWant ? "Turning on\xE2\x80\xA6" : "Turning off\xE2\x80\xA6";
+            else if (filesState.failed) detail = filesState.reason;
+            store.push_back({K::Toggle, SetFiles, "File access", detail, value});
+            if (filesState.on && filesSaidAt == 0) {
+                std::string ip;
+                {
+                    std::lock_guard<std::mutex> lk(settingsNet.m);
+                    if (settingsNet.have && !settingsNet.st.ipv4.empty())
+                        ip = settingsNet.st.ipv4.substr(0, settingsNet.st.ipv4.find('/'));
+                }
+                char host[256] = {0};
+                ::gethostname(host, sizeof host - 1);
+                store.push_back({K::Info, 0, "Address",
+                                 host[0] ? std::string(host) + ".local" : std::string(),
+                                 ip.empty() ? "Checking\xE2\x80\xA6" : ip});
+                store.push_back({K::Info, 0, "User name", "", "cabinet"});
+                store.push_back({K::Info, 0, "Password", "", files::password()});
+                store.push_back({K::Action, SetFilesPassword, "New password", "", ""});
+            }
+        }
         cats.push_back({"Storage", std::move(store)});
 
         cats.push_back({"System", {
@@ -6859,6 +6904,48 @@ int main(int argc, char** argv) {
                         choiceScreen.setValues(values);
                         wifiPanelOpen = true;
                         askWifi();
+                    });
+                    sound::play(sound::Cue::Activate);
+                } else if (res.value == SetFiles) {
+                    // On behind the PIN; off never is, because closing a
+                    // door needs no key.
+                    auto flip = [&](bool on) {
+                        std::string why;
+                        const bool ok = on ? files::turnOn(&why) : files::turnOff(&why);
+                        if (!ok) {
+                            filesState.on = false;
+                            filesState.failed = true;
+                            filesState.reason =
+                                why.find("not found") != std::string::npos ? "Not in this image" : why;
+                            if (filesState.reason.size() > 60) filesState.reason.resize(60);
+                            filesSaidAt = 0;
+                        } else {
+                            filesSaidAt = std::time(nullptr);
+                        }
+                        filesWant = on;
+                        prefs::set("file_access", on ? "on" : "off");
+                        buildSettings();
+                    };
+                    if (filesSaidAt != 0) {
+                        sound::play(sound::Cue::Edge);
+                    } else if (filesState.on) {
+                        flip(false);
+                        sound::play(sound::Cue::Activate);
+                    } else {
+                        askPin("Enter the PIN", "To turn on file access", [&, flip]() { flip(true); });
+                        sound::play(sound::Cue::Activate);
+                    }
+                } else if (res.value == SetFilesPassword) {
+                    // The old one stops working on every computer that saved
+                    // it, so it is asked once, with focus on Cancel.
+                    askPin("Enter the PIN", "To make a new password", [&]() {
+                        askChoice("New password?", "", {"New password", "Cancel"}, 1, [&](int k) {
+                            if (k != 0) return;
+                            std::string why;
+                            if (!files::newPassword(&why))
+                                menuNotice.say("Couldn't make a new password", Tone::Problem);
+                            filesSaidAt = 0;
+                        });
                     });
                     sound::play(sound::Cue::Activate);
                 } else if (res.value == SetCredits) {
@@ -9091,6 +9178,23 @@ int main(int argc, char** argv) {
         updAutoWait -= dt;
         if (updPoll <= 0.0f) {
             updPoll = 0.5f;
+            {
+                // File access: root's answer. A state said on screen waits
+                // for an answer written after it; ten seconds without one
+                // and it gives up waiting and shows what root last said.
+                const files::State f = files::read();
+                const bool answered = filesSaidAt == 0 || f.at >= filesSaidAt ||
+                                      std::time(nullptr) - filesSaidAt > 10;
+                if (answered && (f.on != filesState.on || f.failed != filesState.failed ||
+                                 f.reason != filesState.reason || f.at != filesState.at ||
+                                 filesSaidAt != 0)) {
+                    filesState = f;
+                    filesSaidAt = 0;
+                    std::fprintf(stderr, "[files] %s%s\n",
+                                 f.on ? "on" : (f.failed ? "failed: " : "off"), f.reason.c_str());
+                    if (here() == Screen::Settings) buildSettings();
+                }
+            }
             const update::Status s = update::read();
             const bool mine = updSaidAt == 0 || s.at >= updSaidAt;
             const bool changed = s.state != upd.state || s.at != upd.at || s.done != upd.done ||

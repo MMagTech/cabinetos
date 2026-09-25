@@ -1,0 +1,24 @@
+[Unit]
+Description=CabinetOS development shell (SSH on port 2222, key only)
+Documentation=https://github.com/MMagTech/cabinetos/blob/main/docs/SETTINGS.md
+# Only on a development image. A shipping console has no shell to reach.
+ConditionPathExists=/usr/share/cabinetos/DEVELOPMENT-IMAGE
+Wants=sshd-keygen.target
+After=network.target sshd-keygen.target
+
+[Service]
+# SELinux lets sshd listen on ports labelled ssh_port_t, which is 22 only.
+# Labelled here, at boot, rather than in the image: the policy store is in
+# /etc, and a console that has changed any SELinux setting keeps its own
+# compiled policy over the image's, so a label baked into the image would
+# never arrive. 0.7 s the first time, 0.14 s to find it done after.
+ExecStartPre=/bin/sh -c 'semanage port -l | grep -qE "^ssh_port_t.*[ ,]2222(,|$$)" || semanage port -a -t ssh_port_t -p tcp 2222'
+# Its own instance, so File access can start and stop sshd.service (port
+# 22) without touching this. PidFile none: two sshds would share one.
+ExecStart=/usr/sbin/sshd -D -p 2222 -o PidFile=none
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

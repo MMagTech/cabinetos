@@ -50,19 +50,27 @@ else
     dnf5 -y install openssh-server
 fi
 
-# Enabled rather than assumed-enabled. Fedora Atomic images generally ship sshd
-# enabled already, but "generally" is not a thing to build a development
-# workflow on.
+# TWO SSHDS, ONE PER PORT, as of 2026-09-25 (File access, docs/SETTINGS.md,
+# Storage; the rules are /etc/ssh/sshd_config.d/30-cabinetos.conf).
 #
-# Fedora can run sshd either as a classic always-listening service or via socket
-# activation, and the two conflict if both are enabled. Prefer whichever the
-# base already uses rather than forcing one and breaking the other.
-if systemctl is-enabled sshd.socket >/dev/null 2>&1; then
-    log "sshd.socket is enabled (socket activation) — leaving it alone"
-else
-    log "enabling sshd.service"
-    systemctl enable sshd.service
-fi
+#   cabinetos-dev-ssh.service   port 2222, key only, a shell. Enabled here,
+#                               and it only runs on an image carrying the
+#                               DEVELOPMENT-IMAGE marker written below.
+#   sshd.service                port 22, File access: SFTP only, a password.
+#                               NOT enabled. /usr/libexec/cabinetos-files
+#                               starts it when File access is turned on in
+#                               Settings and stops it when it is turned off.
+#
+# THE DEVELOPMENT SHELL MOVED FROM 22 TO 2222 HERE. Anything that reached a
+# console with `ssh cabinet@<address>` now needs `-p 2222`, or a Host entry
+# with `Port 2222`. Port 22 answers only while File access is on, and then
+# with SFTP and nothing else.
+#
+# sshd.socket is disabled too: socket activation would open 22 on its own,
+# which is the one thing File access being off promises it is not.
+systemctl disable sshd.service sshd.socket >/dev/null 2>&1 || true
+systemctl enable cabinetos-dev-ssh.service
+log "sshd.service off until File access; cabinetos-dev-ssh.service on (port 2222)"
 
 # SFTP, so a frontend build can be pushed to a running console without
 # reflashing it. Fedora's sshd_config enables the sftp subsystem by default;

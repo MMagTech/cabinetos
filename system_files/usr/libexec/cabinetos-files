@@ -1,0 +1,167 @@
+#!/usr/bin/env bash
+#
+# File access, the root half. docs/SETTINGS.md, Storage; issue #69.
+#
+#   cabinetos-files on        the password, the folder view, port 22 open
+#   cabinetos-files off       port 22 closed, the view taken down
+#   cabinetos-files newpass   a new password (and applied, if on)
+#
+# Run only by cabinetos-files.service (on as ExecStart, off as ExecStop) and
+# cabinetos-files-password.service, which the session starts and stops
+# through 62-cabinetos-files.rules.
+#
+# WHAT A COMPUTER SEES is /run/cabinetos-files, the chroot the port 22 rules
+# in /etc/ssh/sshd_config.d/30-cabinetos.conf lock `cabinet` into: the
+# console's roms, cache, bios and users (the saves) folders, and one folder
+# per extra drive holding that drive's CabinetOS folder and nothing else of
+# it. Bind mounts, so it is the real folders, not copies. config/ (the RomM
+# token) and logs/ are not in it. Nothing of the system is.
+#
+# THE PASSWORD is `cabinet`'s login password, because that is what sshd
+# checks. Made the first time File access is turned on, kept through
+# restarts and through off and on, changed only by newpass. Stored where the
+# session can read it to show it (0640 root:cabinet): it is shown in plain
+# text on the Settings page while File access is on, by design.
+#
+# The answer is /run/cabinetos-files.state, key=value, replaced whole:
+#   state=on | off | failed
+#   reason=<short text>     failed
+#   at=<epoch>
+
+set -uo pipefail
+
+ROOT=/var/lib/cabinetos
+VIEW=/run/cabinetos-files
+KEEP=/var/lib/cabinetos-files
+PASS="${KEEP}/password"
+STATE=/run/cabinetos-files.state
+USER_NAME=cabinet
+# No 0/O, no 1/I/L: it is read off a television.
+ALPHABET=ABCDEFGHJKMNPQRSTUVWXYZ23456789
+
+OP="${1:-}"
+
+say() {
+    local tmp
+    tmp=$(mktemp /run/.cabinetos-files.XXXXXX) || return
+    { printf '%s\n' "$@"; printf 'at=%s\n' "$(date +%s)"; } > "${tmp}"
+    chmod 0644 "${tmp}"
+    mv -f "${tmp}" "${STATE}"
+}
+
+fail() {
+    echo "cabinetos-files: $1" >&2
+    say state=failed "reason=$1"
+    exit 1
+}
+
+# XXXX-XXXX, the shape of RomM's pairing code, which people already read off
+# this television. 31 symbols, 8 of them: about 40 bits, against a network
+# neighbour who also has to get past sshd's own rate limiting.
+generate() {
+    local out="" i n
+    for i in 1 2 3 4 5 6 7 8; do
+        n=$(( $(od -An -N2 -tu2 /dev/urandom) % ${#ALPHABET} ))
+        out+="${ALPHABET:n:1}"
+        [[ "${i}" == 4 ]] && out+="-"
+    done
+    echo "${out}"
+}
+
+ensure_password() {
+    install -d -m 0750 -o root -g "${USER_NAME}" "${KEEP}" || return 1
+    if [[ ! -s "${PASS}" ]]; then
+        generate > "${PASS}.new" || return 1
+        chown root:"${USER_NAME}" "${PASS}.new" && chmod 0640 "${PASS}.new" || return 1
+        mv -f "${PASS}.new" "${PASS}"
+        echo "made a new password"
+    fi
+}
+
+apply_password() {
+    printf '%s:%s\n' "${USER_NAME}" "$(<"${PASS}")" | chpasswd
+}
+
+# The name Storage gives a drive: External for USB, Internal otherwise.
+drive_kind() {
+    local dev link
+    dev=$(stat -c '%Hd:%Ld' "$1") || { echo Internal; return; }
+    link=$(readlink -f "/sys/dev/block/${dev}" 2>/dev/null)
+    [[ "${link}" == */usb* ]] && echo External || echo Internal
+}
+
+view_up() {
+    install -d -m 0755 -o root -g root "${VIEW}" || return 1
+    local d
+    for d in roms cache bios users; do
+        [[ -d "${ROOT}/${d}" ]] || continue
+        mkdir -p "${VIEW}/${d}"
+        mountpoint -q "${VIEW}/${d}" || mount --bind "${ROOT}/${d}" "${VIEW}/${d}" || return 1
+    done
+    # Each drive the console has claimed (storage::locations): a mount under
+    # one of these, on another device, with a CabinetOS folder on it.
+    local here base m kind name n
+    here=$(stat -c '%d' "${ROOT}")
+    for base in "/run/media/${USER_NAME}" /var/mnt; do
+        for m in "${base}"/*; do
+            [[ -d "${m}/CabinetOS" ]] || continue
+            [[ "$(stat -c '%d' "${m}")" != "${here}" ]] || continue
+            kind=$(drive_kind "${m}")
+            name="${kind}"
+            n=2
+            while [[ -e "${VIEW}/${name}" ]] && ! mountpoint -q "${VIEW}/${name}"; do
+                name="${kind} ${n}"; n=$(( n + 1 ))
+            done
+            mountpoint -q "${VIEW}/${name}" && continue
+            mkdir -p "${VIEW}/${name}"
+            mount --bind "${m}/CabinetOS" "${VIEW}/${name}" || return 1
+            echo "drive ${m} shown as ${name}"
+        done
+    done
+}
+
+# NEVER rm -r HERE. Everything under the view is somebody's saves and games
+# until it is unmounted; rmdir removes only what is empty, so a mount that
+# would not come off leaves a folder behind rather than an empty drive.
+view_down() {
+    [[ -d "${VIEW}" ]] || return 0
+    local d
+    for d in "${VIEW}"/*; do
+        [[ -e "${d}" ]] || continue
+        if mountpoint -q "${d}"; then
+            umount "${d}" 2>/dev/null || umount -l "${d}"
+        fi
+        rmdir "${d}" 2>/dev/null
+    done
+    rmdir "${VIEW}" 2>/dev/null
+    return 0
+}
+
+case "${OP}" in
+    on)
+        ensure_password || fail "Couldn't make a password"
+        apply_password || fail "Couldn't set the password"
+        view_up || { view_down; fail "Couldn't show the folders"; }
+        systemctl start sshd.service || { view_down; fail "Couldn't start SSH"; }
+        say state=on
+        ;;
+    off)
+        systemctl stop sshd.service
+        view_down
+        say state=off
+        ;;
+    newpass)
+        rm -f "${PASS}"
+        ensure_password || fail "Couldn't make a password"
+        # The account's password only changes while File access is on; off,
+        # the new one is applied the next time it is turned on.
+        if systemctl is-active -q cabinetos-files.service; then
+            apply_password || fail "Couldn't set the password"
+            say state=on
+        fi
+        ;;
+    *)
+        echo "usage: cabinetos-files on|off|newpass" >&2
+        exit 2
+        ;;
+esac

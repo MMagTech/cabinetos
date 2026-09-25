@@ -60,7 +60,14 @@ for expected in \
     /usr/libexec/cabinetos-update \
     /usr/lib/systemd/system/cabinetos-update-check.service \
     /usr/lib/systemd/system/cabinetos-update-download.service \
-    /usr/share/polkit-1/rules.d/61-cabinetos-update.rules
+    /usr/share/polkit-1/rules.d/61-cabinetos-update.rules \
+    /usr/libexec/cabinetos-files \
+    /usr/lib/systemd/system/cabinetos-files.service \
+    /usr/lib/systemd/system/cabinetos-files-password.service \
+    /usr/lib/systemd/system/cabinetos-dev-ssh.service \
+    /usr/lib/systemd/system-preset/40-cabinetos.preset \
+    /usr/share/polkit-1/rules.d/62-cabinetos-files.rules \
+    /etc/ssh/sshd_config.d/30-cabinetos.conf
 do
     if [[ -e "${expected}" ]]; then
         log "  overlaid: ${expected}"
@@ -353,16 +360,22 @@ fi
 # more legible.
 check_present "kernel modules directory" /usr/lib/modules || failed=1
 
-# SSH must be enabled — Phases 2 to 5 are developed over it. See open question 8.
-# Either the classic service or socket activation counts.
-if systemctl is-enabled sshd.service >/dev/null 2>&1; then
-    log "  ok: sshd.service is enabled"
-elif systemctl is-enabled sshd.socket >/dev/null 2>&1; then
-    log "  ok: sshd.socket is enabled (socket activation)"
+# SSH, since 2026-09-25 two things (enable-ssh.sh): the development shell on
+# 2222 must be enabled, because this project is developed over it, and port
+# 22 must NOT be, because it is File access and File access starts off.
+if systemctl is-enabled cabinetos-dev-ssh.service >/dev/null 2>&1; then
+    log "  ok: cabinetos-dev-ssh.service is enabled (port 2222)"
 else
-    log "  MISSING: sshd is not enabled by either service or socket"
+    log "  MISSING: cabinetos-dev-ssh.service is not enabled: no way in to develop"
     failed=1
 fi
+for unit in sshd.service sshd.socket; do
+    if systemctl is-enabled "${unit}" >/dev/null 2>&1; then
+        log "  WRONG: ${unit} is enabled; port 22 would be open with File access off"
+        failed=1
+    fi
+done
+check_present "File access's sshd rules" /etc/ssh/sshd_config.d/30-cabinetos.conf || failed=1
 
 # The session must be enabled, or the machine boots to a console — which is
 # Phase 1 behaviour, not Phase 2.
@@ -397,11 +410,11 @@ check_present "emulator flatpak manifest" /usr/share/cabinetos/flatpaks.list || 
 # these; every one is in the base today and none is something we install, so
 # a strip pass or a base bump that took one away would ship a console whose
 # update row says "Couldn't check" for a reason nobody would connect to it.
-for needed in bootc skopeo jq ostree flock; do
+for needed in bootc skopeo jq ostree flock chpasswd mountpoint semanage; do
     if command -v "${needed}" >/dev/null 2>&1; then
         log "  ok: ${needed} ($(command -v "${needed}"))"
     else
-        log "  MISSING: ${needed}, which /usr/libexec/cabinetos-update runs"
+        log "  MISSING: ${needed}, which cabinetos-update, cabinetos-files or the dev shell runs"
         failed=1
     fi
 done
