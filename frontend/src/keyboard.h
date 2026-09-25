@@ -12,11 +12,12 @@
 // Three decisions worth stating, because they are the ones that make it
 // bearable rather than merely possible:
 //
-// SHOW WHAT WAS TYPED, INCLUDING PASSWORDS. Every console hides a password
-// field by default and every console is wrong: nobody is shoulder-surfing a
-// living room, and not being able to see what you typed IS the difficulty. A
-// caller can still ask for concealment, and there is a control to toggle it,
-// but visible is the default.
+// A PASSWORD IS MASKED, BUT THE LAST CHARACTER SHOWS. Reversed 2026-09-24 by
+// MMagTech, from "show what was typed, including passwords" (open question
+// 17). The objection to masking was that a typo nobody can see only surfaces
+// as a failed join; showing each character for a moment as it is typed, the
+// way phones do, answers that, and the "show" key reveals the lot before
+// done. Callers ask for it with `conceal`; other fields are shown as typed.
 //
 // REDUCE TYPING RATHER THAN SPEEDING IT UP. A key that inserts ".com", a
 // prefilled scheme, and a remembered previous value each save more than any
@@ -29,6 +30,7 @@
 
 #pragma once
 
+#include <chrono>
 #include <functional>
 #include <string>
 #include <vector>
@@ -98,6 +100,20 @@ public:
     void toggleConceal();
     KeyboardResult commit();   // "done"
     KeyboardResult cancel();
+
+    // WAITING ON WHAT WAS TYPED, e.g. a Wi-Fi join. The panel stays up and
+    // takes no typing; only cancel (B) works. It used to close on done and a
+    // new one open on a wrong password, and the two cuts of a full-screen
+    // scrim read as a strobe (MMagTech on the TV, 2026-09-24).
+    void setBusy(bool on) { busy_ = on; }
+    bool busy() const { return busy_; }
+
+    // A MESSAGE IN THE FIELD ITSELF: it empties and says `msg` where the
+    // placeholder goes, until the first character is typed. `problem` makes
+    // it brighter and shakes it once ("Wrong password"). MMagTech's idea,
+    // 2026-09-24: a line under the title made the panel grow and jump, and
+    // the pill at the foot of the screen was out of the line of sight.
+    void sayInField(const std::string& msg, bool problem);
 
     // A physical keyboard types into the same field. Not a separate path: the
     // same string, the same commit, the same screen.
@@ -177,6 +193,13 @@ private:
     std::string value_;
     bool shifted_ = false;
     bool conceal_ = false;
+    bool busy_ = false;
+    std::string fieldMsg_;          // replaces the placeholder while set
+    bool fieldProblem_ = false;
+    std::chrono::steady_clock::time_point shakeAt_{};
+    // The character just typed stays readable this long in a masked field.
+    std::chrono::steady_clock::time_point lastTyped_{};
+    bool revealLast_ = false;
     int row_ = 0, col_ = 0;
     float panelTop_ = 0.0f;
     std::vector<std::vector<Key>> lower_, upper_;

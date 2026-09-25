@@ -113,8 +113,26 @@ and says when it is right.
 
 - **Status** (connected over Ethernet or Wi-Fi, and the address). **Built.**
 - **RomM server** address shown. **Built.**
-- **Wi-Fi:** see networks, join, forget, change a password. **To build**; the
-  code underneath already works for first run. #59.
+- **Wi-Fi:** one row under Network, showing the network in use ("Off" or
+  "Not connected" otherwise). Pressing it (PIN if set) opens a panel listing
+  the networks in range, the one in use first ("Connected"), then saved
+  ones ("Saved"), then by signal; six at a time, scrolling. The networks were
+  rows on the Network page for one build, and MMagTech: in a crowded building
+  that list would be long. Choosing one: in use gives Change password /
+  Forget; saved gives Join / Change password / Forget; new joins, with the
+  on-screen keyboard for a password. Forget asks "Forget <name>?". Change
+  password is forget then join. The PIN is asked once per visit to Settings.
+  The password is masked, the character just typed shown for a moment, with
+  a "show" key. While it joins, the keyboard stays up and its field says
+  "Joining…"; a wrong password empties it to "Wrong password" (shaken) until
+  the next try is typed. A failed join leaves no saved network behind. The
+  pill says "Connected to <name>". No signal bars: tried and dropped the
+  same day, since a person joins their own network whatever its strength
+  (MMagTech). 802.1X
+  networks are not offered. First run's Wi-Fi step behaves the same way.
+  Worked out on the TV with MMagTech, 2026-09-24. **Built, #59.**
+  **Later, if asked for:** joining a network that hides its name (first run
+  can; Settings cannot yet).
 - **Addresses are automatic only.** A fixed address is set on the router.
   **Dropped: manual IP**, unless people ask, then it is one "Advanced" page.
 - **Change server address:** the same server at a new address. The console

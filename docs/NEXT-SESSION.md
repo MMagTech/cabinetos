@@ -32,6 +32,21 @@ with its investigations intact.
 
 ## Before anything else
 
+**THE SESSION OF 2026-09-24/25 BUILT FIVE SETTINGS ITEMS, ALL MERGED:** #91
+(interface sounds, #62), #92 (owner and PIN #57, remove an account #58, and
+account switching, which froze and crashed, fixed), #93 (turn off screen
+after, #71), #94 (Wi-Fi, #59). Everything was judged on the TV with
+`tools/ui-loop.sh`. The details and what was tried and dropped are in
+`docs/SETTINGS.md`; the item-1 block under *WHAT TO DO NEXT* has the rest.
+**Next: Sign out (#61) and Change server address (#60), together.**
+
+**THE A9 WAS LEFT ON THE LOOP'S HAND-BUILT BINARY** (the /run drop-in) unless
+MMagTech upgraded it: check `ps -eo args | grep [c]abinetos-frontend`. A
+reboot, or `sudo bootc upgrade && sudo systemctl reboot` once #94's image is
+built, puts it on the image. **Its accounts are `1 - MMagTech` and
+`12 - vivian`; claire was removed by hand (her save folder is still on
+disk). No PIN is set.**
+
 **THE SESSION OF 2026-09-23/24 MERGED THREE PRS, AND THE A9 RUNS THEM.**
 
 - **#53** (`1e0c40f`): no rechunk; the image is built in layers, so a frontend change
@@ -481,9 +496,20 @@ notes here stay the detail.
      a digit back.
    - On-screen text states, never explains: see the no-spoon-feeding rule.
 
-   **Next: Turn off screen after (#71)**, a Choice row like sounds, then
-   Wi-Fi (#59), then change server (#60) and sign out (#61), each gated with
-   `askPin`.
+   **#71 TURN OFF SCREEN AFTER, MERGED AS #93**: 10, 15 or 30 min under
+   Display and Sound, dim fixed at 5 min (Never and 1 hour dropped).
+
+   **#59 WI-FI, MERGED AS #94** (judged on the TV, 2026-09-24/25): one
+   Wi-Fi row opening a scrolling list panel; masked password with the last
+   character shown; "Joining…"/"Wrong password" in the keyboard's field; the
+   PIN asked once per Settings visit. Details in `docs/SETTINGS.md`.
+   **A failed `nmcli device wifi connect` leaves a profile holding the wrong
+   password; the join job now forgets it.** Over SSH, nmcli cannot delete
+   Wi-Fi profiles (polkit: only the console's session can), so clean up
+   through the UI.
+
+   **Next: Sign out (#61) and Change server address (#60)**, together, each
+   gated with `askPin`; the question panel (`choice.h`) is ready for them.
 
    **Tracked as GitHub issues #57 to #75, Settings milestone** (#74 and #75
    are `later`). The checklist below is the same list:
@@ -497,7 +523,7 @@ notes here stay the detail.
    - [ ] Change server address (same-server check by token) and Sign out
          (one confirmation, clear that server's games and accounts, back to
          first run's server step).
-   - [ ] Wi-Fi page (join, forget, change password); `net.h` has the calls.
+   - [x] Wi-Fi page (join, forget, change password); `net.h` has the calls.
    - [ ] File access: SFTP only, user `cabinet`, generated password shown in
          plain text, "New password", restricted to CabinetOS folders on every
          drive.

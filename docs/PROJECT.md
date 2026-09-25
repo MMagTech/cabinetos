@@ -9458,10 +9458,14 @@ television, which is a thing to find out rather than assume.
 
 #### Three decisions that matter more than the mechanism
 
-1. **Show the password by default.** Every console hides it and every console is
-   wrong: there is nobody shoulder-surfing a living room, and not being able to
-   see what you typed *is* the entire difficulty. This one choice removes most
-   of the pain for free.
+1. ~~**Show the password by default.**~~ **REVERSED 2026-09-24 by MMagTech:
+   masked, with the character just typed shown for a moment and a "show" key
+   for the whole thing**, the way phones do it. The original reasoning was
+   that not seeing what you typed *is* the difficulty; the brief reveal
+   answers that (each character is checked as it goes in), so the objection
+   to masking no longer holds. Kept for the record: *"Every console hides it
+   and every console is wrong: there is nobody shoulder-surfing a living
+   room."*
 2. **Skip the screen when already online.**
 3. **Remember networks.** NetworkManager does this for nothing.
 

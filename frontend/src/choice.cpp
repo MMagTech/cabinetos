@@ -12,12 +12,14 @@ namespace {
 constexpr float kPanelPad = 40.0f;
 constexpr float kPanelRadius = 32.0f;
 constexpr float kPanelMaxW = 1200.0f;
-constexpr float kButtonW = 520.0f;
+constexpr float kButtonW = 600.0f;
 constexpr float kButtonH = 88.0f;
 constexpr float kButtonGap = 12.0f;
 constexpr float kButtonRadius = 16.0f;
 constexpr float kFocusScale = 1.04f;
 constexpr float kAppear = 0.280f;
+// MORE THAN THIS SCROLLS, for a Wi-Fi list in a crowded building.
+constexpr int kMaxVisible = 6;
 
 }  // namespace
 
@@ -27,11 +29,28 @@ void ChoiceScreen::open(std::string title, std::string detail,
     title_ = std::move(title);
     detail_ = std::move(detail);
     options_ = std::move(options);
+    values_.clear();
     slot_ = options_.empty() ? 0 : std::clamp(focus, 0, static_cast<int>(options_.size()) - 1);
+    top_ = std::max(0, slot_ - (kMaxVisible - 1));
     appear_.from = appear_.to = 0.0f;
     appear_.elapsed = 0.0f;
     appear_.retarget(1.0f, kAppear);
     focus_.settle(1.0f);
+}
+
+void ChoiceScreen::replace(std::vector<std::string> options, std::vector<std::string> values,
+                           std::string detail) {
+    const std::string was = (slot_ >= 0 && slot_ < static_cast<int>(options_.size()))
+                                ? options_[slot_] : std::string();
+    options_ = std::move(options);
+    values_ = std::move(values);
+    detail_ = std::move(detail);
+    slot_ = 0;
+    for (int i = 0; i < static_cast<int>(options_.size()); ++i)
+        if (options_[i] == was) slot_ = i;
+    top_ = std::clamp(top_, 0, std::max(0, static_cast<int>(options_.size()) - kMaxVisible));
+    if (slot_ < top_) top_ = slot_;
+    if (slot_ >= top_ + kMaxVisible) top_ = slot_ - kMaxVisible + 1;
 }
 
 ChoiceScreen::Outcome ChoiceScreen::key(Nav n) {
@@ -45,6 +64,8 @@ ChoiceScreen::Outcome ChoiceScreen::key(Nav n) {
                 return Outcome::None;
             }
             slot_ = next;
+            if (slot_ < top_) top_ = slot_;
+            if (slot_ >= top_ + kMaxVisible) top_ = slot_ - kMaxVisible + 1;
             focus_.retarget(0.0f, 0.0f);
             focus_.elapsed = 0.0f;
             focus_.retarget(1.0f, design::kFocusDuration);
@@ -56,6 +77,7 @@ ChoiceScreen::Outcome ChoiceScreen::key(Nav n) {
             sound::play(sound::Cue::Edge);
             return Outcome::None;
         case Nav::Activate:
+            if (options_.empty()) { sound::play(sound::Cue::Edge); return Outcome::None; }
             sound::play(sound::Cue::Activate);
             return Outcome::Chosen;
         case Nav::Back:
@@ -86,7 +108,8 @@ void ChoiceScreen::draw(Ctx& c) {
     const float lineH = c.text.lineHeight(TextStyle::Callout, sc);
     const float detailH = detail_.empty() ? 0.0f : 8.0f + lineH;
     const int n = static_cast<int>(options_.size());
-    const float listH = n * kButtonH + std::max(0, n - 1) * kButtonGap;
+    const int shown = std::min(n, kMaxVisible);
+    const float listH = shown * kButtonH + std::max(0, shown - 1) * kButtonGap;
     const float panelH = kPanelPad + titleH + detailH + 36.0f + listH + kPanelPad;
     const float px = (W - panelW) * 0.5f, py = (H - panelH) * 0.5f;
 
@@ -115,19 +138,28 @@ void ChoiceScreen::draw(Ctx& c) {
 
     const float f = focus_.value();
     const float bx = (W - kButtonW) * 0.5f;
-    for (int i = 0; i < n; ++i) {
+    const bool list = !values_.empty();
+    for (int i = top_; i < std::min(n, top_ + kMaxVisible); ++i) {
         const bool on = (i == slot_);
         const float s = on ? 1.0f + (kFocusScale - 1.0f) * f : 1.0f;
         const float dw = kButtonW * s, dh = kButtonH * s;
         const float dx = bx - (dw - kButtonW) * 0.5f, dy = y - (dh - kButtonH) * 0.5f;
         const float bf = on ? f : 0.0f;
         c.r.draw(design::menuButton(dx, dy, dw, dh, kButtonRadius * s, bf, 1.0f));
-        const std::string label =
-            c.text.truncate(options_[i], TextStyle::Title3, sc, kButtonW - 40.0f);
+        const float base = dy + dh * 0.5f + c.text.ascent(TextStyle::Title3, sc) * 0.40f;
+        // A LIST (answers with values) reads left to right, "name ... state",
+        // like a Settings row; a plain question keeps its answers centred.
+        const std::string value =
+            (list && i < static_cast<int>(values_.size())) ? values_[i] : std::string();
+        const float vw = value.empty() ? 0.0f : c.text.measure(value, TextStyle::Callout, sc);
+        const float room = kButtonW - 48.0f - (value.empty() ? 0.0f : vw + 24.0f);
+        const std::string label = c.text.truncate(options_[i], TextStyle::Title3, sc, room);
         const float lw = c.text.measure(label, TextStyle::Title3, sc);
-        c.text.draw(c.r, label, dx + (dw - lw) * 0.5f,
-                    dy + dh * 0.5f + c.text.ascent(TextStyle::Title3, sc) * 0.40f,
-                    TextStyle::Title3, design::menuLabel(bf, 1.0f), sc);
+        const float lx = list ? dx + 24.0f : dx + (dw - lw) * 0.5f;
+        c.text.draw(c.r, label, lx, base, TextStyle::Title3, design::menuLabel(bf, 1.0f), sc);
+        if (!value.empty())
+            c.text.draw(c.r, value, dx + dw - 24.0f - vw, base, TextStyle::Callout,
+                        ui::Color::white(0.60f), sc);
         y += kButtonH + kButtonGap;
     }
     c.r.setContentAlpha(1.0f);

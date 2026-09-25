@@ -39,6 +39,9 @@ Keyboard::Key action(const char* label, Keyboard::Key::Action a, float width = 1
 
 void Keyboard::open(const Config& config) {
     config_ = config;
+    busy_ = false;
+    fieldMsg_.clear();
+    fieldProblem_ = false;
     value_ = config.initial;
     conceal_ = config.conceal;
     shifted_ = false;
@@ -217,18 +220,25 @@ void Keyboard::moveFocus(int dx, int dy) {
 
 KeyboardResult Keyboard::pressKey() {
     if (!open_) return KeyboardResult::Cancelled;
+    if (busy_) return KeyboardResult::Typing;
     clampFocus();
     const Key& key = layout()[row_][col_];
     switch (key.action) {
         case Key::Backspace: backspace(); return KeyboardResult::Typing;
         case Key::Shift: toggleShift(); return KeyboardResult::Typing;
-        case Key::Space: value_ += ' '; return KeyboardResult::Typing;
+        case Key::Space:
+            value_ += ' ';
+            lastTyped_ = std::chrono::steady_clock::now();
+            revealLast_ = true;
+            return KeyboardResult::Typing;
         case Key::Conceal: toggleConceal(); return KeyboardResult::Typing;
         case Key::Done: return commit();
         case Key::Cancel: return cancel();
         case Key::None: break;
     }
     value_ += key.insert;
+    lastTyped_ = std::chrono::steady_clock::now();
+    revealLast_ = true;
     // Shift is one-shot, the way a phone keyboard behaves: capitalise a letter
     // and fall back to lowercase, because the next character almost never wants
     // the same case.
@@ -240,6 +250,8 @@ KeyboardResult Keyboard::pressKey() {
 }
 
 void Keyboard::backspace() {
+    if (busy_) return;
+    revealLast_ = false;
     if (value_.empty()) return;
     // Step back over a whole UTF-8 code point, not a byte. Deleting half of a
     // multi-byte character leaves an invalid string that will not render.
@@ -249,6 +261,7 @@ void Keyboard::backspace() {
 }
 
 void Keyboard::toggleShift() {
+    if (busy_) return;
     shifted_ = !shifted_;
     clampFocus();
 }
@@ -269,16 +282,28 @@ void Keyboard::toggleConceal() {
 }
 
 void Keyboard::typeText(const char* utf8) {
-    if (!open_ || !utf8) return;
+    if (!open_ || !utf8 || busy_) return;
     value_ += utf8;
+    lastTyped_ = std::chrono::steady_clock::now();
+    revealLast_ = true;
+}
+
+void Keyboard::sayInField(const std::string& msg, bool problem) {
+    value_.clear();
+    revealLast_ = false;
+    fieldMsg_ = msg;
+    fieldProblem_ = problem;
+    if (problem) shakeAt_ = std::chrono::steady_clock::now();
 }
 
 KeyboardResult Keyboard::commit() {
+    if (busy_) return KeyboardResult::Typing;
     open_ = false;
     return KeyboardResult::Committed;
 }
 
 KeyboardResult Keyboard::cancel() {
+    busy_ = false;
     open_ = false;
     return KeyboardResult::Cancelled;
 }
@@ -395,9 +420,38 @@ void Keyboard::draw(Renderer& r, TextRenderer& text, float scale) {
     // The field.
     r.draw(Rect{panelX + pad, y, widest, fieldH, kKeyRadius, Color::black(0.45f)});
     std::string shown = value_;
-    if (conceal_) shown.assign(value_.size(), '*');
+    if (conceal_) {
+        // A dot per character, not per byte, and the last one readable for
+        // a moment after it was typed.
+        constexpr auto kReveal = std::chrono::milliseconds(1500);
+        const bool reveal = revealLast_ &&
+                            std::chrono::steady_clock::now() - lastTyped_ < kReveal;
+        std::vector<std::string> chars;
+        for (size_t i = 0; i < value_.size();) {
+            size_t n = 1;
+            while (i + n < value_.size() &&
+                   (static_cast<unsigned char>(value_[i + n]) & 0xC0) == 0x80)
+                ++n;
+            chars.push_back(value_.substr(i, n));
+            i += n;
+        }
+        shown.clear();
+        for (size_t i = 0; i < chars.size(); ++i)
+            shown += (reveal && i + 1 == chars.size()) ? chars[i] : "\xE2\x80\xA2";
+    }
     const bool empty = shown.empty();
-    if (empty) shown = config_.placeholder;
+    // A message in the field (sayInField) stands in for the placeholder,
+    // and so goes the moment something is typed.
+    const bool message = empty && !fieldMsg_.empty();
+    if (empty) shown = message ? fieldMsg_ : config_.placeholder;
+    // ONE SHORT SHAKE for a problem, the PIN dots' own: a decaying wobble.
+    float shakeX = 0.0f;
+    if (message && fieldProblem_) {
+        const float t = std::chrono::duration<float>(std::chrono::steady_clock::now() -
+                                                     shakeAt_).count();
+        constexpr float kShake = 0.40f;
+        if (t < kShake) shakeX = std::sin(t * 50.0f) * 18.0f * (1.0f - t / kShake);
+    }
     const float fieldBaseline = y + fieldH * 0.5f + text.ascent(TextStyle::Title3, scale) * 0.5f;
     // Show the tail when it overflows: what someone is typing is at the end,
     // and a field that scrolls off the right hides exactly the character they
@@ -408,8 +462,10 @@ void Keyboard::draw(Renderer& r, TextRenderer& text, float scale) {
         while (n < shown.size() && (static_cast<unsigned char>(shown[n]) & 0xC0) == 0x80) ++n;
         shown.erase(0, n);
     }
-    text.draw(r, shown, panelX + pad + 20.0f, fieldBaseline, TextStyle::Title3,
-              empty ? Color::white(0.35f) : Color::white(1.0f), scale);
+    text.draw(r, shown, panelX + pad + 20.0f + shakeX, fieldBaseline, TextStyle::Title3,
+              message ? Color::white(fieldProblem_ ? 0.95f : 0.60f)
+                      : (empty ? Color::white(0.35f) : Color::white(1.0f)),
+              scale);
     if (!empty) {
         // A caret at the end, so the field reads as active rather than as a
         // label that happens to contain text.
