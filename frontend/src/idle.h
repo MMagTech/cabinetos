@@ -56,11 +56,12 @@ Offset pixelShift(double seconds, float scale, double everySeconds = kShiftEvery
 // question singled out as worse than a menu.
 //
 // THE BLANK IS A SETTING NOW, "Turn off screen after" (docs/SETTINGS.md,
-// System): 10 or 15 minutes, 30 or an hour. The dim comes at a third of it,
-// so the starting 15 dims at 5 as it always has. There is no "never"; see
-// main.cpp's kScreenOff.
+// Display and Sound): 10, 15 or 30 minutes. THE DIM IS FIXED AT 5 MINUTES,
+// whatever the choice. It was a third of the choice for a day, which gave
+// times like 3 min 20 s; MMagTech: "the numbers seem weirdly determined". One
+// rule a person can predict, and an early dim is the better burn-in guard.
+constexpr double kMenuDimAfter = 5 * 60.0;
 constexpr double kMenuBlankAfter = 15 * 60.0;   // the starting value
-constexpr double kMenuDimFraction = 1.0 / 3.0;
 
 // PLAYING, UNPAUSED. A game running is not idle just because nothing is
 // pressed — an attract loop, a cut-scene, somebody thinking about a puzzle — so

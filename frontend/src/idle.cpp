@@ -62,7 +62,7 @@ Level Watch::update(double now, bool playing) {
         if (idle >= kGameDimAfter) want = Level::Dim;
     } else if (blankAfter_ > 0.0) {
         if (idle >= blankAfter_) want = Level::Blank;
-        else if (idle >= blankAfter_ * kMenuDimFraction) want = Level::Dim;
+        else if (idle >= kMenuDimAfter) want = Level::Dim;
     }
     // Only ever deepen on a timer. Coming back up is input()'s job, so pausing
     // or unpausing a game cannot light a dark screen by itself.

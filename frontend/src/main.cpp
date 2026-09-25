@@ -5440,13 +5440,14 @@ int main(int argc, char** argv) {
     // TURN OFF SCREEN AFTER, docs/SETTINGS.md, System. Saved as the word in
     // config/settings.json; the frame loop hands the seconds to idle::Watch.
     // The starting value is 15 minutes, what the console did before there
-    // was a choice. NO "NEVER": it was built and dropped the same day, because
-    // on an OLED a menu left lit indefinitely is burn-in, and an hour is as
-    // long as anybody needs. A saved word this list does not know is 15.
+    // was a choice. NO "NEVER" AND NO HOUR: both were built and dropped the
+    // same day, on MMagTech's word, because on an OLED a lit menu is burn-in
+    // and half an hour is long enough. A saved word this list does not know
+    // is 15.
     struct ScreenOff { const char* name; const char* word; double seconds; };
     static constexpr ScreenOff kScreenOff[] = {
         {"10 minutes", "10m", 10 * 60.0}, {"15 minutes", "15m", 15 * 60.0},
-        {"30 minutes", "30m", 30 * 60.0}, {"1 hour", "1h", 60 * 60.0},
+        {"30 minutes", "30m", 30 * 60.0},
     };
     constexpr int kScreenOffCount = sizeof kScreenOff / sizeof kScreenOff[0];
     int screenOffIndex = 1;
