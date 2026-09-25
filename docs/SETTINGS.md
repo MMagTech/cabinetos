@@ -252,7 +252,69 @@ status here to Built.
 
 ## System
 
-- **System update:** one check, one button, one restart. **To build, #70.**
+- **System update.** Decided with MMagTech, 2026-09-25; **to build, #70**,
+  and to be judged on the TV before anything here is final. Why it comes
+  first: the image switches off every automatic updater on purpose
+  (`strip-desktop.sh`: `uupd`, `bootc-fetch-apply-updates`), so today a
+  console only updates if someone runs `bootc upgrade` over SSH.
+  - **Check for updates:** a row, **Manual** (the default) or **Weekly**.
+    Weekly only ever checks, never downloads. It runs when all of these hold:
+    on Home, no game running, online, and more than 7 days since the last
+    successful check. So offline skips it, and the next boot or reconnection
+    catches up with no separate trigger. An automatic check that finds
+    nothing says nothing; one that finds an update shows the pill "Update
+    available" once per new version.
+  - **The System update row:** the value on the right and a line under it.
+    Up to date / "Checked today" (both kinds of check write that line).
+    Checking…. Update available / "2026.09.28 · 0.9 MB": the size is shown,
+    because a base-image update is hundreds of MB to GB. Downloading: "45%" /
+    "0.4 of 0.9 MB". Installing… with the time taken and the amount written
+    ("3m 12s, 1.4 GB written"), because unpacking has no honest percentage
+    and a spinner would not show it is not frozen. Restart to update.
+    Couldn't update / "Stalled" or the reason; pressing retries.
+  - **PIN:** starting the download asks for it when one is set. Checking,
+    the status, Manual or Weekly, and Restart now or Later do not. MMagTech
+    reversed "system update open to everyone" (2026-09-24): an update can be
+    gigabytes and replaces the system, so the owner decides when.
+  - **When it applies:** asked once the download is ready, in a panel
+    "Update ready": **Restart now** / **Later**. Later applies it at the next
+    Restart or Power off (bootc's staged deployment); Sleep does not, and the
+    row says "Restart to update" until then. Restart now waits for saves
+    still uploading, as Sign out does.
+  - **Never during a game.** No check and no restart while an emulator runs.
+    A download started before a game carries on at low priority; if it
+    finishes during the game, nothing appears until the game is closed, then
+    the "Update ready" panel shows once on Home.
+  - **Stalls:** the root service watches the updating processes' CPU time,
+    bytes read (which includes the network) and bytes written. Stalled when
+    none has moved for 60 s. A slow connection keeps moving and is allowed;
+    there is no overall limit. On a stall the service stops the update, the
+    row says "Couldn't update" / "Stalled", and pressing retries; no
+    automatic retries. The running system is untouched until the new one is
+    complete, so a stall or power cut leaves the console as it was. A retry
+    should reuse what already arrived: **to verify** by pulling the cable
+    mid-download.
+  - **Afterwards:** on the first start after an update, the booted version is
+    compared with the one installed. Match: the pill "Updated to
+    2026.09.28". Not: "Update didn't apply".
+  - **Root:** the session runs as `cabinet`, so the image needs a small root
+    service that only runs the update, and permission for the session to
+    start it. That part is tested by building images, not with the TV loop.
+  - **Emulator Flatpaks** are pinned by the image and fetched by a service
+    at boot, so an update that moves one downloads part of itself after the
+    restart, outside the size shown. Rare; already handled.
+- **The version is the date,** `2026.09.28`, and `2026.09.28.2`, `.3` for
+  further images that day; UTC. The build stamps it into the image (the label
+  the update check reads, and a file the console reads after booting), and
+  numbers a day by the versions already in the registry, so a docs-only
+  commit that builds nothing does not use a number up. This is also About's
+  version (#72). MMagTech, 2026-09-25.
+- **A `testing` tag.** Builds from a `testing` branch publish to
+  `cabinetos:testing`, never `latest`; MMagTech's test console follows it
+  (switched over SSH with `bootc switch`), and its update check then follows
+  `testing` by itself. Every user's console follows `latest`, and nothing on
+  screen changes that. Set up first, to test updates on. **Later:** a "Test
+  builds" switch in developer settings for people who want to help test.
 
 ## About
 

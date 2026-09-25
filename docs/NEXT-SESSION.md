@@ -79,12 +79,16 @@ disabled, `bootc-fetch-apply-updates.timer` masked, `strip-desktop.sh`), so
 today a console only updates if someone connects to it and runs
 `sudo bootc upgrade`. Everyone else stays on what they installed. The same
 day showed the machinery is sound: the A9 skipped four images (#91 to #94)
-and landed cleanly on #95's, a 0.9 MB download. **To decide with MMagTech
-before building:** whether the check runs by itself and shows "Update
-available" or only on a press; what the screen says while it downloads and
-stages; when the restart happens (at once, or at the next power off); and
-what happens with a game running. `docs/SETTINGS.md`, System, has only "one
-check, one button, one restart". Then File access (#69), then Storage.
+and landed cleanly on #95's, a 0.9 MB download. **DESIGNED WITH MMAGTECH THE
+SAME DAY, in `docs/SETTINGS.md`, System**: Manual or Weekly checks, the row's
+states with the size, a PIN on the download, "Update ready: Restart now /
+Later" after the download, nothing during a game, stalls judged by CPU and
+I/O over 60 s, "Updated to …" after, the version as the UTC date
+(`2026.09.28`, `.2`), and a `testing` tag for his test console. **He wants to
+see it on the TV before any of it is final**, so build the `testing` tag
+first (an update needs a newer image than the one installed, and the TV loop
+cannot test the root side), then show him each state. Then File access
+(#69), then Storage.
 
 **THE SESSION OF 2026-09-24/25 BUILT FIVE SETTINGS ITEMS, ALL MERGED:** #91
 (interface sounds, #62), #92 (owner and PIN #57, remove an account #58, and
