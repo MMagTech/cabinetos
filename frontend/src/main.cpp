@@ -5571,7 +5571,10 @@ int main(int argc, char** argv) {
             // Here, not under System: it is about the screen, and it is where a
             // person looks for it. MMagTech, 2026-09-24.
             [&] {
-                Row r{K::Choice, SetScreenOff, "Turn off screen after", "", ""};
+                // A FACT THE ROW CANNOT OTHERWISE SHOW, not an explanation:
+                // the dim is fixed and nothing else on screen says when.
+                Row r{K::Choice, SetScreenOff, "Turn off screen after", "Dims after 5 minutes",
+                      ""};
                 for (int i = 0; i < kScreenOffCount; ++i) r.choices.push_back(kScreenOff[i].name);
                 r.choice = screenOffIndex;
                 return r;
