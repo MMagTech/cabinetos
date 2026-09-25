@@ -33,10 +33,9 @@ with its investigations intact.
 ## Before anything else
 
 **THE SESSION OF 2026-09-25 BUILT SIGN OUT (#61) AND CHANGE SERVER ADDRESS
-(#60), on branch `settings-server`, in the PR that carries this handover.
-NOT MERGED, NO IMAGE BUILT:** MMagTech judged every screen of it on the TV,
-the merge is his call. What was decided is in `docs/SETTINGS.md`, Network;
-the short version:
+(#60), MERGED AS #95 (`ce5459d`), AND THE A9 RUNS IT FROM THE IMAGE.**
+MMagTech judged every screen of it on the TV first. What was decided is in
+`docs/SETTINGS.md`, Network; the short version:
 
 - **RomM server** is one row (PIN if set): Change address, Sign out, Cancel.
 - **Change address** checks the new address is the same server by asking it
@@ -62,9 +61,10 @@ the short version:
   runs in CI**: no workflow calls the self-tests. Another half-working
   automation entry.
 
-**THE A9 AFTER THIS SESSION:** on the loop's hand-built binary of this
-branch (the /run drop-in; a reboot puts it back on the image, which does NOT
-have this work). **Signed out and back in twice: one account, `1 - MMagTech`,
+**THE A9 AFTER THIS SESSION: ON THE IMAGE, `latest.20260925-ce5459d`,**
+`/usr/bin/cabinetos-frontend`, no drop-in. It had sat on #56's image
+(`0db5283`) through #91 to #94, which it had only ever run from the loop;
+upgraded and rebooted 2026-09-25, a 0.9 MB download. **Signed out and back in twice: one account, `1 - MMagTech`,
 no PIN; vivian is gone** (re-add her from the account panel if wanted).
 Its games were cleared and download again as played. **Its address now
 lives in `config/server.json`, like a real install: `/etc/cabinetos/session.env`
@@ -554,8 +554,8 @@ notes here stay the detail.
    Wi-Fi profiles (polkit: only the console's session can), so clean up
    through the UI.
 
-   **#60 CHANGE SERVER ADDRESS AND #61 SIGN OUT, BUILT 2026-09-25** on branch
-   `settings-server`, judged on the TV, not merged. The top of this file has
+   **#60 CHANGE SERVER ADDRESS AND #61 SIGN OUT, MERGED AS #95, 2026-09-25**,
+   judged on the TV, and on the A9 from the image. The top of this file has
    the summary and `docs/SETTINGS.md`, Network, the decisions. The code is
    `server.{h,cpp}` (the check, the address change, the clearing), the
    startup wait in main.cpp, and `setup::Options::signedOut`.
@@ -572,7 +572,7 @@ notes here stay the detail.
    - [x] Change server address (same-server check by token, in Settings and
          on the startup screen) and Sign out (one confirmation, clear that
          server's games and accounts, back to first run's server step).
-         Built on `settings-server`, not merged.
+         Merged as #95.
    - [x] Wi-Fi page (join, forget, change password); `net.h` has the calls.
    - [ ] File access: SFTP only, user `cabinet`, generated password shown in
          plain text, "New password", restricted to CabinetOS folders on every

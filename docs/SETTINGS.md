@@ -19,9 +19,8 @@ against.
 milestone. Discuss on the issue; the PR that builds it closes it and flips its
 status here to Built.
 
-**Where the work is:** branch `settings-side-list`, PR #56, **not merged on
-purpose**. MMagTech judges it on the television with `tools/ui-loop.sh` first
-and says when it is right.
+**Where the work is:** on `main`. Each item is judged on the television with
+`tools/ui-loop.sh` before its PR merges.
 
 ---
 
