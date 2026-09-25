@@ -56,7 +56,11 @@ for expected in \
     /usr/lib/systemd/logind.conf.d/50-cabinetos.conf \
     /usr/lib/systemd/system/cabinetos-flatpak-setup.service \
     /usr/lib/systemd/system/cabinetos-flatpak-setup.timer \
-    /usr/share/cabinetos/flatpaks.list
+    /usr/share/cabinetos/flatpaks.list \
+    /usr/libexec/cabinetos-update \
+    /usr/lib/systemd/system/cabinetos-update-check.service \
+    /usr/lib/systemd/system/cabinetos-update-download.service \
+    /usr/share/polkit-1/rules.d/61-cabinetos-update.rules
 do
     if [[ -e "${expected}" ]]; then
         log "  overlaid: ${expected}"
@@ -388,6 +392,27 @@ for unit in cabinetos-flatpak-setup.service cabinetos-flatpak-setup.timer; do
 done
 
 check_present "emulator flatpak manifest" /usr/share/cabinetos/flatpaks.list || failed=1
+
+# SYSTEM UPDATE, docs/SETTINGS.md, System. The root half is a script that runs
+# these; every one is in the base today and none is something we install, so
+# a strip pass or a base bump that took one away would ship a console whose
+# update row says "Couldn't check" for a reason nobody would connect to it.
+for needed in bootc skopeo jq ostree flock; do
+    if command -v "${needed}" >/dev/null 2>&1; then
+        log "  ok: ${needed} ($(command -v "${needed}"))"
+    else
+        log "  MISSING: ${needed}, which /usr/libexec/cabinetos-update runs"
+        failed=1
+    fi
+done
+# The rule has to name the units that exist, or the session's start is
+# refused and the row can only ever say it could not.
+for unit in cabinetos-update-check.service cabinetos-update-download.service; do
+    grep -q "${unit}" /usr/share/polkit-1/rules.d/61-cabinetos-update.rules || {
+        log "  MISSING: 61-cabinetos-update.rules no longer names ${unit}"
+        failed=1
+    }
+done
 
 # THE CONSOLE ITSELF IS CHECKED IN install-frontend.sh's LAST CALL, not here.
 # The frontend, the cores and their files are installed in later layers, after

@@ -252,8 +252,10 @@ status here to Built.
 
 ## System
 
-- **System update.** Decided with MMagTech, 2026-09-25; **to build, #70**,
-  and to be judged on the TV before anything here is final. Why it comes
+- **System update.** Decided with MMagTech, 2026-09-25; **built on the
+  `system-update` branch, #70, being judged on the TV** (the row's states
+  and the panel were judged and passed on 2026-09-25; the real update is
+  next). Why it comes
   first: the image switches off every automatic updater on purpose
   (`strip-desktop.sh`: `uupd`, `bootc-fetch-apply-updates`), so today a
   console only updates if someone runs `bootc upgrade` over SSH.
@@ -265,13 +267,19 @@ status here to Built.
     nothing says nothing; one that finds an update shows the pill "Update
     available" once per new version.
   - **The System update row:** the value on the right and a line under it.
-    Up to date / "Checked today" (both kinds of check write that line).
+    **A console that has never checked shows the row alone**, no value and
+    no line; pressing it checks (MMagTech on the TV, 2026-09-25: no state
+    for "never checked").
+    Up to date / "Checked today" (both kinds of check write that line;
+    "yesterday", "3 days ago" by the calendar).
     Checking…. Update available / "2026.09.28 · 0.9 MB": the size is shown,
     because a base-image update is hundreds of MB to GB. Downloading: "45%" /
     "0.4 of 0.9 MB". Installing… with the time taken and the amount written
     ("3m 12s, 1.4 GB written"), because unpacking has no honest percentage
     and a spinner would not show it is not frozen. Restart to update.
-    Couldn't update / "Stalled" or the reason; pressing retries.
+    Couldn't update / "Stalled" or the reason; pressing retries. **A failed
+    check says "Couldn't check"** / the reason ("No connection"), because it
+    was not an update that failed.
   - **PIN:** starting the download asks for it when one is set. Checking,
     the status, Manual or Weekly, and Restart now or Later do not. MMagTech
     reversed "system update open to everyone" (2026-09-24): an update can be
@@ -279,10 +287,16 @@ status here to Built.
   - **When it applies:** asked once the download is ready, in a panel
     "Update ready": **Restart now** / **Later**. Later applies it at the next
     Restart or Power off (bootc's staged deployment); Sleep does not, and the
-    row says "Restart to update" until then. Restart now waits for saves
-    still uploading, as Sign out does.
+    row says "Restart to update" until then, with the version under it, and
+    pressing the row asks again. Restart now waits for saves still
+    uploading, as Sign out does: **it is the Power menu's Restart**, whose
+    logind delay lock already holds the machine up to 25 s for uploads
+    (PR #52), so there is no second waiting mechanism. The panel's line is
+    the version.
   - **Never during a game.** No check and no restart while an emulator runs.
-    A download started before a game carries on at low priority; if it
+    A download started before a game carries on at low priority (the
+    download always runs at low priority: `Nice=15`, I/O best-effort 7;
+    in a menu nobody can see the difference); if it
     finishes during the game, nothing appears until the game is closed, then
     the "Update ready" panel shows once on Home.
   - **Stalls:** the root service watches the updating processes' CPU time,
@@ -297,9 +311,31 @@ status here to Built.
   - **Afterwards:** on the first start after an update, the booted version is
     compared with the one installed. Match: the pill "Updated to
     2026.09.28". Not: "Update didn't apply".
-  - **Root:** the session runs as `cabinet`, so the image needs a small root
-    service that only runs the update, and permission for the session to
-    start it. That part is tested by building images, not with the TV loop.
+  - **Root:** the session runs as `cabinet`, so the image carries
+    `/usr/libexec/cabinetos-update` (`check`, `download`), run by two oneshot
+    units, `cabinetos-update-check.service` and
+    `cabinetos-update-download.service`, and a polkit rule,
+    `61-cabinetos-update.rules`, that lets `cabinet` at the console (not over
+    SSH) START those two units and nothing else. The answer is one file,
+    `/run/cabinetos-update/status`, key=value lines, which the frontend reads
+    twice a second. **Proved from the TV on 2026-09-25**: pressed, started,
+    checked as root, answered, in 0.75 s.
+  - **How the pieces map onto bootc** (1.16 on the A9): `bootc upgrade
+    --check` says whether there is an update and its version. The **size**
+    is worked out by the script: the new manifest's layers minus the layers
+    ostree already holds (one ref per layer), which is exactly what bootc
+    fetches; its own "layers needed: 3 (60.2 MB)" matched to the byte.
+    **Downloading** is bootc's JSON progress (`--progress-fd`, which has to
+    be a pipe), bytes of bytes. **Installing** is everything after the last
+    layer: bootc reports only four uneven steps there, with no bytes and no
+    total, which is why it shows time and bytes written. **To measure on the
+    first real update:** bootc unpacks each layer as it downloads, so
+    Installing may last only seconds, in which case its line is barely worth
+    having.
+  - **Weekly, and "online":** there is no separate online test. A weekly
+    check that fails says nothing and may try again half an hour later,
+    which is how "offline skips it" and "the next reconnection catches up"
+    both happen.
   - **Emulator Flatpaks** are pinned by the image and fetched by a service
     at boot, so an update that moves one downloads part of itself after the
     restart, outside the size shown. Rare; already handled.
@@ -308,20 +344,49 @@ status here to Built.
   the update check reads, and a file the console reads after booting), and
   numbers a day by the versions already in the registry, so a docs-only
   commit that builds nothing does not use a number up. This is also About's
-  version (#72). MMagTech, 2026-09-25.
+  version (#72). MMagTech, 2026-09-25. **Built:** `ci/next-version.sh`
+  reads the registry's tags; every published image is also tagged with its
+  version, which is the record. `latest` and `testing` share one sequence,
+  so a version names one image. The file is `/usr/share/cabinetos/version`,
+  in a small layer of its own, last, so it drags nothing else into an
+  update. Two builds overlapping on one day could pick the same number; the
+  push refuses a version already published, and a re-run takes the next.
+  The first: `2026.09.25`, on `testing`.
 - **A `testing` tag.** Builds from a `testing` branch publish to
   `cabinetos:testing`, never `latest`; MMagTech's test console follows it
   (switched over SSH with `bootc switch`), and its update check then follows
   `testing` by itself. Every user's console follows `latest`, and nothing on
   screen changes that. Set up first, to test updates on. **Later:** a "Test
   builds" switch in developer settings for people who want to help test.
+  **Built 2026-09-25**: `testing` publishes `testing`, `testing-<sha>` and
+  its version, never `latest` or the date tags. Push work to it with
+  `git push origin <branch>:testing`. **A push that brings no new commits
+  builds nothing** (creating `testing` at a commit GitHub already had from
+  another branch): `paths-ignore` sees no changed files. Start that one by
+  hand, `gh workflow run build.yml --ref testing`. The A9 was switched to it
+  on 2026-09-25 (a 60.2 MB download), to go back to `latest` when System
+  update is done.
 
 ## About
 
-- **Version:** CabinetOS has **no version number of its own yet**, only
-  Bazzite's. One has to be decided. **To build, #72.**
-- **Credits** (Bazzite, Universal Blue, ChimeraOS, the emulator projects) and
-  **Licences**, readable on the console. **To build.**
+- **Version:** the date version (see System), with Bazzite's underneath,
+  "Bazzite 44.20260916". A console that does not follow `latest` adds the
+  tag, "2026.09.25.2 · Testing", so a test console is told from the rest at
+  a glance; nothing on screen changes the channel. Not focusable: a fact,
+  not a control. Read without root: the version file, Bazzite's
+  `/usr/share/ublue-os/image-info.json`, and the booted deployment's
+  `.origin`. **Built, #72.** MMagTech, 2026-09-25.
+- **Credits and licences: ONE row, not two.** A Credits list and a
+  Licences list would name the same projects twice, so it is one list, one
+  line per project: its name, what it does, its licence ("Snes9x · SNES ·
+  Non-commercial"). Ours, the base (Bazzite, Universal Blue, Fedora),
+  gamescope, the emulators with the six non-commercial ones first, then the
+  libraries and the type. The facts are `docs/LICENCES.md`'s; the list is
+  `kCredits` in main.cpp. **No full licence texts on the television**: they
+  are in the image under `/usr/share/licenses/`. **gamescope is credited and
+  ChimeraOS is not**: nothing of ChimeraOS's is used directly (our session
+  is our own script running Valve's gamescope). MMagTech, 2026-09-25.
+  **Built; being judged on the TV.**
 
 ## In the pause menu, per system (not Settings)
 

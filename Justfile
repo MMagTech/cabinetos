@@ -88,8 +88,15 @@ build $target_image=image_name $tag=default_tag:
         LABELS+=("--label" "org.opencontainers.image.source=https://github.com/{{ repo_organization }}/{{ image_name }}/blob/${GIT_SHA}/Containerfile")
         LABELS+=("--label" "org.opencontainers.image.url=https://github.com/{{ repo_organization }}/{{ image_name }}/tree/${GIT_SHA}")
         LABELS+=("--label" "org.opencontainers.image.revision=${GIT_SHA}")
-        LABELS+=("--label" "org.opencontainers.image.version={{ default_tag }}.$(date +%Y%m%d)-${GIT_SHA}")
     fi
+
+    # THE VERSION IS THE DATE, 2026.09.28, numbered by ci/next-version.sh
+    # (docs/SETTINGS.md, System). It goes in twice: the label, which is what
+    # `bootc upgrade --check` and `bootc status` read, and a file in the image,
+    # /usr/share/cabinetos/version, which is what the console reads after
+    # booting to say "Updated to ...". A build with no version is `dev`.
+    VERSION="${CABINETOS_VERSION:-dev}"
+    LABELS+=("--label" "org.opencontainers.image.version=${VERSION}")
 
     LABELS+=("--label" "org.opencontainers.image.created=$(date -u +%Y\-%m\-%d\T%H\:%M\:%S\Z)")
     LABELS+=("--label" "org.opencontainers.image.description={{ image_desc }}")
@@ -113,6 +120,7 @@ build $target_image=image_name $tag=default_tag:
     podman build \
       "${LABELS[@]}" \
       --timestamp 0 \
+      --build-arg "CABINETOS_VERSION=${VERSION}" \
       --pull=newer \
       --tag "${target_image}:${tag}" \
       --file Containerfile \
@@ -129,9 +137,14 @@ generate-build-tags $target_image=image_name $tag=default_tag:
     if [[ -z "$(git status -s)" ]]; then
         GIT_SHA=$(git rev-parse --short HEAD)
         BUILD_TAGS+=("${tag}-${GIT_SHA}")
-        BUILD_TAGS+=("${DATE}-${GIT_SHA}")
+        # The date tags belong to `latest`. A `testing` build is not what
+        # shipped that day and must not take the name.
+        if [[ "${tag}" == latest ]]; then BUILD_TAGS+=("${DATE}-${GIT_SHA}"); fi
     fi
-    BUILD_TAGS+=("${DATE}")
+    if [[ "${tag}" == latest ]]; then BUILD_TAGS+=("${DATE}"); fi
+    # The version, 2026.09.28: the registry's record of which numbers a day
+    # has used. See ci/next-version.sh.
+    if [[ -n "${CABINETOS_VERSION:-}" ]]; then BUILD_TAGS+=("${CABINETOS_VERSION}"); fi
     BUILD_TAGS+=("${tag}")
 
     echo "${BUILD_TAGS[@]}"

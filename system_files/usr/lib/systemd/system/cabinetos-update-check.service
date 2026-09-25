@@ -1,0 +1,15 @@
+[Unit]
+Description=CabinetOS system update: check for a newer image
+Documentation=https://github.com/MMagTech/cabinetos/blob/main/docs/SETTINGS.md
+# Started by the session (Settings, or the weekly check) through
+# 61-cabinetos-update.rules. Nothing starts it at boot: Manual is the default,
+# and Weekly is the frontend's decision, because only it knows whether a game
+# is running.
+ConditionPathExists=/run/ostree-booted
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/cabinetos-update check
+# A check is one manifest; a minute is generous.
+TimeoutStartSec=120

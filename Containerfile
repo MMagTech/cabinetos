@@ -96,6 +96,14 @@ RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
     --mount=type=tmpfs,dst=/tmp \
     /ctx/install-frontend.sh frontend
 
+# THE VERSION, IN A LAYER OF ITS OWN, LAST. It changes with every image, so
+# anywhere earlier it would drag a layer that did not change into every
+# update. Here it is one small file. The console reads it after booting to
+# tell whether an update applied; docs/SETTINGS.md, System. The number comes
+# from ci/next-version.sh through the Justfile.
+ARG CABINETOS_VERSION=dev
+RUN printf '%s\n' "${CABINETOS_VERSION}" > /usr/share/cabinetos/version
+
 # ---------------------------------------------------------------------------
 # Lint
 # ---------------------------------------------------------------------------

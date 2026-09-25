@@ -1,0 +1,22 @@
+[Unit]
+Description=CabinetOS system update: download and stage the newer image
+Documentation=https://github.com/MMagTech/cabinetos/blob/main/docs/SETTINGS.md
+# Started by the session through 61-cabinetos-update.rules, after the PIN.
+# Staged, not applied: the new image takes over at the next restart or power
+# off (ostree-finalize-staged.service), and the running system is untouched
+# until then, so a stall or a power cut leaves the console as it was.
+ConditionPathExists=/run/ostree-booted
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/cabinetos-update download
+# NO OVERALL LIMIT, deliberately: a slow connection that keeps moving is
+# allowed to finish. The script stops it when nothing has moved for 60 s.
+TimeoutStartSec=infinity
+# LOW PRIORITY, ALWAYS. A download started from Settings carries on if a game
+# starts, and must not cost it frames. In a menu this changes nothing anybody
+# can see: the network, not the CPU, is what it waits on.
+Nice=15
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
