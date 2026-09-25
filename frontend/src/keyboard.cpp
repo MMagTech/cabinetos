@@ -40,6 +40,8 @@ Keyboard::Key action(const char* label, Keyboard::Key::Action a, float width = 1
 void Keyboard::open(const Config& config) {
     config_ = config;
     busy_ = false;
+    fieldMsg_.clear();
+    fieldProblem_ = false;
     value_ = config.initial;
     conceal_ = config.conceal;
     shifted_ = false;
@@ -286,6 +288,14 @@ void Keyboard::typeText(const char* utf8) {
     revealLast_ = true;
 }
 
+void Keyboard::sayInField(const std::string& msg, bool problem) {
+    value_.clear();
+    revealLast_ = false;
+    fieldMsg_ = msg;
+    fieldProblem_ = problem;
+    if (problem) shakeAt_ = std::chrono::steady_clock::now();
+}
+
 KeyboardResult Keyboard::commit() {
     if (busy_) return KeyboardResult::Typing;
     open_ = false;
@@ -430,7 +440,18 @@ void Keyboard::draw(Renderer& r, TextRenderer& text, float scale) {
             shown += (reveal && i + 1 == chars.size()) ? chars[i] : "\xE2\x80\xA2";
     }
     const bool empty = shown.empty();
-    if (empty) shown = config_.placeholder;
+    // A message in the field (sayInField) stands in for the placeholder,
+    // and so goes the moment something is typed.
+    const bool message = empty && !fieldMsg_.empty();
+    if (empty) shown = message ? fieldMsg_ : config_.placeholder;
+    // ONE SHORT SHAKE for a problem, the PIN dots' own: a decaying wobble.
+    float shakeX = 0.0f;
+    if (message && fieldProblem_) {
+        const float t = std::chrono::duration<float>(std::chrono::steady_clock::now() -
+                                                     shakeAt_).count();
+        constexpr float kShake = 0.40f;
+        if (t < kShake) shakeX = std::sin(t * 50.0f) * 18.0f * (1.0f - t / kShake);
+    }
     const float fieldBaseline = y + fieldH * 0.5f + text.ascent(TextStyle::Title3, scale) * 0.5f;
     // Show the tail when it overflows: what someone is typing is at the end,
     // and a field that scrolls off the right hides exactly the character they
@@ -441,8 +462,10 @@ void Keyboard::draw(Renderer& r, TextRenderer& text, float scale) {
         while (n < shown.size() && (static_cast<unsigned char>(shown[n]) & 0xC0) == 0x80) ++n;
         shown.erase(0, n);
     }
-    text.draw(r, shown, panelX + pad + 20.0f, fieldBaseline, TextStyle::Title3,
-              empty ? Color::white(0.35f) : Color::white(1.0f), scale);
+    text.draw(r, shown, panelX + pad + 20.0f + shakeX, fieldBaseline, TextStyle::Title3,
+              message ? Color::white(fieldProblem_ ? 0.95f : 0.60f)
+                      : (empty ? Color::white(0.35f) : Color::white(1.0f)),
+              scale);
     if (!empty) {
         // A caret at the end, so the field reads as active rather than as a
         // label that happens to contain text.

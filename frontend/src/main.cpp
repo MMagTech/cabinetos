@@ -5610,9 +5610,9 @@ int main(int argc, char** argv) {
     // else that opens it (a Wi-Fi password) says here what to do with it.
     std::function<void(ui::KeyboardResult)> keyboardThen;
     // A Wi-Fi password on the on-screen keyboard, then the join on a worker.
-    // `forgetFirst` is Change password; `hint` is "Wrong password" when this
+    // `forgetFirst` is Change password; `why` is "Wrong password" when this
     // is the retry after one. Assigned once buildSettings exists.
-    std::function<void(const std::string& ssid, bool forgetFirst, const std::string& hint)>
+    std::function<void(const std::string& ssid, bool forgetFirst, const std::string& why)>
         askWifiPassword;
     // The network the keyboard is waiting on, while it says "Joining…".
     std::string wifiKeyboardFor;
@@ -5795,24 +5795,24 @@ int main(int argc, char** argv) {
 
         settingsScreen.setCategories(std::move(cats));
     };
-    askWifiPassword = [&](const std::string& ssid, bool forgetFirst, const std::string& hint) {
+    askWifiPassword = [&](const std::string& ssid, bool forgetFirst, const std::string& why) {
         ui::Keyboard::Config cfg;
         cfg.title = ssid;
-        cfg.hint = hint;
         cfg.placeholder = "Password";
         cfg.conceal = true;   // masked, last character shown; keyboard.h
         // Opened over itself on a retry, in the same frame: no close, no cut.
+        // WHY GOES IN THE FIELD ("Wrong password", shaken), not in a line
+        // under the title that made the panel grow. Keyboard::sayInField.
         keyboard.open(cfg);
+        if (!why.empty()) keyboard.sayInField(why, /*problem=*/true);
         keyboardThen = [&, ssid, forgetFirst, cfg](ui::KeyboardResult r) {
             if (r != ui::KeyboardResult::Committed) return;
             const std::string pass = keyboard.value();
             // THE KEYBOARD STAYS UP WHILE IT JOINS, saying so, and takes no
             // typing (Keyboard::setBusy). The job's answer closes it or turns
             // it back into a retry; B leaves and lets the join finish alone.
-            ui::Keyboard::Config wait = cfg;
-            wait.hint = "Joining\xE2\x80\xA6";
-            wait.initial = pass;
-            keyboard.open(wait);
+            keyboard.open(cfg);
+            keyboard.sayInField("Joining\xE2\x80\xA6", /*problem=*/false);
             keyboard.setBusy(true);
             wifiKeyboardFor = ssid;
             keyboardThen = [&](ui::KeyboardResult) { wifiKeyboardFor.clear(); };
