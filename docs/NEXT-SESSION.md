@@ -32,6 +32,40 @@ with its investigations intact.
 
 ## Before anything else
 
+**THE SESSION OF 2026-09-25 (AFTERNOON) BUILT SYSTEM UPDATE (#70) AND ABOUT
+(#72), ON BRANCH `system-update`.** Both judged on the TV. The decisions are
+in `docs/SETTINGS.md`, System and About; the short version:
+
+- **System update works end to end, proved on the A9 from the TV:** the
+  check (1.3 s), Update available with the size, the download (2 s for
+  0.9 MB), **Installing… (26 s, even for 0.9 MB: bootc deploys a whole
+  tree)**, the Update ready panel, Restart now, and "Updated to
+  2026.09.25.2" on Home. The row's states and the panel were each judged
+  one at a time. **A console that has never checked shows the row alone**
+  (MMagTech: no state for it).
+- **The root half** is `/usr/libexec/cabinetos-update`, two oneshot units
+  and `61-cabinetos-update.rules` (the session may START those two units,
+  at the console only). Status is `/run/cabinetos-update/status`. The size
+  is computed from the layers ostree lacks and matched bootc's own count
+  to the byte, twice.
+- **The version is the date**, `2026.09.25`, `.2`, numbered by the tags in
+  the registry (`ci/next-version.sh`), in `/usr/share/cabinetos/version`.
+- **The `testing` channel exists.** Push work with
+  `git push origin <branch>:testing`; it publishes `cabinetos:testing`,
+  never `latest`. **A push that adds no new commits builds nothing** (see
+  *Things that will bite you*).
+- **About:** Version (`2026.09.25.2 · Testing`, Bazzite underneath) and one
+  **Credits and licences** list, 40 lines, replacing separate Credits and
+  Licences rows (MMagTech). gamescope credited, ChimeraOS dropped: nothing
+  of theirs is used directly. A list panel now grows to its longest line.
+
+**NEXT, AS MMAGTECH SET IT 2026-09-25:** File access (#69), then the rest of
+Storage (Eject #67, Kept and cached games #68), then Controllers (connected,
+add, button mapping), then Picture quality. **Still owed by
+`docs/LICENCES.md`:** each licence line verified against its source tree,
+and full licence texts on the console, which the About list deliberately
+does not show (they are in `/usr/share/licenses/`).
+
 **THE SESSION OF 2026-09-25 BUILT SIGN OUT (#61) AND CHANGE SERVER ADDRESS
 (#60), MERGED AS #95 (`ce5459d`), AND THE A9 RUNS IT FROM THE IMAGE.**
 MMagTech judged every screen of it on the TV first. What was decided is in
@@ -2074,6 +2108,27 @@ then `YDOTOOL_SOCKET=/tmp/ydotool.sock ydotool key 108:1 108:0` (Down; Up
   of Sign out once. Capture before any press that destroys something.
 - **A restart in place keeps the loop's `--args`**, so a test deploy with
   `--screen settings` comes back on Settings, not Home.
+
+### About the testing channel and update tests — new 2026-09-25
+
+- **CREATING `testing` AT A COMMIT GITHUB ALREADY HAS BUILDS NOTHING.** The
+  first push to it carried no new commits (the same commit had gone up on
+  `system-update`), so `paths-ignore` saw no changed files and no run
+  started, silently. Start it by hand: `gh workflow run build.yml --ref
+  testing`. Any later push with a new commit builds on its own.
+- **A test on the TV that fakes an update state writes the REAL
+  `settings.json`.** `--update-dir <dir>` makes the frontend read a status
+  file you write, but what it concludes (`update_pending`, `_boot`,
+  `_checked`, `_found`) goes into `/var/lib/cabinetos/config/settings.json`.
+  A fake "ready" left there means the next real boot says "Update didn't
+  apply". Copy the file aside first and put it back after. Headless
+  captures should set `CABINETOS_STORAGE` to a scratch root.
+- **Show a state, then wait for "next".** Running eight states on a timer
+  went past faster than MMagTech could judge them, and the last one stayed
+  up looking like a real failure. One state per message worked.
+- **Anything in `/tmp` on the A9 is gone after a reboot**, including a log
+  you started to watch an update. Read the previous boot with
+  `journalctl -b -1`.
 
 ### About the network, polkit and QR codes, all new on 2026-09-20
 

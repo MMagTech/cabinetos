@@ -369,10 +369,24 @@ status here to Built.
 
 ## About
 
-- **Version:** CabinetOS has **no version number of its own yet**, only
-  Bazzite's. One has to be decided. **To build, #72.**
-- **Credits** (Bazzite, Universal Blue, ChimeraOS, the emulator projects) and
-  **Licences**, readable on the console. **To build.**
+- **Version:** the date version (see System), with Bazzite's underneath,
+  "Bazzite 44.20260916". A console that does not follow `latest` adds the
+  tag, "2026.09.25.2 · Testing", so a test console is told from the rest at
+  a glance; nothing on screen changes the channel. Not focusable: a fact,
+  not a control. Read without root: the version file, Bazzite's
+  `/usr/share/ublue-os/image-info.json`, and the booted deployment's
+  `.origin`. **Built, #72.** MMagTech, 2026-09-25.
+- **Credits and licences: ONE row, not two.** A Credits list and a
+  Licences list would name the same projects twice, so it is one list, one
+  line per project: its name, what it does, its licence ("Snes9x · SNES ·
+  Non-commercial"). Ours, the base (Bazzite, Universal Blue, Fedora),
+  gamescope, the emulators with the six non-commercial ones first, then the
+  libraries and the type. The facts are `docs/LICENCES.md`'s; the list is
+  `kCredits` in main.cpp. **No full licence texts on the television**: they
+  are in the image under `/usr/share/licenses/`. **gamescope is credited and
+  ChimeraOS is not**: nothing of ChimeraOS's is used directly (our session
+  is our own script running Valve's gamescope). MMagTech, 2026-09-25.
+  **Built; being judged on the TV.**
 
 ## In the pause menu, per system (not Settings)
 
