@@ -497,7 +497,7 @@ notes here stay the detail.
    - [ ] Change server address (same-server check by token) and Sign out
          (one confirmation, clear that server's games and accounts, back to
          first run's server step).
-   - [ ] Wi-Fi page (join, forget, change password); `net.h` has the calls.
+   - [x] Wi-Fi page (join, forget, change password); `net.h` has the calls.
    - [ ] File access: SFTP only, user `cabinet`, generated password shown in
          plain text, "New password", restricted to CabinetOS folders on every
          drive.
