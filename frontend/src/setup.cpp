@@ -1077,7 +1077,7 @@ void Flow::pumpJobs() {
             ui::Keyboard::Config cfg;
             cfg.title = n.ssid;
             cfg.hint = "The password for this network";
-            cfg.conceal = false;
+            cfg.conceal = true;   // masked, last character shown; keyboard.h
             keyboard_.open(cfg);
             typing_ = Typing::Passphrase;
             notice_.clear();
@@ -1402,12 +1402,11 @@ void Flow::activate() {
             ui::Keyboard::Config cfg;
             cfg.title = n.ssid;
             cfg.hint = "The password for this network";
-            // SHOWN, NOT HIDDEN, and this is a decision rather than an
-            // oversight — docs/PROJECT.md open question 17. Nobody is
-            // shoulder-surfing a living room, the passphrase is usually being
-            // read off the underside of a router, and not being able to see
-            // what you typed IS the difficulty.
-            cfg.conceal = false;
+            // MASKED, WITH THE LAST CHARACTER SHOWN as it is typed and a
+            // "show" key for the lot. It was shown in full until 2026-09-24
+            // (docs/PROJECT.md open question 17); MMagTech reversed it once
+            // the brief reveal answered the typo objection. keyboard.h.
+            cfg.conceal = true;
             keyboard_.open(cfg);
             typing_ = Typing::Passphrase;
             break;

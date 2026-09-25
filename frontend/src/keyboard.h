@@ -12,11 +12,12 @@
 // Three decisions worth stating, because they are the ones that make it
 // bearable rather than merely possible:
 //
-// SHOW WHAT WAS TYPED, INCLUDING PASSWORDS. Every console hides a password
-// field by default and every console is wrong: nobody is shoulder-surfing a
-// living room, and not being able to see what you typed IS the difficulty. A
-// caller can still ask for concealment, and there is a control to toggle it,
-// but visible is the default.
+// A PASSWORD IS MASKED, BUT THE LAST CHARACTER SHOWS. Reversed 2026-09-24 by
+// MMagTech, from "show what was typed, including passwords" (open question
+// 17). The objection to masking was that a typo nobody can see only surfaces
+// as a failed join; showing each character for a moment as it is typed, the
+// way phones do, answers that, and the "show" key reveals the lot before
+// done. Callers ask for it with `conceal`; other fields are shown as typed.
 //
 // REDUCE TYPING RATHER THAN SPEEDING IT UP. A key that inserts ".com", a
 // prefilled scheme, and a remembered previous value each save more than any
@@ -29,6 +30,7 @@
 
 #pragma once
 
+#include <chrono>
 #include <functional>
 #include <string>
 #include <vector>
@@ -177,6 +179,9 @@ private:
     std::string value_;
     bool shifted_ = false;
     bool conceal_ = false;
+    // The character just typed stays readable this long in a masked field.
+    std::chrono::steady_clock::time_point lastTyped_{};
+    bool revealLast_ = false;
     int row_ = 0, col_ = 0;
     float panelTop_ = 0.0f;
     std::vector<std::vector<Key>> lower_, upper_;

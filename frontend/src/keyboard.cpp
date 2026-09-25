@@ -222,13 +222,19 @@ KeyboardResult Keyboard::pressKey() {
     switch (key.action) {
         case Key::Backspace: backspace(); return KeyboardResult::Typing;
         case Key::Shift: toggleShift(); return KeyboardResult::Typing;
-        case Key::Space: value_ += ' '; return KeyboardResult::Typing;
+        case Key::Space:
+            value_ += ' ';
+            lastTyped_ = std::chrono::steady_clock::now();
+            revealLast_ = true;
+            return KeyboardResult::Typing;
         case Key::Conceal: toggleConceal(); return KeyboardResult::Typing;
         case Key::Done: return commit();
         case Key::Cancel: return cancel();
         case Key::None: break;
     }
     value_ += key.insert;
+    lastTyped_ = std::chrono::steady_clock::now();
+    revealLast_ = true;
     // Shift is one-shot, the way a phone keyboard behaves: capitalise a letter
     // and fall back to lowercase, because the next character almost never wants
     // the same case.
@@ -240,6 +246,7 @@ KeyboardResult Keyboard::pressKey() {
 }
 
 void Keyboard::backspace() {
+    revealLast_ = false;
     if (value_.empty()) return;
     // Step back over a whole UTF-8 code point, not a byte. Deleting half of a
     // multi-byte character leaves an invalid string that will not render.
@@ -271,6 +278,8 @@ void Keyboard::toggleConceal() {
 void Keyboard::typeText(const char* utf8) {
     if (!open_ || !utf8) return;
     value_ += utf8;
+    lastTyped_ = std::chrono::steady_clock::now();
+    revealLast_ = true;
 }
 
 KeyboardResult Keyboard::commit() {
@@ -395,7 +404,25 @@ void Keyboard::draw(Renderer& r, TextRenderer& text, float scale) {
     // The field.
     r.draw(Rect{panelX + pad, y, widest, fieldH, kKeyRadius, Color::black(0.45f)});
     std::string shown = value_;
-    if (conceal_) shown.assign(value_.size(), '*');
+    if (conceal_) {
+        // A dot per character, not per byte, and the last one readable for
+        // a moment after it was typed.
+        constexpr auto kReveal = std::chrono::milliseconds(1500);
+        const bool reveal = revealLast_ &&
+                            std::chrono::steady_clock::now() - lastTyped_ < kReveal;
+        std::vector<std::string> chars;
+        for (size_t i = 0; i < value_.size();) {
+            size_t n = 1;
+            while (i + n < value_.size() &&
+                   (static_cast<unsigned char>(value_[i + n]) & 0xC0) == 0x80)
+                ++n;
+            chars.push_back(value_.substr(i, n));
+            i += n;
+        }
+        shown.clear();
+        for (size_t i = 0; i < chars.size(); ++i)
+            shown += (reveal && i + 1 == chars.size()) ? chars[i] : "\xE2\x80\xA2";
+    }
     const bool empty = shown.empty();
     if (empty) shown = config_.placeholder;
     const float fieldBaseline = y + fieldH * 0.5f + text.ascent(TextStyle::Title3, scale) * 0.5f;

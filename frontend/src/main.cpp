@@ -5343,9 +5343,15 @@ int main(int argc, char** argv) {
     constexpr int kPinTries = 5;
     constexpr float kPinLockSeconds = 30.0f;
     int pinFails = 0;
+    // ONCE PER VISIT TO SETTINGS. Entered once, the PIN is not asked again
+    // until Settings is left; the frame loop clears this. MMagTech on the TV,
+    // 2026-09-24: a wrong Wi-Fi password meant the PIN again, then the list,
+    // then the keyboard. Switching into the owner's account still always asks
+    // (it passes `always`), because that is not a Settings visit.
+    bool pinUnlocked = false;
     auto askPin = [&](const std::string& title, const std::string& detail,
-                      std::function<void()> then) {
-        if (!accounts::pinIsSet()) { then(); return; }
+                      std::function<void()> then, bool always = false) {
+        if (!accounts::pinIsSet() || (pinUnlocked && !always)) { then(); return; }
         pinThen = std::move(then);
         pinScreen.open(screens::PinScreen::Mode::Check, title, detail);
         std::fprintf(stderr, "[pin] asked: %s\n", title.c_str());
@@ -5377,6 +5383,7 @@ int main(int argc, char** argv) {
                 return;
             }
             pinFails = 0;
+            pinUnlocked = true;
             std::fprintf(stderr, "[pin] accepted\n");
         } else {
             std::string err;
@@ -5593,6 +5600,11 @@ int main(int argc, char** argv) {
     // THE KEYBOARD OUTSIDE SEARCH. Search owns its docked keyboard; anything
     // else that opens it (a Wi-Fi password) says here what to do with it.
     std::function<void(ui::KeyboardResult)> keyboardThen;
+    // A Wi-Fi password on the on-screen keyboard, then the join on a worker.
+    // `forgetFirst` is Change password; `hint` is "Wrong password" when this
+    // is the retry after one. Assigned once buildSettings exists.
+    std::function<void(const std::string& ssid, bool forgetFirst, const std::string& hint)>
+        askWifiPassword;
     auto askNetwork = [&settingsNet]() {
         if (settingsNet.th.joinable()) settingsNet.th.join();
         settingsNet.th = std::thread([&settingsNet]() {
@@ -5772,6 +5784,21 @@ int main(int argc, char** argv) {
 
         settingsScreen.setCategories(std::move(cats));
     };
+    askWifiPassword = [&](const std::string& ssid, bool forgetFirst, const std::string& hint) {
+        ui::Keyboard::Config cfg;
+        cfg.title = ssid;
+        cfg.hint = hint;
+        cfg.placeholder = "Password";
+        cfg.conceal = true;   // masked, last character shown; keyboard.h
+        keyboard.open(cfg);
+        keyboardThen = [&, ssid, forgetFirst](ui::KeyboardResult r) {
+            if (r != ui::KeyboardResult::Committed) return;
+            const std::string pass = keyboard.value();
+            menuNotice.say("Joining " + ssid, Tone::Busy);
+            startWifiJoin(ssid, pass, forgetFirst);
+            buildSettings();
+        };
+    };
 
     auto apply = [&](const screens::Result& res) {
         switch (res.action) {
@@ -5891,7 +5918,8 @@ int main(int argc, char** argv) {
                     const std::vector<accounts::Account> list = accounts::all();
                     const accounts::Account* a = accounts::find(list, id);
                     askPin("Enter the PIN",
-                           "To switch to " + (a ? a->name : std::string("them")), go);
+                           "To switch to " + (a ? a->name : std::string("them")), go,
+                           /*always=*/true);
                 } else {
                     go();
                 }
@@ -5946,17 +5974,7 @@ int main(int argc, char** argv) {
                         // A password, typed on the on-screen keyboard, then the
                         // join on a worker. `forgetFirst` is Change password.
                         auto typeAndJoin = [&](const net::Network& net, bool forgetFirst) {
-                            ui::Keyboard::Config cfg;
-                            cfg.title = net.ssid;
-                            cfg.placeholder = "Password";
-                            keyboard.open(cfg);
-                            keyboardThen = [&, net, forgetFirst](ui::KeyboardResult r) {
-                                if (r != ui::KeyboardResult::Committed) return;
-                                const std::string pass = keyboard.value();
-                                menuNotice.say("Joining " + net.ssid, Tone::Busy);
-                                startWifiJoin(net.ssid, pass, forgetFirst);
-                                buildSettings();
-                            };
+                            askWifiPassword(net.ssid, forgetFirst, "");
                         };
                         auto join = [&, typeAndJoin](const net::Network& net) {
                             if (net.secured && !net.known) { typeAndJoin(net, false); return; }
@@ -5969,8 +5987,16 @@ int main(int argc, char** argv) {
                                       [&, net](int i) {
                                           if (i != 0) return;
                                           std::string err;
-                                          if (net::forget(net.ssid, &err))
+                                          if (net::forget(net.ssid, &err)) {
                                               menuNotice.say("Forgot " + net.ssid, Tone::Done);
+                                              // AT ONCE, not when the next scan
+                                              // lands: joining a stale "saved"
+                                              // network sent no password.
+                                              std::lock_guard<std::mutex> lk(settingsWifi.m);
+                                              for (net::Network& w : settingsWifi.list)
+                                                  if (w.ssid == net.ssid)
+                                                      w.known = w.active = false;
+                                          }
                                           else
                                               menuNotice.say("Couldn't forget " + net.ssid,
                                                              Tone::Problem);
@@ -8244,6 +8270,8 @@ int main(int argc, char** argv) {
                     settingsWifi.fresh = false;
                 }
                 if (!choiceScreen.isOpen()) wifiPanelOpen = false;
+                // Leaving Settings locks the PIN again.
+                if (here() != Screen::Settings && !pinScreen.isOpen()) pinUnlocked = false;
                 if (fresh && wifiPanelOpen) {
                     // The list is open: refresh it in place, focus kept.
                     sortWifi();
@@ -8277,6 +8305,12 @@ int main(int argc, char** argv) {
                     const bool badPass = err.find("ecrets") != std::string::npos ||
                                          err.find("psk") != std::string::npos;
                     if (ok) menuNotice.say("Connected to " + ssid, Tone::Done);
+                    else if (badPass && here() == Screen::Settings && !keyboard.isOpen() &&
+                             !pinScreen.isOpen() && !choiceScreen.isOpen())
+                        // STRAIGHT BACK TO THE KEYBOARD for another go, rather
+                        // than out to the list. MMagTech tested a wrong
+                        // password on the TV: "kicked out and hard to re-enter".
+                        askWifiPassword(ssid, false, "Wrong password");
                     else if (badPass) menuNotice.say("Wrong password", Tone::Problem);
                     else menuNotice.say("Couldn't join " + ssid, Tone::Problem);
                     askNetwork();
