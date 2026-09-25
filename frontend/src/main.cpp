@@ -5567,6 +5567,14 @@ int main(int argc, char** argv) {
                 r.choice = static_cast<int>(sound::level());
                 return r;
             }(),
+            // Here, not under System: it is about the screen, and it is where a
+            // person looks for it. MMagTech, 2026-09-24.
+            [&] {
+                Row r{K::Choice, SetScreenOff, "Turn off screen after", "", ""};
+                for (int i = 0; i < kScreenOffCount; ++i) r.choices.push_back(kScreenOff[i].name);
+                r.choice = screenOffIndex;
+                return r;
+            }(),
         }});
 
         // THE DRIVES, by MMagTech's names: the main drive is "CabinetOS", any
@@ -5603,12 +5611,6 @@ int main(int argc, char** argv) {
 
         cats.push_back({"System", {
             {K::Unbuilt, 0, "System update", "One check, one button, one restart", ""},
-            [&] {
-                Row r{K::Choice, SetScreenOff, "Turn off screen after", "", ""};
-                for (int i = 0; i < kScreenOffCount; ++i) r.choices.push_back(kScreenOff[i].name);
-                r.choice = screenOffIndex;
-                return r;
-            }(),
         }});
 
         cats.push_back({"About", {

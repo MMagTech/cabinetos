@@ -137,6 +137,12 @@ and says when it is right.
   Medium, Loud, and remembered in `config/settings.json`. Left and right
   change it; Back returns to the list. Judged on the TV 2026-09-24.
   **Built, #62.**
+- **Turn off screen after:** 10 min, 15 min (to start), 30 min, 1 hour.
+  The dim comes at a third of it. Saved in `config/settings.json`.
+  **Built, #71.** Under Display and Sound, not System: it is about the
+  screen (MMagTech, 2026-09-24). **Dropped: Never**, built and removed the
+  same day: on an OLED a menu lit indefinitely is burn-in, and an hour is
+  long enough.
 - **HDMI-CEC: dropped.** No adapter will be bought to test with, and standby
   already covers what it was for. This reverses the earlier "CEC is a
   requirement".
@@ -165,10 +171,6 @@ and says when it is right.
 ## System
 
 - **System update:** one check, one button, one restart. **To build, #70.**
-- **Turn off screen after:** 10 min, 15 min (to start), 30 min, 1 hour.
-  The dim comes at a third of it. Saved in `config/settings.json`.
-  **Built, #71.** **Dropped: Never**, built and removed the same day: on an
-  OLED a menu lit indefinitely is burn-in, and an hour is long enough.
 
 ## About
 
