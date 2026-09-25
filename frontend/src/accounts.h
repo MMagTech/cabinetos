@@ -84,6 +84,17 @@ std::vector<Account> all();
 // Which account the console is acting as, or 0 when it has never been set.
 int activeId();
 
+// WHO OWNS THIS CONSOLE: the first account from setup, which is the first in
+// the list, since the list is kept in the order accounts were added. 0 when
+// there is none. docs/SETTINGS.md, Accounts: the owner is who sets the PIN,
+// and the PIN stops anybody else switching into them.
+//
+// Read from the order rather than written down as its own field, because
+// "first" is the whole rule and a second record of it could disagree.
+// Removing an account (#58) must refuse the owner, or ownership would pass
+// silently to whoever was added next.
+int ownerId();
+
 // One account by id, or nullptr. The pointer is into a caller-owned vector, so
 // this takes the list rather than hiding a static.
 const Account* find(const std::vector<Account>& list, int id);
@@ -105,6 +116,9 @@ bool add(const Account& a, const std::string& token, std::string* err);
 // the console is signed in as leaves it holding an identity whose token has
 // just been deleted, with no way back except re-pairing. The switcher disables
 // that row too; this is the enforcement rather than the hint.
+//
+// REFUSES THE OWNER too (the first account; see ownerId), for the same kind
+// of reason: ownership would pass silently to whoever was added next.
 //
 // Does NOT touch `users/<id> - <name>/`. Forgetting a login is not the same as
 // throwing away somebody's saves, and the second one needs its own deliberate

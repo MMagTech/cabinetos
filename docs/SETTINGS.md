@@ -65,22 +65,36 @@ and says when it is right.
   signed in. **Built.**
 - **Add an account** is in Settings and in the account button's panel.
   **Built.**
-- **The first account from setup owns the console.** **To build.**
+- **The first account from setup owns the console.** **Built.**
 - **One PIN, set by the owner.** With no PIN, every account can do everything.
   With a PIN, these ask for it instead of disappearing, so the owner can act
   while a child is signed in:
   - Wi-Fi changes
   - Sign out and Change server address
-  - Remove an account
+  - Adding an account, and removing one
   - File access (turning it on, making a new password)
 
-  Open to everyone: adding an account, sounds, picture quality, system update.
-  The same PIN stops anyone switching into the owner's account. **To build,
-  #57.**
-- **The PIN is offered when a second account is added**, not in first run.
-  Right after the new person pairs: *"Anyone using this console can change
-  Wi-Fi, sign out and remove accounts. Set a PIN so only you can?"* Set PIN /
-  Not now. Only if no PIN exists, only once. **To build, #57.**
+  Open to everyone: sounds, picture quality, system update.
+  **Adding an account needs the PIN when one is set**, from the account
+  panel and from Settings alike. MMagTech, 2026-09-24: otherwise anyone
+  holding the controller can add themselves. With no PIN, anyone can add one,
+  like everything else.
+  The same PIN stops anyone switching into the owner's account. **Built, #57**
+  (a centred number pad; five wrong tries lock it for 30 seconds).
+- **Only the owner sees the PIN's controls.** Signed in as the owner:
+  Set a PIN, or Change PIN and Turn off PIN. Anyone else sees one row, "PIN",
+  On ("Set by MMagTech") or Off ("Only MMagTech can set one"), with nothing
+  to press. MMagTech, 2026-09-24. **Built.**
+- **One PIN, not one per person**, kept after comparing consoles on
+  2026-09-24: PlayStation and Xbox let each person lock their own account;
+  Nintendo and Apple TV (and so Cabinet) have only the one console PIN.
+  **Later, if wanted:** an optional lock per account that guards switching
+  into it, added beside the owner PIN without changing it.
+- **Dropped: offering a PIN when the second account is added.** Built and
+  tried on 2026-09-24, then removed. If the owner is signed in and someone
+  else has the controller, that person could answer the offer and set a PIN
+  the owner does not know. MMagTech: *"just abandon this screen"*. A PIN is
+  set from Settings, by the owner, when they want one.
 - **Remove an account** is in Settings only. It removes the account from this
   console; the RomM account and its saves are untouched. The account playing
   now cannot be removed. **To build, #58.**

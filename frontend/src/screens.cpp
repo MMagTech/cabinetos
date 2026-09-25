@@ -1412,27 +1412,61 @@ void AccountScreen::draw(Ctx& c) {
     // The panel grows downward as it appears, which is what makes it read as an
     // expansion. Everything inside is clipped to it by being drawn after.
     const int rows = rowCount();
+    // THE NOTICE WRAPS INSIDE THE PANEL. On one line "vivian was added.
+    // Choose them to switch." ran off the panel's right edge on the A9.
+    const std::vector<std::string> noticeLines =
+        notice_.empty() ? std::vector<std::string>{}
+                        : wrapTwoLines(c.text, notice_, ui::TextStyle::Callout, c.sc, w - 36.0f);
+    const float noticeLineH = c.text.lineHeight(ui::TextStyle::Callout, c.sc);
     const float bodyH = rows * rowH + (rows - 1) * 8.0f + 18.0f * 2.0f +
-                        (notice_.empty() ? 0.0f : 46.0f);
-    c.r.drawGlass(ui::Rect{x, top, w, bodyH * a, design::kRowRadius,
-                           ui::Color::white(0)},
-                  design::kRegularMaterialBlur, ui::Color::white(0.10f * a));
+                        (noticeLines.empty() ? 0.0f
+                                             : 8.0f + noticeLineH * noticeLines.size());
+    // FROSTED, LIKE THE CHIP IT OPENS FROM, BUT LIFTED. This is a dropdown
+    // off the account chip, not an interruption, so it stays in the chip's
+    // material; the pop-ups' dark panel was tried and felt too heavy for it
+    // (MMagTech, 2026-09-24: "something feels wrong about this one
+    // matching"). What made the frosted version melt into the Settings rows
+    // was having no depth, not the material: so a denser frost than the
+    // rows (0.18 against their 0.08), and the pop-ups' shadow and hairline
+    // edge to put it on top.
+    {
+        ui::Rect lift{x, top, w, bodyH * a, design::kRowRadius, ui::Color::white(0)};
+        lift.shadowBlur = design::kOverlayPanelShadowBlur;
+        lift.shadowOffsetY = design::kOverlayPanelShadowY;
+        lift.shadowColor = ui::Color::black(design::kOverlayPanelShadowAlpha * a);
+        c.r.draw(lift);
+    }
+    c.r.drawGlass(ui::Rect{x, top, w, bodyH * a, design::kRowRadius, ui::Color::white(0)},
+                  design::kRegularMaterialBlur, ui::Color::white(0.18f * a));
+    {
+        ui::Rect edge{x, top, w, bodyH * a, design::kRowRadius, ui::Color::white(0)};
+        edge.border = design::kOverlayPanelBorder;
+        edge.borderColor = ui::Color::white(design::kOverlayPanelBorderAlpha * 1.4f * a);
+        c.r.draw(edge);
+    }
 
     float y = top + 18.0f;
 
     for (int i = 0; i < rows; ++i) {
         const bool on = (i == slot_);
         const float f = on ? focus_.value() : 0.0f;
-        const float rw = w - 16.0f;
-        const float rx = x + 8.0f;
-        c.r.draw(ui::Rect{rx, y, rw, rowH, design::kRowRadius,
-                          ui::Color::white((0.04f + 0.16f * f) * a)});
+        // THE FOCUSED ROW AT THE DESIGN SYSTEM'S FOCUSED TINT, grown a little,
+        // and the others' names dimmed. It was a 20% wash on a panel already
+        // tinted 10%, with every name equally bright. MMagTech, 2026-09-24:
+        // *"a bit too dim and i cant make out who is selected if anything"*.
+        const float gs = 1.0f + f * (design::kRowFocusScale - 1.0f);
+        const float rw0 = w - 16.0f;
+        const float rw = rw0 * gs, rh = rowH * gs;
+        const float rx = x + 8.0f - (rw - rw0) * 0.5f;
+        c.r.draw(ui::Rect{rx, y - (rh - rowH) * 0.5f, rw, rh, design::kRowRadius,
+                          ui::Color::white((0.04f + (design::kFocusedTint - 0.04f) * f) * a)});
+        const float nameA = 0.70f + 0.30f * f;
 
         if (isAddRow(i)) {
             // A PLUS ON A DISC, so it sits in the same column as the faces and
             // reads as one more entry in the same list rather than as a button
             // bolted underneath it.
-            const float dx = rx + 12.0f, dy = y + (rowH - discD) * 0.5f;
+            const float dx = x + 20.0f, dy = y + (rowH - discD) * 0.5f;
             c.r.draw(ui::Rect{dx, dy, discD, discD, discD * 0.5f,
                               ui::Color::white(0.14f * a)});
             const float pw = c.text.measure("+", rowStyle, c.sc);
@@ -1443,7 +1477,7 @@ void AccountScreen::draw(Ctx& c) {
             c.text.draw(c.r, "Add user", dx + discD + 14.0f,
                         y + (rowH - c.text.lineHeight(rowStyle, c.sc)) * 0.5f +
                             c.text.ascent(rowStyle, c.sc),
-                        rowStyle, ui::Color::white(0.92f * a), c.sc);
+                        rowStyle, ui::Color::white(nameA * a), c.sc);
             y += rowH + 8.0f;
             continue;
         }
@@ -1452,7 +1486,7 @@ void AccountScreen::draw(Ctx& c) {
         // The disc is drawn either way: the ground under a picture with
         // transparency, and the fallback when there is none. Same rule as the
         // chip in the bar, and the same reason.
-        const float dx = rx + 16.0f, dy = y + (rowH - discD) * 0.5f;
+        const float dx = x + 24.0f, dy = y + (rowH - discD) * 0.5f;
         c.r.draw(ui::Rect{dx, dy, discD, discD, discD * 0.5f, ui::Color::white(0.22f * a)});
         const ui::Image* face = nullptr;
         if (!row.avatar.empty()) {
@@ -1475,14 +1509,16 @@ void AccountScreen::draw(Ctx& c) {
         c.text.draw(c.r, row.name, dx + discD + 14.0f,
                     y + (rowH - c.text.lineHeight(rowStyle, c.sc)) * 0.5f +
                         c.text.ascent(rowStyle, c.sc),
-                    rowStyle, ui::Color::white(0.92f * a), c.sc);
+                    rowStyle, ui::Color::white(nameA * a), c.sc);
         y += rowH + 8.0f;
     }
 
-    if (!notice_.empty())
-        c.text.draw(c.r, notice_, x + 18.0f,
-                    y + 8.0f + c.text.ascent(ui::TextStyle::Callout, c.sc),
-                    ui::TextStyle::Callout, ui::Color::white(0.85f * a), c.sc);
+    float nb = y + c.text.ascent(ui::TextStyle::Callout, c.sc);
+    for (const std::string& line : noticeLines) {
+        c.text.draw(c.r, line, x + 18.0f, nb, ui::TextStyle::Callout,
+                    ui::Color::white(0.85f * a), c.sc);
+        nb += noticeLineH;
+    }
 }
 
 // --- Adding an account ------------------------------------------------------

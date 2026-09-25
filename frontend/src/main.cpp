@@ -74,6 +74,8 @@
 #include "storage.h"
 #include "text.h"
 #include "overlaywin.h"
+#include "pin.h"
+#include "choice.h"
 #include "power.h"
 #include "prefs.h"
 #include "ui.h"
@@ -1936,8 +1938,15 @@ static Library loadLibrary(romm::Client& client) {
     // fetching the catalogue, would have quietly emptied Home while every one
     // of these calls still succeeded. That is the trap in this change and it
     // is why the store is filled from here rather than searched.
+    // TIMED, because once on the A9 these two took eleven seconds during an
+    // account switch when they take a fifth of one at boot, and nothing else
+    // in the log said which.
+    const Uint64 tRecent = SDL_GetTicks();
     std::vector<romm::Game> recent;
-    if (client.fetchRecent(16, &recent, &err)) {
+    const bool gotRecent = client.fetchRecent(16, &recent, &err);
+    std::fprintf(stderr, "[library] play history in %llu ms\n",
+                 static_cast<unsigned long long>(SDL_GetTicks() - tRecent));
+    if (gotRecent) {
         for (const auto& g : recent) {
             // A recent game on a platform this console cannot play is skipped,
             // not shown greyed: Home must not offer a Resume that cannot run.
@@ -1960,8 +1969,12 @@ static Library loadLibrary(romm::Client& client) {
         std::fprintf(stderr, "[library] no play history: %s\n", err.c_str());
     }
 
+    const Uint64 tFavs = SDL_GetTicks();
     std::vector<romm::Game> favs;
-    if (client.fetchFavorites(40, &favs, &err)) {
+    const bool gotFavs = client.fetchFavorites(40, &favs, &err);
+    std::fprintf(stderr, "[library] favourites in %llu ms\n",
+                 static_cast<unsigned long long>(SDL_GetTicks() - tFavs));
+    if (gotFavs) {
         for (const auto& g : favs) {
             if (!catalog::playable(g)) continue;
             lib.favorites.push_back(appendGame(lib, g));
@@ -2449,6 +2462,14 @@ static int accountsTest() {
     check(!accounts::remove(99, &err), "removing an unknown account is refused");
     check(accounts::remove(2, &err), "removing an inactive account works");
     check(accounts::all().size() == 1, "and it is gone from the list");
+
+    check(accounts::add(bob, "bob-token", &err) && accounts::setActive(2, &err),
+          "someone else can be added and signed in");
+    check(accounts::ownerId() == 1, "the first account added owns the console");
+    check(!accounts::remove(1, &err),
+          "removing the OWNER is refused, even with someone else signed in");
+    check(accounts::setActive(1, &err) && accounts::remove(2, &err),
+          "and the other one can go once the owner is back");
 
     check(!accounts::setActive(99, &err), "switching to an unknown account is refused");
 
@@ -4403,13 +4424,24 @@ int main(int argc, char** argv) {
     // How many of those draw as labelled capsules. The chip draws itself.
     constexpr int kBarCapsules = BarAccount;
 
-    const size_t shelfSlots = shelf.empty() ? cards.size() : shelf.size();
+    // ASKED, NOT REMEMBERED. These were constants worked out once at startup,
+    // and switching accounts replaces the library underneath them: a console
+    // that started as someone with an empty Home and switched to someone with
+    // sixteen cards could focus none of them (the d-pad clicked, nothing
+    // moved), and the other way round it reached for a card that no longer
+    // existed and crashed. Found on the A9, 2026-09-24.
+    auto shelfSlots = [&]() -> size_t { return shelf.empty() ? cards.size() : shelf.size(); };
     // Whether there is a game to resume. It is shelf slot 0 when there is.
-    const bool haveResume = heroIndex >= 0 && !shelf.empty();
-    const bool haveFavorites = !favorites.empty();
+    auto haveResume = [&]() { return heroIndex >= 0 && !shelf.empty(); };
+    auto haveFavorites = [&]() { return !favorites.empty(); };
+    // A HOME WITH NOTHING ON IT: a new account that has played nothing and
+    // starred nothing. MMagTech, switching to one on the A9, 2026-09-24: the
+    // screen was "just purple", focus was nowhere, and finding the Library
+    // took pressing Up by accident. See the frame loop and drawShelf's caller.
+    auto homeEmpty = [&]() { return shelfSlots() == 0 && !haveFavorites(); };
 
     auto rowSlots = [&](int row) -> size_t {
-        if (row == RowRecent) return shelfSlots;
+        if (row == RowRecent) return shelfSlots();
         return favorites.size();
     };
     auto rowExists = [&](int row) { return rowSlots(row) > 0; };
@@ -4418,7 +4450,7 @@ int main(int argc, char** argv) {
     // items are destinations rather than cards.
     auto cardAt = [&](int row, int slot) -> Card* {
         if (row == RowRecent) {
-            if (slot < 0 || static_cast<size_t>(slot) >= shelfSlots) return nullptr;
+            if (slot < 0 || static_cast<size_t>(slot) >= shelfSlots()) return nullptr;
             return &cards[shelf.empty() ? static_cast<size_t>(slot)
                                         : static_cast<size_t>(shelf[slot])];
         }
@@ -4431,11 +4463,16 @@ int main(int argc, char** argv) {
     // game this console can play.
     int focusRow = RowRecent;
     int focusSlot = 0;
+    // Remembered focus per row, which is the behaviour tvOS gives free and the
+    // one people notice missing: leaving Recent at the sixth cover and coming
+    // back to the first is the kind of thing that feels broken without anyone
+    // being able to say why.
+    int rememberedSlot[2] = {0, 0};
     // --focus N still means "start on card N of Recent", which is what every
     // existing capture script passes it for.
     if (initialFocus >= 0) {
         focusRow = RowRecent;
-        focusSlot = std::clamp(initialFocus, 0, static_cast<int>(shelfSlots) - 1);
+        focusSlot = std::clamp(initialFocus, 0, static_cast<int>(shelfSlots()) - 1);
     }
     if (initialRow >= 0) {
         focusRow = std::clamp(initialRow, 0, static_cast<int>(RowFavorites));
@@ -4585,7 +4622,23 @@ int main(int argc, char** argv) {
         std::vector<std::thread> workers;
     };
     CoverFill coverFill;
-    if (rommAddress) {
+    // STARTED AGAIN BY AN ACCOUNT SWITCH, which builds new tiles with no
+    // covers. It used to run at boot only, so after a switch the Library's
+    // platforms stayed bare colour until each was opened. MMagTech, on the A9,
+    // 2026-09-24. Any fill still running for the last account is stopped and
+    // its results dropped first, so no cover lands on the wrong person's tile.
+    auto startCoverFill = [&]() {
+        coverFill.quit.store(true);
+        for (std::thread& w : coverFill.workers)
+            if (w.joinable()) w.join();
+        coverFill.workers.clear();
+        coverFill.quit.store(false);
+        coverFill.next.store(0);
+        coverFill.want.clear();
+        {
+            std::lock_guard<std::mutex> lk(coverFill.m);
+            coverFill.done.clear();
+        }
         // THE TILE MAP FIRST, WHICH IS THE WHOLE POINT. Without it the console
         // asks thirty-six times at every start which cover a tile should use
         // and gets the same thirty-six answers — 1.07 s and a third of a
@@ -4645,7 +4698,8 @@ int main(int argc, char** argv) {
                 }
             });
         }
-    }
+    };
+    if (rommAddress) startCoverFill();
     // THE REST OF A BIG GRID, BEHIND THE FIRST PAGE.
     //
     // A grid is proportional to its own platform — about 1 ms a game — so the
@@ -5086,6 +5140,18 @@ int main(int argc, char** argv) {
         }
         lib = std::move(fresh);
         libraryScreen.build(platformTiles, collectionTiles);
+        startCoverFill();
+        // HOME STARTS OVER FOR THE NEW PERSON: the first card of Recent, every
+        // row scrolled back. Where the last person was is meaningless in a
+        // different set of cards, and was out of range whenever the new set
+        // was shorter.
+        focusRow = RowRecent;
+        focusSlot = 0;
+        rememberedSlot[0] = rememberedSlot[1] = 0;
+        shelfScroll[0].settle(0.0f);
+        shelfScroll[1].settle(0.0f);
+        scrollY.settle(0.0f);
+        if (Card* c = cardAt(focusRow, focusSlot)) c->focus.settle(1.0f);
         refreshKeeps();
 
         const storage::User& now = storage::currentUser();
@@ -5213,6 +5279,27 @@ int main(int argc, char** argv) {
     // fighting each other.
     // THE CURTAIN. 0 is clear, 1 is black over everything. See design.h.
     Animated curtain;
+    // An account switch waiting behind the curtain; see pumpSwitch.
+    int switchPendingId = 0;
+    std::string switchLabel;
+    int switchCurtainFrames = 0;
+    Uint64 switchShownAt = 0;    // when the curtain was fully down
+    // THE NAME HAS ITS OWN FADE, inside the curtain's. It came in and went out
+    // with the curtain, so it sat over the old screen on the way down and over
+    // the new Home on the way up: MMagTech saw the two overlap. Now it only
+    // shows on a fully black screen: in after the curtain is down, out before
+    // it lifts.
+    Animated switchText;
+    // AN ACCOUNT SWITCH'S CURTAIN IS THE CONSOLE'S PURPLE, not black: the
+    // plain gradient boot and Settings stand on. Black is a game's curtain;
+    // behind "Switching to vivian" it looked like a screen nobody had
+    // designed. MMagTech, 2026-09-24. Set with the switch, cleared once the
+    // curtain is fully up again.
+    bool switchCurtain = false;
+    constexpr float kSwitchTextFade = 0.200f;   // a starting value
+    bool switchDone = false;     // the switch has run; waiting out the hold
+    bool switchOk = false;
+    std::string switchWhy;
     curtain.smooth = true;
     curtain.from = curtain.to = 0.0f;
 
@@ -5238,6 +5325,108 @@ int main(int argc, char** argv) {
     // moveRow exist.
     std::function<bool(screens::Nav)> homeKey;
 
+    // ---- The PIN ------------------------------------------------------------
+    //
+    // docs/SETTINGS.md, Accounts, issue #57. The pad is a layer over whatever
+    // is showing (pin.h); these decide what an entered PIN means.
+    //
+    // `askPin` is the one door every protected action goes through: with no
+    // PIN set it simply goes ahead, which is the rule that with no PIN every
+    // account can do everything. Wi-Fi, Sign out, Change server address,
+    // Remove an account and File access call it when they are built.
+    screens::PinScreen pinScreen;
+    std::function<void()> pinThen;
+    // FIVE WRONG TRIES, THEN THIRTY SECONDS. Enough to forgive fumbling with
+    // a d-pad, and enough to make guessing ten thousand PINs not worth it for
+    // the sibling the PIN is for. Starting values. Counted per console run,
+    // not saved: a restart is slower than the wait.
+    constexpr int kPinTries = 5;
+    constexpr float kPinLockSeconds = 30.0f;
+    int pinFails = 0;
+    auto askPin = [&](const std::string& title, const std::string& detail,
+                      std::function<void()> then) {
+        if (!accounts::pinIsSet()) { then(); return; }
+        pinThen = std::move(then);
+        pinScreen.open(screens::PinScreen::Mode::Check, title, detail);
+        std::fprintf(stderr, "[pin] asked: %s\n", title.c_str());
+    };
+    auto choosePin = [&](const std::string& title, const std::string& detail,
+                         std::function<void()> then) {
+        pinThen = std::move(then);
+        pinScreen.open(screens::PinScreen::Mode::Choose, title, detail);
+    };
+    auto pinOutcome = [&](screens::PinScreen::Outcome o) {
+        using O = screens::PinScreen::Outcome;
+        if (o == O::None) return;
+        if (o == O::Cancelled) {
+            pinScreen.close();
+            pinThen = nullptr;
+            std::fprintf(stderr, "[pin] left without one\n");
+            return;
+        }
+        if (pinScreen.mode() == screens::PinScreen::Mode::Check) {
+            if (!accounts::checkPin(pinScreen.pin())) {
+                ++pinFails;
+                sound::play(sound::Cue::Edge);
+                std::fprintf(stderr, "[pin] wrong, %d of %d\n", pinFails, kPinTries);
+                pinScreen.reject("That is not the PIN");
+                if (pinFails >= kPinTries) {
+                    pinFails = 0;
+                    pinScreen.lockFor(kPinLockSeconds);
+                }
+                return;
+            }
+            pinFails = 0;
+            std::fprintf(stderr, "[pin] accepted\n");
+        } else {
+            std::string err;
+            if (!accounts::setPin(pinScreen.pin(), &err)) {
+                pinScreen.reject("The PIN could not be saved");
+                std::fprintf(stderr, "[pin] could not save: %s\n", err.c_str());
+                return;
+            }
+            std::fprintf(stderr, "[pin] set\n");
+        }
+        // CLOSED BEFORE THE ACTION RUNS, so an action that opens the pad
+        // again (Change PIN: the old one, then the new one) opens it fresh.
+        pinScreen.close();
+        auto then = std::move(pinThen);
+        pinThen = nullptr;
+        sound::play(sound::Cue::Activate);
+        if (then) then();
+    };
+
+    // ---- A question with a few answers (choice.h) -------------------------
+    //
+    // Same shape as the PIN: the app opens it with what to do with the
+    // answer, and the answer is acted on after it closes, so an answer can
+    // open another question ("who?" then "are you sure?").
+    screens::ChoiceScreen choiceScreen;
+    std::function<void(int)> choiceThen;
+    auto askChoice = [&](const std::string& title, const std::string& detail,
+                         std::vector<std::string> options, int focus,
+                         std::function<void(int)> then) {
+        choiceThen = std::move(then);
+        choiceScreen.open(title, detail, std::move(options), focus);
+    };
+    auto choiceOutcome = [&](screens::ChoiceScreen::Outcome o) {
+        using O = screens::ChoiceScreen::Outcome;
+        if (o == O::None) return;
+        choiceScreen.close();
+        auto then = std::move(choiceThen);
+        choiceThen = nullptr;
+        if (o == O::Chosen && then) then(choiceScreen.chosen());
+    };
+    // WHO CAN BE REMOVED: everybody but whoever is signed in (the store
+    // refuses them) and the owner (the store refuses them too).
+    auto removableAccounts = [&]() {
+        std::vector<accounts::Account> out;
+        const int active = accounts::activeId(), owner = accounts::ownerId();
+        for (const accounts::Account& a : accounts::all())
+            if (a.id != active && a.id != owner) out.push_back(a);
+        return out;
+    };
+
     // ---- Settings' rows -----------------------------------------------------
     //
     // docs/PROJECT.md, open question 31. The screen is handed rows and hands
@@ -5245,7 +5434,8 @@ int main(int argc, char** argv) {
     // Settings opens or a row changes. Rows marked Unbuilt are agreed and not
     // built: they are there so the whole layout can be judged on the
     // television, and focus never lands on them.
-    enum SettingId { SetAddAccount = 1, SetInterfaceSounds };
+    enum SettingId { SetAddAccount = 1, SetInterfaceSounds, SetPinSet, SetPinChange,
+                     SetPinOff, SetRemoveAccount };
     // THE NETWORK IS ASKED OFF THE FRAME THREAD. net::status() is three or four
     // nmcli round trips, which is a visible hitch if the screen waits for it,
     // so the row says "Checking" until the answer lands.
@@ -5283,13 +5473,37 @@ int main(int argc, char** argv) {
         cats.push_back({"Accounts", {
             {K::Action, SetAddAccount, "Add an account",
              "Pair another RomM user with this console", ""},
-            {K::Unbuilt, 0, "Remove an account",
-             "The account playing now cannot be removed", ""},
-            {K::Unbuilt, 0, "Require a PIN to switch",
-             "Off to start. Entered with the controller", ""},
-            {K::Unbuilt, 0, "RetroAchievements",
-             "Sign in with your own RetroAchievements account", ""},
         }});
+        // REMOVE AN ACCOUNT: from this console only. Greyed out when there is
+        // nobody it could remove (not the person signed in, not the owner).
+        cats.back().rows.push_back(Row{removableAccounts().empty() ? K::Disabled : K::Action,
+                                       SetRemoveAccount, "Remove an account", "", ""});
+        // THE PIN IS THE OWNER'S, AND ONLY THE OWNER SEES ITS CONTROLS.
+        // Anyone else sees whether there is one and whose it is, with nothing
+        // to press. MMagTech, 2026-09-24, signed in as claire and offered
+        // Change PIN and Turn off PIN: *"why would claire or anyone but me have
+        // the option to change the pin or turn it off"*. To change it while
+        // somebody else is signed in, the owner switches in, which asks for it.
+        {
+            auto& rows = cats.back().rows;
+            const char* protects = "Protects accounts, Wi-Fi, sign out and file access";
+            const bool isOwner = accounts::activeId() == accounts::ownerId();
+            const std::vector<accounts::Account> list = accounts::all();
+            const accounts::Account* owner = accounts::find(list, accounts::ownerId());
+            const std::string ownerName = owner ? owner->name : std::string("the owner");
+            if (isOwner && accounts::pinIsSet()) {
+                rows.push_back({K::Action, SetPinChange, "Change PIN", protects, ""});
+                rows.push_back({K::Action, SetPinOff, "Turn off PIN", "", ""});
+            } else if (isOwner) {
+                rows.push_back({K::Action, SetPinSet, "Set a PIN", protects, ""});
+            } else if (accounts::pinIsSet()) {
+                rows.push_back({K::Info, 0, "PIN", "Set by " + ownerName, "On"});
+            } else {
+                rows.push_back({K::Info, 0, "PIN", "Only " + ownerName + " can set one", "Off"});
+            }
+            rows.push_back({K::Unbuilt, 0, "RetroAchievements",
+                            "Sign in with your own RetroAchievements account", ""});
+        }
 
         cats.push_back({"Controllers", {
             {K::Unbuilt, 0, "Connected controllers", "Which controller is which player", ""},
@@ -5476,43 +5690,121 @@ int main(int argc, char** argv) {
                 // THE REFUSALS BELONG TO THE APP AND SO DO THEIR WORDS. The
                 // screen does not know whether a game is running or a save is
                 // still going up; it asked to become somebody and this decides.
-                std::string why;
-                if (switchAccount(res.value, &why)) {
-                    // Straight back to Home with the panel closed, because
-                    // everything behind it belonged to the last account.
-                    // Leaving the panel open over a Home that has just been
-                    // rebuilt for somebody else is the stale-screen fault in
-                    // miniature.
+                const int id = res.value;
+                // NOT SWITCHED HERE. The switch asks the server who this is and
+                // reloads the library, which blocks the frame loop; done here,
+                // the screen froze mid-panel for as long as that took (eleven
+                // seconds once, on the A9). It is handed to pumpSwitch, which
+                // brings the curtain down with the person's name on it first.
+                auto go = [&, id]() {
+                    const std::vector<accounts::Account> list = accounts::all();
+                    const accounts::Account* a = accounts::find(list, id);
+                    switchPendingId = id;
+                    switchCurtain = true;
+                    switchLabel = "Switching to " + (a ? a->name : std::string("them"));
+                    switchCurtainFrames = 0;
                     accountsOpen = false;
                     barFocused = false;
-                    stack.clear();
-                    stack.push_back(Screen::Home);
                     accountScreen.setNotice("");
+                    curtain.retarget(1.0f, kCurtainDown);
                     sound::play(sound::Cue::Activate);
+                };
+                // THE SAME PIN STOPS ANYBODY SWITCHING INTO THE OWNER.
+                // docs/SETTINGS.md, Accounts. With no PIN, askPin just goes.
+                if (id == accounts::ownerId() && accounts::activeId() != id) {
+                    const std::vector<accounts::Account> list = accounts::all();
+                    const accounts::Account* a = accounts::find(list, id);
+                    askPin("Enter the PIN",
+                           "To switch to " + (a ? a->name : std::string("them")), go);
                 } else {
-                    accountScreen.setNotice(why);
-                    sound::play(sound::Cue::Edge);
+                    go();
                 }
                 break;
             }
             case screens::Action::AddAccount:
-                // THE PANEL CLOSES AND A SCREEN OPENS. Leaving the panel up
-                // behind a pairing code would put the list somebody is about
-                // to change underneath the thing changing it.
-                accountsOpen = false;
-                barFocused = false;
-                addAccountScreen.open();
-                stack.push_back(Screen::AddAccount);
-                startAddAccount();
+                // WITH A PIN SET, ADDING SOMEBODY ASKS FOR IT, from here and
+                // from Settings alike. MMagTech, 2026-09-24: without it,
+                // anyone holding the controller could add themselves; with no
+                // PIN, anyone can, which is the no-PIN rule everywhere.
+                askPin("Enter the PIN", "To add an account", [&]() {
+                    // THE PANEL CLOSES AND A SCREEN OPENS. Leaving the panel
+                    // up behind a pairing code would put the list somebody is
+                    // about to change underneath the thing changing it.
+                    accountsOpen = false;
+                    barFocused = false;
+                    addAccountScreen.open();
+                    stack.push_back(Screen::AddAccount);
+                    startAddAccount();
+                });
                 sound::play(sound::Cue::Activate);
                 break;
             case screens::Action::Setting:
                 if (res.value == SetAddAccount) {
-                    // The same route as the chip's Add user. Back from the
-                    // pairing screen returns here, because it is pushed.
-                    addAccountScreen.open();
-                    stack.push_back(Screen::AddAccount);
-                    startAddAccount();
+                    // The same route as the chip's Add user, PIN included.
+                    // Back from the pairing screen returns here, because it
+                    // is pushed.
+                    askPin("Enter the PIN", "To add an account", [&]() {
+                        addAccountScreen.open();
+                        stack.push_back(Screen::AddAccount);
+                        startAddAccount();
+                    });
+                    sound::play(sound::Cue::Activate);
+                } else if (res.value == SetRemoveAccount) {
+                    // PIN (if set), then who, then are you sure. With one
+                    // person to remove, "who" is skipped.
+                    askPin("Enter the PIN", "To remove an account", [&]() {
+                        auto confirm = [&](accounts::Account who) {
+                            // NO EXPLANATION. MMagTech, 2026-09-24: the people
+                            // using this are technical, "we don't need to spoon
+                            // feed them everything with an explanation".
+                            askChoice("Remove " + who.name + "?", "",
+                                      {"Remove", "Cancel"}, 1, [&, who](int i) {
+                                          if (i != 0) return;
+                                          std::string err;
+                                          if (accounts::remove(who.id, &err))
+                                              std::fprintf(stderr,
+                                                           "[accounts] removed %d - %s, "
+                                                           "now %zu accounts\n",
+                                                           who.id, who.name.c_str(),
+                                                           accounts::all().size());
+                                          else
+                                              std::fprintf(stderr,
+                                                           "[accounts] could not remove "
+                                                           "%d: %s\n", who.id, err.c_str());
+                                          refreshAccountRows();
+                                          buildSettings();
+                                      });
+                        };
+                        const std::vector<accounts::Account> people = removableAccounts();
+                        if (people.empty()) return;
+                        if (people.size() == 1) { confirm(people[0]); return; }
+                        std::vector<std::string> names;
+                        for (const auto& p : people) names.push_back(p.name);
+                        names.push_back("Cancel");
+                        askChoice("Remove an account", "", names, 0,
+                                  [&, people, confirm](int i) {
+                                      if (i >= 0 && i < static_cast<int>(people.size()))
+                                          confirm(people[i]);
+                                  });
+                    });
+                    sound::play(sound::Cue::Activate);
+                } else if (res.value == SetPinSet) {
+                    choosePin("Choose a PIN", "",
+                              [&]() { buildSettings(); });
+                    sound::play(sound::Cue::Activate);
+                } else if (res.value == SetPinChange) {
+                    askPin("Enter your current PIN", "", [&]() {
+                        choosePin("Choose a new PIN", "",
+                                  [&]() { buildSettings(); });
+                    });
+                    sound::play(sound::Cue::Activate);
+                } else if (res.value == SetPinOff) {
+                    askPin("Enter the PIN", "To turn it off", [&]() {
+                        std::string err;
+                        if (accounts::setPin("", &err))
+                            std::fprintf(stderr, "[pin] turned off\n");
+                        buildSettings();
+                    });
                     sound::play(sound::Cue::Activate);
                 }
                 break;
@@ -5583,7 +5875,7 @@ int main(int argc, char** argv) {
         // only card on Home that behaves this way.
         //
         // Home promises one action from cold to playing, and this is it.
-        if (haveResume && focusRow == RowRecent && focusSlot == 0) {
+        if (haveResume() && focusRow == RowRecent && focusSlot == 0) {
             launchById(cards[heroIndex].id);
             return;
         }
@@ -5813,6 +6105,12 @@ int main(int argc, char** argv) {
     refreshKeeps();
 
     navigate = [&](screens::Nav n) -> bool {
+        // THE PIN PAD BEFORE ANYTHING. It covers the screen, so nothing under
+        // it may take a press.
+        if (pinScreen.isOpen()) { pinOutcome(pinScreen.key(n)); return true; }
+        if (choiceScreen.isOpen()) { choiceOutcome(choiceScreen.key(n)); return true; }
+        // Nothing takes a press while an account switch is behind the curtain.
+        if (switchPendingId) return true;
         // The bar first, wherever it is focused. One place, one behaviour.
         if (accountsOpen) { apply(accountScreen.key(n)); return true; }
         if (barFocused && barKey(n)) return true;
@@ -5930,6 +6228,69 @@ int main(int argc, char** argv) {
     // Picks up a finished job. Loading the game happens HERE, on the frame
     // thread, because the core is not thread-safe and the worker only ever
     // moved bytes.
+    // ---- An account switch, behind the curtain ---------------------------
+    //
+    // The request (the account panel's SwitchAccount) only sets these. Each
+    // frame this brings the curtain down; once it is fully down and a frame
+    // with the name on it has been shown, it runs the blocking switch, then
+    // lifts the curtain on the new person's Home. MMagTech, 2026-09-24: the UI
+    // stalled on a switch with nothing to say why.
+    // (switchPendingId, switchLabel and switchCurtainFrames are declared by
+    // the curtain, further up, because the account panel's apply sets them.)
+    auto pumpSwitch = [&]() {
+        if (!switchPendingId) return;
+        curtain.retarget(1.0f, kCurtainDown);
+        if (curtain.value() < 0.995f) return;
+        if (switchShownAt == 0) {
+            switchShownAt = SDL_GetTicks();
+            switchText.smooth = true;
+            switchText.retarget(1.0f, kSwitchTextFade);
+        }
+        if (!switchDone) {
+            // Two frames at full curtain, so the name is on the television
+            // before the frame loop stops for the network.
+            if (++switchCurtainFrames < 3) return;
+            const Uint64 t0 = SDL_GetTicks();
+            switchWhy.clear();
+            switchOk = switchAccount(switchPendingId, &switchWhy);
+            std::fprintf(stderr, "[accounts] switch took %llu ms\n",
+                         static_cast<unsigned long long>(SDL_GetTicks() - t0));
+            switchDone = true;
+            // Straight to Home, because everything behind it belonged to the
+            // last account. Behind the curtain, so it is ready when it lifts.
+            if (switchOk) {
+                stack.clear();
+                stack.push_back(Screen::Home);
+            }
+        }
+        // THE NAME STAYS UP LONG ENOUGH TO READ. A switch usually takes a
+        // quarter of a second, and the curtain dropping and lifting around
+        // that read as a glitch: MMagTech, 2026-09-24, *"the account switch
+        // text flash to fast that it just seems like a glitch"*. A slow
+        // switch is not held any longer than it took. Starting value.
+        constexpr Uint64 kSwitchHoldMs = 700;
+        if (SDL_GetTicks() - switchShownAt < kSwitchHoldMs) return;
+        // The name goes before the curtain does.
+        switchText.retarget(0.0f, kSwitchTextFade);
+        if (switchText.value() > 0.01f) return;
+        const bool ok = switchOk;
+        const std::string why = switchWhy;
+        switchPendingId = 0;
+        switchDone = false;
+        switchShownAt = 0;
+        if (!ok) {
+            // Back to the panel, saying why, with the old person still in.
+            accountsOpen = true;
+            barFocused = true;
+            barSlot = BarAccount;
+            refreshAccountRows();
+            accountScreen.open();
+            accountScreen.setNotice(why);
+            sound::play(sound::Cue::Edge);
+        }
+        curtain.retarget(0.0f, kCurtainUp);
+    };
+
     auto pumpLaunch = [&]() {
         const LaunchJob::Stage st = launchJob.stage.load();
         if (st == LaunchJob::Stage::Failed) {
@@ -6269,11 +6630,6 @@ int main(int argc, char** argv) {
         playing = true;
     };
 
-    // Remembered focus per row, which is the behaviour tvOS gives free and the
-    // one people notice missing: leaving Recent at the sixth cover and coming
-    // back to the first is the kind of thing that feels broken without anyone
-    // being able to say why.
-    int rememberedSlot[2] = {0, 0};
 
     auto leaveFocus = [&]() {
         if (Card* c = cardAt(focusRow, focusSlot)) c->focus.retarget(0.0f, kFocusDuration);
@@ -6319,6 +6675,24 @@ int main(int argc, char** argv) {
     // Home's keys, routed through the same door as every other screen's so the
     // bar can be offered them first. See `navigate`.
     homeKey = [&](screens::Nav n) -> bool {
+        // AN EMPTY HOME SAYS "Press A to open the Library", and A does.
+        // Up is still the bar.
+        if (homeEmpty()) {
+            switch (n) {
+                case screens::Nav::Up:
+                    barSlot = 0;
+                    barFocused = true;
+                    sound::play(sound::Cue::Move);
+                    return true;
+                case screens::Nav::Activate:
+                    transitionTo(1);
+                    sound::play(sound::Cue::Activate);
+                    return true;
+                default:
+                    sound::play(sound::Cue::Edge);
+                    return true;
+            }
+        }
         switch (n) {
             case screens::Nav::Left:  moveFocus(-1); return true;
             case screens::Nav::Right: moveFocus(+1); return true;
@@ -6605,14 +6979,25 @@ int main(int argc, char** argv) {
             else if (word == "a") n = screens::Nav::Activate;
             else if (word == "b") n = screens::Nav::Back;
             else ok = false;
+            // A digit is a PIN pad key typed on a keyboard, so a whole PIN
+            // can be walked headless: "down,a,4,8,2,1,4,8,2,1".
+            if (!ok && word.size() == 1 && word[0] >= '0' && word[0] <= '9') {
+                pinOutcome(pinScreen.typeDigit(word[0]));
+                word.clear();
+                if (!*p) break;
+                continue;
+            }
             if (ok) navigate(n);
             else if (!word.empty()) std::fprintf(stderr, "[nav] unknown press '%s'\n", word.c_str());
             word.clear();
             if (!*p) break;
         }
-        std::fprintf(stderr, "[nav] after '%s': screen %d, bar %s slot %d\n", navScript,
+        std::fprintf(stderr, "[nav] after '%s': screen %d, bar %s slot %d%s\n", navScript,
                      static_cast<int>(here()), barFocused ? "focused" : "not focused",
-                     barSlot);
+                     barSlot, pinScreen.isOpen() ? ", PIN pad open" : "");
+        // A capture shows the pad at rest, not part-way through its fade.
+        if (pinScreen.isOpen()) pinScreen.settle();
+        if (choiceScreen.isOpen()) choiceScreen.settle();
     }
 
     // ---- Idle: pixel shift, dim, blank — idle.h, open question 10b -------
@@ -6681,6 +7066,19 @@ int main(int argc, char** argv) {
                     if (keyboard.isOpen()) keyboard.typeText(e.text.text);
                     break;
                 case SDL_EVENT_KEY_DOWN:
+                    // A physical keyboard's digits go into the PIN pad, the
+                    // same field the controller fills.
+                    if (pinScreen.isOpen() && owner == InputOwner::UI) {
+                        const SDL_Keycode k = e.key.key;
+                        char d = 0;
+                        if (k >= SDLK_0 && k <= SDLK_9) d = static_cast<char>('0' + (k - SDLK_0));
+                        else if (k >= SDLK_KP_1 && k <= SDLK_KP_9)
+                            d = static_cast<char>('1' + (k - SDLK_KP_1));
+                        else if (k == SDLK_KP_0) d = '0';
+                        if (d) { pinOutcome(pinScreen.typeDigit(d)); break; }
+                        if (k == SDLK_BACKSPACE) { pinScreen.deleteDigit(); break; }
+                        if (k == SDLK_ESCAPE) { navigate(screens::Nav::Back); break; }
+                    }
                     if (owner == InputOwner::Keyboard) {
                         // While it owns input it takes every key, the same way
                         // the core owns the pad while a game runs. A control
@@ -6817,6 +7215,13 @@ int main(int argc, char** argv) {
                          e.gbutton.button == SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER)) {
                         switchDestination(
                             e.gbutton.button == SDL_GAMEPAD_BUTTON_LEFT_SHOULDER ? -1 : +1);
+                        break;
+                    }
+                    // X TAKES A DIGIT OFF THE PIN, as it takes a letter off
+                    // the on-screen keyboard. B leaves the pad.
+                    if (pinScreen.isOpen() && owner == InputOwner::UI &&
+                        e.gbutton.button == SDL_GAMEPAD_BUTTON_WEST) {
+                        pinScreen.deleteDigit();
                         break;
                     }
                     if (owner == InputOwner::Keyboard) {
@@ -7260,11 +7665,19 @@ int main(int argc, char** argv) {
                     // Added, NOT switched to. Back to the panel with the new
                     // person in it, which is where the switch is.
                     refreshAccountRows();
+                    // AND SETTINGS UNDER IT, which it may have been opened
+                    // from: Remove an account stayed greyed out until Settings
+                    // was left and re-entered. MMagTech, on the A9.
+                    buildSettings();
                     if (stack.size() > 1) stack.pop_back();
                     accountsOpen = true;
                     barFocused = true;
                     barSlot = BarAccount;
-                    accountScreen.setNotice(who.name + " was added. Choose them to switch.");
+                    // NO NOTE. "<name> was added. Choose them to switch." used
+                    // to sit under the list; MMagTech, 2026-09-24: it looked
+                    // bad and said what scanning the code had just done. Their
+                    // name appearing in the list is the confirmation.
+                    accountScreen.setNotice("");
                     std::fprintf(stderr, "[accounts] added %d - %s, now %zu accounts, "
                                          "still acting as %d\n",
                                  who.id, who.name.c_str(), accounts::all().size(),
@@ -7276,7 +7689,7 @@ int main(int argc, char** argv) {
                     // saying so is right — going back to a panel that looks
                     // exactly as it did is what made this look broken.
                     addAccountScreen.setError(
-                        who.name + " is already on this console, so nobody was added. "
+                        who.name + " is already on this console. "
                         "Sign in to RomM as the person you are adding (a private "
                         "window is easiest) and try again.");
                     std::fprintf(stderr, "[accounts] NOT ADDED: approved as %d - %s, "
@@ -7339,6 +7752,7 @@ int main(int argc, char** argv) {
         }
 
         pumpLaunch();
+        pumpSwitch();
         pumpExit();
         pumpStateLoad(stateLoad, session, menuNotice);
         if (stateLoad.loaded) {
@@ -7463,6 +7877,7 @@ int main(int argc, char** argv) {
         scrollY.tick(dt);
         backdropMix.tick(dt);
         curtain.tick(dt);
+        switchText.tick(dt);
         menuNotice.tick(dt);
         if (noticeGallery) {
             // Four seconds each, the first after two so the screen has settled.
@@ -7501,7 +7916,10 @@ int main(int argc, char** argv) {
             libraryScreen.tick(dt);
             accountScreen.tick(dt);
             addAccountScreen.tick(dt);
+            settingsScreen.setHasFocus(!barFocused && !accountsOpen);
             settingsScreen.tick(dt);
+            pinScreen.tick(dt);
+            choiceScreen.tick(dt);
             tabDissolve.tick(dt);
             keyboardSlide.tick(dt);
             if (keyboard.sliding() || keyboard.isOpen()) {
@@ -8095,7 +8513,7 @@ int main(int argc, char** argv) {
         // top of the screen leaves half a screen of nothing under it, which is
         // not what a scroll view does and reads as the layout having broken.
         const float contentHeight =
-            (haveFavorites ? favoritesTop + shelfBlockHeight : recentTop + shelfBlockHeight) +
+            (haveFavorites() ? favoritesTop + shelfBlockHeight : recentTop + shelfBlockHeight) +
             kHomeBottomPad;
         const float maxScroll = std::max(0.0f, contentHeight - ui::kCanvasHeight);
         float wantScroll = 0.0f;
@@ -8165,7 +8583,7 @@ int main(int argc, char** argv) {
                 // into the game where every other cover on Home opens a launch
                 // screen, and the objection recorded against that was exactly
                 // that nothing on the screen would say so. Now something does.
-                if (rowId == RowRecent && slot == 0 && haveResume) {
+                if (rowId == RowRecent && slot == 0 && haveResume()) {
                     const char* kResume = "\xE2\x96\xB6  Resume";
                     text.draw(renderer, kResume, titleX, headerBaseline,
                               ui::TextStyle::Callout, ui::Color::white(0.95f), sc);
@@ -8308,7 +8726,57 @@ int main(int argc, char** argv) {
         float rowY = shelfHeaderY;
         rowY += drawShelf("Recent", shelf, RowRecent, rowY);
         // Only when there are any. An empty Favorites row is worse than none.
-        if (haveFavorites) drawShelf("Favorites", favorites, RowFavorites, rowY);
+        if (haveFavorites()) drawShelf("Favorites", favorites, RowFavorites, rowY);
+        // SAID, NOT LEFT BLANK, with the way out under it. The first version
+        // lit Library in the bar instead, which read as already being on the
+        // Library: MMagTech pressed A on what he took for a loaded Library and
+        // it only then opened. Home stays Home; the button is the suggestion.
+        if (homeEmpty()) {
+            const char* title = "Nothing played yet";
+            // One line. A second, pointing at the Library, was dropped on
+            // MMagTech's word: Library is already lit in the bar.
+            const char* detail = "Games you play or favourite will show up here.";
+            const float tw = text.measure(title, ui::TextStyle::Title2, sc);
+            const float dw = text.measure(detail, ui::TextStyle::Callout, sc);
+            const float ty = ui::kCanvasHeight * 0.45f;
+            text.draw(renderer, title, (ui::kCanvasWidth - tw) * 0.5f, ty,
+                      ui::TextStyle::Title2, ui::Color::white(0.95f), sc);
+            text.draw(renderer, detail, (ui::kCanvasWidth - dw) * 0.5f,
+                      ty + text.lineHeight(ui::TextStyle::Title2, sc) * 0.9f,
+                      ui::TextStyle::Callout, ui::Color::white(0.60f), sc);
+            // AN INSTRUCTION, NOT A BUTTON. A focused Open Library button was
+            // tried twice, quiet and then white, and neither read as selected,
+            // because nobody had moved focus onto it. MMagTech, 2026-09-24:
+            // *"since one didn't navigate to end up there it doesn't read as
+            // already being selected... it should Press A to Open Library."*
+            // The A is drawn as a button badge, the way consoles prompt. It
+            // dims while focus is up in the bar, where A means something else.
+            const bool on = !barFocused && !accountsOpen;
+            const ui::TextStyle st = ui::TextStyle::Title3;
+            const char* before = "Press";
+            const char* after = "to open the Library";
+            const float gap = 16.0f;
+            const float badge = text.lineHeight(st, sc) * 0.95f;
+            const float w1 = text.measure(before, st, sc);
+            const float w2 = text.measure(after, st, sc);
+            const float total = w1 + gap + badge + gap + w2;
+            const float base = ty + text.lineHeight(ui::TextStyle::Title2, sc) * 0.9f + 96.0f;
+            const float alpha = on ? 1.0f : 0.45f;
+            float x = (ui::kCanvasWidth - total) * 0.5f;
+            text.draw(renderer, before, x, base, st, ui::Color::white(0.92f * alpha), sc);
+            x += w1 + gap;
+            // The badge: a white disc with a dark A, centred on the text's
+            // x-height rather than its baseline.
+            const float capMid = base - text.ascent(st, sc) * 0.36f;
+            renderer.draw(ui::Rect{x, capMid - badge * 0.5f, badge, badge, badge * 0.5f,
+                                   ui::Color::white(0.95f * alpha)});
+            const float aw = text.measure("A", st, sc);
+            text.draw(renderer, "A", x + (badge - aw) * 0.5f,
+                      capMid + text.ascent(st, sc) * 0.36f, st,
+                      ui::Color{0.07f, 0.05f, 0.12f, alpha}, sc);
+            x += badge + gap;
+            text.draw(renderer, after, x, base, st, ui::Color::white(0.92f * alpha), sc);
+        }
         }  // end of the shelf branch
 
         // The overlay's scrim belongs to the WORLD, not to the overlay, so it
@@ -8694,15 +9162,21 @@ int main(int argc, char** argv) {
             //
             // The disc is drawn either way, as the ground under a picture with
             // transparency and as the fallback when there is none.
-            // THE CHIP IS FOCUSABLE NOW. It is not a capsule like the other
-            // bar items, so it takes the focus treatment on its own disc — a
-            // rim, which is this design system's focus idiom everywhere else.
+            // FOCUSED, THE CHIP GETS THE BAR'S OWN PILL, behind the name and
+            // the picture together, at the focused tint the destinations use.
+            // It used to take only a rim on its small disc, and MMagTech found
+            // it hard to tell when focus had arrived on it, 2026-09-24:
+            // *"can we make the text or some way grab your attention more
+            // beside just the little highlight of the icon"*.
             const bool chipOn = barFocused && barSlot == BarAccount;
             if (chipOn) {
-                const float pad = 6.0f;
-                renderer.draw(ui::Rect{discX - pad, discY - pad, discD + pad * 2.0f,
-                                       discD + pad * 2.0f, (discD + pad * 2.0f) * 0.5f,
-                                       ui::Color::white(0.55f)});
+                constexpr float kChipPillPadX = 22.0f;   // the bar pill's
+                constexpr float kChipPillInsetY = 6.0f;
+                const float ph = barHeight - kChipPillInsetY * 2.0f;
+                const float left = discX - 10.0f - nameW - kChipPillPadX;
+                const float right = discX + discD + 12.0f;
+                renderer.draw(ui::Rect{left, barTop + kChipPillInsetY, right - left, ph,
+                                       ph * 0.5f, ui::Color::white(kFocusedTint)});
             }
             renderer.draw(ui::Rect{discX, discY, discD, discD, discD * 0.5f,
                                    ui::Color::white(chipOn ? 0.34f : 0.22f)});
@@ -8738,7 +9212,7 @@ int main(int argc, char** argv) {
             // Brighter when focused, because it just got smaller and a focus
             // target you cannot find is worse than one that is too loud.
             text.draw(renderer, who, discX - 10.0f - nameW, chipBaseline,
-                      chipStyle, ui::Color::white(chipOn ? 0.95f : 0.62f), sc);
+                      chipStyle, ui::Color::white(chipOn ? 1.0f : 0.62f), sc);
         }
 
         // ---- The account switcher, over the screen and over the bar -------
@@ -8750,6 +9224,18 @@ int main(int argc, char** argv) {
             screens::Ctx actx{renderer, text, images, sc, &cards};
             accountScreen.draw(actx);
         }
+        // The PIN pad over all of it, the panel included: it can be opened
+        // from the panel, and it covers the screen.
+        if (choiceScreen.isOpen() && !playing) {
+            screens::Ctx cctx{renderer, text, images, sc, &cards};
+            choiceScreen.draw(cctx);
+            renderer.setContentAlpha(1.0f);
+        }
+        if (pinScreen.isOpen() && !playing) {
+            screens::Ctx pctx{renderer, text, images, sc, &cards};
+            pinScreen.draw(pctx);
+            renderer.setContentAlpha(1.0f);
+        }
 
         // ---- The curtain, over everything --------------------------------
         //
@@ -8757,9 +9243,28 @@ int main(int argc, char** argv) {
         // not part of any screen, it is the screen going away. See design.h.
         {
             const float c = curtain.value();
-            if (c > 0.001f)
+            if (c > 0.001f && switchCurtain) {
+                // The console's own backdrop, in one piece, faded. Two bands
+                // were drawn here first and left a line under the name where
+                // they met; MMagTech saw it on the TV.
+                renderer.drawBackdrop({ui::palette::kBackdropTop, ui::palette::kBackdropMid,
+                                       ui::palette::kBackdropBottom, 0.55f}, c);
+            } else if (c > 0.001f) {
                 renderer.draw(ui::Rect{0, 0, ui::kCanvasWidth, ui::kCanvasHeight, 0,
                                        ui::Color::black(c)});
+            }
+            if (c <= 0.001f && switchPendingId == 0) switchCurtain = false;
+            // WHO IT IS BECOMING, on the curtain, only while the curtain is
+            // fully down (see switchText).
+            const float ta = switchText.value();
+            if (ta > 0.001f && !switchLabel.empty()) {
+                const float lw = text.measure(switchLabel, ui::TextStyle::Title2, sc);
+                text.draw(renderer, switchLabel, (ui::kCanvasWidth - lw) * 0.5f,
+                          ui::kCanvasHeight * 0.5f + text.ascent(ui::TextStyle::Title2, sc) * 0.5f,
+                          ui::TextStyle::Title2, ui::Color::white(0.9f * ta), sc);
+            } else if (ta <= 0.001f && switchPendingId == 0) {
+                switchLabel.clear();
+            }
         }
 
         // A switch asked for this frame: copy it now, before the keyboard, so

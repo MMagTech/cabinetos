@@ -427,23 +427,73 @@ notes here stay the detail.
    the TV so far:** the side list, the top-bar dissolve with the sliding
    keyboard, and the category cross-fade.
 
-   **#62, INTERFACE SOUNDS, IS BUILT AND JUDGED ON THE TV, 2026-09-24**
-   (branch `settings-sound-levels`). Off, Quiet, Medium, Loud, saved in
+   **#62, INTERFACE SOUNDS, MERGED AS #91, 2026-09-24.** Off, Quiet, Medium, Loud, saved in
    `config/settings.json` through the new `prefs.{h,cpp}`, which the next
    console-wide settings should use too. Settings has a new row kind,
    `Choice`, for any left-and-right row. Volumes 0.07, 0.22, 0.65, after
    MMagTech found 5 dB steps too close; `--ui-sound-levels q,m,l` tunes them
-   without a rebuild. **Next: #57 (owner and PIN)**, which Wi-Fi, sign out
-   and remove all depend on.
+   without a rebuild.
+
+   **#57, OWNER AND PIN, BUILT AND JUDGED ON THE TV, 2026-09-24** (branch
+   `settings-pin`). The rules as they ended, in `docs/SETTINGS.md`: the
+   first account owns the console; one 4-digit PIN, the owner's; with it
+   set, adding or removing an account, Wi-Fi, sign out, change server, file
+   access and switching into the owner all go through `askPin` (main.cpp);
+   only the owner sees the PIN rows. **The PIN offer after adding the second
+   account was built and DROPPED** (someone else holding the pad could set
+   it). The pad is a centred panel (`pin.{h,cpp}`), not full screen.
+
+   **THE SAME BRANCH FIXED ACCOUNT SWITCHING, which was broken on the TV:**
+   Home counted its cards once at startup, so a console that started on an
+   empty account froze after switching (d-pad clicked, nothing moved) and
+   the other way round CRASHED (SIGSEGV on a d-pad press). Now: counts are
+   live, a switch runs behind a curtain with "Switching to <name>", covers
+   refill after a switch, and an empty Home says "Nothing played yet /
+   Press (A) to open the Library". **Once on the A9 a switch took 11 s in
+   the play-history call; it never reproduced.** The log now times it
+   (`[library] play history in N ms`, `[accounts] switch took N ms`).
+
+   **THE A9's ACCOUNTS WERE EDITED BY HAND FOR TESTING:** claire (13) was
+   removed, vivian (12) removed and re-added by MMagTech. It has
+   `1 - MMagTech` and `12 - vivian`. claire's save folder is still on disk.
+
+   **Open with MMagTech, not to be raised by us:** Add an account is in
+   both Settings and the account panel; he is thinking about it.
+
+   **#58, REMOVE AN ACCOUNT, BUILT ON THE SAME BRANCH AND PR (#92).**
+   PIN if set, then who (skipped with one), then "Remove <name>?" with focus
+   on Cancel. Greyed out (new `Disabled` row kind, no explanation) when
+   nobody can go: never the person signed in, never the owner, and
+   `accounts::remove` now refuses the owner too (`--accounts-test`).
+   `choice.{h,cpp}` is the reusable question panel for sign out and
+   forgetting a network.
+
+   **THE LOOK THE POP-UPS SETTLED ON, after four tries on the TV:**
+   - An interruption (PIN pad, a question) is the PAUSE MENU's panel,
+     `design::menuPanel`/`menuButton`, over a 55% scrim. Black glass read as
+     "forgotten about", frosted as "washed out".
+   - The account panel is a DROPDOWN off the light chip, so it stays frosted
+     (0.18, denser than the rows' 0.08) with the pop-ups' shadow and a
+     hairline edge. The dark panel was tried on it and felt too heavy.
+   - An account switch's curtain is the purple backdrop (drawBackdrop now
+     takes an alpha), not black; a game's curtain stays black.
+   - The PIN pad has no button legend. B leaves, X or the Delete key takes
+     a digit back.
+   - On-screen text states, never explains: see the no-spoon-feeding rule.
+
+   **Next: Turn off screen after (#71)**, a Choice row like sounds, then
+   Wi-Fi (#59), then change server (#60) and sign out (#61), each gated with
+   `askPin`.
 
    **Tracked as GitHub issues #57 to #75, Settings milestone** (#74 and #75
    are `later`). The checklist below is the same list:
    - [x] Interface sounds as one row: Off, Quiet, Medium, Loud (left/right),
          and SAVED, which the current toggle is not.
-   - [ ] Owner (first setup account) and one PIN. PIN offered when the second
-         account is added. Protected with a PIN: Wi-Fi, Sign out, Change
-         server address, Remove an account, File access.
-   - [ ] Remove an account, in Settings > Accounts.
+   - [x] Owner (first setup account) and one PIN. Protected with a PIN:
+         adding and removing accounts, Wi-Fi, Sign out, Change server
+         address, File access. (The offer on adding a second account was
+         dropped.)
+   - [x] Remove an account, in Settings > Accounts.
    - [ ] Change server address (same-server check by token) and Sign out
          (one confirmation, clear that server's games and accounts, back to
          first run's server step).

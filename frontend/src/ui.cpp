@@ -139,13 +139,14 @@ uniform vec3 uTop;
 uniform vec3 uMid;
 uniform vec3 uBottom;
 uniform float uMidStop;
+uniform float uAlpha;
 out vec4 fragColor;
 void main() {
     float t = 1.0 - vUV.y;  // vUV.y is 0 at the bottom in clip space
     vec3 c = t < uMidStop
         ? mix(uTop, uMid, t / uMidStop)
         : mix(uMid, uBottom, (t - uMidStop) / (1.0 - uMidStop));
-    fragColor = vec4(c, 1.0);
+    fragColor = vec4(c, uAlpha);
 }
 )";
 
@@ -445,6 +446,7 @@ bool Renderer::init() {
     bloc_.mid = glGetUniformLocation(backdropProgram_, "uMid");
     bloc_.bottom = glGetUniformLocation(backdropProgram_, "uBottom");
     bloc_.midStop = glGetUniformLocation(backdropProgram_, "uMidStop");
+    bloc_.alpha = glGetUniformLocation(backdropProgram_, "uAlpha");
 
     tloc_.canvas = glGetUniformLocation(texturedProgram_, "uCanvas");
     tloc_.rect = glGetUniformLocation(texturedProgram_, "uRect");
@@ -760,8 +762,9 @@ void Renderer::beginFrame(int drawableWidth, int drawableHeight) {
     glBindVertexArray(vao_);
 }
 
-void Renderer::drawBackdrop(const Gradient& g) {
+void Renderer::drawBackdrop(const Gradient& g, float alpha) {
     glUseProgram(backdropProgram_);
+    glUniform1f(bloc_.alpha, alpha);
     glUniform3f(bloc_.top, g.top.r, g.top.g, g.top.b);
     glUniform3f(bloc_.mid, g.mid.r, g.mid.g, g.mid.b);
     glUniform3f(bloc_.bottom, g.bottom.r, g.bottom.g, g.bottom.b);

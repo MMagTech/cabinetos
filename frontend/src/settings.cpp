@@ -109,6 +109,12 @@ void SettingsScreen::retargetFocus() {
     focus_.retarget(1.0f, design::kFocusDuration);
 }
 
+void SettingsScreen::setHasFocus(bool on) {
+    if (on == hasFocus_) return;
+    hasFocus_ = on;
+    if (on) retargetFocus();
+}
+
 void SettingsScreen::tick(float dt) {
     appear_.tick(dt);
     focus_.tick(dt);
@@ -250,7 +256,7 @@ void SettingsScreen::drawGlass(Ctx& c) {
     float y = top;
     for (int i = 0; i < static_cast<int>(cats_.size()); ++i) {
         const bool selected = (i == cat_);
-        const bool focused = selected && row_ < 0;
+        const bool focused = selected && row_ < 0 && hasFocus_;
         const float ff = focused ? f : 0.0f;
         const float s = 1.0f + ff * (design::kRowFocusScale - 1.0f);
         const float w0 = design::kSettingsListWidth;
@@ -261,7 +267,7 @@ void SettingsScreen::drawGlass(Ctx& c) {
             c.r.drawGlass(ui::Rect{x, iy, w, h, design::kRowRadius, ui::Color::white(0)},
                           design::kRegularMaterialBlur,
                           ui::Color::white(design::kFocusedTint * ff));
-        else if (selected)
+        else if (selected && hasFocus_)
             c.r.draw(ui::Rect{x, iy, w, h, design::kRowRadius,
                               ui::Color::white(design::kSelectedTint * 0.6f)});
         c.text.draw(c.r, cats_[i].name, design::kContentInset,
@@ -306,9 +312,11 @@ void SettingsScreen::drawGlass(Ctx& c) {
     for (int i = 0; i < static_cast<int>(list.size()); ++i) {
         const SettingsRow& row = list[i];
         const float rh = rowHeight(c, row);
-        const bool on = (i == focusRow);
+        const bool on = (i == focusRow) && hasFocus_;
         const float rf = on ? f : 0.0f;
         const bool unbuilt = row.kind == Kind::Unbuilt;
+        // Dimmed either way; only an unbuilt row says why.
+        const bool dimmed = unbuilt || row.kind == Kind::Disabled;
         const float s = 1.0f + rf * (design::kRowFocusScale - 1.0f);
         const float w = pw * s, h = rh * s;
         const float x = px - (w - pw) * 0.5f;
@@ -319,9 +327,9 @@ void SettingsScreen::drawGlass(Ctx& c) {
         // reads as one list.
         c.r.drawGlass(ui::Rect{x, ry, w, h, design::kRowRadius, ui::Color::white(0)},
                       design::kRegularMaterialBlur,
-                      ui::Color::white(unbuilt ? 0.04f : 0.08f + 0.14f * rf));
+                      ui::Color::white(dimmed ? 0.04f : 0.08f + 0.14f * rf));
 
-        const float textA = unbuilt ? design::kSettingsUnbuiltAlpha : 1.0f;
+        const float textA = dimmed ? design::kSettingsUnbuiltAlpha : 1.0f;
         const bool chevron = row.kind == Kind::Action;
         const float chevW = chevron
             ? c.text.measure(kChevron, ui::TextStyle::Title3, c.sc) : 0.0f;

@@ -580,6 +580,50 @@ constexpr float kOverlayButtonRestText = 0.62f;
 constexpr float kOverlayButtonFocusShadowBlur = 22.0f;
 constexpr float kOverlayButtonFocusShadowY = 6.0f;
 constexpr float kOverlayButtonFocusShadowAlpha = 0.45f;
+
+// THE PAUSE MENU'S PANEL AND BUTTONS, as a recipe the console's other small
+// panels share: the PIN pad (pin.cpp) and the question panel (choice.cpp).
+// Both tried the keyboard's black glass (*"forgotten about"*) and the account
+// panel's frosted glass (*"too frosted or washed out"*) first; MMagTech,
+// 2026-09-24. `a` fades the whole thing. The pause menu itself still builds
+// its own in main.cpp, from these same constants.
+inline ui::Rect menuPanel(float x, float y, float w, float h, float a) {
+    ui::Color fill = kOverlayPanelSurface;
+    fill.a = kOverlayPanelFill * a;
+    ui::Rect p{x, y, w, h, kOverlayPanelRadius, fill};
+    p.gradient = true;
+    p.fillBottom = ui::Color{fill.r * kOverlayPanelBottomDarken,
+                             fill.g * kOverlayPanelBottomDarken,
+                             fill.b * kOverlayPanelBottomDarken,
+                             kOverlayPanelFillBottom * a};
+    p.edgeLight = ui::Color::white(kOverlayPanelEdgeLight * a);
+    p.border = kOverlayPanelBorder;
+    p.borderColor = ui::Color::white(kOverlayPanelBorderAlpha * a);
+    p.shadowBlur = kOverlayPanelShadowBlur;
+    p.shadowOffsetY = kOverlayPanelShadowY;
+    p.shadowColor = ui::Color::black(kOverlayPanelShadowAlpha * a);
+    return p;
+}
+// A button on it; `f` is focus, 0 to 1. Focus is the rim, as everywhere.
+inline ui::Rect menuButton(float x, float y, float w, float h, float radius, float f,
+                           float a) {
+    ui::Rect b{x, y, w, h, radius,
+               ui::Color::white((kOverlayButtonRestFill +
+                                 f * (kOverlayButtonFocusFill - kOverlayButtonRestFill)) * a)};
+    if (f > 0.0f) {
+        b.border = f * kFocusRimWidth;
+        b.borderColor = ui::palette::kFocusRim;
+        b.borderColor.a *= a;
+        b.shadowBlur = kOverlayButtonFocusShadowBlur;
+        b.shadowOffsetY = kOverlayButtonFocusShadowY;
+        b.shadowColor = ui::Color::black(kOverlayButtonFocusShadowAlpha * f * a);
+    }
+    return b;
+}
+// Its label: dim at rest, full white focused.
+inline ui::Color menuLabel(float f, float a) {
+    return ui::Color::white((kOverlayButtonRestText + f * (1.0f - kOverlayButtonRestText)) * a);
+}
 constexpr float kOverlayButtonHeight = 92.0f;
 constexpr float kOverlayButtonGap = 14.0f;
 

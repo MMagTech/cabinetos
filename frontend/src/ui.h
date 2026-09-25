@@ -109,7 +109,10 @@ public:
     // drawableWidth/Height are real pixels; the canvas is scaled to fit and
     // centred, so an overscan-safe layout stays correct on any panel.
     void beginFrame(int drawableWidth, int drawableHeight);
-    void drawBackdrop(const Gradient& g);
+    // `alpha` below 1 fades it over what is already drawn: an account
+    // switch's curtain. Two gradient bands were tried for that first and
+    // left a line across the screen where they met.
+    void drawBackdrop(const Gradient& g, float alpha = 1.0f);
     void draw(const Rect& r);
 
     // A textured quad in design points. Glyphs use it; cover art and a running
@@ -311,7 +314,7 @@ private:
             shadowVS, fillBottom, edgeLight;
     } loc_{};
     struct {
-        GLint top, mid, bottom, midStop;
+        GLint top, mid, bottom, midStop, alpha;
     } bloc_{};
     struct {
         GLint canvas, rect, uv, tint, tex, single, lod, clip, clipRadius, opaque, rot;
