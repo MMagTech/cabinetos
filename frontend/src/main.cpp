@@ -5605,6 +5605,8 @@ int main(int argc, char** argv) {
     // is the retry after one. Assigned once buildSettings exists.
     std::function<void(const std::string& ssid, bool forgetFirst, const std::string& hint)>
         askWifiPassword;
+    // The network the keyboard is waiting on, while it says "Joining…".
+    std::string wifiKeyboardFor;
     auto askNetwork = [&settingsNet]() {
         if (settingsNet.th.joinable()) settingsNet.th.join();
         settingsNet.th = std::thread([&settingsNet]() {
@@ -5790,11 +5792,21 @@ int main(int argc, char** argv) {
         cfg.hint = hint;
         cfg.placeholder = "Password";
         cfg.conceal = true;   // masked, last character shown; keyboard.h
+        // Opened over itself on a retry, in the same frame: no close, no cut.
         keyboard.open(cfg);
-        keyboardThen = [&, ssid, forgetFirst](ui::KeyboardResult r) {
+        keyboardThen = [&, ssid, forgetFirst, cfg](ui::KeyboardResult r) {
             if (r != ui::KeyboardResult::Committed) return;
             const std::string pass = keyboard.value();
-            menuNotice.say("Joining " + ssid, Tone::Busy);
+            // THE KEYBOARD STAYS UP WHILE IT JOINS, saying so, and takes no
+            // typing (Keyboard::setBusy). The job's answer closes it or turns
+            // it back into a retry; B leaves and lets the join finish alone.
+            ui::Keyboard::Config wait = cfg;
+            wait.hint = "Joining\xE2\x80\xA6";
+            wait.initial = pass;
+            keyboard.open(wait);
+            keyboard.setBusy(true);
+            wifiKeyboardFor = ssid;
+            keyboardThen = [&](ui::KeyboardResult) { wifiKeyboardFor.clear(); };
             startWifiJoin(ssid, pass, forgetFirst);
             buildSettings();
         };
@@ -8304,15 +8316,24 @@ int main(int argc, char** argv) {
                     // "Secrets were required" is nmcli's wrong password.
                     const bool badPass = err.find("ecrets") != std::string::npos ||
                                          err.find("psk") != std::string::npos;
-                    if (ok) menuNotice.say("Connected to " + ssid, Tone::Done);
-                    else if (badPass && here() == Screen::Settings && !keyboard.isOpen() &&
-                             !pinScreen.isOpen() && !choiceScreen.isOpen())
-                        // STRAIGHT BACK TO THE KEYBOARD for another go, rather
-                        // than out to the list. MMagTech tested a wrong
-                        // password on the TV: "kicked out and hard to re-enter".
+                    // Is the keyboard still up, waiting on this very join?
+                    const bool waiting = keyboard.isOpen() && keyboard.busy() &&
+                                         wifiKeyboardFor == ssid;
+                    if (waiting && badPass) {
+                        // ANOTHER GO, IN PLACE: the same panel, emptied, saying
+                        // why. MMagTech tested a wrong password on the TV:
+                        // "kicked out and hard to re-enter", then a strobe.
                         askWifiPassword(ssid, false, "Wrong password");
-                    else if (badPass) menuNotice.say("Wrong password", Tone::Problem);
-                    else menuNotice.say("Couldn't join " + ssid, Tone::Problem);
+                    } else {
+                        if (waiting) {
+                            keyboard.cancel();
+                            keyboardThen = nullptr;
+                        }
+                        if (ok) menuNotice.say("Connected to " + ssid, Tone::Done);
+                        else if (badPass) menuNotice.say("Wrong password", Tone::Problem);
+                        else menuNotice.say("Couldn't join " + ssid, Tone::Problem);
+                    }
+                    wifiKeyboardFor.clear();
                     askNetwork();
                     askWifi();
                     if (here() == Screen::Settings) buildSettings();

@@ -101,6 +101,13 @@ public:
     KeyboardResult commit();   // "done"
     KeyboardResult cancel();
 
+    // WAITING ON WHAT WAS TYPED, e.g. a Wi-Fi join. The panel stays up and
+    // takes no typing; only cancel (B) works. It used to close on done and a
+    // new one open on a wrong password, and the two cuts of a full-screen
+    // scrim read as a strobe (MMagTech on the TV, 2026-09-24).
+    void setBusy(bool on) { busy_ = on; }
+    bool busy() const { return busy_; }
+
     // A physical keyboard types into the same field. Not a separate path: the
     // same string, the same commit, the same screen.
     void typeText(const char* utf8);
@@ -179,6 +186,7 @@ private:
     std::string value_;
     bool shifted_ = false;
     bool conceal_ = false;
+    bool busy_ = false;
     // The character just typed stays readable this long in a masked field.
     std::chrono::steady_clock::time_point lastTyped_{};
     bool revealLast_ = false;

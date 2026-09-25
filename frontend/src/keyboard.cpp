@@ -39,6 +39,7 @@ Keyboard::Key action(const char* label, Keyboard::Key::Action a, float width = 1
 
 void Keyboard::open(const Config& config) {
     config_ = config;
+    busy_ = false;
     value_ = config.initial;
     conceal_ = config.conceal;
     shifted_ = false;
@@ -217,6 +218,7 @@ void Keyboard::moveFocus(int dx, int dy) {
 
 KeyboardResult Keyboard::pressKey() {
     if (!open_) return KeyboardResult::Cancelled;
+    if (busy_) return KeyboardResult::Typing;
     clampFocus();
     const Key& key = layout()[row_][col_];
     switch (key.action) {
@@ -246,6 +248,7 @@ KeyboardResult Keyboard::pressKey() {
 }
 
 void Keyboard::backspace() {
+    if (busy_) return;
     revealLast_ = false;
     if (value_.empty()) return;
     // Step back over a whole UTF-8 code point, not a byte. Deleting half of a
@@ -256,6 +259,7 @@ void Keyboard::backspace() {
 }
 
 void Keyboard::toggleShift() {
+    if (busy_) return;
     shifted_ = !shifted_;
     clampFocus();
 }
@@ -276,18 +280,20 @@ void Keyboard::toggleConceal() {
 }
 
 void Keyboard::typeText(const char* utf8) {
-    if (!open_ || !utf8) return;
+    if (!open_ || !utf8 || busy_) return;
     value_ += utf8;
     lastTyped_ = std::chrono::steady_clock::now();
     revealLast_ = true;
 }
 
 KeyboardResult Keyboard::commit() {
+    if (busy_) return KeyboardResult::Typing;
     open_ = false;
     return KeyboardResult::Committed;
 }
 
 KeyboardResult Keyboard::cancel() {
+    busy_ = false;
     open_ = false;
     return KeyboardResult::Cancelled;
 }
