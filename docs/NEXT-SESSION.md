@@ -32,6 +32,21 @@ with its investigations intact.
 
 ## Before anything else
 
+**THE SESSION OF 2026-09-24/25 BUILT FIVE SETTINGS ITEMS, ALL MERGED:** #91
+(interface sounds, #62), #92 (owner and PIN #57, remove an account #58, and
+account switching, which froze and crashed, fixed), #93 (turn off screen
+after, #71), #94 (Wi-Fi, #59). Everything was judged on the TV with
+`tools/ui-loop.sh`. The details and what was tried and dropped are in
+`docs/SETTINGS.md`; the item-1 block under *WHAT TO DO NEXT* has the rest.
+**Next: Sign out (#61) and Change server address (#60), together.**
+
+**THE A9 WAS LEFT ON THE LOOP'S HAND-BUILT BINARY** (the /run drop-in) unless
+MMagTech upgraded it: check `ps -eo args | grep [c]abinetos-frontend`. A
+reboot, or `sudo bootc upgrade && sudo systemctl reboot` once #94's image is
+built, puts it on the image. **Its accounts are `1 - MMagTech` and
+`12 - vivian`; claire was removed by hand (her save folder is still on
+disk). No PIN is set.**
+
 **THE SESSION OF 2026-09-23/24 MERGED THREE PRS, AND THE A9 RUNS THEM.**
 
 - **#53** (`1e0c40f`): no rechunk; the image is built in layers, so a frontend change
@@ -484,7 +499,7 @@ notes here stay the detail.
    **#71 TURN OFF SCREEN AFTER, MERGED AS #93**: 10, 15 or 30 min under
    Display and Sound, dim fixed at 5 min (Never and 1 hour dropped).
 
-   **#59 WI-FI, BUILT AND JUDGED ON THE TV** (branch `settings-wifi`): one
+   **#59 WI-FI, MERGED AS #94** (judged on the TV, 2026-09-24/25): one
    Wi-Fi row opening a scrolling list panel; masked password with the last
    character shown; "Joining…"/"Wrong password" in the keyboard's field; the
    PIN asked once per Settings visit. Details in `docs/SETTINGS.md`.
