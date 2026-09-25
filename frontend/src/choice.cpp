@@ -98,15 +98,23 @@ void ChoiceScreen::draw(Ctx& c) {
     const float a = appear_.value();
     const float W = ui::kCanvasWidth, H = ui::kCanvasHeight, sc = c.sc;
 
+    // The detail may be more than one line, split at '\n' (Sign out's two).
+    std::vector<std::string> lines;
+    for (size_t at = 0; !detail_.empty() && at <= detail_.size();) {
+        size_t nl = detail_.find('\n', at);
+        if (nl == std::string::npos) nl = detail_.size();
+        lines.push_back(detail_.substr(at, nl - at));
+        at = nl + 1;
+    }
     float innerW = kButtonW;
     innerW = std::max(innerW, c.text.measure(title_, TextStyle::Title2, sc));
-    if (!detail_.empty())
-        innerW = std::max(innerW, c.text.measure(detail_, TextStyle::Callout, sc));
+    for (const std::string& l : lines)
+        innerW = std::max(innerW, c.text.measure(l, TextStyle::Callout, sc));
     const float panelW = std::min(kPanelMaxW, innerW + kPanelPad * 2);
     const float textMax = panelW - kPanelPad * 2;
     const float titleH = c.text.lineHeight(TextStyle::Title2, sc);
     const float lineH = c.text.lineHeight(TextStyle::Callout, sc);
-    const float detailH = detail_.empty() ? 0.0f : 8.0f + lineH;
+    const float detailH = lines.empty() ? 0.0f : 8.0f + lineH * lines.size();
     const int n = static_cast<int>(options_.size());
     const int shown = std::min(n, kMaxVisible);
     const float listH = shown * kButtonH + std::max(0, shown - 1) * kButtonGap;
@@ -129,11 +137,10 @@ void ChoiceScreen::draw(Ctx& c) {
     float y = py + kPanelPad;
     centred(title_, y + c.text.ascent(TextStyle::Title2, sc), TextStyle::Title2, 1.0f);
     y += titleH;
-    if (!detail_.empty()) {
-        centred(detail_, y + 8.0f + c.text.ascent(TextStyle::Callout, sc), TextStyle::Callout,
-                0.60f);
-        y += detailH;
-    }
+    for (size_t i = 0; i < lines.size(); ++i)
+        centred(lines[i], y + 8.0f + lineH * i + c.text.ascent(TextStyle::Callout, sc),
+                TextStyle::Callout, 0.60f);
+    y += detailH;
     y += 36.0f;
 
     const float f = focus_.value();

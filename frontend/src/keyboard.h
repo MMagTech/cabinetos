@@ -113,7 +113,12 @@ public:
     // it brighter and shakes it once ("Wrong password"). MMagTech's idea,
     // 2026-09-24: a line under the title made the panel grow and jump, and
     // the pill at the foot of the screen was out of the line of sight.
-    void sayInField(const std::string& msg, bool problem);
+    //
+    // `keep` holds what was typed behind the message instead of emptying it,
+    // for a field worth correcting rather than retyping (a server address).
+    // The next key brings it back and acts on it; Done sends it again as it
+    // was.
+    void sayInField(const std::string& msg, bool problem, bool keep = false);
 
     // A physical keyboard types into the same field. Not a separate path: the
     // same string, the same commit, the same screen.
@@ -195,6 +200,8 @@ private:
     bool conceal_ = false;
     bool busy_ = false;
     std::string fieldMsg_;          // replaces the placeholder while set
+    std::string held_;              // typed text behind the message (keep)
+    void restoreHeld();
     bool fieldProblem_ = false;
     std::chrono::steady_clock::time_point shakeAt_{};
     // The character just typed stays readable this long in a masked field.

@@ -12949,6 +12949,40 @@ cache and unsent saves when pairing to a different server?
   to first run's server step, reusing its screens.
 - **One server at a time.** A friend's server is sign out, then sign in.
 
+**SERVER: BUILT 2026-09-25, and what changed on the way** (final state in
+`docs/SETTINGS.md`, Network):
+
+- **Change server address was unreachable in the case it exists for.** A
+  console whose server's IP changed never reaches Settings: it waited 90 s,
+  exited, and the session started it again. So the startup screen offers it
+  too, after 10 s, with the same check. Settings keeps its row for a move
+  made while the old address still answers, and for a console already
+  running when the server moves.
+- **The token check was proved**, not assumed: a second RomM (5.3.1) stood
+  up on the A9 refused the real token. Only the signed-in account's token is
+  tried; a dead token means the console cannot load its library either, and
+  MMagTech: tokens can be set never to expire.
+- **"Tried quietly first" had nothing to try.** The pending marker records a
+  size, not what to send, and nothing re-sends from the disk. So uploads in
+  flight are waited for, and anything older is named on the question
+  ("Saves waiting to upload will be lost"), not counted. Re-sending belongs
+  with the offline console, open question 22.
+- **Keeping games through Sign out was proposed and dropped the same hour.**
+  It would have kept the old token aside to ask the next server whether it
+  was the same one. But the only deliberate same-server sign out (a dead
+  token) is where that check fails, it leaves a credential behind after
+  "Sign out", and the question would have to explain itself.
+- **Leaving is not a black screen.** Both actions restart the app, which a
+  plain exit makes into seconds of black while gamescope comes back. The app
+  replaces itself in place instead, under the startup screen (MMagTech:
+  *"the screen you see with the logo"*); measured 0.14 to 0.24 s.
+- **After Sign out, first run is the server and pairing only.** MMagTech:
+  *"we just need the ip screen"*; pairing stays because the accounts are gone.
+- **The startup wait no longer gives up** (reversing open question 22's
+  bounded wait): with the screen retrying and offering the change, the
+  restart only added a black flash every 90 s. It dims and blanks on Home's
+  timers instead.
+
 **Changing category cross-fades the rows**, 150 ms ease-in-out, no movement:
 the old rows fade out as the new ones fade in. MMagTech asked whether it should
 be instant; a person runs down that list quickly, so a slide would be busy and

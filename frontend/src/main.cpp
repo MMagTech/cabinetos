@@ -78,6 +78,7 @@
 #include "choice.h"
 #include "power.h"
 #include "prefs.h"
+#include "server.h"
 #include "ui.h"
 
 namespace {
@@ -2007,6 +2008,44 @@ static Library loadLibrary(romm::Client& client) {
 //
 // The token lives in ~/.config/cabinetos/romm.json at 0600. It is a credential:
 // it is never printed here, and it does not belong in the repository.
+// The keyboard for a server address, in Settings and on the startup screen:
+// first run's, without its hint, because the people here know what an
+// address is (docs/SETTINGS.md, Network).
+// TURN OFF SCREEN AFTER, docs/SETTINGS.md, System. Saved as the word in
+// config/settings.json; the frame loop hands the seconds to idle::Watch.
+// The starting value is 15 minutes, what the console did before there
+// was a choice. NO "NEVER" AND NO HOUR: both were built and dropped the
+// same day, on MMagTech's word, because on an OLED a lit menu is burn-in
+// and half an hour is long enough. A saved word this list does not know
+// is 15. At file scope because the startup screen's wait uses it too.
+struct ScreenOff { const char* name; const char* word; double seconds; };
+static constexpr ScreenOff kScreenOff[] = {
+    {"10 minutes", "10m", 10 * 60.0}, {"15 minutes", "15m", 15 * 60.0},
+    {"30 minutes", "30m", 30 * 60.0},
+};
+constexpr int kScreenOffCount = sizeof kScreenOff / sizeof kScreenOff[0];
+static int savedScreenOff() {
+    const std::string w = prefs::get("screen_off_after", "15m");
+    for (int i = 0; i < kScreenOffCount; ++i)
+        if (w == kScreenOff[i].word) return i;
+    return 1;
+}
+
+static ui::Keyboard::Config serverKeyboardConfig(const std::string& initial) {
+    ui::Keyboard::Config cfg;
+    cfg.title = "RomM server";
+    cfg.initial = initial;
+    cfg.placeholder = "192.168.1.10:6005";
+    cfg.shortcuts = {".local", ":8080"};
+    return cfg;
+}
+
+static std::string trimmedAddress(std::string a) {
+    while (!a.empty() && a.back() == ' ') a.pop_back();
+    while (!a.empty() && a.front() == ' ') a.erase(0, 1);
+    return a;
+}
+
 static std::string rommTokenPath() {
     const char* home = getenv("HOME");
     return std::string(home ? home : ".") + "/.config/cabinetos/romm.json";
@@ -2309,6 +2348,65 @@ static int firstRunWriteTest() {
     check(firstrun::completion().why == firstrun::Why::AdoptedExisting,
           "an adopted machine records itself as adopted");
 
+    // 6. SIGN OUT (issue #61): everything tied to the server goes, and
+    // nothing else. A console's worth of files in the scratch root, and a
+    // scratch HOME for the tokens and the PIN, so no real one is touched.
+    {
+        const std::string r = root, home = r + "/home";
+        setenv("HOME", home.c_str(), 1);
+        auto put = [](const std::string& path) {
+            storage::makeDirs(path.substr(0, path.rfind('/')));
+            if (FILE* f = std::fopen(path.c_str(), "wb")) { std::fputs("x\n", f); std::fclose(f); }
+        };
+        const std::vector<std::string> gone = {
+            r + "/roms/snes/1 - Kept.sfc",       r + "/cache/snes/2 - Cached.sfc",
+            r + "/users/1 - A/saves/snes/1/x.srm", r + "/users/1 - A/pending/1-x.srm",
+            r + "/covers/srv_6005/a.jpg",        r + "/config/user.json",
+            r + "/config/accounts.json",         home + "/.config/cabinetos/accounts/1.json",
+            home + "/.config/cabinetos/pin",     home + "/.config/cabinetos/romm.json",
+        };
+        const std::vector<std::string> kept = {
+            r + "/bios/scph5501.bin", r + "/config/settings.json",
+        };
+        for (const auto& p : gone) put(p);
+        for (const auto& p : kept) put(p);
+        check(server::unsentSaves() == 1, "an unsent save is counted before signing out");
+        check(server::signOut(&werr), "signOut reports success");
+        const firstrun::Completion out = firstrun::completion();
+        check(!out.done && out.why == firstrun::Why::SignedOut && out.clearing,
+              "signed out: first run is needed, and the clearing is still owed");
+        server::finishSignOut();
+        bool allGone = true;
+        for (const auto& p : gone)
+            if (storage::exists(p)) { allGone = false; std::printf("        left: %s\n", p.c_str()); }
+        check(allGone, "games, saves, covers, accounts, tokens and the PIN are gone");
+        bool allKept = true;
+        for (const auto& p : kept) allKept = allKept && storage::exists(p);
+        check(allKept, "BIOS and the console's settings stay");
+        check(storage::exists(r + "/roms") && storage::exists(r + "/cache") &&
+                  storage::exists(r + "/users"),
+              "the empty folders are back");
+        const firstrun::Completion cleared = firstrun::completion();
+        check(!cleared.done && cleared.why == firstrun::Why::SignedOut && !cleared.clearing,
+              "still signed out, and cleared");
+        check(!accounts::pinIsSet(), "no PIN");
+
+        // 7. CHANGE SERVER ADDRESS keeps the covers, filed under the address.
+        if (server::addressIsOurs()) {
+            firstrun::setServerAddress("old.invalid:6005", &werr);
+            put(r + "/covers/" + storage::safeSegment("old.invalid:6005") + "/a.jpg");
+            check(server::changeAddress("old.invalid:6005", "new.invalid:6005", &werr),
+                  "changeAddress reports success");
+            check(firstrun::serverAddress() == "new.invalid:6005", "the new address is read back");
+            check(storage::exists(r + "/covers/" + storage::safeSegment("new.invalid:6005") +
+                                  "/a.jpg"),
+                  "the covers moved with it");
+        } else {
+            std::printf("  note  the address is set by %s, so changing it cannot be checked "
+                        "here\n", firstrun::serverAddressSource().c_str());
+        }
+    }
+
     // Leave nothing behind. A test that litters is a test nobody runs twice.
     std::string rm = "rm -rf ";
     rm += root;
@@ -2598,7 +2696,10 @@ static int firstRunRules() {
 static int firstRunProbe(romm::Client& client, const char* startAt, bool tryServer) {
     const firstrun::Completion done = firstrun::completion();
     std::printf("first run       %s\n",
-                !done.done               ? "NEEDED — this console is not set up"
+                done.why == firstrun::Why::SignedOut
+                      ? (done.clearing ? "NEEDED, signed out; games and accounts not cleared yet"
+                                       : "NEEDED, signed out")
+                : !done.done             ? "NEEDED — this console is not set up"
                 : done.why == firstrun::Why::AdoptedExisting
                       ? "not needed — this machine is already configured, so it "
                         "is treated as set up"
@@ -3023,6 +3124,9 @@ int main(int argc, char** argv) {
     int focusBarSlot = -1;
     bool startupShot = false;
     bool accountsProbeMode = false;
+    // --server-check <address>: would this address be accepted as the same
+    // server by Change server address? Says which answer, and exits.
+    const char* serverCheckAddress = nullptr;
     bool accountsTestMode = false;
     bool firstRunRulesMode = false;
     bool firstRunWriteMode = false;
@@ -3271,6 +3375,8 @@ int main(int argc, char** argv) {
             if (i + 1 < argc && argv[i + 1][0] != '-') focusBarSlot = SDL_atoi(argv[++i]);
         } else if (SDL_strcmp(argv[i], "--keepers") == 0 && i + 1 < argc) {
             keepersRomId = SDL_atoi(argv[++i]);
+        } else if (SDL_strcmp(argv[i], "--server-check") == 0 && i + 1 < argc) {
+            serverCheckAddress = argv[++i];
         } else if (SDL_strcmp(argv[i], "--accounts") == 0) {
             accountsProbeMode = true;
         } else if (SDL_strcmp(argv[i], "--accounts-test") == 0) {
@@ -3571,6 +3677,17 @@ int main(int argc, char** argv) {
     // than with --first-run-rules because it reports the REAL console, so it
     // has to run after the storage root is settled.
     if (accountsProbeMode) return accountsProbe();
+    if (serverCheckAddress) {
+        std::string detail;
+        const server::Check r = server::check(serverCheckAddress, &detail);
+        std::printf("%s: %s%s%s\n", serverCheckAddress,
+                    r == server::Check::Same        ? "same server"
+                    : r == server::Check::Different ? "different server"
+                    : r == server::Check::NoServer  ? "no server"
+                                                    : "could not tell",
+                    detail.empty() ? "" : " (", detail.empty() ? "" : (detail + ")").c_str());
+        return r == server::Check::Same ? 0 : 1;
+    }
     if (keepersRomId > 0) return keepersProbe(keepersRomId);
 
     if (storageReport) {
@@ -3752,14 +3869,32 @@ int main(int argc, char** argv) {
     // came from being configured rather than from a marker, the marker is
     // back-filled here so the judgement is made once and recorded.
     if (!noSetup) {
-        const firstrun::Completion done = firstrun::completion();
+        firstrun::Completion done = firstrun::completion();
+        // SIGNED OUT AND NOT YET CLEARED: the last run signed out and started
+        // this one. Cleared here, before anything else runs, so nothing can
+        // write into a folder being emptied; server.h. Under the startup
+        // screen the last run left on.
+        if (done.why == firstrun::Why::SignedOut && done.clearing && !shotMode) {
+            setup::Deps deps;
+            deps.window = window;
+            deps.renderer = &renderer;
+            deps.text = &text;
+            setup::showWaiting(deps, "", "Signing out");
+            server::finishSignOut();
+            done = firstrun::completion();
+        }
         if (forceSetup || !done.done) {
             setup::Deps deps;
             deps.window = window;
             deps.renderer = &renderer;
             deps.text = &text;
             setup::Options opts;
-            opts.startStep = setupStep;
+            // Back from Sign out: the network is set up and stays, so the
+            // server step (docs/SETTINGS.md, Network).
+            opts.startStep = setupStep ? setupStep
+                             : done.why == firstrun::Why::SignedOut ? "server"
+                                                                    : nullptr;
+            opts.signedOut = done.why == firstrun::Why::SignedOut;
             // A capture of a setup screen must never write a marker or an
             // address: it is a photograph, and the machine it is taken on is
             // usually one that is already set up.
@@ -3843,6 +3978,47 @@ int main(int argc, char** argv) {
     // MMagTech noticed it as the pause after "Start playing" in first run, but
     // it is not a first-run fault: it has happened on every boot this console
     // has ever done. Nobody watches a console boot with a stopwatch.
+    // ---- Idle: pixel shift, dim, blank — idle.h, open question 10b -------
+    //
+    // UP HERE, BEFORE THE SERVER IS ASKED FOR, because the startup screen can
+    // now wait for it without end (below), and a bright logo left all night
+    // is the burn-in this exists to stop. One watch for both: a screen that
+    // went dark while waiting stays dark on Home, and the same press wakes it.
+    idle::Watch idleWatch;
+    idleWatch.setTimeScale(idleScale);
+    idleWatch.setEnabled(!idleOff);
+    idle::Level idleShown = idle::Level::Awake;
+    Animated dimLayer;
+    dimLayer.smooth = true;
+    idle::Offset shiftShown;
+    auto clockSeconds = [] { return SDL_GetTicksNS() / 1e9; };
+    // Once a frame. The timers only ever deepen here; idleWatch.input() is
+    // what lifts them.
+    auto idleFrame = [&](float dt, bool playingNow, double blankAfter) {
+        const double t = clockSeconds();
+        idleWatch.setBlankAfter(blankAfter);
+        const idle::Level lvl = idleWatch.update(t, playingNow);
+        if (lvl != idleShown) {
+            std::fprintf(stderr, "[idle] %s -> %s after %.0fs without input\n",
+                         idle::name(idleShown), idle::name(lvl), idleWatch.idleFor(t));
+            if (lvl == idle::Level::Blank) idle::setDisplayAsleep(true);
+            else if (idleShown == idle::Level::Blank) idle::setDisplayAsleep(false);
+            const float depth = lvl == idle::Level::Awake ? 0.0f
+                                : lvl == idle::Level::Dim ? idle::kDimDepth
+                                                          : 1.0f;
+            dimLayer.retarget(depth, lvl == idle::Level::Awake ? idle::kWakeFadeSeconds
+                                                               : idle::kDimFadeSeconds);
+            idleShown = lvl;
+        }
+        dimLayer.tick(dt);
+        const idle::Offset o = idle::pixelShift(t, renderer.scale(), shiftEvery);
+        if (o.dx != shiftShown.dx || o.dy != shiftShown.dy) {
+            std::fprintf(stderr, "[idle] pixel shift %+d,%+d px\n", o.dx, o.dy);
+            renderer.setPixelShift(o.dx, o.dy);
+            shiftShown = o;
+        }
+    };
+
     setup::Deps waitDeps;
     waitDeps.window = window;
     waitDeps.renderer = &renderer;
@@ -3888,43 +4064,339 @@ int main(int argc, char** argv) {
         // docs/PROJECT.md, open question 22. The ladder no longer draws that
         // conclusion; this is the other half, which is not having the race.
         //
-        // A BOUNDED WAIT, not an indefinite one, and not the offline console.
-        // Ninety seconds covers a boot race and a router coming back after a
-        // power cut. It is deliberately NOT the answer to "there is no server"
+        // IT WAS A BOUNDED WAIT until 2026-09-25 (below), and it is still not
+        // the offline console. Ninety seconds covered a boot race and a router
+        // coming back after a power cut. It is deliberately NOT the answer to
+        // "there is no server"
         // — a console that keeps its library, plays its kept games and fills
         // in when the server returns is open question 22's design and a
         // different piece of work. This is the difference between a machine
         // that recovers from a power cut on its own and one that does not.
+        //
+        // AND IT OFFERS CHANGE SERVER ADDRESS (issue #60), because this is the
+        // one screen a console whose server moved ever shows: it never reaches
+        // Settings. After ten seconds, when a boot race is over, a second line
+        // says "Press (A) to change the server address"; the same keyboard and
+        // the same check as Settings follow, PIN first if one is set. The same
+        // server at the new address: the start carries on there. A different
+        // server: Sign out is offered here, since Settings is out of reach.
+        // MMagTech, 2026-09-25. So the server is tried on a worker and this
+        // loop keeps drawing and listening.
+        //
+        // NO LONGER BOUNDED, 2026-09-25. It gave up at ninety seconds and the
+        // session started it again, which bought nothing once this screen
+        // retried by itself and cost a black flash every minute and a half
+        // while a server was off. MMagTech: wait for as long as it takes. The
+        // (A) line is the cue to go and look at the server.
         {
-            constexpr double kWaitSeconds = 90.0;
-            const uint64_t start = SDL_GetTicks();
-            bool said = false;
-            while (!liveClient.setAddress(rommAddress, &err)) {
-                if ((SDL_GetTicks() - start) / 1000.0 >= kWaitSeconds) {
-                    std::fprintf(stderr, "[romm] %s — gave up after %.0fs\n",
-                                 err.c_str(), kWaitSeconds);
-                    return 1;
+            constexpr double kOfferAfter = 10.0;
+            struct Probe {
+                std::atomic<bool> stop{false}, answered{false};
+                std::mutex m;
+                std::string err;
+                std::thread th;
+            } probe;
+            const std::string firstAddress = rommAddress;
+            probe.th = std::thread([&probe, firstAddress]() {
+                std::string e;
+                while (!probe.stop.load()) {
+                    if (liveClient.setAddress(firstAddress, &e)) { probe.answered = true; return; }
+                    {
+                        std::lock_guard<std::mutex> lk(probe.m);
+                        probe.err = e;
+                    }
+                    for (int i = 0; i < 20 && !probe.stop.load(); ++i) SDL_Delay(100);
                 }
+            });
+            struct CheckJob {
+                std::thread th;
+                std::atomic<bool> done{false};
+                server::Check result = server::Check::Failed;
+                std::string address;
+                Uint64 at = 0;
+                ~CheckJob() { if (th.joinable()) th.join(); }
+            } check;
+
+            // The pads, which main opens only later: this screen needs them.
+            if (SDL_JoystickID* ids = SDL_GetGamepads(nullptr)) {
+                for (int i = 0; ids[i]; ++i) SDL_OpenGamepad(ids[i]);
+                SDL_free(ids);
+            }
+
+            ui::Keyboard addrKeyboard;
+            screens::ChoiceScreen question;
+            screens::PinScreen pad;
+            int pinFails = 0;
+            std::string newAddress;
+            bool signOutNow = false, quit = false, said = false, swallowText = false;
+            const double blankAfter = kScreenOff[savedScreenOff()].seconds;
+            const Uint64 start = SDL_GetTicks();
+            Uint64 prevNs = SDL_GetTicksNS();
+
+            auto openKeyboard = [&](const std::string& typed, const std::string& why) {
+                addrKeyboard.open(serverKeyboardConfig(typed));
+                if (!why.empty()) addrKeyboard.sayInField(why, /*problem=*/true, /*keep=*/true);
+            };
+            auto keyboardResult = [&](ui::KeyboardResult r) {
+                if (r != ui::KeyboardResult::Committed) return;
+                const std::string addr = trimmedAddress(addrKeyboard.value());
+                if (addr.empty()) return;
+                addrKeyboard.open(serverKeyboardConfig(addr));
+                addrKeyboard.sayInField("Checking\xE2\x80\xA6", /*problem=*/false, /*keep=*/true);
+                addrKeyboard.setBusy(true);
+                if (check.th.joinable()) check.th.join();
+                check.done = false;
+                check.address = addr;
+                check.at = SDL_GetTicks();
+                check.th = std::thread([&check, addr]() {
+                    std::string detail;
+                    check.result = server::check(addr, &detail);
+                    std::fprintf(stderr, "[server] %s at startup: %d%s%s\n", addr.c_str(),
+                                 static_cast<int>(check.result), detail.empty() ? "" : ", ",
+                                 detail.c_str());
+                    check.done = true;
+                });
+            };
+            // What the pad's answer means, from a press or from a typed digit.
+            auto pinOutcome = [&](screens::PinScreen::Outcome o) {
+                if (o == screens::PinScreen::Outcome::Cancelled) pad.close();
+                if (o != screens::PinScreen::Outcome::Entered) return;
+                if (!accounts::checkPin(pad.pin())) {
+                    pad.reject("That is not the PIN");
+                    if (++pinFails >= 5) { pinFails = 0; pad.lockFor(30.0f); }
+                    return;
+                }
+                pad.close();
+                openKeyboard(rommAddress, "");
+            };
+            auto press = [&](screens::Nav n) {
+                if (pad.isOpen()) {
+                    pinOutcome(pad.key(n));
+                    return;
+                }
+                if (question.isOpen()) {
+                    const auto o = question.key(n);
+                    if (o == screens::ChoiceScreen::Outcome::None) return;
+                    question.close();
+                    if (o == screens::ChoiceScreen::Outcome::Chosen && question.chosen() == 0)
+                        signOutNow = true;
+                    return;
+                }
+                if (addrKeyboard.isOpen()) {
+                    switch (n) {
+                        case screens::Nav::Left: addrKeyboard.moveFocus(-1, 0); break;
+                        case screens::Nav::Right: addrKeyboard.moveFocus(+1, 0); break;
+                        case screens::Nav::Up: addrKeyboard.moveFocus(0, -1); break;
+                        case screens::Nav::Down: addrKeyboard.moveFocus(0, +1); break;
+                        case screens::Nav::Activate: keyboardResult(addrKeyboard.pressKey()); break;
+                        case screens::Nav::Back: addrKeyboard.cancel(); break;
+                    }
+                    return;
+                }
+                if (n != screens::Nav::Activate) return;
+                if ((SDL_GetTicks() - start) / 1000.0 < kOfferAfter) return;
+                if (accounts::pinIsSet())
+                    pad.open(screens::PinScreen::Mode::Check, "Enter the PIN",
+                             "To change the RomM server");
+                else
+                    openKeyboard(rommAddress, "");
+            };
+
+            while (!probe.answered.load() && newAddress.empty() && !signOutNow && !quit) {
+                const Uint64 now = SDL_GetTicks();
                 // Once, not once per attempt: a line a second for a minute and
                 // a half buries whatever else the boot had to say.
-                if (!said) {
-                    said = true;
-                    std::fprintf(stderr,
-                                 "[romm] %s — waiting up to %.0fs for it\n",
-                                 err.c_str(), kWaitSeconds);
+                if (!said && now - start > 2500) {
+                    std::lock_guard<std::mutex> lk(probe.m);
+                    if (!probe.err.empty()) {
+                        said = true;
+                        std::fprintf(stderr, "[romm] %s, waiting for it\n", probe.err.c_str());
+                    }
                 }
-                // A NUMBER THAT CHANGES, every two seconds, for as long as
-                // ninety. This is the longest a person can be looking at the
-                // startup screen and it used to say one unchanging sentence
-                // throughout, which is what a hung console looks like.
-                {
+
+                SDL_Event e;
+                while (SDL_PollEvent(&e)) {
+                    // A PRESS ON A DARK SCREEN ONLY WAKES IT, as on Home; the
+                    // text a swallowed key would have typed goes with it.
+                    const bool touched =
+                        e.type == SDL_EVENT_KEY_DOWN || e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN ||
+                        (e.type == SDL_EVENT_GAMEPAD_AXIS_MOTION &&
+                         std::abs(static_cast<int>(e.gaxis.value)) > idle::kAxisDeadzone);
+                    if (touched) {
+                        swallowText = false;
+                        if (idleWatch.input(clockSeconds())) {
+                            swallowText = e.type == SDL_EVENT_KEY_DOWN;
+                            continue;
+                        }
+                    }
+                    if (e.type == SDL_EVENT_TEXT_INPUT && swallowText) {
+                        swallowText = false;
+                        continue;
+                    }
+                    switch (e.type) {
+                        case SDL_EVENT_QUIT: quit = true; break;
+                        case SDL_EVENT_GAMEPAD_ADDED: SDL_OpenGamepad(e.gdevice.which); break;
+                        case SDL_EVENT_TEXT_INPUT:
+                            if (pad.isOpen()) {
+                                for (const char* c = e.text.text; *c && pad.isOpen(); ++c)
+                                    pinOutcome(pad.typeDigit(*c));
+                            } else if (addrKeyboard.isOpen()) {
+                                addrKeyboard.typeText(e.text.text);
+                            }
+                            break;
+                        case SDL_EVENT_KEY_DOWN:
+                            switch (e.key.key) {
+                                case SDLK_UP: press(screens::Nav::Up); break;
+                                case SDLK_DOWN: press(screens::Nav::Down); break;
+                                case SDLK_LEFT: press(screens::Nav::Left); break;
+                                case SDLK_RIGHT: press(screens::Nav::Right); break;
+                                case SDLK_ESCAPE: press(screens::Nav::Back); break;
+                                case SDLK_BACKSPACE:
+                                    if (pad.isOpen()) pad.deleteDigit();
+                                    else if (addrKeyboard.isOpen()) addrKeyboard.backspace();
+                                    break;
+                                case SDLK_RETURN:
+                                case SDLK_KP_ENTER:
+                                    if (addrKeyboard.isOpen() && !pad.isOpen() && !question.isOpen())
+                                        keyboardResult(addrKeyboard.commit());
+                                    else
+                                        press(screens::Nav::Activate);
+                                    break;
+                                default: break;
+                            }
+                            break;
+                        case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+                            switch (e.gbutton.button) {
+                                case SDL_GAMEPAD_BUTTON_DPAD_UP: press(screens::Nav::Up); break;
+                                case SDL_GAMEPAD_BUTTON_DPAD_DOWN: press(screens::Nav::Down); break;
+                                case SDL_GAMEPAD_BUTTON_DPAD_LEFT: press(screens::Nav::Left); break;
+                                case SDL_GAMEPAD_BUTTON_DPAD_RIGHT: press(screens::Nav::Right); break;
+                                case SDL_GAMEPAD_BUTTON_SOUTH: press(screens::Nav::Activate); break;
+                                case SDL_GAMEPAD_BUTTON_EAST: press(screens::Nav::Back); break;
+                                case SDL_GAMEPAD_BUTTON_WEST:
+                                    if (pad.isOpen()) pad.deleteDigit();
+                                    else if (addrKeyboard.isOpen()) addrKeyboard.backspace();
+                                    break;
+                                case SDL_GAMEPAD_BUTTON_NORTH:
+                                    if (addrKeyboard.isOpen()) addrKeyboard.toggleShift();
+                                    break;
+                                case SDL_GAMEPAD_BUTTON_START:
+                                    if (addrKeyboard.isOpen() && !pad.isOpen() && !question.isOpen())
+                                        keyboardResult(addrKeyboard.commit());
+                                    break;
+                                default: break;
+                            }
+                            break;
+                        default: break;
+                    }
+                }
+
+                // An address check finished ("Checking…" up 700 ms at least,
+                // as in Settings). B while it ran means leave it alone.
+                if (check.done.load() && SDL_GetTicks() - check.at >= 700) {
+                    check.done = false;
+                    if (addrKeyboard.isOpen() && addrKeyboard.busy()) {
+                        const std::string addr = check.address;
+                        switch (check.result) {
+                            case server::Check::Same: newAddress = addr; break;
+                            case server::Check::Different: {
+                                addrKeyboard.cancel();
+                                const bool unsent = server::unsentSaves() > 0;
+                                question.open("A different server",
+                                              std::string("Removes every game and account from "
+                                                          "this console.\n") +
+                                                  (unsent ? "Saves waiting to upload will be lost."
+                                                          : "Saves stay on the server."),
+                                              {"Sign out", "Cancel"}, 1);
+                                break;
+                            }
+                            case server::Check::NoServer:
+                                openKeyboard(addr, "No RomM server there");
+                                break;
+                            case server::Check::Failed:
+                                openKeyboard(addr, "Couldn't check it");
+                                break;
+                        }
+                    }
+                }
+
+                const Uint64 ns = SDL_GetTicksNS();
+                const float dt = static_cast<float>(ns - prevNs) / 1e9f;
+                prevNs = ns;
+                question.tick(dt);
+                pad.tick(dt);
+                idleFrame(dt, /*playingNow=*/false, blankAfter);
+
+                int dw = 0, dh = 0;
+                SDL_GetWindowSizeInPixels(window, &dw, &dh);
+                if (dw > 0 && dh > 0) {
+                    renderer.beginFrame(dw, dh);
+                    const double waited = (SDL_GetTicks() - start) / 1000.0;
+                    // A NUMBER THAT CHANGES. One unchanging sentence is what a
+                    // hung console looks like.
+                    const int secs = static_cast<int>(waited);
                     char line[96];
-                    std::snprintf(line, sizeof line,
-                                  "Waiting for your server — %ds",
-                                  static_cast<int>((SDL_GetTicks() - start) / 1000));
-                    setup::showWaiting(waitDeps, "Starting up", line);
+                    if (secs < 60)
+                        std::snprintf(line, sizeof line, "Waiting for your server, %ds", secs);
+                    else
+                        std::snprintf(line, sizeof line, "Waiting for your server, %dm %ds",
+                                      secs / 60, secs % 60);
+                    setup::drawStartup(renderer, text,
+                                       newAddress.empty() ? line : "Connecting", 1.0f,
+                                       waited >= kOfferAfter
+                                           ? "Press (A) to change the server address"
+                                           : nullptr);
+                    renderer.presentScene();
+                    screens::Ctx ctx{renderer, text, images, renderer.scale()};
+                    if (addrKeyboard.isOpen()) addrKeyboard.draw(renderer, text, renderer.scale());
+                    question.draw(ctx);
+                    pad.draw(ctx);
+                    if (const float d = dimLayer.value(); d > 0.001f)
+                        renderer.draw(ui::Rect{0, 0, ui::kCanvasWidth, ui::kCanvasHeight, 0,
+                                               ui::Color::black(d)});
+                    SDL_GL_SwapWindow(window);
                 }
-                SDL_Delay(2000);
+                // Dark: ten pictures a second is plenty, as on Home.
+                if (idleShown == idle::Level::Blank && dimLayer.value() >= 0.999f) SDL_Delay(100);
+            }
+
+            probe.stop = true;
+            if (!probe.answered.load() && (!newAddress.empty() || signOutNow)) {
+                // Said while the old address's last try runs out.
+                setup::showWaiting(waitDeps, "",
+                                   signOutNow ? "Signing out"
+                                              : ("Connecting to " + newAddress).c_str());
+            }
+            probe.th.join();
+            if (quit) return 0;
+            if (signOutNow) {
+                std::string serr;
+                if (!server::signOut(&serr)) {
+                    std::fprintf(stderr, "[sign out] could not: %s\n", serr.c_str());
+                    return 1;
+                }
+                // The clearing and first run are the next start's, as from
+                // Settings. In place, so gamescope stays up.
+                std::fprintf(stderr, "[frontend] starting again\n");
+                std::fflush(stderr);
+                ::close_range(3, ~0U, 0);
+                ::execv("/proc/self/exe", argv);
+                std::fprintf(stderr, "[frontend] could not start again: %s\n",
+                             std::strerror(errno));
+                return 1;
+            }
+            if (!probe.answered.load() && !newAddress.empty()) {
+                std::string cerr;
+                const std::string from = rommAddress;
+                if (!server::changeAddress(from, newAddress, &cerr))
+                    std::fprintf(stderr, "[server] could not save %s: %s\n", newAddress.c_str(),
+                                 cerr.c_str());
+                resolvedAddress = newAddress;
+                rommAddress = resolvedAddress.c_str();
+                if (!liveClient.setAddress(rommAddress, &err)) {
+                    std::fprintf(stderr, "[romm] %s at the new address\n", err.c_str());
+                    return 1;
+                }
             }
             if (said) std::fprintf(stderr, "[romm] the server answered\n");
         }
@@ -5281,6 +5753,14 @@ int main(int argc, char** argv) {
     Animated curtain;
     // An account switch waiting behind the curtain; see pumpSwitch.
     int switchPendingId = 0;
+    // LEAVING: Sign out, or a new server address saved. The curtain is the
+    // startup screen with this line under the name, and once it is down (and
+    // uploads are through) the app starts itself again; see pumpLeave.
+    enum class Leave { None, SignOut, NewAddress };
+    Leave leaving = Leave::None;
+    std::string leaveLabel;
+    Uint64 leaveDownAt = 0;
+    bool restartSelf = false;
     std::string switchLabel;
     int switchCurtainFrames = 0;
     Uint64 switchShownAt = 0;    // when the curtain was fully down
@@ -5442,28 +5922,10 @@ int main(int argc, char** argv) {
     // built: they are there so the whole layout can be judged on the
     // television, and focus never lands on them.
     enum SettingId { SetAddAccount = 1, SetInterfaceSounds, SetPinSet, SetPinChange,
-                     SetPinOff, SetRemoveAccount, SetScreenOff, SetWifi };
+                     SetPinOff, SetRemoveAccount, SetScreenOff, SetWifi, SetServer };
 
-    // TURN OFF SCREEN AFTER, docs/SETTINGS.md, System. Saved as the word in
-    // config/settings.json; the frame loop hands the seconds to idle::Watch.
-    // The starting value is 15 minutes, what the console did before there
-    // was a choice. NO "NEVER" AND NO HOUR: both were built and dropped the
-    // same day, on MMagTech's word, because on an OLED a lit menu is burn-in
-    // and half an hour is long enough. A saved word this list does not know
-    // is 15.
-    struct ScreenOff { const char* name; const char* word; double seconds; };
-    static constexpr ScreenOff kScreenOff[] = {
-        {"10 minutes", "10m", 10 * 60.0}, {"15 minutes", "15m", 15 * 60.0},
-        {"30 minutes", "30m", 30 * 60.0},
-    };
-    constexpr int kScreenOffCount = sizeof kScreenOff / sizeof kScreenOff[0];
-    int screenOffIndex = 1;
-    {
-        const std::string w = prefs::get("screen_off_after", "15m");
-        for (int i = 0; i < kScreenOffCount; ++i)
-            if (w == kScreenOff[i].word) screenOffIndex = i;
-        std::fprintf(stderr, "[idle] screen off after %s\n", kScreenOff[screenOffIndex].name);
-    }
+    int screenOffIndex = savedScreenOff();
+    std::fprintf(stderr, "[idle] screen off after %s\n", kScreenOff[screenOffIndex].name);
     // THE NETWORK IS ASKED OFF THE FRAME THREAD. net::status() is three or four
     // nmcli round trips, which is a visible hitch if the screen waits for it,
     // so the row says "Checking" until the answer lands.
@@ -5560,6 +6022,49 @@ int main(int argc, char** argv) {
             wifiJob.running = false;
         });
     };
+    // ---- Change server address (issue #60) -------------------------------
+    //
+    // IS IT THE SAME SERVER, off the frame thread: reaching an address that
+    // is not there costs curl's connect timeout. The keyboard stays up saying
+    // "Checking…" while it runs, the Wi-Fi password's shape.
+    struct ServerJob {
+        std::mutex m;
+        std::thread th;
+        std::atomic<bool> running{false};
+        bool done = false;
+        server::Check result = server::Check::Failed;
+        std::string address, detail;
+        Uint64 startedAt = 0;
+        ~ServerJob() { if (th.joinable()) th.join(); }
+    };
+    ServerJob serverJob;
+    auto startServerCheck = [&serverJob](const std::string& address) {
+        if (serverJob.running.load()) return;
+        if (serverJob.th.joinable()) serverJob.th.join();
+        serverJob.running = true;
+        {
+            std::lock_guard<std::mutex> lk(serverJob.m);
+            serverJob.address = address;
+            serverJob.done = false;
+            serverJob.startedAt = SDL_GetTicks();
+        }
+        serverJob.th = std::thread([&serverJob, address]() {
+            std::string detail;
+            const server::Check r = server::check(address, &detail);
+            std::fprintf(stderr, "[server] %s: %s%s%s\n", address.c_str(),
+                         r == server::Check::Same        ? "the same server"
+                         : r == server::Check::Different ? "a different server"
+                         : r == server::Check::NoServer  ? "no server"
+                                                         : "could not tell",
+                         detail.empty() ? "" : ", ", detail.c_str());
+            std::lock_guard<std::mutex> lk(serverJob.m);
+            serverJob.result = r;
+            serverJob.detail = detail;
+            serverJob.done = true;
+            serverJob.running = false;
+        });
+    };
+
     // The networks as the rows show them: one per name, strongest signal,
     // the one in use first, then saved ones, then the rest by signal.
     std::vector<net::Network> wifiShown;
@@ -5616,6 +6121,12 @@ int main(int argc, char** argv) {
         askWifiPassword;
     // The network the keyboard is waiting on, while it says "Joining…".
     std::string wifiKeyboardFor;
+    // A server address on the keyboard; `why` is what went wrong with the
+    // last one, said in the field with the address kept behind it. Assigned
+    // once buildSettings exists.
+    std::function<void(const std::string& typed, const std::string& why)> askServerAddress;
+    // The address the keyboard is waiting on, while it says "Checking…".
+    std::string serverKeyboardFor;
     auto askNetwork = [&settingsNet]() {
         if (settingsNet.th.joinable()) settingsNet.th.join();
         settingsNet.th = std::thread([&settingsNet]() {
@@ -5700,7 +6211,7 @@ int main(int argc, char** argv) {
         }
         cats.push_back({"Network", {
             {K::Info, 0, "Status", netDetail, netValue},
-            {K::Info, 0, "RomM server", "", rommAddress ? rommAddress : ""},
+            {K::Action, SetServer, "RomM server", "", rommAddress ? rommAddress : ""},
         }});
         // ONE WI-FI ROW, showing the network in use. The networks themselves
         // are in a panel it opens: as rows here they flooded the page in a
@@ -5818,6 +6329,39 @@ int main(int argc, char** argv) {
             keyboardThen = [&](ui::KeyboardResult) { wifiKeyboardFor.clear(); };
             startWifiJoin(ssid, pass, forgetFirst);
             buildSettings();
+        };
+    };
+
+    // THE CURTAIN COMES DOWN ON THE STARTUP SCREEN, and pumpLeave does the
+    // rest once it is down.
+    auto startLeaving = [&](Leave what, const std::string& label) {
+        leaving = what;
+        leaveLabel = label;
+        leaveDownAt = 0;
+        accountsOpen = false;
+        barFocused = false;
+        curtain.retarget(1.0f, kCurtainDown);
+        sound::play(sound::Cue::Activate);
+        std::fprintf(stderr, "[server] %s\n", label.c_str());
+    };
+
+    askServerAddress = [&](const std::string& typed, const std::string& why) {
+        const ui::Keyboard::Config cfg = serverKeyboardConfig(typed);
+        keyboard.open(cfg);
+        if (!why.empty()) keyboard.sayInField(why, /*problem=*/true, /*keep=*/true);
+        keyboardThen = [&, cfg](ui::KeyboardResult r) {
+            if (r != ui::KeyboardResult::Committed) return;
+            const std::string addr = trimmedAddress(keyboard.value());
+            // The same address, or none: nothing to change.
+            if (addr.empty() || addr == (rommAddress ? rommAddress : "")) return;
+            ui::Keyboard::Config again = cfg;
+            again.initial = addr;
+            keyboard.open(again);
+            keyboard.sayInField("Checking\xE2\x80\xA6", /*problem=*/false, /*keep=*/true);
+            keyboard.setBusy(true);
+            serverKeyboardFor = addr;
+            keyboardThen = [&](ui::KeyboardResult) { serverKeyboardFor.clear(); };
+            startServerCheck(addr);
         };
     };
 
@@ -6066,6 +6610,40 @@ int main(int argc, char** argv) {
                         choiceScreen.setValues(values);
                         wifiPanelOpen = true;
                         askWifi();
+                    });
+                    sound::play(sound::Cue::Activate);
+                } else if (res.value == SetServer) {
+                    // PIN FIRST, then what to do: the Wi-Fi row's shape.
+                    // docs/SETTINGS.md, Network; issues #60 and #61.
+                    askPin("Enter the PIN", "To change the RomM server", [&]() {
+                        const std::string addr = rommAddress ? rommAddress : "";
+                        askChoice(addr, "", {"Change address", "Sign out", "Cancel"}, 0,
+                                  [&, addr](int i) {
+                            if (i == 0) {
+                                // Root's address outranks ours (firstrun.h).
+                                // Only a console set up by hand has one.
+                                if (!server::addressIsOurs()) {
+                                    menuNotice.say("Set in /etc/cabinetos/session.env",
+                                                   Tone::Problem);
+                                    return;
+                                }
+                                askServerAddress(addr, "");
+                            } else if (i == 1) {
+                                // ONE CONFIRMATION, focus on Cancel. Unsent
+                                // saves are said, not counted (MMagTech,
+                                // 2026-09-25); by design there are none.
+                                const bool unsent = server::unsentSaves() > 0;
+                                askChoice("Sign out?",
+                                          std::string("Removes every game and account from "
+                                                      "this console.\n") +
+                                              (unsent ? "Saves waiting to upload will be lost."
+                                                      : "Saves stay on the server."),
+                                          {"Sign out", "Cancel"}, 1, [&](int k) {
+                                              if (k == 0)
+                                                  startLeaving(Leave::SignOut, "Signing out");
+                                          });
+                            }
+                        });
                     });
                     sound::play(sound::Cue::Activate);
                 } else if (res.value == SetRemoveAccount) {
@@ -6438,7 +7016,7 @@ int main(int argc, char** argv) {
         if (pinScreen.isOpen()) { pinOutcome(pinScreen.key(n)); return true; }
         if (choiceScreen.isOpen()) { choiceOutcome(choiceScreen.key(n)); return true; }
         // Nothing takes a press while an account switch is behind the curtain.
-        if (switchPendingId) return true;
+        if (switchPendingId || leaving != Leave::None) return true;
         // The bar first, wherever it is focused. One place, one behaviour.
         if (accountsOpen) { apply(accountScreen.key(n)); return true; }
         if (barFocused && barKey(n)) return true;
@@ -6618,6 +7196,44 @@ int main(int argc, char** argv) {
             sound::play(sound::Cue::Edge);
         }
         curtain.retarget(0.0f, kCurtainUp);
+    };
+
+    // ---- Leaving, behind the startup screen ------------------------------
+    //
+    // Sign out and a new server address both end with this program starting
+    // again: the address is read once at startup, and first run is a loop of
+    // its own that runs before this one (setup.h). The curtain is the startup
+    // screen, so the picture the app leaves on is the one it comes back on.
+    // MMagTech, 2026-09-25: not a black screen.
+    auto pumpLeave = [&]() {
+        if (leaving == Leave::None) return;
+        curtain.retarget(1.0f, kCurtainDown);
+        if (curtain.value() < 0.995f) return;
+        const Uint64 now = SDL_GetTicks();
+        if (leaveDownAt == 0) leaveDownAt = now;
+        // UPLOADS FIRST, at most twenty seconds, as for sleep. A save that
+        // is still going up would otherwise be cleared by Sign out, or cut
+        // off by the restart. By design this is nothing: leaving a game
+        // uploads, and Settings is a walk away from any game.
+        if (uploader.pending() > 0 && now - leaveDownAt < 20000) return;
+        // The line stays up long enough to read: the switch's reason.
+        constexpr Uint64 kLeaveHoldMs = 700;
+        if (now - leaveDownAt < kLeaveHoldMs) return;
+        if (uploader.pending() > 0)
+            std::fprintf(stderr, "[server] leaving with %d upload(s) still owed\n",
+                         uploader.pending());
+        if (leaving == Leave::SignOut) {
+            std::string err;
+            if (!server::signOut(&err)) {
+                std::fprintf(stderr, "[sign out] could not: %s\n", err.c_str());
+                leaving = Leave::None;
+                curtain.retarget(0.0f, kCurtainUp);
+                menuNotice.say("Couldn't sign out", Tone::Problem);
+                return;
+            }
+        }
+        restartSelf = true;
+        running = false;
     };
 
     auto pumpLaunch = [&]() {
@@ -7335,15 +7951,6 @@ int main(int argc, char** argv) {
         if (choiceScreen.isOpen()) choiceScreen.settle();
     }
 
-    // ---- Idle: pixel shift, dim, blank — idle.h, open question 10b -------
-    idle::Watch idleWatch;
-    idleWatch.setTimeScale(idleScale);
-    idleWatch.setEnabled(!idleOff);
-    idle::Level idleShown = idle::Level::Awake;
-    Animated dimLayer;
-    dimLayer.smooth = true;
-    idle::Offset shiftShown;
-    auto clockSeconds = [] { return SDL_GetTicksNS() / 1e9; };
 
     while (running) {
         SDL_Event e;
@@ -7777,30 +8384,7 @@ int main(int argc, char** argv) {
 
         // Idle, once a frame. The timers only ever deepen here; input() is
         // what lifts them, above.
-        {
-            const double t = clockSeconds();
-            idleWatch.setBlankAfter(kScreenOff[screenOffIndex].seconds);
-            const idle::Level lvl = idleWatch.update(t, playing && !overlayOpen);
-            if (lvl != idleShown) {
-                std::fprintf(stderr, "[idle] %s -> %s after %.0fs without input\n",
-                             idle::name(idleShown), idle::name(lvl), idleWatch.idleFor(t));
-                if (lvl == idle::Level::Blank) idle::setDisplayAsleep(true);
-                else if (idleShown == idle::Level::Blank) idle::setDisplayAsleep(false);
-                const float depth = lvl == idle::Level::Awake ? 0.0f
-                                    : lvl == idle::Level::Dim ? idle::kDimDepth
-                                                              : 1.0f;
-                dimLayer.retarget(depth, lvl == idle::Level::Awake ? idle::kWakeFadeSeconds
-                                                                   : idle::kDimFadeSeconds);
-                idleShown = lvl;
-            }
-            dimLayer.tick(dt);
-            const idle::Offset o = idle::pixelShift(t, renderer.scale(), shiftEvery);
-            if (o.dx != shiftShown.dx || o.dy != shiftShown.dy) {
-                std::fprintf(stderr, "[idle] pixel shift %+d,%+d px\n", o.dx, o.dy);
-                renderer.setPixelShift(o.dx, o.dy);
-                shiftShown = o;
-            }
-        }
+        idleFrame(dt, playing && !overlayOpen, kScreenOff[screenOffIndex].seconds);
 
         // The held direction, repeating and speeding up. Driven from the frame
         // loop rather than from the event queue, because the pad sends nothing
@@ -8089,6 +8673,7 @@ int main(int argc, char** argv) {
 
         pumpLaunch();
         pumpSwitch();
+        pumpLeave();
         pumpExit();
         pumpStateLoad(stateLoad, session, menuNotice);
         if (stateLoad.loaded) {
@@ -8346,6 +8931,47 @@ int main(int argc, char** argv) {
                     askNetwork();
                     askWifi();
                     if (here() == Screen::Settings) buildSettings();
+                }
+            }
+            {
+                // An address check finished. Same server: saved, and the app
+                // starts again on it. Anything else: said in the field, the
+                // address kept behind it to correct.
+                bool done = false;
+                server::Check r = server::Check::Failed;
+                std::string addr;
+                {
+                    // "CHECKING…" STAYS UP 700 MS AT LEAST. A refused port
+                    // answers in 10 ms and the word flashed for one frame,
+                    // which reads as a glitch: the account switch's lesson.
+                    std::lock_guard<std::mutex> lk(serverJob.m);
+                    if (serverJob.done && SDL_GetTicks() - serverJob.startedAt >= 700) {
+                        done = true;
+                        serverJob.done = false;
+                        r = serverJob.result;
+                        addr = serverJob.address;
+                    }
+                }
+                // B while it checked means leave it alone, whatever it found.
+                if (done && keyboard.isOpen() && keyboard.busy() && serverKeyboardFor == addr) {
+                    serverKeyboardFor.clear();
+                    std::string err;
+                    const std::string from = rommAddress ? rommAddress : "";
+                    if (r == server::Check::Same && server::changeAddress(from, addr, &err)) {
+                        keyboard.cancel();
+                        keyboardThen = nullptr;
+                        startLeaving(Leave::NewAddress, "Connecting to " + addr);
+                    } else if (r == server::Check::Same) {
+                        std::fprintf(stderr, "[server] could not save %s: %s\n",
+                                     addr.c_str(), err.c_str());
+                        askServerAddress(addr, "Couldn't save it");
+                    } else {
+                        askServerAddress(addr,
+                                         r == server::Check::Different ? "A different server: use Sign out"
+                                         : r == server::Check::NoServer
+                                             ? "No RomM server there"
+                                             : "Couldn't check it");
+                    }
                 }
             }
             searchScreen.tick(dt, ctx);
@@ -9644,7 +10270,13 @@ int main(int argc, char** argv) {
         // not part of any screen, it is the screen going away. See design.h.
         {
             const float c = curtain.value();
-            if (c > 0.001f && switchCurtain) {
+            if (c > 0.001f && leaving != Leave::None) {
+                // Leaving: the startup screen, which is what comes back.
+                const float keep = renderer.contentAlpha();
+                renderer.setContentAlpha(1.0f);
+                setup::drawStartup(renderer, text, leaveLabel.c_str(), c);
+                renderer.setContentAlpha(keep);
+            } else if (c > 0.001f && switchCurtain) {
                 // The console's own backdrop, in one piece, faded. Two bands
                 // were drawn here first and left a line under the name where
                 // they met; MMagTech saw it on the TV.
@@ -9857,5 +10489,20 @@ int main(int argc, char** argv) {
     SDL_GL_DestroyContext(gl);
     SDL_DestroyWindow(window);
     SDL_Quit();
+
+    // STARTING AGAIN IN PLACE, for Sign out and a new server address. Not by
+    // exiting: gamescope ends with its child, and the session coming back up
+    // is seconds of black. exec keeps the process, so gamescope stays and the
+    // startup screen follows the one this left on. Every descriptor is closed
+    // first so nothing this run held (the power delay lock above all) is
+    // carried into the next one.
+    if (restartSelf) {
+        std::fprintf(stderr, "[frontend] starting again\n");
+        std::fflush(stderr);
+        ::close_range(3, ~0U, 0);
+        ::execv("/proc/self/exe", argv);
+        std::fprintf(stderr, "[frontend] could not start again: %s\n", std::strerror(errno));
+        return 1;
+    }
     return 0;
 }

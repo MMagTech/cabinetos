@@ -72,6 +72,12 @@ struct Options {
     // look at it at all — the reference machine is configured and taking that
     // away to see a screen would be a silly way to lose an afternoon.
     bool dryRun = false;
+
+    // BACK FROM SIGN OUT (issue #61): the server, then pairing, then the
+    // console. The network and the controllers stayed, so their steps and
+    // the Ready screen ("You can unplug the keyboard") are not shown.
+    // MMagTech, 2026-09-25.
+    bool signedOut = false;
 };
 
 // One frame saying the console is busy, drawn in the same language as the setup
@@ -94,6 +100,15 @@ struct Options {
 // nothing to animate against. A still sentence that says what is happening
 // beats a picture that has stopped changing for no stated reason.
 void showWaiting(const Deps& d, const char* title, const char* detail);
+
+// The same startup screen, drawn into a frame somebody else is building, at
+// `alpha`. For the main loop's curtain when the app is about to start again
+// (Sign out, a new server address), so the screen it leaves on is the screen
+// it comes back on.
+// `hint`, if given, is a second line under it, brighter: something a person
+// can do ("Press (A) to change the server address").
+void drawStartup(ui::Renderer& r, ui::TextRenderer& t, const char* detail, float alpha,
+                 const char* hint = nullptr);
 
 enum class Outcome {
     Completed,   // setup finished; the console is configured

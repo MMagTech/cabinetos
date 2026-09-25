@@ -32,13 +32,59 @@ with its investigations intact.
 
 ## Before anything else
 
+**THE SESSION OF 2026-09-25 BUILT SIGN OUT (#61) AND CHANGE SERVER ADDRESS
+(#60), on branch `settings-server`, in the PR that carries this handover.
+NOT MERGED, NO IMAGE BUILT:** MMagTech judged every screen of it on the TV,
+the merge is his call. What was decided is in `docs/SETTINGS.md`, Network;
+the short version:
+
+- **RomM server** is one row (PIN if set): Change address, Sign out, Cancel.
+- **Change address** checks the new address is the same server by asking it
+  who the signed-in token belongs to. **Proved against a second, throwaway
+  RomM (5.3.1) on the A9: it refused the real token.** Same server: saved,
+  covers moved, app restarts on it. Different: "A different server: use
+  Sign out".
+- **The startup screen offers it too**, because a console whose server moved
+  never reaches Settings: after 10 s, "Press (A) to change the server
+  address". **The startup wait no longer gives up at 90 s** (see item 4); it
+  dims and blanks like Home, sharing Home's idle watch.
+- **Sign out** clears that server's games, saves on the console, covers,
+  accounts, tokens, PIN and address, then first run at the server step,
+  pairing, and straight into the console (no controller step, no Ready).
+  The clearing happens at the NEXT start, before anything runs.
+- **Leaving restarts the app IN PLACE** (`execv("/proc/self/exe")`), so
+  gamescope stays up: the startup screen, 0.14 to 0.24 s, the startup screen.
+- **Fixed on the way:** first run froze 17 s on "Start playing" (its
+  Bluetooth scan was joined with nothing drawn); the logo covers it now.
+- **`--first-run-writes` now tests Sign out and the address change** in a
+  scratch root and scratch HOME (21 checks, all pass on the A9), and
+  `--server-check <address>` answers same / different / no server. **Neither
+  runs in CI**: no workflow calls the self-tests. Another half-working
+  automation entry.
+
+**THE A9 AFTER THIS SESSION:** on the loop's hand-built binary of this
+branch (the /run drop-in; a reboot puts it back on the image, which does NOT
+have this work). **Signed out and back in twice: one account, `1 - MMagTech`,
+no PIN; vivian is gone** (re-add her from the account panel if wanted).
+Its games were cleared and download again as played. **Its address now
+lives in `config/server.json`, like a real install: `/etc/cabinetos/session.env`
+was moved aside to `session.env.hand-set`**, because root's file outranks
+anything Settings writes (firstrun.h). `~/signout-backup/` holds a copy of the
+users and config folders from before the first Sign out (91 MB); delete it
+when MMagTech says. `ydotoold` may be running (see *Driving the television
+from here*, under *Things that will bite you*).
+
+**Next:** the next unchecked Settings items (the checklist under *WHAT TO DO
+NEXT*, item 1): File access, then Storage. Ask MMagTech which first.
+
 **THE SESSION OF 2026-09-24/25 BUILT FIVE SETTINGS ITEMS, ALL MERGED:** #91
 (interface sounds, #62), #92 (owner and PIN #57, remove an account #58, and
 account switching, which froze and crashed, fixed), #93 (turn off screen
 after, #71), #94 (Wi-Fi, #59). Everything was judged on the TV with
 `tools/ui-loop.sh`. The details and what was tried and dropped are in
 `docs/SETTINGS.md`; the item-1 block under *WHAT TO DO NEXT* has the rest.
-**Next: Sign out (#61) and Change server address (#60), together.**
+**Then: Sign out (#61) and Change server address (#60), together**, built
+2026-09-25, above.
 
 **THE A9 WAS LEFT ON THE LOOP'S HAND-BUILT BINARY** (the /run drop-in) unless
 MMagTech upgraded it: check `ps -eo args | grep [c]abinetos-frontend`. A
@@ -508,8 +554,11 @@ notes here stay the detail.
    Wi-Fi profiles (polkit: only the console's session can), so clean up
    through the UI.
 
-   **Next: Sign out (#61) and Change server address (#60)**, together, each
-   gated with `askPin`; the question panel (`choice.h`) is ready for them.
+   **#60 CHANGE SERVER ADDRESS AND #61 SIGN OUT, BUILT 2026-09-25** on branch
+   `settings-server`, judged on the TV, not merged. The top of this file has
+   the summary and `docs/SETTINGS.md`, Network, the decisions. The code is
+   `server.{h,cpp}` (the check, the address change, the clearing), the
+   startup wait in main.cpp, and `setup::Options::signedOut`.
 
    **Tracked as GitHub issues #57 to #75, Settings milestone** (#74 and #75
    are `later`). The checklist below is the same list:
@@ -520,9 +569,10 @@ notes here stay the detail.
          address, File access. (The offer on adding a second account was
          dropped.)
    - [x] Remove an account, in Settings > Accounts.
-   - [ ] Change server address (same-server check by token) and Sign out
-         (one confirmation, clear that server's games and accounts, back to
-         first run's server step).
+   - [x] Change server address (same-server check by token, in Settings and
+         on the startup screen) and Sign out (one confirmation, clear that
+         server's games and accounts, back to first run's server step).
+         Built on `settings-server`, not merged.
    - [x] Wi-Fi page (join, forget, change password); `net.h` has the calls.
    - [ ] File access: SFTP only, user `cabinet`, generated password shown in
          plain text, "New password", restricted to CabinetOS folders on every
@@ -1442,6 +1492,13 @@ not the art, saves **write to disk first and upload later** with a four-rule
 precedence at launch, and **offline the console stays as the last user it knew**
 and offers no switcher it cannot honour — MMagTech's call, 2026-09-19.
 
+**2026-09-25: THE WAIT IS NO LONGER BOUNDED.** It gave up at ninety seconds
+and the session started it again. Once the startup screen retried by itself
+and offered Change server address, the restart bought nothing and cost a
+black flash every minute and a half while a server was off. MMagTech: wait
+for as long as it takes. It dims and blanks on Home's timers so an OLED is
+not left on the logo all night. `docs/SETTINGS.md`, Network.
+
 **AND FIRST RUN CANNOT BE COMPLETED WITHOUT A NETWORK.** MMagTech,
 2026-09-19: the entirety of this OS relies on a RomM server, so one of Ethernet
 or Wi-Fi must be working before setup can proceed — there is no "continue
@@ -1990,6 +2047,27 @@ the repository alone.
   without a controller.
 - **Stop the session before building on the VM.** The frontend runs at 300% CPU
   under llvmpipe and it is four cores. Or skip it and use the offscreen driver.
+
+### Driving the television from here — new 2026-09-25
+
+**The A9 can be pressed from the Mac, so MMagTech can watch while the
+assistant drives.** `cabinet` can write `/dev/uinput` and the image ships
+`ydotool`. Start the daemon once per boot:
+`nohup ydotoold --socket-path=/tmp/ydotool.sock --socket-own=1000:1000 &`,
+then `YDOTOOL_SOCKET=/tmp/ydotool.sock ydotool key 108:1 108:0` (Down; Up
+103, Left 105, Right 106, Return 28, Escape 1, Backspace 14) or
+`ydotool type '192.168.1.10:6005'`. The frontend takes a keyboard everywhere.
+
+- **The frontend's SIGUSR1 capture only works in the main loop.** First run
+  and the startup screen have loops of their own: use `gamescopectl
+  screenshot` with `XDG_RUNTIME_DIR=/run/user/1000` and
+  `GAMESCOPE_WAYLAND_DISPLAY` set to the NEWEST `gamescope-N` there; a
+  session restart leaves the old socket behind and gamescopectl fails on it.
+- **After five idle minutes the first press only wakes the screen,** and
+  every later press lands one step off. That opened the Wi-Fi panel instead
+  of Sign out once. Capture before any press that destroys something.
+- **A restart in place keeps the loop's `--args`**, so a test deploy with
+  `--screen settings` comes back on Settings, not Home.
 
 ### About the network, polkit and QR codes, all new on 2026-09-20
 

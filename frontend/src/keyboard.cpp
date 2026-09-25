@@ -41,6 +41,7 @@ void Keyboard::open(const Config& config) {
     config_ = config;
     busy_ = false;
     fieldMsg_.clear();
+    held_.clear();
     fieldProblem_ = false;
     value_ = config.initial;
     conceal_ = config.conceal;
@@ -218,6 +219,12 @@ void Keyboard::moveFocus(int dx, int dy) {
     clampFocus();
 }
 
+void Keyboard::restoreHeld() {
+    if (held_.empty()) return;
+    value_ = held_;
+    held_.clear();
+}
+
 KeyboardResult Keyboard::pressKey() {
     if (!open_) return KeyboardResult::Cancelled;
     if (busy_) return KeyboardResult::Typing;
@@ -227,6 +234,7 @@ KeyboardResult Keyboard::pressKey() {
         case Key::Backspace: backspace(); return KeyboardResult::Typing;
         case Key::Shift: toggleShift(); return KeyboardResult::Typing;
         case Key::Space:
+            restoreHeld();
             value_ += ' ';
             lastTyped_ = std::chrono::steady_clock::now();
             revealLast_ = true;
@@ -236,6 +244,7 @@ KeyboardResult Keyboard::pressKey() {
         case Key::Cancel: return cancel();
         case Key::None: break;
     }
+    restoreHeld();
     value_ += key.insert;
     lastTyped_ = std::chrono::steady_clock::now();
     revealLast_ = true;
@@ -252,6 +261,7 @@ KeyboardResult Keyboard::pressKey() {
 void Keyboard::backspace() {
     if (busy_) return;
     revealLast_ = false;
+    restoreHeld();
     if (value_.empty()) return;
     // Step back over a whole UTF-8 code point, not a byte. Deleting half of a
     // multi-byte character leaves an invalid string that will not render.
@@ -267,6 +277,7 @@ void Keyboard::toggleShift() {
 }
 
 void Keyboard::toggleConceal() {
+    restoreHeld();
     conceal_ = !conceal_;
     // The labels live in the built layouts, so rebuild them to say the other
     // thing. Cheap, and it keeps one source of truth for the layout.
@@ -283,12 +294,14 @@ void Keyboard::toggleConceal() {
 
 void Keyboard::typeText(const char* utf8) {
     if (!open_ || !utf8 || busy_) return;
+    restoreHeld();
     value_ += utf8;
     lastTyped_ = std::chrono::steady_clock::now();
     revealLast_ = true;
 }
 
-void Keyboard::sayInField(const std::string& msg, bool problem) {
+void Keyboard::sayInField(const std::string& msg, bool problem, bool keep) {
+    held_ = keep ? (value_.empty() ? held_ : value_) : std::string();
     value_.clear();
     revealLast_ = false;
     fieldMsg_ = msg;
@@ -298,6 +311,7 @@ void Keyboard::sayInField(const std::string& msg, bool problem) {
 
 KeyboardResult Keyboard::commit() {
     if (busy_) return KeyboardResult::Typing;
+    restoreHeld();
     open_ = false;
     return KeyboardResult::Committed;
 }

@@ -1384,6 +1384,13 @@ void Flow::activate() {
         if (!b.enabled) return;
         switch (b.act) {
             case Act::Continue:
+                if (o_.signedOut && machine_.step() == firstrun::Step::Pair &&
+                    machine_.gate() == firstrun::Gate::Ready) {
+                    finish();
+                    running_ = false;
+                    outcome_ = Outcome::Completed;
+                    break;
+                }
                 if (machine_.advance()) { observe(); enterStep(); }
                 break;
             case Act::Skip:
@@ -2018,39 +2025,12 @@ static void drawCabinet(ui::Renderer& r, float ox, float oy, float s, float a) {
     R(303, 795, 419, 55, 14, panel);
 }
 
-void showWaiting(const Deps& d, const char* title, const char* detail) {
-    if (!d.window || !d.renderer || !d.text) return;
-    ui::Renderer& r = *d.renderer;
-    ui::TextRenderer& t = *d.text;
-
-    // **PUMP FIRST, OR THIS DRAWS AT THE WRONG SIZE ON EVERY BOOT.**
-    //
-    // MMagTech, 2026-09-22: *"I see the starting up screen appear and it's a
-    // tinier image in the bottom left with the rest of the screen black."*
-    // Measured: the drawable reported 1920x1080 while the panel is 3840x2160,
-    // so this drew a quarter-size frame into a 4K framebuffer — in the bottom
-    // left, because that is where GL's origin is.
-    //
-    // SDL creates the window at its requested size and gamescope resizes it
-    // immediately afterwards; the size arrives as an EVENT. Nothing had pumped
-    // the queue by the time this ran, so `SDL_GetWindowSizeInPixels` answered
-    // with the size before the compositor had its say. The main loop pumps and
-    // gets it right, which is why only this screen was wrong.
-    //
-    // THIS IS NOT A TEST-RIG ARTEFACT. It is every boot on a 4K panel, and
-    // this screen exists precisely because the console used to show nothing
-    // for the seconds — up to ninety — that reaching the server and pulling
-    // sixteen hundred games takes.
-    SDL_PumpEvents();
-    int dw = 0, dh = 0;
-    SDL_GetWindowSizeInPixels(d.window, &dw, &dh);
-    if (dw <= 0 || dh <= 0) return;
-    std::fprintf(stderr, "[waiting] drawable %dx%d\n", dw, dh);
-    r.beginFrame(dw, dh);
+void drawStartup(ui::Renderer& r, ui::TextRenderer& t, const char* detail, float alpha,
+                 const char* hint) {
     const float sc = r.scale();
 
     r.drawBackdrop({ui::palette::kBackdropTop, ui::palette::kBackdropMid,
-                    ui::palette::kBackdropBottom, 0.55f});
+                    ui::palette::kBackdropBottom, 0.55f}, alpha);
 
     // CENTRED, AND NOT A SETUP STEP. This used to be "Starting up" at the
     // setup inset with the prose under it, which dressed the last beat of a
@@ -2089,19 +2069,57 @@ void showWaiting(const Deps& d, const char* title, const char* detail) {
     const float s = ww / kIconW;
     const float cabTop = 150.0f;
     const float oy = cabTop - kIconTop * s;
-    drawCabinet(r, (ui::kCanvasWidth - ww) * 0.5f - 248.0f * s, oy, s, 1.0f);
+    drawCabinet(r, (ui::kCanvasWidth - ww) * 0.5f - 248.0f * s, oy, s, alpha);
 
     float y = oy + kIconBottom * s + 56.0f;
     t.draw(r, kWordmark, (ui::kCanvasWidth - ww) * 0.5f,
-           y + t.ascent(markStyle, sc), markStyle, Color::white(0.94f), sc);
+           y + t.ascent(markStyle, sc), markStyle, Color::white(0.94f * alpha), sc);
     y += t.lineHeight(markStyle, sc) + 16.0f;
 
     if (detail) {
         const float dw = t.measure(detail, ui::TextStyle::Body, sc);
         t.draw(r, detail, (ui::kCanvasWidth - dw) * 0.5f,
                y + t.ascent(ui::TextStyle::Body, sc), ui::TextStyle::Body,
-               Color::white(0.42f), sc);
+               Color::white(0.42f * alpha), sc);
+        y += t.lineHeight(ui::TextStyle::Body, sc) + 8.0f;
     }
+    if (hint) {
+        const float hw = t.measure(hint, ui::TextStyle::Body, sc);
+        t.draw(r, hint, (ui::kCanvasWidth - hw) * 0.5f, y + t.ascent(ui::TextStyle::Body, sc),
+               ui::TextStyle::Body, Color::white(0.80f * alpha), sc);
+    }
+}
+
+void showWaiting(const Deps& d, const char* title, const char* detail) {
+    if (!d.window || !d.renderer || !d.text) return;
+    ui::Renderer& r = *d.renderer;
+    ui::TextRenderer& t = *d.text;
+
+    // **PUMP FIRST, OR THIS DRAWS AT THE WRONG SIZE ON EVERY BOOT.**
+    //
+    // MMagTech, 2026-09-22: *"I see the starting up screen appear and it's a
+    // tinier image in the bottom left with the rest of the screen black."*
+    // Measured: the drawable reported 1920x1080 while the panel is 3840x2160,
+    // so this drew a quarter-size frame into a 4K framebuffer — in the bottom
+    // left, because that is where GL's origin is.
+    //
+    // SDL creates the window at its requested size and gamescope resizes it
+    // immediately afterwards; the size arrives as an EVENT. Nothing had pumped
+    // the queue by the time this ran, so `SDL_GetWindowSizeInPixels` answered
+    // with the size before the compositor had its say. The main loop pumps and
+    // gets it right, which is why only this screen was wrong.
+    //
+    // THIS IS NOT A TEST-RIG ARTEFACT. It is every boot on a 4K panel, and
+    // this screen exists precisely because the console used to show nothing
+    // for the seconds — up to ninety — that reaching the server and pulling
+    // sixteen hundred games takes.
+    SDL_PumpEvents();
+    int dw = 0, dh = 0;
+    SDL_GetWindowSizeInPixels(d.window, &dw, &dh);
+    if (dw <= 0 || dh <= 0) return;
+    std::fprintf(stderr, "[waiting] drawable %dx%d\n", dw, dh);
+    r.beginFrame(dw, dh);
+    drawStartup(r, t, detail, 1.0f);
     (void)title;
 
     // Without this the frame goes into the scene texture and never reaches the
@@ -2113,7 +2131,14 @@ void showWaiting(const Deps& d, const char* title, const char* detail) {
 Outcome run(const Deps& d, const Options& o) {
     if (!d.window || !d.renderer || !d.text) return Outcome::Quit;
     Flow flow(d, o);
-    return flow.run();
+    const Outcome out = flow.run();
+    // THE STARTUP SCREEN BEFORE THE WORKERS ARE REAPED. Leaving `flow` joins
+    // every job it started, and the controller step's Bluetooth scan alone is
+    // ten seconds: on the A9, 2026-09-25, "Start playing" stayed pressed on a
+    // frozen Ready screen for 17 s. Now the logo is up for that time instead,
+    // and the startup's own lines follow it.
+    if (out == Outcome::Completed && !o.screenshotPath) showWaiting(d, "", nullptr);
+    return out;
 }
 
 }  // namespace setup

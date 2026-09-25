@@ -346,4 +346,15 @@ bool checkPin(const std::string& pin) {
     return trimmed(pin) == stored;
 }
 
+bool forgetEveryone() {
+    const std::string dir = homeDir() + "/.config/cabinetos";
+    bool ok = true;
+    for (const std::string& p : {listPath(), dir + "/accounts", pinPath(), dir + "/romm.json"})
+        if (storage::exists(p) && !storage::removeEntry(p)) {
+            std::fprintf(stderr, "[sign out] could not remove %s\n", p.c_str());
+            ok = false;
+        }
+    return ok;
+}
+
 }  // namespace accounts
