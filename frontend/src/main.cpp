@@ -5986,7 +5986,9 @@ int main(int argc, char** argv) {
     // "Checked today", by the calendar here, not by 24-hour periods.
     auto updChecked = [&]() -> std::string {
         const int64_t at = prefNum("update_checked");
-        if (at <= 0) return "Never checked";
+        // Never checked says nothing: the row alone, and pressing it checks.
+        // MMagTech, 2026-09-25.
+        if (at <= 0) return std::string();
         auto dayOf = [](std::time_t t) {
             std::tm tm{};
             localtime_r(&t, &tm);
@@ -6051,8 +6053,6 @@ int main(int argc, char** argv) {
                              updBytes(prefNum("update_size"));
                 } else if (prefNum("update_checked") > 0) {
                     value = "Up to date";
-                    detail = updChecked();
-                } else {
                     detail = updChecked();
                 }
                 break;
