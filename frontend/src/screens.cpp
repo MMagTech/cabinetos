@@ -1421,14 +1421,29 @@ void AccountScreen::draw(Ctx& c) {
     const float bodyH = rows * rowH + (rows - 1) * 8.0f + 18.0f * 2.0f +
                         (noticeLines.empty() ? 0.0f
                                              : 8.0f + noticeLineH * noticeLines.size());
-    // THE POP-UPS' PANEL (design::menuPanel), the PIN pad's and the
-    // question panel's. It was frosted glass, the same material as the
-    // Settings rows it opens over, and melted into them; MMagTech, 2026-09-24:
-    // *"sort of clashing or blending in too much with what's behind it"*. The
-    // dark surface and the shadow are what put it on top.
-    ui::Rect panel = design::menuPanel(x, top, w, bodyH * a, a);
-    panel.radius = design::kRowRadius;
-    c.r.draw(panel);
+    // FROSTED, LIKE THE CHIP IT OPENS FROM, BUT LIFTED. This is a dropdown
+    // off the account chip, not an interruption, so it stays in the chip's
+    // material; the pop-ups' dark panel was tried and felt too heavy for it
+    // (MMagTech, 2026-09-24: "something feels wrong about this one
+    // matching"). What made the frosted version melt into the Settings rows
+    // was having no depth, not the material: so a denser frost than the
+    // rows (0.18 against their 0.08), and the pop-ups' shadow and hairline
+    // edge to put it on top.
+    {
+        ui::Rect lift{x, top, w, bodyH * a, design::kRowRadius, ui::Color::white(0)};
+        lift.shadowBlur = design::kOverlayPanelShadowBlur;
+        lift.shadowOffsetY = design::kOverlayPanelShadowY;
+        lift.shadowColor = ui::Color::black(design::kOverlayPanelShadowAlpha * a);
+        c.r.draw(lift);
+    }
+    c.r.drawGlass(ui::Rect{x, top, w, bodyH * a, design::kRowRadius, ui::Color::white(0)},
+                  design::kRegularMaterialBlur, ui::Color::white(0.18f * a));
+    {
+        ui::Rect edge{x, top, w, bodyH * a, design::kRowRadius, ui::Color::white(0)};
+        edge.border = design::kOverlayPanelBorder;
+        edge.borderColor = ui::Color::white(design::kOverlayPanelBorderAlpha * 1.4f * a);
+        c.r.draw(edge);
+    }
 
     float y = top + 18.0f;
 
