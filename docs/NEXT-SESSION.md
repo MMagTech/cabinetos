@@ -460,8 +460,30 @@ notes here stay the detail.
    **Open with MMagTech, not to be raised by us:** Add an account is in
    both Settings and the account panel; he is thinking about it.
 
-   **Next: #58 (remove an account)**, then Wi-Fi (#59), change server (#60)
-   and sign out (#61), each gated with `askPin`.
+   **#58, REMOVE AN ACCOUNT, BUILT ON THE SAME BRANCH AND PR (#92).**
+   PIN if set, then who (skipped with one), then "Remove <name>?" with focus
+   on Cancel. Greyed out (new `Disabled` row kind, no explanation) when
+   nobody can go: never the person signed in, never the owner, and
+   `accounts::remove` now refuses the owner too (`--accounts-test`).
+   `choice.{h,cpp}` is the reusable question panel for sign out and
+   forgetting a network.
+
+   **THE LOOK THE POP-UPS SETTLED ON, after four tries on the TV:**
+   - An interruption (PIN pad, a question) is the PAUSE MENU's panel,
+     `design::menuPanel`/`menuButton`, over a 55% scrim. Black glass read as
+     "forgotten about", frosted as "washed out".
+   - The account panel is a DROPDOWN off the light chip, so it stays frosted
+     (0.18, denser than the rows' 0.08) with the pop-ups' shadow and a
+     hairline edge. The dark panel was tried on it and felt too heavy.
+   - An account switch's curtain is the purple backdrop (drawBackdrop now
+     takes an alpha), not black; a game's curtain stays black.
+   - The PIN pad has no button legend. B leaves, X or the Delete key takes
+     a digit back.
+   - On-screen text states, never explains: see the no-spoon-feeding rule.
+
+   **Next: Turn off screen after (#71)**, a Choice row like sounds, then
+   Wi-Fi (#59), then change server (#60) and sign out (#61), each gated with
+   `askPin`.
 
    **Tracked as GitHub issues #57 to #75, Settings milestone** (#74 and #75
    are `later`). The checklist below is the same list:
@@ -471,7 +493,7 @@ notes here stay the detail.
          adding and removing accounts, Wi-Fi, Sign out, Change server
          address, File access. (The offer on adding a second account was
          dropped.)
-   - [ ] Remove an account, in Settings > Accounts.
+   - [x] Remove an account, in Settings > Accounts.
    - [ ] Change server address (same-server check by token) and Sign out
          (one confirmation, clear that server's games and accounts, back to
          first run's server step).
