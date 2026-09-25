@@ -25,6 +25,13 @@ public:
     // answer destroys something, start on the harmless one.
     void open(std::string title, std::string detail, std::vector<std::string> options,
               int focus = 0);
+    // A value on the right of each answer ("Connected"), turning the column
+    // into a list: labels go to the left. Call after open; empty for none.
+    void setValues(std::vector<std::string> values) { values_ = std::move(values); }
+    // New answers while open (a Wi-Fi scan landing), keeping focus on the
+    // same label if it is still there.
+    void replace(std::vector<std::string> options, std::vector<std::string> values,
+                 std::string detail);
     void close() { open_ = false; }
     bool isOpen() const { return open_; }
     // The answer, after Chosen.
@@ -40,7 +47,9 @@ private:
     bool open_ = false;
     std::string title_, detail_;
     std::vector<std::string> options_;
+    std::vector<std::string> values_;
     int slot_ = 0;
+    int top_ = 0;              // first answer shown, once there are too many
     design::Animated appear_;
     design::Animated focus_;
 };

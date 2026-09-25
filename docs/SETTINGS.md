@@ -113,14 +113,16 @@ and says when it is right.
 
 - **Status** (connected over Ethernet or Wi-Fi, and the address). **Built.**
 - **RomM server** address shown. **Built.**
-- **Wi-Fi:** the networks in range are rows of their own under Network,
-  the one in use first ("Connected"), then saved ones ("Saved"), then by
-  signal. Pressing one: in use gives Change password / Forget; saved gives
-  Join / Change password / Forget; new joins, with the on-screen keyboard
-  for a password. Forget asks "Forget <name>?". Change password is forget
-  then join. Joining runs in the background and the notice pill says how it
-  went ("Wrong password" when it was). 802.1X networks are listed greyed.
-  All of it asks for the PIN when one is set. **Built, #59.**
+- **Wi-Fi:** one row under Network, showing the network in use ("Off" or
+  "Not connected" otherwise). Pressing it (PIN if set) opens a panel listing
+  the networks in range, the one in use first ("Connected"), then saved
+  ones ("Saved"), then by signal; six at a time, scrolling. The networks were
+  rows on the Network page for one build, and MMagTech: in a crowded building
+  that list would be long. Choosing one: in use gives Change password /
+  Forget; saved gives Join / Change password / Forget; new joins, with the
+  on-screen keyboard for a password. Forget asks "Forget <name>?". Change
+  password is forget then join. The notice pill says how a join went ("Wrong
+  password" when it was). 802.1X networks are not offered. **Built, #59.**
 - **Addresses are automatic only.** A fixed address is set on the router.
   **Dropped: manual IP**, unless people ask, then it is one "Advanced" page.
 - **Change server address:** the same server at a new address. The console

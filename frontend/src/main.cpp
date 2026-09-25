@@ -5435,8 +5435,7 @@ int main(int argc, char** argv) {
     // built: they are there so the whole layout can be judged on the
     // television, and focus never lands on them.
     enum SettingId { SetAddAccount = 1, SetInterfaceSounds, SetPinSet, SetPinChange,
-                     SetPinOff, SetRemoveAccount, SetScreenOff, SetWifiRadio,
-                     SetWifiBase = 1000 };   // + the network's index in wifiShown
+                     SetPinOff, SetRemoveAccount, SetScreenOff, SetWifi };
 
     // TURN OFF SCREEN AFTER, docs/SETTINGS.md, System. Saved as the word in
     // config/settings.json; the frame loop hands the seconds to idle::Watch.
@@ -5548,6 +5547,49 @@ int main(int argc, char** argv) {
     // The networks as the rows show them: one per name, strongest signal,
     // the one in use first, then saved ones, then the rest by signal.
     std::vector<net::Network> wifiShown;
+    // Whether the question panel on screen is the Wi-Fi list, so a scan that
+    // lands while it is open can refresh it.
+    bool wifiPanelOpen = false;
+    auto sortWifi = [&]() {
+        std::vector<net::Network> seen;
+        {
+            std::lock_guard<std::mutex> lk(settingsWifi.m);
+            seen = settingsWifi.list;
+        }
+        wifiShown.clear();
+        for (const net::Network& n : seen) {
+            // 802.1X needs a certificate and an identity, which nobody types
+            // with a d-pad, so it is not offered at all.
+            if (n.ssid.empty() || n.enterprise) continue;
+            auto it = std::find_if(wifiShown.begin(), wifiShown.end(),
+                                   [&](const net::Network& w) { return w.ssid == n.ssid; });
+            if (it == wifiShown.end()) { wifiShown.push_back(n); continue; }
+            it->signal = std::max(it->signal, n.signal);
+            it->active = it->active || n.active;
+            it->known = it->known || n.known;
+        }
+        std::stable_sort(wifiShown.begin(), wifiShown.end(),
+                         [](const net::Network& a, const net::Network& b) {
+                             if (a.active != b.active) return a.active;
+                             if (a.known != b.known) return a.known;
+                             return a.signal > b.signal;
+                         });
+    };
+    // The list as the panel shows it: names, and "Connected", "Saved" or
+    // "Joining…" on the right.
+    auto wifiPanelRows = [&](std::vector<std::string>* names, std::vector<std::string>* values) {
+        std::string joining;
+        if (wifiJob.running.load()) {
+            std::lock_guard<std::mutex> lk(wifiJob.m);
+            joining = wifiJob.ssid;
+        }
+        for (const net::Network& n : wifiShown) {
+            names->push_back(n.ssid);
+            std::string v = n.active ? "Connected" : (n.known ? "Saved" : "");
+            if (n.ssid == joining) v = "Joining\xE2\x80\xA6";
+            values->push_back(v);
+        }
+    };
     // THE KEYBOARD OUTSIDE SEARCH. Search owns its docked keyboard; anything
     // else that opens it (a Wi-Fi password) says here what to do with it.
     std::function<void(ui::KeyboardResult)> keyboardThen;
@@ -5637,10 +5679,12 @@ int main(int argc, char** argv) {
             {K::Info, 0, "Status", netDetail, netValue},
             {K::Info, 0, "RomM server", "", rommAddress ? rommAddress : ""},
         }});
-        // THE NETWORKS, AS ROWS OF THEIR OWN, not a page behind a Wi-Fi row:
-        // this is a side list, and the right side is already the page.
+        // ONE WI-FI ROW, showing the network in use. The networks themselves
+        // are in a panel it opens: as rows here they flooded the page in a
+        // crowded building. MMagTech, 2026-09-24.
         {
             bool radioPresent = true, radioOn = true;
+            std::string onWifi;
             {
                 std::lock_guard<std::mutex> lk(settingsNet.m);
                 if (settingsNet.have) {
@@ -5648,46 +5692,15 @@ int main(int argc, char** argv) {
                     radioOn = settingsNet.st.wifiEnabled;
                 }
             }
-            std::vector<net::Network> seen;
             {
                 std::lock_guard<std::mutex> lk(settingsWifi.m);
-                seen = settingsWifi.list;
+                for (const net::Network& n : settingsWifi.list)
+                    if (n.active) onWifi = n.ssid;
             }
-            wifiShown.clear();
-            for (const net::Network& n : seen) {
-                if (n.ssid.empty()) continue;
-                auto it = std::find_if(wifiShown.begin(), wifiShown.end(),
-                                       [&](const net::Network& w) { return w.ssid == n.ssid; });
-                if (it == wifiShown.end()) { wifiShown.push_back(n); continue; }
-                it->signal = std::max(it->signal, n.signal);
-                it->active = it->active || n.active;
-                it->known = it->known || n.known;
-            }
-            std::stable_sort(wifiShown.begin(), wifiShown.end(),
-                             [](const net::Network& a, const net::Network& b) {
-                                 if (a.active != b.active) return a.active;
-                                 if (a.known != b.known) return a.known;
-                                 return a.signal > b.signal;
-                             });
-            std::string joining;
-            if (wifiJob.running.load()) {
-                std::lock_guard<std::mutex> lk(wifiJob.m);
-                joining = wifiJob.ssid;
-            }
-            auto& rows = cats.back().rows;
-            if (radioPresent && !radioOn) {
-                rows.push_back({K::Action, SetWifiRadio, "Turn on Wi-Fi", "", ""});
-            } else if (radioPresent) {
-                for (size_t i = 0; i < wifiShown.size(); ++i) {
-                    const net::Network& n = wifiShown[i];
-                    std::string value = n.active ? "Connected" : (n.known ? "Saved" : "");
-                    if (n.ssid == joining) value = "Joining\xE2\x80\xA6";
-                    // 802.1X needs a certificate and an identity, which nobody
-                    // types with a d-pad: listed, greyed, not offered.
-                    rows.push_back({n.enterprise ? K::Disabled : K::Action,
-                                    SetWifiBase + static_cast<int>(i), n.ssid, "", value});
-                }
-            }
+            if (radioPresent)
+                cats.back().rows.push_back(
+                    {K::Action, SetWifi, "Wi-Fi", "",
+                     !radioOn ? "Off" : (onWifi.empty() ? "Not connected" : onWifi)});
         }
 
         cats.push_back({"Display and Sound", {
@@ -5912,79 +5925,100 @@ int main(int argc, char** argv) {
                         startAddAccount();
                     });
                     sound::play(sound::Cue::Activate);
-                } else if (res.value == SetWifiRadio) {
+                } else if (res.value == SetWifi) {
+                    // PIN FIRST, then either the radio on or the list of
+                    // networks in the question panel, scrolling past six.
                     askPin("Enter the PIN", "To change Wi-Fi", [&]() {
-                        std::string err;
-                        if (!net::setRadio(true, &err))
-                            menuNotice.say("Couldn't turn on Wi-Fi", Tone::Problem);
-                        askNetwork();
-                        askWifi();
-                        buildSettings();
-                    });
-                    sound::play(sound::Cue::Activate);
-                } else if (res.value >= SetWifiBase &&
-                           res.value < SetWifiBase + static_cast<int>(wifiShown.size())) {
-                    const net::Network n = wifiShown[res.value - SetWifiBase];
-                    if (wifiJob.running.load()) {
-                        sound::play(sound::Cue::Edge);
-                        break;
-                    }
-                    // A password, typed on the on-screen keyboard, then the
-                    // join on a worker. `forgetFirst` is Change password.
-                    auto typeAndJoin = [&](const net::Network& net, bool forgetFirst) {
-                        ui::Keyboard::Config cfg;
-                        cfg.title = net.ssid;
-                        cfg.placeholder = "Password";
-                        keyboard.open(cfg);
-                        keyboardThen = [&, net, forgetFirst](ui::KeyboardResult r) {
-                            if (r != ui::KeyboardResult::Committed) return;
-                            const std::string pass = keyboard.value();
+                        bool radioOn = true;
+                        {
+                            std::lock_guard<std::mutex> lk(settingsNet.m);
+                            if (settingsNet.have) radioOn = settingsNet.st.wifiEnabled;
+                        }
+                        if (!radioOn) {
+                            std::string err;
+                            if (!net::setRadio(true, &err))
+                                menuNotice.say("Couldn't turn on Wi-Fi", Tone::Problem);
+                            askNetwork();
+                            askWifi();
+                            buildSettings();
+                            return;
+                        }
+                        // A password, typed on the on-screen keyboard, then the
+                        // join on a worker. `forgetFirst` is Change password.
+                        auto typeAndJoin = [&](const net::Network& net, bool forgetFirst) {
+                            ui::Keyboard::Config cfg;
+                            cfg.title = net.ssid;
+                            cfg.placeholder = "Password";
+                            keyboard.open(cfg);
+                            keyboardThen = [&, net, forgetFirst](ui::KeyboardResult r) {
+                                if (r != ui::KeyboardResult::Committed) return;
+                                const std::string pass = keyboard.value();
+                                menuNotice.say("Joining " + net.ssid, Tone::Busy);
+                                startWifiJoin(net.ssid, pass, forgetFirst);
+                                buildSettings();
+                            };
+                        };
+                        auto join = [&, typeAndJoin](const net::Network& net) {
+                            if (net.secured && !net.known) { typeAndJoin(net, false); return; }
                             menuNotice.say("Joining " + net.ssid, Tone::Busy);
-                            startWifiJoin(net.ssid, pass, forgetFirst);
+                            startWifiJoin(net.ssid, "", false);
                             buildSettings();
                         };
-                    };
-                    auto join = [&](const net::Network& net) {
-                        if (net.secured && !net.known) { typeAndJoin(net, false); return; }
-                        menuNotice.say("Joining " + net.ssid, Tone::Busy);
-                        startWifiJoin(net.ssid, "", false);
-                        buildSettings();
-                    };
-                    auto forget = [&](const net::Network& net) {
-                        askChoice("Forget " + net.ssid + "?", "", {"Forget", "Cancel"}, 1,
-                                  [&, net](int i) {
-                                      if (i != 0) return;
-                                      std::string err;
-                                      if (net::forget(net.ssid, &err))
-                                          menuNotice.say("Forgot " + net.ssid, Tone::Done);
-                                      else
-                                          menuNotice.say("Couldn't forget " + net.ssid,
-                                                         Tone::Problem);
-                                      std::fprintf(stderr, "[wifi] forget %s: %s\n",
-                                                   net.ssid.c_str(),
-                                                   err.empty() ? "done" : err.c_str());
-                                      askNetwork();
-                                      askWifi();
-                                      buildSettings();
+                        auto forget = [&](const net::Network& net) {
+                            askChoice("Forget " + net.ssid + "?", "", {"Forget", "Cancel"}, 1,
+                                      [&, net](int i) {
+                                          if (i != 0) return;
+                                          std::string err;
+                                          if (net::forget(net.ssid, &err))
+                                              menuNotice.say("Forgot " + net.ssid, Tone::Done);
+                                          else
+                                              menuNotice.say("Couldn't forget " + net.ssid,
+                                                             Tone::Problem);
+                                          std::fprintf(stderr, "[wifi] forget %s: %s\n",
+                                                       net.ssid.c_str(),
+                                                       err.empty() ? "done" : err.c_str());
+                                          askNetwork();
+                                          askWifi();
+                                          buildSettings();
+                                      });
+                        };
+                        sortWifi();
+                        std::vector<std::string> names, values;
+                        wifiPanelRows(&names, &values);
+                        askChoice("Wi-Fi",
+                                  names.empty() ? "Looking for networks\xE2\x80\xA6" : "",
+                                  names, 0, [&, typeAndJoin, join, forget](int i) {
+                                      wifiPanelOpen = false;
+                                      if (i < 0 || i >= static_cast<int>(wifiShown.size()))
+                                          return;
+                                      const net::Network n = wifiShown[i];
+                                      if (wifiJob.running.load()) {
+                                          sound::play(sound::Cue::Edge);
+                                          return;
+                                      }
+                                      if (n.active) {
+                                          askChoice(n.ssid, "",
+                                                    {"Change password", "Forget", "Cancel"}, 0,
+                                                    [&, n, typeAndJoin, forget](int k) {
+                                                        if (k == 0) typeAndJoin(n, true);
+                                                        else if (k == 1) forget(n);
+                                                    });
+                                      } else if (n.known) {
+                                          askChoice(n.ssid, "",
+                                                    {"Join", "Change password", "Forget",
+                                                     "Cancel"},
+                                                    0, [&, n, typeAndJoin, join, forget](int k) {
+                                                        if (k == 0) join(n);
+                                                        else if (k == 1) typeAndJoin(n, true);
+                                                        else if (k == 2) forget(n);
+                                                    });
+                                      } else {
+                                          join(n);
+                                      }
                                   });
-                    };
-                    askPin("Enter the PIN", "To change Wi-Fi", [&, n, typeAndJoin, join, forget]() {
-                        if (n.active) {
-                            askChoice(n.ssid, "", {"Change password", "Forget", "Cancel"}, 0,
-                                      [&, n, typeAndJoin, forget](int i) {
-                                          if (i == 0) typeAndJoin(n, true);
-                                          else if (i == 1) forget(n);
-                                      });
-                        } else if (n.known) {
-                            askChoice(n.ssid, "", {"Join", "Change password", "Forget", "Cancel"},
-                                      0, [&, n, typeAndJoin, join, forget](int i) {
-                                          if (i == 0) join(n);
-                                          else if (i == 1) typeAndJoin(n, true);
-                                          else if (i == 2) forget(n);
-                                      });
-                        } else {
-                            join(n);
-                        }
+                        choiceScreen.setValues(values);
+                        wifiPanelOpen = true;
+                        askWifi();
                     });
                     sound::play(sound::Cue::Activate);
                 } else if (res.value == SetRemoveAccount) {
@@ -8208,6 +8242,18 @@ int main(int argc, char** argv) {
                     std::lock_guard<std::mutex> lk(settingsWifi.m);
                     fresh = settingsWifi.fresh;
                     settingsWifi.fresh = false;
+                }
+                if (!choiceScreen.isOpen()) wifiPanelOpen = false;
+                if (fresh && wifiPanelOpen) {
+                    // The list is open: refresh it in place, focus kept.
+                    sortWifi();
+                    std::vector<std::string> names, values;
+                    wifiPanelRows(&names, &values);
+                    choiceScreen.replace(names, values,
+                                         names.empty() ? (settingsWifi.running.load()
+                                                              ? "Looking for networks\xE2\x80\xA6"
+                                                              : "No networks found")
+                                                       : "");
                 }
                 if (fresh && here() == Screen::Settings) buildSettings();
             }
