@@ -5990,7 +5990,7 @@ int main(int argc, char** argv) {
     // television, and focus never lands on them.
     enum SettingId { SetAddAccount = 1, SetInterfaceSounds, SetPinSet, SetPinChange,
                      SetPinOff, SetRemoveAccount, SetScreenOff, SetWifi, SetServer,
-                     SetUpdate, SetUpdateCheck, SetCredits, SetFiles, SetFilesPassword };
+                     SetUpdate, SetUpdateCheck, SetCredits, SetFiles };
 
     int screenOffIndex = savedScreenOff();
     std::fprintf(stderr, "[idle] screen off after %s\n", kScreenOff[screenOffIndex].name);
@@ -6122,6 +6122,7 @@ int main(int argc, char** argv) {
     // settings.json, so a console left with it on turns it on again at boot.
     files::State filesState = files::read();
     int64_t filesSaidAt = 0;
+    bool filesPanelWhenOn = false;   // open the panel once root says it is on
     bool filesWant = prefs::get("file_access", "off") == "on";
     if (filesWant && !filesState.on) {
         std::string why;
@@ -6509,9 +6510,10 @@ int main(int argc, char** argv) {
             store.push_back({K::Unbuilt, 0, "Eject", "Makes a USB drive safe to unplug", ""});
         store.push_back({K::Unbuilt, 0, "Kept and cached games",
                          "What is on this console, and what it keeps", ""});
-        // FILE ACCESS: one switch, and while it is on, everything a computer
-        // needs to reach it, the password in plain text (anyone at the
-        // television can already turn it on or make a new one). SFTP, port
+        // FILE ACCESS: ONE ROW. What a computer needs to reach it (address,
+        // user name, the password in plain text) is in a panel the row opens,
+        // as Wi-Fi's networks are: as rows under Storage they ran off the
+        // bottom of the screen. MMagTech on the TV, 2026-09-25. SFTP, port
         // 22, user `cabinet`, the saves and games folders only.
         {
             std::string value = filesState.on ? "On" : "Off";
@@ -6519,22 +6521,6 @@ int main(int argc, char** argv) {
             if (filesSaidAt != 0) value = filesWant ? "Turning on\xE2\x80\xA6" : "Turning off\xE2\x80\xA6";
             else if (filesState.failed) detail = filesState.reason;
             store.push_back({K::Toggle, SetFiles, "File access", detail, value});
-            if (filesState.on && filesSaidAt == 0) {
-                std::string ip;
-                {
-                    std::lock_guard<std::mutex> lk(settingsNet.m);
-                    if (settingsNet.have && !settingsNet.st.ipv4.empty())
-                        ip = settingsNet.st.ipv4.substr(0, settingsNet.st.ipv4.find('/'));
-                }
-                char host[256] = {0};
-                ::gethostname(host, sizeof host - 1);
-                store.push_back({K::Info, 0, "Address",
-                                 host[0] ? std::string(host) + ".local" : std::string(),
-                                 ip.empty() ? "Checking\xE2\x80\xA6" : ip});
-                store.push_back({K::Info, 0, "User name", "", "cabinet"});
-                store.push_back({K::Info, 0, "Password", "", files::password()});
-                store.push_back({K::Action, SetFilesPassword, "New password", "", ""});
-            }
         }
         cats.push_back({"Storage", std::move(store)});
 
@@ -6599,6 +6585,67 @@ int main(int argc, char** argv) {
             std::fprintf(stderr, "[update] restart now, into %s\n", upd.version.c_str());
             power::act(power::Action::Restart);
         });
+    };
+    // File access on or off. A refusal is said in the row, as the update
+    // row does; otherwise "Turning on…" until root answers.
+    auto setFiles = [&](bool on) {
+        std::string why;
+        const bool ok = on ? files::turnOn(&why) : files::turnOff(&why);
+        if (!ok) {
+            filesState.on = false;
+            filesState.failed = true;
+            filesState.reason = why.find("not found") != std::string::npos ? "Not in this image" : why;
+            if (filesState.reason.size() > 60) filesState.reason.resize(60);
+            filesSaidAt = 0;
+            filesPanelWhenOn = false;
+        } else {
+            filesSaidAt = std::time(nullptr);
+        }
+        filesWant = on;
+        prefs::set("file_access", on ? "on" : "off");
+        buildSettings();
+    };
+    // THE PANEL: everything a computer needs, the password in plain text
+    // (anyone at the television can already turn this on or make a new
+    // one), then Done, New password, Turn off. Focus on Done.
+    std::function<void()> openFilesPanel;
+    openFilesPanel = [&]() {
+        std::string ip;
+        {
+            std::lock_guard<std::mutex> lk(settingsNet.m);
+            if (settingsNet.have && !settingsNet.st.ipv4.empty())
+                ip = settingsNet.st.ipv4.substr(0, settingsNet.st.ipv4.find('/'));
+        }
+        char host[256] = {0};
+        ::gethostname(host, sizeof host - 1);
+        std::string where = ip;
+        if (host[0]) where += (where.empty() ? "" : " \xC2\xB7 ") + std::string(host) + ".local";
+        const std::string pass = files::password();
+        askChoice("File access",
+                  where + "\nUser name  cabinet\nPassword  " + (pass.empty() ? "\xE2\x80\xA6" : pass),
+                  {"Done", "New password", "Turn off"}, 0, [&](int k) {
+                      if (k == 2) {
+                          setFiles(false);
+                      } else if (k == 1) {
+                          // The old one stops working on every computer that
+                          // saved it: asked once, focus on Cancel. Then the
+                          // panel comes back with the new one.
+                          askPin("Enter the PIN", "To make a new password", [&]() {
+                              askChoice("New password?", "", {"New password", "Cancel"}, 1,
+                                        [&](int c) {
+                                            if (c != 0) { openFilesPanel(); return; }
+                                            std::string why;
+                                            if (!files::newPassword(&why)) {
+                                                menuNotice.say("Couldn't make a new password",
+                                                               Tone::Problem);
+                                                return;
+                                            }
+                                            filesPanelWhenOn = true;
+                                            filesSaidAt = std::time(nullptr);
+                                        });
+                          });
+                      }
+                  });
     };
     askWifiPassword = [&](const std::string& ssid, bool forgetFirst, const std::string& why) {
         ui::Keyboard::Config cfg;
@@ -6907,47 +6954,20 @@ int main(int argc, char** argv) {
                     });
                     sound::play(sound::Cue::Activate);
                 } else if (res.value == SetFiles) {
-                    // On behind the PIN; off never is, because closing a
-                    // door needs no key.
-                    auto flip = [&](bool on) {
-                        std::string why;
-                        const bool ok = on ? files::turnOn(&why) : files::turnOff(&why);
-                        if (!ok) {
-                            filesState.on = false;
-                            filesState.failed = true;
-                            filesState.reason =
-                                why.find("not found") != std::string::npos ? "Not in this image" : why;
-                            if (filesState.reason.size() > 60) filesState.reason.resize(60);
-                            filesSaidAt = 0;
-                        } else {
-                            filesSaidAt = std::time(nullptr);
-                        }
-                        filesWant = on;
-                        prefs::set("file_access", on ? "on" : "off");
-                        buildSettings();
-                    };
                     if (filesSaidAt != 0) {
                         sound::play(sound::Cue::Edge);
                     } else if (filesState.on) {
-                        flip(false);
+                        openFilesPanel();
                         sound::play(sound::Cue::Activate);
                     } else {
-                        askPin("Enter the PIN", "To turn on file access", [&, flip]() { flip(true); });
+                        // On behind the PIN, then the panel opens by itself
+                        // once root says it is on.
+                        askPin("Enter the PIN", "To turn on file access", [&]() {
+                            filesPanelWhenOn = true;
+                            setFiles(true);
+                        });
                         sound::play(sound::Cue::Activate);
                     }
-                } else if (res.value == SetFilesPassword) {
-                    // The old one stops working on every computer that saved
-                    // it, so it is asked once, with focus on Cancel.
-                    askPin("Enter the PIN", "To make a new password", [&]() {
-                        askChoice("New password?", "", {"New password", "Cancel"}, 1, [&](int k) {
-                            if (k != 0) return;
-                            std::string why;
-                            if (!files::newPassword(&why))
-                                menuNotice.say("Couldn't make a new password", Tone::Problem);
-                            filesSaidAt = 0;
-                        });
-                    });
-                    sound::play(sound::Cue::Activate);
                 } else if (res.value == SetCredits) {
                     // A list, one line per project: what it does, and its
                     // licence. Nothing to choose; A or B closes it.
@@ -9193,6 +9213,12 @@ int main(int argc, char** argv) {
                     std::fprintf(stderr, "[files] %s%s\n",
                                  f.on ? "on" : (f.failed ? "failed: " : "off"), f.reason.c_str());
                     if (here() == Screen::Settings) buildSettings();
+                    if (filesPanelWhenOn) {
+                        filesPanelWhenOn = false;
+                        if (f.on && here() == Screen::Settings && !choiceScreen.isOpen() &&
+                            !pinScreen.isOpen())
+                            openFilesPanel();
+                    }
                 }
             }
             const update::Status s = update::read();
