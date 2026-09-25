@@ -166,7 +166,9 @@ and says when it is right.
 
 - **System update:** one check, one button, one restart. **To build, #70.**
 - **Turn off screen after:** 10 min, 15 min (to start), 30 min, 1 hour, Never.
-  **To build, #71.**
+  The dim comes at a third of it. Never means the menus neither dim nor go
+  dark; pixel shift still runs and a running game still dims at 20 min.
+  Saved in `config/settings.json`. **Built, #71.**
 
 ## About
 
