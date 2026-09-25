@@ -481,9 +481,20 @@ notes here stay the detail.
      a digit back.
    - On-screen text states, never explains: see the no-spoon-feeding rule.
 
-   **Next: Turn off screen after (#71)**, a Choice row like sounds, then
-   Wi-Fi (#59), then change server (#60) and sign out (#61), each gated with
-   `askPin`.
+   **#71 TURN OFF SCREEN AFTER, MERGED AS #93**: 10, 15 or 30 min under
+   Display and Sound, dim fixed at 5 min (Never and 1 hour dropped).
+
+   **#59 WI-FI, BUILT AND JUDGED ON THE TV** (branch `settings-wifi`): one
+   Wi-Fi row opening a scrolling list panel; masked password with the last
+   character shown; "Joining…"/"Wrong password" in the keyboard's field; the
+   PIN asked once per Settings visit. Details in `docs/SETTINGS.md`.
+   **A failed `nmcli device wifi connect` leaves a profile holding the wrong
+   password; the join job now forgets it.** Over SSH, nmcli cannot delete
+   Wi-Fi profiles (polkit: only the console's session can), so clean up
+   through the UI.
+
+   **Next: Sign out (#61) and Change server address (#60)**, together, each
+   gated with `askPin`; the question panel (`choice.h`) is ready for them.
 
    **Tracked as GitHub issues #57 to #75, Settings milestone** (#74 and #75
    are `later`). The checklist below is the same list:

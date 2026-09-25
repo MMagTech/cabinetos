@@ -121,8 +121,13 @@ and says when it is right.
   that list would be long. Choosing one: in use gives Change password /
   Forget; saved gives Join / Change password / Forget; new joins, with the
   on-screen keyboard for a password. Forget asks "Forget <name>?". Change
-  password is forget then join. The notice pill says how a join went ("Wrong
-  password" when it was). 802.1X networks are not offered. **Built, #59.**
+  password is forget then join. The PIN is asked once per visit to Settings.
+  The password is masked, the character just typed shown for a moment, with
+  a "show" key. While it joins, the keyboard stays up and its field says
+  "Joining…"; a wrong password empties it to "Wrong password" (shaken) until
+  the next try is typed. A failed join leaves no saved network behind. The
+  pill says "Connected to <name>". 802.1X networks are not offered. Worked
+  out on the TV with MMagTech, 2026-09-24. **Built, #59.**
 - **Addresses are automatic only.** A fixed address is set on the router.
   **Dropped: manual IP**, unless people ask, then it is one "Advanced" page.
 - **Change server address:** the same server at a new address. The console
