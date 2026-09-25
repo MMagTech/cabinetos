@@ -30,7 +30,6 @@ void ChoiceScreen::open(std::string title, std::string detail,
     detail_ = std::move(detail);
     options_ = std::move(options);
     values_.clear();
-    signals_.clear();
     slot_ = options_.empty() ? 0 : std::clamp(focus, 0, static_cast<int>(options_.size()) - 1);
     top_ = std::max(0, slot_ - (kMaxVisible - 1));
     appear_.from = appear_.to = 0.0f;
@@ -153,28 +152,13 @@ void ChoiceScreen::draw(Ctx& c) {
         const std::string value =
             (list && i < static_cast<int>(values_.size())) ? values_[i] : std::string();
         const float vw = value.empty() ? 0.0f : c.text.measure(value, TextStyle::Callout, sc);
-        // THE BARS, three, rising, lit by strength. Starting thresholds.
-        const bool bars = i < static_cast<int>(signals_.size());
-        constexpr float kBarW = 6.0f, kBarGap = 4.0f, kBarsW = kBarW * 3 + kBarGap * 2;
-        if (bars) {
-            const int sig = signals_[i];
-            const int lit = sig >= 70 ? 3 : (sig >= 40 ? 2 : (sig > 0 ? 1 : 0));
-            const float bx0 = dx + dw - 24.0f - kBarsW;
-            const float foot = dy + dh * 0.5f + 11.0f;
-            for (int b = 0; b < 3; ++b) {
-                const float h = 10.0f + 6.0f * b;
-                c.r.draw(ui::Rect{bx0 + b * (kBarW + kBarGap), foot - h, kBarW, h, 2.0f,
-                                  ui::Color::white(b < lit ? 0.85f : 0.20f)});
-            }
-        }
-        const float barsRoom = bars ? kBarsW + 20.0f : 0.0f;
-        const float room = kButtonW - 48.0f - (value.empty() ? 0.0f : vw + 24.0f) - barsRoom;
+        const float room = kButtonW - 48.0f - (value.empty() ? 0.0f : vw + 24.0f);
         const std::string label = c.text.truncate(options_[i], TextStyle::Title3, sc, room);
         const float lw = c.text.measure(label, TextStyle::Title3, sc);
         const float lx = list ? dx + 24.0f : dx + (dw - lw) * 0.5f;
         c.text.draw(c.r, label, lx, base, TextStyle::Title3, design::menuLabel(bf, 1.0f), sc);
         if (!value.empty())
-            c.text.draw(c.r, value, dx + dw - 24.0f - barsRoom - vw, base, TextStyle::Callout,
+            c.text.draw(c.r, value, dx + dw - 24.0f - vw, base, TextStyle::Callout,
                         ui::Color::white(0.60f), sc);
         y += kButtonH + kButtonGap;
     }
