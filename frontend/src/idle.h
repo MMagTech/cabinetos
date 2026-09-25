@@ -56,10 +56,9 @@ Offset pixelShift(double seconds, float scale, double everySeconds = kShiftEvery
 // question singled out as worse than a menu.
 //
 // THE BLANK IS A SETTING NOW, "Turn off screen after" (docs/SETTINGS.md,
-// System): 10 or 15 minutes, 30, an hour, or never. The dim comes at a third
-// of it, so the starting 15 dims at 5 as it always has. 0 means never, and
-// then the menus neither dim nor blank; pixel shift still runs, and a game
-// left running still dims at kGameDimAfter.
+// System): 10 or 15 minutes, 30 or an hour. The dim comes at a third of it,
+// so the starting 15 dims at 5 as it always has. There is no "never"; see
+// main.cpp's kScreenOff.
 constexpr double kMenuBlankAfter = 15 * 60.0;   // the starting value
 constexpr double kMenuDimFraction = 1.0 / 3.0;
 
