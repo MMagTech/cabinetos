@@ -1,6 +1,8 @@
 #include "update.h"
 
 #include <systemd/sd-bus.h>
+#include <json-c/json.h>
+#include <climits>
 
 #include <cstdio>
 #include <cstdlib>
@@ -105,5 +107,41 @@ std::string bootedVersion() {
 }
 
 std::string bootId() { return firstLine(slurp("/proc/sys/kernel/random/boot_id")); }
+
+std::string channel() {
+    // The kernel command line names the booted deployment (ostree=/ostree/
+    // boot.N/...), a chain of symlinks ending in /ostree/deploy/<os>/deploy/
+    // <hash>.0, and its .origin file holds the image reference bootc follows.
+    // All of it is world-readable, so this needs no root.
+    const std::string cmdline = slurp("/proc/cmdline");
+    const size_t at = cmdline.find("ostree=");
+    if (at == std::string::npos) return "";
+    size_t end = cmdline.find_first_of(" \n", at);
+    if (end == std::string::npos) end = cmdline.size();
+    const std::string link = "/sysroot" + cmdline.substr(at + 7, end - at - 7);
+    char real[PATH_MAX];
+    if (!realpath(link.c_str(), real)) return "";
+    const std::string origin = slurp(std::string(real) + ".origin");
+    const std::string key = "container-image-reference=";
+    const size_t k = origin.find(key);
+    if (k == std::string::npos) return "";
+    const std::string ref = firstLine(origin.substr(k + key.size()));
+    const size_t colon = ref.rfind(':');
+    const size_t slash = ref.rfind('/');
+    if (colon == std::string::npos || (slash != std::string::npos && colon < slash)) return "";
+    return ref.substr(colon + 1);
+}
+
+std::string baseVersion() {
+    const std::string body = slurp("/usr/share/ublue-os/image-info.json");
+    json_object* o = body.empty() ? nullptr : json_tokener_parse(body.c_str());
+    std::string out;
+    json_object* v = nullptr;
+    if (o && json_object_object_get_ex(o, "version", &v) &&
+        json_object_get_type(v) == json_type_string)
+        out = json_object_get_string(v);
+    if (o) json_object_put(o);
+    return out;
+}
 
 }  // namespace update

@@ -829,6 +829,56 @@ struct MenuNotice {
 };
 using Tone = MenuNotice::Tone;
 
+// CREDITS AND LICENCES, Settings > About. One line per project whose work
+// this console is: what it does, and its licence. The same facts as
+// docs/LICENCES.md, which is the record; change one, change both. One list,
+// not a Credits list and a Licences list naming the same projects twice
+// (MMagTech, 2026-09-25). Full licence texts are in the image under
+// /usr/share/licenses/, not on the television.
+struct Credit { const char* name; const char* what; };
+constexpr Credit kCredits[] = {
+    {"CabinetOS", "This console \xC2\xB7 MIT"},
+    {"Bazzite", "The base system \xC2\xB7 Apache 2.0"},
+    {"Universal Blue", "Image tooling \xC2\xB7 Apache 2.0"},
+    {"Fedora", "Under Bazzite \xC2\xB7 Per package"},
+    {"gamescope", "Compositor, by Valve \xC2\xB7 BSD 2-clause"},
+    {"FinalBurn Neo", "Arcade \xC2\xB7 Non-commercial"},
+    {"MAME 2003-Plus", "Arcade \xC2\xB7 Non-commercial"},
+    {"Snes9x", "SNES \xC2\xB7 Non-commercial"},
+    {"Genesis Plus GX", "Sega 8 and 16-bit \xC2\xB7 Non-commercial"},
+    {"PicoDrive", "32X \xC2\xB7 Non-commercial"},
+    {"Opera", "3DO \xC2\xB7 Non-commercial"},
+    {"Flycast", "Dreamcast, Naomi \xC2\xB7 GPL v2"},
+    {"PPSSPP", "PSP \xC2\xB7 GPL v2+"},
+    {"PCSX2", "PlayStation 2 \xC2\xB7 GPL v3+"},
+    {"Dolphin", "GameCube \xC2\xB7 GPL v2+"},
+    {"mupen64plus-next", "Nintendo 64 \xC2\xB7 GPL v2"},
+    {"PCSX ReARMed", "PlayStation \xC2\xB7 GPL v2"},
+    {"Beetle Saturn", "Saturn \xC2\xB7 GPL v2"},
+    {"Beetle PCE Fast", "TurboGrafx-16 \xC2\xB7 GPL v2"},
+    {"Beetle NeoPop", "Neo Geo Pocket \xC2\xB7 GPL v2"},
+    {"Beetle VB", "Virtual Boy \xC2\xB7 GPL v2"},
+    {"FCEUmm", "NES \xC2\xB7 GPL v2"},
+    {"Gambatte", "Game Boy \xC2\xB7 GPL v2"},
+    {"ProSystem", "Atari 7800 \xC2\xB7 GPL v2"},
+    {"Stella 2014", "Atari 2600 \xC2\xB7 GPL v2"},
+    {"melonDS", "Nintendo DS \xC2\xB7 GPL v3"},
+    {"DraStic FreeBIOS", "DS BIOS \xC2\xB7 BSD 2-clause"},
+    {"vecx", "Vectrex \xC2\xB7 GPL v3"},
+    {"mGBA", "Game Boy Advance \xC2\xB7 MPL 2.0"},
+    {"FFmpeg", "Inside PPSSPP \xC2\xB7 LGPL v2.1+"},
+    {"rapidyaml, c4core", "Inside PCSX2 \xC2\xB7 MIT"},
+    {"SDL3", "Input and audio \xC2\xB7 zlib"},
+    {"Mesa", "Graphics \xC2\xB7 MIT"},
+    {"FreeType", "Text \xC2\xB7 FreeType licence"},
+    {"libjpeg-turbo, libpng", "Cover art \xC2\xB7 BSD, libpng"},
+    {"libcurl", "Talking to RomM \xC2\xB7 curl"},
+    {"json-c", "RomM's answers \xC2\xB7 MIT"},
+    {"libarchive", "Game archives \xC2\xB7 BSD 2-clause"},
+    {"zlib", "Compression \xC2\xB7 zlib"},
+    {"Noto Sans", "The type \xC2\xB7 OFL 1.1"},
+};
+
 // EVERY MESSAGE THE PILL CAN SHOW, for `--notice-gallery`, which walks through
 // them on the television one every four seconds so their words and their look
 // can be judged together — including the ones that are hard to cause for real.
@@ -5935,7 +5985,7 @@ int main(int argc, char** argv) {
     // television, and focus never lands on them.
     enum SettingId { SetAddAccount = 1, SetInterfaceSounds, SetPinSet, SetPinChange,
                      SetPinOff, SetRemoveAccount, SetScreenOff, SetWifi, SetServer,
-                     SetUpdate, SetUpdateCheck };
+                     SetUpdate, SetUpdateCheck, SetCredits };
 
     int screenOffIndex = savedScreenOff();
     std::fprintf(stderr, "[idle] screen off after %s\n", kScreenOff[screenOffIndex].name);
@@ -6454,12 +6504,23 @@ int main(int argc, char** argv) {
             }(),
         }});
 
-        cats.push_back({"About", {
-            {K::Unbuilt, 0, "Version", "CabinetOS has no version number yet", ""},
-            {K::Unbuilt, 0, "Credits",
-             "Bazzite, Universal Blue, ChimeraOS and the emulator projects", ""},
-            {K::Unbuilt, 0, "Licences", "Readable here, on the console", ""},
-        }});
+        // VERSION: the date version, with Bazzite's under it. A console that
+        // does not follow `latest` says which tag it does follow, which is how
+        // a test console is told from the rest at a glance; nothing here
+        // changes it. MMagTech, 2026-09-25.
+        {
+            std::string version = update::bootedVersion();
+            if (version.empty()) version = "Unknown";
+            const std::string ch = update::channel();
+            if (ch == "testing") version += " \xC2\xB7 Testing";
+            else if (!ch.empty() && ch != "latest") version += " \xC2\xB7 " + ch;
+            const std::string base = update::baseVersion();
+            cats.push_back({"About", {
+                {K::Info, 0, "Version", base.empty() ? "" : "Bazzite " + base, version},
+                {K::Action, SetCredits, "Credits and licences", "", ""},
+            }});
+        }
+
 
         settingsScreen.setCategories(std::move(cats));
     };
@@ -6799,6 +6860,17 @@ int main(int argc, char** argv) {
                         wifiPanelOpen = true;
                         askWifi();
                     });
+                    sound::play(sound::Cue::Activate);
+                } else if (res.value == SetCredits) {
+                    // A list, one line per project: what it does, and its
+                    // licence. Nothing to choose; A or B closes it.
+                    std::vector<std::string> names, values;
+                    for (const Credit& cr : kCredits) {
+                        names.push_back(cr.name);
+                        values.push_back(cr.what);
+                    }
+                    askChoice("Credits and licences", "", names, 0, [](int) {});
+                    choiceScreen.setValues(values);
                     sound::play(sound::Cue::Activate);
                 } else if (res.value == SetUpdate) {
                     // ONE ROW, AND WHAT IT DOES IS WHAT IT SAYS: check, fetch

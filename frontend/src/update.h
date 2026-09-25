@@ -61,4 +61,11 @@ std::string bootedVersion();
 // This boot's id, which tells "started again" from "restarted the machine".
 std::string bootId();
 
+// The tag the booted image follows, "latest" or "testing", read from the
+// booted deployment's origin file. Empty if it cannot be read.
+std::string channel();
+
+// Bazzite's version underneath, 44.20260916. Empty if it cannot be read.
+std::string baseVersion();
+
 }  // namespace update

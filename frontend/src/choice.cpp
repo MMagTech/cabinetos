@@ -106,7 +106,21 @@ void ChoiceScreen::draw(Ctx& c) {
         lines.push_back(detail_.substr(at, nl - at));
         at = nl + 1;
     }
-    float innerW = kButtonW;
+    // A LIST GROWS TO ITS LONGEST LINE, name and value, up to the panel's
+    // limit, so "Universal Blue ... Image tooling" is not cut to "Unive...".
+    // A question keeps its fixed buttons. Found on Credits and licences,
+    // 2026-09-25; long Wi-Fi names get the same room.
+    const bool list = !values_.empty();
+    float rowW = kButtonW;
+    if (list) {
+        for (size_t i = 0; i < options_.size(); ++i) {
+            const float vw = i < values_.size() && !values_[i].empty()
+                ? c.text.measure(values_[i], TextStyle::Callout, sc) + 24.0f : 0.0f;
+            rowW = std::max(rowW, c.text.measure(options_[i], TextStyle::Title3, sc) + vw + 48.0f);
+        }
+        rowW = std::min(rowW, kPanelMaxW - kPanelPad * 2);
+    }
+    float innerW = rowW;
     innerW = std::max(innerW, c.text.measure(title_, TextStyle::Title2, sc));
     for (const std::string& l : lines)
         innerW = std::max(innerW, c.text.measure(l, TextStyle::Callout, sc));
@@ -144,13 +158,12 @@ void ChoiceScreen::draw(Ctx& c) {
     y += 36.0f;
 
     const float f = focus_.value();
-    const float bx = (W - kButtonW) * 0.5f;
-    const bool list = !values_.empty();
+    const float bx = (W - rowW) * 0.5f;
     for (int i = top_; i < std::min(n, top_ + kMaxVisible); ++i) {
         const bool on = (i == slot_);
         const float s = on ? 1.0f + (kFocusScale - 1.0f) * f : 1.0f;
-        const float dw = kButtonW * s, dh = kButtonH * s;
-        const float dx = bx - (dw - kButtonW) * 0.5f, dy = y - (dh - kButtonH) * 0.5f;
+        const float dw = rowW * s, dh = kButtonH * s;
+        const float dx = bx - (dw - rowW) * 0.5f, dy = y - (dh - kButtonH) * 0.5f;
         const float bf = on ? f : 0.0f;
         c.r.draw(design::menuButton(dx, dy, dw, dh, kButtonRadius * s, bf, 1.0f));
         const float base = dy + dh * 0.5f + c.text.ascent(TextStyle::Title3, sc) * 0.40f;
@@ -159,7 +172,7 @@ void ChoiceScreen::draw(Ctx& c) {
         const std::string value =
             (list && i < static_cast<int>(values_.size())) ? values_[i] : std::string();
         const float vw = value.empty() ? 0.0f : c.text.measure(value, TextStyle::Callout, sc);
-        const float room = kButtonW - 48.0f - (value.empty() ? 0.0f : vw + 24.0f);
+        const float room = rowW - 48.0f - (value.empty() ? 0.0f : vw + 24.0f);
         const std::string label = c.text.truncate(options_[i], TextStyle::Title3, sc, room);
         const float lw = c.text.measure(label, TextStyle::Title3, sc);
         const float lx = list ? dx + 24.0f : dx + (dw - lw) * 0.5f;
