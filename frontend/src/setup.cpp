@@ -273,6 +273,9 @@ private:
 
     void startWifiScan();
     void joinSelected(const std::string& passphrase);
+    // The password keyboard for the chosen network; `why` goes in its field
+    // ("Wrong password"). Settings' Wi-Fi does the same (main.cpp).
+    void openPassphrase(const std::string& why);
     void startServerProbe(const std::string& address);
     void startPairing();
     void pollPairing();
@@ -822,8 +825,29 @@ void Flow::joinSelected(const std::string& passphrase) {
     noticeIsError_ = false;
     joinJob_.start([ssid, passphrase](bool& out, std::string& err) {
         out = net::join(ssid, passphrase, /*hidden=*/false, &err);
+        // A failed join with a typed password leaves a saved network holding
+        // the wrong one; remove it. The same as Settings' Wi-Fi.
+        if (!out && !passphrase.empty()) {
+            std::string ignored;
+            net::forget(ssid, &ignored);
+        }
         return out;
     });
+}
+
+void Flow::openPassphrase(const std::string& why) {
+    if (chosenNetwork_ < 0 || chosenNetwork_ >= static_cast<int>(networks_.size())) return;
+    ui::Keyboard::Config cfg;
+    cfg.title = networks_[static_cast<size_t>(chosenNetwork_)].ssid;
+    cfg.placeholder = "Password";
+    // MASKED, WITH THE LAST CHARACTER SHOWN as it is typed and a "show" key
+    // for the lot. It was shown in full until 2026-09-24 (docs/PROJECT.md
+    // open question 17); MMagTech reversed it once the brief reveal answered
+    // the typo objection. keyboard.h.
+    cfg.conceal = true;
+    keyboard_.open(cfg);
+    if (!why.empty()) keyboard_.sayInField(why, /*problem=*/true);
+    typing_ = Typing::Passphrase;
 }
 
 void Flow::startServerProbe(const std::string& address) {
@@ -1054,35 +1078,32 @@ void Flow::pumpJobs() {
     }
 
     if (bool joined = false; joinJob_.take(&joined, &err, &ok)) {
+        // THE KEYBOARD MAY STILL BE UP, waiting on this join and saying
+        // "Joining…" in its field (typingFinished). Settings' Wi-Fi works the
+        // same way; MMagTech found the close-then-reopen a strobe.
+        const bool waiting = keyboard_.isOpen() && keyboard_.busy();
+        const bool badPass = err.find("ecrets") != std::string::npos ||
+                             err.find("password") != std::string::npos ||
+                             err.find("psk") != std::string::npos;
         if (ok) {
+            if (waiting) keyboard_.cancel();
+            typing_ = Typing::None;
             notice_ = "Joined.";
             noticeIsError_ = false;
             observe();
             lastScanNS_ = 0;      // the list's "connected" and "saved" just moved
-        } else if (chosenNetwork_ >= 0 &&
+        } else if (badPass && chosenNetwork_ >= 0 &&
                    chosenNetwork_ < static_cast<int>(networks_.size()) &&
-                   networks_[static_cast<size_t>(chosenNetwork_)].secured &&
-                   (err.find("Secrets") != std::string::npos ||
-                    err.find("secrets") != std::string::npos ||
-                    err.find("password") != std::string::npos)) {
-            // A NETWORK THE CONSOLE THOUGHT IT KNEW AND DOES NOT. NetworkManager
-            // answers "Secrets were required, but not provided", which is true
-            // and is not something a person can act on — and the remedy is
-            // obvious, so do it rather than printing the sentence and stopping.
-            //
-            // This is the safety net under the stale-list fix above rather than
-            // a substitute for it: the list should already be right, and if it
-            // ever is not, the screen asks for the password instead of dying.
-            const net::Network& n = networks_[static_cast<size_t>(chosenNetwork_)];
-            ui::Keyboard::Config cfg;
-            cfg.title = n.ssid;
-            cfg.hint = "The password for this network";
-            cfg.conceal = true;   // masked, last character shown; keyboard.h
-            keyboard_.open(cfg);
-            typing_ = Typing::Passphrase;
+                   networks_[static_cast<size_t>(chosenNetwork_)].secured) {
+            // ANOTHER GO, IN THE SAME PANEL: emptied, saying why. This also
+            // catches a network the console thought it knew and does not
+            // ("Secrets were required, but not provided").
+            openPassphrase("Wrong password");
             notice_.clear();
             lastScanNS_ = 0;
         } else {
+            if (waiting) keyboard_.cancel();
+            typing_ = Typing::None;
             notice_ = err;
             noticeIsError_ = true;
         }
@@ -1299,7 +1320,17 @@ bool Flow::canvasPoint(float windowX, float windowY, float* cx, float* cy) const
 void Flow::typingFinished(ui::KeyboardResult result, const std::string& value) {
     if (result == ui::KeyboardResult::Committed) {
         if (typing_ == Typing::Address) startServerProbe(value);
-        else if (typing_ == Typing::Passphrase) joinSelected(value);
+        else if (typing_ == Typing::Passphrase) {
+            joinSelected(value);
+            // THE KEYBOARD STAYS UP WHILE IT JOINS, reopened in this same
+            // frame so nothing flickers, saying so in its field and taking no
+            // typing. The join's answer closes it or makes it a retry.
+            openPassphrase("");
+            keyboard_.sayInField("Joining\xE2\x80\xA6", /*problem=*/false);
+            keyboard_.setBusy(true);
+            rebuild();
+            return;
+        }
     }
     if (result != ui::KeyboardResult::Typing) typing_ = Typing::None;
     rebuild();
@@ -1399,16 +1430,7 @@ void Flow::activate() {
             // asking again for something it already holds is the kind of
             // friction that makes people distrust a setup flow.
             if (n.known || !n.secured) { joinSelected(""); break; }
-            ui::Keyboard::Config cfg;
-            cfg.title = n.ssid;
-            cfg.hint = "The password for this network";
-            // MASKED, WITH THE LAST CHARACTER SHOWN as it is typed and a
-            // "show" key for the lot. It was shown in full until 2026-09-24
-            // (docs/PROJECT.md open question 17); MMagTech reversed it once
-            // the brief reveal answered the typo objection. keyboard.h.
-            cfg.conceal = true;
-            keyboard_.open(cfg);
-            typing_ = Typing::Passphrase;
+            openPassphrase("");
             break;
         }
         case firstrun::Step::Server:

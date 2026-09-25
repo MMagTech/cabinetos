@@ -126,8 +126,11 @@ and says when it is right.
   a "show" key. While it joins, the keyboard stays up and its field says
   "Joining…"; a wrong password empties it to "Wrong password" (shaken) until
   the next try is typed. A failed join leaves no saved network behind. The
-  pill says "Connected to <name>". 802.1X networks are not offered. Worked
-  out on the TV with MMagTech, 2026-09-24. **Built, #59.**
+  pill says "Connected to <name>". Each network shows signal bars. 802.1X
+  networks are not offered. First run's Wi-Fi step behaves the same way.
+  Worked out on the TV with MMagTech, 2026-09-24. **Built, #59.**
+  **Later, if asked for:** joining a network that hides its name (first run
+  can; Settings cannot yet).
 - **Addresses are automatic only.** A fixed address is set on the router.
   **Dropped: manual IP**, unless people ask, then it is one "Advanced" page.
 - **Change server address:** the same server at a new address. The console

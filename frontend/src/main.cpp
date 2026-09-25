@@ -6064,6 +6064,11 @@ int main(int argc, char** argv) {
                                       }
                                   });
                         choiceScreen.setValues(values);
+                        {
+                            std::vector<int> sig;
+                            for (const net::Network& w : wifiShown) sig.push_back(w.signal);
+                            choiceScreen.setSignals(sig);
+                        }
                         wifiPanelOpen = true;
                         askWifi();
                     });
@@ -8303,6 +8308,11 @@ int main(int argc, char** argv) {
                                                               ? "Looking for networks\xE2\x80\xA6"
                                                               : "No networks found")
                                                        : "");
+                    {
+                        std::vector<int> sig;
+                        for (const net::Network& w : wifiShown) sig.push_back(w.signal);
+                        choiceScreen.setSignals(sig);
+                    }
                 }
                 if (fresh && here() == Screen::Settings) buildSettings();
             }

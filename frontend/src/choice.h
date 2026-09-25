@@ -28,6 +28,10 @@ public:
     // A value on the right of each answer ("Connected"), turning the column
     // into a list: labels go to the left. Call after open; empty for none.
     void setValues(std::vector<std::string> values) { values_ = std::move(values); }
+    // Signal bars at the far right of each answer, 0 to 100 (a Wi-Fi list:
+    // in a crowded building it is how two similar names are told apart).
+    // Empty for none; set after open, and again with replace.
+    void setSignals(std::vector<int> signals) { signals_ = std::move(signals); }
     // New answers while open (a Wi-Fi scan landing), keeping focus on the
     // same label if it is still there.
     void replace(std::vector<std::string> options, std::vector<std::string> values,
@@ -48,6 +52,7 @@ private:
     std::string title_, detail_;
     std::vector<std::string> options_;
     std::vector<std::string> values_;
+    std::vector<int> signals_;
     int slot_ = 0;
     int top_ = 0;              // first answer shown, once there are too many
     design::Animated appear_;
