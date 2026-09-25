@@ -9027,7 +9027,7 @@ int main(int argc, char** argv) {
             if (mine && changed) {
                 upd = s;
                 updSaidAt = 0;
-                std::fprintf(stderr, "[update] %s%s%s\n",
+                std::fprintf(stderr, "[update] %s%s%s%s\n",
                              s.state == update::State::Checking      ? "checking"
                              : s.state == update::State::UpToDate    ? "up to date"
                              : s.state == update::State::Available   ? "available "
@@ -9036,7 +9036,9 @@ int main(int argc, char** argv) {
                              : s.state == update::State::Ready       ? "ready "
                              : s.state == update::State::Failed      ? "failed: "
                                                                      : "none",
-                             s.version.c_str(), s.reason.c_str());
+                             s.version.c_str(),
+                             !s.version.empty() && !s.reason.empty() ? ", " : "",
+                             s.reason.c_str());
                 // A check that finished: remember when, and what it found.
                 // Both kinds of check write the "Checked" line.
                 if ((s.state == update::State::UpToDate || s.state == update::State::Available) &&
