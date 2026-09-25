@@ -506,7 +506,7 @@ notes here stay the detail.
    - [ ] Pause menu per system: Virtual Boy 3D glasses (all of Cabinet's
          colours) and screen colour, GB/GBA colours, 2600 flicker blending,
          Vectrex overlays, controller type. No emulator page in Settings.
-   - [ ] Picture quality row (question 23), Turn off screen after, System
+   - [ ] Picture quality row (question 23), [x] Turn off screen after, System
          update, About (CabinetOS has NO version number yet: decide one).
    - [ ] Later: RetroAchievements sign-in per account; background colour per
          account (purple, blue, green, red, graphite); an "Advanced" manual IP

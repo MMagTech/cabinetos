@@ -5435,7 +5435,28 @@ int main(int argc, char** argv) {
     // built: they are there so the whole layout can be judged on the
     // television, and focus never lands on them.
     enum SettingId { SetAddAccount = 1, SetInterfaceSounds, SetPinSet, SetPinChange,
-                     SetPinOff, SetRemoveAccount };
+                     SetPinOff, SetRemoveAccount, SetScreenOff };
+
+    // TURN OFF SCREEN AFTER, docs/SETTINGS.md, System. Saved as the word in
+    // config/settings.json; the frame loop hands the seconds to idle::Watch.
+    // The starting value is 15 minutes, what the console did before there
+    // was a choice. NO "NEVER" AND NO HOUR: both were built and dropped the
+    // same day, on MMagTech's word, because on an OLED a lit menu is burn-in
+    // and half an hour is long enough. A saved word this list does not know
+    // is 15.
+    struct ScreenOff { const char* name; const char* word; double seconds; };
+    static constexpr ScreenOff kScreenOff[] = {
+        {"10 minutes", "10m", 10 * 60.0}, {"15 minutes", "15m", 15 * 60.0},
+        {"30 minutes", "30m", 30 * 60.0},
+    };
+    constexpr int kScreenOffCount = sizeof kScreenOff / sizeof kScreenOff[0];
+    int screenOffIndex = 1;
+    {
+        const std::string w = prefs::get("screen_off_after", "15m");
+        for (int i = 0; i < kScreenOffCount; ++i)
+            if (w == kScreenOff[i].word) screenOffIndex = i;
+        std::fprintf(stderr, "[idle] screen off after %s\n", kScreenOff[screenOffIndex].name);
+    }
     // THE NETWORK IS ASKED OFF THE FRAME THREAD. net::status() is three or four
     // nmcli round trips, which is a visible hitch if the screen waits for it,
     // so the row says "Checking" until the answer lands.
@@ -5547,6 +5568,17 @@ int main(int argc, char** argv) {
                 r.choice = static_cast<int>(sound::level());
                 return r;
             }(),
+            // Here, not under System: it is about the screen, and it is where a
+            // person looks for it. MMagTech, 2026-09-24.
+            [&] {
+                // A FACT THE ROW CANNOT OTHERWISE SHOW, not an explanation:
+                // the dim is fixed and nothing else on screen says when.
+                Row r{K::Choice, SetScreenOff, "Turn off screen after", "Dims after 5 minutes",
+                      ""};
+                for (int i = 0; i < kScreenOffCount; ++i) r.choices.push_back(kScreenOff[i].name);
+                r.choice = screenOffIndex;
+                return r;
+            }(),
         }});
 
         // THE DRIVES, by MMagTech's names: the main drive is "CabinetOS", any
@@ -5583,8 +5615,6 @@ int main(int argc, char** argv) {
 
         cats.push_back({"System", {
             {K::Unbuilt, 0, "System update", "One check, one button, one restart", ""},
-            {K::Unbuilt, 0, "Turn off screen after",
-             "10 min, 15 min, 30 min, 1 hour or never. 15 min to start", ""},
         }});
 
         cats.push_back({"About", {
@@ -5809,6 +5839,14 @@ int main(int argc, char** argv) {
                 }
                 break;
             case screens::Action::SettingChoice:
+                if (res.value == SetScreenOff) {
+                    const int i = settingsScreen.choiceOf(SetScreenOff);
+                    if (i >= 0 && i < kScreenOffCount) {
+                        screenOffIndex = i;
+                        prefs::set("screen_off_after", kScreenOff[i].word);
+                    }
+                    sound::play(sound::Cue::Move);
+                }
                 if (res.value == SetInterfaceSounds) {
                     const int i = settingsScreen.choiceOf(SetInterfaceSounds);
                     if (i >= 0 && i < sound::kLevelCount) {
@@ -7444,6 +7482,7 @@ int main(int argc, char** argv) {
         // what lifts them, above.
         {
             const double t = clockSeconds();
+            idleWatch.setBlankAfter(kScreenOff[screenOffIndex].seconds);
             const idle::Level lvl = idleWatch.update(t, playing && !overlayOpen);
             if (lvl != idleShown) {
                 std::fprintf(stderr, "[idle] %s -> %s after %.0fs without input\n",

@@ -54,8 +54,14 @@ Offset pixelShift(double seconds, float scale, double everySeconds = kShiftEvery
 // NOT PLAYING: Home, the Library, a platform grid, and a PAUSED GAME — a paused
 // game is a menu over a frozen picture, and a frozen HUD is the case the
 // question singled out as worse than a menu.
+//
+// THE BLANK IS A SETTING NOW, "Turn off screen after" (docs/SETTINGS.md,
+// Display and Sound): 10, 15 or 30 minutes. THE DIM IS FIXED AT 5 MINUTES,
+// whatever the choice. It was a third of the choice for a day, which gave
+// times like 3 min 20 s; MMagTech: "the numbers seem weirdly determined". One
+// rule a person can predict, and an early dim is the better burn-in guard.
 constexpr double kMenuDimAfter = 5 * 60.0;
-constexpr double kMenuBlankAfter = 15 * 60.0;
+constexpr double kMenuBlankAfter = 15 * 60.0;   // the starting value
 
 // PLAYING, UNPAUSED. A game running is not idle just because nothing is
 // pressed — an attract loop, a cut-scene, somebody thinking about a puzzle — so
@@ -80,6 +86,8 @@ public:
     // rather than minutes (`--idle-scale 0.01` dims Home at three seconds).
     void setTimeScale(double s) { scale_ = s > 0 ? s : 1.0; }
     void setEnabled(bool on) { enabled_ = on; }
+    // Seconds before the screen goes out on a menu; 0 is never.
+    void setBlankAfter(double seconds) { blankAfter_ = seconds; }
 
     // Somebody touched something. Returns TRUE when this press did nothing but
     // wake the screen, so the menus can swallow it: the first press on a dark
@@ -97,6 +105,7 @@ public:
 private:
     bool enabled_ = true;
     double scale_ = 1.0;
+    double blankAfter_ = kMenuBlankAfter;
     double last_ = 0.0;
     bool started_ = false;
     Level level_ = Level::Awake;
