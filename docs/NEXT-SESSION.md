@@ -68,10 +68,8 @@ upgraded and rebooted 2026-09-25, a 0.9 MB download. **Signed out and back in tw
 no PIN; vivian is gone** (re-add her from the account panel if wanted).
 Its games were cleared and download again as played. **Its address now
 lives in `config/server.json`, like a real install: `/etc/cabinetos/session.env`
-was moved aside to `session.env.hand-set`**, because root's file outranks
-anything Settings writes (firstrun.h). `~/signout-backup/` holds a copy of the
-users and config folders from before the first Sign out (91 MB); delete it
-when MMagTech says. `ydotoold` may be running (see *Driving the television
+was deleted** (MMagTech, 2026-09-25), because root's file outranks anything
+Settings writes (firstrun.h). `ydotoold` is not started at boot (see *Driving the television
 from here*, under *Things that will bite you*).
 
 **Next:** the next unchecked Settings items (the checklist under *WHAT TO DO
@@ -85,13 +83,6 @@ after, #71), #94 (Wi-Fi, #59). Everything was judged on the TV with
 `docs/SETTINGS.md`; the item-1 block under *WHAT TO DO NEXT* has the rest.
 **Then: Sign out (#61) and Change server address (#60), together**, built
 2026-09-25, above.
-
-**THE A9 WAS LEFT ON THE LOOP'S HAND-BUILT BINARY** (the /run drop-in) unless
-MMagTech upgraded it: check `ps -eo args | grep [c]abinetos-frontend`. A
-reboot, or `sudo bootc upgrade && sudo systemctl reboot` once #94's image is
-built, puts it on the image. **Its accounts are `1 - MMagTech` and
-`12 - vivian`; claire was removed by hand (her save folder is still on
-disk). No PIN is set.**
 
 **THE SESSION OF 2026-09-23/24 MERGED THREE PRS, AND THE A9 RUNS THEM.**
 
