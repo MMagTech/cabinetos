@@ -175,6 +175,10 @@ group_start "Installing the frontend"
 
 install -D -m 0755 "${PAYLOAD}/bin/cabinetos-frontend" /usr/bin/cabinetos-frontend
 log "installed /usr/bin/cabinetos-frontend ($(du -h /usr/bin/cabinetos-frontend | cut -f1))"
+# The controller list, beside the binary that reads it (players::loadMappings)
+# and in the same small layer, so its weekly update ships one file.
+install -D -m 0644 /ctx/frontend-data/gamecontrollerdb.txt /usr/share/cabinetos/gamecontrollerdb.txt
+log "installed the controller list ($(grep -c 'platform:Linux' /usr/share/cabinetos/gamecontrollerdb.txt) Linux entries)"
 
 group_end
 

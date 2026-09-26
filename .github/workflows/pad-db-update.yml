@@ -1,7 +1,7 @@
 # Keep the controller list current: open a pull request when it changes.
 #
-# The image carries SDL_GameControllerDB (system_files/usr/share/cabinetos/
-# gamecontrollerdb.txt), the community's list of controllers SDL does not know
+# The image carries SDL_GameControllerDB (frontend/data/gamecontrollerdb.txt,
+# installed to /usr/share/cabinetos/), the community's list of controllers SDL does not know
 # by itself. It is how CabinetOS handles an unrecognised pad instead of a
 # button-mapping screen (issue #66), so a list that never moves is a list that
 # slowly stops covering new pads.
@@ -41,7 +41,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          FILE=system_files/usr/share/cabinetos/gamecontrollerdb.txt
+          FILE=frontend/data/gamecontrollerdb.txt
           SHA=$(gh api repos/mdqinc/SDL_GameControllerDB/commits/master --jq .sha)
           curl -fsSL "https://raw.githubusercontent.com/mdqinc/SDL_GameControllerDB/${SHA}/gamecontrollerdb.txt" -o /tmp/gamecontrollerdb.txt
           # A list that shrank to nothing, or is not a list, is never shipped.
@@ -77,7 +77,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -b "${BRANCH}"
-          git add system_files/usr/share/cabinetos/gamecontrollerdb.txt
+          git add frontend/data/gamecontrollerdb.txt
           git commit -m "Controller list: SDL_GameControllerDB at ${SHORT}"
           git push origin "${BRANCH}"
           cat > /tmp/pr-body.md <<EOF
