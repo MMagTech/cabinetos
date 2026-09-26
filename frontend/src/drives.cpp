@@ -327,7 +327,10 @@ struct Watcher {
         auto it = announced.find(drive);
         if (it != announced.end() && it->second == e) return;
         announced[drive] = e;
-        if (external) post(e, external);
+        // An internal drive gets no notice, but Storage still has to be
+        // redrawn: found on the VM, where a freshly formatted internal drive
+        // mounted and Storage went on listing it as missing.
+        post(external ? e : Event::Changed, external);
     }
 
     void usableAfterAll(const std::string& drive) {
@@ -424,7 +427,7 @@ struct Watcher {
         if (ejected.erase(gone.drive)) return;   // Eject already said "Safe to unplug"
         if (!gone.mounted) return;
         std::fprintf(stderr, "[drives] %s was pulled out while in use\n", gone.drive.c_str());
-        if (gone.external) post(Event::Removed, true);
+        post(gone.external ? Event::Removed : Event::Changed, gone.external);
     }
 
     // A block whose contents changed while attached: wiped, formatted,

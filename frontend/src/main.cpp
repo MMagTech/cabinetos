@@ -3792,6 +3792,11 @@ int main(int argc, char** argv) {
         std::printf("root            %s\n", storage::root().c_str());
         std::printf("pending upload  %10.2f GB\n", cache::pendingBytes() / 1e9);
         std::printf("system reserve  %10.2f GB\n", cache::kSystemReserveBytes / 1e9);
+        // WHERE A KEPT GAME WOULD LAND, by size: the main drive up to 80%,
+        // then the extra drive with the most room (cache::keepLocation).
+        for (const double g : {1.0, 5.0, 50.0})
+            std::printf("keep a %2.0f GB game  -> %s\n", g,
+                        cache::keepLocation(static_cast<int64_t>(g * 1e9)).c_str());
 
         // PER LOCATION, because the floors are a fact about a filesystem and
         // the whole reason `roms/` and `cache/` repeat is that there is more
@@ -8966,9 +8971,12 @@ int main(int argc, char** argv) {
             }
             // File access shows each drive as a folder; a drive that came or
             // went changes the list. Root rebuilds it (cabinetos-files refresh).
+            // Changed covers an internal drive arriving or leaving, which has
+            // no notice of its own.
             if (filesState.on && (dn.event == drives::Event::Connected ||
                                   dn.event == drives::Event::Removed ||
-                                  dn.event == drives::Event::SafeToUnplug))
+                                  dn.event == drives::Event::SafeToUnplug ||
+                                  dn.event == drives::Event::Changed))
                 files::refreshDrives(nullptr);
             if (here() == Screen::Settings) buildSettings();
         }
