@@ -37,14 +37,21 @@ agreed). With promotion, every change is tried on `testing` and a merge
 makes `latest` that same image, so the test console on `testing` is never
 behind what users get, and testing a change needs no `bootc switch` and no
 extra reboot. **SSH is port 2222; sudo's password is
-`cat /var/lib/cabinetos-files/password`.** **#102 (state pictures) merged
-2026-09-26 and was promoted: `latest` is `2026.09.26.7`. At the end of the
-evening session `testing` was rebuilt from `controllers` and the A9 moved
-onto it for MMagTech's check** (`cat /usr/share/cabinetos/version` for the
-number; `bootc status` is the truth), from `testing`, gamescope/drm, File access left on, **a PIN set** (MMagTech's),
+`cat /var/lib/cabinetos-files/password`.** **#104 (players, Add a controller;
+merge `329239a`) and #123 (the controller list; merge `1fc3bd0`) merged
+2026-09-26 and were promoted: `latest` and `testing` are both
+`2026.09.26.10`, and the A9 is on it** (`bootc status` is the truth), from
+`testing`, gamescope/drm, File access left on, **a PIN set** (MMagTech's),
 the SanDisk "Games" stick attached. The VM is on `testing` `2026.09.26.4`.
-Branches left: `main`, `testing`, `controllers` (#64 and #65), and PR
-#42's `base-update/44.20260921`.
+Branches left: `main`, `testing`, the merged `controllers` and
+`controller-database` (safe to delete), and PR #42's
+`base-update/44.20260921`.
+
+**NEXT: THE IN-GAME SHORTCUTS (#76 to #80), BEFORE THE EMULATORS** (MMagTech,
+after #123 merged). **The proposal and three open calls are the comment on
+issue #76**; walk them with him, then fix #103 first. The weekly controller
+list job ran once by hand after #123: no upstream change, no pull request,
+so the pull-request half is still unexercised.
 
 **MMagTech, on what comes next (2026-09-26): finish the app; no side
 projects.** The `main.cpp` split waits until it starts costing: a change to
