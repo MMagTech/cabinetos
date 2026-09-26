@@ -37,15 +37,16 @@ agreed). With promotion, every change is tried on `testing` and a merge
 makes `latest` that same image, so the test console on `testing` is never
 behind what users get, and testing a change needs no `bootc switch` and no
 extra reboot. **SSH is port 2222; sudo's password is
-`cat /var/lib/cabinetos-files/password`.** #96 and #97 are merged; `latest`
-was `2026.09.26`, promoted, not built.
+`cat /var/lib/cabinetos-files/password`.** #96, #97 and #98 are merged.
+**#98 merged as `f02edfa` and was promoted, not built: `latest` and
+`testing` are both `2026.09.26.3` (`sha256:55b1a9f0db43…`), and the A9 is
+on it**, from `testing`, gamescope/drm, no drop-ins. Branches left:
+`main`, `testing`, and PR #42's `base-update/44.20260921`.
 
 **QUEUE, IN ORDER, as of the end of that session:**
 
-1. **Update available panel** (branch `update-panel`): a check somebody
-   pressed opens "Update available / <version> · <size> / Download ·
-   Later"; the row opens it again. Judged on the TV with sample states; the
-   real test is the A9 finding this branch's own `testing` build.
+1. **Update available panel: DONE, #98.** Proved for real on the A9:
+   checked on `.2`, the panel opened, Download, Restart now, `.3` applied.
 2. **USB DRIVES ARE NEVER MOUNTED, found 2026-09-25.** MMagTech plugged a
    4 TB Samsung T9 (exFAT, label "T9") into the A9: the kernel sees `sda2`,
    nothing mounts it, so Storage shows only the main drive. A desktop's
