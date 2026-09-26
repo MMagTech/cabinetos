@@ -6589,7 +6589,11 @@ int main(int argc, char** argv) {
                 }
                 std::vector<bt::Device> got;
                 std::string err;
-                if (bt::listen(4, &got, &err, &pw.cut)) {
+                // TEN SECONDS A ROUND, as first run's scan. Classic Bluetooth
+                // takes about that long to sweep once, and four-second rounds
+                // missed pads in pairing mode that an eight-second scan run
+                // beside them found at once (A9, 2026-09-26).
+                if (bt::listen(10, &got, &err, &pw.cut)) {
                     std::lock_guard<std::mutex> lk(pw.m);
                     for (bt::Device& d : got) pw.heard[d.address] = std::move(d);
                     pw.fresh = true;
