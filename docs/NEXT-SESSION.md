@@ -50,14 +50,42 @@ projects.** The `main.cpp` split (11,243 lines, the one real code-health
 problem) waits until it starts costing: a change to one screen breaking
 another, or contributors arriving. Next is the queue below, in order.
 
-**QUEUE, IN ORDER, as of 2026-09-25 late night:**
+**THE SESSION OF 2026-09-26 BUILT DOWNLOADS (#68), BRANCH `download-row`.**
+Judged on the TV with `tools/ui-loop.sh`, one change at a time. What was
+decided is in `docs/SETTINGS.md`, Storage; the short version:
 
-1. **Extra drives and Eject (#67): BUILT on branch `usb-drives`.** See the
-   block below. What is left is in its "still to test" list.
-2. **Downloads (#68)**, redesigned 2026-09-25: the row that was "Kept and
-   cached games". Only downloaded games (the cache is not shown), everyone's,
-   with whose each is, biggest first, Remove download; **opening it asks
-   the PIN**. In Storage. `docs/SETTINGS.md`, Storage.
+- **The game screen's row says Download** (was "Download and keep"), and it
+  flips to Remove download and back the moment it happens (`setKept` never
+  rebuilt the rows; MMagTech pressed Download four times on Air Zonk).
+- **Settings, Storage, Downloads** (`frontend/src/downloads.{h,cpp}`, a panel
+  like Wi-Fi's; `cache::downloads()` and `cache::unkeepForEveryone()`):
+  PIN to open, the systems biggest first with Remove all, a system's games
+  with ticks, Select all and Remove pinned above, one "are you sure" per
+  removal with Cancel focused, removal for everyone, no names. **Only games
+  on a drive that is here**; a drive that never comes back leaves its games
+  marked downloaded on their own screens, a known rough edge left for users
+  to report (MMagTech: over-engineering otherwise).
+- **"Not enough space" is short and says what to do**: Play "Not enough
+  space. Remove some downloads"; Download "Needs 3.2 GB more. Remove
+  downloads or add a drive" (only a Download spills onto another drive).
+- **Proved on the A9 (loop):** removals of one game, of a whole system (the
+  two Saturn games, by MMagTech), and a mixed system: Black moved by hand
+  onto the SanDisk stick, Burnout 3 on the main drive, PlayStation 2 showed
+  both, then only Burnout 3 after Eject. **Then MMagTech set a PIN, opened
+  Downloads through it, and pressed Remove all** with the stick ejected: the
+  five games on the main drive went (1.93 GB), the two on the stick were not
+  listed and were left alone.
+- **THE A9 HAS A PIN NOW** (MMagTech's; not written here). Settings' PIN
+  rows ask for it; anything that needs it on the TV is his to enter.
+- **Test data on the A9, by hand:** Alex Kidd (Master System) and Black
+  (PS2) were MOVED onto the SanDisk stick's `CabinetOS/roms/`; their keep
+  records are on the main drive, as a real download there would have them.
+  They are the only downloads left; the main drive's `roms/` is empty.
+
+**QUEUE, IN ORDER:**
+
+1. ~~Extra drives and Eject (#67)~~: **merged, #100.**
+2. ~~Downloads (#68)~~: **built on `download-row`**, see above.
 3. **#99, save states carry a screenshot**, as Cabinet does
    (`screenshotFile` part, `<name> [<time>].png`). CabinetOS sends none, so
    its states show blank in Cabinet and RomM.
@@ -65,8 +93,9 @@ another, or contributors arriving. Next is the queue below, in order.
 5. **A first-hour walk-through before release** (MMagTech agreed,
    2026-09-25): install, first run, plugging things in, running out of
    space, offline, as a new user, listing every rough edge. The text pass
-   already queued is part of it. Known so far: a Play that cannot fit says
-   "not enough space for this game, and nothing left that can be cleared".
+   already queued is part of it: **MMagTech, 2026-09-26, "some of these
+   notifications are getting real long"**; the pills and notices want one
+   pass for length.
 
 **THE SESSION OF 2026-09-25 (LATE) BUILT EXTRA DRIVES, BRANCH `usb-drives`.**
 Nothing mounted a USB drive: the desktop's automounter went with the

@@ -507,7 +507,17 @@ public:
     void drawGlass(Ctx& c);
 
     const GameDetail& game() const { return game_; }
-    void setKept(bool kept) { game_.kept = kept; }
+    // The rows are rebuilt too, so "Download and keep" becomes "Remove
+    // download" (and back) the moment it happens. They used to be built only
+    // on open, so the row went on offering Download for a game already kept
+    // until the screen was left and opened again; MMagTech pressed it four
+    // times on Air Zonk, 2026-09-26. Focus stays on the same slot, which is
+    // the same row with its other label.
+    void setKept(bool kept) {
+        game_.kept = kept;
+        rebuildRows();
+        if (slot_ >= static_cast<int>(rows_.size())) slot_ = rows_.empty() ? 0 : static_cast<int>(rows_.size()) - 1;
+    }
 
     // A refusal, or anything else the person needs to read once. The screen
     // shows it under the actions until they do something else.

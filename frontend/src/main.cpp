@@ -45,6 +45,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <map>
+#include <unordered_map>
 #include <set>
 #include <string>
 #include <vector>
@@ -76,6 +77,7 @@
 #include "overlaywin.h"
 #include "pin.h"
 #include "choice.h"
+#include "downloads.h"
 #include "power.h"
 #include "prefs.h"
 #include "server.h"
@@ -1600,9 +1602,13 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
                 if (cache::freeBytes(location) < want) {
                     cache::evictUntilFree(location, want, /*protectRomId=*/0);
                     if (cache::freeBytes(location) < want) {
-                        job.message =
-                            "not enough space for this game, and nothing left "
-                            "that can be cleared";
+                        // WHAT TO DO, SHORT (MMagTech, 2026-09-26). Play
+                        // only ever fetches onto the console's own drive, so
+                        // a new drive would not help it; a Download would
+                        // spill onto one.
+                        job.message = job.keepWhenReady
+                                          ? "Not enough space. Remove downloads or add a drive"
+                                          : "Not enough space. Remove some downloads";
                         job.stage = LaunchJob::Stage::Failed;
                         return;
                     }
@@ -1679,7 +1685,9 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
             unpacked > 0 && cache::freeBytes(location) < unpacked) {
             cache::evictUntilFree(location, unpacked, id);
             if (cache::freeBytes(location) < unpacked) {
-                job.message = "not enough space to unpack this game";
+                job.message = job.keepWhenReady
+                                  ? "Not enough space. Remove downloads or add a drive"
+                                  : "Not enough space. Remove some downloads";
                 job.stage = LaunchJob::Stage::Failed;
                 return;
             }
@@ -1772,6 +1780,10 @@ struct Library {
     // games and sees nothing will reasonably conclude the scan failed.
     std::vector<screens::Tile> platformTiles;
     std::vector<screens::Tile> collectionTiles;
+    // Every platform's full name, qualified where two share one ("Arcade
+    // (FinalBurn Neo)"), for anything that names a system outside a tile:
+    // Settings' Downloads groups by it.
+    std::map<int, std::string> platformNames;
     // What a tile's cached cover is validated against: the platform's own
     // `updated_at` and `rom_count`, as the server reported them this boot.
     // Filled for playable platforms only, because nothing else gets a cover.
@@ -1923,6 +1935,7 @@ static Library loadLibrary(romm::Client& client) {
     // to different work and to different words on the screen.
     for (const auto& p : platforms) {
         const catalog::Coverage cov = catalog::coverageFor(p);
+        lib.platformNames[p.id] = catalog::displayName(p);
         screens::Tile tile;
         tile.id = p.id;
         // THE NAME AND THE QUALIFIER ARE TWO FACTS ON A TILE, not one string.
@@ -5492,9 +5505,11 @@ int main(int argc, char** argv) {
         if (!v.allowed) {
             // The one failure the person ever sees, and the number is what makes
             // it actionable: without it "the disk is full" is a dead end.
-            detailScreen.setNotice("Not enough room. The disk is full of things "
-                                   "you asked me to keep. Remove " +
-                                   gigabytes(v.shortfallBytes) + " to keep this one.");
+            //
+            // SHORT, AND IT SAYS WHAT TO DO (MMagTech, 2026-09-26). A drive
+            // helps here: a Download spills onto an extra drive.
+            detailScreen.setNotice("Needs " + gigabytes(v.shortfallBytes) +
+                                   " more. Remove downloads or add a drive");
             std::fprintf(stderr,
                          "[keep] refused %s: %lld reclaimable against a %lld floor\n",
                          g->name.c_str(), static_cast<long long>(v.reclaimableBytes),
@@ -6042,7 +6057,7 @@ int main(int argc, char** argv) {
     // television, and focus never lands on them.
     enum SettingId { SetAddAccount = 1, SetInterfaceSounds, SetPinSet, SetPinChange,
                      SetPinOff, SetRemoveAccount, SetScreenOff, SetWifi, SetServer,
-                     SetUpdate, SetUpdateCheck, SetCredits, SetFiles };
+                     SetUpdate, SetUpdateCheck, SetCredits, SetFiles, SetDownloads };
     // One Eject row per USB drive: this plus the drive's index in
     // storage::locations() when the rows were built.
     constexpr int kSetEject = 100;
@@ -6051,6 +6066,34 @@ int main(int argc, char** argv) {
     constexpr int kSetFormat = 200;
     std::vector<drives::Unusable> formatable;
     std::map<int, std::string> driveNames;   // a drive row's id -> its name
+
+    // THE DRIVES' NAMES, as Storage shows them: the main drive is
+    // "CabinetOS", any other internal disk "Internal", one that can be
+    // unplugged "External". With two of one kind, counting drives that cannot
+    // be used, the drive's own name tells them apart: its label (the mount
+    // point) for one in use. Downloads names a game's drive the same way.
+    auto locationNames = [&](const std::vector<std::string>& locs,
+                             const std::vector<drives::Unusable>& unusable) {
+        std::map<std::string, std::string> out;
+        int internals = 0, externals = 0;
+        for (size_t i = 1; i < locs.size(); ++i)
+            (storage::isExternal(locs[i]) ? externals : internals)++;
+        for (const drives::Unusable& u : unusable) (u.external ? externals : internals)++;
+        for (size_t i = 0; i < locs.size(); ++i) {
+            std::string name = "CabinetOS";
+            if (i > 0) {
+                const bool external = storage::isExternal(locs[i]);
+                name = external ? "External" : "Internal";
+                if ((external ? externals : internals) > 1) {
+                    // <mount>/CabinetOS: the mount point is named for the drive.
+                    std::string mount = locs[i].substr(0, locs[i].rfind('/'));
+                    name += " (" + mount.substr(mount.rfind('/') + 1) + ")";
+                }
+            }
+            out[locs[i]] = name;
+        }
+        return out;
+    };
 
     int screenOffIndex = savedScreenOff();
     std::fprintf(stderr, "[idle] screen off after %s\n", kScreenOff[screenOffIndex].name);
@@ -6419,6 +6462,49 @@ int main(int argc, char** argv) {
             settingsNet.fresh = true;
         });
     };
+    // ---- Downloads (downloads.h), #68 --------------------------------------
+    //
+    // Every downloaded game, for Settings' Downloads panel, named as the
+    // Library names it where the library knows the game. A game still
+    // downloading is left out until it has arrived (MMagTech, 2026-09-26): its
+    // record is written before its first byte, so it would show half-sized.
+    screens::DownloadsPanel downloadsPanel;
+    // Assigned once buildSettings exists: a removal rebuilds Storage.
+    std::function<void(screens::DownloadsPanel::Outcome)> downloadsOutcome;
+    auto downloadItems = [&]() {
+        std::unordered_map<int, const romm::Game*> byId;
+        for (const romm::Game& g : games) byId[g.id] = &g;
+        const std::vector<std::string> locs = storage::locations();
+        const std::map<std::string, std::string> names = locationNames(locs, drives::unusable());
+        const bool downloading = launchJob.busy() && launchJob.keepWhenReady;
+        std::vector<screens::DownloadItem> out;
+        for (const cache::Download& d : cache::downloads()) {
+            if (downloading && d.romId == launchJob.romId) continue;
+            // ONLY WHAT IS ON A DRIVE THAT IS HERE (MMagTech, 2026-09-26). A
+            // game on an unplugged drive takes no room on this console and
+            // returns to the list with its drive.
+            if (!d.present) continue;
+            screens::DownloadItem it;
+            it.romId = d.romId;
+            it.title = d.title;
+            it.system = d.platform;
+            int platformId = d.platformId;
+            if (auto g = byId.find(d.romId); g != byId.end()) {
+                if (!g->second->name.empty()) it.title = g->second->name;
+                if (g->second->platformId) platformId = g->second->platformId;
+            }
+            if (auto pn = lib.platformNames.find(platformId); pn != lib.platformNames.end())
+                it.system = pn->second;
+            it.bytes = d.bytes;
+            // THE DRIVE ONLY WHEN THERE IS A CHOICE OF DRIVES: with one, the
+            // same word on every row says nothing.
+            if (locs.size() > 1)
+                if (auto n = names.find(d.location); n != names.end()) it.drive = n->second;
+            out.push_back(std::move(it));
+        }
+        return out;
+    };
+
     auto buildSettings = [&]() {
         using Row = screens::SettingsRow;
         using K = Row::Kind;
@@ -6554,17 +6640,10 @@ int main(int argc, char** argv) {
         for (size_t i = 1; i < locs.size(); ++i)
             (storage::isExternal(locs[i]) ? externals : internals)++;
         for (const drives::Unusable& u : unusableDrives) (u.external ? externals : internals)++;
+        const std::map<std::string, std::string> locNames = locationNames(locs, unusableDrives);
         for (size_t i = 0; i < locs.size(); ++i) {
-            std::string name = "CabinetOS";
+            const std::string name = locNames.at(locs[i]);
             const bool external = i > 0 && storage::isExternal(locs[i]);
-            if (i > 0) {
-                name = external ? "External" : "Internal";
-                if ((external ? externals : internals) > 1) {
-                    // <mount>/CabinetOS: the mount point is named for the drive.
-                    std::string mount = locs[i].substr(0, locs[i].rfind('/'));
-                    name += " (" + mount.substr(mount.rfind('/') + 1) + ")";
-                }
-            }
             // THE SPACE ON THE SECOND LINE AND THE ACTION AS THE VALUE, so
             // the row says what pressing it does: a chevron alone only says
             // "more". MMagTech on the TV, 2026-09-25.
@@ -6598,8 +6677,19 @@ int main(int argc, char** argv) {
             }
         }
         // DOWNLOADS, #68: everyone's downloaded games, behind the PIN. The
-        // cache is not shown. docs/SETTINGS.md, Storage.
-        store.push_back({K::Unbuilt, 0, "Downloads", "Games downloaded on this console", ""});
+        // cache is not shown. The count and size on the second line, like a
+        // drive's space; greyed with nothing downloaded. docs/SETTINGS.md,
+        // Storage.
+        {
+            const std::vector<screens::DownloadItem> dl = downloadItems();
+            int64_t bytes = 0;
+            for (const screens::DownloadItem& d : dl) bytes += d.bytes;
+            if (dl.empty())
+                store.push_back({K::Disabled, 0, "Downloads", "None", ""});
+            else
+                store.push_back({K::Action, SetDownloads, "Downloads",
+                                 screens::countText(static_cast<int>(dl.size()), bytes), ""});
+        }
         // FILE ACCESS: ONE ROW. What a computer needs to reach it (address,
         // user name, the password in plain text) is in a panel the row opens,
         // as Wi-Fi's networks are: as rows under Storage they ran off the
@@ -7142,6 +7232,17 @@ int main(int argc, char** argv) {
                         });
                         sound::play(sound::Cue::Activate);
                     }
+                } else if (res.value == SetDownloads) {
+                    // AN ADMIN SCREEN: the PIN to open it, once per Settings
+                    // visit, so clearing several games is one PIN. MMagTech,
+                    // 2026-09-25. Removing your own needs none, from the
+                    // game's own screen.
+                    askPin("Enter the PIN", "To open Downloads", [&]() {
+                        std::vector<screens::DownloadItem> dl = downloadItems();
+                        if (dl.empty()) { buildSettings(); return; }
+                        downloadsPanel.open(std::move(dl));
+                    });
+                    sound::play(sound::Cue::Activate);
                 } else if (res.value == SetCredits) {
                     // A list, one line per project: what it does, and its
                     // licence. Nothing to choose; A or B closes it.
@@ -7577,6 +7678,53 @@ int main(int argc, char** argv) {
         return false;
     };
 
+    // DOWNLOADS' REMOVE: one question naming how many and how much, with
+    // Cancel focused, then everybody's keep released for each. The pill says
+    // how many went; the panel comes back with what is left, and goes when
+    // nothing is. docs/SETTINGS.md, Storage.
+    auto removeDownloads = [&]() {
+        const std::vector<int> ids = downloadsPanel.toRemove();
+        int removed = 0, failed = 0, demoted = 0;
+        int64_t freed = 0;
+        for (int romId : ids) {
+            const bool nowPlaying = playing && session.romId == romId;
+            cache::Release r;
+            cache::unkeepForEveryone(romId, /*keepTheBytes=*/nowPlaying, &r);
+            switch (r.what) {
+                case cache::Release::What::DeleteFailed: ++failed; break;
+                case cache::Release::What::Demoted: ++demoted; ++removed; break;
+                case cache::Release::What::Deleted: freed += r.bytesFreed; ++removed; break;
+                default: ++removed; break;
+            }
+        }
+        std::fprintf(stderr, "[downloads] removed %d, %lld bytes back, %d failed\n", removed,
+                     static_cast<long long>(freed), failed);
+        refreshKeeps();
+        if (!downloadsPanel.replace(downloadItems())) downloadsPanel.close();
+        buildSettings();
+        if (failed > 0)
+            menuNotice.say("Couldn't delete some of the files", Tone::Problem);
+        else if (demoted > 0)
+            menuNotice.say("Removed. The space comes back when you stop playing it", Tone::Info);
+        else
+            menuNotice.say(removed == 1 ? "Download removed"
+                                        : std::to_string(removed) + " downloads removed",
+                           Tone::Done);
+    };
+    downloadsOutcome = [&](screens::DownloadsPanel::Outcome o) {
+        using O = screens::DownloadsPanel::Outcome;
+        if (o == O::Closed) {
+            downloadsPanel.close();
+            buildSettings();
+        } else if (o == O::Remove) {
+            askChoice(downloadsPanel.removeTitle(), downloadsPanel.removeDetail(),
+                      {"Cancel", downloadsPanel.removingAll() ? "Remove all" : "Remove"}, 0,
+                      [&](int answer) {
+                          if (answer == 1) removeDownloads();
+                      });
+        }
+    };
+
     // The first answer, before anything is drawn. Everything after this is a
     // refresh triggered by the thing that changed it.
     refreshKeeps();
@@ -7586,6 +7734,7 @@ int main(int argc, char** argv) {
         // it may take a press.
         if (pinScreen.isOpen()) { pinOutcome(pinScreen.key(n)); return true; }
         if (choiceScreen.isOpen()) { choiceOutcome(choiceScreen.key(n)); return true; }
+        if (downloadsPanel.isOpen()) { downloadsOutcome(downloadsPanel.key(n)); return true; }
         // Nothing takes a press while an account switch is behind the curtain.
         if (switchPendingId || leaving != Leave::None) return true;
         // The bar first, wherever it is focused. One place, one behaviour.
@@ -9576,6 +9725,7 @@ int main(int argc, char** argv) {
             settingsScreen.tick(dt);
             pinScreen.tick(dt);
             choiceScreen.tick(dt);
+            downloadsPanel.tick(dt);
             tabDissolve.tick(dt);
             keyboardSlide.tick(dt);
             if (keyboard.sliding() || keyboard.isOpen()) {
@@ -9613,6 +9763,7 @@ int main(int argc, char** argv) {
                 if (!choiceScreen.isOpen()) wifiPanelOpen = false;
                 // Leaving Settings locks the PIN again.
                 if (here() != Screen::Settings && !pinScreen.isOpen()) pinUnlocked = false;
+                if (here() != Screen::Settings) downloadsPanel.close();
                 if (fresh && wifiPanelOpen) {
                     // The list is open: refresh it in place, focus kept.
                     sortWifi();
@@ -10678,59 +10829,6 @@ int main(int argc, char** argv) {
 
         }
 
-        // ---- The notification pill — see MenuNotice ------------------------
-        //
-        // Over the menus and over a game, under the curtain and the dim. Near
-        // the foot of the screen, inside the safe area, centred: where a
-        // console's confirmation is looked for, and clear of every menu's
-        // buttons. It rises a little as it arrives, like the panels do.
-        {
-            const float na = menuNotice.alpha();
-            const float keepAlpha = renderer.contentAlpha();
-            renderer.setContentAlpha(1.0f);   // not part of a screen's transition
-            if (na > 0.01f && !menuNotice.text.empty()) {
-                const ui::TextStyle st = ui::TextStyle::Callout;
-                const float tw = text.measure(menuNotice.text, st, sc);
-                constexpr float kPillH = 64.0f, kPad = 30.0f, kDot = 14.0f, kGap = 16.0f;
-                const float w = kPad + kDot + kGap + tw + kPad;
-                const float x = (ui::kCanvasWidth - w) * 0.5f;
-                const float y = ui::kCanvasHeight - ui::kSafeInset - kPillH - 24.0f +
-                                (1.0f - std::min(1.0f, menuNotice.age / 0.25f)) * 12.0f;
-                ui::Color fill = kOverlayPanelSurface;
-                fill.a = 0.96f * na;
-                ui::Rect pill{x, y, w, kPillH, kPillH * 0.5f, fill};
-                pill.border = 1.5f;
-                pill.borderColor = ui::Color::white(0.14f * na);
-                pill.edgeLight = ui::Color::white(0.18f * na);
-                pill.shadowBlur = 26.0f;
-                pill.shadowOffsetY = 10.0f;
-                pill.shadowColor = ui::Color::black(0.45f * na);
-                renderer.draw(pill);
-
-                // The dot says which kind of answer it is before the words do.
-                ui::Color dot = ui::Color::white(0.70f);
-                switch (menuNotice.tone) {
-                    case Tone::Done: dot = ui::palette::kScreenCyan; break;
-                    case Tone::Busy: {
-                        dot = ui::palette::kScreenCyan;
-                        // A slow breath, so "working" never reads as "done".
-                        const float t = static_cast<float>(SDL_GetTicks()) / 1000.0f;
-                        dot.a = 0.35f + 0.65f * (0.5f + 0.5f * std::sin(t * 4.2f));
-                        break;
-                    }
-                    case Tone::Info: break;
-                    case Tone::Problem: dot = ui::palette::kMarqueeAmber; break;
-                }
-                dot.a *= na;
-                renderer.draw(ui::Rect{x + kPad, y + (kPillH - kDot) * 0.5f, kDot, kDot,
-                                       kDot * 0.5f, dot});
-                text.draw(renderer, menuNotice.text, x + kPad + kDot + kGap,
-                          y + (kPillH - text.lineHeight(st, sc)) * 0.5f + text.ascent(st, sc),
-                          st, ui::Color::white(0.94f * na), sc);
-            }
-            renderer.setContentAlpha(keepAlpha);
-        }
-
         // THE DOWNLOAD PANEL IS GONE — 2026-09-21.
         //
         // It was a glass panel over a 45% scrim in the middle of the screen,
@@ -10975,6 +11073,74 @@ int main(int argc, char** argv) {
             // target you cannot find is worse than one that is too loud.
             text.draw(renderer, who, discX - 10.0f - nameW, chipBaseline,
                       chipStyle, ui::Color::white(chipOn ? 1.0f : 0.62f), sc);
+        }
+
+        // DOWNLOADS (Settings), over the top bar: it is a panel over the whole
+        // screen, and the bar drawn on top of it showed "Settings" through
+        // it (MMagTech on the TV, 2026-09-26). Under the pill, which says
+        // what a removal did where the panel's foot is, and under the
+        // question it asks ("Remove 3 games?").
+        if (downloadsPanel.isOpen() && !playing) {
+            screens::Ctx dctx{renderer, text, images, sc, &cards};
+            downloadsPanel.draw(dctx);
+            renderer.setContentAlpha(1.0f);
+        }
+
+        // ---- The notification pill — see MenuNotice ------------------------
+        //
+        // Over the menus and over a game, under the curtain and the dim. Near
+        // the foot of the screen, inside the safe area, centred: where a
+        // console's confirmation is looked for, and clear of every menu's
+        // buttons. It rises a little as it arrives, like the panels do.
+        //
+        // After the top bar since 2026-09-26, so it sits over Settings'
+        // Downloads panel; the bar and the pill never meet, one at the top
+        // and one at the foot.
+        {
+            const float na = menuNotice.alpha();
+            const float keepAlpha = renderer.contentAlpha();
+            renderer.setContentAlpha(1.0f);   // not part of a screen's transition
+            if (na > 0.01f && !menuNotice.text.empty()) {
+                const ui::TextStyle st = ui::TextStyle::Callout;
+                const float tw = text.measure(menuNotice.text, st, sc);
+                constexpr float kPillH = 64.0f, kPad = 30.0f, kDot = 14.0f, kGap = 16.0f;
+                const float w = kPad + kDot + kGap + tw + kPad;
+                const float x = (ui::kCanvasWidth - w) * 0.5f;
+                const float y = ui::kCanvasHeight - ui::kSafeInset - kPillH - 24.0f +
+                                (1.0f - std::min(1.0f, menuNotice.age / 0.25f)) * 12.0f;
+                ui::Color fill = kOverlayPanelSurface;
+                fill.a = 0.96f * na;
+                ui::Rect pill{x, y, w, kPillH, kPillH * 0.5f, fill};
+                pill.border = 1.5f;
+                pill.borderColor = ui::Color::white(0.14f * na);
+                pill.edgeLight = ui::Color::white(0.18f * na);
+                pill.shadowBlur = 26.0f;
+                pill.shadowOffsetY = 10.0f;
+                pill.shadowColor = ui::Color::black(0.45f * na);
+                renderer.draw(pill);
+
+                // The dot says which kind of answer it is before the words do.
+                ui::Color dot = ui::Color::white(0.70f);
+                switch (menuNotice.tone) {
+                    case Tone::Done: dot = ui::palette::kScreenCyan; break;
+                    case Tone::Busy: {
+                        dot = ui::palette::kScreenCyan;
+                        // A slow breath, so "working" never reads as "done".
+                        const float t = static_cast<float>(SDL_GetTicks()) / 1000.0f;
+                        dot.a = 0.35f + 0.65f * (0.5f + 0.5f * std::sin(t * 4.2f));
+                        break;
+                    }
+                    case Tone::Info: break;
+                    case Tone::Problem: dot = ui::palette::kMarqueeAmber; break;
+                }
+                dot.a *= na;
+                renderer.draw(ui::Rect{x + kPad, y + (kPillH - kDot) * 0.5f, kDot, kDot,
+                                       kDot * 0.5f, dot});
+                text.draw(renderer, menuNotice.text, x + kPad + kDot + kGap,
+                          y + (kPillH - text.lineHeight(st, sc)) * 0.5f + text.ascent(st, sc),
+                          st, ui::Color::white(0.94f * na), sc);
+            }
+            renderer.setContentAlpha(keepAlpha);
         }
 
         // ---- The account switcher, over the screen and over the bar -------

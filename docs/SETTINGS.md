@@ -246,21 +246,61 @@ status here to Built.
   drive", and it is not powered off. Internal drives have no Eject. **Built on
   `usb-drives`, #67.**
 - **Downloads** (was "Kept and cached games"), redesigned with MMagTech
-  2026-09-25. **To build, #68.**
+  2026-09-25, **built 2026-09-26 on `download-row`, #68**, judged on the TV.
   - **Only downloaded (kept) games. The cache is not shown:** it clears
     itself, so there is nothing to decide, and it still counts in each
     drive's free space. His own rule, 2026-09-16: "no one knows or cares if
     the game is cached".
-  - Named "Downloads" to match the Download and "Remove download" words the
-    console already uses. Each game with its size and the drive it is on,
-    biggest first. The one action is Remove download.
-  - **Everyone's downloads, with whose each is**: the space belongs to the
-    machine. **Opening Downloads asks the PIN** if one is set: it is an
-    admin screen (MMagTech). Once per Settings visit, like every PIN in
-    Settings, so clearing several games is one PIN. A person without the PIN
-    still removes their own download from the game's own screen.
+  - **Only games on a drive that is here.** A game on an unplugged drive takes
+    no room on this console and comes back into the list with its drive; a
+    system with games on both shows the ones that are here (MMagTech on the
+    TV, 2026-09-26, after seeing it listed as "Drive not connected"). The
+    game's own screen still says Remove download for such a game, and Play
+    fetches a stand-in as before. **A known rough edge, left for users to
+    report:** a drive that never comes back leaves those games marked
+    downloaded on their screens (a few hundred bytes each; Remove download
+    there clears it). Showing Download instead was considered and dropped:
+    it would put a second copy on the main drive whenever a stick is only
+    unplugged for a while.
+  - **The Storage row** reads "Downloads", "10 games · 4.2 GB" under it; with
+    nothing downloaded it is greyed, "None".
+  - **Two levels, like the Library** (a drive full of NES games would be one
+    list of hundreds): a panel with the systems, biggest first, each with its
+    count and size, and **Remove all** above them; a system opens its games,
+    biggest first, each with its size, and the drive's name after it when more
+    than one drive is attached. Named as the Library names systems ("Arcade
+    (FinalBurn Neo)").
+  - **Inside a system, A ticks.** **Select all** (Select none once all are
+    ticked) and **Remove** are pinned above the list; Remove is greyed until
+    something is ticked, then "Remove 3 games · 1.2 GB". **No single press
+    removes anything:** every removal is one question naming the game, or how
+    many, and the size, with Cancel focused. A system opens on Select all
+    (it only ticks); the systems list opens on the first system, not on
+    Remove all. No ticking on the systems list (A opens there), and ticks do
+    not carry between screens. Left and right jump a page in a long list.
+  - **A and B only**: the whole console runs on the D-pad, A and B, and a
+    keyboard works everywhere; a Select button would be the first break.
+  - **No names. Removing takes the game for everyone** who downloaded it:
+    the space belongs to the machine. MMagTech: a parent who minds sets the
+    PIN. **Opening Downloads asks the PIN** if one is set: it is an admin
+    screen. Once per Settings visit, like every PIN in Settings, so clearing
+    several games is one PIN. A person without the PIN still removes their
+    own download from the game's own screen.
+  - After a removal the pill says "Download removed" or "3 downloads
+    removed", the list shrinks, an emptied system goes back to the systems,
+    and an empty list closes.
   - In Storage, not a category of its own: it is where "Storage almost full"
     sends a person looking.
+  - Seven rows at most, so the panel clears the top bar.
+- **Not enough space, said short with what to do** (MMagTech, 2026-09-26:
+  the old messages were too long). Play: "Not enough space. Remove some
+  downloads". Download: "Needs 3.2 GB more. Remove downloads or add a
+  drive". Only Download mentions a drive, because only a Download spills
+  onto one; Play always fetches onto the console's own drive.
+- **The game screen's row says Download**, not "Download and keep"
+  (MMagTech, 2026-09-26): one set of words, Download, Remove download,
+  Downloads. "And keep" only told it apart from Play's fetch into the cache,
+  which nobody sees.
 - **File access** (under Storage): **built on branch `file-access`, #69;
   screens judged on the TV 2026-09-25, the login still to be tested.**
   - **One row**, "File access", "SFTP" under it, On or Off. **Everything a

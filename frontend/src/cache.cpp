@@ -11,7 +11,10 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <map>
 #include <set>
+
+#include <json-c/json.h>
 
 namespace cache {
 namespace {
@@ -478,6 +481,91 @@ bool unkeep(const storage::User& u, int romId, bool keepTheBytes, Release* out) 
     r.what = Release::What::Deleted;
     r.bytesFreed = bytes;
     return true;
+}
+
+bool unkeepForEveryone(int romId, bool keepTheBytes, Release* out) {
+    Release scratch;
+    Release& r = out ? *out : scratch;
+    r = Release{};
+    bool ok = true;
+    bool any = false;
+    // One person at a time through unkeep, so the last release is the one that
+    // deletes and says so, exactly as it would from the game's own screen.
+    for (const storage::User& u : storage::knownUsers()) {
+        if (!isKeptBy(u, romId)) continue;
+        any = true;
+        ok = unkeep(u, romId, keepTheBytes, &r) && ok;
+    }
+    if (!any) {
+        // NOBODY KEEPS IT: a game left in `roms/` on a drive that came back
+        // after its download was removed. Removing it is deleting it.
+        const Placement p = find(romId);
+        if (!p.present || !p.kept) return true;
+        const int64_t bytes = storage::treeBytes(p.entryPath);
+        if (!removeTree(p.entryPath)) {
+            r.what = Release::What::DeleteFailed;
+            return true;
+        }
+        if (const int fd = ::open(p.location.c_str(), O_RDONLY | O_DIRECTORY); fd >= 0) {
+            ::syncfs(fd);
+            ::close(fd);
+        }
+        std::fprintf(stderr, "[keep] %d was kept by nobody; removed, %lld bytes back\n", romId,
+                     static_cast<long long>(bytes));
+        r.what = Release::What::Deleted;
+        r.bytesFreed = bytes;
+    }
+    return ok;
+}
+
+std::vector<Download> downloads() {
+    std::map<int, Download> by;
+    // The records first: title and platform, and the games whose drive is away.
+    for (const storage::User& u : storage::knownUsers()) {
+        for (int id : keptRoms(u)) {
+            if (by.count(id)) continue;
+            Download d;
+            d.romId = id;
+            if (json_object* o = json_object_from_file(keepPath(u, id).c_str())) {
+                json_object* v = nullptr;
+                if (json_object_object_get_ex(o, "name", &v)) d.title = json_object_get_string(v);
+                if (json_object_object_get_ex(o, "platform_display_name", &v))
+                    d.platform = json_object_get_string(v);
+                if (d.platform.empty() && json_object_object_get_ex(o, "platform_name", &v))
+                    d.platform = json_object_get_string(v);
+                if (json_object_object_get_ex(o, "platform_id", &v))
+                    d.platformId = json_object_get_int(v);
+                json_object_put(o);
+            }
+            by[id] = d;
+        }
+    }
+    // Then what is actually under `roms/`, on every drive that is here.
+    for (const std::string& loc : storage::locations()) {
+        walkHalf(storage::romsDir(loc), [&](const std::string& platform, const std::string& entry) {
+            const int id = storage::romIdFromEntry(entry);
+            if (id <= 0) return;
+            Download& d = by[id];
+            d.romId = id;
+            if (d.present) return;   // twice on the machine; dedupe's business
+            d.present = true;
+            d.location = loc;
+            d.bytes = storage::treeBytes(storage::romsDir(loc) + "/" + platform + "/" + entry);
+            if (d.platform.empty()) d.platform = platform;
+            if (d.title.empty()) {
+                // "<id> - <title>", with any extension a single file carries.
+                const size_t dash = entry.find(" - ");
+                d.title = dash == std::string::npos ? entry : entry.substr(dash + 3);
+                const size_t dot = d.title.rfind('.');
+                if (dot != std::string::npos && dot > 0 && d.title.size() - dot <= 5)
+                    d.title.resize(dot);
+            }
+        });
+    }
+    std::vector<Download> out;
+    out.reserve(by.size());
+    for (auto& [id, d] : by) out.push_back(std::move(d));
+    return out;
 }
 
 void markPending(const storage::User& u, int romId, const std::string& fileName,

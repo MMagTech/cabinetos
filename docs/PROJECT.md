@@ -4806,6 +4806,7 @@ KEEP, and it is the only place in the product where the console may refuse.
 > person asked for by name belongs in the first.
 
 So the row reads **Download and keep**, and on a kept game **Remove download**.
+**Renamed 2026-09-26: the row says Download** (docs/SETTINGS.md, Storage).
 **Superseded 2026-09-19 — see open question 18.** Un-keeping now deletes the
 game, because the row says "Remove download" and reclaiming space is why people
 press it. The paragraph below is the original reasoning.
