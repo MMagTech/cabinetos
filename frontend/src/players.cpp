@@ -4,6 +4,7 @@
 #include <cctype>
 #include <cstdio>
 #include <cstring>
+#include <fstream>
 #include <map>
 
 namespace players {
@@ -93,21 +94,22 @@ int gGeneration = 0;
 // serial can: over Bluetooth it is the pad's own address. The device path is
 // the fallback for a pad with no serial, which holds for a wired pad put back
 // in the same socket.
+std::string addressOf(SDL_Gamepad* gp);
+
 std::string keyOf(SDL_Gamepad* gp) {
+    if (std::string a = addressOf(gp); !a.empty()) return "bt:" + a;
     if (const char* s = SDL_GetGamepadSerial(gp); s && *s) return std::string("serial:") + s;
     if (const char* p = SDL_GetGamepadPath(gp); p && *p) return std::string("path:") + p;
     return {};
 }
 
-// A Bluetooth address, "E4:17:D8:71:F1:ED", from SDL's serial, which for a
-// Bluetooth pad is its address written "e4-17-d8-71-f1-ed". Empty for any
-// other serial (a wired pad's is often "000000000003").
-std::string addressOf(SDL_Gamepad* gp) {
-    const char* s = SDL_GetGamepadSerial(gp);
-    if (!s || std::strlen(s) != 17) return {};
+// "E4:17:D8:71:F1:ED" from "e4-17-d8-71-f1-ed" or "e4:17:d8:71:f1:ed"; empty
+// for anything that is not an address (a wired pad's "000000000003").
+std::string asAddress(const std::string& s) {
+    if (s.size() != 17) return {};
     std::string out;
     for (int i = 0; i < 17; ++i) {
-        const char c = s[i];
+        const char c = s[static_cast<size_t>(i)];
         if (i % 3 == 2) {
             if (c != '-' && c != ':') return {};
             out += ':';
@@ -117,6 +119,34 @@ std::string addressOf(SDL_Gamepad* gp) {
         }
     }
     return out;
+}
+
+std::string firstLine(const std::string& path, const char* prefix = nullptr) {
+    std::ifstream f(path);
+    for (std::string line; std::getline(f, line);) {
+        if (!prefix) return line;
+        if (line.rfind(prefix, 0) == 0) return line.substr(std::strlen(prefix));
+    }
+    return {};
+}
+
+// A PAD'S BLUETOOTH ADDRESS. SDL's serial has it when SDL drives the pad
+// itself (a Switch pad through hidraw: "e4-17-d8-71-f1-ed"), and not when the
+// kernel does: an Xbox pad and an 8BitDo Lite 2 came through with no serial,
+// so their rows had no Forget (MMagTech, 2026-09-26). The kernel always keeps
+// it, as the device's "uniq", so that is asked second.
+std::string addressOf(SDL_Gamepad* gp) {
+    if (const char* s = SDL_GetGamepadSerial(gp); s)
+        if (std::string a = asAddress(s); !a.empty()) return a;
+    const char* p = SDL_GetGamepadPath(gp);
+    if (!p) return {};
+    const std::string path = p;
+    std::string uniq;
+    if (path.rfind("/dev/input/", 0) == 0)
+        uniq = firstLine("/sys/class/input/" + path.substr(11) + "/device/uniq");
+    else if (path.rfind("/dev/hidraw", 0) == 0)
+        uniq = firstLine("/sys/class/hidraw/" + path.substr(5) + "/device/uevent", "HID_UNIQ=");
+    return asAddress(uniq);
 }
 
 // The name the pad gives. A pad in its Switch mode says it is a Switch Pro
