@@ -50,14 +50,33 @@ projects.** The `main.cpp` split (11,243 lines, the one real code-health
 problem) waits until it starts costing: a change to one screen breaking
 another, or contributors arriving. Next is the queue below, in order.
 
-**QUEUE, IN ORDER, as of 2026-09-25 late night:**
+**START HERE, 2026-09-26: DOWNLOADS (#68), ON BRANCH `download-row`.** The
+branch already holds one fix: the game screen's row did not change from
+"Download and keep" to "Remove download" (or back) until the screen was
+reopened, because `DetailScreen::setKept` never rebuilt the rows; MMagTech
+pressed Download four times on Air Zonk. Fixed in `screens.h`, built, and
+**put on the A9 with `tools/ui-loop.sh` for him to confirm** (open a game,
+Download and keep, the row should flip at once; Remove download, it flips
+back). **The A9 is on that hand-built binary until `tools/ui-loop.sh
+--restore` or a reboot.** Ask him how it went, then build Downloads on the
+same branch; one PR for both.
 
-1. **Extra drives and Eject (#67): BUILT on branch `usb-drives`.** See the
-   block below. What is left is in its "still to test" list.
+**The A9 has nine downloaded games for the Downloads screen to list**, all
+on the main drive, all MMagTech's (Virtual Boy, Vectrex, TurboGrafx-CD and
+-16, SNES, Saturn, Genesis, Master System, and Burnout 3 on PS2, 1.9 GB),
+downloaded 2026-09-26 to check Download still works after the drives work.
+It does, and "main drive first" put every one on the main drive.
+
+**QUEUE, IN ORDER:**
+
+1. ~~Extra drives and Eject (#67)~~: **merged, #100.**
 2. **Downloads (#68)**, redesigned 2026-09-25: the row that was "Kept and
-   cached games". Only downloaded games (the cache is not shown), everyone's,
-   with whose each is, biggest first, Remove download; **opening it asks
-   the PIN**. In Storage. `docs/SETTINGS.md`, Storage.
+   cached games" (the placeholder is already named Downloads). Only
+   downloaded games (the cache is not shown), everyone's, with whose each
+   is, biggest first, each with its size and drive, Remove download;
+   **opening it asks the PIN** (once per Settings visit, like every PIN in
+   Settings). In Storage. `docs/SETTINGS.md`, Storage, and issue #68's
+   comments.
 3. **#99, save states carry a screenshot**, as Cabinet does
    (`screenshotFile` part, `<name> [<time>].png`). CabinetOS sends none, so
    its states show blank in Cabinet and RomM.
