@@ -50,33 +50,39 @@ projects.** The `main.cpp` split (11,243 lines, the one real code-health
 problem) waits until it starts costing: a change to one screen breaking
 another, or contributors arriving. Next is the queue below, in order.
 
-**START HERE, 2026-09-26: DOWNLOADS (#68), ON BRANCH `download-row`.** The
-branch already holds one fix: the game screen's row did not change from
-"Download and keep" to "Remove download" (or back) until the screen was
-reopened, because `DetailScreen::setKept` never rebuilt the rows; MMagTech
-pressed Download four times on Air Zonk. Fixed in `screens.h`, built, and
-**put on the A9 with `tools/ui-loop.sh` for him to confirm** (open a game,
-Download and keep, the row should flip at once; Remove download, it flips
-back). **The A9 is on that hand-built binary until `tools/ui-loop.sh
---restore` or a reboot.** Ask him how it went, then build Downloads on the
-same branch; one PR for both.
+**THE SESSION OF 2026-09-26 BUILT DOWNLOADS (#68), BRANCH `download-row`.**
+Judged on the TV with `tools/ui-loop.sh`, one change at a time. What was
+decided is in `docs/SETTINGS.md`, Storage; the short version:
 
-**The A9 has nine downloaded games for the Downloads screen to list**, all
-on the main drive, all MMagTech's (Virtual Boy, Vectrex, TurboGrafx-CD and
--16, SNES, Saturn, Genesis, Master System, and Burnout 3 on PS2, 1.9 GB),
-downloaded 2026-09-26 to check Download still works after the drives work.
-It does, and "main drive first" put every one on the main drive.
+- **The game screen's row says Download** (was "Download and keep"), and it
+  flips to Remove download and back the moment it happens (`setKept` never
+  rebuilt the rows; MMagTech pressed Download four times on Air Zonk).
+- **Settings, Storage, Downloads** (`frontend/src/downloads.{h,cpp}`, a panel
+  like Wi-Fi's; `cache::downloads()` and `cache::unkeepForEveryone()`):
+  PIN to open, the systems biggest first with Remove all, a system's games
+  with ticks, Select all and Remove pinned above, one "are you sure" per
+  removal with Cancel focused, removal for everyone, no names. **Only games
+  on a drive that is here**; a drive that never comes back leaves its games
+  marked downloaded on their own screens, a known rough edge left for users
+  to report (MMagTech: over-engineering otherwise).
+- **"Not enough space" is short and says what to do**: Play "Not enough
+  space. Remove some downloads"; Download "Needs 3.2 GB more. Remove
+  downloads or add a drive" (only a Download spills onto another drive).
+- **Proved on the A9 (loop):** removals of one game, of a whole system (the
+  two Saturn games, by MMagTech), and a mixed system: Black moved by hand
+  onto the SanDisk stick, Burnout 3 on the main drive, PlayStation 2 showed
+  both, then only Burnout 3 after Eject. **Not tried: Remove all** (it would
+  delete every download) and a removal with a PIN set.
+- **Test data on the A9, by hand:** Alex Kidd (Master System) and Black
+  (PS2) were MOVED onto the SanDisk stick's `CabinetOS/roms/`; their keep
+  records are on the main drive, as a real download there would have them.
+  Removed during testing: Smash T.V., both Saturn games, the TurboGrafx-CD
+  game.
 
 **QUEUE, IN ORDER:**
 
 1. ~~Extra drives and Eject (#67)~~: **merged, #100.**
-2. **Downloads (#68)**, redesigned 2026-09-25: the row that was "Kept and
-   cached games" (the placeholder is already named Downloads). Only
-   downloaded games (the cache is not shown), everyone's, with whose each
-   is, biggest first, each with its size and drive, Remove download;
-   **opening it asks the PIN** (once per Settings visit, like every PIN in
-   Settings). In Storage. `docs/SETTINGS.md`, Storage, and issue #68's
-   comments.
+2. ~~Downloads (#68)~~: **built on `download-row`**, see above.
 3. **#99, save states carry a screenshot**, as Cabinet does
    (`screenshotFile` part, `<name> [<time>].png`). CabinetOS sends none, so
    its states show blank in Cabinet and RomM.
@@ -84,8 +90,9 @@ It does, and "main drive first" put every one on the main drive.
 5. **A first-hour walk-through before release** (MMagTech agreed,
    2026-09-25): install, first run, plugging things in, running out of
    space, offline, as a new user, listing every rough edge. The text pass
-   already queued is part of it. Known so far: a Play that cannot fit says
-   "not enough space for this game, and nothing left that can be cleared".
+   already queued is part of it: **MMagTech, 2026-09-26, "some of these
+   notifications are getting real long"**; the pills and notices want one
+   pass for length.
 
 **THE SESSION OF 2026-09-25 (LATE) BUILT EXTRA DRIVES, BRANCH `usb-drives`.**
 Nothing mounted a USB drive: the desktop's automounter went with the

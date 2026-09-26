@@ -1602,9 +1602,13 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
                 if (cache::freeBytes(location) < want) {
                     cache::evictUntilFree(location, want, /*protectRomId=*/0);
                     if (cache::freeBytes(location) < want) {
-                        job.message =
-                            "not enough space for this game, and nothing left "
-                            "that can be cleared";
+                        // WHAT TO DO, SHORT (MMagTech, 2026-09-26). Play
+                        // only ever fetches onto the console's own drive, so
+                        // a new drive would not help it; a Download would
+                        // spill onto one.
+                        job.message = job.keepWhenReady
+                                          ? "Not enough space. Remove downloads or add a drive"
+                                          : "Not enough space. Remove some downloads";
                         job.stage = LaunchJob::Stage::Failed;
                         return;
                     }
@@ -1681,7 +1685,9 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
             unpacked > 0 && cache::freeBytes(location) < unpacked) {
             cache::evictUntilFree(location, unpacked, id);
             if (cache::freeBytes(location) < unpacked) {
-                job.message = "not enough space to unpack this game";
+                job.message = job.keepWhenReady
+                                  ? "Not enough space. Remove downloads or add a drive"
+                                  : "Not enough space. Remove some downloads";
                 job.stage = LaunchJob::Stage::Failed;
                 return;
             }
@@ -5499,9 +5505,11 @@ int main(int argc, char** argv) {
         if (!v.allowed) {
             // The one failure the person ever sees, and the number is what makes
             // it actionable: without it "the disk is full" is a dead end.
-            detailScreen.setNotice("Not enough room. The disk is full of things "
-                                   "you asked me to keep. Remove " +
-                                   gigabytes(v.shortfallBytes) + " to keep this one.");
+            //
+            // SHORT, AND IT SAYS WHAT TO DO (MMagTech, 2026-09-26). A drive
+            // helps here: a Download spills onto an extra drive.
+            detailScreen.setNotice("Needs " + gigabytes(v.shortfallBytes) +
+                                   " more. Remove downloads or add a drive");
             std::fprintf(stderr,
                          "[keep] refused %s: %lld reclaimable against a %lld floor\n",
                          g->name.c_str(), static_cast<long long>(v.reclaimableBytes),
