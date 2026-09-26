@@ -6565,7 +6565,7 @@ int main(int argc, char** argv) {
         });
         choiceScreen.setStaysOpen(true);
         choiceScreen.setFixedWidth(kPadWindowWidth);
-        choiceScreen.setFullHeight("Looking for controllers\xE2\x80\xA6");
+        choiceScreen.setGrows("Looking for controllers\xE2\x80\xA6");
         padWindowOpen = true;
         padWin.th = std::thread([&pw = padWin]() {
             while (!pw.stop) {

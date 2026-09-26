@@ -43,12 +43,13 @@ public:
     // pairing failed, and MMagTech did not like it (2026-09-26). open()
     // clears it.
     void setFixedWidth(float w) { fixedW_ = w; }
-    // ROOM FOR THE WHOLE LIST FROM THE START: the list area is always as tall
-    // as the most rows it shows, and `placeholder` is said in it while there
-    // are none. Add a controller opened small and grew when devices arrived,
-    // which read as a second window (MMagTech, 2026-09-26). open() clears it.
-    void setFullHeight(std::string placeholder) {
-        fullHeight_ = true;
+    // A LIST THAT FILLS WHILE IT IS OPEN GROWS SMOOTHLY. It opens one row
+    // tall with `placeholder` said in it, and glides taller as rows arrive.
+    // Add a controller first jumped from a small panel to a big one, which
+    // read as a second window; then it opened six rows tall, which left an
+    // empty band (MMagTech, 2026-09-26). open() clears it.
+    void setGrows(std::string placeholder) {
+        grows_ = true;
         placeholder_ = std::move(placeholder);
     }
     // The detail line alone, keeping the answers and focus.
@@ -68,8 +69,10 @@ private:
     bool open_ = false;
     bool staysOpen_ = false;
     float fixedW_ = 0.0f;
-    bool fullHeight_ = false;
+    bool grows_ = false;
     std::string placeholder_;
+    design::Animated listH_;
+    bool listHSet_ = false;
     std::string title_, detail_;
     std::vector<std::string> options_;
     std::vector<std::string> values_;

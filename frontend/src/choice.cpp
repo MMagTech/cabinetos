@@ -20,6 +20,8 @@ constexpr float kFocusScale = 1.04f;
 constexpr float kAppear = 0.280f;
 // MORE THAN THIS SCROLLS, for a Wi-Fi list in a crowded building.
 constexpr int kMaxVisible = 6;
+// How long a growing list takes to make room for a new row.
+constexpr float kGrow = 0.25f;
 
 }  // namespace
 
@@ -28,8 +30,9 @@ void ChoiceScreen::open(std::string title, std::string detail,
     open_ = true;
     staysOpen_ = false;
     fixedW_ = 0.0f;
-    fullHeight_ = false;
+    grows_ = false;
     placeholder_.clear();
+    listHSet_ = false;
     title_ = std::move(title);
     detail_ = std::move(detail);
     options_ = std::move(options);
@@ -93,6 +96,7 @@ ChoiceScreen::Outcome ChoiceScreen::key(Nav n) {
 
 void ChoiceScreen::tick(float dt) {
     appear_.tick(dt);
+    listH_.tick(dt);
     focus_.tick(dt);
 }
 
@@ -135,8 +139,17 @@ void ChoiceScreen::draw(Ctx& c) {
     const float lineH = c.text.lineHeight(TextStyle::Callout, sc);
     const float detailH = lines.empty() ? 0.0f : 8.0f + lineH * lines.size();
     const int n = static_cast<int>(options_.size());
-    const int shown = fullHeight_ ? kMaxVisible : std::min(n, kMaxVisible);
-    const float listH = shown * kButtonH + std::max(0, shown - 1) * kButtonGap;
+    const int shown = grows_ ? std::max(1, std::min(n, kMaxVisible)) : std::min(n, kMaxVisible);
+    float listH = shown * kButtonH + std::max(0, shown - 1) * kButtonGap;
+    if (grows_) {
+        if (!listHSet_) {
+            listH_.settle(listH);
+            listHSet_ = true;
+        } else {
+            listH_.retarget(listH, kGrow);
+        }
+        listH = listH_.value();
+    }
     const float panelH = kPanelPad + titleH + detailH + 36.0f + listH + kPanelPad;
     const float px = (W - panelW) * 0.5f, py = (H - panelH) * 0.5f;
 
@@ -167,6 +180,8 @@ void ChoiceScreen::draw(Ctx& c) {
                 TextStyle::Callout, 0.45f);
     const float f = focus_.value();
     const float bx = (W - rowW) * 0.5f;
+    // A row still arriving shows only as far as the panel has grown.
+    if (grows_) c.r.setScissor(0, y - 8.0f, W, listH + 16.0f);
     for (int i = top_; i < std::min(n, top_ + kMaxVisible); ++i) {
         const bool on = (i == slot_);
         const float s = on ? 1.0f + (kFocusScale - 1.0f) * f : 1.0f;
@@ -190,6 +205,7 @@ void ChoiceScreen::draw(Ctx& c) {
                         ui::Color::white(0.60f), sc);
         y += kButtonH + kButtonGap;
     }
+    if (grows_) c.r.clearScissor();
     c.r.setContentAlpha(1.0f);
 }
 

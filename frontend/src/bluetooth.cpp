@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
+#include <unistd.h>
 
 #include "proc.h"
 
@@ -314,7 +315,19 @@ bool pair(const std::string& address, std::string* err, int timeoutSeconds,
         }
     }
     proc::run({"bluetoothctl", "pairable", "on"}, 10);
-    const proc::Result p = proc::run({"bluetoothctl", "pair", address}, timeoutSeconds, cancel);
+    proc::Result p = proc::run({"bluetoothctl", "pair", address}, timeoutSeconds, cancel);
+    // THE FIRST TRY OFTEN FAILS AND THE SECOND WORKS: an 8BitDo Lite 2 and an
+    // Xbox pad each failed with ConnectionAttemptFailed and paired on the
+    // next press, three times on the A9 (2026-09-26). Pairing straight after
+    // a scan meets the radio still searching. So one more try, a moment
+    // later, before a person is asked to do anything.
+    if (!p.ok() && !p.timedOut && !(cancel && cancel->load()) &&
+        (p.out + p.err).find("ConnectionAttemptFailed") != std::string::npos) {
+        std::fprintf(stderr, "[bluetooth] pairing %s: first try failed, trying again\n",
+                     address.c_str());
+        for (int i = 0; i < 15 && !(cancel && cancel->load()); ++i) usleep(100000);
+        p = proc::run({"bluetoothctl", "pair", address}, timeoutSeconds, cancel);
+    }
     proc::run({"bluetoothctl", "pairable", "off"}, 10);
     // ALREADY PAIRED IS A SUCCESS, NOT A FAILURE. A pad that was set up before
     // and has been picked out of the list again must not be reported as broken,
