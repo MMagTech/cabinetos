@@ -1640,10 +1640,11 @@ reached the app every time (`--pads`, "pressed guide"). The **8BitDo Lite 2's
 heart did not**: raw from the kernel it is an ordinary button, `BTN_C`
 (0x132), one clean press and release each, while the community list's entry
 for it (GUID `05009075c82d00001251000000010000`) puts `guide` on `b12`. So the
-app never sees Home from that pad, and the Lite 2 has no stick clicks, so
-L3+R3 cannot open the pause menu on it either. (In two earlier runs SDL
-reported the heart as d-pad down; not explained, and the fix below does not
-depend on it.) MMagTech: *"so we just randomly fix everyone's controller over
+app never sees Home from that pad. **Not yet known** whether the Lite 2 can
+press L3+R3: it has no thumbsticks, yet two earlier runs showed SDL stick
+clicks from it, alongside the heart reported as d-pad down; neither is
+explained, and the fix below does not depend on them. A button-by-button
+pass settles both. MMagTech: *"so we just randomly fix everyone's controller over
 time"*. Relying on the list means a wrong pad waits on somebody else's fix,
 and Home is the button the list most often gets wrong.
 
