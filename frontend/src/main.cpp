@@ -8739,11 +8739,27 @@ int main(int argc, char** argv) {
         //
         // Opened here rather than at startup because the rate comes from the
         // core: av_info is not known until a game is loaded.
-        if (!audioStream) {
-            SDL_AudioSpec src{};
-            src.format = SDL_AUDIO_S16;
-            src.channels = 2;
-            src.freq = static_cast<int>(core.avInfo().sampleRate);
+        //
+        // AND SET FOR EVERY GAME, NOT ONLY THE FIRST. Until 2026-09-27 the
+        // stream kept the rate of the first game played, so every later game
+        // at another rate was played too fast or too slow. MMagTech played
+        // Mortal Kombat II (SNES, 32040 Hz) and then DoDonPachi (FBNeo, 47997
+        // Hz): its sound went into a stream playing two-thirds as fast, fell
+        // further behind every second, and was still playing on Home after he
+        // quit, which read as the game running on in the background. Emptied
+        // here and at every exit, so no game hears another's leftovers.
+        SDL_AudioSpec src{};
+        src.format = SDL_AUDIO_S16;
+        src.channels = 2;
+        src.freq = static_cast<int>(core.avInfo().sampleRate);
+        if (audioStream) {
+            SDL_ClearAudioStream(audioStream);
+            if (SDL_SetAudioStreamFormat(audioStream, &src, nullptr))
+                std::fprintf(stderr, "[frontend] audio in at %d Hz\n", src.freq);
+            else
+                std::fprintf(stderr, "[frontend] could not set audio to %d Hz: %s\n", src.freq,
+                             SDL_GetError());
+        } else {
             audioStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK,
                                                     &src, nullptr, nullptr);
             if (audioStream) {
@@ -8959,6 +8975,9 @@ int main(int argc, char** argv) {
         // file rather than a tree. This is where a Dreamcast's card is read
         // back out of the system directory and taken out of `bios/`.
         syncFileSaves(session, uploader);
+        // Whatever sound the game had queued goes with it, rather than playing
+        // on over Home (see where the stream's rate is set, at launch).
+        if (audioStream) SDL_ClearAudioStream(audioStream);
         playing = false;
         overlayOpen = false;
         overlayFade.retarget(0.0f, overlayFadeSeconds);
