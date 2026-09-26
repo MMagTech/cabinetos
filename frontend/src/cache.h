@@ -345,6 +345,40 @@ bool isKeptByAnyone(int romId);
 // which is what makes one person's release safe for everybody else.
 std::vector<int> keepers(int romId);
 
+// RELEASES EVERYBODY'S KEEP, so the game goes whoever downloaded it. This is
+// Settings' Downloads (#68): an admin screen behind the PIN, where the space
+// belongs to the machine and not to whoever pressed Download. MMagTech,
+// 2026-09-26: no names on the list, "if an admin/parent is concerned a kid or
+// someone might delete a downloaded game they should turn on PIN protection".
+// The game's own screen still releases only your own (unkeep).
+//
+// A game whose drive is not connected loses its records and nothing else:
+// its bytes are on a drive this console cannot see. If that drive comes back
+// the game is still on it, shows in Downloads again (downloads() below reads
+// the drives too), and can be removed then.
+bool unkeepForEveryone(int romId, bool keepTheBytes = false, Release* out = nullptr);
+
+// EVERY DOWNLOADED GAME ON THIS CONSOLE, for Settings' Downloads: one entry per
+// game however many people kept it. Read off the disk each time, like find().
+//
+// Two sources, because each misses something the other has:
+//   - the keep records, which carry the title and platform, and are the only
+//     trace of a game whose drive is not connected (`present` false);
+//   - `roms/` on every connected drive, which holds games nobody keeps any
+//     more: removed here while their drive was away, then plugged back in.
+//     Without this they would sit on the drive for ever, never cleared (only
+//     `cache/` is) and listed nowhere.
+struct Download {
+    int romId = 0;
+    std::string title;
+    std::string platform;       // RomM's platform name, as the record has it
+    int platformId = 0;         // from the record; zero when there is none
+    int64_t bytes = 0;          // on the disk; zero when not present
+    std::string location;       // the storage location it is on, if present
+    bool present = false;
+};
+std::vector<Download> downloads();
+
 // The games this person has kept.
 std::vector<int> keptRoms(const storage::User& u);
 
