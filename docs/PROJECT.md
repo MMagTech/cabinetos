@@ -1049,6 +1049,31 @@ never overwrite anything. **Syncing is only "finish the uploads."**
 Upload is `POST /api/states?rom_id=&emulator=`, multipart, with the state and an
 optional screenshot captured on the paused frame.
 
+**BUILT 2026-09-26 (#99), and until then only the first half was true.**
+CabinetOS named its states after the game's title and local time to the second,
+sent no picture (so its states showed blank on the Apple TV and in RomM), and
+never sent a failed upload again. Now, decided with MMagTech:
+
+- **The name is Cabinet's to the character:** the game's file name without its
+  extension, then the UTC time to the millisecond, `Mario Kart 64 (Europe) (Rev
+  1) [2026-09-26 17-20-57-651].state` (`TVPlayerView.swift`, `stateFileStem`).
+- **The picture** is the `screenshotFile` part, `image/png`, named like the
+  state. It is read from the core's own frame (`Core::snapshot`), never the
+  screen, so the pause menu is not in it; at the core's resolution, as Cabinet
+  sends; and **turned upright for a vertical arcade board**, which Cabinet's
+  raw texture probably is not (not checked). Kept beside the state on disk.
+- **Owed uploads are sent again.** The pending marker records what to send
+  (kind, tag, name, file, picture); the uploader sends everything owed at
+  start, after any upload that works, and every five minutes while anything is
+  owed. Saves too: a save that failed used to go only if the game changed it
+  again.
+- **Proved on the A9:** SNES (software), N64 (GLES, bottom-left origin) and
+  DoDonPachi (FBNeo, a quarter turn), each on RomM with its picture; a state
+  saved with RomM blocked went up by itself on the five-minute timer, another at
+  the next start. **Not proved:** the Vulkan path (Dreamcast does not start on
+  the A9, #85; its states do not upload anyway, having no state tag), and a
+  failed SAVE being resent (same code, no failing save was produced).
+
 > **The `emulator` tag is the only thing standing between a good state and a
 > corrupt one, and it does not carry a version.** It is a bare slug —
 > `flycast-native`, `mgba-native`, `pcsx-rearmed-native` — and the launch screen

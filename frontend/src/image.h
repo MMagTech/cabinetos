@@ -130,6 +130,11 @@ private:
 bool decodeImage(const std::vector<uint8_t>& encoded, std::vector<uint8_t>& rgbaOut,
                  int& widthOut, int& heightOut);
 
+// Straight RGBA to a PNG, for the picture a save state carries (#99). The
+// alpha is dropped: a game frame is opaque. False only if libpng refuses.
+bool encodePNG(const std::vector<uint8_t>& rgba, unsigned width, unsigned height,
+               std::vector<uint8_t>& pngOut);
+
 // Draws a picture into a box, honouring the fit and the fade. The odd-aspect
 // case draws the blurred echo underneath by itself; callers do not have to know
 // the rule, which is the point.

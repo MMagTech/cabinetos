@@ -568,15 +568,72 @@ std::vector<Download> downloads() {
     return out;
 }
 
-void markPending(const storage::User& u, int romId, const std::string& fileName,
-                 int64_t bytes) {
+void markPending(const storage::User& u, const Owed& o, int64_t bytes) {
     if (!u.valid()) return;
     storage::makeDirs(storage::pendingDir(u));
-    const std::string path = storage::pendingDir(u) + "/" + markerName(romId, fileName);
+    const std::string path = storage::pendingDir(u) + "/" + markerName(o.romId, o.fileName);
+    // One "key value" per line after the byte count. Values are file names
+    // and paths, which never hold a newline.
     if (FILE* f = std::fopen(path.c_str(), "wb")) {
         std::fprintf(f, "%lld\n", static_cast<long long>(bytes));
+        std::fprintf(f, "kind %s\n", o.isState ? "state" : "save");
+        std::fprintf(f, "rom %d\n", o.romId);
+        std::fprintf(f, "emulator %s\n", o.emulator.c_str());
+        std::fprintf(f, "name %s\n", o.fileName.c_str());
+        std::fprintf(f, "local %s\n", o.localPath.c_str());
+        if (!o.shotName.empty()) {
+            std::fprintf(f, "shotname %s\n", o.shotName.c_str());
+            std::fprintf(f, "shot %s\n", o.shotPath.c_str());
+        }
         std::fclose(f);
     }
+}
+
+std::vector<Owed> owed(const storage::User& u) {
+    std::vector<std::pair<time_t, Owed>> found;
+    if (!u.valid()) return {};
+    const std::string dir = storage::pendingDir(u);
+    DIR* d = ::opendir(dir.c_str());
+    if (!d) return {};
+    while (struct dirent* e = ::readdir(d)) {
+        if (e->d_name[0] == '.') continue;
+        const std::string path = dir + "/" + e->d_name;
+        FILE* f = std::fopen(path.c_str(), "rb");
+        if (!f) continue;
+        Owed o;
+        bool first = true, kind = false;
+        char line[4096];
+        while (std::fgets(line, sizeof line, f)) {
+            std::string l(line);
+            while (!l.empty() && (l.back() == '\n' || l.back() == '\r')) l.pop_back();
+            if (first) { first = false; continue; }   // the byte count
+            const size_t sp = l.find(' ');
+            if (sp == std::string::npos) continue;
+            const std::string k = l.substr(0, sp), v = l.substr(sp + 1);
+            if (k == "kind") { kind = true; o.isState = v == "state"; }
+            else if (k == "rom") o.romId = std::atoi(v.c_str());
+            else if (k == "emulator") o.emulator = v;
+            else if (k == "name") o.fileName = v;
+            else if (k == "local") o.localPath = v;
+            else if (k == "shotname") o.shotName = v;
+            else if (k == "shot") o.shotPath = v;
+        }
+        std::fclose(f);
+        if (!kind || o.romId <= 0 || o.emulator.empty() || o.fileName.empty() ||
+            o.localPath.empty()) {
+            std::fprintf(stderr, "[upload] %s says nothing about what to send; left owed\n",
+                         e->d_name);
+            continue;
+        }
+        struct stat st;
+        found.emplace_back(::stat(path.c_str(), &st) == 0 ? st.st_mtime : 0, std::move(o));
+    }
+    ::closedir(d);
+    std::stable_sort(found.begin(), found.end(),
+                     [](const auto& a, const auto& b) { return a.first < b.first; });
+    std::vector<Owed> out;
+    for (auto& [t, o] : found) out.push_back(std::move(o));
+    return out;
 }
 
 void clearPending(const storage::User& u, int romId, const std::string& fileName) {

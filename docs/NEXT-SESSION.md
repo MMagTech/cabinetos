@@ -37,20 +37,67 @@ agreed). With promotion, every change is tried on `testing` and a merge
 makes `latest` that same image, so the test console on `testing` is never
 behind what users get, and testing a change needs no `bootc switch` and no
 extra reboot. **SSH is port 2222; sudo's password is
-`cat /var/lib/cabinetos-files/password`.** #96 to #98 and **#100 (extra
-drives) are merged. #100 merged 2026-09-26 and was promoted, not built:
-`latest` and `testing` are both `2026.09.26.5` (`sha256:1a2ffb0aa211…`),
-and the A9 is on it**, from `testing`, gamescope/drm, no drop-ins, File
-access left on, the T9 and the SanDisk "Games" stick attached. **The VM is
-on `testing` `2026.09.26.4`.** Branches left: `main`, `testing`, and PR
-#42's `base-update/44.20260921`.
+`cat /var/lib/cabinetos-files/password`.** **#101 (Downloads) merged
+2026-09-26 and was promoted, not built: `latest` and `testing` are both
+`2026.09.26.6` (`sha256:37c2ccbeb255…`), and the A9 is on it**, from
+`testing`, gamescope/drm, File access left on, **a PIN set** (MMagTech's),
+the SanDisk "Games" stick attached. The VM is on `testing` `2026.09.26.4`.
+Branches left: `main`, `testing`, `state-screenshot` (this session's #99),
+and PR #42's `base-update/44.20260921`.
 
 **MMagTech, on what comes next (2026-09-26): finish the app; no side
-projects.** The `main.cpp` split (11,243 lines, the one real code-health
-problem) waits until it starts costing: a change to one screen breaking
-another, or contributors arriving. Next is the queue below, in order.
+projects.** The `main.cpp` split waits until it starts costing: a change to
+one screen breaking another, or contributors arriving.
 
-**THE SESSION OF 2026-09-26 BUILT DOWNLOADS (#68), BRANCH `download-row`.**
+**THE ORDER, SET WITH MMAGTECH 2026-09-26.** The old queue listed only
+Settings; this is everything open, in order:
+
+1. **#99, a picture with every save state**: built on `state-screenshot`,
+   see below. Next step: MMagTech checks the pictures on the Apple TV, then
+   push to `testing`, then merge.
+2. **Controllers** (#64 connected, #65 add one, #66 button mapping). They do
+   not depend on the emulators.
+3. **The emulators, as one block**: GameCube audio (#83), NES audio (#84),
+   Dreamcast will not start on the A9 (#85: flycast wants Vulkan memory
+   export this driver will not give, seen again 2026-09-26), N64 states
+   (#86), N64 textures (#82, also wrong on Cabinet: **a fixed amount of
+   effort, then write it down and move on**), PSP exit crash (#87), the
+   per-system emulator options Cabinet sets (#89), and the missing-BIOS
+   warning (#90). **Before Picture quality, because Picture quality is one
+   option on eight systems, four of which have these bugs** (MMagTech).
+4. **Picture quality** (#63), with the per-game override in the pause menu
+   (#73).
+5. **Offline play** (#88).
+6. **The installer** (not fit for users since 2026-09-19: branded Bazzite, a
+   media check that fails good media, Anaconda's partitioning and user
+   screens), the boot splash, the power button's clean shutdown.
+7. **The first-hour walk-through**, as a new user, with the real installer.
+   Includes one pass over every notification for length (MMagTech,
+   2026-09-26: *"some of these notifications are getting real long"*).
+
+**Open, for MMagTech:** whether the in-game features (#76 hotkey layer, #77
+fast forward, #78 rewind, #79 screenshots, #80 state undo) are in the first
+release. It decides how long the road is. Also parked: #74 RetroAchievements
+and #75 background colour (both "later"), #81 stale doc lines, PR #42.
+
+**THE SESSION OF 2026-09-26 (LATER) BUILT #99 ON `state-screenshot`.** Decided
+with MMagTech, recorded in `docs/PROJECT.md` under *Where a save state lives*:
+
+- **A state carries the game's picture** (`screenshotFile`, PNG), read from
+  the core's frame (`Core::snapshot`), so the pause menu is never in it;
+  upright for vertical arcade boards; at the core's resolution.
+- **States are named as Cabinet names them**: file name, UTC to the ms.
+- **Owed uploads are sent again**, saves and states: at start, after any
+  upload that works, every five minutes while owed. Found while planning #99:
+  nothing had ever retried a failed upload.
+- **Proved on the A9** (loop): SNES, N64, DoDonPachi on RomM with pictures
+  (state ids 74 to 77 and two more, all test states on MMagTech's account,
+  Tetris & Dr. Mario, Mario Kart 64, DoDonPachi); the five-minute resend and
+  the at-start resend, each with RomM blocked by a temporary nft table
+  (`inet cabtest`, gone; a 20-minute self-removal timer was armed each time).
+  **Not proved:** Vulkan (#85), a failed save resent.
+
+**THE SESSION OF 2026-09-26 BUILT DOWNLOADS (#68), MERGED AS #101.**
 Judged on the TV with `tools/ui-loop.sh`, one change at a time. What was
 decided is in `docs/SETTINGS.md`, Storage; the short version:
 
@@ -81,21 +128,6 @@ decided is in `docs/SETTINGS.md`, Storage; the short version:
   (PS2) were MOVED onto the SanDisk stick's `CabinetOS/roms/`; their keep
   records are on the main drive, as a real download there would have them.
   They are the only downloads left; the main drive's `roms/` is empty.
-
-**QUEUE, IN ORDER:**
-
-1. ~~Extra drives and Eject (#67)~~: **merged, #100.**
-2. ~~Downloads (#68)~~: **built on `download-row`**, see above.
-3. **#99, save states carry a screenshot**, as Cabinet does
-   (`screenshotFile` part, `<name> [<time>].png`). CabinetOS sends none, so
-   its states show blank in Cabinet and RomM.
-4. Controllers, then Picture quality.
-5. **A first-hour walk-through before release** (MMagTech agreed,
-   2026-09-25): install, first run, plugging things in, running out of
-   space, offline, as a new user, listing every rough edge. The text pass
-   already queued is part of it: **MMagTech, 2026-09-26, "some of these
-   notifications are getting real long"**; the pills and notices want one
-   pass for length.
 
 **THE SESSION OF 2026-09-25 (LATE) BUILT EXTRA DRIVES, BRANCH `usb-drives`.**
 Nothing mounted a USB drive: the desktop's automounter went with the

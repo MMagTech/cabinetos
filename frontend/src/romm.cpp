@@ -637,19 +637,31 @@ bool Client::fetchGames(int platformId, std::vector<Game>* out, std::string* err
 }
 
 namespace {
-// One multipart/form-data body with a single file part. Hand-built because the
-// whole client is: no HTTP library, and this is thirty lines.
+// One multipart/form-data body: the file part, and a state's picture as a
+// second part when there is one. Hand-built because the whole client is: no
+// HTTP library, and this is thirty lines. The picture part is Cabinet's to the
+// byte: `screenshotFile`, image/png (RommClient.swift, uploadState).
 std::string multipartBody(const std::string& boundary, const char* partName,
-                          const std::string& fileName, const std::vector<uint8_t>& data) {
+                          const std::string& fileName, const std::vector<uint8_t>& data,
+                          const std::string& shotName, const std::vector<uint8_t>& shot) {
     std::string b;
-    b.reserve(data.size() + fileName.size() + 256);
+    b.reserve(data.size() + shot.size() + fileName.size() + shotName.size() + 512);
     b += "--" + boundary + "\r\n";
     b += "Content-Disposition: form-data; name=\"";
     b += partName;
     b += "\"; filename=\"" + fileName + "\"\r\n";
     b += "Content-Type: application/octet-stream\r\n\r\n";
     b.append(reinterpret_cast<const char*>(data.data()), data.size());
-    b += "\r\n--" + boundary + "--\r\n";
+    b += "\r\n";
+    if (!shotName.empty() && !shot.empty()) {
+        b += "--" + boundary + "\r\n";
+        b += "Content-Disposition: form-data; name=\"screenshotFile\"; filename=\"" +
+             shotName + "\"\r\n";
+        b += "Content-Type: image/png\r\n\r\n";
+        b.append(reinterpret_cast<const char*>(shot.data()), shot.size());
+        b += "\r\n";
+    }
+    b += "--" + boundary + "--\r\n";
     return b;
 }
 
@@ -710,21 +722,23 @@ bool Client::uploadSave(int romId, const std::string& emulator, const std::strin
 }
 
 bool Client::uploadState(int romId, const std::string& emulator, const std::string& fileName,
-                         const std::vector<uint8_t>& data, std::string* err) const {
+                         const std::vector<uint8_t>& data, std::string* err,
+                         const std::string& shotName, const std::vector<uint8_t>& shot) const {
     // Deliberately NOT overwrite: a history of states is the point of states.
     const std::string path = "/api/states?rom_id=" + std::to_string(romId) +
                              "&emulator=" + emulator;
-    return postMultipart(path, "stateFile", fileName, data, err);
+    return postMultipart(path, "stateFile", fileName, data, err, shotName, shot);
 }
 
 bool Client::postMultipart(const std::string& path, const char* partName,
                            const std::string& fileName, const std::vector<uint8_t>& data,
-                           std::string* err) const {
+                           std::string* err, const std::string& shotName,
+                           const std::vector<uint8_t>& shot) const {
     CURL* c = curl_easy_init();
     if (!c) { if (err) *err = "curl init failed"; return false; }
 
     const std::string boundary = "CabinetOSBoundary7f3a91c4";
-    const std::string body = multipartBody(boundary, partName, fileName, data);
+    const std::string body = multipartBody(boundary, partName, fileName, data, shotName, shot);
 
     curl_slist* hdrs = curl_slist_append(
         nullptr, ("Content-Type: multipart/form-data; boundary=" + boundary).c_str());

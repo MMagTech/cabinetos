@@ -383,6 +383,15 @@ public:
     // catches a divergence that audio alone would not.
     uint64_t frameDigest() const;
 
+    // THE GAME'S OWN PICTURE, AS RGBA, THE WAY UP IT IS SHOWN: for the
+    // picture a save state carries (#99). Read from the game's frame, never
+    // from the screen, so the pause menu drawn over it is not in it. Rows top
+    // first, flipped and quarter-turned exactly as the player draws it, at the
+    // core's own resolution (Cabinet sends the same). False with nothing to
+    // read: no frame yet, or the PS2 path, which has no states. Call on the
+    // GL thread.
+    bool snapshot(std::vector<uint8_t>& rgba, unsigned& width, unsigned& height) const;
+
     // Emulated frames run since the game loaded, and audio frames produced.
     // Audio against the core's own sample rate is the only direct read on
     // whether emulated time is advancing at realtime.

@@ -99,6 +99,35 @@ bool decodeJPEG(const std::vector<uint8_t>& in, std::vector<uint8_t>& out, int& 
 
 }  // namespace
 
+bool encodePNG(const std::vector<uint8_t>& rgba, unsigned width, unsigned height,
+               std::vector<uint8_t>& out) {
+    if (width == 0 || height == 0 || rgba.size() < static_cast<size_t>(width) * height * 4)
+        return false;
+    // RGB, not RGBA: a quarter smaller, and there is no transparency to keep.
+    std::vector<uint8_t> rgb(static_cast<size_t>(width) * height * 3);
+    for (size_t i = 0, j = 0; j < rgb.size(); i += 4, j += 3) {
+        rgb[j] = rgba[i];
+        rgb[j + 1] = rgba[i + 1];
+        rgb[j + 2] = rgba[i + 2];
+    }
+    png_image img{};
+    img.version = PNG_IMAGE_VERSION;
+    img.width = width;
+    img.height = height;
+    img.format = PNG_FORMAT_RGB;
+    png_alloc_size_t size = 0;
+    if (!png_image_write_to_memory(&img, nullptr, &size, 0, rgb.data(), 0, nullptr) ||
+        size == 0)
+        return false;
+    out.resize(size);
+    if (!png_image_write_to_memory(&img, out.data(), &size, 0, rgb.data(), 0, nullptr)) {
+        out.clear();
+        return false;
+    }
+    out.resize(size);
+    return true;
+}
+
 bool decodeImage(const std::vector<uint8_t>& enc, std::vector<uint8_t>& rgba, int& w,
                  int& h) {
     if (enc.size() < 12) return false;
