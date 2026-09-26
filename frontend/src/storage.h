@@ -65,6 +65,8 @@
 
 #pragma once
 
+#include <sys/types.h>
+
 #include <string>
 #include <vector>
 
@@ -119,13 +121,6 @@ std::vector<std::string> locations();
 // firmware, configuration. The internal disk, always.
 const std::string& primaryLocation();
 
-// Where a game being KEPT should go: the games drive when one is plugged in,
-// and the internal disk otherwise.
-//
-// This decides where a download LANDS and nothing else. Keeping a game already
-// on the disk never moves bytes between drives — it changes which half of its
-// own location it sits in, which is a rename. See cache::keep.
-std::string keepLocation();
 
 // A drive that was here the last time the console looked and is not here now,
 // or empty.
@@ -155,7 +150,11 @@ struct Space {
     int64_t totalBytes = 0;
 };
 Space spaceOf(const std::string& location);
-bool isUsb(const std::string& location);
+// A drive that can be unplugged while the console runs: USB, Thunderbolt, an
+// SD card. What Storage calls "External" and offers Eject for.
+bool isExternal(const std::string& location);
+// The same question about a block device, before anything is mounted from it.
+bool isExternalDevice(dev_t device);
 
 // The location a game with this id is stored under, or the primary location
 // when it is not here yet.

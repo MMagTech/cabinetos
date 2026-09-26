@@ -81,6 +81,7 @@
 #include "server.h"
 #include "update.h"
 #include "files.h"
+#include "drives.h"
 #include "ui.h"
 
 namespace {
@@ -907,7 +908,28 @@ constexpr GalleryNotice kNoticeGallery[] = {
     {"Update didn't apply", Tone::Problem},
     {"Couldn't check for updates", Tone::Problem},
     {"Couldn't update", Tone::Problem},
+    {"External drive connected", Tone::Done},
+    {"Couldn't use the external drive", Tone::Problem},
+    {"Safe to unplug", Tone::Done},
+    {"Couldn't eject the external drive", Tone::Problem},
+    {"External drive removed", Tone::Info},
+    {"External drive isn't exFAT or NTFS", Tone::Problem},
+    {"Storage almost full", Tone::Info},
+    {"Couldn't format the drive", Tone::Problem},
 };
+
+// A drive's size as Storage says it: "2.02 TB", "125 GB". TWO DECIMALS FROM
+// 1 TB UP: with one, a 2.05 TB drive with 23 GB used read "2.0 TB free of
+// 2.0 TB", which looked impossible (MMagTech, 2026-09-25). Decimal units, as
+// the drive's box, the Mac and the PS5 count; Windows calls the same drive
+// 1.86 TB because it counts in binary units and still says TB.
+static std::string driveSize(int64_t b) {
+    char buf[32];
+    const double g = static_cast<double>(b) / 1e9;
+    if (g >= 1000.0) std::snprintf(buf, sizeof buf, "%.2f TB", g / 1000.0);
+    else std::snprintf(buf, sizeof buf, "%.0f GB", g);
+    return std::string(buf);
+}
 
 static void saveStateNow(GameSession& sess, Uploader& up, MenuNotice& notice) {
     cab::Core& core = cab::Core::shared();
@@ -1400,7 +1422,7 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
     const bool kept = placed.present ? placed.kept : keepWhenReady;
     const std::string location = placed.present
                                      ? placed.location
-                                     : (keepWhenReady ? storage::keepLocation()
+                                     : (keepWhenReady ? cache::keepLocation(game.sizeBytes)
                                                       : storage::primaryLocation());
     job.entryPath = placed.present
                         ? placed.entryPath
@@ -3592,6 +3614,10 @@ int main(int argc, char** argv) {
     // Printed rather than assumed. A console quietly writing somewhere nobody
     // expected is the kind of bug that costs an afternoon, and the one line it
     // takes to prevent that is this one.
+    //
+    // USB drives are mounted first, so the tree below and everything after it
+    // see a drive that was plugged in before the console started. drives.h.
+    if (!shotMode) drives::start();
     {
         std::string serr;
         if (!storage::ensureTree(&serr)) {
@@ -3766,6 +3792,11 @@ int main(int argc, char** argv) {
         std::printf("root            %s\n", storage::root().c_str());
         std::printf("pending upload  %10.2f GB\n", cache::pendingBytes() / 1e9);
         std::printf("system reserve  %10.2f GB\n", cache::kSystemReserveBytes / 1e9);
+        // WHERE A KEPT GAME WOULD LAND, by size: the main drive up to 80%,
+        // then the extra drive with the most room (cache::keepLocation).
+        for (const double g : {1.0, 5.0, 50.0})
+            std::printf("keep a %2.0f GB game  -> %s\n", g,
+                        cache::keepLocation(static_cast<int64_t>(g * 1e9)).c_str());
 
         // PER LOCATION, because the floors are a fact about a filesystem and
         // the whole reason `roms/` and `cache/` repeat is that there is more
@@ -3778,7 +3809,7 @@ int main(int argc, char** argv) {
             for (const auto& e : evictable) evictableBytes += e.bytes;
             std::printf("\n%-15s %s%s\n", i == 0 ? "internal" : "games drive",
                         loc.c_str(),
-                        loc == storage::keepLocation() ? "   <- kept games go here" : "");
+                        loc == cache::keepLocation(0) ? "   <- the next kept game goes here" : "");
             std::printf("  free          %10.2f GB\n", cache::freeBytes(loc) / 1e9);
             std::printf("  save floor    %10.2f GB\n", cache::saveFloorBytes(loc) / 1e9);
             std::printf("  evictable     %10.2f GB  in %zu game(s)\n",
@@ -5456,7 +5487,7 @@ int main(int argc, char** argv) {
         // which is the quiet second benefit of the split — see open question 14.
         const cache::Placement where = cache::find(romId);
         const std::string keepOn =
-            where.present ? where.location : storage::keepLocation();
+            where.present ? where.location : cache::keepLocation(g->sizeBytes);
         const cache::KeepVerdict v = cache::mayKeep(keepOn, romId, g->sizeBytes);
         if (!v.allowed) {
             // The one failure the person ever sees, and the number is what makes
@@ -5896,15 +5927,28 @@ int main(int argc, char** argv) {
     // then the keyboard. Switching into the owner's account still always asks
     // (it passes `always`), because that is not a Settings visit.
     bool pinUnlocked = false;
+    // A CODE THE CONSOLE CHOSE, typed on the same pad: the last step before
+    // Format, so erasing a drive is never one press too many. Not the PIN;
+    // no lockout, because a wrong code costs nothing.
+    std::string pinExpect;
     auto askPin = [&](const std::string& title, const std::string& detail,
                       std::function<void()> then, bool always = false) {
+        pinExpect.clear();
         if (!accounts::pinIsSet() || (pinUnlocked && !always)) { then(); return; }
         pinThen = std::move(then);
         pinScreen.open(screens::PinScreen::Mode::Check, title, detail);
         std::fprintf(stderr, "[pin] asked: %s\n", title.c_str());
     };
+    auto askCode = [&](const std::string& code, const std::string& title,
+                       const std::string& detail, std::function<void()> then) {
+        pinExpect = code;
+        pinThen = std::move(then);
+        pinScreen.open(screens::PinScreen::Mode::Check, title, detail);
+        std::fprintf(stderr, "[pin] code asked: %s\n", title.c_str());
+    };
     auto choosePin = [&](const std::string& title, const std::string& detail,
                          std::function<void()> then) {
+        pinExpect.clear();
         pinThen = std::move(then);
         pinScreen.open(screens::PinScreen::Mode::Choose, title, detail);
     };
@@ -5914,10 +5958,18 @@ int main(int argc, char** argv) {
         if (o == O::Cancelled) {
             pinScreen.close();
             pinThen = nullptr;
+            pinExpect.clear();
             std::fprintf(stderr, "[pin] left without one\n");
             return;
         }
-        if (pinScreen.mode() == screens::PinScreen::Mode::Check) {
+        if (!pinExpect.empty()) {
+            if (pinScreen.pin() != pinExpect) {
+                sound::play(sound::Cue::Edge);
+                pinScreen.reject("That is not the code");
+                return;
+            }
+            pinExpect.clear();
+        } else if (pinScreen.mode() == screens::PinScreen::Mode::Check) {
             if (!accounts::checkPin(pinScreen.pin())) {
                 ++pinFails;
                 sound::play(sound::Cue::Edge);
@@ -5991,6 +6043,14 @@ int main(int argc, char** argv) {
     enum SettingId { SetAddAccount = 1, SetInterfaceSounds, SetPinSet, SetPinChange,
                      SetPinOff, SetRemoveAccount, SetScreenOff, SetWifi, SetServer,
                      SetUpdate, SetUpdateCheck, SetCredits, SetFiles };
+    // One Eject row per USB drive: this plus the drive's index in
+    // storage::locations() when the rows were built.
+    constexpr int kSetEject = 100;
+    // One Format row per blank drive: this plus its index in formatIds, the
+    // drives as they were when the rows were built.
+    constexpr int kSetFormat = 200;
+    std::vector<drives::Unusable> formatable;
+    std::map<int, std::string> driveNames;   // a drive row's id -> its name
 
     int screenOffIndex = savedScreenOff();
     std::fprintf(stderr, "[idle] screen off after %s\n", kScreenOff[screenOffIndex].name);
@@ -6362,13 +6422,7 @@ int main(int argc, char** argv) {
     auto buildSettings = [&]() {
         using Row = screens::SettingsRow;
         using K = Row::Kind;
-        auto gb = [](int64_t b) {
-            char buf[32];
-            const double g = static_cast<double>(b) / 1e9;
-            if (g >= 1000.0) std::snprintf(buf, sizeof buf, "%.1f TB", g / 1000.0);
-            else std::snprintf(buf, sizeof buf, "%.0f GB", g);
-            return std::string(buf);
-        };
+        auto gb = driveSize;
         std::vector<screens::SettingsCategory> cats;
 
         cats.push_back({"Accounts", {
@@ -6484,33 +6538,68 @@ int main(int argc, char** argv) {
         }});
 
         // THE DRIVES, by MMagTech's names: the main drive is "CabinetOS", any
-        // other internal disk "Internal", a USB drive "External". With two of
-        // one kind the drive's own name tells them apart.
+        // other internal disk "Internal", one that can be unplugged
+        // "External". With two of one kind, counting drives that cannot be
+        // used, the drive's own name tells them apart: its label for one in
+        // use, its model for one that is not. THE DRIVE'S OWN ROW IS THE
+        // BUTTON: an External drive in use offers Eject, a blank drive offers
+        // Format, and there are no separate action rows, so there is never a
+        // question of which drive a row means. MMagTech on the TV, 2026-09-25:
+        // a Format row under the drive "can make me feel like I'm formatting
+        // something that isn't the unformatted drive".
         std::vector<Row> store;
         const std::vector<std::string> locs = storage::locations();
+        const std::vector<drives::Unusable> unusableDrives = drives::unusable();
         int internals = 0, externals = 0;
         for (size_t i = 1; i < locs.size(); ++i)
-            (storage::isUsb(locs[i]) ? externals : internals)++;
+            (storage::isExternal(locs[i]) ? externals : internals)++;
+        for (const drives::Unusable& u : unusableDrives) (u.external ? externals : internals)++;
         for (size_t i = 0; i < locs.size(); ++i) {
             std::string name = "CabinetOS";
+            const bool external = i > 0 && storage::isExternal(locs[i]);
             if (i > 0) {
-                const bool usb = storage::isUsb(locs[i]);
-                name = usb ? "External" : "Internal";
-                if ((usb ? externals : internals) > 1) {
+                name = external ? "External" : "Internal";
+                if ((external ? externals : internals) > 1) {
                     // <mount>/CabinetOS: the mount point is named for the drive.
                     std::string mount = locs[i].substr(0, locs[i].rfind('/'));
                     name += " (" + mount.substr(mount.rfind('/') + 1) + ")";
                 }
             }
+            // THE SPACE ON THE SECOND LINE AND THE ACTION AS THE VALUE, so
+            // the row says what pressing it does: a chevron alone only says
+            // "more". MMagTech on the TV, 2026-09-25.
             const storage::Space sp = storage::spaceOf(locs[i]);
-            store.push_back({K::Info, 0, name, "",
-                             sp.ok ? gb(sp.freeBytes) + " free of " + gb(sp.totalBytes)
-                                   : std::string("Unknown")});
+            const std::string space = sp.ok ? gb(sp.freeBytes) + " free of " + gb(sp.totalBytes)
+                                            : std::string("Unknown");
+            const std::string value =
+                !external ? "" : drives::ejecting() ? "Ejecting\xE2\x80\xA6" : "Eject";
+            store.push_back({external ? K::Action : K::Info,
+                             external ? kSetEject + static_cast<int>(i) : 0, name, space, value});
+            if (external) driveNames[kSetEject + static_cast<int>(i)] = name;
         }
-        if (externals > 0)
-            store.push_back({K::Unbuilt, 0, "Eject", "Makes a USB drive safe to unplug", ""});
-        store.push_back({K::Unbuilt, 0, "Kept and cached games",
-                         "What is on this console, and what it keeps", ""});
+        // DRIVES FOUND AND NOT USABLE, greyed, with the reason. A new internal
+        // SSD arrives blank; without this row it would be invisible, because
+        // internal drives get no notices. A blank one has Format under it.
+        formatable.clear();
+        for (const drives::Unusable& u : unusableDrives) {
+            std::string name = u.external ? "External" : "Internal";
+            if ((u.external ? externals : internals) > 1 && !u.model.empty())
+                name += " (" + u.model + ")";
+            const std::string size = u.sizeBytes ? gb(static_cast<int64_t>(u.sizeBytes)) : "";
+            if (u.blank) {
+                store.push_back({K::Action, kSetFormat + static_cast<int>(formatable.size()),
+                                 name, size.empty() ? "Blank" : "Blank \xC2\xB7 " + size,
+                                 drives::formatting() ? "Formatting\xE2\x80\xA6" : "Format"});
+                formatable.push_back(u);
+            } else {
+                std::string why = u.wrongFormat ? "Isn't exFAT or NTFS" : "Couldn't use this drive";
+                if (!size.empty()) why += " \xC2\xB7 " + size;
+                store.push_back({K::Disabled, 0, name, why, ""});
+            }
+        }
+        // DOWNLOADS, #68: everyone's downloaded games, behind the PIN. The
+        // cache is not shown. docs/SETTINGS.md, Storage.
+        store.push_back({K::Unbuilt, 0, "Downloads", "Games downloaded on this console", ""});
         // FILE ACCESS: ONE ROW. What a computer needs to reach it (address,
         // user name, the password in plain text) is in a panel the row opens,
         // as Wi-Fi's networks are: as rows under Storage they ran off the
@@ -6872,7 +6961,69 @@ int main(int argc, char** argv) {
                 sound::play(sound::Cue::Activate);
                 break;
             case screens::Action::Setting:
-                if (res.value == SetAddAccount) {
+                if (res.value >= kSetFormat) {
+                    const size_t i = static_cast<size_t>(res.value - kSetFormat);
+                    if (drives::formatting() || i >= formatable.size()) {
+                        sound::play(sound::Cue::Edge);
+                        break;
+                    }
+                    // THREE STEPS, MMagTech 2026-09-25: the PIN if set; the
+                    // drive by name and size with Cancel focused, so a drive
+                    // wrongly read as blank is recognised before anything
+                    // happens; then a code the console chose. The only thing
+                    // on the console that erases anything.
+                    const drives::Unusable u = formatable[i];
+                    const std::string what =
+                        std::string(u.external ? "External" : "Internal") +
+                        (u.model.empty() ? "" : ", " + u.model) +
+                        (u.sizeBytes ? ", " + driveSize(static_cast<int64_t>(u.sizeBytes)) : "");
+                    askPin("Enter the PIN", "To format a drive", [&, u, what]() {
+                        askChoice("Format this drive?", what, {"Cancel", "Format"}, 0,
+                                  [&, u](int k) {
+                            if (k != 1) return;
+                            char code[8];
+                            std::snprintf(code, sizeof code, "%04u",
+                                          static_cast<unsigned>(SDL_rand(10000)));
+                            askCode(code, std::string("Enter ") + code, "To format it as exFAT",
+                                    [&, u]() {
+                                std::fprintf(stderr, "[drives] format asked for %s\n",
+                                             u.id.c_str());
+                                drives::format(u.id);
+                                buildSettings();
+                            });
+                        });
+                    });
+                    sound::play(sound::Cue::Activate);
+                } else if (res.value >= kSetEject) {
+                    const std::vector<std::string> locs = storage::locations();
+                    const size_t i = static_cast<size_t>(res.value - kSetEject);
+                    if (drives::ejecting() || i >= locs.size() || !storage::isExternal(locs[i])) {
+                        sound::play(sound::Cue::Edge);
+                        break;
+                    }
+                    // The drive's row was pressed: Eject is asked, with the
+                    // drive named, and Cancel beside it.
+                    const std::string loc = locs[i];
+                    const std::string ejName =
+                        driveNames.count(res.value) ? driveNames[res.value] : "External";
+                    askChoice(ejName, "", {"Eject", "Cancel"}, 0, [&, loc](int k) {
+                    if (k != 0) return;
+                    // FINISHES OR STOPS ANYTHING WRITING TO IT. The only thing
+                    // that writes to a drive is a download being kept there;
+                    // it is stopped and waited for, so nothing holds a file
+                    // open on the drive. Its stage is left as the worker set
+                    // it, so the frame loop undoes the keep as for any failed
+                    // download.
+                    if (launchJob.busy() && launchJob.entryPath.rfind(loc + "/", 0) == 0) {
+                        std::fprintf(stderr, "[drives] eject: stopping the download of %s\n",
+                                     launchJob.title.c_str());
+                        launchJob.stop();
+                    }
+                    drives::eject(loc);
+                    buildSettings();
+                    });
+                    sound::play(sound::Cue::Activate);
+                } else if (res.value == SetAddAccount) {
                     // The same route as the chip's Add user, PIN included.
                     // Back from the pairing screen returns here, because it
                     // is pushed.
@@ -7713,6 +7864,12 @@ int main(int argc, char** argv) {
                 detailScreen.setKept(
                     cache::isKeptBy(storage::currentUser(), launchJob.romId));
             refreshKeeps();
+            // THE ONE EARLY WARNING. Only a Download can fill the drives (the
+            // cache clears itself, saves are small), so this is the one moment
+            // to say it: kept games are close to leaving no room to play
+            // something new. MMagTech, 2026-09-25.
+            if (launchJob.keepWhenReady && cache::almostFull())
+                menuNotice.say("Storage almost full", Tone::Info);
             return;
         }
 
@@ -8780,6 +8937,48 @@ int main(int argc, char** argv) {
             case power::Event::Woke:
             case power::Event::None:
                 break;
+        }
+        // USB DRIVES coming, going and ejected. The pill and nothing else: no
+        // sound, because a chime would play over a game. MMagTech, 2026-09-25.
+        if (const drives::Notice dn = drives::poll(); dn.event != drives::Event::None) {
+            const std::string drive = dn.external ? "External drive" : "Internal drive";
+            switch (dn.event) {
+                case drives::Event::Connected:
+                    menuNotice.say(drive + " connected", Tone::Done);
+                    break;
+                case drives::Event::WrongFormat:
+                    menuNotice.say(drive + " isn't exFAT or NTFS", Tone::Problem);
+                    break;
+                case drives::Event::CouldNotUse:
+                    menuNotice.say("Couldn't use the " + std::string(dn.external ? "external" : "internal") +
+                                       " drive", Tone::Problem);
+                    break;
+                case drives::Event::Removed:
+                    menuNotice.say(drive + " removed", Tone::Info);
+                    break;
+                case drives::Event::SafeToUnplug:
+                    menuNotice.say("Safe to unplug", Tone::Done);
+                    break;
+                case drives::Event::EjectFailed:
+                    menuNotice.say("Couldn't eject the external drive", Tone::Problem);
+                    break;
+                case drives::Event::FormatFailed:
+                    menuNotice.say("Couldn't format the drive", Tone::Problem);
+                    break;
+                case drives::Event::None:
+                case drives::Event::Changed:
+                    break;
+            }
+            // File access shows each drive as a folder; a drive that came or
+            // went changes the list. Root rebuilds it (cabinetos-files refresh).
+            // Changed covers an internal drive arriving or leaving, which has
+            // no notice of its own.
+            if (filesState.on && (dn.event == drives::Event::Connected ||
+                                  dn.event == drives::Event::Removed ||
+                                  dn.event == drives::Event::SafeToUnplug ||
+                                  dn.event == drives::Event::Changed))
+                files::refreshDrives(nullptr);
+            if (here() == Screen::Settings) buildSettings();
         }
         if (releasePending) {
             const double waited = (SDL_GetTicksNS() - releaseWaitStart) / 1e9;

@@ -8460,6 +8460,75 @@ recalled:
    the first time and nothing after, because silently re-downloading a library
    over Wi-Fi is its own kind of rude.
 
+##### REVISED 2026-09-25: the main drive first, and a drive is overflow
+
+**Rule 2 is replaced.** The first USB drive ever plugged into the A9 (a 4 TB
+Samsung T9) showed that nothing mounted it: udisks mounts on request, and the
+requester on a desktop is the desktop's automounter, which the image strips.
+Building that turned into a conversation about what a drive is for, and
+MMagTech found the hole in rule 2 by asking about the other shape: *a 2 TB
+main drive with lots free, and a 1 TB stick*. Rule 2 sends every kept game to
+the smaller, slower drive that can be pulled out, while the big one sits empty.
+
+Considered and dropped: **the drive with the most free space**. It handles
+both shapes, but scatters kept games across drives for no gain, so pulling
+one takes an arbitrary handful with it.
+
+**Decided (MMagTech's proposal): kept games go on the main drive until it is
+80% full, then to the extra drive with the most room; with none, the main
+drive after all, down to the two floors.**
+
+- The 80% counts what is NOT the cache, because the cache clears itself. The
+  last 20% is room to play a game nobody kept, which is why it is not 100%:
+  a main drive full of kept games cannot play anything new without removing
+  one. Updates and saves do not depend on it; the two floors already protect
+  them.
+- With one drive the 80% changes nothing. Refusing a Download while 400 GB
+  sits free would read as a bug, and filling your own drive is your choice.
+- It keeps kept games on the fastest drive, the one that never leaves, which
+  is also the one offline mode can always read. Offline, a game kept on a
+  drive that is not attached cannot be played, and shows greyed; no rule can
+  fix that, because the file is not on the console.
+- Internal or external makes no difference, which is rule 3 made true: both
+  are now mounted by the console (udisks2, `frontend/src/drives.cpp`, and
+  `63-cabinetos-drives.rules` for the internal case).
+- Nothing already on a drive moves. The rule decides where the next Download
+  lands.
+- The duplicate rule below still holds as written: a kept copy under `roms/`
+  wins over a stand-in in `cache/`, wherever each is.
+
+**Only exFAT and NTFS**, MMagTech. FAT32 cannot hold a file over 4 GB, which
+many PS2 and GameCube games are; Linux filesystems mount with a root-owned top
+folder the console cannot write into; Mac formats do not mount writable. Each
+had a fix and none was worth it for technical users who made the installer on
+a computer that can format a drive.
+
+**Formatting: a blank drive only.** MMagTech first ruled it out (a formatting
+bug is a wiped drive, and whoever installed this has a computer to format
+with), then reopened it the same evening for the case that rule breaks: a
+blank SSD fitted inside the PC, which cannot be formatted anywhere else. So
+Format is offered only on a drive with nothing on it (no partition table, no
+filesystem), checked when listed and again from udisks right before writing,
+behind the PIN, a confirm naming the drive's model and size with Cancel
+focused, and a random 4-digit code on the PIN pad (his). The protection
+against the bug he feared is the blank check plus the name and size on the
+confirm; the code guards against a slip. A drive with anything on it, even
+something the console cannot read, is never offered it.
+
+**One early warning, "Storage almost full"**, after a Download that leaves
+under 10% free across all drives. Only a Download can fill the drives (the
+cache clears itself, saves are small), so there is no background watcher.
+
+**Rule 6 is dropped for a drive missing at boot**: it only ever reached the
+log. The "External drive removed" pill covers a drive pulled while on.
+
+**Found while building it, in File access:** a second External drive never
+appeared (the naming loop skipped it), and Eject with File access on would
+have either failed or, worse, said "Safe to unplug" while File access's view
+still held the drive mounted. Eject now checks the kernel's mount table for
+the drive before it says anything, and File access rebuilds its drive folders
+when a drive comes or goes.
+
 ##### The duplicate, which MMagTech found and is the only real hole in it
 
 **Keep a game with the drive plugged in, unplug it, play the game — it comes
@@ -8500,7 +8569,7 @@ folder on the internal disk being mistaken for a drive and then "lost". It
 claims `CabinetOS/` on each and nothing else. `$CABINETOS_DRIVES` overrides the
 search for testing.
 
-`keepLocation()` is the first drive or the internal disk. `cache::dedupe`
+`keepLocation()` is the first drive or the internal disk (**superseded 2026-09-25**: `cache::keepLocation`, main drive first, see above). `cache::dedupe`
 resolves a game that is on the machine twice. The missing-drive line is said
 once and the drive then forgotten, so it is never said twice.
 
@@ -12755,9 +12824,11 @@ About. `frontend/src/settings.{h,cpp}`; the rows are built in `main.cpp`
 - **Found while building: CabinetOS has no version number.** The image reports
   only Bazzite's (`44.20260916`), so About > Version has nothing to show until
   one is decided.
-- USB versus internal is read from the drive's sysfs path (`storage::isUsb`).
-  A drive whose filesystem has no single block device (btrfs) reads as
-  Internal. It only changes a label.
+- External versus internal is read from the drive's sysfs path
+  (`storage::isExternal`): USB, or a device the kernel marks removable (an SD
+  card, a Thunderbolt enclosure). A drive whose filesystem has no single
+  block device (btrfs) reads as Internal. It changes the label and hides
+  Eject. The Thunderbolt case is untested: no such enclosure here.
 
 **Moving across the top bar switches the screen under it**, MMagTech
 2026-09-24: the shoulders already switched, and the d-pad made you press A on

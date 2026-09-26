@@ -43,26 +43,80 @@ extra reboot. **SSH is port 2222; sudo's password is
 on it**, from `testing`, gamescope/drm, no drop-ins. Branches left:
 `main`, `testing`, and PR #42's `base-update/44.20260921`.
 
-**QUEUE, IN ORDER, as of the end of that session:**
+**QUEUE, IN ORDER, as of 2026-09-25 late night:**
 
-1. **Update available panel: DONE, #98.** Proved for real on the A9:
-   checked on `.2`, the panel opened, Download, Restart now, `.3` applied.
-2. **USB DRIVES ARE NEVER MOUNTED, found 2026-09-25.** MMagTech plugged a
-   4 TB Samsung T9 (exFAT, label "T9") into the A9: the kernel sees `sda2`,
-   nothing mounts it, so Storage shows only the main drive. A desktop's
-   automounter did that job and was stripped with the desktop;
-   `storage::driveSearchPaths()` looks in `/run/media/cabinet`, where
-   udisks would have put it. **Fix: the console asks udisks2 to mount a
-   drive when it appears and to unmount and power it off for Eject (#67)**,
-   the same service. Leave the T9 plugged in; it is the test drive.
-   **Notifications, MMagTech 2026-09-25:** the pill, no new sound.
-   "External drive connected" once it is mounted and usable (not at the
-   cable), "Safe to unplug" after Eject, "External drive removed" when
-   pulled without it, "Couldn't use the external drive" when it cannot be
-   used. No sound: the pill is the notification (PS5 does the same), and a
-   chime would play over a game.
-3. Then Eject (#67) and Kept and cached games (#68), then Controllers,
-   then Picture quality.
+1. **Extra drives and Eject (#67): BUILT on branch `usb-drives`.** See the
+   block below. What is left is in its "still to test" list.
+2. **Downloads (#68)**, redesigned 2026-09-25: the row that was "Kept and
+   cached games". Only downloaded games (the cache is not shown), everyone's,
+   with whose each is, biggest first, Remove download; **opening it asks
+   the PIN**. In Storage. `docs/SETTINGS.md`, Storage.
+3. **#99, save states carry a screenshot**, as Cabinet does
+   (`screenshotFile` part, `<name> [<time>].png`). CabinetOS sends none, so
+   its states show blank in Cabinet and RomM.
+4. Controllers, then Picture quality.
+5. **A first-hour walk-through before release** (MMagTech agreed,
+   2026-09-25): install, first run, plugging things in, running out of
+   space, offline, as a new user, listing every rough edge. The text pass
+   already queued is part of it. Known so far: a Play that cannot fit says
+   "not enough space for this game, and nothing left that can be cleared".
+
+**THE SESSION OF 2026-09-25 (LATE) BUILT EXTRA DRIVES, BRANCH `usb-drives`.**
+Nothing mounted a USB drive: the desktop's automounter went with the
+desktop. What started as "mount the T9" became a design conversation with
+MMagTech, every scenario a real user hits, and the design changed. Final
+state in `docs/SETTINGS.md`, Storage; reasoning in `docs/PROJECT.md`, "REVISED
+2026-09-25" under the games-drive rules. The short version:
+
+- **The console mounts extra drives itself** (udisks2 over D-Bus,
+  `frontend/src/drives.{h,cpp}`), internal and external, at start and when
+  they appear. Never its own drive, never Windows' EFI/reserved/recovery
+  partitions, **exFAT and NTFS only**. `63-cabinetos-drives.rules` grants
+  the internal-drive mount and format; USB needed no rule.
+- **Kept games go on the main drive first, up to 80%** (not counting the
+  cache), then the extra drive with the most room (`cache::keepLocation`).
+  Replaces "the first extra drive, always".
+- **Storage:** each drive's row is its button, space on the second line,
+  its action as the value (**Eject ›**, **Format ›**); drives it cannot use
+  are listed greyed with why; sizes to two decimals from 1 TB up.
+- **Format, blank drives only**, behind the PIN, a confirm naming the drive
+  with Cancel focused, and a random 4-digit code. Names the drive "Games",
+  "Games 2"... **Proved on the A9** on the SanDisk installer stick, wiped
+  blank with MMagTech's permission (serial `A200366670F40C46`; it is a test
+  stick now, not an installer).
+- **Pills, no sound:** connected, removed, safe to unplug, isn't exFAT or
+  NTFS, couldn't use, couldn't eject, couldn't format, Storage almost full
+  (after a Download leaving under 10%). Internal drives get no pills.
+- **File access** names drive folders as Storage does and rebuilds them when
+  a drive comes or goes (`cabinetos-files refresh`, ExecReload, polkit
+  `reload`). Found on the way: a second External drive never showed, and
+  Eject with File access on could have said "Safe to unplug" while File
+  access still held it mounted. Eject now reads the kernel's mount table.
+- **PROVED, 2026-09-25/26.** On the A9 (loop, then `testing`
+  `2026.09.26.4`): mount at start, blank and wrong-format verdicts, Format
+  twice, Eject, a pull without Eject, a wipe noticed while plugged in, File
+  access showing both drives by Storage's names, and **Eject with File
+  access on**, which first failed safe ("Not authorized": udisks will not
+  let the session unmount root's bind mount) and now works: udisks'
+  mount, then `cabinetos-files refresh`, then the kernel's mount table
+  checked empty, then power-off with a retry (it was refused as busy a
+  quarter second after the second unmount). On the VM (`testing`): only
+  the Windows disk's data partition mounted, Format on a blank internal
+  disk, and the 80% overflow (`--storage` now prints where a 1, 5 and
+  50 GB kept game would land: 1 GB stays, 5 GB goes to the 64 GB disk).
+  **A "USB hub asleep" theory was tested and disproved:** a T9 that seemed
+  to appear only after `lsusb` mounted on its own in a clean retest; it
+  had been a slow connection on a new port. **Not testable here:**
+  Thunderbolt; "Storage almost full" on a real drive; the SFTP password
+  login itself (unchanged, and MMagTech's to run).
+- **The T9 carries exFAT's "not properly unmounted" flag** from a pull
+  without Eject. Harmless; Disk Utility's First Aid on a Mac clears it. A
+  check on the console for such a drive was offered and parked (slow on
+  4 TB, exFAT copes).
+- **The VM is on `testing` now** (switched 2026-09-26; dev SSH is port 2222
+  there too, sudo still `cabinet`). Its two new 8 GB disks: `vdc`, formatted
+  by the console as exFAT "Games"; `vdd`, a Windows layout, "Windows"
+  mounted. `~/cabinetos-frontend-test` on it is a scratch binary.
 
 **THE SESSION OF 2026-09-25 (EVENING) BUILT FILE ACCESS (#69), BRANCH
 `file-access`.** Judged on the TV, then proved from MMagTech's Mac against

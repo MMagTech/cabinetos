@@ -255,6 +255,35 @@ struct KeepVerdict {
 // the machine has already made.
 KeepVerdict mayKeep(const std::string& location, int romId, int64_t gameBytes);
 
+// --- Where a kept game goes, with more than one drive ----------------------
+//
+// THE MAIN DRIVE FIRST, AND ANOTHER DRIVE ONLY AS OVERFLOW. MMagTech,
+// 2026-09-25, replacing "the first extra drive, whenever one is plugged in".
+// That rule assumed a small main drive and a big extra one; with a 2 TB main
+// drive and a 1 TB stick it sent every kept game to the smaller, slower drive
+// that can be pulled out, while the big one sat empty. Main first keeps kept
+// games on the fastest drive, the one that never leaves, which is also the
+// one offline mode can always read.
+//
+// Kept games fill the main drive up to 80% of it. The rest is left for the
+// games people only play (the cache, which clears itself) so a new game can
+// always be played without removing a kept one. Past that, the extra drive
+// with the most free room that the game fits on. With no extra drive, or
+// none it fits on, the main drive after all, down to the floors above:
+// refusing while hundreds of gigabytes sit free would read as a bug.
+// Internal or USB makes no difference. A starting value; one line.
+inline constexpr double kMainKeepShare = 0.80;
+
+// Where a kept game of `gameBytes` should be downloaded to. Decides where a
+// download LANDS and nothing else: keeping a game already on a drive never
+// moves it (see keep()).
+std::string keepLocation(int64_t gameBytes);
+
+// Space left across every drive, counting the cache as free because it clears
+// itself. Under this share, a Download says "Storage almost full".
+inline constexpr double kAlmostFullShare = 0.10;
+bool almostFull();
+
 // Marks a game kept BY THIS PERSON, and promotes it out of the cache.
 //
 // `record` is the game's whole library entry as JSON, not a subset: Cabinet's

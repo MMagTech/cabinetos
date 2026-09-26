@@ -36,5 +36,6 @@ bool call(const char* method, const char* name, std::string* why) {
 
 bool start(const char* name, std::string* why) { return call("StartUnit", name, why); }
 bool stop(const char* name, std::string* why) { return call("StopUnit", name, why); }
+bool reload(const char* name, std::string* why) { return call("ReloadUnit", name, why); }
 
 }  // namespace unit

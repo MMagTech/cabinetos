@@ -65,5 +65,6 @@ bool turnOff(std::string* why) { return unit::stop("cabinetos-files.service", wh
 bool newPassword(std::string* why) {
     return unit::start("cabinetos-files-password.service", why);
 }
+bool refreshDrives(std::string* why) { return unit::reload("cabinetos-files.service", why); }
 
 }  // namespace files

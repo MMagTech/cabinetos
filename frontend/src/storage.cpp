@@ -327,15 +327,6 @@ std::vector<std::string> locations() {
 
 const std::string& primaryLocation() { return root(); }
 
-std::string keepLocation() {
-    const std::vector<std::string> all = locations();
-    // The first drive, if there is one. Kept games are what a drive is FOR —
-    // they are deliberate, they are the bulk, and they are the only thing worth
-    // carrying. The cache stays on the internal disk, which is always attached
-    // and usually faster than USB.
-    return all.size() > 1 ? all[1] : all.front();
-}
-
 std::string missingDriveToReport() {
     const std::vector<std::string> now = locations();
     std::vector<std::string> present(now.begin() + 1, now.end());
@@ -367,20 +358,43 @@ Space spaceOf(const std::string& location) {
     return out;
 }
 
-bool isUsb(const std::string& location) {
+bool isExternalDevice(dev_t d) {
     // A partition's sysfs link resolves to a path under its disk, and the
-    // disk's under whatever bus carries it: .../usb2/2-1/.../block/sdb/sdb1.
+    // disk's under whatever carries it: .../usb2/2-1/.../block/sdb/sdb1.
+    // Anything on USB can be unplugged. So can a disk the kernel marks
+    // removable (an SD card: `removable` is 1 on the disk), and anything
+    // behind a port the kernel knows faces outwards (`removable` reads
+    // "removable" on the device, which is how a Thunderbolt enclosure shows,
+    // since its NVMe drive sits on PCIe like an internal one). Walked from the
+    // partition up to /sys/devices.
+    //
     // A filesystem with no single block device behind it (btrfs reports an
     // anonymous one) resolves nowhere and is reported as internal, which is
-    // the safe answer: it only changes a label.
-    const dev_t d = deviceOf(location);
+    // the safe answer: it only changes a label and hides Eject.
     if (d == 0) return false;
     char link[64];
     std::snprintf(link, sizeof link, "/sys/dev/block/%u:%u", major(d), minor(d));
     char resolved[PATH_MAX];
     if (!::realpath(link, resolved)) return false;
-    return std::strstr(resolved, "/usb") != nullptr;
+    std::string at = resolved;
+    if (at.find("/usb") != std::string::npos) return true;
+    while (at.size() > std::strlen("/sys/devices")) {
+        if (FILE* f = std::fopen((at + "/removable").c_str(), "rb")) {
+            char buf[32] = {};
+            const size_t n = std::fread(buf, 1, sizeof buf - 1, f);
+            std::fclose(f);
+            std::string v(buf, n);
+            while (!v.empty() && std::isspace(static_cast<unsigned char>(v.back()))) v.pop_back();
+            if (v == "1" || v == "removable") return true;
+        }
+        const size_t slash = at.rfind('/');
+        if (slash == std::string::npos) break;
+        at.erase(slash);
+    }
+    return false;
 }
+
+bool isExternal(const std::string& location) { return isExternalDevice(deviceOf(location)); }
 
 std::string romsDir(const std::string& location) { return location + "/roms"; }
 std::string cacheDir(const std::string& location) { return location + "/cache"; }
