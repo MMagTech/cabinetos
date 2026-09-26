@@ -6592,8 +6592,9 @@ int main(int argc, char** argv) {
                 store.push_back({K::Disabled, 0, name, why, ""});
             }
         }
-        store.push_back({K::Unbuilt, 0, "Kept and cached games",
-                         "What is on this console, and what it keeps", ""});
+        // DOWNLOADS, #68: everyone's downloaded games, behind the PIN. The
+        // cache is not shown. docs/SETTINGS.md, Storage.
+        store.push_back({K::Unbuilt, 0, "Downloads", "Games downloaded on this console", ""});
         // FILE ACCESS: ONE ROW. What a computer needs to reach it (address,
         // user name, the password in plain text) is in a panel the row opens,
         // as Wi-Fi's networks are: as rows under Storage they ran off the
