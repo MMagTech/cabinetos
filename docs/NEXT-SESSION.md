@@ -71,13 +71,16 @@ decided is in `docs/SETTINGS.md`, Storage; the short version:
 - **Proved on the A9 (loop):** removals of one game, of a whole system (the
   two Saturn games, by MMagTech), and a mixed system: Black moved by hand
   onto the SanDisk stick, Burnout 3 on the main drive, PlayStation 2 showed
-  both, then only Burnout 3 after Eject. **Not tried: Remove all** (it would
-  delete every download) and a removal with a PIN set.
+  both, then only Burnout 3 after Eject. **Then MMagTech set a PIN, opened
+  Downloads through it, and pressed Remove all** with the stick ejected: the
+  five games on the main drive went (1.93 GB), the two on the stick were not
+  listed and were left alone.
+- **THE A9 HAS A PIN NOW** (MMagTech's; not written here). Settings' PIN
+  rows ask for it; anything that needs it on the TV is his to enter.
 - **Test data on the A9, by hand:** Alex Kidd (Master System) and Black
   (PS2) were MOVED onto the SanDisk stick's `CabinetOS/roms/`; their keep
   records are on the main drive, as a real download there would have them.
-  Removed during testing: Smash T.V., both Saturn games, the TurboGrafx-CD
-  game.
+  They are the only downloads left; the main drive's `roms/` is empty.
 
 **QUEUE, IN ORDER:**
 
