@@ -37,11 +37,18 @@ agreed). With promotion, every change is tried on `testing` and a merge
 makes `latest` that same image, so the test console on `testing` is never
 behind what users get, and testing a change needs no `bootc switch` and no
 extra reboot. **SSH is port 2222; sudo's password is
-`cat /var/lib/cabinetos-files/password`.** #96, #97 and #98 are merged.
-**#98 merged as `f02edfa` and was promoted, not built: `latest` and
-`testing` are both `2026.09.26.3` (`sha256:55b1a9f0db43…`), and the A9 is
-on it**, from `testing`, gamescope/drm, no drop-ins. Branches left:
-`main`, `testing`, and PR #42's `base-update/44.20260921`.
+`cat /var/lib/cabinetos-files/password`.** #96 to #98 and **#100 (extra
+drives) are merged. #100 merged 2026-09-26 and was promoted, not built:
+`latest` and `testing` are both `2026.09.26.5` (`sha256:1a2ffb0aa211…`),
+and the A9 is on it**, from `testing`, gamescope/drm, no drop-ins, File
+access left on, the T9 and the SanDisk "Games" stick attached. **The VM is
+on `testing` `2026.09.26.4`.** Branches left: `main`, `testing`, and PR
+#42's `base-update/44.20260921`.
+
+**MMagTech, on what comes next (2026-09-26): finish the app; no side
+projects.** The `main.cpp` split (11,243 lines, the one real code-health
+problem) waits until it starts costing: a change to one screen breaking
+another, or contributors arriving. Next is the queue below, in order.
 
 **QUEUE, IN ORDER, as of 2026-09-25 late night:**
 
