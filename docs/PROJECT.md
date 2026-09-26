@@ -1537,6 +1537,31 @@ that claims Nintendo, Xbox or PlayStation after the company its address is
 registered to was built and shown. MMagTech, the same day: if it is in
 Switch mode, that is what it should show. Do not rebuild it.
 
+### No mapping screen, and the in-game shortcuts' shape — 2026-09-26
+
+MMagTech asked whether Button mapping should be RetroArch-style remapping,
+then whether he was drifting into adding too much: *"the os is meant to be
+simple and take the complexity away alot of emulators add."* Decided:
+
+- **No remapping, for the first release at least.** Every system already
+  plays with RetroArch's out-of-the-box layout, read by position (bottom
+  button to RetroPad B, and so on), so the defaults are the ones people
+  know. With four players a remap has no clean owner: per system changes
+  the game for everyone, per pad multiplies screens, per person fails for
+  players 2 to 4. If it is asked for after release, the likely request is
+  "A and B swapped on a Nintendo-style pad", which is one switch.
+- **No mapping screen for unknown pads either (#66).** The console carries
+  SDL_GameControllerDB (`players::loadMappings`) and a weekly pull request
+  keeps it current; a pad that is still missing is added to the list. The
+  person never maps anything, which is the rule this section began with.
+- **The in-game shortcuts (#76 to #80) are NOT drift, in this shape**
+  (MMagTech's argument, accepted: off by default, unknown to anyone who
+  never turns them on): one Settings row, In-game shortcuts Off/On, **fixed
+  combinations chosen by us**, no per-shortcut settings (a configurable
+  hotkey is a mapping screen again). Rewind only where it is cheap (the
+  cartridge systems), absent elsewhere the way Save state is on PS2.
+  Roadmap step 4, after the emulator work.
+
 ### The permission detail, and a Phase 2 decision that paid for itself
 
 Gamepads are the one input the frontend reads **directly from `/dev/input`**;

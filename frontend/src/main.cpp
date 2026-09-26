@@ -968,6 +968,7 @@ constexpr Credit kCredits[] = {
     {"FFmpeg", "Inside PPSSPP \xC2\xB7 LGPL v2.1+"},
     {"rapidyaml, c4core", "Inside PCSX2 \xC2\xB7 MIT"},
     {"SDL3", "Input and audio \xC2\xB7 zlib"},
+    {"SDL_GameControllerDB", "The controller list \xC2\xB7 zlib"},
     {"Mesa", "Graphics \xC2\xB7 MIT"},
     {"FreeType", "Text \xC2\xB7 FreeType licence"},
     {"libjpeg-turbo, libpng", "Cover art \xC2\xB7 BSD, libpng"},
@@ -4014,6 +4015,7 @@ int main(int argc, char** argv) {
         std::fprintf(stderr, "[frontend] SDL_Init failed: %s\n", SDL_GetError());
         return 1;
     }
+    players::loadMappings();
 
     // The interface's own sounds. Opened here rather than lazily, because the
     // first click a person hears should not be the second one they asked for —

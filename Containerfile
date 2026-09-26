@@ -20,6 +20,10 @@ COPY system_files /system_files
 # repository.
 COPY LICENSE /licences/LICENSE
 COPY docs/LICENCES.md /licences/LICENCES.md
+# The controller list (SDL_GameControllerDB). Installed with the frontend, in
+# the small last layer, NOT from system_files/: there it rode in the OS layer,
+# and its first update shipped 60 MB to the console instead of one file.
+COPY frontend/data /frontend-data
 # The frontend binary, the twenty-one cores and PPSSPP's system files.
 #
 # None of them is in this repository and none of them is built here — they are

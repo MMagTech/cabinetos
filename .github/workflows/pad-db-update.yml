@@ -1,0 +1,91 @@
+# Keep the controller list current: open a pull request when it changes.
+#
+# The image carries SDL_GameControllerDB (frontend/data/gamecontrollerdb.txt,
+# installed to /usr/share/cabinetos/), the community's list of controllers SDL does not know
+# by itself. It is how CabinetOS handles an unrecognised pad instead of a
+# button-mapping screen (issue #66), so a list that never moves is a list that
+# slowly stops covering new pads.
+#
+# Weekly, like the base update, and for the same reason: one reviewable
+# change a week. It never merges anything; a merge ships the new list to every
+# console through System update.
+
+name: Check controller list update
+
+on:
+  schedule:
+    # Monday 09:30 UTC, half an hour after the base check.
+    - cron: '30 9 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: pad-db-update
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Check for a new controller list
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+
+      - name: Fetch the latest list
+        id: fetch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          FILE=frontend/data/gamecontrollerdb.txt
+          SHA=$(gh api repos/mdqinc/SDL_GameControllerDB/commits/master --jq .sha)
+          curl -fsSL "https://raw.githubusercontent.com/mdqinc/SDL_GameControllerDB/${SHA}/gamecontrollerdb.txt" -o /tmp/gamecontrollerdb.txt
+          # A list that shrank to nothing, or is not a list, is never shipped.
+          LINUX=$(grep -c 'platform:Linux' /tmp/gamecontrollerdb.txt || true)
+          if [ "${LINUX}" -lt 300 ]; then
+            echo "Only ${LINUX} Linux entries in the new list; not using it." >> "${GITHUB_STEP_SUMMARY}"
+            exit 1
+          fi
+          if cmp -s /tmp/gamecontrollerdb.txt "${FILE}"; then
+            echo "changed=false" >> "${GITHUB_OUTPUT}"
+          else
+            cp /tmp/gamecontrollerdb.txt "${FILE}"
+            echo "changed=true" >> "${GITHUB_OUTPUT}"
+            echo "sha=${SHA}" >> "${GITHUB_OUTPUT}"
+            echo "short=${SHA:0:12}" >> "${GITHUB_OUTPUT}"
+            echo "linux=${LINUX}" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Open a pull request
+        if: steps.fetch.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.BASE_UPDATE_TOKEN || secrets.GITHUB_TOKEN }}
+          SHORT: ${{ steps.fetch.outputs.short }}
+          SHA: ${{ steps.fetch.outputs.sha }}
+          LINUX: ${{ steps.fetch.outputs.linux }}
+        run: |
+          set -euo pipefail
+          BRANCH="pad-db/${SHORT}"
+          if git ls-remote --exit-code --heads origin "${BRANCH}" >/dev/null 2>&1; then
+            echo "Branch ${BRANCH} already exists; leaving the open PR alone."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "${BRANCH}"
+          git add frontend/data/gamecontrollerdb.txt
+          git commit -m "Controller list: SDL_GameControllerDB at ${SHORT}"
+          git push origin "${BRANCH}"
+          cat > /tmp/pr-body.md <<EOF
+          **What it does:** updates the list of controllers the console recognises to SDL_GameControllerDB at \`${SHA}\` (${LINUX} Linux entries).
+
+          **Why:** it is how a pad SDL does not know gets its buttons right, instead of a mapping screen (#66). Merging ships it to every console with the next System update.
+          EOF
+          # Needs Settings -> Actions -> General -> "Allow GitHub Actions to
+          # create and approve pull requests", as base-update.yml explains.
+          gh pr create --title "Controller list → ${SHORT}" --body-file /tmp/pr-body.md \
+            --base "${{ github.event.repository.default_branch }}" --head "${BRANCH}"

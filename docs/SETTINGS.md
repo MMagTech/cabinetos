@@ -151,11 +151,13 @@ Decided with MMagTech 2026-09-26, from the things people will actually do.
   - B closes it at once, stopping a scan or pairing in flight.
   - A wired pad needs none of it: plugged in, it is the next player (and
     its first press closes the window if it is open).
-- **Button mapping** (#66): opens by itself when a pad the console does not
-  recognise connects, driven by that pad, asking by position ("the bottom
-  button"); saved per pad model, with a Reset. A testing switch makes a
-  known pad come up as unknown, so it can be judged on the TV with a pad
-  that is recognised. **To build.**
+- **No Button mapping screen** (#66, decided with MMagTech 2026-09-26). An
+  unrecognised pad is handled by the console, not the person: the image
+  carries the community's controller list (SDL_GameControllerDB, 491 more
+  controllers than SDL knows alone), refreshed by a weekly pull request, and
+  a pad reported missing is added to it. **Personal remapping is parked**:
+  every system already plays with RetroArch's default layout by button
+  position, and a remap has no clean owner with four players.
 - **A playing pad dropping out opens the pause menu**, as on Switch and
   Apple TV (MMagTech: yes). Any pad can resume.
 

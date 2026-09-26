@@ -66,6 +66,17 @@ private:
 
 // ---- The console's pads ----------------------------------------------------
 
+// THE COMMUNITY'S CONTROLLER LIST, on top of SDL's own: SDL_GameControllerDB,
+// in the image at /usr/share/cabinetos/gamecontrollerdb.txt (CABINETOS_PAD_DB
+// overrides it). Call once, after SDL_Init and before any pad is opened.
+//
+// THIS IS INSTEAD OF A BUTTON-MAPPING SCREEN (issue #66, decided with
+// MMagTech 2026-09-26). A pad SDL does not know arrives with meaningless
+// buttons; rather than hand the person a screen to fix it, the console
+// carries the larger list, and a pad reported missing is added to it. The
+// mapping stays ours, as docs/PROJECT.md has always said.
+void loadMappings();
+
 // A pad SDL just reported, or one found at start. Opens it and seats it.
 void added(SDL_JoystickID id);
 void removed(SDL_JoystickID id);
