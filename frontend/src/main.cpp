@@ -6041,6 +6041,7 @@ int main(int argc, char** argv) {
     // drives as they were when the rows were built.
     constexpr int kSetFormat = 200;
     std::vector<drives::Unusable> formatable;
+    std::map<int, std::string> driveNames;   // a drive row's id -> its name
 
     int screenOffIndex = savedScreenOff();
     std::fprintf(stderr, "[idle] screen off after %s\n", kScreenOff[screenOffIndex].name);
@@ -6531,9 +6532,12 @@ int main(int argc, char** argv) {
         // other internal disk "Internal", one that can be unplugged
         // "External". With two of one kind, counting drives that cannot be
         // used, the drive's own name tells them apart: its label for one in
-        // use, its model for one that is not. EACH DRIVE'S ACTION SITS RIGHT
-        // UNDER IT, Eject under a drive in use, Format under a blank one, so
-        // with two drives there is no asking which one a row means.
+        // use, its model for one that is not. THE DRIVE'S OWN ROW IS THE
+        // BUTTON: an External drive in use offers Eject, a blank drive offers
+        // Format, and there are no separate action rows, so there is never a
+        // question of which drive a row means. MMagTech on the TV, 2026-09-25:
+        // a Format row under the drive "can make me feel like I'm formatting
+        // something that isn't the unformatted drive".
         std::vector<Row> store;
         const std::vector<std::string> locs = storage::locations();
         const std::vector<drives::Unusable> unusableDrives = drives::unusable();
@@ -6553,14 +6557,12 @@ int main(int argc, char** argv) {
                 }
             }
             const storage::Space sp = storage::spaceOf(locs[i]);
-            store.push_back({K::Info, 0, name, "",
-                             sp.ok ? gb(sp.freeBytes) + " free of " + gb(sp.totalBytes)
-                                   : std::string("Unknown")});
-            // EJECT: unmount, then power the drive off, then "Safe to unplug"
-            // in the pill.
-            if (external)
-                store.push_back({K::Action, kSetEject + static_cast<int>(i), "Eject", "",
-                                 drives::ejecting() ? "Ejecting\xE2\x80\xA6" : ""});
+            std::string value = sp.ok ? gb(sp.freeBytes) + " free of " + gb(sp.totalBytes)
+                                      : std::string("Unknown");
+            if (external && drives::ejecting()) value = "Ejecting\xE2\x80\xA6";
+            store.push_back({external ? K::Action : K::Info,
+                             external ? kSetEject + static_cast<int>(i) : 0, name, "", value});
+            if (external) driveNames[kSetEject + static_cast<int>(i)] = name;
         }
         // DRIVES FOUND AND NOT USABLE, greyed, with the reason. A new internal
         // SSD arrives blank; without this row it would be invisible, because
@@ -6570,16 +6572,16 @@ int main(int argc, char** argv) {
             std::string name = u.external ? "External" : "Internal";
             if ((u.external ? externals : internals) > 1 && !u.model.empty())
                 name += " (" + u.model + ")";
-            store.push_back({K::Disabled, 0, name,
-                             u.blank         ? "Blank"
-                             : u.wrongFormat ? "Isn't exFAT or NTFS"
-                                             : "Couldn't use this drive",
-                             u.sizeBytes ? gb(static_cast<int64_t>(u.sizeBytes)) : ""});
+            const std::string size = u.sizeBytes ? gb(static_cast<int64_t>(u.sizeBytes)) : "";
             if (u.blank) {
                 store.push_back({K::Action, kSetFormat + static_cast<int>(formatable.size()),
-                                 "Format", "",
-                                 drives::formatting() ? "Formatting\xE2\x80\xA6" : ""});
+                                 name, "Blank",
+                                 drives::formatting() ? "Formatting\xE2\x80\xA6" : size});
                 formatable.push_back(u);
+            } else {
+                store.push_back({K::Disabled, 0, name,
+                                 u.wrongFormat ? "Isn't exFAT or NTFS" : "Couldn't use this drive",
+                                 size});
             }
         }
         store.push_back({K::Unbuilt, 0, "Kept and cached games",
@@ -6985,19 +6987,27 @@ int main(int argc, char** argv) {
                         sound::play(sound::Cue::Edge);
                         break;
                     }
+                    // The drive's row was pressed: Eject is asked, with the
+                    // drive named, and Cancel beside it.
+                    const std::string loc = locs[i];
+                    const std::string ejName =
+                        driveNames.count(res.value) ? driveNames[res.value] : "External";
+                    askChoice(ejName, "", {"Eject", "Cancel"}, 0, [&, loc](int k) {
+                    if (k != 0) return;
                     // FINISHES OR STOPS ANYTHING WRITING TO IT. The only thing
                     // that writes to a drive is a download being kept there;
                     // it is stopped and waited for, so nothing holds a file
                     // open on the drive. Its stage is left as the worker set
                     // it, so the frame loop undoes the keep as for any failed
                     // download.
-                    if (launchJob.busy() && launchJob.entryPath.rfind(locs[i] + "/", 0) == 0) {
+                    if (launchJob.busy() && launchJob.entryPath.rfind(loc + "/", 0) == 0) {
                         std::fprintf(stderr, "[drives] eject: stopping the download of %s\n",
                                      launchJob.title.c_str());
                         launchJob.stop();
                     }
-                    drives::eject(locs[i]);
+                    drives::eject(loc);
                     buildSettings();
+                    });
                     sound::play(sound::Cue::Activate);
                 } else if (res.value == SetAddAccount) {
                     // The same route as the chip's Add user, PIN included.

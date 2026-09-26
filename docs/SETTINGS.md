@@ -331,8 +331,7 @@ status here to Built.
     a new SSD). MMagTech first decided the console never formats (a
     formatting bug is a wiped drive), then raised the case that breaks it the
     same evening: a blank SSD fitted inside the PC cannot be formatted
-    anywhere else. A blank drive is listed as "Blank" with **Format** under
-    it; pressing it asks the PIN if set, then "Format this drive?" naming the
+    anywhere else. A blank drive is listed as "Blank"; pressing it asks the PIN if set, then "Format this drive?" naming the
     drive, its model and size with **Cancel** focused (so a drive wrongly
     read as blank is recognised), then a **random 4-digit code** on the PIN
     pad (his idea; typing "format" with a pad was rejected as slower and no
@@ -341,10 +340,14 @@ status here to Built.
     checked again from udisks right before writing. Built on `usb-drives`;
     tested on the A9 with the installer stick wiped blank (MMagTech's
     permission), and on the VM's virtual disks for the internal case.
-  - **Storage's layout with several drives:** each drive's row, then its
-    action right under it (Eject under a drive in use, Format under a blank
-    one). With two of a kind, a drive in use is named by its label, "External
-    (T9)", and one not in use by its model, "External (SanDisk 3.2 Gen1)".
+  - **The drive's own row is the button** (MMagTech on the TV, 2026-09-25:
+    a Format row under the drive "can make me feel like I'm formatting
+    something that isn't the unformatted drive"). An External drive in use
+    opens "Eject / Cancel" titled with its name; a blank drive opens the
+    Format confirm; a drive with nothing to do is plain or greyed. No
+    separate action rows. With two of a kind, a drive in use is named by its
+    label, "External (T9)", and one not in use by its model, "External
+    (SanDisk 3.2 Gen1)".
 
 ## System
 
