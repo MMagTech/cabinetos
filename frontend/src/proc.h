@@ -19,6 +19,7 @@
 #pragma once
 
 #include <atomic>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -51,6 +52,11 @@ Result run(const std::vector<std::string>& args, int timeoutSeconds);
 // screen that has been closed must not hold the console for the rest of it.
 Result run(const std::vector<std::string>& args, int timeoutSeconds,
            const std::atomic<bool>* cancel);
+// And with what the tool prints handed over as it arrives, whole lines at a
+// time, for a tool whose output is news while it runs (a Bluetooth scan).
+Result run(const std::vector<std::string>& args, int timeoutSeconds,
+           const std::atomic<bool>* cancel,
+           const std::function<void(const std::string& line)>& onLine);
 
 // Whitespace off both ends. Every one of these tools newline-terminates
 // everything, and a trailing newline in an error message reads badly on a

@@ -27,7 +27,14 @@ Result run(const std::vector<std::string>& args, int timeoutSeconds) {
 
 Result run(const std::vector<std::string>& args, int timeoutSeconds,
            const std::atomic<bool>* cancel) {
+    return run(args, timeoutSeconds, cancel, {});
+}
+
+Result run(const std::vector<std::string>& args, int timeoutSeconds,
+           const std::atomic<bool>* cancel,
+           const std::function<void(const std::string& line)>& onLine) {
     Result r;
+    size_t handed = 0;   // how much of r.out has gone to onLine
     if (args.empty()) return r;
 
     int outPipe[2], errPipe[2];
@@ -90,6 +97,10 @@ Result run(const std::vector<std::string>& args, int timeoutSeconds,
             const ssize_t got = read(fds[i].fd, buf, sizeof buf);
             if (got > 0) {
                 (i == 0 ? r.out : r.err).append(buf, static_cast<size_t>(got));
+                if (i == 0 && onLine)
+                    for (size_t nl; (nl = r.out.find('\n', handed)) != std::string::npos;
+                         handed = nl + 1)
+                        onLine(r.out.substr(handed, nl - handed));
             } else {
                 (i == 0 ? open0 : open1) = false;
             }

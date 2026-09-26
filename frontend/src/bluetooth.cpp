@@ -213,7 +213,8 @@ bool scan(int seconds, std::vector<Device>* out, std::string* err,
 }
 
 bool listen(int seconds, std::vector<Device>* out, std::string* err,
-            const std::atomic<bool>* cancel) {
+            const std::atomic<bool>* cancel,
+            const std::function<void(const Device&)>& onHeard) {
     if (!out) return false;
     out->clear();
     if (!available()) {
@@ -227,9 +228,27 @@ bool listen(int seconds, std::vector<Device>* out, std::string* err,
     }
     if (!a.powered && !powerOn(err)) return false;
     if (seconds < 1) seconds = 1;
+    // Told as it happens: each address the first time it is heard, and again
+    // when a line brings its name.
+    std::vector<std::string> told;
+    auto onLine = [&](const std::string& line) {
+        if (!onHeard || told.size() >= kMaxDevices) return;
+        const size_t at = line.find("Device ");
+        if (at == std::string::npos || line.size() < at + 7 + 17) return;
+        const std::string address = line.substr(at + 7, 17);
+        if (address[2] != ':' || address[14] != ':') return;
+        const bool seen = std::find(told.begin(), told.end(), address) != told.end();
+        const bool named = line.find(" Name: ") != std::string::npos ||
+                           line.find(" Alias: ") != std::string::npos;
+        if (seen && !named) return;
+        if (!seen) told.push_back(address);
+        Device d;
+        d.address = address;
+        if (fill(&d)) onHeard(d);
+    };
     const proc::Result r = proc::run(
         {"bluetoothctl", "--timeout", std::to_string(seconds), "scan", "on"}, seconds + 15,
-        cancel);
+        cancel, onLine);
     // Every line about a device names it: "[NEW] Device E4:17:D8:3D:DB:BE
     // 8BitDo Lite 2", "[CHG] Device 63:95:E1:A8:D2:1C RSSI: ...", with
     // colour codes around the tag. The address after "Device " is the thing.

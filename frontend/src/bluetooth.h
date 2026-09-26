@@ -37,6 +37,7 @@
 #pragma once
 
 #include <atomic>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -90,10 +91,14 @@ bool scan(int seconds, std::vector<Device>* out, std::string* err,
 // heard during it, described. `bt::scan` returns everything bluez has ever
 // seen, and on the A9 that listed an 8BitDo under the identity of a mode it
 // was no longer in, which could never answer (2026-09-26). Stopped early by
-// `cancel`, keeping what was heard until then. False only when there is no
+// `cancel`, keeping what was heard until then. `onHeard`, if given, is told
+// about each device the moment it is heard (and again when its name
+// arrives), so a list can fill while the round is still running: a window
+// that showed nothing for ten seconds looked stalled (MMagTech, 2026-09-26). False only when there is no
 // Bluetooth to listen with.
 bool listen(int seconds, std::vector<Device>* out, std::string* err,
-            const std::atomic<bool>* cancel = nullptr);
+            const std::atomic<bool>* cancel = nullptr,
+            const std::function<void(const Device&)>& onHeard = {});
 
 // What the adapter already knows, without looking again. For drawing something
 // immediately while `scan` runs.
