@@ -297,6 +297,11 @@ public:
     const std::vector<int16_t>& drainAudio();
 
     void setPad(int port, const PadState& pad);
+    // How many players there are, so the core is told a controller is in
+    // each of their ports. Before loadGame it sets what the game starts with;
+    // during a game a higher number plugs the new ports in. Never unplugs: a
+    // player whose pad went off keeps their controller in the machine.
+    void setPlayers(int n);
 
     // --- PlayStation 2 ---------------------------------------------------
     //

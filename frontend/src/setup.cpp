@@ -15,6 +15,7 @@
 #include "firstrun.h"
 #include "keyboard.h"
 #include "net.h"
+#include "players.h"
 #include "qr.h"
 #include "romm.h"
 #include "accounts.h"
@@ -235,6 +236,9 @@ struct ServerProbe {
 class Flow {
 public:
     Flow(const Deps& d, const Options& o) : d_(d), o_(o) {}
+    // Stops a Bluetooth scan or pairing still running, so leaving does not
+    // wait it out while the jobs are joined.
+    ~Flow() { btCancel_.store(true); }
 
     Outcome run();
 
@@ -288,6 +292,7 @@ private:
 
     Deps d_;
     Options o_;
+    std::atomic<bool> btCancel_{false};
 
     firstrun::Machine machine_;
     firstrun::Facts facts_;
@@ -934,11 +939,11 @@ void Flow::startBtScan() {
     // and says so properly, which is a better answer than silently doing
     // nothing.
     if (btAdapterKnown_ && !btAdapter_.present) return;
-    btScanJob_.start([](std::vector<bt::Device>& out, std::string& err) {
+    btScanJob_.start([this](std::vector<bt::Device>& out, std::string& err) {
         // Ten seconds: the sensible floor for a pad somebody has only just put
         // into pairing mode, and short enough that "Scan again" is a reasonable
         // thing to press.
-        return bt::scan(10, &out, &err);
+        return bt::scan(10, &out, &err, &btCancel_);
     });
 }
 
@@ -947,8 +952,8 @@ void Flow::pairSelected() {
     const bt::Device dev = devices_[static_cast<size_t>(chosenDevice_)];
     notice_ = "Pairing with " + (dev.name.empty() ? dev.address : dev.name) + "…";
     noticeIsError_ = false;
-    btPairJob_.start([dev](bool& out, std::string& err) {
-        out = bt::pair(dev.address, &err);
+    btPairJob_.start([this, dev](bool& out, std::string& err) {
+        out = bt::pair(dev.address, &err, 40, &btCancel_);
         return out;
     });
 }
@@ -1713,8 +1718,12 @@ Outcome Flow::run() {
                     outcome_ = Outcome::Quit;
                     break;
 
+                case SDL_EVENT_GAMEPAD_REMOVED:
+                    players::removed(e.gdevice.which);
+                    break;
+
                 case SDL_EVENT_GAMEPAD_ADDED:
-                    SDL_OpenGamepad(e.gdevice.which);
+                    players::added(e.gdevice.which);
                     // A pad that turns up mid-setup is the controller step
                     // answering itself, which is exactly what should happen
                     // when somebody wakes a pad that was already paired.

@@ -1471,6 +1471,72 @@ the mapping is entirely ours.
 5. **Rumble quality varies by driver**, and there is no Taptic Engine to fall
    back to the way Cabinet has on a phone.
 
+### Players, decided 2026-09-26 (issue #64)
+
+**Found first: only one pad had ever played.** Every pad drove the menus, but
+a game read only the first pad SDL listed, as port 0, and `core.cpp` had two
+ports. A second person's pad did nothing in a game. So item 3 above was not
+a numbering question but "build players 2 to 4".
+
+**The rules** (`frontend/src/players.{h,cpp}`, walked by `--players-test`):
+each pad takes the next number up to four; outside a game the numbers close
+up; during a game a pad that goes off keeps its number while another pad is
+on, and gets it back by its serial; if every pad goes off, the first back is
+player 1. A Settings row per pad gives it another number by swapping.
+
+**Why the numbers close up outside a game, and why "every pad off" resets.**
+The first proposal held a number until the console restarted. MMagTech's
+question killed it: *"say we are done playing and both go off ... and then i
+grab the controller that happened to have been player 2."* Held numbers
+would leave that person as player 2 in a one-player game, holding a pad the
+game does not hear. So a number is held only where it protects someone: a
+pad dropping out mid-game while the other person plays on.
+
+**Why a swap, not "the pad that connects first is player 1".** MMagTech: *"i
+might have a preferred controller and just switching the controller to the
+other person wouldn't fix that."* The number follows the person's choice in
+Settings, and closing up keeps the order, so the swap holds while both pads
+are on.
+
+**The core is told a controller is in a port only when a player is there**
+(`Core::setPlayers`), and plugged in mid-game when one arrives. Every port
+a joypad would have Flycast make four VMUs nothing syncs. PlayStation 2's host
+takes two ports, so players 3 and 4 play nothing there (no multitap).
+
+**A playing pad dropping out pauses the game** (MMagTech, same day).
+
+**Add a controller became a window, and pairing had to keep its keys.**
+Built first as first run's pairing screen on its own (the 2026-09-24
+decision); MMagTech compared it with a window like Wi-Fi's and chose the
+window. Three things found on the way, each on the A9:
+
+- **The adapter is not pairable, so a pad paired without bonding** and bluez
+  then refused its input ("Rejected connection from !bonded device"): the
+  kids' Switch pad showed "connected" and did nothing. `bt::pair` now makes
+  the adapter pairable for the pairing only, and re-pairs a pad left paired
+  without keys.
+- **The first pairing try often fails** (ConnectionAttemptFailed) and the
+  second works, three times in a row: the radio is still searching. One
+  automatic retry after 1.5 s.
+- **Four-second listening rounds missed pads in pairing mode** that an
+  eight-second scan found at once; classic Bluetooth needs about ten seconds
+  a sweep. Ten-second rounds, with each device listed the moment a line of
+  the scan names it (`bt::listen`, `proc::run` with a line callback).
+- **8BitDo pads have a Bluetooth identity per mode**, so bluez's own list
+  (`bt::scan`) held identities that could never answer. The window lists
+  only what it has heard since opening.
+- **SDL does not always know a Bluetooth pad's address** (not for pads the
+  kernel drives, such as an Xbox pad), which hid Forget. It is read from
+  the kernel's `uniq` when SDL has none.
+
+**A pad is named as it names itself. Tried the other way and taken back.**
+A pad in Switch mode reports itself as a Switch Pro Controller, so
+MMagTech's 8BitDo read "Nintendo Switch Pro Controller". Its Bluetooth
+address gives the maker away (E4:17:D8 is 8BitDo's), and naming any pad
+that claims Nintendo, Xbox or PlayStation after the company its address is
+registered to was built and shown. MMagTech, the same day: if it is in
+Switch mode, that is what it should show. Do not rebuild it.
+
 ### The permission detail, and a Phase 2 decision that paid for itself
 
 Gamepads are the one input the frontend reads **directly from `/dev/input`**;

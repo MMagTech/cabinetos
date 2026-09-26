@@ -36,6 +36,8 @@
 
 #pragma once
 
+#include <atomic>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -82,7 +84,21 @@ struct Device {
 // It returns devices that are already paired as well as ones just discovered,
 // because "this pad is already set up" is an answer the screen has to be able
 // to give rather than a reason to hide the row.
-bool scan(int seconds, std::vector<Device>* out, std::string* err);
+bool scan(int seconds, std::vector<Device>* out, std::string* err,
+          const std::atomic<bool>* cancel = nullptr);
+
+// ONLY WHAT IS IN RANGE NOW: a scan of `seconds`, returning just the devices
+// heard during it, described. `bt::scan` returns everything bluez has ever
+// seen, and on the A9 that listed an 8BitDo under the identity of a mode it
+// was no longer in, which could never answer (2026-09-26). Stopped early by
+// `cancel`, keeping what was heard until then. `onHeard`, if given, is told
+// about each device the moment it is heard (and again when its name
+// arrives), so a list can fill while the round is still running: a window
+// that showed nothing for ten seconds looked stalled (MMagTech, 2026-09-26). False only when there is no
+// Bluetooth to listen with.
+bool listen(int seconds, std::vector<Device>* out, std::string* err,
+            const std::atomic<bool>* cancel = nullptr,
+            const std::function<void(const Device&)>& onHeard = {});
 
 // What the adapter already knows, without looking again. For drawing something
 // immediately while `scan` runs.
@@ -101,7 +117,8 @@ bool known(std::vector<Device>* out, std::string* err);
 //
 // Blocks. Pairing a controller is normally two or three seconds and can be
 // thirty when a pad has dropped out of pairing mode.
-bool pair(const std::string& address, std::string* err, int timeoutSeconds = 40);
+bool pair(const std::string& address, std::string* err, int timeoutSeconds = 40,
+          const std::atomic<bool>* cancel = nullptr);
 
 // Drops a device entirely, so a half-finished pairing can be retried cleanly.
 // A device bluez has seen but failed to pair with will otherwise sit in its

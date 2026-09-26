@@ -104,9 +104,60 @@ status here to Built.
 
 ## Controllers
 
-- **Connected controllers** (which is which player), **Add a controller** (the
-  same pairing screen as first run), **Button mapping**. All **to build**:
-  #64, #65, #66.
+Decided with MMagTech 2026-09-26, from the things people will actually do.
+
+- **Up to four players, one per controller** (#64). Until then a game heard
+  only the first pad; every pad walked the menus, and still does. A system
+  with fewer ports uses the first ones. The keyboard is player 1 too.
+- **Outside a game the numbers close up**: the pads that are on are 1, 2, 3
+  in the order they connected. Both pads go to sleep, and whichever one is
+  picked up next is player 1.
+- **During a game a pad that goes off keeps its number** while any other pad
+  is still on, and gets it back when it returns (known by its serial, the
+  Bluetooth address). **If every pad goes off, the first one back is player
+  1.** Leaving the game closes up any number still held.
+- **One row per controller: its name, with "Player 1" as the value**, the
+  shape of every other setting. (Built first as "Player 1" over the name;
+  MMagTech: nothing said the number could be changed.) **The pad last
+  pressed has a steady dot before its "Player N"**: that is how two
+  identical pads are told apart. (A flash on every press was tried first; it
+  strobed while navigating and read as a bug.) Pads with player lights show
+  their number on the pad.
+- **A pad is named as it names itself.** An 8BitDo in Switch mode reads
+  "Nintendo Switch Pro Controller", and that is right: it is in Switch mode.
+  (Naming pads after their maker, from the Bluetooth address, was built and
+  taken back out the same day; MMagTech preferred what the pad says.)
+- **Pressing a row: "Make player N"** for each other pad (the two swap; a
+  preferred pad keeps its number while both stay on) **and Forget** for a
+  Bluetooth pad, with "Forget <name>?" and Cancel focused. No PIN. A lone
+  wired pad has nothing to press, so its row only shows.
+- **Add a controller** (#65): **a window over Settings, like Wi-Fi's**, no
+  PIN. (First run's full pairing screen was built for it first and
+  compared: it felt like leaving Settings. First run keeps that screen.)
+  - Title "Add a controller", line "Put a controller into pairing mode".
+  - It opens one row tall, "Looking for controllers…" dimmed in it, and
+    **grows smoothly** as devices arrive; the width never changes. (Opening
+    small then jumping read as a second window; opening six rows tall left
+    an empty band.)
+  - **Only devices heard since it opened**, each listed the moment it is
+    heard, in ten-second listening rounds. Controllers sort to the top;
+    other named devices (lights, TVs) stay listed, because a controller
+    that does not say it is one must not go missing (MMagTech). Pads
+    already playing are not listed.
+  - Choosing one: its row says "Pairing…". Success: the title becomes
+    **"Paired successfully"**, the line "Press a button on it", and the new
+    pad's first press closes the window with "<name> is player N". Failure:
+    "Couldn't pair. Try again".
+  - B closes it at once, stopping a scan or pairing in flight.
+  - A wired pad needs none of it: plugged in, it is the next player (and
+    its first press closes the window if it is open).
+- **Button mapping** (#66): opens by itself when a pad the console does not
+  recognise connects, driven by that pad, asking by position ("the bottom
+  button"); saved per pad model, with a Reset. A testing switch makes a
+  known pad come up as unknown, so it can be judged on the TV with a pad
+  that is recognised. **To build.**
+- **A playing pad dropping out opens the pause menu**, as on Switch and
+  Apple TV (MMagTech: yes). Any pad can resume.
 
 ## Network
 

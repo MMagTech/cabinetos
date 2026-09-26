@@ -1,8 +1,11 @@
 #include "bluetooth.h"
 
+#include <cstdio>
+
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
+#include <unistd.h>
 
 #include "proc.h"
 
@@ -180,7 +183,8 @@ bool known(std::vector<Device>* out, std::string* err) {
     return true;
 }
 
-bool scan(int seconds, std::vector<Device>* out, std::string* err) {
+bool scan(int seconds, std::vector<Device>* out, std::string* err,
+          const std::atomic<bool>* cancel) {
     if (!out) return false;
     out->clear();
     if (!available()) {
@@ -200,7 +204,8 @@ bool scan(int seconds, std::vector<Device>* out, std::string* err) {
     // The proc deadline is longer, so a tool that overruns its own timeout is
     // still given the chance to print why.
     proc::run({"bluetoothctl", "--timeout", std::to_string(seconds), "scan", "on"},
-              seconds + 15);
+              seconds + 15, cancel);
+    if (cancel && cancel->load()) return false;
     // The scan's exit status is deliberately ignored. It reports a failure when
     // discovery was already running — which is not a failure, it is two scans
     // overlapping — and the question that matters is what the adapter knows
@@ -208,7 +213,76 @@ bool scan(int seconds, std::vector<Device>* out, std::string* err) {
     return known(out, err);
 }
 
-bool pair(const std::string& address, std::string* err, int timeoutSeconds) {
+bool listen(int seconds, std::vector<Device>* out, std::string* err,
+            const std::atomic<bool>* cancel,
+            const std::function<void(const Device&)>& onHeard) {
+    if (!out) return false;
+    out->clear();
+    if (!available()) {
+        if (err) *err = "bluetoothctl is not installed";
+        return false;
+    }
+    const Adapter a = adapter();
+    if (!a.present) {
+        if (err) *err = "this console has no Bluetooth";
+        return false;
+    }
+    if (!a.powered && !powerOn(err)) return false;
+    if (seconds < 1) seconds = 1;
+    // Told as it happens: each address the first time it is heard, and again
+    // when a line brings its name.
+    std::vector<std::string> told;
+    auto onLine = [&](const std::string& line) {
+        if (!onHeard || told.size() >= kMaxDevices) return;
+        const size_t at = line.find("Device ");
+        if (at == std::string::npos || line.size() < at + 7 + 17) return;
+        const std::string address = line.substr(at + 7, 17);
+        if (address[2] != ':' || address[14] != ':') return;
+        const bool seen = std::find(told.begin(), told.end(), address) != told.end();
+        const bool named = line.find(" Name: ") != std::string::npos ||
+                           line.find(" Alias: ") != std::string::npos;
+        if (seen && !named) return;
+        if (!seen) told.push_back(address);
+        Device d;
+        d.address = address;
+        if (fill(&d)) onHeard(d);
+    };
+    const proc::Result r = proc::run(
+        {"bluetoothctl", "--timeout", std::to_string(seconds), "scan", "on"}, seconds + 15,
+        cancel, onLine);
+    // Every line about a device names it: "[NEW] Device E4:17:D8:3D:DB:BE
+    // 8BitDo Lite 2", "[CHG] Device 63:95:E1:A8:D2:1C RSSI: ...", with
+    // colour codes around the tag. The address after "Device " is the thing.
+    std::vector<Device> heard;
+    for (const std::string& line : lines(r.out)) {
+        const size_t at = line.find("Device ");
+        if (at == std::string::npos || line.size() < at + 7 + 17) continue;
+        const std::string address = line.substr(at + 7, 17);
+        if (address[2] != ':' || address[14] != ':') continue;
+        if (std::any_of(heard.begin(), heard.end(),
+                        [&](const Device& d) { return d.address == address; }))
+            continue;
+        Device d;
+        d.address = address;
+        heard.push_back(std::move(d));
+    }
+    // The names come from what bluez knows, which the scan has just updated.
+    std::vector<Device> all;
+    const proc::Result list = proc::run({"bluetoothctl", "devices"}, 10);
+    if (list.ok()) all = parseDeviceList(list.out);
+    for (Device& d : heard)
+        for (const Device& k : all)
+            if (k.address == d.address) d.name = k.name;
+    // Named ones first, before describe() keeps only thirty-two: a flat full
+    // of phones is mostly unnamed, and the pad must not be the one cut.
+    std::stable_partition(heard.begin(), heard.end(),
+                          [](const Device& d) { return !d.name.empty(); });
+    *out = describe(std::move(heard));
+    return true;
+}
+
+bool pair(const std::string& address, std::string* err, int timeoutSeconds,
+          const std::atomic<bool>* cancel) {
     if (address.empty()) {
         if (err) *err = "no device";
         return false;
@@ -218,20 +292,59 @@ bool pair(const std::string& address, std::string* err, int timeoutSeconds) {
         return false;
     }
 
-    const proc::Result p = proc::run({"bluetoothctl", "pair", address}, timeoutSeconds);
+    // PAIRED IS NOT ENOUGH: THE KEYS HAVE TO BE KEPT ("bonded"). bluez takes
+    // input only from a bonded pad ("Rejected connection from !bonded
+    // device"), and an adapter that is not PAIRABLE pairs without bonding, so
+    // the pad pairs, connects, and is ignored. The A9's adapter is not
+    // pairable; a Switch pad of MMagTech's kids paired exactly like that,
+    // 2026-09-26, while his 8BitDo, paired when the adapter happened to be
+    // pairable, worked. So: pairable for the pairing only, and a pad left
+    // paired without its keys is forgotten, found again, and paired properly.
+    auto info = [&]() { return proc::run({"bluetoothctl", "info", address}, 10).out; };
+    {
+        const std::string i = info();
+        if (i.find("Paired: yes") != std::string::npos &&
+            i.find("Bonded: yes") == std::string::npos) {
+            std::fprintf(stderr, "[bluetooth] %s paired without keys; pairing it again\n",
+                         address.c_str());
+            proc::run({"bluetoothctl", "remove", address}, 15);
+            // Forgetting drops it from what bluez knows, and a pad has to be
+            // known to be paired with. It is still in pairing mode.
+            proc::run({"bluetoothctl", "--timeout", "6", "scan", "on"}, 20, cancel);
+            if (cancel && cancel->load()) return false;
+        }
+    }
+    proc::run({"bluetoothctl", "pairable", "on"}, 10);
+    proc::Result p = proc::run({"bluetoothctl", "pair", address}, timeoutSeconds, cancel);
+    // THE FIRST TRY OFTEN FAILS AND THE SECOND WORKS: an 8BitDo Lite 2 and an
+    // Xbox pad each failed with ConnectionAttemptFailed and paired on the
+    // next press, three times on the A9 (2026-09-26). Pairing straight after
+    // a scan meets the radio still searching. So one more try, a moment
+    // later, before a person is asked to do anything.
+    if (!p.ok() && !p.timedOut && !(cancel && cancel->load()) &&
+        (p.out + p.err).find("ConnectionAttemptFailed") != std::string::npos) {
+        std::fprintf(stderr, "[bluetooth] pairing %s: first try failed, trying again\n",
+                     address.c_str());
+        for (int i = 0; i < 15 && !(cancel && cancel->load()); ++i) usleep(100000);
+        p = proc::run({"bluetoothctl", "pair", address}, timeoutSeconds, cancel);
+    }
+    proc::run({"bluetoothctl", "pairable", "off"}, 10);
     // ALREADY PAIRED IS A SUCCESS, NOT A FAILURE. A pad that was set up before
     // and has been picked out of the list again must not be reported as broken,
     // and that is the common case on a machine being set up a second time.
     const bool alreadyPaired = p.out.find("already") != std::string::npos ||
                                p.err.find("already") != std::string::npos;
     if (!p.ok() && !alreadyPaired) {
-        if (err) {
-            const std::string why = trimmed(p.err).empty() ? trimmed(p.out) : trimmed(p.err);
-            *err = p.timedOut ? "the controller did not answer. Put it back "
-                                "into pairing mode and try again"
-                   : why.empty() ? "could not pair with that controller"
-                                 : why;
-        }
+        // bluez's own words go to the log, not the television: they read
+        // "Attempting to pair with E4:...Failed to pair:
+        // org.bluez.Error.ConnectionAttemptFailed", which says nothing a
+        // person can act on.
+        const std::string why = trimmed(p.err).empty() ? trimmed(p.out) : trimmed(p.err);
+        std::string oneLine = why;
+        for (char& ch : oneLine) if (ch == '\n') ch = ' ';
+        std::fprintf(stderr, "[bluetooth] pairing %s failed: %s\n", address.c_str(),
+                     p.timedOut ? "no answer" : oneLine.c_str());
+        if (err) *err = "Couldn't pair. Put it back into pairing mode and try again";
         return false;
     }
 
@@ -239,7 +352,7 @@ bool pair(const std::string& address, std::string* err, int timeoutSeconds) {
     // refuses the incoming connection every time the controller wakes up, so
     // the pad pairs perfectly once and then never reconnects — which reads as
     // "it keeps disconnecting" and has nothing to do with pairing.
-    if (!proc::run({"bluetoothctl", "trust", address}, 15).ok()) {
+    if (!proc::run({"bluetoothctl", "trust", address}, 15, cancel).ok()) {
         if (err)
             *err = "paired, but this console could not mark the controller "
                    "trusted, so it may not reconnect on its own";
@@ -248,7 +361,7 @@ bool pair(const std::string& address, std::string* err, int timeoutSeconds) {
 
     // Bringing it up now is what lets the screen say the only thing that
     // actually proves it worked: press a button and watch it respond.
-    const proc::Result c = proc::run({"bluetoothctl", "connect", address}, timeoutSeconds);
+    const proc::Result c = proc::run({"bluetoothctl", "connect", address}, timeoutSeconds, cancel);
     if (!c.ok()) {
         if (err)
             *err = "paired and trusted, but it is not connected yet. Press a "

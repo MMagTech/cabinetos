@@ -22,7 +22,19 @@ int64_t nowMs() {
 }  // namespace
 
 Result run(const std::vector<std::string>& args, int timeoutSeconds) {
+    return run(args, timeoutSeconds, nullptr);
+}
+
+Result run(const std::vector<std::string>& args, int timeoutSeconds,
+           const std::atomic<bool>* cancel) {
+    return run(args, timeoutSeconds, cancel, {});
+}
+
+Result run(const std::vector<std::string>& args, int timeoutSeconds,
+           const std::atomic<bool>* cancel,
+           const std::function<void(const std::string& line)>& onLine) {
     Result r;
+    size_t handed = 0;   // how much of r.out has gone to onLine
     if (args.empty()) return r;
 
     int outPipe[2], errPipe[2];
@@ -71,10 +83,10 @@ Result run(const std::vector<std::string>& args, int timeoutSeconds) {
     bool open0 = true, open1 = true;
     while (open0 || open1) {
         const int64_t left = deadline - nowMs();
-        if (left <= 0) { r.timedOut = true; break; }
+        if (left <= 0 || (cancel && cancel->load())) { r.timedOut = true; break; }
         fds[0].events = open0 ? POLLIN : 0;
         fds[1].events = open1 ? POLLIN : 0;
-        const int n = poll(fds, 2, static_cast<int>(std::min<int64_t>(left, 1000)));
+        const int n = poll(fds, 2, static_cast<int>(std::min<int64_t>(left, cancel ? 100 : 1000)));
         if (n < 0) {
             if (errno == EINTR) continue;
             break;
@@ -85,6 +97,10 @@ Result run(const std::vector<std::string>& args, int timeoutSeconds) {
             const ssize_t got = read(fds[i].fd, buf, sizeof buf);
             if (got > 0) {
                 (i == 0 ? r.out : r.err).append(buf, static_cast<size_t>(got));
+                if (i == 0 && onLine)
+                    for (size_t nl; (nl = r.out.find('\n', handed)) != std::string::npos;
+                         handed = nl + 1)
+                        onLine(r.out.substr(handed, nl - handed));
             } else {
                 (i == 0 ? open0 : open1) = false;
             }

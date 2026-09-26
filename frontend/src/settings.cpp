@@ -27,6 +27,12 @@ constexpr const char* kChevronBack = "\xE2\x80\xB9";
 constexpr float kChoiceArrowOn = 0.70f;
 constexpr float kChoiceArrowOff = 0.18f;
 constexpr float kChoiceArrowGap = 14.0f;
+// The dot on the controller last pressed: its size, its gap before the
+// value, and how quickly it moves to another row. Starting values, to be
+// judged on the television.
+constexpr float kMarkSize = 12.0f;
+constexpr float kMarkGap = 14.0f;
+constexpr float kMarkMove = 0.15f;
 
 float rowHeight(Ctx& c, const SettingsRow& row) {
     float h = design::kRowPadY * 2.0f + c.text.lineHeight(ui::TextStyle::Title3, c.sc);
@@ -120,6 +126,15 @@ void SettingsScreen::tick(float dt) {
     focus_.tick(dt);
     scroll_.tick(dt);
     paneChange_.tick(dt);
+    markMove_.tick(dt);
+}
+
+void SettingsScreen::mark(int id) {
+    if (id == marked_) return;
+    markedBefore_ = marked_;
+    marked_ = id;
+    markMove_.settle(0.0f);
+    markMove_.retarget(1.0f, kMarkMove);
 }
 
 Result SettingsScreen::key(Nav n) {
@@ -369,6 +384,17 @@ void SettingsScreen::drawGlass(Ctx& c) {
             right -= valueW;
             c.text.draw(c.r, value, right, titleBase, ui::TextStyle::Callout,
                         ui::Color::white(0.60f * (unbuilt ? 0.8f : 1.0f)), c.sc);
+            // The dot before the value, on the controller last pressed.
+            const float m = !row.id ? 0.0f
+                            : row.id == marked_ ? markMove_.value()
+                            : row.id == markedBefore_ ? 1.0f - markMove_.value()
+                                                      : 0.0f;
+            if (m > 0.0f) {
+                const float mid = titleBase - c.text.ascent(ui::TextStyle::Callout, c.sc) * 0.36f;
+                c.r.draw(ui::Rect{right - kMarkGap - kMarkSize, mid - kMarkSize * 0.5f,
+                                  kMarkSize, kMarkSize, kMarkSize * 0.5f,
+                                  ui::Color::white(0.90f * m)});
+            }
             right -= 24.0f;
         }
         if (choice && rf > 0.0f) {

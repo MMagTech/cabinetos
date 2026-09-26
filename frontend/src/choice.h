@@ -32,6 +32,30 @@ public:
     // same label if it is still there.
     void replace(std::vector<std::string> options, std::vector<std::string> values,
                  std::string detail);
+    // STAYS UP WHEN AN ANSWER IS CHOSEN, for a window that acts on a choice
+    // in place (Add a controller pairs the pad it lists). Back still closes.
+    // open() clears it.
+    void setStaysOpen(bool on) { staysOpen_ = on; }
+    bool staysOpen() const { return staysOpen_; }
+    // ONE WIDTH FOR AS LONG AS IT IS OPEN, the content's width in canvas
+    // points; longer names and lines are cut short. For a window whose list
+    // and line change while it is up: Add a controller grew wider when a
+    // pairing failed, and MMagTech did not like it (2026-09-26). open()
+    // clears it.
+    void setFixedWidth(float w) { fixedW_ = w; }
+    // A LIST THAT FILLS WHILE IT IS OPEN GROWS SMOOTHLY. It opens one row
+    // tall with `placeholder` said in it, and glides taller as rows arrive.
+    // Add a controller first jumped from a small panel to a big one, which
+    // read as a second window; then it opened six rows tall, which left an
+    // empty band (MMagTech, 2026-09-26). open() clears it.
+    void setGrows(std::string placeholder) {
+        grows_ = true;
+        placeholder_ = std::move(placeholder);
+    }
+    // The title alone, keeping everything else ("Paired successfully").
+    void setTitle(std::string title) { title_ = std::move(title); }
+    // The detail line alone, keeping the answers and focus.
+    void setDetail(std::string detail) { detail_ = std::move(detail); }
     void close() { open_ = false; }
     bool isOpen() const { return open_; }
     // The answer, after Chosen.
@@ -45,6 +69,12 @@ public:
 
 private:
     bool open_ = false;
+    bool staysOpen_ = false;
+    float fixedW_ = 0.0f;
+    bool grows_ = false;
+    std::string placeholder_;
+    design::Animated listH_;
+    bool listHSet_ = false;
     std::string title_, detail_;
     std::vector<std::string> options_;
     std::vector<std::string> values_;
