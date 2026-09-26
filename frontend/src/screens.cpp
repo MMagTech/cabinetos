@@ -1112,10 +1112,14 @@ void DetailScreen::rebuildRows() {
         // so this row is not "is it cached", it is "put this game on the
         // machine and do not take it away again". That is what makes it a keep,
         // and what makes it the one action the console may refuse.
+        //
+        // "Download", not "Download and keep", MMagTech 2026-09-26: "and keep"
+        // only told it apart from Play's fetch into the cache, which nobody
+        // sees. One family of words: Download, Remove download, Downloads.
         if (game_.kept)
             rows_.push_back({Action::RemoveDownload, "Remove download", true});
         else
-            rows_.push_back({Action::Download, "Download and keep", true});
+            rows_.push_back({Action::Download, "Download", true});
     }
     // A different save state, a different core and an export belong here too.
     // They are not built yet and a row that does nothing is worse than no row.
