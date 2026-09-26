@@ -92,16 +92,31 @@ state in `docs/SETTINGS.md`, Storage; reasoning in `docs/PROJECT.md`, "REVISED
   `reload`). Found on the way: a second External drive never showed, and
   Eject with File access on could have said "Safe to unplug" while File
   access still held it mounted. Eject now reads the kernel's mount table.
-- **Proved on the A9 with the loop:** mount at start, the blank and
-  wrong-format verdicts, Format twice, Eject, a wipe noticed while plugged
-  in. **Still to test, needs the `testing` image:** File access with drives
-  (names, a drive plugged in while on, Eject while on); internal drives and
-  the 80% overflow on the VM, whose disks `vdc` (blank) and `vdd` (a
-  Windows layout: EFI, MSR, NTFS "Windows", NTFS recovery) were added for
-  this. **Not testable here:** Thunderbolt; "Storage almost full" on a real
-  drive.
-- **The VM has two new 8 GB disks, `vdc` and `vdd`**, and needs `bootc
-  switch` to `testing` for the internal-drive test.
+- **PROVED, 2026-09-25/26.** On the A9 (loop, then `testing`
+  `2026.09.26.4`): mount at start, blank and wrong-format verdicts, Format
+  twice, Eject, a pull without Eject, a wipe noticed while plugged in, File
+  access showing both drives by Storage's names, and **Eject with File
+  access on**, which first failed safe ("Not authorized": udisks will not
+  let the session unmount root's bind mount) and now works: udisks'
+  mount, then `cabinetos-files refresh`, then the kernel's mount table
+  checked empty, then power-off with a retry (it was refused as busy a
+  quarter second after the second unmount). On the VM (`testing`): only
+  the Windows disk's data partition mounted, Format on a blank internal
+  disk, and the 80% overflow (`--storage` now prints where a 1, 5 and
+  50 GB kept game would land: 1 GB stays, 5 GB goes to the 64 GB disk).
+  **A "USB hub asleep" theory was tested and disproved:** a T9 that seemed
+  to appear only after `lsusb` mounted on its own in a clean retest; it
+  had been a slow connection on a new port. **Not testable here:**
+  Thunderbolt; "Storage almost full" on a real drive; the SFTP password
+  login itself (unchanged, and MMagTech's to run).
+- **The T9 carries exFAT's "not properly unmounted" flag** from a pull
+  without Eject. Harmless; Disk Utility's First Aid on a Mac clears it. A
+  check on the console for such a drive was offered and parked (slow on
+  4 TB, exFAT copes).
+- **The VM is on `testing` now** (switched 2026-09-26; dev SSH is port 2222
+  there too, sudo still `cabinet`). Its two new 8 GB disks: `vdc`, formatted
+  by the console as exFAT "Games"; `vdd`, a Windows layout, "Windows"
+  mounted. `~/cabinetos-frontend-test` on it is a scratch binary.
 
 **THE SESSION OF 2026-09-25 (EVENING) BUILT FILE ACCESS (#69), BRANCH
 `file-access`.** Judged on the TV, then proved from MMagTech's Mac against
