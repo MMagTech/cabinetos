@@ -486,12 +486,24 @@ struct Watcher {
                 return false;
             }
         }
+        // NAMED "Games", or "Games 2" and on if a drive of that name is
+        // attached, so two drives this formatted are told apart in Storage
+        // and on a computer. Games is all the console puts on an extra drive,
+        // and exFAT allows 11 characters. MMagTech, 2026-09-25.
+        std::set<std::string> taken;
+        for (const std::string& b : blockDevices(bus)) {
+            std::string label;
+            if (stringProp(bus, b, kBlock, "IdLabel", "s", &label) && !label.empty())
+                taken.insert(label);
+        }
+        std::string label = "Games";
+        for (int n = 2; taken.count(label) && n < 100; ++n) label = "Games " + std::to_string(n);
         sd_bus_error err = SD_BUS_ERROR_NULL;
         sd_bus_message* reply = nullptr;
         const int r = sd_bus_call_method(
             bus, kUDisks, disk.c_str(), kPartitionTable, "CreatePartitionAndFormat", &err, &reply,
             "ttssa{sv}sa{sv}", uint64_t(0), uint64_t(0), kBasicData, "", 1,
-            "auth.no_user_interaction", "b", 1, "exfat", 2, "label", "s", "CabinetOS",
+            "auth.no_user_interaction", "b", 1, "exfat", 2, "label", "s", label.c_str(),
             "auth.no_user_interaction", "b", 1);
         if (r < 0) why = err.message ? err.message : std::strerror(-r);
         sd_bus_error_free(&err);
@@ -500,7 +512,8 @@ struct Watcher {
             std::fprintf(stderr, "[drives] format: no exFAT partition: %s\n", why.c_str());
             return false;
         }
-        std::fprintf(stderr, "[drives] format: %s is exFAT now\n", drive.c_str());
+        std::fprintf(stderr, "[drives] format: %s is exFAT now, named %s\n", drive.c_str(),
+                     label.c_str());
         {
             std::lock_guard<std::mutex> lk(gM);
             gUnusable.erase(drive);

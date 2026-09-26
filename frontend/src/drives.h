@@ -87,8 +87,8 @@ void eject(const std::string& location);
 // True from eject() until its answer has been taken by poll().
 bool ejecting();
 
-// Format a BLANK drive (Unusable::blank) as one exFAT partition labelled
-// CabinetOS, after checking again that it is blank and not the console's own.
+// Format a BLANK drive (Unusable::blank) as one exFAT partition named
+// "Games" (or "Games 2" and on), after checking again that it is blank and not the console's own.
 // On the worker. Success is the drive then mounting as any drive does, with
 // "connected"; failure is FormatFailed.
 void format(const std::string& driveId);

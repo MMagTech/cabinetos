@@ -245,8 +245,21 @@ status here to Built.
   in the pill. If anything still has it open: "Couldn't eject the external
   drive", and it is not powered off. Internal drives have no Eject. **Built on
   `usb-drives`, #67.**
-- **Kept and cached games:** see what is on the console, keep or release.
-  **To build, #68.**
+- **Downloads** (was "Kept and cached games"), redesigned with MMagTech
+  2026-09-25. **To build, #68.**
+  - **Only downloaded (kept) games. The cache is not shown:** it clears
+    itself, so there is nothing to decide, and it still counts in each
+    drive's free space. His own rule, 2026-09-16: "no one knows or cares if
+    the game is cached".
+  - Named "Downloads" to match the Download and "Remove download" words the
+    console already uses. Each game with its size and the drive it is on,
+    biggest first. The one action is Remove download.
+  - **Everyone's downloads, with whose each is**: the space belongs to the
+    machine. Looking needs no PIN; removing your own needs none (as on the
+    game's own screen); **removing someone else's asks the PIN** if one is
+    set.
+  - In Storage, not a category of its own: it is where "Storage almost full"
+    sends a person looking.
 - **File access** (under Storage): **built on branch `file-access`, #69;
   screens judged on the TV 2026-09-25, the login still to be tested.**
   - **One row**, "File access", "SFTP" under it, On or Off. **Everything a
@@ -335,7 +348,9 @@ status here to Built.
     drive, its model and size with **Cancel** focused (so a drive wrongly
     read as blank is recognised), then a **random 4-digit code** on the PIN
     pad (his idea; typing "format" with a pad was rejected as slower and no
-    safer). It makes one exFAT partition labelled CabinetOS, and the drive is
+    safer). It makes one exFAT partition named "Games" ("Games 2" and on if
+    one is attached: two formatted drives must be told apart; exFAT names
+    are 11 characters), and the drive is
     then used like any other ("External drive connected"). Blankness is
     checked again from udisks right before writing. Built on `usb-drives`;
     PROVED on the A9 2026-09-25 with the installer stick wiped blank
