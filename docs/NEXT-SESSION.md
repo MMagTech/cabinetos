@@ -55,10 +55,13 @@ Settings; this is everything open, in order:
 
 1. ~~**#99, a picture with every save state**~~: **merged as #102**
    (2026-09-26).
-2. **Controllers** (#64 connected, #65 add one, #66 button mapping). #64
-   and #65 are built on branch `controllers` (below); **#66 is next**, on
-   its own branch. Also found: **#103**, leaving the pause menu presses
-   that button in the game.
+2. **Controllers: DONE once #104 and `controller-database` merge.** #64
+   and #65 are PR #104. **#66 is not a screen any more** (MMagTech,
+   2026-09-26): branch `controller-database` ships SDL_GameControllerDB
+   with a weekly refresh PR (`pad-db-update.yml`, never run yet: run it by
+   hand once after merging) and parks personal remapping; reasons in
+   PROJECT.md, *No mapping screen*. Also found: **#103**, leaving the pause
+   menu presses that button in the game.
 3. **The emulators, as one block**: GameCube audio (#83), NES audio (#84),
    Dreamcast will not start on the A9 (#85: flycast wants Vulkan memory
    export this driver will not give, seen again 2026-09-26), N64 states
@@ -77,9 +80,10 @@ Settings; this is everything open, in order:
    Includes one pass over every notification for length (MMagTech,
    2026-09-26: *"some of these notifications are getting real long"*).
 
-**Open, for MMagTech:** whether the in-game features (#76 hotkey layer, #77
-fast forward, #78 rewind, #79 screenshots, #80 state undo) are in the first
-release. It decides how long the road is. Also parked: #74 RetroAchievements
+**The in-game features (#76 to #80) have a shape now** (MMagTech,
+2026-09-26): off by default, one Settings row, fixed combinations, rewind
+only where cheap. Still roadmap step 4, after the emulators. PROJECT.md,
+*No mapping screen, and the in-game shortcuts' shape*. Also parked: #74 RetroAchievements
 and #75 background colour (both "later"), #81 stale doc lines, PR #42.
 
 **THE SESSION OF 2026-09-26 (EVENING) BUILT PLAYERS (#64) AND ADD A
@@ -110,7 +114,8 @@ in `docs/PROJECT.md`, *Players, decided 2026-09-26*. The short version:
   now is whatever MMagTech left; his first 8BitDo ("Pro Controller",
   E4:17:D8:71:F1:ED) was forgotten.
 - **State at the end:** `controllers` pushed to `testing` for the image
-  check; merge on his word (promotes, no build). Then #66.
+  check; merge on his word (promotes, no build). Then #66, which became
+  the controller list (above).
 
 **THE SESSION OF 2026-09-26 (LATER) BUILT #99 ON `state-screenshot`.** Decided
 with MMagTech, recorded in `docs/PROJECT.md` under *Where a save state lives*:

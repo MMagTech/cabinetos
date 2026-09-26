@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <map>
@@ -188,6 +189,17 @@ void changed(const char* what, SDL_JoystickID id) {
 
 }  // namespace
 
+void loadMappings() {
+    const char* env = std::getenv("CABINETOS_PAD_DB");
+    const std::string path = env && *env ? env : "/usr/share/cabinetos/gamecontrollerdb.txt";
+    const int n = SDL_AddGamepadMappingsFromFile(path.c_str());
+    if (n < 0)
+        std::fprintf(stderr, "[players] no controller list at %s: %s\n", path.c_str(),
+                     SDL_GetError());
+    else
+        std::fprintf(stderr, "[players] %d controller mappings from %s\n", n, path.c_str());
+}
+
 void added(SDL_JoystickID id) {
     if (gOpen.count(id)) return;
     SDL_Gamepad* gp = SDL_OpenGamepad(id);
@@ -342,6 +354,7 @@ int report(int seconds) {
         std::fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
         return 1;
     }
+    loadMappings();
     auto describe = [](SDL_JoystickID id) {
         const bool known = SDL_IsGamepad(id);
         std::printf("pad %u  %s\n", static_cast<unsigned>(id),
