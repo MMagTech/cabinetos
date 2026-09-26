@@ -1561,6 +1561,8 @@ simple and take the complexity away alot of emulators add."* Decided:
   hotkey is a mapping screen again). Rewind only where it is cheap (the
   cartridge systems), absent elsewhere the way Save state is on PS2.
   Roadmap step 4, after the emulator work.
+  *Reversed in part 2026-09-27: the shortcut button is set by pressing it.
+  See "The shortcut button is set by pressing it", below.*
 
 ### The in-game shortcuts, and three states per game — decided 2026-09-27
 
@@ -1580,9 +1582,9 @@ order changed the same evening: the shortcuts come **before** the emulators
 - **L3+R3 always opens the pause menu**, switch or not. It covers a pad with
   no Home, a Home SDL does not recognise, and anything upstream that takes
   Home before the frontend sees it (not yet checked on the A9).
-- **Home cannot be reassigned.** That is the mapping screen dropped with #66.
+- ~~**Home cannot be reassigned.** That is the mapping screen dropped with #66.
   A pad whose Home is wrong is fixed in the controller list, and L3+R3 still
-  gets in meanwhile.
+  gets in meanwhile.~~ **Reversed the same day**, on the A9 evidence below.
 
 **Screenshots (#79): no gallery on the console.** They upload to RomM's
 per-user gallery, `POST /api/screenshots?rom_id=` (RomM 5.1: stored under the
@@ -1629,8 +1631,50 @@ slots"* without *"having to pick which slot you save to."*
   a Load earlier state list in the pause menu.
 
 **A save shortcut is wanted** (MMagTech: *"when saved via menu or hot key
-combo"*). Not in the #76 list; its combination, and whether Load newest gets
-one too, is settled in the shortcuts walk-through.
+combo"*). Not in the #76 list; settled below.
+
+#### The shortcut button is set by pressing it — REVERSES the fixed hotkey
+
+**What turned it.** The Home check on the A9: the Xbox One S pad's Home
+reached the app every time (`--pads`, "pressed guide"). The **8BitDo Lite 2's
+heart did not**: raw from the kernel it is an ordinary button, `BTN_C`
+(0x132), one clean press and release each, while the community list's entry
+for it (GUID `05009075c82d00001251000000010000`) puts `guide` on `b12`. So the
+app never sees Home from that pad, and the Lite 2 has no stick clicks, so
+L3+R3 cannot open the pause menu on it either. (In two earlier runs SDL
+reported the heart as d-pad down; not explained, and the fix below does not
+depend on it.) MMagTech: *"so we just randomly fix everyone's controller over
+time"*. Relying on the list means a wrong pad waits on somebody else's fix,
+and Home is the button the list most often gets wrong.
+
+**Decided:**
+
+- **One shortcut button, set by pressing it.** When In-game shortcuts is On,
+  a *Shortcut button* row appears showing the current one; A on it, then
+  press the button wanted. It is read **raw** (the joystick button, not the
+  gamepad mapping), so it works for a button the list gets wrong.
+- **Remembered per kind of pad** (by SDL's GUID), because a raw button number
+  means different things on different models. Set once for a Lite 2, every
+  Lite 2 on the console uses it.
+- **Home by default** where the pad has a working one. A pad with none has no
+  shortcut button until one is set.
+- **A tap of it opens the pause menu; held with a second button it is a
+  shortcut**, exactly as Home was. Governed by the same switch.
+- **Single button only**, not a pair: it is held while a second is pressed,
+  so a pair makes every shortcut three buttons at once; the two-button way
+  into the menu already exists (L3+R3); and every pad seen has a spare single
+  button (Select/minus, star, capture). Add pairs if a pad ever turns up
+  without one.
+- **The combinations stay fixed**, and are: shortcut button + **R** save state
+  (fills the next of the three), + **L** load newest, + **ZR** fast forward,
+  + **ZL** rewind, + **Y** screenshot (Nintendo names; RB, LB, RT, LT on Xbox).
+  Right side forward and save, left side back and load. A load by mistake
+  loses play since the last save; accepted, since the button must be held,
+  the two are on opposite sides, and it is off unless turned on.
+- **The Lite 2's entry is still corrected** in our copy of the list and sent
+  upstream, so its heart is Home for everyone, but nothing depends on it.
+- **Rejected:** a fixed Home (above); a Home / Select switch (covers pads with
+  no Home but not a Home the app cannot see); a configurable pair.
 
 ### The permission detail, and a Phase 2 decision that paid for itself
 
