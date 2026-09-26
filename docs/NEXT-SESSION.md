@@ -53,6 +53,11 @@ work:
 - **Recovery if 2222 ever fails to come up:** at the TV with a keyboard,
   Ctrl+Alt+F3, log in as `cabinet` (its password is as above), `sudo bootc
   rollback`, `sudo reboot`.
+- **A MERGE PROMOTES THE TESTED IMAGE; IT DOES NOT BUILD.** Push the
+  branch's final commit to `testing`, have it judged on the A9, then merge:
+  `latest` becomes that exact image (`ci/promote-tested.sh`). Anything else
+  on the branch after the testing push means main builds instead. Pull
+  requests no longer build the image.
 - **Claude Code's permission system refuses a password login test over
   the network from here** ("Expose Local Services"). MMagTech ran the live
   SFTP test himself from his Mac; plan on that again.

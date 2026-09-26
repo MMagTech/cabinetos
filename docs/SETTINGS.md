@@ -401,6 +401,17 @@ status here to Built.
   hand, `gh workflow run build.yml --ref testing`. The A9 was switched to it
   on 2026-09-25 (a 60.2 MB download), to go back to `latest` when System
   update is done.
+  **THE TESTED IMAGE IS WHAT SHIPS, 2026-09-25.** MMagTech: *"The intent of
+  test was I could build and test features and then when all was good we
+  go to main."* So a merge to main does not build: if main's files are
+  exactly those `testing` was built from (the git tree, so a merge commit
+  from an up-to-date branch counts), that image is tagged `latest` in
+  seconds, same digest, same version (`ci/promote-tested.sh`). Otherwise it
+  builds, as before. **The rule: push the final commit of a branch to
+  `testing`, judge it, then merge.** Pull requests no longer build the whole
+  image; they lint and compile the frontend. Until that day `testing` was a
+  separate channel and main rebuilt everything, so a feature was built
+  three times and `latest` was a rebuild of what had been judged.
 
 ## About
 
