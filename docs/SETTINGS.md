@@ -104,9 +104,35 @@ status here to Built.
 
 ## Controllers
 
-- **Connected controllers** (which is which player), **Add a controller** (the
-  same pairing screen as first run), **Button mapping**. All **to build**:
-  #64, #65, #66.
+Decided with MMagTech 2026-09-26, from the things people will actually do.
+
+- **Up to four players, one per controller** (#64). Until then a game heard
+  only the first pad; every pad walked the menus, and still does. A system
+  with fewer ports uses the first ones. The keyboard is player 1 too.
+- **Outside a game the numbers close up**: the pads that are on are 1, 2, 3
+  in the order they connected. Both pads go to sleep, and whichever one is
+  picked up next is player 1.
+- **During a game a pad that goes off keeps its number** while any other pad
+  is still on, and gets it back when it returns (known by its serial, the
+  Bluetooth address). **If every pad goes off, the first one back is player
+  1.** Leaving the game closes up any number still held.
+- **One row per controller**, "Player 1" with the pad's name under it.
+  Pressing a button on a pad lights its row: that is how two identical pads
+  are told apart. Pads with player lights show their number on the pad.
+- **Pressing a row: "Make player N"** for each other pad (the two swap; a
+  preferred pad keeps its number while both stay on) **and Forget** for a
+  Bluetooth pad, with "Forget <name>?" and Cancel focused. No PIN. A lone
+  wired pad has nothing to press, so its row only shows.
+- **Add a controller** (#65): the same pairing screen as first run; pad 1
+  picks the new pad and the new pad confirms with a button. A wired pad
+  needs none of it: plugged in, it is the next player. **To build.**
+- **Button mapping** (#66): opens by itself when a pad the console does not
+  recognise connects, driven by that pad, asking by position ("the bottom
+  button"); saved per pad model, with a Reset. A testing switch makes a
+  known pad come up as unknown, so it can be judged on the TV with a pad
+  that is recognised. **To build.**
+- **Open, for MMagTech:** whether a game pauses (the pause menu opens) when a
+  playing pad drops out, as on Switch and Apple TV.
 
 ## Network
 

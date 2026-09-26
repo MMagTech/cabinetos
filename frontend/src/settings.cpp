@@ -27,6 +27,11 @@ constexpr const char* kChevronBack = "\xE2\x80\xB9";
 constexpr float kChoiceArrowOn = 0.70f;
 constexpr float kChoiceArrowOff = 0.18f;
 constexpr float kChoiceArrowGap = 14.0f;
+// A controller's row lighting when its pad is pressed: how bright over the
+// row's own surface, and how long it takes to fade. Starting values, to be
+// judged on the television.
+constexpr float kPulseTint = 0.22f;
+constexpr float kPulseSeconds = 0.9f;
 
 float rowHeight(Ctx& c, const SettingsRow& row) {
     float h = design::kRowPadY * 2.0f + c.text.lineHeight(ui::TextStyle::Title3, c.sc);
@@ -120,6 +125,22 @@ void SettingsScreen::tick(float dt) {
     focus_.tick(dt);
     scroll_.tick(dt);
     paneChange_.tick(dt);
+    for (Pulse& p : pulses_) p.left -= dt / kPulseSeconds;
+    pulses_.erase(std::remove_if(pulses_.begin(), pulses_.end(),
+                                 [](const Pulse& p) { return p.left <= 0.0f; }),
+                  pulses_.end());
+}
+
+void SettingsScreen::pulse(int id) {
+    for (Pulse& p : pulses_)
+        if (p.id == id) { p.left = 1.0f; return; }
+    pulses_.push_back({id, 1.0f});
+}
+
+float SettingsScreen::pulseOf(int id) const {
+    for (const Pulse& p : pulses_)
+        if (p.id == id) return p.left * p.left;   // eases out
+    return 0.0f;
 }
 
 Result SettingsScreen::key(Nav n) {
@@ -325,9 +346,11 @@ void SettingsScreen::drawGlass(Ctx& c) {
         // Treatment 3, the row: a surface that is always there, brighter under
         // focus. An unbuilt row keeps a fainter surface so the list still
         // reads as one list.
+        const float lit = row.id ? pulseOf(row.id) : 0.0f;
         c.r.drawGlass(ui::Rect{x, ry, w, h, design::kRowRadius, ui::Color::white(0)},
                       design::kRegularMaterialBlur,
-                      ui::Color::white(dimmed ? 0.04f : 0.08f + 0.14f * rf));
+                      ui::Color::white(dimmed ? 0.04f
+                                              : 0.08f + 0.14f * rf + kPulseTint * lit));
 
         const float textA = dimmed ? design::kSettingsUnbuiltAlpha : 1.0f;
         const bool chevron = row.kind == Kind::Action;

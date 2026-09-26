@@ -15,6 +15,7 @@
 #include "firstrun.h"
 #include "keyboard.h"
 #include "net.h"
+#include "players.h"
 #include "qr.h"
 #include "romm.h"
 #include "accounts.h"
@@ -1713,8 +1714,12 @@ Outcome Flow::run() {
                     outcome_ = Outcome::Quit;
                     break;
 
+                case SDL_EVENT_GAMEPAD_REMOVED:
+                    players::removed(e.gdevice.which);
+                    break;
+
                 case SDL_EVENT_GAMEPAD_ADDED:
-                    SDL_OpenGamepad(e.gdevice.which);
+                    players::added(e.gdevice.which);
                     // A pad that turns up mid-setup is the controller step
                     // answering itself, which is exactly what should happen
                     // when somebody wakes a pad that was already paired.

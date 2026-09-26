@@ -84,6 +84,8 @@
 #include "update.h"
 #include "files.h"
 #include "drives.h"
+#include "players.h"
+#include "bluetooth.h"
 #include "ui.h"
 
 namespace {
@@ -988,6 +990,7 @@ constexpr GalleryNotice kNoticeGallery[] = {
     {"Saved on this console only", Tone::Info},
     {"Save states aren't available for this system", Tone::Info},
     {"Couldn't save the state", Tone::Problem},
+    {"Couldn't forget Pro Controller", Tone::Problem},
     {"Loading\xE2\x80\xA6", Tone::Busy},
     {"State loaded", Tone::Done},
     {"No saved state for this game", Tone::Info},
@@ -3354,6 +3357,8 @@ int main(int argc, char** argv) {
     // server by Change server address? Says which answer, and exits.
     const char* serverCheckAddress = nullptr;
     bool accountsTestMode = false;
+    bool playersTestMode = false;
+    int padsSeconds = 0;
     bool firstRunRulesMode = false;
     bool firstRunWriteMode = false;
     // Runs the setup flow even on a console that is already configured, so it
@@ -3607,6 +3612,11 @@ int main(int argc, char** argv) {
             accountsProbeMode = true;
         } else if (SDL_strcmp(argv[i], "--accounts-test") == 0) {
             accountsTestMode = true;
+        } else if (SDL_strcmp(argv[i], "--players-test") == 0) {
+            playersTestMode = true;
+        } else if (SDL_strcmp(argv[i], "--pads") == 0) {
+            padsSeconds = 30;
+            if (i + 1 < argc && argv[i + 1][0] != '-') padsSeconds = SDL_atoi(argv[++i]);
         } else if (SDL_strcmp(argv[i], "--first-run-rules") == 0) {
             firstRunRulesMode = true;
         } else if (SDL_strcmp(argv[i], "--first-run-writes") == 0) {
@@ -3747,6 +3757,8 @@ int main(int argc, char** argv) {
     // they answer before anything is created on disk. --qr in particular should
     // not cost a console a directory it did not have.
     if (accountsTestMode) return accountsTest();
+    if (playersTestMode) return players::test();
+    if (padsSeconds > 0) return players::report(padsSeconds);
     if (firstRunRulesMode) return firstRunRules();
     if (firstRunWriteMode) return firstRunWriteTest();
     if (qrText) return qrProbe(qrText, qrPbm);
@@ -4364,7 +4376,7 @@ int main(int argc, char** argv) {
 
             // The pads, which main opens only later: this screen needs them.
             if (SDL_JoystickID* ids = SDL_GetGamepads(nullptr)) {
-                for (int i = 0; ids[i]; ++i) SDL_OpenGamepad(ids[i]);
+                for (int i = 0; ids[i]; ++i) players::added(ids[i]);
                 SDL_free(ids);
             }
 
@@ -4480,7 +4492,8 @@ int main(int argc, char** argv) {
                     }
                     switch (e.type) {
                         case SDL_EVENT_QUIT: quit = true; break;
-                        case SDL_EVENT_GAMEPAD_ADDED: SDL_OpenGamepad(e.gdevice.which); break;
+                        case SDL_EVENT_GAMEPAD_ADDED: players::added(e.gdevice.which); break;
+                        case SDL_EVENT_GAMEPAD_REMOVED: players::removed(e.gdevice.which); break;
                         case SDL_EVENT_TEXT_INPUT:
                             if (pad.isOpen()) {
                                 for (const char* c = e.text.text; *c && pad.isOpen(); ++c)
@@ -4778,6 +4791,7 @@ int main(int argc, char** argv) {
             std::fprintf(stderr, "[frontend] core: %s\n", core.error().c_str());
             return 1;
         }
+        core.setPlayers(players::count());
         if (!core.loadGame(romPath, storage::biosDir(), saveDir)) {
             std::fprintf(stderr, "[frontend] %s\n", core.error().c_str());
             return 1;
@@ -5484,7 +5498,7 @@ int main(int argc, char** argv) {
     // so a controller connected later works without restarting anything.
     int padCount = 0;
     if (SDL_JoystickID* ids = SDL_GetGamepads(&padCount)) {
-        for (int i = 0; i < padCount; ++i) SDL_OpenGamepad(ids[i]);
+        for (int i = 0; i < padCount; ++i) players::added(ids[i]);
         SDL_free(ids);
     }
     std::fprintf(stderr, "[frontend] gamepads at startup: %d\n", padCount);
@@ -6201,6 +6215,11 @@ int main(int argc, char** argv) {
     // One Format row per blank drive: this plus its index in formatIds, the
     // drives as they were when the rows were built.
     constexpr int kSetFormat = 200;
+    // One row per connected controller: this plus its player, 0-based.
+    constexpr int kSetPad = 300;
+    // The controllers the Controllers rows were built from, to rebuild them
+    // when one connects or goes (players::generation).
+    int settingsPadsSeen = -1;
     std::vector<drives::Unusable> formatable;
     std::map<int, std::string> driveNames;   // a drive row's id -> its name
 
@@ -6683,12 +6702,27 @@ int main(int argc, char** argv) {
                             "Sign in with your own RetroAchievements account", ""});
         }
 
-        cats.push_back({"Controllers", {
-            {K::Unbuilt, 0, "Connected controllers", "Which controller is which player", ""},
-            {K::Unbuilt, 0, "Add a controller", "The same pairing screen as first run", ""},
-            {K::Unbuilt, 0, "Button mapping",
-             "For controllers the console does not recognise", ""},
-        }});
+        // ONE ROW PER CONTROLLER, AS ITS PLAYER (players.h, issue #64). A
+        // button pressed on a pad lights its row, which is how two identical
+        // pads are told apart. Pressing a row gives that pad another number
+        // (the two swap) or forgets a Bluetooth pad; a lone wired pad has
+        // neither, so its row only shows.
+        {
+            std::vector<Row> rows;
+            const std::vector<players::Pad> pads = players::connected();
+            settingsPadsSeen = players::generation();
+            if (pads.empty()) rows.push_back({K::Info, 0, "No controllers", "", ""});
+            for (const players::Pad& p : pads) {
+                const bool canAct = pads.size() > 1 || !p.address.empty();
+                rows.push_back({canAct ? K::Action : K::Info, kSetPad + p.player,
+                                "Player " + std::to_string(p.player + 1), p.name, ""});
+            }
+            rows.push_back({K::Unbuilt, 0, "Add a controller",
+                            "The same pairing screen as first run", ""});
+            rows.push_back({K::Unbuilt, 0, "Button mapping",
+                            "For controllers the console does not recognise", ""});
+            cats.push_back({"Controllers", std::move(rows)});
+        }
 
         std::string netValue = "Checking\xE2\x80\xA6", netDetail;
         {
@@ -7188,7 +7222,47 @@ int main(int argc, char** argv) {
                 sound::play(sound::Cue::Activate);
                 break;
             case screens::Action::Setting:
-                if (res.value >= kSetFormat) {
+                if (res.value >= kSetPad && res.value < kSetPad + players::kMax) {
+                    const int me = res.value - kSetPad;
+                    const std::vector<players::Pad> pads = players::connected();
+                    auto mine = std::find_if(pads.begin(), pads.end(),
+                                             [&](const players::Pad& p) { return p.player == me; });
+                    if (mine == pads.end()) break;
+                    const players::Pad pad = *mine;
+                    std::vector<std::string> opts;
+                    std::vector<int> numbers;
+                    for (const players::Pad& o : pads)
+                        if (o.player != me) {
+                            opts.push_back("Make player " + std::to_string(o.player + 1));
+                            numbers.push_back(o.player);
+                        }
+                    const bool canForget = !pad.address.empty();
+                    if (canForget) opts.push_back("Forget");
+                    opts.push_back("Cancel");
+                    askChoice(pad.name, "Player " + std::to_string(me + 1), opts, 0,
+                              [&, me, numbers, canForget, pad](int k) {
+                        if (k >= 0 && k < static_cast<int>(numbers.size())) {
+                            players::swap(me, numbers[k]);
+                            buildSettings();
+                            return;
+                        }
+                        if (!canForget || k != static_cast<int>(numbers.size())) return;
+                        askChoice("Forget " + pad.name + "?", "", {"Forget", "Cancel"}, 1,
+                                  [&, pad](int j) {
+                            if (j != 0) return;
+                            std::string err;
+                            if (bt::forget(pad.address, &err))
+                                std::fprintf(stderr, "[players] forgot %s\n", pad.address.c_str());
+                            else {
+                                std::fprintf(stderr, "[players] could not forget %s: %s\n",
+                                             pad.address.c_str(), err.c_str());
+                                menuNotice.say("Couldn't forget " + pad.name, Tone::Problem);
+                            }
+                            buildSettings();
+                        });
+                    });
+                    sound::play(sound::Cue::Activate);
+                } else if (res.value >= kSetFormat) {
                     const size_t i = static_cast<size_t>(res.value - kSetFormat);
                     if (drives::formatting() || i >= formatable.size()) {
                         sound::play(sound::Cue::Edge);
@@ -8267,6 +8341,7 @@ int main(int argc, char** argv) {
             restoreFileSaves(saveSpecs, launchJob.fsStem, saveDir, launchJob.romId,
                              launchTag, liveClient);
 
+        core.setPlayers(players::count());
         if (!core.loadGame(launchJob.romPath, storage::biosDir(), saveDir)) {
             // AND SAY IT ON THE SCREEN, NOT ONLY TO STDERR — 2026-09-21.
             //
@@ -8854,6 +8929,11 @@ int main(int argc, char** argv) {
                     openPowerMenu();
                 continue;
             }
+            // WHICH PAD IS WHICH: a press on a pad lights its row in
+            // Controllers (players.h).
+            if (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && here() == Screen::Settings)
+                if (const int p = players::playerOf(e.gbutton.which); p >= 0)
+                    settingsScreen.pulse(kSetPad + p);
             switch (e.type) {
                 case SDL_EVENT_QUIT:
                     running = false;
@@ -8862,8 +8942,10 @@ int main(int argc, char** argv) {
                                  playing ? " with a game running" : "");
                     break;
                 case SDL_EVENT_GAMEPAD_ADDED:
-                    SDL_OpenGamepad(e.gdevice.which);
-                    std::fprintf(stderr, "[frontend] gamepad connected\n");
+                    players::added(e.gdevice.which);
+                    break;
+                case SDL_EVENT_GAMEPAD_REMOVED:
+                    players::removed(e.gdevice.which);
                     break;
                 case SDL_EVENT_TEXT_INPUT:
                     // A physical keyboard types into the same field. Not a
@@ -9290,6 +9372,12 @@ int main(int argc, char** argv) {
         // Idle, once a frame. The timers only ever deepen here; input() is
         // what lifts them, above.
         idleFrame(dt, playing && !overlayOpen, kScreenOff[screenOffIndex].seconds);
+        // Held seats for pads that went off last only as long as the game
+        // (players.h). The pause menu is still the game.
+        players::setInGame(playing);
+        if (playing) cab::Core::shared().setPlayers(players::count());
+        if (here() == Screen::Settings && players::generation() != settingsPadsSeen)
+            buildSettings();
 
         // The held direction, repeating and speeding up. Driven from the frame
         // loop rather than from the event queue, because the pad sends nothing
@@ -9334,82 +9422,84 @@ int main(int argc, char** argv) {
 
             // A real pad, mapped by SDL's own gamepad abstraction so the
             // hundreds of controllers in its database all arrive the same way.
-            // Both paths OR together: neither is required, both work.
-            int padCountNow = 0;
-            if (SDL_JoystickID* ids = SDL_GetGamepads(&padCountNow)) {
-                if (padCountNow > 0) {
-                    if (SDL_Gamepad* gp = SDL_GetGamepadFromID(ids[0])) {
-                        auto down = [&](SDL_GamepadButton b) {
-                            return SDL_GetGamepadButton(gp, b);
-                        };
-                        if (down(SDL_GAMEPAD_BUTTON_DPAD_UP)) pad.buttons |= bit(cab::Up);
-                        if (down(SDL_GAMEPAD_BUTTON_DPAD_DOWN)) pad.buttons |= bit(cab::Down);
-                        if (down(SDL_GAMEPAD_BUTTON_DPAD_LEFT)) pad.buttons |= bit(cab::Left);
-                        if (down(SDL_GAMEPAD_BUTTON_DPAD_RIGHT)) pad.buttons |= bit(cab::Right);
-                        // South is the bottom face button whatever it is
-                        // labelled: A on Xbox, B on Nintendo, Cross on
-                        // PlayStation. SDL normalises by POSITION, which is the
-                        // only thing that is actually the same across pads.
-                        if (down(SDL_GAMEPAD_BUTTON_SOUTH)) pad.buttons |= bit(cab::B);
-                        if (down(SDL_GAMEPAD_BUTTON_EAST)) pad.buttons |= bit(cab::A);
-                        if (down(SDL_GAMEPAD_BUTTON_WEST)) pad.buttons |= bit(cab::Y);
-                        if (down(SDL_GAMEPAD_BUTTON_NORTH)) pad.buttons |= bit(cab::X);
-                        if (down(SDL_GAMEPAD_BUTTON_START)) pad.buttons |= bit(cab::Start);
-                        if (down(SDL_GAMEPAD_BUTTON_BACK)) pad.buttons |= bit(cab::Select);
+            // The keyboard is player one as well: both OR together, neither is
+            // required.
+            //
+            // EVERY SEATED PAD IS ITS OWN PLAYER (players.h, issue #64). Until
+            // 2026-09-26 a game read only the first pad SDL listed, so a second
+            // person's pad walked the menus and did nothing in a game.
+            for (int p = 0; p < players::kMax; ++p) {
+                cab::PadState st = p == 0 ? pad : cab::PadState{};
+                if (SDL_Gamepad* gp = players::gamepad(p)) {
+                    auto down = [&](SDL_GamepadButton b) {
+                        return SDL_GetGamepadButton(gp, b);
+                    };
+                    if (down(SDL_GAMEPAD_BUTTON_DPAD_UP)) st.buttons |= bit(cab::Up);
+                    if (down(SDL_GAMEPAD_BUTTON_DPAD_DOWN)) st.buttons |= bit(cab::Down);
+                    if (down(SDL_GAMEPAD_BUTTON_DPAD_LEFT)) st.buttons |= bit(cab::Left);
+                    if (down(SDL_GAMEPAD_BUTTON_DPAD_RIGHT)) st.buttons |= bit(cab::Right);
+                    // South is the bottom face button whatever it is
+                    // labelled: A on Xbox, B on Nintendo, Cross on
+                    // PlayStation. SDL normalises by POSITION, which is the
+                    // only thing that is actually the same across pads.
+                    if (down(SDL_GAMEPAD_BUTTON_SOUTH)) st.buttons |= bit(cab::B);
+                    if (down(SDL_GAMEPAD_BUTTON_EAST)) st.buttons |= bit(cab::A);
+                    if (down(SDL_GAMEPAD_BUTTON_WEST)) st.buttons |= bit(cab::Y);
+                    if (down(SDL_GAMEPAD_BUTTON_NORTH)) st.buttons |= bit(cab::X);
+                    if (down(SDL_GAMEPAD_BUTTON_START)) st.buttons |= bit(cab::Start);
+                    if (down(SDL_GAMEPAD_BUTTON_BACK)) st.buttons |= bit(cab::Select);
 
-                        // THE SHOULDERS, THE TRIGGERS AND THE RIGHT STICK.
-                        // None of these were mapped until 2026-09-19 — the
-                        // pad sent a d-pad, four face buttons, Start, Select
-                        // and one stick, and RetroPad's other six inputs went
-                        // nowhere. Found by MMagTech on the A9 trying to play
-                        // Crazy Taxi, where the triggers ARE drive and
-                        // reverse, so the game could not be played at all.
-                        //
-                        // It survived because nothing headless presses a
-                        // button: every measurement to date drove the pad
-                        // from code or watched an attract demo.
-                        if (down(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER))  pad.buttons |= bit(cab::L);
-                        if (down(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER)) pad.buttons |= bit(cab::R);
-                        // L3/R3 also open the overlay as a pair. They still
-                        // reach the core individually: Cabinet's rule is that
-                        // the hotkey "applies regardless of what either button
-                        // is otherwise bound to", and the overlay pauses the
-                        // core the instant it opens anyway.
-                        if (down(SDL_GAMEPAD_BUTTON_LEFT_STICK))  pad.buttons |= bit(cab::L3);
-                        if (down(SDL_GAMEPAD_BUTTON_RIGHT_STICK)) pad.buttons |= bit(cab::R3);
+                    // THE SHOULDERS, THE TRIGGERS AND THE RIGHT STICK.
+                    // None of these were mapped until 2026-09-19 — the
+                    // pad sent a d-pad, four face buttons, Start, Select
+                    // and one stick, and RetroPad's other six inputs went
+                    // nowhere. Found by MMagTech on the A9 trying to play
+                    // Crazy Taxi, where the triggers ARE drive and
+                    // reverse, so the game could not be played at all.
+                    //
+                    // It survived because nothing headless presses a
+                    // button: every measurement to date drove the pad
+                    // from code or watched an attract demo.
+                    if (down(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER))  st.buttons |= bit(cab::L);
+                    if (down(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER)) st.buttons |= bit(cab::R);
+                    // L3/R3 also open the overlay as a pair. They still
+                    // reach the core individually: Cabinet's rule is that
+                    // the hotkey "applies regardless of what either button
+                    // is otherwise bound to", and the overlay pauses the
+                    // core the instant it opens anyway.
+                    if (down(SDL_GAMEPAD_BUTTON_LEFT_STICK))  st.buttons |= bit(cab::L3);
+                    if (down(SDL_GAMEPAD_BUTTON_RIGHT_STICK)) st.buttons |= bit(cab::R3);
 
-                        // Analog triggers as digital L2/R2, which is what a
-                        // RetroPad's L2/R2 are for every core in this set.
-                        // Half travel: a hair-trigger fires on the spring's
-                        // own slop and a full-travel one never fires on a worn
-                        // pad.
-                        const int kTrigger = 16384;
-                        const int lt = SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_LEFT_TRIGGER);
-                        const int rt = SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER);
-                        if (lt > kTrigger) pad.buttons |= bit(cab::L2);
-                        if (rt > kTrigger) pad.buttons |= bit(cab::R2);
-                        // AND HOW FAR, not just whether. A Dreamcast reads its
-                        // triggers as a continuous value — they are the
-                        // accelerator and the brake in a driving game — and
-                        // Flycast asks for that through the analogue channel
-                        // rather than the button. The digital bits above still
-                        // go out for every core that wants a shoulder.
-                        //
-                        // A pad with switches instead of springs, which is what
-                        // a Switch Pro Controller's ZL and ZR are, hands SDL a
-                        // clean 0 or 32767 and arrives here as 0 or 1.
-                        pad.leftTrigger = std::clamp(lt / 32767.0f, 0.0f, 1.0f);
-                        pad.rightTrigger = std::clamp(rt / 32767.0f, 0.0f, 1.0f);
+                    // Analog triggers as digital L2/R2, which is what a
+                    // RetroPad's L2/R2 are for every core in this set.
+                    // Half travel: a hair-trigger fires on the spring's
+                    // own slop and a full-travel one never fires on a worn
+                    // pad.
+                    const int kTrigger = 16384;
+                    const int lt = SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_LEFT_TRIGGER);
+                    const int rt = SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER);
+                    if (lt > kTrigger) st.buttons |= bit(cab::L2);
+                    if (rt > kTrigger) st.buttons |= bit(cab::R2);
+                    // AND HOW FAR, not just whether. A Dreamcast reads its
+                    // triggers as a continuous value — they are the
+                    // accelerator and the brake in a driving game — and
+                    // Flycast asks for that through the analogue channel
+                    // rather than the button. The digital bits above still
+                    // go out for every core that wants a shoulder.
+                    //
+                    // A pad with switches instead of springs, which is what
+                    // a Switch Pro Controller's ZL and ZR are, hands SDL a
+                    // clean 0 or 32767 and arrives here as 0 or 1.
+                    st.leftTrigger = std::clamp(lt / 32767.0f, 0.0f, 1.0f);
+                    st.rightTrigger = std::clamp(rt / 32767.0f, 0.0f, 1.0f);
 
-                        pad.leftX = SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_LEFTX) / 32767.0f;
-                        pad.leftY = SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_LEFTY) / 32767.0f;
-                        pad.rightX = SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_RIGHTX) / 32767.0f;
-                        pad.rightY = SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_RIGHTY) / 32767.0f;
-                    }
+                    st.leftX = SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_LEFTX) / 32767.0f;
+                    st.leftY = SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_LEFTY) / 32767.0f;
+                    st.rightX = SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_RIGHTX) / 32767.0f;
+                    st.rightY = SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_RIGHTY) / 32767.0f;
                 }
-                SDL_free(ids);
+                core.setPad(p, st);
             }
-            core.setPad(0, pad);
 
             // Wall-clock pacing is the product's, and it is wrong for a
             // capture. `--frames 180` asks for 180 drawn frames, and with

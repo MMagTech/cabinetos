@@ -64,8 +64,13 @@ struct {
     size_t (*get_memory_size)(unsigned) = nullptr;
 } g;
 
-constexpr int kMaxPorts = 2;
+// Four players (players.h). PlayStation 2's own host takes two of them.
+constexpr int kMaxPorts = 4;
 PadState gPads[kMaxPorts];
+// How many players the app says there are, and how many ports the core has
+// been told hold a controller.
+int gPlayers = 1;
+unsigned gPortsPlugged = 0;
 
 // How many controller ports the CORE says it has, from
 // RETRO_ENVIRONMENT_SET_CONTROLLER_INFO. Four for Flycast, and it matters that
@@ -1378,16 +1383,19 @@ bool Core::loadGame(const std::string& romPath, const std::string& systemDir,
     // never runs. Telling it about one port is the same as telling it about
     // none.
     //
-    // ONE PAD, HONESTLY. This frontend drives port 0 and nothing else — see
-    // setPad — so port 0 is a joypad and the rest are empty. Saying every port
-    // has a controller would have Flycast create four memory cards for a
-    // console with one player, three of which nothing would ever sync and all
-    // of which would sit in the system directory.
+    // A CONTROLLER IN EACH PLAYER'S PORT, AND NO MORE. Player one's port is
+    // always a joypad; the others are joypads only when somebody is sitting
+    // at them (players.h). Saying every port has a controller would have
+    // Flycast create four memory cards for a console with one player, three
+    // of which nothing would ever sync and all of which would sit in the
+    // system directory.
+    gPortsPlugged = 0;
     if (g.set_controller_port_device) {
         const unsigned ports = std::max(gCorePorts, 1u);
-        g.set_controller_port_device(0, RETRO_DEVICE_JOYPAD);
-        for (unsigned p = 1; p < ports; ++p)
-            g.set_controller_port_device(p, RETRO_DEVICE_NONE);
+        const unsigned players = std::clamp<unsigned>(static_cast<unsigned>(gPlayers), 1u, ports);
+        for (unsigned p = 0; p < ports; ++p)
+            g.set_controller_port_device(p, p < players ? RETRO_DEVICE_JOYPAD : RETRO_DEVICE_NONE);
+        gPortsPlugged = players;
     }
 
     retro_system_av_info av{};
@@ -1744,6 +1752,21 @@ void Core::setPaused(bool paused) {
 }
 
 bool Core::isPs2() const { return gIsPs2; }
+
+void Core::setPlayers(int n) {
+    gPlayers = std::clamp(n, 1, kMaxPorts);
+    // A player who arrived mid-game: plug their port in now. libretro allows
+    // it at any time, and it is what a person plugging a pad into the real
+    // machine did.
+    if (!gameLoaded_ || !g.set_controller_port_device || gIsPs2) return;
+    const unsigned ports = std::max(gCorePorts, 1u);
+    const unsigned want = std::min(static_cast<unsigned>(gPlayers), ports);
+    while (gPortsPlugged < want) {
+        g.set_controller_port_device(gPortsPlugged, RETRO_DEVICE_JOYPAD);
+        std::fprintf(stderr, "[input] controller plugged into port %u\n", gPortsPlugged + 1);
+        ++gPortsPlugged;
+    }
+}
 
 void Core::setPad(int port, const PadState& pad) {
     if (port < 0 || port >= kMaxPorts) return;
