@@ -282,8 +282,12 @@ status here to Built.
     reach a console with any local SELinux change). Keyboard-interactive is
     off on 2222 too; it is a second way to type a password.
   - Setting your own password: **later**, if people ask.
-- **Plugging a drive in and it being used has not been tested on the A9 with a
-  real drive yet.**
+- **Plugging a drive in does NOT work on the A9, found 2026-09-25**: nothing
+  mounts a USB drive (the desktop's automounter went with the desktop).
+  To build with Eject: mount and unmount through udisks2. Notifications:
+  the pill, no sound; "External drive connected", "Safe to unplug",
+  "External drive removed", "Couldn't use the external drive". MMagTech,
+  2026-09-25.
 
 ## System
 
@@ -305,6 +309,11 @@ status here to Built.
     **A console that has never checked shows the row alone**, no value and
     no line; pressing it checks (MMagTech on the TV, 2026-09-25: no state
     for "never checked").
+    **A check somebody pressed that finds an update opens a panel**,
+    "Update available" / "2026.09.28 · 0.9 MB" / **Download** · Later, and
+    the row opens it again; Download goes to the PIN. Without it the second
+    press that downloads was nowhere on screen (MMagTech on the TV,
+    2026-09-25). A weekly check stays quiet: the pill only.
     Up to date / "Checked today" (both kinds of check write that line;
     "yesterday", "3 days ago" by the calendar).
     Checking…. Update available / "2026.09.28 · 0.9 MB": the size is shown,

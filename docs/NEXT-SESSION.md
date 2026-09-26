@@ -32,6 +32,37 @@ with its investigations intact.
 
 ## Before anything else
 
+**THE A9 FOLLOWS `testing` PERMANENTLY, from 2026-09-25 late** (MMagTech:
+agreed). With promotion, every change is tried on `testing` and a merge
+makes `latest` that same image, so the test console on `testing` is never
+behind what users get, and testing a change needs no `bootc switch` and no
+extra reboot. **SSH is port 2222; sudo's password is
+`cat /var/lib/cabinetos-files/password`.** #96 and #97 are merged; `latest`
+was `2026.09.26`, promoted, not built.
+
+**QUEUE, IN ORDER, as of the end of that session:**
+
+1. **Update available panel** (branch `update-panel`): a check somebody
+   pressed opens "Update available / <version> · <size> / Download ·
+   Later"; the row opens it again. Judged on the TV with sample states; the
+   real test is the A9 finding this branch's own `testing` build.
+2. **USB DRIVES ARE NEVER MOUNTED, found 2026-09-25.** MMagTech plugged a
+   4 TB Samsung T9 (exFAT, label "T9") into the A9: the kernel sees `sda2`,
+   nothing mounts it, so Storage shows only the main drive. A desktop's
+   automounter did that job and was stripped with the desktop;
+   `storage::driveSearchPaths()` looks in `/run/media/cabinet`, where
+   udisks would have put it. **Fix: the console asks udisks2 to mount a
+   drive when it appears and to unmount and power it off for Eject (#67)**,
+   the same service. Leave the T9 plugged in; it is the test drive.
+   **Notifications, MMagTech 2026-09-25:** the pill, no new sound.
+   "External drive connected" once it is mounted and usable (not at the
+   cable), "Safe to unplug" after Eject, "External drive removed" when
+   pulled without it, "Couldn't use the external drive" when it cannot be
+   used. No sound: the pill is the notification (PS5 does the same), and a
+   chime would play over a game.
+3. Then Eject (#67) and Kept and cached games (#68), then Controllers,
+   then Picture quality.
+
 **THE SESSION OF 2026-09-25 (EVENING) BUILT FILE ACCESS (#69), BRANCH
 `file-access`.** Judged on the TV, then proved from MMagTech's Mac against
 the A9 on `testing` `2026.09.25.4`: turned on from the TV, `sftp
@@ -2160,6 +2191,12 @@ then `YDOTOOL_SOCKET=/tmp/ydotool.sock ydotool key 108:1 108:0` (Down; Up
 - **Show a state, then wait for "next".** Running eight states on a timer
   went past faster than MMagTech could judge them, and the last one stayed
   up looking like a real failure. One state per message worked.
+- **A CHANGE TO THE UPDATE SCREENS NEEDS TWO `testing` BUILDS TO TEST.**
+  The check is done by the frontend the console is RUNNING, so the first
+  build only delivers the new screens; they can only be seen answering a
+  check once there is a second, newer build to find. Found 2026-09-25
+  sending MMagTech to test the Update available panel against the very
+  build that carried it: the old frontend answered, with no panel.
 - **Anything in `/tmp` on the A9 is gone after a reboot**, including a log
   you started to watch an update. Read the previous boot with
   `journalctl -b -1`.
