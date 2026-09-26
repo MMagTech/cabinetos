@@ -408,8 +408,13 @@ struct Watcher {
                      type.c_str(), external ? "external" : "internal", at.c_str(),
                      quiet ? ", already attached" : "");
         usableAfterAll(drive);
-        if (quiet) announced[drive] = Event::Connected;
-        else say(drive, external, Event::Connected);
+        if (quiet) {
+            // No notice, but File access, if on, still has to show it.
+            announced[drive] = Event::Connected;
+            post(Event::Changed, external);
+        } else {
+            say(drive, external, Event::Connected);
+        }
     }
 
     void forget(const std::string& block) {
@@ -532,11 +537,31 @@ struct Watcher {
             std::fprintf(stderr, "[drives] eject: no drive behind %s\n", location.c_str());
             return false;
         }
-        // Every filesystem on the drive, not only the one holding CabinetOS/,
-        // and every place each is mounted: udisks takes one mount point per
-        // call, and File access's view of the drive is a second one.
+        // Every filesystem on the drive, not only the one holding CabinetOS/.
+        // UDISKS' OWN MOUNTS ONLY (under /run/media): File access's view of a
+        // drive is a second mount made by root, which udisks will not let
+        // the session unmount ("Not authorized", found on the A9 with File
+        // access on). That one is root's to take down, below.
         std::vector<dev_t> devs;
         std::vector<std::string> nodes;
+        std::vector<std::string> released;   // unmounted here, to mount back on failure
+        // A FAILED EJECT PUTS THE DRIVE BACK as it was, so it is not left
+        // unmounted from the console and still held by a computer, missing
+        // from Storage.
+        auto putBack = [&]() {
+            for (const std::string& b : released) {
+                std::string at, why;
+                if (callNoPrompt(bus, b, kFs, "Mount", &at, &why)) {
+                    if (auto it = seen.find(b); it != seen.end()) it->second.mounted = true;
+                    std::fprintf(stderr, "[drives] eject: put %s back at %s\n", b.c_str(), at.c_str());
+                }
+            }
+        };
+        auto ours = [](const std::vector<std::string>& mps) {
+            for (const std::string& m : mps)
+                if (m.rfind("/run/media/", 0) == 0) return true;
+            return false;
+        };
         for (const std::string& b : blockDevices(bus)) {
             if (driveOf(bus, b) != drive) continue;
             uint64_t n = 0;
@@ -545,29 +570,56 @@ struct Watcher {
             if (pathBytesProp(bus, b, kBlock, "Device", &node)) nodes.push_back(node);
             for (int tries = 0; tries < 4; ++tries) {
                 std::vector<std::string> mps;
-                if (!mountPoints(bus, b, &mps) || mps.empty()) break;
+                if (!mountPoints(bus, b, &mps) || !ours(mps)) break;
                 std::string why;
                 if (!callNoPrompt(bus, b, kFs, "Unmount", nullptr, &why)) {
                     std::fprintf(stderr, "[drives] eject: could not unmount %s: %s\n", b.c_str(),
                                  why.c_str());
+                    putBack();
                     return false;
                 }
-                std::fprintf(stderr, "[drives] eject: unmounted %s from %s\n", b.c_str(),
-                             mps.front().c_str());
+                released.push_back(b);
+                std::fprintf(stderr, "[drives] eject: unmounted %s\n", b.c_str());
             }
             if (auto it = seen.find(b); it != seen.end()) it->second.mounted = false;
+        }
+        // ANYTHING LEFT is File access's view: root rebuilds it without this
+        // drive (cabinetos-files refresh), and a computer copying a file from
+        // it keeps it busy, so Eject then refuses rather than cutting the copy
+        // off. Waited for, up to ten seconds, because the reload returns when
+        // systemd has the job, not when it is done.
+        if (anyMounted(devs, nodes)) {
+            sd_bus_error err = SD_BUS_ERROR_NULL;
+            const int r = sd_bus_call_method(
+                bus, "org.freedesktop.systemd1", "/org/freedesktop/systemd1",
+                "org.freedesktop.systemd1.Manager", "ReloadUnit", &err, nullptr, "ss",
+                "cabinetos-files.service", "replace");
+            std::fprintf(stderr, "[drives] eject: asked File access to let go: %s\n",
+                         r >= 0 ? "taken" : (err.message ? err.message : "refused"));
+            sd_bus_error_free(&err);
+            for (int i = 0; i < 40 && anyMounted(devs, nodes); ++i) usleep(250 * 1000);
         }
         if (anyMounted(devs, nodes)) {
             std::fprintf(stderr, "[drives] eject: %s is still mounted somewhere; not safe\n",
                          drive.c_str());
+            putBack();
             return false;
         }
         ejected.insert(drive);
         // Unmounted is already safe: unmounting wrote everything out. Powering
         // it off is what makes the drive's light go out, and some enclosures
         // cannot do it, which is not a failure worth a word.
+        // RETRIED FOR A FEW SECONDS: right after an unmount the system may
+        // still be reading the drive once more, and udisks refuses with
+        // "Device or resource busy". Found on the A9 ejecting with File
+        // access on, where two unmounts land a quarter second apart.
         std::string why;
-        if (callNoPrompt(bus, drive, kDrive, "PowerOff", nullptr, &why))
+        bool off = false;
+        for (int i = 0; i < 8 && !off; ++i) {
+            if (i) usleep(500 * 1000);
+            off = callNoPrompt(bus, drive, kDrive, "PowerOff", nullptr, &why);
+        }
+        if (off)
             std::fprintf(stderr, "[drives] eject: %s is powered off\n", drive.c_str());
         else
             std::fprintf(stderr, "[drives] eject: %s stays powered (%s)\n", drive.c_str(),
@@ -677,6 +729,10 @@ void start() {
     w->startedAt = std::chrono::steady_clock::now();
     w->findOwnDrives();
     for (const std::string& b : blockDevices(w->bus)) w->consider(b, true);
+    // One redraw after the first look: Storage, and File access if it is on
+    // and was built before this process started (a restart in place). Found
+    // on the A9: a drive already mounted at start never reached File access.
+    post(Event::Changed, true);
     std::thread([w] { w->run(); }).detach();
 }
 
