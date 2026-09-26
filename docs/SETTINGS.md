@@ -255,9 +255,10 @@ status here to Built.
     console already uses. Each game with its size and the drive it is on,
     biggest first. The one action is Remove download.
   - **Everyone's downloads, with whose each is**: the space belongs to the
-    machine. Looking needs no PIN; removing your own needs none (as on the
-    game's own screen); **removing someone else's asks the PIN** if one is
-    set.
+    machine. **Opening Downloads asks the PIN** if one is set: it is an
+    admin screen (MMagTech). Once per Settings visit, like every PIN in
+    Settings, so clearing several games is one PIN. A person without the PIN
+    still removes their own download from the game's own screen.
   - In Storage, not a category of its own: it is where "Storage almost full"
     sends a person looking.
 - **File access** (under Storage): **built on branch `file-access`, #69;
