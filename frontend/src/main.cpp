@@ -5537,6 +5537,19 @@ int main(int argc, char** argv) {
     // is what makes this simple and is the direct payoff of hosting cores in
     // process rather than launching them.
     bool overlayOpen = false;
+    // THE BUTTONS THE MENU WAS CLOSED WITH, per player, kept from the game
+    // until they are let go (#103). The menu acts when a button goes DOWN and
+    // the game reads what is held every frame, so B to go back, A on Resume,
+    // or the stick clicks that closed it all reached the game a frame later
+    // as a press. Filled while the menu is up; a bit clears when its button
+    // is released and never comes back, so a fresh press after that is the
+    // game's as usual.
+    uint32_t heldThroughMenu[players::kMax] = {};
+    // Whether the menu was up at the last read. The menu usually closes on
+    // an event handled earlier in the SAME frame as the read, so the button
+    // that closed it is only held from that frame on; the frame of the close
+    // has to be captured as well as the frames it was open.
+    bool menuUpAtLastRead = false;
     // Both stick clicks together are the overlay hotkey — see where they are
     // read. Held state rather than a chord test at press time, because SDL
     // delivers the two presses as separate events.
@@ -9649,6 +9662,8 @@ int main(int argc, char** argv) {
             // EVERY SEATED PAD IS ITS OWN PLAYER (players.h, issue #64). Until
             // 2026-09-26 a game read only the first pad SDL listed, so a second
             // person's pad walked the menus and did nothing in a game.
+            const bool menuWasUp = overlayOpen || menuUpAtLastRead;
+            menuUpAtLastRead = overlayOpen;
             for (int p = 0; p < players::kMax; ++p) {
                 cab::PadState st = p == 0 ? pad : cab::PadState{};
                 if (SDL_Gamepad* gp = players::gamepad(p)) {
@@ -9719,6 +9734,16 @@ int main(int argc, char** argv) {
                     st.rightX = SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_RIGHTX) / 32767.0f;
                     st.rightY = SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_RIGHTY) / 32767.0f;
                 }
+                // #103: what closed the menu is the menu's, not the game's.
+                // The keyboard is in `st` for player one, so it is covered
+                // too. A trigger that is swallowed goes to zero as well, or a
+                // Dreamcast would still read the pull through its analogue
+                // channel.
+                if (menuWasUp) heldThroughMenu[p] = st.buttons;
+                heldThroughMenu[p] &= st.buttons;
+                st.buttons &= ~heldThroughMenu[p];
+                if (heldThroughMenu[p] & bit(cab::L2)) st.leftTrigger = 0;
+                if (heldThroughMenu[p] & bit(cab::R2)) st.rightTrigger = 0;
                 core.setPad(p, st);
             }
 
