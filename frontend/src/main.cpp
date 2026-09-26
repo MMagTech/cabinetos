@@ -6702,11 +6702,14 @@ int main(int argc, char** argv) {
                             "Sign in with your own RetroAchievements account", ""});
         }
 
-        // ONE ROW PER CONTROLLER, AS ITS PLAYER (players.h, issue #64). A
-        // button pressed on a pad lights its row, which is how two identical
-        // pads are told apart. Pressing a row gives that pad another number
-        // (the two swap) or forgets a Bluetooth pad; a lone wired pad has
-        // neither, so its row only shows.
+        // ONE ROW PER CONTROLLER: its name, and its player as the value, the
+        // shape of every other setting, so it reads as something that can be
+        // changed. It was "Player 1" over the name for one build, and
+        // MMagTech: nothing said the number could change. A button pressed on
+        // a pad lights its row, which is how two identical pads are told
+        // apart. Pressing a row gives that pad another number (the two swap)
+        // or forgets a Bluetooth pad; a lone wired pad has neither, so its
+        // row only shows. players.h, issue #64.
         {
             std::vector<Row> rows;
             const std::vector<players::Pad> pads = players::connected();
@@ -6714,8 +6717,8 @@ int main(int argc, char** argv) {
             if (pads.empty()) rows.push_back({K::Info, 0, "No controllers", "", ""});
             for (const players::Pad& p : pads) {
                 const bool canAct = pads.size() > 1 || !p.address.empty();
-                rows.push_back({canAct ? K::Action : K::Info, kSetPad + p.player,
-                                "Player " + std::to_string(p.player + 1), p.name, ""});
+                rows.push_back({canAct ? K::Action : K::Info, kSetPad + p.player, p.name, "",
+                                "Player " + std::to_string(p.player + 1)});
             }
             rows.push_back({K::Unbuilt, 0, "Add a controller",
                             "The same pairing screen as first run", ""});
@@ -8944,9 +8947,20 @@ int main(int argc, char** argv) {
                 case SDL_EVENT_GAMEPAD_ADDED:
                     players::added(e.gdevice.which);
                     break;
-                case SDL_EVENT_GAMEPAD_REMOVED:
+                case SDL_EVENT_GAMEPAD_REMOVED: {
+                    // A PLAYING PAD DROPPING OUT PAUSES THE GAME, as on a
+                    // Switch or an Apple TV (MMagTech, 2026-09-26): its
+                    // player would otherwise be run over while they find the
+                    // charger. Any pad can resume.
+                    const int was = players::playerOf(e.gdevice.which);
                     players::removed(e.gdevice.which);
+                    if (playing && !overlayOpen && was >= 0) {
+                        std::fprintf(stderr, "[players] player %d's pad went off: pausing\n",
+                                     was + 1);
+                        toggleOverlay();
+                    }
                     break;
+                }
                 case SDL_EVENT_TEXT_INPUT:
                     // A physical keyboard types into the same field. Not a
                     // separate path — the same string and the same commit.

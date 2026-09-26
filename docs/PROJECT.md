@@ -1503,8 +1503,17 @@ are on.
 a joypad would have Flycast make four VMUs nothing syncs. PlayStation 2's host
 takes two ports, so players 3 and 4 play nothing there (no multitap).
 
-**Open:** whether a game pauses when a playing pad drops out. Recommended,
-not decided.
+**A playing pad dropping out pauses the game** (MMagTech, same day).
+
+**A pad is named after its maker, not its claim.** A pad in Switch mode
+reports itself as a Switch Pro Controller, name and USB ids and all, so
+MMagTech's 8BitDo read "Nintendo Switch Pro Controller" while a wired 8BitDo
+Lite 2 read correctly. Its Bluetooth address gives it away: E4:17:D8 is
+registered to 8BitDo. Asked whether this was an 8BitDo special case, it was
+made general: any pad claiming Nintendo, Xbox or PlayStation whose address
+belongs to someone else is named for that company, from hwdata's list.
+Companies registered under a city name (many Shenzhen makers) keep the name
+the pad gave, since nothing better is known.
 
 ### The permission detail, and a Phase 2 decision that paid for itself
 

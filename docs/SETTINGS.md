@@ -116,9 +116,16 @@ Decided with MMagTech 2026-09-26, from the things people will actually do.
   is still on, and gets it back when it returns (known by its serial, the
   Bluetooth address). **If every pad goes off, the first one back is player
   1.** Leaving the game closes up any number still held.
-- **One row per controller**, "Player 1" with the pad's name under it.
-  Pressing a button on a pad lights its row: that is how two identical pads
-  are told apart. Pads with player lights show their number on the pad.
+- **One row per controller: its name, with "Player 1" as the value**, the
+  shape of every other setting. (Built first as "Player 1" over the name;
+  MMagTech: nothing said the number could be changed.) Pressing a button on
+  a pad lights its row: that is how two identical pads are told apart. Pads
+  with player lights show their number on the pad.
+- **A pad is named after whoever made it.** A pad in Switch mode says it is
+  a "Nintendo Switch Pro Controller"; when a pad claims Nintendo, Xbox or
+  PlayStation and its Bluetooth address is registered to another company
+  (the list in the image, hwdata), it is "<maker> controller": MMagTech's
+  8BitDo reads "8BitDo controller". Any brand, not only 8BitDo.
 - **Pressing a row: "Make player N"** for each other pad (the two swap; a
   preferred pad keeps its number while both stay on) **and Forget** for a
   Bluetooth pad, with "Forget <name>?" and Cancel focused. No PIN. A lone
@@ -131,8 +138,8 @@ Decided with MMagTech 2026-09-26, from the things people will actually do.
   button"); saved per pad model, with a Reset. A testing switch makes a
   known pad come up as unknown, so it can be judged on the TV with a pad
   that is recognised. **To build.**
-- **Open, for MMagTech:** whether a game pauses (the pause menu opens) when a
-  playing pad drops out, as on Switch and Apple TV.
+- **A playing pad dropping out opens the pause menu**, as on Switch and
+  Apple TV (MMagTech: yes). Any pad can resume.
 
 ## Network
 

@@ -81,9 +81,9 @@ int count();
 struct Pad {
     int player = -1;
     SDL_JoystickID id = 0;
-    std::string name;
+    std::string name;      // as a person knows it (see nameOf in players.cpp)
     bool bluetooth = false;
-    std::string address;   // Bluetooth only, when SDL can say
+    std::string address;   // "E4:17:D8:71:F1:ED", Bluetooth only
 };
 // The seated pads that are on, player one first.
 std::vector<Pad> connected();

@@ -1,7 +1,10 @@
 #include "players.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cstdio>
+#include <cstring>
+#include <fstream>
 #include <map>
 
 namespace players {
@@ -97,6 +100,85 @@ std::string keyOf(SDL_Gamepad* gp) {
     return {};
 }
 
+// A Bluetooth address, "E4:17:D8:71:F1:ED", from SDL's serial, which for a
+// Bluetooth pad is its address written "e4-17-d8-71-f1-ed". Empty for any
+// other serial (a wired pad's is often "000000000003").
+std::string addressOf(SDL_Gamepad* gp) {
+    const char* s = SDL_GetGamepadSerial(gp);
+    if (!s || std::strlen(s) != 17) return {};
+    std::string out;
+    for (int i = 0; i < 17; ++i) {
+        const char c = s[i];
+        if (i % 3 == 2) {
+            if (c != '-' && c != ':') return {};
+            out += ':';
+        } else {
+            if (!std::isxdigit(static_cast<unsigned char>(c))) return {};
+            out += static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+        }
+    }
+    return out;
+}
+
+// WHO MADE A BLUETOOTH DEVICE, from the first half of its address, which is
+// registered to a company. The list ships in the image (hwdata). Remembered,
+// because it is several megabytes and read only when a pad connects.
+std::string makerOf(const std::string& address) {
+    static std::map<std::string, std::string> known;
+    if (address.size() < 8) return {};
+    std::string prefix = address.substr(0, 8);   // "E4:17:D8"
+    for (char& c : prefix) if (c == ':') c = '-';
+    if (auto it = known.find(prefix); it != known.end()) return it->second;
+    std::string maker;
+    std::ifstream f("/usr/share/hwdata/oui.txt");
+    for (std::string line; std::getline(f, line);) {
+        if (line.compare(0, 8, prefix) != 0 || line.find("(hex)") == std::string::npos) continue;
+        const size_t tab = line.find_last_of('\t');
+        maker = tab == std::string::npos ? "" : line.substr(tab + 1);
+        break;
+    }
+    known[prefix] = maker;
+    return maker;
+}
+
+// THE NAME A PERSON KNOWS THEIR PAD BY. A pad in its Switch mode tells the
+// machine it IS a Switch Pro Controller, name and all: MMagTech's 8BitDo
+// reads "Nintendo Switch Pro Controller". So when a pad claims one of the
+// big three and its address belongs to somebody else, it is named after
+// whoever made it. A real Nintendo, Xbox or PlayStation pad keeps its name.
+std::string nameOf(SDL_Gamepad* gp) {
+    const char* n = SDL_GetGamepadName(gp);
+    std::string name = n ? n : "";
+    auto has = [](const std::string& hay, const char* needle) {
+        std::string h = hay;
+        for (char& c : h) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        return h.find(needle) != std::string::npos;
+    };
+    const char* brand = nullptr;   // the maker the NAME claims
+    if (has(name, "nintendo") || has(name, "pro controller") || has(name, "joy-con")) brand = "nintendo";
+    else if (has(name, "xbox")) brand = "microsoft";
+    else if (has(name, "playstation") || has(name, "dualsense") || has(name, "dualshock") ||
+             has(name, "ps4") || has(name, "ps5")) brand = "sony";
+    if (!brand) return name;
+    const std::string maker = makerOf(addressOf(gp));
+    if (maker.empty() || has(maker, brand)) return name;
+    // "8BITDO TECHNOLOGY HK LIMITED" -> "8BitDo". The registered name is a
+    // company's legal one; its first word is the brand, except for the
+    // companies registered under their city, where nothing better is known.
+    std::string first = maker.substr(0, maker.find(' '));
+    static const std::map<std::string, std::string> kCased = {
+        {"8bitdo", "8BitDo"}, {"gulikit", "GuliKit"}, {"powera", "PowerA"},
+    };
+    std::string lower = first;
+    for (char& c : lower) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    for (const char* city : {"shenzhen", "guangzhou", "dongguan", "zhuhai", "xiamen",
+                             "beijing", "shanghai", "hong", "ningbo", "hangzhou"})
+        if (lower == city) return name;
+    if (auto it = kCased.find(lower); it != kCased.end()) first = it->second;
+    else if (!first.empty()) first = static_cast<char>(std::toupper(static_cast<unsigned char>(lower[0]))) + lower.substr(1);
+    return first + " controller";
+}
+
 // The player lights on pads that have them (a Switch Pro Controller's four
 // dots, a DualSense's bar) show the number the console gave it.
 void light() {
@@ -117,8 +199,12 @@ void changed(const char* what, SDL_JoystickID id) {
                       s.id ? std::to_string(s.id).c_str() : "held");
         order += buf;
     }
-    std::fprintf(stderr, "[players] %s pad %u; players: %s\n", what,
-                 static_cast<unsigned>(id), order.empty() ? "none" : order.c_str());
+    if (id)
+        std::fprintf(stderr, "[players] %s pad %u; players: %s\n", what,
+                     static_cast<unsigned>(id), order.empty() ? "none" : order.c_str());
+    else
+        std::fprintf(stderr, "[players] %s; players: %s\n", what,
+                     order.empty() ? "none" : order.c_str());
 }
 
 }  // namespace
@@ -133,6 +219,9 @@ void added(SDL_JoystickID id) {
     }
     gOpen[id] = gp;
     gSeats.add(id, keyOf(gp));
+    std::fprintf(stderr, "[players] pad %u is %s%s%s\n", static_cast<unsigned>(id),
+                 nameOf(gp).c_str(), addressOf(gp).empty() ? "" : " over Bluetooth ",
+                 addressOf(gp).c_str());
     changed("connected", id);
 }
 
@@ -148,7 +237,7 @@ void removed(SDL_JoystickID id) {
 void setInGame(bool on) {
     if (gSeats.inGame() == on) return;
     gSeats.setInGame(on);
-    changed(on ? "game started," : "game ended,", 0);
+    changed(on ? "game started" : "game ended", 0);
 }
 
 bool swap(int a, int b) {
@@ -177,11 +266,9 @@ std::vector<Pad> connected() {
         Pad p;
         p.player = static_cast<int>(i);
         p.id = id;
-        if (const char* n = SDL_GetGamepadName(it->second)) p.name = n;
-        p.bluetooth = SDL_GetGamepadConnectionState(it->second) ==
-                      SDL_JOYSTICK_CONNECTION_WIRELESS;
-        if (p.bluetooth)
-            if (const char* s = SDL_GetGamepadSerial(it->second); s && *s) p.address = s;
+        p.name = nameOf(it->second);
+        p.address = addressOf(it->second);
+        p.bluetooth = !p.address.empty();
         out.push_back(std::move(p));
     }
     return out;
