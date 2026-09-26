@@ -85,6 +85,7 @@
 #include "files.h"
 #include "drives.h"
 #include "players.h"
+#include "shortcuts.h"
 #include "bluetooth.h"
 #include "ui.h"
 
@@ -5550,6 +5551,12 @@ int main(int argc, char** argv) {
     // that closed it is only held from that frame on; the frame of the close
     // has to be captured as well as the frames it was open.
     bool menuUpAtLastRead = false;
+    // THE SHORTCUT BUTTON, per player, while a game plays (shortcuts.h).
+    // `before` is what was already held when it went down, so only buttons
+    // pressed DURING the hold count; `used` is whether one was, which is what
+    // tells a tap (the pause menu) from a hold (a shortcut) on release.
+    struct ShortcutHold { bool down = false, used = false; uint32_t before = 0; };
+    ShortcutHold shortcutHold[players::kMax];
     // Both stick clicks together are the overlay hotkey — see where they are
     // read. Held state rather than a chord test at press time, because SDL
     // delivers the two presses as separate events.
@@ -6230,7 +6237,7 @@ int main(int argc, char** argv) {
     enum SettingId { SetAddAccount = 1, SetInterfaceSounds, SetPinSet, SetPinChange,
                      SetPinOff, SetRemoveAccount, SetScreenOff, SetWifi, SetServer,
                      SetUpdate, SetUpdateCheck, SetCredits, SetFiles, SetDownloads,
-                     SetAddController };
+                     SetAddController, SetShortcuts, SetShortcutButton };
     // One Eject row per USB drive: this plus the drive's index in
     // storage::locations() when the rows were built.
     constexpr int kSetEject = 100;
@@ -6245,6 +6252,12 @@ int main(int argc, char** argv) {
     // The pad last pressed in Settings, whose row has the dot. Kept as the
     // pad, not its row: a swap moves it to another row.
     SDL_JoystickID settingsLastPad = 0;
+    // THE SHORTCUT BUTTON ROW IS LISTENING for this pad's next press, 0 when
+    // not (shortcuts.h). And the press it took, so the gamepad event SDL sends
+    // for that same press (same timestamp) goes no further: a B that cancels
+    // must not also leave Settings.
+    SDL_JoystickID shortcutListen = 0;
+    Uint64 shortcutTakenAt = 0;
     std::vector<drives::Unusable> formatable;
     std::map<int, std::string> driveNames;   // a drive row's id -> its name
 
@@ -6916,8 +6929,26 @@ int main(int argc, char** argv) {
                                 "Player " + std::to_string(p.player + 1)});
             }
             rows.push_back({K::Action, SetAddController, "Add a controller", "", ""});
-            rows.push_back({K::Unbuilt, 0, "Button mapping",
-                            "For controllers the console does not recognise", ""});
+            // IN-GAME SHORTCUTS, off by default (shortcuts.h). The Button
+            // mapping row that stood here went with #66: there is no mapping
+            // screen. With the switch on, the shortcut button row is for the
+            // pad in hand, named on the row, since the button is remembered
+            // per kind of pad.
+            {
+                Row r{K::Choice, SetShortcuts, "In-game shortcuts", "", ""};
+                r.choices = {"Off", "On"};
+                r.choice = shortcuts::enabled() ? 1 : 0;
+                rows.push_back(r);
+            }
+            if (shortcuts::enabled() && !pads.empty()) {
+                const players::Pad* inHand = &pads.front();
+                for (const players::Pad& p : pads)
+                    if (p.id == settingsLastPad) inHand = &p;
+                SDL_Gamepad* gp = SDL_GetGamepadFromID(inHand->id);
+                rows.push_back({K::Action, SetShortcutButton, "Shortcut button", inHand->name,
+                                shortcutListen ? "Press a button\xE2\x80\xA6"
+                                               : shortcuts::label(gp)});
+            }
             cats.push_back({"Controllers", std::move(rows)});
         }
 
@@ -7526,6 +7557,14 @@ int main(int argc, char** argv) {
                 } else if (res.value == SetAddController) {
                     sound::play(sound::Cue::Activate);
                     openPadWindow();
+                } else if (res.value == SetShortcutButton) {
+                    // The pad that pressed A, which the row already names.
+                    const std::vector<players::Pad> pads = players::connected();
+                    shortcutListen = pads.empty() ? 0 : pads.front().id;
+                    for (const players::Pad& p : pads)
+                        if (p.id == settingsLastPad) shortcutListen = p.id;
+                    sound::play(sound::Cue::Activate);
+                    buildSettings();
                 } else if (res.value == SetAddAccount) {
                     // The same route as the chip's Add user, PIN included.
                     // Back from the pairing screen returns here, because it
@@ -7790,6 +7829,11 @@ int main(int argc, char** argv) {
                     updWeekly = settingsScreen.choiceOf(SetUpdateCheck) == 1;
                     prefs::set("update_check", updWeekly ? "weekly" : "manual");
                     sound::play(sound::Cue::Move);
+                }
+                if (res.value == SetShortcuts) {
+                    shortcuts::setEnabled(settingsScreen.choiceOf(SetShortcuts) == 1);
+                    sound::play(sound::Cue::Move);
+                    buildSettings();   // the Shortcut button row comes and goes
                 }
                 if (res.value == SetScreenOff) {
                     const int i = settingsScreen.choiceOf(SetScreenOff);
@@ -9150,12 +9194,52 @@ int main(int argc, char** argv) {
                 buildSettings();
                 continue;
             }
+            // SETTING THE SHORTCUT BUTTON: the row is listening, and the next
+            // RAW press on its pad is the answer (shortcuts.h), read before
+            // anything else sees it. B cancels; a button the game needs is
+            // passed over and listening goes on. Every other press is held
+            // back meanwhile, so nothing moves under the row.
+            if (shortcutListen) {
+                if (here() != Screen::Settings || !SDL_GetGamepadFromID(shortcutListen)) {
+                    shortcutListen = 0;
+                    buildSettings();
+                } else if (e.type == SDL_EVENT_JOYSTICK_BUTTON_DOWN &&
+                           e.jbutton.which == shortcutListen) {
+                    const shortcuts::Pick got = shortcuts::pick(
+                        SDL_GetGamepadFromID(shortcutListen), e.jbutton.button);
+                    if (got != shortcuts::Pick::Ignore) {
+                        shortcutListen = 0;
+                        shortcutTakenAt = e.jbutton.timestamp;
+                        sound::play(got == shortcuts::Pick::Taken ? sound::Cue::Activate
+                                                                  : sound::Cue::Back);
+                        buildSettings();
+                    }
+                    continue;
+                } else if (e.type == SDL_EVENT_KEY_DOWN && e.key.key == SDLK_ESCAPE) {
+                    shortcutListen = 0;
+                    sound::play(sound::Cue::Back);
+                    buildSettings();
+                    continue;
+                } else if (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN ||
+                           e.type == SDL_EVENT_GAMEPAD_BUTTON_UP ||
+                           e.type == SDL_EVENT_KEY_DOWN) {
+                    continue;
+                }
+            }
+            if (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && shortcutTakenAt &&
+                e.gbutton.timestamp == shortcutTakenAt) {
+                shortcutTakenAt = 0;
+                continue;
+            }
             // WHICH PAD IS WHICH: the pad last pressed has a dot on its row
-            // in Controllers (players.h).
+            // in Controllers (players.h). With shortcuts on, the Shortcut
+            // button row follows it too.
             if (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && here() == Screen::Settings)
                 if (const int p = players::playerOf(e.gbutton.which); p >= 0) {
+                    const bool moved = settingsLastPad != e.gbutton.which;
                     settingsLastPad = e.gbutton.which;
                     settingsScreen.mark(kSetPad + p);
+                    if (moved && shortcuts::enabled()) buildSettings();
                 }
             switch (e.type) {
                 case SDL_EVENT_QUIT:
@@ -9733,6 +9817,54 @@ int main(int argc, char** argv) {
                     st.leftY = SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_LEFTY) / 32767.0f;
                     st.rightX = SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_RIGHTX) / 32767.0f;
                     st.rightY = SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_RIGHTY) / 32767.0f;
+                }
+                // THE SHORTCUT BUTTON (shortcuts.h), only with the switch on.
+                // While it is held the game hears nothing from this pad's
+                // buttons, so neither it nor the second button of a shortcut
+                // reaches the game; on release, whatever is still held is kept
+                // back until let go, the way the menu's buttons are (#103).
+                // A tap opens the pause menu, or closes it. Shortcuts do
+                // nothing while the menu is up, but still count as a hold.
+                if (SDL_Gamepad* gp = players::gamepad(p); gp && shortcuts::enabled()) {
+                    ShortcutHold& h = shortcutHold[p];
+                    const bool down = shortcuts::held(gp);
+                    if (down && !h.down) h = {true, false, st.buttons};
+                    if (h.down) {
+                        const uint32_t fresh = st.buttons & ~h.before;
+                        h.before = st.buttons;
+                        if (fresh) {
+                            h.used = true;
+                            if (!overlayOpen) {
+                                const bool save = fresh & bit(cab::R);
+                                const bool load = !save && (fresh & bit(cab::L));
+                                if ((save || load) && !session.snapshots) {
+                                    menuNotice.say("Save states aren't available here",
+                                                   Tone::Info);
+                                } else if (save) {
+                                    std::fprintf(stderr, "[shortcuts] player %d: save state\n",
+                                                 p + 1);
+                                    saveStateNow(session, uploader, menuNotice);
+                                } else if (load) {
+                                    std::fprintf(stderr, "[shortcuts] player %d: load newest\n",
+                                                 p + 1);
+                                    beginLoadLatestState(stateLoad, session, liveClient,
+                                                         menuNotice);
+                                }
+                            }
+                        }
+                        if (!down) {
+                            h.down = false;
+                            heldThroughMenu[p] |= st.buttons;
+                            if (!h.used) {
+                                std::fprintf(stderr, "[shortcuts] player %d: tap, %s the menu\n",
+                                             p + 1, overlayOpen ? "closing" : "opening");
+                                toggleOverlay();
+                            }
+                        } else {
+                            st.buttons = 0;
+                            st.leftTrigger = st.rightTrigger = 0;
+                        }
+                    }
                 }
                 // #103: what closed the menu is the menu's, not the game's.
                 // The keyboard is in `st` for player one, so it is covered
