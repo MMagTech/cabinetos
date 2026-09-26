@@ -1,23 +1,30 @@
-// Let the console mount an extra INTERNAL drive, as it already may a USB one.
+// Let the console mount an extra INTERNAL drive, as it already may a USB one,
+// and format a BLANK internal drive, as it already may a blank USB one.
 //
-// udisks' stock policy lets the active session mount a removable drive
-// (`filesystem-mount`, allow_active: yes), which is how a USB drive works
-// with no rule of ours. An internal disk is `filesystem-mount-system`, whose
-// default is a password prompt, and a console has nobody to answer one. An
-// extra drive is an extra drive, internal or USB (MMagTech, 2026-09-25), so
-// this grants that one action. docs/SETTINGS.md, Storage; issue #67.
+// udisks' stock policy lets the active session mount and format a removable
+// drive (`filesystem-mount`, `modify-device`: allow_active: yes), which is
+// how a USB drive works with no rule of ours. An internal disk is
+// `filesystem-mount-system` and `modify-device-system`, whose default is a
+// password prompt, and a console has nobody to answer one. An extra drive is
+// an extra drive, internal or USB (MMagTech, 2026-09-25), and a new SSD
+// fitted inside the PC arrives blank and cannot be formatted anywhere else.
+// docs/SETTINGS.md, Storage; issue #67.
 //
-// WHAT IS MOUNTED is decided by the frontend (frontend/src/drives.cpp): never
-// the console's own drive, never Windows' EFI, reserved or recovery
-// partitions, and only exFAT or NTFS. The console's own filesystems are
-// mounted at boot already, so there is nothing of the system for this to
-// reach.
+// WHAT IS MOUNTED AND WHAT IS FORMATTED is decided by the frontend
+// (frontend/src/drives.cpp): never the console's own drive; never Windows'
+// EFI, reserved or recovery partitions; mounted only if exFAT or NTFS;
+// formatted only if the whole drive is blank (no partition table, no
+// filesystem, nothing mounted), checked again from udisks immediately before,
+// and only after the PIN, a confirm naming the drive and its size, and a code
+// the console chose. udisks itself refuses to format anything mounted, so the
+// console's own filesystems are out of reach twice over.
 //
 // `subject.local`, as in 60-cabinetos-network.rules: the console on its own
 // seat, not an SSH session.
 
 polkit.addRule(function(action, subject) {
-    if (action.id == "org.freedesktop.udisks2.filesystem-mount-system" &&
+    if ((action.id == "org.freedesktop.udisks2.filesystem-mount-system" ||
+         action.id == "org.freedesktop.udisks2.modify-device-system") &&
         subject.user == "cabinet" &&
         subject.local) {
         return polkit.Result.YES;

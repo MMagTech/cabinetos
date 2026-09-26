@@ -40,6 +40,8 @@ constexpr const char* kPartition = "org.freedesktop.UDisks2.Partition";
 constexpr const char* kPartitionTable = "org.freedesktop.UDisks2.PartitionTable";
 constexpr const char* kDrive = "org.freedesktop.UDisks2.Drive";
 constexpr const char* kBlockPrefix = "/org/freedesktop/UDisks2/block_devices/";
+// Microsoft basic data: what Windows and a Mac both take an exFAT partition as.
+constexpr const char* kBasicData = "ebd0a0a2-b9e5-4433-87c0-68b6b72699c7";
 
 // A drive that turns up this soon after start was plugged in before the
 // console started and was only slow to be seen, not news. It is mounted all
@@ -50,6 +52,8 @@ std::mutex gM;
 std::deque<Notice> gNotices;
 std::deque<std::string> gEjects;
 std::atomic<bool> gEjecting{false};
+std::deque<std::string> gFormats;
+std::atomic<bool> gFormatting{false};
 std::map<std::string, Unusable> gUnusable;   // by drive object path
 bool gStarted = false;
 
@@ -277,10 +281,11 @@ struct Watcher {
     std::chrono::steady_clock::time_point startedAt;
     std::set<std::string> ownDrives;       // the console's own, never touched
     std::map<std::string, Seen> seen;      // by block object path
-    std::set<std::string> announced;       // drives already said, either way
+    std::map<std::string, Event> announced;   // what was last said of each drive
     std::set<std::string> ejected;         // drives Eject let go of
     std::vector<std::string> added;        // filled by the signal handlers
     std::vector<std::string> removed;
+    std::vector<std::string> changed;      // an interface went, the block stayed
 
     // THE CONSOLE'S OWN DRIVE, found from the partitions it boots from.
     // Nothing on it is ever mounted by this, whatever else is on it.
@@ -303,20 +308,25 @@ struct Watcher {
         return false;
     }
 
-    // Said once per drive, and only for an external one. A drive that cannot
-    // be used is also listed for Storage, which is how an internal one is
-    // seen at all.
-    void say(const std::string& drive, bool external, Event e) {
+    // Said once per drive and per verdict, and only for an external one. A
+    // drive that cannot be used is also listed for Storage, which is how an
+    // internal one is seen at all.
+    void say(const std::string& drive, bool external, Event e, bool blank = false) {
         if (e == Event::WrongFormat || e == Event::CouldNotUse) {
-            uint64_t size = 0;
-            u64Prop(bus, drive, kDrive, "Size", &size);
+            Unusable u;
+            u.id = drive;
+            u.external = external;
+            u.wrongFormat = e == Event::WrongFormat;
+            u.blank = blank;
+            u64Prop(bus, drive, kDrive, "Size", &u.sizeBytes);
+            stringProp(bus, drive, kDrive, "Model", "s", &u.model);
             std::lock_guard<std::mutex> lk(gM);
-            if (!gUnusable.count(drive)) {
-                gUnusable[drive] = {external, e == Event::WrongFormat, size};
-                if (!external) gNotices.push_back({Event::Changed, false});
-            }
+            gUnusable[drive] = u;
+            gNotices.push_back({Event::Changed, external});
         }
-        if (!announced.insert(drive).second) return;
+        auto it = announced.find(drive);
+        if (it != announced.end() && it->second == e) return;
+        announced[drive] = e;
         if (external) post(e, external);
     }
 
@@ -343,7 +353,7 @@ struct Watcher {
             // Mounted already: by this console before a restart in place, by
             // an fstab line, or by hand. In use, and nothing needs saying.
             seen[block] = {drive, true, external};
-            announced.insert(drive);
+            announced[drive] = Event::Connected;
             std::fprintf(stderr, "[drives] %s is already mounted at %s\n", block.c_str(),
                          mps.front().c_str());
             return;
@@ -369,7 +379,7 @@ struct Watcher {
                 seen[block] = {drive, false, external};
                 std::fprintf(stderr, "[drives] %s is %s; only exFAT and NTFS are used\n",
                              block.c_str(), blank ? "blank" : type.c_str());
-                say(drive, external, Event::WrongFormat);
+                say(drive, external, Event::WrongFormat, blank);
             }
             return;
         }
@@ -395,7 +405,7 @@ struct Watcher {
                      type.c_str(), external ? "external" : "internal", at.c_str(),
                      quiet ? ", already attached" : "");
         usableAfterAll(drive);
-        if (quiet) announced.insert(drive);
+        if (quiet) announced[drive] = Event::Connected;
         else say(drive, external, Event::Connected);
     }
 
@@ -415,6 +425,87 @@ struct Watcher {
         if (!gone.mounted) return;
         std::fprintf(stderr, "[drives] %s was pulled out while in use\n", gone.drive.c_str());
         if (gone.external) post(Event::Removed, true);
+    }
+
+    // A block whose contents changed while attached: wiped, formatted,
+    // repartitioned. Looked at again as if new; say() keeps it from repeating
+    // a notice it already gave.
+    void reconsider(const std::string& block) {
+        auto it = seen.find(block);
+        if (it != seen.end()) {
+            if (it->second.mounted) return;
+            seen.erase(it);
+        }
+        consider(block, false);
+    }
+
+    // THE ONE THING HERE THAT ERASES ANYTHING. Every condition that made the
+    // drive "blank" when it was listed is checked again now, from udisks, not
+    // from what was remembered: its own drive, a partition table, a filesystem
+    // or any signature at all, a partition, a mount. Any of them and nothing
+    // is written.
+    bool formatOne(const std::string& drive) {
+        if (drive.empty() || ownDrives.count(drive)) return false;
+        std::string disk;
+        for (const std::string& b : blockDevices(bus)) {
+            if (driveOf(bus, b) != drive) continue;
+            std::string partType, tableType, usage;
+            if (stringProp(bus, b, kPartition, "Type", "s", &partType)) {
+                std::fprintf(stderr, "[drives] format: %s has a partition; not blank\n", b.c_str());
+                return false;
+            }
+            if (stringProp(bus, b, kPartitionTable, "Type", "s", &tableType)) {
+                std::fprintf(stderr, "[drives] format: %s has a partition table; not blank\n",
+                             b.c_str());
+                return false;
+            }
+            stringProp(bus, b, kBlock, "IdUsage", "s", &usage);
+            std::vector<std::string> mps;
+            mountPoints(bus, b, &mps);
+            if (!usage.empty() || !mps.empty()) {
+                std::fprintf(stderr, "[drives] format: %s holds \"%s\"; not blank\n", b.c_str(),
+                             usage.c_str());
+                return false;
+            }
+            if (!disk.empty()) return false;   // two whole disks under one drive: stop
+            disk = b;
+        }
+        if (disk.empty()) return false;
+        std::fprintf(stderr, "[drives] format: %s is blank; writing a partition table\n",
+                     disk.c_str());
+        std::string why;
+        {
+            sd_bus_error err = SD_BUS_ERROR_NULL;
+            const int r = sd_bus_call_method(bus, kUDisks, disk.c_str(), kBlock, "Format", &err,
+                                             nullptr, "sa{sv}", "gpt", 1,
+                                             "auth.no_user_interaction", "b", 1);
+            if (r < 0) why = err.message ? err.message : std::strerror(-r);
+            sd_bus_error_free(&err);
+            if (r < 0) {
+                std::fprintf(stderr, "[drives] format: no partition table: %s\n", why.c_str());
+                return false;
+            }
+        }
+        sd_bus_error err = SD_BUS_ERROR_NULL;
+        sd_bus_message* reply = nullptr;
+        const int r = sd_bus_call_method(
+            bus, kUDisks, disk.c_str(), kPartitionTable, "CreatePartitionAndFormat", &err, &reply,
+            "ttssa{sv}sa{sv}", uint64_t(0), uint64_t(0), kBasicData, "", 1,
+            "auth.no_user_interaction", "b", 1, "exfat", 2, "label", "s", "CabinetOS",
+            "auth.no_user_interaction", "b", 1);
+        if (r < 0) why = err.message ? err.message : std::strerror(-r);
+        sd_bus_error_free(&err);
+        sd_bus_message_unref(reply);
+        if (r < 0) {
+            std::fprintf(stderr, "[drives] format: no exFAT partition: %s\n", why.c_str());
+            return false;
+        }
+        std::fprintf(stderr, "[drives] format: %s is exFAT now\n", drive.c_str());
+        {
+            std::lock_guard<std::mutex> lk(gM);
+            gUnusable.erase(drive);
+        }
+        return true;
     }
 
     bool ejectOne(const std::string& location) {
@@ -473,11 +564,32 @@ struct Watcher {
             while (sd_bus_process(bus, nullptr) > 0) {
             }
             const bool quiet = std::chrono::steady_clock::now() - startedAt < kQuietAfterStart;
-            std::vector<std::string> a, r;
+            std::vector<std::string> a, r, c;
             a.swap(added);
             r.swap(removed);
+            c.swap(changed);
             for (const std::string& b : r) forget(b);
-            for (const std::string& b : a) consider(b, quiet);
+            for (const std::string& b : a) {
+                if (seen.count(b)) reconsider(b);
+                else consider(b, quiet);
+            }
+            for (const std::string& b : c) reconsider(b);
+
+            std::string fmt;
+            {
+                std::lock_guard<std::mutex> lk(gM);
+                if (!gFormats.empty()) {
+                    fmt = gFormats.front();
+                    gFormats.pop_front();
+                }
+            }
+            if (!fmt.empty()) {
+                if (!formatOne(fmt)) post(Event::FormatFailed, true);
+                std::lock_guard<std::mutex> lk(gM);
+                gFormatting = false;
+                gNotices.push_back({Event::Changed, true});
+                continue;
+            }
 
             std::string loc;
             {
@@ -516,7 +628,10 @@ int onRemoved(sd_bus_message* m, void* userdata, sd_bus_error*) {
         std::free(*i);
     }
     std::free(ifaces);
-    if (block) static_cast<Watcher*>(userdata)->removed.push_back(p);
+    auto* w = static_cast<Watcher*>(userdata);
+    if (block) w->removed.push_back(p);
+    else if (std::strncmp(p, kBlockPrefix, std::strlen(kBlockPrefix)) == 0)
+        w->changed.push_back(p);   // e.g. its partition table was wiped
     return 0;
 }
 
@@ -572,5 +687,13 @@ void eject(const std::string& location) {
 }
 
 bool ejecting() { return gEjecting.load(); }
+
+void format(const std::string& driveId) {
+    std::lock_guard<std::mutex> lk(gM);
+    gFormatting = true;
+    gFormats.push_back(driveId);
+}
+
+bool formatting() { return gFormatting.load(); }
 
 }  // namespace drives

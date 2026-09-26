@@ -327,13 +327,24 @@ status here to Built.
     and rebuilds the folders when a drive comes or goes. Before this, a
     second External drive never appeared, and one plugged in while File
     access was on only appeared after turning it off and on.
-  - **Formatting: open.** Decided 2026-09-25 that the console never formats;
-    then, the same evening, MMagTech raised the case that breaks it: a blank
-    SSD fitted inside the PC, which cannot be formatted anywhere else. The
-    proposal: Format offered only on a completely blank drive (no partition
-    table, no filesystem), after the PIN, a confirm naming the drive and its
-    size with focus on Cancel, and a random 4-digit code on the keypad.
-    Tested on a USB stick wiped blank. Not built.
+  - **Format, for a BLANK drive only** (no partition table, no filesystem:
+    a new SSD). MMagTech first decided the console never formats (a
+    formatting bug is a wiped drive), then raised the case that breaks it the
+    same evening: a blank SSD fitted inside the PC cannot be formatted
+    anywhere else. A blank drive is listed as "Blank" with **Format** under
+    it; pressing it asks the PIN if set, then "Format this drive?" naming the
+    drive, its model and size with **Cancel** focused (so a drive wrongly
+    read as blank is recognised), then a **random 4-digit code** on the PIN
+    pad (his idea; typing "format" with a pad was rejected as slower and no
+    safer). It makes one exFAT partition labelled CabinetOS, and the drive is
+    then used like any other ("External drive connected"). Blankness is
+    checked again from udisks right before writing. Built on `usb-drives`;
+    tested on the A9 with the installer stick wiped blank (MMagTech's
+    permission), and on the VM's virtual disks for the internal case.
+  - **Storage's layout with several drives:** each drive's row, then its
+    action right under it (Eject under a drive in use, Format under a blank
+    one). With two of a kind, a drive in use is named by its label, "External
+    (T9)", and one not in use by its model, "External (SanDisk 3.2 Gen1)".
 
 ## System
 

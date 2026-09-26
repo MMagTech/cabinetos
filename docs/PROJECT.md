@@ -8503,11 +8503,17 @@ folder the console cannot write into; Mac formats do not mount writable. Each
 had a fix and none was worth it for technical users who made the installer on
 a computer that can format a drive.
 
-**The console never formats**, MMagTech: a formatting bug is a wiped drive.
-Reopened the same evening by him, for the case it breaks (a blank SSD fitted
-inside the PC, which cannot be formatted anywhere else); see
-`docs/SETTINGS.md`, Storage, for the proposal. Until it is built, such a drive
-is listed greyed in Storage, "Isn't exFAT or NTFS".
+**Formatting: a blank drive only.** MMagTech first ruled it out (a formatting
+bug is a wiped drive, and whoever installed this has a computer to format
+with), then reopened it the same evening for the case that rule breaks: a
+blank SSD fitted inside the PC, which cannot be formatted anywhere else. So
+Format is offered only on a drive with nothing on it (no partition table, no
+filesystem), checked when listed and again from udisks right before writing,
+behind the PIN, a confirm naming the drive's model and size with Cancel
+focused, and a random 4-digit code on the PIN pad (his). The protection
+against the bug he feared is the blank check plus the name and size on the
+confirm; the code guards against a slip. A drive with anything on it, even
+something the console cannot read, is never offered it.
 
 **One early warning, "Storage almost full"**, after a Download that leaves
 under 10% free across all drives. Only a Download can fill the drives (the

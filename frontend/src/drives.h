@@ -13,9 +13,13 @@
 // extra drive). Decided the same day:
 //
 //   - ONLY exFAT AND NTFS. Anything else, and a blank drive, is "isn't exFAT
-//     or NTFS". The console NEVER FORMATS: a formatting bug is a wiped drive,
-//     and anyone who installed this made the USB installer on a computer that
-//     can format one.
+//     or NTFS".
+//   - FORMAT ONLY A BLANK DRIVE: no partition table and no filesystem, which
+//     is what a new SSD is. A drive with anything on it, even something the
+//     console cannot read, is never offered it. Asked for because a blank SSD
+//     fitted inside the PC cannot be formatted anywhere else; guarded because
+//     a formatting bug is a wiped drive (MMagTech, 2026-09-25). The check is
+//     made when the drive is listed and again right before the format.
 //   - Windows' own partitions (EFI, reserved, recovery) are never mounted.
 //   - Notices are for external drives. An internal one that cannot be used
 //     would otherwise say so at every boot; it is simply not in Storage.
@@ -50,6 +54,7 @@ enum class Event {
     Removed,        // pulled out without Eject
     SafeToUnplug,   // Eject finished: nothing on the machine has it open
     EjectFailed,    // something still has it open
+    FormatFailed,   // Format did not finish; the drive may be blank or half done
     Changed,        // no notice; the list of unusable drives changed
 };
 
@@ -65,8 +70,11 @@ Notice poll();
 // the reason. Without it a blank SSD fitted inside the PC would be invisible:
 // internal drives get no notices. MMagTech, 2026-09-25.
 struct Unusable {
+    std::string id;            // the drive, for format()
+    std::string model;         // "SanDisk 3.2 Gen1", for the confirm
     bool external = true;
     bool wrongFormat = true;   // false: exFAT or NTFS that would not mount
+    bool blank = false;        // nothing on it at all: Format is offered
     uint64_t sizeBytes = 0;
 };
 std::vector<Unusable> unusable();
@@ -78,5 +86,12 @@ void eject(const std::string& location);
 
 // True from eject() until its answer has been taken by poll().
 bool ejecting();
+
+// Format a BLANK drive (Unusable::blank) as one exFAT partition labelled
+// CabinetOS, after checking again that it is blank and not the console's own.
+// On the worker. Success is the drive then mounting as any drive does, with
+// "connected"; failure is FormatFailed.
+void format(const std::string& driveId);
+bool formatting();
 
 }  // namespace drives
