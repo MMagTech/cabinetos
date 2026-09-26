@@ -6012,6 +6012,7 @@ int main(int argc, char** argv) {
     float updPoll = 0.0f;
     bool updWeekly = prefs::get("update_check", "manual") == "weekly";
     bool updAuto = false;            // the check running is the weekly one
+    bool updAskAfterCheck = false;   // a check somebody pressed: offer the download
     float updAutoWait = 0.0f;        // before the weekly check may try again
     bool updReadyPanel = false;      // "Update ready" waits to be asked
     bool updReadyAfterGame = false;  // ...and it landed during a game
@@ -6567,6 +6568,7 @@ int main(int argc, char** argv) {
             said.state = update::State::Checking;
         } else {
             said.state = update::State::Failed;
+            updAskAfterCheck = false;   // no check is coming to answer it
             said.reason = why.find("not found") != std::string::npos ? "Not in this image" : why;
             if (said.reason.size() > 60) said.reason.resize(60);
         }
@@ -6574,6 +6576,27 @@ int main(int argc, char** argv) {
         updSaidAt = said.at;
         updAuto = automatic;
         if (here() == Screen::Settings) buildSettings();
+    };
+    // "UPDATE AVAILABLE": DOWNLOAD OR LATER. A check that finds something
+    // used to stop at the row, and the second press that downloads was
+    // nowhere on screen. MMagTech on the TV, 2026-09-25: *"i have to click
+    // again even though it doesnt indicate it."* Now the check a person
+    // pressed opens this, the row opens it again, and Download goes to the
+    // PIN. The same shape as "Update ready", so an update is: check,
+    // Download, Restart now.
+    auto askUpdateDownload = [&]() {
+        std::string version = upd.version, detail;
+        int64_t size = upd.size;
+        if (upd.state != update::State::Available) {
+            version = prefs::get("update_found", "");
+            size = prefNum("update_size");
+        }
+        detail = version + " \xC2\xB7 " + updBytes(size);
+        askChoice("Update available", detail, {"Download", "Later"}, 0, [&](int k) {
+            if (k != 0) return;
+            askPin("Enter the PIN", "To update",
+                   [&]() { startUpdate(/*download=*/true, /*automatic=*/false); });
+        });
     };
     // "Update ready", once per staged version. Restart now is the Power
     // menu's Restart: logind holds the machine while saves upload (PR #52),
@@ -6992,11 +7015,15 @@ int main(int argc, char** argv) {
                     } else if (upd.state == update::State::Ready) {
                         askUpdateReady();
                         sound::play(sound::Cue::Activate);
-                    } else if (available || retryDownload) {
+                    } else if (available) {
+                        askUpdateDownload();
+                        sound::play(sound::Cue::Activate);
+                    } else if (retryDownload) {
                         askPin("Enter the PIN", "To update",
                                [&]() { startUpdate(/*download=*/true, /*automatic=*/false); });
                         sound::play(sound::Cue::Activate);
                     } else {
+                        updAskAfterCheck = true;
                         startUpdate(/*download=*/false, /*automatic=*/false);
                         sound::play(sound::Cue::Activate);
                     }
@@ -9270,6 +9297,14 @@ int main(int argc, char** argv) {
                 // The weekly check says nothing when it fails; it tries again
                 // later, which is how "offline skips it" and "reconnecting
                 // catches up" both happen with no separate trigger.
+                // The answer to a check somebody pressed: an update opens the
+                // panel, if they are still in Settings and nothing else is up.
+                if (updAskAfterCheck && !s.busy()) {
+                    updAskAfterCheck = false;
+                    if (s.state == update::State::Available && here() == Screen::Settings &&
+                        !choiceScreen.isOpen() && !pinScreen.isOpen() && !keyboard.isOpen())
+                        askUpdateDownload();
+                }
                 if (!s.busy()) updAuto = false;
                 if (here() == Screen::Settings) buildSettings();
             } else if (upd.state == update::State::Installing && here() == Screen::Settings) {
