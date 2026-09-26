@@ -338,16 +338,22 @@ status here to Built.
     safer). It makes one exFAT partition labelled CabinetOS, and the drive is
     then used like any other ("External drive connected"). Blankness is
     checked again from udisks right before writing. Built on `usb-drives`;
-    tested on the A9 with the installer stick wiped blank (MMagTech's
-    permission), and on the VM's virtual disks for the internal case.
-  - **The drive's own row is the button** (MMagTech on the TV, 2026-09-25:
-    a Format row under the drive "can make me feel like I'm formatting
-    something that isn't the unformatted drive"). An External drive in use
-    opens "Eject / Cancel" titled with its name; a blank drive opens the
-    Format confirm; a drive with nothing to do is plain or greyed. No
-    separate action rows. With two of a kind, a drive in use is named by its
+    PROVED on the A9 2026-09-25 with the installer stick wiped blank
+    (MMagTech's permission): code, GPT, exFAT, mounted, claimed, in 5 s.
+    The internal case is for the VM's virtual disks.
+  - **The drive's own row is the button, and says what it does** (MMagTech
+    on the TV, 2026-09-25: a Format row under the drive "can make me feel
+    like I'm formatting something that isn't the unformatted drive", and
+    then, with a chevron alone, "I have no way of knowing clicking it allows
+    it to be ejected"). Each drive: its name, the space on the second line,
+    and its action as the value, **Eject ›** or **Format ›**. Eject asks
+    "Eject / Cancel" titled with the drive's name. A drive with nothing to
+    do shows no value. With two of a kind, a drive in use is named by its
     label, "External (T9)", and one not in use by its model, "External
     (SanDisk 3.2 Gen1)".
+  - **Sizes: two decimals from 1 TB up** ("2.02 TB free of 2.05 TB"), whole
+    GB below. With one decimal the A9's main drive, 23 GB used, read "2.0 TB
+    free of 2.0 TB". Decimal units, as the box, the Mac and the PS5 count.
 
 ## System
 

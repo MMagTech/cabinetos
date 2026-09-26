@@ -918,11 +918,15 @@ constexpr GalleryNotice kNoticeGallery[] = {
     {"Couldn't format the drive", Tone::Problem},
 };
 
-// A drive's size as Storage says it: "3.2 TB", "125 GB".
+// A drive's size as Storage says it: "2.02 TB", "125 GB". TWO DECIMALS FROM
+// 1 TB UP: with one, a 2.05 TB drive with 23 GB used read "2.0 TB free of
+// 2.0 TB", which looked impossible (MMagTech, 2026-09-25). Decimal units, as
+// the drive's box, the Mac and the PS5 count; Windows calls the same drive
+// 1.86 TB because it counts in binary units and still says TB.
 static std::string driveSize(int64_t b) {
     char buf[32];
     const double g = static_cast<double>(b) / 1e9;
-    if (g >= 1000.0) std::snprintf(buf, sizeof buf, "%.1f TB", g / 1000.0);
+    if (g >= 1000.0) std::snprintf(buf, sizeof buf, "%.2f TB", g / 1000.0);
     else std::snprintf(buf, sizeof buf, "%.0f GB", g);
     return std::string(buf);
 }
@@ -6556,12 +6560,16 @@ int main(int argc, char** argv) {
                     name += " (" + mount.substr(mount.rfind('/') + 1) + ")";
                 }
             }
+            // THE SPACE ON THE SECOND LINE AND THE ACTION AS THE VALUE, so
+            // the row says what pressing it does: a chevron alone only says
+            // "more". MMagTech on the TV, 2026-09-25.
             const storage::Space sp = storage::spaceOf(locs[i]);
-            std::string value = sp.ok ? gb(sp.freeBytes) + " free of " + gb(sp.totalBytes)
-                                      : std::string("Unknown");
-            if (external && drives::ejecting()) value = "Ejecting\xE2\x80\xA6";
+            const std::string space = sp.ok ? gb(sp.freeBytes) + " free of " + gb(sp.totalBytes)
+                                            : std::string("Unknown");
+            const std::string value =
+                !external ? "" : drives::ejecting() ? "Ejecting\xE2\x80\xA6" : "Eject";
             store.push_back({external ? K::Action : K::Info,
-                             external ? kSetEject + static_cast<int>(i) : 0, name, "", value});
+                             external ? kSetEject + static_cast<int>(i) : 0, name, space, value});
             if (external) driveNames[kSetEject + static_cast<int>(i)] = name;
         }
         // DRIVES FOUND AND NOT USABLE, greyed, with the reason. A new internal
@@ -6575,13 +6583,13 @@ int main(int argc, char** argv) {
             const std::string size = u.sizeBytes ? gb(static_cast<int64_t>(u.sizeBytes)) : "";
             if (u.blank) {
                 store.push_back({K::Action, kSetFormat + static_cast<int>(formatable.size()),
-                                 name, "Blank",
-                                 drives::formatting() ? "Formatting\xE2\x80\xA6" : size});
+                                 name, size.empty() ? "Blank" : "Blank \xC2\xB7 " + size,
+                                 drives::formatting() ? "Formatting\xE2\x80\xA6" : "Format"});
                 formatable.push_back(u);
             } else {
-                store.push_back({K::Disabled, 0, name,
-                                 u.wrongFormat ? "Isn't exFAT or NTFS" : "Couldn't use this drive",
-                                 size});
+                std::string why = u.wrongFormat ? "Isn't exFAT or NTFS" : "Couldn't use this drive";
+                if (!size.empty()) why += " \xC2\xB7 " + size;
+                store.push_back({K::Disabled, 0, name, why, ""});
             }
         }
         store.push_back({K::Unbuilt, 0, "Kept and cached games",
