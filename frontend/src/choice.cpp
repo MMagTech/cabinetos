@@ -26,6 +26,7 @@ constexpr int kMaxVisible = 6;
 void ChoiceScreen::open(std::string title, std::string detail,
                         std::vector<std::string> options, int focus) {
     open_ = true;
+    staysOpen_ = false;
     title_ = std::move(title);
     detail_ = std::move(detail);
     options_ = std::move(options);

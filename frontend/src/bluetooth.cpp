@@ -212,6 +212,55 @@ bool scan(int seconds, std::vector<Device>* out, std::string* err,
     return known(out, err);
 }
 
+bool listen(int seconds, std::vector<Device>* out, std::string* err,
+            const std::atomic<bool>* cancel) {
+    if (!out) return false;
+    out->clear();
+    if (!available()) {
+        if (err) *err = "bluetoothctl is not installed";
+        return false;
+    }
+    const Adapter a = adapter();
+    if (!a.present) {
+        if (err) *err = "this console has no Bluetooth";
+        return false;
+    }
+    if (!a.powered && !powerOn(err)) return false;
+    if (seconds < 1) seconds = 1;
+    const proc::Result r = proc::run(
+        {"bluetoothctl", "--timeout", std::to_string(seconds), "scan", "on"}, seconds + 15,
+        cancel);
+    // Every line about a device names it: "[NEW] Device E4:17:D8:3D:DB:BE
+    // 8BitDo Lite 2", "[CHG] Device 63:95:E1:A8:D2:1C RSSI: ...", with
+    // colour codes around the tag. The address after "Device " is the thing.
+    std::vector<Device> heard;
+    for (const std::string& line : lines(r.out)) {
+        const size_t at = line.find("Device ");
+        if (at == std::string::npos || line.size() < at + 7 + 17) continue;
+        const std::string address = line.substr(at + 7, 17);
+        if (address[2] != ':' || address[14] != ':') continue;
+        if (std::any_of(heard.begin(), heard.end(),
+                        [&](const Device& d) { return d.address == address; }))
+            continue;
+        Device d;
+        d.address = address;
+        heard.push_back(std::move(d));
+    }
+    // The names come from what bluez knows, which the scan has just updated.
+    std::vector<Device> all;
+    const proc::Result list = proc::run({"bluetoothctl", "devices"}, 10);
+    if (list.ok()) all = parseDeviceList(list.out);
+    for (Device& d : heard)
+        for (const Device& k : all)
+            if (k.address == d.address) d.name = k.name;
+    // Named ones first, before describe() keeps only thirty-two: a flat full
+    // of phones is mostly unnamed, and the pad must not be the one cut.
+    std::stable_partition(heard.begin(), heard.end(),
+                          [](const Device& d) { return !d.name.empty(); });
+    *out = describe(std::move(heard));
+    return true;
+}
+
 bool pair(const std::string& address, std::string* err, int timeoutSeconds,
           const std::atomic<bool>* cancel) {
     if (address.empty()) {

@@ -32,6 +32,13 @@ public:
     // same label if it is still there.
     void replace(std::vector<std::string> options, std::vector<std::string> values,
                  std::string detail);
+    // STAYS UP WHEN AN ANSWER IS CHOSEN, for a window that acts on a choice
+    // in place (Add a controller pairs the pad it lists). Back still closes.
+    // open() clears it.
+    void setStaysOpen(bool on) { staysOpen_ = on; }
+    bool staysOpen() const { return staysOpen_; }
+    // The detail line alone, keeping the answers and focus.
+    void setDetail(std::string detail) { detail_ = std::move(detail); }
     void close() { open_ = false; }
     bool isOpen() const { return open_; }
     // The answer, after Chosen.
@@ -45,6 +52,7 @@ public:
 
 private:
     bool open_ = false;
+    bool staysOpen_ = false;
     std::string title_, detail_;
     std::vector<std::string> options_;
     std::vector<std::string> values_;

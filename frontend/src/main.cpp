@@ -6185,6 +6185,11 @@ int main(int argc, char** argv) {
     auto choiceOutcome = [&](screens::ChoiceScreen::Outcome o) {
         using O = screens::ChoiceScreen::Outcome;
         if (o == O::None) return;
+        if (o == O::Chosen && choiceScreen.staysOpen()) {
+            // A copy: the answer may open another question over this one.
+            if (auto then = choiceThen) then(choiceScreen.chosen());
+            return;
+        }
         choiceScreen.close();
         auto then = std::move(choiceThen);
         choiceThen = nullptr;
@@ -6210,7 +6215,7 @@ int main(int argc, char** argv) {
     enum SettingId { SetAddAccount = 1, SetInterfaceSounds, SetPinSet, SetPinChange,
                      SetPinOff, SetRemoveAccount, SetScreenOff, SetWifi, SetServer,
                      SetUpdate, SetUpdateCheck, SetCredits, SetFiles, SetDownloads,
-                     SetAddController };
+                     SetAddController, SetAddControllerOld };
     // One Eject row per USB drive: this plus the drive's index in
     // storage::locations() when the rows were built.
     constexpr int kSetEject = 100;
@@ -6440,6 +6445,160 @@ int main(int argc, char** argv) {
         ~SettingsWifi() { if (th.joinable()) th.join(); }
     };
     SettingsWifi settingsWifi;
+
+    // ---- Add a controller, a window over Settings (issue #65) --------------
+    //
+    // A WINDOW LIKE WI-FI'S, NOT FIRST RUN'S SCREEN. MMagTech, 2026-09-26:
+    // first run's full screen felt like leaving Settings. While it is open a
+    // worker listens in short rounds and the list is only what it has HEARD
+    // since opening, so a pad's stale identities from other modes never show.
+    // Choosing one pairs it in place; the new pad's first button press closes
+    // it. Pairing and listening take turns on the one worker: bluetoothctl
+    // does not want two at once.
+    struct PadWindow {
+        std::mutex m;
+        std::map<std::string, bt::Device> heard;   // by address, since opening
+        bool fresh = false;
+        bool noBluetooth = false;
+        std::string pairAddress;                   // asked for, not started
+        bool pairing = false;
+        bool pairDone = false, pairOk = false;
+        std::string pairError;
+        std::atomic<bool> stop{false};
+        std::atomic<bool> cut{false};              // ends a listening round early
+        std::thread th;
+        void quit() {
+            stop = true;
+            cut = true;
+            if (th.joinable()) th.join();
+        }
+        ~PadWindow() { quit(); }
+    };
+    PadWindow padWin;
+    bool padWindowOpen = false;
+    std::vector<SDL_JoystickID> padWindowBefore;   // pads here when it opened
+    std::vector<bt::Device> padShown;              // the rows, in order
+    std::string padPairingName;                    // "" when not pairing
+    std::string padDetail;
+    auto padWindowRows = [&](std::vector<std::string>* names, std::vector<std::string>* values) {
+        // Not the pads already playing: they are in Controllers. A pad bluez
+        // calls connected but the console is not hearing (paired without its
+        // keys, see bt::pair) is listed, because pairing it is the fix.
+        std::vector<std::string> seated;
+        for (const players::Pad& p : players::connected()) seated.push_back(p.address);
+        padShown.clear();
+        {
+            std::lock_guard<std::mutex> lk(padWin.m);
+            for (const auto& [addr, d] : padWin.heard) {
+                if (std::find(seated.begin(), seated.end(), addr) != seated.end()) continue;
+                if (!d.gamepad && d.name.empty()) continue;   // nobody could pick it out
+                padShown.push_back(d);
+            }
+        }
+        std::stable_sort(padShown.begin(), padShown.end(),
+                         [](const bt::Device& a, const bt::Device& b) {
+                             if (a.gamepad != b.gamepad) return a.gamepad;
+                             return a.name < b.name;
+                         });
+        for (const bt::Device& d : padShown) {
+            names->push_back(d.name.empty() ? d.address : d.name);
+            values->push_back(d.name == padPairingName && !padPairingName.empty()
+                                  ? "Pairing\xE2\x80\xA6"
+                                  : "");
+        }
+    };
+    auto padWindowRefresh = [&]() {
+        std::vector<std::string> names, values;
+        padWindowRows(&names, &values);
+        bool none = false;
+        {
+            std::lock_guard<std::mutex> lk(padWin.m);
+            none = padWin.noBluetooth;
+        }
+        choiceScreen.replace(names, values, none ? "This console has no Bluetooth" : padDetail);
+    };
+    auto closePadWindow = [&]() {
+        padWindowOpen = false;
+        padWin.quit();
+        padPairingName.clear();
+    };
+    auto openPadWindow = [&]() {
+        padWin.quit();
+        padWin.stop = false;
+        padWin.cut = false;
+        {
+            std::lock_guard<std::mutex> lk(padWin.m);
+            padWin.heard.clear();
+            padWin.fresh = padWin.noBluetooth = false;
+            padWin.pairAddress.clear();
+            padWin.pairing = padWin.pairDone = padWin.pairOk = false;
+        }
+        padWindowBefore.clear();
+        int n = 0;
+        if (SDL_JoystickID* ids = SDL_GetGamepads(&n)) {
+            padWindowBefore.assign(ids, ids + n);
+            SDL_free(ids);
+        }
+        padPairingName.clear();
+        padDetail = "Put a controller into pairing mode";
+        askChoice("Add a controller", padDetail, {}, 0, [&](int i) {
+            if (i < 0 || i >= static_cast<int>(padShown.size())) return;
+            if (!padPairingName.empty()) {   // one at a time
+                sound::play(sound::Cue::Edge);
+                return;
+            }
+            const bt::Device d = padShown[static_cast<size_t>(i)];
+            padPairingName = d.name.empty() ? d.address : d.name;
+            padDetail = "Pairing with " + padPairingName + "\xE2\x80\xA6";
+            {
+                std::lock_guard<std::mutex> lk(padWin.m);
+                padWin.pairAddress = d.address;
+            }
+            padWin.cut = true;
+            std::fprintf(stderr, "[players] pairing %s (%s)\n", d.address.c_str(),
+                         padPairingName.c_str());
+            padWindowRefresh();
+        });
+        choiceScreen.setStaysOpen(true);
+        padWindowOpen = true;
+        padWin.th = std::thread([&pw = padWin]() {
+            while (!pw.stop) {
+                pw.cut = false;
+                std::string address;
+                {
+                    std::lock_guard<std::mutex> lk(pw.m);
+                    address = pw.pairAddress;
+                    pw.pairAddress.clear();
+                    if (!address.empty()) pw.pairing = true;
+                }
+                if (!address.empty()) {
+                    std::string err;
+                    const bool ok = bt::pair(address, &err, 40, &pw.stop);
+                    std::lock_guard<std::mutex> lk(pw.m);
+                    pw.pairing = false;
+                    pw.pairDone = true;
+                    pw.pairOk = ok;
+                    pw.pairError = err;
+                    pw.fresh = true;
+                    continue;
+                }
+                std::vector<bt::Device> got;
+                std::string err;
+                if (bt::listen(4, &got, &err, &pw.cut)) {
+                    std::lock_guard<std::mutex> lk(pw.m);
+                    for (bt::Device& d : got) pw.heard[d.address] = std::move(d);
+                    pw.fresh = true;
+                } else {
+                    {
+                        std::lock_guard<std::mutex> lk(pw.m);
+                        pw.noBluetooth = true;
+                        pw.fresh = true;
+                    }
+                    for (int k = 0; k < 20 && !pw.stop; ++k) SDL_Delay(100);
+                }
+            }
+        });
+    };
     auto askWifi = [&settingsWifi]() {
         if (settingsWifi.running.load()) return;
         if (settingsWifi.th.joinable()) settingsWifi.th.join();
@@ -6726,6 +6885,9 @@ int main(int argc, char** argv) {
                                 "Player " + std::to_string(p.player + 1)});
             }
             rows.push_back({K::Action, SetAddController, "Add a controller", "", ""});
+            // FOR COMPARING, TO GO: first run's full screen, which the window
+            // above replaces if MMagTech prefers it (2026-09-26).
+            rows.push_back({K::Action, SetAddControllerOld, "Add a controller (full screen)", "", ""});
             rows.push_back({K::Unbuilt, 0, "Button mapping",
                             "For controllers the console does not recognise", ""});
             cats.push_back({"Controllers", std::move(rows)});
@@ -7334,6 +7496,9 @@ int main(int argc, char** argv) {
                     });
                     sound::play(sound::Cue::Activate);
                 } else if (res.value == SetAddController) {
+                    sound::play(sound::Cue::Activate);
+                    openPadWindow();
+                } else if (res.value == SetAddControllerOld) {
                     // FIRST RUN'S PAIRING SCREEN, on its own (issue #65). It
                     // runs its own loop until the new pad presses a button or
                     // Back is pressed; players.h seats the pad as it connects.
@@ -8964,6 +9129,25 @@ int main(int argc, char** argv) {
                     openPowerMenu();
                 continue;
             }
+            // THE NEW PAD SAYING IT WORKS: any button on a pad that was not
+            // here when Add a controller opened closes it, and the press goes
+            // no further.
+            if (padWindowOpen && e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN &&
+                std::find(padWindowBefore.begin(), padWindowBefore.end(), e.gbutton.which) ==
+                    padWindowBefore.end()) {
+                choiceScreen.close();
+                closePadWindow();
+                for (const players::Pad& p : players::connected())
+                    if (p.id == e.gbutton.which) {
+                        std::fprintf(stderr, "[players] %s added as player %d\n",
+                                     p.name.c_str(), p.player + 1);
+                        menuNotice.say(p.name + " is player " + std::to_string(p.player + 1),
+                                       Tone::Done);
+                    }
+                settingsLastPad = e.gbutton.which;
+                buildSettings();
+                continue;
+            }
             // WHICH PAD IS WHICH: the pad last pressed has a dot on its row
             // in Controllers (players.h).
             if (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && here() == Screen::Settings)
@@ -10059,6 +10243,36 @@ int main(int argc, char** argv) {
                                                        : "");
                 }
                 if (fresh && here() == Screen::Settings) buildSettings();
+            }
+            if (padWindowOpen) {
+                // Add a controller: closed by Back, or a round heard or a
+                // pairing ended.
+                if (!choiceScreen.isOpen() || here() != Screen::Settings) {
+                    choiceScreen.close();
+                    closePadWindow();
+                } else {
+                    bool fresh = false, done = false, ok = false;
+                    std::string err;
+                    {
+                        std::lock_guard<std::mutex> lk(padWin.m);
+                        fresh = padWin.fresh;
+                        padWin.fresh = false;
+                        done = padWin.pairDone;
+                        padWin.pairDone = false;
+                        ok = padWin.pairOk;
+                        err = padWin.pairError;
+                    }
+                    if (done) {
+                        std::fprintf(stderr, "[players] pairing %s: %s\n",
+                                     padPairingName.c_str(),
+                                     ok ? "paired" : err.c_str());
+                        padDetail = ok ? "Press a button on " + padPairingName
+                                       : std::string("Couldn't pair. Put it back into pairing "
+                                                     "mode and try again");
+                        padPairingName.clear();
+                    }
+                    if (fresh || done) padWindowRefresh();
+                }
             }
             {
                 // A join finished: say how it went, then ask again, so the

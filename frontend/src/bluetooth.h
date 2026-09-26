@@ -86,6 +86,15 @@ struct Device {
 bool scan(int seconds, std::vector<Device>* out, std::string* err,
           const std::atomic<bool>* cancel = nullptr);
 
+// ONLY WHAT IS IN RANGE NOW: a scan of `seconds`, returning just the devices
+// heard during it, described. `bt::scan` returns everything bluez has ever
+// seen, and on the A9 that listed an 8BitDo under the identity of a mode it
+// was no longer in, which could never answer (2026-09-26). Stopped early by
+// `cancel`, keeping what was heard until then. False only when there is no
+// Bluetooth to listen with.
+bool listen(int seconds, std::vector<Device>* out, std::string* err,
+            const std::atomic<bool>* cancel = nullptr);
+
 // What the adapter already knows, without looking again. For drawing something
 // immediately while `scan` runs.
 bool known(std::vector<Device>* out, std::string* err);
