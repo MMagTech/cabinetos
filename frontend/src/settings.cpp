@@ -27,11 +27,12 @@ constexpr const char* kChevronBack = "\xE2\x80\xB9";
 constexpr float kChoiceArrowOn = 0.70f;
 constexpr float kChoiceArrowOff = 0.18f;
 constexpr float kChoiceArrowGap = 14.0f;
-// A controller's row lighting when its pad is pressed: how bright over the
-// row's own surface, and how long it takes to fade. Starting values, to be
+// The dot on the controller last pressed: its size, its gap before the
+// value, and how quickly it moves to another row. Starting values, to be
 // judged on the television.
-constexpr float kPulseTint = 0.22f;
-constexpr float kPulseSeconds = 0.9f;
+constexpr float kMarkSize = 12.0f;
+constexpr float kMarkGap = 14.0f;
+constexpr float kMarkMove = 0.15f;
 
 float rowHeight(Ctx& c, const SettingsRow& row) {
     float h = design::kRowPadY * 2.0f + c.text.lineHeight(ui::TextStyle::Title3, c.sc);
@@ -125,22 +126,15 @@ void SettingsScreen::tick(float dt) {
     focus_.tick(dt);
     scroll_.tick(dt);
     paneChange_.tick(dt);
-    for (Pulse& p : pulses_) p.left -= dt / kPulseSeconds;
-    pulses_.erase(std::remove_if(pulses_.begin(), pulses_.end(),
-                                 [](const Pulse& p) { return p.left <= 0.0f; }),
-                  pulses_.end());
+    markMove_.tick(dt);
 }
 
-void SettingsScreen::pulse(int id) {
-    for (Pulse& p : pulses_)
-        if (p.id == id) { p.left = 1.0f; return; }
-    pulses_.push_back({id, 1.0f});
-}
-
-float SettingsScreen::pulseOf(int id) const {
-    for (const Pulse& p : pulses_)
-        if (p.id == id) return p.left * p.left;   // eases out
-    return 0.0f;
+void SettingsScreen::mark(int id) {
+    if (id == marked_) return;
+    markedBefore_ = marked_;
+    marked_ = id;
+    markMove_.settle(0.0f);
+    markMove_.retarget(1.0f, kMarkMove);
 }
 
 Result SettingsScreen::key(Nav n) {
@@ -346,11 +340,9 @@ void SettingsScreen::drawGlass(Ctx& c) {
         // Treatment 3, the row: a surface that is always there, brighter under
         // focus. An unbuilt row keeps a fainter surface so the list still
         // reads as one list.
-        const float lit = row.id ? pulseOf(row.id) : 0.0f;
         c.r.drawGlass(ui::Rect{x, ry, w, h, design::kRowRadius, ui::Color::white(0)},
                       design::kRegularMaterialBlur,
-                      ui::Color::white(dimmed ? 0.04f
-                                              : 0.08f + 0.14f * rf + kPulseTint * lit));
+                      ui::Color::white(dimmed ? 0.04f : 0.08f + 0.14f * rf));
 
         const float textA = dimmed ? design::kSettingsUnbuiltAlpha : 1.0f;
         const bool chevron = row.kind == Kind::Action;
@@ -392,6 +384,17 @@ void SettingsScreen::drawGlass(Ctx& c) {
             right -= valueW;
             c.text.draw(c.r, value, right, titleBase, ui::TextStyle::Callout,
                         ui::Color::white(0.60f * (unbuilt ? 0.8f : 1.0f)), c.sc);
+            // The dot before the value, on the controller last pressed.
+            const float m = !row.id ? 0.0f
+                            : row.id == marked_ ? markMove_.value()
+                            : row.id == markedBefore_ ? 1.0f - markMove_.value()
+                                                      : 0.0f;
+            if (m > 0.0f) {
+                const float mid = titleBase - c.text.ascent(ui::TextStyle::Callout, c.sc) * 0.36f;
+                c.r.draw(ui::Rect{right - kMarkGap - kMarkSize, mid - kMarkSize * 0.5f,
+                                  kMarkSize, kMarkSize, kMarkSize * 0.5f,
+                                  ui::Color::white(0.90f * m)});
+            }
             right -= 24.0f;
         }
         if (choice && rf > 0.0f) {

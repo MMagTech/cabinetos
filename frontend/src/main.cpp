@@ -6222,6 +6222,9 @@ int main(int argc, char** argv) {
     // The controllers the Controllers rows were built from, to rebuild them
     // when one connects or goes (players::generation).
     int settingsPadsSeen = -1;
+    // The pad last pressed in Settings, whose row has the dot. Kept as the
+    // pad, not its row: a swap moves it to another row.
+    SDL_JoystickID settingsLastPad = 0;
     std::vector<drives::Unusable> formatable;
     std::map<int, std::string> driveNames;   // a drive row's id -> its name
 
@@ -6909,6 +6912,8 @@ int main(int argc, char** argv) {
 
 
         settingsScreen.setCategories(std::move(cats));
+        if (const int p = players::playerOf(settingsLastPad); p >= 0)
+            settingsScreen.mark(kSetPad + p);
     };
     // Start root's check or download, and say so at once rather than when
     // root's first write lands. A refusal is said in the row: the unit is not
@@ -8959,11 +8964,13 @@ int main(int argc, char** argv) {
                     openPowerMenu();
                 continue;
             }
-            // WHICH PAD IS WHICH: a press on a pad lights its row in
-            // Controllers (players.h).
+            // WHICH PAD IS WHICH: the pad last pressed has a dot on its row
+            // in Controllers (players.h).
             if (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && here() == Screen::Settings)
-                if (const int p = players::playerOf(e.gbutton.which); p >= 0)
-                    settingsScreen.pulse(kSetPad + p);
+                if (const int p = players::playerOf(e.gbutton.which); p >= 0) {
+                    settingsLastPad = e.gbutton.which;
+                    settingsScreen.mark(kSetPad + p);
+                }
             switch (e.type) {
                 case SDL_EVENT_QUIT:
                     running = false;

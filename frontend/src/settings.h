@@ -89,10 +89,12 @@ public:
     // frame; coming back grows the focus in rather than snapping it.
     void setHasFocus(bool on);
 
-    // LIGHTS A ROW FOR A MOMENT, whatever has focus: a controller's row when
-    // somebody presses a button on that controller, so two identical pads can
-    // be told apart (issue #64). Fades by itself.
-    void pulse(int id);
+    // A STEADY DOT ON ONE ROW: the controller somebody last pressed a button
+    // on, so two identical pads can be told apart (issue #64). It moves, with
+    // a short cross-fade, only when a different pad is pressed. It was a flash
+    // on every press for one build, and MMagTech: navigating with the pad
+    // made its row strobe, "almost just seems like a bug".
+    void mark(int id);
 
     void tick(float dt);
     Result key(Nav n);
@@ -114,9 +116,8 @@ private:
     design::Animated focus_;
     design::Animated scroll_;
     design::Animated paneChange_;
-    struct Pulse { int id; float left; };   // left: 1 when lit, down to 0
-    std::vector<Pulse> pulses_;
-    float pulseOf(int id) const;
+    int marked_ = 0, markedBefore_ = 0;
+    design::Animated markMove_;
 };
 
 }  // namespace screens

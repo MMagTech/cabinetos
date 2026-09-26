@@ -118,9 +118,11 @@ Decided with MMagTech 2026-09-26, from the things people will actually do.
   1.** Leaving the game closes up any number still held.
 - **One row per controller: its name, with "Player 1" as the value**, the
   shape of every other setting. (Built first as "Player 1" over the name;
-  MMagTech: nothing said the number could be changed.) Pressing a button on
-  a pad lights its row: that is how two identical pads are told apart. Pads
-  with player lights show their number on the pad.
+  MMagTech: nothing said the number could be changed.) **The pad last
+  pressed has a steady dot before its "Player N"**: that is how two
+  identical pads are told apart. (A flash on every press was tried first; it
+  strobed while navigating and read as a bug.) Pads with player lights show
+  their number on the pad.
 - **A pad is named as it names itself.** An 8BitDo in Switch mode reads
   "Nintendo Switch Pro Controller", and that is right: it is in Switch mode.
   (Naming pads after their maker, from the Bluetooth address, was built and
