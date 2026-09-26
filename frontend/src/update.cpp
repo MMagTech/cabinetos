@@ -1,6 +1,7 @@
 #include "update.h"
 
-#include <systemd/sd-bus.h>
+#include "unit.h"
+
 #include <json-c/json.h>
 #include <climits>
 
@@ -73,29 +74,9 @@ Status read() {
 }
 
 bool start(bool download, std::string* why) {
-    const char* unit = download ? "cabinetos-update-download.service"
-                                : "cabinetos-update-check.service";
-    sd_bus* bus = nullptr;
-    if (int r = sd_bus_open_system(&bus); r < 0) {
-        if (why) *why = std::string("No system bus: ") + std::strerror(-r);
-        return false;
-    }
-    sd_bus_error err = SD_BUS_ERROR_NULL;
-    sd_bus_message* reply = nullptr;
-    // "replace", and never interactive: a password prompt on a television is
-    // the same as a refusal. 61-cabinetos-update.rules grants it outright.
-    const int r = sd_bus_call_method(bus, "org.freedesktop.systemd1",
-                                     "/org/freedesktop/systemd1",
-                                     "org.freedesktop.systemd1.Manager", "StartUnit", &err,
-                                     &reply, "ss", unit, "replace");
-    const bool ok = r >= 0;
-    if (!ok && why) *why = err.message ? err.message : std::strerror(-r);
-    std::fprintf(stderr, "[update] start %s: %s\n", unit,
-                 ok ? "started" : (err.message ? err.message : std::strerror(-r)));
-    sd_bus_error_free(&err);
-    sd_bus_message_unref(reply);
-    sd_bus_unref(bus);
-    return ok;
+    return unit::start(download ? "cabinetos-update-download.service"
+                                : "cabinetos-update-check.service",
+                       why);
 }
 
 std::string bootedVersion() {

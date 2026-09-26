@@ -1,0 +1,8 @@
+# CabinetOS's presets, read before Fedora's 90-default.preset (lower number
+# wins), so a first boot that applies presets cannot switch port 22 back on.
+# Port 22 is File access and starts off; it is started by
+# /usr/libexec/cabinetos-files. The development shell is on 2222.
+# See /etc/ssh/sshd_config.d/30-cabinetos.conf.
+disable sshd.service
+disable sshd.socket
+enable cabinetos-dev-ssh.service

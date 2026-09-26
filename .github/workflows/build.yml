@@ -64,6 +64,38 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # THE TESTED IMAGE SHIPS; IT IS NOT BUILT AGAIN. MMagTech, 2026-09-25:
+  # "The intent of test was I could build and test features and then when
+  # all was good we go to main." So on a push to main this looks first: if
+  # main's files are exactly what the current `testing` image was built
+  # from, that image is tagged `latest` (seconds, no build) and every job
+  # below is skipped. Otherwise it builds as it always has. The rule that
+  # makes it work: push the final commit to `testing`, judge it, then merge.
+  # ci/promote-tested.sh.
+  promote:
+    name: Promote the tested image
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      promoted: ${{ steps.promote.outputs.promoted }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+        with:
+          # Every branch's history, so the commit `testing` was built from
+          # can be found and its files compared.
+          fetch-depth: 0
+
+      - name: Promote testing to latest, if it is exactly this
+        id: promote
+        env:
+          REGISTRY_USER: ${{ github.actor }}
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ci/promote-tested.sh "${IMAGE_REGISTRY,,}/cabinetos"
+
   # Cheap checks first. A shell typo in a strip script should fail in ten
   # seconds, not after a twenty minute image build.
   lint:
@@ -111,14 +143,23 @@ jobs:
   # there. That is the honest price of the image containing what it claims to.
   # It also means every image build now proves all twenty-one cores are at
   # their pinned revisions, which is more than was true yesterday.
+  # Everything below runs unless the tested image was promoted. The
+  # `!cancelled() && !failure()` is GitHub's way of saying "and do not skip
+  # me just because promote was skipped", which it otherwise would.
   frontend:
     name: Frontend
-    needs: lint
+    needs: [lint, promote]
+    if: ${{ !cancelled() && !failure() && needs.promote.outputs.promoted != 'true' }}
     uses: ./.github/workflows/build-frontend.yml
 
+  # NOT ON PULL REQUESTS, as of 2026-09-25. A change is proved by its
+  # `testing` image, built from the same commit and judged on a console, so a
+  # second full build here only repeated it. Pull requests keep the cheap
+  # checks: lint and the frontend compile.
   cores:
     name: Cores
-    needs: lint
+    needs: [lint, promote]
+    if: ${{ !cancelled() && !failure() && needs.promote.outputs.promoted != 'true' && github.event_name != 'pull_request' }}
     # The builder container is published to GHCR by the called workflow and
     # reused whenever frontend/Containerfile has not changed. A called
     # workflow cannot have more permission than its caller gives it, so
@@ -137,7 +178,8 @@ jobs:
   # this console yet" and quietly costs the library 71 games.
   playstation2:
     name: PlayStation 2
-    needs: lint
+    needs: [lint, promote]
+    if: ${{ !cancelled() && !failure() && needs.promote.outputs.promoted != 'true' && github.event_name != 'pull_request' }}
     permissions:
       contents: read
       packages: write
@@ -145,7 +187,8 @@ jobs:
 
   build_push:
     name: Build and push image
-    needs: [lint, frontend, cores, playstation2]
+    needs: [lint, promote, frontend, cores, playstation2]
+    if: ${{ !cancelled() && !failure() && needs.promote.outputs.promoted != 'true' && github.event_name != 'pull_request' }}
     runs-on: ubuntu-24.04
 
     permissions:

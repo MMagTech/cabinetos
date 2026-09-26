@@ -1,0 +1,29 @@
+// Let the console turn its own File access on and off, and make a new
+// password for it. Nothing else.
+//
+// The session runs as `cabinet`; opening port 22, building the folder view
+// and setting the account's password need root. So the root half is
+// /usr/libexec/cabinetos-files behind two units, and this lets the session
+// start and stop cabinetos-files.service and start
+// cabinetos-files-password.service, by name. docs/SETTINGS.md, Storage;
+// issue #69.
+//
+// The PIN is asked by the frontend before File access is turned on or a new
+// password made. `subject.local`, as in 60-cabinetos-network.rules: the
+// console on its own seat, not an SSH session.
+
+polkit.addRule(function(action, subject) {
+    if (action.id != "org.freedesktop.systemd1.manage-units" ||
+        subject.user != "cabinet" || !subject.local) {
+        return polkit.Result.NOT_HANDLED;
+    }
+    var unit = action.lookup("unit");
+    var verb = action.lookup("verb");
+    if (unit == "cabinetos-files.service" && (verb == "start" || verb == "stop")) {
+        return polkit.Result.YES;
+    }
+    if (unit == "cabinetos-files-password.service" && verb == "start") {
+        return polkit.Result.YES;
+    }
+    return polkit.Result.NOT_HANDLED;
+});

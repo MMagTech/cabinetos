@@ -57,7 +57,16 @@ DROPIN_DIR=/run/systemd/system/cabinetos-session.service.d
 # The old location, removed on restore too, so a console that still has one
 # from before this change is cleaned up rather than left behind.
 DROPIN_OLD=/etc/systemd/system/cabinetos-session.service.d/50-ui-loop.conf
-PW=cabinet
+# THE DEVELOPMENT SHELL IS ON PORT 2222 as of 2026-09-25 (File access took
+# 22; see /etc/ssh/sshd_config.d/30-cabinetos.conf). Asked, not assumed, so
+# a console still on an older image, where it is 22, keeps working.
+A9_PORT=2222
+"${SSH[@]}" -p 2222 -o ConnectTimeout=5 -o BatchMode=yes "$A9" true 2>/dev/null || A9_PORT=22
+A9SSH=("${SSH[@]}" -p "$A9_PORT")
+# AND SUDO'S PASSWORD IS FILE ACCESS'S once File access has ever been turned
+# on: it is `cabinet`'s login password. The console keeps it where `cabinet`
+# can read it; "cabinet" is the throwaway on a console that never had one.
+SUDO='{ cat /var/lib/cabinetos-files/password 2>/dev/null || echo cabinet; } | sudo -S'
 
 BUILD=1
 VIA_VM=0
@@ -87,9 +96,9 @@ say() { printf '\n== %s\n' "$*"; }
 # docs/NEXT-SESSION.md says it should be left in.
 if [ "$RESTORE" -eq 1 ]; then
     say "restoring the console to the image"
-    "${SSH[@]}" "$A9" "echo $PW | sudo -S rm -f $DROPIN $DROPIN_OLD >/dev/null 2>&1
-                       echo $PW | sudo -S systemctl daemon-reload >/dev/null 2>&1
-                       echo $PW | sudo -S systemctl restart cabinetos-session >/dev/null 2>&1
+    "${A9SSH[@]}" "$A9" "$SUDO rm -f $DROPIN $DROPIN_OLD >/dev/null 2>&1
+                       $SUDO systemctl daemon-reload >/dev/null 2>&1
+                       $SUDO systemctl restart cabinetos-session >/dev/null 2>&1
                        sleep 14
                        echo \"session: \$(systemctl is-active cabinetos-session)\"
                        echo \"drop-ins: \$(ls /etc/systemd/system/cabinetos-session.service.d/ 2>/dev/null | wc -l)\"
@@ -128,14 +137,14 @@ if [ "$BUILD" -eq 1 ]; then
         }
     else
         say "building on the console"
-        rsync -az -e "ssh -i $KEY -o ConnectTimeout=20" "$ROOT/frontend/src/" "$A9:~/frontend/src/" || exit 1
+        rsync -az -e "ssh -i $KEY -p $A9_PORT -o ConnectTimeout=20" "$ROOT/frontend/src/" "$A9:~/frontend/src/" || exit 1
         # The Makefile too: a new library in it (libsystemd, 2026-09-22) is
         # otherwise a link error here that CI would never have.
-        rsync -az -e "ssh -i $KEY -o ConnectTimeout=20" "$ROOT/frontend/Makefile" "$A9:~/frontend/Makefile" || exit 1
+        rsync -az -e "ssh -i $KEY -p $A9_PORT -o ConnectTimeout=20" "$ROOT/frontend/Makefile" "$A9:~/frontend/Makefile" || exit 1
         # Same rule as above, and for the same reason.
-        "${SSH[@]}" "$A9" 'rm -f ~/frontend/build/cabinetos-frontend'
-        "${SSH[@]}" "$A9" 'cd ~/frontend && podman run --rm -v "$PWD":/src:Z -w /src cabinetos-builder make -j24 2>&1 | grep -E "error|Error|warning: unused|built " | head -20'
-        "${SSH[@]}" "$A9" 'test -f ~/frontend/build/cabinetos-frontend' || {
+        "${A9SSH[@]}" "$A9" 'rm -f ~/frontend/build/cabinetos-frontend'
+        "${A9SSH[@]}" "$A9" 'cd ~/frontend && podman run --rm -v "$PWD":/src:Z -w /src cabinetos-builder make -j24 2>&1 | grep -E "error|Error|warning: unused|built " | head -20'
+        "${A9SSH[@]}" "$A9" 'test -f ~/frontend/build/cabinetos-frontend' || {
             echo "build failed — nothing was deployed, the console still runs what it had" >&2
             exit 1
         }
@@ -150,22 +159,22 @@ if [ "$VIA_VM" -eq 1 ]; then
     trap 'rm -rf "$TMP"' EXIT
     scp -q -i "$KEY" "$VM:~/frontend/build/cabinetos-frontend" "$TMP/fe" || exit 1
     SUM_LOCAL=$(shasum -a 256 "$TMP/fe" | awk '{print $1}')
-    "${SSH[@]}" "$A9" "echo $PW | sudo -S systemctl stop cabinetos-session >/dev/null 2>&1"
-    scp -q -i "$KEY" "$TMP/fe" "$A9:/var/home/cabinet/cabinetos-frontend-dev" || exit 1
+    "${A9SSH[@]}" "$A9" "$SUDO systemctl stop cabinetos-session >/dev/null 2>&1"
+    scp -q -i "$KEY" -P "$A9_PORT" "$TMP/fe" "$A9:/var/home/cabinet/cabinetos-frontend-dev" || exit 1
 else
     # Built where it runs, so this is a copy within one disk rather than a
     # transfer. The checksum below still earns its place: a `cp` onto a binary
     # that is in use fails with "Text file busy", which is why the session stops
     # first, and a silent failure there looks exactly like a change that did
     # nothing.
-    SUM_LOCAL=$("${SSH[@]}" "$A9" 'sha256sum ~/frontend/build/cabinetos-frontend | cut -d" " -f1')
-    "${SSH[@]}" "$A9" "echo $PW | sudo -S systemctl stop cabinetos-session >/dev/null 2>&1"
-    "${SSH[@]}" "$A9" 'cp ~/frontend/build/cabinetos-frontend /var/home/cabinet/cabinetos-frontend-dev' || exit 1
+    SUM_LOCAL=$("${A9SSH[@]}" "$A9" 'sha256sum ~/frontend/build/cabinetos-frontend | cut -d" " -f1')
+    "${A9SSH[@]}" "$A9" "$SUDO systemctl stop cabinetos-session >/dev/null 2>&1"
+    "${A9SSH[@]}" "$A9" 'cp ~/frontend/build/cabinetos-frontend /var/home/cabinet/cabinetos-frontend-dev' || exit 1
 fi
 
 # CHECK THE CHECKSUM. A stale binary that ignores the flag you just added looks
 # exactly like a change that did not work, and cost an hour on 2026-09-21.
-SUM_REMOTE=$("${SSH[@]}" "$A9" 'chmod +x /var/home/cabinet/cabinetos-frontend-dev; sha256sum /var/home/cabinet/cabinetos-frontend-dev | cut -d" " -f1')
+SUM_REMOTE=$("${A9SSH[@]}" "$A9" 'chmod +x /var/home/cabinet/cabinetos-frontend-dev; sha256sum /var/home/cabinet/cabinetos-frontend-dev | cut -d" " -f1')
 if [ "$SUM_LOCAL" != "$SUM_REMOTE" ]; then
     echo "the binary on the console is not the one just built" >&2
     exit 1
@@ -177,11 +186,11 @@ APP="/var/home/cabinet/cabinetos-frontend-dev --core-dir /var/home/cabinet/cores
 [ -n "$MENU" ] && APP="$APP $MENU"
 [ -n "$EXTRA" ] && APP="$APP $EXTRA"
 
-"${SSH[@]}" "$A9" "printf '[Service]\nEnvironment=\"CABINETOS_APP=$APP\"\n' > /tmp/50-ui-loop.conf
-                   echo $PW | sudo -S mkdir -p $DROPIN_DIR >/dev/null 2>&1
-                   echo $PW | sudo -S cp /tmp/50-ui-loop.conf $DROPIN >/dev/null 2>&1
-                   echo $PW | sudo -S systemctl daemon-reload >/dev/null 2>&1
-                   echo $PW | sudo -S systemctl start cabinetos-session >/dev/null 2>&1"
+"${A9SSH[@]}" "$A9" "printf '[Service]\nEnvironment=\"CABINETOS_APP=$APP\"\n' > /tmp/50-ui-loop.conf
+                   $SUDO mkdir -p $DROPIN_DIR >/dev/null 2>&1
+                   $SUDO cp /tmp/50-ui-loop.conf $DROPIN >/dev/null 2>&1
+                   $SUDO systemctl daemon-reload >/dev/null 2>&1
+                   $SUDO systemctl start cabinetos-session >/dev/null 2>&1"
 
 # Long enough for gamescope, the frontend and — when asked for — a game and its
 # 400 frames of play before the menu opens.
@@ -194,7 +203,7 @@ sleep "$SETTLE"
 # The frontend, NOT gamescope and NOT the reaper: both match the same string and
 # neither answers SIGUSR1.
 say "capturing"
-"${SSH[@]}" "$A9" 'PID=$(ps -eo pid,args | grep "[c]abinetos-frontend-dev --core-dir" | grep -v gamescope | awk "{print \$1}" | head -1)
+"${A9SSH[@]}" "$A9" 'PID=$(ps -eo pid,args | grep "[c]abinetos-frontend-dev --core-dir" | grep -v gamescope | awk "{print \$1}" | head -1)
                    [ -n "$PID" ] || { echo "the frontend is not running"; exit 1; }
                    rm -f /tmp/cabinetos-frame.bmp
                    kill -USR1 "$PID"
@@ -209,7 +218,7 @@ print(\"captured\", im.size)
 "' || exit 1
 
 OUT="${SHOT:-$ROOT/.ui-loop.png}"
-scp -q -i "$KEY" "$A9:/tmp/ui-loop.png" "$OUT" && echo "wrote $OUT"
+scp -q -i "$KEY" -P "$A9_PORT" "$A9:/tmp/ui-loop.png" "$OUT" && echo "wrote $OUT"
 
 say "it is on the television now — look at that rather than the PNG for anything
    involving colour, contrast or motion. The capture is for reading layout."

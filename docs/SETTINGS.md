@@ -238,15 +238,50 @@ status here to Built.
   says "Safe to unplug". **To build, #67.**
 - **Kept and cached games:** see what is on the console, keep or release.
   **To build, #68.**
-- **File access** (under Storage):
-  - SFTP only, no shell. Off until turned on.
+- **File access** (under Storage): **built on branch `file-access`, #69;
+  screens judged on the TV 2026-09-25, the login still to be tested.**
+  - **One row**, "File access", "SFTP" under it, On or Off. **Everything a
+    computer needs is in a panel the row opens**, not in rows under it:
+    as rows they ran off the bottom of Storage, the same reason Wi-Fi's
+    networks are in a panel (MMagTech on the TV, 2026-09-25). The panel:
+    the address and `<hostname>.local`, "User name  cabinet", "Password
+    XXXX-XXXX", then **Done** (focused), **New password**, **Turn off**.
+    Judged readable from the sofa as it is.
+  - Turning it on asks for the PIN when one is set, then the panel opens by
+    itself once it is on. **Turning it off never asks**: closing a door
+    needs no key. **New password** asks the PIN, then "New password?" with
+    focus on Cancel (every computer that saved the old one breaks), then
+    the panel comes back with the new one. A failure shows in the row:
+    Off, with the reason in place of "SFTP".
+  - SFTP only, no shell. Off until turned on; on is remembered, so a
+    console left with it on turns it back on at boot.
   - User name `cabinet`, fixed.
-  - Password made by the console the first time it is turned on, kept through
-    restarts, shown in plain text on the page, changed only by **New
-    password**.
-  - From a computer you see only the console's saves and games folders, and
-    only the `CabinetOS` folder on an external drive. Nothing of the system.
-  - **To build, #69.** Setting your own password: **later**, if people ask.
+  - Password made by the console the first time it is turned on, kept
+    through restarts and off and on, shown in plain text in the panel,
+    changed only by **New password**. **8 characters, `XXXX-XXXX`**,
+    RomM's pairing code's shape, from letters and digits that cannot be
+    confused on a television (no 0/O, 1/I/L). It is `cabinet`'s login
+    password, because that is what sshd checks, so on today's images it is
+    also the sudo password; that goes when the session user leaves `wheel`.
+  - From a computer you see `roms`, `cache`, `bios` and `users` (the
+    saves), and one folder per extra drive named as Storage names it
+    ("External", "Internal") holding only that drive's `CabinetOS` folder.
+    `config` (the RomM token) and `logs` are not there. Bind mounts in
+    `/run/cabinetos-files`, the chroot; taking them down never deletes
+    (rmdir only). A drive plugged in while it is on appears the next time
+    it is turned on.
+  - **`cabinetos.local` already works**: Bazzite ships avahi. Open question
+    9's mDNS half is answered by the base.
+  - **Ports, MMagTech 2026-09-25:** port 22 is File access (password, SFTP,
+    chrooted, listening only while on); **the development shell moved to
+    port 2222**, key only, on development images only
+    (`cabinetos-dev-ssh.service`). sshd cannot tell a key login from a
+    password login in a Match block, so the port is the line between the
+    two uses of one account. SELinux allows sshd only port 22, so 2222 is
+    labelled at boot by the unit itself (a label in the image would not
+    reach a console with any local SELinux change). Keyboard-interactive is
+    off on 2222 too; it is a second way to type a password.
+  - Setting your own password: **later**, if people ask.
 - **Plugging a drive in and it being used has not been tested on the A9 with a
   real drive yet.**
 
@@ -366,6 +401,17 @@ status here to Built.
   hand, `gh workflow run build.yml --ref testing`. The A9 was switched to it
   on 2026-09-25 (a 60.2 MB download), to go back to `latest` when System
   update is done.
+  **THE TESTED IMAGE IS WHAT SHIPS, 2026-09-25.** MMagTech: *"The intent of
+  test was I could build and test features and then when all was good we
+  go to main."* So a merge to main does not build: if main's files are
+  exactly those `testing` was built from (the git tree, so a merge commit
+  from an up-to-date branch counts), that image is tagged `latest` in
+  seconds, same digest, same version (`ci/promote-tested.sh`). Otherwise it
+  builds, as before. **The rule: push the final commit of a branch to
+  `testing`, judge it, then merge.** Pull requests no longer build the whole
+  image; they lint and compile the frontend. Until that day `testing` was a
+  separate channel and main rebuilt everything, so a feature was built
+  three times and `latest` was a rebuild of what had been judged.
 
 ## About
 

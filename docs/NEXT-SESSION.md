@@ -32,6 +32,36 @@ with its investigations intact.
 
 ## Before anything else
 
+**THE SESSION OF 2026-09-25 (EVENING) BUILT FILE ACCESS (#69), BRANCH
+`file-access`.** Judged on the TV, then proved from MMagTech's Mac against
+the A9 on `testing` `2026.09.25.4`: turned on from the TV, `sftp
+cabinet@cabinetos.local` with the shown password saw exactly `bios cache
+roms users`, `cd /etc` failed, `ssh` with the password got "sftp
+connections only" and no shell, and turned off, port 22 refused. The
+decisions are in `docs/SETTINGS.md`, Storage. The two that change how you
+work:
+
+- **THE DEVELOPMENT SHELL IS ON PORT 2222 NOW, key only**
+  (`cabinetos-dev-ssh.service`, development images only). Port 22 is File
+  access and is closed unless it is on. `ssh -p 2222`, `scp -P 2222`,
+  `rsync -e "ssh -p 2222"`. `tools/ui-loop.sh` finds the port itself.
+- **THE A9'S SUDO PASSWORD IS NO LONGER `cabinet`.** Turning File access on
+  sets `cabinet`'s password to the one it shows, so it is also sudo's. Read
+  it on the console: `cat /var/lib/cabinetos-files/password` (readable by
+  `cabinet`). `ui-loop.sh` does. The VM still has `cabinet` and port 22
+  until it takes an image with this.
+- **Recovery if 2222 ever fails to come up:** at the TV with a keyboard,
+  Ctrl+Alt+F3, log in as `cabinet` (its password is as above), `sudo bootc
+  rollback`, `sudo reboot`.
+- **A MERGE PROMOTES THE TESTED IMAGE; IT DOES NOT BUILD.** Push the
+  branch's final commit to `testing`, have it judged on the A9, then merge:
+  `latest` becomes that exact image (`ci/promote-tested.sh`). Anything else
+  on the branch after the testing push means main builds instead. Pull
+  requests no longer build the image.
+- **Claude Code's permission system refuses a password login test over
+  the network from here** ("Expose Local Services"). MMagTech ran the live
+  SFTP test himself from his Mac; plan on that again.
+
 **THE SESSION OF 2026-09-25 (AFTERNOON) BUILT SYSTEM UPDATE (#70) AND ABOUT
 (#72), ON BRANCH `system-update`.** Both judged on the TV. The decisions are
 in `docs/SETTINGS.md`, System and About; the short version:
@@ -59,9 +89,9 @@ in `docs/SETTINGS.md`, System and About; the short version:
   Licences rows (MMagTech). gamescope credited, ChimeraOS dropped: nothing
   of theirs is used directly. A list panel now grows to its longest line.
 
-**NEXT, AS MMAGTECH SET IT 2026-09-25:** File access (#69), then the rest of
-Storage (Eject #67, Kept and cached games #68), then Controllers (connected,
-add, button mapping), then Picture quality. **Still owed by
+**NEXT, AS MMAGTECH SET IT 2026-09-25:** File access (#69) is built (above);
+then the rest of Storage (Eject #67, Kept and cached games #68), then
+Controllers (connected, add, button mapping), then Picture quality. **Still owed by
 `docs/LICENCES.md`:** each licence line verified against its source tree,
 and full licence texts on the console, which the About list deliberately
 does not show (they are in `/usr/share/licenses/`).
@@ -2089,6 +2119,10 @@ the repository alone.
   under llvmpipe and it is four cores. Or skip it and use the offscreen driver.
 
 ### Driving the television from here — new 2026-09-25
+
+**SSH TO THE A9 IS PORT 2222 SINCE THE FILE ACCESS IMAGE, and sudo's
+password is in `/var/lib/cabinetos-files/password`**, not `cabinet`. Every
+`ssh ... cabinet@192.168.1.212` below needs `-p 2222`.
 
 **The A9 can be pressed from the Mac, so MMagTech can watch while the
 assistant drives.** `cabinet` can write `/dev/uinput` and the image ships
