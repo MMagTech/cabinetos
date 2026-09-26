@@ -14,5 +14,6 @@ namespace unit {
 
 bool start(const char* name, std::string* why);
 bool stop(const char* name, std::string* why);
+bool reload(const char* name, std::string* why);
 
 }  // namespace unit

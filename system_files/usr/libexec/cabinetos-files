@@ -5,6 +5,8 @@
 #   cabinetos-files on        the password, the folder view, port 22 open
 #   cabinetos-files off       port 22 closed, the view taken down
 #   cabinetos-files newpass   a new password (and applied, if on)
+#   cabinetos-files refresh   the drive folders rebuilt, after a drive came
+#                             or went (ExecReload; the session asks, if on)
 #
 # Run only by cabinetos-files.service (on as ExecStart, off as ExecStop) and
 # cabinetos-files-password.service, which the session starts and stops
@@ -82,41 +84,92 @@ apply_password() {
     printf '%s:%s\n' "${USER_NAME}" "$(<"${PASS}")" | chpasswd
 }
 
-# The name Storage gives a drive: External for USB, Internal otherwise.
+# The kind Storage gives a drive: External for one that can be unplugged
+# (USB, or a device the kernel marks removable: an SD card, a Thunderbolt
+# enclosure), Internal otherwise. storage::isExternalDevice, the same walk.
 drive_kind() {
-    local dev link
+    local dev at v
     dev=$(stat -c '%Hd:%Ld' "$1") || { echo Internal; return; }
-    link=$(readlink -f "/sys/dev/block/${dev}" 2>/dev/null)
-    [[ "${link}" == */usb* ]] && echo External || echo Internal
+    at=$(readlink -f "/sys/dev/block/${dev}" 2>/dev/null) || { echo Internal; return; }
+    [[ "${at}" == */usb* ]] && { echo External; return; }
+    while [[ ${#at} -gt ${#SYSDEV} ]]; do
+        if [[ -r "${at}/removable" ]]; then
+            v=$(<"${at}/removable")
+            [[ "${v}" == 1 || "${v}" == removable ]] && { echo External; return; }
+        fi
+        at=${at%/*}
+    done
+    echo Internal
 }
+SYSDEV=/sys/devices
+
+CORE="roms cache bios users"
 
 view_up() {
     install -d -m 0755 -o root -g root "${VIEW}" || return 1
     local d
-    for d in roms cache bios users; do
+    for d in ${CORE}; do
         [[ -d "${ROOT}/${d}" ]] || continue
         mkdir -p "${VIEW}/${d}"
         mountpoint -q "${VIEW}/${d}" || mount --bind "${ROOT}/${d}" "${VIEW}/${d}" || return 1
     done
-    # Each drive the console has claimed (storage::locations): a mount under
-    # one of these, on another device, with a CabinetOS folder on it.
-    local here base m kind name n
+    drives_up
+}
+
+# Each drive the console has claimed (storage::locations): a mount under one
+# of these, on another device, with a CabinetOS folder on it. NAMED AS
+# STORAGE NAMES IT: "External", and with two of a kind "External (T9)", the
+# mount point being named for the drive. A failure here is one missing
+# folder, never File access failing.
+drives_up() {
+    local here base m kind name
+    local -a mounts=() kinds=()
+    local -A count=()
     here=$(stat -c '%d' "${ROOT}")
     for base in "/run/media/${USER_NAME}" /var/mnt; do
         for m in "${base}"/*; do
             [[ -d "${m}/CabinetOS" ]] || continue
             [[ "$(stat -c '%d' "${m}")" != "${here}" ]] || continue
             kind=$(drive_kind "${m}")
-            name="${kind}"
-            n=2
-            while [[ -e "${VIEW}/${name}" ]] && ! mountpoint -q "${VIEW}/${name}"; do
-                name="${kind} ${n}"; n=$(( n + 1 ))
-            done
-            mountpoint -q "${VIEW}/${name}" && continue
-            mkdir -p "${VIEW}/${name}"
-            mount --bind "${m}/CabinetOS" "${VIEW}/${name}" || return 1
-            echo "drive ${m} shown as ${name}"
+            mounts+=("${m}")
+            kinds+=("${kind}")
+            count[${kind}]=$(( ${count[${kind}]:-0} + 1 ))
         done
+    done
+    local i
+    for i in "${!mounts[@]}"; do
+        m=${mounts[$i]}
+        kind=${kinds[$i]}
+        name=${kind}
+        (( ${count[${kind}]} > 1 )) && name="${kind} (${m##*/})"
+        mountpoint -q "${VIEW}/${name}" && continue
+        mkdir -p "${VIEW}/${name}"
+        if mount --bind "${m}/CabinetOS" "${VIEW}/${name}"; then
+            echo "drive ${m} shown as ${name}"
+        else
+            rmdir "${VIEW}/${name}" 2>/dev/null
+        fi
+    done
+}
+
+# The drive folders taken down, the console's own left alone. A drive still
+# attached is unmounted normally, and if a computer is using it that fails and
+# the folder stays: Eject then refuses rather than cutting a copy off. Only a
+# drive that is already gone is detached lazily, since there is nothing left
+# to protect.
+drives_down() {
+    local d src
+    for d in "${VIEW}"/*; do
+        [[ -e "${d}" ]] || continue
+        [[ " ${CORE} " == *" ${d##*/} "* ]] && continue
+        if mountpoint -q "${d}"; then
+            src=$(findmnt -no SOURCE "${d}" 2>/dev/null)
+            src=${src%%[*}
+            if ! umount "${d}" 2>/dev/null && [[ ! -b "${src}" ]]; then
+                umount -l "${d}"
+            fi
+        fi
+        rmdir "${d}" 2>/dev/null
     done
 }
 
@@ -150,6 +203,12 @@ case "${OP}" in
         view_down
         say state=off
         ;;
+    refresh)
+        # Only while on: off, there is no view to refresh.
+        [[ -d "${VIEW}" ]] || exit 0
+        drives_down
+        drives_up
+        ;;
     newpass)
         rm -f "${PASS}"
         ensure_password || fail "Couldn't make a password"
@@ -161,7 +220,7 @@ case "${OP}" in
         fi
         ;;
     *)
-        echo "usage: cabinetos-files on|off|newpass" >&2
+        echo "usage: cabinetos-files on|off|newpass|refresh" >&2
         exit 2
         ;;
 esac

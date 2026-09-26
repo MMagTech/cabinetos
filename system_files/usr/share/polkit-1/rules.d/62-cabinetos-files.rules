@@ -4,7 +4,8 @@
 // The session runs as `cabinet`; opening port 22, building the folder view
 // and setting the account's password need root. So the root half is
 // /usr/libexec/cabinetos-files behind two units, and this lets the session
-// start and stop cabinetos-files.service and start
+// start, stop and reload cabinetos-files.service (reload rebuilds the drive
+// folders when a drive comes or goes) and start
 // cabinetos-files-password.service, by name. docs/SETTINGS.md, Storage;
 // issue #69.
 //
@@ -19,7 +20,8 @@ polkit.addRule(function(action, subject) {
     }
     var unit = action.lookup("unit");
     var verb = action.lookup("verb");
-    if (unit == "cabinetos-files.service" && (verb == "start" || verb == "stop")) {
+    if (unit == "cabinetos-files.service" &&
+        (verb == "start" || verb == "stop" || verb == "reload")) {
         return polkit.Result.YES;
     }
     if (unit == "cabinetos-files-password.service" && verb == "start") {

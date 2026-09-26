@@ -29,5 +29,8 @@ std::string password();   // "XXXX-XXXX", empty until first turned on
 bool turnOn(std::string* why);
 bool turnOff(std::string* why);
 bool newPassword(std::string* why);
+// Rebuild the drive folders in the view after a drive came or went, so a
+// computer sees the drives there are now, named as Storage names them.
+bool refreshDrives(std::string* why);
 
 }  // namespace files

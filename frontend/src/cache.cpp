@@ -191,12 +191,15 @@ Placement dedupe(int romId, int64_t expectedBytes) {
     std::vector<Placement> all = findAll(romId);
     if (all.size() <= 1) return all.empty() ? Placement{} : all.front();
 
-    // Where this game BELONGS, which is a fact about the game and not about any
-    // disk: kept games live on the games drive, and the cache lives on the
-    // internal one. The keep record never leaves the internal disk, so this
-    // answer is available even when the drive is not.
+    // WHICH COPY STAYS. A kept game's kept copy (under roms/), wherever it
+    // is: the other is the stand-in fetched into the cache while its drive was
+    // away. A game nobody keeps stays on the main drive, where the cache
+    // lives. Between two equal copies, the main drive's. The keep record never
+    // leaves the main drive, so this answer is there even when a drive is not.
     const bool kept = isKeptByAnyone(romId);
-    const std::string home = kept ? storage::keepLocation() : storage::primaryLocation();
+    auto rank = [&](const Placement& p) {
+        return (kept && !p.kept ? 2 : 0) + (p.location != storage::primaryLocation() ? 1 : 0);
+    };
 
     std::vector<const Placement*> usable;
     for (const Placement& p : all)
@@ -216,7 +219,7 @@ Placement dedupe(int romId, int64_t expectedBytes) {
 
     const Placement* winner = usable.front();
     for (const Placement* p : usable)
-        if (p->location == home) { winner = p; break; }
+        if (rank(*p) < rank(*winner)) winner = p;
 
     for (const Placement& p : all) {
         if (&p == winner) continue;
@@ -528,6 +531,45 @@ void touch(const std::string& entryPath) {
         // older than it is and may be evicted sooner than it deserves.
         std::fprintf(stderr, "[cache] could not touch %s\n", entryPath.c_str());
     }
+}
+
+std::string keepLocation(int64_t gameBytes) {
+    const std::vector<std::string> all = storage::locations();
+    const std::string& main = all.front();
+    if (all.size() == 1) return main;
+
+    // What is on the main drive that is not the cache: the cache is the
+    // console's to clear, so it does not count towards the 80%.
+    const storage::Space m = storage::spaceOf(main);
+    if (m.ok && m.totalBytes > 0) {
+        int64_t cached = 0;
+        for (const Entry& e : candidates(main)) cached += e.bytes;
+        const int64_t settled = m.totalBytes - m.freeBytes - cached;
+        if (settled + gameBytes <= static_cast<int64_t>(m.totalBytes * kMainKeepShare))
+            return main;
+    }
+    std::string best;
+    int64_t bestFree = -1;
+    for (size_t i = 1; i < all.size(); ++i) {
+        const storage::Space sp = storage::spaceOf(all[i]);
+        if (sp.ok && sp.freeBytes >= gameBytes && sp.freeBytes > bestFree) {
+            best = all[i];
+            bestFree = sp.freeBytes;
+        }
+    }
+    return best.empty() ? main : best;
+}
+
+bool almostFull() {
+    int64_t room = 0, total = 0;
+    for (const std::string& loc : storage::locations()) {
+        const storage::Space sp = storage::spaceOf(loc);
+        if (!sp.ok) continue;
+        room += sp.freeBytes;
+        for (const Entry& e : candidates(loc)) room += e.bytes;
+        total += sp.totalBytes;
+    }
+    return total > 0 && room < static_cast<int64_t>(total * kAlmostFullShare);
 }
 
 }  // namespace cache

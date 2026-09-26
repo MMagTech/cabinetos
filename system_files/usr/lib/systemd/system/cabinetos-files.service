@@ -10,4 +10,5 @@ After=network.target local-fs.target
 Type=oneshot
 RemainAfterExit=yes
 ExecStart=/usr/libexec/cabinetos-files on
+ExecReload=/usr/libexec/cabinetos-files refresh
 ExecStop=/usr/libexec/cabinetos-files off

@@ -231,11 +231,20 @@ status here to Built.
 
 ## Storage
 
-- **Drives, with their space:** the main drive is **CabinetOS**, another
-  internal drive is **Internal**, a USB drive is **External**; two of one kind
-  are told apart by the drive's name. **Built.**
-- **Eject** for a USB drive: finishes or stops anything writing to it, then
-  says "Safe to unplug". **To build, #67.**
+- **Drives, with their space, each on its own line** (not one total: Eject is
+  per drive, a total jumps when a drive is pulled, and it hides which drive is
+  full): the main drive is **CabinetOS**, another internal drive is
+  **Internal**, a drive that can be unplugged (USB, Thunderbolt, SD) is
+  **External**; two of one kind are told apart by the drive's name. **Built.**
+- **Drives found and not usable are listed greyed**, with the reason ("Isn't
+  exFAT or NTFS", "Couldn't use this drive") and the size. Without this a
+  blank SSD fitted inside the PC would be invisible. **Built on `usb-drives`.**
+- **Eject** for an External drive: stops a download going to it, unmounts
+  every filesystem on it, checks nothing on the machine still has it mounted
+  (File access's view included), then powers it off and says "Safe to unplug"
+  in the pill. If anything still has it open: "Couldn't eject the external
+  drive", and it is not powered off. Internal drives have no Eject. **Built on
+  `usb-drives`, #67.**
 - **Kept and cached games:** see what is on the console, keep or release.
   **To build, #68.**
 - **File access** (under Storage): **built on branch `file-access`, #69;
@@ -282,12 +291,49 @@ status here to Built.
     reach a console with any local SELinux change). Keyboard-interactive is
     off on 2222 too; it is a second way to type a password.
   - Setting your own password: **later**, if people ask.
-- **Plugging a drive in does NOT work on the A9, found 2026-09-25**: nothing
-  mounts a USB drive (the desktop's automounter went with the desktop).
-  To build with Eject: mount and unmount through udisks2. Notifications:
-  the pill, no sound; "External drive connected", "Safe to unplug",
-  "External drive removed", "Couldn't use the external drive". MMagTech,
-  2026-09-25.
+- **Extra drives, decided with MMagTech 2026-09-25, built on `usb-drives`:**
+  - **Mounted by the console itself**, internal and external alike, when it
+    starts and when one appears (udisks2, `frontend/src/drives.cpp`). Found
+    2026-09-25: nothing mounted a USB drive, because the desktop's automounter
+    went with the desktop. Never the console's own drive, never Windows' EFI,
+    reserved or recovery partitions.
+  - **exFAT and NTFS only.** Anything else, and a blank drive: "isn't exFAT
+    or NTFS". Users are technical and made the installer on a computer that
+    can format a drive.
+  - **Kept games go on the main drive first**, up to 80% of it (not counting
+    the cache, which clears itself), then to the extra drive with the most
+    room; with none, the main drive after all, down to the floors. Replaces
+    "the first extra drive whenever one is plugged in", which sent games to a
+    small stick while a big main drive sat empty. Nothing already on a drive
+    moves. Cached games and saves stay on the main drive, as before.
+  - **Offline (#90, not built):** a game kept on a drive that is not attached
+    cannot be played and shows greyed. Online it downloads a stand-in, as
+    today. Saves never leave the main drive, so nothing of a person's progress
+    goes with the drive.
+  - **Notices, in the pill, no sound** (a chime would play over a game):
+    "External drive connected" once mounted and usable, "Safe to unplug"
+    after Eject, "External drive removed" when pulled without it, "External
+    drive isn't exFAT or NTFS", "Couldn't use the external drive". A drive
+    attached before the console started is mounted without "connected".
+    **Internal drives get no notices** (a bad one would say so every boot);
+    they are listed greyed in Storage instead.
+  - **"Storage almost full"** after a Download that leaves under 10% free
+    across all drives (counting the cache as free). The one early warning:
+    only a Download can fill the drives.
+  - **The drive missing at boot is not said on screen** (it only ever went to
+    the log): the pill covers pulling it while on, and a drive unplugged
+    while off was unplugged by the person who knows it.
+  - **File access** shows each drive as a folder named as Storage names it,
+    and rebuilds the folders when a drive comes or goes. Before this, a
+    second External drive never appeared, and one plugged in while File
+    access was on only appeared after turning it off and on.
+  - **Formatting: open.** Decided 2026-09-25 that the console never formats;
+    then, the same evening, MMagTech raised the case that breaks it: a blank
+    SSD fitted inside the PC, which cannot be formatted anywhere else. The
+    proposal: Format offered only on a completely blank drive (no partition
+    table, no filesystem), after the PIN, a confirm naming the drive and its
+    size with focus on Cancel, and a random 4-digit code on the keypad.
+    Tested on a USB stick wiped blank. Not built.
 
 ## System
 
