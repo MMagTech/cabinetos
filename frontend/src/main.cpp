@@ -6522,6 +6522,9 @@ int main(int argc, char** argv) {
         padWin.quit();
         padPairingName.clear();
     };
+    // Wide enough for "Nintendo Switch Pro Controller" with "Pairing…"
+    // beside it. A starting value, judged on the television.
+    constexpr float kPadWindowWidth = 760.0f;
     auto openPadWindow = [&]() {
         padWin.quit();
         padWin.stop = false;
@@ -6549,7 +6552,8 @@ int main(int argc, char** argv) {
             }
             const bt::Device d = padShown[static_cast<size_t>(i)];
             padPairingName = d.name.empty() ? d.address : d.name;
-            padDetail = "Pairing with " + padPairingName + "\xE2\x80\xA6";
+            // The row says "Pairing…"; the line keeps what it said, so
+            // nothing is said twice and the window does not change size.
             {
                 std::lock_guard<std::mutex> lk(padWin.m);
                 padWin.pairAddress = d.address;
@@ -6560,6 +6564,7 @@ int main(int argc, char** argv) {
             padWindowRefresh();
         });
         choiceScreen.setStaysOpen(true);
+        choiceScreen.setFixedWidth(kPadWindowWidth);
         padWindowOpen = true;
         padWin.th = std::thread([&pw = padWin]() {
             while (!pw.stop) {
@@ -10266,9 +10271,7 @@ int main(int argc, char** argv) {
                         std::fprintf(stderr, "[players] pairing %s: %s\n",
                                      padPairingName.c_str(),
                                      ok ? "paired" : err.c_str());
-                        padDetail = ok ? "Press a button on " + padPairingName
-                                       : std::string("Couldn't pair. Put it back into pairing "
-                                                     "mode and try again");
+                        padDetail = ok ? "Press a button on it" : "Couldn't pair. Try again";
                         padPairingName.clear();
                     }
                     if (fresh || done) padWindowRefresh();

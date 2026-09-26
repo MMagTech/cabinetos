@@ -27,6 +27,7 @@ void ChoiceScreen::open(std::string title, std::string detail,
                         std::vector<std::string> options, int focus) {
     open_ = true;
     staysOpen_ = false;
+    fixedW_ = 0.0f;
     title_ = std::move(title);
     detail_ = std::move(detail);
     options_ = std::move(options);
@@ -125,6 +126,7 @@ void ChoiceScreen::draw(Ctx& c) {
     innerW = std::max(innerW, c.text.measure(title_, TextStyle::Title2, sc));
     for (const std::string& l : lines)
         innerW = std::max(innerW, c.text.measure(l, TextStyle::Callout, sc));
+    if (fixedW_ > 0.0f) rowW = innerW = std::min(fixedW_, kPanelMaxW - kPanelPad * 2);
     const float panelW = std::min(kPanelMaxW, innerW + kPanelPad * 2);
     const float textMax = panelW - kPanelPad * 2;
     const float titleH = c.text.lineHeight(TextStyle::Title2, sc);

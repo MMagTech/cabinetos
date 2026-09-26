@@ -308,8 +308,10 @@ bool pair(const std::string& address, std::string* err, int timeoutSeconds,
         // org.bluez.Error.ConnectionAttemptFailed", which says nothing a
         // person can act on.
         const std::string why = trimmed(p.err).empty() ? trimmed(p.out) : trimmed(p.err);
+        std::string oneLine = why;
+        for (char& ch : oneLine) if (ch == '\n') ch = ' ';
         std::fprintf(stderr, "[bluetooth] pairing %s failed: %s\n", address.c_str(),
-                     p.timedOut ? "no answer" : why.c_str());
+                     p.timedOut ? "no answer" : oneLine.c_str());
         if (err) *err = "Couldn't pair. Put it back into pairing mode and try again";
         return false;
     }
