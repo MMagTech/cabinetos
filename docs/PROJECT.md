@@ -1562,6 +1562,76 @@ simple and take the complexity away alot of emulators add."* Decided:
   cartridge systems), absent elsewhere the way Save state is on PS2.
   Roadmap step 4, after the emulator work.
 
+### The in-game shortcuts, and three states per game — decided 2026-09-27
+
+The #76 proposal (a comment on that issue, 2026-09-26) put three calls to
+MMagTech; this settles them and the save-state question underneath #80. The
+order changed the same evening: the shortcuts come **before** the emulators
+(nobody plays but MMagTech, so order is only about speed), with #103 first.
+
+**Home, and getting into the pause menu:**
+
+- **A tap of Home opens the pause menu; holding Home with a second button is a
+  shortcut.** Told apart on release: a tap is Home going down and up with
+  nothing else pressed meanwhile.
+- **The In-game shortcuts switch (off by default) governs both**, the tap as
+  well as the combinations. With it off, Home does nothing in a game.
+  *Recommended the other way (tap always on) and decided against.*
+- **L3+R3 always opens the pause menu**, switch or not. It covers a pad with
+  no Home, a Home SDL does not recognise, and anything upstream that takes
+  Home before the frontend sees it (not yet checked on the A9).
+- **Home cannot be reassigned.** That is the mapping screen dropped with #66.
+  A pad whose Home is wrong is fixed in the controller list, and L3+R3 still
+  gets in meanwhile.
+
+**Screenshots (#79): no gallery on the console.** They upload to RomM's
+per-user gallery, `POST /api/screenshots?rom_id=` (RomM 5.1: stored under the
+user, `is_gallery`, private until shared, deletable), and are viewed and
+deleted there. Kept apart from the pictures RomM shows as a game's
+screenshots, which come from its metadata sources (IGDB, ScreenScraper and
+LaunchBox are on at the reference server); MMagTech had seen those and taken
+them for uploads.
+
+**Save states: three per game, per user, rotating (#80).** MMagTech's own
+design from the 2026-09-24 brainstorm, restated because the 2026-09-26
+proposal changed it without his agreement (it dropped the deletion and put
+the list in the pause menu). His purpose, in his words: *"sort of like save
+slots"* without *"having to pick which slot you save to."*
+
+- **Save is one press and never asks.** Each save fills the next of three
+  places; once there are three, a new save replaces the oldest, **on the
+  console and on RomM** (`POST /api/states/delete`). The same whether the save
+  came from the pause menu or a shortcut.
+- **In a game, Load is always the newest.** No list in the pause menu.
+- **The three are chosen on the game's launch screen**, with picture and time,
+  newest first, as Cabinet's tvOS *Continue from* row does
+  (`TVGameLaunchView.swift`). **Play still starts the game normally**, from
+  its own save; picking a state starts from that moment. Home's Resume is the
+  "straight back in" button (loads the newest), as already specified.
+- **Per user.** RomM 5.1 returns only the signed-in user's states
+  (`get_states` filters on `request.user.id`), and the console keeps each
+  person's in their own folder, so one person's saves never push out
+  another's.
+- **Only Cabinet's states count.** The console lists, loads and rotates only
+  states under Cabinet's emulator tags (`catalog::emulatorTag`). States from
+  RomM's web player or any other app are never shown and never deleted, which
+  answers what happens to a new user's existing states on first install.
+- **The cost, accepted:** a state saved by Cabinet on the Apple TV for the same
+  game and emulator is one of the three, so a save on the console can rotate
+  it out. The Apple TV itself never deletes, so its states pile up until the
+  console next saves; giving Cabinet the same rule is a Cabinet change, later.
+- **Why three and not more:** the job is undoing a bad save (saved a moment
+  before dying, twice in a row, and still one good one left); more becomes a
+  history to scroll, which is the slot-picking this avoids. One constant,
+  cheap to raise if three ever feels short.
+- **Rejected:** keeping every state on RomM and showing three (nothing lost,
+  but RomM holds states the console never shows and the "three" is not true);
+  a Load earlier state list in the pause menu.
+
+**A save shortcut is wanted** (MMagTech: *"when saved via menu or hot key
+combo"*). Not in the #76 list; its combination, and whether Load newest gets
+one too, is settled in the shortcuts walk-through.
+
 ### The permission detail, and a Phase 2 decision that paid for itself
 
 Gamepads are the one input the frontend reads **directly from `/dev/input`**;
