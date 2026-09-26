@@ -4,7 +4,6 @@
 
 #include <SDL3/SDL.h>
 
-#include <algorithm>
 #include <atomic>
 #include <functional>
 #include <string>
@@ -237,8 +236,8 @@ struct ServerProbe {
 class Flow {
 public:
     Flow(const Deps& d, const Options& o) : d_(d), o_(o) {}
-    // Stops a Bluetooth scan still running, so leaving does not wait out its
-    // ten seconds while the jobs are joined.
+    // Stops a Bluetooth scan or pairing still running, so leaving does not
+    // wait it out while the jobs are joined.
     ~Flow() { btCancel_.store(true); }
 
     Outcome run();
@@ -294,10 +293,6 @@ private:
     Deps d_;
     Options o_;
     std::atomic<bool> btCancel_{false};
-    // Add a controller: the pads that were already here, and whether the
-    // chosen one has paired.
-    std::vector<SDL_JoystickID> padsAtOpen_;
-    bool btPaired_ = false;
 
     firstrun::Machine machine_;
     firstrun::Facts facts_;
@@ -419,9 +414,6 @@ std::string Flow::prose() const {
             if (btScanJob_.busy()) return "Scanning. Put a controller into "
                                           "pairing mode.";
             if (btPairJob_.busy()) return "Pairing…";
-            if (o_.addController)
-                return btPaired_ ? "Press a button on it."
-                                 : "Put a controller into pairing mode.";
             return why.empty() ? "Ready." : why;
 
         case firstrun::Step::Done:
@@ -742,9 +734,7 @@ void Flow::rebuild() {
     // over Ethernet and what Wi-Fi would buy; a button that restates the
     // sentence is a second voice saying the same thing, and it grows every time
     // a step gains an optional half.
-    if (o_.addController) {
-        // Nothing to continue to: the new pad pressing a button ends it.
-    } else if (machine_.step() == firstrun::Step::Done) {
+    if (machine_.step() == firstrun::Step::Done) {
         buttons_.push_back({Act::Finish, "Start playing", true, {}});
     } else if (gate == firstrun::Gate::Skippable) {
         buttons_.push_back({Act::Skip, "Skip", true, {}});
@@ -1216,7 +1206,6 @@ void Flow::pumpJobs() {
         // caveat is the sentence that tells somebody what to do next.
         notice_ = err.empty() ? "Controller ready." : err;
         noticeIsError_ = !paired;
-        btPaired_ = paired;
         if (paired) {
             observe();
             // THIS USED TO CALL bt::known() RIGHT HERE, ON THE FRAME THREAD.
@@ -1387,11 +1376,6 @@ void Flow::moveAction(int dx) {
 }
 
 void Flow::goBack() {
-    if (o_.addController) {
-        running_ = false;
-        outcome_ = Outcome::Cancelled;
-        return;
-    }
     if (machine_.back()) {
         observe();
         enterStep();
@@ -1506,9 +1490,8 @@ void Flow::draw() {
 
     // The five steps, as dots. Not a percentage and not "step 3 of 5" — a
     // shape somebody can see the end of at a glance, which is the one thing a
-    // setup flow owes a person who does not know how long it is. Not from
-    // Settings, where this is one screen and not a step of anything.
-    if (!o_.addController) {
+    // setup flow owes a person who does not know how long it is.
+    {
         // One per step, Done excluded — it is the end, not a stop along the
         // way.
         constexpr int kSteps = 4;
@@ -1715,16 +1698,8 @@ Outcome Flow::run() {
     if (d_.window) SDL_StartTextInput(d_.window);
 
     observe();
-    const char* step = o_.addController ? "controller" : o_.startStep;
-    if (step && !machine_.openAt(step))
-        std::fprintf(stderr, "[first-run] no step called '%s'\n", step);
-    if (o_.addController) {
-        int n = 0;
-        if (SDL_JoystickID* ids = SDL_GetGamepads(&n)) {
-            padsAtOpen_.assign(ids, ids + n);
-            SDL_free(ids);
-        }
-    }
+    if (o_.startStep && !machine_.openAt(o_.startStep))
+        std::fprintf(stderr, "[first-run] no step called '%s'\n", o_.startStep);
     enterStep();
 
     std::fprintf(stderr, "[first-run] starting at %s\n", firstrun::name(machine_.step()));
@@ -1838,18 +1813,6 @@ Outcome Flow::run() {
                     break;
 
                 case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
-                    // THE NEW PAD SAYING IT WORKS. Any button on a pad that
-                    // was not here when the screen opened, and the press goes
-                    // no further.
-                    if (o_.addController &&
-                        std::find(padsAtOpen_.begin(), padsAtOpen_.end(), e.gbutton.which) ==
-                            padsAtOpen_.end()) {
-                        std::fprintf(stderr, "[players] new pad %u pressed a button\n",
-                                     static_cast<unsigned>(e.gbutton.which));
-                        running_ = false;
-                        outcome_ = Outcome::Completed;
-                        break;
-                    }
                     if (keyboard_.isOpen()) {
                         switch (e.gbutton.button) {
                             case SDL_GAMEPAD_BUTTON_DPAD_LEFT: keyboard_.moveFocus(-1, 0); break;
@@ -1944,8 +1907,7 @@ Outcome Flow::run() {
             SDL_DelayNS(kFrameNS - spent);
     }
 
-    // Settings' text input is the app's, and stays on.
-    if (d_.window && !o_.addController) SDL_StopTextInput(d_.window);
+    if (d_.window) SDL_StopTextInput(d_.window);
     return outcome_;
 }
 
@@ -2184,8 +2146,7 @@ Outcome run(const Deps& d, const Options& o) {
     // ten seconds: on the A9, 2026-09-25, "Start playing" stayed pressed on a
     // frozen Ready screen for 17 s. Now the logo is up for that time instead,
     // and the startup's own lines follow it.
-    if (out == Outcome::Completed && !o.screenshotPath && !o.addController)
-        showWaiting(d, "", nullptr);
+    if (out == Outcome::Completed && !o.screenshotPath) showWaiting(d, "", nullptr);
     return out;
 }
 

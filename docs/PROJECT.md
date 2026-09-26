@@ -1505,6 +1505,30 @@ takes two ports, so players 3 and 4 play nothing there (no multitap).
 
 **A playing pad dropping out pauses the game** (MMagTech, same day).
 
+**Add a controller became a window, and pairing had to keep its keys.**
+Built first as first run's pairing screen on its own (the 2026-09-24
+decision); MMagTech compared it with a window like Wi-Fi's and chose the
+window. Three things found on the way, each on the A9:
+
+- **The adapter is not pairable, so a pad paired without bonding** and bluez
+  then refused its input ("Rejected connection from !bonded device"): the
+  kids' Switch pad showed "connected" and did nothing. `bt::pair` now makes
+  the adapter pairable for the pairing only, and re-pairs a pad left paired
+  without keys.
+- **The first pairing try often fails** (ConnectionAttemptFailed) and the
+  second works, three times in a row: the radio is still searching. One
+  automatic retry after 1.5 s.
+- **Four-second listening rounds missed pads in pairing mode** that an
+  eight-second scan found at once; classic Bluetooth needs about ten seconds
+  a sweep. Ten-second rounds, with each device listed the moment a line of
+  the scan names it (`bt::listen`, `proc::run` with a line callback).
+- **8BitDo pads have a Bluetooth identity per mode**, so bluez's own list
+  (`bt::scan`) held identities that could never answer. The window lists
+  only what it has heard since opening.
+- **SDL does not always know a Bluetooth pad's address** (not for pads the
+  kernel drives, such as an Xbox pad), which hid Forget. It is read from
+  the kernel's `uniq` when SDL has none.
+
 **A pad is named as it names itself. Tried the other way and taken back.**
 A pad in Switch mode reports itself as a Switch Pro Controller, so
 MMagTech's 8BitDo read "Nintendo Switch Pro Controller". Its Bluetooth

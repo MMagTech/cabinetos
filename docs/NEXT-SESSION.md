@@ -37,13 +37,14 @@ agreed). With promotion, every change is tried on `testing` and a merge
 makes `latest` that same image, so the test console on `testing` is never
 behind what users get, and testing a change needs no `bootc switch` and no
 extra reboot. **SSH is port 2222; sudo's password is
-`cat /var/lib/cabinetos-files/password`.** **#101 (Downloads) merged
-2026-09-26 and was promoted, not built: `latest` and `testing` are both
-`2026.09.26.6` (`sha256:37c2ccbeb255…`), and the A9 is on it**, from
-`testing`, gamescope/drm, File access left on, **a PIN set** (MMagTech's),
+`cat /var/lib/cabinetos-files/password`.** **#102 (state pictures) merged
+2026-09-26 and was promoted: `latest` is `2026.09.26.7`. At the end of the
+evening session `testing` was rebuilt from `controllers` and the A9 moved
+onto it for MMagTech's check** (`cat /usr/share/cabinetos/version` for the
+number; `bootc status` is the truth), from `testing`, gamescope/drm, File access left on, **a PIN set** (MMagTech's),
 the SanDisk "Games" stick attached. The VM is on `testing` `2026.09.26.4`.
-Branches left: `main`, `testing`, `state-screenshot` (this session's #99),
-and PR #42's `base-update/44.20260921`.
+Branches left: `main`, `testing`, `controllers` (#64 and #65), and PR
+#42's `base-update/44.20260921`.
 
 **MMagTech, on what comes next (2026-09-26): finish the app; no side
 projects.** The `main.cpp` split waits until it starts costing: a change to
@@ -52,11 +53,12 @@ one screen breaking another, or contributors arriving.
 **THE ORDER, SET WITH MMAGTECH 2026-09-26.** The old queue listed only
 Settings; this is everything open, in order:
 
-1. **#99, a picture with every save state**: built on `state-screenshot`,
-   see below. Next step: MMagTech checks the pictures on the Apple TV, then
-   push to `testing`, then merge.
-2. **Controllers** (#64 connected, #65 add one, #66 button mapping). They do
-   not depend on the emulators.
+1. ~~**#99, a picture with every save state**~~: **merged as #102**
+   (2026-09-26).
+2. **Controllers** (#64 connected, #65 add one, #66 button mapping). #64
+   and #65 are built on branch `controllers` (below); **#66 is next**, on
+   its own branch. Also found: **#103**, leaving the pause menu presses
+   that button in the game.
 3. **The emulators, as one block**: GameCube audio (#83), NES audio (#84),
    Dreamcast will not start on the A9 (#85: flycast wants Vulkan memory
    export this driver will not give, seen again 2026-09-26), N64 states
@@ -79,6 +81,36 @@ Settings; this is everything open, in order:
 fast forward, #78 rewind, #79 screenshots, #80 state undo) are in the first
 release. It decides how long the road is. Also parked: #74 RetroAchievements
 and #75 background colour (both "later"), #81 stale doc lines, PR #42.
+
+**THE SESSION OF 2026-09-26 (EVENING) BUILT PLAYERS (#64) AND ADD A
+CONTROLLER (#65), BRANCH `controllers`.** Every step judged on the TV with
+`tools/ui-loop.sh`. Decisions in `docs/SETTINGS.md`, Controllers; reasoning
+in `docs/PROJECT.md`, *Players, decided 2026-09-26*. The short version:
+
+- **Until this, a game heard only one pad.** Now up to four players
+  (`frontend/src/players.{h,cpp}`, rules walked by `--players-test`, 20
+  checks): numbers close up outside a game; during one, a pad that drops
+  keeps its number (matched by Bluetooth address) and **the pause menu
+  opens**; if every pad drops, the first back is player 1. `Core` has four
+  ports and plugs a port in only when a player sits at it.
+- **Controllers rows**: the pad's own name (a pad in Switch mode really is
+  "Nintendo Switch Pro Controller"; naming by maker was built and taken
+  back out, do not rebuild it), "Player N" as the value, a steady dot on the
+  pad last pressed, "Make player N" (swap) and Forget.
+- **Add a controller is a window**, growing as devices are heard. Pairing
+  now keeps its keys (the adapter was not pairable, so pads paired and were
+  ignored), retries once, and `--pads` prints what SDL knows about each pad.
+- **Proved on the A9 (loop), by MMagTech:** two players in Snes9x, a pad
+  dropping mid-game and coming back as its player, both off then the old
+  player 2 back as player 1, the swap, Forget, and pairing an 8BitDo Lite 2
+  and an Xbox pad from the window. **Not proved:** the kids' licensed Switch
+  pad ("Lic Pro Controller") after the pairing fix; players 3 and 4 in a
+  game; Dreamcast's second port (Dreamcast does not start on the A9).
+- **The A9's pads were paired and forgotten many times.** What is paired
+  now is whatever MMagTech left; his first 8BitDo ("Pro Controller",
+  E4:17:D8:71:F1:ED) was forgotten.
+- **State at the end:** `controllers` pushed to `testing` for the image
+  check; merge on his word (promotes, no build). Then #66.
 
 **THE SESSION OF 2026-09-26 (LATER) BUILT #99 ON `state-screenshot`.** Decided
 with MMagTech, recorded in `docs/PROJECT.md` under *Where a save state lives*:

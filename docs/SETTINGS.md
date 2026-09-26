@@ -131,13 +131,26 @@ Decided with MMagTech 2026-09-26, from the things people will actually do.
   preferred pad keeps its number while both stay on) **and Forget** for a
   Bluetooth pad, with "Forget <name>?" and Cancel focused. No PIN. A lone
   wired pad has nothing to press, so its row only shows.
-- **Add a controller** (#65): first run's pairing screen on its own, no PIN.
-  It scans, pad 1 picks the new pad from the list, and after "Press a button
-  on it" the new pad's first press ends it, back in Settings with "<name> is
-  player 2". Back leaves at any point, stopping a scan or pairing in flight
-  rather than waiting it out. A wired pad needs none of it: plugged in, it
-  is the next player (plugged in while this screen is open, its first press
-  ends it the same way).
+- **Add a controller** (#65): **a window over Settings, like Wi-Fi's**, no
+  PIN. (First run's full pairing screen was built for it first and
+  compared: it felt like leaving Settings. First run keeps that screen.)
+  - Title "Add a controller", line "Put a controller into pairing mode".
+  - It opens one row tall, "Looking for controllers…" dimmed in it, and
+    **grows smoothly** as devices arrive; the width never changes. (Opening
+    small then jumping read as a second window; opening six rows tall left
+    an empty band.)
+  - **Only devices heard since it opened**, each listed the moment it is
+    heard, in ten-second listening rounds. Controllers sort to the top;
+    other named devices (lights, TVs) stay listed, because a controller
+    that does not say it is one must not go missing (MMagTech). Pads
+    already playing are not listed.
+  - Choosing one: its row says "Pairing…". Success: the title becomes
+    **"Paired successfully"**, the line "Press a button on it", and the new
+    pad's first press closes the window with "<name> is player N". Failure:
+    "Couldn't pair. Try again".
+  - B closes it at once, stopping a scan or pairing in flight.
+  - A wired pad needs none of it: plugged in, it is the next player (and
+    its first press closes the window if it is open).
 - **Button mapping** (#66): opens by itself when a pad the console does not
   recognise connects, driven by that pad, asking by position ("the bottom
   button"); saved per pad model, with a Reset. A testing switch makes a

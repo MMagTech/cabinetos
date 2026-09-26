@@ -6215,7 +6215,7 @@ int main(int argc, char** argv) {
     enum SettingId { SetAddAccount = 1, SetInterfaceSounds, SetPinSet, SetPinChange,
                      SetPinOff, SetRemoveAccount, SetScreenOff, SetWifi, SetServer,
                      SetUpdate, SetUpdateCheck, SetCredits, SetFiles, SetDownloads,
-                     SetAddController, SetAddControllerOld };
+                     SetAddController };
     // One Eject row per USB drive: this plus the drive's index in
     // storage::locations() when the rows were built.
     constexpr int kSetEject = 100;
@@ -6901,9 +6901,6 @@ int main(int argc, char** argv) {
                                 "Player " + std::to_string(p.player + 1)});
             }
             rows.push_back({K::Action, SetAddController, "Add a controller", "", ""});
-            // FOR COMPARING, TO GO: first run's full screen, which the window
-            // above replaces if MMagTech prefers it (2026-09-26).
-            rows.push_back({K::Action, SetAddControllerOld, "Add a controller (full screen)", "", ""});
             rows.push_back({K::Unbuilt, 0, "Button mapping",
                             "For controllers the console does not recognise", ""});
             cats.push_back({"Controllers", std::move(rows)});
@@ -7514,32 +7511,6 @@ int main(int argc, char** argv) {
                 } else if (res.value == SetAddController) {
                     sound::play(sound::Cue::Activate);
                     openPadWindow();
-                } else if (res.value == SetAddControllerOld) {
-                    // FIRST RUN'S PAIRING SCREEN, on its own (issue #65). It
-                    // runs its own loop until the new pad presses a button or
-                    // Back is pressed; players.h seats the pad as it connects.
-                    // No PIN: a controller is not one of the things it guards.
-                    sound::play(sound::Cue::Activate);
-                    std::vector<SDL_JoystickID> before;
-                    for (const players::Pad& p : players::connected()) before.push_back(p.id);
-                    setup::Options opts;
-                    opts.addController = true;
-                    const setup::Outcome out = setup::run(waitDeps, opts);
-                    idleWatch.input(clockSeconds());
-                    if (out == setup::Outcome::Quit) {
-                        // The system asked the app to stop while it was open.
-                        running = false;
-                        askedToStop = true;
-                        std::fprintf(stderr, "[shutdown] asked to stop from Add a controller\n");
-                        break;
-                    }
-                    for (const players::Pad& p : players::connected())
-                        if (std::find(before.begin(), before.end(), p.id) == before.end()) {
-                            menuNotice.say(p.name + " is player " + std::to_string(p.player + 1),
-                                           Tone::Done);
-                            break;
-                        }
-                    buildSettings();
                 } else if (res.value == SetAddAccount) {
                     // The same route as the chip's Add user, PIN included.
                     // Back from the pairing screen returns here, because it
