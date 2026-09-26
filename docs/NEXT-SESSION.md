@@ -2191,6 +2191,12 @@ then `YDOTOOL_SOCKET=/tmp/ydotool.sock ydotool key 108:1 108:0` (Down; Up
 - **Show a state, then wait for "next".** Running eight states on a timer
   went past faster than MMagTech could judge them, and the last one stayed
   up looking like a real failure. One state per message worked.
+- **A CHANGE TO THE UPDATE SCREENS NEEDS TWO `testing` BUILDS TO TEST.**
+  The check is done by the frontend the console is RUNNING, so the first
+  build only delivers the new screens; they can only be seen answering a
+  check once there is a second, newer build to find. Found 2026-09-25
+  sending MMagTech to test the Update available panel against the very
+  build that carried it: the old frontend answered, with no panel.
 - **Anything in `/tmp` on the A9 is gone after a reboot**, including a log
   you started to watch an update. Read the previous boot with
   `journalctl -b -1`.
