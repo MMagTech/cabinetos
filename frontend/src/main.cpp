@@ -155,6 +155,16 @@ public:
         std::string fileName;
         std::vector<uint8_t> data;
         bool isState = false;
+        // The file on disk these bytes came from: what a retry reads, since
+        // the bytes in memory do not outlive the console being switched off.
+        std::string localPath;
+        // A state's picture (#99): its name, its bytes, and where it is.
+        std::string shotName;
+        std::vector<uint8_t> shot;
+        std::string shotPath;
+        // Sent again from a marker, not asked for by a person just now: the
+        // pause menu is not told how it went.
+        bool resend = false;
     };
 
     // An upload that has not reached the server is the ONE irreplaceable thing
@@ -182,17 +192,43 @@ public:
     void push(Job job) {
         // Recorded BEFORE it is queued, so the window in which the console owes
         // the server something and does not know it is zero.
-        cache::markPending(storage::currentUser(), job.romId, job.fileName,
-                           static_cast<int64_t>(job.data.size()));
-        {
-            std::lock_guard<std::mutex> lock(mutex_);
-            queue_.push_back(std::move(job));
-            ++pending_;
+        cache::Owed o;
+        o.romId = job.romId;
+        o.isState = job.isState;
+        o.emulator = job.emulator;
+        o.fileName = job.fileName;
+        o.localPath = job.localPath;
+        o.shotName = job.shotName;
+        o.shotPath = job.shotPath;
+        cache::markPending(storage::currentUser(), o, static_cast<int64_t>(job.data.size()));
+        enqueue(std::move(job));
+    }
+
+    // SEND AGAIN EVERYTHING STILL OWED (2026-09-26). Until this, an upload
+    // that failed was never tried again: a state saved while the server was
+    // away stayed on this console for good, and never reached the Apple TV.
+    // Called at start, after an upload that worked, and every few minutes
+    // while something is owed (the frame loop's `owing()`). The bytes are read
+    // off the disk on the worker; anything already queued is not queued twice.
+    void resendOwed() {
+        const std::vector<cache::Owed> list = cache::owed(storage::currentUser());
+        for (const cache::Owed& o : list) {
+            Job j;
+            j.romId = o.romId;
+            j.isState = o.isState;
+            j.emulator = o.emulator;
+            j.fileName = o.fileName;
+            j.localPath = o.localPath;
+            j.shotName = o.shotName;
+            j.shotPath = o.shotPath;
+            j.resend = true;
+            enqueue(std::move(j));
         }
-        wake_.notify_one();
     }
 
     int pending() const { return pending_.load(); }
+    // Something failed and is still owed: the frame loop tries again on a timer.
+    bool owing() const { return owing_.load(); }
 
     // THE OUTCOME OF THE MOST RECENT STATE UPLOAD, so the pause menu can say
     // what happened rather than what was attempted. 0 nothing new, 1 it reached
@@ -206,6 +242,27 @@ public:
     std::atomic<int> stateOutcome{0};
 
 private:
+    static std::string key(const Job& j) { return std::to_string(j.romId) + "/" + j.fileName; }
+
+    void enqueue(Job job) {
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            const std::string k = key(job);
+            if (queued_.count(k)) {
+                // Already on its way. A person's own save replaces the bytes
+                // of a resend of the same file, which is only ever older.
+                if (job.resend) return;
+                for (Job& q : queue_)
+                    if (key(q) == k) { q = std::move(job); return; }
+                // In flight right now: queue it behind, it is newer.
+            }
+            queued_.insert(k);
+            queue_.push_back(std::move(job));
+            ++pending_;
+        }
+        wake_.notify_one();
+    }
+
     void run() {
         for (;;) {
             Job job;
@@ -220,19 +277,47 @@ private:
                 queue_.pop_front();
             }
 
+            // A resend reads its bytes now, off the disk.
+            if (job.data.empty() && !job.localPath.empty()) {
+                job.data = cab::readBytes(job.localPath);
+                if (!job.shotPath.empty()) job.shot = cab::readBytes(job.shotPath);
+            }
+            bool ok = false;
             std::string err;
-            const bool ok = job.isState
-                ? client_->uploadState(job.romId, job.emulator, job.fileName, job.data, &err)
-                : client_->uploadSave(job.romId, job.emulator, job.fileName, job.data, &err);
-            // Cleared only on success. A failed upload leaves the marker, which
-            // is the point: the file is still on disk, it still has not reached
-            // RomM, and the console still owes it.
-            if (ok) cache::clearPending(storage::currentUser(), job.romId, job.fileName);
-            if (job.isState) stateOutcome.store(ok ? 1 : 2);
-            std::fprintf(stderr, "[%s] %s %s\n", job.isState ? "state" : "save",
+            if (job.data.empty()) {
+                // The file it was owed from is gone (deleted by hand, or the
+                // person removed). Nothing left to send, so nothing is owed.
+                err = "its file is gone";
+                cache::clearPending(storage::currentUser(), job.romId, job.fileName);
+            } else {
+                ok = job.isState
+                    ? client_->uploadState(job.romId, job.emulator, job.fileName, job.data,
+                                           &err, job.shotName, job.shot)
+                    : client_->uploadSave(job.romId, job.emulator, job.fileName, job.data,
+                                          &err);
+                // Cleared only on success. A failed upload leaves the marker,
+                // which is the point: the file is still on disk, it still has
+                // not reached RomM, and the console still owes it.
+                if (ok) cache::clearPending(storage::currentUser(), job.romId, job.fileName);
+            }
+            if (job.isState && !job.resend) stateOutcome.store(ok ? 1 : 2);
+            std::fprintf(stderr, "[%s] %s%s %s%s\n", job.isState ? "state" : "save",
+                         job.resend ? "resent, " : "",
                          ok ? "uploaded" : "upload failed, kept locally:",
-                         ok ? job.emulator.c_str() : err.c_str());
+                         ok ? job.emulator.c_str() : err.c_str(),
+                         ok && !job.shot.empty() ? " with its picture" : "");
+            bool resendNow = false;
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                queued_.erase(key(job));
+                // THE SERVER ANSWERED, so anything a failure left behind can
+                // go now rather than at the next timer.
+                if (ok && owing_.load()) resendNow = true;
+                if (!ok && !job.data.empty()) owing_ = true;
+                if (ok && queue_.empty()) owing_ = false;
+            }
             --pending_;
+            if (resendNow) resendOwed();
         }
     }
 
@@ -241,7 +326,9 @@ private:
     std::mutex mutex_;
     std::condition_variable wake_;
     std::deque<Job> queue_;
+    std::set<std::string> queued_;
     std::atomic<int> pending_{0};
+    std::atomic<bool> owing_{false};
     bool stopping_ = false;
 };
 
@@ -403,7 +490,9 @@ static void syncDirSave(GameSession& sess, Uploader& up) {
     sess.dirAtLaunch = now;   // this is the new baseline; do not send it twice
 
     if (sess.saveTag.empty()) return;
-    up.push(Uploader::Job{sess.romId, sess.saveTag, name, std::move(zip), false});
+    Uploader::Job job{sess.romId, sess.saveTag, name, std::move(zip), false};
+    job.localPath = path;
+    up.push(std::move(job));
 }
 
 // The name a save travels under on RomM, and it is the REFERENCE
@@ -748,7 +837,9 @@ static void syncFileSaves(GameSession& sess, Uploader& up) {
         f.hadOne = true;
 
         if (sess.saveTag.empty()) continue;
-        up.push(Uploader::Job{sess.romId, sess.saveTag, name, std::move(data), false});
+        Uploader::Job job{sess.romId, sess.saveTag, name, std::move(data), false};
+        job.localPath = f.spec.inSystemDir ? local : written;
+        up.push(std::move(job));
     }
 }
 
@@ -777,7 +868,9 @@ static void syncSave(GameSession& sess, Uploader& up) {
     // Queued, not sent. The local copy above is already safe; the network is
     // the part that can take thirty seconds and it does not get to stop the
     // picture.
-    up.push(Uploader::Job{sess.romId, sess.saveTag, name, std::move(ram), false});
+    Uploader::Job job{sess.romId, sess.saveTag, name, std::move(ram), false};
+    job.localPath = path;
+    up.push(std::move(job));
 }
 
 // WHAT THE PAUSE MENU SAYS BACK — new 2026-09-21.
@@ -943,18 +1036,54 @@ static void saveStateNow(GameSession& sess, Uploader& up, MenuNotice& notice) {
     }
     // Named with a timestamp because states accumulate on purpose; a save
     // overwrites, a state does not.
-    char stamp[32];
-    const std::time_t now = std::time(nullptr);
-    std::strftime(stamp, sizeof stamp, "%Y-%m-%d %H-%M-%S", std::localtime(&now));
-    const std::string name = sanitisedStem(sess.title) + " [" + stamp + "].state";
+    //
+    // CABINET'S NAME, TO THE CHARACTER (#99, MMagTech 2026-09-26): the game's
+    // file name without its extension, then the UTC time to the millisecond
+    // with its separators dashed, "Super Mario World (USA) [2026-09-26
+    // 17-45-12-345]" (TVPlayerView.swift, stateFileStem). It was the title
+    // and local time to the second, so a list of states read differently
+    // depending on where each was made. Nothing here reads the name back:
+    // the newest local state is found by date.
+    struct timespec ts{};
+    clock_gettime(CLOCK_REALTIME, &ts);
+    struct tm utc{};
+    gmtime_r(&ts.tv_sec, &utc);
+    char stamp[48];
+    const size_t n = std::strftime(stamp, sizeof stamp, "%Y-%m-%d %H-%M-%S", &utc);
+    std::snprintf(stamp + n, sizeof stamp - n, "-%03ld", ts.tv_nsec / 1000000L);
+    std::string base = sess.fsStem.empty() ? sanitisedStem(sess.title) : sess.fsStem;
+    std::replace(base.begin(), base.end(), '/', '_');
+    const std::string stem = base + " [" + stamp + "]";
+    const std::string name = stem + ".state";
 
     storage::makeDirs(sess.stateDir);
-    if (!writeLocal(sess.stateDir + "/" + name, st)) {
+    const std::string path = sess.stateDir + "/" + name;
+    if (!writeLocal(path, st)) {
         std::fprintf(stderr, "[state] could not write locally, not uploading\n");
         notice.say("Couldn't save the state", Tone::Problem);
         return;
     }
     std::fprintf(stderr, "[state] %zu bytes saved locally\n", st.size());
+
+    // THE PICTURE (#99): the game's own frame, the menu not in it, upright,
+    // at the core's resolution, as Cabinet sends. Kept beside the state, so a
+    // state that has to wait for the server still has it when it goes. A
+    // state without one is still a state: nothing here stops the save.
+    std::vector<uint8_t> png;
+    std::string shotName, shotPath;
+    {
+        std::vector<uint8_t> rgba;
+        unsigned w = 0, h = 0;
+        if (core.snapshot(rgba, w, h) && ui::encodePNG(rgba, w, h, png)) {
+            shotName = stem + ".png";
+            shotPath = sess.stateDir + "/" + shotName;
+            if (!writeLocal(shotPath, png)) shotPath.clear();
+            std::fprintf(stderr, "[state] picture %ux%u, %zu bytes\n", w, h, png.size());
+        } else {
+            png.clear();
+            std::fprintf(stderr, "[state] no picture for this state\n");
+        }
+    }
 
     if (sess.stateTag.empty()) {
         std::fprintf(stderr, "[state] no settled tag for this core — not uploaded\n");
@@ -969,7 +1098,12 @@ static void saveStateNow(GameSession& sess, Uploader& up, MenuNotice& notice) {
     // it before the server has it. The frame loop finishes this sentence when
     // the uploader reports back — see Uploader::stateOutcome.
     notice.say("Saving\xE2\x80\xA6", Tone::Busy);
-    up.push(Uploader::Job{sess.romId, sess.stateTag, name, std::move(st), true});
+    Uploader::Job job{sess.romId, sess.stateTag, name, std::move(st), true};
+    job.localPath = path;
+    job.shotName = shotName;
+    job.shot = std::move(png);
+    job.shotPath = shotPath;
+    up.push(std::move(job));
 }
 
 // The newest state RomM holds that THIS build can actually restore. A state
@@ -5375,6 +5509,9 @@ int main(int argc, char** argv) {
     // quitting does not discard a save someone has already made.
     Uploader uploader;
     uploader.start(&liveClient);
+    // Whatever an earlier run could not send goes first.
+    uploader.resendOwed();
+    float owedClock = 0.0f;   // seconds since the last try at what is owed
     StateLoad stateLoad;
     MenuNotice menuNotice;
 
@@ -9704,6 +9841,14 @@ int main(int argc, char** argv) {
         // The other half of the sentence Save started. Cabinet's own words,
         // because they are better than anything invented here: it either
         // reached the server or it is waiting for signal.
+        // WHAT IS OWED IS TRIED AGAIN EVERY FIVE MINUTES while any of it is:
+        // the server coming back says nothing, so asking is the only way to
+        // find out. A starting value; one line.
+        owedClock = uploader.owing() ? owedClock + dt : 0.0f;
+        if (owedClock >= 300.0f) {
+            owedClock = 0.0f;
+            uploader.resendOwed();
+        }
         if (const int outcome = uploader.stateOutcome.exchange(0); outcome != 0)
             menuNotice.say(outcome == 1 ? "Saved to RomM"
                                         : "Saved. Will upload when RomM is back",

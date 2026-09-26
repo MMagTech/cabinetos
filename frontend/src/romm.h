@@ -289,8 +289,12 @@ public:
     // is offered later, so it must identify the BUILD and not just the core.
     bool uploadSave(int romId, const std::string& emulator, const std::string& fileName,
                     const std::vector<uint8_t>& data, std::string* err) const;
+    // A state may carry its picture, as Cabinet's do (#99): a second part,
+    // `screenshotFile`, image/png, named like the state. Empty for none.
     bool uploadState(int romId, const std::string& emulator, const std::string& fileName,
-                     const std::vector<uint8_t>& data, std::string* err) const;
+                     const std::vector<uint8_t>& data, std::string* err,
+                     const std::string& shotName = "",
+                     const std::vector<uint8_t>& shot = {}) const;
 
     // For ImageCache::Loader. Returns empty on any failure, because a cover
     // that will not load is not an error the frame loop can do anything about.
@@ -317,7 +321,8 @@ private:
                        std::string* err);
     bool postMultipart(const std::string& path, const char* partName,
                        const std::string& fileName, const std::vector<uint8_t>& data,
-                       std::string* err) const;
+                       std::string* err, const std::string& shotName = "",
+                       const std::vector<uint8_t>& shot = {}) const;
     bool get(const std::string& path, std::string* body, std::string* err) const;
     bool postJson(const std::string& path, const std::string& json,
                   std::string* body, long* status, std::string* err) const;

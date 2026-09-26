@@ -1924,6 +1924,110 @@ uint64_t Core::frameDigest() const {
     return h;
 }
 
+bool Core::snapshot(std::vector<uint8_t>& rgba, unsigned& width, unsigned& height) const {
+    const unsigned w = gFrameW, h = gFrameH;
+    if (w == 0 || h == 0 || isPs2()) return false;
+    std::vector<uint8_t> px(static_cast<size_t>(w) * h * 4);
+
+    // Read a GL framebuffer's bottom-left w x h into px, top row first when
+    // `bottomUp` says row zero is the picture's bottom.
+    auto readFBO = [&](GLuint fbo, bool bottomUp) {
+        GLint bound = 0;
+        glGetIntegerv(GL_FRAMEBUFFER_BINDING, &bound);
+        glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+        glPixelStorei(GL_PACK_ALIGNMENT, 1);
+        glReadPixels(0, 0, static_cast<GLsizei>(w), static_cast<GLsizei>(h), GL_RGBA,
+                     GL_UNSIGNED_BYTE, px.data());
+        glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(bound));
+        if (!bottomUp) return;
+        const size_t row = static_cast<size_t>(w) * 4;
+        std::vector<uint8_t> tmp(row);
+        for (unsigned y = 0; y < h / 2; ++y) {
+            uint8_t* a = px.data() + y * row;
+            uint8_t* b = px.data() + (h - 1 - y) * row;
+            std::memcpy(tmp.data(), a, row);
+            std::memcpy(a, b, row);
+            std::memcpy(b, tmp.data(), row);
+        }
+    };
+
+    if (gHWVulkan) {
+        // The exported image is an ordinary GL texture (vkhost), top row
+        // first, the picture in its top-left corner. present() waits on its
+        // fence, so what is there is complete.
+        const GLuint tex = vk::texture();
+        if (!tex) return false;
+        GLuint fbo = 0;
+        glGenFramebuffers(1, &fbo);
+        GLint bound = 0;
+        glGetIntegerv(GL_FRAMEBUFFER_BINDING, &bound);
+        glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tex, 0);
+        const bool ok = glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
+        glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(bound));
+        if (ok) readFBO(fbo, /*bottomUp=*/false);
+        glDeleteFramebuffers(1, &fbo);
+        if (!ok) return false;
+    } else if (gHWFrame) {
+        // glReadPixels hands back row zero = the framebuffer's y = 0, which
+        // is the picture's bottom exactly when the core says so.
+        if (!gHWFBO) return false;
+        readFBO(gHWFBO, gHW.bottom_left_origin);
+    } else {
+        if (gFrame.size() < gFramePitch * h) return false;
+        for (unsigned y = 0; y < h; ++y) {
+            const uint8_t* src = gFrame.data() + static_cast<size_t>(y) * gFramePitch;
+            uint8_t* dst = px.data() + static_cast<size_t>(y) * w * 4;
+            for (unsigned x = 0; x < w; ++x, dst += 4) {
+                uint8_t r, g, b;
+                if (gPixelFormat == RETRO_PIXEL_FORMAT_XRGB8888) {
+                    uint32_t p;
+                    std::memcpy(&p, src + x * 4, 4);
+                    r = (p >> 16) & 0xFF; g = (p >> 8) & 0xFF; b = p & 0xFF;
+                } else {
+                    uint16_t p;
+                    std::memcpy(&p, src + x * 2, 2);
+                    if (gPixelFormat == RETRO_PIXEL_FORMAT_RGB565) {
+                        r = ((p >> 11) & 0x1F) << 3; g = ((p >> 5) & 0x3F) << 2; b = (p & 0x1F) << 3;
+                    } else {
+                        r = ((p >> 10) & 0x1F) << 3; g = ((p >> 5) & 0x1F) << 3; b = (p & 0x1F) << 3;
+                    }
+                }
+                dst[0] = r; dst[1] = g; dst[2] = b; dst[3] = 0xFF;
+            }
+        }
+    }
+    // Opaque whatever the core left in alpha: a PNG with holes in it shows
+    // the page behind.
+    for (size_t i = 3; i < px.size(); i += 4) px[i] = 0xFF;
+
+    // THE QUARTER TURN, as the player's vertex shader turns it (ui.cpp, uRot:
+    // the destination's corner reads the source at (1 - y, x) for one step
+    // anticlockwise), so a vertical arcade game's picture stands upright.
+    const unsigned r = gRotation & 3u;
+    if (r == 0) {
+        rgba = std::move(px);
+        width = w;
+        height = h;
+        return true;
+    }
+    const unsigned ow = (r & 1u) ? h : w, oh = (r & 1u) ? w : h;
+    rgba.assign(static_cast<size_t>(ow) * oh * 4, 0);
+    for (unsigned dy = 0; dy < oh; ++dy) {
+        for (unsigned dx = 0; dx < ow; ++dx) {
+            unsigned sx, sy;
+            if (r == 1) { sx = w - 1 - dy; sy = dx; }
+            else if (r == 2) { sx = w - 1 - dx; sy = h - 1 - dy; }
+            else { sx = dy; sy = h - 1 - dx; }
+            std::memcpy(rgba.data() + (static_cast<size_t>(dy) * ow + dx) * 4,
+                        px.data() + (static_cast<size_t>(sy) * w + sx) * 4, 4);
+        }
+    }
+    width = ow;
+    height = oh;
+    return true;
+}
+
 uint64_t Core::framesRun() const { return gFramesRun; }
 uint64_t Core::audioFramesTotal() const { return gAudioFrames; }
 

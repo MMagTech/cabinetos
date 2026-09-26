@@ -399,8 +399,29 @@ std::vector<int> allKeptRoms();
 // boot, and its bytes still count against the save floor.
 //
 // Per user, because the thing it is tracking is a save.
-void markPending(const storage::User& u, int romId, const std::string& fileName,
-                 int64_t bytes);
+//
+// A MARKER SAYS WHAT TO SEND, NOT ONLY THAT SOMETHING IS OWED (2026-09-26).
+// It used to hold the byte count and nothing else, so nothing could ever send
+// it again: a state saved while the server was away stayed on this console
+// for good, and a save went only if the game changed it next time. Now it
+// names the kind, the emulator tag, the name it travels under and the file on
+// disk (and a state's picture), and owed() reads them back so the uploader
+// can try again. The byte count stays on the first line, where pendingBytes()
+// reads it. A marker from before this has only that line, and stays owed.
+struct Owed {
+    int romId = 0;
+    bool isState = false;
+    std::string emulator;
+    std::string fileName;     // the name it travels under
+    std::string localPath;    // the bytes to send
+    std::string shotName;     // a state's picture: its name, and where it is
+    std::string shotPath;
+};
+void markPending(const storage::User& u, const Owed& o, int64_t bytes);
+
+// Everything this person's console still owes the server that can be sent
+// again, oldest first.
+std::vector<Owed> owed(const storage::User& u);
 void clearPending(const storage::User& u, int romId, const std::string& fileName);
 
 // Whether this console still owes the server this exact file. Read off the
