@@ -14,6 +14,10 @@
 //     and how much. A 40 GB game cannot go by a stray A.
 //   - A AND B ONLY. The whole console runs on the D-pad, A and B, and a
 //     keyboard works everywhere; a Select button would be the first break.
+//   - ONLY WHAT IS HERE. A game on a drive that is not connected is not
+//     listed: it takes no room on this console, and it comes back into the
+//     list with its drive (MMagTech, 2026-09-26). A system with games on
+//     both shows the ones that are here.
 //   - NO NAMES. Whose download it is is not shown and does not matter here:
 //     removing takes it for everyone. A parent who minds sets the PIN, which
 //     opening this asks for.
@@ -38,9 +42,8 @@ struct DownloadItem {
     int romId = 0;
     std::string title;
     std::string system;        // the platform, as the Library names it
-    int64_t bytes = 0;         // zero when its drive is not connected
+    int64_t bytes = 0;
     std::string drive;         // "External", shown when there is more than one
-    bool missing = false;      // its drive is not connected
 };
 
 // "1.9 GB", "96 MB", "80 KB": the unit that suits the number, as the game's
@@ -80,7 +83,6 @@ private:
         std::string name;
         std::vector<int> items;   // indices into items_, biggest first
         int64_t bytes = 0;
-        int missing = 0;          // games whose drive is not connected
     };
     void group();
     int actionCount() const;           // rows pinned above the list

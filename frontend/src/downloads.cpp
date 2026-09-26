@@ -84,7 +84,6 @@ void DownloadsPanel::group() {
         s.name = items_[i].system;
         s.items.push_back(i);
         s.bytes += items_[i].bytes;
-        if (items_[i].missing) ++s.missing;
     }
     systems_.clear();
     for (auto& [name, s] : by) {
@@ -390,16 +389,12 @@ void DownloadsPanel::draw(Ctx& c) {
         const int row = actions + li;
         if (system_ < 0) {
             const System& s = systems_[li];
-            const int count = static_cast<int>(s.items.size());
-            // A system that is only on a drive that is not here says so, or
-            // it reads as a game of no size at the foot of the list.
-            std::string value = countText(count, s.bytes);
-            if (s.missing == count) value += " \xC2\xB7 Drive not connected";
-            drawRow(row, ry, s.name, value, true, -1);
+            drawRow(row, ry, s.name, countText(static_cast<int>(s.items.size()), s.bytes), true,
+                    -1);
         } else {
             const DownloadItem& it = items_[systems_[system_].items[li]];
-            std::string value = it.missing ? "Drive not connected" : sizeText(it.bytes);
-            if (!it.missing && !it.drive.empty()) value += " \xC2\xB7 " + it.drive;
+            std::string value = sizeText(it.bytes);
+            if (!it.drive.empty()) value += " \xC2\xB7 " + it.drive;
             drawRow(row, ry, it.title, value, true, ticked_.count(it.romId) ? 1 : 0);
         }
         ry += kRowH + kRowGap;

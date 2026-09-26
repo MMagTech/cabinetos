@@ -352,10 +352,7 @@ std::vector<int> keepers(int romId);
 // someone might delete a downloaded game they should turn on PIN protection".
 // The game's own screen still releases only your own (unkeep).
 //
-// A game whose drive is not connected loses its records and nothing else:
-// its bytes are on a drive this console cannot see. If that drive comes back
-// the game is still on it, shows in Downloads again (downloads() below reads
-// the drives too), and can be removed then.
+// A game in `roms/` that nobody keeps (see downloads()) is simply deleted.
 bool unkeepForEveryone(int romId, bool keepTheBytes = false, Release* out = nullptr);
 
 // EVERY DOWNLOADED GAME ON THIS CONSOLE, for Settings' Downloads: one entry per
@@ -363,11 +360,13 @@ bool unkeepForEveryone(int romId, bool keepTheBytes = false, Release* out = null
 //
 // Two sources, because each misses something the other has:
 //   - the keep records, which carry the title and platform, and are the only
-//     trace of a game whose drive is not connected (`present` false);
-//   - `roms/` on every connected drive, which holds games nobody keeps any
-//     more: removed here while their drive was away, then plugged back in.
-//     Without this they would sit on the drive for ever, never cleared (only
-//     `cache/` is) and listed nowhere.
+//     trace of a game whose drive is not connected (`present` false;
+//     Settings leaves those out);
+//   - `roms/` on every connected drive, which can hold a game nobody keeps
+//     any more: its record released from the game's own screen while its
+//     drive was away, then the drive plugged back in. Without this it would
+//     sit on the drive for ever, never cleared (only `cache/` is) and listed
+//     nowhere.
 struct Download {
     int romId = 0;
     std::string title;

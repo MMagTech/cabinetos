@@ -6472,6 +6472,10 @@ int main(int argc, char** argv) {
         std::vector<screens::DownloadItem> out;
         for (const cache::Download& d : cache::downloads()) {
             if (downloading && d.romId == launchJob.romId) continue;
+            // ONLY WHAT IS ON A DRIVE THAT IS HERE (MMagTech, 2026-09-26). A
+            // game on an unplugged drive takes no room on this console and
+            // returns to the list with its drive.
+            if (!d.present) continue;
             screens::DownloadItem it;
             it.romId = d.romId;
             it.title = d.title;
@@ -6483,11 +6487,10 @@ int main(int argc, char** argv) {
             }
             if (auto pn = lib.platformNames.find(platformId); pn != lib.platformNames.end())
                 it.system = pn->second;
-            it.bytes = d.present ? d.bytes : 0;
-            it.missing = !d.present;
+            it.bytes = d.bytes;
             // THE DRIVE ONLY WHEN THERE IS A CHOICE OF DRIVES: with one, the
             // same word on every row says nothing.
-            if (d.present && locs.size() > 1)
+            if (locs.size() > 1)
                 if (auto n = names.find(d.location); n != names.end()) it.drive = n->second;
             out.push_back(std::move(it));
         }
