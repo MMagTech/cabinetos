@@ -1673,6 +1673,11 @@ and Home is the button the list most often gets wrong.
   the two are on opposite sides, and it is off unless turned on.
 - **The Lite 2's entry is still corrected** in our copy of the list and sent
   upstream, so its heart is Home for everyone, but nothing depends on it.
+- **A button games use can be chosen** (minus/Select, say). While shortcuts
+  are on it no longer reaches the game; only the person who chose it is
+  affected, and nothing on screen warns about it (MMagTech, agreed).
+- **Which pad the row sets** (proposed: the pad in hand, its name on the row,
+  as the Controllers rows do): MMagTech wants to see it on the TV first.
 - **Rejected:** a fixed Home (above); a Home / Select switch (covers pads with
   no Home but not a Home the app cannot see); a configurable pair.
 
