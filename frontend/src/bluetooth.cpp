@@ -180,7 +180,8 @@ bool known(std::vector<Device>* out, std::string* err) {
     return true;
 }
 
-bool scan(int seconds, std::vector<Device>* out, std::string* err) {
+bool scan(int seconds, std::vector<Device>* out, std::string* err,
+          const std::atomic<bool>* cancel) {
     if (!out) return false;
     out->clear();
     if (!available()) {
@@ -200,7 +201,8 @@ bool scan(int seconds, std::vector<Device>* out, std::string* err) {
     // The proc deadline is longer, so a tool that overruns its own timeout is
     // still given the chance to print why.
     proc::run({"bluetoothctl", "--timeout", std::to_string(seconds), "scan", "on"},
-              seconds + 15);
+              seconds + 15, cancel);
+    if (cancel && cancel->load()) return false;
     // The scan's exit status is deliberately ignored. It reports a failure when
     // discovery was already running — which is not a failure, it is two scans
     // overlapping — and the question that matters is what the adapter knows
@@ -208,7 +210,8 @@ bool scan(int seconds, std::vector<Device>* out, std::string* err) {
     return known(out, err);
 }
 
-bool pair(const std::string& address, std::string* err, int timeoutSeconds) {
+bool pair(const std::string& address, std::string* err, int timeoutSeconds,
+          const std::atomic<bool>* cancel) {
     if (address.empty()) {
         if (err) *err = "no device";
         return false;
@@ -218,7 +221,7 @@ bool pair(const std::string& address, std::string* err, int timeoutSeconds) {
         return false;
     }
 
-    const proc::Result p = proc::run({"bluetoothctl", "pair", address}, timeoutSeconds);
+    const proc::Result p = proc::run({"bluetoothctl", "pair", address}, timeoutSeconds, cancel);
     // ALREADY PAIRED IS A SUCCESS, NOT A FAILURE. A pad that was set up before
     // and has been picked out of the list again must not be reported as broken,
     // and that is the common case on a machine being set up a second time.
@@ -239,7 +242,7 @@ bool pair(const std::string& address, std::string* err, int timeoutSeconds) {
     // refuses the incoming connection every time the controller wakes up, so
     // the pad pairs perfectly once and then never reconnects — which reads as
     // "it keeps disconnecting" and has nothing to do with pairing.
-    if (!proc::run({"bluetoothctl", "trust", address}, 15).ok()) {
+    if (!proc::run({"bluetoothctl", "trust", address}, 15, cancel).ok()) {
         if (err)
             *err = "paired, but this console could not mark the controller "
                    "trusted, so it may not reconnect on its own";
@@ -248,7 +251,7 @@ bool pair(const std::string& address, std::string* err, int timeoutSeconds) {
 
     // Bringing it up now is what lets the screen say the only thing that
     // actually proves it worked: press a button and watch it respond.
-    const proc::Result c = proc::run({"bluetoothctl", "connect", address}, timeoutSeconds);
+    const proc::Result c = proc::run({"bluetoothctl", "connect", address}, timeoutSeconds, cancel);
     if (!c.ok()) {
         if (err)
             *err = "paired and trusted, but it is not connected yet. Press a "

@@ -121,18 +121,21 @@ Decided with MMagTech 2026-09-26, from the things people will actually do.
   MMagTech: nothing said the number could be changed.) Pressing a button on
   a pad lights its row: that is how two identical pads are told apart. Pads
   with player lights show their number on the pad.
-- **A pad is named after whoever made it.** A pad in Switch mode says it is
-  a "Nintendo Switch Pro Controller"; when a pad claims Nintendo, Xbox or
-  PlayStation and its Bluetooth address is registered to another company
-  (the list in the image, hwdata), it is "<maker> controller": MMagTech's
-  8BitDo reads "8BitDo controller". Any brand, not only 8BitDo.
+- **A pad is named as it names itself.** An 8BitDo in Switch mode reads
+  "Nintendo Switch Pro Controller", and that is right: it is in Switch mode.
+  (Naming pads after their maker, from the Bluetooth address, was built and
+  taken back out the same day; MMagTech preferred what the pad says.)
 - **Pressing a row: "Make player N"** for each other pad (the two swap; a
   preferred pad keeps its number while both stay on) **and Forget** for a
   Bluetooth pad, with "Forget <name>?" and Cancel focused. No PIN. A lone
   wired pad has nothing to press, so its row only shows.
-- **Add a controller** (#65): the same pairing screen as first run; pad 1
-  picks the new pad and the new pad confirms with a button. A wired pad
-  needs none of it: plugged in, it is the next player. **To build.**
+- **Add a controller** (#65): first run's pairing screen on its own, no PIN.
+  It scans, pad 1 picks the new pad from the list, and after "Press a button
+  on it" the new pad's first press ends it, back in Settings with "<name> is
+  player 2". Back leaves at any point, stopping a scan or pairing in flight
+  rather than waiting it out. A wired pad needs none of it: plugged in, it
+  is the next player (plugged in while this screen is open, its first press
+  ends it the same way).
 - **Button mapping** (#66): opens by itself when a pad the console does not
   recognise connects, driven by that pad, asking by position ("the bottom
   button"); saved per pad model, with a Reset. A testing switch makes a

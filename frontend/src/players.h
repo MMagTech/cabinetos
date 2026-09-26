@@ -81,7 +81,7 @@ int count();
 struct Pad {
     int player = -1;
     SDL_JoystickID id = 0;
-    std::string name;      // as a person knows it (see nameOf in players.cpp)
+    std::string name;      // as the pad gives it
     bool bluetooth = false;
     std::string address;   // "E4:17:D8:71:F1:ED", Bluetooth only
 };

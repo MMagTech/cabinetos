@@ -18,6 +18,7 @@
 
 #pragma once
 
+#include <atomic>
 #include <string>
 #include <vector>
 
@@ -45,6 +46,11 @@ struct Result {
 // `bluetoothctl` both prompt when they want something, and a child that
 // inherits a terminal can sit on that prompt until the deadline.
 Result run(const std::vector<std::string>& args, int timeoutSeconds);
+// The same, stopped early (as if timed out) once `*cancel` is set. For a long
+// tool somebody can walk away from: a ten-second Bluetooth scan behind a
+// screen that has been closed must not hold the console for the rest of it.
+Result run(const std::vector<std::string>& args, int timeoutSeconds,
+           const std::atomic<bool>* cancel);
 
 // Whitespace off both ends. Every one of these tools newline-terminates
 // everything, and a trailing newline in an error message reads badly on a

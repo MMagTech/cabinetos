@@ -991,6 +991,7 @@ constexpr GalleryNotice kNoticeGallery[] = {
     {"Save states aren't available for this system", Tone::Info},
     {"Couldn't save the state", Tone::Problem},
     {"Couldn't forget Pro Controller", Tone::Problem},
+    {"8BitDo Lite 2 is player 2", Tone::Done},
     {"Loading\xE2\x80\xA6", Tone::Busy},
     {"State loaded", Tone::Done},
     {"No saved state for this game", Tone::Info},
@@ -6208,7 +6209,8 @@ int main(int argc, char** argv) {
     // television, and focus never lands on them.
     enum SettingId { SetAddAccount = 1, SetInterfaceSounds, SetPinSet, SetPinChange,
                      SetPinOff, SetRemoveAccount, SetScreenOff, SetWifi, SetServer,
-                     SetUpdate, SetUpdateCheck, SetCredits, SetFiles, SetDownloads };
+                     SetUpdate, SetUpdateCheck, SetCredits, SetFiles, SetDownloads,
+                     SetAddController };
     // One Eject row per USB drive: this plus the drive's index in
     // storage::locations() when the rows were built.
     constexpr int kSetEject = 100;
@@ -6720,8 +6722,7 @@ int main(int argc, char** argv) {
                 rows.push_back({canAct ? K::Action : K::Info, kSetPad + p.player, p.name, "",
                                 "Player " + std::to_string(p.player + 1)});
             }
-            rows.push_back({K::Unbuilt, 0, "Add a controller",
-                            "The same pairing screen as first run", ""});
+            rows.push_back({K::Action, SetAddController, "Add a controller", "", ""});
             rows.push_back({K::Unbuilt, 0, "Button mapping",
                             "For controllers the console does not recognise", ""});
             cats.push_back({"Controllers", std::move(rows)});
@@ -7327,6 +7328,32 @@ int main(int argc, char** argv) {
                     buildSettings();
                     });
                     sound::play(sound::Cue::Activate);
+                } else if (res.value == SetAddController) {
+                    // FIRST RUN'S PAIRING SCREEN, on its own (issue #65). It
+                    // runs its own loop until the new pad presses a button or
+                    // Back is pressed; players.h seats the pad as it connects.
+                    // No PIN: a controller is not one of the things it guards.
+                    sound::play(sound::Cue::Activate);
+                    std::vector<SDL_JoystickID> before;
+                    for (const players::Pad& p : players::connected()) before.push_back(p.id);
+                    setup::Options opts;
+                    opts.addController = true;
+                    const setup::Outcome out = setup::run(waitDeps, opts);
+                    idleWatch.input(clockSeconds());
+                    if (out == setup::Outcome::Quit) {
+                        // The system asked the app to stop while it was open.
+                        running = false;
+                        askedToStop = true;
+                        std::fprintf(stderr, "[shutdown] asked to stop from Add a controller\n");
+                        break;
+                    }
+                    for (const players::Pad& p : players::connected())
+                        if (std::find(before.begin(), before.end(), p.id) == before.end()) {
+                            menuNotice.say(p.name + " is player " + std::to_string(p.player + 1),
+                                           Tone::Done);
+                            break;
+                        }
+                    buildSettings();
                 } else if (res.value == SetAddAccount) {
                     // The same route as the chip's Add user, PIN included.
                     // Back from the pairing screen returns here, because it

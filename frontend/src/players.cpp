@@ -4,7 +4,6 @@
 #include <cctype>
 #include <cstdio>
 #include <cstring>
-#include <fstream>
 #include <map>
 
 namespace players {
@@ -120,63 +119,13 @@ std::string addressOf(SDL_Gamepad* gp) {
     return out;
 }
 
-// WHO MADE A BLUETOOTH DEVICE, from the first half of its address, which is
-// registered to a company. The list ships in the image (hwdata). Remembered,
-// because it is several megabytes and read only when a pad connects.
-std::string makerOf(const std::string& address) {
-    static std::map<std::string, std::string> known;
-    if (address.size() < 8) return {};
-    std::string prefix = address.substr(0, 8);   // "E4:17:D8"
-    for (char& c : prefix) if (c == ':') c = '-';
-    if (auto it = known.find(prefix); it != known.end()) return it->second;
-    std::string maker;
-    std::ifstream f("/usr/share/hwdata/oui.txt");
-    for (std::string line; std::getline(f, line);) {
-        if (line.compare(0, 8, prefix) != 0 || line.find("(hex)") == std::string::npos) continue;
-        const size_t tab = line.find_last_of('\t');
-        maker = tab == std::string::npos ? "" : line.substr(tab + 1);
-        break;
-    }
-    known[prefix] = maker;
-    return maker;
-}
-
-// THE NAME A PERSON KNOWS THEIR PAD BY. A pad in its Switch mode tells the
-// machine it IS a Switch Pro Controller, name and all: MMagTech's 8BitDo
-// reads "Nintendo Switch Pro Controller". So when a pad claims one of the
-// big three and its address belongs to somebody else, it is named after
-// whoever made it. A real Nintendo, Xbox or PlayStation pad keeps its name.
+// The name the pad gives. A pad in its Switch mode says it is a Switch Pro
+// Controller, and that is what is shown: an attempt to name such a pad after
+// its maker (from its Bluetooth address) was built and taken back out the
+// same day. MMagTech, 2026-09-26: in Switch mode, that is what it should show.
 std::string nameOf(SDL_Gamepad* gp) {
     const char* n = SDL_GetGamepadName(gp);
-    std::string name = n ? n : "";
-    auto has = [](const std::string& hay, const char* needle) {
-        std::string h = hay;
-        for (char& c : h) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-        return h.find(needle) != std::string::npos;
-    };
-    const char* brand = nullptr;   // the maker the NAME claims
-    if (has(name, "nintendo") || has(name, "pro controller") || has(name, "joy-con")) brand = "nintendo";
-    else if (has(name, "xbox")) brand = "microsoft";
-    else if (has(name, "playstation") || has(name, "dualsense") || has(name, "dualshock") ||
-             has(name, "ps4") || has(name, "ps5")) brand = "sony";
-    if (!brand) return name;
-    const std::string maker = makerOf(addressOf(gp));
-    if (maker.empty() || has(maker, brand)) return name;
-    // "8BITDO TECHNOLOGY HK LIMITED" -> "8BitDo". The registered name is a
-    // company's legal one; its first word is the brand, except for the
-    // companies registered under their city, where nothing better is known.
-    std::string first = maker.substr(0, maker.find(' '));
-    static const std::map<std::string, std::string> kCased = {
-        {"8bitdo", "8BitDo"}, {"gulikit", "GuliKit"}, {"powera", "PowerA"},
-    };
-    std::string lower = first;
-    for (char& c : lower) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    for (const char* city : {"shenzhen", "guangzhou", "dongguan", "zhuhai", "xiamen",
-                             "beijing", "shanghai", "hong", "ningbo", "hangzhou"})
-        if (lower == city) return name;
-    if (auto it = kCased.find(lower); it != kCased.end()) first = it->second;
-    else if (!first.empty()) first = static_cast<char>(std::toupper(static_cast<unsigned char>(lower[0]))) + lower.substr(1);
-    return first + " controller";
+    return n ? n : "";
 }
 
 // The player lights on pads that have them (a Switch Pro Controller's four

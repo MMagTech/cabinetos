@@ -78,6 +78,13 @@ struct Options {
     // the Ready screen ("You can unplug the keyboard") are not shown.
     // MMagTech, 2026-09-25.
     bool signedOut = false;
+
+    // SETTINGS' ADD A CONTROLLER (issue #65): the controller step alone, on a
+    // console already set up. No step dots, no Continue, nothing written.
+    // Back leaves (Cancelled); a button pressed on a pad that was not connected
+    // when the screen opened is the new pad saying it works, and ends it
+    // (Completed). A wired pad plugged in while it is open counts the same.
+    bool addController = false;
 };
 
 // One frame saying the console is busy, drawn in the same language as the setup
@@ -112,7 +119,9 @@ void drawStartup(ui::Renderer& r, ui::TextRenderer& t, const char* detail, float
 
 enum class Outcome {
     Completed,   // setup finished; the console is configured
-    Quit,        // the person quit, or a capture run ended
+    Quit,        // the person quit, or a capture run ended, or the system
+                 // asked the app to stop
+    Cancelled,   // Back, from Add a controller: back to Settings
 };
 
 // Runs first run to completion. On success the server address and the token are
