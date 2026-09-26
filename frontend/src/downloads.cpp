@@ -20,10 +20,11 @@ constexpr float kRowGap = 10.0f;
 constexpr float kRowRadius = 16.0f;
 constexpr float kFocusScale = 1.03f;
 constexpr float kAppear = 0.280f;
-// Rows shown at once, the pinned ones included: eight fit a television with
-// the title above them. More than that and the list scrolls under the pinned
-// rows, which stay put so Remove and its count are always in view.
-constexpr int kSlots = 8;
+// Rows shown at once, the pinned ones included. More than that and the list
+// scrolls under the pinned rows, which stay put so Remove and its count are
+// always in view. Seven, not eight: eight reached up over the top bar
+// (MMagTech on the TV, 2026-09-26).
+constexpr int kSlots = 7;
 // Between the pinned rows and the list, so the two read as different things.
 constexpr float kSplitGap = 28.0f;
 constexpr float kTick = 36.0f;          // the tick's circle
@@ -83,6 +84,7 @@ void DownloadsPanel::group() {
         s.name = items_[i].system;
         s.items.push_back(i);
         s.bytes += items_[i].bytes;
+        if (items_[i].missing) ++s.missing;
     }
     systems_.clear();
     for (auto& [name, s] : by) {
@@ -126,7 +128,10 @@ bool DownloadsPanel::replace(std::vector<DownloadItem> items) {
     for (int i = 0; i < static_cast<int>(systems_.size()); ++i)
         if (!was.empty() && systems_[i].name == was) system_ = i;
     if (system_ >= 0) {
-        row_ = std::clamp(wasRow, actionCount(), rowCount() - 1);
+        // Back on Select all, where the system opened: Remove, where focus
+        // was, is greyed now that nothing is ticked.
+        row_ = 0;
+        top_ = 0;
     } else {
         // The system emptied: back to the systems, on the one after it.
         const int at = wasSystemRow >= 0 ? wasSystemRow : wasRow - actionCount();
@@ -136,11 +141,14 @@ bool DownloadsPanel::replace(std::vector<DownloadItem> items) {
     return true;
 }
 
+// A SYSTEM OPENS ON "SELECT ALL" (MMagTech on the TV, 2026-09-26): it only
+// ticks, so it is harmless, and clearing a whole system is then A, down, A.
+// The systems list still opens on the first system rather than on Remove all.
 void DownloadsPanel::openSystem(int index) {
     if (index < 0 || index >= static_cast<int>(systems_.size())) return;
     system_ = index;
     ticked_.clear();
-    row_ = actionCount();
+    row_ = 0;
     top_ = 0;
 }
 
@@ -382,8 +390,12 @@ void DownloadsPanel::draw(Ctx& c) {
         const int row = actions + li;
         if (system_ < 0) {
             const System& s = systems_[li];
-            drawRow(row, ry, s.name, countText(static_cast<int>(s.items.size()), s.bytes), true,
-                    -1);
+            const int count = static_cast<int>(s.items.size());
+            // A system that is only on a drive that is not here says so, or
+            // it reads as a game of no size at the foot of the list.
+            std::string value = countText(count, s.bytes);
+            if (s.missing == count) value += " \xC2\xB7 Drive not connected";
+            drawRow(row, ry, s.name, value, true, -1);
         } else {
             const DownloadItem& it = items_[systems_[system_].items[li]];
             std::string value = it.missing ? "Drive not connected" : sizeText(it.bytes);
@@ -401,11 +413,11 @@ void DownloadsPanel::draw(Ctx& c) {
         // In the panel's margin, clear of a focused row, which grows.
         const float tx = px + kPanelW - kPanelPad * 0.35f - kScrollBarW * 0.5f;
         c.r.draw(ui::Rect{tx, trackTop, kScrollBarW, trackH, kScrollBarW * 0.5f,
-                          ui::Color::white(0.10f)});
+                          ui::Color::white(0.14f)});
         const float thumbH = std::max(40.0f, trackH * visible / n);
         const float thumbY = trackTop + (trackH - thumbH) * top_ / std::max(1, n - visible);
         c.r.draw(ui::Rect{tx, thumbY, kScrollBarW, thumbH, kScrollBarW * 0.5f,
-                          ui::Color::white(0.55f)});
+                          ui::Color::white(0.75f)});
     }
     c.r.setContentAlpha(1.0f);
 }

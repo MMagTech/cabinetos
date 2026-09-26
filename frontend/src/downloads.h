@@ -80,6 +80,7 @@ private:
         std::string name;
         std::vector<int> items;   // indices into items_, biggest first
         int64_t bytes = 0;
+        int missing = 0;          // games whose drive is not connected
     };
     void group();
     int actionCount() const;           // rows pinned above the list
