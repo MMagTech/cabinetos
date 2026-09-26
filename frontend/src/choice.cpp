@@ -28,6 +28,8 @@ void ChoiceScreen::open(std::string title, std::string detail,
     open_ = true;
     staysOpen_ = false;
     fixedW_ = 0.0f;
+    fullHeight_ = false;
+    placeholder_.clear();
     title_ = std::move(title);
     detail_ = std::move(detail);
     options_ = std::move(options);
@@ -133,7 +135,7 @@ void ChoiceScreen::draw(Ctx& c) {
     const float lineH = c.text.lineHeight(TextStyle::Callout, sc);
     const float detailH = lines.empty() ? 0.0f : 8.0f + lineH * lines.size();
     const int n = static_cast<int>(options_.size());
-    const int shown = std::min(n, kMaxVisible);
+    const int shown = fullHeight_ ? kMaxVisible : std::min(n, kMaxVisible);
     const float listH = shown * kButtonH + std::max(0, shown - 1) * kButtonGap;
     const float panelH = kPanelPad + titleH + detailH + 36.0f + listH + kPanelPad;
     const float px = (W - panelW) * 0.5f, py = (H - panelH) * 0.5f;
@@ -160,6 +162,9 @@ void ChoiceScreen::draw(Ctx& c) {
     y += detailH;
     y += 36.0f;
 
+    if (n == 0 && !placeholder_.empty())
+        centred(placeholder_, y + listH * 0.5f + c.text.ascent(TextStyle::Callout, sc) * 0.4f,
+                TextStyle::Callout, 0.45f);
     const float f = focus_.value();
     const float bx = (W - rowW) * 0.5f;
     for (int i = top_; i < std::min(n, top_ + kMaxVisible); ++i) {

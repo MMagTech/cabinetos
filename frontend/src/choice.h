@@ -43,6 +43,14 @@ public:
     // pairing failed, and MMagTech did not like it (2026-09-26). open()
     // clears it.
     void setFixedWidth(float w) { fixedW_ = w; }
+    // ROOM FOR THE WHOLE LIST FROM THE START: the list area is always as tall
+    // as the most rows it shows, and `placeholder` is said in it while there
+    // are none. Add a controller opened small and grew when devices arrived,
+    // which read as a second window (MMagTech, 2026-09-26). open() clears it.
+    void setFullHeight(std::string placeholder) {
+        fullHeight_ = true;
+        placeholder_ = std::move(placeholder);
+    }
     // The detail line alone, keeping the answers and focus.
     void setDetail(std::string detail) { detail_ = std::move(detail); }
     void close() { open_ = false; }
@@ -60,6 +68,8 @@ private:
     bool open_ = false;
     bool staysOpen_ = false;
     float fixedW_ = 0.0f;
+    bool fullHeight_ = false;
+    std::string placeholder_;
     std::string title_, detail_;
     std::vector<std::string> options_;
     std::vector<std::string> values_;
