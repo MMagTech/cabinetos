@@ -1216,8 +1216,8 @@ void Flow::pumpJobs() {
         // caveat is the sentence that tells somebody what to do next.
         notice_ = err.empty() ? "Controller ready." : err;
         noticeIsError_ = !paired;
+        btPaired_ = paired;
         if (paired) {
-            btPaired_ = true;
             observe();
             // THIS USED TO CALL bt::known() RIGHT HERE, ON THE FRAME THREAD.
             // That is one subprocess to list the devices and ANOTHER PER DEVICE

@@ -1,5 +1,7 @@
 #include "bluetooth.h"
 
+#include <cstdio>
+
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
@@ -221,20 +223,45 @@ bool pair(const std::string& address, std::string* err, int timeoutSeconds,
         return false;
     }
 
+    // PAIRED IS NOT ENOUGH: THE KEYS HAVE TO BE KEPT ("bonded"). bluez takes
+    // input only from a bonded pad ("Rejected connection from !bonded
+    // device"), and an adapter that is not PAIRABLE pairs without bonding, so
+    // the pad pairs, connects, and is ignored. The A9's adapter is not
+    // pairable; a Switch pad of MMagTech's kids paired exactly like that,
+    // 2026-09-26, while his 8BitDo, paired when the adapter happened to be
+    // pairable, worked. So: pairable for the pairing only, and a pad left
+    // paired without its keys is forgotten, found again, and paired properly.
+    auto info = [&]() { return proc::run({"bluetoothctl", "info", address}, 10).out; };
+    {
+        const std::string i = info();
+        if (i.find("Paired: yes") != std::string::npos &&
+            i.find("Bonded: yes") == std::string::npos) {
+            std::fprintf(stderr, "[bluetooth] %s paired without keys; pairing it again\n",
+                         address.c_str());
+            proc::run({"bluetoothctl", "remove", address}, 15);
+            // Forgetting drops it from what bluez knows, and a pad has to be
+            // known to be paired with. It is still in pairing mode.
+            proc::run({"bluetoothctl", "--timeout", "6", "scan", "on"}, 20, cancel);
+            if (cancel && cancel->load()) return false;
+        }
+    }
+    proc::run({"bluetoothctl", "pairable", "on"}, 10);
     const proc::Result p = proc::run({"bluetoothctl", "pair", address}, timeoutSeconds, cancel);
+    proc::run({"bluetoothctl", "pairable", "off"}, 10);
     // ALREADY PAIRED IS A SUCCESS, NOT A FAILURE. A pad that was set up before
     // and has been picked out of the list again must not be reported as broken,
     // and that is the common case on a machine being set up a second time.
     const bool alreadyPaired = p.out.find("already") != std::string::npos ||
                                p.err.find("already") != std::string::npos;
     if (!p.ok() && !alreadyPaired) {
-        if (err) {
-            const std::string why = trimmed(p.err).empty() ? trimmed(p.out) : trimmed(p.err);
-            *err = p.timedOut ? "the controller did not answer. Put it back "
-                                "into pairing mode and try again"
-                   : why.empty() ? "could not pair with that controller"
-                                 : why;
-        }
+        // bluez's own words go to the log, not the television: they read
+        // "Attempting to pair with E4:...Failed to pair:
+        // org.bluez.Error.ConnectionAttemptFailed", which says nothing a
+        // person can act on.
+        const std::string why = trimmed(p.err).empty() ? trimmed(p.out) : trimmed(p.err);
+        std::fprintf(stderr, "[bluetooth] pairing %s failed: %s\n", address.c_str(),
+                     p.timedOut ? "no answer" : why.c_str());
+        if (err) *err = "Couldn't pair. Put it back into pairing mode and try again";
         return false;
     }
 
