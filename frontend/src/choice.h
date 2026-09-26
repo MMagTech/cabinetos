@@ -52,6 +52,8 @@ public:
         grows_ = true;
         placeholder_ = std::move(placeholder);
     }
+    // The title alone, keeping everything else ("Paired successfully").
+    void setTitle(std::string title) { title_ = std::move(title); }
     // The detail line alone, keeping the answers and focus.
     void setDetail(std::string detail) { detail_ = std::move(detail); }
     void close() { open_ = false; }

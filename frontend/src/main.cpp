@@ -6552,6 +6552,7 @@ int main(int argc, char** argv) {
             }
             const bt::Device d = padShown[static_cast<size_t>(i)];
             padPairingName = d.name.empty() ? d.address : d.name;
+            choiceScreen.setTitle("Add a controller");
             // The row says "Pairing…"; the line keeps what it said, so
             // nothing is said twice and the window does not change size.
             {
@@ -10281,6 +10282,9 @@ int main(int argc, char** argv) {
                         std::fprintf(stderr, "[players] pairing %s: %s\n",
                                      padPairingName.c_str(),
                                      ok ? "paired" : err.c_str());
+                        // Said in the title, as MMagTech asked (2026-09-26):
+                        // "Pairing…" on the row gave way to a line alone.
+                        choiceScreen.setTitle(ok ? "Paired successfully" : "Add a controller");
                         padDetail = ok ? "Press a button on it" : "Couldn't pair. Try again";
                         padPairingName.clear();
                     }
