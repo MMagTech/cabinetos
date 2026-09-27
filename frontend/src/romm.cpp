@@ -767,6 +767,12 @@ bool Client::uploadState(int romId, const std::string& emulator, const std::stri
     return postMultipart(path, "stateFile", fileName, data, err, shotName, shot);
 }
 
+bool Client::uploadScreenshot(int romId, const std::string& fileName,
+                              const std::vector<uint8_t>& png, std::string* err) const {
+    return postMultipart("/api/screenshots?rom_id=" + std::to_string(romId), "screenshotFile",
+                         fileName, png, err);
+}
+
 bool Client::deleteStates(const std::vector<int>& ids, std::string* err) const {
     if (ids.empty()) return true;
     std::string json = "{\"states\":[";

@@ -314,6 +314,12 @@ public:
     // whole request if one id is not theirs.
     bool deleteStates(const std::vector<int>& ids, std::string* err) const;
 
+    // A screenshot into this person's gallery on RomM 5.1 (`POST
+    // /api/screenshots?rom_id=`: stored under the user, private until shared),
+    // not among the pictures RomM's metadata sources give a game (#79).
+    bool uploadScreenshot(int romId, const std::string& fileName,
+                          const std::vector<uint8_t>& png, std::string* err) const;
+
     // For ImageCache::Loader. Returns empty on any failure, because a cover
     // that will not load is not an error the frame loop can do anything about.
     //

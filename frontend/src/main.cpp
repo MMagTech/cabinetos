@@ -168,6 +168,8 @@ public:
         // Sent again from a marker, not asked for by a person just now: the
         // pause menu is not told how it went.
         bool resend = false;
+        // A screenshot (#79): `data` is the PNG, and it goes to the gallery.
+        bool isScreenshot = false;
     };
 
     // An upload that has not reached the server is the ONE irreplaceable thing
@@ -198,6 +200,7 @@ public:
         cache::Owed o;
         o.romId = job.romId;
         o.isState = job.isState;
+        o.isScreenshot = job.isScreenshot;
         o.emulator = job.emulator;
         o.fileName = job.fileName;
         o.localPath = job.localPath;
@@ -219,6 +222,7 @@ public:
             Job j;
             j.romId = o.romId;
             j.isState = o.isState;
+            j.isScreenshot = o.isScreenshot;
             j.emulator = o.emulator;
             j.fileName = o.fileName;
             j.localPath = o.localPath;
@@ -355,7 +359,9 @@ private:
                 err = "its file is gone";
                 cache::clearPending(storage::currentUser(), job.romId, job.fileName);
             } else {
-                ok = job.isState
+                ok = job.isScreenshot
+                    ? client_->uploadScreenshot(job.romId, job.fileName, job.data, &err)
+                    : job.isState
                     ? client_->uploadState(job.romId, job.emulator, job.fileName, job.data,
                                            &err, job.shotName, job.shot)
                     : client_->uploadSave(job.romId, job.emulator, job.fileName, job.data,
@@ -367,7 +373,8 @@ private:
             }
             if (ok && job.isState) rotate(job);
             if (job.isState && !job.resend) stateOutcome.store(ok ? 1 : 2);
-            std::fprintf(stderr, "[%s] %s%s %s%s\n", job.isState ? "state" : "save",
+            std::fprintf(stderr, "[%s] %s%s %s%s\n",
+                         job.isScreenshot ? "screenshot" : job.isState ? "state" : "save",
                          job.resend ? "resent, " : "",
                          ok ? "uploaded" : "upload failed, kept locally:",
                          ok ? job.emulator.c_str() : err.c_str(),
@@ -1172,6 +1179,51 @@ static void saveStateNow(GameSession& sess, Uploader& up, MenuNotice& notice) {
     job.shotName = shotName;
     job.shot = std::move(png);
     job.shotPath = shotPath;
+    up.push(std::move(job));
+}
+
+// A SCREENSHOT (#79): the shortcut button and Y. The game's own frame, as a
+// state's picture is (the menu is never in it), saved on this console first
+// and then sent to this person's gallery on RomM, retried like a save when
+// RomM is away. Named as a state is, the game's file name and the UTC time,
+// so two never collide. No gallery on the console: they are seen and
+// deleted in RomM (decided 2026-09-27).
+static void screenshotNow(GameSession& sess, Uploader& up, MenuNotice& notice) {
+    cab::Core& core = cab::Core::shared();
+    std::vector<uint8_t> rgba, png;
+    unsigned w = 0, h = 0;
+    if (!core.snapshot(rgba, w, h) || !ui::encodePNG(rgba, w, h, png)) {
+        std::fprintf(stderr, "[screenshot] no picture to take\n");
+        notice.say("Screenshots aren't available here", Tone::Info);
+        return;
+    }
+    struct timespec ts{};
+    clock_gettime(CLOCK_REALTIME, &ts);
+    struct tm utc{};
+    gmtime_r(&ts.tv_sec, &utc);
+    char stamp[48];
+    const size_t n = std::strftime(stamp, sizeof stamp, "%Y-%m-%d %H-%M-%S", &utc);
+    std::snprintf(stamp + n, sizeof stamp - n, "-%03ld", ts.tv_nsec / 1000000L);
+    std::string base = sess.fsStem.empty() ? sanitisedStem(sess.title) : sess.fsStem;
+    std::replace(base.begin(), base.end(), '/', '_');
+    const std::string name = base + " [" + stamp + "].png";
+    const std::string dir =
+        storage::screenshotsDir(storage::currentUser()) + "/" + std::to_string(sess.romId);
+    storage::makeDirs(dir);
+    const std::string path = dir + "/" + name;
+    if (!writeLocal(path, png)) {
+        notice.say("Couldn't save the screenshot", Tone::Problem);
+        return;
+    }
+    std::fprintf(stderr, "[screenshot] %ux%u, %zu bytes, %s\n", w, h, png.size(), name.c_str());
+    notice.say("Screenshot saved", Tone::Done);
+    Uploader::Job job;
+    job.romId = sess.romId;
+    job.emulator = "screenshot";
+    job.fileName = name;
+    job.data = std::move(png);
+    job.localPath = path;
+    job.isScreenshot = true;
     up.push(std::move(job));
 }
 
@@ -10175,6 +10227,11 @@ int main(int argc, char** argv) {
                             if (!overlayOpen && !stateHold && !stateHoldWaiting) {
                                 const bool save = fresh & bit(cab::R);
                                 const bool load = !save && (fresh & bit(cab::L));
+                                if (!save && !load && (fresh & bit(cab::Y))) {
+                                    std::fprintf(stderr, "[shortcuts] player %d: screenshot\n",
+                                                 p + 1);
+                                    screenshotNow(session, uploader, menuNotice);
+                                }
                                 if ((save || load) && !session.snapshots) {
                                     menuNotice.say("Save states aren't available here",
                                                    Tone::Info);
