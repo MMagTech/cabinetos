@@ -65,8 +65,10 @@ the top bar), #129 dark mode and an Appearance setting, #128 time played,
 offline play, account switching (designed 2026-09-21, not built), and the
 installer, boot splash and power button.
 
-**Suggested first: the Home fixes, #125 to #127**, which need nothing
-prepared. **#124 is PARKED (label `later`):** testing it means making saves
+**NEXT SESSION, CHOSEN BY MMAGTECH 2026-09-27: THE HOME FIXES (#125 TO
+#127) AND DARK MODE (#129)**, the latter with his Appearance idea on the
+issue (a dark option, and one that follows the time of day). Walk the
+scenarios with him before building, as usual. **#124 is PARKED (label `later`):** testing it means making saves
 and states in each of RomM's web-player emulators, and MMagTech: too much
 for now. Kept open for when someone reports starting over.
 
