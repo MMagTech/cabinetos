@@ -11007,9 +11007,24 @@ int main(int argc, char** argv) {
         // The same errand as the launch above, for the action a person takes on
         // the launch screen. It goes through downloadById, so the floors are
         // checked exactly as they would be for a press.
-        if (autoDownloadId > 0 && !launchJob.busy()) {
+        // Once Home is up, as a person's press would be: a download begun
+        // behind the startup screen takes the curtain from it (pumpArrive
+        // gives the curtain to any launch job) and the screen stays black.
+        if (autoDownloadId > 0 && !launchJob.busy() && !arriving) {
             const int id = autoDownloadId;
             autoDownloadId = 0;
+            // ASKED FOR BY ID, as --launch is (below): only Recent and
+            // Favorites are in the library at boot, so any other game was not
+            // found and the download never started, without a word. That is
+            // how the first capture of the download ring (#145) came out as an
+            // empty bar.
+            if (lib.byRomId.find(id) == lib.byRomId.end()) {
+                romm::Game g;
+                std::string err;
+                if (liveClient.fetchGame(id, &g, &err)) appendGame(lib, g);
+                else std::fprintf(stderr, "[download] could not fetch rom %d: %s\n", id,
+                                  err.c_str());
+            }
             downloadById(id);
         }
         // The pairing worker's answer, picked up on the frame thread. Nothing
@@ -12689,45 +12704,7 @@ int main(int argc, char** argv) {
                 bx += w + 60.0f;
             }
 
-            // A DOWNLOAD IN FLIGHT, IN THE CORNER. For the person who started
-            // one and walked away: without it a background fetch of a 1.78 GB
-            // arcade set is completely invisible the moment you leave the
-            // screen that started it, which is exactly when you want to know.
-            //
-            // It is a readout and not a control — nothing is reached by
-            // pointing at it — so it is small, quiet, and says only the two
-            // things worth knowing: that something is coming, and how far.
-            float rightEdge = barX + barW;
-            if (launchJob.busy() && launchJob.busyFor >= kProgressDelay) {
-                const int64_t got = launchJob.got.load();
-                const int64_t total = launchJob.total.load();
-                char pct[64];
-                if (launchJob.stage.load() == LaunchJob::Stage::Unpacking)
-                    std::snprintf(pct, sizeof pct, "Unpacking\xE2\x80\xA6");
-                else if (total > 0)
-                    std::snprintf(pct, sizeof pct, "%.0f%%",
-                                  100.0 * static_cast<double>(got) /
-                                      static_cast<double>(total));
-                else
-                    std::snprintf(pct, sizeof pct, "%.0f MB",
-                                  static_cast<double>(got) / 1e6);
-                const float pw = text.measure(pct, ui::TextStyle::Callout, sc);
-                const float trackW = 140.0f;
-                const float trackY = barTop + barHeight * 0.5f - 3.0f;
-                float px = rightEdge - pw;
-                text.draw(renderer, pct, px, barBaseline, ui::TextStyle::Callout,
-                          ui::Color::white(0.75f), sc);
-                px -= 14.0f + trackW;
-                renderer.draw(ui::Rect{px, trackY, trackW, 6.0f, 3.0f,
-                                       ui::Color::white(0.16f)});
-                if (total > 0) {
-                    const float frac = std::clamp(
-                        static_cast<float>(got) / static_cast<float>(total), 0.0f, 1.0f);
-                    renderer.draw(ui::Rect{px, trackY, trackW * frac, 6.0f, 3.0f,
-                                           ui::palette::kScreenCyan});
-                }
-                rightEdge = px - 32.0f;
-            }
+            const float rightEdge = barX + barW;
 
             // The account, at the far right — the corner the reference
             // implementation reserves for it. `TVAccountChip`: "the signed-in
@@ -12825,6 +12802,80 @@ int main(int argc, char** argv) {
             // target you cannot find is worse than one that is too loud.
             text.draw(renderer, who, discX - 10.0f - nameW, chipBaseline,
                       chipStyle, ui::Color::white(chipOn ? 1.0f : 0.62f), sc);
+
+            // A DOWNLOAD IN FLIGHT: A RING LEFT OF THE ACCOUNT CHIP (#145).
+            // For the person who started one and walked away: without it a
+            // background fetch of a 1.78 GB arcade set is invisible the moment
+            // you leave the screen that started it.
+            //
+            // IT USED TO BE A LINE AND A PERCENTAGE IN THE CORNER, and the chip
+            // was fitted to its left, so the chip jumped sideways whenever a
+            // download started or finished. MMagTech, on the TV, 2026-09-27:
+            // he doesn't like it moving. Now the chip owns the corner and never
+            // moves, and the download is a small ring that fills clockwise from
+            // the top with a down arrow inside, the shape PS5 and Xbox use; no
+            // number. Unpacking has no fraction to show, so a quarter of the
+            // ring turns instead. A readout, not a control: nothing reaches it.
+            if (launchJob.busy() && launchJob.busyFor >= kProgressDelay) {
+                const int64_t got = launchJob.got.load();
+                const int64_t total = launchJob.total.load();
+                const bool unpacking =
+                    launchJob.stage.load() == LaunchJob::Stage::Unpacking;
+                // Clear of the chip's focus pill (kChipPillPadX), so the two
+                // never touch when focus lands on the chip.
+                const float chipLeft = discX - 10.0f - nameW - 22.0f;
+                const float ringD = discD;
+                const float cx = chipLeft - 24.0f - ringD * 0.5f;
+                const float cy = barTop + barHeight * 0.5f;
+                const float stroke = 4.0f;
+                const float rad = (ringD - stroke) * 0.5f;
+                // A stroke drawn as overlapping discs: the renderer has
+                // rounded rectangles and nothing else, and at a 4-point width
+                // discs a point apart read as one smooth line with round ends.
+                // Only in SOLID colours: see-through discs stack where they
+                // overlap and the line comes out blotchy (the first capture).
+                const float width = stroke;
+                auto dot = [&](float x, float y, ui::Color col) {
+                    renderer.draw(ui::Rect{x - width * 0.5f, y - width * 0.5f, width,
+                                           width, width * 0.5f, col});
+                };
+                auto arc = [&](float from, float to, ui::Color col) {
+                    const float len = (to - from) * rad;
+                    const int n = std::max(2, static_cast<int>(len / 1.0f));
+                    for (int i = 0; i <= n; ++i) {
+                        const float a = from + (to - from) * static_cast<float>(i) / n;
+                        dot(cx + std::sin(a) * rad, cy - std::cos(a) * rad, col);
+                    }
+                };
+                constexpr float kTau = 6.2831853f;
+                // The track is one shape, an inset rim on a clear circle, so
+                // it can be faint without stacking.
+                {
+                    ui::Rect track{cx - ringD * 0.5f, cy - ringD * 0.5f, ringD, ringD,
+                                   ringD * 0.5f, ui::Color::white(0.0f)};
+                    track.border = stroke;
+                    track.borderColor = ui::Color::white(0.28f);
+                    renderer.draw(track);
+                }
+                if (unpacking) {
+                    const float spin = static_cast<float>(SDL_GetTicks() % 1200) / 1200.0f * kTau;
+                    arc(spin, spin + kTau * 0.25f, ui::palette::kScreenCyan);
+                } else if (total > 0) {
+                    const float frac = std::clamp(
+                        static_cast<float>(got) / static_cast<float>(total), 0.0f, 1.0f);
+                    if (frac > 0.0f) arc(0.0f, kTau * frac, ui::palette::kScreenCyan);
+                }
+                // The arrow is the font's own, so it is as sharp as the text
+                // beside it; drawn from discs it had a bright knot at the tip.
+                {
+                    const char* kArrow = "\xE2\x86\x93";   // U+2193
+                    const ui::TextStyle as = ui::TextStyle::Caption2;
+                    const float aw = text.measure(kArrow, as, sc);
+                    text.draw(renderer, kArrow, cx - aw * 0.5f,
+                              cy - text.lineHeight(as, sc) * 0.5f + text.ascent(as, sc), as,
+                              ui::Color::white(0.85f), sc);
+                }
+            }
         }
 
         // DOWNLOADS (Settings), over the top bar: it is a panel over the whole
