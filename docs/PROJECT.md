@@ -1832,61 +1832,102 @@ Issues #125, #126, #127, #129 and #75, built and judged on the A9 with
 - `--colour <word>` and `--dark` set a look for one run, for judging.
   Every shade and the dark amounts are starting values.
 
-### Dreamcast plays again, and game sound stays in time (#85) — 2026-09-27
+### Dreamcast, PSP and N64 draw right, and the speaker sets the pace (#85, #82, #144) — 2026-09-27
 
-**Dreamcast had not launched since 2026-09-20.** That day the host began
-telling every core it prefers Vulkan (open question 20), and Flycast took
-it. Its libretro `create_device` (`core/rend/vulkan/vk_context_lr.cpp`, at
-our pin and on upstream master) receives the frontend's required device
-extensions and never uses them, so its device lacked external memory and
-the host refused it: "this device will not export memory as a file
-descriptor", on a GPU that exports fine. Dolphin honours the list, which is
-why GameCube played. RetroArch never meets this: it presents from Vulkan,
-so a picture never has to leave it.
+**The rule that came out of it, from MMagTech:** match Cabinet only where a
+setting decides whether a save or state loads on the other device; choose
+for a TV console everywhere else; say for every fix what it does on hardware
+that is not the A9; and when RetroArch, Batocera or EmuDeck play something
+out of the box, find the setting or behaviour we are missing rather than
+invent a fix.
 
-**Decided: no patch to Flycast.** It links no Vulkan symbol (`nm -D` on the
-shipped `.so`) and looks up `vkCreateDevice` through the
-`get_instance_proc_addr` we pass, so the host hands it a lookup that wraps
-that one function and adds whichever of our extensions the GPU lists and
-the core left out (`vkhost.cpp`, `createDeviceWithOurs`). That is what the
-v2 negotiation interface is for; Flycast speaks v1 only. It applies to
-every Vulkan core. Rejected: putting Flycast back on GLES (reverses open
-question 20, which names Dreamcast as a system Vulkan was for); patching
-Flycast (a change to carry on every update). Offering the fix upstream is
-optional. **Off the A9:** a GPU without the extensions gets the old clean
-refusal; a machine with no Vulkan puts Flycast on GLES, checked on the
-test VM (Crazy Taxi 2 drew, llvmpipe).
+**Two Vulkan faults, both since open question 20 (2026-09-20) made the host
+prefer Vulkan, and both what RetroArch already does:**
 
-**The black screen after a launch (#85's second half).** The ready branch
-lowered the curtain and only then asked whether the person had moved to
-another screen, returning without lifting it. Now it asks first, lifts the
-curtain if it was lowered, and logs both screens. The one sighting fired
-two seconds after the press, on a hand-built loop build; it did not
-reproduce on the image. MMagTech walked away from a PS2 download on the TV:
-the screen stayed up.
+- **Dreamcast would not launch.** Flycast's libretro `create_device`
+  (`core/rend/vulkan/vk_context_lr.cpp`, at our pin and upstream master)
+  receives the frontend's required device extensions and never uses them,
+  so its device had no external memory and the host refused it. Flycast
+  links no Vulkan symbol and looks up `vkCreateDevice` through the
+  `get_instance_proc_addr` we pass, so the host hands it a wrapper that adds
+  whichever of our extensions the GPU lists (`vkhost.cpp`,
+  `createDeviceWithOurs`). No patch to Flycast; it covers every Vulkan core.
+  RetroArch never meets this because its picture never leaves Vulkan.
+  Rejected: Flycast back on GLES (reverses open question 20, which names
+  Dreamcast), patching Flycast.
+- **PSP crashed the whole console as it started.** PPSSPP asks for a Vulkan
+  1.0 instance, then its allocator calls `vkGetBufferMemoryRequirements2`, a
+  1.1 function its loader only fetches on 1.1 (a call through a null
+  pointer, found under gdb). RetroArch raises every instance to at least 1.1
+  where the loader has it (`gfx/common/vulkan_common.c`); so does the host
+  now. The image build crashed the same way, so it was not today's work.
+  Lumines plays its demo on Vulkan.
 
-**Game sound, measured with a new `[audio]` log line every ten seconds.**
-Crazy Taxi 2 on Vulkan queued 1.3 s of sound in ten seconds and 2.9 s by
-two minutes, heard as out of sync. Two causes, two fixes:
+**Off the A9:** a GPU without the extensions gets the old clean refusal; a
+loader without 1.1 keeps what the core asked for; a machine with no Vulkan
+puts every core on GLES, checked on the test VM (Crazy Taxi 2 drew on
+llvmpipe).
 
-- **Flycast's emulation thread runs ahead of `retro_run`.** Cabinet's audio
-  governor exists for exactly this (`NativePlayerRenderer.swift`); this
-  host had it for PPSSPP only, with a comment saying Flycast did not need
-  it. Flycast is now governed too, with Cabinet's 0.1 s cap on catch-up.
-  N64 stays ungoverned: Cabinet found it slower with the governor, and why
-  was never recorded.
-- **Every stall made sound permanently later, on every system.** The
-  speaker plays silence during a stall and the sound the core owed queues
-  behind when it catches up. **Game sound is now capped at 64 ms waiting**,
-  RetroArch's default audio latency; what does not fit is dropped.
-  Measured on the TV: Crazy Taxi 2 36 to 64 ms (5 to 10 ms trimmed per ten
-  seconds, inaudible), Mortal Kombat II 36 to 54 ms with nothing trimmed.
-  MMagTech: both sounded good.
+**N64 draws with ParaLLEl-RDP wherever there is Vulkan (#82).** GLideN64,
+the core's default, approximates the N64's graphics and is built for GLES3
+here and on Cabinet, which share the fault ("almost every game": Mario Kart,
+Wave Race, Hydro Thunder). RetroArch and Batocera run the same default on
+desktop GL, which our GLES context cannot host; both offer ParaLLEl-RDP (the
+N64's own graphics chip, run on the GPU, with the LLE RSP beside it) when
+accuracy matters. `catalog::optionOverrides`, only when
+`cab::gpu::vulkan().available`; GLideN64 otherwise. 2x upscale is a starting
+value. MMagTech: the reported fault is fixed; there may be small ones left.
 
-**Not done, and filed:** RetroArch also runs dynamic rate control (±0.5%,
-on by default on PCs, off on its console builds) and syncs to the audio
-device for every core. One timing rule for every core, measured on each,
-is the right end state; the per-core governor is a stopgap.
+**The black screen after a launch.** The ready branch lowered the curtain
+and only then asked whether the person had moved on, returning without
+lifting it. It asks first now, and logs both screens. Walking away from a
+PS2 download on the TV kept the screen up.
+
+**THE SPEAKER SETS THE PACE, for every system.** Before each frame: more
+than 64 ms of game sound already waiting and the core does not run. That is
+RetroArch's audio sync (its audio write blocks when the buffer is full;
+default latency 64 ms). It replaced a day of per-core fixes, each measured
+with a new `[audio]` log line and each wrong in its own way:
+
+1. Flycast's threaded emulation ran ahead: 2.9 s of sound queued in Crazy
+   Taxi 2. A brake against the wall clock (Cabinet's governor, then on
+   PPSSPP only) fixed that.
+2. Every stall added delay for the rest of the session; a 64 ms cap that
+   dropped the surplus fixed that and cost nothing on SNES.
+3. **N64 makes 3.4 to 4% more sound than realtime**: each emulated frame
+   carries more sound-time than a real one (the core builds frames from the
+   VI clock, 48.68 MHz NTSC, and times sound differently; the sum comes to
+   3.9% NTSC, close to the 3.4% measured, but 6% PAL against 4% measured).
+   So N64 ran that much fast, and the cap turned the surplus into crackle.
+   Cabinet's "the governor slowed N64 down" was most likely this, slowed to
+   true speed. The core's timing options are marked "will break stuff" and
+   Batocera leaves them alone; RetroArch absorbs it with audio sync.
+4. The brake on every core still crackled, because N64 delivers sound in
+   bursts. Pacing by the speaker covers all of it, and nothing is thrown
+   away.
+
+**A burst bigger than the gate is waited out, not trimmed**, as RetroArch's
+blocking write does. Flycast keeps its threaded rendering, its own default
+("highly recommended"): turning it off also stopped the skipping, but it is
+the thread that helps a weaker machine or a higher upscale, and RetroArch
+leaves it on. Its loading burst (~380 ms) drains within seconds. A 1 s
+safety net catches only a broken core. The wall-clock brake is off for every
+core and stays in `core.cpp` for a core that ever needs pacing with no
+speaker. **The guard Cabinet paid for (its issue #6):** held 250 ms with the
+queue not draining, the gate lets go and the clock paces the core, so a
+game cannot freeze on a silent speaker.
+
+Measured on the A9 TV: Crazy Taxi 2 39 to 77 ms waiting after its loading
+burst, Mario Kart 33 to 70 ms, nothing dropped; MMagTech: "looks and sounds
+better". A headless sweep of the smallest game on all 30 systems ran on
+each version.
+
+**Not done:** RetroArch's dynamic rate control (±0.5%, on by default on
+PCs) is not built; nothing today drifts slowly enough to need it. Quality
+settings per level are open question 23, which gained a gap today: sound
+can tell the console to step a game DOWN, but not that it has room to step
+UP; that needs the time the core takes per frame against the frame's
+budget.
 
 ### Time played (#128) — 2026-09-27
 
