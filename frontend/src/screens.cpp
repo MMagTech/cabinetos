@@ -1307,8 +1307,9 @@ void DetailScreen::draw(Ctx& c) {
     // WHAT THE GAME IS, on one line: platform, then RomM's year, maker and
     // players where it has them, then the size. IT MUST FIT THE COLUMN: on
     // "Super Nintendo Entertainment System" with all four it ran into the
-    // cover (MMagTech on the TV, 2026-09-27). So the size goes first, then the
-    // maker, and only then is what is left cut short.
+    // cover (MMagTech on the TV, 2026-09-27). So the size goes first, then
+    // the players (the least reliable fact: RomM has Mortal Kombat II as one
+    // player), then the maker, and only then is what is left cut short.
     std::string size;
     if (game_.sizeBytes > 0) {
         // A unit that suits the number. A library holds a 19 KB Game Boy ROM
@@ -1321,15 +1322,17 @@ void DetailScreen::draw(Ctx& c) {
         else std::snprintf(buf, sizeof buf, "%.0f KB", b / 1e3);
         size = buf;
     }
-    bool withSize = true, withMaker = true;
+    bool withSize = true, withPlayers = true, withMaker = true;
     auto joined = [&]() {
         std::string m = game_.platform;
         for (const std::string& p : {facts_.year, withMaker ? facts_.maker : std::string(),
-                                     facts_.players, withSize ? size : std::string()})
+                                     withPlayers ? facts_.players : std::string(),
+                                     withSize ? size : std::string()})
             if (!p.empty()) m += "  \xC2\xB7  " + p;
         return m;
     };
     if (c.text.measure(joined(), ui::TextStyle::Callout, c.sc) > textW) withSize = false;
+    if (c.text.measure(joined(), ui::TextStyle::Callout, c.sc) > textW) withPlayers = false;
     if (c.text.measure(joined(), ui::TextStyle::Callout, c.sc) > textW) withMaker = false;
     const std::string meta = c.text.truncate(joined(), ui::TextStyle::Callout, c.sc, textW);
     c.text.draw(c.r, meta, textX, y, ui::TextStyle::Callout,
