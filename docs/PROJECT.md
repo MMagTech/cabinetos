@@ -1819,6 +1819,11 @@ Issues #125, #126, #127, #129 and #75, built and judged on the A9 with
   MMagTech suggested the router; it gives the time in UTC, not the zone. The
   installer's Time & Date screen sets it (`disk_config/iso.toml`), so when
   #107 cuts Anaconda's other screens that one stays.
+- **The menus are dithered.** MMagTech saw lines in the background, worst in
+  Dark and while a colour fades, as a near-black gradient steps between
+  8-bit levels. Half a level of static noise in the backdrop, the panels and
+  the glass rows (the glass needs its own: its blur averages the backdrop's
+  away). The letterbox glow already did this. MMagTech on the TV: perfect.
 - `--colour <word>` and `--dark` set a look for one run, for judging.
   Every shade and the dark amounts are starting values.
 
