@@ -19,6 +19,7 @@
 // See docs/PROJECT.md, "The design system" and "Navigation model".
 
 #include <SDL3/SDL.h>
+#include <zlib.h>
 
 #include <dirent.h>
 #include <sys/stat.h>
@@ -5748,6 +5749,28 @@ int main(int argc, char** argv) {
     // true to the console, now and later), and elsewhere it says so.
     constexpr double kFastForward = 4.0;
     bool fastForwardSaid = false;
+    // REWIND (#78): the shortcut button and ZL, held. The game runs backwards
+    // while held, up to about 20 seconds, and plays on from there on release.
+    // A state is kept every other frame, compressed, in a ring; rewinding
+    // restores them newest first. ONLY WHERE IT IS CHEAP: states under 1 MB,
+    // which is the cartridge systems and their like (measured 2026-09-27:
+    // TurboGrafx 80 KB, arcade 296 KB, SNES 823 KB; N64 16.8 MB), and only
+    // where states are at all (fast forward and rewind go with states).
+    // Elsewhere it says so. The ring is dropped when a state loads or the
+    // game ends, since it no longer leads anywhere real.
+    struct RewindRing {
+        std::deque<std::vector<uint8_t>> snaps;
+        size_t bytes = 0;
+        int tick = 0;
+        int available = -1;   // -1 not yet decided for this game
+        std::vector<uint8_t> raw, packed;
+        void clear() { snaps.clear(); bytes = 0; tick = 0; }
+    } rewindRing;
+    constexpr size_t kRewindMaxState = 1024 * 1024;
+    constexpr size_t kRewindBudget = 96u * 1024 * 1024;
+    constexpr int kRewindEvery = 2;          // draws between snapshots
+    constexpr size_t kRewindMaxSnaps = 20 * 60 / kRewindEvery;   // ~20 s at 60 fps
+    bool rewindSaid = false;
     // Both stick clicks together are the overlay hotkey — see where they are
     // read. Held state rather than a chord test at press time, because SDL
     // delivers the two presses as separate events.
@@ -9320,6 +9343,8 @@ int main(int argc, char** argv) {
         if (audioStream) SDL_ClearAudioStream(audioStream);
         pendingStateId = 0;
         stateHold = stateHoldWaiting = false;
+        rewindRing.clear();
+        rewindRing.available = -1;
         detailStates.stale = true;   // Continue from may have changed
         playing = false;
         overlayOpen = false;
@@ -10138,7 +10163,7 @@ int main(int argc, char** argv) {
             // EVERY SEATED PAD IS ITS OWN PLAYER (players.h, issue #64). Until
             // 2026-09-26 a game read only the first pad SDL listed, so a second
             // person's pad walked the menus and did nothing in a game.
-            bool fastForward = false;
+            bool fastForward = false, rewinding = false;
             const bool menuWasUp = overlayOpen || stateHold || menuUpAtLastRead;
             menuUpAtLastRead = overlayOpen || stateHold;
             for (int p = 0; p < players::kMax; ++p) {
@@ -10228,6 +10253,9 @@ int main(int argc, char** argv) {
                         if (down && (st.buttons & bit(cab::R2)) && !overlayOpen && !stateHold &&
                             !stateHoldWaiting)
                             fastForward = true;
+                        if (down && (st.buttons & bit(cab::L2)) && !overlayOpen && !stateHold &&
+                            !stateHoldWaiting)
+                            rewinding = true;
                         const uint32_t fresh = st.buttons & ~h.before;
                         h.before = st.buttons;
                         if (fresh) {
@@ -10326,7 +10354,22 @@ int main(int argc, char** argv) {
             }
             if (fastForward != (core.speed() > 1.0))
                 std::fprintf(stderr, "[shortcuts] fast forward %s\n", fastForward ? "on" : "off");
-            core.setSpeed(fastForward ? kFastForward : 1.0);
+            core.setSpeed(fastForward && !rewinding ? kFastForward : 1.0);
+            // Whether this game can rewind, decided once it is running.
+            if (rewindRing.available < 0 && core.running() && core.framesRun() > 0) {
+                const size_t sz = core.stateSize();
+                rewindRing.available =
+                    session.snapshots && sz > 0 && sz <= kRewindMaxState ? 1 : 0;
+                std::fprintf(stderr, "[rewind] %s (state %zu bytes)\n",
+                             rewindRing.available ? "available" : "not offered", sz);
+            }
+            if (rewinding && rewindRing.available != 1) {
+                if (!rewindSaid) menuNotice.say("Rewind isn't available here", Tone::Info);
+                rewindSaid = true;
+                rewinding = false;
+            } else if (!rewinding) {
+                rewindSaid = false;
+            }
             const bool frozen = overlayOpen || stateHold || stateHoldWaiting;
             core.setPaused(frozen);
 
@@ -10335,8 +10378,47 @@ int main(int argc, char** argv) {
                 // menu sits over a frozen picture rather than a black one.
             } else if (shotMode) {
                 core.runFor(1.0 / std::max(core.avInfo().fps, 1.0));
+            } else if (rewinding) {
+                // ONE STEP BACK PER DRAW: the newest kept state, restored, and
+                // one frame run from it so there is a picture (its sound is
+                // dropped below). At the end of the ring it holds still.
+                if (!rewindRing.snaps.empty()) {
+                    std::vector<uint8_t>& packed = rewindRing.snaps.back();
+                    uLongf rawLen = static_cast<uLongf>(core.stateSize());
+                    rewindRing.raw.resize(rawLen);
+                    if (uncompress(rewindRing.raw.data(), &rawLen, packed.data(),
+                                   static_cast<uLong>(packed.size())) == Z_OK) {
+                        rewindRing.raw.resize(rawLen);
+                        core.loadState(rewindRing.raw);
+                        core.runFor(1.0 / std::max(core.avInfo().fps, 1.0));
+                    }
+                    rewindRing.bytes -= packed.size();
+                    rewindRing.snaps.pop_back();
+                }
             } else {
-                core.runFor(dt);
+                const int ran = core.runFor(dt);
+                // KEEP A STATE every other draw that moved the game on,
+                // compressed, dropping the oldest past ~20 s or the budget.
+                if (rewindRing.available == 1 && ran > 0 &&
+                    ++rewindRing.tick >= kRewindEvery) {
+                    rewindRing.tick = 0;
+                    if (core.saveState(rewindRing.raw) && !rewindRing.raw.empty()) {
+                        uLongf len = compressBound(static_cast<uLong>(rewindRing.raw.size()));
+                        rewindRing.packed.resize(len);
+                        if (compress2(rewindRing.packed.data(), &len, rewindRing.raw.data(),
+                                      static_cast<uLong>(rewindRing.raw.size()), 1) == Z_OK) {
+                            rewindRing.snaps.emplace_back(rewindRing.packed.begin(),
+                                                          rewindRing.packed.begin() + len);
+                            rewindRing.bytes += len;
+                            while (!rewindRing.snaps.empty() &&
+                                   (rewindRing.bytes > kRewindBudget ||
+                                    rewindRing.snaps.size() > kRewindMaxSnaps)) {
+                                rewindRing.bytes -= rewindRing.snaps.front().size();
+                                rewindRing.snaps.pop_front();
+                            }
+                        }
+                    }
+                }
             }
             core.uploadFrame();
 
@@ -10344,7 +10426,8 @@ int main(int argc, char** argv) {
                 const std::vector<int16_t>& samples = core.drainAudio();
                 // Fast forward's sound is discarded, not played fast: four
                 // times the samples would only pile up behind the picture.
-                if (!samples.empty() && core.speed() <= 1.0) {
+                // Rewind's too: it is a frame's sound played forwards.
+                if (!samples.empty() && core.speed() <= 1.0 && !rewinding) {
                     SDL_PutAudioStreamData(audioStream, samples.data(),
                                            static_cast<int>(samples.size() * sizeof(int16_t)));
                 }
@@ -10484,6 +10567,7 @@ int main(int argc, char** argv) {
         }
         if (stateLoad.loaded) {
             stateLoad.loaded = false;
+            rewindRing.clear();   // the history led somewhere else
             closeOverlay();
             stateHold = true;
             stateHoldWaiting = false;
