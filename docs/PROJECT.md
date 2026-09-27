@@ -1676,8 +1676,10 @@ and Home is the button the list most often gets wrong.
 - **A button games use can be chosen** (minus/Select, say). While shortcuts
   are on it no longer reaches the game; only the person who chose it is
   affected, and nothing on screen warns about it (MMagTech, agreed).
-- **Which pad the row sets** (proposed: the pad in hand, its name on the row,
-  as the Controllers rows do): MMagTech wants to see it on the TV first.
+- **The row is for the pad in hand**: it names the pad last pressed in
+  Settings and follows it when another pad is pressed (MMagTech on the TV,
+  2026-09-27: good). A button the mapping does not name shows by number, the
+  Lite 2's heart as "Button 3" (MMagTech: good).
 - **Rejected:** a fixed Home (above); a Home / Select switch (covers pads with
   no Home but not a Home the app cannot see); a configurable pair.
 
