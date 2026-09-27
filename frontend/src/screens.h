@@ -516,6 +516,8 @@ public:
     // THE GAME'S OWN SAVE, when there is one: "Saved today, 8:17 PM", shown as
     // the Play row's value, because that save is what Play starts from.
     void setSaveWhen(std::string when);
+    // A few facts under the cover, one per line: "1997", "Cave", "1-2 players".
+    void setFacts(std::vector<std::string> lines);
     void tick(float dt);
     Result key(Nav n);
     void draw(Ctx& c);
@@ -577,6 +579,7 @@ private:
     std::vector<Row> rows_;
     std::vector<StateChoice> states_;
     std::string saveWhen_;
+    std::vector<std::string> facts_;
     // Continue from's card size, worked out in draw() with the rest of the
     // layout so the block can be centred as a whole.
     float cardW_ = 0, cardH_ = 0;

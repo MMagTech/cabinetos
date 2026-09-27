@@ -5877,6 +5877,7 @@ int main(int argc, char** argv) {
         int romId = 0;
         std::vector<screens::StateChoice> list;
         std::string saveWhen;
+        std::vector<std::string> facts;
         int wantRom = 0;
         std::string wantTag, wantSaveTag;
         // Asked again once the uploads are done: a game just left may have
@@ -5897,6 +5898,18 @@ int main(int argc, char** argv) {
             std::vector<romm::Asset> all;
             std::vector<screens::StateChoice> out;
             std::string err, saveWhen;
+            // YEAR, MAKER, PLAYERS, under the cover. Whatever RomM has.
+            std::vector<std::string> facts;
+            {
+                romm::Client::Facts f;
+                std::string ferr;
+                if (liveClient.fetchFacts(romId, &f, &ferr)) {
+                    if (f.year > 0) facts.push_back(std::to_string(f.year));
+                    if (!f.maker.empty()) facts.push_back(f.maker);
+                    if (!f.players.empty())
+                        facts.push_back(f.players + (f.players == "1" ? " player" : " players"));
+                }
+            }
             // THE GAME'S OWN SAVE, the newest under the tag it travels by, as
             // the launch reads it. "Saved today, 8:17 PM".
             if (!saveTag.empty() && liveClient.fetchSaves(romId, &all, &err)) {
@@ -5929,6 +5942,7 @@ int main(int argc, char** argv) {
             detailStates.romId = romId;
             detailStates.list = std::move(out);
             detailStates.saveWhen = std::move(saveWhen);
+            detailStates.facts = std::move(facts);
             detailStates.ready = true;
             detailStates.busy = false;
         });
@@ -5939,11 +5953,12 @@ int main(int argc, char** argv) {
         for (const auto& g : games) {
             if (g.id != romId) continue;
             const catalog::Coverage cov = catalog::coverageFor(g);
-            if (!cov.core || !liveClient.haveToken()) return;
-            const char* tag = catalog::snapshotsAllowed(cov.core)
+            if (!liveClient.haveToken()) return;
+            // The facts are asked for every game, playable or not; the states
+            // and the save only where there is a core to have written them.
+            const char* tag = cov.core && catalog::snapshotsAllowed(cov.core)
                 ? catalog::emulatorTag(cov.core) : nullptr;
-            const char* saveTag = catalog::saveTag(cov.core);
-            if (!tag && !saveTag) return;
+            const char* saveTag = cov.core ? catalog::saveTag(cov.core) : nullptr;
             detailStates.wantRom = romId;
             detailStates.wantTag = tag ? tag : "";
             detailStates.wantSaveTag = saveTag ? saveTag : "";
@@ -5957,6 +5972,7 @@ int main(int argc, char** argv) {
             if (here() == Screen::Detail && detailScreen.game().romId == detailStates.romId) {
                 detailScreen.setStates(detailStates.list);
                 detailScreen.setSaveWhen(detailStates.saveWhen);
+                detailScreen.setFacts(detailStates.facts);
             }
         }
         startDetailStates();

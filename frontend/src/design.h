@@ -482,6 +482,7 @@ constexpr float kDetailRowGap = 16.0f;
 // and its space under the rows; and the highest the page may start. First
 // guesses, to be judged on the television.
 constexpr float kDetailCoverGap = 80.0f;
+constexpr float kDetailFactsGap = 24.0f;   // cover to the facts under it
 constexpr float kStateCardGap = 28.0f;
 constexpr float kStateShelfGap = 40.0f;
 constexpr float kStateBlockMinTop = 90.0f;

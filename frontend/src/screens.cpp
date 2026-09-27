@@ -1096,6 +1096,7 @@ void DetailScreen::open(GameDetail d) {
     slot_ = 0;
     states_.clear();
     saveWhen_.clear();
+    facts_.clear();
     inStates_ = false;
     stateSlot_ = 0;
     rebuildRows();
@@ -1128,6 +1129,8 @@ void DetailScreen::rebuildRows() {
     // A different save state, a different core and an export belong here too.
     // They are not built yet and a row that does nothing is worse than no row.
 }
+
+void DetailScreen::setFacts(std::vector<std::string> lines) { facts_ = std::move(lines); }
 
 void DetailScreen::setSaveWhen(std::string when) {
     saveWhen_ = std::move(when);
@@ -1268,9 +1271,25 @@ void DetailScreen::draw(Ctx& c) {
         : design::kStateShelfGap + calloutLH + design::kDetailRowGap + cardH_ +
               design::kDetailRowGap * 0.75f + calloutLH;
     const float colH = headToRows + rowsH + shelfH;
-    const float pairH = std::max(colH, design::kDetailCoverHeight);
+    // THE FACTS UNDER THE COVER (year, maker, players) are part of the
+    // cover's side, so the two sides are balanced with them counted in.
+    const float factsH = facts_.empty() ? 0.0f
+        : design::kDetailFactsGap + facts_.size() * calloutLH;
+    const float coverSideH = design::kDetailCoverHeight + factsH;
+    const float pairH = std::max(colH, coverSideH);
     const float top = std::max(design::kStateBlockMinTop, (ui::kCanvasHeight - pairH) * 0.5f);
-    const float coverY = top + (pairH - design::kDetailCoverHeight) * 0.5f;
+    const float coverY = top + (pairH - coverSideH) * 0.5f;
+    {
+        float fy = coverY + design::kDetailCoverHeight + design::kDetailFactsGap +
+                   c.text.ascent(ui::TextStyle::Callout, c.sc);
+        for (const std::string& line : facts_) {
+            c.text.draw(c.r,
+                        c.text.truncate(line, ui::TextStyle::Callout, c.sc,
+                                        design::kDetailCoverWidth),
+                        coverX, fy, ui::TextStyle::Callout, ui::Color::white(0.60f * a), c.sc);
+            fy += calloutLH;
+        }
+    }
     const float blockTop = top;
     statesX_ = colX;
     statesY_ = blockTop + headToRows + rowsH + design::kStateShelfGap;

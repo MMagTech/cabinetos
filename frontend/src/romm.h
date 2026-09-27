@@ -258,6 +258,16 @@ public:
     // it is on Home: boot stopped fetching the whole catalogue.
     bool fetchGame(int romId, Game* out, std::string* err);
 
+    // A few facts about a game from RomM's merged metadata (`metadatum`), for
+    // the launch screen: the year, the first company named, how many can
+    // play. Any can be missing; a game RomM never matched has none.
+    struct Facts {
+        int year = 0;
+        std::string maker;
+        std::string players;   // as RomM gives it: "1", "1-2", "2"
+    };
+    bool fetchFacts(int romId, Facts* out, std::string* err);
+
     // A value going INTO a query fragment, percent-encoded strictly. A search
     // term is whatever somebody typed on a television keyboard, so it can hold
     // a space, an ampersand or an apostrophe — all of which would otherwise

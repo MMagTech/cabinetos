@@ -1,5 +1,7 @@
 #include "romm.h"
 
+#include <ctime>
+
 #include <curl/curl.h>
 #include <json-c/json.h>
 
@@ -590,6 +592,37 @@ bool Client::fetchGame(int romId, Game* out, std::string* err) {
     json_object_put(root);
     if (!ok && err) *err = "rom response did not parse as a game";
     return ok;
+}
+
+bool Client::fetchFacts(int romId, Facts* out, std::string* err) {
+    *out = Facts{};
+    std::string body;
+    if (!get("/api/roms/" + std::to_string(romId), &body, err)) return false;
+    json_object* root = json_tokener_parse(body.c_str());
+    if (!root) { if (err) *err = "rom response was not JSON"; return false; }
+    json_object* meta = nullptr;
+    if (json_object_object_get_ex(root, "metadatum", &meta) &&
+        json_object_get_type(meta) == json_type_object) {
+        json_object* v = nullptr;
+        if (json_object_object_get_ex(meta, "first_release_date", &v) &&
+            json_object_get_type(v) == json_type_int) {
+            // Milliseconds in RomM's merged record; seconds in some sources'.
+            int64_t t = json_object_get_int64(v);
+            if (t > 100000000000LL) t /= 1000;
+            const time_t tt = static_cast<time_t>(t);
+            struct tm g;
+            if (t > 0 && gmtime_r(&tt, &g)) out->year = g.tm_year + 1900;
+        }
+        if (json_object_object_get_ex(meta, "companies", &v) &&
+            json_object_get_type(v) == json_type_array && json_object_array_length(v) > 0) {
+            json_object* first = json_object_array_get_idx(v, 0);
+            if (json_object_get_type(first) == json_type_string)
+                out->maker = json_object_get_string(first);
+        }
+        out->players = jstr(meta, "player_count");
+    }
+    json_object_put(root);
+    return true;
 }
 
 bool Client::fetchGames(int platformId, std::vector<Game>* out, std::string* err,
