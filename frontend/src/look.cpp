@@ -41,6 +41,21 @@ const Swatch kSwatches[kColourCount] = {
     {"Graphite", "graphite",
      {ui::Color::rgb(0x34363C), ui::Color::rgb(0x121316), ui::Color::rgb(0x08090A), 0.55f},
      ui::Color::rgb(0x26282D)},
+    {"Pink", "pink",
+     {ui::Color::rgb(0xC2367E), ui::Color::rgb(0x3A0F28), ui::Color::rgb(0x1A0612), 0.55f},
+     ui::Color::rgb(0x5A1A3E)},
+    {"Sky", "sky",
+     {ui::Color::rgb(0x1E7FD0), ui::Color::rgb(0x0A2644), ui::Color::rgb(0x051222), 0.55f},
+     ui::Color::rgb(0x1A3F66)},
+    {"Lime", "lime",
+     {ui::Color::rgb(0x3F8A1C), ui::Color::rgb(0x14300A), ui::Color::rgb(0x091705), 0.55f},
+     ui::Color::rgb(0x2A5016)},
+    {"Orange", "orange",
+     {ui::Color::rgb(0xC0581A), ui::Color::rgb(0x3E1C08), ui::Color::rgb(0x1C0D04), 0.55f},
+     ui::Color::rgb(0x5E3010)},
+    {"Sunset", "sunset",
+     {ui::Color::rgb(0xD9487A), ui::Color::rgb(0x3B1650), ui::Color::rgb(0x0E0A26), 0.55f},
+     ui::Color::rgb(0x4A1E4E)},
 };
 
 // HOW FAR DARK TURNS THINGS DOWN. Starting values for the television.
