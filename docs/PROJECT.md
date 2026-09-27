@@ -1933,6 +1933,47 @@ can tell the console to step a game DOWN, but not that it has room to step
 UP; that needs the time the core takes per frame against the frame's
 budget.
 
+### The emulator settings audit (#89) — 2026-09-27
+
+**The rule, MMagTech's:** most settings do not decide whether a save or
+state loads, so Cabinet is matched only where one does; everywhere else the
+choice is for a TV console, starting from each emulator's own default and
+changing it only with a reason beside it.
+
+**How it was audited:** every option our cores declare, and the value they
+are actually given, from `--core-options-detail` on the A9 (FCEUmm and
+FBNeo declare theirs only with a game loaded, so a real launch was read for
+those: 44 and 16, all answered), set against every value Cabinet sends in
+`NativeCoreOptions.swift`. **Most of Cabinet's list already matched,**
+because Cabinet's "restored defaults" are the emulators' declared defaults,
+which this host answers for every core. That includes all of Cabinet's
+colour fixes from its 2026-08-17 quality pass (NES palette, GBC colour
+correction, GB colorization, FBNeo 32-bit), checked on a picture: NES
+Bomberman's black is (0,0,0), which only the real palette gives.
+
+**Changed, in `catalog::optionOverrides`:**
+- **PS1 card 2 `none`** (was "shared", one card for every game in the
+  system directory, never synced). Cabinet's value. No card 2 existed.
+- **Genesis/Sega CD FM `nuked (ym2612)`** (was MAME's). A state records its
+  FM core and restores into it, so mixed chips left the music wrong after a
+  cross-device load. Cabinet's value, and the accurate chip; heavier, fine on
+  the A9, untested on weaker machines.
+- **Virtual Boy right stick as the right d-pad.** Teleroboxer played on the
+  TV with both arms.
+- **melonDS threaded software renderer on.** Cabinet's value; how the work is
+  split, not what a state holds.
+
+**Kept ours, on purpose:** N64 C-buttons on the right stick (Cabinet maps
+them to face buttons for touch; the stick is RetroArch's pad layout); 32X
+three-button (the pause menu's controller type, #73).
+
+**Left for later:** DS screen layout and touch for a TV (a design, judged on
+the TV); the quality upgrades Cabinet turns on (SNES Mode 7 hi-res, Vectrex
+4x, NES sound quality, PS1 enhanced resolution, 32-bit and gaussian SPU),
+which belong to open question 23's levels; the options MAME asks for and
+never declares. **Found on the way: N64 and PSP run without their
+recompilers** (#147).
+
 ### Time played (#128) — 2026-09-27
 
 **What RomM has (checked in its source, 5.1.0 and 5.3.1):** play sessions,
