@@ -1202,7 +1202,14 @@ bool Core::load(const std::string& soPath) {
     // sat 2 ms behind). PlayStation 2 paces itself and never reaches it.
     // Checked on every system by a headless sweep on the A9 before it shipped.
     // The switch stays so a core can be taken off it with a reason.
-    governed_ = true;
+    //
+    // AND THEN NONE, the same afternoon. MMagTech still heard crackle on N64
+    // with this on every core: N64 delivers sound in bursts, and a brake
+    // against the wall clock plus a 64 ms cap threw the top of each burst
+    // away. main.cpp now paces every core by the speaker (RetroArch's audio
+    // sync), which covers everything this brake did. The switch stays for a
+    // core that ever needs pacing with no speaker to pace it.
+    governed_ = false;
 
     // Order matters: the environment callback must be installed before
     // retro_init, because a core may call it from there.
@@ -1568,7 +1575,8 @@ int Core::runFor(double dt) {
 
     int ran = 0;
     while (accumulator_ >= interval && ran < maxRuns) {
-        // The second brake, and every core has it. See load(): the
+        // The second brake, off for every core since the speaker paces them
+        // (main.cpp). See load(): the
         // accumulator counts the runs that were asked for, and for PPSSPP a
         // run is a game frame rather than a vblank, so the accumulator can be
         // satisfied while the emulated machine is running at twice speed.

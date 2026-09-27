@@ -459,7 +459,18 @@ std::map<std::string, std::string> optionOverrides(const std::string& core) {
         // which is this console's first free ride from the core-options work.
         // Raising it is a look-and-performance decision and it waits for real
         // hardware.
-        return {{"ppsspp_cpu_core", "IR JIT"}};
+        //
+        // ppsspp_backend IS PINNED TO OPENGL — 2026-09-27. Its default, auto,
+        // takes whatever the frontend prefers, and since open question 20 the
+        // host prefers Vulkan, so PSP moved to Vulkan on 2026-09-20 without
+        // anyone asking. There it crashes the whole console as it starts:
+        // a call through a null pointer right after the render interface is
+        // handed over (MMagTech on the TV, "black screen and then closes";
+        // the image build crashes identically headless, so it is not today's
+        // Vulkan changes). PSP was proven on GLES and was never one of the
+        // systems Vulkan was for. Why PPSSPP's Vulkan path crashes here is
+        // filed, not chased.
+        return {{"ppsspp_cpu_core", "IR JIT"}, {"ppsspp_backend", "opengl"}};
     }
 
     // Genesis Plus GX, and this one decides WHERE THE SAVE IS, not how it

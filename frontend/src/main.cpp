@@ -10754,7 +10754,48 @@ int main(int argc, char** argv) {
                     rewindLastFrame = core.framesRun();
                 }
             } else {
-                core.runFor(dt);
+                // THE SPEAKER SETS THE PACE, for every system — 2026-09-27.
+                // More than kAudioSyncMs of sound already waiting and the core
+                // is not due this frame. This is RetroArch's audio sync (its
+                // audio write blocks when the buffer is full, default latency
+                // 64 ms), and it replaced a day of per-core fixes: a core that
+                // runs fast (N64 by 3 to 4%, Flycast's free-running thread,
+                // PPSSPP's double speed) fills the queue and is held; one that
+                // delivers sound in bursts (N64) waits instead of having the
+                // top of each burst thrown away as crackle; a stall cannot
+                // pile up delay. Nothing is discarded to keep time.
+                //
+                // THE GUARD, which Cabinet paid for (its issue #6): a gate on
+                // the speaker draining freezes the game whenever the speaker
+                // stops taking sound. Held for more than 250 ms with the queue
+                // not going down, the gate lets go and the clock paces the
+                // core as before, and says so once.
+                static constexpr double kAudioSyncMs = 64.0;
+                static uint64_t drainSeenNs = 0;
+                static double lastWaitingMs = 0.0;
+                static bool saidStuck = false;
+                bool holdForSpeaker = false;
+                if (audioStream && !core.isPs2() && core.speed() <= 1.0) {
+                    const uint64_t nowNs = SDL_GetTicksNS();
+                    const double rate = std::max(core.avInfo().sampleRate, 1.0);
+                    const double waitingMs =
+                        SDL_GetAudioStreamQueued(audioStream) / (4.0 * rate) * 1000.0;
+                    if (waitingMs <= kAudioSyncMs || waitingMs < lastWaitingMs ||
+                        drainSeenNs == 0) {
+                        drainSeenNs = nowNs;
+                        saidStuck = false;
+                    }
+                    holdForSpeaker = waitingMs > kAudioSyncMs &&
+                                     nowNs - drainSeenNs < 250'000'000ull;
+                    if (waitingMs > kAudioSyncMs && !holdForSpeaker && !saidStuck) {
+                        std::fprintf(stderr,
+                                     "[audio] the speaker is not taking sound; pacing by "
+                                     "the clock\n");
+                        saidStuck = true;
+                    }
+                    lastWaitingMs = waitingMs;
+                }
+                if (!holdForSpeaker) core.runFor(dt);
                 // A SNAPSHOT EVERY HALF SECOND OF PLAY, counted in the game's
                 // own frames so fast forward keeps them half a game-second
                 // apart. Taken here, compressed on rewind's worker.
@@ -10777,8 +10818,11 @@ int main(int argc, char** argv) {
                 // Fast forward's sound is discarded, not played fast: four
                 // times the samples would only pile up behind the picture.
                 // Rewind's too: it is a frame's sound played forwards.
-                // NEVER MORE THAN 64 ms OF SOUND WAITING, for every system —
-                // 2026-09-27. When a game stalls, the speaker plays silence;
+                // A SAFETY NET, NOT THE PACING — 2026-09-27. The speaker sets
+                // the pace above; this only catches what gets past it (a core
+                // that hands over a second of sound in one call). It used to
+                // be the pacing, at 64 ms, and threw away the top of every N64
+                // burst as crackle. The history: When a game stalls, the speaker plays silence;
                 // when it catches up, the sound it owed queued up behind and
                 // never drained, so every stall made the sound a little later
                 // for the rest of the session. Crazy Taxi 2 sat 200 ms behind
@@ -10788,7 +10832,7 @@ int main(int argc, char** argv) {
                 // from piling up. What does not fit is dropped: one small jump
                 // in the sound instead of a delay that lasts. Measured against
                 // this stream only, so it is the same on any machine.
-                static constexpr double kMaxWaitingMs = 64.0;
+                static constexpr double kMaxWaitingMs = 250.0;
                 static uint64_t droppedBytes = 0;
                 static uint64_t droppedLogAt = 0;
                 if (!samples.empty() && core.speed() <= 1.0 && !rewinding) {
