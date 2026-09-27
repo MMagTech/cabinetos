@@ -37,20 +37,21 @@ agreed). With promotion, every change is tried on `testing` and a merge
 makes `latest` that same image, so the test console on `testing` is never
 behind what users get, and testing a change needs no `bootc switch` and no
 extra reboot. **SSH is port 2222; sudo's password is
-`cat /var/lib/cabinetos-files/password`.** **#143 merged 2026-09-27 and was
-promoted: `latest` and `testing` are both `2026.09.27.7`** (digest
-`874c64f6`, the tested one, no rebuild). It carries the Dreamcast, PSP and
-N64 fixes, the speaker pacing and the four #89 settings (#148 was folded
-into it). **The A9 is booted on it, from the image, with no test drop-in.**
-MMagTech asked for the merge before playing anything on the image; the same
-code had been judged on the TV all afternoon through `tools/ui-loop.sh`.
-gamescope/drm, File access on, **a PIN set** (MMagTech's), the SanDisk
-"Games" stick attached, In-game shortcuts ON with the Lite 2's heart. **All
-downloads were cleared at MMagTech's request** (saves and states
-untouched). The VM is on `testing` `2026.09.26.4`. **Branches: `main`,
-`testing`, PR #42's `base-update/44.20260921` (parked); every other branch
-was deleted.** The A9 has `~/fb/sweep.sh` and `~/fb/sweep-all.txt` (the
-headless every-system sweep, below).
+`cat /var/lib/cabinetos-files/password`.** **#152 merged 2026-09-27 late and
+was promoted: `latest` and `testing` are both `2026.09.27.9`** (digest
+`c465bbf1`, the tested one, no rebuild). **The A9 is booted on it, from the
+image, no drop-in.** gamescope/drm, File access on, a PIN set (MMagTech's),
+the SanDisk "Games" stick attached, In-game shortcuts ON with the Lite 2's
+heart, Rumble On. tuned on `balanced`. The VM is on `testing` `2026.09.26.4`.
+**Branches: `main`, `testing`, PR #42's `base-update/44.20260921` (parked).**
+
+**NEXT, IN ORDER:** **#153 first** (PS2 never starts on a fresh install: its
+BIOS is not placed where PCSX2 looks; the A9 only works from a hand copy of
+2026-09-20). Then #150 (Bazzite's performance profile during games; measure
+PS2 first), #151 (Dreamcast crash after a 143 MB arcade state, not
+reproduced), then Picture quality (#63/#73, which now also owns PS1 DualShock
+and N64 Rumble Pak), offline (#88), the installer block. **One check owed from
+#152:** Lumines (PSP) loading a state made under the IR interpreter.
 
 **THE SESSION OF 2026-09-27 (LATE) DID THE EMULATOR QUEUE, BRANCH
 `emulator-queue`.** Decisions in `docs/PROJECT.md`, *The emulator queue:
@@ -85,12 +86,12 @@ recompilers, rumble, the download ring, plain refusals*. Short version:
   console; PROJECT.md has why). **The testing image `.8` does NOT have these
   fixes**; the branch was pushed to `testing` again at the end of the session
   for an image that does.
-- **STILL OWED ON THE TV, on that newer testing image:** Dreamcast and
-  GameCube rumble; Rumble Off; the download ring during a real download;
-  Mario Kart 64 plus an old state (recompiler); Lumines plus an old state;
-  GameCube screenshot; Dreamcast states (#140); optionally four pads (#115).
-  Then MMagTech's word "merge" (the merge promotes that image). Close #147,
-  #149, #145, #89, #146, #90, #130 with the merge ("Closes" in the PR body).
+- **ALSO PROVED ON THE TV, then merged as #152:** Dreamcast and GameCube
+  rumble, Rumble Off, the download ring, a pre-recompiler Mario Kart 64
+  state, GameCube and Dreamcast screenshots, a GameCube card uploaded on
+  exit, Dreamcast states (#140's item). On image `.9`, headless: Burnout 3
+  twice in one run. #147, #149, #145, #89, #146, #90, #130 closed with
+  comments. **Not done:** Lumines with an old state; four pads (#115).
 - **PS1 and N64 do not rumble by default**, as RetroArch, Batocera and Cabinet:
   their controller type is #73 (comment there). The Lite 2 rumbles only in
   Switch mode (S).
