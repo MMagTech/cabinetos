@@ -37,21 +37,62 @@ agreed). With promotion, every change is tried on `testing` and a merge
 makes `latest` that same image, so the test console on `testing` is never
 behind what users get, and testing a change needs no `bootc switch` and no
 extra reboot. **SSH is port 2222; sudo's password is
-`cat /var/lib/cabinetos-files/password`.** **#104 (players, Add a controller;
-merge `329239a`) and #123 (the controller list; merge `1fc3bd0`) merged
-2026-09-26 and were promoted: `latest` and `testing` are both
-`2026.09.26.10`, and the A9 is on it** (`bootc status` is the truth), from
-`testing`, gamescope/drm, File access left on, **a PIN set** (MMagTech's),
-the SanDisk "Games" stick attached. The VM is on `testing` `2026.09.26.4`.
-Branches left: `main`, `testing`, the merged `controllers` and
-`controller-database` (safe to delete), and PR #42's
-`base-update/44.20260921`.
+`cat /var/lib/cabinetos-files/password`.** `latest` and `testing` are both
+`2026.09.26.10` (#104 and #123), and the A9's image is that (`bootc status`
+is the truth), from `testing`, gamescope/drm, File access on, **a PIN set**
+(MMagTech's), the SanDisk "Games" stick attached. **BUT THE A9 IS RUNNING A
+HAND-BUILT FRONTEND from `tools/ui-loop.sh`** (the `in-game-shortcuts`
+branch) until `tools/ui-loop.sh --restore` or a reboot. The VM is on
+`testing` `2026.09.26.4`. Branches: `main`, `testing`, **`in-game-shortcuts`
+(pushed, not merged)**, and PR #42's `base-update/44.20260921` (parked, on
+MMagTech's word).
 
-**NEXT: THE IN-GAME SHORTCUTS (#76 to #80), BEFORE THE EMULATORS** (MMagTech,
-after #123 merged). **The proposal and three open calls are the comment on
-issue #76**; walk them with him, then fix #103 first. The weekly controller
-list job ran once by hand after #123: no upstream change, no pull request,
-so the pull-request half is still unexercised.
+**NEXT: THE TESTING IMAGE FOR `in-game-shortcuts`, THEN MERGE ON HIS WORD.**
+Everything on it was judged on the TV with the loop, one piece at a time
+(session of 2026-09-27, below). Push it to `testing`, let the image build
+(~8 min), `bootc upgrade` the A9, have MMagTech judge the real image, and
+merge only on his explicit word ([[merge approval]] in memory). **Last thing
+built, not yet reported back on: Home's Resume** (loads the newest state,
+else just starts). Then the emulators (the order below, step 3).
+
+**THE SESSION OF 2026-09-27 BUILT THE IN-GAME SHORTCUTS (#76 TO #80) AND FIXED
+#103, BRANCH `in-game-shortcuts`.** Every decision, with the reasons and what
+was tried and dropped, is in `docs/PROJECT.md`: *The in-game shortcuts, and
+three states per game*, *The shortcut button is set by pressing it*, *Rewind
+is for getting back*, and *The launch screen, redone on the TV*. Short
+version:
+
+- **#103:** anything held while the pause menu is up, or on the frame it
+  closes, is kept from the game until released (`heldThroughMenu`).
+- **Sound was at the first game's rate for every later game** until the app
+  restarted, since 2026-09-19 (`426d55c`); fixed, and possibly the cause of
+  #84 (NES sound). See *Things that will bite you*.
+- **Settings > Controllers:** In-game shortcuts Off/On (off by default); with
+  it on, a **Shortcut button** row for the pad in hand, set by pressing the
+  button, read RAW and remembered per kind of pad (`shortcuts.{h,cpp}`),
+  Home by default. The unbuilt Button mapping row is gone.
+- **In a game (switch on):** tap = pause menu; hold with **R** save, **L**
+  load newest, **ZR** fast forward (4x, sound off), **ZL** rewind, **Y**
+  screenshot. L3+R3 always opens the menu. Fast forward and rewind only
+  where states are; screenshots meant for every game (#130 for PS2/GC).
+- **Three states per game per user, rotating** on RomM and locally
+  (`Uploader::rotate`); a first save clears older Cabinet states down to
+  three (accepted, alpha). Cabinet should follow: MMagTech/cabinet#8.
+- **After any state loads the game waits** on "Press (A) to continue" (A
+  only). Launch screen picks, Load latest state, the load shortcut, Resume.
+- **Rewind:** a snapshot every half second, 15 s, in memory, compressed on a
+  worker (`rewind.{h,cpp}`), every system with states. N64 snapshots take up
+  to 18.6 ms (a frame); recheck after #82 (#78 comment).
+- **Screenshots** to RomM's per-user gallery (`POST /api/screenshots`),
+  retried like saves; also the pause menu's **Screenshot** item.
+- **Launch screen:** column left, cover right, same layout for every game;
+  facts line (year, maker, players from RomM); the game's own save on the
+  Play row; Continue from (three states, play from one); dissolve in and out,
+  the page fading in whole once loaded. MMagTech: *"that's it, perfect."*
+- **Filed:** #124 other apps' saves and states, #125 to #127 Home, #128 time
+  played, #129 dark mode and an Appearance setting, #130 PS2/GameCube
+  screenshots. The 8BitDo Lite 2's list entry is wrong (heart is `BTN_C`, raw
+  button 2, list says `guide:b12`); fixing the list was dropped.
 
 **MMagTech, on what comes next (2026-09-26): finish the app; no side
 projects.** The `main.cpp` split waits until it starts costing: a change to
@@ -87,11 +128,10 @@ Settings; this is everything open, in order:
    Includes one pass over every notification for length (MMagTech,
    2026-09-26: *"some of these notifications are getting real long"*).
 
-**The in-game features (#76 to #80) have a shape now** (MMagTech,
-2026-09-26): off by default, one Settings row, fixed combinations, rewind
-only where cheap. Still roadmap step 4, after the emulators. PROJECT.md,
-*No mapping screen, and the in-game shortcuts' shape*. Also parked: #74 RetroAchievements
-and #75 background colour (both "later"), #81 stale doc lines, PR #42.
+**The in-game features (#76 to #80) are BUILT** on `in-game-shortcuts`
+(2026-09-27, above); the order was changed the evening before to do them
+before the emulators. Also parked: #74 RetroAchievements and #75 background
+colour (both "later"), #81 stale doc lines, PR #42.
 
 **THE SESSION OF 2026-09-26 (EVENING) BUILT PLAYERS (#64) AND ADD A
 CONTROLLER (#65), BRANCH `controllers`.** Every step judged on the TV with
@@ -2795,6 +2835,17 @@ then `YDOTOOL_SOCKET=/tmp/ydotool.sock ydotool key 108:1 108:0` (Down; Up
 - **Retargeting a pull request does not re-run CI.** Close and reopen it.
 - **`core-manifest.json` IS on GitHub**, at `docs/core-manifest.json` in
   Cabinet, and has been since `37ca75d`.
+
+### TWO GAMES AT DIFFERENT SOUND RATES, WITHOUT A RESTART — learned 2026-09-27
+
+The audio stream was opened once, at the first game's sample rate, and kept
+for every later game until the app restarted. It hid for eight days because
+**every loop deploy, image update and reboot restarts the app**, so most
+tests played one game in a fresh app, and a fresh app is always right. It
+showed as DoDonPachi (47997 Hz) after Mortal Kombat II (32040 Hz): no sound
+while playing, then the backlog playing on over Home after quitting, which
+MMagTech read as "another version is running". **Any per-game setting that is
+opened once and reused needs a test of two different games in one run.**
 
 ### AND THE LOGS ARE READABLE AFTER ALL — worth knowing, it cost time today
 
