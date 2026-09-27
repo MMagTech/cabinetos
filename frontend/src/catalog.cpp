@@ -1,5 +1,7 @@
 #include "catalog.h"
 
+#include "gpu.h"
+
 #include <sys/stat.h>
 
 #include <map>
@@ -537,6 +539,33 @@ std::map<std::string, std::string> optionOverrides(const std::string& core) {
             {"pcsx2_shared_memory_cards", "disabled"},
             {"pcsx2_analog_mode1", "enabled"},
             {"pcsx2_analog_mode2", "enabled"},
+        };
+    }
+    // NINTENDO 64 DRAWS WITH ParaLLEl-RDP WHEREVER THERE IS VULKAN — 2026-09-27
+    // (#82). The declared default is GLideN64, which redraws the N64's
+    // graphics with modern techniques and gets textures wrong in game after
+    // game: MMagTech saw it in "almost every game", Mario Kart, Wave Race and
+    // Hydro Thunder, and on Cabinet too. What the two share is GLideN64 built
+    // for GLES3 (build-core.sh, FORCE_GLES3); RetroArch and Batocera run the
+    // same default on desktop GL, which this frontend's GLES context cannot
+    // host. ParaLLEl-RDP runs the N64's own graphics chip on the GPU, and is
+    // what those frontends offer when accuracy matters (Batocera exposes it
+    // per system). It needs the LLE RSP beside it; both are compiled in.
+    // Run headless on the A9 with the three games: Vulkan device from the
+    // core, 60 fps, every wall, the water and the boat drawn.
+    //
+    // ONLY WITH VULKAN, and that is the fallback, not an afterthought: a
+    // machine without it (the test VM, older or odd hardware) keeps GLideN64
+    // on GLES exactly as before.
+    //
+    // 2x is a starting value: the core's default 1x is the N64's own 320x240,
+    // softer than the 640x480 GLideN64 drew here. Judged on the TV; open
+    // question 23's quality setting is where it moves later.
+    if (coreName == "mupen64plus" && cab::gpu::vulkan().available) {
+        return {
+            {"mupen64plus-rdp-plugin", "parallel"},
+            {"mupen64plus-rsp-plugin", "parallel"},
+            {"mupen64plus-parallel-rdp-upscaling", "2x"},
         };
     }
     if (coreName == "opera") {
