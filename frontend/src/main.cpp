@@ -5877,7 +5877,7 @@ int main(int argc, char** argv) {
         int romId = 0;
         std::vector<screens::StateChoice> list;
         std::string saveWhen;
-        std::vector<std::string> facts;
+        screens::DetailScreen::Facts facts;
         int wantRom = 0;
         std::string wantTag, wantSaveTag;
         // Asked again once the uploads are done: a game just left may have
@@ -5899,15 +5899,15 @@ int main(int argc, char** argv) {
             std::vector<screens::StateChoice> out;
             std::string err, saveWhen;
             // YEAR, MAKER, PLAYERS, under the cover. Whatever RomM has.
-            std::vector<std::string> facts;
+            screens::DetailScreen::Facts facts;
             {
                 romm::Client::Facts f;
                 std::string ferr;
                 if (liveClient.fetchFacts(romId, &f, &ferr)) {
-                    if (f.year > 0) facts.push_back(std::to_string(f.year));
-                    if (!f.maker.empty()) facts.push_back(f.maker);
+                    if (f.year > 0) facts.year = std::to_string(f.year);
+                    facts.maker = f.maker;
                     if (!f.players.empty())
-                        facts.push_back(f.players + (f.players == "1" ? " player" : " players"));
+                        facts.players = f.players + (f.players == "1" ? " player" : " players");
                 }
             }
             // THE GAME'S OWN SAVE, the newest under the tag it travels by, as

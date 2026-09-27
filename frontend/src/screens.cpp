@@ -1096,7 +1096,7 @@ void DetailScreen::open(GameDetail d) {
     slot_ = 0;
     states_.clear();
     saveWhen_.clear();
-    facts_.clear();
+    facts_ = {};
     inStates_ = false;
     stateSlot_ = 0;
     rebuildRows();
@@ -1130,7 +1130,7 @@ void DetailScreen::rebuildRows() {
     // They are not built yet and a row that does nothing is worse than no row.
 }
 
-void DetailScreen::setFacts(std::vector<std::string> lines) { facts_ = std::move(lines); }
+void DetailScreen::setFacts(Facts f) { facts_ = std::move(f); }
 
 void DetailScreen::setSaveWhen(std::string when) {
     saveWhen_ = std::move(when);
@@ -1305,20 +1305,33 @@ void DetailScreen::draw(Ctx& c) {
          c.text.ascent(ui::TextStyle::Callout, c.sc);
 
     // WHAT THE GAME IS, on one line: platform, then RomM's year, maker and
-    // players where it has them, then the size.
-    std::string meta = game_.platform;
-    for (const std::string& f : facts_) meta += "  \xC2\xB7  " + f;
+    // players where it has them, then the size. IT MUST FIT THE COLUMN: on
+    // "Super Nintendo Entertainment System" with all four it ran into the
+    // cover (MMagTech on the TV, 2026-09-27). So the size goes first, then the
+    // maker, and only then is what is left cut short.
+    std::string size;
     if (game_.sizeBytes > 0) {
         // A unit that suits the number. A library holds a 19 KB Game Boy ROM
         // and a 1.78 GB arcade set, and megabytes flatter neither: the first
         // reads as "0 MB", which looks like the server failed to say.
         char buf[64];
         const double b = static_cast<double>(game_.sizeBytes);
-        if (b >= 1e9) std::snprintf(buf, sizeof buf, "  ·  %.1f GB", b / 1e9);
-        else if (b >= 1e6) std::snprintf(buf, sizeof buf, "  ·  %.0f MB", b / 1e6);
-        else std::snprintf(buf, sizeof buf, "  ·  %.0f KB", b / 1e3);
-        meta += buf;
+        if (b >= 1e9) std::snprintf(buf, sizeof buf, "%.1f GB", b / 1e9);
+        else if (b >= 1e6) std::snprintf(buf, sizeof buf, "%.0f MB", b / 1e6);
+        else std::snprintf(buf, sizeof buf, "%.0f KB", b / 1e3);
+        size = buf;
     }
+    bool withSize = true, withMaker = true;
+    auto joined = [&]() {
+        std::string m = game_.platform;
+        for (const std::string& p : {facts_.year, withMaker ? facts_.maker : std::string(),
+                                     facts_.players, withSize ? size : std::string()})
+            if (!p.empty()) m += "  \xC2\xB7  " + p;
+        return m;
+    };
+    if (c.text.measure(joined(), ui::TextStyle::Callout, c.sc) > textW) withSize = false;
+    if (c.text.measure(joined(), ui::TextStyle::Callout, c.sc) > textW) withMaker = false;
+    const std::string meta = c.text.truncate(joined(), ui::TextStyle::Callout, c.sc, textW);
     c.text.draw(c.r, meta, textX, y, ui::TextStyle::Callout,
                 ui::Color::white(0.60f * a), c.sc);
 
