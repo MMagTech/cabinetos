@@ -37,55 +37,51 @@ agreed). With promotion, every change is tried on `testing` and a merge
 makes `latest` that same image, so the test console on `testing` is never
 behind what users get, and testing a change needs no `bootc switch` and no
 extra reboot. **SSH is port 2222; sudo's password is
-`cat /var/lib/cabinetos-files/password`.** **`home-and-appearance` merged
-2026-09-27 as `7445002` (#131) and was promoted: `latest` and `testing` are
-both `2026.09.27.2`** (digest `c4044383`, the tested one, no rebuild), and
-**the A9 is booted on it** (`bootc status` is the truth), from `testing`, gamescope/drm, File
-access on, **a PIN set** (MMagTech's), the SanDisk "Games" stick attached,
-In-game shortcuts ON with the Lite 2's heart set as its shortcut button. The
-VM is on `testing` `2026.09.26.4`. Branches: `main`, `testing`, the merged
-`in-game-shortcuts` and `home-and-appearance` (safe to delete), and PR #42's `base-update/44.20260921`
-(parked, on MMagTech's word). The handover commits after the tested one
-merged separately as documentation, which builds nothing.
+`cat /var/lib/cabinetos-files/password`.** **`time-played` merged 2026-09-27 (#142) and was promoted: `latest` and
+`testing` are both `2026.09.27.4`** (digest `66d37378`, the tested one, no
+rebuild), after `startup-fade` (#141, `2026.09.27.3`). **The A9 is booted on
+it**, from `testing`. The A9 is on `testing`,
+gamescope/drm, File access on, **a PIN set** (MMagTech's), the SanDisk
+"Games" stick attached, In-game shortcuts ON with the Lite 2's heart as its
+shortcut button (`bootc status` is the truth). The VM is on `testing`
+`2026.09.26.4`. Branches: `main`, `testing`, PR #42's
+`base-update/44.20260921` (parked, on MMagTech's word); every merged branch
+was deleted. The handover commits merge after the tested one, as documentation, which
+builds nothing.
 
-**THEN, MMAGTECH 2026-09-27: "I'd really rather focus on features not yet
-implemented or other fixes", NOT THE EMULATORS YET.** This overrides step 3
-of the order below for now. Pick with him at the start of the session;
-candidates: #124 other apps' saves and states (matters to anyone trying the
-console), #125 to #127 Home (focus on two shelves, Up/Down landing, Home in
-the top bar), #129 dark mode and an Appearance setting, #128 time played,
-#130 PS2/GameCube screenshots, #73 the per-system pause-menu options, #88
-offline play, account switching (designed 2026-09-21, not built), and the
-installer, boot splash and power button.
+**THE SESSION OF 2026-09-27 (AFTERNOON) DID #109 AND #128.** Decisions in
+`docs/PROJECT.md`, *The startup screen lifts off Home (#109)* and *Time
+played (#128)*. Short version:
 
-**THE SESSION OF 2026-09-27 (LATE) BUILT THE HOME FIXES AND APPEARANCE,
-BRANCH `home-and-appearance`, ALL JUDGED ON THE TV.** #125 (focus per shelf
-place), #126 (Up/Down land on the cover above or below; per-shelf memory
-gone), #127 (Home first in the bar; arriving by bar or shoulder starts fresh,
-Back keeps your place), brighter bar pills (30%/55%), the bar cursor follows
-L1/R1, the power menu on Home opens on Cancel, the power icon DROPPED,
-Appearance (Standard/Dark/Scheduled with one Dark hours row) and sixteen
-Colors per account (#75), the switch curtain fading to the new person's
-colour, and the menus dithered (banding). Decisions in `docs/PROJECT.md`,
-*Home, the top bar, and Appearance*. **Judged on the testing image and
-merged** (#131).
+- **#109, merged:** Home starts behind the curtain drawn as the startup
+  screen and lifts with `kCurtainUp`, after Home's covers have loaded and
+  faded in (at most 1 s; measured 385 to 420 ms on the A9). Sign out already
+  comes down onto the same screen. The 2026-09-23 freeze did not come back in
+  seven session restarts and a real update reboot. MMagTech: looks good.
+- **#128, merged:** each game's session goes to RomM (`POST /api/play-sessions`)
+  through the uploader; the launch screen's facts line ends "2 minutes
+  played" / "12 hours played". Pause menu and a game left alone past 20
+  minutes do not count; under a minute is not recorded; `playtime.json` per
+  person holds the session in progress (every minute), what is owed, and
+  RomM's last total. `--playtime-test`, 22 checks. **RomM returns only the
+  token's device's sessions**, and every CabinetOS console pairs as the same
+  device (`cabinetos`), so the total is all CabinetOS play for that person;
+  web player and Apple TV are not in it: **filed upstream, rommapp/romm#4837.**
+  A long maker is shortened so the time is never cut off. Proved on the TV:
+  DoDonPachi, 157 of 164 s counted, RomM took it, the page read it back.
+- **Five issues built by #131 were still open; closed with comments**
+  (#75, #125, #126, #127, #129). MMagTech: close each issue as its work
+  merges, with a comment. PR bodies say "Closes #N".
+- **A slow boot seen once:** 11 s in the library load (before Home exists),
+  once in twenty boots. If it recurs, time each server call.
 
-**PLANNED WORK THAT HAD NO ISSUE IS FILED** (same session): a sweep of the
-docs, checked against the code twice, gave #132 to #140 (sleep per machine,
-the shader cache, a shipping image without the development shell, signing,
-installer splash and Wi-Fi, os-release naming, the new-systems order, a Test
-builds switch, and a checklist of owed hardware tests), and the per-game half
-of picture quality as a comment on #63. The launch screen's "different core"
-and "export" are dropped. **Not filed, his call and not yet made:** Download
-All for a whole system (P:8559) and rumble (not implemented anywhere). Stale
-"not built" lines found by the same sweep belong to #81.
-
-**NEXT, RECOMMENDED TO MMAGTECH 2026-09-27:** #128 time played and #109 the
-harsh cut from the startup screen to Home, as one quick session like this
-one; then the installer block (#105 to #108, #136), the one real blocker
-before a public release. Pick with him. **#124 is PARKED (label `later`):** testing it means making saves
-and states in each of RomM's web-player emulators, and MMagTech: too much
-for now. Kept open for when someone reports starting over.
+**NEXT, MMAGTECH 2026-09-27: THE EMULATOR BUGS**, walked with him first and
+the order agreed: GameCube audio (#83), NES audio (#84, possibly fixed by
+`2aa5f08`, ask), Dreamcast on the A9 (#85, and a launch after a refused one
+can freeze the console), N64 states (#86), N64 textures (#82, a fixed amount
+of effort), PSP exit crash (#87), per-system options (#89), missing-BIOS
+warning (#90). Then the installer block (#105 to #108, #136). **#124 is
+PARKED (label `later`).**
 
 **THE SESSION OF 2026-09-27 BUILT THE IN-GAME SHORTCUTS (#76 TO #80) AND FIXED
 #103, BRANCH `in-game-shortcuts`.** Every decision, with the reasons and what
@@ -2414,6 +2410,12 @@ then `YDOTOOL_SOCKET=/tmp/ydotool.sock ydotool key 108:1 108:0` (Down; Up
   `--screen settings` comes back on Settings, not Home.
 
 ### About the testing channel and update tests — new 2026-09-25
+
+- **PROMOTION COMPARES WHOLE TREES, DOCS INCLUDED** (`ci/promote-tested.sh`,
+  learned 2026-09-27). A handover committed to `main` while a tested PR is
+  still open makes main's tree differ from the tested one, and the merge then
+  BUILDS a new image instead of promoting the judged one. Merge the tested
+  PR first; write the handover to `main` after.
 
 - **CREATING `testing` AT A COMMIT GITHUB ALREADY HAS BUILDS NOTHING.** The
   first push to it carried no new commits (the same commit had gone up on
