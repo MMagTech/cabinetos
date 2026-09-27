@@ -52,6 +52,44 @@ untouched). The VM is on `testing` `2026.09.26.4`. **Branches: `main`,
 was deleted.** The A9 has `~/fb/sweep.sh` and `~/fb/sweep-all.txt` (the
 headless every-system sweep, below).
 
+**THE SESSION OF 2026-09-27 (LATE) DID THE EMULATOR QUEUE, BRANCH
+`emulator-queue`.** Decisions in `docs/PROJECT.md`, *The emulator queue:
+recompilers, rumble, the download ring, plain refusals*. Short version:
+
+- **#147:** N64 built with its recompiler (Mario Kart 64 6.05 → 1.91 ms a
+  frame; states cross both ways, identical to the old core's own round
+  trip); PSP on PPSSPP's default recompiler (MMagTech: the documentation is
+  enough, no measurement).
+- **#149 rumble:** every libretro core plus PS2 (PCSX2's vibration call
+  taken over with `--wrap` in `frontend/ps2/compile.sh`), Settings >
+  Controllers > Rumble, on by default.
+- **#145:** Home's download is a ring left of the account chip; the chip no
+  longer moves. **No arrow** (MMagTech: horrible).
+- **#89:** MAME 2003-Plus's undeclared options are by design; FBNeo is clean.
+  DS stays parked. #89 is done.
+- **#146/#90:** plain one-line refusals; "No Saturn BIOS on your server" only
+  when a BIOS-only system got none. The ahead-of-time check was dropped in
+  conversation. Arcade sets must be non-merged (they carry the BIOS).
+- **#130:** PS2 screenshots read PCSX2's frame texture.
+- **#150 filed:** Bazzite's power profiles are never switched (the A9 sits on
+  `balanced`); measured on N64, recommend performance in a game.
+- **New instruments:** `--speed-test` (+ `CABINETOS_PACED=1`,
+  `CABINETOS_WARM`, `CABINETOS_TIMED`) and `CABINETOS_STATE_OUT/IN` on
+  `--state-test`; `--download <id>` now fetches by id and waits for Home.
+- **Owed on the TV** (the image, not the loop: the loop uses the image's
+  cores, and the N64 core and PS2 bridge changed): rumble on N64, PS1, PS2,
+  GameCube, Dreamcast and a Game Boy rumble cart; the Rumble row; the ring
+  during a real download; an older PSP state loading under the recompiler;
+  PS2 and GameCube screenshots; Dreamcast states (#140); players 3 and 4
+  (#115); the kids' licensed Switch pad (#116).
+- **A9 scratch state:** `~/fb/frontend2` (a second build tree), `~/fb/repo`
+  (cores built by hand: the recompiler N64 core), `~/fb/speed.sh`,
+  `~/fb/xstate.sh`, `~/fb/govtest.sh`, `~/fb/fetch.sh`. tuned is back on
+  `balanced`.
+
+**NEXT after this merges:** #150 (measure PS2 first), then Picture quality
+(#63/#73), offline (#88), the installer block.
+
 **THE SESSION OF 2026-09-27 (AFTERNOON) DID #109 AND #128.** Decisions in
 `docs/PROJECT.md`, *The startup screen lifts off Home (#109)* and *Time
 played (#128)*. Short version:
@@ -120,9 +158,8 @@ the pace* and *The emulator settings audit (#89)*. Short version:
   not a game. MMagTech asked for it deleted; that was declined as a
   permanent deletion on his server, and he was told where to do it in RomM.
 
-**NEXT, the emulator queue:** #147, rumble (#149), #145,
-MAME's options (#89), #90 (BIOS warning, walk the scenarios first). Then the installer block (#105
-to #108, #136). #124 stays parked.
+**The emulator queue that stood here was done the same night; see the
+block above.** #124 stays parked.
 
 **THE SESSION OF 2026-09-27 BUILT THE IN-GAME SHORTCUTS (#76 TO #80) AND FIXED
 #103, BRANCH `in-game-shortcuts`.** Every decision, with the reasons and what

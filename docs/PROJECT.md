@@ -1974,6 +1974,103 @@ which belong to open question 23's levels; the options MAME asks for and
 never declares. **Found on the way: N64 and PSP run without their
 recompilers** (#147).
 
+### The emulator queue: recompilers, rumble, the download ring, plain refusals — 2026-09-27 (late)
+
+**N64 and PSP use their recompilers (#147).** Both ran interpreters because
+Cabinet's Apple builds may not run a recompiler: `WITH_DYNAREC` empty for
+mupen64plus-next, `ppsspp_cpu_core = "IR JIT"` (PPSSPP's IR interpreter, which
+upstream wrote for iOS). That is a platform rule, not a save-format one.
+RetroArch, Batocera and the libretro documentation run both with their
+recompilers on a PC, and MMagTech took the documentation as enough.
+- N64 measured on the A9 (`--speed-test`, 1800 frames after 600, back to
+  back): Mario Kart 64 6.05 ms a frame on the cached interpreter, 1.91 ms on
+  the recompiler, same new core with only `mupen64plus-cpucore` changed.
+  Before/after builds: Wave Race 64 about 4.5 → 2.6 ms, Hydro Thunder 5.8 →
+  1.1 ms, Mario Kart 5.8 → 2.1 ms.
+- **States cross both ways.** `CABINETOS_STATE_OUT`/`IN` hand a state from
+  one run to another; old interpreter core → new recompiler core, and back,
+  on Mario Kart 64 and Hydro Thunder, gave results identical to the digit to
+  the old core's own round trip (which is #86's known "not bit exact",
+  settled on the TV as fine). The state is the emulated machine, not the
+  engine.
+- PSP: `optionOverrides` no longer answers the CPU engine, so PPSSPP's own
+  default, the recompiler ("JIT"), applies. Not measured: `--speed-test`
+  cannot time PPSSPP (it emulates on its own thread; retro_run only collects
+  a frame, and the headless run hangs at unload), and MMagTech called the
+  measurement unnecessary. A state made under "IR JIT" loading is checked on
+  the TV.
+
+**Rumble (#149), matching Cabinet.** `rumble.{h,cpp}`: every libretro core
+gets `GET_RUMBLE_INTERFACE` (answered even with the switch off; the switch
+is applied at the pad, so turning it on mid-game works). Strong motor →
+SDL's low-frequency, weak → high-frequency, as RetroArch's SDL driver does.
+PS2 is not a libretro core: PCSX2 reports every pad's motors through one
+function, `InputManager::SetPadVibrationIntensity`, and the bridge takes it
+over at link time with `--wrap` (no patch to PCSX2; the real function has
+no bindings here and would do nothing), exposing `cps2_get_rumble`, read
+once a frame. `ps2.cpp` resolves it optionally, so an older bridge plays
+without motors. **Every send lasts 250 ms and is renewed while it holds**:
+RetroArch sends without an end and stops explicitly, but a console that can
+crash is safer with an end on every send. Stopped on pause, state load,
+rewind, game end, a pad changing seat.
+
+**Home's download is a ring left of the account chip (#145).** The chip owns
+the corner and never moves (it used to be fitted left of a line and a
+percentage, and jumped whenever a download started or ended). The ring fills
+clockwise from the top in the accent cyan; a quarter turns while unpacking;
+no number. Drawn as overlapping solid discs (the renderer has only rounded
+rectangles; see-through discs stack into blotches) over one inset-rim
+circle for the track. **A down arrow inside was tried twice, drawn and as
+the font's glyph, and MMagTech: "the arrow in the ring is horrible". Gone.**
+
+**MAME 2003-Plus's "never declared" options are expected (#89).** Read in
+its source at the pinned commit (`src/mame2003/core_options.c`): it
+declares only the options the loaded game can use (vector settings for a
+vector game, the Neo Geo BIOS for a Neo Geo game, crosshairs for a light
+gun game) and asks for all of them, keeping its own value for any left
+unanswered. RetroArch answers them exactly as this console does. FBNeo
+declares 16 and asks 16. Nothing to fix; `core.cpp` says so. **With DS
+parked, #89 is done.**
+
+**A launch that fails says one plain sentence (#146, #90).** "Couldn't start
+this game", "Couldn't download this game", "Couldn't open this game's
+file"; the technical reason goes to the log. **The BIOS warning was cut
+down to wording, in conversation:** a check ahead of time (a "No BIOS" line
+on the system's tile, Play greyed) was designed, and dropped because
+Cabinet has none either and MMagTech's own server holds every BIOS; it
+would only ever help a stranger, once. What remains: if a system that
+cannot start without its BIOS (3DO, Saturn, Sega CD, PS2, TurboGrafx-CD;
+`catalog::needsBios`) got none from the server and the game then fails,
+the page says "No Saturn BIOS on your server". Offline, nothing is claimed.
+**Not tested:** the BIOS wording, because the only server has every BIOS
+and deleting one from it was not on the table.
+
+**Arcade sets must be non-merged (MMagTech, 2026-09-27).** A non-merged
+set carries everything a game needs in its own zip, board BIOS included:
+Metal Slug 2's zip on this server holds the whole Neo Geo BIOS set
+(`sp-s2.sp1`, `000-lo.lo`, `sfix.sfix`, `sm1.sm1`, every Unibios). So arcade
+needs no BIOS check. Some non-merged sets published online leave Neo Geo's
+BIOS out; the server's separate `neogeo.zip` is fetched as firmware anyway.
+
+**Saturn's BIOS on this server is `saturn_bios.bin`** (MD5 `af5828fd…`, a
+v1.00 BIOS, the name other Saturn emulators use), not either file Beetle
+Saturn documents (`sega_101.bin` 85ec9ca4…, `mpr-17933.bin` 3240872c…). The
+console copies it under both names by size, as Cabinet does
+(`NativeLauncher.firmwareNames`). It plays; if a Saturn game misbehaves,
+adding the two documented files to RomM is the first thing to try.
+
+**PS2 screenshots (#130):** `Core::snapshot` reads the texture the frontend
+fills from PCSX2. GameCube was never refused in code (Dolphin is a libretro
+core here and takes the Vulkan path); checked on the TV.
+
+**Bazzite's power profile, measured, filed as #150.** CabinetOS sits on plain
+tuned `balanced` always, because the desktop and Steam that switch Bazzite's
+profiles were removed. At N64's own pace on the A9, `throughput-performance-bazzite`
+made a typical frame 15 to 40% cheaper on the heavier games, with every frame
+far inside its budget either way. Power saver is for batteries: Home drew the
+same on it (2026-09-22). Recommended: performance during a game, balanced
+on Home; to measure on PS2 before building.
+
 ### Time played (#128) — 2026-09-27
 
 **What RomM has (checked in its source, 5.1.0 and 5.3.1):** play sessions,

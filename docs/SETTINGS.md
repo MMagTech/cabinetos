@@ -160,6 +160,14 @@ Decided with MMagTech 2026-09-26, from the things people will actually do.
   position, and a remap has no clean owner with four players.
 - **A playing pad dropping out opens the pause menu**, as on Switch and
   Apple TV (MMagTech: yes). Any pad can resume.
+- **Rumble: Off / On, on by default** (#149, decided with MMagTech
+  2026-09-27: match Cabinet). One switch for the console, every pad and
+  every system with motors: N64's Rumble Pak, PlayStation's DualShock (PS1
+  and PS2), GameCube, Dreamcast's Puru Puru Pack, Game Boy rumble carts.
+  Below Add a controller, above In-game shortcuts. Motors stop in the pause
+  menu, while a state loads, during rewind and when the game ends; every
+  send lasts 250 ms and is renewed while it holds, so a crash cannot leave
+  a pad buzzing. Pads without motors ignore it.
 
 ## Network
 
