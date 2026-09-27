@@ -1104,9 +1104,9 @@ void DetailScreen::open(GameDetail d) {
     stateSlot_ = 0;
     rebuildRows();
     focus_.settle(1.0f);
-    appear_.retarget(0.0f, 0.0f);
-    appear_.elapsed = 0.0f;
-    appear_.retarget(1.0f, 0.280f);   // the launch transition's own duration
+    // NOT FADED IN YET: see draw(), which starts it once everything is here.
+    appear_.settle(0.0f);
+    started_ = false;
 }
 
 void DetailScreen::rebuildRows() {
@@ -1135,11 +1135,7 @@ void DetailScreen::rebuildRows() {
 
 void DetailScreen::setFacts(Facts f) { facts_ = std::move(f); }
 
-void DetailScreen::detailsArrived() {
-    if (detailsIn_) return;
-    detailsIn_ = true;
-    details_.retarget(1.0f, design::kDetailsFade);
-}
+void DetailScreen::detailsArrived() { detailsIn_ = true; }
 
 std::string DetailScreen::factsLine() const {
     std::string m;
@@ -1163,9 +1159,7 @@ void DetailScreen::tick(float dt) {
     focus_.tick(dt);
     appear_.tick(dt);
     details_.tick(dt);
-    // RomM slow or not asked at all: show what there is rather than wait on.
     waited_ += dt;
-    if (!detailsIn_ && waited_ >= design::kDetailsWait) detailsArrived();
 }
 
 Result DetailScreen::key(Nav n) {
@@ -1211,6 +1205,23 @@ Result DetailScreen::key(Nav n) {
 }
 
 void DetailScreen::draw(Ctx& c) {
+    // THE WHOLE PAGE FADES IN AT ONCE, when everything behind it has loaded:
+    // RomM's answer (facts, save, states), the cover, and every state's
+    // picture. Parts arriving one by one read as a page assembling itself
+    // (MMagTech on the TV, 2026-09-27: "everything faded in at once once
+    // stuff in the background was loaded"). RomM slow or away, it stops
+    // waiting at kDetailsWait and fades in with what it has.
+    if (!started_) {
+        bool ready = detailsIn_;
+        if (ready && !game_.coverLarge.empty()) ready = c.images.get(game_.coverLarge).ready;
+        for (const StateChoice& st : states_)
+            if (ready && !st.picture.empty()) ready = c.images.get(st.picture).ready;
+        if (ready || waited_ >= design::kDetailsWait) {
+            started_ = true;
+            details_.settle(1.0f);
+            appear_.retarget(1.0f, design::kDetailsFade);
+        }
+    }
     const float a = appear_.value();
 
     // THE ARTWORK IS ITS OWN BACKDROP. A full-screen cover rather than a push,

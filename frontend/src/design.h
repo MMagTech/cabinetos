@@ -483,10 +483,10 @@ constexpr float kDetailRowGap = 16.0f;
 // guesses, to be judged on the television.
 constexpr float kDetailCoverGap = 80.0f;
 constexpr float kDetailCoverMaxHeight = 760.0f;   // grown to the column, at most
-// RomM's parts of the launch screen fade in together, over this long, once
-// they arrive, or once this long has passed without an answer.
-constexpr float kDetailsFade = 0.30f;
-constexpr float kDetailsWait = 0.60f;
+// The launch screen fades in whole, over this long, once everything behind it
+// has loaded, or once this long has passed without it all.
+constexpr float kDetailsFade = 0.35f;
+constexpr float kDetailsWait = 0.80f;
 constexpr float kStateCardGap = 28.0f;
 constexpr float kStateShelfGap = 40.0f;
 constexpr float kStateBlockMinTop = 90.0f;

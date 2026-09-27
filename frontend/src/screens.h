@@ -606,6 +606,7 @@ private:
     design::Animated details_;
     float waited_ = 0.0f;
     bool detailsIn_ = false;
+    bool started_ = false;
 };
 
 }  // namespace screens
