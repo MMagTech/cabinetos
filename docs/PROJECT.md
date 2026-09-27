@@ -1630,6 +1630,16 @@ slots"* without *"having to pick which slot you save to."*
   but RomM holds states the console never shows and the "three" is not true);
   a Load earlier state list in the pause menu.
 
+**After any state loads, the game waits on that frame until a button is
+pressed** (decided 2026-09-27). MMagTech, after starting from a state on the
+launch screen: *"catches you off guard how quick it starts"*, and asked for a
+countdown. Agreed instead: frozen on the loaded moment, "Press (A) to
+continue" (any button), everywhere a state is loaded: the launch screen, Load
+latest state, the Load shortcut, and Home's Resume when it loads one. A
+countdown was rejected because it slows every retry of save-and-load and is
+still too short when the pad is not in hand. The press that continues never
+reaches the game (the #103 rule). **Not built yet.**
+
 **A save shortcut is wanted** (MMagTech: *"when saved via menu or hot key
 combo"*). Not in the #76 list; settled below.
 
