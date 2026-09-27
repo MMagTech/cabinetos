@@ -27,6 +27,7 @@
 #include <cstdint>
 #include <string>
 
+#include "look.h"
 #include "ui.h"
 
 namespace design {
@@ -566,7 +567,8 @@ constexpr float kOverlayPanelWidth = 720.0f;
 //
 // Near-opaque, because it has to stay readable over a bright game with only the
 // scrim helping. Glass used to do some of that work.
-constexpr ui::Color kOverlayPanelSurface = ui::palette::kSurface;
+// The panel colour follows the signed-in person's colour and dark mode:
+// look::surface(), in place of the constant this used to be.
 constexpr float kOverlayPanelFill = 0.92f;
 // The gradient and the top edge light, which are what stop a panel this size
 // reading as a hole punched in the screen. Both are small on purpose: at 4K a
@@ -606,7 +608,7 @@ constexpr float kOverlayButtonFocusShadowAlpha = 0.45f;
 // 2026-09-24. `a` fades the whole thing. The pause menu itself still builds
 // its own in main.cpp, from these same constants.
 inline ui::Rect menuPanel(float x, float y, float w, float h, float a) {
-    ui::Color fill = kOverlayPanelSurface;
+    ui::Color fill = look::surface();
     fill.a = kOverlayPanelFill * a;
     ui::Rect p{x, y, w, h, kOverlayPanelRadius, fill};
     p.gradient = true;

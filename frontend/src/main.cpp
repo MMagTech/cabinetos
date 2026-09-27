@@ -79,6 +79,7 @@
 #include "choice.h"
 #include "downloads.h"
 #include "power.h"
+#include "look.h"
 #include "prefs.h"
 #include "server.h"
 #include "update.h"
@@ -3481,6 +3482,10 @@ int main(int argc, char** argv) {
     bool idleOff = false;
     // Opens the Power menu at startup, so a capture can show it.
     bool powerMenuDemo = false;
+    // --colour and --dark: a look for this run only, for judging each colour
+    // and dark on the television without writing anybody's setting.
+    const char* lookColour = nullptr;
+    bool lookDark = false;
     // Walks the notification pill through every message it can show.
     bool noticeGallery = false;
     // `--menu-fade 4` stretches the menus' fade so a person can watch it in
@@ -3624,6 +3629,10 @@ int main(int argc, char** argv) {
             idleOff = true;
         } else if (SDL_strcmp(argv[i], "--power-menu") == 0) {
             powerMenuDemo = true;
+        } else if (SDL_strcmp(argv[i], "--colour") == 0 && i + 1 < argc) {
+            lookColour = argv[++i];
+        } else if (SDL_strcmp(argv[i], "--dark") == 0) {
+            lookDark = true;
         } else if (SDL_strcmp(argv[i], "--notice-gallery") == 0) {
             noticeGallery = true;
         } else if (SDL_strcmp(argv[i], "--menu-rise") == 0 && i + 1 < argc) {
@@ -6184,6 +6193,36 @@ int main(int argc, char** argv) {
                 if (c.id == romId) { c.kept = true; break; }
     };
 
+    // WHAT THE MENUS ARE DRAWN IN — #75 and #129, 2026-09-27. The colour is
+    // the signed-in person's (accounts.json); Appearance and its hours are the
+    // console's (settings.json). See look.h.
+    look::Appearance appearance = look::appearanceFromWord(prefs::get("appearance", "standard"));
+    auto savedHour = [](const char* key, int fallback) {
+        const int h = SDL_atoi(prefs::get(key, std::to_string(fallback)).c_str());
+        return (h >= 0 && h < 24) ? h : fallback;
+    };
+    // Scheduled's starting hours: dark from 8 PM until 7 AM.
+    int darkFrom = savedHour("dark_from", 20);
+    int darkUntil = savedHour("dark_until", 7);
+    auto wantDark = [&]() {
+        if (appearance == look::Appearance::Dark) return true;
+        if (appearance != look::Appearance::Scheduled) return false;
+        const std::time_t now = std::time(nullptr);
+        const std::tm* t = std::localtime(&now);
+        return t && look::scheduledDark(t->tm_hour, darkFrom, darkUntil);
+    };
+    auto applyAccountColour = [&](bool instant) {
+        const int id = accounts::activeId();
+        std::string word;
+        for (const accounts::Account& a : accounts::all())
+            if (a.id == id) word = a.colour;
+        look::setColour(look::colourFromWord(word), instant);
+    };
+    applyAccountColour(true);
+    if (lookColour) look::setColour(look::colourFromWord(lookColour), true);
+    if (lookDark) appearance = look::Appearance::Dark;
+    look::setDark(wantDark(), true);
+
     // SWITCHING WHO THE CONSOLE IS. Open question 26, and the half that
     // `accounts::activate` deliberately does not do.
     //
@@ -6287,6 +6326,7 @@ int main(int argc, char** argv) {
         // different set of cards, and was out of range whenever the new set
         // was shorter.
         homeFromTheStart();
+        applyAccountColour(true);
         refreshKeeps();
 
         const storage::User& now = storage::currentUser();
@@ -6613,7 +6653,8 @@ int main(int argc, char** argv) {
     enum SettingId { SetAddAccount = 1, SetInterfaceSounds, SetPinSet, SetPinChange,
                      SetPinOff, SetRemoveAccount, SetScreenOff, SetWifi, SetServer,
                      SetUpdate, SetUpdateCheck, SetCredits, SetFiles, SetDownloads,
-                     SetAddController, SetShortcuts, SetShortcutButton };
+                     SetAddController, SetShortcuts, SetShortcutButton, SetAppearance,
+                     SetDarkFrom, SetDarkUntil, SetColour };
     // One Eject row per USB drive: this plus the drive's index in
     // storage::locations() when the rows were built.
     constexpr int kSetEject = 100;
@@ -7397,6 +7438,38 @@ int main(int argc, char** argv) {
                 return r;
             }(),
         }});
+        {
+            // APPEARANCE AND COLOUR, under the picture rows: both are how the
+            // menus look. #129 and #75, 2026-09-27. Colour is the signed-in
+            // person's; the account chip above already says who that is.
+            auto& rows = cats.back().rows;
+            auto at = rows.begin() + 1;   // after Picture quality
+            std::vector<Row> lookRows;
+            {
+                Row r{K::Choice, SetAppearance, "Appearance", "", ""};
+                for (int i = 0; i < look::kAppearanceCount; ++i)
+                    r.choices.push_back(look::appearanceName(static_cast<look::Appearance>(i)));
+                r.choice = static_cast<int>(appearance);
+                lookRows.push_back(r);
+            }
+            if (appearance == look::Appearance::Scheduled) {
+                for (int which = 0; which < 2; ++which) {
+                    Row r{K::Choice, which == 0 ? SetDarkFrom : SetDarkUntil,
+                          which == 0 ? "Dark from" : "Until", "", ""};
+                    for (int h = 0; h < 24; ++h) r.choices.push_back(look::hourName(h));
+                    r.choice = which == 0 ? darkFrom : darkUntil;
+                    lookRows.push_back(r);
+                }
+            }
+            {
+                Row r{K::Choice, SetColour, "Color", "", ""};
+                for (int i = 0; i < look::kColourCount; ++i)
+                    r.choices.push_back(look::colourName(static_cast<look::Colour>(i)));
+                r.choice = static_cast<int>(look::colour());
+                lookRows.push_back(r);
+            }
+            rows.insert(at, lookRows.begin(), lookRows.end());
+        }
 
         // THE DRIVES, by MMagTech's names: the main drive is "CabinetOS", any
         // other internal disk "Internal", one that can be unplugged
@@ -8213,6 +8286,35 @@ int main(int argc, char** argv) {
                     shortcuts::setEnabled(settingsScreen.choiceOf(SetShortcuts) == 1);
                     sound::play(sound::Cue::Move);
                     buildSettings();   // the Shortcut button row comes and goes
+                }
+                if (res.value == SetAppearance) {
+                    const int i = settingsScreen.choiceOf(SetAppearance);
+                    if (i >= 0 && i < look::kAppearanceCount) {
+                        appearance = static_cast<look::Appearance>(i);
+                        prefs::set("appearance", look::appearanceWord(appearance));
+                        look::setDark(wantDark());
+                    }
+                    sound::play(sound::Cue::Move);
+                    buildSettings();   // the From and Until rows come and go
+                }
+                if (res.value == SetDarkFrom || res.value == SetDarkUntil) {
+                    const int h = settingsScreen.choiceOf(res.value);
+                    if (h >= 0 && h < 24) {
+                        const bool from = res.value == SetDarkFrom;
+                        (from ? darkFrom : darkUntil) = h;
+                        prefs::set(from ? "dark_from" : "dark_until", std::to_string(h));
+                        look::setDark(wantDark());
+                    }
+                    sound::play(sound::Cue::Move);
+                }
+                if (res.value == SetColour) {
+                    const int i = settingsScreen.choiceOf(SetColour);
+                    if (i >= 0 && i < look::kColourCount) {
+                        const auto c = static_cast<look::Colour>(i);
+                        accounts::setColour(accounts::activeId(), look::colourWord(c));
+                        look::setColour(c);
+                    }
+                    sound::play(sound::Cue::Move);
                 }
                 if (res.value == SetScreenOff) {
                     const int i = settingsScreen.choiceOf(SetScreenOff);
@@ -10733,6 +10835,16 @@ int main(int argc, char** argv) {
             }
         }
         images.pump(dt);
+        look::tick(dt);
+        // Scheduled turns dark at its hour, asked about once a minute.
+        {
+            static float sinceDarkCheck = 0.0f;
+            sinceDarkCheck += dt;
+            if (sinceDarkCheck >= 60.0f) {
+                sinceDarkCheck = 0.0f;
+                look::setDark(wantDark());
+            }
+        }
         for (auto& c : cards) {
             c.focus.tick(dt);
             c.press.tick(dt);
@@ -11225,9 +11337,7 @@ int main(int argc, char** argv) {
                 renderer.draw(ui::Rect{0, 0, ui::kCanvasWidth, ui::kCanvasHeight, 0,
                                        ui::Color::black(1.0f)});
         } else {
-            renderer.drawBackdrop(ui::Gradient{ui::palette::kBackdropTop,
-                                               ui::palette::kBackdropMid,
-                                               ui::palette::kBackdropBottom, 0.55f});
+            renderer.drawBackdrop(look::backdrop());
 
         // ---- THE BACKDROP FOLLOWS FOCUS, ON EVERY BROWSING SCREEN ----------
         //
@@ -11385,7 +11495,7 @@ int main(int argc, char** argv) {
                 }
                 renderer.drawTextured(
                     0, 0, ui::kCanvasWidth, ui::kCanvasHeight, art.texture, u0, v0, u1, v1,
-                    ui::Color{1, 1, 1, alpha * art.fade * backdropFill}, false,
+                    ui::Color{1, 1, 1, alpha * art.fade * look::artFill(backdropFill)}, false,
                     blurToTexels(static_cast<float>(art.width) * (u1 - u0),
                                  backdropTexels));
             };
@@ -11397,7 +11507,7 @@ int main(int argc, char** argv) {
             // not a brighter screen than one with.
             if (!backdropKey.empty())
                 renderer.draw(ui::Rect{0, 0, ui::kCanvasWidth, ui::kCanvasHeight, 0,
-                                       ui::Color::black(backdropScrim)});
+                                       ui::Color::black(look::artScrim(backdropScrim))});
         }
         }
 
@@ -11828,7 +11938,7 @@ int main(int argc, char** argv) {
                     // Unfocused artwork sits back. See design::kRestArtDim.
                     if (f < 1.0f)
                         renderer.draw(ui::Rect{x, y, w, h, kCoverRadius * scale,
-                                               ui::Color::black(kRestArtDim * (1.0f - f))});
+                                               ui::Color::black(look::restDim(kRestArtDim) * (1.0f - f))});
                     // The kept mark, the same as the grid draws. A mark that
                     // appeared on a game in one screen and not in another is
                     // exactly the drift the shared design system exists to
@@ -11970,7 +12080,7 @@ int main(int argc, char** argv) {
             //
             // The shadow is what separates it from the game now that the blur
             // does not, and it costs nothing on either path.
-            ui::Color panelFill = kOverlayPanelSurface;
+            ui::Color panelFill = look::surface();
             panelFill.a = kOverlayPanelFill * ovl;
             ui::Rect panel{px, py, kOverlayPanelWidth, panelH,
                            kOverlayPanelRadius, panelFill};
@@ -12325,7 +12435,7 @@ int main(int argc, char** argv) {
                 const float x = (ui::kCanvasWidth - w) * 0.5f;
                 const float y = ui::kCanvasHeight - ui::kSafeInset - kPillH - 24.0f +
                                 (1.0f - std::min(1.0f, menuNotice.age / 0.25f)) * 12.0f;
-                ui::Color fill = kOverlayPanelSurface;
+                ui::Color fill = look::surface();
                 fill.a = 0.96f * na;
                 ui::Rect pill{x, y, w, kPillH, kPillH * 0.5f, fill};
                 pill.border = 1.5f;
@@ -12398,8 +12508,7 @@ int main(int argc, char** argv) {
                 // The console's own backdrop, in one piece, faded. Two bands
                 // were drawn here first and left a line under the name where
                 // they met; MMagTech saw it on the TV.
-                renderer.drawBackdrop({ui::palette::kBackdropTop, ui::palette::kBackdropMid,
-                                       ui::palette::kBackdropBottom, 0.55f}, c);
+                renderer.drawBackdrop(look::backdrop(), c);
             } else if (c > 0.001f) {
                 renderer.draw(ui::Rect{0, 0, ui::kCanvasWidth, ui::kCanvasHeight, 0,
                                        ui::Color::black(c)});

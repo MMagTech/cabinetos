@@ -109,7 +109,7 @@ void drawCover(Ctx& c, const Card& card, float x, float y, float w, float h,
     // Unfocused artwork sits back. See design::kRestArtDim.
     if (f < 1.0f)
         c.r.draw(ui::Rect{x, y, w, h, radius,
-                          ui::Color::black(design::kRestArtDim * (1.0f - f))});
+                          ui::Color::black(look::restDim(design::kRestArtDim) * (1.0f - f))});
     drawKeptMark(c, card, x, y, w, radius);
     if (f > 0.0f && rim) {
         ui::Rect edge{x, y, w, h, radius, ui::Color::white(0)};
@@ -451,7 +451,7 @@ void LibraryScreen::draw(Ctx& c) {
             // system. Dimmed when the platform cannot be played, which is the
             // difference a person has to be able to see from a sofa.
             ui::Rect plate{x, y, w, h, design::kTileRadius,
-                           t.enterable ? ui::palette::kSurface
+                           t.enterable ? look::surface()
                                        : ui::Color::white(0.06f)};
             // NO RIM: a platform tile is a composite element, art mixed with
             // its own text, and a rectangle drawn round it crosses the text.

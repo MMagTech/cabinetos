@@ -66,6 +66,10 @@ struct Account {
     // `avatar_path` — see `romm::User::avatarPath` for why those differ and
     // which one is a 404. Empty is normal and means a lettered disc.
     std::string avatar;
+    // Their colour for the menus, as look::colourWord writes it. Empty is
+    // purple. The account's and not the machine's: MMagTech, 2026-09-24, the
+    // console takes on the colour of whoever is signed in (#75).
+    std::string colour;
 
     bool valid() const { return id > 0; }
 };
@@ -132,6 +136,9 @@ bool setActive(int id, std::string* err);
 // Updates a name or avatar in place, for when /api/users/me answers after the
 // account was first written. Silent no-op for an unknown id.
 bool update(int id, const std::string& name, const std::string& avatar);
+
+// Their colour for the menus. Silent no-op for an unknown id.
+bool setColour(int id, const std::string& colour);
 
 // --- Switching -------------------------------------------------------------
 

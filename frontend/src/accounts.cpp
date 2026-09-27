@@ -105,6 +105,7 @@ Book load() {
             a.id = jint(e, "id");
             a.name = jstr(e, "name");
             a.avatar = jstr(e, "avatar");
+            a.colour = jstr(e, "colour");
             if (a.valid()) b.list.push_back(std::move(a));
         }
     }
@@ -132,6 +133,8 @@ bool save(const Book& b, std::string* err) {
         json_object_object_add(e, "id", json_object_new_int(a.id));
         json_object_object_add(e, "name", json_object_new_string(a.name.c_str()));
         json_object_object_add(e, "avatar", json_object_new_string(a.avatar.c_str()));
+        if (!a.colour.empty())
+            json_object_object_add(e, "colour", json_object_new_string(a.colour.c_str()));
         json_object_array_add(arr, e);
     }
     json_object_object_add(root, "accounts", arr);
@@ -273,6 +276,16 @@ bool update(int id, const std::string& name, const std::string& avatar) {
     if (!name.empty()) target->name = name;
     target->avatar = avatar;
     return save(b, nullptr);
+}
+
+bool setColour(int id, const std::string& colour) {
+    Book b = load();
+    for (Account& a : b.list) {
+        if (a.id != id) continue;
+        a.colour = colour;
+        return save(b, nullptr);
+    }
+    return false;
 }
 
 bool activate(int id, romm::Client& client, std::string* err) {
