@@ -5384,6 +5384,19 @@ int main(int argc, char** argv) {
         return &cards[favorites[slot]];
     };
 
+    // FOCUS BELONGS TO A PLACE ON A SHELF, NOT TO A GAME — #125, 2026-09-27.
+    // It lived on the Card, and a game that is both recent and a favourite is
+    // one Card drawn on two shelves, so focusing it on Recent lifted its cover
+    // on Favorites too. MMagTech: two covers looked focused at once. One lift
+    // and one press per (row, slot), grown as a row is drawn.
+    std::vector<Animated> slotFocus[2], slotPress[2];
+    auto slotAnim = [&](std::vector<Animated>* v, int row, int slot) -> Animated& {
+        std::vector<Animated>& r = v[std::clamp(row, 0, 1)];
+        const size_t s = static_cast<size_t>(std::max(slot, 0));
+        if (s >= r.size()) r.resize(s + 1);
+        return r[s];
+    };
+
     // RESUME-FIRST, and it is now one rule rather than a separate object:
     // Home opens on the first card of Recent, which is the most recently played
     // game this console can play.
@@ -5434,9 +5447,8 @@ int main(int argc, char** argv) {
     // Settled, not animating: a screenshot should show the resting focused
     // state, not a frame part-way through the transition into it.
     auto settleFocus = [&]() {
-        if (Card* c = cardAt(focusRow, focusSlot)) {
-            c->focus.retarget(1.0f, kFocusDuration);
-            c->focus.elapsed = kFocusDuration;
+        if (cardAt(focusRow, focusSlot)) {
+            slotAnim(slotFocus, focusRow, focusSlot).settle(1.0f);
         } else {
             // The top bar's items are not Cards and have no animation of their
             // own: focus there is a tinted pill drawn from focusRow/focusSlot.
@@ -6266,7 +6278,8 @@ int main(int argc, char** argv) {
         shelfScroll[0].settle(0.0f);
         shelfScroll[1].settle(0.0f);
         scrollY.settle(0.0f);
-        if (Card* c = cardAt(focusRow, focusSlot)) c->focus.settle(1.0f);
+        for (int r = 0; r < 2; ++r) { slotFocus[r].clear(); slotPress[r].clear(); }
+        if (cardAt(focusRow, focusSlot)) slotAnim(slotFocus, focusRow, focusSlot).settle(1.0f);
         refreshKeeps();
 
         const storage::User& now = storage::currentUser();
@@ -9141,10 +9154,12 @@ int main(int argc, char** argv) {
 
 
     auto leaveFocus = [&]() {
-        if (Card* c = cardAt(focusRow, focusSlot)) c->focus.retarget(0.0f, kFocusDuration);
+        if (cardAt(focusRow, focusSlot))
+            slotAnim(slotFocus, focusRow, focusSlot).retarget(0.0f, kFocusDuration);
     };
     auto enterFocus = [&]() {
-        if (Card* c = cardAt(focusRow, focusSlot)) c->focus.retarget(1.0f, kFocusDuration);
+        if (cardAt(focusRow, focusSlot))
+            slotAnim(slotFocus, focusRow, focusSlot).retarget(1.0f, kFocusDuration);
     };
 
     auto moveFocus = [&](int delta) {
@@ -10702,6 +10717,10 @@ int main(int argc, char** argv) {
             c.focus.tick(dt);
             c.press.tick(dt);
         }
+        for (int r = 0; r < 2; ++r) {
+            for (auto& a : slotFocus[r]) a.tick(dt);
+            for (auto& a : slotPress[r]) a.tick(dt);
+        }
         // These two are not Cards and so are not in the loop above. Forgetting
         // them cost a debugging pass: the scroll target was computed correctly
         // every frame and then discarded, because an Animated whose elapsed
@@ -11148,8 +11167,9 @@ int main(int argc, char** argv) {
                                                                 : ui::kCanvasHeight);
             detailScreen.tick(dt);
         }
-        if (Card* pc = cardAt(focusRow, focusSlot))
-            pc->press.retarget(pressing ? 1.0f : 0.0f, kPressDuration);
+        if (cardAt(focusRow, focusSlot))
+            slotAnim(slotPress, focusRow, focusSlot)
+                .retarget(pressing ? 1.0f : 0.0f, kPressDuration);
 
         int dw = 0, dh = 0;
         SDL_GetWindowSizeInPixels(window, &dw, &dh);
@@ -11748,8 +11768,8 @@ int main(int argc, char** argv) {
                 if (cullX > ui::kCanvasWidth + kCullMargin) break;
 
                 Card& card = cards[i];
-                const float f = card.focus.value();
-                const float p = card.press.value();
+                const float f = slotAnim(slotFocus, rowId, static_cast<int>(slot)).value();
+                const float p = slotAnim(slotPress, rowId, static_cast<int>(slot)).value();
 
                 // Pressed reads as a push INTO the screen, against the focused
                 // lift, so a click still registers on a card that is already
