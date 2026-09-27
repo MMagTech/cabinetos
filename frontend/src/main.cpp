@@ -5756,9 +5756,9 @@ int main(int argc, char** argv) {
     Animated overlayFade;
     overlayFade.smooth = true;    // 350 ms ease-in-out, per the design system
     Animated overlayFocus;
-    enum OverlayItem { OvResume = 0, OvSaveState, OvLoadState, OvExit, OvCount };
+    enum OverlayItem { OvResume = 0, OvSaveState, OvLoadState, OvScreenshot, OvExit, OvCount };
     const char* kOverlayLabels[OvCount] = {
-        "Resume", "Save state", "Load latest state", "Exit to Home",
+        "Resume", "Save state", "Load latest state", "Take screenshot", "Exit to Home",
     };
     // The pause menu's items for THIS game, built each time it opens: the two
     // state items only where the system has snapshots. PlayStation 2 and
@@ -9401,6 +9401,11 @@ int main(int argc, char** argv) {
                 break;
             case OvSaveState: saveStateNow(session, uploader, menuNotice); break;
             case OvLoadState: beginLoadLatestState(stateLoad, session, liveClient, menuNotice); break;
+            // THE PAUSED MOMENT, the menu not in it: a screenshot reads the
+            // game's frame, not the screen. MMagTech's idea, 2026-09-27: pause
+            // in an intense scene and take it without letting go of the game.
+            // The menu stays open, saying "Screenshot saved".
+            case OvScreenshot: screenshotNow(session, uploader, menuNotice); break;
             case OvExit: exitToHome(); break;
             default: break;
         }
@@ -9418,6 +9423,9 @@ int main(int argc, char** argv) {
                 pauseItems.push_back(OvSaveState);
                 pauseItems.push_back(OvLoadState);
             }
+            // Where a picture can be read from the game, which today is where
+            // states are; PS2 and GameCube follow in #130.
+            if (session.snapshots) pauseItems.push_back(OvScreenshot);
             pauseItems.push_back(OvExit);
         }
         overlaySlot = 0;
@@ -10224,6 +10232,13 @@ int main(int argc, char** argv) {
                         h.before = st.buttons;
                         if (fresh) {
                             h.used = true;
+                            // The screenshot shortcut works in the pause menu too,
+                            // on the paused frame. Nothing else does there.
+                            if (overlayOpen && !powerMenu && (fresh & bit(cab::Y))) {
+                                std::fprintf(stderr,
+                                             "[shortcuts] player %d: screenshot, paused\n", p + 1);
+                                screenshotNow(session, uploader, menuNotice);
+                            }
                             if (!overlayOpen && !stateHold && !stateHoldWaiting) {
                                 const bool save = fresh & bit(cab::R);
                                 const bool load = !save && (fresh & bit(cab::L));
