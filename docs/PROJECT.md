@@ -1621,7 +1621,12 @@ slots"* without *"having to pick which slot you save to."*
 - **The cost, accepted:** a state saved by Cabinet on the Apple TV for the same
   game and emulator is one of the three, so a save on the console can rotate
   it out. The Apple TV itself never deletes, so its states pile up until the
-  console next saves; giving Cabinet the same rule is a Cabinet change, later.
+  console next saves; giving Cabinet the same rule is MMagTech/cabinet#8.
+  **Including on the first save:** a new user's older Cabinet states for that
+  game are cut to three at once (seen here: five August states went on the
+  first save in DoDonPachi). Protecting states that existed before the
+  console's first save was offered and declined (MMagTech: *"it's all an
+  alpha build anyway"*).
 - **Why three and not more:** the job is undoing a bad save (saved a moment
   before dying, twice in a row, and still one good one left); more becomes a
   history to scroll, which is the slot-picking this avoids. One constant,
@@ -1706,8 +1711,11 @@ and Home is the button the list most often gets wrong.
   Right side forward and save, left side back and load. A load by mistake
   loses play since the last save; accepted, since the button must be held,
   the two are on opposite sides, and it is off unless turned on.
-- **The Lite 2's entry is still corrected** in our copy of the list and sent
-  upstream, so its heart is Home for everyone, but nothing depends on it.
+- ~~**The Lite 2's entry is still corrected** in our copy of the list and sent
+  upstream, so its heart is Home for everyone, but nothing depends on it.~~
+  **Dropped, the same day** (MMagTech: agreed). Setting the button by
+  pressing it is the fix; another Lite 2 owner sets the heart as he did, and
+  until then its row reads "Button 3" and the heart does nothing.
 - **A button games use can be chosen** (minus/Select, say). While shortcuts
   are on it no longer reaches the game; only the person who chose it is
   affected, and nothing on screen warns about it (MMagTech, agreed).
@@ -1737,7 +1745,8 @@ at a time. What it is now (`screens.cpp`, `DetailScreen`):
   space is kept even when RomM has nothing. Facts listed under the cover were
   tried and read as filler (*"a horrible afterthought"*); one line dropping
   parts to fit was inconsistent between games. **Players can be wrong**
-  (RomM has Mortal Kombat II as one player).
+  (RomM has Mortal Kombat II as one player), and is shown as RomM gives it:
+  a wrong number is RomM's data, not the console's fault (MMagTech: keep it).
 - **The game's own save is the Play row's value**, "Saved today, 8:17 PM",
   because that save is what Play starts from.
 - **Continue from:** the newest three states for the emulator Play would run,
