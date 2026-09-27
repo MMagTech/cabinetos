@@ -125,7 +125,10 @@ echo "host layer: linked $BUILD/cabinet-ps2-probe"
 #
 # shellcheck disable=SC2086,SC2016  # SYS is word-split on purpose, and $ORIGIN
 # is a LINKER token that must reach ld unexpanded — the shell must not touch it.
+# --wrap takes over PCSX2's one vibration call for rumble without a patch;
+# CabinetPS2Bridge.cpp says why and what it does instead.
 clang++ -shared -Wl,-z,defs -Wl,-rpath,'$ORIGIN' -Wl,--disable-new-dtags -o "$BUILD/cabinetos-ps2.so" \
+    -Wl,--wrap=_ZN12InputManager24SetPadVibrationIntensityEjff \
     "$BUILD/CabinetPS2Host.o" "$BUILD/CabinetPS2Audio.o" "$BUILD/CabinetPS2Bridge.o" \
     -Wl,--start-group \
     "$BUILD/pcsx2/libpcsx2.a" "$BUILD/common/libcommon.a" \

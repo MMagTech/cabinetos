@@ -21,6 +21,7 @@
 #include <SDL3/SDL.h>
 
 #include <dirent.h>
+#include <sys/resource.h>
 #include <sys/stat.h>
 
 #include <cctype>
@@ -89,6 +90,8 @@
 #include "playtime.h"
 #include "shortcuts.h"
 #include "rewind.h"
+#include "ps2.h"
+#include "rumble.h"
 #include "bluetooth.h"
 #include "ui.h"
 
@@ -3528,6 +3531,8 @@ int main(int argc, char** argv) {
     bool evictTest = false;
     // Proves a restored state is genuinely identical, not merely accepted.
     bool stateTest = false;
+    // What one emulated frame costs, run back to back with no clock (#147).
+    bool speedTest = false;
     bool audioProbe = false;
     // Opens the keyboard immediately, so it can be worked on without walking
     // through a first-run flow that does not exist yet.
@@ -3756,6 +3761,8 @@ int main(int argc, char** argv) {
             audioProbe = true;
         } else if (SDL_strcmp(argv[i], "--state-test") == 0) {
             stateTest = true;
+        } else if (SDL_strcmp(argv[i], "--speed-test") == 0) {
+            speedTest = true;
         } else if (SDL_strcmp(argv[i], "--core") == 0 && i + 1 < argc) {
             corePath = argv[++i];
         } else if (SDL_strcmp(argv[i], "--romm") == 0 && i + 1 < argc) {
@@ -5114,6 +5121,80 @@ int main(int argc, char** argv) {
             return 0;
         }
 
+        if (speedTest) {
+            // HOW MUCH ROOM A CORE HAS, NOT HOW FAST IT PLAYS. Paced, every
+            // core plays at 60 on the A9 and the number says nothing; run back
+            // to back, the cost of one frame is what a slower machine has to
+            // find inside its 16.7 ms. Written for #147 (recompiler against
+            // interpreter). Warm-up first, so loading and the intro's first
+            // shader compiles are not counted; then the mean, the 95th
+            // percentile and the worst single frame, because a slow frame is
+            // a stutter even when the mean is fine.
+            const int kWarm = SDL_getenv("CABINETOS_WARM")
+                                  ? SDL_atoi(SDL_getenv("CABINETOS_WARM"))
+                                  : 600;
+            const int kTimed = SDL_getenv("CABINETOS_TIMED")
+                                   ? SDL_atoi(SDL_getenv("CABINETOS_TIMED"))
+                                   : 1800;
+            const double step = 1.0 / core.avInfo().fps;
+            for (int i = 0; i < kWarm; ++i) {
+                core.runFor(step);
+                core.drainAudio();
+            }
+            // CABINETOS_PACED=1 runs at the game's own rate, idle between
+            // frames as in play. That idle is where the CPU clocks down, so it
+            // is the configuration a power setting has to be judged in; back
+            // to back, the CPU never rests and the setting hardly shows.
+            const bool paced = SDL_getenv("CABINETOS_PACED") != nullptr;
+            const uint64_t frameNs = static_cast<uint64_t>(1e9 / core.avInfo().fps);
+            // CPU TIME FOR THE WHOLE PROCESS, every thread, per game frame.
+            // The per-call timing below misses a core that emulates on a
+            // thread of its own (PPSSPP, Flycast, melonDS threaded): there
+            // retro_run only collects a finished frame. This does not.
+            auto cpuMs = [] {
+                rusage u{};
+                getrusage(RUSAGE_SELF, &u);
+                return (u.ru_utime.tv_sec + u.ru_stime.tv_sec) * 1e3 +
+                       (u.ru_utime.tv_usec + u.ru_stime.tv_usec) / 1e3;
+            };
+            std::vector<double> ms;
+            ms.reserve(kTimed);
+            const double cpuStart = cpuMs();
+            const uint64_t start = SDL_GetTicksNS();
+            int frames = 0;
+            while (frames < kTimed) {
+                if (paced) {
+                    const uint64_t due = start + static_cast<uint64_t>(frames) * frameNs;
+                    const uint64_t now = SDL_GetTicksNS();
+                    if (due > now) SDL_DelayPrecise(due - now);
+                }
+                const uint64_t t0 = SDL_GetTicksNS();
+                const int ran = core.runFor(step);
+                const double took = (SDL_GetTicksNS() - t0) / 1e6;
+                core.drainAudio();
+                if (ran <= 0) continue;
+                for (int r = 0; r < ran; ++r) ms.push_back(took / ran);
+                frames += ran;
+            }
+            const double wall = (SDL_GetTicksNS() - start) / 1e9;
+            const double cpu = cpuMs() - cpuStart;
+            std::sort(ms.begin(), ms.end());
+            double sum = 0;
+            for (double v : ms) sum += v;
+            std::fprintf(stderr,
+                         "[speed] %d frames after %d warm-up: mean %.2f ms, 95th %.2f ms, "
+                         "worst %.2f ms, %.0f frames a second (the game wants %.1f)%s; "
+                         "CPU %.2f ms a frame on all threads\n",
+                         frames, kWarm, sum / ms.size(), ms[ms.size() * 95 / 100],
+                         ms.back(), frames / wall, core.avInfo().fps,
+                         paced ? ", paced" : "", cpu / frames);
+            // Out without unloading. PPSSPP's teardown hangs in this headless
+            // path (the product's quit is a different route and works, #87),
+            // and a measurement has nothing to save.
+            std::fflush(stderr);
+            std::_Exit(0);
+        }
+
         if (stateTest) {
             // A save state is only worth anything if what comes back is the
             // same machine. "The core accepted the bytes" is not that: it is
@@ -5170,6 +5251,28 @@ int main(int argc, char** argv) {
                 return 1;
             }
             std::fprintf(stderr, "[state] %zu bytes at frame %d\n", state.size(), kWarm);
+            // A STATE FROM ANOTHER BUILD OR ANOTHER CPU ENGINE (#147). With
+            // CABINETOS_STATE_OUT this run's state is kept in a file; with
+            // CABINETOS_STATE_IN runs 2 and 3 restore THAT state instead of
+            // their own, so an interpreter's state can be loaded by the
+            // recompiler. Run 1 against run 2 then compares two engines and
+            // may differ without anything being wrong; what has to hold is
+            // that the state is accepted and the game plays on from it.
+            if (const char* out = SDL_getenv("CABINETOS_STATE_OUT")) {
+                const bool ok = SDL_SaveFile(out, state.data(), state.size());
+                std::fprintf(stderr, "[state] kept in %s: %s\n", out, ok ? "yes" : SDL_GetError());
+            }
+            if (const char* in = SDL_getenv("CABINETOS_STATE_IN")) {
+                size_t n = 0;
+                void* bytes = SDL_LoadFile(in, &n);
+                if (!bytes) {
+                    std::fprintf(stderr, "[state] cannot read %s: %s\n", in, SDL_GetError());
+                    return 1;
+                }
+                state.assign(static_cast<uint8_t*>(bytes), static_cast<uint8_t*>(bytes) + n);
+                SDL_free(bytes);
+                std::fprintf(stderr, "[state] runs 2 and 3 restore %s (%zu bytes)\n", in, n);
+            }
 
             // Video and audio digested SEPARATELY. If they are mixed and the
             // result differs, all you know is "something diverged" — which is
@@ -6766,7 +6869,7 @@ int main(int argc, char** argv) {
                      SetPinOff, SetRemoveAccount, SetScreenOff, SetWifi, SetServer,
                      SetUpdate, SetUpdateCheck, SetCredits, SetFiles, SetDownloads,
                      SetAddController, SetShortcuts, SetShortcutButton, SetAppearance,
-                     SetDarkHours, SetColour };
+                     SetDarkHours, SetColour, SetRumble };
     // One Eject row per USB drive: this plus the drive's index in
     // storage::locations() when the rows were built.
     constexpr int kSetEject = 100;
@@ -7458,6 +7561,15 @@ int main(int argc, char** argv) {
                                 "Player " + std::to_string(p.player + 1)});
             }
             rows.push_back({K::Action, SetAddController, "Add a controller", "", ""});
+            // RUMBLE, on by default, for every pad and every system with
+            // motors: one switch, as Cabinet has it (rumble.h, #149). Above
+            // the shortcuts so their button row stays under its own switch.
+            {
+                Row r{K::Choice, SetRumble, "Rumble", "", ""};
+                r.choices = {"Off", "On"};
+                r.choice = rumble::enabled() ? 1 : 0;
+                rows.push_back(r);
+            }
             // IN-GAME SHORTCUTS, off by default (shortcuts.h). The Button
             // mapping row that stood here went with #66: there is no mapping
             // screen. With the switch on, the shortcut button row is for the
@@ -8413,6 +8525,10 @@ int main(int argc, char** argv) {
                 if (res.value == SetUpdateCheck) {
                     updWeekly = settingsScreen.choiceOf(SetUpdateCheck) == 1;
                     prefs::set("update_check", updWeekly ? "weekly" : "manual");
+                    sound::play(sound::Cue::Move);
+                }
+                if (res.value == SetRumble) {
+                    rumble::setEnabled(settingsScreen.choiceOf(SetRumble) == 1);
                     sound::play(sound::Cue::Move);
                 }
                 if (res.value == SetShortcuts) {
@@ -10733,6 +10849,11 @@ int main(int argc, char** argv) {
             }
             const bool frozen = overlayOpen || stateHold || stateHoldWaiting;
             core.setPaused(frozen);
+            // RUMBLE (#149): what the game asked for, to each player's pad,
+            // and nothing while the game is not being played. Rewind replays
+            // frames backwards, which is not play either.
+            if (core.isPs2()) ps2::pollRumble();
+            rumble::update(!frozen && !rewinding);
 
             if (frozen) {
                 // Nothing to step. The last frame stays uploaded, so the

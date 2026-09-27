@@ -17,6 +17,7 @@
 
 #include "libretro.h"
 #include "libretro_vulkan.h"
+#include "rumble.h"
 #include "vkhost.h"
 
 // The vendored libretro.h stops at environment call 72 and this one is 73.
@@ -697,6 +698,17 @@ bool environment(unsigned cmd, void* data) {
             static_cast<retro_log_callback*>(data)->log = logCallback;
             return true;
 
+        case RETRO_ENVIRONMENT_GET_RUMBLE_INTERFACE:
+            // Every core that has motors, as RetroArch does (#149). Answered
+            // even with the Settings switch off: the switch is applied at the
+            // pad (rumble.cpp), so turning it on mid-game works at once.
+            static_cast<retro_rumble_interface*>(data)->set_rumble_state =
+                [](unsigned port, enum retro_rumble_effect effect, uint16_t strength) {
+                    rumble::set(port, effect == RETRO_RUMBLE_STRONG ? 0 : 1, strength);
+                    return true;
+                };
+            return true;
+
         case RETRO_ENVIRONMENT_GET_VARIABLE: {
             auto* var = static_cast<retro_variable*>(data);
             const std::string key = var->key ? var->key : "";
@@ -1283,6 +1295,7 @@ void Core::unload() {
 
 bool Core::loadGame(const std::string& romPath, const std::string& systemDir,
                     const std::string& saveDir) {
+    rumble::reset();
     if (!handle_) {
         error_ = "no core loaded";
         return false;
@@ -1491,6 +1504,7 @@ bool Core::loadGame(const std::string& romPath, const std::string& systemDir,
 }
 
 void Core::unloadGame() {
+    rumble::reset();
     if (gIsPs2) {
         if (!gameLoaded_) return;
         // BLOCKS until PCSX2 has actually stopped, which is what makes the

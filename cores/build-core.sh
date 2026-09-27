@@ -403,12 +403,23 @@ mupen64plus)
     # tag for this core, so nothing uploads a state that Cabinet might offer
     # back. Settle it when the frontend can host a hardware-rendered core and
     # there is something to compare.
+    #
+    # THE RECOMPILER IS ON, 2026-09-27 (#147). It was left out on 2026-09-13
+    # to match Cabinet's Apple TV build, where Apple forbids a JIT; that is a
+    # platform rule, not a save-format one, and RetroArch and Batocera run
+    # this core with it on PC. Measured on the A9 before and after: see
+    # docs/PROJECT.md, *The N64 and PSP recompilers*. The states it writes
+    # load in the interpreter build and the other way round, because the
+    # state is the emulated machine, not the engine running it.
+    # CABINETOS_N64_DYNAREC= (empty) still builds the interpreter, for
+    # comparing the two; NO_ASM is needed then and only then.
+    N64_DYNAREC="${CABINETOS_N64_DYNAREC-x86_64}"
     MAKEARGS=(
-        "WITH_DYNAREC=${CABINETOS_N64_DYNAREC-}"
-        DYNAFLAGS=-DNO_ASM
+        "WITH_DYNAREC=$N64_DYNAREC"
         FORCE_GLES3=1 GLES3=1
         LLE=1 HAVE_PARALLEL_RSP=1 HAVE_PARALLEL_RDP=1 HAVE_THR_AL=1
     )
+    if [ -z "$N64_DYNAREC" ]; then MAKEARGS+=(DYNAFLAGS=-DNO_ASM); fi
     ;;
 flycast)
     REPO=https://github.com/flyinghead/flycast.git

@@ -41,7 +41,28 @@ namespace
 	// same lifetime a libretro core's `video_refresh` buffer has.
 	CabinetPS2::Frame s_frame;
 	std::vector<int16_t> s_audio;
+
+	// What each DualShock 2 was last asked to do with its motors, 0 to 1,
+	// large then small. Written on PCSX2's CPU thread, read by the frontend's.
+	std::atomic<float> s_motor[2][2];
 } // namespace
+
+// RUMBLE, WITHOUT PATCHING PCSX2 (#149). Every pad type with motors reports
+// them through this one function, which in PCSX2's own frontends drives the
+// bound controller. Here nothing is bound, so the call is taken over at link
+// time instead: compile.sh links with --wrap for its mangled name, which
+// sends every call from the pad code here. The real function is not called;
+// with no bindings it would do nothing. `pad_index` is PCSX2's unified slot,
+// 0 and 1 for the two ports without a multitap, which is all this host
+// offers (CabinetPS2::SetPad).
+extern "C" void __wrap__ZN12InputManager24SetPadVibrationIntensityEjff(
+	unsigned pad_index, float large_or_single, float small)
+{
+	if (pad_index >= 2)
+		return;
+	s_motor[pad_index][0].store(large_or_single);
+	s_motor[pad_index][1].store(small);
+}
 
 extern "C" {
 
@@ -129,6 +150,13 @@ void cps2_set_pad(unsigned port, uint32_t buttons, float left_x, float left_y, f
 	pad.leftTrigger = left_trigger;
 	pad.rightTrigger = right_trigger;
 	CabinetPS2::SetPad(port, pad);
+}
+
+// The motors of the pad in `port`, 0 to 1, as the game last set them.
+void cps2_get_rumble(unsigned port, float* large, float* small)
+{
+	*large = port < 2 ? s_motor[port][0].load() : 0.0f;
+	*small = port < 2 ? s_motor[port][1].load() : 0.0f;
 }
 
 // Lends the newest frame if there is one newer than `since`. The pointer stays
