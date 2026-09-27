@@ -2,6 +2,7 @@
 
 #include <ft2build.h>
 #include FT_FREETYPE_H
+#include FT_TRUETYPE_TABLES_H
 
 #include <algorithm>
 #include <cmath>
@@ -224,6 +225,21 @@ float TextRenderer::ascent(TextStyle style, float scale) {
                                                      faces_.size() - 1)]);
     FT_Set_Pixel_Sizes(face, 0, static_cast<FT_UInt>(px));
     return (static_cast<float>(face->size->metrics.ascender) / 64.0f) / scale;
+}
+
+float TextRenderer::capHeight(TextStyle style, float scale) {
+    const int px = std::max(1, static_cast<int>(std::lround(styleSize(style) * scale)));
+    auto face = static_cast<FT_Face>(faces_[std::min(static_cast<size_t>(styleWeight(style)),
+                                                     faces_.size() - 1)]);
+    FT_Set_Pixel_Sizes(face, 0, static_cast<FT_UInt>(px));
+    // The font's own figure, from its OS/2 table; a font without one gets a
+    // capital H measured instead.
+    if (auto* os2 = static_cast<TT_OS2*>(FT_Get_Sfnt_Table(face, FT_SFNT_OS2));
+        os2 && os2->version >= 2 && os2->sCapHeight > 0 && face->units_per_EM > 0)
+        return (static_cast<float>(os2->sCapHeight) * px / face->units_per_EM) / scale;
+    if (FT_Load_Char(face, 'H', FT_LOAD_NO_BITMAP) == 0)
+        return (static_cast<float>(face->glyph->metrics.horiBearingY) / 64.0f) / scale;
+    return ascent(style, scale) * 0.72f;
 }
 
 float TextRenderer::lineHeight(TextStyle style, float scale) {

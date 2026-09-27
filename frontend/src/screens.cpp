@@ -1316,15 +1316,24 @@ void DetailScreen::draw(Ctx& c) {
     // listed under a cover of the old size were tried first and read as
     // filler; MMagTech: "a horrible afterthought". They went into the line
     // under the title.) The pair is centred across the screen either way.
-    const float coverH = std::clamp(colH, design::kDetailCoverHeight,
+    //
+    // LINED UP WITH WHAT IS SEEN, not with the text's line boxes (MMagTech,
+    // the same day: the cover's top sat above the title's letters and its foot
+    // below the pictures, at the labels'). Its top is the top of the title's
+    // capitals; its foot is the foot of the state pictures.
+    const float capInset = c.text.ascent(ui::TextStyle::LargeTitle, c.sc) -
+                           c.text.capHeight(ui::TextStyle::LargeTitle, c.sc);
+    const float picturesFoot = headToRows + rowsH + design::kStateShelfGap + calloutLH +
+                               design::kDetailRowGap + cardH_;
+    const float coverH = std::clamp(picturesFoot - capInset, design::kDetailCoverHeight,
                                     design::kDetailCoverMaxHeight);
     const float coverW = coverH * (design::kDetailCoverWidth / design::kDetailCoverHeight);
     const float pairW = colW + design::kDetailCoverGap + coverW;
     const float colX = (ui::kCanvasWidth - pairW) * 0.5f;
     const float coverX = colX + colW + design::kDetailCoverGap;
-    const float pairH = std::max(colH, coverH);
+    const float pairH = std::max(colH, capInset + coverH);
     const float top = std::max(design::kStateBlockMinTop, (ui::kCanvasHeight - pairH) * 0.5f);
-    const float coverY = top;
+    const float coverY = top + capInset;
     const float blockTop = top;
     statesX_ = colX;
     statesY_ = blockTop + headToRows + rowsH + design::kStateShelfGap;
