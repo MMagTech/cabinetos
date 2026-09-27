@@ -136,8 +136,8 @@ constexpr float kPressDuration = 0.120f;
 // is 22 points rather than 10, and the hierarchy is the right way round. Both
 // still get full-white text, so selection is never invisible — it is the pill
 // that stops competing with the cursor.
-constexpr float kSelectedTint = 0.20f;
-constexpr float kFocusedTint = 0.42f;
+constexpr float kSelectedTint = 0.30f;
+constexpr float kFocusedTint = 0.55f;
 
 // UNFOCUSED ARTWORK SITS BACK — new 2026-09-21.
 //
