@@ -1194,8 +1194,15 @@ bool Core::load(const std::string& soPath) {
     // is what RetroArch's audio sync does to every core. Cabinet's "slowed N64
     // down" was most likely this same 3 to 4%, slowed to true speed; why was
     // never recorded, so that is a reading, not a finding.
-    governed_ = coreName_ == "PPSSPP" || coreName_ == "Flycast" ||
-                coreName_ == "Mupen64Plus-Next";
+    //
+    // SO EVERY CORE, which is the end state #144 asked for. Three cores out of
+    // three that were measured needed it, each for a different reason, and
+    // the brake only acts on a core whose sound is more than 20 ms ahead of
+    // the clock, so a core that keeps time never feels it (Mortal Kombat II
+    // sat 2 ms behind). PlayStation 2 paces itself and never reaches it.
+    // Checked on every system by a headless sweep on the A9 before it shipped.
+    // The switch stays so a core can be taken off it with a reason.
+    governed_ = true;
 
     // Order matters: the environment callback must be installed before
     // retro_init, because a core may call it from there.
@@ -1561,7 +1568,7 @@ int Core::runFor(double dt) {
 
     int ran = 0;
     while (accumulator_ >= interval && ran < maxRuns) {
-        // The second brake, and three cores have it. See load(): the
+        // The second brake, and every core has it. See load(): the
         // accumulator counts the runs that were asked for, and for PPSSPP a
         // run is a game frame rather than a vblank, so the accumulator can be
         // satisfied while the emulated machine is running at twice speed.
