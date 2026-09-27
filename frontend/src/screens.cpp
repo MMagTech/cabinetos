@@ -1236,29 +1236,44 @@ void DetailScreen::draw(Ctx& c) {
     c.r.draw(ui::Rect{0, 0, ui::kCanvasWidth, ui::kCanvasHeight, 0,
                       ui::Color::black(design::kScrimOverlay * a)});
 
-    // The cover itself, at the detail size, on the left, with the title level
-    // with its top.
+    // ONE COLUMN ON THE LEFT, THE COVER ON THE RIGHT, the pair centred across
+    // the screen. Everything read or chosen (title, Play, Download, Continue
+    // from) lines up on one left edge, and the cover balances it.
     //
-    // CONTINUE FROM IS A SHELF ACROSS THE FOOT, starting under the cover, the
-    // way Home's shelves run: the game above, where to pick up from below.
-    // (It was first drawn under the rows, to the right of the cover, and the
-    // right-hand side then ran above and below the cover with nothing lining
-    // up; MMagTech on the TV: off balance.) With a shelf, the cover and the
-    // shelf are centred together; without one, the cover is centred alone,
-    // as it always was.
-    const float coverX = design::kLibraryInset;
+    // Two layouts came first, both judged by MMagTech on the TV, 2026-09-27.
+    // Cover left with the states under the rows: the right side ran above and
+    // below the cover and nothing lined up ("off balance"). Cover left with
+    // the states as a shelf under it: the shelf filled two-thirds of the width
+    // and the page sat heavy on the left ("the bottom feels out of weight,
+    // maybe the image somewhere on the right").
+    //
+    // The column's top is level with the cover's while the column is the
+    // shorter; once Continue from makes it taller, the cover is centred
+    // against it instead.
     const float calloutLH = c.text.lineHeight(ui::TextStyle::Callout, c.sc);
     const bool shelf = !states_.empty() && game_.playable;
-    cardH_ = design::kStateCardHeight;
-    cardW_ = cardH_ * (16.0f / 9.0f);
-    const float shelfH = design::kStateShelfGap + calloutLH + design::kDetailRowGap + cardH_ +
-                         design::kDetailRowGap * 0.75f + calloutLH;
-    const float total = design::kDetailCoverHeight + (shelf ? shelfH : 0.0f);
-    const float coverY = std::max(shelf ? design::kStateBlockMinTop : 0.0f,
-                                  (ui::kCanvasHeight - total) * 0.5f);
-    statesX_ = coverX;
-    statesY_ = coverY + design::kDetailCoverHeight + design::kStateShelfGap;
-    const float blockTop = coverY;
+    const float colW = design::kRowColumnMaxWidth;
+    const float pairW = colW + design::kDetailCoverGap + design::kDetailCoverWidth;
+    const float colX = (ui::kCanvasWidth - pairW) * 0.5f;
+    const float coverX = colX + colW + design::kDetailCoverGap;
+    cardW_ = (colW - 2.0f * design::kStateCardGap) / 3.0f;
+    cardH_ = cardW_ * (9.0f / 16.0f);
+    const float headToRows = c.text.ascent(ui::TextStyle::LargeTitle, c.sc) +
+                             c.text.lineHeight(ui::TextStyle::LargeTitle, c.sc) * 0.55f +
+                             c.text.ascent(ui::TextStyle::Callout, c.sc) + calloutLH * 1.6f;
+    const float rowH = c.text.lineHeight(ui::TextStyle::Title3, c.sc) + design::kRowPadY * 2.0f;
+    const float rowsH = rows_.empty() ? 0.0f
+        : rows_.size() * rowH + (rows_.size() - 1) * design::kDetailRowGap;
+    const float shelfH = !shelf ? 0.0f
+        : design::kStateShelfGap + calloutLH + design::kDetailRowGap + cardH_ +
+              design::kDetailRowGap * 0.75f + calloutLH;
+    const float colH = headToRows + rowsH + shelfH;
+    const float pairH = std::max(colH, design::kDetailCoverHeight);
+    const float top = std::max(design::kStateBlockMinTop, (ui::kCanvasHeight - pairH) * 0.5f);
+    const float coverY = top + (pairH - design::kDetailCoverHeight) * 0.5f;
+    const float blockTop = top;
+    statesX_ = colX;
+    statesY_ = blockTop + headToRows + rowsH + design::kStateShelfGap;
     if (c.cards && game_.cardIndex >= 0 &&
         game_.cardIndex < static_cast<int>(c.cards->size())) {
         drawCover(c, (*c.cards)[game_.cardIndex], coverX, coverY,
@@ -1271,9 +1286,8 @@ void DetailScreen::draw(Ctx& c) {
 
     // The title, Large Title — the one place in the product that size is used
     // for a game rather than a settings page.
-    const float textX = coverX + design::kDetailCoverWidth + 60.0f;
-    const float textW = std::min(design::kRowColumnMaxWidth,
-                                 ui::kCanvasWidth - textX - design::kLibraryInset);
+    const float textX = colX;
+    const float textW = colW;
     float y = blockTop + c.text.ascent(ui::TextStyle::LargeTitle, c.sc);
     c.text.draw(c.r, c.text.truncate(game_.title, ui::TextStyle::LargeTitle, c.sc, textW),
                 textX, y, ui::TextStyle::LargeTitle, ui::Color::white(a), c.sc);
