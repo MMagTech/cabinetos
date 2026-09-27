@@ -1256,9 +1256,6 @@ void DetailScreen::draw(Ctx& c) {
     const float calloutLH = c.text.lineHeight(ui::TextStyle::Callout, c.sc);
     const bool shelf = !states_.empty() && game_.playable;
     const float colW = design::kRowColumnMaxWidth;
-    const float pairW = colW + design::kDetailCoverGap + design::kDetailCoverWidth;
-    const float colX = (ui::kCanvasWidth - pairW) * 0.5f;
-    const float coverX = colX + colW + design::kDetailCoverGap;
     cardW_ = (colW - 2.0f * design::kStateCardGap) / 3.0f;
     cardH_ = cardW_ * (9.0f / 16.0f);
     const float headToRows = c.text.ascent(ui::TextStyle::LargeTitle, c.sc) +
@@ -1271,36 +1268,30 @@ void DetailScreen::draw(Ctx& c) {
         : design::kStateShelfGap + calloutLH + design::kDetailRowGap + cardH_ +
               design::kDetailRowGap * 0.75f + calloutLH;
     const float colH = headToRows + rowsH + shelfH;
-    // THE FACTS UNDER THE COVER (year, maker, players) are part of the
-    // cover's side, so the two sides are balanced with them counted in.
-    const float factsH = facts_.empty() ? 0.0f
-        : design::kDetailFactsGap + facts_.size() * calloutLH;
-    const float coverSideH = design::kDetailCoverHeight + factsH;
-    const float pairH = std::max(colH, coverSideH);
+    // THE COVER GROWS TO THE COLUMN'S HEIGHT once Continue from makes the
+    // column taller than it: top level with the title, foot level with the
+    // shelf's labels, so the right side is filled by the art itself. (Facts
+    // listed under a cover of the old size were tried first and read as
+    // filler; MMagTech: "a horrible afterthought". They went into the line
+    // under the title.) The pair is centred across the screen either way.
+    const float coverH = std::clamp(colH, design::kDetailCoverHeight,
+                                    design::kDetailCoverMaxHeight);
+    const float coverW = coverH * (design::kDetailCoverWidth / design::kDetailCoverHeight);
+    const float pairW = colW + design::kDetailCoverGap + coverW;
+    const float colX = (ui::kCanvasWidth - pairW) * 0.5f;
+    const float coverX = colX + colW + design::kDetailCoverGap;
+    const float pairH = std::max(colH, coverH);
     const float top = std::max(design::kStateBlockMinTop, (ui::kCanvasHeight - pairH) * 0.5f);
-    const float coverY = top + (pairH - coverSideH) * 0.5f;
-    {
-        float fy = coverY + design::kDetailCoverHeight + design::kDetailFactsGap +
-                   c.text.ascent(ui::TextStyle::Callout, c.sc);
-        for (const std::string& line : facts_) {
-            c.text.draw(c.r,
-                        c.text.truncate(line, ui::TextStyle::Callout, c.sc,
-                                        design::kDetailCoverWidth),
-                        coverX, fy, ui::TextStyle::Callout, ui::Color::white(0.60f * a), c.sc);
-            fy += calloutLH;
-        }
-    }
+    const float coverY = top;
     const float blockTop = top;
     statesX_ = colX;
     statesY_ = blockTop + headToRows + rowsH + design::kStateShelfGap;
     if (c.cards && game_.cardIndex >= 0 &&
         game_.cardIndex < static_cast<int>(c.cards->size())) {
-        drawCover(c, (*c.cards)[game_.cardIndex], coverX, coverY,
-                  design::kDetailCoverWidth, design::kDetailCoverHeight,
+        drawCover(c, (*c.cards)[game_.cardIndex], coverX, coverY, coverW, coverH,
                   design::kDetailRadius, /*f=*/1.0f, /*rim=*/false, /*large=*/true);
     } else {
-        c.r.draw(ui::Rect{coverX, coverY, design::kDetailCoverWidth,
-                          design::kDetailCoverHeight, design::kDetailRadius, game_.art});
+        c.r.draw(ui::Rect{coverX, coverY, coverW, coverH, design::kDetailRadius, game_.art});
     }
 
     // The title, Large Title — the one place in the product that size is used
@@ -1313,7 +1304,10 @@ void DetailScreen::draw(Ctx& c) {
     y += c.text.lineHeight(ui::TextStyle::LargeTitle, c.sc) * 0.55f +
          c.text.ascent(ui::TextStyle::Callout, c.sc);
 
+    // WHAT THE GAME IS, on one line: platform, then RomM's year, maker and
+    // players where it has them, then the size.
     std::string meta = game_.platform;
+    for (const std::string& f : facts_) meta += "  \xC2\xB7  " + f;
     if (game_.sizeBytes > 0) {
         // A unit that suits the number. A library holds a 19 KB Game Boy ROM
         // and a 1.78 GB arcade set, and megabytes flatter neither: the first
