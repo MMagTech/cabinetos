@@ -6,15 +6,17 @@
 // in, which also says who is playing), and dark mode belongs to the console,
 // because it is about the lights being off, not about who is holding the pad.
 //
-// FIVE HAND-PICKED COLOURS, NOT A PICKER: purple (the brand), blue, teal,
-// wine and graphite. Wine rather than red, which reads as an error screen and
-// muddies the red and orange box art a retro library is full of; teal rather
-// than green, which reads as somebody else's console.
+// EIGHT HAND-PICKED COLOURS, NOT A PICKER, in order round the colour wheel:
+// purple (the brand), blue, teal, green, amber, red, wine and graphite. The
+// first five were purple, blue, teal, wine and graphite; MMagTech asked for a
+// few more the same evening, and the three added fill the wheel's gaps rather
+// than sitting beside one already there. Red is a deep crimson, kept dark so
+// it does not read as an error screen.
 //
 // DARK IS ONE RULE OVER ANY COLOUR, not a second hand-tuned set: the
 // background goes toward black, the game-art glow and the covers at rest sit
-// further back, and text and the focused cover stay as they are. Five looks to
-// judge instead of ten. Menus only: a game's picture is the game's.
+// further back, and text and the focused cover stay as they are. Eight looks to
+// judge instead of sixteen. Menus only: a game's picture is the game's.
 //
 // NOT HERE: the startup screen and first run stay purple. Before anybody has
 // signed in there is nobody's colour to use, and the startup screen is the
@@ -28,8 +30,8 @@
 
 namespace look {
 
-enum class Colour { Purple = 0, Blue, Teal, Wine, Graphite };
-constexpr int kColourCount = 5;
+enum class Colour { Purple = 0, Blue, Teal, Green, Amber, Red, Wine, Graphite };
+constexpr int kColourCount = 8;
 const char* colourName(Colour c);                 // "Purple", for the screen
 const char* colourWord(Colour c);                 // "purple", for the file
 Colour colourFromWord(const std::string& word);   // anything unknown is Purple
