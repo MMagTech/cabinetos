@@ -723,8 +723,19 @@ bool environment(unsigned cmd, void* data) {
                 // A key the core never declared. There is nothing honest to
                 // answer with — we do not know its values, let alone its
                 // default — so it is recorded and reported rather than guessed
-                // at. This is the one case that stays unanswered, and it is a
-                // bug in the core or a table we failed to read.
+                // at. This is the one case that stays unanswered, and RetroArch
+                // leaves it unanswered too.
+                //
+                // MAME 2003-PLUS DOES THIS ON PURPOSE, and it is the only core
+                // here that does it every launch (#89, read in its source at
+                // the pinned commit, src/mame2003/core_options.c): it declares
+                // only the options the loaded game can use (vector settings for
+                // a vector game, the Neo Geo BIOS for a Neo Geo game, crosshairs
+                // for a light gun game...) but asks for every one, and keeps its
+                // own value for any the frontend does not answer. Whatever is
+                // relevant to the game is declared and answered; the rest do
+                // not apply. So its list of "never declared" is expected, not a
+                // table we failed to read. Anywhere else it is worth a look.
                 var->value = nullptr;
                 if (!key.empty() &&
                     std::find(gUndeclaredAsks.begin(), gUndeclaredAsks.end(), key) ==
