@@ -76,12 +76,31 @@ recompilers, rumble, the download ring, plain refusals*. Short version:
 - **New instruments:** `--speed-test` (+ `CABINETOS_PACED=1`,
   `CABINETOS_WARM`, `CABINETOS_TIMED`) and `CABINETOS_STATE_OUT/IN` on
   `--state-test`; `--download <id>` now fetches by id and waits for Home.
-- **Owed on the TV** (the image, not the loop: the loop uses the image's
-  cores, and the N64 core and PS2 bridge changed): rumble on N64, PS1, PS2,
-  GameCube, Dreamcast and a Game Boy rumble cart; the Rumble row; the ring
-  during a real download; an older PSP state loading under the recompiler;
-  PS2 and GameCube screenshots; Dreamcast states (#140); players 3 and 4
-  (#115); the kids' licensed Switch pad (#116).
+- **TESTED ON THE TV (image `2026.09.27.8`, then the loop):** the Rumble
+  row; PS2 and GBA rumble on the Xbox pad; PS2 pause, Resume, Screenshot
+  (uploaded to RomM), Exit and a second PS2 launch, after the two PS2 fixes
+  below. #116 closed (the kids' pad pairs and plays).
+- **FOUND ON THE TV AND FIXED:** the PS2 pause menu ended the game, and a
+  second PS2 game in one run aborted the app (both since PS2 first ran in the
+  console; PROJECT.md has why). **The testing image `.8` does NOT have these
+  fixes**; the branch was pushed to `testing` again at the end of the session
+  for an image that does.
+- **STILL OWED ON THE TV, on that newer testing image:** Dreamcast and
+  GameCube rumble; Rumble Off; the download ring during a real download;
+  Mario Kart 64 plus an old state (recompiler); Lumines plus an old state;
+  GameCube screenshot; Dreamcast states (#140); optionally four pads (#115).
+  Then MMagTech's word "merge" (the merge promotes that image). Close #147,
+  #149, #145, #89, #146, #90, #130 with the merge ("Closes" in the PR body).
+- **PS1 and N64 do not rumble by default**, as RetroArch, Batocera and Cabinet:
+  their controller type is #73 (comment there). The Lite 2 rumbles only in
+  Switch mode (S).
+- **#151 filed:** Dreamcast crashed on load after an arcade game with a 143 MB
+  state; not reproduced (`--then <id>` added for it).
+- **The loop's `~/cores-dev` was stale for PS2 and GameCube** (hand copies from
+  2026-09-20/21). Now `cabinetos-ps2.so` is tonight's build and
+  `dolphin_libretro.so` links to the image's; the old files are `*.old`. A PS2
+  bridge built by hand is in `~/pcsx2-clean/pcsx2-upstream/build-cabinetos/`
+  (with the probe; run it with `LD_LIBRARY_PATH` set to that folder).
 - **A9 scratch state:** `~/fb/frontend2` (a second build tree), `~/fb/repo`
   (cores built by hand: the recompiler N64 core), `~/fb/speed.sh`,
   `~/fb/xstate.sh`, `~/fb/govtest.sh`, `~/fb/fetch.sh`. tuned is back on

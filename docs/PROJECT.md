@@ -2063,6 +2063,39 @@ adding the two documented files to RomM is the first thing to try.
 fills from PCSX2. GameCube was never refused in code (Dolphin is a libretro
 core here and takes the Vulkan path); checked on the TV.
 
+**Two PS2 bugs found on the TV with the testing image, both there since PS2
+first ran inside the console (fixed the same night):**
+- **The pause menu ended the game.** The bridge ran PCSX2 while its state was
+  Running and shut the VM down on anything else, so Paused meant finished and
+  the console showed the last frame of a game that was gone. The loop now
+  follows pcsx2-qt's `EmuThread::run`: Running executes, Paused waits (resume
+  and stop are applied there, since `PumpMessagesOnCPUThread` is not called
+  while paused), Stopping leaves.
+- **A second PS2 game in one run aborted the app.** PCSX2's base settings layer
+  and its page fault handler may be set once per process; the bridge set PCSX2
+  up and tore it down for every game, on a new thread each time. Every game now
+  runs on one long-lived PS2 thread that initialises PCSX2 the first time only
+  (as pcsx2-qt does), and an `atexit` handler shuts that thread down before
+  PCSX2's statics are destroyed (without it, every exit asserted).
+- Proved with the PS2 probe (`--pause-at`, `--runs`): Burnout 3 twice in one
+  process, each paused two seconds (held still, still running) and resumed,
+  clean exit; then on the TV: Resume, Screenshot from the pause menu (uploaded),
+  Exit, Burnout again.
+- The pause menu now offers **Screenshot in every game**.
+
+**Rumble on real pads:** the Xbox One S pad rumbles (PS2, GBA). The 8BitDo Lite
+2 has motors only in Switch mode (S); paired in its Android mode (D) it has
+none. The kids' licensed Switch pad ("Lic Pro Controller", PowerA-style) has no
+motors. `--pads` now prints whether SDL can drive a pad's motors. **PS1 and N64
+do not rumble by default and that matches RetroArch, Batocera and Cabinet**:
+PS1 is plugged in as the digital pad (no motors, no sticks; `RETRO_DEVICE_JOYPAD`
+→ `PSE_PAD_TYPE_STANDARD`) and N64's pak is a Memory Pak. Both are #73's
+per-system controller type; recorded there.
+
+**A Dreamcast crash on load after an arcade game with a 143 MB state (#151)**,
+not reproduced; `--then <id>` (a second game in one run, after
+`--overlay-exit`) was added to chase it.
+
 **Bazzite's power profile, measured, filed as #150.** CabinetOS sits on plain
 tuned `balanced` always, because the desktop and Steam that switch Bazzite's
 profiles were removed. At N64's own pace on the A9, `throughput-performance-bazzite`

@@ -374,6 +374,14 @@ int report(int seconds) {
                             : cs == SDL_JOYSTICK_CONNECTION_WIRED  ? "wired"
                                                                    : "unknown",
                             static_cast<int>(SDL_GetGamepadType(gp)));
+                // Whether SDL can drive its motors, which is all rumble.h
+                // can use (#149): a pad that has motors but whose driver
+                // SDL does not know how to talk to reads "no" here.
+                std::printf("  rumble   %s\n",
+                            SDL_GetBooleanProperty(SDL_GetGamepadProperties(gp),
+                                                   SDL_PROP_GAMEPAD_CAP_RUMBLE_BOOLEAN, false)
+                                ? "yes"
+                                : "no");
                 char* m = SDL_GetGamepadMapping(gp);
                 std::printf("  mapping  %s\n", m ? m : "(none)");
                 SDL_free(m);

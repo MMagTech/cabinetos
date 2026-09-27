@@ -3689,6 +3689,11 @@ int main(int argc, char** argv) {
     // the whole Home-to-game transition can be watched on a machine with no
     // controller attached to it.
     int autoLaunchId = 0;
+    // A SECOND GAME IN THE SAME RUN (--then <id>): started once --overlay-exit
+    // has taken the first back to Home. Several emulators have broken only
+    // when they were not the first game of the run (PS2 and Dreamcast, found
+    // on the TV 2026-09-27), and a single --launch never exercises that.
+    int thenLaunchId = 0;
     // Runs the whole save/state round trip once the game is up: write a state,
     // upload it, then fetch the newest one back and restore it. Headless, so
     // the sync can be proved on a machine nobody is sitting at.
@@ -3854,6 +3859,8 @@ int main(int argc, char** argv) {
             autoSwitchAccountId = SDL_atoi(argv[++i]);
         } else if (SDL_strcmp(argv[i], "--unkeep") == 0 && i + 1 < argc) {
             autoUnkeepId = SDL_atoi(argv[++i]);
+        } else if (SDL_strcmp(argv[i], "--then") == 0 && i + 1 < argc) {
+            thenLaunchId = SDL_atoi(argv[++i]);
         } else if (SDL_strcmp(argv[i], "--overlay-exit") == 0) {
             overlayExitDemo = true;
             // Optional frame count: --overlay-exit 2000 plays for 2000 frames
@@ -11144,6 +11151,13 @@ int main(int argc, char** argv) {
             const int id = autoUnkeepId;
             autoUnkeepId = 0;
             removeDownload(id);
+        }
+        if (thenLaunchId > 0 && !overlayExitDemo && !playing && autoLaunchId == 0 &&
+            !launchJob.busy()) {
+            std::fprintf(stderr, "[launch] then: %d\n", thenLaunchId);
+            autoLaunchId = thenLaunchId;
+            thenLaunchId = 0;
+            autoLaunchAfter = 1.0f;
         }
         if (autoLaunchId > 0 && !playing) {
             autoLaunchAfter -= dt;
