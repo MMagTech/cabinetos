@@ -1693,6 +1693,39 @@ and Home is the button the list most often gets wrong.
 - **Rejected:** a fixed Home (above); a Home / Select switch (covers pads with
   no Home but not a Home the app cannot see); a configurable pair.
 
+### The launch screen, redone on the TV — 2026-09-27
+
+Built for Continue from (#80) and reworked with MMagTech on the A9, one change
+at a time. What it is now (`screens.cpp`, `DetailScreen`):
+
+- **One column on the left, the cover on the right**, the pair centred across
+  the screen. Title; two lines under it; Play and Download; Continue from.
+  Tried first and dropped: cover left with the states under the rows (nothing
+  lined up), cover left with the states as a shelf under it (heavy on the
+  left, *"maybe the image somewhere on the right"*).
+- **Every page is laid out the same**, with or without states: the cover is
+  one size in one place, and a game with no states has open space where the
+  shelf goes (*"everything needs to be in the same place between the two"*).
+  The cover is the column's height, top level with the title.
+- **Two lines under the title, the same on every game:** platform and size;
+  then year, maker and players from RomM's merged metadata. The second line's
+  space is kept even when RomM has nothing. Facts listed under the cover were
+  tried and read as filler (*"a horrible afterthought"*); one line dropping
+  parts to fit was inconsistent between games. **Players can be wrong**
+  (RomM has Mortal Kombat II as one player).
+- **The game's own save is the Play row's value**, "Saved today, 8:17 PM",
+  because that save is what Play starts from.
+- **Continue from:** the newest three states for the emulator Play would run,
+  as three 16:9 cards splitting the column, each picture whole on a blurred
+  echo of itself, the time under it; unfocused ones a little darker. Down
+  from the last row goes in; picking one plays from it.
+- **Arrival:** the old screen is copied and dissolves away (as a top-bar
+  switch does); the page's backdrop is there at once, and everything on it
+  waits until RomM has answered and the cover and pictures have loaded (at
+  least 0.2 s, at most 0.8 s), then fades in together, rising 16 points.
+  Leaving dissolves the same way. MMagTech: *"that's it, perfect."* Parts
+  popping in one by one, and a cut, were what it replaced.
+
 ### The permission detail, and a Phase 2 decision that paid for itself
 
 Gamepads are the one input the frontend reads **directly from `/dev/input`**;
