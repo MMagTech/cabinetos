@@ -37,23 +37,33 @@ agreed). With promotion, every change is tried on `testing` and a merge
 makes `latest` that same image, so the test console on `testing` is never
 behind what users get, and testing a change needs no `bootc switch` and no
 extra reboot. **SSH is port 2222; sudo's password is
-`cat /var/lib/cabinetos-files/password`.** `latest` and `testing` are both
-`2026.09.26.10` (#104 and #123), and the A9's image is that (`bootc status`
-is the truth), from `testing`, gamescope/drm, File access on, **a PIN set**
-(MMagTech's), the SanDisk "Games" stick attached. **BUT THE A9 IS RUNNING A
-HAND-BUILT FRONTEND from `tools/ui-loop.sh`** (the `in-game-shortcuts`
-branch) until `tools/ui-loop.sh --restore` or a reboot. The VM is on
-`testing` `2026.09.26.4`. Branches: `main`, `testing`, **`in-game-shortcuts`
-(pushed, not merged)**, and PR #42's `base-update/44.20260921` (parked, on
-MMagTech's word).
+`cat /var/lib/cabinetos-files/password`.** **`in-game-shortcuts` merged
+2026-09-27 as `4ad4a74` and was promoted: `latest` and `testing` are both
+`2026.09.27`** (the tested digest, no rebuild), and **the A9 is booted on
+it** (`bootc status` is the truth), from `testing`, gamescope/drm, File
+access on, **a PIN set** (MMagTech's), the SanDisk "Games" stick attached,
+In-game shortcuts ON with the Lite 2's heart set as its shortcut button. The
+VM is on `testing` `2026.09.26.4`. Branches: `main`, `testing`, the merged
+`in-game-shortcuts` (safe to delete), and PR #42's `base-update/44.20260921`
+(parked, on MMagTech's word). The handover commits after the tested one
+merged separately as documentation, which builds nothing.
 
-**NEXT: THE TESTING IMAGE FOR `in-game-shortcuts`, THEN MERGE ON HIS WORD.**
-Everything on it was judged on the TV with the loop, one piece at a time
-(session of 2026-09-27, below). Push it to `testing`, let the image build
-(~8 min), `bootc upgrade` the A9, have MMagTech judge the real image, and
-merge only on his explicit word ([[merge approval]] in memory). **Last thing
-built, not yet reported back on: Home's Resume** (loads the newest state,
-else just starts). Then the emulators (the order below, step 3).
+**THEN, MMAGTECH 2026-09-27: "I'd really rather focus on features not yet
+implemented or other fixes", NOT THE EMULATORS YET.** This overrides step 3
+of the order below for now. Pick with him at the start of the session;
+candidates: #124 other apps' saves and states (matters to anyone trying the
+console), #125 to #127 Home (focus on two shelves, Up/Down landing, Home in
+the top bar), #129 dark mode and an Appearance setting, #128 time played,
+#130 PS2/GameCube screenshots, #73 the per-system pause-menu options, #88
+offline play, account switching (designed 2026-09-21, not built), and the
+installer, boot splash and power button.
+
+**NEXT SESSION, CHOSEN BY MMAGTECH 2026-09-27: THE HOME FIXES (#125 TO
+#127) AND DARK MODE (#129)**, the latter with his Appearance idea on the
+issue (a dark option, and one that follows the time of day). Walk the
+scenarios with him before building, as usual. **#124 is PARKED (label `later`):** testing it means making saves
+and states in each of RomM's web-player emulators, and MMagTech: too much
+for now. Kept open for when someone reports starting over.
 
 **THE SESSION OF 2026-09-27 BUILT THE IN-GAME SHORTCUTS (#76 TO #80) AND FIXED
 #103, BRANCH `in-game-shortcuts`.** Every decision, with the reasons and what
