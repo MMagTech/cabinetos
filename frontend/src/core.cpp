@@ -2021,8 +2021,15 @@ uint64_t Core::frameDigest() const {
 }
 
 bool Core::snapshot(std::vector<uint8_t>& rgba, unsigned& width, unsigned& height) const {
-    const unsigned w = gFrameW, h = gFrameH;
-    if (w == 0 || h == 0 || isPs2()) return false;
+    // PLAYSTATION 2 (#130): its frame is not the core's, it is the texture
+    // uploadFrame fills from PCSX2 (ps2::takeFrame), RGBA, top row first, at
+    // the game's own resolution. So a screenshot works in every game where
+    // the shortcut button does. Not a save state's picture: PS2 has none.
+    const bool ps2Frame = isPs2();
+    const unsigned w = ps2Frame ? frameWidth_ : gFrameW;
+    const unsigned h = ps2Frame ? frameHeight_ : gFrameH;
+    if (w == 0 || h == 0) return false;
+    if (ps2Frame && !texture_) return false;
     std::vector<uint8_t> px(static_cast<size_t>(w) * h * 4);
 
     // Read a GL framebuffer's bottom-left w x h into px, top row first when
@@ -2047,11 +2054,12 @@ bool Core::snapshot(std::vector<uint8_t>& rgba, unsigned& width, unsigned& heigh
         }
     };
 
-    if (gHWVulkan) {
+    if (ps2Frame || gHWVulkan) {
         // The exported image is an ordinary GL texture (vkhost), top row
         // first, the picture in its top-left corner. present() waits on its
-        // fence, so what is there is complete.
-        const GLuint tex = vk::texture();
+        // fence, so what is there is complete. PS2's texture is read the
+        // same way.
+        const GLuint tex = ps2Frame ? texture_ : vk::texture();
         if (!tex) return false;
         GLuint fbo = 0;
         glGenFramebuffers(1, &fbo);
