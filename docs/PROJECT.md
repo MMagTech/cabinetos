@@ -1919,8 +1919,12 @@ game cannot freeze on a silent speaker.
 
 Measured on the A9 TV: Crazy Taxi 2 39 to 77 ms waiting after its loading
 burst, Mario Kart 33 to 70 ms, nothing dropped; MMagTech: "looks and sounds
-better". A headless sweep of the smallest game on all 30 systems ran on
-each version.
+better". A headless sweep of the smallest game on all 30 systems ran
+with the every-core brake (every system that played still played); the
+speaker gate itself was swept on six (N64, Dreamcast, GameCube, SNES,
+Genesis, Neo Geo Pocket Color) plus PSP. The full sweep of the final build
+was stopped part way, on purpose, to move on: **run it before relying on a
+system nobody has played since** (`~/fb/sweep.sh` on the A9).
 
 **Not done:** RetroArch's dynamic rate control (±0.5%, on by default on
 PCs) is not built; nothing today drifts slowly enough to need it. Quality
