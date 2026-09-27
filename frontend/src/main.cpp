@@ -10819,10 +10819,15 @@ int main(int argc, char** argv) {
                 // times the samples would only pile up behind the picture.
                 // Rewind's too: it is a frame's sound played forwards.
                 // A SAFETY NET, NOT THE PACING — 2026-09-27. The speaker sets
-                // the pace above; this only catches what gets past it (a core
-                // that hands over a second of sound in one call). It used to
-                // be the pacing, at 64 ms, and threw away the top of every N64
-                // burst as crackle. The history: When a game stalls, the speaker plays silence;
+                // the pace above, and a batch bigger than the gate is QUEUED,
+                // not trimmed: the gate then waits it out, which is what
+                // RetroArch's blocking audio write does. Flycast's threaded
+                // rendering (its default, "highly recommended") hands over a
+                // loading burst of ~380 ms that drains within seconds; trimmed
+                // at 250 ms it was audible skipping. So this only catches a
+                // second of sound in one call, which is broken, not bursty. It
+                // used to be the pacing, at 64 ms, and threw away the top of
+                // every N64 burst as crackle. The history: When a game stalls, the speaker plays silence;
                 // when it catches up, the sound it owed queued up behind and
                 // never drained, so every stall made the sound a little later
                 // for the rest of the session. Crazy Taxi 2 sat 200 ms behind
@@ -10832,7 +10837,7 @@ int main(int argc, char** argv) {
                 // from piling up. What does not fit is dropped: one small jump
                 // in the sound instead of a delay that lasts. Measured against
                 // this stream only, so it is the same on any machine.
-                static constexpr double kMaxWaitingMs = 250.0;
+                static constexpr double kMaxWaitingMs = 1000.0;
                 static uint64_t droppedBytes = 0;
                 static uint64_t droppedLogAt = 0;
                 if (!samples.empty() && core.speed() <= 1.0 && !rewinding) {
