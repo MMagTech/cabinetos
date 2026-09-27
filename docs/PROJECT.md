@@ -5244,7 +5244,9 @@ asked me to keep"* is a dead end without one.
 
 A different save state, a different core and an export. The screen is the right
 home for all three and none is built; a row that does nothing is worse than no
-row, so none is drawn.
+row, so none is drawn. **2026-09-27: the different save state is built
+(Continue from); a different core and an export are DROPPED** (MMagTech, on
+the list of unfiled work: the console picks the core, and fewer rows).
 
 ##### The navigation bar is NOT built, and the reason is a measurement
 

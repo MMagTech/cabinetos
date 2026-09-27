@@ -37,14 +37,14 @@ agreed). With promotion, every change is tried on `testing` and a merge
 makes `latest` that same image, so the test console on `testing` is never
 behind what users get, and testing a change needs no `bootc switch` and no
 extra reboot. **SSH is port 2222; sudo's password is
-`cat /var/lib/cabinetos-files/password`.** **`in-game-shortcuts` merged
-2026-09-27 as `4ad4a74` and was promoted: `latest` and `testing` are both
-`2026.09.27`** (the tested digest, no rebuild), and **the A9 is booted on
-it** (`bootc status` is the truth), from `testing`, gamescope/drm, File
+`cat /var/lib/cabinetos-files/password`.** **`home-and-appearance` merged
+2026-09-27 as `7445002` (#131) and was promoted: `latest` and `testing` are
+both `2026.09.27.2`** (digest `c4044383`, the tested one, no rebuild), and
+**the A9 is booted on it** (`bootc status` is the truth), from `testing`, gamescope/drm, File
 access on, **a PIN set** (MMagTech's), the SanDisk "Games" stick attached,
 In-game shortcuts ON with the Lite 2's heart set as its shortcut button. The
 VM is on `testing` `2026.09.26.4`. Branches: `main`, `testing`, the merged
-`in-game-shortcuts` (safe to delete), and PR #42's `base-update/44.20260921`
+`in-game-shortcuts` and `home-and-appearance` (safe to delete), and PR #42's `base-update/44.20260921`
 (parked, on MMagTech's word). The handover commits after the tested one
 merged separately as documentation, which builds nothing.
 
@@ -67,22 +67,23 @@ L1/R1, the power menu on Home opens on Cancel, the power icon DROPPED,
 Appearance (Standard/Dark/Scheduled with one Dark hours row) and sixteen
 Colors per account (#75), the switch curtain fading to the new person's
 colour, and the menus dithered (banding). Decisions in `docs/PROJECT.md`,
-*Home, the top bar, and Appearance*. **Merge only on MMagTech's go after the
-testing image is judged.** Until the next reboot the A9 runs the loop's
-hand-built binary (`tools/ui-loop.sh --restore` puts it back).
+*Home, the top bar, and Appearance*. **Judged on the testing image and
+merged** (#131).
 
-**OWED FROM THAT SESSION: FILING.** A sweep found planned work with no issue
-(checked against the code). MMagTech has the list and has not yet said which
-to file. Decided but never filed: sleep offered per machine (P:6212), the
-Mesa shader cache the eviction cannot see (N:2076), a shipping image without
-the development shell (OQ 8), signed images, installer splash and firmware
-(P:5726, P:5733), os-release naming (OQ 7), Download All for a system
-(P:8559), Switch/PS3/Xbox/Wii order (OQ 12b), picture quality that learns
-per game (P:10926), launch screen "different core" and "export" (P:5171), a
-"Test builds" switch (SETTINGS.md:578), and owed tests (NES/SNES save after
-play, failed save resend, OLED dim, Dreamcast states). Rumble has no issue
-and is not implemented. Ask him which to file. Stale "not built" lines found
-by the same sweep belong to #81. **#124 is PARKED (label `later`):** testing it means making saves
+**PLANNED WORK THAT HAD NO ISSUE IS FILED** (same session): a sweep of the
+docs, checked against the code twice, gave #132 to #140 (sleep per machine,
+the shader cache, a shipping image without the development shell, signing,
+installer splash and Wi-Fi, os-release naming, the new-systems order, a Test
+builds switch, and a checklist of owed hardware tests), and the per-game half
+of picture quality as a comment on #63. The launch screen's "different core"
+and "export" are dropped. **Not filed, his call and not yet made:** Download
+All for a whole system (P:8559) and rumble (not implemented anywhere). Stale
+"not built" lines found by the same sweep belong to #81.
+
+**NEXT, RECOMMENDED TO MMAGTECH 2026-09-27:** #128 time played and #109 the
+harsh cut from the startup screen to Home, as one quick session like this
+one; then the installer block (#105 to #108, #136), the one real blocker
+before a public release. Pick with him. **#124 is PARKED (label `later`):** testing it means making saves
 and states in each of RomM's web-player emulators, and MMagTech: too much
 for now. Kept open for when someone reports starting over.
 
