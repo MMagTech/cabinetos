@@ -186,7 +186,8 @@ public:
     // FAST FORWARD (#77): how many emulated seconds pass per real one. 1 is
     // normal. runFor steps up to this many times more frames per draw; the
     // caller discards the sound meanwhile. No effect on PlayStation 2, whose
-    // emulator paces itself (it has a turbo of its own, not yet wired).
+    // emulator paces itself; fast forward is not offered there anyway (it goes
+    // with states, which PlayStation 2 does not have).
     void setSpeed(double s) { speed_ = s < 1.0 ? 1.0 : s; }
     double speed() const { return speed_; }
 

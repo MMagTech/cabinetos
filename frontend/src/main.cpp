@@ -5691,7 +5691,9 @@ int main(int argc, char** argv) {
     ShortcutHold shortcutHold[players::kMax];
     // FAST FORWARD (#77): the shortcut button and ZR, held. Fast while held,
     // normal on release, the sound discarded meanwhile. About 4x, a fixed top
-    // speed rather than a setting. PlayStation 2 paces itself and says so.
+    // speed rather than a setting. ONLY WHERE STATES ARE (MMagTech,
+    // 2026-09-27: fast forward and rewind go with states, on the systems kept
+    // true to the console, now and later), and elsewhere it says so.
     constexpr double kFastForward = 4.0;
     bool fastForwardSaid = false;
     // Both stick clicks together are the overlay hotkey — see where they are
@@ -10243,7 +10245,7 @@ int main(int argc, char** argv) {
             // all twenty-one libretro cores, so it is stated unconditionally
             // rather than behind a test somebody has to remember.
             stateHoldJustEnded = false;
-            if (fastForward && core.isPs2()) {
+            if (fastForward && !session.snapshots) {
                 if (!fastForwardSaid) menuNotice.say("Fast forward isn't available here", Tone::Info);
                 fastForwardSaid = true;
                 fastForward = false;

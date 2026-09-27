@@ -1640,6 +1640,13 @@ countdown was rejected because it slows every retry of save-and-load and is
 still too short when the pad is not in hand. The press that continues never
 reaches the game (the #103 rule). **Not built yet.**
 
+**Fast forward and rewind go with states** (MMagTech, 2026-09-27: *"fast
+forward and rewind won't work on the cores that don't have states, both
+future and present ones"*). Where a system has no states (PlayStation 2,
+GameCube, and anything later kept true to its console), neither is offered,
+and the shortcut says "Fast forward isn't available here" (rewind the same).
+The same line as open question 25. So there is no PlayStation 2 turbo to wire.
+
 **A save shortcut is wanted** (MMagTech: *"when saved via menu or hot key
 combo"*). Not in the #76 list; settled below.
 
