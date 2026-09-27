@@ -489,8 +489,46 @@ std::map<std::string, std::string> optionOverrides(const std::string& core) {
     // stays 0 and Sonic CD refuses to boot past "RAM cartridge not
     // initialized". Answering declared defaults is what closes that, which is
     // this console's second free ride from the core-options work.
+    //
+    // THE SOUND CHIP IS NUKED'S, to match Cabinet — 2026-09-27 (#89 audit).
+    // A Genesis state records which FM core made it and restores into that
+    // core's structures (core/sound/sound.c, sound_context_save/load at our
+    // pin), so a state from Cabinet (Nuked) loaded under MAME's chip, or the
+    // other way round, comes back with the running chip untouched and the
+    // music wrong until the game rewrites it. Nuked is also the accurate one.
+    // It costs more processor than MAME's: fine on the A9, untested on
+    // weaker machines.
     if (coreName == "genesis_plus_gx") {
-        return {{"genesis_plus_gx_system_bram", "per game"}};
+        return {
+            {"genesis_plus_gx_system_bram", "per game"},
+            {"genesis_plus_gx_ym2612", "nuked (ym2612)"},
+        };
+    }
+
+    // PlayStation 1: NO SECOND MEMORY CARD, to match Cabinet — 2026-09-27
+    // (#89 audit). The declared default "shared" puts one card in slot 2 for
+    // every game, in the system directory, which the save sync never reads:
+    // a game that saved there would keep that save on this console and never
+    // reach RomM or an Apple TV. Card 1 is already "libretro", per game,
+    // which is the one that syncs. No card 2 had ever been written on the
+    // A9 when this changed.
+    if (coreName == "pcsx_rearmed") {
+        return {{"pcsx_rearmed_memcard2", "none"}};
+    }
+
+    // Virtual Boy: THE RIGHT STICK IS THE SECOND D-PAD (#89 audit). The
+    // console has two d-pads and games use both (Red Alarm, Teleroboxer); a
+    // modern pad has one, so without this half the controls are nowhere.
+    // Cabinet forces it for the same reason. Input only.
+    if (coreName == "beetle_vb") {
+        return {{"vb_right_analog_to_digital", "enabled"}};
+    }
+
+    // DS: THE SOFTWARE RENDERER ON ITS OWN THREAD (#89 audit), as Cabinet
+    // has it. It changes how the drawing work is split, not what a save or
+    // state holds, and it is the headroom a weaker machine needs.
+    if (coreName == "melonds") {
+        return {{"melonds_threaded_renderer", "enabled"}};
     }
 
     // Beetle Saturn, and this one also decides where the save is. "libretro"
