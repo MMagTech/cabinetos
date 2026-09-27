@@ -1647,6 +1647,19 @@ GameCube, and anything later kept true to its console), neither is offered,
 and the shortcut says "Fast forward isn't available here" (rewind the same).
 The same line as open question 25. So there is no PlayStation 2 turbo to wire.
 
+**Rewind is for getting back, not for scrubbing** (decided 2026-09-27).
+MMagTech: *"it mostly just [is] if you can't get a chance to save or forget
+and then die"*, *"none of them have to be super smooth"*, and *"even 15 is
+good"*. So: a snapshot every half second of play, the last **15 seconds**
+kept in memory (nothing on the drive), and holding ZL with the shortcut
+button steps back one snapshot every 0.2 s, so it can be stopped where
+wanted. On **every system with states**, N64 and PlayStation included. The
+first build kept one every other frame, smooth, and so had to stop at states
+under 1 MB (an N64 state is 16.8 MB; copying and compressing 30 a second
+would stutter the game); half-second snapshots are cheap enough everywhere.
+Compression runs on a worker (`rewind.h`); only taking the snapshot happens
+on the frame, and the log reports the slowest one per game.
+
 **Screenshots do not go with states:** they should eventually work in every
 game where the shortcut button is recognised (MMagTech, 2026-09-27), which
 includes PlayStation 2 and GameCube, whose emulators run inside the frontend.

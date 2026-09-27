@@ -19,7 +19,6 @@
 // See docs/PROJECT.md, "The design system" and "Navigation model".
 
 #include <SDL3/SDL.h>
-#include <zlib.h>
 
 #include <dirent.h>
 #include <sys/stat.h>
@@ -87,6 +86,7 @@
 #include "drives.h"
 #include "players.h"
 #include "shortcuts.h"
+#include "rewind.h"
 #include "bluetooth.h"
 #include "ui.h"
 
@@ -5749,27 +5749,18 @@ int main(int argc, char** argv) {
     // true to the console, now and later), and elsewhere it says so.
     constexpr double kFastForward = 4.0;
     bool fastForwardSaid = false;
-    // REWIND (#78): the shortcut button and ZL, held. The game runs backwards
-    // while held, up to about 20 seconds, and plays on from there on release.
-    // A state is kept every other frame, compressed, in a ring; rewinding
-    // restores them newest first. ONLY WHERE IT IS CHEAP: states under 1 MB,
-    // which is the cartridge systems and their like (measured 2026-09-27:
-    // TurboGrafx 80 KB, arcade 296 KB, SNES 823 KB; N64 16.8 MB), and only
-    // where states are at all (fast forward and rewind go with states).
-    // Elsewhere it says so. The ring is dropped when a state loads or the
-    // game ends, since it no longer leads anywhere real.
-    struct RewindRing {
-        std::deque<std::vector<uint8_t>> snaps;
-        size_t bytes = 0;
-        int tick = 0;
-        int available = -1;   // -1 not yet decided for this game
-        std::vector<uint8_t> raw, packed;
-        void clear() { snaps.clear(); bytes = 0; tick = 0; }
-    } rewindRing;
-    constexpr size_t kRewindMaxState = 1024 * 1024;
-    constexpr size_t kRewindBudget = 96u * 1024 * 1024;
-    constexpr int kRewindEvery = 2;          // draws between snapshots
-    constexpr size_t kRewindMaxSnaps = 20 * 60 / kRewindEvery;   // ~20 s at 60 fps
+    // REWIND (#78): the shortcut button and ZL, held (rewind.h). A snapshot
+    // every half second of play, the last 15 seconds kept in memory; held,
+    // it steps back one every kRewindStep and plays on from there on release.
+    // On every system with states and nowhere else (fast forward and rewind
+    // go with states). Dropped when a state loads or the game ends.
+    static cab::Rewind rewindKeep;
+    int rewindAvailable = -1;          // -1 not yet decided for this game
+    uint64_t rewindLastFrame = 0;      // framesRun at the last snapshot
+    float rewindStepWait = 0.0f;
+    double rewindWorstMs = 0.0;        // the slowest snapshot, for the log
+    std::vector<uint8_t> rewindRaw;
+    constexpr float kRewindStep = 0.20f;
     bool rewindSaid = false;
     // Both stick clicks together are the overlay hotkey — see where they are
     // read. Held state rather than a chord test at press time, because SDL
@@ -9343,8 +9334,10 @@ int main(int argc, char** argv) {
         if (audioStream) SDL_ClearAudioStream(audioStream);
         pendingStateId = 0;
         stateHold = stateHoldWaiting = false;
-        rewindRing.clear();
-        rewindRing.available = -1;
+        rewindKeep.reset();
+        rewindAvailable = -1;
+        rewindLastFrame = 0;
+        rewindWorstMs = 0.0;
         detailStates.stale = true;   // Continue from may have changed
         playing = false;
         overlayOpen = false;
@@ -10356,29 +10349,27 @@ int main(int argc, char** argv) {
                 std::fprintf(stderr, "[shortcuts] fast forward %s\n", fastForward ? "on" : "off");
             core.setSpeed(fastForward && !rewinding ? kFastForward : 1.0);
             // Whether this game can rewind, decided once it is running.
-            if (rewindRing.available < 0 && core.running() && core.framesRun() > 0) {
+            if (rewindAvailable < 0 && core.running() && core.framesRun() > 0) {
                 const size_t sz = core.stateSize();
-                rewindRing.available =
-                    session.snapshots && sz > 0 && sz <= kRewindMaxState ? 1 : 0;
-                std::fprintf(stderr, "[rewind] %s (state %zu bytes)\n",
-                             rewindRing.available ? "available" : "not offered", sz);
+                rewindAvailable = session.snapshots && sz > 0 ? 1 : 0;
+                rewindLastFrame = core.framesRun();
+                std::fprintf(stderr, "[rewind] %s (state %zu KB)\n",
+                             rewindAvailable ? "available" : "not offered", sz / 1024);
             }
             // WHAT REWIND IS HOLDING, in the log each time it starts: the
             // numbers the memory budget was argued from, measured.
             static bool wasRewinding = false;
-            if (rewinding && !wasRewinding && rewindRing.available == 1) {
-                const double secs = rewindRing.snaps.size() * kRewindEvery /
-                                    std::max(core.avInfo().fps, 1.0);
+            if (rewinding && !wasRewinding && rewindAvailable == 1) {
+                const size_t n = rewindKeep.count(), b = rewindKeep.bytes();
                 std::fprintf(stderr,
                              "[rewind] %zu states, %.1f s, %.1f MB in memory "
-                             "(%.0f KB each, from %zu KB)\n",
-                             rewindRing.snaps.size(), secs, rewindRing.bytes / 1048576.0,
-                             rewindRing.snaps.empty() ? 0.0
-                                 : rewindRing.bytes / 1024.0 / rewindRing.snaps.size(),
-                             core.stateSize() / 1024);
+                             "(%.0f KB each, from %zu KB); slowest snapshot %.1f ms\n",
+                             n, n * 0.5, b / 1048576.0, n ? b / 1024.0 / n : 0.0,
+                             core.stateSize() / 1024, rewindWorstMs);
+                rewindStepWait = 0.0f;   // the first step is at once
             }
             wasRewinding = rewinding;
-            if (rewinding && rewindRing.available != 1) {
+            if (rewinding && rewindAvailable != 1) {
                 if (!rewindSaid) menuNotice.say("Rewind isn't available here", Tone::Info);
                 rewindSaid = true;
                 rewinding = false;
@@ -10394,44 +10385,33 @@ int main(int argc, char** argv) {
             } else if (shotMode) {
                 core.runFor(1.0 / std::max(core.avInfo().fps, 1.0));
             } else if (rewinding) {
-                // ONE STEP BACK PER DRAW: the newest kept state, restored, and
-                // one frame run from it so there is a picture (its sound is
-                // dropped below). At the end of the ring it holds still.
-                if (!rewindRing.snaps.empty()) {
-                    std::vector<uint8_t>& packed = rewindRing.snaps.back();
-                    uLongf rawLen = static_cast<uLongf>(core.stateSize());
-                    rewindRing.raw.resize(rawLen);
-                    if (uncompress(rewindRing.raw.data(), &rawLen, packed.data(),
-                                   static_cast<uLong>(packed.size())) == Z_OK) {
-                        rewindRing.raw.resize(rawLen);
-                        core.loadState(rewindRing.raw);
+                // ONE SNAPSHOT BACK EVERY kRewindStep, held still between, so
+                // it can be stopped where wanted. A frame is run from each so
+                // there is a picture (its sound is dropped below). With none
+                // left it holds on the oldest.
+                rewindStepWait -= dt;
+                if (rewindStepWait <= 0.0f) {
+                    rewindStepWait = kRewindStep;
+                    if (rewindKeep.takeNewest(rewindRaw)) {
+                        core.loadState(rewindRaw);
                         core.runFor(1.0 / std::max(core.avInfo().fps, 1.0));
                     }
-                    rewindRing.bytes -= packed.size();
-                    rewindRing.snaps.pop_back();
+                    rewindLastFrame = core.framesRun();
                 }
             } else {
-                const int ran = core.runFor(dt);
-                // KEEP A STATE every other draw that moved the game on,
-                // compressed, dropping the oldest past ~20 s or the budget.
-                if (rewindRing.available == 1 && ran > 0 &&
-                    ++rewindRing.tick >= kRewindEvery) {
-                    rewindRing.tick = 0;
-                    if (core.saveState(rewindRing.raw) && !rewindRing.raw.empty()) {
-                        uLongf len = compressBound(static_cast<uLong>(rewindRing.raw.size()));
-                        rewindRing.packed.resize(len);
-                        if (compress2(rewindRing.packed.data(), &len, rewindRing.raw.data(),
-                                      static_cast<uLong>(rewindRing.raw.size()), 1) == Z_OK) {
-                            rewindRing.snaps.emplace_back(rewindRing.packed.begin(),
-                                                          rewindRing.packed.begin() + len);
-                            rewindRing.bytes += len;
-                            while (!rewindRing.snaps.empty() &&
-                                   (rewindRing.bytes > kRewindBudget ||
-                                    rewindRing.snaps.size() > kRewindMaxSnaps)) {
-                                rewindRing.bytes -= rewindRing.snaps.front().size();
-                                rewindRing.snaps.pop_front();
-                            }
-                        }
+                core.runFor(dt);
+                // A SNAPSHOT EVERY HALF SECOND OF PLAY, counted in the game's
+                // own frames so fast forward keeps them half a game-second
+                // apart. Taken here, compressed on rewind's worker.
+                const uint64_t every = static_cast<uint64_t>(
+                    std::max(1.0, std::round(core.avInfo().fps * 0.5)));
+                if (rewindAvailable == 1 && core.framesRun() >= rewindLastFrame + every) {
+                    rewindLastFrame = core.framesRun();
+                    const uint64_t t0 = SDL_GetTicksNS();
+                    if (core.saveState(rewindRaw) && !rewindRaw.empty()) {
+                        const double ms = (SDL_GetTicksNS() - t0) / 1e6;
+                        if (ms > rewindWorstMs) rewindWorstMs = ms;
+                        rewindKeep.offer(rewindRaw);
                     }
                 }
             }
@@ -10582,7 +10562,8 @@ int main(int argc, char** argv) {
         }
         if (stateLoad.loaded) {
             stateLoad.loaded = false;
-            rewindRing.clear();   // the history led somewhere else
+            rewindKeep.reset();   // the history led somewhere else
+            rewindLastFrame = cab::Core::shared().framesRun();
             closeOverlay();
             stateHold = true;
             stateHoldWaiting = false;
