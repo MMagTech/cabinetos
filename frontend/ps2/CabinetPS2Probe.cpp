@@ -42,7 +42,8 @@ namespace
 		std::fprintf(stderr,
 			"usage: %s --disc <path> --resources <dir> --data <dir>\n"
 			"          [--frames N] [--dump <dir>] [--dump-from N] [--dump-count N]\n"
-			"          [--upscale N] [--uncapped] [--verbose]\n",
+			"          [--upscale N] [--uncapped] [--verbose]\n"
+			"          [--pause-at N] [--runs N]\n",
 			argv0);
 	}
 
@@ -69,6 +70,14 @@ int main(int argc, char** argv)
 	// at all: everything upstream of the DualShock 2 can be correct and the
 	// picture still never changes.
 	uint32_t press_from = 0;
+
+	// THE TWO THINGS THE CONSOLE DOES THAT A SINGLE RUN NEVER DID, both
+	// found broken on the TV 2026-09-27. --pause-at N pauses at frame N for
+	// two seconds and resumes, as the pause menu does, and requires the game
+	// to still be running and to move again after. --runs N plays the whole
+	// thing N times in one process, as playing a second PS2 game does.
+	uint32_t pause_at = 0;
+	int runs = 1;
 
 	for (int i = 1; i < argc; i++)
 	{
@@ -102,6 +111,10 @@ int main(int argc, char** argv)
 			config.unlimited = true;
 		else if (!std::strcmp(argv[i], "--press-from"))
 			press_from = static_cast<uint32_t>(std::atoi(Param(argc, argv, i)));
+		else if (!std::strcmp(argv[i], "--pause-at"))
+			pause_at = static_cast<uint32_t>(std::atoi(Param(argc, argv, i)));
+		else if (!std::strcmp(argv[i], "--runs"))
+			runs = std::max(1, std::atoi(Param(argc, argv, i)));
 		else if (!std::strcmp(argv[i], "--verbose"))
 			config.verbose_log = true;
 		else if (!std::strcmp(argv[i], "--help"))
@@ -130,9 +143,15 @@ int main(int argc, char** argv)
 	if (!config.dump_dir.empty() && config.dump_count == 0)
 		config.dump_count = 3;
 
+	for (int run = 1; run <= runs; run++)
+	{
+	if (runs > 1)
+		std::printf("[probe] run %d of %d\n", run, runs);
 	std::atomic<bool> finished{false};
 	std::string error;
 	bool ok = false;
+	bool pauseDone = false;
+	uint64_t framesAtResume = 0;
 
 	// Run() blocks for the life of the game, exactly as Cabinet's does, so it
 	// gets a thread and this one reports on it.
@@ -168,6 +187,21 @@ int main(int argc, char** argv)
 			audio_peak = std::max<int16_t>(audio_peak, static_cast<int16_t>(s < 0 ? -s : s));
 
 		const CabinetPS2::Metrics mid = CabinetPS2::GetMetrics();
+		if (pause_at != 0 && !pauseDone && mid.frames >= pause_at)
+		{
+			pauseDone = true;
+			CabinetPS2::SetPaused(true);
+			std::this_thread::sleep_for(std::chrono::milliseconds(300));
+			const uint64_t before = CabinetPS2::GetMetrics().frames;
+			std::this_thread::sleep_for(std::chrono::seconds(2));
+			const uint64_t after = CabinetPS2::GetMetrics().frames;
+			std::printf("[probe] paused at %llu: %s, %s\n",
+				static_cast<unsigned long long>(before),
+				finished.load() ? "THE GAME ENDED WHILE PAUSED" : "still running",
+				after == before ? "held still" : "FRAMES MOVED WHILE PAUSED");
+			CabinetPS2::SetPaused(false);
+			framesAtResume = after;
+		}
 		if (press_from != 0 && mid.frames >= press_from)
 		{
 			// Alternate held and released. A button that is never let go is a
@@ -204,6 +238,13 @@ int main(int argc, char** argv)
 		std::fprintf(stderr, "[probe] FAILED: %s\n", error.c_str());
 		return 1;
 	}
+	if (pause_at != 0)
+	{
+		const uint64_t end = CabinetPS2::GetMetrics().frames;
+		std::printf("[probe] after resume: %llu more frames, %s\n",
+			static_cast<unsigned long long>(end - framesAtResume),
+			end > framesAtResume + 60 ? "RESUMED" : "DID NOT RESUME");
+	}
 
 	const CabinetPS2::Metrics m = CabinetPS2::GetMetrics();
 	std::printf("[probe] done, %llu frames\n", static_cast<unsigned long long>(m.frames));
@@ -234,6 +275,7 @@ int main(int argc, char** argv)
 	else
 	{
 		std::printf("[probe] no frame ever reached the handover\n");
+	}
 	}
 	return 0;
 }

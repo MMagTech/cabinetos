@@ -6028,7 +6028,8 @@ int main(int argc, char** argv) {
     };
     // The pause menu's items for THIS game, built each time it opens: the two
     // state items only where the system has snapshots. PlayStation 2 and
-    // GameCube get Resume and Exit to Home and nothing to press that says no.
+    // GameCube get Resume, Screenshot and Exit to Home, and nothing to press
+    // that says no.
     std::vector<OverlayItem> pauseItems{OvResume, OvSaveState, OvLoadState, OvExit};
 
     // ---- The Power menu — docs/PROJECT.md, open question 10b ------------
@@ -9937,9 +9938,10 @@ int main(int argc, char** argv) {
                 pauseItems.push_back(OvSaveState);
                 pauseItems.push_back(OvLoadState);
             }
-            // Where a picture can be read from the game, which today is where
-            // states are; PS2 and GameCube follow in #130.
-            if (session.snapshots) pauseItems.push_back(OvScreenshot);
+            // In every game, as the shortcut is (MMagTech: screenshots go
+            // wherever the shortcut button is recognised). PS2 reads PCSX2's
+            // frame since #130; GameCube is a libretro core like the rest.
+            pauseItems.push_back(OvScreenshot);
             pauseItems.push_back(OvExit);
         }
         overlaySlot = 0;
