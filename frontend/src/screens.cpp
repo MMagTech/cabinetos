@@ -1261,7 +1261,6 @@ void DetailScreen::draw(Ctx& c) {
     // shorter; once Continue from makes it taller, the cover is centred
     // against it instead.
     const float calloutLH = c.text.lineHeight(ui::TextStyle::Callout, c.sc);
-    const bool shelf = !states_.empty() && game_.playable;
     const float colW = design::kRowColumnMaxWidth;
     cardW_ = (colW - 2.0f * design::kStateCardGap) / 3.0f;
     cardH_ = cardW_ * (9.0f / 16.0f);
@@ -1269,10 +1268,14 @@ void DetailScreen::draw(Ctx& c) {
                              c.text.lineHeight(ui::TextStyle::LargeTitle, c.sc) * 0.55f +
                              c.text.ascent(ui::TextStyle::Callout, c.sc) + calloutLH * 2.6f;
     const float rowH = c.text.lineHeight(ui::TextStyle::Title3, c.sc) + design::kRowPadY * 2.0f;
-    const float rowsH = rows_.empty() ? 0.0f
-        : rows_.size() * rowH + (rows_.size() - 1) * design::kDetailRowGap;
-    const float shelfH = !shelf ? 0.0f
-        : design::kStateShelfGap + calloutLH + design::kDetailRowGap + cardH_ +
+    // EVERY PAGE IS LAID OUT THE SAME, whatever the game has: two rows and
+    // a shelf, so the cover is one size in one place and the title, the rows
+    // and Continue from never move between games. A game with no states has
+    // open space where the shelf would be. (The cover grew only when there
+    // was a shelf, first, and MMagTech: a game without saves and states
+    // should look like one with them.)
+    const float rowsH = 2.0f * rowH + design::kDetailRowGap;
+    const float shelfH = design::kStateShelfGap + calloutLH + design::kDetailRowGap + cardH_ +
               design::kDetailRowGap * 0.75f + calloutLH;
     const float colH = headToRows + rowsH + shelfH;
     // THE COVER GROWS TO THE COLUMN'S HEIGHT once Continue from makes the
