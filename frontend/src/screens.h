@@ -520,6 +520,9 @@ public:
     // "Cave", "1-2 players". Any may be empty.
     struct Facts { std::string year, maker, players; };
     void setFacts(Facts f);
+    // RomM HAS ANSWERED: the facts, the save and Continue from fade in
+    // together now, rather than each popping in as it arrived.
+    void detailsArrived();
     void tick(float dt);
     Result key(Nav n);
     void draw(Ctx& c);
@@ -598,6 +601,11 @@ private:
     int slot_ = 0;
     design::Animated focus_;
     design::Animated appear_;
+    // RomM's parts of the page (the facts line, the save on Play, Continue
+    // from) share one fade, started when they arrive or after kDetailsWait.
+    design::Animated details_;
+    float waited_ = 0.0f;
+    bool detailsIn_ = false;
 };
 
 }  // namespace screens

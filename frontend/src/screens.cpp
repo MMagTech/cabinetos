@@ -1097,6 +1097,9 @@ void DetailScreen::open(GameDetail d) {
     states_.clear();
     saveWhen_.clear();
     facts_ = {};
+    details_.settle(0.0f);
+    waited_ = 0.0f;
+    detailsIn_ = false;
     inStates_ = false;
     stateSlot_ = 0;
     rebuildRows();
@@ -1132,6 +1135,12 @@ void DetailScreen::rebuildRows() {
 
 void DetailScreen::setFacts(Facts f) { facts_ = std::move(f); }
 
+void DetailScreen::detailsArrived() {
+    if (detailsIn_) return;
+    detailsIn_ = true;
+    details_.retarget(1.0f, design::kDetailsFade);
+}
+
 std::string DetailScreen::factsLine() const {
     std::string m;
     for (const std::string* p : {&facts_.year, &facts_.maker, &facts_.players})
@@ -1153,6 +1162,10 @@ void DetailScreen::setStates(std::vector<StateChoice> states) {
 void DetailScreen::tick(float dt) {
     focus_.tick(dt);
     appear_.tick(dt);
+    details_.tick(dt);
+    // RomM slow or not asked at all: show what there is rather than wait on.
+    waited_ += dt;
+    if (!detailsIn_ && waited_ >= design::kDetailsWait) detailsArrived();
 }
 
 Result DetailScreen::key(Nav n) {
@@ -1340,7 +1353,8 @@ void DetailScreen::draw(Ctx& c) {
     const std::string facts = factsLine();
     if (!facts.empty())
         c.text.draw(c.r, c.text.truncate(facts, ui::TextStyle::Callout, c.sc, textW), textX, y,
-                    ui::TextStyle::Callout, ui::Color::white(0.60f * a), c.sc);
+                    ui::TextStyle::Callout,
+                    ui::Color::white(0.60f * a * details_.value()), c.sc);
 
     rowsX_ = textX;
     rowsW_ = textW;
@@ -1409,7 +1423,8 @@ void DetailScreen::drawGlass(Ctx& c) {
         if (!busy && !rows_[i].value.empty()) {
             const float vw = c.text.measure(rows_[i].value, ui::TextStyle::Callout, c.sc);
             c.text.draw(c.r, rows_[i].value, x + w - design::kRowPadX - vw, base,
-                        ui::TextStyle::Callout, ui::Color::white(0.60f * a), c.sc);
+                        ui::TextStyle::Callout,
+                        ui::Color::white(0.60f * a * details_.value()), c.sc);
         }
         y += rowH + design::kDetailRowGap;
     }
@@ -1421,6 +1436,8 @@ void DetailScreen::drawGlass(Ctx& c) {
     // person tells three moments in one game apart.
     if (!states_.empty() && game_.playable) {
         const float rowsEnd = y;
+        // The shelf in RomM's fade; `a` below is only ever used as an alpha.
+        const float a = appear_.value() * details_.value();
         y = statesY_;
         c.text.draw(c.r, "Continue from", statesX_,
                     y + c.text.ascent(ui::TextStyle::Callout, c.sc), ui::TextStyle::Callout,

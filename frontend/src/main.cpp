@@ -5973,6 +5973,7 @@ int main(int argc, char** argv) {
                 detailScreen.setStates(detailStates.list);
                 detailScreen.setSaveWhen(detailStates.saveWhen);
                 detailScreen.setFacts(detailStates.facts);
+                detailScreen.detailsArrived();
             }
         }
         startDetailStates();
