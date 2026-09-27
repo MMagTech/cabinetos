@@ -56,6 +56,15 @@ const Swatch kSwatches[kColourCount] = {
     {"Sunset", "sunset",
      {ui::Color::rgb(0xD9487A), ui::Color::rgb(0x3B1650), ui::Color::rgb(0x0E0A26), 0.55f},
      ui::Color::rgb(0x4A1E4E)},
+    {"Ocean", "ocean",
+     {ui::Color::rgb(0x2A8FD6), ui::Color::rgb(0x0B3A48), ui::Color::rgb(0x06102A), 0.55f},
+     ui::Color::rgb(0x163E52)},
+    {"Aurora", "aurora",
+     {ui::Color::rgb(0x2E9A5A), ui::Color::rgb(0x0C3A44), ui::Color::rgb(0x1A0C34), 0.55f},
+     ui::Color::rgb(0x183E46)},
+    {"Fire", "fire",
+     {ui::Color::rgb(0xD0661A), ui::Color::rgb(0x4A1010), ui::Color::rgb(0x120606), 0.55f},
+     ui::Color::rgb(0x4E1A12)},
 };
 
 // HOW FAR DARK TURNS THINGS DOWN. Starting values for the television.

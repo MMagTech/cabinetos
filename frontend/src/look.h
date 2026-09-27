@@ -20,10 +20,14 @@
 // Lime and Orange are kept deeper than a crayon; the middle and bottom stay
 // dark for the covers and the words.
 //
+// SUNSET WAS THE FUN ONE (*"oh the gradient is fun"*), so three more with a
+// hue for each stop: Ocean, Aurora and Fire. To be cut down to a final set
+// on the TV; sixteen is too many to walk with Left and Right.
+//
 // DARK IS ONE RULE OVER ANY COLOUR, not a second hand-tuned set: the
 // background goes toward black, the game-art glow and the covers at rest sit
-// further back, and text and the focused cover stay as they are. Thirteen looks
-// to judge instead of twenty-six. Menus only: a game's picture is the game's.
+// further back, and text and the focused cover stay as they are. Each look is
+// judged once, not once per appearance. Menus only: a game's picture is the game's.
 //
 // NOT HERE: the startup screen and first run stay purple. Before anybody has
 // signed in there is nobody's colour to use, and the startup screen is the
@@ -39,9 +43,9 @@ namespace look {
 
 enum class Colour {
     Purple = 0, Blue, Teal, Green, Amber, Red, Wine, Graphite,
-    Pink, Sky, Lime, Orange, Sunset
+    Pink, Sky, Lime, Orange, Sunset, Ocean, Aurora, Fire
 };
-constexpr int kColourCount = 13;
+constexpr int kColourCount = 16;
 const char* colourName(Colour c);                 // "Purple", for the screen
 const char* colourWord(Colour c);                 // "purple", for the file
 Colour colourFromWord(const std::string& word);   // anything unknown is Purple
