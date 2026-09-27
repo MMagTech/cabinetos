@@ -518,7 +518,7 @@ public:
     void setSaveWhen(std::string when);
     // What RomM knows of the game, for the line under the title: "1997",
     // "Cave", "1-2 players". Any may be empty.
-    struct Facts { std::string year, maker, players; };
+    struct Facts { std::string year, maker, players, played; };
     void setFacts(Facts f);
     // RomM HAS ANSWERED: the facts, the save and Continue from fade in
     // together now, rather than each popping in as it arrived.
@@ -585,7 +585,9 @@ private:
     std::vector<StateChoice> states_;
     std::string saveWhen_;
     Facts facts_;
-    std::string factsLine() const;
+    // The line, fitted to `width`: if it is too long, the maker is what gets
+    // shortened, so the time played at its end is always whole.
+    std::string factsLine(ui::TextRenderer& text, float sc, float width) const;
     // Continue from's card size, worked out in draw() with the rest of the
     // layout so the block can be centred as a whole.
     float cardW_ = 0, cardH_ = 0;

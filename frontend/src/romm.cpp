@@ -791,6 +791,78 @@ bool Client::deleteStates(const std::vector<int>& ids, std::string* err) const {
     return true;
 }
 
+bool Client::postPlaySessions(const std::vector<PlaySession>& list, std::vector<int>* outcome,
+                              std::string* err) const {
+    outcome->assign(list.size(), 0);
+    if (list.empty()) return true;
+    json_object* root = json_object_new_object();
+    json_object* arr = json_object_new_array();
+    for (const PlaySession& p : list) {
+        json_object* o = json_object_new_object();
+        json_object_object_add(o, "rom_id", json_object_new_int(p.romId));
+        json_object_object_add(o, "start_time", json_object_new_string(p.start.c_str()));
+        json_object_object_add(o, "end_time", json_object_new_string(p.end.c_str()));
+        json_object_object_add(o, "duration_ms", json_object_new_int64(p.durationMs));
+        json_object_array_add(arr, o);
+    }
+    json_object_object_add(root, "sessions", arr);
+    const std::string payload = json_object_to_json_string_ext(root, JSON_C_TO_STRING_PLAIN);
+    json_object_put(root);
+
+    std::string body;
+    long status = 0;
+    if (!postJson("/api/play-sessions", payload, &body, &status, err)) return false;
+    if (status >= 400) {
+        if (err) *err = "HTTP " + std::to_string(status) + " sending play sessions";
+        return false;
+    }
+    json_object* resp = json_tokener_parse(body.c_str());
+    if (!resp) { if (err) *err = "play session response was not JSON"; return false; }
+    json_object* results = nullptr;
+    if (json_object_object_get_ex(resp, "results", &results) &&
+        json_object_get_type(results) == json_type_array) {
+        for (size_t i = 0; i < json_object_array_length(results); ++i) {
+            json_object* r = json_object_array_get_idx(results, i);
+            const int64_t idx = jint(r, "index");
+            if (idx < 0 || idx >= static_cast<int64_t>(list.size())) continue;
+            const std::string st = jstr(r, "status");
+            (*outcome)[idx] = st == "created" || st == "duplicate" ? 1 : st == "error" ? -1 : 0;
+            if (st == "error")
+                std::fprintf(stderr, "[playtime] RomM refused a session: %s\n",
+                             jstr(r, "detail").c_str());
+        }
+    }
+    json_object_put(resp);
+    return true;
+}
+
+bool Client::fetchPlayedMs(int romId, int64_t* ms, std::string* err) const {
+    *ms = 0;
+    // Newest first, a page at a time. A game played every day for years is a
+    // few thousand sessions; the cap is there so a wrong answer cannot loop.
+    constexpr int kPage = 500;
+    for (int page = 0; page < 40; ++page) {
+        std::string body;
+        if (!get("/api/play-sessions?rom_id=" + std::to_string(romId) +
+                     "&limit=" + std::to_string(kPage) +
+                     "&offset=" + std::to_string(page * kPage),
+                 &body, err))
+            return false;
+        json_object* root = json_tokener_parse(body.c_str());
+        if (!root || json_object_get_type(root) != json_type_array) {
+            if (root) json_object_put(root);
+            if (err) *err = "play session list was not a list";
+            return false;
+        }
+        const size_t n = json_object_array_length(root);
+        for (size_t i = 0; i < n; ++i)
+            *ms += jint(json_object_array_get_idx(root, i), "duration_ms");
+        json_object_put(root);
+        if (n < static_cast<size_t>(kPage)) return true;
+    }
+    return true;
+}
+
 bool Client::postMultipart(const std::string& path, const char* partName,
                            const std::string& fileName, const std::vector<uint8_t>& data,
                            std::string* err, const std::string& shotName,

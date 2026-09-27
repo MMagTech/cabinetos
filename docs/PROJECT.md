@@ -1832,6 +1832,47 @@ Issues #125, #126, #127, #129 and #75, built and judged on the A9 with
 - `--colour <word>` and `--dark` set a look for one run, for judging.
   Every shade and the dark amounts are starting values.
 
+### Time played (#128) — 2026-09-27
+
+**What RomM has (checked in its source, 5.1.0 and 5.3.1):** play sessions,
+per user: `POST /api/play-sessions` takes them, `GET` lists them, and its own
+web player reports one per play. RomM shows no total anywhere, so showing one
+is ours. Ingesting a session also sets the game's last played, marks it being
+played, and turns a blank or "finished" status into "incomplete" (a status a
+person set on purpose is left alone); MMagTech accepted that as RomM's own
+behaviour.
+
+**Whose time the total is.** A console's token is tied to a RomM device, and
+RomM answers a session list with that device's sessions only; there is no way
+to ask for all of them. RomM finds a paired device by the client's identifier,
+and every CabinetOS console sends `cabinetos`, so for one person it is one
+device: **the total is their play on any CabinetOS console, and survives a
+reinstall. RomM's web player and the Apple TV are not in it.** MMagTech:
+per console is fine, and file it upstream: rommapp/romm#4837.
+
+**Decided with MMagTech:**
+- **Shown on the launch screen only**, last on the facts line: "1995 ·
+  Capcom · 1-2 players · 12 hours played". Not on Home: the big consoles keep
+  it one step in too (a game's page or a profile), and Home has no room.
+- **Minutes under an hour, whole hours after**, rounded down. Nothing under a
+  minute. Nintendo rounds for the same reason: an exact total on a child's
+  game reads like a meter.
+- **What counts:** only a game on screen with no menu over it. Time since the
+  last press counts while under twenty minutes (the in-game dim); a game left
+  running all afternoon counts up to the last press. A session under a minute
+  is not recorded.
+- **Nothing is lost:** the session in progress is written every minute
+  (`users/<id> - <name>/playtime.json`), so a power cut loses at most one;
+  the next start sends it. Offline sessions wait in the same file and go with
+  the uploader, retried on its five-minute timer. RomM spots a duplicate by
+  game and start time, so a retry never counts twice.
+- **Offline, the page shows** the last total RomM gave plus what is waiting to
+  go; nothing when RomM never gave one, rather than a number that is only part
+  of it.
+- **No device id is sent.** RomM takes it from the token.
+
+`--playtime-test` walks the counting rules and the record (22 checks).
+
 ### The permission detail, and a Phase 2 decision that paid for itself
 
 Gamepads are the one input the frontend reads **directly from `/dev/input`**;

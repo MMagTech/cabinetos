@@ -1138,11 +1138,24 @@ void DetailScreen::setFacts(Facts f) { facts_ = std::move(f); }
 
 void DetailScreen::detailsArrived() { detailsIn_ = true; }
 
-std::string DetailScreen::factsLine() const {
-    std::string m;
-    for (const std::string* p : {&facts_.year, &facts_.maker, &facts_.players})
-        if (!p->empty()) m += (m.empty() ? "" : "  \xC2\xB7  ") + *p;
-    return m;
+std::string DetailScreen::factsLine(ui::TextRenderer& text, float sc, float width) const {
+    auto join = [&](const std::string& maker) {
+        std::string m;
+        for (const std::string* p : {&facts_.year, &maker, &facts_.players, &facts_.played})
+            if (!p->empty()) m += (m.empty() ? "" : "  \xC2\xB7  ") + *p;
+        return m;
+    };
+    const std::string whole = join(facts_.maker);
+    if (facts_.maker.empty() || text.measure(whole, ui::TextStyle::Callout, sc) <= width)
+        return whole;
+    // TOO LONG: THE MAKER GIVES WAY, not the end of the line. Cut at the end,
+    // a long maker took the time played with it ("12 ho..."), and that is the
+    // one part a person came to read. Every part stays on every game; only a
+    // long company name is shortened. MMagTech, 2026-09-27.
+    const float rest = text.measure(join(""), ui::TextStyle::Callout, sc) +
+                       text.measure("  \xC2\xB7  ", ui::TextStyle::Callout, sc);
+    if (width - rest <= 0.0f) return whole;
+    return join(text.truncate(facts_.maker, ui::TextStyle::Callout, sc, width - rest));
 }
 
 void DetailScreen::setSaveWhen(std::string when) {
@@ -1378,7 +1391,7 @@ void DetailScreen::draw(Ctx& c) {
     c.text.draw(c.r, c.text.truncate(meta, ui::TextStyle::Callout, c.sc, textW), textX, y,
                 ui::TextStyle::Callout, ui::Color::white(0.60f * a), c.sc);
     y += c.text.lineHeight(ui::TextStyle::Callout, c.sc);
-    const std::string facts = factsLine();
+    const std::string facts = factsLine(c.text, c.sc, textW);
     if (!facts.empty())
         c.text.draw(c.r, c.text.truncate(facts, ui::TextStyle::Callout, c.sc, textW), textX, y,
                     ui::TextStyle::Callout,
