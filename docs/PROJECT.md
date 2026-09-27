@@ -1647,6 +1647,11 @@ GameCube, and anything later kept true to its console), neither is offered,
 and the shortcut says "Fast forward isn't available here" (rewind the same).
 The same line as open question 25. So there is no PlayStation 2 turbo to wire.
 
+**Screenshots do not go with states:** they should eventually work in every
+game where the shortcut button is recognised (MMagTech, 2026-09-27), which
+includes PlayStation 2 and GameCube, whose emulators run inside the frontend.
+Not yet there: their frame is not read into a picture (an issue of its own).
+
 **A save shortcut is wanted** (MMagTech: *"when saved via menu or hot key
 combo"*). Not in the #76 list; settled below.
 
