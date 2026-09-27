@@ -8431,6 +8431,10 @@ int main(int argc, char** argv) {
             return;
         }
         transitionTo(want);
+        // THE CURSOR GOES WITH IT when it is up in the bar. MMagTech,
+        // 2026-09-27: R1 from Home switched the screen and left the bar's
+        // highlight on Home.
+        if (barFocused && barSlot != BarAccount) barSlot = want;
         sound::play(want > at ? sound::Cue::Activate : sound::Cue::Back);
     };
 
