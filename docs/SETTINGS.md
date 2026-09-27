@@ -268,6 +268,15 @@ Decided with MMagTech 2026-09-26, from the things people will actually do.
 
 - **Picture quality:** Performance, Balanced or Quality for the whole console,
   and a game's pause menu can override it for that game. **To build, #63.**
+- **Appearance:** Standard, Dark or Scheduled, the console's, in
+  `config/settings.json`. Dark turns the menus down, never the game.
+  Scheduled adds one **Dark hours** row (8 PM to 7 AM to start) that opens
+  the question panel: From and Until, then the hours. **Built on
+  `home-and-appearance`, #129.**
+- **Color:** sixteen: Purple, Blue, Teal, Green, Amber, Red, Wine, Graphite,
+  Pink, Sky, Lime, Orange, and the gradients Sunset, Ocean, Aurora and Fire.
+  The signed-in person's, stored with their account. Startup and first run stay
+  purple. **Built on `home-and-appearance`, #75.**
 - **Interface sounds:** one row changed with left and right: Off, Quiet,
   Medium, Loud, and remembered in `config/settings.json`. Left and right
   change it; Back returns to the list. Judged on the TV 2026-09-24.

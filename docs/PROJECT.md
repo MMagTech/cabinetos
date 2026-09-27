@@ -1760,6 +1760,78 @@ at a time. What it is now (`screens.cpp`, `DetailScreen`):
   Leaving dissolves the same way. MMagTech: *"that's it, perfect."* Parts
   popping in one by one, and a cut, were what it replaced.
 
+### Home, the top bar, and Appearance — 2026-09-27
+
+Issues #125, #126, #127, #129 and #75, built and judged on the A9 with
+`tools/ui-loop.sh`, branch `home-and-appearance`.
+
+- **Focus belongs to a place on a shelf, not to a game (#125).** A game on
+  both Recent and Favorites is one card drawn twice, and its lift lived on the
+  card, so both copies lit. Each (shelf, slot) now has its own lift and press,
+  and the lift follows focus every frame, as the grid's does: arriving fresh
+  under a focused bar lit a cover, and coming down from the bar never relit
+  one.
+- **Up and Down land on the cover above or below (#126)**, the nearest by
+  place on screen whatever each shelf has scrolled to, or the last one when
+  the other shelf is shorter. **The per-shelf memory is gone** (MMagTech
+  agreed): Down, walk along, Up lands above where you are now. The bar still
+  returns you to the card you left.
+- **Home is the first item in the top bar (#127). REVERSES 2026-09-21**,
+  which left it out because a bar item that does nothing where you stand
+  teaches people the bar is decorative. Since 2026-09-24 moving across the bar
+  switches the screen, so the lit item is always where you stand and Library
+  does nothing on Library either; the reason no longer held. Up from Home
+  lands on Home (the old "Up switches nothing" exception is gone), L1 from
+  Library is Home. **Arriving on Home by the bar or a shoulder starts at the
+  first card of Recent**, as every destination starts fresh; **Back keeps
+  your place.** A bar slot is its destination's number.
+- **The bar says where you are more plainly.** The pill under the current
+  screen was 20% white and MMagTech could not see it move; now 30%, with the
+  cursor raised from 42% to 55% so it still wins. The same two values are the
+  Settings list, the account panel and the switcher, so they rose too.
+- **The bar's cursor follows L1 and R1** when it is up there; it stayed
+  behind.
+- **The power icon on the bar is DROPPED** (MMagTech). Start on Home already
+  opens the power menu. **The menu on Home opens on Cancel**, as it opens on
+  Resume in a game: an accidental Start then A slept the console.
+
+**Appearance and Color, in Settings > Display and Sound** (`look.{h,cpp}`):
+
+- **Color is personal, Appearance is the room.** Color is stored with the
+  account (`accounts.json`, `"colour"`), as decided 2026-09-24; Appearance is
+  the console's (`settings.json`: `appearance`, `dark_from`, `dark_until`).
+- **Appearance: Standard, Dark, Scheduled.** "Scheduled", not "Automatic",
+  because the hours are the person's and Automatic means sunset on Apple
+  devices. Scheduled adds one **Dark hours** row ("8 PM to 7 AM" by default)
+  that opens the question panel Wi-Fi uses: From and Until, then the hours.
+  Two rows of hours made the list too long (MMagTech).
+- **Color, sixteen of them.** Purple, Blue, Teal, Green, Amber, Red, Wine,
+  Graphite round the colour wheel: five first (wine rather than red, teal
+  rather than green), and MMagTech asked for a few more, so three filled the
+  wheel's gaps. Then five bright ones for children (*"lack some fun ones like
+  ones my kids might like"*): Pink, Sky, Lime, Orange, and Sunset, a hue per
+  stop down the screen. Sunset was the hit (*"oh the gradient is fun"*), so
+  Ocean, Aurora and Fire joined it. **All sixteen kept**; a cut was offered
+  and declined: scrolling them is quick. On screen "Color", matching
+  "Favorites".
+- **Dark is one rule over any colour**, not a second set: the background goes
+  toward black, the game-art glow and covers at rest sit further back; text,
+  the focused cover and the game picture are untouched. Menus only.
+- A change fades over 1.5 s. **Switching accounts, the curtain fades to the
+  new person's colour while it says their name.** The startup screen and
+  first run stay purple: nobody is signed in, and it is the brand.
+- **The time comes from the network, the time zone from the installer.**
+  MMagTech suggested the router; it gives the time in UTC, not the zone. The
+  installer's Time & Date screen sets it (`disk_config/iso.toml`), so when
+  #107 cuts Anaconda's other screens that one stays.
+- **The menus are dithered.** MMagTech saw lines in the background, worst in
+  Dark and while a colour fades, as a near-black gradient steps between
+  8-bit levels. Half a level of static noise in the backdrop, the panels and
+  the glass rows (the glass needs its own: its blur averages the backdrop's
+  away). The letterbox glow already did this. MMagTech on the TV: perfect.
+- `--colour <word>` and `--dark` set a look for one run, for judging.
+  Every shade and the dark amounts are starting values.
+
 ### The permission detail, and a Phase 2 decision that paid for itself
 
 Gamepads are the one input the frontend reads **directly from `/dev/input`**;
@@ -5184,8 +5256,9 @@ not a compromise — see "Spacing and sizing" for what that card actually was.
 
 What exists now:
 
-- **Three destinations are drawn: Library, Search, Settings.** Home is not one
-  of them, because it is the root and Back returns to it; a destination that
+- **Three destinations are drawn: Library, Search, Settings.** (REVERSED
+  2026-09-27: Home is the first; see *Home, the top bar, and Appearance*.)
+  Home is not one of them, because it is the root and Back returns to it; a destination that
   does nothing when you are already there teaches people the bar is decorative.
 - **Library and Search work. Settings does not exist** and says nothing when
   pressed rather than pretending.
@@ -6299,7 +6372,8 @@ press, `display awake: gamescope took it`. The test flags stay:
   Batocera puts it under Start → Quit; Steam's game mode under the Steam menu,
   with a long press as a shortcut; PS5 in the control centre; Xbox on a held
   guide button; **Switch on the home screen itself**, a Sleep icon beside
-  Settings. The plan: **a power icon at the right end of Home's top bar**, next
+  Settings. **DROPPED 2026-09-27 (MMagTech): Start on Home is enough.** The
+  plan was: **a power icon at the right end of Home's top bar**, next
   to the account chip — Rest, Restart, Power off — reachable from every screen
   the bar is on. Later, **holding the pad's Home button** opens the same menu
   from anywhere including a game. Needs a polkit rule for logind's three
@@ -13148,8 +13222,8 @@ About. `frontend/src/settings.{h,cpp}`; the rows are built in `main.cpp`
 **Moving across the top bar switches the screen under it**, MMagTech
 2026-09-24: the shoulders already switched, and the d-pad made you press A on
 each destination. It is the Apple TV's top bar; A only drops you into the
-screen. **Two exceptions**: arriving in the bar with Up switches nothing (Home
-stays Home while you look), and the account chip still needs A, because it
+screen. **Two exceptions**: arriving in the bar with Up switches nothing (since
+2026-09-27 it lands on the screen you are on, Home included), and the account chip still needs A, because it
 opens a panel rather than going anywhere. On Search the docked keyboard does
 not take the pad while the bar has focus above it.
 

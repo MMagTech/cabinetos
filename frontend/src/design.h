@@ -27,6 +27,7 @@
 #include <cstdint>
 #include <string>
 
+#include "look.h"
 #include "ui.h"
 
 namespace design {
@@ -136,8 +137,8 @@ constexpr float kPressDuration = 0.120f;
 // is 22 points rather than 10, and the hierarchy is the right way round. Both
 // still get full-white text, so selection is never invisible — it is the pill
 // that stops competing with the cursor.
-constexpr float kSelectedTint = 0.20f;
-constexpr float kFocusedTint = 0.42f;
+constexpr float kSelectedTint = 0.30f;
+constexpr float kFocusedTint = 0.55f;
 
 // UNFOCUSED ARTWORK SITS BACK — new 2026-09-21.
 //
@@ -566,7 +567,8 @@ constexpr float kOverlayPanelWidth = 720.0f;
 //
 // Near-opaque, because it has to stay readable over a bright game with only the
 // scrim helping. Glass used to do some of that work.
-constexpr ui::Color kOverlayPanelSurface = ui::palette::kSurface;
+// The panel colour follows the signed-in person's colour and dark mode:
+// look::surface(), in place of the constant this used to be.
 constexpr float kOverlayPanelFill = 0.92f;
 // The gradient and the top edge light, which are what stop a panel this size
 // reading as a hole punched in the screen. Both are small on purpose: at 4K a
@@ -606,7 +608,7 @@ constexpr float kOverlayButtonFocusShadowAlpha = 0.45f;
 // 2026-09-24. `a` fades the whole thing. The pause menu itself still builds
 // its own in main.cpp, from these same constants.
 inline ui::Rect menuPanel(float x, float y, float w, float h, float a) {
-    ui::Color fill = kOverlayPanelSurface;
+    ui::Color fill = look::surface();
     fill.a = kOverlayPanelFill * a;
     ui::Rect p{x, y, w, h, kOverlayPanelRadius, fill};
     p.gradient = true;

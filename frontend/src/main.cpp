@@ -79,6 +79,7 @@
 #include "choice.h"
 #include "downloads.h"
 #include "power.h"
+#include "look.h"
 #include "prefs.h"
 #include "server.h"
 #include "update.h"
@@ -3481,6 +3482,10 @@ int main(int argc, char** argv) {
     bool idleOff = false;
     // Opens the Power menu at startup, so a capture can show it.
     bool powerMenuDemo = false;
+    // --colour and --dark: a look for this run only, for judging each colour
+    // and dark on the television without writing anybody's setting.
+    const char* lookColour = nullptr;
+    bool lookDark = false;
     // Walks the notification pill through every message it can show.
     bool noticeGallery = false;
     // `--menu-fade 4` stretches the menus' fade so a person can watch it in
@@ -3624,6 +3629,10 @@ int main(int argc, char** argv) {
             idleOff = true;
         } else if (SDL_strcmp(argv[i], "--power-menu") == 0) {
             powerMenuDemo = true;
+        } else if (SDL_strcmp(argv[i], "--colour") == 0 && i + 1 < argc) {
+            lookColour = argv[++i];
+        } else if (SDL_strcmp(argv[i], "--dark") == 0) {
+            lookDark = true;
         } else if (SDL_strcmp(argv[i], "--notice-gallery") == 0) {
             noticeGallery = true;
         } else if (SDL_strcmp(argv[i], "--menu-rise") == 0 && i + 1 < argc) {
@@ -5345,8 +5354,14 @@ int main(int argc, char** argv) {
     // loop below stops at BarSettings and the chip takes its own focus rim.
     // Everything else about it — L1/R1 walking onto it, Down leaving the bar —
     // it gets for free by being in this list.
-    enum BarItem { BarLibrary = 0, BarSearch, BarSettings, BarAccount, BarCount };
-    const char* kBarLabels[BarCount] = { "Library", "Search", "Settings", "Account" };
+    //
+    // HOME IS THE FIRST ITEM — #127, MMagTech 2026-09-27. It was left out on
+    // 2026-09-21 because a bar item that does nothing where you stand teaches
+    // people the bar is decorative. Since 2026-09-24 moving across the bar
+    // switches the screen, so the lit item is always where you stand, and
+    // Home is simply one of them. A bar slot is now its destination's number.
+    enum BarItem { BarHome = 0, BarLibrary, BarSearch, BarSettings, BarAccount, BarCount };
+    const char* kBarLabels[BarCount] = { "Home", "Library", "Search", "Settings", "Account" };
     // How many of those draw as labelled capsules. The chip draws itself.
     constexpr int kBarCapsules = BarAccount;
 
@@ -5384,16 +5399,24 @@ int main(int argc, char** argv) {
         return &cards[favorites[slot]];
     };
 
+    // FOCUS BELONGS TO A PLACE ON A SHELF, NOT TO A GAME — #125, 2026-09-27.
+    // It lived on the Card, and a game that is both recent and a favourite is
+    // one Card drawn on two shelves, so focusing it on Recent lifted its cover
+    // on Favorites too. MMagTech: two covers looked focused at once. One lift
+    // and one press per (row, slot), grown as a row is drawn.
+    std::vector<Animated> slotFocus[2], slotPress[2];
+    auto slotAnim = [&](std::vector<Animated>* v, int row, int slot) -> Animated& {
+        std::vector<Animated>& r = v[std::clamp(row, 0, 1)];
+        const size_t s = static_cast<size_t>(std::max(slot, 0));
+        if (s >= r.size()) r.resize(s + 1);
+        return r[s];
+    };
+
     // RESUME-FIRST, and it is now one rule rather than a separate object:
     // Home opens on the first card of Recent, which is the most recently played
     // game this console can play.
     int focusRow = RowRecent;
     int focusSlot = 0;
-    // Remembered focus per row, which is the behaviour tvOS gives free and the
-    // one people notice missing: leaving Recent at the sixth cover and coming
-    // back to the first is the kind of thing that feels broken without anyone
-    // being able to say why.
-    int rememberedSlot[2] = {0, 0};
     // --focus N still means "start on card N of Recent", which is what every
     // existing capture script passes it for.
     if (initialFocus >= 0) {
@@ -5411,6 +5434,18 @@ int main(int argc, char** argv) {
     // under it.
     Animated scrollY;
     scrollY.from = scrollY.to = 0.0f;
+    // HOME FROM THE START: the first card of Recent, every row scrolled back.
+    // For a new person, and for arriving by the bar or a shoulder, which
+    // enters every destination fresh. Back to Home keeps your place.
+    auto homeFromTheStart = [&]() {
+        focusRow = RowRecent;
+        focusSlot = 0;
+        shelfScroll[0].settle(0.0f);
+        shelfScroll[1].settle(0.0f);
+        scrollY.settle(0.0f);
+        for (int r = 0; r < 2; ++r) { slotFocus[r].clear(); slotPress[r].clear(); }
+        if (cardAt(focusRow, focusSlot)) slotAnim(slotFocus, focusRow, focusSlot).settle(1.0f);
+    };
     // What is lighting the room, and what was lighting it before. Two cache
     // keys and a mix, because a cut between two covers is the one thing this
     // must not look like. `backdropWant` is what focus is asking for, which is
@@ -5434,9 +5469,8 @@ int main(int argc, char** argv) {
     // Settled, not animating: a screenshot should show the resting focused
     // state, not a frame part-way through the transition into it.
     auto settleFocus = [&]() {
-        if (Card* c = cardAt(focusRow, focusSlot)) {
-            c->focus.retarget(1.0f, kFocusDuration);
-            c->focus.elapsed = kFocusDuration;
+        if (cardAt(focusRow, focusSlot)) {
+            slotAnim(slotFocus, focusRow, focusSlot).settle(1.0f);
         } else {
             // The top bar's items are not Cards and have no animation of their
             // own: focus there is a tinted pill drawn from focusRow/focusSlot.
@@ -5790,14 +5824,14 @@ int main(int argc, char** argv) {
     // THE PAUSE MENU'S PANEL WITH A DIFFERENT LIST, not a second menu. The
     // power button opens it everywhere, and Start opens it on Home. In a game
     // the game is paused and Resume comes first and is focused, so a child
-    // pressing the button costs one press of A. Rest is listed only on a
+    // pressing the button costs one press of A; on Home, Cancel does the same. Rest is listed only on a
     // machine that can rest.
     //
     // Anything but Resume, from a game, leaves the game through finishExit
     // first — the one way out of a game, which uploads every kind of save — so
     // this is true for every emulator without any of them knowing.
     bool powerMenu = false;
-    enum PowerItem { PwResume, PwRest, PwRestart, PwPowerOff };
+    enum PowerItem { PwResume, PwCancel, PwRest, PwRestart, PwPowerOff };
     std::vector<PowerItem> powerItems;
     bool restAvailable = false;
     // Rest waits for the uploads finishExit queued: a machine that sleeps
@@ -5811,6 +5845,7 @@ int main(int argc, char** argv) {
         if (!powerMenu) return kOverlayLabels[pauseItems[i]];
         switch (powerItems[i]) {
             case PwResume: return "Resume";
+            case PwCancel: return "Cancel";
             // "Sleep", not "Rest": Rest is PlayStation's word alone, and
             // Switch, Xbox, SteamOS, Windows and macOS all say Sleep.
             // MMagTech, 2026-09-22.
@@ -6158,6 +6193,37 @@ int main(int argc, char** argv) {
                 if (c.id == romId) { c.kept = true; break; }
     };
 
+    // WHAT THE MENUS ARE DRAWN IN — #75 and #129, 2026-09-27. The colour is
+    // the signed-in person's (accounts.json); Appearance and its hours are the
+    // console's (settings.json). See look.h.
+    look::Appearance appearance = look::appearanceFromWord(prefs::get("appearance", "standard"));
+    auto savedHour = [](const char* key, int fallback) {
+        const int h = SDL_atoi(prefs::get(key, std::to_string(fallback)).c_str());
+        return (h >= 0 && h < 24) ? h : fallback;
+    };
+    // Scheduled's starting hours: dark from 8 PM until 7 AM.
+    int darkFrom = savedHour("dark_from", 20);
+    int darkUntil = savedHour("dark_until", 7);
+    auto wantDark = [&]() {
+        if (appearance == look::Appearance::Dark) return true;
+        if (appearance != look::Appearance::Scheduled) return false;
+        const std::time_t now = std::time(nullptr);
+        const std::tm* t = std::localtime(&now);
+        return t && look::scheduledDark(t->tm_hour, darkFrom, darkUntil);
+    };
+    auto accountColour = [](int id) {
+        for (const accounts::Account& a : accounts::all())
+            if (a.id == id) return look::colourFromWord(a.colour);
+        return look::Colour::Purple;
+    };
+    auto applyAccountColour = [&](bool instant) {
+        look::setColour(accountColour(accounts::activeId()), instant);
+    };
+    applyAccountColour(true);
+    if (lookColour) look::setColour(look::colourFromWord(lookColour), true);
+    if (lookDark) appearance = look::Appearance::Dark;
+    look::setDark(wantDark(), true);
+
     // SWITCHING WHO THE CONSOLE IS. Open question 26, and the half that
     // `accounts::activate` deliberately does not do.
     //
@@ -6260,13 +6326,7 @@ int main(int argc, char** argv) {
         // row scrolled back. Where the last person was is meaningless in a
         // different set of cards, and was out of range whenever the new set
         // was shorter.
-        focusRow = RowRecent;
-        focusSlot = 0;
-        rememberedSlot[0] = rememberedSlot[1] = 0;
-        shelfScroll[0].settle(0.0f);
-        shelfScroll[1].settle(0.0f);
-        scrollY.settle(0.0f);
-        if (Card* c = cardAt(focusRow, focusSlot)) c->focus.settle(1.0f);
+        homeFromTheStart();
         refreshKeeps();
 
         const storage::User& now = storage::currentUser();
@@ -6560,6 +6620,9 @@ int main(int argc, char** argv) {
         choiceThen = std::move(then);
         choiceScreen.open(title, detail, std::move(options), focus);
     };
+    // Settings > Display and Sound > Dark hours: From and Until, and the hours
+    // of each. Set where it is opened; it reopens itself after an hour is set.
+    std::function<void(int)> darkHoursPanel;
     auto choiceOutcome = [&](screens::ChoiceScreen::Outcome o) {
         using O = screens::ChoiceScreen::Outcome;
         if (o == O::None) return;
@@ -6593,7 +6656,8 @@ int main(int argc, char** argv) {
     enum SettingId { SetAddAccount = 1, SetInterfaceSounds, SetPinSet, SetPinChange,
                      SetPinOff, SetRemoveAccount, SetScreenOff, SetWifi, SetServer,
                      SetUpdate, SetUpdateCheck, SetCredits, SetFiles, SetDownloads,
-                     SetAddController, SetShortcuts, SetShortcutButton };
+                     SetAddController, SetShortcuts, SetShortcutButton, SetAppearance,
+                     SetDarkHours, SetColour };
     // One Eject row per USB drive: this plus the drive's index in
     // storage::locations() when the rows were built.
     constexpr int kSetEject = 100;
@@ -7377,6 +7441,36 @@ int main(int argc, char** argv) {
                 return r;
             }(),
         }});
+        {
+            // APPEARANCE AND COLOUR, under the picture rows: both are how the
+            // menus look. #129 and #75, 2026-09-27. Colour is the signed-in
+            // person's; the account chip above already says who that is.
+            auto& rows = cats.back().rows;
+            auto at = rows.begin() + 1;   // after Picture quality
+            std::vector<Row> lookRows;
+            {
+                Row r{K::Choice, SetAppearance, "Appearance", "", ""};
+                for (int i = 0; i < look::kAppearanceCount; ++i)
+                    r.choices.push_back(look::appearanceName(static_cast<look::Appearance>(i)));
+                r.choice = static_cast<int>(appearance);
+                lookRows.push_back(r);
+            }
+            // ONE ROW FOR THE HOURS, opening the question panel. Two rows
+            // made the list too long (MMagTech, 2026-09-27); the panel is the
+            // one Wi-Fi and Add a controller already use.
+            if (appearance == look::Appearance::Scheduled)
+                lookRows.push_back({K::Action, SetDarkHours, "Dark hours", "",
+                                    look::hourName(darkFrom) + " to " +
+                                        look::hourName(darkUntil)});
+            {
+                Row r{K::Choice, SetColour, "Color", "", ""};
+                for (int i = 0; i < look::kColourCount; ++i)
+                    r.choices.push_back(look::colourName(static_cast<look::Colour>(i)));
+                r.choice = static_cast<int>(look::colour());
+                lookRows.push_back(r);
+            }
+            rows.insert(at, lookRows.begin(), lookRows.end());
+        }
 
         // THE DRIVES, by MMagTech's names: the main drive is "CabinetOS", any
         // other internal disk "Internal", one that can be unplugged
@@ -8028,6 +8122,29 @@ int main(int argc, char** argv) {
                         askWifi();
                     });
                     sound::play(sound::Cue::Activate);
+                } else if (res.value == SetDarkHours) {
+                    // From and Until, then the hours of whichever was chosen,
+                    // then back to From and Until with the new one showing.
+                    darkHoursPanel = [&](int focus) {
+                        askChoice("Dark hours", "", {"From", "Until"}, focus, [&](int k) {
+                            std::vector<std::string> names;
+                            for (int h = 0; h < 24; ++h) names.push_back(look::hourName(h));
+                            int& which = k == 0 ? darkFrom : darkUntil;
+                            askChoice(k == 0 ? "Dark from" : "Until", "", names, which,
+                                      [&, k](int h) {
+                                          (k == 0 ? darkFrom : darkUntil) = h;
+                                          prefs::set(k == 0 ? "dark_from" : "dark_until",
+                                                     std::to_string(h));
+                                          look::setDark(wantDark());
+                                          buildSettings();
+                                          darkHoursPanel(k);
+                                      });
+                        });
+                        choiceScreen.setValues({look::hourName(darkFrom),
+                                                look::hourName(darkUntil)});
+                    };
+                    darkHoursPanel(0);
+                    sound::play(sound::Cue::Activate);
                 } else if (res.value == SetFiles) {
                     if (filesSaidAt != 0) {
                         sound::play(sound::Cue::Edge);
@@ -8194,6 +8311,25 @@ int main(int argc, char** argv) {
                     sound::play(sound::Cue::Move);
                     buildSettings();   // the Shortcut button row comes and goes
                 }
+                if (res.value == SetAppearance) {
+                    const int i = settingsScreen.choiceOf(SetAppearance);
+                    if (i >= 0 && i < look::kAppearanceCount) {
+                        appearance = static_cast<look::Appearance>(i);
+                        prefs::set("appearance", look::appearanceWord(appearance));
+                        look::setDark(wantDark());
+                    }
+                    sound::play(sound::Cue::Move);
+                    buildSettings();   // the From and Until rows come and go
+                }
+                if (res.value == SetColour) {
+                    const int i = settingsScreen.choiceOf(SetColour);
+                    if (i >= 0 && i < look::kColourCount) {
+                        const auto c = static_cast<look::Colour>(i);
+                        accounts::setColour(accounts::activeId(), look::colourWord(c));
+                        look::setColour(c);
+                    }
+                    sound::play(sound::Cue::Move);
+                }
                 if (res.value == SetScreenOff) {
                     const int i = settingsScreen.choiceOf(SetScreenOff);
                     if (i >= 0 && i < kScreenOffCount) {
@@ -8225,9 +8361,10 @@ int main(int argc, char** argv) {
                 // Where the cursor lands in the bar: on the destination you are
                 // standing in, so walking up and straight back down is a no-op
                 // rather than a silent change of where you would go.
-                barSlot = (here() == Screen::Library || here() == Screen::Grid)
-                              ? BarLibrary
-                              : (here() == Screen::Settings ? BarSettings : 0);
+                barSlot = (here() == Screen::Library || here() == Screen::Grid) ? BarLibrary
+                        : here() == Screen::Search                               ? BarSearch
+                        : here() == Screen::Settings                             ? BarSettings
+                                                                                 : BarHome;
                 barFocused = true;
                 sound::play(sound::Cue::Move);
                 break;
@@ -8390,6 +8527,7 @@ int main(int argc, char** argv) {
     tabDissolve.smooth = true;
     tabDissolve.from = tabDissolve.to = 0.0f;
     auto transitionTo = [&](int d) {
+        if (d == 0) homeFromTheStart();
         if (shotMode) { goToDestination(d); return; }
         // Taken at the end of the next frame, which still shows the old screen.
         pendingDest = d;
@@ -8410,6 +8548,10 @@ int main(int argc, char** argv) {
             return;
         }
         transitionTo(want);
+        // THE CURSOR GOES WITH IT when it is up in the bar. MMagTech,
+        // 2026-09-27: R1 from Home switched the screen and left the bar's
+        // highlight on Home.
+        if (barFocused && barSlot != BarAccount) barSlot = want;
         sound::play(want > at ? sound::Cue::Activate : sound::Cue::Back);
     };
 
@@ -8429,13 +8571,12 @@ int main(int argc, char** argv) {
                 // you press A on each one. The Apple TV's top bar works this
                 // way too: A only drops you into the screen.
                 //
-                // Only a MOVE switches. Arriving in the bar with Up does not,
-                // or looking at the bar from Home would throw you off Home.
+                // Only a MOVE switches. Arriving in the bar with Up lands on
+                // the screen you are on, so it has nothing to switch.
                 // And the account chip opens a panel rather than going
                 // anywhere, so sliding onto it opens nothing.
                 if (barSlot != BarAccount) {
-                    const int want = (barSlot == BarLibrary) ? 1
-                                   : (barSlot == BarSearch ? 2 : 3);
+                    const int want = barSlot;
                     if (destinationGoing() != want) {
                         transitionTo(want);
                         barFocused = true;
@@ -8477,10 +8618,8 @@ int main(int argc, char** argv) {
                     sound::play(sound::Cue::Activate);
                     return true;
                 }
-                if (barSlot == BarLibrary || barSlot == BarSearch ||
-                    barSlot == BarSettings) {
-                    const int d = (barSlot == BarLibrary) ? 1
-                                : (barSlot == BarSearch ? 2 : 3);
+                if (barSlot <= BarSettings) {
+                    const int d = barSlot;
                     barFocused = false;
                     // Already standing in it: drop back into the screen rather
                     // than rebuilding it under the person's feet.
@@ -8693,6 +8832,10 @@ int main(int argc, char** argv) {
             switchShownAt = SDL_GetTicks();
             switchText.smooth = true;
             switchText.retarget(1.0f, kSwitchTextFade);
+            // THE CURTAIN TURNS THEIR COLOUR while it says their name, rather
+            // than the colour jumping behind it. A switch that fails puts it
+            // back below.
+            look::setColour(accountColour(switchPendingId));
         }
         if (!switchDone) {
             // Two frames at full curtain, so the name is on the television
@@ -8727,6 +8870,7 @@ int main(int argc, char** argv) {
         switchDone = false;
         switchShownAt = 0;
         if (!ok) {
+            applyAccountColour(false);
             // Back to the panel, saying why, with the old person still in.
             accountsOpen = true;
             barFocused = true;
@@ -9141,10 +9285,12 @@ int main(int argc, char** argv) {
 
 
     auto leaveFocus = [&]() {
-        if (Card* c = cardAt(focusRow, focusSlot)) c->focus.retarget(0.0f, kFocusDuration);
+        if (cardAt(focusRow, focusSlot))
+            slotAnim(slotFocus, focusRow, focusSlot).retarget(0.0f, kFocusDuration);
     };
     auto enterFocus = [&]() {
-        if (Card* c = cardAt(focusRow, focusSlot)) c->focus.retarget(1.0f, kFocusDuration);
+        if (cardAt(focusRow, focusSlot))
+            slotAnim(slotFocus, focusRow, focusSlot).retarget(1.0f, kFocusDuration);
     };
 
     auto moveFocus = [&](int delta) {
@@ -9157,7 +9303,6 @@ int main(int argc, char** argv) {
         leaveFocus();
         sound::play(sound::Cue::Move);
         focusSlot = next;
-        rememberedSlot[focusRow] = focusSlot;
         enterFocus();
     };
 
@@ -9173,11 +9318,19 @@ int main(int argc, char** argv) {
             if (row == RowFavorites) return;
         }
         if (row == focusRow || !rowExists(row)) { sound::play(sound::Cue::Edge); return; }
+        // LAND ON THE COVER ABOVE OR BELOW — #126, MMagTech 2026-09-27. Each
+        // row used to remember its own slot and go back to it, so Down from
+        // the third cover could land on the ninth. Now it is the cover nearest
+        // the same place on screen, whatever each row has scrolled to, and the
+        // last one when the other row is shorter. Going up to the bar and back
+        // still returns to the same card: that is not a row move.
+        const float pitch = kShelfCoverWidth + kShelfSpacing;
+        const float x = static_cast<float>(focusSlot) * pitch - shelfScroll[focusRow].to;
+        const float slot = std::round((x + shelfScroll[row].to) / pitch);
         leaveFocus();
         sound::play(sound::Cue::Move);
         focusRow = row;
-        focusSlot = std::clamp(rememberedSlot[row], 0,
-                               static_cast<int>(rowSlots(row)) - 1);
+        focusSlot = std::clamp(static_cast<int>(slot), 0, static_cast<int>(rowSlots(row)) - 1);
         enterFocus();
     };
 
@@ -9189,7 +9342,7 @@ int main(int argc, char** argv) {
         if (homeEmpty()) {
             switch (n) {
                 case screens::Nav::Up:
-                    barSlot = 0;
+                    barSlot = BarHome;
                     barFocused = true;
                     sound::play(sound::Cue::Move);
                     return true;
@@ -9212,7 +9365,7 @@ int main(int argc, char** argv) {
                 // move into RowBar.
                 if (focusRow == RowRecent) {
                     leaveFocus();
-                    barSlot = 0;
+                    barSlot = BarHome;
                     barFocused = true;
                     sound::play(sound::Cue::Move);
                 } else {
@@ -9395,7 +9548,7 @@ int main(int argc, char** argv) {
     };
 
     auto powerActivate = [&](PowerItem item) {
-        if (item == PwResume) {
+        if (item == PwResume || item == PwCancel) {
             closeOverlay();
             return;
         }
@@ -9470,7 +9623,10 @@ int main(int argc, char** argv) {
             return;
         }
         powerItems.clear();
-        if (playing) powerItems.push_back(PwResume);
+        // THE FIRST ITEM DOES NOTHING, and it is the one focused. In a game
+        // that is Resume; on Home it is Cancel. MMagTech, 2026-09-27: Start
+        // pressed by accident opened the menu on Sleep, one A from asleep.
+        powerItems.push_back(playing ? PwResume : PwCancel);
         if (restAvailable) powerItems.push_back(PwRest);
         powerItems.push_back(PwRestart);
         powerItems.push_back(PwPowerOff);
@@ -10698,9 +10854,23 @@ int main(int argc, char** argv) {
             }
         }
         images.pump(dt);
+        look::tick(dt);
+        // Scheduled turns dark at its hour, asked about once a minute.
+        {
+            static float sinceDarkCheck = 0.0f;
+            sinceDarkCheck += dt;
+            if (sinceDarkCheck >= 60.0f) {
+                sinceDarkCheck = 0.0f;
+                look::setDark(wantDark());
+            }
+        }
         for (auto& c : cards) {
             c.focus.tick(dt);
             c.press.tick(dt);
+        }
+        for (int r = 0; r < 2; ++r) {
+            for (auto& a : slotFocus[r]) a.tick(dt);
+            for (auto& a : slotPress[r]) a.tick(dt);
         }
         // These two are not Cards and so are not in the loop above. Forgetting
         // them cost a debugging pass: the scroll target was computed correctly
@@ -11148,8 +11318,9 @@ int main(int argc, char** argv) {
                                                                 : ui::kCanvasHeight);
             detailScreen.tick(dt);
         }
-        if (Card* pc = cardAt(focusRow, focusSlot))
-            pc->press.retarget(pressing ? 1.0f : 0.0f, kPressDuration);
+        if (cardAt(focusRow, focusSlot))
+            slotAnim(slotPress, focusRow, focusSlot)
+                .retarget(pressing ? 1.0f : 0.0f, kPressDuration);
 
         int dw = 0, dh = 0;
         SDL_GetWindowSizeInPixels(window, &dw, &dh);
@@ -11185,9 +11356,7 @@ int main(int argc, char** argv) {
                 renderer.draw(ui::Rect{0, 0, ui::kCanvasWidth, ui::kCanvasHeight, 0,
                                        ui::Color::black(1.0f)});
         } else {
-            renderer.drawBackdrop(ui::Gradient{ui::palette::kBackdropTop,
-                                               ui::palette::kBackdropMid,
-                                               ui::palette::kBackdropBottom, 0.55f});
+            renderer.drawBackdrop(look::backdrop());
 
         // ---- THE BACKDROP FOLLOWS FOCUS, ON EVERY BROWSING SCREEN ----------
         //
@@ -11345,7 +11514,7 @@ int main(int argc, char** argv) {
                 }
                 renderer.drawTextured(
                     0, 0, ui::kCanvasWidth, ui::kCanvasHeight, art.texture, u0, v0, u1, v1,
-                    ui::Color{1, 1, 1, alpha * art.fade * backdropFill}, false,
+                    ui::Color{1, 1, 1, alpha * art.fade * look::artFill(backdropFill)}, false,
                     blurToTexels(static_cast<float>(art.width) * (u1 - u0),
                                  backdropTexels));
             };
@@ -11357,7 +11526,7 @@ int main(int argc, char** argv) {
             // not a brighter screen than one with.
             if (!backdropKey.empty())
                 renderer.draw(ui::Rect{0, 0, ui::kCanvasWidth, ui::kCanvasHeight, 0,
-                                       ui::Color::black(backdropScrim)});
+                                       ui::Color::black(look::artScrim(backdropScrim))});
         }
         }
 
@@ -11748,8 +11917,14 @@ int main(int argc, char** argv) {
                 if (cullX > ui::kCanvasWidth + kCullMargin) break;
 
                 Card& card = cards[i];
-                const float f = card.focus.value();
-                const float p = card.press.value();
+                // THE LIFT FOLLOWS FOCUS EVERY FRAME, as the grid's does, so
+                // focus going up to the bar, into the account panel, or
+                // arriving fresh from the bar all look right without each
+                // path remembering to say so.
+                Animated& lift = slotAnim(slotFocus, rowId, static_cast<int>(slot));
+                lift.retarget(isFocused ? 1.0f : 0.0f, kFocusDuration);
+                const float f = lift.value();
+                const float p = slotAnim(slotPress, rowId, static_cast<int>(slot)).value();
 
                 // Pressed reads as a push INTO the screen, against the focused
                 // lift, so a click still registers on a card that is already
@@ -11782,7 +11957,7 @@ int main(int argc, char** argv) {
                     // Unfocused artwork sits back. See design::kRestArtDim.
                     if (f < 1.0f)
                         renderer.draw(ui::Rect{x, y, w, h, kCoverRadius * scale,
-                                               ui::Color::black(kRestArtDim * (1.0f - f))});
+                                               ui::Color::black(look::restDim(kRestArtDim) * (1.0f - f))});
                     // The kept mark, the same as the grid draws. A mark that
                     // appeared on a game in one screen and not in another is
                     // exactly the drift the shared design system exists to
@@ -11924,7 +12099,7 @@ int main(int argc, char** argv) {
             //
             // The shadow is what separates it from the game now that the blur
             // does not, and it costs nothing on either path.
-            ui::Color panelFill = kOverlayPanelSurface;
+            ui::Color panelFill = look::surface();
             panelFill.a = kOverlayPanelFill * ovl;
             ui::Rect panel{px, py, kOverlayPanelWidth, panelH,
                            kOverlayPanelRadius, panelFill};
@@ -12051,7 +12226,8 @@ int main(int argc, char** argv) {
             // the switcher pills: a SELECTED destination is where you are, a
             // FOCUSED one is what you would open. Standing in the Library, the
             // bar says Library without pretending the cursor is up there.
-            const int selected = (here() == Screen::Library || here() == Screen::Grid)
+            const int selected = here() == Screen::Home ? BarHome
+                                 : (here() == Screen::Library || here() == Screen::Grid)
                                      ? BarLibrary
                                      : here() == Screen::Search   ? BarSearch
                                      : here() == Screen::Settings ? BarSettings
@@ -12278,7 +12454,7 @@ int main(int argc, char** argv) {
                 const float x = (ui::kCanvasWidth - w) * 0.5f;
                 const float y = ui::kCanvasHeight - ui::kSafeInset - kPillH - 24.0f +
                                 (1.0f - std::min(1.0f, menuNotice.age / 0.25f)) * 12.0f;
-                ui::Color fill = kOverlayPanelSurface;
+                ui::Color fill = look::surface();
                 fill.a = 0.96f * na;
                 ui::Rect pill{x, y, w, kPillH, kPillH * 0.5f, fill};
                 pill.border = 1.5f;
@@ -12351,8 +12527,7 @@ int main(int argc, char** argv) {
                 // The console's own backdrop, in one piece, faded. Two bands
                 // were drawn here first and left a line under the name where
                 // they met; MMagTech saw it on the TV.
-                renderer.drawBackdrop({ui::palette::kBackdropTop, ui::palette::kBackdropMid,
-                                       ui::palette::kBackdropBottom, 0.55f}, c);
+                renderer.drawBackdrop(look::backdrop(), c);
             } else if (c > 0.001f) {
                 renderer.draw(ui::Rect{0, 0, ui::kCanvasWidth, ui::kCanvasHeight, 0,
                                        ui::Color::black(c)});
