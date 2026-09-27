@@ -134,6 +134,9 @@ struct Asset {
     // rather than failing in front of someone — see docs/CABINET.md.
     std::string emulator;
     std::string updatedAt;
+    // A state's picture on RomM (its `screenshot.download_path`), for the
+    // launch screen. Empty for a save, or a state sent without one.
+    std::string picturePath;
 };
 
 // Who the token belongs to.

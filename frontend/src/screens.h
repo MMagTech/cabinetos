@@ -57,6 +57,7 @@ enum class Action {
     Play,              // value is a rom id
     Download,          // value is a rom id — fetch it AND keep it
     RemoveDownload,    // value is a rom id — release the keep AND delete the game
+    PlayState,         // value is a RomM state id — play, starting from that state
     // UP OUT OF THE TOP ROW, INTO THE BAR. MMagTech: *"if the library has the
     // top bar in view shouldnt i be able to up and access it."* Yes — chrome
     // that is on screen and cannot be reached is worse than chrome that is
@@ -498,9 +499,20 @@ struct GameDetail {
     bool kept = false;
 };
 
+// One of the three states on the launch screen (docs/PROJECT.md, "The in-game
+// shortcuts, and three states per game"), newest first.
+struct StateChoice {
+    int id = 0;            // RomM's
+    std::string picture;   // RomM path of its picture, empty for none
+    std::string when;      // "Today, 8:13 PM"
+};
+
 class DetailScreen {
 public:
     void open(GameDetail d);
+    // CONTINUE FROM: the game's states, arriving after the screen opens because
+    // RomM has to be asked. None, and the section is not drawn at all.
+    void setStates(std::vector<StateChoice> states);
     void tick(float dt);
     Result key(Nav n);
     void draw(Ctx& c);
@@ -559,6 +571,10 @@ private:
 
     GameDetail game_;
     std::vector<Row> rows_;
+    std::vector<StateChoice> states_;
+    // Focus is in Continue from rather than the rows, and on which state.
+    bool inStates_ = false;
+    int stateSlot_ = 0;
     std::string notice_;
     // Where draw() put the action column, so the glass pass can put the rows in
     // the same place without computing the layout twice and drifting from it.

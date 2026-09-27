@@ -477,6 +477,10 @@ constexpr float kRowRadius = 16.0f;
 constexpr float kRowPadX = 32.0f;
 constexpr float kRowPadY = 22.0f;
 constexpr float kDetailRowGap = 16.0f;
+// Continue from, on the launch screen: one state's picture, 4:3, and the gap
+// between two. First guesses, to be judged on the television.
+constexpr float kStateCardHeight = 150.0f;
+constexpr float kStateCardGap = 28.0f;
 // The reference implementation's settings column. A row stretched to the full
 // 1920 leaves a label at one end and a value at the other with a third of the
 // screen empty between them.

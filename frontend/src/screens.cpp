@@ -1094,6 +1094,9 @@ void DetailScreen::open(GameDetail d) {
     game_ = std::move(d);
     notice_.clear();
     slot_ = 0;
+    states_.clear();
+    inStates_ = false;
+    stateSlot_ = 0;
     rebuildRows();
     focus_.settle(1.0f);
     appear_.retarget(0.0f, 0.0f);
@@ -1125,6 +1128,12 @@ void DetailScreen::rebuildRows() {
     // They are not built yet and a row that does nothing is worse than no row.
 }
 
+void DetailScreen::setStates(std::vector<StateChoice> states) {
+    states_ = std::move(states);
+    if (states_.empty()) inStates_ = false;
+    stateSlot_ = std::clamp(stateSlot_, 0, std::max(0, static_cast<int>(states_.size()) - 1));
+}
+
 void DetailScreen::tick(float dt) {
     focus_.tick(dt);
     appear_.tick(dt);
@@ -1133,16 +1142,38 @@ void DetailScreen::tick(float dt) {
 Result DetailScreen::key(Nav n) {
     if (n == Nav::Back) return {Action::Back, 0};
     if (rows_.empty()) return {};
+    auto refocus = [&]() {
+        notice_.clear();
+        focus_.retarget(0.0f, 0.0f);
+        focus_.elapsed = 0.0f;
+        focus_.retarget(1.0f, design::kFocusDuration);
+    };
+    // CONTINUE FROM is one line of up to three, under the rows: Down from the
+    // last row goes in, on the newest; Up comes back out to the row it left.
+    if (inStates_) {
+        const int count = static_cast<int>(states_.size());
+        if (n == Nav::Left || n == Nav::Right) {
+            const int next = std::clamp(stateSlot_ + (n == Nav::Right ? 1 : -1), 0, count - 1);
+            if (next != stateSlot_) { stateSlot_ = next; refocus(); }
+        } else if (n == Nav::Up) {
+            inStates_ = false;
+            refocus();
+        } else if (n == Nav::Activate && stateSlot_ < count) {
+            return {Action::PlayState, states_[stateSlot_].id};
+        }
+        return {};
+    }
     if (n == Nav::Up || n == Nav::Down) {
         const int d = (n == Nav::Down) ? 1 : -1;
-        const int next = std::clamp(slot_ + d, 0, static_cast<int>(rows_.size()) - 1);
-        if (next != slot_) {
-            slot_ = next;
-            notice_.clear();
-            focus_.retarget(0.0f, 0.0f);
-            focus_.elapsed = 0.0f;
-            focus_.retarget(1.0f, design::kFocusDuration);
+        const int last = static_cast<int>(rows_.size()) - 1;
+        if (d > 0 && slot_ == last && !states_.empty() && game_.playable) {
+            inStates_ = true;
+            stateSlot_ = 0;
+            refocus();
+            return {};
         }
+        const int next = std::clamp(slot_ + d, 0, last);
+        if (next != slot_) { slot_ = next; refocus(); }
         return {};
     }
     if (n == Nav::Activate && rows_[slot_].enabled)
@@ -1260,7 +1291,7 @@ void DetailScreen::drawGlass(Ctx& c) {
                        design::kRowPadY * 2.0f;
     float y = rowsY_;
     for (size_t i = 0; i < rows_.size(); ++i) {
-        const bool on = (static_cast<int>(i) == slot_);
+        const bool on = !inStates_ && static_cast<int>(i) == slot_;
         const float f = on ? focus_.value() : 0.0f;
         const float s = 1.0f + f * (design::kRowFocusScale - 1.0f);
         const float w = rowsW_ * s, h = rowH * s;
@@ -1304,6 +1335,47 @@ void DetailScreen::drawGlass(Ctx& c) {
                     ui::TextStyle::Title3,
                     ui::Color::white((on || busy ? 1.0f : 0.60f) * a), c.sc);
         y += rowH + design::kDetailRowGap;
+    }
+
+    // CONTINUE FROM, as Cabinet's tvOS launch screen calls it: the game's
+    // states, newest first, each with the picture it was saved with and when.
+    // Picking one plays from there; Play itself still starts the game from
+    // its own save. Cards rather than rows because the picture is how a
+    // person tells three moments in one game apart.
+    if (!states_.empty() && game_.playable) {
+        y += design::kDetailRowGap;
+        c.text.draw(c.r, "Continue from", rowsX_,
+                    y + c.text.ascent(ui::TextStyle::Callout, c.sc), ui::TextStyle::Callout,
+                    ui::Color::white(0.60f * a), c.sc);
+        y += c.text.lineHeight(ui::TextStyle::Callout, c.sc) + design::kDetailRowGap;
+        const float cardH = design::kStateCardHeight;
+        const float cardW = cardH * (4.0f / 3.0f);
+        float x = rowsX_;
+        for (size_t i = 0; i < states_.size(); ++i) {
+            const bool on = inStates_ && static_cast<int>(i) == stateSlot_;
+            const float f = on ? focus_.value() : 0.0f;
+            const float s = 1.0f + f * (design::kFocusScale - 1.0f);
+            const float w = cardW * s, h = cardH * s;
+            const float cx = x - (w - cardW) * 0.5f;
+            const float cy = y - (h - cardH) * 0.5f;
+            c.r.drawGlass(ui::Rect{cx, cy, w, h, design::kRowRadius, ui::Color::white(0)},
+                          design::kRegularMaterialBlur,
+                          ui::Color::white((0.08f + 0.14f * f) * a));
+            if (!states_[i].picture.empty()) {
+                const ui::Image& img = c.images.get(states_[i].picture);
+                ui::drawImage(c.r, img, cx, cy, w, h, ui::Fit::Contain, a,
+                              design::kRowRadius);
+            }
+            const float labelY = y + cardH + design::kDetailRowGap * 0.75f +
+                                 c.text.ascent(ui::TextStyle::Callout, c.sc);
+            c.text.draw(c.r,
+                        c.text.truncate(states_[i].when, ui::TextStyle::Callout, c.sc, cardW),
+                        x, labelY, ui::TextStyle::Callout,
+                        ui::Color::white((on ? 1.0f : 0.60f) * a), c.sc);
+            x += cardW + design::kStateCardGap;
+        }
+        y += cardH + design::kDetailRowGap * 0.75f +
+             c.text.lineHeight(ui::TextStyle::Callout, c.sc) + design::kDetailRowGap;
     }
 
     // A refusal, and the number that makes it actionable. docs/PROJECT.md:

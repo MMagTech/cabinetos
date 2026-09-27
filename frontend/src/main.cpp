@@ -1202,8 +1202,10 @@ struct StateLoad {
 
 static std::string newestLocalState(const GameSession& sess);
 
+// `wantId`: a particular state, picked on the launch screen, rather than the
+// newest. Everything else is the same, the fallback included.
 static void beginLoadLatestState(StateLoad& load, GameSession& sess,
-                                 romm::Client& client, MenuNotice& notice) {
+                                 romm::Client& client, MenuNotice& notice, int wantId = 0) {
     if (load.running.load()) return;
 
     notice.say("Loading\xE2\x80\xA6", Tone::Busy);
@@ -1234,7 +1236,7 @@ static void beginLoadLatestState(StateLoad& load, GameSession& sess,
     load.serverFailed = false;
     const int romId = sess.romId;
     const std::string tag = sess.stateTag;
-    load.worker = std::thread([&load, &client, romId, tag]() {
+    load.worker = std::thread([&load, &client, romId, tag, wantId]() {
         std::vector<romm::Asset> states;
         std::string err;
         if (!client.fetchStates(romId, &states, &err)) {
@@ -1255,6 +1257,10 @@ static void beginLoadLatestState(StateLoad& load, GameSession& sess,
             // Loading one does not fail cleanly: it boots something that looks
             // like the game and is not.
             if (a.emulator != tag) { ++skipped; continue; }
+            if (wantId) {
+                if (a.id == wantId) best = &a;
+                continue;
+            }
             if (!best || a.updatedAt > best->updatedAt) best = &a;
         }
         if (!best) {
@@ -1499,6 +1505,44 @@ static int countEntries(const std::string& dir) {
 // on a 4K panel.
 static float gPs2Upscale = 1.0f;
 static int gPs2Anisotropy = 0;
+
+// WHEN A STATE WAS SAVED, as the launch screen says it: "Today, 8:13 PM",
+// "Yesterday, 8:13 PM", "Sep 23, 8:13 PM", with the year only when it is not
+// this one. From RomM's `updated_at`, which is UTC, into this console's time.
+static std::string stateWhen(const std::string& iso) {
+    int Y, M, D, h, m, sec;
+    if (std::sscanf(iso.c_str(), "%d-%d-%dT%d:%d:%d", &Y, &M, &D, &h, &m, &sec) != 6) return "";
+    struct tm utc = {};
+    utc.tm_year = Y - 1900;
+    utc.tm_mon = M - 1;
+    utc.tm_mday = D;
+    utc.tm_hour = h;
+    utc.tm_min = m;
+    utc.tm_sec = sec;
+    const time_t t = timegm(&utc);
+    struct tm at, now;
+    localtime_r(&t, &at);
+    const time_t n = time(nullptr);
+    localtime_r(&n, &now);
+    char clock[32];
+    std::strftime(clock, sizeof clock, "%l:%M %p", &at);
+    const char* c = clock;
+    while (*c == ' ') ++c;
+    struct tm yday = now;
+    yday.tm_mday -= 1;
+    mktime(&yday);
+    auto same = [](const struct tm& a, const struct tm& b) {
+        return a.tm_year == b.tm_year && a.tm_yday == b.tm_yday;
+    };
+    char day[32];
+    if (same(at, now)) std::snprintf(day, sizeof day, "Today");
+    else if (same(at, yday)) std::snprintf(day, sizeof day, "Yesterday");
+    else if (at.tm_year == now.tm_year) std::strftime(day, sizeof day, "%b %e", &at);
+    else std::strftime(day, sizeof day, "%b %e %Y", &at);
+    std::string d = day;
+    for (size_t i; (i = d.find("  ")) != std::string::npos;) d.erase(i, 1);
+    return d + ", " + c;
+}
 
 static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& game,
                         const std::string& coreDir, std::string* err,
@@ -5822,6 +5866,84 @@ int main(int argc, char** argv) {
 
     // Opening the launch screen for a card. Everything it shows is decided
     // here, so the screen holds no opinion about where any of it came from.
+    // CONTINUE FROM, fetched when a game's page opens: the newest three states
+    // RomM holds for the emulator Play would run, with their pictures. Network
+    // work, so on a worker, one at a time; a page opened while one is out
+    // waits its turn in `wantRom` rather than blocking the frame on a join.
+    struct DetailStates {
+        std::mutex m;
+        std::thread worker;
+        std::atomic<bool> busy{false}, ready{false};
+        int romId = 0;
+        std::vector<screens::StateChoice> list;
+        int wantRom = 0;
+        std::string wantTag;
+        // Asked again once the uploads are done: a game just left may have
+        // saved a state that is still on its way to RomM.
+        bool stale = false;
+        ~DetailStates() { if (worker.joinable()) worker.join(); }
+    };
+    static DetailStates detailStates;
+    auto startDetailStates = [&]() {
+        if (detailStates.busy.load() || !detailStates.wantRom) return;
+        if (detailStates.worker.joinable()) detailStates.worker.join();
+        const int romId = detailStates.wantRom;
+        const std::string tag = detailStates.wantTag;
+        detailStates.wantRom = 0;
+        detailStates.busy = true;
+        detailStates.worker = std::thread([romId, tag]() {
+            std::vector<romm::Asset> all;
+            std::vector<screens::StateChoice> out;
+            std::string err;
+            if (liveClient.fetchStates(romId, &all, &err)) {
+                std::vector<romm::Asset> mine;
+                for (const romm::Asset& a : all)
+                    if (a.emulator == tag) mine.push_back(a);
+                std::sort(mine.begin(), mine.end(),
+                          [](const romm::Asset& a, const romm::Asset& b) {
+                              return a.updatedAt > b.updatedAt;
+                          });
+                for (size_t i = 0; i < mine.size() && i < 3; ++i)
+                    out.push_back({mine[i].id, mine[i].picturePath, stateWhen(mine[i].updatedAt)});
+            } else {
+                std::fprintf(stderr, "[detail] states: %s\n", err.c_str());
+            }
+            std::lock_guard<std::mutex> lk(detailStates.m);
+            detailStates.romId = romId;
+            detailStates.list = std::move(out);
+            detailStates.ready = true;
+            detailStates.busy = false;
+        });
+    };
+    // Which emulator Play would run for this game decides whose states are
+    // offered: another emulator's state does not load, it hangs.
+    auto loadDetailStates = [&](int romId) {
+        for (const auto& g : games) {
+            if (g.id != romId) continue;
+            const catalog::Coverage cov = catalog::coverageFor(g);
+            const char* tag = cov.core ? catalog::emulatorTag(cov.core) : nullptr;
+            if (!tag || !catalog::snapshotsAllowed(cov.core) || !liveClient.haveToken()) return;
+            detailStates.wantRom = romId;
+            detailStates.wantTag = tag;
+            startDetailStates();
+            return;
+        }
+    };
+    auto pumpDetailStates = [&]() {
+        if (detailStates.ready.exchange(false)) {
+            std::lock_guard<std::mutex> lk(detailStates.m);
+            if (here() == Screen::Detail && detailScreen.game().romId == detailStates.romId)
+                detailScreen.setStates(detailStates.list);
+        }
+        startDetailStates();
+        if (detailStates.stale && uploader.pending() == 0) {
+            detailStates.stale = false;
+            if (here() == Screen::Detail) loadDetailStates(detailScreen.game().romId);
+        }
+    };
+    // A state picked on the launch screen, loaded once the game is running.
+    int pendingStateId = 0;
+
     auto openDetail = [&](int cardIndex) {
         if (cardIndex < 0 || cardIndex >= static_cast<int>(cards.size())) return;
         screens::GameDetail d;
@@ -5841,8 +5963,10 @@ int main(int argc, char** argv) {
             break;
         }
         d.kept = cache::isKeptBy(storage::currentUser(), d.romId);
+        const int romId = d.romId;
         detailScreen.open(std::move(d));
         stack.push_back(Screen::Detail);
+        loadDetailStates(romId);
     };
 
     // What a screen asked for, and whether the app can do it. A screen never
@@ -7941,6 +8065,11 @@ int main(int argc, char** argv) {
             case screens::Action::Play:
                 launchById(res.value);
                 break;
+            case screens::Action::PlayState:
+                std::fprintf(stderr, "[detail] play from state %d\n", res.value);
+                pendingStateId = res.value;
+                if (!launchById(detailScreen.game().romId)) pendingStateId = 0;
+                break;
             case screens::Action::Download:
                 downloadById(res.value);
                 break;
@@ -9041,6 +9170,8 @@ int main(int argc, char** argv) {
         // Whatever sound the game had queued goes with it, rather than playing
         // on over Home (see where the stream's rate is set, at launch).
         if (audioStream) SDL_ClearAudioStream(audioStream);
+        pendingStateId = 0;
+        detailStates.stale = true;   // Continue from may have changed
         playing = false;
         overlayOpen = false;
         overlayFade.retarget(0.0f, overlayFadeSeconds);
@@ -10131,6 +10262,14 @@ int main(int argc, char** argv) {
         pumpLeave();
         pumpExit();
         pumpStateLoad(stateLoad, session, menuNotice);
+        pumpDetailStates();
+        // THE STATE PICKED ON THE LAUNCH SCREEN goes in once the core is
+        // running, the same way Load latest state does, by id.
+        if (pendingStateId && playing && cab::Core::shared().running() &&
+            cab::Core::shared().framesRun() >= 1 && !stateLoad.running.load()) {
+            beginLoadLatestState(stateLoad, session, liveClient, menuNotice, pendingStateId);
+            pendingStateId = 0;
+        }
         if (stateLoad.loaded) {
             stateLoad.loaded = false;
             closeOverlay();
