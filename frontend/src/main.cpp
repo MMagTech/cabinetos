@@ -1506,6 +1506,31 @@ static int countEntries(const std::string& dir) {
 static float gPs2Upscale = 1.0f;
 static int gPs2Anisotropy = 0;
 
+// "PRESS (A) TO ...", centred, with the A drawn as a button badge the way
+// consoles prompt: a white disc with a dark A, on the text's x-height. Home's
+// empty state says "Press (A) to open the Library" this way, and a game held
+// after a state loads says "Press (A) to continue".
+static void drawPressPrompt(ui::Renderer& r, ui::TextRenderer& text, float sc,
+                            const char* before, const char* after, float base,
+                            float alpha) {
+    const ui::TextStyle st = ui::TextStyle::Title3;
+    const float gap = 16.0f;
+    const float badge = text.lineHeight(st, sc) * 0.95f;
+    const float w1 = text.measure(before, st, sc);
+    const float w2 = text.measure(after, st, sc);
+    float x = (ui::kCanvasWidth - (w1 + gap + badge + gap + w2)) * 0.5f;
+    text.draw(r, before, x, base, st, ui::Color::white(0.92f * alpha), sc);
+    x += w1 + gap;
+    const float capMid = base - text.ascent(st, sc) * 0.36f;
+    r.draw(ui::Rect{x, capMid - badge * 0.5f, badge, badge, badge * 0.5f,
+                    ui::Color::white(0.95f * alpha)});
+    const float aw = text.measure("A", st, sc);
+    text.draw(r, "A", x + (badge - aw) * 0.5f, capMid + text.ascent(st, sc) * 0.36f, st,
+              ui::Color{0.07f, 0.05f, 0.12f, alpha}, sc);
+    x += badge + gap;
+    text.draw(r, after, x, base, st, ui::Color::white(0.92f * alpha), sc);
+}
+
 // WHEN A STATE WAS SAVED, as the launch screen says it: "Today, 8:13 PM",
 // "Yesterday, 8:13 PM", "Sep 23, 8:13 PM", with the year only when it is not
 // this one. From RomM's `updated_at`, which is UTC, into this console's time.
@@ -5984,6 +6009,14 @@ int main(int argc, char** argv) {
     };
     // A state picked on the launch screen, loaded once the game is running.
     int pendingStateId = 0;
+    // AFTER A STATE LOADS, THE GAME WAITS ON THAT FRAME for a button
+    // (docs/PROJECT.md, decided 2026-09-27: "catches you off guard how quick
+    // it starts"). `stateHold` is the wait, with its "Press (A) to continue";
+    // `stateHoldWaiting` holds a game started from the launch screen still,
+    // with no prompt, while its state is fetched, so it does not boot and
+    // then jump. Only ever set by a state load, so a system without states
+    // never waits. The press that ends it is kept from the game.
+    bool stateHold = false, stateHoldWaiting = false, stateHoldJustEnded = false;
 
     auto openDetail = [&](int cardIndex) {
         if (cardIndex < 0 || cardIndex >= static_cast<int>(cards.size())) return;
@@ -9227,6 +9260,7 @@ int main(int argc, char** argv) {
         // on over Home (see where the stream's rate is set, at launch).
         if (audioStream) SDL_ClearAudioStream(audioStream);
         pendingStateId = 0;
+        stateHold = stateHoldWaiting = false;
         detailStates.stale = true;   // Continue from may have changed
         playing = false;
         overlayOpen = false;
@@ -9435,6 +9469,17 @@ int main(int argc, char** argv) {
             if (touched && idleWatch.input(clockSeconds()) && owner != InputOwner::Game &&
                 !powerKey)
                 continue;
+            // THE PRESS THAT ENDS THE WAIT after a state loads. Any button or
+            // key, and it goes no further; the frame read keeps it from the
+            // game until it is let go, as it does the pause menu's.
+            if (stateHold && playing && !overlayOpen &&
+                (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN ||
+                 (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat && !powerKey))) {
+                stateHold = false;
+                stateHoldJustEnded = true;
+                std::fprintf(stderr, "[state] continuing\n");
+                continue;
+            }
             if (powerKey) {
                 // The press that woke the machine from Rest arrives here too,
                 // and must not wake it straight into this menu.
@@ -9958,7 +10003,7 @@ int main(int argc, char** argv) {
 
         // Idle, once a frame. The timers only ever deepen here; input() is
         // what lifts them, above.
-        idleFrame(dt, playing && !overlayOpen, kScreenOff[screenOffIndex].seconds);
+        idleFrame(dt, playing && !overlayOpen && !stateHold, kScreenOff[screenOffIndex].seconds);
         // Held seats for pads that went off last only as long as the game
         // (players.h). The pause menu is still the game.
         players::setInGame(playing);
@@ -10015,8 +10060,8 @@ int main(int argc, char** argv) {
             // EVERY SEATED PAD IS ITS OWN PLAYER (players.h, issue #64). Until
             // 2026-09-26 a game read only the first pad SDL listed, so a second
             // person's pad walked the menus and did nothing in a game.
-            const bool menuWasUp = overlayOpen || menuUpAtLastRead;
-            menuUpAtLastRead = overlayOpen;
+            const bool menuWasUp = overlayOpen || stateHold || menuUpAtLastRead;
+            menuUpAtLastRead = overlayOpen || stateHold;
             for (int p = 0; p < players::kMax; ++p) {
                 cab::PadState st = p == 0 ? pad : cab::PadState{};
                 if (SDL_Gamepad* gp = players::gamepad(p)) {
@@ -10097,13 +10142,15 @@ int main(int argc, char** argv) {
                 if (SDL_Gamepad* gp = players::gamepad(p); gp && shortcuts::enabled()) {
                     ShortcutHold& h = shortcutHold[p];
                     const bool down = shortcuts::held(gp);
-                    if (down && !h.down) h = {true, false, st.buttons};
+                    // The shortcut button pressed to end a wait is that press,
+                    // not a tap that opens the menu on its release.
+                    if (down && !h.down) h = {true, stateHoldJustEnded, st.buttons};
                     if (h.down) {
                         const uint32_t fresh = st.buttons & ~h.before;
                         h.before = st.buttons;
                         if (fresh) {
                             h.used = true;
-                            if (!overlayOpen) {
+                            if (!overlayOpen && !stateHold && !stateHoldWaiting) {
                                 const bool save = fresh & bit(cab::R);
                                 const bool load = !save && (fresh & bit(cab::L));
                                 if ((save || load) && !session.snapshots) {
@@ -10124,7 +10171,7 @@ int main(int argc, char** argv) {
                         if (!down) {
                             h.down = false;
                             heldThroughMenu[p] |= st.buttons;
-                            if (!h.used) {
+                            if (!h.used && !stateHold && !stateHoldWaiting) {
                                 std::fprintf(stderr, "[shortcuts] player %d: tap, %s the menu\n",
                                              p + 1, overlayOpen ? "closing" : "opening");
                                 toggleOverlay();
@@ -10175,9 +10222,11 @@ int main(int argc, char** argv) {
             // every core did before 2026-09-19. It has to be TOLD. A no-op for
             // all twenty-one libretro cores, so it is stated unconditionally
             // rather than behind a test somebody has to remember.
-            core.setPaused(overlayOpen);
+            stateHoldJustEnded = false;
+            const bool frozen = overlayOpen || stateHold || stateHoldWaiting;
+            core.setPaused(frozen);
 
-            if (overlayOpen) {
+            if (frozen) {
                 // Nothing to step. The last frame stays uploaded, so the
                 // menu sits over a frozen picture rather than a black one.
             } else if (shotMode) {
@@ -10325,11 +10374,17 @@ int main(int argc, char** argv) {
             cab::Core::shared().framesRun() >= 1 && !stateLoad.running.load()) {
             beginLoadLatestState(stateLoad, session, liveClient, menuNotice, pendingStateId);
             pendingStateId = 0;
+            if (stateLoad.running.load()) stateHoldWaiting = true;
         }
         if (stateLoad.loaded) {
             stateLoad.loaded = false;
             closeOverlay();
+            stateHold = true;
+            stateHoldWaiting = false;
         }
+        // A launch-screen state that did not load: the game just goes on.
+        if (stateHoldWaiting && !stateLoad.running.load() && !stateLoad.ready.load())
+            stateHoldWaiting = false;
         if (overlayDemo && playing && !overlayOpen &&
             cab::Core::shared().framesRun() >= static_cast<uint64_t>(overlayDemoAfter)) {
             overlayDemo = false;
@@ -11586,32 +11641,20 @@ int main(int argc, char** argv) {
             // The A is drawn as a button badge, the way consoles prompt. It
             // dims while focus is up in the bar, where A means something else.
             const bool on = !barFocused && !accountsOpen;
-            const ui::TextStyle st = ui::TextStyle::Title3;
-            const char* before = "Press";
-            const char* after = "to open the Library";
-            const float gap = 16.0f;
-            const float badge = text.lineHeight(st, sc) * 0.95f;
-            const float w1 = text.measure(before, st, sc);
-            const float w2 = text.measure(after, st, sc);
-            const float total = w1 + gap + badge + gap + w2;
-            const float base = ty + text.lineHeight(ui::TextStyle::Title2, sc) * 0.9f + 96.0f;
-            const float alpha = on ? 1.0f : 0.45f;
-            float x = (ui::kCanvasWidth - total) * 0.5f;
-            text.draw(renderer, before, x, base, st, ui::Color::white(0.92f * alpha), sc);
-            x += w1 + gap;
-            // The badge: a white disc with a dark A, centred on the text's
-            // x-height rather than its baseline.
-            const float capMid = base - text.ascent(st, sc) * 0.36f;
-            renderer.draw(ui::Rect{x, capMid - badge * 0.5f, badge, badge, badge * 0.5f,
-                                   ui::Color::white(0.95f * alpha)});
-            const float aw = text.measure("A", st, sc);
-            text.draw(renderer, "A", x + (badge - aw) * 0.5f,
-                      capMid + text.ascent(st, sc) * 0.36f, st,
-                      ui::Color{0.07f, 0.05f, 0.12f, alpha}, sc);
-            x += badge + gap;
-            text.draw(renderer, after, x, base, st, ui::Color::white(0.92f * alpha), sc);
+            drawPressPrompt(renderer, text, sc, "Press", "to open the Library",
+                            ty + text.lineHeight(ui::TextStyle::Title2, sc) * 0.9f + 96.0f,
+                            on ? 1.0f : 0.45f);
         }
         }  // end of the shelf branch
+
+        // THE WAIT AFTER A STATE LOADS: the game's frozen picture, a little
+        // darker, and the prompt low on it. Not while the pause menu is up.
+        if (playing && stateHold && overlayFade.value() < 0.001f) {
+            renderer.draw(ui::Rect{0, 0, ui::kCanvasWidth, ui::kCanvasHeight, 0,
+                                   ui::Color::black(0.35f)});
+            drawPressPrompt(renderer, text, sc, "Press", "to continue",
+                            ui::kCanvasHeight * 0.82f, 1.0f);
+        }
 
         // The overlay's scrim belongs to the WORLD, not to the overlay, so it
         // is drawn before the scene is presented. Put it after and the panel's
