@@ -518,7 +518,7 @@ public:
     void setSaveWhen(std::string when);
     // What RomM knows of the game, for the line under the title: "1997",
     // "Cave", "1-2 players". Any may be empty.
-    struct Facts { std::string year, maker, players; };
+    struct Facts { std::string year, maker, players, played; };
     void setFacts(Facts f);
     // RomM HAS ANSWERED: the facts, the save and Continue from fade in
     // together now, rather than each popping in as it arrived.

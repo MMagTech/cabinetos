@@ -86,6 +86,7 @@
 #include "files.h"
 #include "drives.h"
 #include "players.h"
+#include "playtime.h"
 #include "shortcuts.h"
 #include "rewind.h"
 #include "bluetooth.h"
@@ -172,6 +173,10 @@ public:
         bool resend = false;
         // A screenshot (#79): `data` is the PNG, and it goes to the gallery.
         bool isScreenshot = false;
+        // Time played (#128): every play session this person owes RomM, read
+        // off the disk when it runs. No bytes, no marker; playtime.json is
+        // its own record of what is owed.
+        bool isPlay = false;
     };
 
     // An upload that has not reached the server is the ONE irreplaceable thing
@@ -233,6 +238,17 @@ public:
             j.resend = true;
             enqueue(std::move(j));
         }
+        if (!playtime::owed(storage::currentUser()).empty()) sendPlay();
+    }
+
+    // Everything owed in playtime.json, in one job. Queued once however often
+    // it is asked for; a session closed while it is in flight goes next time.
+    void sendPlay() {
+        Job j;
+        j.isPlay = true;
+        j.fileName = "play sessions";
+        j.resend = true;
+        enqueue(std::move(j));
     }
 
     int pending() const { return pending_.load(); }
@@ -348,6 +364,13 @@ private:
                 queue_.pop_front();
             }
 
+            if (job.isPlay) {
+                std::string err;
+                const bool ok = sendPlaySessions(&err);
+                if (!ok) std::fprintf(stderr, "[playtime] not sent, kept locally: %s\n", err.c_str());
+                finished(job, ok, /*leftSomething=*/!ok);
+                continue;
+            }
             // A resend reads its bytes now, off the disk.
             if (job.data.empty() && !job.localPath.empty()) {
                 job.data = cab::readBytes(job.localPath);
@@ -381,19 +404,51 @@ private:
                          ok ? "uploaded" : "upload failed, kept locally:",
                          ok ? job.emulator.c_str() : err.c_str(),
                          ok && !job.shot.empty() ? " with its picture" : "");
-            bool resendNow = false;
-            {
-                std::lock_guard<std::mutex> lock(mutex_);
-                queued_.erase(key(job));
-                // THE SERVER ANSWERED, so anything a failure left behind can
-                // go now rather than at the next timer.
-                if (ok && owing_.load()) resendNow = true;
-                if (!ok && !job.data.empty()) owing_ = true;
-                if (ok && queue_.empty()) owing_ = false;
-            }
-            --pending_;
-            if (resendNow) resendOwed();
+            finished(job, ok, /*leftSomething=*/!ok && !job.data.empty());
         }
+    }
+
+    void finished(const Job& job, bool ok, bool leftSomething) {
+        bool resendNow = false;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            queued_.erase(key(job));
+            // THE SERVER ANSWERED, so anything a failure left behind can
+            // go now rather than at the next timer.
+            if (ok && owing_.load()) resendNow = true;
+            if (leftSomething) owing_ = true;
+            if (ok && queue_.empty()) owing_ = false;
+        }
+        --pending_;
+        if (resendNow) resendOwed();
+    }
+
+    // A hundred at a time, RomM's most. Whatever RomM has now (new, or a copy
+    // of one it already had) or has refused for good stops being owed.
+    bool sendPlaySessions(std::string* err) {
+        const storage::User who = storage::currentUser();
+        std::vector<playtime::Session> list = playtime::owed(who);
+        constexpr size_t kBatch = 100;
+        for (size_t at = 0; at < list.size(); at += kBatch) {
+            const size_t end = std::min(list.size(), at + kBatch);
+            std::vector<romm::Client::PlaySession> out;
+            for (size_t i = at; i < end; ++i)
+                out.push_back({list[i].romId, playtime::iso(list[i].startMs),
+                               playtime::iso(list[i].endMs), list[i].playedMs});
+            std::vector<int> outcome;
+            if (!client_->postPlaySessions(out, &outcome, err)) return false;
+            std::vector<playtime::Session> done;
+            for (size_t i = at; i < end; ++i)
+                if (outcome[i - at] != 0) done.push_back(list[i]);
+            playtime::sent(who, done);
+            std::fprintf(stderr, "[playtime] sent %zu session(s), %zu taken\n", end - at,
+                         done.size());
+            if (done.size() < end - at) {
+                if (err) *err = "RomM did not say what became of some";
+                return false;
+            }
+        }
+        return true;
     }
 
     romm::Client* client_ = nullptr;
@@ -3557,6 +3612,7 @@ int main(int argc, char** argv) {
     const char* serverCheckAddress = nullptr;
     bool accountsTestMode = false;
     bool playersTestMode = false;
+    bool playtimeTestMode = false;
     int padsSeconds = 0;
     bool firstRunRulesMode = false;
     bool firstRunWriteMode = false;
@@ -3817,6 +3873,8 @@ int main(int argc, char** argv) {
             accountsTestMode = true;
         } else if (SDL_strcmp(argv[i], "--players-test") == 0) {
             playersTestMode = true;
+        } else if (SDL_strcmp(argv[i], "--playtime-test") == 0) {
+            playtimeTestMode = true;
         } else if (SDL_strcmp(argv[i], "--pads") == 0) {
             padsSeconds = 30;
             if (i + 1 < argc && argv[i + 1][0] != '-') padsSeconds = SDL_atoi(argv[++i]);
@@ -3961,6 +4019,7 @@ int main(int argc, char** argv) {
     // not cost a console a directory it did not have.
     if (accountsTestMode) return accountsTest();
     if (playersTestMode) return players::test();
+    if (playtimeTestMode) return playtime::test();
     if (padsSeconds > 0) return players::report(padsSeconds);
     if (firstRunRulesMode) return firstRunRules();
     if (firstRunWriteMode) return firstRunWriteTest();
@@ -5752,6 +5811,11 @@ int main(int argc, char** argv) {
     // quitting does not discard a save someone has already made.
     Uploader uploader;
     uploader.start(&liveClient);
+    // TIME PLAYED (#128). A session a power cut left open, for anybody who
+    // has played here, is owed now; it is sent when that person is.
+    playtime::Clock playClock;
+    float playCheckpointClock = 0.0f;
+    for (const storage::User& u : storage::knownUsers()) playtime::recover(u);
     // Whatever an earlier run could not send goes first.
     uploader.resendOwed();
     float owedClock = 0.0f;   // seconds since the last try at what is owed
@@ -6033,7 +6097,8 @@ int main(int argc, char** argv) {
         const std::string saveTag = detailStates.wantSaveTag;
         detailStates.wantRom = 0;
         detailStates.busy = true;
-        detailStates.worker = std::thread([romId, tag, saveTag]() {
+        const storage::User who = storage::currentUser();
+        detailStates.worker = std::thread([romId, tag, saveTag, who]() {
             std::vector<romm::Asset> all;
             std::vector<screens::StateChoice> out;
             std::string err, saveWhen;
@@ -6048,6 +6113,17 @@ int main(int argc, char** argv) {
                     if (!f.players.empty())
                         facts.players = f.players + (f.players == "1" ? " player" : " players");
                 }
+            }
+            // TIME PLAYED (#128): RomM's total plus what this console has not
+            // sent yet; with no server, the last total RomM gave. Nothing when
+            // neither is known, rather than a number that is only part of it.
+            {
+                int64_t ms = 0;
+                std::string perr;
+                bool have = liveClient.fetchPlayedMs(romId, &ms, &perr);
+                if (have) playtime::remember(who, romId, ms);
+                else have = playtime::known(who, romId, &ms);
+                if (have) facts.played = playtime::describe(ms + playtime::owedMs(who, romId));
             }
             // THE GAME'S OWN SAVE, the newest under the tag it travels by, as
             // the launch reads it. "Saved today, 8:17 PM".
@@ -9281,6 +9357,10 @@ int main(int argc, char** argv) {
 
         std::fprintf(stderr, "[launch] running %s\n", core.coreName().c_str());
         playing = true;
+        if (session.romId > 0) {
+            playClock.begin(session.romId, playtime::wallMs());
+            playCheckpointClock = 0.0f;
+        }
     };
 
 
@@ -9469,6 +9549,12 @@ int main(int argc, char** argv) {
     bool exitPending = false;
     uint64_t exitWaitStart = 0;
     auto finishExit = [&]() {
+        // TIME PLAYED (#128): the session ends as the game does, and goes to
+        // RomM with the save.
+        if (playClock.active()) {
+            playtime::close(storage::currentUser(), playClock.finish(playtime::wallMs()));
+            uploader.sendPlay();
+        }
         syncSave(session, uploader);
         // And the same curtain on the way out — `unloadGame` blocks too, and a
         // game vanishing into Home mid-frame is the same cut in the other
@@ -9718,6 +9804,7 @@ int main(int argc, char** argv) {
             // reaching for that button wants.
             const bool powerKey = e.type == SDL_EVENT_KEY_DOWN &&
                                   (e.key.key == SDLK_POWER || e.key.key == SDLK_SLEEP);
+            if (touched) playClock.touch();
             if (touched && idleWatch.input(clockSeconds()) && owner != InputOwner::Game &&
                 !powerKey)
                 continue;
@@ -10267,6 +10354,14 @@ int main(int argc, char** argv) {
         // Idle, once a frame. The timers only ever deepen here; input() is
         // what lifts them, above.
         idleFrame(dt, playing && !overlayOpen && !stateHold, kScreenOff[screenOffIndex].seconds);
+        // TIME PLAYED (#128): the same test the dim uses for "a game is on
+        // screen". Written down once a minute, so a power cut loses at most
+        // one.
+        playClock.tick(dt, playing && !overlayOpen && !stateHold);
+        if (playClock.active() && (playCheckpointClock += dt) >= 60.0f) {
+            playCheckpointClock = 0.0f;
+            playtime::checkpoint(storage::currentUser(), playClock.now(playtime::wallMs()));
+        }
         // Held seats for pads that went off last only as long as the game
         // (players.h). The pause menu is still the game.
         players::setInGame(playing);

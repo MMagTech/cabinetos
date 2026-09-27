@@ -268,6 +268,22 @@ public:
     };
     bool fetchFacts(int romId, Facts* out, std::string* err);
 
+    // TIME PLAYED (#128), playtime.h. `POST /api/play-sessions` takes up to a
+    // hundred at once; `outcome` says, per entry, 1 RomM has it (new, or a
+    // duplicate of one already sent), -1 RomM refused it for good (its end is
+    // in the future), 0 not known. RomM spots a duplicate by game and start
+    // time, so sending one twice after a lost answer counts it once.
+    struct PlaySession {
+        int romId = 0;
+        std::string start, end;   // ISO 8601, UTC
+        int64_t durationMs = 0;
+    };
+    bool postPlaySessions(const std::vector<PlaySession>& list, std::vector<int>* outcome,
+                          std::string* err) const;
+    // The sum of this person's sessions for a game, as this console's device
+    // sees them (playtime.h, "whose time RomM returns").
+    bool fetchPlayedMs(int romId, int64_t* ms, std::string* err) const;
+
     // A value going INTO a query fragment, percent-encoded strictly. A search
     // term is whatever somebody typed on a television keyboard, so it can hold
     // a space, an ampersand or an apostrophe — all of which would otherwise

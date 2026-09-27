@@ -1140,7 +1140,7 @@ void DetailScreen::detailsArrived() { detailsIn_ = true; }
 
 std::string DetailScreen::factsLine() const {
     std::string m;
-    for (const std::string* p : {&facts_.year, &facts_.maker, &facts_.players})
+    for (const std::string* p : {&facts_.year, &facts_.maker, &facts_.players, &facts_.played})
         if (!p->empty()) m += (m.empty() ? "" : "  \xC2\xB7  ") + *p;
     return m;
 }
