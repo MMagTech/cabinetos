@@ -5815,14 +5815,14 @@ int main(int argc, char** argv) {
     // THE PAUSE MENU'S PANEL WITH A DIFFERENT LIST, not a second menu. The
     // power button opens it everywhere, and Start opens it on Home. In a game
     // the game is paused and Resume comes first and is focused, so a child
-    // pressing the button costs one press of A. Rest is listed only on a
+    // pressing the button costs one press of A; on Home, Cancel does the same. Rest is listed only on a
     // machine that can rest.
     //
     // Anything but Resume, from a game, leaves the game through finishExit
     // first — the one way out of a game, which uploads every kind of save — so
     // this is true for every emulator without any of them knowing.
     bool powerMenu = false;
-    enum PowerItem { PwResume, PwRest, PwRestart, PwPowerOff };
+    enum PowerItem { PwResume, PwCancel, PwRest, PwRestart, PwPowerOff };
     std::vector<PowerItem> powerItems;
     bool restAvailable = false;
     // Rest waits for the uploads finishExit queued: a machine that sleeps
@@ -5836,6 +5836,7 @@ int main(int argc, char** argv) {
         if (!powerMenu) return kOverlayLabels[pauseItems[i]];
         switch (powerItems[i]) {
             case PwResume: return "Resume";
+            case PwCancel: return "Cancel";
             // "Sleep", not "Rest": Rest is PlayStation's word alone, and
             // Switch, Xbox, SteamOS, Windows and macOS all say Sleep.
             // MMagTech, 2026-09-22.
@@ -9426,7 +9427,7 @@ int main(int argc, char** argv) {
     };
 
     auto powerActivate = [&](PowerItem item) {
-        if (item == PwResume) {
+        if (item == PwResume || item == PwCancel) {
             closeOverlay();
             return;
         }
@@ -9501,7 +9502,10 @@ int main(int argc, char** argv) {
             return;
         }
         powerItems.clear();
-        if (playing) powerItems.push_back(PwResume);
+        // THE FIRST ITEM DOES NOTHING, and it is the one focused. In a game
+        // that is Resume; on Home it is Cancel. MMagTech, 2026-09-27: Start
+        // pressed by accident opened the menu on Sleep, one A from asleep.
+        powerItems.push_back(playing ? PwResume : PwCancel);
         if (restAvailable) powerItems.push_back(PwRest);
         powerItems.push_back(PwRestart);
         powerItems.push_back(PwPowerOff);
