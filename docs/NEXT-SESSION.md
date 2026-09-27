@@ -37,23 +37,16 @@ agreed). With promotion, every change is tried on `testing` and a merge
 makes `latest` that same image, so the test console on `testing` is never
 behind what users get, and testing a change needs no `bootc switch` and no
 extra reboot. **SSH is port 2222; sudo's password is
-`cat /var/lib/cabinetos-files/password`.** `latest` and `testing` are both
-`2026.09.26.10` (#104 and #123), and the A9's image is that (`bootc status`
-is the truth), from `testing`, gamescope/drm, File access on, **a PIN set**
-(MMagTech's), the SanDisk "Games" stick attached. **BUT THE A9 IS RUNNING A
-HAND-BUILT FRONTEND from `tools/ui-loop.sh`** (the `in-game-shortcuts`
-branch) until `tools/ui-loop.sh --restore` or a reboot. The VM is on
-`testing` `2026.09.26.4`. Branches: `main`, `testing`, **`in-game-shortcuts`
-(pushed, not merged)**, and PR #42's `base-update/44.20260921` (parked, on
-MMagTech's word).
-
-**NEXT: THE TESTING IMAGE FOR `in-game-shortcuts`, THEN MERGE ON HIS WORD.**
-Everything on it was judged on the TV with the loop, one piece at a time
-(session of 2026-09-27, below). Push it to `testing`, let the image build
-(~8 min), `bootc upgrade` the A9, have MMagTech judge the real image, and
-merge only on his explicit word ([[merge approval]] in memory). **Last thing
-built: Home's Resume** (loads the newest state, else just starts; worked on
-DoDonPachi).
+`cat /var/lib/cabinetos-files/password`.** **`in-game-shortcuts` merged
+2026-09-27 as `4ad4a74` and was promoted: `latest` and `testing` are both
+`2026.09.27`** (the tested digest, no rebuild), and **the A9 is booted on
+it** (`bootc status` is the truth), from `testing`, gamescope/drm, File
+access on, **a PIN set** (MMagTech's), the SanDisk "Games" stick attached,
+In-game shortcuts ON with the Lite 2's heart set as its shortcut button. The
+VM is on `testing` `2026.09.26.4`. Branches: `main`, `testing`, the merged
+`in-game-shortcuts` (safe to delete), and PR #42's `base-update/44.20260921`
+(parked, on MMagTech's word). The handover commits after the tested one
+merged separately as documentation, which builds nothing.
 
 **THEN, MMAGTECH 2026-09-27: "I'd really rather focus on features not yet
 implemented or other fixes", NOT THE EMULATORS YET.** This overrides step 3
