@@ -614,6 +614,11 @@ const char* directorySaveRoot(const char* core) {
     return nullptr;
 }
 
+bool needsBios(const std::string& slug) {
+    return slug == "3do" || slug == "saturn" || slug == "segacd" || slug == "ps2" ||
+           slug == "turbografx-cd";
+}
+
 FirmwareAliases firmwareAliases(const std::string& slug, const std::string& fsSlug) {
     // Sizes and names taken from the reference implementation's own table,
     // which was built against real hardware, and checked against what the

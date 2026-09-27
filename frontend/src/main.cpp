@@ -1512,6 +1512,13 @@ struct LaunchJob {
     // than two code paths that would drift.
     bool playWhenReady = true;
     bool keepWhenReady = false;
+    // WHAT A FAILED LAUNCH SAYS, in words (#146, #90). The worker notes
+    // whether a system that cannot start without its BIOS got none from the
+    // server; if the game then fails, that is what the page says, "No Saturn
+    // BIOS on your server", rather than the core's own wording. It is never
+    // a reason to refuse: the core is still asked, and may manage.
+    std::atomic<bool> biosMissing{false};
+    std::string systemName;
     // WHERE THE PERSON WAS WHEN THEY PRESSED PLAY, as an integer the launch
     // machinery does not have to understand. See `startedOn` at the press site
     // and the ready branch in pumpLaunch: a download that finishes while
@@ -1707,6 +1714,8 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
     job.title = game.name.empty() ? game.fsName : game.name;
     job.romId = game.id;
     job.platformFsSlug = game.platformFsSlug;
+    job.systemName = game.platformName;
+    job.biosMissing = false;
     job.platformSlug = game.platformSlug;
     job.fsStem = game.fsName;
     if (const size_t dot = job.fsStem.find_last_of('.'); dot != std::string::npos)
@@ -1768,7 +1777,9 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
     }
 
     if (!core.load(job.corePath)) {
-        *err = "core " + job.coreName + ": " + core.error();
+        std::fprintf(stderr, "[launch] core %s: %s\n", job.coreName.c_str(),
+                     core.error().c_str());
+        *err = "Couldn't start this game";
         job.stage = LaunchJob::Stage::Idle;
         return false;
     }
@@ -1785,7 +1796,8 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
     if (keepWhenReady) {
         std::string kerr;
         if (!cache::keep(user, game.id, gameRecordJson(game), &kerr)) {
-            *err = kerr;
+            std::fprintf(stderr, "[keep] %s\n", kerr.c_str());
+            *err = "Couldn't download this game";
             job.stage = LaunchJob::Stage::Idle;
             return false;
         }
@@ -1859,7 +1871,8 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
             // them on alphabetical order. It happened to choose correctly and
             // that is not a property anyone should rely on.
             std::vector<std::string> platformFirmware;
-            if (client.fetchFirmware(platformId, &firmware, &ferr)) {
+            const bool listed = client.fetchFirmware(platformId, &firmware, &ferr);
+            if (listed) {
                 for (const auto& f : firmware) {
                     if (job.cancel.load()) break;
                     const std::string fdest = biosDir + "/" + storage::safeSegment(f.fileName);
@@ -1948,6 +1961,25 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
                     }
                 }
             }
+            // A SYSTEM THAT CANNOT START WITHOUT ITS BIOS, AND NONE CAME (#90).
+            // Only when the server ANSWERED: offline, the list is unknown and
+            // whatever is already on the console may be enough. "None" means
+            // no file this platform lists is on the disk after the fetch, or,
+            // where the core wants a known size, none of that size.
+            if (listed && catalog::needsBios(slug)) {
+                const catalog::FirmwareAliases fa = catalog::firmwareAliases(slug, fsSlug);
+                bool have = false;
+                for (const std::string& cand : platformFirmware) {
+                    struct stat st;
+                    if (::stat(cand.c_str(), &st) != 0 || st.st_size <= 0) continue;
+                    if (fa.sizeBytes > 0 && st.st_size != fa.sizeBytes) continue;
+                    have = true;
+                }
+                job.biosMissing = !have;
+                if (!have)
+                    std::fprintf(stderr, "[firmware] no BIOS for %s on the server\n",
+                                 slug.c_str());
+            }
             job.got = 0;
             job.total = 0;
         }
@@ -2018,7 +2050,8 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
                     return !job.cancel.load();
                 }, &err);
             if (!ok) {
-                job.message = err;
+                std::fprintf(stderr, "[launch] download: %s\n", err.c_str());
+                job.message = "Couldn't download this game";
                 job.stage = LaunchJob::Stage::Failed;
                 return;
             }
@@ -2090,7 +2123,8 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
 
         if (!romfile::prepareFile(dest, entryPath, validExts, blockExtract, &primary,
                                   &kind, &err)) {
-            job.message = err;
+            std::fprintf(stderr, "[launch] file: %s\n", err.c_str());
+            job.message = "Couldn't open this game's file";
             job.stage = LaunchJob::Stage::Failed;
             return;
         }
@@ -9411,7 +9445,10 @@ int main(int argc, char** argv) {
                     }
                 }
             }
-            detailScreen.setNotice(core.error());
+            detailScreen.setNotice(
+                launchJob.biosMissing.load()
+                    ? "No " + launchJob.systemName + " BIOS on your server"
+                    : std::string("Couldn't start this game"));
             sound::play(sound::Cue::Edge);
             // The curtain came down for a game that is not going to start, so
             // it goes straight back up onto the screen that says why.

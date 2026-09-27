@@ -363,6 +363,15 @@ struct FirmwareAliases {
     const char* subDir = nullptr;
 };
 
+// THE SYSTEMS THAT CANNOT START WITHOUT THEIR OWN BIOS: 3DO, Saturn, Sega
+// CD, PlayStation 2 and TurboGrafx-CD (#90). Every other system either needs
+// none or its core carries a stand-in (PlayStation, Dreamcast, GBA, DS,
+// GameCube). Arcade is not here on purpose: this console expects non-merged
+// sets, which carry each board's BIOS inside the game's own zip (MMagTech,
+// 2026-09-27; Metal Slug 2's zip holds the whole Neo Geo BIOS). Used only
+// to word a failure, never to refuse a launch.
+bool needsBios(const std::string& slug);
+
 // What to copy where, for this platform, or nothing for the platforms whose
 // cores need no firmware or already agree with RomM about the name.
 FirmwareAliases firmwareAliases(const std::string& slug, const std::string& fsSlug);
