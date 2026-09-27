@@ -5402,11 +5402,6 @@ int main(int argc, char** argv) {
     // game this console can play.
     int focusRow = RowRecent;
     int focusSlot = 0;
-    // Remembered focus per row, which is the behaviour tvOS gives free and the
-    // one people notice missing: leaving Recent at the sixth cover and coming
-    // back to the first is the kind of thing that feels broken without anyone
-    // being able to say why.
-    int rememberedSlot[2] = {0, 0};
     // --focus N still means "start on card N of Recent", which is what every
     // existing capture script passes it for.
     if (initialFocus >= 0) {
@@ -6274,7 +6269,6 @@ int main(int argc, char** argv) {
         // was shorter.
         focusRow = RowRecent;
         focusSlot = 0;
-        rememberedSlot[0] = rememberedSlot[1] = 0;
         shelfScroll[0].settle(0.0f);
         shelfScroll[1].settle(0.0f);
         scrollY.settle(0.0f);
@@ -9172,7 +9166,6 @@ int main(int argc, char** argv) {
         leaveFocus();
         sound::play(sound::Cue::Move);
         focusSlot = next;
-        rememberedSlot[focusRow] = focusSlot;
         enterFocus();
     };
 
@@ -9188,11 +9181,19 @@ int main(int argc, char** argv) {
             if (row == RowFavorites) return;
         }
         if (row == focusRow || !rowExists(row)) { sound::play(sound::Cue::Edge); return; }
+        // LAND ON THE COVER ABOVE OR BELOW — #126, MMagTech 2026-09-27. Each
+        // row used to remember its own slot and go back to it, so Down from
+        // the third cover could land on the ninth. Now it is the cover nearest
+        // the same place on screen, whatever each row has scrolled to, and the
+        // last one when the other row is shorter. Going up to the bar and back
+        // still returns to the same card: that is not a row move.
+        const float pitch = kShelfCoverWidth + kShelfSpacing;
+        const float x = static_cast<float>(focusSlot) * pitch - shelfScroll[focusRow].to;
+        const float slot = std::round((x + shelfScroll[row].to) / pitch);
         leaveFocus();
         sound::play(sound::Cue::Move);
         focusRow = row;
-        focusSlot = std::clamp(rememberedSlot[row], 0,
-                               static_cast<int>(rowSlots(row)) - 1);
+        focusSlot = std::clamp(static_cast<int>(slot), 0, static_cast<int>(rowSlots(row)) - 1);
         enterFocus();
     };
 
