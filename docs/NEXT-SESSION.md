@@ -66,12 +66,9 @@ offline play, account switching (designed 2026-09-21, not built), and the
 installer, boot splash and power button.
 
 **Suggested first: the Home fixes, #125 to #127**, which need nothing
-prepared. **#124 stays open until there are saves to test with:** MMagTech
-has none from another app. They can be made in RomM's own web player (Play
-on a game in RomM's web page, save in the game): one per save FORMAT is
-enough to test the rule, not one per system: a battery save (SNES or Game
-Boy), a PlayStation memory card, a Dreamcast VMU, an arcade NVRAM, as far as
-the web player covers them.
+prepared. **#124 is PARKED (label `later`):** testing it means making saves
+and states in each of RomM's web-player emulators, and MMagTech: too much
+for now. Kept open for when someone reports starting over.
 
 **THE SESSION OF 2026-09-27 BUILT THE IN-GAME SHORTCUTS (#76 TO #80) AND FIXED
 #103, BRANCH `in-game-shortcuts`.** Every decision, with the reasons and what
