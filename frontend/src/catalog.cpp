@@ -460,17 +460,11 @@ std::map<std::string, std::string> optionOverrides(const std::string& core) {
         // Raising it is a look-and-performance decision and it waits for real
         // hardware.
         //
-        // ppsspp_backend IS PINNED TO OPENGL — 2026-09-27. Its default, auto,
-        // takes whatever the frontend prefers, and since open question 20 the
-        // host prefers Vulkan, so PSP moved to Vulkan on 2026-09-20 without
-        // anyone asking. There it crashes the whole console as it starts:
-        // a call through a null pointer right after the render interface is
-        // handed over (MMagTech on the TV, "black screen and then closes";
-        // the image build crashes identically headless, so it is not today's
-        // Vulkan changes). PSP was proven on GLES and was never one of the
-        // systems Vulkan was for. Why PPSSPP's Vulkan path crashes here is
-        // filed, not chased.
-        return {{"ppsspp_cpu_core", "IR JIT"}, {"ppsspp_backend", "opengl"}};
+        // PSP moved to Vulkan on 2026-09-20 with everything else (open question
+        // 20), and crashed the console as it started until the host raised
+        // every Vulkan instance to 1.1 as RetroArch does (vkhost.cpp) —
+        // 2026-09-27. Lumines plays its demo on Vulkan on the A9.
+        return {{"ppsspp_cpu_core", "IR JIT"}};
     }
 
     // Genesis Plus GX, and this one decides WHERE THE SAVE IS, not how it

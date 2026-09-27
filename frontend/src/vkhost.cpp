@@ -943,6 +943,27 @@ bool createContext(std::string* err) {
         if (fromCore) app = fromCore;
     }
 
+    // BUT NEVER BELOW 1.1 WHERE THE LOADER HAS IT, which is what RetroArch
+    // does (gfx/common/vulkan_common.c: "Vulkan 1.0 drivers are completely
+    // irrelevant these days") — 2026-09-27. PPSSPP asks for 1.0 and then its
+    // memory allocator calls vkGetBufferMemoryRequirements2, a 1.1 function
+    // its loader only fetches on a 1.1 instance: a call through a null
+    // pointer that took the whole console down the moment PSP started on
+    // Vulkan. A loader without 1.1 keeps what the core asked for, as
+    // RetroArch's does.
+    VkApplicationInfo raised{};
+    if (app->apiVersion < VK_API_VERSION_1_1) {
+        auto enumerateVersion = reinterpret_cast<PFN_vkEnumerateInstanceVersion>(
+            gApi.getInstanceProcAddr(nullptr, "vkEnumerateInstanceVersion"));
+        uint32_t supported = VK_API_VERSION_1_0;
+        if (enumerateVersion && enumerateVersion(&supported) == VK_SUCCESS &&
+            supported >= VK_API_VERSION_1_1) {
+            raised = *app;
+            raised.apiVersion = VK_API_VERSION_1_1;
+            app = &raised;
+        }
+    }
+
     // Surface support is asked for, not assumed: a machine without it still
     // runs every Vulkan core that does not need a display token, and one that
     // does gets a clear line rather than a black picture.
