@@ -1184,7 +1184,18 @@ bool Core::load(const std::string& soPath) {
     // two-minute run, flat in between, and MMagTech heard it as sound out of
     // sync with the picture. The core's own output was ahead of the clock by
     // the same amount, which is this brake's exact condition.
-    governed_ = coreName_ == "PPSSPP" || coreName_ == "Flycast";
+    //
+    // AND N64, the same day, which reverses the line above it. With ParaLLEl-
+    // RDP on the A9, Hydro Thunder made 3.4% more sound than realtime and
+    // Mario Kart 64 4%, measured by the [audio] log line: the emulated
+    // machine was running that much FAST, and the 64 ms cap threw the surplus
+    // away as crackle MMagTech heard. Audio is the one clock the emulated
+    // machine keeps itself, so the brake holding it there is correct, and it
+    // is what RetroArch's audio sync does to every core. Cabinet's "slowed N64
+    // down" was most likely this same 3 to 4%, slowed to true speed; why was
+    // never recorded, so that is a reading, not a finding.
+    governed_ = coreName_ == "PPSSPP" || coreName_ == "Flycast" ||
+                coreName_ == "Mupen64Plus-Next";
 
     // Order matters: the environment callback must be installed before
     // retro_init, because a core may call it from there.
@@ -1550,7 +1561,7 @@ int Core::runFor(double dt) {
 
     int ran = 0;
     while (accumulator_ >= interval && ran < maxRuns) {
-        // The second brake, and two cores have it. See load(): the
+        // The second brake, and three cores have it. See load(): the
         // accumulator counts the runs that were asked for, and for PPSSPP a
         // run is a game frame rather than a vblank, so the accumulator can be
         // satisfied while the emulated machine is running at twice speed.
