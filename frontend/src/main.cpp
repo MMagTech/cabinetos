@@ -6211,12 +6211,13 @@ int main(int argc, char** argv) {
         const std::tm* t = std::localtime(&now);
         return t && look::scheduledDark(t->tm_hour, darkFrom, darkUntil);
     };
-    auto applyAccountColour = [&](bool instant) {
-        const int id = accounts::activeId();
-        std::string word;
+    auto accountColour = [](int id) {
         for (const accounts::Account& a : accounts::all())
-            if (a.id == id) word = a.colour;
-        look::setColour(look::colourFromWord(word), instant);
+            if (a.id == id) return look::colourFromWord(a.colour);
+        return look::Colour::Purple;
+    };
+    auto applyAccountColour = [&](bool instant) {
+        look::setColour(accountColour(accounts::activeId()), instant);
     };
     applyAccountColour(true);
     if (lookColour) look::setColour(look::colourFromWord(lookColour), true);
@@ -6326,7 +6327,6 @@ int main(int argc, char** argv) {
         // different set of cards, and was out of range whenever the new set
         // was shorter.
         homeFromTheStart();
-        applyAccountColour(true);
         refreshKeeps();
 
         const storage::User& now = storage::currentUser();
@@ -6620,6 +6620,9 @@ int main(int argc, char** argv) {
         choiceThen = std::move(then);
         choiceScreen.open(title, detail, std::move(options), focus);
     };
+    // Settings > Display and Sound > Dark hours: From and Until, and the hours
+    // of each. Set where it is opened; it reopens itself after an hour is set.
+    std::function<void(int)> darkHoursPanel;
     auto choiceOutcome = [&](screens::ChoiceScreen::Outcome o) {
         using O = screens::ChoiceScreen::Outcome;
         if (o == O::None) return;
@@ -6654,7 +6657,7 @@ int main(int argc, char** argv) {
                      SetPinOff, SetRemoveAccount, SetScreenOff, SetWifi, SetServer,
                      SetUpdate, SetUpdateCheck, SetCredits, SetFiles, SetDownloads,
                      SetAddController, SetShortcuts, SetShortcutButton, SetAppearance,
-                     SetDarkFrom, SetDarkUntil, SetColour };
+                     SetDarkHours, SetColour };
     // One Eject row per USB drive: this plus the drive's index in
     // storage::locations() when the rows were built.
     constexpr int kSetEject = 100;
@@ -7452,15 +7455,13 @@ int main(int argc, char** argv) {
                 r.choice = static_cast<int>(appearance);
                 lookRows.push_back(r);
             }
-            if (appearance == look::Appearance::Scheduled) {
-                for (int which = 0; which < 2; ++which) {
-                    Row r{K::Choice, which == 0 ? SetDarkFrom : SetDarkUntil,
-                          which == 0 ? "Dark from" : "Until", "", ""};
-                    for (int h = 0; h < 24; ++h) r.choices.push_back(look::hourName(h));
-                    r.choice = which == 0 ? darkFrom : darkUntil;
-                    lookRows.push_back(r);
-                }
-            }
+            // ONE ROW FOR THE HOURS, opening the question panel. Two rows
+            // made the list too long (MMagTech, 2026-09-27); the panel is the
+            // one Wi-Fi and Add a controller already use.
+            if (appearance == look::Appearance::Scheduled)
+                lookRows.push_back({K::Action, SetDarkHours, "Dark hours", "",
+                                    look::hourName(darkFrom) + " to " +
+                                        look::hourName(darkUntil)});
             {
                 Row r{K::Choice, SetColour, "Color", "", ""};
                 for (int i = 0; i < look::kColourCount; ++i)
@@ -8121,6 +8122,29 @@ int main(int argc, char** argv) {
                         askWifi();
                     });
                     sound::play(sound::Cue::Activate);
+                } else if (res.value == SetDarkHours) {
+                    // From and Until, then the hours of whichever was chosen,
+                    // then back to From and Until with the new one showing.
+                    darkHoursPanel = [&](int focus) {
+                        askChoice("Dark hours", "", {"From", "Until"}, focus, [&](int k) {
+                            std::vector<std::string> names;
+                            for (int h = 0; h < 24; ++h) names.push_back(look::hourName(h));
+                            int& which = k == 0 ? darkFrom : darkUntil;
+                            askChoice(k == 0 ? "Dark from" : "Until", "", names, which,
+                                      [&, k](int h) {
+                                          (k == 0 ? darkFrom : darkUntil) = h;
+                                          prefs::set(k == 0 ? "dark_from" : "dark_until",
+                                                     std::to_string(h));
+                                          look::setDark(wantDark());
+                                          buildSettings();
+                                          darkHoursPanel(k);
+                                      });
+                        });
+                        choiceScreen.setValues({look::hourName(darkFrom),
+                                                look::hourName(darkUntil)});
+                    };
+                    darkHoursPanel(0);
+                    sound::play(sound::Cue::Activate);
                 } else if (res.value == SetFiles) {
                     if (filesSaidAt != 0) {
                         sound::play(sound::Cue::Edge);
@@ -8296,16 +8320,6 @@ int main(int argc, char** argv) {
                     }
                     sound::play(sound::Cue::Move);
                     buildSettings();   // the From and Until rows come and go
-                }
-                if (res.value == SetDarkFrom || res.value == SetDarkUntil) {
-                    const int h = settingsScreen.choiceOf(res.value);
-                    if (h >= 0 && h < 24) {
-                        const bool from = res.value == SetDarkFrom;
-                        (from ? darkFrom : darkUntil) = h;
-                        prefs::set(from ? "dark_from" : "dark_until", std::to_string(h));
-                        look::setDark(wantDark());
-                    }
-                    sound::play(sound::Cue::Move);
                 }
                 if (res.value == SetColour) {
                     const int i = settingsScreen.choiceOf(SetColour);
@@ -8818,6 +8832,10 @@ int main(int argc, char** argv) {
             switchShownAt = SDL_GetTicks();
             switchText.smooth = true;
             switchText.retarget(1.0f, kSwitchTextFade);
+            // THE CURTAIN TURNS THEIR COLOUR while it says their name, rather
+            // than the colour jumping behind it. A switch that fails puts it
+            // back below.
+            look::setColour(accountColour(switchPendingId));
         }
         if (!switchDone) {
             // Two frames at full curtain, so the name is on the television
@@ -8852,6 +8870,7 @@ int main(int argc, char** argv) {
         switchDone = false;
         switchShownAt = 0;
         if (!ok) {
+            applyAccountColour(false);
             // Back to the panel, saying why, with the old person still in.
             accountsOpen = true;
             barFocused = true;
