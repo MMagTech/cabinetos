@@ -393,11 +393,90 @@ bool createOwnDevice(std::string* err) {
     return true;
 }
 
+// A CORE THAT DROPS THE EXTENSIONS IT IS HANDED, and Flycast is one — 2026-09-27.
+//
+// Flycast's create_device (core/rend/vulkan/vk_context_lr.cpp, at our pin and
+// on upstream master alike) receives required_device_extensions and never
+// reads it: it builds its own list from what IT wants and creates the device
+// with that. So Dreamcast came up on a device without external memory, and
+// loadDeviceApi refused it with "this device will not export memory as a file
+// descriptor" on a GPU that exports perfectly well. Dolphin reads the list,
+// which is why GameCube played on the same boot. RetroArch never notices:
+// it presents from Vulkan, so the picture never has to leave it.
+//
+// No patch to the core. It looks up vkCreateDevice through the
+// get_instance_proc_addr WE pass (it links no Vulkan symbol at all — `nm -D`
+// on the shipped .so shows none), so we hand it a lookup that answers that
+// one name with a wrapper adding whatever of our list is missing. That is
+// what the v2 negotiation interface formalises; Flycast only speaks v1.
+//
+// Only extensions the GPU has are added. Asking for one it lacks fails device
+// creation, and Flycast uses vulkan-hpp with exceptions, so that failure would
+// be a throw through a C boundary rather than the clean refusal it gets now.
+PFN_vkCreateDevice gRealCreateDevice = nullptr;
+
+VKAPI_ATTR VkResult VKAPI_CALL createDeviceWithOurs(VkPhysicalDevice gpu,
+                                                    const VkDeviceCreateInfo* info,
+                                                    const VkAllocationCallbacks* alloc,
+                                                    VkDevice* device) {
+    std::vector<VkExtensionProperties> supported;
+    auto enumerate = reinterpret_cast<PFN_vkEnumerateDeviceExtensionProperties>(
+        gApi.getInstanceProcAddr(gInstance, "vkEnumerateDeviceExtensionProperties"));
+    if (enumerate) {
+        uint32_t n = 0;
+        enumerate(gpu, nullptr, &n, nullptr);
+        supported.resize(n);
+        enumerate(gpu, nullptr, &n, supported.data());
+        supported.resize(n);
+    }
+    auto has = [](const char* const* names, size_t count, const char* want) {
+        for (size_t i = 0; i < count; ++i)
+            if (std::strcmp(names[i], want) == 0) return true;
+        return false;
+    };
+    std::vector<const char*> names(info->ppEnabledExtensionNames,
+                                   info->ppEnabledExtensionNames + info->enabledExtensionCount);
+    unsigned added = 0;
+    for (const char* need : gRequiredDeviceExtensions) {
+        if (has(names.data(), names.size(), need)) continue;
+        bool gpuHasIt = false;
+        for (const auto& p : supported)
+            if (std::strcmp(p.extensionName, need) == 0) { gpuHasIt = true; break; }
+        if (!gpuHasIt) continue;
+        names.push_back(need);
+        ++added;
+    }
+    if (added)
+        std::fprintf(stderr,
+                     "[vulkan] the core left out %u of the extensions this host needs; "
+                     "added them to its device\n",
+                     added);
+    VkDeviceCreateInfo withOurs = *info;
+    withOurs.enabledExtensionCount = static_cast<uint32_t>(names.size());
+    withOurs.ppEnabledExtensionNames = names.data();
+    return gRealCreateDevice(gpu, &withOurs, alloc, device);
+}
+
+VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL coreGetInstanceProcAddr(VkInstance instance,
+                                                                 const char* name) {
+    if (name && std::strcmp(name, "vkCreateDevice") == 0)
+        return reinterpret_cast<PFN_vkVoidFunction>(&createDeviceWithOurs);
+    if (name && std::strcmp(name, "vkGetInstanceProcAddr") == 0)
+        return reinterpret_cast<PFN_vkVoidFunction>(&coreGetInstanceProcAddr);
+    return gApi.getInstanceProcAddr(instance, name);
+}
+
 bool createCoreDevice(std::string* err) {
+    gRealCreateDevice = reinterpret_cast<PFN_vkCreateDevice>(
+        gApi.getInstanceProcAddr(gInstance, "vkCreateDevice"));
+    if (!gRealCreateDevice) {
+        *err = "no vkCreateDevice";
+        return false;
+    }
     retro_vulkan_context ctx{};
     VkPhysicalDeviceFeatures features{};
     const bool ok = gNegotiation->create_device(
-        &ctx, gInstance, gGpu, gSurface, gApi.getInstanceProcAddr,
+        &ctx, gInstance, gGpu, gSurface, coreGetInstanceProcAddr,
         gRequiredDeviceExtensions.data(),
         static_cast<unsigned>(gRequiredDeviceExtensions.size()), nullptr, 0, &features);
     if (!ok) {
@@ -862,6 +941,27 @@ bool createContext(std::string* err) {
     if (gNegotiation && gNegotiation->get_application_info) {
         const VkApplicationInfo* fromCore = gNegotiation->get_application_info();
         if (fromCore) app = fromCore;
+    }
+
+    // BUT NEVER BELOW 1.1 WHERE THE LOADER HAS IT, which is what RetroArch
+    // does (gfx/common/vulkan_common.c: "Vulkan 1.0 drivers are completely
+    // irrelevant these days") — 2026-09-27. PPSSPP asks for 1.0 and then its
+    // memory allocator calls vkGetBufferMemoryRequirements2, a 1.1 function
+    // its loader only fetches on a 1.1 instance: a call through a null
+    // pointer that took the whole console down the moment PSP started on
+    // Vulkan. A loader without 1.1 keeps what the core asked for, as
+    // RetroArch's does.
+    VkApplicationInfo raised{};
+    if (app->apiVersion < VK_API_VERSION_1_1) {
+        auto enumerateVersion = reinterpret_cast<PFN_vkEnumerateInstanceVersion>(
+            gApi.getInstanceProcAddr(nullptr, "vkEnumerateInstanceVersion"));
+        uint32_t supported = VK_API_VERSION_1_0;
+        if (enumerateVersion && enumerateVersion(&supported) == VK_SUCCESS &&
+            supported >= VK_API_VERSION_1_1) {
+            raised = *app;
+            raised.apiVersion = VK_API_VERSION_1_1;
+            app = &raised;
+        }
     }
 
     // Surface support is asked for, not assumed: a machine without it still

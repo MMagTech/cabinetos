@@ -1172,11 +1172,44 @@ bool Core::load(const std::string& soPath) {
     // see it is the audio, which is the one thing the core emits at a rate the
     // emulated machine decides — so the brake is audioAhead() below.
     //
-    // Named rather than taken from the hardware-render flag, because the other
-    // two hardware-rendered cores do not need it and one of them is measurably
-    // worse for having it: applying Cabinet's governor to every core slowed N64
-    // down, reported from a real device within hours.
-    governed_ = coreName_ == "PPSSPP";
+    // Named rather than taken from the hardware-render flag, because N64 is
+    // measurably worse for having it: applying Cabinet's governor to every
+    // core slowed N64 down, reported from a real device within hours.
+    //
+    // FLYCAST TOO, 2026-09-27. This said it did not need it, and Cabinet's own
+    // record says otherwise: Cabinet's governor exists FOR Flycast, whose
+    // threaded rendering lets its emulation thread free-run ahead of retro_run
+    // (measured there at up to five times realtime). On the A9, Crazy Taxi 2
+    // queued 1.3 s of sound in its first ten seconds and 2.9 s by the end of a
+    // two-minute run, flat in between, and MMagTech heard it as sound out of
+    // sync with the picture. The core's own output was ahead of the clock by
+    // the same amount, which is this brake's exact condition.
+    //
+    // AND N64, the same day, which reverses the line above it. With ParaLLEl-
+    // RDP on the A9, Hydro Thunder made 3.4% more sound than realtime and
+    // Mario Kart 64 4%, measured by the [audio] log line: the emulated
+    // machine was running that much FAST, and the 64 ms cap threw the surplus
+    // away as crackle MMagTech heard. Audio is the one clock the emulated
+    // machine keeps itself, so the brake holding it there is correct, and it
+    // is what RetroArch's audio sync does to every core. Cabinet's "slowed N64
+    // down" was most likely this same 3 to 4%, slowed to true speed; why was
+    // never recorded, so that is a reading, not a finding.
+    //
+    // SO EVERY CORE, which is the end state #144 asked for. Three cores out of
+    // three that were measured needed it, each for a different reason, and
+    // the brake only acts on a core whose sound is more than 20 ms ahead of
+    // the clock, so a core that keeps time never feels it (Mortal Kombat II
+    // sat 2 ms behind). PlayStation 2 paces itself and never reaches it.
+    // Checked on every system by a headless sweep on the A9 before it shipped.
+    // The switch stays so a core can be taken off it with a reason.
+    //
+    // AND THEN NONE, the same afternoon. MMagTech still heard crackle on N64
+    // with this on every core: N64 delivers sound in bursts, and a brake
+    // against the wall clock plus a 64 ms cap threw the top of each burst
+    // away. main.cpp now paces every core by the speaker (RetroArch's audio
+    // sync), which covers everything this brake did. The switch stays for a
+    // core that ever needs pacing with no speaker to pace it.
+    governed_ = false;
 
     // Order matters: the environment callback must be installed before
     // retro_init, because a core may call it from there.
@@ -1530,13 +1563,24 @@ int Core::runFor(double dt) {
     // enforces holds in both, and a capture of a 30fps PSP game advances it at
     // 30 game frames per 60 drawn rather than sprinting.
     paceClock_ += dt * speed_;
+    // A governed core that fell behind keeps its claim to run, but only a
+    // tenth of a second of it. Uncapped, a loading stall banks a debt the core
+    // then repays at speed, and for Flycast that surplus is sound queued ahead
+    // of the picture. Cabinet caps its governor's debt the same way
+    // (NativePlayerRenderer.swift, audioTargetFrames).
+    if (governed_ && av_.sampleRate > 0) {
+        const double produced = static_cast<double>(gAudioFrames) / av_.sampleRate;
+        if (paceClock_ - produced > 0.1) paceClock_ = produced + 0.1;
+    }
 
     int ran = 0;
     while (accumulator_ >= interval && ran < maxRuns) {
-        // The second brake, and only one core has it. See load(): the
+        // The second brake, off for every core since the speaker paces them
+        // (main.cpp). See load(): the
         // accumulator counts the runs that were asked for, and for PPSSPP a
         // run is a game frame rather than a vblank, so the accumulator can be
         // satisfied while the emulated machine is running at twice speed.
+        // Flycast's emulation thread free-runs ahead of retro_run the same way.
         //
         // The core's own audio output is the check, because its rate is
         // decided by the emulated machine rather than by us. Ahead of the

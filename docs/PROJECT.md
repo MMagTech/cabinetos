@@ -1832,6 +1832,148 @@ Issues #125, #126, #127, #129 and #75, built and judged on the A9 with
 - `--colour <word>` and `--dark` set a look for one run, for judging.
   Every shade and the dark amounts are starting values.
 
+### Dreamcast, PSP and N64 draw right, and the speaker sets the pace (#85, #82, #144) — 2026-09-27
+
+**The rule that came out of it, from MMagTech:** match Cabinet only where a
+setting decides whether a save or state loads on the other device; choose
+for a TV console everywhere else; say for every fix what it does on hardware
+that is not the A9; and when RetroArch, Batocera or EmuDeck play something
+out of the box, find the setting or behaviour we are missing rather than
+invent a fix.
+
+**Two Vulkan faults, both since open question 20 (2026-09-20) made the host
+prefer Vulkan, and both what RetroArch already does:**
+
+- **Dreamcast would not launch.** Flycast's libretro `create_device`
+  (`core/rend/vulkan/vk_context_lr.cpp`, at our pin and upstream master)
+  receives the frontend's required device extensions and never uses them,
+  so its device had no external memory and the host refused it. Flycast
+  links no Vulkan symbol and looks up `vkCreateDevice` through the
+  `get_instance_proc_addr` we pass, so the host hands it a wrapper that adds
+  whichever of our extensions the GPU lists (`vkhost.cpp`,
+  `createDeviceWithOurs`). No patch to Flycast; it covers every Vulkan core.
+  RetroArch never meets this because its picture never leaves Vulkan.
+  Rejected: Flycast back on GLES (reverses open question 20, which names
+  Dreamcast), patching Flycast.
+- **PSP crashed the whole console as it started.** PPSSPP asks for a Vulkan
+  1.0 instance, then its allocator calls `vkGetBufferMemoryRequirements2`, a
+  1.1 function its loader only fetches on 1.1 (a call through a null
+  pointer, found under gdb). RetroArch raises every instance to at least 1.1
+  where the loader has it (`gfx/common/vulkan_common.c`); so does the host
+  now. The image build crashed the same way, so it was not today's work.
+  Lumines plays its demo on Vulkan.
+
+**Off the A9:** a GPU without the extensions gets the old clean refusal; a
+loader without 1.1 keeps what the core asked for; a machine with no Vulkan
+puts every core on GLES, checked on the test VM (Crazy Taxi 2 drew on
+llvmpipe).
+
+**N64 draws with ParaLLEl-RDP wherever there is Vulkan (#82).** GLideN64,
+the core's default, approximates the N64's graphics and is built for GLES3
+here and on Cabinet, which share the fault ("almost every game": Mario Kart,
+Wave Race, Hydro Thunder). RetroArch and Batocera run the same default on
+desktop GL, which our GLES context cannot host; both offer ParaLLEl-RDP (the
+N64's own graphics chip, run on the GPU, with the LLE RSP beside it) when
+accuracy matters. `catalog::optionOverrides`, only when
+`cab::gpu::vulkan().available`; GLideN64 otherwise. 2x upscale is a starting
+value. MMagTech: the reported fault is fixed; there may be small ones left.
+
+**The black screen after a launch.** The ready branch lowered the curtain
+and only then asked whether the person had moved on, returning without
+lifting it. It asks first now, and logs both screens. Walking away from a
+PS2 download on the TV kept the screen up.
+
+**THE SPEAKER SETS THE PACE, for every system.** Before each frame: more
+than 64 ms of game sound already waiting and the core does not run. That is
+RetroArch's audio sync (its audio write blocks when the buffer is full;
+default latency 64 ms). It replaced a day of per-core fixes, each measured
+with a new `[audio]` log line and each wrong in its own way:
+
+1. Flycast's threaded emulation ran ahead: 2.9 s of sound queued in Crazy
+   Taxi 2. A brake against the wall clock (Cabinet's governor, then on
+   PPSSPP only) fixed that.
+2. Every stall added delay for the rest of the session; a 64 ms cap that
+   dropped the surplus fixed that and cost nothing on SNES.
+3. **N64 makes 3.4 to 4% more sound than realtime**: each emulated frame
+   carries more sound-time than a real one (the core builds frames from the
+   VI clock, 48.68 MHz NTSC, and times sound differently; the sum comes to
+   3.9% NTSC, close to the 3.4% measured, but 6% PAL against 4% measured).
+   So N64 ran that much fast, and the cap turned the surplus into crackle.
+   Cabinet's "the governor slowed N64 down" was most likely this, slowed to
+   true speed. The core's timing options are marked "will break stuff" and
+   Batocera leaves them alone; RetroArch absorbs it with audio sync.
+4. The brake on every core still crackled, because N64 delivers sound in
+   bursts. Pacing by the speaker covers all of it, and nothing is thrown
+   away.
+
+**A burst bigger than the gate is waited out, not trimmed**, as RetroArch's
+blocking write does. Flycast keeps its threaded rendering, its own default
+("highly recommended"): turning it off also stopped the skipping, but it is
+the thread that helps a weaker machine or a higher upscale, and RetroArch
+leaves it on. Its loading burst (~380 ms) drains within seconds. A 1 s
+safety net catches only a broken core. The wall-clock brake is off for every
+core and stays in `core.cpp` for a core that ever needs pacing with no
+speaker. **The guard Cabinet paid for (its issue #6):** held 250 ms with the
+queue not draining, the gate lets go and the clock paces the core, so a
+game cannot freeze on a silent speaker.
+
+Measured on the A9 TV: Crazy Taxi 2 39 to 77 ms waiting after its loading
+burst, Mario Kart 33 to 70 ms, nothing dropped; MMagTech: "looks and sounds
+better". A headless sweep of the smallest game on all 30 systems ran
+with the every-core brake (every system that played still played); the
+speaker gate itself was swept on six (N64, Dreamcast, GameCube, SNES,
+Genesis, Neo Geo Pocket Color) plus PSP. The full sweep of the final build
+was stopped part way, on purpose, to move on: **run it before relying on a
+system nobody has played since** (`~/fb/sweep.sh` on the A9).
+
+**Not done:** RetroArch's dynamic rate control (±0.5%, on by default on
+PCs) is not built; nothing today drifts slowly enough to need it. Quality
+settings per level are open question 23, which gained a gap today: sound
+can tell the console to step a game DOWN, but not that it has room to step
+UP; that needs the time the core takes per frame against the frame's
+budget.
+
+### The emulator settings audit (#89) — 2026-09-27
+
+**The rule, MMagTech's:** most settings do not decide whether a save or
+state loads, so Cabinet is matched only where one does; everywhere else the
+choice is for a TV console, starting from each emulator's own default and
+changing it only with a reason beside it.
+
+**How it was audited:** every option our cores declare, and the value they
+are actually given, from `--core-options-detail` on the A9 (FCEUmm and
+FBNeo declare theirs only with a game loaded, so a real launch was read for
+those: 44 and 16, all answered), set against every value Cabinet sends in
+`NativeCoreOptions.swift`. **Most of Cabinet's list already matched,**
+because Cabinet's "restored defaults" are the emulators' declared defaults,
+which this host answers for every core. That includes all of Cabinet's
+colour fixes from its 2026-08-17 quality pass (NES palette, GBC colour
+correction, GB colorization, FBNeo 32-bit), checked on a picture: NES
+Bomberman's black is (0,0,0), which only the real palette gives.
+
+**Changed, in `catalog::optionOverrides`:**
+- **PS1 card 2 `none`** (was "shared", one card for every game in the
+  system directory, never synced). Cabinet's value. No card 2 existed.
+- **Genesis/Sega CD FM `nuked (ym2612)`** (was MAME's). A state records its
+  FM core and restores into it, so mixed chips left the music wrong after a
+  cross-device load. Cabinet's value, and the accurate chip; heavier, fine on
+  the A9, untested on weaker machines.
+- **Virtual Boy right stick as the right d-pad.** Teleroboxer played on the
+  TV with both arms.
+- **melonDS threaded software renderer on.** Cabinet's value; how the work is
+  split, not what a state holds.
+
+**Kept ours, on purpose:** N64 C-buttons on the right stick (Cabinet maps
+them to face buttons for touch; the stick is RetroArch's pad layout); 32X
+three-button (the pause menu's controller type, #73).
+
+**Left for later:** DS screen layout and touch for a TV (a design, judged on
+the TV); the quality upgrades Cabinet turns on (SNES Mode 7 hi-res, Vectrex
+4x, NES sound quality, PS1 enhanced resolution, 32-bit and gaussian SPU),
+which belong to open question 23's levels; the options MAME asks for and
+never declares. **Found on the way: N64 and PSP run without their
+recompilers** (#147).
+
 ### Time played (#128) — 2026-09-27
 
 **What RomM has (checked in its source, 5.1.0 and 5.3.1):** play sessions,

@@ -1,5 +1,7 @@
 #include "catalog.h"
 
+#include "gpu.h"
+
 #include <sys/stat.h>
 
 #include <map>
@@ -457,6 +459,11 @@ std::map<std::string, std::string> optionOverrides(const std::string& core) {
         // which is this console's first free ride from the core-options work.
         // Raising it is a look-and-performance decision and it waits for real
         // hardware.
+        //
+        // PSP moved to Vulkan on 2026-09-20 with everything else (open question
+        // 20), and crashed the console as it started until the host raised
+        // every Vulkan instance to 1.1 as RetroArch does (vkhost.cpp) —
+        // 2026-09-27. Lumines plays its demo on Vulkan on the A9.
         return {{"ppsspp_cpu_core", "IR JIT"}};
     }
 
@@ -482,8 +489,46 @@ std::map<std::string, std::string> optionOverrides(const std::string& core) {
     // stays 0 and Sonic CD refuses to boot past "RAM cartridge not
     // initialized". Answering declared defaults is what closes that, which is
     // this console's second free ride from the core-options work.
+    //
+    // THE SOUND CHIP IS NUKED'S, to match Cabinet — 2026-09-27 (#89 audit).
+    // A Genesis state records which FM core made it and restores into that
+    // core's structures (core/sound/sound.c, sound_context_save/load at our
+    // pin), so a state from Cabinet (Nuked) loaded under MAME's chip, or the
+    // other way round, comes back with the running chip untouched and the
+    // music wrong until the game rewrites it. Nuked is also the accurate one.
+    // It costs more processor than MAME's: fine on the A9, untested on
+    // weaker machines.
     if (coreName == "genesis_plus_gx") {
-        return {{"genesis_plus_gx_system_bram", "per game"}};
+        return {
+            {"genesis_plus_gx_system_bram", "per game"},
+            {"genesis_plus_gx_ym2612", "nuked (ym2612)"},
+        };
+    }
+
+    // PlayStation 1: NO SECOND MEMORY CARD, to match Cabinet — 2026-09-27
+    // (#89 audit). The declared default "shared" puts one card in slot 2 for
+    // every game, in the system directory, which the save sync never reads:
+    // a game that saved there would keep that save on this console and never
+    // reach RomM or an Apple TV. Card 1 is already "libretro", per game,
+    // which is the one that syncs. No card 2 had ever been written on the
+    // A9 when this changed.
+    if (coreName == "pcsx_rearmed") {
+        return {{"pcsx_rearmed_memcard2", "none"}};
+    }
+
+    // Virtual Boy: THE RIGHT STICK IS THE SECOND D-PAD (#89 audit). The
+    // console has two d-pads and games use both (Red Alarm, Teleroboxer); a
+    // modern pad has one, so without this half the controls are nowhere.
+    // Cabinet forces it for the same reason. Input only.
+    if (coreName == "beetle_vb") {
+        return {{"vb_right_analog_to_digital", "enabled"}};
+    }
+
+    // DS: THE SOFTWARE RENDERER ON ITS OWN THREAD (#89 audit), as Cabinet
+    // has it. It changes how the drawing work is split, not what a save or
+    // state holds, and it is the headroom a weaker machine needs.
+    if (coreName == "melonds") {
+        return {{"melonds_threaded_renderer", "enabled"}};
     }
 
     // Beetle Saturn, and this one also decides where the save is. "libretro"
@@ -537,6 +582,33 @@ std::map<std::string, std::string> optionOverrides(const std::string& core) {
             {"pcsx2_shared_memory_cards", "disabled"},
             {"pcsx2_analog_mode1", "enabled"},
             {"pcsx2_analog_mode2", "enabled"},
+        };
+    }
+    // NINTENDO 64 DRAWS WITH ParaLLEl-RDP WHEREVER THERE IS VULKAN — 2026-09-27
+    // (#82). The declared default is GLideN64, which redraws the N64's
+    // graphics with modern techniques and gets textures wrong in game after
+    // game: MMagTech saw it in "almost every game", Mario Kart, Wave Race and
+    // Hydro Thunder, and on Cabinet too. What the two share is GLideN64 built
+    // for GLES3 (build-core.sh, FORCE_GLES3); RetroArch and Batocera run the
+    // same default on desktop GL, which this frontend's GLES context cannot
+    // host. ParaLLEl-RDP runs the N64's own graphics chip on the GPU, and is
+    // what those frontends offer when accuracy matters (Batocera exposes it
+    // per system). It needs the LLE RSP beside it; both are compiled in.
+    // Run headless on the A9 with the three games: Vulkan device from the
+    // core, 60 fps, every wall, the water and the boat drawn.
+    //
+    // ONLY WITH VULKAN, and that is the fallback, not an afterthought: a
+    // machine without it (the test VM, older or odd hardware) keeps GLideN64
+    // on GLES exactly as before.
+    //
+    // 2x is a starting value: the core's default 1x is the N64's own 320x240,
+    // softer than the 640x480 GLideN64 drew here. Judged on the TV; open
+    // question 23's quality setting is where it moves later.
+    if (coreName == "mupen64plus" && cab::gpu::vulkan().available) {
+        return {
+            {"mupen64plus-rdp-plugin", "parallel"},
+            {"mupen64plus-rsp-plugin", "parallel"},
+            {"mupen64plus-parallel-rdp-upscaling", "2x"},
         };
     }
     if (coreName == "opera") {
