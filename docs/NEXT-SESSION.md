@@ -37,22 +37,20 @@ agreed). With promotion, every change is tried on `testing` and a merge
 makes `latest` that same image, so the test console on `testing` is never
 behind what users get, and testing a change needs no `bootc switch` and no
 extra reboot. **SSH is port 2222; sudo's password is
-`cat /var/lib/cabinetos-files/password`.** **`latest` and `testing`'s last
-promoted image is `2026.09.27.4`** (`time-played`, #142). **`testing` was
-since pushed with #143's branch** and built, **but that image was never
-judged and is now stale** (see *First thing next session*). **THE A9 IS NOT
-RUNNING ITS IMAGE: it runs a hand-built `tools/ui-loop.sh` binary through a
-transient `/run` drop-in, containing #143 and #148** (checksum `d5013083`),
-because the image's Dreamcast and PSP are broken; a reboot or `bootc
-upgrade` puts it back on `2026.09.27.4`. gamescope/drm, File access on, **a
-PIN set** (MMagTech's), the SanDisk "Games" stick attached, In-game
-shortcuts ON with the Lite 2's heart. **All downloads were cleared at
-MMagTech's request** (kept games, cache, the stick's roms; saves and states
-untouched). The VM is on `testing` `2026.09.26.4`, its session restored.
-Branches: `main`, `testing`, `dreamcast-vulkan` (PR #143; the local branch
-is `n64-parallel`), `emulator-options` (PR #148, on top of #143), PR #42's
-`base-update/44.20260921` (parked). The A9 has `~/fb/sweep.sh` and
-`~/fb/sweep-all.txt` (the headless every-system sweep, below).
+`cat /var/lib/cabinetos-files/password`.** **#143 merged 2026-09-27 and was
+promoted: `latest` and `testing` are both `2026.09.27.7`** (digest
+`874c64f6`, the tested one, no rebuild). It carries the Dreamcast, PSP and
+N64 fixes, the speaker pacing and the four #89 settings (#148 was folded
+into it). **The A9 is booted on it, from the image, with no test drop-in.**
+MMagTech asked for the merge before playing anything on the image; the same
+code had been judged on the TV all afternoon through `tools/ui-loop.sh`.
+gamescope/drm, File access on, **a PIN set** (MMagTech's), the SanDisk
+"Games" stick attached, In-game shortcuts ON with the Lite 2's heart. **All
+downloads were cleared at MMagTech's request** (saves and states
+untouched). The VM is on `testing` `2026.09.26.4`. **Branches: `main`,
+`testing`, PR #42's `base-update/44.20260921` (parked); every other branch
+was deleted.** The A9 has `~/fb/sweep.sh` and `~/fb/sweep-all.txt` (the
+headless every-system sweep, below).
 
 **THE SESSION OF 2026-09-27 (AFTERNOON) DID #109 AND #128.** Decisions in
 `docs/PROJECT.md`, *The startup screen lifts off Home (#109)* and *Time
@@ -80,15 +78,6 @@ played (#128)*. Short version:
 - **A slow boot seen once:** 11 s in the library load (before Home exists),
   once in twenty boots. If it recurs, time each server call.
 
-**FIRST THING NEXT SESSION: GET #143 AND #148 MERGED.** Neither has been
-judged from a testing image. This handover went to `main` first, so:
-merge `main` into `n64-parallel` and push it to both `dreamcast-vulkan` and
-`testing` (a new build); `sudo bootc upgrade && sudo systemctl reboot` on
-the A9; MMagTech plays one Dreamcast and one N64 game from the image; merge
-#143 **on his explicit go** (promotion). Then the same for #148 (merge
-`main` into `emulator-options` first). Promotion compares whole trees: do
-not commit to `main` between a testing push and its merge.
-
 **THE SESSION OF 2026-09-27 (EVENING) DID THE EMULATOR BUGS.** Decisions in
 `docs/PROJECT.md`, *Dreamcast, PSP and N64 draw right, and the speaker sets
 the pace* and *The emulator settings audit (#89)*. Short version:
@@ -101,7 +90,7 @@ the pace* and *The emulator settings audit (#89)*. Short version:
 - **Closed:** #83 GameCube and #84 NES audio (fine on recheck), #86 N64
   states (load in place; one inaudible sample differs; the Cabinet round
   trip is the end-of-roadmap test), #87 PSP (quit while loading and a
-  state round trip, on the TV). **#85, #82, #144 close with #143.**
+  state round trip, on the TV). **#85, #82 and #144 closed with #143.**
 - **#143:** Dreamcast (Flycast ignores the frontend's device extensions;
   the host wraps `vkCreateDevice` and adds them), PSP (PPSSPP asks for
   Vulkan 1.0 then calls a 1.1 function; the host raises every instance to
@@ -110,7 +99,7 @@ the pace* and *The emulator settings audit (#89)*. Short version:
   speaker sets the pace for every core** (RetroArch's audio sync: no frame
   runs while more than 64 ms of sound waits; a burst is waited out, never
   trimmed; 1 s safety net; a 250 ms guard against a silent speaker).
-- **#148:** PS1 card 2 none, Genesis/Sega CD Nuked FM, Virtual Boy right
+- **#148, folded into #143:** PS1 card 2 none, Genesis/Sega CD Nuked FM, Virtual Boy right
   stick, melonDS threaded renderer.
 - **Filed:** #145 Home's download indicator pushes the account chip over;
   #146 refusals show raw engineering text; #147 N64 (no recompiler: built
@@ -131,7 +120,7 @@ the pace* and *The emulator settings audit (#89)*. Short version:
   not a game. MMagTech asked for it deleted; that was declined as a
   permanent deletion on his server, and he was told where to do it in RomM.
 
-**NEXT after the merges, the emulator queue:** #147, rumble (#149), #145,
+**NEXT, the emulator queue:** #147, rumble (#149), #145,
 MAME's options (#89), #90 (BIOS warning, walk the scenarios first). Then the installer block (#105
 to #108, #136). #124 stays parked.
 
