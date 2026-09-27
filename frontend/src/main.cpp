@@ -6010,6 +6010,18 @@ int main(int argc, char** argv) {
         loadDetailStates(romId);
     };
 
+    // OPENING A GAME'S PAGE, AND LEAVING IT, DISSOLVE like a top-bar switch:
+    // asked for here, done at the end of the frame, after that frame has been
+    // copied to dissolve away over the new one. It was a cut, and MMagTech on
+    // the TV, 2026-09-27: "the switch still happens a bit fast and then
+    // everything is just thrown at you". A capture run opens it at once.
+    int pendingDetail = -1;
+    bool pendingDetailBack = false;
+    auto openDetailSoon = [&](int cardIndex) {
+        if (shotMode) openDetail(cardIndex);
+        else pendingDetail = cardIndex;
+    };
+
     // What a screen asked for, and whether the app can do it. A screen never
     // reaches the disk, the network or a core; it returns one of these.
     // Declared before `apply` because `apply` is what it calls, and defined
@@ -7550,6 +7562,9 @@ int main(int argc, char** argv) {
                     barFocused = true;
                     barSlot = BarAccount;
                     sound::play(sound::Cue::Back);
+                } else if (stack.size() > 1 && here() == Screen::Detail && !shotMode) {
+                    pendingDetailBack = true;
+                    sound::play(sound::Cue::Back);
                 } else if (stack.size() > 1) {
                     stack.pop_back(); sound::play(sound::Cue::Back);
                 } else sound::play(sound::Cue::Edge);
@@ -8101,7 +8116,7 @@ int main(int argc, char** argv) {
                 sound::play(sound::Cue::Move);
                 break;
             case screens::Action::OpenGame:
-                openDetail(res.value);
+                openDetailSoon(res.value);
                 break;
             case screens::Action::Play:
                 launchById(res.value);
@@ -8150,7 +8165,7 @@ int main(int argc, char** argv) {
         // cover anywhere else.
         if (const Card* c = cardAt(focusRow, focusSlot)) {
             for (size_t i = 0; i < cards.size(); ++i) {
-                if (cards[i].id == c->id) { openDetail(static_cast<int>(i)); return; }
+                if (cards[i].id == c->id) { openDetailSoon(static_cast<int>(i)); return; }
             }
         }
     };
@@ -8538,7 +8553,7 @@ int main(int argc, char** argv) {
             if (card < 0 && here() == Screen::Grid)
                 apply(gridScreen.key(screens::Nav::Activate));
             else if (card >= 0)
-                openDetail(card);
+                openDetailSoon(card);
         }
     }
 
@@ -8846,7 +8861,7 @@ int main(int argc, char** argv) {
                 detailScreen.game().romId != launchJob.romId) {
                 for (size_t i = 0; i < cards.size(); ++i) {
                     if (cards[i].id == launchJob.romId) {
-                        openDetail(static_cast<int>(i));
+                        openDetailSoon(static_cast<int>(i));
                         break;
                     }
                 }
@@ -12109,7 +12124,8 @@ int main(int argc, char** argv) {
 
         // A switch asked for this frame: copy it now, before the keyboard, so
         // the keyboard can leave by sliding rather than dissolve with the copy.
-        if (pendingDest >= 0 && !playing && renderer.sceneCaptured()) {
+        if ((pendingDest >= 0 || pendingDetail >= 0 || pendingDetailBack) && !playing &&
+            renderer.sceneCaptured()) {
             renderer.captureSnapshot();
             snapTaken = true;
         }
@@ -12171,6 +12187,21 @@ int main(int argc, char** argv) {
         // A top-bar switch asked for: this frame still shows the old screen, so
         // copy it, THEN switch. The next frame draws the new screen with this
         // copy dissolving over it.
+        if (pendingDetail >= 0 || pendingDetailBack) {
+            if (snapTaken) {
+                snapTaken = false;
+                tabDissolve.from = tabDissolve.to = 1.0f;
+                tabDissolve.elapsed = 0.0f;
+                tabDissolve.retarget(0.0f, kTabDissolve);
+                // Back to a grid or Home: its content arrives as a top-bar
+                // switch's does. Into the page: the page times its own.
+                if (pendingDetailBack) tabSince = 0.0f;
+            }
+            if (pendingDetail >= 0) openDetail(pendingDetail);
+            else if (stack.size() > 1) stack.pop_back();
+            pendingDetail = -1;
+            pendingDetailBack = false;
+        }
         if (pendingDest >= 0) {
             if (snapTaken) {
                 snapTaken = false;

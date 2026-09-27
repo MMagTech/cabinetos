@@ -1105,6 +1105,7 @@ void DetailScreen::open(GameDetail d) {
     rebuildRows();
     focus_.settle(1.0f);
     // NOT FADED IN YET: see draw(), which starts it once everything is here.
+    appear_.smooth = true;
     appear_.settle(0.0f);
     started_ = false;
 }
@@ -1216,7 +1217,9 @@ void DetailScreen::draw(Ctx& c) {
         if (ready && !game_.coverLarge.empty()) ready = c.images.get(game_.coverLarge).ready;
         for (const StateChoice& st : states_)
             if (ready && !st.picture.empty()) ready = c.images.get(st.picture).ready;
-        if (ready || waited_ >= design::kDetailsWait) {
+        // And never before the old screen has mostly dissolved away (the
+        // copy of it drawn over this one, as the top-bar switch does).
+        if ((ready && waited_ >= design::kDetailMinWait) || waited_ >= design::kDetailsWait) {
             started_ = true;
             details_.settle(1.0f);
             appear_.retarget(1.0f, design::kDetailsFade);
@@ -1264,11 +1267,16 @@ void DetailScreen::draw(Ctx& c) {
             u1 = u0 + span;
         }
         c.r.drawTextured(0, 0, ui::kCanvasWidth, ui::kCanvasHeight, art->texture,
-                         u0, v0, u1, v1, ui::Color{1, 1, 1, art->fade * a}, false,
+                         u0, v0, u1, v1, ui::Color{1, 1, 1, art->fade}, false,
                          design::kBackdropBlur);
     }
     c.r.draw(ui::Rect{0, 0, ui::kCanvasWidth, ui::kCanvasHeight, 0,
-                      ui::Color::black(design::kScrimOverlay * a)});
+                      ui::Color::black(design::kScrimOverlay)});
+    // THE BACKDROP IS THERE AT ONCE, under the old screen's dissolving copy,
+    // as a top-bar switch's new background is. Everything on it waits, then
+    // fades in RISING a little, the same arrival as a top-bar switch's.
+    const float keepY = c.r.contentOffsetY();
+    c.r.setContentOffsetY(keepY + (1.0f - a) * design::kDetailRise);
 
     // ONE COLUMN ON THE LEFT, THE COVER ON THE RIGHT, the pair centred across
     // the screen. Everything read or chosen (title, Play, Download, Continue
@@ -1378,10 +1386,13 @@ void DetailScreen::draw(Ctx& c) {
                     textX, rowsY_ + c.text.ascent(ui::TextStyle::Title3, c.sc),
                     ui::TextStyle::Title3, ui::Color::white(0.60f * a), c.sc);
     }
+    c.r.setContentOffsetY(keepY);
 }
 
 void DetailScreen::drawGlass(Ctx& c) {
     const float a = appear_.value();
+    const float keepY = c.r.contentOffsetY();
+    c.r.setContentOffsetY(keepY + (1.0f - a) * design::kDetailRise);
     // Treatment 3, the row one: a surface that is always there. Blur untinted
     // at rest, white 22% focused, scale 1.03 — a full-width row growing a
     // cover's tenth would collide with its neighbours.
@@ -1515,6 +1526,7 @@ void DetailScreen::drawGlass(Ctx& c) {
             baseline += c.text.lineHeight(ui::TextStyle::Callout, c.sc);
         }
     }
+    c.r.setContentOffsetY(keepY);
 }
 
 

@@ -485,8 +485,13 @@ constexpr float kDetailCoverGap = 80.0f;
 constexpr float kDetailCoverMaxHeight = 760.0f;   // grown to the column, at most
 // The launch screen fades in whole, over this long, once everything behind it
 // has loaded, or once this long has passed without it all.
-constexpr float kDetailsFade = 0.35f;
+constexpr float kDetailsFade = 0.40f;
 constexpr float kDetailsWait = 0.80f;
+// Not before this, so the old screen's copy has mostly dissolved first (the
+// top-bar switch's kTabContentDelay), and rising this far as it fades in (its
+// kTabRise).
+constexpr float kDetailMinWait = 0.20f;
+constexpr float kDetailRise = 16.0f;
 constexpr float kStateCardGap = 28.0f;
 constexpr float kStateShelfGap = 40.0f;
 constexpr float kStateBlockMinTop = 90.0f;
