@@ -1132,6 +1132,13 @@ void DetailScreen::rebuildRows() {
 
 void DetailScreen::setFacts(Facts f) { facts_ = std::move(f); }
 
+std::string DetailScreen::factsLine() const {
+    std::string m;
+    for (const std::string* p : {&facts_.year, &facts_.maker, &facts_.players})
+        if (!p->empty()) m += (m.empty() ? "" : "  \xC2\xB7  ") + *p;
+    return m;
+}
+
 void DetailScreen::setSaveWhen(std::string when) {
     saveWhen_ = std::move(when);
     rebuildRows();
@@ -1260,7 +1267,8 @@ void DetailScreen::draw(Ctx& c) {
     cardH_ = cardW_ * (9.0f / 16.0f);
     const float headToRows = c.text.ascent(ui::TextStyle::LargeTitle, c.sc) +
                              c.text.lineHeight(ui::TextStyle::LargeTitle, c.sc) * 0.55f +
-                             c.text.ascent(ui::TextStyle::Callout, c.sc) + calloutLH * 1.6f;
+                             c.text.ascent(ui::TextStyle::Callout, c.sc) + calloutLH * 1.6f +
+                             (factsLine().empty() ? 0.0f : calloutLH);
     const float rowH = c.text.lineHeight(ui::TextStyle::Title3, c.sc) + design::kRowPadY * 2.0f;
     const float rowsH = rows_.empty() ? 0.0f
         : rows_.size() * rowH + (rows_.size() - 1) * design::kDetailRowGap;
@@ -1304,39 +1312,32 @@ void DetailScreen::draw(Ctx& c) {
     y += c.text.lineHeight(ui::TextStyle::LargeTitle, c.sc) * 0.55f +
          c.text.ascent(ui::TextStyle::Callout, c.sc);
 
-    // WHAT THE GAME IS, on one line: platform, then RomM's year, maker and
-    // players where it has them, then the size. IT MUST FIT THE COLUMN: on
-    // "Super Nintendo Entertainment System" with all four it ran into the
-    // cover (MMagTech on the TV, 2026-09-27). So the size goes first, then
-    // the players (the least reliable fact: RomM has Mortal Kombat II as one
-    // player), then the maker, and only then is what is left cut short.
-    std::string size;
+    // WHAT THE GAME IS, in two lines, the same two on every game: platform and
+    // size, then RomM's year, maker and players. They were one line first, and
+    // a long platform name pushed it into the cover; dropping parts to make it
+    // fit showed different facts on different games, and MMagTech: "has to be
+    // consistent across everything". A game RomM never matched has no second
+    // line; a part RomM lacks is left out of it.
+    std::string meta = game_.platform;
     if (game_.sizeBytes > 0) {
         // A unit that suits the number. A library holds a 19 KB Game Boy ROM
         // and a 1.78 GB arcade set, and megabytes flatter neither: the first
         // reads as "0 MB", which looks like the server failed to say.
         char buf[64];
         const double b = static_cast<double>(game_.sizeBytes);
-        if (b >= 1e9) std::snprintf(buf, sizeof buf, "%.1f GB", b / 1e9);
-        else if (b >= 1e6) std::snprintf(buf, sizeof buf, "%.0f MB", b / 1e6);
-        else std::snprintf(buf, sizeof buf, "%.0f KB", b / 1e3);
-        size = buf;
+        if (b >= 1e9) std::snprintf(buf, sizeof buf, "  \xC2\xB7  %.1f GB", b / 1e9);
+        else if (b >= 1e6) std::snprintf(buf, sizeof buf, "  \xC2\xB7  %.0f MB", b / 1e6);
+        else std::snprintf(buf, sizeof buf, "  \xC2\xB7  %.0f KB", b / 1e3);
+        meta += buf;
     }
-    bool withSize = true, withPlayers = true, withMaker = true;
-    auto joined = [&]() {
-        std::string m = game_.platform;
-        for (const std::string& p : {facts_.year, withMaker ? facts_.maker : std::string(),
-                                     withPlayers ? facts_.players : std::string(),
-                                     withSize ? size : std::string()})
-            if (!p.empty()) m += "  \xC2\xB7  " + p;
-        return m;
-    };
-    if (c.text.measure(joined(), ui::TextStyle::Callout, c.sc) > textW) withSize = false;
-    if (c.text.measure(joined(), ui::TextStyle::Callout, c.sc) > textW) withPlayers = false;
-    if (c.text.measure(joined(), ui::TextStyle::Callout, c.sc) > textW) withMaker = false;
-    const std::string meta = c.text.truncate(joined(), ui::TextStyle::Callout, c.sc, textW);
-    c.text.draw(c.r, meta, textX, y, ui::TextStyle::Callout,
-                ui::Color::white(0.60f * a), c.sc);
+    c.text.draw(c.r, c.text.truncate(meta, ui::TextStyle::Callout, c.sc, textW), textX, y,
+                ui::TextStyle::Callout, ui::Color::white(0.60f * a), c.sc);
+    const std::string facts = factsLine();
+    if (!facts.empty()) {
+        y += c.text.lineHeight(ui::TextStyle::Callout, c.sc);
+        c.text.draw(c.r, c.text.truncate(facts, ui::TextStyle::Callout, c.sc, textW), textX, y,
+                    ui::TextStyle::Callout, ui::Color::white(0.60f * a), c.sc);
+    }
 
     rowsX_ = textX;
     rowsW_ = textW;

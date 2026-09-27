@@ -582,6 +582,7 @@ private:
     std::vector<StateChoice> states_;
     std::string saveWhen_;
     Facts facts_;
+    std::string factsLine() const;
     // Continue from's card size, worked out in draw() with the rest of the
     // layout so the block can be centred as a whole.
     float cardW_ = 0, cardH_ = 0;
