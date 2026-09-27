@@ -1267,8 +1267,7 @@ void DetailScreen::draw(Ctx& c) {
     cardH_ = cardW_ * (9.0f / 16.0f);
     const float headToRows = c.text.ascent(ui::TextStyle::LargeTitle, c.sc) +
                              c.text.lineHeight(ui::TextStyle::LargeTitle, c.sc) * 0.55f +
-                             c.text.ascent(ui::TextStyle::Callout, c.sc) + calloutLH * 1.6f +
-                             (factsLine().empty() ? 0.0f : calloutLH);
+                             c.text.ascent(ui::TextStyle::Callout, c.sc) + calloutLH * 2.6f;
     const float rowH = c.text.lineHeight(ui::TextStyle::Title3, c.sc) + design::kRowPadY * 2.0f;
     const float rowsH = rows_.empty() ? 0.0f
         : rows_.size() * rowH + (rows_.size() - 1) * design::kDetailRowGap;
@@ -1316,8 +1315,10 @@ void DetailScreen::draw(Ctx& c) {
     // size, then RomM's year, maker and players. They were one line first, and
     // a long platform name pushed it into the cover; dropping parts to make it
     // fit showed different facts on different games, and MMagTech: "has to be
-    // consistent across everything". A game RomM never matched has no second
-    // line; a part RomM lacks is left out of it.
+    // consistent across everything". THE SECOND LINE'S SPACE IS ALWAYS KEPT,
+    // blank for a game RomM never matched, so the rows and the shelf sit in
+    // the same place on every game (MMagTech, the same day: the pages did not
+    // line up when the line came and went). A part RomM lacks is left out.
     std::string meta = game_.platform;
     if (game_.sizeBytes > 0) {
         // A unit that suits the number. A library holds a 19 KB Game Boy ROM
@@ -1332,12 +1333,11 @@ void DetailScreen::draw(Ctx& c) {
     }
     c.text.draw(c.r, c.text.truncate(meta, ui::TextStyle::Callout, c.sc, textW), textX, y,
                 ui::TextStyle::Callout, ui::Color::white(0.60f * a), c.sc);
+    y += c.text.lineHeight(ui::TextStyle::Callout, c.sc);
     const std::string facts = factsLine();
-    if (!facts.empty()) {
-        y += c.text.lineHeight(ui::TextStyle::Callout, c.sc);
+    if (!facts.empty())
         c.text.draw(c.r, c.text.truncate(facts, ui::TextStyle::Callout, c.sc, textW), textX, y,
                     ui::TextStyle::Callout, ui::Color::white(0.60f * a), c.sc);
-    }
 
     rowsX_ = textX;
     rowsW_ = textW;
