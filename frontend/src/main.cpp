@@ -12813,8 +12813,9 @@ int main(int argc, char** argv) {
             // download started or finished. MMagTech, on the TV, 2026-09-27:
             // he doesn't like it moving. Now the chip owns the corner and never
             // moves, and the download is a small ring that fills clockwise from
-            // the top with a down arrow inside, the shape PS5 and Xbox use; no
-            // number. Unpacking has no fraction to show, so a quarter of the
+            // the top; no number. A down arrow inside was tried, drawn and then
+            // as the font's glyph, and MMagTech found it horrible: the ring
+            // alone says it. Unpacking has no fraction to show, so a quarter of the
             // ring turns instead. A readout, not a control: nothing reaches it.
             if (launchJob.busy() && launchJob.busyFor >= kProgressDelay) {
                 const int64_t got = launchJob.got.load();
@@ -12864,16 +12865,6 @@ int main(int argc, char** argv) {
                     const float frac = std::clamp(
                         static_cast<float>(got) / static_cast<float>(total), 0.0f, 1.0f);
                     if (frac > 0.0f) arc(0.0f, kTau * frac, ui::palette::kScreenCyan);
-                }
-                // The arrow is the font's own, so it is as sharp as the text
-                // beside it; drawn from discs it had a bright knot at the tip.
-                {
-                    const char* kArrow = "\xE2\x86\x93";   // U+2193
-                    const ui::TextStyle as = ui::TextStyle::Caption2;
-                    const float aw = text.measure(kArrow, as, sc);
-                    text.draw(renderer, kArrow, cx - aw * 0.5f,
-                              cy - text.lineHeight(as, sc) * 0.5f + text.ascent(as, sc), as,
-                              ui::Color::white(0.85f), sc);
                 }
             }
         }
