@@ -116,16 +116,23 @@ the pace* and *The emulator settings audit (#89)*. Short version:
   #146 refusals show raw engineering text; #147 N64 (no recompiler: built
   without it to match Apple's no-JIT rule) and PSP (IR interpreter) should
   use their recompilers where faster.
-- **#89 left:** DS layout and touch for a TV; MAME's undeclared options.
+- **#89 left:** MAME's undeclared options. **DS layout and touch are PARKED**
+  (MMagTech rarely plays DS and dislikes it on a TV).
   Cabinet's quality upgrades move to open question 23, which gained a gap:
   sound says when to step a game DOWN, not when it has room to go UP.
-- **Not filed yet:** rumble. CabinetOS has none at all; Cabinet has one
-  system-wide switch, on by default. MMagTech was told it would match.
-- **Server:** Master System "Gangster Town" is a web page on RomM, not a
-  game.
+- **Rumble, #149, approved:** CabinetOS has none at all; match Cabinet, one
+  system-wide switch, on by default.
+- **#145, a recommendation to build and judge:** the account chip pinned
+  right, the download a small filling ring with an arrow to its left, no
+  line and no percentage.
+- **N64's 2x upscale is a placeholder** until open question 23's levels; it
+  equals what GLideN64 drew here, so the renderer switch cost no sharpness.
+- **Server:** Master System "Gangster Town" (RomM id 3338) is a web page,
+  not a game. MMagTech asked for it deleted; that was declined as a
+  permanent deletion on his server, and he was told where to do it in RomM.
 
-**NEXT after the merges, the emulator queue:** #147, the rest of #89, rumble,
-#90 (BIOS warning, walk the scenarios first). Then the installer block (#105
+**NEXT after the merges, the emulator queue:** #147, rumble (#149), #145,
+MAME's options (#89), #90 (BIOS warning, walk the scenarios first). Then the installer block (#105
 to #108, #136). #124 stays parked.
 
 **THE SESSION OF 2026-09-27 BUILT THE IN-GAME SHORTCUTS (#76 TO #80) AND FIXED
