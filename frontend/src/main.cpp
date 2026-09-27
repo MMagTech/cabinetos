@@ -9469,16 +9469,27 @@ int main(int argc, char** argv) {
             if (touched && idleWatch.input(clockSeconds()) && owner != InputOwner::Game &&
                 !powerKey)
                 continue;
-            // THE PRESS THAT ENDS THE WAIT after a state loads. Any button or
-            // key, and it goes no further; the frame read keeps it from the
-            // game until it is let go, as it does the pause menu's.
+            // THE PRESS THAT ENDS THE WAIT after a state loads: A, as the
+            // prompt says (Return on a keyboard). It was any button, and
+            // MMagTech: "it says press A to continue and any button works".
+            // Every other press does nothing while it waits. None goes further;
+            // the frame read keeps them from the game until let go, as it does
+            // the pause menu's. L3 and R3 still reach the pause menu below.
             if (stateHold && playing && !overlayOpen &&
                 (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN ||
                  (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat && !powerKey))) {
-                stateHold = false;
-                stateHoldJustEnded = true;
-                std::fprintf(stderr, "[state] continuing\n");
-                continue;
+                const bool stick = e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN &&
+                                   (e.gbutton.button == SDL_GAMEPAD_BUTTON_LEFT_STICK ||
+                                    e.gbutton.button == SDL_GAMEPAD_BUTTON_RIGHT_STICK);
+                const bool a = (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN &&
+                                e.gbutton.button == SDL_GAMEPAD_BUTTON_SOUTH) ||
+                               (e.type == SDL_EVENT_KEY_DOWN && e.key.key == SDLK_RETURN);
+                if (a) {
+                    stateHold = false;
+                    stateHoldJustEnded = true;
+                    std::fprintf(stderr, "[state] continuing\n");
+                }
+                if (!stick) continue;
             }
             if (powerKey) {
                 // The press that woke the machine from Rest arrives here too,
