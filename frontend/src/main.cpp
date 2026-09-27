@@ -10363,6 +10363,21 @@ int main(int argc, char** argv) {
                 std::fprintf(stderr, "[rewind] %s (state %zu bytes)\n",
                              rewindRing.available ? "available" : "not offered", sz);
             }
+            // WHAT REWIND IS HOLDING, in the log each time it starts: the
+            // numbers the memory budget was argued from, measured.
+            static bool wasRewinding = false;
+            if (rewinding && !wasRewinding && rewindRing.available == 1) {
+                const double secs = rewindRing.snaps.size() * kRewindEvery /
+                                    std::max(core.avInfo().fps, 1.0);
+                std::fprintf(stderr,
+                             "[rewind] %zu states, %.1f s, %.1f MB in memory "
+                             "(%.0f KB each, from %zu KB)\n",
+                             rewindRing.snaps.size(), secs, rewindRing.bytes / 1048576.0,
+                             rewindRing.snaps.empty() ? 0.0
+                                 : rewindRing.bytes / 1024.0 / rewindRing.snaps.size(),
+                             core.stateSize() / 1024);
+            }
+            wasRewinding = rewinding;
             if (rewinding && rewindRing.available != 1) {
                 if (!rewindSaid) menuNotice.say("Rewind isn't available here", Tone::Info);
                 rewindSaid = true;
