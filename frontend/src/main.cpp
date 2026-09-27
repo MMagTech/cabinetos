@@ -1514,6 +1514,10 @@ struct LaunchJob {
     // and the ready branch in pumpLaunch: a download that finishes while
     // somebody has moved on somewhere else must not drag them out of it.
     int startedOn = -1;
+    // Whether the ready branch has started bringing the curtain down for this
+    // job, so that a launch abandoned part way can put it back up without
+    // touching a curtain somebody else lowered.
+    bool loweredCurtain = false;
 
     // Written by the worker before it sets Ready or Failed, read by the frame
     // thread only after it observes one of those. The atomic stage is the
@@ -1717,6 +1721,7 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
     job.message.clear();
     job.playWhenReady = playWhenReady;
     job.keepWhenReady = keepWhenReady;
+    job.loweredCurtain = false;
     job.stage = LaunchJob::Stage::Downloading;
 
     const storage::User& user = storage::currentUser();
@@ -9098,6 +9103,15 @@ int main(int argc, char** argv) {
         }
         if (st != LaunchJob::Stage::Ready) return;
 
+        // WHETHER THE PERSON MOVED ON is decided BEFORE the curtain, not after
+        // it — 2026-09-27. It used to be checked below, after the curtain had
+        // come all the way down, and that branch returned without lifting it:
+        // the console sat on a black screen with no way out but restarting
+        // the app (#85, Dynamite Cop). Asked every frame, so a screen change
+        // while the curtain is on its way down lifts it again as well.
+        const bool movedOn = launchJob.playWhenReady && launchJob.startedOn >= 0 &&
+                             launchJob.startedOn != static_cast<int>(here());
+
         // THE CURTAIN COMES DOWN BEFORE THE BLOCKING WORK, not after it. See
         // design::kCurtainDown. The stage is deliberately NOT cleared here, so
         // this runs again next frame and the frames in between are spent
@@ -9107,8 +9121,9 @@ int main(int argc, char** argv) {
         // Only for a launch. A download that was merely asked for must not
         // black the screen out — the person is still browsing, and its progress
         // is on the row they pressed.
-        if (launchJob.playWhenReady) {
+        if (launchJob.playWhenReady && !movedOn) {
             curtain.retarget(1.0f, kCurtainDown);
+            launchJob.loweredCurtain = true;
             if (curtain.value() < 0.995f) return;
         }
 
@@ -9149,11 +9164,16 @@ int main(int argc, char** argv) {
         // and it launches — "one action from cold to playing" holds. Moved on,
         // and it finishes quietly. The game is on the disk, prepared exactly as
         // a launch would have prepared it, and its row says Play.
-        if (launchJob.startedOn >= 0 &&
-            launchJob.startedOn != static_cast<int>(here())) {
+        if (movedOn) {
+            // Which screens, because the one time this was seen it fired two
+            // seconds after the press, too soon to be somebody walking away,
+            // and the log could not say what had moved.
             std::fprintf(stderr,
-                         "[launch] %s is ready, and not starting: the screen moved on\n",
-                         launchJob.title.c_str());
+                         "[launch] %s is ready, and not starting: the screen moved on "
+                         "(pressed on screen %d, now on %d)\n",
+                         launchJob.title.c_str(), launchJob.startedOn,
+                         static_cast<int>(here()));
+            if (launchJob.loweredCurtain) curtain.retarget(0.0f, kCurtainUp);
             if (here() == Screen::Detail &&
                 detailScreen.game().romId == launchJob.romId)
                 detailScreen.setKept(
@@ -10757,9 +10777,57 @@ int main(int argc, char** argv) {
                 // Fast forward's sound is discarded, not played fast: four
                 // times the samples would only pile up behind the picture.
                 // Rewind's too: it is a frame's sound played forwards.
+                // NEVER MORE THAN 64 ms OF SOUND WAITING, for every system —
+                // 2026-09-27. When a game stalls, the speaker plays silence;
+                // when it catches up, the sound it owed queued up behind and
+                // never drained, so every stall made the sound a little later
+                // for the rest of the session. Crazy Taxi 2 sat 200 ms behind
+                // its picture this way even with Flycast held to the clock.
+                // 64 ms is RetroArch's default audio latency
+                // (DEFAULT_OUT_LATENCY), which is also what keeps RetroArch
+                // from piling up. What does not fit is dropped: one small jump
+                // in the sound instead of a delay that lasts. Measured against
+                // this stream only, so it is the same on any machine.
+                static constexpr double kMaxWaitingMs = 64.0;
+                static uint64_t droppedBytes = 0;
+                static uint64_t droppedLogAt = 0;
                 if (!samples.empty() && core.speed() <= 1.0 && !rewinding) {
-                    SDL_PutAudioStreamData(audioStream, samples.data(),
-                                           static_cast<int>(samples.size() * sizeof(int16_t)));
+                    const double bytesPerMs =
+                        4.0 * std::max(core.avInfo().sampleRate, 1.0) / 1000.0;
+                    const int room = static_cast<int>(kMaxWaitingMs * bytesPerMs) -
+                                     SDL_GetAudioStreamQueued(audioStream);
+                    const int want = static_cast<int>(samples.size() * sizeof(int16_t));
+                    const int take = std::max(0, std::min(want, room)) & ~3;
+                    if (take > 0) SDL_PutAudioStreamData(audioStream, samples.data(), take);
+                    droppedBytes += static_cast<uint64_t>(want - take);
+                }
+                // Said at most every ten seconds, so a system that trips it
+                // constantly shows up in the log rather than hiding in it.
+                if (droppedBytes > 0 && SDL_GetTicksNS() >= droppedLogAt) {
+                    const double rate = std::max(core.avInfo().sampleRate, 1.0);
+                    std::fprintf(stderr, "[audio] dropped %.0f ms of sound to keep it in time\n",
+                                 droppedBytes / (4.0 * rate) * 1000.0);
+                    droppedBytes = 0;
+                    droppedLogAt = SDL_GetTicksNS() + 10'000'000'000ull;
+                }
+                // THE TWO NUMBERS THAT TELL "OUT OF SYNC" APART, every ten
+                // seconds of play. Sound waiting to be played that stays flat
+                // is a fixed delay; one that climbs is a rate mismatch. The
+                // core's own output against the clock says which side is
+                // fast. Reported for Dreamcast on 2026-09-27.
+                static uint64_t audioLogAt = 0;
+                const uint64_t nowNs = SDL_GetTicksNS();
+                if (nowNs >= audioLogAt) {
+                    if (audioLogAt != 0) {
+                        const double rate = std::max(core.avInfo().sampleRate, 1.0);
+                        const double queuedMs =
+                            SDL_GetAudioStreamQueued(audioStream) / (4.0 * rate) * 1000.0;
+                        std::fprintf(stderr,
+                                     "[audio] %.0f ms waiting to play; the core is %+.0f ms "
+                                     "against the clock\n",
+                                     queuedMs, core.audioAhead() * 1000.0);
+                    }
+                    audioLogAt = nowNs + 10'000'000'000ull;
                 }
             }
         }

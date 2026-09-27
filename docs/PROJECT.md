@@ -1832,6 +1832,62 @@ Issues #125, #126, #127, #129 and #75, built and judged on the A9 with
 - `--colour <word>` and `--dark` set a look for one run, for judging.
   Every shade and the dark amounts are starting values.
 
+### Dreamcast plays again, and game sound stays in time (#85) — 2026-09-27
+
+**Dreamcast had not launched since 2026-09-20.** That day the host began
+telling every core it prefers Vulkan (open question 20), and Flycast took
+it. Its libretro `create_device` (`core/rend/vulkan/vk_context_lr.cpp`, at
+our pin and on upstream master) receives the frontend's required device
+extensions and never uses them, so its device lacked external memory and
+the host refused it: "this device will not export memory as a file
+descriptor", on a GPU that exports fine. Dolphin honours the list, which is
+why GameCube played. RetroArch never meets this: it presents from Vulkan,
+so a picture never has to leave it.
+
+**Decided: no patch to Flycast.** It links no Vulkan symbol (`nm -D` on the
+shipped `.so`) and looks up `vkCreateDevice` through the
+`get_instance_proc_addr` we pass, so the host hands it a lookup that wraps
+that one function and adds whichever of our extensions the GPU lists and
+the core left out (`vkhost.cpp`, `createDeviceWithOurs`). That is what the
+v2 negotiation interface is for; Flycast speaks v1 only. It applies to
+every Vulkan core. Rejected: putting Flycast back on GLES (reverses open
+question 20, which names Dreamcast as a system Vulkan was for); patching
+Flycast (a change to carry on every update). Offering the fix upstream is
+optional. **Off the A9:** a GPU without the extensions gets the old clean
+refusal; a machine with no Vulkan puts Flycast on GLES, checked on the
+test VM (Crazy Taxi 2 drew, llvmpipe).
+
+**The black screen after a launch (#85's second half).** The ready branch
+lowered the curtain and only then asked whether the person had moved to
+another screen, returning without lifting it. Now it asks first, lifts the
+curtain if it was lowered, and logs both screens. The one sighting fired
+two seconds after the press, on a hand-built loop build; it did not
+reproduce on the image. MMagTech walked away from a PS2 download on the TV:
+the screen stayed up.
+
+**Game sound, measured with a new `[audio]` log line every ten seconds.**
+Crazy Taxi 2 on Vulkan queued 1.3 s of sound in ten seconds and 2.9 s by
+two minutes, heard as out of sync. Two causes, two fixes:
+
+- **Flycast's emulation thread runs ahead of `retro_run`.** Cabinet's audio
+  governor exists for exactly this (`NativePlayerRenderer.swift`); this
+  host had it for PPSSPP only, with a comment saying Flycast did not need
+  it. Flycast is now governed too, with Cabinet's 0.1 s cap on catch-up.
+  N64 stays ungoverned: Cabinet found it slower with the governor, and why
+  was never recorded.
+- **Every stall made sound permanently later, on every system.** The
+  speaker plays silence during a stall and the sound the core owed queues
+  behind when it catches up. **Game sound is now capped at 64 ms waiting**,
+  RetroArch's default audio latency; what does not fit is dropped.
+  Measured on the TV: Crazy Taxi 2 36 to 64 ms (5 to 10 ms trimmed per ten
+  seconds, inaudible), Mortal Kombat II 36 to 54 ms with nothing trimmed.
+  MMagTech: both sounded good.
+
+**Not done, and filed:** RetroArch also runs dynamic rate control (±0.5%,
+on by default on PCs, off on its console builds) and syncs to the audio
+device for every core. One timing rule for every core, measured on each,
+is the right end state; the per-core governor is a stopgap.
+
 ### Time played (#128) — 2026-09-27
 
 **What RomM has (checked in its source, 5.1.0 and 5.3.1):** play sessions,
