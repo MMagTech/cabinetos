@@ -228,6 +228,13 @@ int ImageCache::pendingCount() const {
     return static_cast<int>(requests_.size() + finished_.size());
 }
 
+int ImageCache::settlingCount() const {
+    int n = 0;
+    for (const auto& [key, e] : entries_)
+        if (e.requested && !e.image.failed && (!e.image.ready || e.image.fade < 1.0f)) ++n;
+    return n;
+}
+
 void ImageCache::pump(float dt) {
     ++frame_;
 

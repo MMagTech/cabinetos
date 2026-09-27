@@ -2558,6 +2558,39 @@ names the machine; it does not explain it.
 useful when a VM and a mini PC are both running different builds. Off for
 release builds.
 
+### The startup screen lifts off Home (#109) — 2026-09-27
+
+MMagTech, 2026-09-23: *"when you see the CabinetOS screen and it moves into Home
+the transition is extremely harsh."* Home replaced the startup screen from one
+frame to the next.
+
+**Decided (MMagTech: "use the other animations the UI does"):** the startup
+screen is the curtain, and it lifts. Home's main loop starts with the curtain
+fully down, drawn as the startup screen with its last line ("Loading your
+library"), which is the frame already on the television, so the hand-over
+itself changes nothing on screen. Then it lifts with the same timing and easing
+as the curtain onto a game (`kCurtainUp`, 0.42 s, ease-in-out), and Home shows
+through it. Sign out and a new server address already bring the curtain down as
+the startup screen, so leaving and coming back are one motion run both ways.
+
+- **Held before lifting:** three frames, so Home's first texture uploads happen
+  behind it; then until every cover Home asked for has loaded and faded in, at
+  most one second (a starting value). Measured on the A9: it lifts 390 to 420 ms
+  after Home's first frame, with every cover in.
+- **Presses** are ignored while it is fully down and work from the moment it
+  starts lifting.
+- **Anything else that wants the curtain takes it** (a launch, a switch,
+  leaving), and the startup screen stops being drawn on it.
+- **Never for a capture**, whose first frame must be the screen itself.
+
+**Rejected: the first try, 2026-09-23 (`1ac83e7`, reverted).** It dimmed the
+startup screen to black in a loop of its own before Home existed, redrawing as
+fast as it could swap, then raised Home from black. On a second run MMagTech saw
+the television frozen on a distorted frame. The cause was never proven; this
+version draws nothing outside the main loop's own paced frames. Four session
+restarts in a row on the A9, 2026-09-27, each lifted normally, and gamescope's
+own capture of the last showed Home.
+
 ### Attribution belongs in Settings → About, not on the boot screen
 
 Considered and rejected: putting "a fork of Bazzite" on the splash. It breaks
