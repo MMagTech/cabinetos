@@ -1247,6 +1247,9 @@ struct StateLoad {
     bool loaded = false;
     // The server could not be asked at all, as opposed to having nothing.
     bool serverFailed = false;
+    // Home's Resume asked, not a person pressing Load: finding no state is
+    // not news (the game just starts), so nothing is said about it.
+    bool quiet = false;
     std::vector<uint8_t> data;
     std::string note;
     std::thread worker;
@@ -1258,10 +1261,12 @@ static std::string newestLocalState(const GameSession& sess);
 // `wantId`: a particular state, picked on the launch screen, rather than the
 // newest. Everything else is the same, the fallback included.
 static void beginLoadLatestState(StateLoad& load, GameSession& sess,
-                                 romm::Client& client, MenuNotice& notice, int wantId = 0) {
+                                 romm::Client& client, MenuNotice& notice, int wantId = 0,
+                                 bool quiet = false) {
     if (load.running.load()) return;
 
-    notice.say("Loading\xE2\x80\xA6", Tone::Busy);
+    load.quiet = quiet;
+    if (!quiet) notice.say("Loading\xE2\x80\xA6", Tone::Busy);
     if (sess.stateTag.empty()) {
         // THIS SYSTEM'S STATES NEVER LEAVE THE CONSOLE, so the newest one here
         // IS the latest. Until 2026-09-23 this refused outright — so on NES,
@@ -1272,7 +1277,7 @@ static void beginLoadLatestState(StateLoad& load, GameSession& sess,
             local.empty() ? std::vector<uint8_t>{} : cab::readBytes(local);
         if (bytes.empty()) {
             std::fprintf(stderr, "[state] no settled tag and nothing saved here\n");
-            notice.say("No saved state for this game", Tone::Info);
+            if (!quiet) notice.say("No saved state for this game", Tone::Info);
             return;
         }
         const bool ok = cab::Core::shared().loadState(bytes);
@@ -1400,8 +1405,9 @@ static void pumpStateLoad(StateLoad& load, const GameSession& sess,
         // gambatte-native (3 for other emulators)", or a server error) and was
         // shown on the television raw until 2026-09-23. It stays in the log
         // above; the person gets the sentence that means the same thing.
-        notice.say(load.serverFailed ? "Couldn't reach RomM" : "No saved state for this game",
-                   load.serverFailed ? Tone::Problem : Tone::Info);
+        if (!load.quiet)
+            notice.say(load.serverFailed ? "Couldn't reach RomM" : "No saved state for this game",
+                       load.serverFailed ? Tone::Problem : Tone::Info);
         return;
     }
     const bool ok = cab::Core::shared().loadState(load.data);
@@ -6082,6 +6088,10 @@ int main(int argc, char** argv) {
     };
     // A state picked on the launch screen, loaded once the game is running.
     int pendingStateId = 0;
+    // HOME'S RESUME: the newest state, if there is one, loaded the same way;
+    // none, and the game simply starts (MMagTech, 2026-09-27). Only where the
+    // system has states.
+    bool pendingResume = false;
     // AFTER A STATE LOADS, THE GAME WAITS ON THAT FRAME for a button
     // (docs/PROJECT.md, decided 2026-09-27: "catches you off guard how quick
     // it starts"). `stateHold` is the wait, with its "Press (A) to continue";
@@ -8264,7 +8274,7 @@ int main(int argc, char** argv) {
         //
         // Home promises one action from cold to playing, and this is it.
         if (haveResume() && focusRow == RowRecent && focusSlot == 0) {
-            launchById(cards[heroIndex].id);
+            pendingResume = launchById(cards[heroIndex].id);
             return;
         }
         // Every other cover on Home opens the launch screen, the same as a
@@ -9333,6 +9343,7 @@ int main(int argc, char** argv) {
         // on over Home (see where the stream's rate is set, at launch).
         if (audioStream) SDL_ClearAudioStream(audioStream);
         pendingStateId = 0;
+        pendingResume = false;
         stateHold = stateHoldWaiting = false;
         rewindKeep.reset();
         rewindAvailable = -1;
@@ -10559,6 +10570,15 @@ int main(int argc, char** argv) {
             beginLoadLatestState(stateLoad, session, liveClient, menuNotice, pendingStateId);
             pendingStateId = 0;
             if (stateLoad.running.load()) stateHoldWaiting = true;
+        }
+        if (pendingResume && playing && cab::Core::shared().running() &&
+            cab::Core::shared().framesRun() >= 1 && !stateLoad.running.load()) {
+            pendingResume = false;
+            if (session.snapshots) {
+                std::fprintf(stderr, "[resume] loading the newest state, if there is one\n");
+                beginLoadLatestState(stateLoad, session, liveClient, menuNotice, 0, true);
+                if (stateLoad.running.load()) stateHoldWaiting = true;
+            }
         }
         if (stateLoad.loaded) {
             stateLoad.loaded = false;
