@@ -1805,10 +1805,15 @@ Issues #125, #126, #127, #129 and #75, built and judged on the A9 with
   devices. Scheduled adds one **Dark hours** row ("8 PM to 7 AM" by default)
   that opens the question panel Wi-Fi uses: From and Until, then the hours.
   Two rows of hours made the list too long (MMagTech).
-- **Color: Purple, Blue, Teal, Green, Amber, Red, Wine, Graphite**, round the
-  colour wheel. Five first (wine rather than red, teal rather than green);
-  MMagTech asked for a few more and the three added fill the wheel's gaps. On
-  screen "Color", matching "Favorites".
+- **Color, sixteen of them.** Purple, Blue, Teal, Green, Amber, Red, Wine,
+  Graphite round the colour wheel: five first (wine rather than red, teal
+  rather than green), and MMagTech asked for a few more, so three filled the
+  wheel's gaps. Then five bright ones for children (*"lack some fun ones like
+  ones my kids might like"*): Pink, Sky, Lime, Orange, and Sunset, a hue per
+  stop down the screen. Sunset was the hit (*"oh the gradient is fun"*), so
+  Ocean, Aurora and Fire joined it. **All sixteen kept**; a cut was offered
+  and declined: scrolling them is quick. On screen "Color", matching
+  "Favorites".
 - **Dark is one rule over any colour**, not a second set: the background goes
   toward black, the game-art glow and covers at rest sit further back; text,
   the focused cover and the game picture are untouched. Menus only.

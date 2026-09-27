@@ -273,8 +273,9 @@ Decided with MMagTech 2026-09-26, from the things people will actually do.
   Scheduled adds one **Dark hours** row (8 PM to 7 AM to start) that opens
   the question panel: From and Until, then the hours. **Built on
   `home-and-appearance`, #129.**
-- **Color:** Purple, Blue, Teal, Green, Amber, Red, Wine or Graphite, the
-  signed-in person's, stored with their account. Startup and first run stay
+- **Color:** sixteen: Purple, Blue, Teal, Green, Amber, Red, Wine, Graphite,
+  Pink, Sky, Lime, Orange, and the gradients Sunset, Ocean, Aurora and Fire.
+  The signed-in person's, stored with their account. Startup and first run stay
   purple. **Built on `home-and-appearance`, #75.**
 - **Interface sounds:** one row changed with left and right: Off, Quiet,
   Medium, Loud, and remembered in `config/settings.json`. Left and right

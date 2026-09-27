@@ -21,8 +21,8 @@
 // dark for the covers and the words.
 //
 // SUNSET WAS THE FUN ONE (*"oh the gradient is fun"*), so three more with a
-// hue for each stop: Ocean, Aurora and Fire. To be cut down to a final set
-// on the TV; sixteen is too many to walk with Left and Right.
+// hue for each stop: Ocean, Aurora and Fire. All sixteen kept: MMagTech
+// offered a cut and declined, *"its not that bad to scroll through them"*.
 //
 // DARK IS ONE RULE OVER ANY COLOUR, not a second hand-tuned set: the
 // background goes toward black, the game-art glow and the covers at rest sit
