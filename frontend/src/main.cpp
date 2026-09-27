@@ -10854,11 +10854,10 @@ int main(int argc, char** argv) {
                     droppedBytes = 0;
                     droppedLogAt = SDL_GetTicksNS() + 10'000'000'000ull;
                 }
-                // THE TWO NUMBERS THAT TELL "OUT OF SYNC" APART, every ten
-                // seconds of play. Sound waiting to be played that stays flat
-                // is a fixed delay; one that climbs is a rate mismatch. The
-                // core's own output against the clock says which side is
-                // fast. Reported for Dreamcast on 2026-09-27.
+                // HOW MUCH SOUND IS WAITING, every ten seconds of play, beside
+                // any sound the safety net below had to drop. Together they
+                // say whether a system keeps time. Added for Dreamcast on
+                // 2026-09-27.
                 static uint64_t audioLogAt = 0;
                 const uint64_t nowNs = SDL_GetTicksNS();
                 if (nowNs >= audioLogAt) {
@@ -10866,10 +10865,10 @@ int main(int argc, char** argv) {
                         const double rate = std::max(core.avInfo().sampleRate, 1.0);
                         const double queuedMs =
                             SDL_GetAudioStreamQueued(audioStream) / (4.0 * rate) * 1000.0;
-                        std::fprintf(stderr,
-                                     "[audio] %.0f ms waiting to play; the core is %+.0f ms "
-                                     "against the clock\n",
-                                     queuedMs, core.audioAhead() * 1000.0);
+                        // Only the queue: since the speaker paces every
+                        // core, the core's output against runFor's clock
+                        // stops meaning anything while it is being held.
+                        std::fprintf(stderr, "[audio] %.0f ms waiting to play\n", queuedMs);
                     }
                     audioLogAt = nowNs + 10'000'000'000ull;
                 }

@@ -573,6 +573,18 @@ std::map<std::string, std::string> optionOverrides(const std::string& core) {
             {"mupen64plus-parallel-rdp-upscaling", "2x"},
         };
     }
+    // FLYCAST RENDERS ON ONE THREAD HERE — 2026-09-27. Its threaded
+    // rendering lets the emulation thread run on while the frontend holds
+    // back, then hands over the sound it made in one batch; with the speaker
+    // pacing every core (main.cpp) that batch overran even a 250 ms net and
+    // Crazy Taxi 2 lost 100 to 265 ms of sound every ten seconds. Off, a
+    // retro_run is one frame like every other core: nothing dropped, 3 to 43
+    // ms waiting, measured on the A9. Cabinet keeps it on because it paces
+    // Flycast by the clock and an Apple TV needs the thread; it changes how
+    // the work is split, not what a save or state holds.
+    if (coreName == "flycast") {
+        return {{"reicast_threaded_rendering", "disabled"}};
+    }
     if (coreName == "opera") {
         return {
             {"opera_bios", "panafz10.bin"},
