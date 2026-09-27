@@ -296,6 +296,11 @@ public:
                      const std::string& shotName = "",
                      const std::vector<uint8_t>& shot = {}) const;
 
+    // Removes states, and each one's picture with it (RomM 5.1,
+    // `POST /api/states/delete`). Only the signed-in user's; RomM refuses the
+    // whole request if one id is not theirs.
+    bool deleteStates(const std::vector<int>& ids, std::string* err) const;
+
     // For ImageCache::Loader. Returns empty on any failure, because a cover
     // that will not load is not an error the frame loop can do anything about.
     //

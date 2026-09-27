@@ -730,6 +730,24 @@ bool Client::uploadState(int romId, const std::string& emulator, const std::stri
     return postMultipart(path, "stateFile", fileName, data, err, shotName, shot);
 }
 
+bool Client::deleteStates(const std::vector<int>& ids, std::string* err) const {
+    if (ids.empty()) return true;
+    std::string json = "{\"states\":[";
+    for (size_t i = 0; i < ids.size(); ++i) {
+        if (i) json += ",";
+        json += std::to_string(ids[i]);
+    }
+    json += "]}";
+    std::string body;
+    long status = 0;
+    if (!postJson("/api/states/delete", json, &body, &status, err)) return false;
+    if (status >= 400) {
+        if (err) *err = "HTTP " + std::to_string(status) + " deleting states";
+        return false;
+    }
+    return true;
+}
+
 bool Client::postMultipart(const std::string& path, const char* partName,
                            const std::string& fileName, const std::vector<uint8_t>& data,
                            std::string* err, const std::string& shotName,

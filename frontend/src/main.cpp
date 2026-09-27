@@ -247,6 +247,68 @@ public:
 private:
     static std::string key(const Job& j) { return std::to_string(j.romId) + "/" + j.fileName; }
 
+    // THREE STATES PER GAME, ROTATING (docs/PROJECT.md, "The in-game
+    // shortcuts, and three states per game"). Once a state has reached RomM,
+    // this person's states for the game UNDER THE SAME EMULATOR TAG are cut to
+    // the newest three, on RomM and on this console. Other tags, which is
+    // every other app's states, are never looked at. A state saved by Cabinet
+    // on the Apple TV under the same tag counts, and can be the one that goes:
+    // decided, and the price of three being true everywhere.
+    //
+    // After the upload, not before: an offline save waits in the queue, and
+    // counting it before it exists on RomM would delete a good state to make
+    // room for one that might never arrive. Several saved offline come down to
+    // three as each lands.
+    //
+    // Deletes nothing unless the state just sent is among the three kept. If
+    // RomM's times disagree with ours, a wrong guess would delete the newest
+    // state someone has; doing nothing leaves one too many, which the next
+    // save tidies.
+    static constexpr size_t kStatesKept = 3;
+    void rotate(const Job& job) {
+        std::vector<romm::Asset> all;
+        std::string err;
+        if (!client_->fetchStates(job.romId, &all, &err)) {
+            std::fprintf(stderr, "[state] could not list states to keep three: %s\n",
+                         err.c_str());
+            return;
+        }
+        std::vector<romm::Asset> mine;
+        for (const romm::Asset& a : all)
+            if (a.emulator == job.emulator) mine.push_back(a);
+        if (mine.size() <= kStatesKept) return;
+        std::sort(mine.begin(), mine.end(), [](const romm::Asset& a, const romm::Asset& b) {
+            return a.updatedAt != b.updatedAt ? a.updatedAt > b.updatedAt
+                                              : a.fileName > b.fileName;
+        });
+        bool keptNew = false;
+        for (size_t i = 0; i < kStatesKept; ++i)
+            if (mine[i].fileName == job.fileName) keptNew = true;
+        if (!keptNew) {
+            std::fprintf(stderr, "[state] %s is not among the newest three on RomM; "
+                                 "deleting nothing\n", job.fileName.c_str());
+            return;
+        }
+        std::vector<int> ids;
+        for (size_t i = kStatesKept; i < mine.size(); ++i) ids.push_back(mine[i].id);
+        if (!client_->deleteStates(ids, &err)) {
+            std::fprintf(stderr, "[state] could not remove older states: %s\n", err.c_str());
+            return;
+        }
+        // This console's copies of the ones that went, and their pictures.
+        const size_t slash = job.localPath.rfind('/');
+        const std::string dir =
+            slash == std::string::npos ? std::string() : job.localPath.substr(0, slash);
+        for (size_t i = kStatesKept; i < mine.size(); ++i) {
+            const std::string& name = mine[i].fileName;
+            std::fprintf(stderr, "[state] rotated out %s\n", name.c_str());
+            if (dir.empty()) continue;
+            cab::removeFile(dir + "/" + name);
+            const size_t dot = name.rfind('.');
+            if (dot != std::string::npos) cab::removeFile(dir + "/" + name.substr(0, dot) + ".png");
+        }
+    }
+
     void enqueue(Job job) {
         {
             std::lock_guard<std::mutex> lock(mutex_);
@@ -303,6 +365,7 @@ private:
                 // not reached RomM, and the console still owes it.
                 if (ok) cache::clearPending(storage::currentUser(), job.romId, job.fileName);
             }
+            if (ok && job.isState) rotate(job);
             if (job.isState && !job.resend) stateOutcome.store(ok ? 1 : 2);
             std::fprintf(stderr, "[%s] %s%s %s%s\n", job.isState ? "state" : "save",
                          job.resend ? "resent, " : "",
