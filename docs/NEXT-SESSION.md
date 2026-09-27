@@ -52,8 +52,18 @@ Everything on it was judged on the TV with the loop, one piece at a time
 (session of 2026-09-27, below). Push it to `testing`, let the image build
 (~8 min), `bootc upgrade` the A9, have MMagTech judge the real image, and
 merge only on his explicit word ([[merge approval]] in memory). **Last thing
-built, not yet reported back on: Home's Resume** (loads the newest state,
-else just starts). Then the emulators (the order below, step 3).
+built: Home's Resume** (loads the newest state, else just starts; worked on
+DoDonPachi).
+
+**THEN, MMAGTECH 2026-09-27: "I'd really rather focus on features not yet
+implemented or other fixes", NOT THE EMULATORS YET.** This overrides step 3
+of the order below for now. Pick with him at the start of the session;
+candidates: #124 other apps' saves and states (matters to anyone trying the
+console), #125 to #127 Home (focus on two shelves, Up/Down landing, Home in
+the top bar), #129 dark mode and an Appearance setting, #128 time played,
+#130 PS2/GameCube screenshots, #73 the per-system pause-menu options, #88
+offline play, account switching (designed 2026-09-21, not built), and the
+installer, boot splash and power button.
 
 **THE SESSION OF 2026-09-27 BUILT THE IN-GAME SHORTCUTS (#76 TO #80) AND FIXED
 #103, BRANCH `in-game-shortcuts`.** Every decision, with the reasons and what
