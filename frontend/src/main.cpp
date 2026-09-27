@@ -5345,8 +5345,14 @@ int main(int argc, char** argv) {
     // loop below stops at BarSettings and the chip takes its own focus rim.
     // Everything else about it — L1/R1 walking onto it, Down leaving the bar —
     // it gets for free by being in this list.
-    enum BarItem { BarLibrary = 0, BarSearch, BarSettings, BarAccount, BarCount };
-    const char* kBarLabels[BarCount] = { "Library", "Search", "Settings", "Account" };
+    //
+    // HOME IS THE FIRST ITEM — #127, MMagTech 2026-09-27. It was left out on
+    // 2026-09-21 because a bar item that does nothing where you stand teaches
+    // people the bar is decorative. Since 2026-09-24 moving across the bar
+    // switches the screen, so the lit item is always where you stand, and
+    // Home is simply one of them. A bar slot is now its destination's number.
+    enum BarItem { BarHome = 0, BarLibrary, BarSearch, BarSettings, BarAccount, BarCount };
+    const char* kBarLabels[BarCount] = { "Home", "Library", "Search", "Settings", "Account" };
     // How many of those draw as labelled capsules. The chip draws itself.
     constexpr int kBarCapsules = BarAccount;
 
@@ -5419,6 +5425,18 @@ int main(int argc, char** argv) {
     // under it.
     Animated scrollY;
     scrollY.from = scrollY.to = 0.0f;
+    // HOME FROM THE START: the first card of Recent, every row scrolled back.
+    // For a new person, and for arriving by the bar or a shoulder, which
+    // enters every destination fresh. Back to Home keeps your place.
+    auto homeFromTheStart = [&]() {
+        focusRow = RowRecent;
+        focusSlot = 0;
+        shelfScroll[0].settle(0.0f);
+        shelfScroll[1].settle(0.0f);
+        scrollY.settle(0.0f);
+        for (int r = 0; r < 2; ++r) { slotFocus[r].clear(); slotPress[r].clear(); }
+        if (cardAt(focusRow, focusSlot)) slotAnim(slotFocus, focusRow, focusSlot).settle(1.0f);
+    };
     // What is lighting the room, and what was lighting it before. Two cache
     // keys and a mix, because a cut between two covers is the one thing this
     // must not look like. `backdropWant` is what focus is asking for, which is
@@ -6267,13 +6285,7 @@ int main(int argc, char** argv) {
         // row scrolled back. Where the last person was is meaningless in a
         // different set of cards, and was out of range whenever the new set
         // was shorter.
-        focusRow = RowRecent;
-        focusSlot = 0;
-        shelfScroll[0].settle(0.0f);
-        shelfScroll[1].settle(0.0f);
-        scrollY.settle(0.0f);
-        for (int r = 0; r < 2; ++r) { slotFocus[r].clear(); slotPress[r].clear(); }
-        if (cardAt(focusRow, focusSlot)) slotAnim(slotFocus, focusRow, focusSlot).settle(1.0f);
+        homeFromTheStart();
         refreshKeeps();
 
         const storage::User& now = storage::currentUser();
@@ -8232,9 +8244,10 @@ int main(int argc, char** argv) {
                 // Where the cursor lands in the bar: on the destination you are
                 // standing in, so walking up and straight back down is a no-op
                 // rather than a silent change of where you would go.
-                barSlot = (here() == Screen::Library || here() == Screen::Grid)
-                              ? BarLibrary
-                              : (here() == Screen::Settings ? BarSettings : 0);
+                barSlot = (here() == Screen::Library || here() == Screen::Grid) ? BarLibrary
+                        : here() == Screen::Search                               ? BarSearch
+                        : here() == Screen::Settings                             ? BarSettings
+                                                                                 : BarHome;
                 barFocused = true;
                 sound::play(sound::Cue::Move);
                 break;
@@ -8397,6 +8410,7 @@ int main(int argc, char** argv) {
     tabDissolve.smooth = true;
     tabDissolve.from = tabDissolve.to = 0.0f;
     auto transitionTo = [&](int d) {
+        if (d == 0) homeFromTheStart();
         if (shotMode) { goToDestination(d); return; }
         // Taken at the end of the next frame, which still shows the old screen.
         pendingDest = d;
@@ -8436,13 +8450,12 @@ int main(int argc, char** argv) {
                 // you press A on each one. The Apple TV's top bar works this
                 // way too: A only drops you into the screen.
                 //
-                // Only a MOVE switches. Arriving in the bar with Up does not,
-                // or looking at the bar from Home would throw you off Home.
+                // Only a MOVE switches. Arriving in the bar with Up lands on
+                // the screen you are on, so it has nothing to switch.
                 // And the account chip opens a panel rather than going
                 // anywhere, so sliding onto it opens nothing.
                 if (barSlot != BarAccount) {
-                    const int want = (barSlot == BarLibrary) ? 1
-                                   : (barSlot == BarSearch ? 2 : 3);
+                    const int want = barSlot;
                     if (destinationGoing() != want) {
                         transitionTo(want);
                         barFocused = true;
@@ -8484,10 +8497,8 @@ int main(int argc, char** argv) {
                     sound::play(sound::Cue::Activate);
                     return true;
                 }
-                if (barSlot == BarLibrary || barSlot == BarSearch ||
-                    barSlot == BarSettings) {
-                    const int d = (barSlot == BarLibrary) ? 1
-                                : (barSlot == BarSearch ? 2 : 3);
+                if (barSlot <= BarSettings) {
+                    const int d = barSlot;
                     barFocused = false;
                     // Already standing in it: drop back into the screen rather
                     // than rebuilding it under the person's feet.
@@ -9205,7 +9216,7 @@ int main(int argc, char** argv) {
         if (homeEmpty()) {
             switch (n) {
                 case screens::Nav::Up:
-                    barSlot = 0;
+                    barSlot = BarHome;
                     barFocused = true;
                     sound::play(sound::Cue::Move);
                     return true;
@@ -9228,7 +9239,7 @@ int main(int argc, char** argv) {
                 // move into RowBar.
                 if (focusRow == RowRecent) {
                     leaveFocus();
-                    barSlot = 0;
+                    barSlot = BarHome;
                     barFocused = true;
                     sound::play(sound::Cue::Move);
                 } else {
@@ -11769,7 +11780,13 @@ int main(int argc, char** argv) {
                 if (cullX > ui::kCanvasWidth + kCullMargin) break;
 
                 Card& card = cards[i];
-                const float f = slotAnim(slotFocus, rowId, static_cast<int>(slot)).value();
+                // THE LIFT FOLLOWS FOCUS EVERY FRAME, as the grid's does, so
+                // focus going up to the bar, into the account panel, or
+                // arriving fresh from the bar all look right without each
+                // path remembering to say so.
+                Animated& lift = slotAnim(slotFocus, rowId, static_cast<int>(slot));
+                lift.retarget(isFocused ? 1.0f : 0.0f, kFocusDuration);
+                const float f = lift.value();
                 const float p = slotAnim(slotPress, rowId, static_cast<int>(slot)).value();
 
                 // Pressed reads as a push INTO the screen, against the focused
@@ -12072,7 +12089,8 @@ int main(int argc, char** argv) {
             // the switcher pills: a SELECTED destination is where you are, a
             // FOCUSED one is what you would open. Standing in the Library, the
             // bar says Library without pretending the cursor is up there.
-            const int selected = (here() == Screen::Library || here() == Screen::Grid)
+            const int selected = here() == Screen::Home ? BarHome
+                                 : (here() == Screen::Library || here() == Screen::Grid)
                                      ? BarLibrary
                                      : here() == Screen::Search   ? BarSearch
                                      : here() == Screen::Settings ? BarSettings
