@@ -116,6 +116,13 @@ void main() {
         color.a = color.a + e.a * (1.0 - color.a);
     }
 
+    // DITHERED, like the backdrop: a large dark panel's gradient bands too.
+    // It reaches the screen in proportion to the shape's own alpha, so a
+    // faint tint adds next to nothing and an opaque panel gets all of it.
+    vec2 q = floor(gl_FragCoord.xy);
+    float n1 = fract(sin(dot(q, vec2(12.9898, 78.233))) * 43758.5453);
+    float n2 = fract(sin(dot(q, vec2(39.3468, 11.1353))) * 24634.6345);
+    color.rgb += (n1 + n2 - 1.0) / 255.0;
     fragColor = color;
 }
 )";
@@ -302,6 +309,12 @@ void main() {
     // Tint OVER the blur, not mixed into it: the tint is a veil the art shows
     // through, which is what makes it read as glass rather than as paint.
     vec3 c = mix(behind, uTint.rgb, uTint.a);
+    // DITHERED AGAIN: the blur averages the backdrop's dither away, so the
+    // bands come back inside a glass row unless the glass adds its own.
+    vec2 q = floor(gl_FragCoord.xy);
+    float n1 = fract(sin(dot(q, vec2(12.9898, 78.233))) * 43758.5453);
+    float n2 = fract(sin(dot(q, vec2(39.3468, 11.1353))) * 24634.6345);
+    c += (n1 + n2 - 1.0) / 255.0;
     fragColor = vec4(c, a * uAlpha);
 }
 )";
