@@ -58,10 +58,31 @@ the top bar), #129 dark mode and an Appearance setting, #128 time played,
 offline play, account switching (designed 2026-09-21, not built), and the
 installer, boot splash and power button.
 
-**NEXT SESSION, CHOSEN BY MMAGTECH 2026-09-27: THE HOME FIXES (#125 TO
-#127) AND DARK MODE (#129)**, the latter with his Appearance idea on the
-issue (a dark option, and one that follows the time of day). Walk the
-scenarios with him before building, as usual. **#124 is PARKED (label `later`):** testing it means making saves
+**THE SESSION OF 2026-09-27 (LATE) BUILT THE HOME FIXES AND APPEARANCE,
+BRANCH `home-and-appearance`, ALL JUDGED ON THE TV.** #125 (focus per shelf
+place), #126 (Up/Down land on the cover above or below; per-shelf memory
+gone), #127 (Home first in the bar; arriving by bar or shoulder starts fresh,
+Back keeps your place), brighter bar pills (30%/55%), the bar cursor follows
+L1/R1, the power menu on Home opens on Cancel, the power icon DROPPED,
+Appearance (Standard/Dark/Scheduled with one Dark hours row) and sixteen
+Colors per account (#75), the switch curtain fading to the new person's
+colour, and the menus dithered (banding). Decisions in `docs/PROJECT.md`,
+*Home, the top bar, and Appearance*. **Merge only on MMagTech's go after the
+testing image is judged.** Until the next reboot the A9 runs the loop's
+hand-built binary (`tools/ui-loop.sh --restore` puts it back).
+
+**OWED FROM THAT SESSION: FILING.** A sweep found planned work with no issue
+(checked against the code). MMagTech has the list and has not yet said which
+to file. Decided but never filed: sleep offered per machine (P:6212), the
+Mesa shader cache the eviction cannot see (N:2076), a shipping image without
+the development shell (OQ 8), signed images, installer splash and firmware
+(P:5726, P:5733), os-release naming (OQ 7), Download All for a system
+(P:8559), Switch/PS3/Xbox/Wii order (OQ 12b), picture quality that learns
+per game (P:10926), launch screen "different core" and "export" (P:5171), a
+"Test builds" switch (SETTINGS.md:578), and owed tests (NES/SNES save after
+play, failed save resend, OLED dim, Dreamcast states). Rumble has no issue
+and is not implemented. Ask him which to file. Stale "not built" lines found
+by the same sweep belong to #81. **#124 is PARKED (label `later`):** testing it means making saves
 and states in each of RomM's web-player emulators, and MMagTech: too much
 for now. Kept open for when someone reports starting over.
 
