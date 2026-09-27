@@ -3,6 +3,8 @@
 
 #include "ps2.h"
 
+#include "rumble.h"
+
 #include <cstdio>
 #include <cstring>
 #include <dlfcn.h>
@@ -28,6 +30,9 @@ struct Api {
     unsigned (*sampleRate)() = nullptr;
     void     (*metrics)(float*, float*, double*) = nullptr;
     const char* (*version)() = nullptr;
+    // Optional: a library built before rumble (#149) lacks it, and PS2 plays
+    // on without motors rather than refusing to start.
+    void     (*getRumble)(unsigned, float*, float*) = nullptr;
 } gApi;
 
 uint64_t gFrameSerial = 0;
@@ -70,6 +75,9 @@ bool ps2::load(const std::string& soPath) {
         resolve(gApi.sampleRate, "cps2_audio_sample_rate") &&
         resolve(gApi.metrics, "cps2_metrics") &&
         resolve(gApi.version, "cps2_version");
+
+    gApi.getRumble =
+        reinterpret_cast<decltype(gApi.getRumble)>(dlsym(gHandle, "cps2_get_rumble"));
 
     if (!ok) {
         dlclose(gHandle);
@@ -131,6 +139,19 @@ void ps2::setPad(int port, uint32_t buttons, float leftX, float leftY, float rig
     if (!gHandle || port < 0) return;
     gApi.setPad(static_cast<unsigned>(port), buttons, leftX, leftY, rightX, rightY,
                 leftTrigger, rightTrigger);
+}
+
+void ps2::pollRumble() {
+    if (!gHandle || !gApi.getRumble) return;
+    for (unsigned port = 0; port < 2; ++port) {
+        float large = 0, small = 0;
+        gApi.getRumble(port, &large, &small);
+        auto level = [](float v) {
+            return static_cast<uint16_t>(v <= 0 ? 0 : v >= 1 ? 65535 : v * 65535.0f);
+        };
+        rumble::set(port, 0, level(large));
+        rumble::set(port, 1, level(small));
+    }
 }
 
 bool ps2::takeFrame(const uint32_t** pixels, unsigned& width, unsigned& height) {

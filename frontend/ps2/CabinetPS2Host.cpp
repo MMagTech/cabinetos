@@ -22,9 +22,11 @@
 #include <atomic>
 #include <chrono>
 #include <cstdio>
+#include <cstdlib>
 #include <mutex>
 #include <optional>
 #include <thread>
+#include <condition_variable>
 
 #include "fmt/format.h"
 
@@ -772,10 +774,17 @@ namespace
 	}
 } // namespace
 
-bool CabinetPS2::Run(const Config& config, std::string* error)
+// Whether the one PS2 thread has done PCSX2's once-per-process setup.
+static bool s_cpu_ready = false;
+
+// THE GAME ITSELF, on the one PS2 thread (see CabinetPS2::Run below).
+static bool RunOnCPUThread(const CabinetPS2::Config& config, std::string* error)
 {
 	s_config = config;
 	s_stop_requested.store(false);
+	// A game left from the pause menu was paused when it stopped; the next
+	// one must not start that way.
+	s_paused.store(false);
 	s_frames.store(0);
 	s_dumped = 0;
 
@@ -810,7 +819,14 @@ bool CabinetPS2::Run(const Config& config, std::string* error)
 		ImGuiManager::SetFonts(std::move(fonts));
 	}
 
-	Host::Internal::SetBaseSettingsLayer(&s_settings);
+	// ONCE PER PROCESS. PCSX2 asserts if the base layer is set twice, and it
+	// was set on every start, so the second PS2 game in one run of the
+	// console aborted it (found on the TV 2026-09-27). The layer is the same
+	// object every time; what changes is its contents, cleared and written
+	// again below for this game.
+	s_settings.Clear();
+	if (!Host::Internal::GetBaseSettingsLayer())
+		Host::Internal::SetBaseSettingsLayer(&s_settings);
 	VMManager::SetDefaultSettings(s_settings, true, true, true, true, true);
 
 	// --- what CabinetOS overrides, and why each one ---
@@ -937,10 +953,19 @@ bool CabinetPS2::Run(const Config& config, std::string* error)
 
 	EmuFolders::EnsureFoldersExist();
 
-	if (!VMManager::Internal::CPUThreadInitialize())
+	// ONCE, ON THIS THREAD, FOR THE LIFE OF THE PROCESS. It allocates the
+	// emulated machine's memory and installs PCSX2's page fault handler,
+	// which may only be installed once: set up again for a second game, it
+	// aborted the console (found 2026-09-27). pcsx2-qt does the same: one
+	// CPU thread, initialised once, many VMs created and destroyed on it.
+	if (!s_cpu_ready)
 	{
-		*error = "PCSX2's CPU thread would not initialise";
-		return false;
+		if (!VMManager::Internal::CPUThreadInitialize())
+		{
+			*error = "PCSX2's CPU thread would not initialise";
+			return false;
+		}
+		s_cpu_ready = true;
 	}
 
 	VMManager::ApplySettings();
@@ -956,8 +981,40 @@ bool CabinetPS2::Run(const Config& config, std::string* error)
 			VMManager::SetLimiterMode(LimiterModeType::Unlimited);
 
 		VMManager::SetState(VMState::Running);
-		while (VMManager::GetState() == VMState::Running)
-			VMManager::Execute();
+		// PAUSED IS NOT FINISHED. This loop used to run while the state was
+		// Running and shut the VM down as soon as it was anything else, so
+		// opening the pause menu ended the game and left the console showing
+		// its last frame (found on the TV 2026-09-27, there since PS2 first
+		// ran in the console). Now it follows pcsx2-qt's EmuThread::run:
+		// Running executes, Paused waits, Resetting resets, Stopping (or
+		// anything else) leaves. While paused, Execute is not running, so
+		// PumpMessagesOnCPUThread is not called and cannot apply a resume or
+		// a stop; that is done here instead.
+		for (;;)
+		{
+			const VMState state = VMManager::GetState();
+			if (state == VMState::Running)
+			{
+				VMManager::Execute();
+			}
+			else if (state == VMState::Paused)
+			{
+				if (s_stop_requested.load())
+					VMManager::SetState(VMState::Stopping);
+				else if (!s_paused.load())
+					VMManager::SetState(VMState::Running);
+				else
+					std::this_thread::sleep_for(std::chrono::milliseconds(5));
+			}
+			else if (state == VMState::Resetting)
+			{
+				VMManager::Reset();
+			}
+			else
+			{
+				break;
+			}
+		}
 
 		VMManager::Shutdown(false);
 		ok = true;
@@ -967,9 +1024,83 @@ bool CabinetPS2::Run(const Config& config, std::string* error)
 		*error = fmt::format("PCSX2 would not boot {}", config.disc_path);
 	}
 
-	VMManager::Internal::CPUThreadShutdown();
+	// No CPUThreadShutdown: the thread and what it set up stay for the next
+	// game, as in pcsx2-qt, and go with the process.
 	s_running.store(false);
 	return ok;
+}
+
+namespace
+{
+	// ONE PS2 THREAD FOR THE PROCESS. Each game used to run on a new thread
+	// that set PCSX2 up and tore it down again, which PCSX2 does not support
+	// (its CPU-thread state is per process). Run now hands the game to this
+	// thread and waits, so callers still see one blocking call per game.
+	std::mutex s_job_lock;
+	std::condition_variable s_job_cv;
+	const CabinetPS2::Config* s_job = nullptr;
+	bool s_job_done = false;
+	bool s_job_ok = false;
+	std::string s_job_error;
+	bool s_cpu_thread_started = false;
+	// AND CLOSED WHEN THE PROCESS ENDS. Its threads (the GS thread among
+	// them) must be joined before PCSX2's statics are destroyed, or it
+	// asserts on the way out: every console shutdown and restart would end
+	// in an abort. So an atexit handler, registered when the thread starts
+	// and therefore run before those destructors, asks it to shut PCSX2's
+	// CPU thread down and waits, a few seconds at most.
+	bool s_quit = false;
+	bool s_quit_done = false;
+
+	void CloseCPUThread()
+	{
+		std::unique_lock<std::mutex> lock(s_job_lock);
+		s_quit = true;
+		s_job_cv.notify_all();
+		s_job_cv.wait_for(lock, std::chrono::seconds(5), [] { return s_quit_done; });
+	}
+} // namespace
+
+bool CabinetPS2::Run(const Config& config, std::string* error)
+{
+	std::unique_lock<std::mutex> lock(s_job_lock);
+	if (!s_cpu_thread_started)
+	{
+		s_cpu_thread_started = true;
+		std::thread([] {
+			for (;;)
+			{
+				std::unique_lock<std::mutex> l(s_job_lock);
+				s_job_cv.wait(l, [] { return s_job != nullptr || s_quit; });
+				if (s_quit)
+				{
+					if (s_cpu_ready)
+						VMManager::Internal::CPUThreadShutdown();
+					s_quit_done = true;
+					s_job_cv.notify_all();
+					return;
+				}
+				const Config job = *s_job;
+				l.unlock();
+				std::string err;
+				const bool ok = RunOnCPUThread(job, &err);
+				l.lock();
+				s_job = nullptr;
+				s_job_ok = ok;
+				s_job_error = err;
+				s_job_done = true;
+				s_job_cv.notify_all();
+			}
+		}).detach();
+		std::atexit(CloseCPUThread);
+	}
+	s_job = &config;
+	s_job_done = false;
+	s_job_cv.notify_all();
+	s_job_cv.wait(lock, [] { return s_job_done; });
+	if (!s_job_ok && error)
+		*error = s_job_error;
+	return s_job_ok;
 }
 
 void CabinetPS2::SetPad(unsigned port, const Pad& pad)

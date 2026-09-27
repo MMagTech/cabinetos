@@ -75,6 +75,10 @@ void setPaused(bool paused);
 void setPad(int port, uint32_t buttons, float leftX, float leftY, float rightX, float rightY,
             float leftTrigger, float rightTrigger);
 
+// Hands what the game last asked of each DualShock 2's motors to rumble.h.
+// Once a frame; PCSX2 runs on its own thread, so this is read, not told.
+void pollRumble();
+
 // Takes the newest finished frame, if there is one. The pixels stay valid
 // until the next call.
 bool takeFrame(const uint32_t** pixels, unsigned& width, unsigned& height);

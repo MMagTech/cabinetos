@@ -21,6 +21,7 @@
 #include <SDL3/SDL.h>
 
 #include <dirent.h>
+#include <sys/resource.h>
 #include <sys/stat.h>
 
 #include <cctype>
@@ -89,6 +90,8 @@
 #include "playtime.h"
 #include "shortcuts.h"
 #include "rewind.h"
+#include "ps2.h"
+#include "rumble.h"
 #include "bluetooth.h"
 #include "ui.h"
 
@@ -1509,6 +1512,13 @@ struct LaunchJob {
     // than two code paths that would drift.
     bool playWhenReady = true;
     bool keepWhenReady = false;
+    // WHAT A FAILED LAUNCH SAYS, in words (#146, #90). The worker notes
+    // whether a system that cannot start without its BIOS got none from the
+    // server; if the game then fails, that is what the page says, "No Saturn
+    // BIOS on your server", rather than the core's own wording. It is never
+    // a reason to refuse: the core is still asked, and may manage.
+    std::atomic<bool> biosMissing{false};
+    std::string systemName;
     // WHERE THE PERSON WAS WHEN THEY PRESSED PLAY, as an integer the launch
     // machinery does not have to understand. See `startedOn` at the press site
     // and the ready branch in pumpLaunch: a download that finishes while
@@ -1704,6 +1714,8 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
     job.title = game.name.empty() ? game.fsName : game.name;
     job.romId = game.id;
     job.platformFsSlug = game.platformFsSlug;
+    job.systemName = game.platformName;
+    job.biosMissing = false;
     job.platformSlug = game.platformSlug;
     job.fsStem = game.fsName;
     if (const size_t dot = job.fsStem.find_last_of('.'); dot != std::string::npos)
@@ -1765,7 +1777,9 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
     }
 
     if (!core.load(job.corePath)) {
-        *err = "core " + job.coreName + ": " + core.error();
+        std::fprintf(stderr, "[launch] core %s: %s\n", job.coreName.c_str(),
+                     core.error().c_str());
+        *err = "Couldn't start this game";
         job.stage = LaunchJob::Stage::Idle;
         return false;
     }
@@ -1782,7 +1796,8 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
     if (keepWhenReady) {
         std::string kerr;
         if (!cache::keep(user, game.id, gameRecordJson(game), &kerr)) {
-            *err = kerr;
+            std::fprintf(stderr, "[keep] %s\n", kerr.c_str());
+            *err = "Couldn't download this game";
             job.stage = LaunchJob::Stage::Idle;
             return false;
         }
@@ -1856,7 +1871,8 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
             // them on alphabetical order. It happened to choose correctly and
             // that is not a property anyone should rely on.
             std::vector<std::string> platformFirmware;
-            if (client.fetchFirmware(platformId, &firmware, &ferr)) {
+            const bool listed = client.fetchFirmware(platformId, &firmware, &ferr);
+            if (listed) {
                 for (const auto& f : firmware) {
                     if (job.cancel.load()) break;
                     const std::string fdest = biosDir + "/" + storage::safeSegment(f.fileName);
@@ -1945,6 +1961,25 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
                     }
                 }
             }
+            // A SYSTEM THAT CANNOT START WITHOUT ITS BIOS, AND NONE CAME (#90).
+            // Only when the server ANSWERED: offline, the list is unknown and
+            // whatever is already on the console may be enough. "None" means
+            // no file this platform lists is on the disk after the fetch, or,
+            // where the core wants a known size, none of that size.
+            if (listed && catalog::needsBios(slug)) {
+                const catalog::FirmwareAliases fa = catalog::firmwareAliases(slug, fsSlug);
+                bool have = false;
+                for (const std::string& cand : platformFirmware) {
+                    struct stat st;
+                    if (::stat(cand.c_str(), &st) != 0 || st.st_size <= 0) continue;
+                    if (fa.sizeBytes > 0 && st.st_size != fa.sizeBytes) continue;
+                    have = true;
+                }
+                job.biosMissing = !have;
+                if (!have)
+                    std::fprintf(stderr, "[firmware] no BIOS for %s on the server\n",
+                                 slug.c_str());
+            }
             job.got = 0;
             job.total = 0;
         }
@@ -2015,7 +2050,8 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
                     return !job.cancel.load();
                 }, &err);
             if (!ok) {
-                job.message = err;
+                std::fprintf(stderr, "[launch] download: %s\n", err.c_str());
+                job.message = "Couldn't download this game";
                 job.stage = LaunchJob::Stage::Failed;
                 return;
             }
@@ -2087,7 +2123,8 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
 
         if (!romfile::prepareFile(dest, entryPath, validExts, blockExtract, &primary,
                                   &kind, &err)) {
-            job.message = err;
+            std::fprintf(stderr, "[launch] file: %s\n", err.c_str());
+            job.message = "Couldn't open this game's file";
             job.stage = LaunchJob::Stage::Failed;
             return;
         }
@@ -3528,6 +3565,8 @@ int main(int argc, char** argv) {
     bool evictTest = false;
     // Proves a restored state is genuinely identical, not merely accepted.
     bool stateTest = false;
+    // What one emulated frame costs, run back to back with no clock (#147).
+    bool speedTest = false;
     bool audioProbe = false;
     // Opens the keyboard immediately, so it can be worked on without walking
     // through a first-run flow that does not exist yet.
@@ -3650,6 +3689,11 @@ int main(int argc, char** argv) {
     // the whole Home-to-game transition can be watched on a machine with no
     // controller attached to it.
     int autoLaunchId = 0;
+    // A SECOND GAME IN THE SAME RUN (--then <id>): started once --overlay-exit
+    // has taken the first back to Home. Several emulators have broken only
+    // when they were not the first game of the run (PS2 and Dreamcast, found
+    // on the TV 2026-09-27), and a single --launch never exercises that.
+    int thenLaunchId = 0;
     // Runs the whole save/state round trip once the game is up: write a state,
     // upload it, then fetch the newest one back and restore it. Headless, so
     // the sync can be proved on a machine nobody is sitting at.
@@ -3756,6 +3800,8 @@ int main(int argc, char** argv) {
             audioProbe = true;
         } else if (SDL_strcmp(argv[i], "--state-test") == 0) {
             stateTest = true;
+        } else if (SDL_strcmp(argv[i], "--speed-test") == 0) {
+            speedTest = true;
         } else if (SDL_strcmp(argv[i], "--core") == 0 && i + 1 < argc) {
             corePath = argv[++i];
         } else if (SDL_strcmp(argv[i], "--romm") == 0 && i + 1 < argc) {
@@ -3813,6 +3859,8 @@ int main(int argc, char** argv) {
             autoSwitchAccountId = SDL_atoi(argv[++i]);
         } else if (SDL_strcmp(argv[i], "--unkeep") == 0 && i + 1 < argc) {
             autoUnkeepId = SDL_atoi(argv[++i]);
+        } else if (SDL_strcmp(argv[i], "--then") == 0 && i + 1 < argc) {
+            thenLaunchId = SDL_atoi(argv[++i]);
         } else if (SDL_strcmp(argv[i], "--overlay-exit") == 0) {
             overlayExitDemo = true;
             // Optional frame count: --overlay-exit 2000 plays for 2000 frames
@@ -5114,6 +5162,80 @@ int main(int argc, char** argv) {
             return 0;
         }
 
+        if (speedTest) {
+            // HOW MUCH ROOM A CORE HAS, NOT HOW FAST IT PLAYS. Paced, every
+            // core plays at 60 on the A9 and the number says nothing; run back
+            // to back, the cost of one frame is what a slower machine has to
+            // find inside its 16.7 ms. Written for #147 (recompiler against
+            // interpreter). Warm-up first, so loading and the intro's first
+            // shader compiles are not counted; then the mean, the 95th
+            // percentile and the worst single frame, because a slow frame is
+            // a stutter even when the mean is fine.
+            const int kWarm = SDL_getenv("CABINETOS_WARM")
+                                  ? SDL_atoi(SDL_getenv("CABINETOS_WARM"))
+                                  : 600;
+            const int kTimed = SDL_getenv("CABINETOS_TIMED")
+                                   ? SDL_atoi(SDL_getenv("CABINETOS_TIMED"))
+                                   : 1800;
+            const double step = 1.0 / core.avInfo().fps;
+            for (int i = 0; i < kWarm; ++i) {
+                core.runFor(step);
+                core.drainAudio();
+            }
+            // CABINETOS_PACED=1 runs at the game's own rate, idle between
+            // frames as in play. That idle is where the CPU clocks down, so it
+            // is the configuration a power setting has to be judged in; back
+            // to back, the CPU never rests and the setting hardly shows.
+            const bool paced = SDL_getenv("CABINETOS_PACED") != nullptr;
+            const uint64_t frameNs = static_cast<uint64_t>(1e9 / core.avInfo().fps);
+            // CPU TIME FOR THE WHOLE PROCESS, every thread, per game frame.
+            // The per-call timing below misses a core that emulates on a
+            // thread of its own (PPSSPP, Flycast, melonDS threaded): there
+            // retro_run only collects a finished frame. This does not.
+            auto cpuMs = [] {
+                rusage u{};
+                getrusage(RUSAGE_SELF, &u);
+                return (u.ru_utime.tv_sec + u.ru_stime.tv_sec) * 1e3 +
+                       (u.ru_utime.tv_usec + u.ru_stime.tv_usec) / 1e3;
+            };
+            std::vector<double> ms;
+            ms.reserve(kTimed);
+            const double cpuStart = cpuMs();
+            const uint64_t start = SDL_GetTicksNS();
+            int frames = 0;
+            while (frames < kTimed) {
+                if (paced) {
+                    const uint64_t due = start + static_cast<uint64_t>(frames) * frameNs;
+                    const uint64_t now = SDL_GetTicksNS();
+                    if (due > now) SDL_DelayPrecise(due - now);
+                }
+                const uint64_t t0 = SDL_GetTicksNS();
+                const int ran = core.runFor(step);
+                const double took = (SDL_GetTicksNS() - t0) / 1e6;
+                core.drainAudio();
+                if (ran <= 0) continue;
+                for (int r = 0; r < ran; ++r) ms.push_back(took / ran);
+                frames += ran;
+            }
+            const double wall = (SDL_GetTicksNS() - start) / 1e9;
+            const double cpu = cpuMs() - cpuStart;
+            std::sort(ms.begin(), ms.end());
+            double sum = 0;
+            for (double v : ms) sum += v;
+            std::fprintf(stderr,
+                         "[speed] %d frames after %d warm-up: mean %.2f ms, 95th %.2f ms, "
+                         "worst %.2f ms, %.0f frames a second (the game wants %.1f)%s; "
+                         "CPU %.2f ms a frame on all threads\n",
+                         frames, kWarm, sum / ms.size(), ms[ms.size() * 95 / 100],
+                         ms.back(), frames / wall, core.avInfo().fps,
+                         paced ? ", paced" : "", cpu / frames);
+            // Out without unloading. PPSSPP's teardown hangs in this headless
+            // path (the product's quit is a different route and works, #87),
+            // and a measurement has nothing to save.
+            std::fflush(stderr);
+            std::_Exit(0);
+        }
+
         if (stateTest) {
             // A save state is only worth anything if what comes back is the
             // same machine. "The core accepted the bytes" is not that: it is
@@ -5170,6 +5292,28 @@ int main(int argc, char** argv) {
                 return 1;
             }
             std::fprintf(stderr, "[state] %zu bytes at frame %d\n", state.size(), kWarm);
+            // A STATE FROM ANOTHER BUILD OR ANOTHER CPU ENGINE (#147). With
+            // CABINETOS_STATE_OUT this run's state is kept in a file; with
+            // CABINETOS_STATE_IN runs 2 and 3 restore THAT state instead of
+            // their own, so an interpreter's state can be loaded by the
+            // recompiler. Run 1 against run 2 then compares two engines and
+            // may differ without anything being wrong; what has to hold is
+            // that the state is accepted and the game plays on from it.
+            if (const char* out = SDL_getenv("CABINETOS_STATE_OUT")) {
+                const bool ok = SDL_SaveFile(out, state.data(), state.size());
+                std::fprintf(stderr, "[state] kept in %s: %s\n", out, ok ? "yes" : SDL_GetError());
+            }
+            if (const char* in = SDL_getenv("CABINETOS_STATE_IN")) {
+                size_t n = 0;
+                void* bytes = SDL_LoadFile(in, &n);
+                if (!bytes) {
+                    std::fprintf(stderr, "[state] cannot read %s: %s\n", in, SDL_GetError());
+                    return 1;
+                }
+                state.assign(static_cast<uint8_t*>(bytes), static_cast<uint8_t*>(bytes) + n);
+                SDL_free(bytes);
+                std::fprintf(stderr, "[state] runs 2 and 3 restore %s (%zu bytes)\n", in, n);
+            }
 
             // Video and audio digested SEPARATELY. If they are mixed and the
             // result differs, all you know is "something diverged" — which is
@@ -5891,7 +6035,8 @@ int main(int argc, char** argv) {
     };
     // The pause menu's items for THIS game, built each time it opens: the two
     // state items only where the system has snapshots. PlayStation 2 and
-    // GameCube get Resume and Exit to Home and nothing to press that says no.
+    // GameCube get Resume, Screenshot and Exit to Home, and nothing to press
+    // that says no.
     std::vector<OverlayItem> pauseItems{OvResume, OvSaveState, OvLoadState, OvExit};
 
     // ---- The Power menu — docs/PROJECT.md, open question 10b ------------
@@ -6766,7 +6911,7 @@ int main(int argc, char** argv) {
                      SetPinOff, SetRemoveAccount, SetScreenOff, SetWifi, SetServer,
                      SetUpdate, SetUpdateCheck, SetCredits, SetFiles, SetDownloads,
                      SetAddController, SetShortcuts, SetShortcutButton, SetAppearance,
-                     SetDarkHours, SetColour };
+                     SetDarkHours, SetColour, SetRumble };
     // One Eject row per USB drive: this plus the drive's index in
     // storage::locations() when the rows were built.
     constexpr int kSetEject = 100;
@@ -7458,6 +7603,15 @@ int main(int argc, char** argv) {
                                 "Player " + std::to_string(p.player + 1)});
             }
             rows.push_back({K::Action, SetAddController, "Add a controller", "", ""});
+            // RUMBLE, on by default, for every pad and every system with
+            // motors: one switch, as Cabinet has it (rumble.h, #149). Above
+            // the shortcuts so their button row stays under its own switch.
+            {
+                Row r{K::Choice, SetRumble, "Rumble", "", ""};
+                r.choices = {"Off", "On"};
+                r.choice = rumble::enabled() ? 1 : 0;
+                rows.push_back(r);
+            }
             // IN-GAME SHORTCUTS, off by default (shortcuts.h). The Button
             // mapping row that stood here went with #66: there is no mapping
             // screen. With the switch on, the shortcut button row is for the
@@ -8415,6 +8569,10 @@ int main(int argc, char** argv) {
                     prefs::set("update_check", updWeekly ? "weekly" : "manual");
                     sound::play(sound::Cue::Move);
                 }
+                if (res.value == SetRumble) {
+                    rumble::setEnabled(settingsScreen.choiceOf(SetRumble) == 1);
+                    sound::play(sound::Cue::Move);
+                }
                 if (res.value == SetShortcuts) {
                     shortcuts::setEnabled(settingsScreen.choiceOf(SetShortcuts) == 1);
                     sound::play(sound::Cue::Move);
@@ -9295,7 +9453,10 @@ int main(int argc, char** argv) {
                     }
                 }
             }
-            detailScreen.setNotice(core.error());
+            detailScreen.setNotice(
+                launchJob.biosMissing.load()
+                    ? "No " + launchJob.systemName + " BIOS on your server"
+                    : std::string("Couldn't start this game"));
             sound::play(sound::Cue::Edge);
             // The curtain came down for a game that is not going to start, so
             // it goes straight back up onto the screen that says why.
@@ -9784,9 +9945,10 @@ int main(int argc, char** argv) {
                 pauseItems.push_back(OvSaveState);
                 pauseItems.push_back(OvLoadState);
             }
-            // Where a picture can be read from the game, which today is where
-            // states are; PS2 and GameCube follow in #130.
-            if (session.snapshots) pauseItems.push_back(OvScreenshot);
+            // In every game, as the shortcut is (MMagTech: screenshots go
+            // wherever the shortcut button is recognised). PS2 reads PCSX2's
+            // frame since #130; GameCube is a libretro core like the rest.
+            pauseItems.push_back(OvScreenshot);
             pauseItems.push_back(OvExit);
         }
         overlaySlot = 0;
@@ -10733,6 +10895,11 @@ int main(int argc, char** argv) {
             }
             const bool frozen = overlayOpen || stateHold || stateHoldWaiting;
             core.setPaused(frozen);
+            // RUMBLE (#149): what the game asked for, to each player's pad,
+            // and nothing while the game is not being played. Rewind replays
+            // frames backwards, which is not play either.
+            if (core.isPs2()) ps2::pollRumble();
+            rumble::update(!frozen && !rewinding);
 
             if (frozen) {
                 // Nothing to step. The last frame stays uploaded, so the
@@ -10886,9 +11053,24 @@ int main(int argc, char** argv) {
         // The same errand as the launch above, for the action a person takes on
         // the launch screen. It goes through downloadById, so the floors are
         // checked exactly as they would be for a press.
-        if (autoDownloadId > 0 && !launchJob.busy()) {
+        // Once Home is up, as a person's press would be: a download begun
+        // behind the startup screen takes the curtain from it (pumpArrive
+        // gives the curtain to any launch job) and the screen stays black.
+        if (autoDownloadId > 0 && !launchJob.busy() && !arriving) {
             const int id = autoDownloadId;
             autoDownloadId = 0;
+            // ASKED FOR BY ID, as --launch is (below): only Recent and
+            // Favorites are in the library at boot, so any other game was not
+            // found and the download never started, without a word. That is
+            // how the first capture of the download ring (#145) came out as an
+            // empty bar.
+            if (lib.byRomId.find(id) == lib.byRomId.end()) {
+                romm::Game g;
+                std::string err;
+                if (liveClient.fetchGame(id, &g, &err)) appendGame(lib, g);
+                else std::fprintf(stderr, "[download] could not fetch rom %d: %s\n", id,
+                                  err.c_str());
+            }
             downloadById(id);
         }
         // The pairing worker's answer, picked up on the frame thread. Nothing
@@ -10969,6 +11151,13 @@ int main(int argc, char** argv) {
             const int id = autoUnkeepId;
             autoUnkeepId = 0;
             removeDownload(id);
+        }
+        if (thenLaunchId > 0 && !overlayExitDemo && !playing && autoLaunchId == 0 &&
+            !launchJob.busy()) {
+            std::fprintf(stderr, "[launch] then: %d\n", thenLaunchId);
+            autoLaunchId = thenLaunchId;
+            thenLaunchId = 0;
+            autoLaunchAfter = 1.0f;
         }
         if (autoLaunchId > 0 && !playing) {
             autoLaunchAfter -= dt;
@@ -12568,45 +12757,7 @@ int main(int argc, char** argv) {
                 bx += w + 60.0f;
             }
 
-            // A DOWNLOAD IN FLIGHT, IN THE CORNER. For the person who started
-            // one and walked away: without it a background fetch of a 1.78 GB
-            // arcade set is completely invisible the moment you leave the
-            // screen that started it, which is exactly when you want to know.
-            //
-            // It is a readout and not a control — nothing is reached by
-            // pointing at it — so it is small, quiet, and says only the two
-            // things worth knowing: that something is coming, and how far.
-            float rightEdge = barX + barW;
-            if (launchJob.busy() && launchJob.busyFor >= kProgressDelay) {
-                const int64_t got = launchJob.got.load();
-                const int64_t total = launchJob.total.load();
-                char pct[64];
-                if (launchJob.stage.load() == LaunchJob::Stage::Unpacking)
-                    std::snprintf(pct, sizeof pct, "Unpacking\xE2\x80\xA6");
-                else if (total > 0)
-                    std::snprintf(pct, sizeof pct, "%.0f%%",
-                                  100.0 * static_cast<double>(got) /
-                                      static_cast<double>(total));
-                else
-                    std::snprintf(pct, sizeof pct, "%.0f MB",
-                                  static_cast<double>(got) / 1e6);
-                const float pw = text.measure(pct, ui::TextStyle::Callout, sc);
-                const float trackW = 140.0f;
-                const float trackY = barTop + barHeight * 0.5f - 3.0f;
-                float px = rightEdge - pw;
-                text.draw(renderer, pct, px, barBaseline, ui::TextStyle::Callout,
-                          ui::Color::white(0.75f), sc);
-                px -= 14.0f + trackW;
-                renderer.draw(ui::Rect{px, trackY, trackW, 6.0f, 3.0f,
-                                       ui::Color::white(0.16f)});
-                if (total > 0) {
-                    const float frac = std::clamp(
-                        static_cast<float>(got) / static_cast<float>(total), 0.0f, 1.0f);
-                    renderer.draw(ui::Rect{px, trackY, trackW * frac, 6.0f, 3.0f,
-                                           ui::palette::kScreenCyan});
-                }
-                rightEdge = px - 32.0f;
-            }
+            const float rightEdge = barX + barW;
 
             // The account, at the far right — the corner the reference
             // implementation reserves for it. `TVAccountChip`: "the signed-in
@@ -12704,6 +12855,71 @@ int main(int argc, char** argv) {
             // target you cannot find is worse than one that is too loud.
             text.draw(renderer, who, discX - 10.0f - nameW, chipBaseline,
                       chipStyle, ui::Color::white(chipOn ? 1.0f : 0.62f), sc);
+
+            // A DOWNLOAD IN FLIGHT: A RING LEFT OF THE ACCOUNT CHIP (#145).
+            // For the person who started one and walked away: without it a
+            // background fetch of a 1.78 GB arcade set is invisible the moment
+            // you leave the screen that started it.
+            //
+            // IT USED TO BE A LINE AND A PERCENTAGE IN THE CORNER, and the chip
+            // was fitted to its left, so the chip jumped sideways whenever a
+            // download started or finished. MMagTech, on the TV, 2026-09-27:
+            // he doesn't like it moving. Now the chip owns the corner and never
+            // moves, and the download is a small ring that fills clockwise from
+            // the top; no number. A down arrow inside was tried, drawn and then
+            // as the font's glyph, and MMagTech found it horrible: the ring
+            // alone says it. Unpacking has no fraction to show, so a quarter of the
+            // ring turns instead. A readout, not a control: nothing reaches it.
+            if (launchJob.busy() && launchJob.busyFor >= kProgressDelay) {
+                const int64_t got = launchJob.got.load();
+                const int64_t total = launchJob.total.load();
+                const bool unpacking =
+                    launchJob.stage.load() == LaunchJob::Stage::Unpacking;
+                // Clear of the chip's focus pill (kChipPillPadX), so the two
+                // never touch when focus lands on the chip.
+                const float chipLeft = discX - 10.0f - nameW - 22.0f;
+                const float ringD = discD;
+                const float cx = chipLeft - 24.0f - ringD * 0.5f;
+                const float cy = barTop + barHeight * 0.5f;
+                const float stroke = 4.0f;
+                const float rad = (ringD - stroke) * 0.5f;
+                // A stroke drawn as overlapping discs: the renderer has
+                // rounded rectangles and nothing else, and at a 4-point width
+                // discs a point apart read as one smooth line with round ends.
+                // Only in SOLID colours: see-through discs stack where they
+                // overlap and the line comes out blotchy (the first capture).
+                const float width = stroke;
+                auto dot = [&](float x, float y, ui::Color col) {
+                    renderer.draw(ui::Rect{x - width * 0.5f, y - width * 0.5f, width,
+                                           width, width * 0.5f, col});
+                };
+                auto arc = [&](float from, float to, ui::Color col) {
+                    const float len = (to - from) * rad;
+                    const int n = std::max(2, static_cast<int>(len / 1.0f));
+                    for (int i = 0; i <= n; ++i) {
+                        const float a = from + (to - from) * static_cast<float>(i) / n;
+                        dot(cx + std::sin(a) * rad, cy - std::cos(a) * rad, col);
+                    }
+                };
+                constexpr float kTau = 6.2831853f;
+                // The track is one shape, an inset rim on a clear circle, so
+                // it can be faint without stacking.
+                {
+                    ui::Rect track{cx - ringD * 0.5f, cy - ringD * 0.5f, ringD, ringD,
+                                   ringD * 0.5f, ui::Color::white(0.0f)};
+                    track.border = stroke;
+                    track.borderColor = ui::Color::white(0.28f);
+                    renderer.draw(track);
+                }
+                if (unpacking) {
+                    const float spin = static_cast<float>(SDL_GetTicks() % 1200) / 1200.0f * kTau;
+                    arc(spin, spin + kTau * 0.25f, ui::palette::kScreenCyan);
+                } else if (total > 0) {
+                    const float frac = std::clamp(
+                        static_cast<float>(got) / static_cast<float>(total), 0.0f, 1.0f);
+                    if (frac > 0.0f) arc(0.0f, kTau * frac, ui::palette::kScreenCyan);
+                }
+            }
         }
 
         // DOWNLOADS (Settings), over the top bar: it is a panel over the whole

@@ -52,6 +52,63 @@ untouched). The VM is on `testing` `2026.09.26.4`. **Branches: `main`,
 was deleted.** The A9 has `~/fb/sweep.sh` and `~/fb/sweep-all.txt` (the
 headless every-system sweep, below).
 
+**THE SESSION OF 2026-09-27 (LATE) DID THE EMULATOR QUEUE, BRANCH
+`emulator-queue`.** Decisions in `docs/PROJECT.md`, *The emulator queue:
+recompilers, rumble, the download ring, plain refusals*. Short version:
+
+- **#147:** N64 built with its recompiler (Mario Kart 64 6.05 → 1.91 ms a
+  frame; states cross both ways, identical to the old core's own round
+  trip); PSP on PPSSPP's default recompiler (MMagTech: the documentation is
+  enough, no measurement).
+- **#149 rumble:** every libretro core plus PS2 (PCSX2's vibration call
+  taken over with `--wrap` in `frontend/ps2/compile.sh`), Settings >
+  Controllers > Rumble, on by default.
+- **#145:** Home's download is a ring left of the account chip; the chip no
+  longer moves. **No arrow** (MMagTech: horrible).
+- **#89:** MAME 2003-Plus's undeclared options are by design; FBNeo is clean.
+  DS stays parked. #89 is done.
+- **#146/#90:** plain one-line refusals; "No Saturn BIOS on your server" only
+  when a BIOS-only system got none. The ahead-of-time check was dropped in
+  conversation. Arcade sets must be non-merged (they carry the BIOS).
+- **#130:** PS2 screenshots read PCSX2's frame texture.
+- **#150 filed:** Bazzite's power profiles are never switched (the A9 sits on
+  `balanced`); measured on N64, recommend performance in a game.
+- **New instruments:** `--speed-test` (+ `CABINETOS_PACED=1`,
+  `CABINETOS_WARM`, `CABINETOS_TIMED`) and `CABINETOS_STATE_OUT/IN` on
+  `--state-test`; `--download <id>` now fetches by id and waits for Home.
+- **TESTED ON THE TV (image `2026.09.27.8`, then the loop):** the Rumble
+  row; PS2 and GBA rumble on the Xbox pad; PS2 pause, Resume, Screenshot
+  (uploaded to RomM), Exit and a second PS2 launch, after the two PS2 fixes
+  below. #116 closed (the kids' pad pairs and plays).
+- **FOUND ON THE TV AND FIXED:** the PS2 pause menu ended the game, and a
+  second PS2 game in one run aborted the app (both since PS2 first ran in the
+  console; PROJECT.md has why). **The testing image `.8` does NOT have these
+  fixes**; the branch was pushed to `testing` again at the end of the session
+  for an image that does.
+- **STILL OWED ON THE TV, on that newer testing image:** Dreamcast and
+  GameCube rumble; Rumble Off; the download ring during a real download;
+  Mario Kart 64 plus an old state (recompiler); Lumines plus an old state;
+  GameCube screenshot; Dreamcast states (#140); optionally four pads (#115).
+  Then MMagTech's word "merge" (the merge promotes that image). Close #147,
+  #149, #145, #89, #146, #90, #130 with the merge ("Closes" in the PR body).
+- **PS1 and N64 do not rumble by default**, as RetroArch, Batocera and Cabinet:
+  their controller type is #73 (comment there). The Lite 2 rumbles only in
+  Switch mode (S).
+- **#151 filed:** Dreamcast crashed on load after an arcade game with a 143 MB
+  state; not reproduced (`--then <id>` added for it).
+- **The loop's `~/cores-dev` was stale for PS2 and GameCube** (hand copies from
+  2026-09-20/21). Now `cabinetos-ps2.so` is tonight's build and
+  `dolphin_libretro.so` links to the image's; the old files are `*.old`. A PS2
+  bridge built by hand is in `~/pcsx2-clean/pcsx2-upstream/build-cabinetos/`
+  (with the probe; run it with `LD_LIBRARY_PATH` set to that folder).
+- **A9 scratch state:** `~/fb/frontend2` (a second build tree), `~/fb/repo`
+  (cores built by hand: the recompiler N64 core), `~/fb/speed.sh`,
+  `~/fb/xstate.sh`, `~/fb/govtest.sh`, `~/fb/fetch.sh`. tuned is back on
+  `balanced`.
+
+**NEXT after this merges:** #150 (measure PS2 first), then Picture quality
+(#63/#73), offline (#88), the installer block.
+
 **THE SESSION OF 2026-09-27 (AFTERNOON) DID #109 AND #128.** Decisions in
 `docs/PROJECT.md`, *The startup screen lifts off Home (#109)* and *Time
 played (#128)*. Short version:
@@ -120,9 +177,8 @@ the pace* and *The emulator settings audit (#89)*. Short version:
   not a game. MMagTech asked for it deleted; that was declined as a
   permanent deletion on his server, and he was told where to do it in RomM.
 
-**NEXT, the emulator queue:** #147, rumble (#149), #145,
-MAME's options (#89), #90 (BIOS warning, walk the scenarios first). Then the installer block (#105
-to #108, #136). #124 stays parked.
+**The emulator queue that stood here was done the same night; see the
+block above.** #124 stays parked.
 
 **THE SESSION OF 2026-09-27 BUILT THE IN-GAME SHORTCUTS (#76 TO #80) AND FIXED
 #103, BRANCH `in-game-shortcuts`.** Every decision, with the reasons and what

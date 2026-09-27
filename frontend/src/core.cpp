@@ -17,6 +17,7 @@
 
 #include "libretro.h"
 #include "libretro_vulkan.h"
+#include "rumble.h"
 #include "vkhost.h"
 
 // The vendored libretro.h stops at environment call 72 and this one is 73.
@@ -697,6 +698,17 @@ bool environment(unsigned cmd, void* data) {
             static_cast<retro_log_callback*>(data)->log = logCallback;
             return true;
 
+        case RETRO_ENVIRONMENT_GET_RUMBLE_INTERFACE:
+            // Every core that has motors, as RetroArch does (#149). Answered
+            // even with the Settings switch off: the switch is applied at the
+            // pad (rumble.cpp), so turning it on mid-game works at once.
+            static_cast<retro_rumble_interface*>(data)->set_rumble_state =
+                [](unsigned port, enum retro_rumble_effect effect, uint16_t strength) {
+                    rumble::set(port, effect == RETRO_RUMBLE_STRONG ? 0 : 1, strength);
+                    return true;
+                };
+            return true;
+
         case RETRO_ENVIRONMENT_GET_VARIABLE: {
             auto* var = static_cast<retro_variable*>(data);
             const std::string key = var->key ? var->key : "";
@@ -711,8 +723,19 @@ bool environment(unsigned cmd, void* data) {
                 // A key the core never declared. There is nothing honest to
                 // answer with — we do not know its values, let alone its
                 // default — so it is recorded and reported rather than guessed
-                // at. This is the one case that stays unanswered, and it is a
-                // bug in the core or a table we failed to read.
+                // at. This is the one case that stays unanswered, and RetroArch
+                // leaves it unanswered too.
+                //
+                // MAME 2003-PLUS DOES THIS ON PURPOSE, and it is the only core
+                // here that does it every launch (#89, read in its source at
+                // the pinned commit, src/mame2003/core_options.c): it declares
+                // only the options the loaded game can use (vector settings for
+                // a vector game, the Neo Geo BIOS for a Neo Geo game, crosshairs
+                // for a light gun game...) but asks for every one, and keeps its
+                // own value for any the frontend does not answer. Whatever is
+                // relevant to the game is declared and answered; the rest do
+                // not apply. So its list of "never declared" is expected, not a
+                // table we failed to read. Anywhere else it is worth a look.
                 var->value = nullptr;
                 if (!key.empty() &&
                     std::find(gUndeclaredAsks.begin(), gUndeclaredAsks.end(), key) ==
@@ -1283,6 +1306,7 @@ void Core::unload() {
 
 bool Core::loadGame(const std::string& romPath, const std::string& systemDir,
                     const std::string& saveDir) {
+    rumble::reset();
     if (!handle_) {
         error_ = "no core loaded";
         return false;
@@ -1491,6 +1515,7 @@ bool Core::loadGame(const std::string& romPath, const std::string& systemDir,
 }
 
 void Core::unloadGame() {
+    rumble::reset();
     if (gIsPs2) {
         if (!gameLoaded_) return;
         // BLOCKS until PCSX2 has actually stopped, which is what makes the
@@ -1996,8 +2021,15 @@ uint64_t Core::frameDigest() const {
 }
 
 bool Core::snapshot(std::vector<uint8_t>& rgba, unsigned& width, unsigned& height) const {
-    const unsigned w = gFrameW, h = gFrameH;
-    if (w == 0 || h == 0 || isPs2()) return false;
+    // PLAYSTATION 2 (#130): its frame is not the core's, it is the texture
+    // uploadFrame fills from PCSX2 (ps2::takeFrame), RGBA, top row first, at
+    // the game's own resolution. So a screenshot works in every game where
+    // the shortcut button does. Not a save state's picture: PS2 has none.
+    const bool ps2Frame = isPs2();
+    const unsigned w = ps2Frame ? frameWidth_ : gFrameW;
+    const unsigned h = ps2Frame ? frameHeight_ : gFrameH;
+    if (w == 0 || h == 0) return false;
+    if (ps2Frame && !texture_) return false;
     std::vector<uint8_t> px(static_cast<size_t>(w) * h * 4);
 
     // Read a GL framebuffer's bottom-left w x h into px, top row first when
@@ -2022,11 +2054,12 @@ bool Core::snapshot(std::vector<uint8_t>& rgba, unsigned& width, unsigned& heigh
         }
     };
 
-    if (gHWVulkan) {
+    if (ps2Frame || gHWVulkan) {
         // The exported image is an ordinary GL texture (vkhost), top row
         // first, the picture in its top-left corner. present() waits on its
-        // fence, so what is there is complete.
-        const GLuint tex = vk::texture();
+        // fence, so what is there is complete. PS2's texture is read the
+        // same way.
+        const GLuint tex = ps2Frame ? texture_ : vk::texture();
         if (!tex) return false;
         GLuint fbo = 0;
         glGenFramebuffers(1, &fbo);

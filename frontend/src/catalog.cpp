@@ -201,9 +201,10 @@ const char* emulatorTag(const char* core) {
         // diverges_across_platforms is false), both of the patches Cabinet's
         // builder applies travel and are asserted, the two CMake levers that
         // the unix build would otherwise decide differently are matched
-        // (USING_GLES2, MOBILE_DEVICE), and the CPU engine — which is an
-        // OPTION in this core rather than a build flag — is answered with
-        // Cabinet's own "IR JIT" in optionOverrides below.
+        // (USING_GLES2, MOBILE_DEVICE). The CPU engine is an OPTION in this
+        // core rather than a build flag, and differs on purpose since #147:
+        // the recompiler here, Cabinet's "IR JIT" on Apple (optionOverrides).
+        // The state is the emulated PSP, not the engine that ran it.
         //
         // What is not proved, stated because it is true of the other five
         // here as well: no state written by this build has been loaded by
@@ -425,29 +426,16 @@ std::map<std::string, std::string> optionOverrides(const std::string& core) {
     // beside it — an override with no justification is the thing that goes
     // stale and that nobody can later tell apart from a mistake.
     if (coreName == "ppsspp") {
-        // PPSSPP is the only core in the set whose CPU BACKEND is a runtime
-        // option rather than a build flag, so the lever five other cores pull
-        // in cores/build-core.sh is pulled here instead. Its declared default
-        // is "JIT", the native recompiler; Cabinet ships "IR JIT", which is
-        // upstream's own string for the IR interpreter, on all three of its
-        // platforms.
-        //
-        // Matching it. Two reasons, and the first is the standing rule: until
-        // a backend difference has been MEASURED not to move a core's state
-        // format, match Cabinet's configuration exactly — that is how
-        // pcsx_rearmed, melonDS and picodrive were each settled, and PSP has
-        // not been through it. The second is that nothing is being given up
-        // today: PSP is four games in the reference library, and Cabinet's own
-        // bench found the IR interpreter FASTER than the recompiler on an M4
-        // (Lumines 1.93 ms against 3.05 ms mean) because compilation stalls
-        // land inside frames.
-        //
-        // What it costs, said plainly: on an x86-64 console the native
-        // recompiler is the engine PPSSPP is usually run with, and this leaves
-        // it switched off. The experiment that would change this answer is the
-        // one cores/backend-diff.sh exists for, run on the two option values
-        // rather than two builds — and it needs a PSP game and a machine,
-        // which is the SER5.
+        // THE CPU ENGINE IS THE CORE'S OWN DEFAULT, "JIT", the native
+        // recompiler, from 2026-09-27 (#147). This used to answer "IR JIT",
+        // upstream's IR interpreter, to match Cabinet, whose bench found it
+        // faster on an Apple M4 (Lumines 1.93 ms against 3.05 ms): Apple's
+        // platforms may not run a recompiler, and the IR interpreter is what
+        // PPSSPP built for them. On a PC the recompiler is what PPSSPP,
+        // RetroArch and the libretro documentation all name as the default
+        // and recommended engine, and MMagTech took that as enough
+        // (2026-09-27). A state is the emulated PSP, not the engine, so the
+        // states made under "IR JIT" should still load; that is checked on the TV.
         //
         // ppsspp_internal_resolution deliberately does NOT appear here. Its
         // declared default is "480x272", the PSP's own screen, which is what
@@ -464,7 +452,7 @@ std::map<std::string, std::string> optionOverrides(const std::string& core) {
         // 20), and crashed the console as it started until the host raised
         // every Vulkan instance to 1.1 as RetroArch does (vkhost.cpp) —
         // 2026-09-27. Lumines plays its demo on Vulkan on the A9.
-        return {{"ppsspp_cpu_core", "IR JIT"}};
+        return {};
     }
 
     // Genesis Plus GX, and this one decides WHERE THE SAVE IS, not how it
@@ -624,6 +612,11 @@ const char* directorySaveRoot(const char* core) {
     if (!core) return nullptr;
     if (manifestName(core) == "ppsspp") return "PSP/SAVEDATA";
     return nullptr;
+}
+
+bool needsBios(const std::string& slug) {
+    return slug == "3do" || slug == "saturn" || slug == "segacd" || slug == "ps2" ||
+           slug == "turbografx-cd";
 }
 
 FirmwareAliases firmwareAliases(const std::string& slug, const std::string& fsSlug) {
