@@ -7,6 +7,7 @@
 #include <SDL3/SDL.h>
 
 #include <algorithm>
+#include <cmath>
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
@@ -1515,20 +1516,23 @@ int Core::runFor(double dt) {
     }
 
     const double interval = 1.0 / std::max(av_.fps, 1.0);
-    accumulator_ += dt;
+    // Fast forward is simply more emulated time per real second: the
+    // accumulator fills faster, and the caps below scale with it.
+    accumulator_ += dt * speed_;
+    const int maxRuns = 2 * static_cast<int>(std::ceil(speed_));
     // Anything beyond a couple of frames behind is time that is simply gone.
     // Letting it accumulate would make the core sprint to catch up, which
     // stutters the picture and floods the audio buffer.
-    if (accumulator_ > interval * 4) accumulator_ = interval;
+    if (accumulator_ > interval * 2 * maxRuns) accumulator_ = interval;
     // The clock the governor measures against. It is whatever clock runFor is
     // driven by, which is the wall clock in the product and a synthetic one
     // frame per draw under --screenshot — so the RELATIONSHIP the governor
     // enforces holds in both, and a capture of a 30fps PSP game advances it at
     // 30 game frames per 60 drawn rather than sprinting.
-    paceClock_ += dt;
+    paceClock_ += dt * speed_;
 
     int ran = 0;
-    while (accumulator_ >= interval && ran < 2) {
+    while (accumulator_ >= interval && ran < maxRuns) {
         // The second brake, and only one core has it. See load(): the
         // accumulator counts the runs that were asked for, and for PPSSPP a
         // run is a game frame rather than a vblank, so the accumulator can be

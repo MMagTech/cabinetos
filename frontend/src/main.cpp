@@ -5689,6 +5689,11 @@ int main(int argc, char** argv) {
     // tells a tap (the pause menu) from a hold (a shortcut) on release.
     struct ShortcutHold { bool down = false, used = false; uint32_t before = 0; };
     ShortcutHold shortcutHold[players::kMax];
+    // FAST FORWARD (#77): the shortcut button and ZR, held. Fast while held,
+    // normal on release, the sound discarded meanwhile. About 4x, a fixed top
+    // speed rather than a setting. PlayStation 2 paces itself and says so.
+    constexpr double kFastForward = 4.0;
+    bool fastForwardSaid = false;
     // Both stick clicks together are the overlay hotkey — see where they are
     // read. Held state rather than a chord test at press time, because SDL
     // delivers the two presses as separate events.
@@ -10071,6 +10076,7 @@ int main(int argc, char** argv) {
             // EVERY SEATED PAD IS ITS OWN PLAYER (players.h, issue #64). Until
             // 2026-09-26 a game read only the first pad SDL listed, so a second
             // person's pad walked the menus and did nothing in a game.
+            bool fastForward = false;
             const bool menuWasUp = overlayOpen || stateHold || menuUpAtLastRead;
             menuUpAtLastRead = overlayOpen || stateHold;
             for (int p = 0; p < players::kMax; ++p) {
@@ -10157,6 +10163,9 @@ int main(int argc, char** argv) {
                     // not a tap that opens the menu on its release.
                     if (down && !h.down) h = {true, stateHoldJustEnded, st.buttons};
                     if (h.down) {
+                        if (down && (st.buttons & bit(cab::R2)) && !overlayOpen && !stateHold &&
+                            !stateHoldWaiting)
+                            fastForward = true;
                         const uint32_t fresh = st.buttons & ~h.before;
                         h.before = st.buttons;
                         if (fresh) {
@@ -10234,6 +10243,16 @@ int main(int argc, char** argv) {
             // all twenty-one libretro cores, so it is stated unconditionally
             // rather than behind a test somebody has to remember.
             stateHoldJustEnded = false;
+            if (fastForward && core.isPs2()) {
+                if (!fastForwardSaid) menuNotice.say("Fast forward isn't available here", Tone::Info);
+                fastForwardSaid = true;
+                fastForward = false;
+            } else if (!fastForward) {
+                fastForwardSaid = false;
+            }
+            if (fastForward != (core.speed() > 1.0))
+                std::fprintf(stderr, "[shortcuts] fast forward %s\n", fastForward ? "on" : "off");
+            core.setSpeed(fastForward ? kFastForward : 1.0);
             const bool frozen = overlayOpen || stateHold || stateHoldWaiting;
             core.setPaused(frozen);
 
@@ -10249,7 +10268,9 @@ int main(int argc, char** argv) {
 
             if (audioStream) {
                 const std::vector<int16_t>& samples = core.drainAudio();
-                if (!samples.empty()) {
+                // Fast forward's sound is discarded, not played fast: four
+                // times the samples would only pile up behind the picture.
+                if (!samples.empty() && core.speed() <= 1.0) {
                     SDL_PutAudioStreamData(audioStream, samples.data(),
                                            static_cast<int>(samples.size() * sizeof(int16_t)));
                 }

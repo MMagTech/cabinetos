@@ -183,6 +183,13 @@ public:
     // Returns how many emulated frames actually ran.
     int runFor(double dtSeconds);
 
+    // FAST FORWARD (#77): how many emulated seconds pass per real one. 1 is
+    // normal. runFor steps up to this many times more frames per draw; the
+    // caller discards the sound meanwhile. No effect on PlayStation 2, whose
+    // emulator paces itself (it has a turbo of its own, not yet wired).
+    void setSpeed(double s) { speed_ = s < 1.0 ? 1.0 : s; }
+    double speed() const { return speed_; }
+
     // How far the core's own audio output has run ahead of the clock runFor is
     // driven by, in seconds. Positive means the emulated machine is going
     // faster than realtime.
@@ -425,6 +432,7 @@ private:
     // Wall-clock pacing. Capped so a stall cannot bank a debt the core then
     // tries to repay all at once, which stutters and floods the audio buffer.
     double accumulator_ = 0.0;
+    double speed_ = 1.0;
     // The clock audioAhead measures against, and whether this core is braked
     // by it. One core in twenty-one is. See runFor.
     double paceClock_ = 0.0;
