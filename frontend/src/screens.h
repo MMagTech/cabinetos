@@ -580,6 +580,7 @@ private:
     // Continue from's card size, worked out in draw() with the rest of the
     // layout so the block can be centred as a whole.
     float cardW_ = 0, cardH_ = 0;
+    float statesX_ = 0, statesY_ = 0;
     // Focus is in Continue from rather than the rows, and on which state.
     bool inStates_ = false;
     int stateSlot_ = 0;

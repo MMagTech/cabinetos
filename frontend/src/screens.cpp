@@ -1121,9 +1121,9 @@ void DetailScreen::rebuildRows() {
         // only told it apart from Play's fetch into the cache, which nobody
         // sees. One family of words: Download, Remove download, Downloads.
         if (game_.kept)
-            rows_.push_back({Action::RemoveDownload, "Remove download", true});
+            rows_.push_back({Action::RemoveDownload, "Remove download", true, ""});
         else
-            rows_.push_back({Action::Download, "Download", true});
+            rows_.push_back({Action::Download, "Download", true, ""});
     }
     // A different save state, a different core and an export belong here too.
     // They are not built yet and a row that does nothing is worse than no row.
@@ -1236,33 +1236,29 @@ void DetailScreen::draw(Ctx& c) {
     c.r.draw(ui::Rect{0, 0, ui::kCanvasWidth, ui::kCanvasHeight, 0,
                       ui::Color::black(design::kScrimOverlay * a)});
 
-    // The cover itself, at the detail size, on the left.
+    // The cover itself, at the detail size, on the left, with the title level
+    // with its top.
+    //
+    // CONTINUE FROM IS A SHELF ACROSS THE FOOT, starting under the cover, the
+    // way Home's shelves run: the game above, where to pick up from below.
+    // (It was first drawn under the rows, to the right of the cover, and the
+    // right-hand side then ran above and below the cover with nothing lining
+    // up; MMagTech on the TV: off balance.) With a shelf, the cover and the
+    // shelf are centred together; without one, the cover is centred alone,
+    // as it always was.
     const float coverX = design::kLibraryInset;
-    const float coverY = (ui::kCanvasHeight - design::kDetailCoverHeight) * 0.5f;
-
-    // THE RIGHT-HAND BLOCK IS LAID OUT AS ONE, so it can be centred against
-    // the cover as a whole once Continue from makes it taller than the cover.
-    // Short, it keeps its old place, level with the cover's top. Measured here
-    // with the same numbers the drawing below and drawGlass use.
-    const float textXPre = coverX + design::kDetailCoverWidth + 60.0f;
-    const float colW = std::min(design::kRowColumnMaxWidth,
-                                ui::kCanvasWidth - textXPre - design::kLibraryInset);
     const float calloutLH = c.text.lineHeight(ui::TextStyle::Callout, c.sc);
-    const float headToRows = c.text.ascent(ui::TextStyle::LargeTitle, c.sc) +
-                             c.text.lineHeight(ui::TextStyle::LargeTitle, c.sc) * 0.55f +
-                             c.text.ascent(ui::TextStyle::Callout, c.sc) + calloutLH * 1.6f;
-    const float rowH = c.text.lineHeight(ui::TextStyle::Title3, c.sc) + design::kRowPadY * 2.0f;
-    const float rowsH = rows_.empty() ? 0.0f
-        : rows_.size() * rowH + (rows_.size() - 1) * design::kDetailRowGap;
-    cardW_ = (colW - 2.0f * design::kStateCardGap) / 3.0f;
-    cardH_ = cardW_ * (9.0f / 16.0f);
-    const float statesH = (states_.empty() || !game_.playable) ? 0.0f
-        : design::kDetailRowGap * 2.0f + calloutLH + design::kDetailRowGap + cardH_ +
-              design::kDetailRowGap * 0.75f + calloutLH;
-    const float blockH = headToRows + rowsH + statesH;
-    float blockTop = coverY;
-    if (blockH > design::kDetailCoverHeight)
-        blockTop = std::max(design::kStateBlockMinTop, (ui::kCanvasHeight - blockH) * 0.5f);
+    const bool shelf = !states_.empty() && game_.playable;
+    cardH_ = design::kStateCardHeight;
+    cardW_ = cardH_ * (16.0f / 9.0f);
+    const float shelfH = design::kStateShelfGap + calloutLH + design::kDetailRowGap + cardH_ +
+                         design::kDetailRowGap * 0.75f + calloutLH;
+    const float total = design::kDetailCoverHeight + (shelf ? shelfH : 0.0f);
+    const float coverY = std::max(shelf ? design::kStateBlockMinTop : 0.0f,
+                                  (ui::kCanvasHeight - total) * 0.5f);
+    statesX_ = coverX;
+    statesY_ = coverY + design::kDetailCoverHeight + design::kStateShelfGap;
+    const float blockTop = coverY;
     if (c.cards && game_.cardIndex >= 0 &&
         game_.cardIndex < static_cast<int>(c.cards->size())) {
         drawCover(c, (*c.cards)[game_.cardIndex], coverX, coverY,
@@ -1377,14 +1373,15 @@ void DetailScreen::drawGlass(Ctx& c) {
     // its own save. Cards rather than rows because the picture is how a
     // person tells three moments in one game apart.
     if (!states_.empty() && game_.playable) {
-        y += design::kDetailRowGap;
-        c.text.draw(c.r, "Continue from", rowsX_,
+        const float rowsEnd = y;
+        y = statesY_;
+        c.text.draw(c.r, "Continue from", statesX_,
                     y + c.text.ascent(ui::TextStyle::Callout, c.sc), ui::TextStyle::Callout,
                     ui::Color::white(0.60f * a), c.sc);
         y += c.text.lineHeight(ui::TextStyle::Callout, c.sc) + design::kDetailRowGap;
         const float cardH = cardH_;
         const float cardW = cardW_;
-        float x = rowsX_;
+        float x = statesX_;
         for (size_t i = 0; i < states_.size(); ++i) {
             const bool on = inStates_ && static_cast<int>(i) == stateSlot_;
             const float f = on ? focus_.value() : 0.0f;
@@ -1422,8 +1419,9 @@ void DetailScreen::drawGlass(Ctx& c) {
                         ui::Color::white((on ? 1.0f : 0.60f) * a), c.sc);
             x += cardW + design::kStateCardGap;
         }
-        y += cardH + design::kDetailRowGap * 0.75f +
-             c.text.lineHeight(ui::TextStyle::Callout, c.sc) + design::kDetailRowGap;
+        // A notice goes under the rows, where it always went, not under the
+        // shelf.
+        y = rowsEnd;
     }
 
     // A refusal, and the number that makes it actionable. docs/PROJECT.md:
