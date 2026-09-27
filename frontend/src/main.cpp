@@ -5758,7 +5758,7 @@ int main(int argc, char** argv) {
     Animated overlayFocus;
     enum OverlayItem { OvResume = 0, OvSaveState, OvLoadState, OvScreenshot, OvExit, OvCount };
     const char* kOverlayLabels[OvCount] = {
-        "Resume", "Save state", "Load latest state", "Take screenshot", "Exit to Home",
+        "Resume", "Save state", "Load latest state", "Screenshot", "Exit to Home",
     };
     // The pause menu's items for THIS game, built each time it opens: the two
     // state items only where the system has snapshots. PlayStation 2 and
