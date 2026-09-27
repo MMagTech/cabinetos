@@ -80,6 +80,10 @@ public:
     // Ascent and descent in design points, for laying a line out from a box.
     float ascent(TextStyle style, float scale);
     float lineHeight(TextStyle style, float scale);
+    // How far a capital letter rises above the baseline: where the tops of
+    // the letters actually are, for lining something up with them. The
+    // ascent is the top of the line's space, which sits above them.
+    float capHeight(TextStyle style, float scale);
 
     // Truncates to fit, appending a real ellipsis. Game titles are long and a
     // shelf caption has one line; the reference implementation gives a grid

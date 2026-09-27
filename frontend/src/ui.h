@@ -167,6 +167,7 @@ public:
     // in. Shapes, glass and pictures all move; the backdrop and the scene's
     // own presentation do not. Zero outside a switch.
     void setContentOffsetY(float dy) { offsetY_ = dy; }
+    float contentOffsetY() const { return offsetY_; }
 
     void setContentFade(float f) {
         contentFade_ = f < 0 ? 0 : (f > 1 ? 1 : f);

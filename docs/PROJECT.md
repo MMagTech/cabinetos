@@ -1561,6 +1561,204 @@ simple and take the complexity away alot of emulators add."* Decided:
   hotkey is a mapping screen again). Rewind only where it is cheap (the
   cartridge systems), absent elsewhere the way Save state is on PS2.
   Roadmap step 4, after the emulator work.
+  *Reversed in part 2026-09-27: the shortcut button is set by pressing it.
+  See "The shortcut button is set by pressing it", below.*
+
+### The in-game shortcuts, and three states per game — decided 2026-09-27
+
+The #76 proposal (a comment on that issue, 2026-09-26) put three calls to
+MMagTech; this settles them and the save-state question underneath #80. The
+order changed the same evening: the shortcuts come **before** the emulators
+(nobody plays but MMagTech, so order is only about speed), with #103 first.
+
+**Home, and getting into the pause menu:**
+
+- **A tap of Home opens the pause menu; holding Home with a second button is a
+  shortcut.** Told apart on release: a tap is Home going down and up with
+  nothing else pressed meanwhile.
+- **The In-game shortcuts switch (off by default) governs both**, the tap as
+  well as the combinations. With it off, Home does nothing in a game.
+  *Recommended the other way (tap always on) and decided against.*
+- **L3+R3 always opens the pause menu**, switch or not. It covers a pad with
+  no Home, a Home SDL does not recognise, and anything upstream that takes
+  Home before the frontend sees it (not yet checked on the A9).
+- ~~**Home cannot be reassigned.** That is the mapping screen dropped with #66.
+  A pad whose Home is wrong is fixed in the controller list, and L3+R3 still
+  gets in meanwhile.~~ **Reversed the same day**, on the A9 evidence below.
+
+**Screenshots (#79): no gallery on the console.** They upload to RomM's
+per-user gallery, `POST /api/screenshots?rom_id=` (RomM 5.1: stored under the
+user, `is_gallery`, private until shared, deletable), and are viewed and
+deleted there. Kept apart from the pictures RomM shows as a game's
+screenshots, which come from its metadata sources (IGDB, ScreenScraper and
+LaunchBox are on at the reference server); MMagTech had seen those and taken
+them for uploads.
+
+**Save states: three per game, per user, rotating (#80).** MMagTech's own
+design from the 2026-09-24 brainstorm, restated because the 2026-09-26
+proposal changed it without his agreement (it dropped the deletion and put
+the list in the pause menu). His purpose, in his words: *"sort of like save
+slots"* without *"having to pick which slot you save to."*
+
+- **Save is one press and never asks.** Each save fills the next of three
+  places; once there are three, a new save replaces the oldest, **on the
+  console and on RomM** (`POST /api/states/delete`). The same whether the save
+  came from the pause menu or a shortcut.
+- **In a game, Load is always the newest.** No list in the pause menu.
+- **The three are chosen on the game's launch screen**, with picture and time,
+  newest first, as Cabinet's tvOS *Continue from* row does
+  (`TVGameLaunchView.swift`). **Play still starts the game normally**, from
+  its own save; picking a state starts from that moment. Home's Resume is the
+  "straight back in" button (loads the newest), as already specified.
+- **Per user.** RomM 5.1 returns only the signed-in user's states
+  (`get_states` filters on `request.user.id`), and the console keeps each
+  person's in their own folder, so one person's saves never push out
+  another's.
+- **Only Cabinet's states count.** The console lists, loads and rotates only
+  states under Cabinet's emulator tags (`catalog::emulatorTag`). States from
+  RomM's web player or any other app are never shown and never deleted, which
+  answers what happens to a new user's existing states on first install.
+- **The cost, accepted:** a state saved by Cabinet on the Apple TV for the same
+  game and emulator is one of the three, so a save on the console can rotate
+  it out. The Apple TV itself never deletes, so its states pile up until the
+  console next saves; giving Cabinet the same rule is MMagTech/cabinet#8.
+  **Including on the first save:** a new user's older Cabinet states for that
+  game are cut to three at once (seen here: five August states went on the
+  first save in DoDonPachi). Protecting states that existed before the
+  console's first save was offered and declined (MMagTech: *"it's all an
+  alpha build anyway"*).
+- **Why three and not more:** the job is undoing a bad save (saved a moment
+  before dying, twice in a row, and still one good one left); more becomes a
+  history to scroll, which is the slot-picking this avoids. One constant,
+  cheap to raise if three ever feels short.
+- **Rejected:** keeping every state on RomM and showing three (nothing lost,
+  but RomM holds states the console never shows and the "three" is not true);
+  a Load earlier state list in the pause menu.
+
+**After any state loads, the game waits on that frame until a button is
+pressed** (decided 2026-09-27). MMagTech, after starting from a state on the
+launch screen: *"catches you off guard how quick it starts"*, and asked for a
+countdown. Agreed instead: frozen on the loaded moment, "Press (A) to
+continue" (any button), everywhere a state is loaded: the launch screen, Load
+latest state, the Load shortcut, and Home's Resume when it loads one. A
+countdown was rejected because it slows every retry of save-and-load and is
+still too short when the pad is not in hand. The press that continues never
+reaches the game (the #103 rule). **Not built yet.**
+
+**Fast forward and rewind go with states** (MMagTech, 2026-09-27: *"fast
+forward and rewind won't work on the cores that don't have states, both
+future and present ones"*). Where a system has no states (PlayStation 2,
+GameCube, and anything later kept true to its console), neither is offered,
+and the shortcut says "Fast forward isn't available here" (rewind the same).
+The same line as open question 25. So there is no PlayStation 2 turbo to wire.
+
+**Rewind is for getting back, not for scrubbing** (decided 2026-09-27).
+MMagTech: *"it mostly just [is] if you can't get a chance to save or forget
+and then die"*, *"none of them have to be super smooth"*, and *"even 15 is
+good"*. So: a snapshot every half second of play, the last **15 seconds**
+kept in memory (nothing on the drive), and holding ZL with the shortcut
+button steps back one snapshot every 0.2 s, so it can be stopped where
+wanted. On **every system with states**, N64 and PlayStation included. The
+first build kept one every other frame, smooth, and so had to stop at states
+under 1 MB (an N64 state is 16.8 MB; copying and compressing 30 a second
+would stutter the game); half-second snapshots are cheap enough everywhere.
+Compression runs on a worker (`rewind.h`); only taking the snapshot happens
+on the frame, and the log reports the slowest one per game.
+
+**Screenshots do not go with states:** they should eventually work in every
+game where the shortcut button is recognised (MMagTech, 2026-09-27), which
+includes PlayStation 2 and GameCube, whose emulators run inside the frontend.
+Not yet there: their frame is not read into a picture (an issue of its own).
+
+**A save shortcut is wanted** (MMagTech: *"when saved via menu or hot key
+combo"*). Not in the #76 list; settled below.
+
+#### The shortcut button is set by pressing it — REVERSES the fixed hotkey
+
+**What turned it.** The Home check on the A9: the Xbox One S pad's Home
+reached the app every time (`--pads`, "pressed guide"). The **8BitDo Lite 2's
+heart did not**: raw from the kernel it is an ordinary button, `BTN_C`
+(0x132), one clean press and release each, while the community list's entry
+for it (GUID `05009075c82d00001251000000010000`) puts `guide` on `b12`. So the
+app never sees Home from that pad. The Lite 2 does have L3 and R3 (MMagTech
+opens the pause menu with them), so L3+R3 reaches it. In two earlier runs SDL
+reported the heart as d-pad down; not explained, and the fix below does not
+depend on it. MMagTech: *"so we just randomly fix everyone's controller over
+time"*. Relying on the list means a wrong pad waits on somebody else's fix,
+and Home is the button the list most often gets wrong.
+
+**Decided:**
+
+- **One shortcut button, set by pressing it.** When In-game shortcuts is On,
+  a *Shortcut button* row appears showing the current one; A on it, then
+  press the button wanted. It is read **raw** (the joystick button, not the
+  gamepad mapping), so it works for a button the list gets wrong.
+- **Remembered per kind of pad** (by SDL's GUID), because a raw button number
+  means different things on different models. Set once for a Lite 2, every
+  Lite 2 on the console uses it.
+- **Home by default** where the pad has a working one. A pad with none has no
+  shortcut button until one is set.
+- **A tap of it opens the pause menu; held with a second button it is a
+  shortcut**, exactly as Home was. Governed by the same switch.
+- **Single button only**, not a pair: it is held while a second is pressed,
+  so a pair makes every shortcut three buttons at once; the two-button way
+  into the menu already exists (L3+R3); and every pad seen has a spare single
+  button (Select/minus, star, capture). Add pairs if a pad ever turns up
+  without one.
+- **The combinations stay fixed**, and are: shortcut button + **R** save state
+  (fills the next of the three), + **L** load newest, + **ZR** fast forward,
+  + **ZL** rewind, + **Y** screenshot (Nintendo names; RB, LB, RT, LT on Xbox).
+  Right side forward and save, left side back and load. A load by mistake
+  loses play since the last save; accepted, since the button must be held,
+  the two are on opposite sides, and it is off unless turned on.
+- ~~**The Lite 2's entry is still corrected** in our copy of the list and sent
+  upstream, so its heart is Home for everyone, but nothing depends on it.~~
+  **Dropped, the same day** (MMagTech: agreed). Setting the button by
+  pressing it is the fix; another Lite 2 owner sets the heart as he did, and
+  until then its row reads "Button 3" and the heart does nothing.
+- **A button games use can be chosen** (minus/Select, say). While shortcuts
+  are on it no longer reaches the game; only the person who chose it is
+  affected, and nothing on screen warns about it (MMagTech, agreed).
+- **The row is for the pad in hand**: it names the pad last pressed in
+  Settings and follows it when another pad is pressed (MMagTech on the TV,
+  2026-09-27: good). A button the mapping does not name shows by number, the
+  Lite 2's heart as "Button 3" (MMagTech: good).
+- **Rejected:** a fixed Home (above); a Home / Select switch (covers pads with
+  no Home but not a Home the app cannot see); a configurable pair.
+
+### The launch screen, redone on the TV — 2026-09-27
+
+Built for Continue from (#80) and reworked with MMagTech on the A9, one change
+at a time. What it is now (`screens.cpp`, `DetailScreen`):
+
+- **One column on the left, the cover on the right**, the pair centred across
+  the screen. Title; two lines under it; Play and Download; Continue from.
+  Tried first and dropped: cover left with the states under the rows (nothing
+  lined up), cover left with the states as a shelf under it (heavy on the
+  left, *"maybe the image somewhere on the right"*).
+- **Every page is laid out the same**, with or without states: the cover is
+  one size in one place, and a game with no states has open space where the
+  shelf goes (*"everything needs to be in the same place between the two"*).
+  The cover is the column's height, top level with the title.
+- **Two lines under the title, the same on every game:** platform and size;
+  then year, maker and players from RomM's merged metadata. The second line's
+  space is kept even when RomM has nothing. Facts listed under the cover were
+  tried and read as filler (*"a horrible afterthought"*); one line dropping
+  parts to fit was inconsistent between games. **Players can be wrong**
+  (RomM has Mortal Kombat II as one player), and is shown as RomM gives it:
+  a wrong number is RomM's data, not the console's fault (MMagTech: keep it).
+- **The game's own save is the Play row's value**, "Saved today, 8:17 PM",
+  because that save is what Play starts from.
+- **Continue from:** the newest three states for the emulator Play would run,
+  as three 16:9 cards splitting the column, each picture whole on a blurred
+  echo of itself, the time under it; unfocused ones a little darker. Down
+  from the last row goes in; picking one plays from it.
+- **Arrival:** the old screen is copied and dissolves away (as a top-bar
+  switch does); the page's backdrop is there at once, and everything on it
+  waits until RomM has answered and the cover and pictures have loaded (at
+  least 0.2 s, at most 0.8 s), then fades in together, rising 16 points.
+  Leaving dissolves the same way. MMagTech: *"that's it, perfect."* Parts
+  popping in one by one, and a cut, were what it replaced.
 
 ### The permission detail, and a Phase 2 decision that paid for itself
 

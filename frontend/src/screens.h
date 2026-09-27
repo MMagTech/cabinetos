@@ -57,6 +57,7 @@ enum class Action {
     Play,              // value is a rom id
     Download,          // value is a rom id — fetch it AND keep it
     RemoveDownload,    // value is a rom id — release the keep AND delete the game
+    PlayState,         // value is a RomM state id — play, starting from that state
     // UP OUT OF THE TOP ROW, INTO THE BAR. MMagTech: *"if the library has the
     // top bar in view shouldnt i be able to up and access it."* Yes — chrome
     // that is on screen and cannot be reached is worse than chrome that is
@@ -498,9 +499,30 @@ struct GameDetail {
     bool kept = false;
 };
 
+// One of the three states on the launch screen (docs/PROJECT.md, "The in-game
+// shortcuts, and three states per game"), newest first.
+struct StateChoice {
+    int id = 0;            // RomM's
+    std::string picture;   // RomM path of its picture, empty for none
+    std::string when;      // "Today, 8:13 PM"
+};
+
 class DetailScreen {
 public:
     void open(GameDetail d);
+    // CONTINUE FROM: the game's states, arriving after the screen opens because
+    // RomM has to be asked. None, and the section is not drawn at all.
+    void setStates(std::vector<StateChoice> states);
+    // THE GAME'S OWN SAVE, when there is one: "Saved today, 8:17 PM", shown as
+    // the Play row's value, because that save is what Play starts from.
+    void setSaveWhen(std::string when);
+    // What RomM knows of the game, for the line under the title: "1997",
+    // "Cave", "1-2 players". Any may be empty.
+    struct Facts { std::string year, maker, players; };
+    void setFacts(Facts f);
+    // RomM HAS ANSWERED: the facts, the save and Continue from fade in
+    // together now, rather than each popping in as it arrived.
+    void detailsArrived();
     void tick(float dt);
     Result key(Nav n);
     void draw(Ctx& c);
@@ -554,11 +576,23 @@ private:
         Action action = Action::None;
         std::string label;
         bool enabled = true;
+        std::string value;   // on the right, as a Settings row's is
     };
     void rebuildRows();
 
     GameDetail game_;
     std::vector<Row> rows_;
+    std::vector<StateChoice> states_;
+    std::string saveWhen_;
+    Facts facts_;
+    std::string factsLine() const;
+    // Continue from's card size, worked out in draw() with the rest of the
+    // layout so the block can be centred as a whole.
+    float cardW_ = 0, cardH_ = 0;
+    float statesX_ = 0, statesY_ = 0;
+    // Focus is in Continue from rather than the rows, and on which state.
+    bool inStates_ = false;
+    int stateSlot_ = 0;
     std::string notice_;
     // Where draw() put the action column, so the glass pass can put the rows in
     // the same place without computing the layout twice and drifting from it.
@@ -567,6 +601,12 @@ private:
     int slot_ = 0;
     design::Animated focus_;
     design::Animated appear_;
+    // RomM's parts of the page (the facts line, the save on Play, Continue
+    // from) share one fade, started when they arrive or after kDetailsWait.
+    design::Animated details_;
+    float waited_ = 0.0f;
+    bool detailsIn_ = false;
+    bool started_ = false;
 };
 
 }  // namespace screens

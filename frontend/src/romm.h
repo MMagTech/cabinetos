@@ -134,6 +134,9 @@ struct Asset {
     // rather than failing in front of someone — see docs/CABINET.md.
     std::string emulator;
     std::string updatedAt;
+    // A state's picture on RomM (its `screenshot.download_path`), for the
+    // launch screen. Empty for a save, or a state sent without one.
+    std::string picturePath;
 };
 
 // Who the token belongs to.
@@ -255,6 +258,16 @@ public:
     // it is on Home: boot stopped fetching the whole catalogue.
     bool fetchGame(int romId, Game* out, std::string* err);
 
+    // A few facts about a game from RomM's merged metadata (`metadatum`), for
+    // the launch screen: the year, the first company named, how many can
+    // play. Any can be missing; a game RomM never matched has none.
+    struct Facts {
+        int year = 0;
+        std::string maker;
+        std::string players;   // as RomM gives it: "1", "1-2", "2"
+    };
+    bool fetchFacts(int romId, Facts* out, std::string* err);
+
     // A value going INTO a query fragment, percent-encoded strictly. A search
     // term is whatever somebody typed on a television keyboard, so it can hold
     // a space, an ampersand or an apostrophe — all of which would otherwise
@@ -295,6 +308,17 @@ public:
                      const std::vector<uint8_t>& data, std::string* err,
                      const std::string& shotName = "",
                      const std::vector<uint8_t>& shot = {}) const;
+
+    // Removes states, and each one's picture with it (RomM 5.1,
+    // `POST /api/states/delete`). Only the signed-in user's; RomM refuses the
+    // whole request if one id is not theirs.
+    bool deleteStates(const std::vector<int>& ids, std::string* err) const;
+
+    // A screenshot into this person's gallery on RomM 5.1 (`POST
+    // /api/screenshots?rom_id=`: stored under the user, private until shared),
+    // not among the pictures RomM's metadata sources give a game (#79).
+    bool uploadScreenshot(int romId, const std::string& fileName,
+                          const std::vector<uint8_t>& png, std::string* err) const;
 
     // For ImageCache::Loader. Returns empty on any failure, because a cover
     // that will not load is not an error the frame loop can do anything about.

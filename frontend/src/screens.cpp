@@ -1094,11 +1094,20 @@ void DetailScreen::open(GameDetail d) {
     game_ = std::move(d);
     notice_.clear();
     slot_ = 0;
+    states_.clear();
+    saveWhen_.clear();
+    facts_ = {};
+    details_.settle(0.0f);
+    waited_ = 0.0f;
+    detailsIn_ = false;
+    inStates_ = false;
+    stateSlot_ = 0;
     rebuildRows();
     focus_.settle(1.0f);
-    appear_.retarget(0.0f, 0.0f);
-    appear_.elapsed = 0.0f;
-    appear_.retarget(1.0f, 0.280f);   // the launch transition's own duration
+    // NOT FADED IN YET: see draw(), which starts it once everything is here.
+    appear_.smooth = true;
+    appear_.settle(0.0f);
+    started_ = false;
 }
 
 void DetailScreen::rebuildRows() {
@@ -1106,7 +1115,7 @@ void DetailScreen::rebuildRows() {
     if (game_.playable) {
         // The primary action first, and reachable without travelling through
         // the secondary ones.
-        rows_.push_back({Action::Play, "Play", true});
+        rows_.push_back({Action::Play, "Play", true, saveWhen_});
         // DOWNLOAD IS THE DELIBERATE ONE. The cache is invisible — pressing
         // Play fetches the game if it is not here and says nothing about it —
         // so this row is not "is it cached", it is "put this game on the
@@ -1117,32 +1126,78 @@ void DetailScreen::rebuildRows() {
         // only told it apart from Play's fetch into the cache, which nobody
         // sees. One family of words: Download, Remove download, Downloads.
         if (game_.kept)
-            rows_.push_back({Action::RemoveDownload, "Remove download", true});
+            rows_.push_back({Action::RemoveDownload, "Remove download", true, ""});
         else
-            rows_.push_back({Action::Download, "Download", true});
+            rows_.push_back({Action::Download, "Download", true, ""});
     }
     // A different save state, a different core and an export belong here too.
     // They are not built yet and a row that does nothing is worse than no row.
 }
 
+void DetailScreen::setFacts(Facts f) { facts_ = std::move(f); }
+
+void DetailScreen::detailsArrived() { detailsIn_ = true; }
+
+std::string DetailScreen::factsLine() const {
+    std::string m;
+    for (const std::string* p : {&facts_.year, &facts_.maker, &facts_.players})
+        if (!p->empty()) m += (m.empty() ? "" : "  \xC2\xB7  ") + *p;
+    return m;
+}
+
+void DetailScreen::setSaveWhen(std::string when) {
+    saveWhen_ = std::move(when);
+    rebuildRows();
+}
+
+void DetailScreen::setStates(std::vector<StateChoice> states) {
+    states_ = std::move(states);
+    if (states_.empty()) inStates_ = false;
+    stateSlot_ = std::clamp(stateSlot_, 0, std::max(0, static_cast<int>(states_.size()) - 1));
+}
+
 void DetailScreen::tick(float dt) {
     focus_.tick(dt);
     appear_.tick(dt);
+    details_.tick(dt);
+    waited_ += dt;
 }
 
 Result DetailScreen::key(Nav n) {
     if (n == Nav::Back) return {Action::Back, 0};
     if (rows_.empty()) return {};
+    auto refocus = [&]() {
+        notice_.clear();
+        focus_.retarget(0.0f, 0.0f);
+        focus_.elapsed = 0.0f;
+        focus_.retarget(1.0f, design::kFocusDuration);
+    };
+    // CONTINUE FROM is one line of up to three, under the rows: Down from the
+    // last row goes in, on the newest; Up comes back out to the row it left.
+    if (inStates_) {
+        const int count = static_cast<int>(states_.size());
+        if (n == Nav::Left || n == Nav::Right) {
+            const int next = std::clamp(stateSlot_ + (n == Nav::Right ? 1 : -1), 0, count - 1);
+            if (next != stateSlot_) { stateSlot_ = next; refocus(); }
+        } else if (n == Nav::Up) {
+            inStates_ = false;
+            refocus();
+        } else if (n == Nav::Activate && stateSlot_ < count) {
+            return {Action::PlayState, states_[stateSlot_].id};
+        }
+        return {};
+    }
     if (n == Nav::Up || n == Nav::Down) {
         const int d = (n == Nav::Down) ? 1 : -1;
-        const int next = std::clamp(slot_ + d, 0, static_cast<int>(rows_.size()) - 1);
-        if (next != slot_) {
-            slot_ = next;
-            notice_.clear();
-            focus_.retarget(0.0f, 0.0f);
-            focus_.elapsed = 0.0f;
-            focus_.retarget(1.0f, design::kFocusDuration);
+        const int last = static_cast<int>(rows_.size()) - 1;
+        if (d > 0 && slot_ == last && !states_.empty() && game_.playable) {
+            inStates_ = true;
+            stateSlot_ = 0;
+            refocus();
+            return {};
         }
+        const int next = std::clamp(slot_ + d, 0, last);
+        if (next != slot_) { slot_ = next; refocus(); }
         return {};
     }
     if (n == Nav::Activate && rows_[slot_].enabled)
@@ -1151,6 +1206,25 @@ Result DetailScreen::key(Nav n) {
 }
 
 void DetailScreen::draw(Ctx& c) {
+    // THE WHOLE PAGE FADES IN AT ONCE, when everything behind it has loaded:
+    // RomM's answer (facts, save, states), the cover, and every state's
+    // picture. Parts arriving one by one read as a page assembling itself
+    // (MMagTech on the TV, 2026-09-27: "everything faded in at once once
+    // stuff in the background was loaded"). RomM slow or away, it stops
+    // waiting at kDetailsWait and fades in with what it has.
+    if (!started_) {
+        bool ready = detailsIn_;
+        if (ready && !game_.coverLarge.empty()) ready = c.images.get(game_.coverLarge).ready;
+        for (const StateChoice& st : states_)
+            if (ready && !st.picture.empty()) ready = c.images.get(st.picture).ready;
+        // And never before the old screen has mostly dissolved away (the
+        // copy of it drawn over this one, as the top-bar switch does).
+        if ((ready && waited_ >= design::kDetailMinWait) || waited_ >= design::kDetailsWait) {
+            started_ = true;
+            details_.settle(1.0f);
+            appear_.retarget(1.0f, design::kDetailsFade);
+        }
+    }
     const float a = appear_.value();
 
     // THE ARTWORK IS ITS OWN BACKDROP. A full-screen cover rather than a push,
@@ -1193,36 +1267,102 @@ void DetailScreen::draw(Ctx& c) {
             u1 = u0 + span;
         }
         c.r.drawTextured(0, 0, ui::kCanvasWidth, ui::kCanvasHeight, art->texture,
-                         u0, v0, u1, v1, ui::Color{1, 1, 1, art->fade * a}, false,
+                         u0, v0, u1, v1, ui::Color{1, 1, 1, art->fade}, false,
                          design::kBackdropBlur);
     }
     c.r.draw(ui::Rect{0, 0, ui::kCanvasWidth, ui::kCanvasHeight, 0,
-                      ui::Color::black(design::kScrimOverlay * a)});
+                      ui::Color::black(design::kScrimOverlay)});
+    // THE BACKDROP IS THERE AT ONCE, under the old screen's dissolving copy,
+    // as a top-bar switch's new background is. Everything on it waits, then
+    // fades in RISING a little, the same arrival as a top-bar switch's.
+    const float keepY = c.r.contentOffsetY();
+    c.r.setContentOffsetY(keepY + (1.0f - a) * design::kDetailRise);
 
-    // The cover itself, at the detail size, on the left.
-    const float coverX = design::kLibraryInset;
-    const float coverY = (ui::kCanvasHeight - design::kDetailCoverHeight) * 0.5f;
+    // ONE COLUMN ON THE LEFT, THE COVER ON THE RIGHT, the pair centred across
+    // the screen. Everything read or chosen (title, Play, Download, Continue
+    // from) lines up on one left edge, and the cover balances it.
+    //
+    // Two layouts came first, both judged by MMagTech on the TV, 2026-09-27.
+    // Cover left with the states under the rows: the right side ran above and
+    // below the cover and nothing lined up ("off balance"). Cover left with
+    // the states as a shelf under it: the shelf filled two-thirds of the width
+    // and the page sat heavy on the left ("the bottom feels out of weight,
+    // maybe the image somewhere on the right").
+    //
+    // The column's top is level with the cover's while the column is the
+    // shorter; once Continue from makes it taller, the cover is centred
+    // against it instead.
+    const float calloutLH = c.text.lineHeight(ui::TextStyle::Callout, c.sc);
+    const float colW = design::kRowColumnMaxWidth;
+    cardW_ = (colW - 2.0f * design::kStateCardGap) / 3.0f;
+    cardH_ = cardW_ * (9.0f / 16.0f);
+    const float headToRows = c.text.ascent(ui::TextStyle::LargeTitle, c.sc) +
+                             c.text.lineHeight(ui::TextStyle::LargeTitle, c.sc) * 0.55f +
+                             c.text.ascent(ui::TextStyle::Callout, c.sc) + calloutLH * 2.6f;
+    const float rowH = c.text.lineHeight(ui::TextStyle::Title3, c.sc) + design::kRowPadY * 2.0f;
+    // EVERY PAGE IS LAID OUT THE SAME, whatever the game has: two rows and
+    // a shelf, so the cover is one size in one place and the title, the rows
+    // and Continue from never move between games. A game with no states has
+    // open space where the shelf would be. (The cover grew only when there
+    // was a shelf, first, and MMagTech: a game without saves and states
+    // should look like one with them.)
+    const float rowsH = 2.0f * rowH + design::kDetailRowGap;
+    const float shelfH = design::kStateShelfGap + calloutLH + design::kDetailRowGap + cardH_ +
+              design::kDetailRowGap * 0.75f + calloutLH;
+    const float colH = headToRows + rowsH + shelfH;
+    // THE COVER GROWS TO THE COLUMN'S HEIGHT once Continue from makes the
+    // column taller than it: top level with the title, foot level with the
+    // shelf's labels, so the right side is filled by the art itself. (Facts
+    // listed under a cover of the old size were tried first and read as
+    // filler; MMagTech: "a horrible afterthought". They went into the line
+    // under the title.) The pair is centred across the screen either way.
+    //
+    // LINED UP WITH WHAT IS SEEN, not with the text's line boxes (MMagTech,
+    // the same day: the cover's top sat above the title's letters and its foot
+    // below the pictures, at the labels'). Its top is the top of the title's
+    // capitals; its foot is the foot of the state pictures.
+    const float capInset = c.text.ascent(ui::TextStyle::LargeTitle, c.sc) -
+                           c.text.capHeight(ui::TextStyle::LargeTitle, c.sc);
+    const float picturesFoot = headToRows + rowsH + design::kStateShelfGap + calloutLH +
+                               design::kDetailRowGap + cardH_;
+    const float coverH = std::clamp(picturesFoot - capInset, design::kDetailCoverHeight,
+                                    design::kDetailCoverMaxHeight);
+    const float coverW = coverH * (design::kDetailCoverWidth / design::kDetailCoverHeight);
+    const float pairW = colW + design::kDetailCoverGap + coverW;
+    const float colX = (ui::kCanvasWidth - pairW) * 0.5f;
+    const float coverX = colX + colW + design::kDetailCoverGap;
+    const float pairH = std::max(colH, capInset + coverH);
+    const float top = std::max(design::kStateBlockMinTop, (ui::kCanvasHeight - pairH) * 0.5f);
+    const float coverY = top + capInset;
+    const float blockTop = top;
+    statesX_ = colX;
+    statesY_ = blockTop + headToRows + rowsH + design::kStateShelfGap;
     if (c.cards && game_.cardIndex >= 0 &&
         game_.cardIndex < static_cast<int>(c.cards->size())) {
-        drawCover(c, (*c.cards)[game_.cardIndex], coverX, coverY,
-                  design::kDetailCoverWidth, design::kDetailCoverHeight,
+        drawCover(c, (*c.cards)[game_.cardIndex], coverX, coverY, coverW, coverH,
                   design::kDetailRadius, /*f=*/1.0f, /*rim=*/false, /*large=*/true);
     } else {
-        c.r.draw(ui::Rect{coverX, coverY, design::kDetailCoverWidth,
-                          design::kDetailCoverHeight, design::kDetailRadius, game_.art});
+        c.r.draw(ui::Rect{coverX, coverY, coverW, coverH, design::kDetailRadius, game_.art});
     }
 
     // The title, Large Title — the one place in the product that size is used
     // for a game rather than a settings page.
-    const float textX = coverX + design::kDetailCoverWidth + 60.0f;
-    const float textW = std::min(design::kRowColumnMaxWidth,
-                                 ui::kCanvasWidth - textX - design::kLibraryInset);
-    float y = coverY + c.text.ascent(ui::TextStyle::LargeTitle, c.sc);
+    const float textX = colX;
+    const float textW = colW;
+    float y = blockTop + c.text.ascent(ui::TextStyle::LargeTitle, c.sc);
     c.text.draw(c.r, c.text.truncate(game_.title, ui::TextStyle::LargeTitle, c.sc, textW),
                 textX, y, ui::TextStyle::LargeTitle, ui::Color::white(a), c.sc);
     y += c.text.lineHeight(ui::TextStyle::LargeTitle, c.sc) * 0.55f +
          c.text.ascent(ui::TextStyle::Callout, c.sc);
 
+    // WHAT THE GAME IS, in two lines, the same two on every game: platform and
+    // size, then RomM's year, maker and players. They were one line first, and
+    // a long platform name pushed it into the cover; dropping parts to make it
+    // fit showed different facts on different games, and MMagTech: "has to be
+    // consistent across everything". THE SECOND LINE'S SPACE IS ALWAYS KEPT,
+    // blank for a game RomM never matched, so the rows and the shelf sit in
+    // the same place on every game (MMagTech, the same day: the pages did not
+    // line up when the line came and went). A part RomM lacks is left out.
     std::string meta = game_.platform;
     if (game_.sizeBytes > 0) {
         // A unit that suits the number. A library holds a 19 KB Game Boy ROM
@@ -1230,13 +1370,19 @@ void DetailScreen::draw(Ctx& c) {
         // reads as "0 MB", which looks like the server failed to say.
         char buf[64];
         const double b = static_cast<double>(game_.sizeBytes);
-        if (b >= 1e9) std::snprintf(buf, sizeof buf, "  ·  %.1f GB", b / 1e9);
-        else if (b >= 1e6) std::snprintf(buf, sizeof buf, "  ·  %.0f MB", b / 1e6);
-        else std::snprintf(buf, sizeof buf, "  ·  %.0f KB", b / 1e3);
+        if (b >= 1e9) std::snprintf(buf, sizeof buf, "  \xC2\xB7  %.1f GB", b / 1e9);
+        else if (b >= 1e6) std::snprintf(buf, sizeof buf, "  \xC2\xB7  %.0f MB", b / 1e6);
+        else std::snprintf(buf, sizeof buf, "  \xC2\xB7  %.0f KB", b / 1e3);
         meta += buf;
     }
-    c.text.draw(c.r, meta, textX, y, ui::TextStyle::Callout,
-                ui::Color::white(0.60f * a), c.sc);
+    c.text.draw(c.r, c.text.truncate(meta, ui::TextStyle::Callout, c.sc, textW), textX, y,
+                ui::TextStyle::Callout, ui::Color::white(0.60f * a), c.sc);
+    y += c.text.lineHeight(ui::TextStyle::Callout, c.sc);
+    const std::string facts = factsLine();
+    if (!facts.empty())
+        c.text.draw(c.r, c.text.truncate(facts, ui::TextStyle::Callout, c.sc, textW), textX, y,
+                    ui::TextStyle::Callout,
+                    ui::Color::white(0.60f * a * details_.value()), c.sc);
 
     rowsX_ = textX;
     rowsW_ = textW;
@@ -1249,10 +1395,13 @@ void DetailScreen::draw(Ctx& c) {
                     textX, rowsY_ + c.text.ascent(ui::TextStyle::Title3, c.sc),
                     ui::TextStyle::Title3, ui::Color::white(0.60f * a), c.sc);
     }
+    c.r.setContentOffsetY(keepY);
 }
 
 void DetailScreen::drawGlass(Ctx& c) {
     const float a = appear_.value();
+    const float keepY = c.r.contentOffsetY();
+    c.r.setContentOffsetY(keepY + (1.0f - a) * design::kDetailRise);
     // Treatment 3, the row one: a surface that is always there. Blur untinted
     // at rest, white 22% focused, scale 1.03 — a full-width row growing a
     // cover's tenth would collide with its neighbours.
@@ -1260,7 +1409,7 @@ void DetailScreen::drawGlass(Ctx& c) {
                        design::kRowPadY * 2.0f;
     float y = rowsY_;
     for (size_t i = 0; i < rows_.size(); ++i) {
-        const bool on = (static_cast<int>(i) == slot_);
+        const bool on = !inStates_ && static_cast<int>(i) == slot_;
         const float f = on ? focus_.value() : 0.0f;
         const float s = 1.0f + f * (design::kRowFocusScale - 1.0f);
         const float w = rowsW_ * s, h = rowH * s;
@@ -1299,11 +1448,75 @@ void DetailScreen::drawGlass(Ctx& c) {
             label = buf;
         }
 
-        c.text.draw(c.r, label, x + design::kRowPadX,
-                    ry + design::kRowPadY * s + c.text.ascent(ui::TextStyle::Title3, c.sc),
-                    ui::TextStyle::Title3,
+        const float base = ry + design::kRowPadY * s + c.text.ascent(ui::TextStyle::Title3, c.sc);
+        c.text.draw(c.r, label, x + design::kRowPadX, base, ui::TextStyle::Title3,
                     ui::Color::white((on || busy ? 1.0f : 0.60f) * a), c.sc);
+        if (!busy && !rows_[i].value.empty()) {
+            const float vw = c.text.measure(rows_[i].value, ui::TextStyle::Callout, c.sc);
+            c.text.draw(c.r, rows_[i].value, x + w - design::kRowPadX - vw, base,
+                        ui::TextStyle::Callout,
+                        ui::Color::white(0.60f * a * details_.value()), c.sc);
+        }
         y += rowH + design::kDetailRowGap;
+    }
+
+    // CONTINUE FROM, as Cabinet's tvOS launch screen calls it: the game's
+    // states, newest first, each with the picture it was saved with and when.
+    // Picking one plays from there; Play itself still starts the game from
+    // its own save. Cards rather than rows because the picture is how a
+    // person tells three moments in one game apart.
+    if (!states_.empty() && game_.playable) {
+        const float rowsEnd = y;
+        // The shelf in RomM's fade; `a` below is only ever used as an alpha.
+        const float a = appear_.value() * details_.value();
+        y = statesY_;
+        c.text.draw(c.r, "Continue from", statesX_,
+                    y + c.text.ascent(ui::TextStyle::Callout, c.sc), ui::TextStyle::Callout,
+                    ui::Color::white(0.60f * a), c.sc);
+        y += c.text.lineHeight(ui::TextStyle::Callout, c.sc) + design::kDetailRowGap;
+        const float cardH = cardH_;
+        const float cardW = cardW_;
+        float x = statesX_;
+        for (size_t i = 0; i < states_.size(); ++i) {
+            const bool on = inStates_ && static_cast<int>(i) == stateSlot_;
+            const float f = on ? focus_.value() : 0.0f;
+            const float s = 1.0f + f * (design::kFocusScale - 1.0f);
+            const float w = cardW * s, h = cardH * s;
+            const float cx = x - (w - cardW) * 0.5f;
+            const float cy = y - (h - cardH) * 0.5f;
+            c.r.drawGlass(ui::Rect{cx, cy, w, h, design::kRowRadius, ui::Color::white(0)},
+                          design::kRegularMaterialBlur, ui::Color::white(0.08f * a));
+            // The whole picture, on a blurred echo of itself, as a cover of
+            // an odd shape is drawn: a tall arcade screen keeps its shape and
+            // the sides are its own colours rather than bars. The ones not
+            // focused sit a little darker, so the focused one reads as chosen.
+            if (!states_[i].picture.empty()) {
+                const ui::Image& img = c.images.get(states_[i].picture);
+                if (img.ready) {
+                    const float ew = w * 1.3f, eh = h * 1.3f;
+                    c.r.drawTextured(cx - (ew - w) * 0.5f, cy - (eh - h) * 0.5f, ew, eh,
+                                     img.texture, 0, 0, 1, 1,
+                                     ui::Color{1, 1, 1, a * img.fade}, false, 4.0f, cx, cy,
+                                     w, h, design::kRowRadius);
+                    c.r.draw(ui::Rect{cx, cy, w, h, design::kRowRadius,
+                                      ui::Color::black(0.18f * a)});
+                }
+                ui::drawImage(c.r, img, cx, cy, w, h, ui::Fit::Contain, a,
+                              design::kRowRadius);
+            }
+            c.r.draw(ui::Rect{cx, cy, w, h, design::kRowRadius,
+                              ui::Color::black(0.30f * (1.0f - f) * a)});
+            const float labelY = y + cardH + design::kDetailRowGap * 0.75f +
+                                 c.text.ascent(ui::TextStyle::Callout, c.sc);
+            c.text.draw(c.r,
+                        c.text.truncate(states_[i].when, ui::TextStyle::Callout, c.sc, cardW),
+                        x, labelY, ui::TextStyle::Callout,
+                        ui::Color::white((on ? 1.0f : 0.60f) * a), c.sc);
+            x += cardW + design::kStateCardGap;
+        }
+        // A notice goes under the rows, where it always went, not under the
+        // shelf.
+        y = rowsEnd;
     }
 
     // A refusal, and the number that makes it actionable. docs/PROJECT.md:
@@ -1322,6 +1535,7 @@ void DetailScreen::drawGlass(Ctx& c) {
             baseline += c.text.lineHeight(ui::TextStyle::Callout, c.sc);
         }
     }
+    c.r.setContentOffsetY(keepY);
 }
 
 

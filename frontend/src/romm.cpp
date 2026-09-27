@@ -1,5 +1,7 @@
 #include "romm.h"
 
+#include <ctime>
+
 #include <curl/curl.h>
 #include <json-c/json.h>
 
@@ -592,6 +594,37 @@ bool Client::fetchGame(int romId, Game* out, std::string* err) {
     return ok;
 }
 
+bool Client::fetchFacts(int romId, Facts* out, std::string* err) {
+    *out = Facts{};
+    std::string body;
+    if (!get("/api/roms/" + std::to_string(romId), &body, err)) return false;
+    json_object* root = json_tokener_parse(body.c_str());
+    if (!root) { if (err) *err = "rom response was not JSON"; return false; }
+    json_object* meta = nullptr;
+    if (json_object_object_get_ex(root, "metadatum", &meta) &&
+        json_object_get_type(meta) == json_type_object) {
+        json_object* v = nullptr;
+        if (json_object_object_get_ex(meta, "first_release_date", &v) &&
+            json_object_get_type(v) == json_type_int) {
+            // Milliseconds in RomM's merged record; seconds in some sources'.
+            int64_t t = json_object_get_int64(v);
+            if (t > 100000000000LL) t /= 1000;
+            const time_t tt = static_cast<time_t>(t);
+            struct tm g;
+            if (t > 0 && gmtime_r(&tt, &g)) out->year = g.tm_year + 1900;
+        }
+        if (json_object_object_get_ex(meta, "companies", &v) &&
+            json_object_get_type(v) == json_type_array && json_object_array_length(v) > 0) {
+            json_object* first = json_object_array_get_idx(v, 0);
+            if (json_object_get_type(first) == json_type_string)
+                out->maker = json_object_get_string(first);
+        }
+        out->players = jstr(meta, "player_count");
+    }
+    json_object_put(root);
+    return true;
+}
+
 bool Client::fetchGames(int platformId, std::vector<Game>* out, std::string* err,
                         const std::function<void(int)>& onPage) {
     out->clear();
@@ -686,6 +719,10 @@ bool parseAssets(const std::string& body, std::vector<Asset>* out, std::string* 
         a.sizeBytes = jint(o, "file_size_bytes");
         a.emulator = jstr(o, "emulator");
         a.updatedAt = jstr(o, "updated_at");
+        json_object* shot = nullptr;
+        if (json_object_object_get_ex(o, "screenshot", &shot) &&
+            json_object_get_type(shot) == json_type_object)
+            a.picturePath = jstr(shot, "download_path");
         if (a.id != 0) out->push_back(std::move(a));
     }
     json_object_put(root);
@@ -728,6 +765,30 @@ bool Client::uploadState(int romId, const std::string& emulator, const std::stri
     const std::string path = "/api/states?rom_id=" + std::to_string(romId) +
                              "&emulator=" + emulator;
     return postMultipart(path, "stateFile", fileName, data, err, shotName, shot);
+}
+
+bool Client::uploadScreenshot(int romId, const std::string& fileName,
+                              const std::vector<uint8_t>& png, std::string* err) const {
+    return postMultipart("/api/screenshots?rom_id=" + std::to_string(romId), "screenshotFile",
+                         fileName, png, err);
+}
+
+bool Client::deleteStates(const std::vector<int>& ids, std::string* err) const {
+    if (ids.empty()) return true;
+    std::string json = "{\"states\":[";
+    for (size_t i = 0; i < ids.size(); ++i) {
+        if (i) json += ",";
+        json += std::to_string(ids[i]);
+    }
+    json += "]}";
+    std::string body;
+    long status = 0;
+    if (!postJson("/api/states/delete", json, &body, &status, err)) return false;
+    if (status >= 400) {
+        if (err) *err = "HTTP " + std::to_string(status) + " deleting states";
+        return false;
+    }
+    return true;
 }
 
 bool Client::postMultipart(const std::string& path, const char* partName,

@@ -576,7 +576,7 @@ void markPending(const storage::User& u, const Owed& o, int64_t bytes) {
     // and paths, which never hold a newline.
     if (FILE* f = std::fopen(path.c_str(), "wb")) {
         std::fprintf(f, "%lld\n", static_cast<long long>(bytes));
-        std::fprintf(f, "kind %s\n", o.isState ? "state" : "save");
+        std::fprintf(f, "kind %s\n", o.isScreenshot ? "screenshot" : o.isState ? "state" : "save");
         std::fprintf(f, "rom %d\n", o.romId);
         std::fprintf(f, "emulator %s\n", o.emulator.c_str());
         std::fprintf(f, "name %s\n", o.fileName.c_str());
@@ -610,7 +610,11 @@ std::vector<Owed> owed(const storage::User& u) {
             const size_t sp = l.find(' ');
             if (sp == std::string::npos) continue;
             const std::string k = l.substr(0, sp), v = l.substr(sp + 1);
-            if (k == "kind") { kind = true; o.isState = v == "state"; }
+            if (k == "kind") {
+                kind = true;
+                o.isState = v == "state";
+                o.isScreenshot = v == "screenshot";
+            }
             else if (k == "rom") o.romId = std::atoi(v.c_str());
             else if (k == "emulator") o.emulator = v;
             else if (k == "name") o.fileName = v;

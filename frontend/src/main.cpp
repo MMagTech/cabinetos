@@ -85,6 +85,8 @@
 #include "files.h"
 #include "drives.h"
 #include "players.h"
+#include "shortcuts.h"
+#include "rewind.h"
 #include "bluetooth.h"
 #include "ui.h"
 
@@ -167,6 +169,8 @@ public:
         // Sent again from a marker, not asked for by a person just now: the
         // pause menu is not told how it went.
         bool resend = false;
+        // A screenshot (#79): `data` is the PNG, and it goes to the gallery.
+        bool isScreenshot = false;
     };
 
     // An upload that has not reached the server is the ONE irreplaceable thing
@@ -197,6 +201,7 @@ public:
         cache::Owed o;
         o.romId = job.romId;
         o.isState = job.isState;
+        o.isScreenshot = job.isScreenshot;
         o.emulator = job.emulator;
         o.fileName = job.fileName;
         o.localPath = job.localPath;
@@ -218,6 +223,7 @@ public:
             Job j;
             j.romId = o.romId;
             j.isState = o.isState;
+            j.isScreenshot = o.isScreenshot;
             j.emulator = o.emulator;
             j.fileName = o.fileName;
             j.localPath = o.localPath;
@@ -245,6 +251,68 @@ public:
 
 private:
     static std::string key(const Job& j) { return std::to_string(j.romId) + "/" + j.fileName; }
+
+    // THREE STATES PER GAME, ROTATING (docs/PROJECT.md, "The in-game
+    // shortcuts, and three states per game"). Once a state has reached RomM,
+    // this person's states for the game UNDER THE SAME EMULATOR TAG are cut to
+    // the newest three, on RomM and on this console. Other tags, which is
+    // every other app's states, are never looked at. A state saved by Cabinet
+    // on the Apple TV under the same tag counts, and can be the one that goes:
+    // decided, and the price of three being true everywhere.
+    //
+    // After the upload, not before: an offline save waits in the queue, and
+    // counting it before it exists on RomM would delete a good state to make
+    // room for one that might never arrive. Several saved offline come down to
+    // three as each lands.
+    //
+    // Deletes nothing unless the state just sent is among the three kept. If
+    // RomM's times disagree with ours, a wrong guess would delete the newest
+    // state someone has; doing nothing leaves one too many, which the next
+    // save tidies.
+    static constexpr size_t kStatesKept = 3;
+    void rotate(const Job& job) {
+        std::vector<romm::Asset> all;
+        std::string err;
+        if (!client_->fetchStates(job.romId, &all, &err)) {
+            std::fprintf(stderr, "[state] could not list states to keep three: %s\n",
+                         err.c_str());
+            return;
+        }
+        std::vector<romm::Asset> mine;
+        for (const romm::Asset& a : all)
+            if (a.emulator == job.emulator) mine.push_back(a);
+        if (mine.size() <= kStatesKept) return;
+        std::sort(mine.begin(), mine.end(), [](const romm::Asset& a, const romm::Asset& b) {
+            return a.updatedAt != b.updatedAt ? a.updatedAt > b.updatedAt
+                                              : a.fileName > b.fileName;
+        });
+        bool keptNew = false;
+        for (size_t i = 0; i < kStatesKept; ++i)
+            if (mine[i].fileName == job.fileName) keptNew = true;
+        if (!keptNew) {
+            std::fprintf(stderr, "[state] %s is not among the newest three on RomM; "
+                                 "deleting nothing\n", job.fileName.c_str());
+            return;
+        }
+        std::vector<int> ids;
+        for (size_t i = kStatesKept; i < mine.size(); ++i) ids.push_back(mine[i].id);
+        if (!client_->deleteStates(ids, &err)) {
+            std::fprintf(stderr, "[state] could not remove older states: %s\n", err.c_str());
+            return;
+        }
+        // This console's copies of the ones that went, and their pictures.
+        const size_t slash = job.localPath.rfind('/');
+        const std::string dir =
+            slash == std::string::npos ? std::string() : job.localPath.substr(0, slash);
+        for (size_t i = kStatesKept; i < mine.size(); ++i) {
+            const std::string& name = mine[i].fileName;
+            std::fprintf(stderr, "[state] rotated out %s\n", name.c_str());
+            if (dir.empty()) continue;
+            cab::removeFile(dir + "/" + name);
+            const size_t dot = name.rfind('.');
+            if (dot != std::string::npos) cab::removeFile(dir + "/" + name.substr(0, dot) + ".png");
+        }
+    }
 
     void enqueue(Job job) {
         {
@@ -292,7 +360,9 @@ private:
                 err = "its file is gone";
                 cache::clearPending(storage::currentUser(), job.romId, job.fileName);
             } else {
-                ok = job.isState
+                ok = job.isScreenshot
+                    ? client_->uploadScreenshot(job.romId, job.fileName, job.data, &err)
+                    : job.isState
                     ? client_->uploadState(job.romId, job.emulator, job.fileName, job.data,
                                            &err, job.shotName, job.shot)
                     : client_->uploadSave(job.romId, job.emulator, job.fileName, job.data,
@@ -302,8 +372,10 @@ private:
                 // not reached RomM, and the console still owes it.
                 if (ok) cache::clearPending(storage::currentUser(), job.romId, job.fileName);
             }
+            if (ok && job.isState) rotate(job);
             if (job.isState && !job.resend) stateOutcome.store(ok ? 1 : 2);
-            std::fprintf(stderr, "[%s] %s%s %s%s\n", job.isState ? "state" : "save",
+            std::fprintf(stderr, "[%s] %s%s %s%s\n",
+                         job.isScreenshot ? "screenshot" : job.isState ? "state" : "save",
                          job.resend ? "resent, " : "",
                          ok ? "uploaded" : "upload failed, kept locally:",
                          ok ? job.emulator.c_str() : err.c_str(),
@@ -1111,6 +1183,51 @@ static void saveStateNow(GameSession& sess, Uploader& up, MenuNotice& notice) {
     up.push(std::move(job));
 }
 
+// A SCREENSHOT (#79): the shortcut button and Y. The game's own frame, as a
+// state's picture is (the menu is never in it), saved on this console first
+// and then sent to this person's gallery on RomM, retried like a save when
+// RomM is away. Named as a state is, the game's file name and the UTC time,
+// so two never collide. No gallery on the console: they are seen and
+// deleted in RomM (decided 2026-09-27).
+static void screenshotNow(GameSession& sess, Uploader& up, MenuNotice& notice) {
+    cab::Core& core = cab::Core::shared();
+    std::vector<uint8_t> rgba, png;
+    unsigned w = 0, h = 0;
+    if (!core.snapshot(rgba, w, h) || !ui::encodePNG(rgba, w, h, png)) {
+        std::fprintf(stderr, "[screenshot] no picture to take\n");
+        notice.say("Screenshots aren't available here", Tone::Info);
+        return;
+    }
+    struct timespec ts{};
+    clock_gettime(CLOCK_REALTIME, &ts);
+    struct tm utc{};
+    gmtime_r(&ts.tv_sec, &utc);
+    char stamp[48];
+    const size_t n = std::strftime(stamp, sizeof stamp, "%Y-%m-%d %H-%M-%S", &utc);
+    std::snprintf(stamp + n, sizeof stamp - n, "-%03ld", ts.tv_nsec / 1000000L);
+    std::string base = sess.fsStem.empty() ? sanitisedStem(sess.title) : sess.fsStem;
+    std::replace(base.begin(), base.end(), '/', '_');
+    const std::string name = base + " [" + stamp + "].png";
+    const std::string dir =
+        storage::screenshotsDir(storage::currentUser()) + "/" + std::to_string(sess.romId);
+    storage::makeDirs(dir);
+    const std::string path = dir + "/" + name;
+    if (!writeLocal(path, png)) {
+        notice.say("Couldn't save the screenshot", Tone::Problem);
+        return;
+    }
+    std::fprintf(stderr, "[screenshot] %ux%u, %zu bytes, %s\n", w, h, png.size(), name.c_str());
+    notice.say("Screenshot saved", Tone::Done);
+    Uploader::Job job;
+    job.romId = sess.romId;
+    job.emulator = "screenshot";
+    job.fileName = name;
+    job.data = std::move(png);
+    job.localPath = path;
+    job.isScreenshot = true;
+    up.push(std::move(job));
+}
+
 // The newest state RomM holds that THIS build can actually restore. A state
 // from another emulator is skipped rather than attempted: loading one does not
 // fail cleanly, it boots something that looks like the game and is not.
@@ -1130,6 +1247,9 @@ struct StateLoad {
     bool loaded = false;
     // The server could not be asked at all, as opposed to having nothing.
     bool serverFailed = false;
+    // Home's Resume asked, not a person pressing Load: finding no state is
+    // not news (the game just starts), so nothing is said about it.
+    bool quiet = false;
     std::vector<uint8_t> data;
     std::string note;
     std::thread worker;
@@ -1138,11 +1258,15 @@ struct StateLoad {
 
 static std::string newestLocalState(const GameSession& sess);
 
+// `wantId`: a particular state, picked on the launch screen, rather than the
+// newest. Everything else is the same, the fallback included.
 static void beginLoadLatestState(StateLoad& load, GameSession& sess,
-                                 romm::Client& client, MenuNotice& notice) {
+                                 romm::Client& client, MenuNotice& notice, int wantId = 0,
+                                 bool quiet = false) {
     if (load.running.load()) return;
 
-    notice.say("Loading\xE2\x80\xA6", Tone::Busy);
+    load.quiet = quiet;
+    if (!quiet) notice.say("Loading\xE2\x80\xA6", Tone::Busy);
     if (sess.stateTag.empty()) {
         // THIS SYSTEM'S STATES NEVER LEAVE THE CONSOLE, so the newest one here
         // IS the latest. Until 2026-09-23 this refused outright — so on NES,
@@ -1153,7 +1277,7 @@ static void beginLoadLatestState(StateLoad& load, GameSession& sess,
             local.empty() ? std::vector<uint8_t>{} : cab::readBytes(local);
         if (bytes.empty()) {
             std::fprintf(stderr, "[state] no settled tag and nothing saved here\n");
-            notice.say("No saved state for this game", Tone::Info);
+            if (!quiet) notice.say("No saved state for this game", Tone::Info);
             return;
         }
         const bool ok = cab::Core::shared().loadState(bytes);
@@ -1170,7 +1294,7 @@ static void beginLoadLatestState(StateLoad& load, GameSession& sess,
     load.serverFailed = false;
     const int romId = sess.romId;
     const std::string tag = sess.stateTag;
-    load.worker = std::thread([&load, &client, romId, tag]() {
+    load.worker = std::thread([&load, &client, romId, tag, wantId]() {
         std::vector<romm::Asset> states;
         std::string err;
         if (!client.fetchStates(romId, &states, &err)) {
@@ -1191,6 +1315,10 @@ static void beginLoadLatestState(StateLoad& load, GameSession& sess,
             // Loading one does not fail cleanly: it boots something that looks
             // like the game and is not.
             if (a.emulator != tag) { ++skipped; continue; }
+            if (wantId) {
+                if (a.id == wantId) best = &a;
+                continue;
+            }
             if (!best || a.updatedAt > best->updatedAt) best = &a;
         }
         if (!best) {
@@ -1277,8 +1405,9 @@ static void pumpStateLoad(StateLoad& load, const GameSession& sess,
         // gambatte-native (3 for other emulators)", or a server error) and was
         // shown on the television raw until 2026-09-23. It stays in the log
         // above; the person gets the sentence that means the same thing.
-        notice.say(load.serverFailed ? "Couldn't reach RomM" : "No saved state for this game",
-                   load.serverFailed ? Tone::Problem : Tone::Info);
+        if (!load.quiet)
+            notice.say(load.serverFailed ? "Couldn't reach RomM" : "No saved state for this game",
+                       load.serverFailed ? Tone::Problem : Tone::Info);
         return;
     }
     const bool ok = cab::Core::shared().loadState(load.data);
@@ -1435,6 +1564,69 @@ static int countEntries(const std::string& dir) {
 // on a 4K panel.
 static float gPs2Upscale = 1.0f;
 static int gPs2Anisotropy = 0;
+
+// "PRESS (A) TO ...", centred, with the A drawn as a button badge the way
+// consoles prompt: a white disc with a dark A, on the text's x-height. Home's
+// empty state says "Press (A) to open the Library" this way, and a game held
+// after a state loads says "Press (A) to continue".
+static void drawPressPrompt(ui::Renderer& r, ui::TextRenderer& text, float sc,
+                            const char* before, const char* after, float base,
+                            float alpha) {
+    const ui::TextStyle st = ui::TextStyle::Title3;
+    const float gap = 16.0f;
+    const float badge = text.lineHeight(st, sc) * 0.95f;
+    const float w1 = text.measure(before, st, sc);
+    const float w2 = text.measure(after, st, sc);
+    float x = (ui::kCanvasWidth - (w1 + gap + badge + gap + w2)) * 0.5f;
+    text.draw(r, before, x, base, st, ui::Color::white(0.92f * alpha), sc);
+    x += w1 + gap;
+    const float capMid = base - text.ascent(st, sc) * 0.36f;
+    r.draw(ui::Rect{x, capMid - badge * 0.5f, badge, badge, badge * 0.5f,
+                    ui::Color::white(0.95f * alpha)});
+    const float aw = text.measure("A", st, sc);
+    text.draw(r, "A", x + (badge - aw) * 0.5f, capMid + text.ascent(st, sc) * 0.36f, st,
+              ui::Color{0.07f, 0.05f, 0.12f, alpha}, sc);
+    x += badge + gap;
+    text.draw(r, after, x, base, st, ui::Color::white(0.92f * alpha), sc);
+}
+
+// WHEN A STATE WAS SAVED, as the launch screen says it: "Today, 8:13 PM",
+// "Yesterday, 8:13 PM", "Sep 23, 8:13 PM", with the year only when it is not
+// this one. From RomM's `updated_at`, which is UTC, into this console's time.
+static std::string stateWhen(const std::string& iso) {
+    int Y, M, D, h, m, sec;
+    if (std::sscanf(iso.c_str(), "%d-%d-%dT%d:%d:%d", &Y, &M, &D, &h, &m, &sec) != 6) return "";
+    struct tm utc = {};
+    utc.tm_year = Y - 1900;
+    utc.tm_mon = M - 1;
+    utc.tm_mday = D;
+    utc.tm_hour = h;
+    utc.tm_min = m;
+    utc.tm_sec = sec;
+    const time_t t = timegm(&utc);
+    struct tm at, now;
+    localtime_r(&t, &at);
+    const time_t n = time(nullptr);
+    localtime_r(&n, &now);
+    char clock[32];
+    std::strftime(clock, sizeof clock, "%l:%M %p", &at);
+    const char* c = clock;
+    while (*c == ' ') ++c;
+    struct tm yday = now;
+    yday.tm_mday -= 1;
+    mktime(&yday);
+    auto same = [](const struct tm& a, const struct tm& b) {
+        return a.tm_year == b.tm_year && a.tm_yday == b.tm_yday;
+    };
+    char day[32];
+    if (same(at, now)) std::snprintf(day, sizeof day, "Today");
+    else if (same(at, yday)) std::snprintf(day, sizeof day, "Yesterday");
+    else if (at.tm_year == now.tm_year) std::strftime(day, sizeof day, "%b %e", &at);
+    else std::strftime(day, sizeof day, "%b %e %Y", &at);
+    std::string d = day;
+    for (size_t i; (i = d.find("  ")) != std::string::npos;) d.erase(i, 1);
+    return d + ", " + c;
+}
 
 static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& game,
                         const std::string& coreDir, std::string* err,
@@ -5537,6 +5729,45 @@ int main(int argc, char** argv) {
     // is what makes this simple and is the direct payoff of hosting cores in
     // process rather than launching them.
     bool overlayOpen = false;
+    // THE BUTTONS THE MENU WAS CLOSED WITH, per player, kept from the game
+    // until they are let go (#103). The menu acts when a button goes DOWN and
+    // the game reads what is held every frame, so B to go back, A on Resume,
+    // or the stick clicks that closed it all reached the game a frame later
+    // as a press. Filled while the menu is up; a bit clears when its button
+    // is released and never comes back, so a fresh press after that is the
+    // game's as usual.
+    uint32_t heldThroughMenu[players::kMax] = {};
+    // Whether the menu was up at the last read. The menu usually closes on
+    // an event handled earlier in the SAME frame as the read, so the button
+    // that closed it is only held from that frame on; the frame of the close
+    // has to be captured as well as the frames it was open.
+    bool menuUpAtLastRead = false;
+    // THE SHORTCUT BUTTON, per player, while a game plays (shortcuts.h).
+    // `before` is what was already held when it went down, so only buttons
+    // pressed DURING the hold count; `used` is whether one was, which is what
+    // tells a tap (the pause menu) from a hold (a shortcut) on release.
+    struct ShortcutHold { bool down = false, used = false; uint32_t before = 0; };
+    ShortcutHold shortcutHold[players::kMax];
+    // FAST FORWARD (#77): the shortcut button and ZR, held. Fast while held,
+    // normal on release, the sound discarded meanwhile. About 4x, a fixed top
+    // speed rather than a setting. ONLY WHERE STATES ARE (MMagTech,
+    // 2026-09-27: fast forward and rewind go with states, on the systems kept
+    // true to the console, now and later), and elsewhere it says so.
+    constexpr double kFastForward = 4.0;
+    bool fastForwardSaid = false;
+    // REWIND (#78): the shortcut button and ZL, held (rewind.h). A snapshot
+    // every half second of play, the last 15 seconds kept in memory; held,
+    // it steps back one every kRewindStep and plays on from there on release.
+    // On every system with states and nowhere else (fast forward and rewind
+    // go with states). Dropped when a state loads or the game ends.
+    static cab::Rewind rewindKeep;
+    int rewindAvailable = -1;          // -1 not yet decided for this game
+    uint64_t rewindLastFrame = 0;      // framesRun at the last snapshot
+    float rewindStepWait = 0.0f;
+    double rewindWorstMs = 0.0;        // the slowest snapshot, for the log
+    std::vector<uint8_t> rewindRaw;
+    constexpr float kRewindStep = 0.20f;
+    bool rewindSaid = false;
     // Both stick clicks together are the overlay hotkey — see where they are
     // read. Held state rather than a chord test at press time, because SDL
     // delivers the two presses as separate events.
@@ -5545,9 +5776,9 @@ int main(int argc, char** argv) {
     Animated overlayFade;
     overlayFade.smooth = true;    // 350 ms ease-in-out, per the design system
     Animated overlayFocus;
-    enum OverlayItem { OvResume = 0, OvSaveState, OvLoadState, OvExit, OvCount };
+    enum OverlayItem { OvResume = 0, OvSaveState, OvLoadState, OvScreenshot, OvExit, OvCount };
     const char* kOverlayLabels[OvCount] = {
-        "Resume", "Save state", "Load latest state", "Exit to Home",
+        "Resume", "Save state", "Load latest state", "Screenshot", "Exit to Home",
     };
     // The pause menu's items for THIS game, built each time it opens: the two
     // state items only where the system has snapshots. PlayStation 2 and
@@ -5739,6 +5970,137 @@ int main(int argc, char** argv) {
 
     // Opening the launch screen for a card. Everything it shows is decided
     // here, so the screen holds no opinion about where any of it came from.
+    // CONTINUE FROM, fetched when a game's page opens: the newest three states
+    // RomM holds for the emulator Play would run, with their pictures. Network
+    // work, so on a worker, one at a time; a page opened while one is out
+    // waits its turn in `wantRom` rather than blocking the frame on a join.
+    struct DetailStates {
+        std::mutex m;
+        std::thread worker;
+        std::atomic<bool> busy{false}, ready{false};
+        int romId = 0;
+        std::vector<screens::StateChoice> list;
+        std::string saveWhen;
+        screens::DetailScreen::Facts facts;
+        int wantRom = 0;
+        std::string wantTag, wantSaveTag;
+        // Asked again once the uploads are done: a game just left may have
+        // saved a state that is still on its way to RomM.
+        bool stale = false;
+        ~DetailStates() { if (worker.joinable()) worker.join(); }
+    };
+    static DetailStates detailStates;
+    auto startDetailStates = [&]() {
+        if (detailStates.busy.load() || !detailStates.wantRom) return;
+        if (detailStates.worker.joinable()) detailStates.worker.join();
+        const int romId = detailStates.wantRom;
+        const std::string tag = detailStates.wantTag;
+        const std::string saveTag = detailStates.wantSaveTag;
+        detailStates.wantRom = 0;
+        detailStates.busy = true;
+        detailStates.worker = std::thread([romId, tag, saveTag]() {
+            std::vector<romm::Asset> all;
+            std::vector<screens::StateChoice> out;
+            std::string err, saveWhen;
+            // YEAR, MAKER, PLAYERS, under the cover. Whatever RomM has.
+            screens::DetailScreen::Facts facts;
+            {
+                romm::Client::Facts f;
+                std::string ferr;
+                if (liveClient.fetchFacts(romId, &f, &ferr)) {
+                    if (f.year > 0) facts.year = std::to_string(f.year);
+                    facts.maker = f.maker;
+                    if (!f.players.empty())
+                        facts.players = f.players + (f.players == "1" ? " player" : " players");
+                }
+            }
+            // THE GAME'S OWN SAVE, the newest under the tag it travels by, as
+            // the launch reads it. "Saved today, 8:17 PM".
+            if (!saveTag.empty() && liveClient.fetchSaves(romId, &all, &err)) {
+                const romm::Asset* newest = nullptr;
+                for (const romm::Asset& a : all)
+                    if (a.emulator == saveTag && (!newest || a.updatedAt > newest->updatedAt))
+                        newest = &a;
+                if (newest) {
+                    std::string w = stateWhen(newest->updatedAt);
+                    if (w.rfind("Today", 0) == 0 || w.rfind("Yesterday", 0) == 0)
+                        w[0] = static_cast<char>(std::tolower(static_cast<unsigned char>(w[0])));
+                    if (!w.empty()) saveWhen = "Saved " + w;
+                }
+            }
+            all.clear();
+            if (!tag.empty() && liveClient.fetchStates(romId, &all, &err)) {
+                std::vector<romm::Asset> mine;
+                for (const romm::Asset& a : all)
+                    if (a.emulator == tag) mine.push_back(a);
+                std::sort(mine.begin(), mine.end(),
+                          [](const romm::Asset& a, const romm::Asset& b) {
+                              return a.updatedAt > b.updatedAt;
+                          });
+                for (size_t i = 0; i < mine.size() && i < 3; ++i)
+                    out.push_back({mine[i].id, mine[i].picturePath, stateWhen(mine[i].updatedAt)});
+            } else if (!err.empty()) {
+                std::fprintf(stderr, "[detail] states and saves: %s\n", err.c_str());
+            }
+            std::lock_guard<std::mutex> lk(detailStates.m);
+            detailStates.romId = romId;
+            detailStates.list = std::move(out);
+            detailStates.saveWhen = std::move(saveWhen);
+            detailStates.facts = std::move(facts);
+            detailStates.ready = true;
+            detailStates.busy = false;
+        });
+    };
+    // Which emulator Play would run for this game decides whose states are
+    // offered: another emulator's state does not load, it hangs.
+    auto loadDetailStates = [&](int romId) {
+        for (const auto& g : games) {
+            if (g.id != romId) continue;
+            const catalog::Coverage cov = catalog::coverageFor(g);
+            if (!liveClient.haveToken()) return;
+            // The facts are asked for every game, playable or not; the states
+            // and the save only where there is a core to have written them.
+            const char* tag = cov.core && catalog::snapshotsAllowed(cov.core)
+                ? catalog::emulatorTag(cov.core) : nullptr;
+            const char* saveTag = cov.core ? catalog::saveTag(cov.core) : nullptr;
+            detailStates.wantRom = romId;
+            detailStates.wantTag = tag ? tag : "";
+            detailStates.wantSaveTag = saveTag ? saveTag : "";
+            startDetailStates();
+            return;
+        }
+    };
+    auto pumpDetailStates = [&]() {
+        if (detailStates.ready.exchange(false)) {
+            std::lock_guard<std::mutex> lk(detailStates.m);
+            if (here() == Screen::Detail && detailScreen.game().romId == detailStates.romId) {
+                detailScreen.setStates(detailStates.list);
+                detailScreen.setSaveWhen(detailStates.saveWhen);
+                detailScreen.setFacts(detailStates.facts);
+                detailScreen.detailsArrived();
+            }
+        }
+        startDetailStates();
+        if (detailStates.stale && uploader.pending() == 0) {
+            detailStates.stale = false;
+            if (here() == Screen::Detail) loadDetailStates(detailScreen.game().romId);
+        }
+    };
+    // A state picked on the launch screen, loaded once the game is running.
+    int pendingStateId = 0;
+    // HOME'S RESUME: the newest state, if there is one, loaded the same way;
+    // none, and the game simply starts (MMagTech, 2026-09-27). Only where the
+    // system has states.
+    bool pendingResume = false;
+    // AFTER A STATE LOADS, THE GAME WAITS ON THAT FRAME for a button
+    // (docs/PROJECT.md, decided 2026-09-27: "catches you off guard how quick
+    // it starts"). `stateHold` is the wait, with its "Press (A) to continue";
+    // `stateHoldWaiting` holds a game started from the launch screen still,
+    // with no prompt, while its state is fetched, so it does not boot and
+    // then jump. Only ever set by a state load, so a system without states
+    // never waits. The press that ends it is kept from the game.
+    bool stateHold = false, stateHoldWaiting = false, stateHoldJustEnded = false;
+
     auto openDetail = [&](int cardIndex) {
         if (cardIndex < 0 || cardIndex >= static_cast<int>(cards.size())) return;
         screens::GameDetail d;
@@ -5758,8 +6120,22 @@ int main(int argc, char** argv) {
             break;
         }
         d.kept = cache::isKeptBy(storage::currentUser(), d.romId);
+        const int romId = d.romId;
         detailScreen.open(std::move(d));
         stack.push_back(Screen::Detail);
+        loadDetailStates(romId);
+    };
+
+    // OPENING A GAME'S PAGE, AND LEAVING IT, DISSOLVE like a top-bar switch:
+    // asked for here, done at the end of the frame, after that frame has been
+    // copied to dissolve away over the new one. It was a cut, and MMagTech on
+    // the TV, 2026-09-27: "the switch still happens a bit fast and then
+    // everything is just thrown at you". A capture run opens it at once.
+    int pendingDetail = -1;
+    bool pendingDetailBack = false;
+    auto openDetailSoon = [&](int cardIndex) {
+        if (shotMode) openDetail(cardIndex);
+        else pendingDetail = cardIndex;
     };
 
     // What a screen asked for, and whether the app can do it. A screen never
@@ -6217,7 +6593,7 @@ int main(int argc, char** argv) {
     enum SettingId { SetAddAccount = 1, SetInterfaceSounds, SetPinSet, SetPinChange,
                      SetPinOff, SetRemoveAccount, SetScreenOff, SetWifi, SetServer,
                      SetUpdate, SetUpdateCheck, SetCredits, SetFiles, SetDownloads,
-                     SetAddController };
+                     SetAddController, SetShortcuts, SetShortcutButton };
     // One Eject row per USB drive: this plus the drive's index in
     // storage::locations() when the rows were built.
     constexpr int kSetEject = 100;
@@ -6232,6 +6608,12 @@ int main(int argc, char** argv) {
     // The pad last pressed in Settings, whose row has the dot. Kept as the
     // pad, not its row: a swap moves it to another row.
     SDL_JoystickID settingsLastPad = 0;
+    // THE SHORTCUT BUTTON ROW IS LISTENING for this pad's next press, 0 when
+    // not (shortcuts.h). And the press it took, so the gamepad event SDL sends
+    // for that same press (same timestamp) goes no further: a B that cancels
+    // must not also leave Settings.
+    SDL_JoystickID shortcutListen = 0;
+    Uint64 shortcutTakenAt = 0;
     std::vector<drives::Unusable> formatable;
     std::map<int, std::string> driveNames;   // a drive row's id -> its name
 
@@ -6903,8 +7285,26 @@ int main(int argc, char** argv) {
                                 "Player " + std::to_string(p.player + 1)});
             }
             rows.push_back({K::Action, SetAddController, "Add a controller", "", ""});
-            rows.push_back({K::Unbuilt, 0, "Button mapping",
-                            "For controllers the console does not recognise", ""});
+            // IN-GAME SHORTCUTS, off by default (shortcuts.h). The Button
+            // mapping row that stood here went with #66: there is no mapping
+            // screen. With the switch on, the shortcut button row is for the
+            // pad in hand, named on the row, since the button is remembered
+            // per kind of pad.
+            {
+                Row r{K::Choice, SetShortcuts, "In-game shortcuts", "", ""};
+                r.choices = {"Off", "On"};
+                r.choice = shortcuts::enabled() ? 1 : 0;
+                rows.push_back(r);
+            }
+            if (shortcuts::enabled() && !pads.empty()) {
+                const players::Pad* inHand = &pads.front();
+                for (const players::Pad& p : pads)
+                    if (p.id == settingsLastPad) inHand = &p;
+                SDL_Gamepad* gp = SDL_GetGamepadFromID(inHand->id);
+                rows.push_back({K::Action, SetShortcutButton, "Shortcut button", inHand->name,
+                                shortcutListen ? "Press a button\xE2\x80\xA6"
+                                               : shortcuts::label(gp)});
+            }
             cats.push_back({"Controllers", std::move(rows)});
         }
 
@@ -7278,6 +7678,9 @@ int main(int argc, char** argv) {
                     barFocused = true;
                     barSlot = BarAccount;
                     sound::play(sound::Cue::Back);
+                } else if (stack.size() > 1 && here() == Screen::Detail && !shotMode) {
+                    pendingDetailBack = true;
+                    sound::play(sound::Cue::Back);
                 } else if (stack.size() > 1) {
                     stack.pop_back(); sound::play(sound::Cue::Back);
                 } else sound::play(sound::Cue::Edge);
@@ -7513,6 +7916,14 @@ int main(int argc, char** argv) {
                 } else if (res.value == SetAddController) {
                     sound::play(sound::Cue::Activate);
                     openPadWindow();
+                } else if (res.value == SetShortcutButton) {
+                    // The pad that pressed A, which the row already names.
+                    const std::vector<players::Pad> pads = players::connected();
+                    shortcutListen = pads.empty() ? 0 : pads.front().id;
+                    for (const players::Pad& p : pads)
+                        if (p.id == settingsLastPad) shortcutListen = p.id;
+                    sound::play(sound::Cue::Activate);
+                    buildSettings();
                 } else if (res.value == SetAddAccount) {
                     // The same route as the chip's Add user, PIN included.
                     // Back from the pairing screen returns here, because it
@@ -7778,6 +8189,11 @@ int main(int argc, char** argv) {
                     prefs::set("update_check", updWeekly ? "weekly" : "manual");
                     sound::play(sound::Cue::Move);
                 }
+                if (res.value == SetShortcuts) {
+                    shortcuts::setEnabled(settingsScreen.choiceOf(SetShortcuts) == 1);
+                    sound::play(sound::Cue::Move);
+                    buildSettings();   // the Shortcut button row comes and goes
+                }
                 if (res.value == SetScreenOff) {
                     const int i = settingsScreen.choiceOf(SetScreenOff);
                     if (i >= 0 && i < kScreenOffCount) {
@@ -7816,10 +8232,15 @@ int main(int argc, char** argv) {
                 sound::play(sound::Cue::Move);
                 break;
             case screens::Action::OpenGame:
-                openDetail(res.value);
+                openDetailSoon(res.value);
                 break;
             case screens::Action::Play:
                 launchById(res.value);
+                break;
+            case screens::Action::PlayState:
+                std::fprintf(stderr, "[detail] play from state %d\n", res.value);
+                pendingStateId = res.value;
+                if (!launchById(detailScreen.game().romId)) pendingStateId = 0;
                 break;
             case screens::Action::Download:
                 downloadById(res.value);
@@ -7853,14 +8274,14 @@ int main(int argc, char** argv) {
         //
         // Home promises one action from cold to playing, and this is it.
         if (haveResume() && focusRow == RowRecent && focusSlot == 0) {
-            launchById(cards[heroIndex].id);
+            pendingResume = launchById(cards[heroIndex].id);
             return;
         }
         // Every other cover on Home opens the launch screen, the same as a
         // cover anywhere else.
         if (const Card* c = cardAt(focusRow, focusSlot)) {
             for (size_t i = 0; i < cards.size(); ++i) {
-                if (cards[i].id == c->id) { openDetail(static_cast<int>(i)); return; }
+                if (cards[i].id == c->id) { openDetailSoon(static_cast<int>(i)); return; }
             }
         }
     };
@@ -8248,7 +8669,7 @@ int main(int argc, char** argv) {
             if (card < 0 && here() == Screen::Grid)
                 apply(gridScreen.key(screens::Nav::Activate));
             else if (card >= 0)
-                openDetail(card);
+                openDetailSoon(card);
         }
     }
 
@@ -8556,7 +8977,7 @@ int main(int argc, char** argv) {
                 detailScreen.game().romId != launchJob.romId) {
                 for (size_t i = 0; i < cards.size(); ++i) {
                     if (cards[i].id == launchJob.romId) {
-                        openDetail(static_cast<int>(i));
+                        openDetailSoon(static_cast<int>(i));
                         break;
                     }
                 }
@@ -8682,11 +9103,27 @@ int main(int argc, char** argv) {
         //
         // Opened here rather than at startup because the rate comes from the
         // core: av_info is not known until a game is loaded.
-        if (!audioStream) {
-            SDL_AudioSpec src{};
-            src.format = SDL_AUDIO_S16;
-            src.channels = 2;
-            src.freq = static_cast<int>(core.avInfo().sampleRate);
+        //
+        // AND SET FOR EVERY GAME, NOT ONLY THE FIRST. Until 2026-09-27 the
+        // stream kept the rate of the first game played, so every later game
+        // at another rate was played too fast or too slow. MMagTech played
+        // Mortal Kombat II (SNES, 32040 Hz) and then DoDonPachi (FBNeo, 47997
+        // Hz): its sound went into a stream playing two-thirds as fast, fell
+        // further behind every second, and was still playing on Home after he
+        // quit, which read as the game running on in the background. Emptied
+        // here and at every exit, so no game hears another's leftovers.
+        SDL_AudioSpec src{};
+        src.format = SDL_AUDIO_S16;
+        src.channels = 2;
+        src.freq = static_cast<int>(core.avInfo().sampleRate);
+        if (audioStream) {
+            SDL_ClearAudioStream(audioStream);
+            if (SDL_SetAudioStreamFormat(audioStream, &src, nullptr))
+                std::fprintf(stderr, "[frontend] audio in at %d Hz\n", src.freq);
+            else
+                std::fprintf(stderr, "[frontend] could not set audio to %d Hz: %s\n", src.freq,
+                             SDL_GetError());
+        } else {
             audioStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK,
                                                     &src, nullptr, nullptr);
             if (audioStream) {
@@ -8902,6 +9339,17 @@ int main(int argc, char** argv) {
         // file rather than a tree. This is where a Dreamcast's card is read
         // back out of the system directory and taken out of `bios/`.
         syncFileSaves(session, uploader);
+        // Whatever sound the game had queued goes with it, rather than playing
+        // on over Home (see where the stream's rate is set, at launch).
+        if (audioStream) SDL_ClearAudioStream(audioStream);
+        pendingStateId = 0;
+        pendingResume = false;
+        stateHold = stateHoldWaiting = false;
+        rewindKeep.reset();
+        rewindAvailable = -1;
+        rewindLastFrame = 0;
+        rewindWorstMs = 0.0;
+        detailStates.stale = true;   // Continue from may have changed
         playing = false;
         overlayOpen = false;
         overlayFade.retarget(0.0f, overlayFadeSeconds);
@@ -8982,6 +9430,11 @@ int main(int argc, char** argv) {
                 break;
             case OvSaveState: saveStateNow(session, uploader, menuNotice); break;
             case OvLoadState: beginLoadLatestState(stateLoad, session, liveClient, menuNotice); break;
+            // THE PAUSED MOMENT, the menu not in it: a screenshot reads the
+            // game's frame, not the screen. MMagTech's idea, 2026-09-27: pause
+            // in an intense scene and take it without letting go of the game.
+            // The menu stays open, saying "Screenshot saved".
+            case OvScreenshot: screenshotNow(session, uploader, menuNotice); break;
             case OvExit: exitToHome(); break;
             default: break;
         }
@@ -8999,6 +9452,9 @@ int main(int argc, char** argv) {
                 pauseItems.push_back(OvSaveState);
                 pauseItems.push_back(OvLoadState);
             }
+            // Where a picture can be read from the game, which today is where
+            // states are; PS2 and GameCube follow in #130.
+            if (session.snapshots) pauseItems.push_back(OvScreenshot);
             pauseItems.push_back(OvExit);
         }
         overlaySlot = 0;
@@ -9109,6 +9565,28 @@ int main(int argc, char** argv) {
             if (touched && idleWatch.input(clockSeconds()) && owner != InputOwner::Game &&
                 !powerKey)
                 continue;
+            // THE PRESS THAT ENDS THE WAIT after a state loads: A, as the
+            // prompt says (Return on a keyboard). It was any button, and
+            // MMagTech: "it says press A to continue and any button works".
+            // Every other press does nothing while it waits. None goes further;
+            // the frame read keeps them from the game until let go, as it does
+            // the pause menu's. L3 and R3 still reach the pause menu below.
+            if (stateHold && playing && !overlayOpen &&
+                (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN ||
+                 (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat && !powerKey))) {
+                const bool stick = e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN &&
+                                   (e.gbutton.button == SDL_GAMEPAD_BUTTON_LEFT_STICK ||
+                                    e.gbutton.button == SDL_GAMEPAD_BUTTON_RIGHT_STICK);
+                const bool a = (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN &&
+                                e.gbutton.button == SDL_GAMEPAD_BUTTON_SOUTH) ||
+                               (e.type == SDL_EVENT_KEY_DOWN && e.key.key == SDLK_RETURN);
+                if (a) {
+                    stateHold = false;
+                    stateHoldJustEnded = true;
+                    std::fprintf(stderr, "[state] continuing\n");
+                }
+                if (!stick) continue;
+            }
             if (powerKey) {
                 // The press that woke the machine from Rest arrives here too,
                 // and must not wake it straight into this menu.
@@ -9137,12 +9615,52 @@ int main(int argc, char** argv) {
                 buildSettings();
                 continue;
             }
+            // SETTING THE SHORTCUT BUTTON: the row is listening, and the next
+            // RAW press on its pad is the answer (shortcuts.h), read before
+            // anything else sees it. B cancels; a button the game needs is
+            // passed over and listening goes on. Every other press is held
+            // back meanwhile, so nothing moves under the row.
+            if (shortcutListen) {
+                if (here() != Screen::Settings || !SDL_GetGamepadFromID(shortcutListen)) {
+                    shortcutListen = 0;
+                    buildSettings();
+                } else if (e.type == SDL_EVENT_JOYSTICK_BUTTON_DOWN &&
+                           e.jbutton.which == shortcutListen) {
+                    const shortcuts::Pick got = shortcuts::pick(
+                        SDL_GetGamepadFromID(shortcutListen), e.jbutton.button);
+                    if (got != shortcuts::Pick::Ignore) {
+                        shortcutListen = 0;
+                        shortcutTakenAt = e.jbutton.timestamp;
+                        sound::play(got == shortcuts::Pick::Taken ? sound::Cue::Activate
+                                                                  : sound::Cue::Back);
+                        buildSettings();
+                    }
+                    continue;
+                } else if (e.type == SDL_EVENT_KEY_DOWN && e.key.key == SDLK_ESCAPE) {
+                    shortcutListen = 0;
+                    sound::play(sound::Cue::Back);
+                    buildSettings();
+                    continue;
+                } else if (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN ||
+                           e.type == SDL_EVENT_GAMEPAD_BUTTON_UP ||
+                           e.type == SDL_EVENT_KEY_DOWN) {
+                    continue;
+                }
+            }
+            if (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && shortcutTakenAt &&
+                e.gbutton.timestamp == shortcutTakenAt) {
+                shortcutTakenAt = 0;
+                continue;
+            }
             // WHICH PAD IS WHICH: the pad last pressed has a dot on its row
-            // in Controllers (players.h).
+            // in Controllers (players.h). With shortcuts on, the Shortcut
+            // button row follows it too.
             if (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && here() == Screen::Settings)
                 if (const int p = players::playerOf(e.gbutton.which); p >= 0) {
+                    const bool moved = settingsLastPad != e.gbutton.which;
                     settingsLastPad = e.gbutton.which;
                     settingsScreen.mark(kSetPad + p);
+                    if (moved && shortcuts::enabled()) buildSettings();
                 }
             switch (e.type) {
                 case SDL_EVENT_QUIT:
@@ -9592,7 +10110,7 @@ int main(int argc, char** argv) {
 
         // Idle, once a frame. The timers only ever deepen here; input() is
         // what lifts them, above.
-        idleFrame(dt, playing && !overlayOpen, kScreenOff[screenOffIndex].seconds);
+        idleFrame(dt, playing && !overlayOpen && !stateHold, kScreenOff[screenOffIndex].seconds);
         // Held seats for pads that went off last only as long as the game
         // (players.h). The pause menu is still the game.
         players::setInGame(playing);
@@ -9649,6 +10167,9 @@ int main(int argc, char** argv) {
             // EVERY SEATED PAD IS ITS OWN PLAYER (players.h, issue #64). Until
             // 2026-09-26 a game read only the first pad SDL listed, so a second
             // person's pad walked the menus and did nothing in a game.
+            bool fastForward = false, rewinding = false;
+            const bool menuWasUp = overlayOpen || stateHold || menuUpAtLastRead;
+            menuUpAtLastRead = overlayOpen || stateHold;
             for (int p = 0; p < players::kMax; ++p) {
                 cab::PadState st = p == 0 ? pad : cab::PadState{};
                 if (SDL_Gamepad* gp = players::gamepad(p)) {
@@ -9719,6 +10240,84 @@ int main(int argc, char** argv) {
                     st.rightX = SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_RIGHTX) / 32767.0f;
                     st.rightY = SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_RIGHTY) / 32767.0f;
                 }
+                // THE SHORTCUT BUTTON (shortcuts.h), only with the switch on.
+                // While it is held the game hears nothing from this pad's
+                // buttons, so neither it nor the second button of a shortcut
+                // reaches the game; on release, whatever is still held is kept
+                // back until let go, the way the menu's buttons are (#103).
+                // A tap opens the pause menu, or closes it. Shortcuts do
+                // nothing while the menu is up, but still count as a hold.
+                if (SDL_Gamepad* gp = players::gamepad(p); gp && shortcuts::enabled()) {
+                    ShortcutHold& h = shortcutHold[p];
+                    const bool down = shortcuts::held(gp);
+                    // The shortcut button pressed to end a wait is that press,
+                    // not a tap that opens the menu on its release.
+                    if (down && !h.down) h = {true, stateHoldJustEnded, st.buttons};
+                    if (h.down) {
+                        if (down && (st.buttons & bit(cab::R2)) && !overlayOpen && !stateHold &&
+                            !stateHoldWaiting)
+                            fastForward = true;
+                        if (down && (st.buttons & bit(cab::L2)) && !overlayOpen && !stateHold &&
+                            !stateHoldWaiting)
+                            rewinding = true;
+                        const uint32_t fresh = st.buttons & ~h.before;
+                        h.before = st.buttons;
+                        if (fresh) {
+                            h.used = true;
+                            // The screenshot shortcut works in the pause menu too,
+                            // on the paused frame. Nothing else does there.
+                            if (overlayOpen && !powerMenu && (fresh & bit(cab::Y))) {
+                                std::fprintf(stderr,
+                                             "[shortcuts] player %d: screenshot, paused\n", p + 1);
+                                screenshotNow(session, uploader, menuNotice);
+                            }
+                            if (!overlayOpen && !stateHold && !stateHoldWaiting) {
+                                const bool save = fresh & bit(cab::R);
+                                const bool load = !save && (fresh & bit(cab::L));
+                                if (!save && !load && (fresh & bit(cab::Y))) {
+                                    std::fprintf(stderr, "[shortcuts] player %d: screenshot\n",
+                                                 p + 1);
+                                    screenshotNow(session, uploader, menuNotice);
+                                }
+                                if ((save || load) && !session.snapshots) {
+                                    menuNotice.say("Save states aren't available here",
+                                                   Tone::Info);
+                                } else if (save) {
+                                    std::fprintf(stderr, "[shortcuts] player %d: save state\n",
+                                                 p + 1);
+                                    saveStateNow(session, uploader, menuNotice);
+                                } else if (load) {
+                                    std::fprintf(stderr, "[shortcuts] player %d: load newest\n",
+                                                 p + 1);
+                                    beginLoadLatestState(stateLoad, session, liveClient,
+                                                         menuNotice);
+                                }
+                            }
+                        }
+                        if (!down) {
+                            h.down = false;
+                            heldThroughMenu[p] |= st.buttons;
+                            if (!h.used && !stateHold && !stateHoldWaiting) {
+                                std::fprintf(stderr, "[shortcuts] player %d: tap, %s the menu\n",
+                                             p + 1, overlayOpen ? "closing" : "opening");
+                                toggleOverlay();
+                            }
+                        } else {
+                            st.buttons = 0;
+                            st.leftTrigger = st.rightTrigger = 0;
+                        }
+                    }
+                }
+                // #103: what closed the menu is the menu's, not the game's.
+                // The keyboard is in `st` for player one, so it is covered
+                // too. A trigger that is swallowed goes to zero as well, or a
+                // Dreamcast would still read the pull through its analogue
+                // channel.
+                if (menuWasUp) heldThroughMenu[p] = st.buttons;
+                heldThroughMenu[p] &= st.buttons;
+                st.buttons &= ~heldThroughMenu[p];
+                if (heldThroughMenu[p] & bit(cab::L2)) st.leftTrigger = 0;
+                if (heldThroughMenu[p] & bit(cab::R2)) st.rightTrigger = 0;
                 core.setPad(p, st);
             }
 
@@ -9749,21 +10348,92 @@ int main(int argc, char** argv) {
             // every core did before 2026-09-19. It has to be TOLD. A no-op for
             // all twenty-one libretro cores, so it is stated unconditionally
             // rather than behind a test somebody has to remember.
-            core.setPaused(overlayOpen);
+            stateHoldJustEnded = false;
+            if (fastForward && !session.snapshots) {
+                if (!fastForwardSaid) menuNotice.say("Fast forward isn't available here", Tone::Info);
+                fastForwardSaid = true;
+                fastForward = false;
+            } else if (!fastForward) {
+                fastForwardSaid = false;
+            }
+            if (fastForward != (core.speed() > 1.0))
+                std::fprintf(stderr, "[shortcuts] fast forward %s\n", fastForward ? "on" : "off");
+            core.setSpeed(fastForward && !rewinding ? kFastForward : 1.0);
+            // Whether this game can rewind, decided once it is running.
+            if (rewindAvailable < 0 && core.running() && core.framesRun() > 0) {
+                const size_t sz = core.stateSize();
+                rewindAvailable = session.snapshots && sz > 0 ? 1 : 0;
+                rewindLastFrame = core.framesRun();
+                std::fprintf(stderr, "[rewind] %s (state %zu KB)\n",
+                             rewindAvailable ? "available" : "not offered", sz / 1024);
+            }
+            // WHAT REWIND IS HOLDING, in the log each time it starts: the
+            // numbers the memory budget was argued from, measured.
+            static bool wasRewinding = false;
+            if (rewinding && !wasRewinding && rewindAvailable == 1) {
+                const size_t n = rewindKeep.count(), b = rewindKeep.bytes();
+                std::fprintf(stderr,
+                             "[rewind] %zu states, %.1f s, %.1f MB in memory "
+                             "(%.0f KB each, from %zu KB); slowest snapshot %.1f ms\n",
+                             n, n * 0.5, b / 1048576.0, n ? b / 1024.0 / n : 0.0,
+                             core.stateSize() / 1024, rewindWorstMs);
+                rewindStepWait = 0.0f;   // the first step is at once
+            }
+            wasRewinding = rewinding;
+            if (rewinding && rewindAvailable != 1) {
+                if (!rewindSaid) menuNotice.say("Rewind isn't available here", Tone::Info);
+                rewindSaid = true;
+                rewinding = false;
+            } else if (!rewinding) {
+                rewindSaid = false;
+            }
+            const bool frozen = overlayOpen || stateHold || stateHoldWaiting;
+            core.setPaused(frozen);
 
-            if (overlayOpen) {
+            if (frozen) {
                 // Nothing to step. The last frame stays uploaded, so the
                 // menu sits over a frozen picture rather than a black one.
             } else if (shotMode) {
                 core.runFor(1.0 / std::max(core.avInfo().fps, 1.0));
+            } else if (rewinding) {
+                // ONE SNAPSHOT BACK EVERY kRewindStep, held still between, so
+                // it can be stopped where wanted. A frame is run from each so
+                // there is a picture (its sound is dropped below). With none
+                // left it holds on the oldest.
+                rewindStepWait -= dt;
+                if (rewindStepWait <= 0.0f) {
+                    rewindStepWait = kRewindStep;
+                    if (rewindKeep.takeNewest(rewindRaw)) {
+                        core.loadState(rewindRaw);
+                        core.runFor(1.0 / std::max(core.avInfo().fps, 1.0));
+                    }
+                    rewindLastFrame = core.framesRun();
+                }
             } else {
                 core.runFor(dt);
+                // A SNAPSHOT EVERY HALF SECOND OF PLAY, counted in the game's
+                // own frames so fast forward keeps them half a game-second
+                // apart. Taken here, compressed on rewind's worker.
+                const uint64_t every = static_cast<uint64_t>(
+                    std::max(1.0, std::round(core.avInfo().fps * 0.5)));
+                if (rewindAvailable == 1 && core.framesRun() >= rewindLastFrame + every) {
+                    rewindLastFrame = core.framesRun();
+                    const uint64_t t0 = SDL_GetTicksNS();
+                    if (core.saveState(rewindRaw) && !rewindRaw.empty()) {
+                        const double ms = (SDL_GetTicksNS() - t0) / 1e6;
+                        if (ms > rewindWorstMs) rewindWorstMs = ms;
+                        rewindKeep.offer(rewindRaw);
+                    }
+                }
             }
             core.uploadFrame();
 
             if (audioStream) {
                 const std::vector<int16_t>& samples = core.drainAudio();
-                if (!samples.empty()) {
+                // Fast forward's sound is discarded, not played fast: four
+                // times the samples would only pile up behind the picture.
+                // Rewind's too: it is a frame's sound played forwards.
+                if (!samples.empty() && core.speed() <= 1.0 && !rewinding) {
                     SDL_PutAudioStreamData(audioStream, samples.data(),
                                            static_cast<int>(samples.size() * sizeof(int16_t)));
                 }
@@ -9892,10 +10562,35 @@ int main(int argc, char** argv) {
         pumpLeave();
         pumpExit();
         pumpStateLoad(stateLoad, session, menuNotice);
+        pumpDetailStates();
+        // THE STATE PICKED ON THE LAUNCH SCREEN goes in once the core is
+        // running, the same way Load latest state does, by id.
+        if (pendingStateId && playing && cab::Core::shared().running() &&
+            cab::Core::shared().framesRun() >= 1 && !stateLoad.running.load()) {
+            beginLoadLatestState(stateLoad, session, liveClient, menuNotice, pendingStateId);
+            pendingStateId = 0;
+            if (stateLoad.running.load()) stateHoldWaiting = true;
+        }
+        if (pendingResume && playing && cab::Core::shared().running() &&
+            cab::Core::shared().framesRun() >= 1 && !stateLoad.running.load()) {
+            pendingResume = false;
+            if (session.snapshots) {
+                std::fprintf(stderr, "[resume] loading the newest state, if there is one\n");
+                beginLoadLatestState(stateLoad, session, liveClient, menuNotice, 0, true);
+                if (stateLoad.running.load()) stateHoldWaiting = true;
+            }
+        }
         if (stateLoad.loaded) {
             stateLoad.loaded = false;
+            rewindKeep.reset();   // the history led somewhere else
+            rewindLastFrame = cab::Core::shared().framesRun();
             closeOverlay();
+            stateHold = true;
+            stateHoldWaiting = false;
         }
+        // A launch-screen state that did not load: the game just goes on.
+        if (stateHoldWaiting && !stateLoad.running.load() && !stateLoad.ready.load())
+            stateHoldWaiting = false;
         if (overlayDemo && playing && !overlayOpen &&
             cab::Core::shared().framesRun() >= static_cast<uint64_t>(overlayDemoAfter)) {
             overlayDemo = false;
@@ -11152,32 +11847,20 @@ int main(int argc, char** argv) {
             // The A is drawn as a button badge, the way consoles prompt. It
             // dims while focus is up in the bar, where A means something else.
             const bool on = !barFocused && !accountsOpen;
-            const ui::TextStyle st = ui::TextStyle::Title3;
-            const char* before = "Press";
-            const char* after = "to open the Library";
-            const float gap = 16.0f;
-            const float badge = text.lineHeight(st, sc) * 0.95f;
-            const float w1 = text.measure(before, st, sc);
-            const float w2 = text.measure(after, st, sc);
-            const float total = w1 + gap + badge + gap + w2;
-            const float base = ty + text.lineHeight(ui::TextStyle::Title2, sc) * 0.9f + 96.0f;
-            const float alpha = on ? 1.0f : 0.45f;
-            float x = (ui::kCanvasWidth - total) * 0.5f;
-            text.draw(renderer, before, x, base, st, ui::Color::white(0.92f * alpha), sc);
-            x += w1 + gap;
-            // The badge: a white disc with a dark A, centred on the text's
-            // x-height rather than its baseline.
-            const float capMid = base - text.ascent(st, sc) * 0.36f;
-            renderer.draw(ui::Rect{x, capMid - badge * 0.5f, badge, badge, badge * 0.5f,
-                                   ui::Color::white(0.95f * alpha)});
-            const float aw = text.measure("A", st, sc);
-            text.draw(renderer, "A", x + (badge - aw) * 0.5f,
-                      capMid + text.ascent(st, sc) * 0.36f, st,
-                      ui::Color{0.07f, 0.05f, 0.12f, alpha}, sc);
-            x += badge + gap;
-            text.draw(renderer, after, x, base, st, ui::Color::white(0.92f * alpha), sc);
+            drawPressPrompt(renderer, text, sc, "Press", "to open the Library",
+                            ty + text.lineHeight(ui::TextStyle::Title2, sc) * 0.9f + 96.0f,
+                            on ? 1.0f : 0.45f);
         }
         }  // end of the shelf branch
+
+        // THE WAIT AFTER A STATE LOADS: the game's frozen picture, a little
+        // darker, and the prompt low on it. Not while the pause menu is up.
+        if (playing && stateHold && overlayFade.value() < 0.001f) {
+            renderer.draw(ui::Rect{0, 0, ui::kCanvasWidth, ui::kCanvasHeight, 0,
+                                   ui::Color::black(0.35f)});
+            drawPressPrompt(renderer, text, sc, "Press", "to continue",
+                            ui::kCanvasHeight * 0.82f, 1.0f);
+        }
 
         // The overlay's scrim belongs to the WORLD, not to the overlay, so it
         // is drawn before the scene is presented. Put it after and the panel's
@@ -11690,7 +12373,8 @@ int main(int argc, char** argv) {
 
         // A switch asked for this frame: copy it now, before the keyboard, so
         // the keyboard can leave by sliding rather than dissolve with the copy.
-        if (pendingDest >= 0 && !playing && renderer.sceneCaptured()) {
+        if ((pendingDest >= 0 || pendingDetail >= 0 || pendingDetailBack) && !playing &&
+            renderer.sceneCaptured()) {
             renderer.captureSnapshot();
             snapTaken = true;
         }
@@ -11752,6 +12436,21 @@ int main(int argc, char** argv) {
         // A top-bar switch asked for: this frame still shows the old screen, so
         // copy it, THEN switch. The next frame draws the new screen with this
         // copy dissolving over it.
+        if (pendingDetail >= 0 || pendingDetailBack) {
+            if (snapTaken) {
+                snapTaken = false;
+                tabDissolve.from = tabDissolve.to = 1.0f;
+                tabDissolve.elapsed = 0.0f;
+                tabDissolve.retarget(0.0f, kTabDissolve);
+                // Back to a grid or Home: its content arrives as a top-bar
+                // switch's does. Into the page: the page times its own.
+                if (pendingDetailBack) tabSince = 0.0f;
+            }
+            if (pendingDetail >= 0) openDetail(pendingDetail);
+            else if (stack.size() > 1) stack.pop_back();
+            pendingDetail = -1;
+            pendingDetailBack = false;
+        }
         if (pendingDest >= 0) {
             if (snapTaken) {
                 snapTaken = false;

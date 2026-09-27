@@ -477,6 +477,24 @@ constexpr float kRowRadius = 16.0f;
 constexpr float kRowPadX = 32.0f;
 constexpr float kRowPadY = 22.0f;
 constexpr float kDetailRowGap = 16.0f;
+// The launch screen: the space between the left column and the cover on the
+// right; Continue from's gap between two cards (three split the column, 16:9)
+// and its space under the rows; and the highest the page may start. First
+// guesses, to be judged on the television.
+constexpr float kDetailCoverGap = 80.0f;
+constexpr float kDetailCoverMaxHeight = 760.0f;   // grown to the column, at most
+// The launch screen fades in whole, over this long, once everything behind it
+// has loaded, or once this long has passed without it all.
+constexpr float kDetailsFade = 0.40f;
+constexpr float kDetailsWait = 0.80f;
+// Not before this, so the old screen's copy has mostly dissolved first (the
+// top-bar switch's kTabContentDelay), and rising this far as it fades in (its
+// kTabRise).
+constexpr float kDetailMinWait = 0.20f;
+constexpr float kDetailRise = 16.0f;
+constexpr float kStateCardGap = 28.0f;
+constexpr float kStateShelfGap = 40.0f;
+constexpr float kStateBlockMinTop = 90.0f;
 // The reference implementation's settings column. A row stretched to the full
 // 1920 leaves a label at one end and a value at the other with a third of the
 // screen empty between them.

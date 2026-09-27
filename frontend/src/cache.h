@@ -411,6 +411,7 @@ std::vector<int> allKeptRoms();
 struct Owed {
     int romId = 0;
     bool isState = false;
+    bool isScreenshot = false;   // #79; `emulator` is then just "screenshot"
     std::string emulator;
     std::string fileName;     // the name it travels under
     std::string localPath;    // the bytes to send
