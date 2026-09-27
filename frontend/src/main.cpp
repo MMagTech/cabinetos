@@ -5876,8 +5876,9 @@ int main(int argc, char** argv) {
         std::atomic<bool> busy{false}, ready{false};
         int romId = 0;
         std::vector<screens::StateChoice> list;
+        std::string saveWhen;
         int wantRom = 0;
-        std::string wantTag;
+        std::string wantTag, wantSaveTag;
         // Asked again once the uploads are done: a game just left may have
         // saved a state that is still on its way to RomM.
         bool stale = false;
@@ -5889,13 +5890,29 @@ int main(int argc, char** argv) {
         if (detailStates.worker.joinable()) detailStates.worker.join();
         const int romId = detailStates.wantRom;
         const std::string tag = detailStates.wantTag;
+        const std::string saveTag = detailStates.wantSaveTag;
         detailStates.wantRom = 0;
         detailStates.busy = true;
-        detailStates.worker = std::thread([romId, tag]() {
+        detailStates.worker = std::thread([romId, tag, saveTag]() {
             std::vector<romm::Asset> all;
             std::vector<screens::StateChoice> out;
-            std::string err;
-            if (liveClient.fetchStates(romId, &all, &err)) {
+            std::string err, saveWhen;
+            // THE GAME'S OWN SAVE, the newest under the tag it travels by, as
+            // the launch reads it. "Saved today, 8:17 PM".
+            if (!saveTag.empty() && liveClient.fetchSaves(romId, &all, &err)) {
+                const romm::Asset* newest = nullptr;
+                for (const romm::Asset& a : all)
+                    if (a.emulator == saveTag && (!newest || a.updatedAt > newest->updatedAt))
+                        newest = &a;
+                if (newest) {
+                    std::string w = stateWhen(newest->updatedAt);
+                    if (w.rfind("Today", 0) == 0 || w.rfind("Yesterday", 0) == 0)
+                        w[0] = static_cast<char>(std::tolower(static_cast<unsigned char>(w[0])));
+                    if (!w.empty()) saveWhen = "Saved " + w;
+                }
+            }
+            all.clear();
+            if (!tag.empty() && liveClient.fetchStates(romId, &all, &err)) {
                 std::vector<romm::Asset> mine;
                 for (const romm::Asset& a : all)
                     if (a.emulator == tag) mine.push_back(a);
@@ -5905,12 +5922,13 @@ int main(int argc, char** argv) {
                           });
                 for (size_t i = 0; i < mine.size() && i < 3; ++i)
                     out.push_back({mine[i].id, mine[i].picturePath, stateWhen(mine[i].updatedAt)});
-            } else {
-                std::fprintf(stderr, "[detail] states: %s\n", err.c_str());
+            } else if (!err.empty()) {
+                std::fprintf(stderr, "[detail] states and saves: %s\n", err.c_str());
             }
             std::lock_guard<std::mutex> lk(detailStates.m);
             detailStates.romId = romId;
             detailStates.list = std::move(out);
+            detailStates.saveWhen = std::move(saveWhen);
             detailStates.ready = true;
             detailStates.busy = false;
         });
@@ -5921,10 +5939,14 @@ int main(int argc, char** argv) {
         for (const auto& g : games) {
             if (g.id != romId) continue;
             const catalog::Coverage cov = catalog::coverageFor(g);
-            const char* tag = cov.core ? catalog::emulatorTag(cov.core) : nullptr;
-            if (!tag || !catalog::snapshotsAllowed(cov.core) || !liveClient.haveToken()) return;
+            if (!cov.core || !liveClient.haveToken()) return;
+            const char* tag = catalog::snapshotsAllowed(cov.core)
+                ? catalog::emulatorTag(cov.core) : nullptr;
+            const char* saveTag = catalog::saveTag(cov.core);
+            if (!tag && !saveTag) return;
             detailStates.wantRom = romId;
-            detailStates.wantTag = tag;
+            detailStates.wantTag = tag ? tag : "";
+            detailStates.wantSaveTag = saveTag ? saveTag : "";
             startDetailStates();
             return;
         }
@@ -5932,8 +5954,10 @@ int main(int argc, char** argv) {
     auto pumpDetailStates = [&]() {
         if (detailStates.ready.exchange(false)) {
             std::lock_guard<std::mutex> lk(detailStates.m);
-            if (here() == Screen::Detail && detailScreen.game().romId == detailStates.romId)
+            if (here() == Screen::Detail && detailScreen.game().romId == detailStates.romId) {
                 detailScreen.setStates(detailStates.list);
+                detailScreen.setSaveWhen(detailStates.saveWhen);
+            }
         }
         startDetailStates();
         if (detailStates.stale && uploader.pending() == 0) {

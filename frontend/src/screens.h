@@ -513,6 +513,9 @@ public:
     // CONTINUE FROM: the game's states, arriving after the screen opens because
     // RomM has to be asked. None, and the section is not drawn at all.
     void setStates(std::vector<StateChoice> states);
+    // THE GAME'S OWN SAVE, when there is one: "Saved today, 8:17 PM", shown as
+    // the Play row's value, because that save is what Play starts from.
+    void setSaveWhen(std::string when);
     void tick(float dt);
     Result key(Nav n);
     void draw(Ctx& c);
@@ -566,12 +569,17 @@ private:
         Action action = Action::None;
         std::string label;
         bool enabled = true;
+        std::string value;   // on the right, as a Settings row's is
     };
     void rebuildRows();
 
     GameDetail game_;
     std::vector<Row> rows_;
     std::vector<StateChoice> states_;
+    std::string saveWhen_;
+    // Continue from's card size, worked out in draw() with the rest of the
+    // layout so the block can be centred as a whole.
+    float cardW_ = 0, cardH_ = 0;
     // Focus is in Continue from rather than the rows, and on which state.
     bool inStates_ = false;
     int stateSlot_ = 0;

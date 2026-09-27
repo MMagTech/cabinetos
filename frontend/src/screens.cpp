@@ -1095,6 +1095,7 @@ void DetailScreen::open(GameDetail d) {
     notice_.clear();
     slot_ = 0;
     states_.clear();
+    saveWhen_.clear();
     inStates_ = false;
     stateSlot_ = 0;
     rebuildRows();
@@ -1109,7 +1110,7 @@ void DetailScreen::rebuildRows() {
     if (game_.playable) {
         // The primary action first, and reachable without travelling through
         // the secondary ones.
-        rows_.push_back({Action::Play, "Play", true});
+        rows_.push_back({Action::Play, "Play", true, saveWhen_});
         // DOWNLOAD IS THE DELIBERATE ONE. The cache is invisible — pressing
         // Play fetches the game if it is not here and says nothing about it —
         // so this row is not "is it cached", it is "put this game on the
@@ -1126,6 +1127,11 @@ void DetailScreen::rebuildRows() {
     }
     // A different save state, a different core and an export belong here too.
     // They are not built yet and a row that does nothing is worse than no row.
+}
+
+void DetailScreen::setSaveWhen(std::string when) {
+    saveWhen_ = std::move(when);
+    rebuildRows();
 }
 
 void DetailScreen::setStates(std::vector<StateChoice> states) {
@@ -1233,6 +1239,30 @@ void DetailScreen::draw(Ctx& c) {
     // The cover itself, at the detail size, on the left.
     const float coverX = design::kLibraryInset;
     const float coverY = (ui::kCanvasHeight - design::kDetailCoverHeight) * 0.5f;
+
+    // THE RIGHT-HAND BLOCK IS LAID OUT AS ONE, so it can be centred against
+    // the cover as a whole once Continue from makes it taller than the cover.
+    // Short, it keeps its old place, level with the cover's top. Measured here
+    // with the same numbers the drawing below and drawGlass use.
+    const float textXPre = coverX + design::kDetailCoverWidth + 60.0f;
+    const float colW = std::min(design::kRowColumnMaxWidth,
+                                ui::kCanvasWidth - textXPre - design::kLibraryInset);
+    const float calloutLH = c.text.lineHeight(ui::TextStyle::Callout, c.sc);
+    const float headToRows = c.text.ascent(ui::TextStyle::LargeTitle, c.sc) +
+                             c.text.lineHeight(ui::TextStyle::LargeTitle, c.sc) * 0.55f +
+                             c.text.ascent(ui::TextStyle::Callout, c.sc) + calloutLH * 1.6f;
+    const float rowH = c.text.lineHeight(ui::TextStyle::Title3, c.sc) + design::kRowPadY * 2.0f;
+    const float rowsH = rows_.empty() ? 0.0f
+        : rows_.size() * rowH + (rows_.size() - 1) * design::kDetailRowGap;
+    cardW_ = (colW - 2.0f * design::kStateCardGap) / 3.0f;
+    cardH_ = cardW_ * (9.0f / 16.0f);
+    const float statesH = (states_.empty() || !game_.playable) ? 0.0f
+        : design::kDetailRowGap * 2.0f + calloutLH + design::kDetailRowGap + cardH_ +
+              design::kDetailRowGap * 0.75f + calloutLH;
+    const float blockH = headToRows + rowsH + statesH;
+    float blockTop = coverY;
+    if (blockH > design::kDetailCoverHeight)
+        blockTop = std::max(design::kStateBlockMinTop, (ui::kCanvasHeight - blockH) * 0.5f);
     if (c.cards && game_.cardIndex >= 0 &&
         game_.cardIndex < static_cast<int>(c.cards->size())) {
         drawCover(c, (*c.cards)[game_.cardIndex], coverX, coverY,
@@ -1248,7 +1278,7 @@ void DetailScreen::draw(Ctx& c) {
     const float textX = coverX + design::kDetailCoverWidth + 60.0f;
     const float textW = std::min(design::kRowColumnMaxWidth,
                                  ui::kCanvasWidth - textX - design::kLibraryInset);
-    float y = coverY + c.text.ascent(ui::TextStyle::LargeTitle, c.sc);
+    float y = blockTop + c.text.ascent(ui::TextStyle::LargeTitle, c.sc);
     c.text.draw(c.r, c.text.truncate(game_.title, ui::TextStyle::LargeTitle, c.sc, textW),
                 textX, y, ui::TextStyle::LargeTitle, ui::Color::white(a), c.sc);
     y += c.text.lineHeight(ui::TextStyle::LargeTitle, c.sc) * 0.55f +
@@ -1330,10 +1360,14 @@ void DetailScreen::drawGlass(Ctx& c) {
             label = buf;
         }
 
-        c.text.draw(c.r, label, x + design::kRowPadX,
-                    ry + design::kRowPadY * s + c.text.ascent(ui::TextStyle::Title3, c.sc),
-                    ui::TextStyle::Title3,
+        const float base = ry + design::kRowPadY * s + c.text.ascent(ui::TextStyle::Title3, c.sc);
+        c.text.draw(c.r, label, x + design::kRowPadX, base, ui::TextStyle::Title3,
                     ui::Color::white((on || busy ? 1.0f : 0.60f) * a), c.sc);
+        if (!busy && !rows_[i].value.empty()) {
+            const float vw = c.text.measure(rows_[i].value, ui::TextStyle::Callout, c.sc);
+            c.text.draw(c.r, rows_[i].value, x + w - design::kRowPadX - vw, base,
+                        ui::TextStyle::Callout, ui::Color::white(0.60f * a), c.sc);
+        }
         y += rowH + design::kDetailRowGap;
     }
 
@@ -1348,8 +1382,8 @@ void DetailScreen::drawGlass(Ctx& c) {
                     y + c.text.ascent(ui::TextStyle::Callout, c.sc), ui::TextStyle::Callout,
                     ui::Color::white(0.60f * a), c.sc);
         y += c.text.lineHeight(ui::TextStyle::Callout, c.sc) + design::kDetailRowGap;
-        const float cardH = design::kStateCardHeight;
-        const float cardW = cardH * (4.0f / 3.0f);
+        const float cardH = cardH_;
+        const float cardW = cardW_;
         float x = rowsX_;
         for (size_t i = 0; i < states_.size(); ++i) {
             const bool on = inStates_ && static_cast<int>(i) == stateSlot_;
@@ -1359,13 +1393,27 @@ void DetailScreen::drawGlass(Ctx& c) {
             const float cx = x - (w - cardW) * 0.5f;
             const float cy = y - (h - cardH) * 0.5f;
             c.r.drawGlass(ui::Rect{cx, cy, w, h, design::kRowRadius, ui::Color::white(0)},
-                          design::kRegularMaterialBlur,
-                          ui::Color::white((0.08f + 0.14f * f) * a));
+                          design::kRegularMaterialBlur, ui::Color::white(0.08f * a));
+            // The whole picture, on a blurred echo of itself, as a cover of
+            // an odd shape is drawn: a tall arcade screen keeps its shape and
+            // the sides are its own colours rather than bars. The ones not
+            // focused sit a little darker, so the focused one reads as chosen.
             if (!states_[i].picture.empty()) {
                 const ui::Image& img = c.images.get(states_[i].picture);
+                if (img.ready) {
+                    const float ew = w * 1.3f, eh = h * 1.3f;
+                    c.r.drawTextured(cx - (ew - w) * 0.5f, cy - (eh - h) * 0.5f, ew, eh,
+                                     img.texture, 0, 0, 1, 1,
+                                     ui::Color{1, 1, 1, a * img.fade}, false, 4.0f, cx, cy,
+                                     w, h, design::kRowRadius);
+                    c.r.draw(ui::Rect{cx, cy, w, h, design::kRowRadius,
+                                      ui::Color::black(0.18f * a)});
+                }
                 ui::drawImage(c.r, img, cx, cy, w, h, ui::Fit::Contain, a,
                               design::kRowRadius);
             }
+            c.r.draw(ui::Rect{cx, cy, w, h, design::kRowRadius,
+                              ui::Color::black(0.30f * (1.0f - f) * a)});
             const float labelY = y + cardH + design::kDetailRowGap * 0.75f +
                                  c.text.ascent(ui::TextStyle::Callout, c.sc);
             c.text.draw(c.r,
