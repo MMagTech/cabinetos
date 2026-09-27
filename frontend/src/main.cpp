@@ -4543,6 +4543,11 @@ int main(int argc, char** argv) {
     waitDeps.window = window;
     waitDeps.renderer = &renderer;
     waitDeps.text = &text;
+    // The startup screen's last line, which Home lifts it off (#109, see
+    // `arriving`). One string, so the frame the curtain starts on is the
+    // frame that was already on the television.
+    static constexpr const char* kLoadingLine = "Loading your library";
+    bool startupShown = false;
 
     // A capture of the startup screen, which otherwise exists only for the few
     // seconds between the window appearing and the library arriving — and on a
@@ -4951,7 +4956,8 @@ int main(int argc, char** argv) {
         // existed to make a slow thing bearable; the slow thing was removed.
         // The server-wait countdown above survives untouched, because a router
         // coming back after a power cut is not something this can make faster.
-        setup::showWaiting(waitDeps, "Starting up", "Loading your library");
+        setup::showWaiting(waitDeps, "Starting up", kLoadingLine);
+        startupShown = true;
         lib = loadLibrary(liveClient);
         // The references above name lib's own members, so there is nothing to
         // copy out any more.
@@ -6561,6 +6567,28 @@ int main(int argc, char** argv) {
     std::string switchWhy;
     curtain.smooth = true;
     curtain.from = curtain.to = 0.0f;
+    // ARRIVING: THE STARTUP SCREEN LIFTS OFF HOME, #109. It used to be
+    // replaced by Home between one frame and the next; MMagTech, on the A9:
+    // *"the transition is extremely harsh."* Now the curtain starts down as
+    // the startup screen, the frame already on the television, and lifts the
+    // way it does onto a game. Sign out and a new address come down onto the
+    // same screen, so leaving and coming back are one motion run both ways.
+    //
+    // A FIRST TRY FROZE THE TELEVISION ONCE, 2026-09-23 (1ac83e7, reverted).
+    // It ran its fade in a loop of its own before Home existed, redrawing the
+    // startup screen as fast as it could swap. This draws nothing of its own:
+    // it is the main loop's curtain, paced like every other frame.
+    //
+    // Never for a capture, whose first frame must be the screen itself.
+    bool arriving = false;
+    bool arriveLifting = false;
+    int arriveFrames = 0;
+    Uint64 arriveHeldAt = 0;
+    if (startupShown && !shotMode) {
+        curtain.from = curtain.to = 1.0f;
+        curtain.elapsed = curtain.duration;
+        arriving = true;
+    }
 
     bool navHeld = false;
     screens::Nav heldNav = screens::Nav::Down;
@@ -8772,7 +8800,11 @@ int main(int argc, char** argv) {
         if (choiceScreen.isOpen()) { choiceOutcome(choiceScreen.key(n)); return true; }
         if (downloadsPanel.isOpen()) { downloadsOutcome(downloadsPanel.key(n)); return true; }
         // Nothing takes a press while an account switch is behind the curtain.
-        if (switchPendingId || leaving != Leave::None) return true;
+        // Nor while the startup screen is still fully down over Home: a
+        // press there would move a Home nobody can see yet. Once it lifts,
+        // Home is live.
+        if (switchPendingId || leaving != Leave::None || (arriving && !arriveLifting))
+            return true;
         // The bar first, wherever it is focused. One place, one behaviour.
         if (accountsOpen) { apply(accountScreen.key(n)); return true; }
         if (barFocused && barKey(n)) return true;
@@ -8995,6 +9027,47 @@ int main(int argc, char** argv) {
         }
         restartSelf = true;
         running = false;
+    };
+
+    // ---- Arriving, from behind the startup screen (see `arriving`) -------
+    //
+    // Held down for a few frames first, so the first frames of Home, which
+    // upload textures and can take several frame times each, are spent behind
+    // it rather than eating the start of the lift. Then held while Home's
+    // covers are still coming off the disk or fading in, for at most a
+    // second, so the shelves do not fill in during the lift. Then up, as onto
+    // a game.
+    //
+    // ANYTHING ELSE THAT WANTS THE CURTAIN TAKES IT. A game launched as the
+    // console starts, or a press on Play during the lift, brings it down as
+    // its own; from then on it is theirs, and this stops drawing the startup
+    // screen on it.
+    auto pumpArrive = [&]() {
+        if (!arriving) return;
+        if (launchJob.stage.load() != LaunchJob::Stage::Idle || switchPendingId ||
+            leaving != Leave::None || (arriveLifting && curtain.to > 0.0f)) {
+            arriving = false;
+            return;
+        }
+        if (arriveLifting) {
+            if (curtain.value() <= 0.001f) {
+                arriving = false;
+                std::fprintf(stderr, "[startup] Home is up\n");
+            }
+            return;
+        }
+        const Uint64 now = SDL_GetTicks();
+        if (arriveHeldAt == 0) arriveHeldAt = now;
+        constexpr int kArriveHoldFrames = 3;
+        constexpr Uint64 kArriveCoversMs = 1000;   // a starting value
+        if (++arriveFrames < kArriveHoldFrames) return;
+        const int waiting = images.settlingCount();
+        if (waiting > 0 && now - arriveHeldAt < kArriveCoversMs) return;
+        std::fprintf(stderr,
+                     "[startup] lifting onto Home after %llu ms, %d image(s) still settling\n",
+                     static_cast<unsigned long long>(now - arriveHeldAt), waiting);
+        curtain.retarget(0.0f, kCurtainUp);
+        arriveLifting = true;
     };
 
     auto pumpLaunch = [&]() {
@@ -10811,6 +10884,7 @@ int main(int argc, char** argv) {
         pumpLaunch();
         pumpSwitch();
         pumpLeave();
+        pumpArrive();
         pumpExit();
         pumpStateLoad(stateLoad, session, menuNotice);
         pumpDetailStates();
@@ -12612,11 +12686,13 @@ int main(int argc, char** argv) {
         // not part of any screen, it is the screen going away. See design.h.
         {
             const float c = curtain.value();
-            if (c > 0.001f && leaving != Leave::None) {
+            if (c > 0.001f && (leaving != Leave::None || arriving)) {
                 // Leaving: the startup screen, which is what comes back.
+                // Arriving: the startup screen, which is what was there.
                 const float keep = renderer.contentAlpha();
                 renderer.setContentAlpha(1.0f);
-                setup::drawStartup(renderer, text, leaveLabel.c_str(), c);
+                setup::drawStartup(renderer, text,
+                                   leaving != Leave::None ? leaveLabel.c_str() : kLoadingLine, c);
                 renderer.setContentAlpha(keep);
             } else if (c > 0.001f && switchCurtain) {
                 // The console's own backdrop, in one piece, faded. Two bands

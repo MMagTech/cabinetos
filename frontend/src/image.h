@@ -88,6 +88,10 @@ public:
 
     size_t bytesResident() const { return residentBytes_; }
     int pendingCount() const;
+    // Images asked for that are not on screen at full strength yet: queued,
+    // being decoded, waiting to upload, or still fading in. Unlike
+    // pendingCount it sees the ones a worker is holding. Frame thread only.
+    int settlingCount() const;
 
     // Reads a file. The default loader, and what Phase 4 replaces.
     static std::vector<uint8_t> readFile(const std::string& path);
