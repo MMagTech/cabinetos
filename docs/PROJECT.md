@@ -13982,3 +13982,66 @@ needs a key newer than `prod-v19.keys` will not start. The newest titles
 a newer `prod.keys` in RomM, which is MMagTech's side. (The header key that
 reads a title ID is the same in every version, so this has nothing to do with
 RomM's title IDs above.)
+
+#### BUILT ON `standalone-emulators`, 2026-09-28, with nobody at the television
+
+Stages 1, 3 and 4 of #169, plus freezing and rumble, built and run on the A9
+(the branch, not merged; nothing judged on the TV yet).
+
+- **Launch and exit** (`standalone.h`). Play downloads the NSP as for any
+  system, places the keys from `bios/`, writes Eden's settings and runs
+  `flatpak run --cwd=<storage>/emulators/eden ... -f -g <nsp>`. Eden treats a
+  `user` folder in its working directory as its whole home, so keys, system
+  memory, settings and shader cache sit in the console's storage, not in
+  `~/.var/app`, and no source patch is needed. gamescope gives Eden the screen
+  by itself. Close is SIGTERM to Eden (0.8 to 1.0 s); **SIGTERM to the sandbox
+  process `flatpak ps` names does nothing**, Eden is two levels below it.
+- **A game Eden cannot load** puts up a modal error box nobody can close. The
+  console reads Eden's log for its two phrases for that and kills it at once
+  (0.4 s); the box also blocks SIGTERM, measured. Contra Anniversary
+  Collection's file is update-only and fails this way (Error 60).
+- **A crash** lands on Home with "The game closed unexpectedly".
+- **Saves** (decision D as reversed): Eden's `save_directory` is set to this
+  person's folder for this game at every launch, and the save folder travels
+  as a zip the way PSP's does (`restoreDirSave`, now shared). The console
+  writes Eden's profile itself with a fixed ID (`CabinetOS player`, the
+  player's name as the profile name) because Eden's own is random and would
+  not exist yet on a new console. AQUA KITTY UDX's save uploaded, came back
+  byte for byte, and restored into a fresh profile.
+- **Controllers** (`vpad.h`): Eden gets one virtual controller per player and
+  never the real pads. **Why:** Eden maps raw button numbers from the SDL in
+  its Flatpak, 3.2.30 (sdl2-compat), against 3.4.16 in the console; two SDLs
+  can number one pad differently and scramble it silently. The virtual pad's
+  layout is fixed by SDL's evdev rule (buttons in key-code order), so both
+  agree. Buttons by position, as Eden maps any pad. Eden's own Nintendo
+  drivers and its SDL's HID access are off. Tested with `tools/fake-pad.c`:
+  taps went through the console and moved AQUA KITTY UDX into play.
+  **Motion (gyro) does not come through.**
+- **Rumble** comes back: the virtual pad takes force feedback and the console
+  hands it to `rumble.h`. The fake pad received the game's vibrations.
+- **Play time and Recent** work as for any game: a 70 s session reached RomM
+  and made the game Home's Resume.
+- **Freezing** (decision C): SIGSTOP holds Eden's picture still and SIGCONT
+  carries on; 10, 20 and 30 s freezes, and it closed normally after. A frozen
+  Eden never hears a close request, so closing thaws it first (the bug that
+  forced a 10 s wait, fixed).
+- **Mario Kart 8 Deluxe**, the one game Eden checks firmware for, reached its
+  title screen with no firmware and no dialog. Its menus were not reached.
+- **RomM's v19 keys are too old for Metroid Prime 4 Beyond.** Eden stops with
+  loader error 21, `ErrorMissingKeyAreaKey`: the game needs a master key the
+  file does not hold. The console now says "Needs newer Nintendo Switch keys
+  on your server" for that family of errors. **A newer `prod.keys` in RomM is
+  MMagTech's to add**; every newer game will want it too.
+
+#### THE PAUSE MENU'S LOOK IS STILL OPEN, and the reason is a number
+
+A still of the game from gamescope (`gamescopectl screenshot`) takes **2.2 s
+at 4K as PNG, 1.9 s as AVIF**, measured: gamescope encodes a 12 MB file and
+has no smaller option. So the two routes are:
+
+| | The menu appears | The glass panel |
+|---|---|---|
+| **Overlay (open question 24)**: our menu in gamescope's overlay slot over the frozen game | at once | flat, no blur, until a still arrives 2 s later |
+| **Still**: grab, then bring our own window forward with the ordinary menu over the still | about 2 s after the press | exactly as on every other system |
+
+MMagTech to choose on the television.

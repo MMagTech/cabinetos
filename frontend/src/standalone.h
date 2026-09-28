@@ -44,6 +44,10 @@ struct Emulator {
     // nobody can close, so the console reads the log and closes it instead.
     const char* log;
     const char* loadFailed[2];
+    // And the ones among those failures that mean the keys on the console are
+    // too old for this game: a newer prod.keys in RomM is the whole fix, so
+    // the console says that rather than "Couldn't start".
+    const char* keysTooOld[4];
     // The game files it opens as they are, libretro's `valid_extensions`
     // format. The console never unpacks them.
     const char* extensions;
@@ -108,7 +112,7 @@ public:
     bool active() const { return root_ > 0; }
     bool stopping() const { return stopAtMs_ > 0; }
 
-    enum class End { None, Asked, Quit, Crashed, CouldNotLoad };
+    enum class End { None, Asked, Quit, Crashed, CouldNotLoad, KeysTooOld };
     End ended() const { return ended_; }
 
 private:
@@ -122,6 +126,7 @@ private:
     std::string logPath_;    // the emulator's own log, read for a failed load
     long logRead_ = 0;
     bool failedLoad_ = false;
+    bool oldKeys_ = false;
     bool frozen_ = false;
     End ended_ = End::None;
 };

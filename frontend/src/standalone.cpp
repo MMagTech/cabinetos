@@ -30,7 +30,13 @@ const Emulator kEmulators[] = {
     // Eden's words for a game it cannot load (yuzu/main_window.cpp, before its
     // "Error while loading ROM!" box).
     {"eden", "dev.eden_emu.eden", "eden", "user/log/eden_log.txt",
-     {"Failed to load ROM", "Failed to obtain loader"}, "nsp|xci"},
+     {"Failed to load ROM", "Failed to obtain loader"},
+     // Eden's loader codes (core/loader/loader.h) for a key the file needs and
+     // the keys do not hold: 21 is a master key newer than the file has, which
+     // is what Metroid Prime 4 Beyond gave against RomM's v19 keys on
+     // 2026-09-28; 18 and 19 are its title key and title key key.
+     {"(Error 21)", "(Error 18)", "(Error 19)", "(Error 13)"},
+     "nsp|xci"},
 };
 
 // How long a program that was asked to close gets before it is made to.
@@ -433,6 +439,7 @@ bool Run::start(const Emulator& e, const std::string& romPath, const std::string
     program_ = -1;
     stopAtMs_ = 0;
     failedLoad_ = false;
+    oldKeys_ = false;
     frozen_ = false;
     const std::string dir = home(e);
     // A fresh log each start, so a failure from the last game is not read as
@@ -528,7 +535,9 @@ bool Run::poll() {
     const pid_t got = waitpid(root_, &status, WNOHANG);
     if (got == root_) {
         const int64_t ran = nowMs() - startMs_;
-        if (failedLoad_) {
+        if (failedLoad_ && oldKeys_) {
+            ended_ = End::KeysTooOld;
+        } else if (failedLoad_) {
             ended_ = End::CouldNotLoad;
         } else if (stopping()) {
             ended_ = End::Asked;
@@ -569,6 +578,8 @@ bool Run::poll() {
                     std::fprintf(stderr, "[standalone] %s could not load the game: %s",
                                  emu_->program, line);
                     failedLoad_ = true;
+                    for (const char* k : emu_->keysTooOld)
+                        if (k && std::strstr(line, k)) oldKeys_ = true;
                     break;
                 }
             }

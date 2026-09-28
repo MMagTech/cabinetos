@@ -9427,6 +9427,9 @@ int main(int argc, char** argv) {
             case cab::standalone::Run::End::CouldNotLoad:
                 refuseLaunch("Couldn't start this game");
                 break;
+            case cab::standalone::Run::End::KeysTooOld:
+                refuseLaunch("Needs newer " + launchJob.systemName + " keys on your server");
+                break;
             case cab::standalone::Run::End::Crashed:
                 menuNotice.say("The game closed unexpectedly", Tone::Problem);
                 break;
