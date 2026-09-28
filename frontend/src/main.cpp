@@ -3775,6 +3775,10 @@ int main(int argc, char** argv) {
     // by the console after N seconds, as the pause menu's Exit will close it.
     // The leave-a-game path for those, with nobody at the television.
     float standaloneExitAfter = 0.0f;
+    // --standalone-freeze N: frozen N seconds in, as the pause menu freezes
+    // it, and left so. With --standalone-exit later, the exit-while-paused
+    // path.
+    float standaloneFreezeAfter = 0.0f;
     float autoLaunchAfter = 0.0f;
     for (int i = 1; i < argc; ++i) {
         if (SDL_strcmp(argv[i], "--screenshot") == 0 && i + 1 < argc) {
@@ -3919,6 +3923,8 @@ int main(int argc, char** argv) {
             thenLaunchId = SDL_atoi(argv[++i]);
         } else if (SDL_strcmp(argv[i], "--standalone-exit") == 0 && i + 1 < argc) {
             standaloneExitAfter = static_cast<float>(SDL_atof(argv[++i]));
+        } else if (SDL_strcmp(argv[i], "--standalone-freeze") == 0 && i + 1 < argc) {
+            standaloneFreezeAfter = static_cast<float>(SDL_atof(argv[++i]));
         } else if (SDL_strcmp(argv[i], "--overlay-exit") == 0) {
             overlayExitDemo = true;
             // Optional frame count: --overlay-exit 2000 plays for 2000 frames
@@ -10812,8 +10818,14 @@ int main(int argc, char** argv) {
                 playCheckpointClock = 0.0f;
                 playtime::checkpoint(storage::currentUser(), playClock.now(playtime::wallMs()));
             }
+            standaloneRan += dt;
+            if (standaloneFreezeAfter > 0.0f && standaloneRan >= standaloneFreezeAfter &&
+                !standaloneRun.frozen() && !standaloneRun.stopping()) {
+                standaloneFreezeAfter = 0.0f;
+                standaloneRun.freeze();
+            }
             if (standaloneExitAfter > 0.0f && !standaloneRun.stopping() &&
-                (standaloneRan += dt) >= standaloneExitAfter) {
+                standaloneRan >= standaloneExitAfter) {
                 std::fprintf(stderr, "[standalone] --standalone-exit: closing it\n");
                 standaloneRun.stop();
             }

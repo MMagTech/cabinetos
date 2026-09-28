@@ -93,8 +93,17 @@ public:
     // ended, after which `ended()` says how.
     bool poll();
     // Asks it to close the way its own window close would: SIGTERM to the
-    // program. `poll` forces it after a deadline if it does not.
+    // program. `poll` forces it after a deadline if it does not. A frozen
+    // program is thawed first, or it never hears the request (measured: Eden
+    // asked while frozen had to be forced after the full grace).
     void stop();
+    // THE PAUSE MENU'S PAUSE (decision C): the whole program stops where it
+    // is, sound and all, and carries on from the same instant when thawed.
+    // Measured on the A9 2026-09-28: frozen for 10, 20 and 30 s, Eden's
+    // picture held still and moved again the moment it was thawed.
+    void freeze();
+    void thaw();
+    bool frozen() const { return frozen_; }
 
     bool active() const { return root_ > 0; }
     bool stopping() const { return stopAtMs_ > 0; }
@@ -113,6 +122,7 @@ private:
     std::string logPath_;    // the emulator's own log, read for a failed load
     long logRead_ = 0;
     bool failedLoad_ = false;
+    bool frozen_ = false;
     End ended_ = End::None;
 };
 

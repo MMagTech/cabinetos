@@ -433,6 +433,7 @@ bool Run::start(const Emulator& e, const std::string& romPath, const std::string
     program_ = -1;
     stopAtMs_ = 0;
     failedLoad_ = false;
+    frozen_ = false;
     const std::string dir = home(e);
     // A fresh log each start, so a failure from the last game is not read as
     // this one's.
@@ -481,8 +482,25 @@ bool Run::start(const Emulator& e, const std::string& romPath, const std::string
     return true;
 }
 
+void Run::freeze() {
+    if (!active() || frozen_ || stopping()) return;
+    if (program_ <= 0) program_ = proc::findDescendant(root_, emu_->program);
+    if (program_ <= 0) return;
+    ::kill(program_, SIGSTOP);
+    frozen_ = true;
+    std::fprintf(stderr, "[standalone] %s frozen\n", emu_->program);
+}
+
+void Run::thaw() {
+    if (!frozen_) return;
+    if (program_ > 0) ::kill(program_, SIGCONT);
+    frozen_ = false;
+    std::fprintf(stderr, "[standalone] %s thawed\n", emu_->program);
+}
+
 void Run::stop() {
     if (!active() || stopping()) return;
+    thaw();
     stopAtMs_ = nowMs();
     if (program_ <= 0) program_ = proc::findDescendant(root_, emu_->program);
     if (program_ > 0) {
@@ -525,6 +543,7 @@ bool Run::poll() {
         root_ = -1;
         program_ = -1;
         stopAtMs_ = 0;
+        frozen_ = false;
         return false;
     }
 
