@@ -48,10 +48,18 @@ struct Emulator {
     // too old for this game: a newer prod.keys in RomM is the whole fix, so
     // the console says that rather than "Couldn't start".
     const char* keysTooOld[4];
-    // What it writes when the game stops by itself, which leaves the
-    // emulator's own window on the television rather than closing it. The
-    // console closes it instead, as if the game had been exited.
-    const char* gameEnded;
+    // HOW TO TELL THE GAME HAS STOPPED while the emulator stays open on its
+    // own window, which the console then closes as if the game had been
+    // exited. Its window title starts with `titlePrefix`, and has at least
+    // `titleParts` " | "-separated parts only while a game is running.
+    //
+    // NOT THE LOG. The first version read Eden's log for its "Force stopping
+    // EmuThread" line, and it never arrived in time: Eden writes its log in
+    // batches and flushes at once only for errors, so the line landed when
+    // Eden exited. Shredder's Revenge sat on Eden's game list for minutes
+    // with the log still ending at 12 s (2026-09-28).
+    const char* titlePrefix;
+    int titleParts;
     // The game files it opens as they are, libretro's `valid_extensions`
     // format. The console never unpacks them.
     const char* extensions;
@@ -132,6 +140,8 @@ private:
     bool failedLoad_ = false;
     bool oldKeys_ = false;
     bool frozen_ = false;
+    bool sawGameTitle_ = false;
+    int64_t titleCheckMs_ = 0;
     End ended_ = End::None;
 };
 

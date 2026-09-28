@@ -7,6 +7,7 @@
 #include <archive.h>
 #include <archive_entry.h>
 #include <dirent.h>
+#include <dlfcn.h>
 #include <signal.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
@@ -19,6 +20,7 @@
 #include <ctime>
 #include <fstream>
 #include <sstream>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -38,10 +40,10 @@ const Emulator kEmulators[] = {
      // is what Metroid Prime 4 Beyond gave against RomM's v19 keys on
      // 2026-09-28; 18 and 19 are its title key and title key key.
      {"(Error 21)", "(Error 18)", "(Error 19)", "(Error 13)"},
-     // Emulation stopping for any reason (bootmanager.h). Seen 2026-09-28 when
-     // Shredder's Revenge quit by itself 17 s in and left Eden's game list
-     // on the television.
-     "Force stopping EmuThread",
+     // "Eden | <version> | <compiler>" idle, and the game's name, its version
+     // and the GPU after that while one runs (main_window.cpp,
+     // UpdateWindowTitle).
+     "Eden |", 5,
      "nsp|xci"},
 };
 
@@ -286,6 +288,78 @@ std::string applyIni(const std::string& text, const std::vector<IniSet>& sets) {
     return out;
 }
 
+// THE EMULATOR'S WINDOW TITLE, read from the X server the console and the
+// emulator share (gamescope's Xwayland). libX11 is opened at run time, as
+// overlaywin.cpp does, so a console without it only loses this check.
+struct XTitles {
+    using Display = void;
+    using Window = unsigned long;
+    using Atom = unsigned long;
+    void* lib = nullptr;
+    Display* dpy = nullptr;
+    Display* (*OpenDisplay)(const char*) = nullptr;
+    int (*CloseDisplay)(Display*) = nullptr;
+    Window (*DefaultRootWindow)(Display*) = nullptr;
+    int (*QueryTree)(Display*, Window, Window*, Window*, Window**, unsigned*) = nullptr;
+    Atom (*InternAtom)(Display*, const char*, int) = nullptr;
+    int (*GetWindowProperty)(Display*, Window, Atom, long, long, int, Atom, Atom*, int*,
+                             unsigned long*, unsigned long*, unsigned char**) = nullptr;
+    int (*Free)(void*) = nullptr;
+
+    bool open() {
+        if (dpy) return true;
+        if (!lib) lib = dlopen("libX11.so.6", RTLD_LAZY | RTLD_LOCAL);
+        if (!lib) return false;
+        auto sym = [&](auto& fn, const char* name) {
+            fn = reinterpret_cast<std::remove_reference_t<decltype(fn)>>(dlsym(lib, name));
+            return fn != nullptr;
+        };
+        if (!(sym(OpenDisplay, "XOpenDisplay") && sym(CloseDisplay, "XCloseDisplay") &&
+              sym(DefaultRootWindow, "XDefaultRootWindow") && sym(QueryTree, "XQueryTree") &&
+              sym(InternAtom, "XInternAtom") && sym(GetWindowProperty, "XGetWindowProperty") &&
+              sym(Free, "XFree")))
+            return false;
+        dpy = OpenDisplay(nullptr);
+        return dpy != nullptr;
+    }
+    void close() {
+        if (dpy) CloseDisplay(dpy);
+        dpy = nullptr;
+    }
+    // The longest title among the top-level windows that start with `prefix`,
+    // counted in " | " parts; 0 when there is none.
+    int parts(const char* prefix) {
+        if (!open()) return 0;
+        const Atom netName = InternAtom(dpy, "_NET_WM_NAME", 0);
+        const Atom utf8 = InternAtom(dpy, "UTF8_STRING", 0);
+        Window rootRet = 0, parent = 0;
+        Window* kids = nullptr;
+        unsigned n = 0;
+        if (!QueryTree(dpy, DefaultRootWindow(dpy), &rootRet, &parent, &kids, &n)) return 0;
+        int best = 0;
+        for (unsigned i = 0; i < n; ++i) {
+            Atom type = 0;
+            int format = 0;
+            unsigned long count = 0, after = 0;
+            unsigned char* data = nullptr;
+            if (GetWindowProperty(dpy, kids[i], netName, 0, 1024, 0, utf8, &type, &format,
+                                  &count, &after, &data) != 0 || !data)
+                continue;
+            const std::string title(reinterpret_cast<char*>(data), count);
+            Free(data);
+            if (title.compare(0, std::strlen(prefix), prefix) != 0) continue;
+            int p = 1;
+            for (size_t at = title.find(" | "); at != std::string::npos;
+                 at = title.find(" | ", at + 3))
+                ++p;
+            best = std::max(best, p);
+        }
+        if (kids) Free(kids);
+        return best;
+    }
+};
+XTitles gTitles;
+
 // EDEN'S PROFILE, which names the folder every save sits in:
 // `user/save/0000000000000000/<profile>/<title ID>/`. Eden makes one with a
 // RANDOM ID the first time it starts, so on a new console the folder a save
@@ -476,10 +550,11 @@ bool prepareEden(const Emulator& e, const std::string& saveDir, const std::strin
         {"Controls", "enable_joycon_driver", "false"},
         {"Controls", "enable_procon_driver", "false"},
         // NO INTERNET, as far as a game can tell. Nintendo's online services do
-        // not answer an emulator, so nothing is lost; and a game told the
-        // network is up that then cannot open a socket may quit, which
-        // Shredder's Revenge did 17 s in on 2026-09-28 (Eden's log: bsd
-        // "File descriptor handle=0 is not allocated", then ExitProcess).
+        // not answer an emulator, so nothing is lost. It did NOT save
+        // Shredder's Revenge, whose Epic online layer quits on a call Eden
+        // only stubs (bsd EventFd); nor did cutting the sandbox off the
+        // network, which made it hang instead and was taken out
+        // (2026-09-28).
         {"Network", "airplane_mode", "true"},
     };
     const std::vector<std::string> controls = edenControls(players);
@@ -554,6 +629,8 @@ bool Run::start(const Emulator& e, const std::string& romPath, const std::string
     failedLoad_ = false;
     oldKeys_ = false;
     frozen_ = false;
+    sawGameTitle_ = false;
+    titleCheckMs_ = 0;
     const std::string dir = home(e);
     // A fresh log each start, so a failure from the last game is not read as
     // this one's.
@@ -666,6 +743,7 @@ bool Run::poll() {
         program_ = -1;
         stopAtMs_ = 0;
         frozen_ = false;
+        gTitles.close();
         return false;
     }
 
@@ -679,29 +757,22 @@ bool Run::poll() {
         stopAtMs_ = now;   // and again after another grace, should even that not take
     }
 
-    // THE EMULATOR'S LOG, read as it grows, for the two things it only says
-    // there. A LOAD THAT FAILED is an error box nobody can close, so the
-    // console closes it instead, within the first minute. A GAME THAT STOPPED
-    // BY ITSELF leaves the emulator's own window up, so the console closes
-    // that too, at any time.
-    if (!stopping()) {
-        bool gameEnded = false;
+    // A LOAD THAT FAILED is an error box nobody can close, so the emulator's
+    // log is read, as it grows, for its words for that in the first minute,
+    // and the console closes it instead. Errors are written at once, unlike
+    // the rest of the log.
+    if (!stopping() && !failedLoad_ && now - startMs_ < kLoadWatchMs) {
         if (FILE* f = std::fopen(logPath_.c_str(), "r")) {
             std::fseek(f, logRead_, SEEK_SET);
             char line[1024];
             while (std::fgets(line, sizeof line, f)) {
-                if (!failedLoad_ && now - startMs_ < kLoadWatchMs &&
-                    (std::strstr(line, emu_->loadFailed[0]) ||
-                     std::strstr(line, emu_->loadFailed[1]))) {
+                if (std::strstr(line, emu_->loadFailed[0]) ||
+                    std::strstr(line, emu_->loadFailed[1])) {
                     std::fprintf(stderr, "[standalone] %s could not load the game: %s",
                                  emu_->program, line);
                     failedLoad_ = true;
                     for (const char* k : emu_->keysTooOld)
                         if (k && std::strstr(line, k)) oldKeys_ = true;
-                    break;
-                }
-                if (emu_->gameEnded && std::strstr(line, emu_->gameEnded)) {
-                    gameEnded = true;
                     break;
                 }
             }
@@ -714,9 +785,18 @@ bool Run::poll() {
         if (failedLoad_) {
             stopAtMs_ = now;
             kill9();
-        } else if (gameEnded) {
-            // Its own exit shortcut comes this way too, so the log says what
-            // is known: emulation stopped, not who stopped it.
+        }
+    }
+
+    // A GAME THAT STOPPED, by itself or through the emulator's own exit
+    // shortcut, leaves the emulator's window up: its title loses the game.
+    // Twice a second is plenty, and a frozen emulator's title does not move.
+    if (!stopping() && !frozen_ && emu_->titlePrefix && now - titleCheckMs_ >= 500) {
+        titleCheckMs_ = now;
+        const int parts = gTitles.parts(emu_->titlePrefix);
+        if (parts >= emu_->titleParts) {
+            sawGameTitle_ = true;
+        } else if (sawGameTitle_ && parts > 0) {
             std::fprintf(stderr, "[standalone] emulation stopped; closing %s\n",
                          emu_->program);
             stop();
