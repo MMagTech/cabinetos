@@ -193,3 +193,76 @@ Worth reading before assuming a tvOS screen is just the iOS one resized.
   UserDefaults, Metal.
 - **`MotionSensor`** is iOS-only by decision, not omission: Apple removed the
   sensors from the 2021 Siri Remote.
+
+## Cabinet-side debts
+
+**CABINET'S APPLE TV CORES ARE NOT AT THE COMMITS ITS MANIFEST PINS**, found
+2026-09-23. `docs/core-manifest.json` pins the Mac's revision; the iOS and tvOS
+builds of snes9x, fceumm, beetle_pce_fast, beetle_saturn and mame2003_plus are
+older, and Saturn's tvOS revision is recorded as unrecoverable. CabinetOS
+matches the pin, so an Apple TV Saturn state is REFUSED here (Daytona USA,
+measured). **Rebuild Cabinet's Apple TV cores at the pinned commits** and
+Saturn and MAME 2003-Plus states can be shared (`catalog.cpp`, emulatorTag).
+
+1. **Flycast carries unscripted edits in its working tree**, so its pinned
+   commit does not reproduce what ships, and **that is the only reason Flycast
+   cannot share its emulator tag.** Capture the diff before anything touches
+   that tree:
+   `git -C spikes/cores/flycast/src diff > tools/patches/flycast-unscripted.patch`
+2. **The manifest does not describe how a core is built.** PPSSPP's entry says
+   `patches: null` and `build_args: null`; `tools/build-ppsspp.sh` applies two
+   source patches and passes CMake flags, two of which change what the binary
+   is. **The builder scripts are the real record**, and the manifest is
+   load-bearing for parity — so this is worth a pass across every core.
+3. **A comment in `NativeCore.savesOverSaveRAM` says PSP save sync is "its own
+   future feature".** It was built afterwards and the comment never moved. It
+   cost a wrong claim in a pull request here. **A stale comment reads exactly
+   like a current one.**
+4. **mGBA's Mac build is `-dirty` too**, and its manifest entry lists no patches
+   at all. Same problem, quieter.
+5. **Two "unrecoverable" tvOS revisions were recovered with `strings`.** Nine
+   more are probably sitting in the shipping archives.
+6. **melonDS's archives carry no revision** while the same upstream built here
+   reports one, so something in Cabinet's build is losing `GIT_VERSION`.
+7. **NEITHER PS2 NOR GAMECUBE HAS A FRESHNESS RULE, AND IT HAS PUT SIX EMPTY
+   CARDS ON THE SERVER.** Measured 2026-09-20: of seven rows, only Burnout 3
+   held a save. `PS2MemoryCard.store` and `GCMemoryCard.store` both force the
+   first upload for a game regardless of content —
+
+   ```swift
+   let neverUploaded = stamp(romId: rom.id) == nil
+   guard neverUploaded || digest(bytes) != digestBefore else { return }
+   ```
+
+   — and nothing anywhere asks whether the card holds anything. The
+   `neverUploaded` clause exists for a good reason (a card adopted from PCSX2's
+   shared `Mcd001` arrives already containing a save and never looks "changed")
+   but it opens this hole. **Same fault the Dreamcast path has**, which
+   `catalog.h` already records; worse ratio. CabinetOS's two rules are in
+   `filesave.cpp` and are cheap to port: a PS2 card without the
+   `Sony PS2 Memory Card Format` magic is untouched, and a GameCube card with
+   no directory entry in blocks 1 or 2 is untouched.
+
+8. **`MAIN_MEMORY_CARD_SIZE` IS NOT PINNED, AND THE CARD'S SIZE IS IN ITS
+   FILENAME.** `CabinetDolphinHost.cpp` sets `MAIN_SLOT_A` and
+   `MAIN_MEMCARD_A_PATH` and leaves the size at -1, so Dolphin decides — and
+   one of the three cards on the reference server is `cabinet-934.USA.251.raw`,
+   a 2 MB card, beside two 16 MB ones. RomM matches a row by filename, so the
+   day Dolphin changes its mind about a game's card size the save lands under a
+   new name, gets a new row, and the old one is orphaned. **Not observed**, and
+   the same shape as the `.USA.` suffix the existing comment describes finding
+   by accident. CabinetOS pins it.
+
+9. **`PS2PlayerView.swift`'s header says the screen has no pause menu and no
+   save state. It has both.** The file opens with *"there is no sound, no
+   controller, no pause menu, and no save state or memory card sync — this
+   screen exists to put a picture on the display"*, and forty lines later there
+   is a four-row menu whose Save and Load call `CabinetPS2SaveStateToSlot(1)`
+   and `CabinetPS2LoadStateFromSlot(1)`.
+
+   **Same shape as 4 and as the `savesOverSaveRAM` comment in the handover's
+   list**, and it cost the same thing again on 2026-09-20: a stale comment reads
+   exactly like a current one, and the comment is what got remembered rather
+   than the code. The memory-card half of that sentence IS still true, which is
+   what makes the rest of it convincing.
+

@@ -160,7 +160,7 @@ fi
 #                       is the test VM, and which is exactly why the frontend's
 #                       own host discovers rather than assumes.
 #   X11_API=ON          the console runs on X11 under gamescope. There is no EGL
-#                       display in that process at all; see NEXT-SESSION.md.
+#                       display in that process at all; see docs/lessons/emulators.md.
 #   WAYLAND_API=OFF     would pull in extra-cmake-modules and Wayland-Egl for a
 #                       windowing path this frontend will never use.
 #   USE_BACKTRACE=OFF   libbacktrace-devel is the one dependency Fedora 44 has

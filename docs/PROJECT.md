@@ -2104,6 +2104,35 @@ far inside its budget either way. Power saver is for batteries: Home drew the
 same on it (2026-09-22). Recommended: performance during a game, balanced
 on Home; to measure on PS2 before building.
 
+### PS2 finds its BIOS where the console puts it (#153) — 2026-09-27
+
+**PS2 never started on a fresh install.** The console downloads a platform's
+BIOS into `bios/`, under the names RomM gives them, and PCSX2 was told to look
+in `bios/pcsx2/bios`, which nothing filled. On a fresh install `bios/pcsx2` is
+also a link to the image's read-only PCSX2 resources, so nothing could have.
+The A9 played PS2 only because the BIOS had been copied there by hand on
+2026-09-20. The failure said nothing on screen: the game waited 15 s and gave
+up.
+
+**PCSX2 is now handed `bios/` itself.** It needs no fixed name: it looks at
+every file of 4 to 8 MB in that folder, not in subfolders, and takes the first
+whose header is a PS2 BIOS, so no other system's firmware can be mistaken for
+one and no copy under another name is needed (unlike Saturn or 3DO in
+`catalog::firmwareAliases`). The other choice, a writable `bios/pcsx2/bios`
+filled by the firmware step, would have kept a second copy of every PS2 BIOS
+and needed the resources link moved out of the way. **Off the A9:** the same
+on any machine; which BIOS is used when a server has several is PCSX2's own
+choice (the first valid one in the folder listing), as it was before. PCSX2
+writes its small `.nvm` and `.mec` files beside the BIOS in `bios/`.
+
+**Proved on the A9, headless, the image's PS2 core:** an empty storage root
+holding only the console's config files. The image's frontend fetched both
+BIOS files, searched `bios/pcsx2/bios` and ended in a millisecond (the fault);
+the fixed one searched `bios/`, used the USA BIOS and ran Burnout 3 with sound
+for 45 s. "No PlayStation 2 BIOS on your server" did not appear. **Found on
+the way:** the image ships no `patches.zip`, PCSX2's built-in game fixes.
+MMagTech: support it later, not now (#154).
+
 ### Time played (#128) — 2026-09-27
 
 **What RomM has (checked in its source, 5.1.0 and 5.3.1):** play sessions,

@@ -11947,7 +11947,7 @@ int main(int argc, char** argv) {
                 // A CAPTURE HAS NO WALL CLOCK TO WAIT ON. `--frames N` on the
                 // A9's Radeon goes by in well under the 220ms this delay
                 // wants — the same trap `--launch-after` fell into, recorded in
-                // docs/NEXT-SESSION.md — so a screenshot would show the screen
+                // docs/lessons/testing.md — so a screenshot would show the screen
                 // with no backdrop at all and look like the feature was not
                 // built. Every other animation here already settles for a
                 // capture; this one joins them.
