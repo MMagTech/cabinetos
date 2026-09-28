@@ -13824,3 +13824,104 @@ cache and unsent saves when pairing to a different server?
 the old rows fade out as the new ones fade in. MMagTech asked whether it should
 be instant; a person runs down that list quickly, so a slide would be busy and
 an instant swap makes the whole right side jump. MMagTech on the TV: good.
+
+### 32. Standalone emulators as games, starting with Switch (Eden)
+**Raised by milestone 2 (#169, #170). Researched 2026-09-28; four decisions
+taken the same day. Nothing built yet: nothing below has been launched.**
+
+**What #169 builds, in one line:** the parts a separate emulator program needs
+to behave like any other game on this console. Launch it, hand it the TV, draw
+our pause menu over it, route the pads, exit or recover from a crash back to
+Home, move its saves to and from RomM, count play time, fetch its keys and
+firmware, and write its settings so nobody sees its own menus. Built once with
+Eden, then reused for PS3, Xbox and Wii U.
+
+#### Why these are Flatpaks and PS2 is not
+
+MMagTech asked, and the answer is worth keeping in one place:
+
+- **PS2 runs inside the frontend** because upstream PCSX2 can be built as a
+  library and Cabinet for Mac had already shown how. The libretro PS2 core was
+  never an option: its source no longer exists (12b). Cabinet's code is not a
+  dependency; `cores/build-pcsx2.sh` clones `PCSX2/pcsx2` directly.
+- **Eden, RPCS3, xemu and Cemu come from Flathub** (21) because that is the only
+  practical way to get them; building each in-process would be a PCSX2-sized
+  port four times over. The reason for first-boot install was `/var`, not
+  licensing; all are GPL.
+- **A legal point, not recorded before:** taking Eden from Flathub means this
+  project never distributes a Switch emulator itself. Nintendo sent takedowns
+  against Eden in February and July 2026. Batocera goes further and ships no
+  Switch emulator at all while the console is on sale.
+- **The risk that comes with it:** Eden's Flathub package is community-made and
+  unverified, not Eden's own. If Flathub pulls it, new installs lose Switch.
+- **Recommendation, accepted:** PS2 stays in-process; the other four use the
+  Flatpak path. Revisit only if that path proves worse on the television.
+
+#### What was checked, 2026-09-28
+
+- **Eden IS on `flatpaks.list` and installed on the A9**, 0.2.1 at Flathub
+  commit `88af3f79`, which is still Flathub's current build. #170 said
+  otherwise and was wrong. 0.2.1 (2026-06-01) is Eden's latest stable release.
+- **The Flatpak holds the Qt app only** (`eden`, `eden-launcher`); the SDL
+  front end `eden-cli` is built with `YUZU_CMD=OFF`. Its flags in 0.2.1: `-f`,
+  `-g <file>`, `-u <user>`, `-input-profile`, `-qlaunch`, `-setup`. No config
+  path flag until master (2026-09-23).
+- **The Flatpak cannot see our files.** Its only filesystem grants are for
+  Discord and KDE; the launch must grant our storage root.
+- **The library is plain.** 109 games, every one a single `.nsp`, 310 GB, the
+  largest Metroid Prime 4 at 28.3 GB. Reading each file's header over HTTP:
+  105 hold one base game, Absolum and PSYVARIAR DELTA carry an update or DLC
+  merged in, and **Contra Anniversary Collection and Horizon Chase Turbo look
+  like update-only files**, which will not boot alone (not launched to confirm;
+  a library fix on the server).
+- **RomM holds keys and no firmware:** `prod-v19.keys`, `title-v19.keys`. RomM
+  is 5.1.0.
+
+What Eden's source (v0.2.1) says, spot-checked against the source rather than
+taken from the research summary:
+
+- **Keys** are read from `<data>/keys/prod.keys` and `title.keys` at start; no
+  GUI step. Missing keys raise a dialog, so the console must refuse to launch
+  first and say so.
+- **Firmware is checked for one game only**, Mario Kart 8 Deluxe
+  (`firmware_manager.h`), and even there it is a warning that can be passed.
+- **SIGTERM closes cleanly** through the normal window close, **if**
+  `[UI] confirmStop=2`; the default asks "Are you sure". **SIGINT is
+  `_exit(1)`**, which skips shutdown; never send it.
+- **No auto-mapping of pads.** Player 1 defaults to the keyboard; the console
+  writes each pad's SDL GUID into `[Controls] player_N_*`.
+- **Saves are a folder per profile and title:**
+  `nand/user/save/0000000000000000/<profile UUID>/<title ID>/`. The profile
+  UUID is random when Eden first creates it, so the console must fix it.
+- **Nothing pops over a game** once `confirmStop=2`, `firstStart=false`, the
+  Wayland warning hidden (`gui_hide_backend_warning=true` or xcb) and
+  `disableControllerApplet=true` are set. The Flathub build compiles the update
+  checker out; telemetry no longer exists.
+- **Updates and DLC load without installing** from folders listed in
+  `[UI] Paths\external_content_dirs`, since 0.2.0-rc1.
+- **Batocera** removed its Switch system on 2026-07-13. Its leftover Citron
+  generator and the community Eden add-on both do what this plan does: write
+  the ini before launch (`confirmStop=2`, `firstStart=false`, fullscreen), keys
+  from a BIOS folder, `-f -g <rom>`.
+
+#### DECIDED, MMagTech 2026-09-28
+
+- **A. Firmware is used if RomM has it, never required.** Keys are required.
+- **B. Always docked.** No handheld option; docked is the TV mode and the
+  sharper picture.
+- **C. Pause freezes the whole emulator process** and Resume thaws it, the same
+  for all four emulators. To be judged on the television; Eden's own pause key
+  is the fallback if freezing misbehaves.
+- **D. RomM goes to 5.3**, and the console uses RomM's `title_id` to find a
+  game's save folder (#160). MMagTech upgrades the server.
+
+**The pause menu is Resume and Exit to Home.** Switch fails question 25's rule
+(states tied to the emulator build, nothing to travel to), so no save states.
+**Screenshot**, which #169 lists, is still to confirm.
+
+#### Still to find out by building (#169)
+
+Whether freezing the process is clean on the TV (sound, the GPU, the menu
+over a frozen picture); how long a clean exit takes and the force-quit
+deadline after it; how Eden actually runs on the A9; where its NAND and shader
+cache are best placed in our storage root (#133). None of these has been run.
