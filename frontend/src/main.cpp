@@ -72,6 +72,7 @@
 #include "settings.h"
 #include "sound.h"
 #include "standalone.h"
+#include "vpad.h"
 #include "setup.h"
 #include "accounts.h"
 #include "storage.h"
@@ -4388,6 +4389,10 @@ int main(int argc, char** argv) {
     // once the window loses focus. Nothing else changes, because this window
     // has the focus whenever anything of the console's is on the screen.
     SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
+    // AND NEVER ITS OWN VIRTUAL CONTROLLERS (vpad.h). They are real devices to
+    // every SDL on the machine, this one included, and a console that adopted
+    // them as players would pass each press back to itself.
+    SDL_SetHint(SDL_HINT_GAMECONTROLLER_IGNORE_DEVICES, "0x1209/0xCAB0");
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD | SDL_INIT_AUDIO)) {
         std::fprintf(stderr, "[frontend] SDL_Init failed: %s\n", SDL_GetError());
         return 1;
@@ -9340,9 +9345,18 @@ int main(int argc, char** argv) {
         const storage::User& user = storage::currentUser();
         const std::string saveDir = storage::savesDir(
             user, launchJob.platformFsSlug, launchJob.romId, launchJob.coreName);
+        // ONE VIRTUAL CONTROLLER PER PLAYER, and at least one: the emulator
+        // is given these and never the real pads (vpad.h). Without them the
+        // game would start and nothing would move it, so that refuses here.
+        const int pads = std::max(1, players::count());
+        if (!cab::vpad::open(pads)) {
+            refuseLaunch("Couldn't start this game");
+            return;
+        }
         bool missingKeys = false;
         std::string err;
-        if (!cab::standalone::prepare(emu, saveDir, user.name, &missingKeys, &err)) {
+        if (!cab::standalone::prepare(emu, saveDir, user.name, pads, &missingKeys, &err)) {
+            cab::vpad::close();
             if (!err.empty()) std::fprintf(stderr, "[standalone] %s\n", err.c_str());
             refuseLaunch(missingKeys ? "No " + launchJob.systemName + " keys on your server"
                                      : std::string("Couldn't start this game"));
@@ -9356,6 +9370,7 @@ int main(int argc, char** argv) {
         if (!root.empty() && tag && liveClient.haveToken())
             restoreDirSave(liveClient, launchJob.romId, tag, root);
         if (!standaloneRun.start(emu, launchJob.romPath, saveDir, &err)) {
+            cab::vpad::close();
             std::fprintf(stderr, "[standalone] %s\n", err.c_str());
             refuseLaunch("Couldn't start this game");
             return;
@@ -9391,6 +9406,7 @@ int main(int argc, char** argv) {
         // game that saved and then fell over still saved.
         if (!session.dirSaveRoot.empty()) syncDirSave(session, uploader);
         session.dirSaveRoot.clear();
+        cab::vpad::close();
         if (playClock.active()) {
             playtime::close(storage::currentUser(), playClock.finish(playtime::wallMs()));
             uploader.sendPlay();
@@ -10178,9 +10194,38 @@ int main(int argc, char** argv) {
             // may act on a press it also sees, or Home would be navigated
             // blind behind the game; a press only says somebody is playing.
             // A request to quit still goes through.
+            //
+            // EACH REAL PAD'S PRESSES GO TO ITS PLAYER'S VIRTUAL CONTROLLER,
+            // the moment they arrive: this loop waits on events rather than
+            // sleeping while the emulator runs, so nothing is added to the
+            // time between a press and the game. A pad arriving or leaving
+            // still reaches players.h, so the order stays the console's.
             if (standaloneRun.active() && e.type != SDL_EVENT_QUIT) {
-                if (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN || e.type == SDL_EVENT_KEY_DOWN)
-                    playClock.touch();
+                switch (e.type) {
+                    case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+                    case SDL_EVENT_GAMEPAD_BUTTON_UP:
+                        playClock.touch();
+                        cab::vpad::button(players::playerOf(e.gbutton.which),
+                                          static_cast<SDL_GamepadButton>(e.gbutton.button),
+                                          e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN);
+                        break;
+                    case SDL_EVENT_GAMEPAD_AXIS_MOTION:
+                        cab::vpad::axis(players::playerOf(e.gaxis.which),
+                                        static_cast<SDL_GamepadAxis>(e.gaxis.axis),
+                                        e.gaxis.value);
+                        break;
+                    case SDL_EVENT_GAMEPAD_ADDED:
+                        players::added(e.gdevice.which);
+                        break;
+                    case SDL_EVENT_GAMEPAD_REMOVED:
+                        players::removed(e.gdevice.which);
+                        break;
+                    case SDL_EVENT_KEY_DOWN:
+                        playClock.touch();
+                        break;
+                    default:
+                        break;
+                }
                 continue;
             }
             const InputOwner owner = inputOwner();
@@ -10773,7 +10818,9 @@ int main(int argc, char** argv) {
                 standaloneRun.stop();
             }
             if (!standaloneRun.poll()) finishStandalone();
-            SDL_Delay(16);
+            // Until the next press or a sixtieth of a second, whichever is
+            // first: presses pass straight on, and a watcher costs nothing.
+            SDL_WaitEventTimeout(nullptr, 16);
             continue;
         }
 

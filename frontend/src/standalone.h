@@ -70,8 +70,11 @@ std::string home(const Emulator& e);
 //
 // False with `*missingKeys` when the keys it cannot run without are not on
 // the console; false with an `*err` for anything else.
+//
+// `players` is how many virtual controllers (vpad.h) there are, and each
+// player's controls are written for theirs, in the console's order.
 bool prepare(const Emulator& e, const std::string& saveDir, const std::string& player,
-             bool* missingKeys, std::string* err);
+             int players, bool* missingKeys, std::string* err);
 
 // Where, inside `saveDir`, the game's own save folders are: the root of what
 // travels to RomM as a zip, whose top-level folders are one per game. For

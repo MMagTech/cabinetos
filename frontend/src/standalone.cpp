@@ -2,6 +2,7 @@
 
 #include "proc.h"
 #include "storage.h"
+#include "vpad.h"
 
 #include <dirent.h>
 #include <signal.h>
@@ -249,8 +250,68 @@ std::string edenProfile(const std::string& homeDir, const std::string& player) {
     return profileFolder(reinterpret_cast<const uint8_t*>(&data[user]));
 }
 
+// EACH PLAYER'S CONTROLS, on their virtual controller (vpad.h), laid out as a
+// Pro Controller the way Eden lays out any SDL pad itself: by POSITION, so
+// the button on the right of the diamond is A on every pad, as it is on a
+// Switch (sdl_driver.cpp, GetDefaultButtonBinding). Players past `players` are
+// unplugged, or a game would count four controllers and offer four seats.
+std::vector<std::string> edenControls(int players) {
+    const std::string guid = cab::vpad::edenGuid();
+    std::vector<std::string> lines;   // "key=value" for [Controls]
+    auto btn = [&](int p, SDL_GamepadButton b) {
+        return "\"engine:sdl,port:" + std::to_string(p) + ",guid:" + guid +
+               ",button:" + std::to_string(cab::vpad::buttonIndex(b)) + "\"";
+    };
+    auto hat = [&](int p, const char* dir) {
+        return "\"engine:sdl,port:" + std::to_string(p) + ",guid:" + guid +
+               ",hat:0,direction:" + dir + "\"";
+    };
+    auto trig = [&](int p, SDL_GamepadAxis a) {
+        return "\"engine:sdl,port:" + std::to_string(p) + ",guid:" + guid +
+               ",axis:" + std::to_string(cab::vpad::axisIndex(a)) +
+               ",threshold:0.5,invert:+\"";
+    };
+    auto stick = [&](int p, SDL_GamepadAxis x, SDL_GamepadAxis y) {
+        return "\"engine:sdl,port:" + std::to_string(p) + ",guid:" + guid +
+               ",axis_x:" + std::to_string(cab::vpad::axisIndex(x)) +
+               ",axis_y:" + std::to_string(cab::vpad::axisIndex(y)) +
+               ",offset_x:0,offset_y:0,invert_x:+,invert_y:+\"";
+    };
+    for (int p = 0; p < 8; ++p) {
+        const std::string k = "player_" + std::to_string(p) + "_";
+        lines.push_back(k + "connected=" + (p < players ? "true" : "false"));
+        if (p >= cab::vpad::kMaxPlayers) continue;
+        lines.push_back(k + "type=0");   // Pro Controller
+        lines.push_back(k + "button_a=" + btn(p, SDL_GAMEPAD_BUTTON_EAST));
+        lines.push_back(k + "button_b=" + btn(p, SDL_GAMEPAD_BUTTON_SOUTH));
+        lines.push_back(k + "button_x=" + btn(p, SDL_GAMEPAD_BUTTON_NORTH));
+        lines.push_back(k + "button_y=" + btn(p, SDL_GAMEPAD_BUTTON_WEST));
+        lines.push_back(k + "button_lstick=" + btn(p, SDL_GAMEPAD_BUTTON_LEFT_STICK));
+        lines.push_back(k + "button_rstick=" + btn(p, SDL_GAMEPAD_BUTTON_RIGHT_STICK));
+        lines.push_back(k + "button_l=" + btn(p, SDL_GAMEPAD_BUTTON_LEFT_SHOULDER));
+        lines.push_back(k + "button_r=" + btn(p, SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER));
+        lines.push_back(k + "button_zl=" + trig(p, SDL_GAMEPAD_AXIS_LEFT_TRIGGER));
+        lines.push_back(k + "button_zr=" + trig(p, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER));
+        lines.push_back(k + "button_plus=" + btn(p, SDL_GAMEPAD_BUTTON_START));
+        lines.push_back(k + "button_minus=" + btn(p, SDL_GAMEPAD_BUTTON_BACK));
+        lines.push_back(k + "button_dleft=" + hat(p, "left"));
+        lines.push_back(k + "button_dup=" + hat(p, "up"));
+        lines.push_back(k + "button_dright=" + hat(p, "right"));
+        lines.push_back(k + "button_ddown=" + hat(p, "down"));
+        lines.push_back(k + "button_slleft=" + btn(p, SDL_GAMEPAD_BUTTON_LEFT_SHOULDER));
+        lines.push_back(k + "button_srleft=" + btn(p, SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER));
+        lines.push_back(k + "button_slright=" + btn(p, SDL_GAMEPAD_BUTTON_LEFT_SHOULDER));
+        lines.push_back(k + "button_srright=" + btn(p, SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER));
+        lines.push_back(k + "button_home=" + btn(p, SDL_GAMEPAD_BUTTON_GUIDE));
+        lines.push_back(k + "button_screenshot=\"\"");
+        lines.push_back(k + "lstick=" + stick(p, SDL_GAMEPAD_AXIS_LEFTX, SDL_GAMEPAD_AXIS_LEFTY));
+        lines.push_back(k + "rstick=" + stick(p, SDL_GAMEPAD_AXIS_RIGHTX, SDL_GAMEPAD_AXIS_RIGHTY));
+    }
+    return lines;
+}
+
 bool prepareEden(const Emulator& e, const std::string& saveDir, const std::string& player,
-                 bool* missingKeys, std::string* err) {
+                 int players, bool* missingKeys, std::string* err) {
     const std::string user = home(e) + "/user";
     storage::makeDirs(user + "/keys");
     storage::makeDirs(user + "/config");
@@ -278,7 +339,7 @@ bool prepareEden(const Emulator& e, const std::string& saveDir, const std::strin
     // choice on the television. Batocera's generator and the community Eden
     // add-on write the same ones.
     const std::string ini = user + "/config/qt-config.ini";
-    const std::vector<IniSet> sets = {
+    std::vector<IniSet> sets = {
         {"UI", "fullscreen", "true"},
         // No welcome on the first start.
         {"UI", "firstStart", "false"},
@@ -297,7 +358,22 @@ bool prepareEden(const Emulator& e, const std::string& saveDir, const std::strin
         // so nothing of anybody else's is in reach of the game and what
         // changed while it ran is exactly what it saved.
         {"Data%20Storage", "save_directory", saveDir.c_str()},
+        // Eden's own drivers for Nintendo pads open the real ones directly,
+        // which the virtual controllers exist to prevent (vpad.h).
+        {"Controls", "enable_joycon_driver", "false"},
+        {"Controls", "enable_procon_driver", "false"},
     };
+    const std::vector<std::string> controls = edenControls(players);
+    std::vector<std::string> keys, values;
+    keys.reserve(controls.size());
+    values.reserve(controls.size());
+    for (const std::string& l : controls) {
+        const size_t eq = l.find('=');
+        keys.push_back(l.substr(0, eq));
+        values.push_back(l.substr(eq + 1));
+    }
+    for (size_t i = 0; i < controls.size(); ++i)
+        sets.push_back({"Controls", keys[i].c_str(), values[i].c_str()});
     if (!writeFile(ini, applyIni(readFile(ini), sets))) {
         *err = "could not write " + ini;
         return false;
@@ -325,11 +401,11 @@ bool installed(const Emulator& e) {
 std::string home(const Emulator& e) { return storage::emulatorsDir() + "/" + e.core; }
 
 bool prepare(const Emulator& e, const std::string& saveDir, const std::string& player,
-             bool* missingKeys, std::string* err) {
+             int players, bool* missingKeys, std::string* err) {
     *missingKeys = false;
     storage::makeDirs(saveDir);
     if (std::strcmp(e.core, "eden") == 0)
-        return prepareEden(e, saveDir, player, missingKeys, err);
+        return prepareEden(e, saveDir, player, players, missingKeys, err);
     *err = std::string("nothing prepares ") + e.core;
     return false;
 }
@@ -383,6 +459,10 @@ bool Run::start(const Emulator& e, const std::string& romPath, const std::string
         // a warning box first; the console runs on X11 anyway (lessons,
         // "THE CONSOLE RUNS ON X11").
         "--env=QT_QPA_PLATFORM=xcb",
+        // Its SDL keeps its hands off the real pads' HID devices. It is given
+        // virtual controllers instead (vpad.h), and two programs driving one
+        // Switch or PlayStation pad's HID protocol at once fight over it.
+        "--env=SDL_JOYSTICK_HIDAPI=0",
         std::string("--command=") + e.program,
         e.flatpak,
         "-f", "-g", romPath,
