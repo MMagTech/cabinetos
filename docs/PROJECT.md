@@ -13974,3 +13974,11 @@ Whether freezing the process is clean on the TV (sound, the GPU, the menu
 over a frozen picture); how long a clean exit takes and the force-quit
 deadline after it; how Eden actually runs on the A9; where its NAND and shader
 cache are best placed in our storage root (#133). None of these has been run.
+
+**Whether RomM's v19 keys open the newest games.** Firmware releases now and
+then add a master key that later games are encrypted with, and a game that
+needs a key newer than `prod-v19.keys` will not start. The newest titles
+(Metroid Prime 4 Beyond) are the ones to launch first. The fix, if needed, is
+a newer `prod.keys` in RomM, which is MMagTech's side. (The header key that
+reads a title ID is the same in every version, so this has nothing to do with
+RomM's title IDs above.)
