@@ -14,11 +14,14 @@ session picks up is `docs/NEXT-SESSION.md`.
 
 ## In order
 
-1. **Emulators.** PS2 on a fresh install (#153), the Dreamcast crash after a
-   big arcade state (#151), full CPU speed during games (#150, measured first).
-2. **New systems** (#138): Switch, PS3 and Xbox, then Wii. Before picture
-   quality, because that is one setting across every system; broken into one
-   issue per system when started.
+1. **Emulators. Done 2026-09-28.** PS2 on a fresh install (#153) was fixed;
+   the Dreamcast crash (#151), full CPU speed during games (#150, measured: no
+   visible benefit on the A9) and rewind's snapshot cost (#168) moved to After
+   first release.
+2. **New systems**, in MMagTech's order: the shared foundation for emulators
+   that run as their own programs (#169), then Switch (#170), PS3 (#171), Xbox
+   (#172), Wii (#173) and Wii U (#174). Before picture quality, because that
+   is one setting across every system.
 3. **Settings: picture.** Picture quality (#63), the pause menu's per-system
    picture and controller options (#73, which also own the PS1 DualShock and
    the N64 Rumble Pak), and shaders and CRT looks (#122, to be designed).
@@ -38,9 +41,10 @@ session picks up is `docs/NEXT-SESSION.md`.
    (#114), players 3 and 4 (#115), the owed hardware tests (#140), and last,
    the first-hour walk-through as a new user on the real installer (#111).
 
-**After first release** (MMagTech, 2026-09-28): a pad waking the console
-(#121), other apps' saves (#124), a test-builds switch (#139), PCSX2's
-per-game fixes (#154).
+**After first release:** everything in that milestone on GitHub, including
+the Dreamcast crash (#151), the performance profile (#150), rewind's cost
+(#168), multi-disc swapping (#162), PCSX2's per-game fixes (#154), the RomM
+5.2/5.3 features (#158 to #161) and the system tuning ideas (#163 to #167).
 
 Done: Settings (#57 to #72, except #63), the emulator block (#82 to #90), the
 in-game features (#76 to #80).
