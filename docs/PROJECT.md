@@ -14045,3 +14045,26 @@ has no smaller option. So the two routes are:
 | **Still**: grab, then bring our own window forward with the ordinary menu over the still | about 2 s after the press | exactly as on every other system |
 
 MMagTech to choose on the television.
+
+#### ONE RULE FOR EVERY GAME, AND EDEN AS IT SHIPS — MMagTech, 2026-09-28
+
+*"i dont want to aplly per game fixes"*, and *"would rather not patch eden
+for a fix"*. Eden's settings are written the same for every game, and Eden is
+Flathub's build unchanged. A game that runs only with a per-game tweak or a
+source patch is a known problem until its update (#181) or a newer pinned
+Eden fixes it.
+
+**The first such game: Teenage Mutant Ninja Turtles: Shredder's Revenge**
+(base 1.0.0, no update). It quits by itself about 27 s in, after its Epic
+Online Services layer fails; the console notices and returns to Home.
+Researched against yuzu's final source: the stubbed `EventFd` and the
+`pollfd.revents` assert are identical in yuzu; what Eden adds is a hardcoded
+DNS block on `api.epicgames.dev` (PR #3999, no setting) and an airplane mode
+that refuses connection sockets outright (yuzu had neither). Eden's tracker
+lists the game as loading only with multicore off (issue #2662, #4370), which
+is exactly the per-game switch ruled out above. Its first update predates the
+game's release, so almost nobody played 1.0.0.
+
+**Airplane mode stays on for every game**: online never works under
+emulation, and Eden has an open change to make it its default (PR #4495). If
+a game ever needs it off, it is reconsidered for all of them.
