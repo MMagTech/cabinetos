@@ -13949,9 +13949,13 @@ Two faults, both upstream:
    NCA whose 17th and 18th characters are `01` is misread, about 2 in 100,
    and a wrong ID looks exactly like a right one.
 
-The fixes are small (pass the keys RomM already holds as Switch firmware;
-anchor the match to the start of a 16-hex name), and filing them is MMagTech's
-call. Nothing here waits on them.
+**The first is not a bug and will not change.** It was reported as romm#4697
+and closed by a RomM maintainer: *"We explicitly avoid to implement the use of
+``prod.keys`` inside RomM. It's not a bug, it's a decision."* So RomM will never
+read most Switch title IDs, which settles the reversal above on its own.
+**The second is a real bug** and matters more because of the first: without
+keys, the faulty fallback is the only path RomM runs on Switch. Filed with
+MMagTech's go as rommapp/argosy-sigil#9, 2026-09-28. Nothing here waits on it.
 
 **Atari 7800 got no IDs and never will:** RomM reads title IDs for fourteen
 platforms only (PSX, PS2, PS3, PSP, Vita, Switch, Switch 2, 3DS, Wii, Wii U,
