@@ -48,6 +48,10 @@ struct Emulator {
     // too old for this game: a newer prod.keys in RomM is the whole fix, so
     // the console says that rather than "Couldn't start".
     const char* keysTooOld[4];
+    // What it writes when the game stops by itself, which leaves the
+    // emulator's own window on the television rather than closing it. The
+    // console closes it instead, as if the game had been exited.
+    const char* gameEnded;
     // The game files it opens as they are, libretro's `valid_extensions`
     // format. The console never unpacks them.
     const char* extensions;

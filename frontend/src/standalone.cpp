@@ -4,6 +4,8 @@
 #include "storage.h"
 #include "vpad.h"
 
+#include <archive.h>
+#include <archive_entry.h>
 #include <dirent.h>
 #include <signal.h>
 #include <sys/stat.h>
@@ -36,6 +38,10 @@ const Emulator kEmulators[] = {
      // is what Metroid Prime 4 Beyond gave against RomM's v19 keys on
      // 2026-09-28; 18 and 19 are its title key and title key key.
      {"(Error 21)", "(Error 18)", "(Error 19)", "(Error 13)"},
+     // Emulation stopping for any reason (bootmanager.h). Seen 2026-09-28 when
+     // Shredder's Revenge quit by itself 17 s in and left Eden's game list
+     // on the television.
+     "Force stopping EmuThread",
      "nsp|xci"},
 };
 
@@ -110,6 +116,104 @@ std::string newestKeys(const std::string& biosDir, const std::string& prefix) {
     }
     closedir(d);
     return pick;
+}
+
+// The Switch firmware zip RomM serves, if any: a `.zip` in `bios/` with
+// "firmware" in its name, the highest version when there are several. Named
+// rather than any zip because `bios/` is shared by every system, and arcade
+// BIOS sets are zips too.
+std::string newestFirmwareZip(const std::string& biosDir) {
+    std::string pick;
+    long pickVersion = -2;
+    DIR* d = opendir(biosDir.c_str());
+    if (!d) return pick;
+    while (dirent* e = readdir(d)) {
+        std::string lower = e->d_name;
+        for (char& ch : lower) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+        if (lower.size() < 4 || lower.compare(lower.size() - 4, 4, ".zip") != 0) continue;
+        if (lower.find("firmware") == std::string::npos) continue;
+        long v = -1;
+        for (size_t i = 0; i < lower.size();) {
+            if (!std::isdigit(static_cast<unsigned char>(lower[i]))) { ++i; continue; }
+            size_t j = i;
+            while (j < lower.size() && std::isdigit(static_cast<unsigned char>(lower[j]))) ++j;
+            v = std::max(v, std::strtol(lower.substr(i, j - i).c_str(), nullptr, 10));
+            break;   // the first number is the major version
+        }
+        const std::string path = biosDir + "/" + e->d_name;
+        if (v > pickVersion || (v == pickVersion && path > pick)) {
+            pick = path;
+            pickVersion = v;
+        }
+    }
+    closedir(d);
+    return pick;
+}
+
+// FIRMWARE IS USED WHEN RomM HAS IT (decision A), installed the way Eden's
+// own "Install Firmware" does it (qt_common/util/content.cpp): every `.nca` in
+// the source, at any depth, copied by name into nand/system/Contents/
+// registered after that folder is emptied. From the zip directly, so it does
+// not matter whether the files are at its top or inside a folder.
+//
+// Once per zip: a note of which zip and its size is kept beside it, and the
+// install runs again only when the zip in RomM changes. Mario Kart 8 Deluxe
+// is why: without firmware its Mii screen crashed the game (2026-09-28).
+bool installFirmware(const std::string& homeDir, const std::string& zip) {
+    struct stat st;
+    if (::stat(zip.c_str(), &st) != 0) return false;
+    const std::string contents = homeDir + "/user/nand/system/Contents";
+    const std::string registered = contents + "/registered";
+    const std::string note = contents + "/cabinetos-firmware.txt";
+    const std::string stamp =
+        zip.substr(zip.find_last_of('/') + 1) + " " + std::to_string(st.st_size) + "\n";
+    if (readFile(note) == stamp) return true;
+
+    storage::makeDirs(registered);
+    if (DIR* d = opendir(registered.c_str())) {
+        while (dirent* e = readdir(d)) {
+            const std::string n = e->d_name;
+            if (n == "." || n == "..") continue;
+            const std::string p = registered + "/" + n;
+            struct stat es;
+            if (::lstat(p.c_str(), &es) == 0 && S_ISREG(es.st_mode)) ::unlink(p.c_str());
+        }
+        closedir(d);
+    }
+
+    archive* a = archive_read_new();
+    archive_read_support_format_zip(a);
+    int placed = 0;
+    bool ok = archive_read_open_filename(a, zip.c_str(), 1 << 16) == ARCHIVE_OK;
+    archive_entry* entry = nullptr;
+    while (ok && archive_read_next_header(a, &entry) == ARCHIVE_OK) {
+        if (archive_entry_filetype(entry) != AE_IFREG) continue;
+        std::string name = archive_entry_pathname(entry);
+        name = name.substr(name.find_last_of('/') + 1);
+        if (name.size() < 4 || name.compare(name.size() - 4, 4, ".nca") != 0) continue;
+        const std::string dest = registered + "/" + name;
+        FILE* out = std::fopen(dest.c_str(), "wb");
+        if (!out) { ok = false; break; }
+        const void* buf;
+        size_t size;
+        la_int64_t offset;
+        int r;
+        while ((r = archive_read_data_block(a, &buf, &size, &offset)) == ARCHIVE_OK)
+            if (std::fwrite(buf, 1, size, out) != size) { r = ARCHIVE_FATAL; break; }
+        std::fclose(out);
+        if (r != ARCHIVE_EOF) { ok = false; break; }
+        ++placed;
+    }
+    archive_read_free(a);
+    if (!ok || placed == 0) {
+        std::fprintf(stderr, "[standalone] firmware from %s: %s\n", zip.c_str(),
+                     placed == 0 ? "no .nca files in it" : "could not unpack it");
+        return false;
+    }
+    writeFile(note, stamp);
+    std::fprintf(stderr, "[standalone] firmware installed from %s (%d files)\n", zip.c_str(),
+                 placed);
+    return true;
 }
 
 // Copies `from` to `to` unless `to` already holds the same bytes.
@@ -339,6 +443,9 @@ bool prepareEden(const Emulator& e, const std::string& saveDir, const std::strin
     const std::string title = newestKeys(storage::biosDir(), "title");
     if (!title.empty() && !placeFile(title, user + "/keys/title.keys"))
         std::fprintf(stderr, "[standalone] could not place %s\n", title.c_str());
+    // Not fatal either way: most games need none (decision A).
+    if (const std::string fw = newestFirmwareZip(storage::biosDir()); !fw.empty())
+        installFirmware(home(e), fw);
 
     // THE CONSOLE'S SETTINGS, laid over Eden's own file before every start.
     // Every one of these is something that would otherwise put a box or a
@@ -368,6 +475,12 @@ bool prepareEden(const Emulator& e, const std::string& saveDir, const std::strin
         // which the virtual controllers exist to prevent (vpad.h).
         {"Controls", "enable_joycon_driver", "false"},
         {"Controls", "enable_procon_driver", "false"},
+        // NO INTERNET, as far as a game can tell. Nintendo's online services do
+        // not answer an emulator, so nothing is lost; and a game told the
+        // network is up that then cannot open a socket may quit, which
+        // Shredder's Revenge did 17 s in on 2026-09-28 (Eden's log: bsd
+        // "File descriptor handle=0 is not allocated", then ExitProcess).
+        {"Network", "airplane_mode", "true"},
     };
     const std::vector<std::string> controls = edenControls(players);
     std::vector<std::string> keys, values;
@@ -566,20 +679,29 @@ bool Run::poll() {
         stopAtMs_ = now;   // and again after another grace, should even that not take
     }
 
-    // A LOAD THAT FAILED IS AN ERROR BOX NOBODY CAN CLOSE, so the log is read
-    // for Eden's own words for it and the console closes it instead.
-    if (!failedLoad_ && !stopping() && now - startMs_ < kLoadWatchMs) {
+    // THE EMULATOR'S LOG, read as it grows, for the two things it only says
+    // there. A LOAD THAT FAILED is an error box nobody can close, so the
+    // console closes it instead, within the first minute. A GAME THAT STOPPED
+    // BY ITSELF leaves the emulator's own window up, so the console closes
+    // that too, at any time.
+    if (!stopping()) {
+        bool gameEnded = false;
         if (FILE* f = std::fopen(logPath_.c_str(), "r")) {
             std::fseek(f, logRead_, SEEK_SET);
             char line[1024];
             while (std::fgets(line, sizeof line, f)) {
-                if (std::strstr(line, emu_->loadFailed[0]) ||
-                    std::strstr(line, emu_->loadFailed[1])) {
+                if (!failedLoad_ && now - startMs_ < kLoadWatchMs &&
+                    (std::strstr(line, emu_->loadFailed[0]) ||
+                     std::strstr(line, emu_->loadFailed[1]))) {
                     std::fprintf(stderr, "[standalone] %s could not load the game: %s",
                                  emu_->program, line);
                     failedLoad_ = true;
                     for (const char* k : emu_->keysTooOld)
                         if (k && std::strstr(line, k)) oldKeys_ = true;
+                    break;
+                }
+                if (emu_->gameEnded && std::strstr(line, emu_->gameEnded)) {
+                    gameEnded = true;
                     break;
                 }
             }
@@ -592,6 +714,12 @@ bool Run::poll() {
         if (failedLoad_) {
             stopAtMs_ = now;
             kill9();
+        } else if (gameEnded) {
+            // Its own exit shortcut comes this way too, so the log says what
+            // is known: emulation stopped, not who stopped it.
+            std::fprintf(stderr, "[standalone] emulation stopped; closing %s\n",
+                         emu_->program);
+            stop();
         }
     }
     return true;
