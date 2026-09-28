@@ -1332,15 +1332,19 @@ bool Core::loadGame(const std::string& romPath, const std::string& systemDir,
 
         // Firmware is shared and comes from RomM; the card is this person's and
         // this game's; the scratch is throwaway. Three places, deliberately.
-        // `bios/pcsx2/bios`, and the repetition is not a mistake. The outer
-        // one is this console's firmware directory for every system; the
-        // `pcsx2` folder is where the PlayStation 2's own BIOS files sit,
-        // which is where the save work already put them; and PCSX2 is handed
-        // that directory DIRECTLY rather than a root it appends `bios` to.
-        // Getting it one segment short produced a VM that started and was
-        // destroyed in the same twelve milliseconds, saying only "Searching
-        // for a BIOS image in ..." with no error after it.
-        const std::string biosDir = systemDir + "/pcsx2/bios";
+        //
+        // PCSX2 IS HANDED `bios/` ITSELF (#153), which is where the firmware
+        // step puts whatever RomM serves, under RomM's own names. PCSX2 does
+        // not want a name: it looks at every file of 4 to 8 MB in the folder
+        // it is given, not in subfolders, and takes the first whose header is
+        // a PS2 BIOS, so no other system's firmware can be mistaken for one.
+        // It was `bios/pcsx2/bios` until 2026-09-27, which nothing filled:
+        // PS2 played only on the one console where the files were copied
+        // there by hand, and on a fresh install `bios/pcsx2` is the image's
+        // read-only resources link, so nothing could have. The failure is a
+        // VM destroyed in the millisecond it starts, after "Searching for a
+        // BIOS image in ..." and no error.
+        const std::string biosDir = systemDir;
         const std::string scratchDir = saveDir + "/pcsx2-scratch";
 
         if (!ps2::startGame(romPath, biosDir, saveDir, stem + ".ps2", scratchDir,
