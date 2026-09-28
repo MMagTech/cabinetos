@@ -332,6 +332,11 @@ const char* saveTag(const char* core) {
         // from either would not load in the Mac's build anyway.
         {"pcsx2", "pcsx2"},
         {"dolphin", "dolphin"},
+        // Switch, in Eden. No Cabinet app plays Switch, so there is no row to
+        // match and the name is this console's to choose: the emulator's own,
+        // as the two above are. The save is a zip of the game's save folder,
+        // travelling the way PSP's does (open question 32, decision D).
+        {"eden", "eden"},
     };
     const std::string name = manifestName(core);
     for (const auto& t : kSaveTags)

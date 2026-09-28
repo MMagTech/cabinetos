@@ -175,7 +175,82 @@ std::string applyIni(const std::string& text, const std::vector<IniSet>& sets) {
     return out;
 }
 
-bool prepareEden(const Emulator& e, bool* missingKeys, std::string* err) {
+// EDEN'S PROFILE, which names the folder every save sits in:
+// `user/save/0000000000000000/<profile>/<title ID>/`. Eden makes one with a
+// RANDOM ID the first time it starts, so on a new console the folder a save
+// must be restored into would not exist until the game was already running.
+// So the console makes it first, with a fixed ID, and on a console where Eden
+// already made one it is read and kept.
+//
+// The file is Eden's ProfileDataRaw (acc/profile_manager.cpp): 0x10 bytes of
+// padding, then eight 0xC8-byte users, each a 16-byte ID, the same ID again,
+// an 8-byte timestamp, a 32-byte name and 0x80 bytes of extra data. The
+// folder is the ID's bytes REVERSED, in capitals: checked against two
+// profiles Eden made on the A9, 2026-09-28.
+//
+// The name is set to whoever is playing each time, because some games show
+// it. The ID never changes, so neither does the folder.
+constexpr const char* kEdenProfiles =
+    "/user/nand/system/save/8000000000000010/su/avators/profiles.dat";
+constexpr size_t kProfilesSize = 0x650;
+constexpr size_t kUserSize = 0xC8;
+constexpr size_t kUserNameAt = 0x28;   // after two IDs and the timestamp
+constexpr size_t kUserNameSize = 0x20;
+// "CabinetOS player", which reads back from the folder name in a hex dump.
+constexpr uint8_t kProfileId[16] = {'C', 'a', 'b', 'i', 'n', 'e', 't', 'O',
+                                    'S', ' ', 'p', 'l', 'a', 'y', 'e', 'r'};
+
+std::string profileFolder(const uint8_t* id) {
+    static const char* hex = "0123456789ABCDEF";
+    std::string out;
+    for (int i = 15; i >= 0; --i) {
+        out += hex[id[i] >> 4];
+        out += hex[id[i] & 0xF];
+    }
+    return out;
+}
+
+// The first profile's folder, making the profile if there is none. Empty
+// only when the file cannot be written.
+std::string edenProfile(const std::string& homeDir, const std::string& player) {
+    const std::string path = homeDir + kEdenProfiles;
+    std::string data = readFile(path);
+    if (data.size() != kProfilesSize) data.assign(kProfilesSize, '\0');
+
+    size_t user = 0x10;
+    bool found = false;
+    for (size_t at = 0x10; at + kUserSize <= kProfilesSize; at += kUserSize) {
+        bool zero = true;
+        for (size_t i = 0; i < 16; ++i)
+            if (data[at + i] != '\0') { zero = false; break; }
+        if (!zero) { user = at; found = true; break; }
+    }
+    if (!found) {
+        std::memcpy(&data[user], kProfileId, 16);
+        std::memcpy(&data[user + 16], kProfileId, 16);
+    }
+
+    // The name, cut at a whole character: 32 bytes, zero-padded.
+    std::string name = player.empty() ? std::string("Player") : player;
+    if (name.size() > kUserNameSize) {
+        size_t cut = kUserNameSize;
+        while (cut > 0 && (static_cast<unsigned char>(name[cut]) & 0xC0) == 0x80) --cut;
+        name.resize(cut);
+    }
+    std::string field(kUserNameSize, '\0');
+    std::memcpy(&field[0], name.data(), name.size());
+    const bool rename = data.compare(user + kUserNameAt, kUserNameSize, field) != 0;
+    if (rename) std::memcpy(&data[user + kUserNameAt], field.data(), kUserNameSize);
+
+    if (!found || rename) {
+        storage::makeDirs(path.substr(0, path.find_last_of('/')));
+        if (!writeFile(path, data)) return {};
+    }
+    return profileFolder(reinterpret_cast<const uint8_t*>(&data[user]));
+}
+
+bool prepareEden(const Emulator& e, const std::string& saveDir, const std::string& player,
+                 bool* missingKeys, std::string* err) {
     const std::string user = home(e) + "/user";
     storage::makeDirs(user + "/keys");
     storage::makeDirs(user + "/config");
@@ -218,9 +293,17 @@ bool prepareEden(const Emulator& e, bool* missingKeys, std::string* err) {
         {"UI", "disableControllerApplet", "true"},
         // Docked, always: the television mode (decision B). 1 is Docked.
         {"System", "use_docked_mode", "1"},
+        // THIS PERSON'S SAVES FOR THIS GAME, a different folder every launch,
+        // so nothing of anybody else's is in reach of the game and what
+        // changed while it ran is exactly what it saved.
+        {"Data%20Storage", "save_directory", saveDir.c_str()},
     };
     if (!writeFile(ini, applyIni(readFile(ini), sets))) {
         *err = "could not write " + ini;
+        return false;
+    }
+    if (edenProfile(home(e), player).empty()) {
+        *err = "could not write Eden's profile";
         return false;
     }
     return true;
@@ -241,14 +324,34 @@ bool installed(const Emulator& e) {
 
 std::string home(const Emulator& e) { return storage::emulatorsDir() + "/" + e.core; }
 
-bool prepare(const Emulator& e, bool* missingKeys, std::string* err) {
+bool prepare(const Emulator& e, const std::string& saveDir, const std::string& player,
+             bool* missingKeys, std::string* err) {
     *missingKeys = false;
-    if (std::strcmp(e.core, "eden") == 0) return prepareEden(e, missingKeys, err);
+    storage::makeDirs(saveDir);
+    if (std::strcmp(e.core, "eden") == 0)
+        return prepareEden(e, saveDir, player, missingKeys, err);
     *err = std::string("nothing prepares ") + e.core;
     return false;
 }
 
-bool Run::start(const Emulator& e, const std::string& romPath, std::string* err) {
+std::string saveRoot(const Emulator& e, const std::string& saveDir) {
+    if (std::strcmp(e.core, "eden") == 0) {
+        const std::string data = readFile(home(e) + kEdenProfiles);
+        for (size_t at = 0x10; data.size() == kProfilesSize && at + kUserSize <= kProfilesSize;
+             at += kUserSize) {
+            bool zero = true;
+            for (size_t i = 0; i < 16; ++i)
+                if (data[at + i] != '\0') { zero = false; break; }
+            if (!zero)
+                return saveDir + "/user/save/0000000000000000/" +
+                       profileFolder(reinterpret_cast<const uint8_t*>(&data[at]));
+        }
+    }
+    return {};
+}
+
+bool Run::start(const Emulator& e, const std::string& romPath, const std::string& saveDir,
+                std::string* err) {
     emu_ = &e;
     ended_ = End::None;
     program_ = -1;
@@ -262,11 +365,11 @@ bool Run::start(const Emulator& e, const std::string& romPath, std::string* err)
     ::unlink(logPath_.c_str());
     logRead_ = 0;
 
-    // THE SANDBOX SEES TWO THINGS OF OURS: the emulator's own home, and the
-    // folder the game is in, read-only. Nothing else of the console's, and
-    // nothing of anybody's saves but what `home` holds. The game may be on an
-    // external drive, which is why its folder is named per launch rather than
-    // granted once.
+    // THE SANDBOX SEES THREE THINGS OF OURS: the emulator's own home, this
+    // person's save folder for this game, and the folder the game is in,
+    // read-only. Nothing else of the console's and nobody else's saves. The
+    // game may be on an external drive, which is why its folder is named per
+    // launch rather than granted once.
     std::string gameDir = romPath;
     if (const size_t slash = gameDir.find_last_of('/'); slash != std::string::npos)
         gameDir.erase(slash);
@@ -274,6 +377,7 @@ bool Run::start(const Emulator& e, const std::string& romPath, std::string* err)
         "flatpak", "run",
         "--cwd=" + dir,
         "--filesystem=" + dir,
+        "--filesystem=" + saveDir,
         "--filesystem=" + gameDir + ":ro",
         // gamescope's Xwayland. Eden also offers Wayland, and there it puts up
         // a warning box first; the console runs on X11 anyway (lessons,

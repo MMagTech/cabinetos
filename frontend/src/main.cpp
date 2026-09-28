@@ -582,6 +582,42 @@ static bool writeLocal(const std::string& path, const std::vector<uint8_t>& data
 // save slot is one thing, and shipping half of it would produce an archive that
 // restores a PARAM.SFO without its DATA.BIN. See GameSession for why the
 // baseline is needed at all.
+// A DIRECTORY SAVE COMES DOWN before the game starts: the newest zip RomM
+// holds under `tag` for this game, unpacked into `root`. PSP's memory stick
+// and a Switch game's save folder both travel this way.
+static void restoreDirSave(romm::Client& client, int romId, const char* tag,
+                           const std::string& root) {
+    std::vector<romm::Asset> saves;
+    std::string serr;
+    if (!client.fetchSaves(romId, &saves, &serr)) return;
+    const romm::Asset* newest = nullptr;
+    for (const auto& a : saves) {
+        if (a.emulator != tag) continue;
+        if (!newest || a.updatedAt > newest->updatedAt) newest = &a;
+    }
+    if (!newest) return;
+    std::vector<uint8_t> data = client.fetchAsset("saves", newest->id);
+    // SNIFFED, never taken from the name. The reference implementation's PSP
+    // saves are an Apple directory archive wearing an `.srm` extension, so the
+    // filename says nothing at all about what is inside. Anything that is not
+    // a zip is left alone rather than guessed at — better a missing save than
+    // a corrupted memory stick.
+    if (cab::looksLikeZip(data)) {
+        std::string uerr;
+        if (cab::unzipTree(data, root, &uerr)) {
+            std::fprintf(stderr, "[save] unpacked %s (%zu bytes) into %s\n",
+                         newest->fileName.c_str(), data.size(), root.c_str());
+        } else {
+            std::fprintf(stderr, "[save] %s would not unpack: %s\n",
+                         newest->fileName.c_str(), uerr.c_str());
+        }
+    } else if (!data.empty()) {
+        std::fprintf(stderr, "[save] %s is not a zip (%02x %02x %02x %02x) — left alone\n",
+                     newest->fileName.c_str(), data[0], data[1],
+                     data.size() > 2 ? data[2] : 0, data.size() > 3 ? data[3] : 0);
+    }
+}
+
 static void syncDirSave(GameSession& sess, Uploader& up) {
     std::map<std::string, cab::DirEntry> before;
     for (const cab::DirEntry& e : sess.dirAtLaunch) before[e.relPath] = e;
@@ -9301,15 +9337,25 @@ int main(int argc, char** argv) {
     // by itself (measured 2026-09-28), so this window stays as it is.
     auto startStandalone = [&](const cab::standalone::Emulator& emu) {
         cache::touch(launchJob.entryPath);
+        const storage::User& user = storage::currentUser();
+        const std::string saveDir = storage::savesDir(
+            user, launchJob.platformFsSlug, launchJob.romId, launchJob.coreName);
         bool missingKeys = false;
         std::string err;
-        if (!cab::standalone::prepare(emu, &missingKeys, &err)) {
+        if (!cab::standalone::prepare(emu, saveDir, user.name, &missingKeys, &err)) {
             if (!err.empty()) std::fprintf(stderr, "[standalone] %s\n", err.c_str());
             refuseLaunch(missingKeys ? "No " + launchJob.systemName + " keys on your server"
                                      : std::string("Couldn't start this game"));
             return;
         }
-        if (!standaloneRun.start(emu, launchJob.romPath, &err)) {
+        // THE SAVE COMES DOWN FIRST, as PSP's does: a zip of the game's save
+        // folder, unpacked where the emulator will look. The folder inside is
+        // named by the game's title ID, so the console never has to know it.
+        const std::string root = cab::standalone::saveRoot(emu, saveDir);
+        const char* tag = catalog::saveTag(launchJob.coreName.c_str());
+        if (!root.empty() && tag && liveClient.haveToken())
+            restoreDirSave(liveClient, launchJob.romId, tag, root);
+        if (!standaloneRun.start(emu, launchJob.romPath, saveDir, &err)) {
             std::fprintf(stderr, "[standalone] %s\n", err.c_str());
             refuseLaunch("Couldn't start this game");
             return;
@@ -9318,6 +9364,16 @@ int main(int argc, char** argv) {
         session.romId = launchJob.romId;
         session.title = launchJob.title;
         session.fsStem = launchJob.fsStem;
+        session.saveDir = saveDir;
+        if (tag) session.saveTag = tag;
+        // The baseline: what changes between here and the end is what the
+        // game saved. See GameSession.
+        if (!root.empty()) {
+            session.dirSaveRoot = root;
+            session.dirAtLaunch = cab::listTree(root);
+            std::fprintf(stderr, "[save] %s holds %zu file(s) at launch\n", root.c_str(),
+                         session.dirAtLaunch.size());
+        }
         standaloneRan = 0.0f;
         if (session.romId > 0) {
             playClock.begin(session.romId, playtime::wallMs());
@@ -9330,6 +9386,11 @@ int main(int argc, char** argv) {
     // load says so where the press came from; one that fell over says so in
     // the pill, because the person was playing, not choosing.
     auto finishStandalone = [&]() {
+        // AFTER THE EMULATOR HAS GONE, which is when everything it wrote is
+        // on the disk. Whatever changed is zipped and sent, crash or not: a
+        // game that saved and then fell over still saved.
+        if (!session.dirSaveRoot.empty()) syncDirSave(session, uploader);
+        session.dirSaveRoot.clear();
         if (playClock.active()) {
             playtime::close(storage::currentUser(), playClock.finish(playtime::wallMs()));
             uploader.sendPlay();
@@ -9484,43 +9545,8 @@ int main(int argc, char** argv) {
         // is a folder the game has already decided is not there.
         const char* dirSub = catalog::directorySaveRoot(launchJob.coreName.c_str());
         const char* launchTag = catalog::saveTag(launchJob.coreName.c_str());
-        if (dirSub && launchTag && liveClient.haveToken()) {
-            const std::string root = saveDir + "/" + dirSub;
-            std::vector<romm::Asset> saves;
-            std::string serr;
-            if (liveClient.fetchSaves(launchJob.romId, &saves, &serr)) {
-                const romm::Asset* newest = nullptr;
-                for (const auto& a : saves) {
-                    if (a.emulator != launchTag) continue;
-                    if (!newest || a.updatedAt > newest->updatedAt) newest = &a;
-                }
-                if (newest) {
-                    std::vector<uint8_t> data = liveClient.fetchAsset("saves", newest->id);
-                    // SNIFFED, never taken from the name. The reference
-                    // implementation's PSP saves are an Apple directory archive
-                    // wearing an `.srm` extension, so the filename says nothing
-                    // at all about what is inside. Anything that is not a zip is
-                    // left alone rather than guessed at — better a missing save
-                    // than a corrupted memory stick.
-                    if (cab::looksLikeZip(data)) {
-                        std::string uerr;
-                        if (cab::unzipTree(data, root, &uerr)) {
-                            std::fprintf(stderr, "[save] unpacked %s (%zu bytes) into %s\n",
-                                         newest->fileName.c_str(), data.size(), root.c_str());
-                        } else {
-                            std::fprintf(stderr, "[save] %s would not unpack: %s\n",
-                                         newest->fileName.c_str(), uerr.c_str());
-                        }
-                    } else if (!data.empty()) {
-                        std::fprintf(stderr,
-                                     "[save] %s is not a zip (%02x %02x %02x %02x) — left alone\n",
-                                     newest->fileName.c_str(), data[0], data[1],
-                                     data.size() > 2 ? data[2] : 0,
-                                     data.size() > 3 ? data[3] : 0);
-                    }
-                }
-            }
-        }
+        if (dirSub && launchTag && liveClient.haveToken())
+            restoreDirSave(liveClient, launchJob.romId, launchTag, saveDir + "/" + dirSub);
 
         // AND THE SAVES THE CORE WRITES AS A FILE, which is most of the ones
         // on a real server and none of the ones this console used to handle.

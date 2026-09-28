@@ -62,16 +62,30 @@ std::string home(const Emulator& e);
 
 // Everything the emulator needs before a game starts: the folders, its keys
 // out of `bios/` under the names it opens, and the settings the console
-// decides for it (fullscreen, no prompts, docked). False with `*missingKeys`
-// when the keys it cannot run without are not on the console; false with an
-// `*err` for anything else.
-bool prepare(const Emulator& e, bool* missingKeys, std::string* err);
+// decides for it (fullscreen, no prompts, docked).
+//
+// `saveDir` is this person's folder for this game (storage::savesDir), and
+// the emulator writes the game's save inside it, so two people and two games
+// never share one. `player` is the name a game shows for the person playing.
+//
+// False with `*missingKeys` when the keys it cannot run without are not on
+// the console; false with an `*err` for anything else.
+bool prepare(const Emulator& e, const std::string& saveDir, const std::string& player,
+             bool* missingKeys, std::string* err);
+
+// Where, inside `saveDir`, the game's own save folders are: the root of what
+// travels to RomM as a zip, whose top-level folders are one per game. For
+// Eden, `user/save/0000000000000000/<profile>`, each folder inside named by
+// the game's title ID, which is why no title ID is ever asked for.
+std::string saveRoot(const Emulator& e, const std::string& saveDir);
 
 // One running game.
 class Run {
 public:
-    // Starts `romPath` in `e`. False with a reason when it could not start.
-    bool start(const Emulator& e, const std::string& romPath, std::string* err);
+    // Starts `romPath` in `e`, able to write `saveDir`. False with a reason
+    // when it could not start.
+    bool start(const Emulator& e, const std::string& romPath, const std::string& saveDir,
+               std::string* err);
     // Once a frame. True while the game is still going; false once it has
     // ended, after which `ended()` says how.
     bool poll();
