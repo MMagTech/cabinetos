@@ -71,6 +71,7 @@
 #include "screens.h"
 #include "settings.h"
 #include "sound.h"
+#include "standalone.h"
 #include "setup.h"
 #include "accounts.h"
 #include "storage.h"
@@ -1738,53 +1739,67 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
 
     const storage::User& user = storage::currentUser();
 
-    // The core is loaded here, on the frame thread, before the worker starts:
-    // it is cheap, it is the thing that decides whether the archive gets
-    // opened, and a core that will not load should fail now rather than after
-    // three gigabytes have been fetched.
-    cab::Core& core = cab::Core::shared();
-    // Before load(), because retro_init is inside it and a core may read the
-    // directories there and never ask again. See Core::setDirectories.
-    //
-    // THE SAVE DIRECTORY IS THIS PERSON'S AND THIS GAME'S. Every core on the
-    // machine used to share one, which is why attributing a PSP save folder to
-    // the game that wrote it needed a timestamp comparison rather than a path.
-    const std::string saveDir =
-        storage::savesDir(user, game.platformFsSlug, game.id, cov.core);
-    storage::makeDirs(saveDir);
-    core.setDirectories(storage::biosDir(), saveDir);
-    // Also before load(), and for the same reason. This was reaching only the
-    // --core-options audit until PPSSPP needed the first real override, which
-    // meant the override table was being PRINTED rather than applied: every
-    // core played on its declared defaults and the audit agreed with itself.
-    // Invisible while the table was empty, wrong the moment it was not.
-    core.setOptionOverrides(catalog::optionOverrides(job.coreName));
+    // AN EMULATOR THAT IS ITS OWN APPLICATION LOADS NOTHING HERE. There is no
+    // core to open and nothing in this process to hand directories to; the
+    // game file is fetched exactly as for any other system, and pumpLaunch
+    // starts the program once it is on the disk. docs/PROJECT.md, open
+    // question 32.
+    const cab::standalone::Emulator* emu = cab::standalone::find(cov.core);
+    std::string validExts;
+    bool blockExtract = false;
+    if (emu) {
+        // Never unpacked: the emulator opens the file as it came.
+        validExts = emu->extensions;
+        blockExtract = true;
+    } else {
+        // The core is loaded here, on the frame thread, before the worker starts:
+        // it is cheap, it is the thing that decides whether the archive gets
+        // opened, and a core that will not load should fail now rather than after
+        // three gigabytes have been fetched.
+        cab::Core& core = cab::Core::shared();
+        // Before load(), because retro_init is inside it and a core may read the
+        // directories there and never ask again. See Core::setDirectories.
+        //
+        // THE SAVE DIRECTORY IS THIS PERSON'S AND THIS GAME'S. Every core on the
+        // machine used to share one, which is why attributing a PSP save folder to
+        // the game that wrote it needed a timestamp comparison rather than a path.
+        const std::string saveDir =
+            storage::savesDir(user, game.platformFsSlug, game.id, cov.core);
+        storage::makeDirs(saveDir);
+        core.setDirectories(storage::biosDir(), saveDir);
+        // Also before load(), and for the same reason. This was reaching only the
+        // --core-options audit until PPSSPP needed the first real override, which
+        // meant the override table was being PRINTED rather than applied: every
+        // core played on its declared defaults and the audit agreed with itself.
+        // Invisible while the table was empty, wrong the moment it was not.
+        core.setOptionOverrides(catalog::optionOverrides(job.coreName));
 
-    // PLAYSTATION 2 NEEDS THREE THINGS NO LIBRETRO CORE DOES, and the second
-    // is the one that matters most.
-    //
-    // PCSX2 refuses to start without its own resources folder — its game
-    // database, fonts and GS shaders — rather than degrading, so it ships with
-    // the emulator the way PPSSPP's system files already do.
-    //
-    // The memory card is NOT named here. Core::loadGame names it from the rom
-    // by the same rule catalog::saveFiles uses, so the existing save machinery
-    // — restore before launch, capture after, refuse an unformatted card, file
-    // it on the server under the name Cabinet's Mac uses — works on it
-    // unchanged.
-    if (cov.core && std::string(cov.core) == "pcsx2") {
-        core.setPs2(storage::imageAssetsDir() + "/pcsx2/resources", gPs2Upscale, gPs2Anisotropy);
-    }
+        // PLAYSTATION 2 NEEDS THREE THINGS NO LIBRETRO CORE DOES, and the second
+        // is the one that matters most.
+        //
+        // PCSX2 refuses to start without its own resources folder — its game
+        // database, fonts and GS shaders — rather than degrading, so it ships with
+        // the emulator the way PPSSPP's system files already do.
+        //
+        // The memory card is NOT named here. Core::loadGame names it from the rom
+        // by the same rule catalog::saveFiles uses, so the existing save machinery
+        // — restore before launch, capture after, refuse an unformatted card, file
+        // it on the server under the name Cabinet's Mac uses — works on it
+        // unchanged.
+        if (cov.core && std::string(cov.core) == "pcsx2") {
+            core.setPs2(storage::imageAssetsDir() + "/pcsx2/resources", gPs2Upscale, gPs2Anisotropy);
+        }
 
-    if (!core.load(job.corePath)) {
-        std::fprintf(stderr, "[launch] core %s: %s\n", job.coreName.c_str(),
-                     core.error().c_str());
-        *err = "Couldn't start this game";
-        job.stage = LaunchJob::Stage::Idle;
-        return false;
+        if (!core.load(job.corePath)) {
+            std::fprintf(stderr, "[launch] core %s: %s\n", job.coreName.c_str(),
+                         core.error().c_str());
+            *err = "Couldn't start this game";
+            job.stage = LaunchJob::Stage::Idle;
+            return false;
+        }
+        validExts = core.validExtensions();
+        blockExtract = core.blockExtract();
     }
-    const std::string validExts = core.validExtensions();
-    const bool blockExtract = core.blockExtract();
 
     // THE KEEP IS RECORDED BEFORE THE FIRST BYTE MOVES, for two reasons that
     // both matter. It makes the in-flight download safe from the eviction its
@@ -2385,7 +2400,7 @@ static Library loadLibrary(romm::Client& client) {
             // The tile gets the short form, which is all it has room for. The
             // log keeps the full sentence, because a log is read by somebody
             // trying to find out why.
-            tile.detail = catalog::shortReason(cov.support);
+            tile.detail = catalog::shortReason(cov);
             std::fprintf(stderr, "[library] %s (%d games) — %s\n", tile.title.c_str(),
                          p.romCount, cov.reason ? cov.reason : tile.detail.c_str());
             lib.platformTiles.push_back(std::move(tile));
@@ -3719,6 +3734,10 @@ int main(int argc, char** argv) {
     // can be proved on a machine with nothing attached.
     bool overlayExitDemo = false;
     int overlayExitAfter = 120;   // frames of play before the overlay quits it
+    // --standalone-exit N: an emulator that is its own application is closed
+    // by the console after N seconds, as the pause menu's Exit will close it.
+    // The leave-a-game path for those, with nobody at the television.
+    float standaloneExitAfter = 0.0f;
     float autoLaunchAfter = 0.0f;
     for (int i = 1; i < argc; ++i) {
         if (SDL_strcmp(argv[i], "--screenshot") == 0 && i + 1 < argc) {
@@ -3861,6 +3880,8 @@ int main(int argc, char** argv) {
             autoUnkeepId = SDL_atoi(argv[++i]);
         } else if (SDL_strcmp(argv[i], "--then") == 0 && i + 1 < argc) {
             thenLaunchId = SDL_atoi(argv[++i]);
+        } else if (SDL_strcmp(argv[i], "--standalone-exit") == 0 && i + 1 < argc) {
+            standaloneExitAfter = static_cast<float>(SDL_atof(argv[++i]));
         } else if (SDL_strcmp(argv[i], "--overlay-exit") == 0) {
             overlayExitDemo = true;
             // Optional frame count: --overlay-exit 2000 plays for 2000 frames
@@ -4324,6 +4345,13 @@ int main(int argc, char** argv) {
     // constraint on the design and not an artefact of the test.
     if (overlayTest) SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "x11");
 
+    // CONTROLLERS REACH THIS PROCESS EVEN WHEN ANOTHER WINDOW IS IN FRONT. An
+    // emulator that is its own application has the television and the focus,
+    // and this process still has to see the pad: to count time played, and to
+    // open the pause menu over the game. SDL drops those events by default
+    // once the window loses focus. Nothing else changes, because this window
+    // has the focus whenever anything of the console's is on the screen.
+    SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD | SDL_INIT_AUDIO)) {
         std::fprintf(stderr, "[frontend] SDL_Init failed: %s\n", SDL_GetError());
         return 1;
@@ -5962,6 +5990,11 @@ int main(int argc, char** argv) {
     // opened, and the worker puts what comes out where the core can open it.
     LaunchJob launchJob;
     GameSession session;
+    // A game in an emulator that is its own application (standalone.h). While
+    // it is active the emulator has the television and this loop only watches
+    // it: nothing is drawn and nothing reaches the screens here.
+    cab::standalone::Run standaloneRun;
+    float standaloneRan = 0.0f;
     // One worker for every upload. Started here and drained on the way out, so
     // quitting does not discard a save someone has already made.
     Uploader uploader;
@@ -6400,6 +6433,8 @@ int main(int argc, char** argv) {
     // everything is just thrown at you". A capture run opens it at once.
     int pendingDetail = -1;
     bool pendingDetailBack = false;
+    // What that screen should say once it is open. See refuseLaunch.
+    std::string pendingDetailNotice;
     auto openDetailSoon = [&](int cardIndex) {
         if (shotMode) openDetail(cardIndex);
         else pendingDetail = cardIndex;
@@ -9233,6 +9268,92 @@ int main(int argc, char** argv) {
         arriveLifting = true;
     };
 
+    // A LAUNCH THAT CANNOT GO AHEAD says why on the game's own screen, the
+    // way a core that will not load does below: opened if the press came from
+    // somewhere with nowhere to put a message, and the curtain lifted onto it.
+    //
+    // THE MESSAGE WAITS FOR THE SCREEN when the screen is opened a frame later:
+    // DetailScreen::open clears its notice, so a notice set before the open
+    // was wiped by it, and a refusal from Home arrived on the game's screen
+    // saying nothing. Found 2026-09-28 by a Switch game that would not load,
+    // launched from Home; the core-failure path had the same order.
+    auto refuseLaunch = [&](const std::string& why) {
+        bool deferred = false;
+        if (here() != Screen::Detail || detailScreen.game().romId != launchJob.romId) {
+            for (size_t i = 0; i < cards.size(); ++i) {
+                if (cards[i].id == launchJob.romId) {
+                    openDetailSoon(static_cast<int>(i));
+                    deferred = pendingDetail >= 0;
+                    break;
+                }
+            }
+        }
+        if (deferred) pendingDetailNotice = why;
+        else detailScreen.setNotice(why);
+        sound::play(sound::Cue::Edge);
+        curtain.retarget(0.0f, kCurtainUp);
+    };
+
+    // THE GAME IS ON THE DISK AND ITS EMULATOR IS ITS OWN APPLICATION: start
+    // it and let it have the television. The curtain is already down, so the
+    // moment between here and the emulator's first picture is black, which is
+    // what every launch looks like. gamescope gives the new window the screen
+    // by itself (measured 2026-09-28), so this window stays as it is.
+    auto startStandalone = [&](const cab::standalone::Emulator& emu) {
+        cache::touch(launchJob.entryPath);
+        bool missingKeys = false;
+        std::string err;
+        if (!cab::standalone::prepare(emu, &missingKeys, &err)) {
+            if (!err.empty()) std::fprintf(stderr, "[standalone] %s\n", err.c_str());
+            refuseLaunch(missingKeys ? "No " + launchJob.systemName + " keys on your server"
+                                     : std::string("Couldn't start this game"));
+            return;
+        }
+        if (!standaloneRun.start(emu, launchJob.romPath, &err)) {
+            std::fprintf(stderr, "[standalone] %s\n", err.c_str());
+            refuseLaunch("Couldn't start this game");
+            return;
+        }
+        session = GameSession{};
+        session.romId = launchJob.romId;
+        session.title = launchJob.title;
+        session.fsStem = launchJob.fsStem;
+        standaloneRan = 0.0f;
+        if (session.romId > 0) {
+            playClock.begin(session.romId, playtime::wallMs());
+            playCheckpointClock = 0.0f;
+        }
+    };
+
+    // AND WHEN IT ENDS, however it ends, the console is where it was: Home,
+    // or the game's screen, under the curtain lifting. A game that could not
+    // load says so where the press came from; one that fell over says so in
+    // the pill, because the person was playing, not choosing.
+    auto finishStandalone = [&]() {
+        if (playClock.active()) {
+            playtime::close(storage::currentUser(), playClock.finish(playtime::wallMs()));
+            uploader.sendPlay();
+        }
+        curtain.from = curtain.to = 1.0f;
+        curtain.elapsed = curtain.duration;
+        curtain.retarget(0.0f, kCurtainUp);
+        // Nothing reached this loop while the emulator had the screen, so the
+        // idle timers think nobody has touched anything since the launch.
+        idleWatch.input(clockSeconds());
+        switch (standaloneRun.ended()) {
+            case cab::standalone::Run::End::CouldNotLoad:
+                refuseLaunch("Couldn't start this game");
+                break;
+            case cab::standalone::Run::End::Crashed:
+                menuNotice.say("The game closed unexpectedly", Tone::Problem);
+                break;
+            default:
+                break;
+        }
+        detailStates.stale = true;
+        std::fprintf(stderr, "[standalone] back to Home\n");
+    };
+
     auto pumpLaunch = [&]() {
         const LaunchJob::Stage st = launchJob.stage.load();
         if (st == LaunchJob::Stage::Failed) {
@@ -9340,6 +9461,12 @@ int main(int argc, char** argv) {
             return;
         }
 
+        if (const cab::standalone::Emulator* emu =
+                cab::standalone::find(launchJob.coreName)) {
+            startStandalone(*emu);
+            return;
+        }
+
         cab::Core& core = cab::Core::shared();
         // THIS PERSON'S SAVES, FOR THIS GAME, FROM THIS CORE. It is also the
         // directory the core itself is handed, so a Sega CD's .brm and a PSP's
@@ -9443,24 +9570,10 @@ int main(int argc, char** argv) {
             // If the press came from somewhere with nowhere to put a message —
             // Home's Resume card, for instance — the console goes to the
             // game's own screen and says it there, rather than inventing a
-            // second place for refusals to live.
-            if (here() != Screen::Detail ||
-                detailScreen.game().romId != launchJob.romId) {
-                for (size_t i = 0; i < cards.size(); ++i) {
-                    if (cards[i].id == launchJob.romId) {
-                        openDetailSoon(static_cast<int>(i));
-                        break;
-                    }
-                }
-            }
-            detailScreen.setNotice(
-                launchJob.biosMissing.load()
-                    ? "No " + launchJob.systemName + " BIOS on your server"
-                    : std::string("Couldn't start this game"));
-            sound::play(sound::Cue::Edge);
-            // The curtain came down for a game that is not going to start, so
-            // it goes straight back up onto the screen that says why.
-            curtain.retarget(0.0f, kCurtainUp);
+            // second place for refusals to live. See refuseLaunch.
+            refuseLaunch(launchJob.biosMissing.load()
+                             ? "No " + launchJob.systemName + " BIOS on your server"
+                             : std::string("Couldn't start this game"));
             return;
         }
         // Played now, so it is the LAST thing eviction should take rather than
@@ -10035,6 +10148,15 @@ int main(int argc, char** argv) {
     while (running) {
         SDL_Event e;
         while (SDL_PollEvent(&e)) {
+            // THE EMULATOR HAS THE TELEVISION AND THE CONTROLLERS. Nothing here
+            // may act on a press it also sees, or Home would be navigated
+            // blind behind the game; a press only says somebody is playing.
+            // A request to quit still goes through.
+            if (standaloneRun.active() && e.type != SDL_EVENT_QUIT) {
+                if (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN || e.type == SDL_EVENT_KEY_DOWN)
+                    playClock.touch();
+                continue;
+            }
             const InputOwner owner = inputOwner();
             // ANY TOUCH WAKES THE SCREEN, AND ON A DARK SCREEN THAT IS ALL IT
             // DOES. The press that lights a dimmed or blank Home is swallowed,
@@ -10536,6 +10658,9 @@ int main(int argc, char** argv) {
                 std::fprintf(stderr, "[shutdown] the machine is going down%s\n",
                              playing ? "; leaving the game first" : "");
                 if (playing && cab::Core::shared().running()) finishExit();
+                // An emulator of its own is asked to close as its own window
+                // would, which is when it writes what it has not.
+                standaloneRun.stop();
                 releasePending = true;
                 releaseWaitStart = SDL_GetTicksNS();
                 break;
@@ -10604,6 +10729,26 @@ int main(int argc, char** argv) {
                 restPending = false;
                 power::act(power::Action::Rest);
             }
+        }
+
+        // WHILE AN EMULATOR OF ITS OWN HAS THE SCREEN, this loop watches it and
+        // does nothing else: no idle dimming over a game this process cannot
+        // see, nothing drawn, and a short sleep so a watcher does not take a
+        // core from the game. Play time counts as it does for any game.
+        if (standaloneRun.active()) {
+            playClock.tick(dt, true);
+            if (playClock.active() && (playCheckpointClock += dt) >= 60.0f) {
+                playCheckpointClock = 0.0f;
+                playtime::checkpoint(storage::currentUser(), playClock.now(playtime::wallMs()));
+            }
+            if (standaloneExitAfter > 0.0f && !standaloneRun.stopping() &&
+                (standaloneRan += dt) >= standaloneExitAfter) {
+                std::fprintf(stderr, "[standalone] --standalone-exit: closing it\n");
+                standaloneRun.stop();
+            }
+            if (!standaloneRun.poll()) finishStandalone();
+            SDL_Delay(16);
+            continue;
         }
 
         // Idle, once a frame. The timers only ever deepen here; input() is
@@ -13126,6 +13271,9 @@ int main(int argc, char** argv) {
             }
             if (pendingDetail >= 0) openDetail(pendingDetail);
             else if (stack.size() > 1) stack.pop_back();
+            if (pendingDetail >= 0 && !pendingDetailNotice.empty())
+                detailScreen.setNotice(pendingDetailNotice);
+            pendingDetailNotice.clear();
             pendingDetail = -1;
             pendingDetailBack = false;
         }
@@ -13192,6 +13340,13 @@ int main(int argc, char** argv) {
         finishExit();
     }
 
+    // An emulator of its own outlives this process unless it is closed: it has
+    // a session of its own. Asked, then made, inside its grace period.
+    if (standaloneRun.active()) {
+        standaloneRun.stop();
+        while (standaloneRun.poll()) SDL_Delay(50);
+        finishStandalone();
+    }
     if (playing) {
         cab::Core& core = cab::Core::shared();
         const double realtime = core.audioFramesTotal() / core.avInfo().sampleRate;
