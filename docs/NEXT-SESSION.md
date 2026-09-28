@@ -20,15 +20,16 @@ lessons file named on the item you pick up. New here? `docs/WORKING.md`
 
 ## Next, in order
 
-1. **#150** Performance profile during games. Measure PS2 first.
-   *Lessons: emulators, image-and-ci.*
-2. **#151** Dreamcast crash after a big arcade state. Not reproduced.
-   *Lessons: emulators, testing.*
-3. **#63 / #73** Picture quality. *Lessons: emulators, testing.*
-4. **#88** Offline play. *Lessons: frontend.*
-5. The installer, boot splash, and power button. *Lessons: image-and-ci.*
-6. The first-hour walk-through with the real installer. *Lessons: testing.*
+**The goal is the first release. The order is `docs/ROADMAP.md`, one numbered
+milestone per step, every open issue in one.** Finish a milestone before
+starting the next; file anything else found on the way into After first
+release unless it blocks the release.
 
-Also owed: Lumines (PSP) loading an old state; four pads at once (#115).
-Parked: #154, PCSX2's `patches.zip` (its per-game fixes; the image has none).
-MMagTech wants it supported later, not now.
+1. **#151** Dreamcast crash after a big arcade state. Not reproduced.
+   *Lessons: emulators, testing.*
+2. **#150** Full CPU speed during games. Measure PS2 first.
+   *Lessons: emulators, image-and-ci.*
+3. Then milestone 2, **New systems** (#138): break it into one issue per
+   system first.
+
+Also owed: Lumines (PSP) loading an old state.

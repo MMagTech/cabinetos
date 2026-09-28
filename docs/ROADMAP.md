@@ -1,56 +1,49 @@
 # CabinetOS roadmap
 
-What comes next, in order. Set by MMagTech on 2026-09-24. Each step is a GitHub
-milestone; its issues are the work, and a milestone gets its issues when we
-reach it, the way Settings did.
+**The goal is the first release.** The order below was set with MMagTech on
+2026-09-28, and it is the order work is done in. Each step is a numbered GitHub
+milestone holding every open issue for it; anything not needed for the first
+release is in **After first release**. A new issue goes into a milestone when
+it is filed. Anything found along the way that is not a release blocker goes
+into After first release rather than jumping the queue.
 
 Milestones: https://github.com/MMagTech/cabinetos/milestones
 
-The detail and reasoning behind any step lives in `docs/PROJECT.md`; the
-state of play for the next session is in `docs/NEXT-SESSION.md`.
+The reasoning behind any step lives in `docs/PROJECT.md`; what the next
+session picks up is `docs/NEXT-SESSION.md`.
 
 ## In order
 
-1. **Settings.** Decided in discussion on 2026-09-24; the final answers are in
-   `docs/SETTINGS.md`, one issue per feature (#57 to #73). The layout is built
-   and being judged on the television (PR #56, not merged until MMagTech says
-   it is right).
-2. **UI polish.** The rest of the interface: the harsh cut from boot to Home,
-   and the pass over on-screen text. Queued with it, not now: the Library
-   showing only systems the console can play, as Cabinet's tvOS app does.
-3. **Emulators.** The cores still to bring in, and fixing the ones already in:
-   N64 textures (#82), GameCube audio (#83), NES audio sync (#84), Dreamcast
-   on the A9 (#85, confirm first), N64 save states (#86), PSP's exit crash and
-   state (#87), finishing the per-system options (#89), and a warning when a
-   BIOS is missing (#90).
-4. **In-game features.** From a brainstorm on 2026-09-24: a modifier hotkey
-   layer (#76), fast forward (#77), rewind for libretro cores (#78),
-   screenshots uploaded to RomM (#79), and a save state undo (#80). Each issue
-   carries the decisions and the questions to settle when it is built. After
-   the emulator work because they touch every emulator; before the TV tests so those
-   test them too.
-5. **Testing at the TV.** Once the UI is finished and every core is in: the
-   pad tests at the television (account switching, save and load state,
-   Dreamcast and PSP states, the black-screen fix, the boot and covers), and
-   MMagTech's check that states made on CabinetOS load in the Cabinet apps.
-   Not earlier.
-6. **Installer ready to ship.** What a real person hits installing CabinetOS,
-   found testing it on 2026-09-19, and the fixes agreed then. Last, because it
-   is what is fixed before CabinetOS is handed to anyone else. Not yet broken
-   into issues.
+1. **Emulators.** PS2 on a fresh install (#153), the Dreamcast crash after a
+   big arcade state (#151), full CPU speed during games (#150, measured first).
+2. **New systems** (#138): Switch, PS3 and Xbox, then Wii. Before picture
+   quality, because that is one setting across every system; broken into one
+   issue per system when started.
+3. **Settings: picture.** Picture quality (#63), the pause menu's per-system
+   picture and controller options (#73, which also own the PS1 DualShock and
+   the N64 Rumble Pak), and shaders and CRT looks (#122, to be designed).
+4. **Offline play.** Kept games play with no server (#88).
+5. **RetroAchievements** (#74). Each account signs in with its own login.
+   After offline, because achievements earned offline must wait and send.
+6. **UI polish.** The wording pass and notification length (#110), the
+   Library showing only systems this console can play (#117), storage the
+   console cannot see (#133), sleep that really works on this hardware
+   (#132), the SELinux denials at boot (#119), and two small doc chores (#81,
+   #118).
+7. **Ready to ship.** The installer (#105 to #108, #136), a release image
+   without the development shell (#134), signed images (#135), CabinetOS named
+   in the system's version info (#137), licences checked and shipped (#120).
+8. **Testing at the TV.** The release gate: covers and art on the TV (#112), a
+   PS2 save reaching the server (#113), Cabinet on Apple TV loading our states
+   (#114), players 3 and 4 (#115), the owed hardware tests (#140), and last,
+   the first-hour walk-through as a new user on the real installer (#111).
 
-Steps 4 and 6 were placed by Claude on 2026-09-24 at MMagTech's word
-("whatever you feel best"); move them if that changes.
+**After first release** (MMagTech, 2026-09-28): a pad waking the console
+(#121), other apps' saves (#124), a test-builds switch (#139), PCSX2's
+per-game fixes (#154).
 
-## Not placed yet
-
-- **Offline: kept games play with no server** (#88). Designed in PROJECT.md
-  open questions 22 and 29, not built. Big enough to be its own step.
-
-## Later, not scheduled
-
-Issues labelled `later`: RetroAchievements sign-in per account (#74) and a
-background colour per account (#75).
+Done: Settings (#57 to #72, except #63), the emulator block (#82 to #90), the
+in-game features (#76 to #80).
 
 ## Decided against
 
