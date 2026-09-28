@@ -14,6 +14,10 @@ MMagTech wants it done. This changes rarely. What to work on next is
   final commit to `testing`, have MMagTech judge it on the A9, merge on his
   explicit go. Anything committed after the testing push, docs included, makes
   main build instead. Write `NEXT-SESSION.md` inside the work's own branch.
+- **Every session starts with only `main` and `testing`.** Delete a branch
+  once it merges, on GitHub and locally. The one exception is PR #42's
+  `base-update/44.20260921`, left open until after the first release
+  (MMagTech).
 - **Check CI yourself** (`gh run list --branch <b>`); never ask him to look at
   Actions. "No checks reported" can be a race, or an event that never fired.
 - **PR bodies** lead with what the change does and why, say "Closes #N", and
