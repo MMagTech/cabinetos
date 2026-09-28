@@ -13912,12 +13912,57 @@ taken from the research summary:
 - **C. Pause freezes the whole emulator process** and Resume thaws it, the same
   for all four emulators. To be judged on the television; Eden's own pause key
   is the fallback if freezing misbehaves.
-- **D. RomM goes to 5.3**, and the console uses RomM's `title_id` to find a
-  game's save folder (#160). MMagTech upgrades the server.
+- ~~**D. RomM goes to 5.3**, and the console uses RomM's `title_id` to find a
+  game's save folder (#160).~~ **REVERSED THE SAME DAY; see below.** The server
+  is on 5.3.1 and stays there.
+- **D, as decided: saves travel as PSP's do, and need no title ID at all.**
+  After a session the console zips the save folder the game changed, rooted at
+  the folder itself (`<title ID>/...`), exactly as `dirsave.h` does for PSP's
+  `SAVEDATA`. On another console the zip unpacks into the profile's save
+  directory, and the folder name inside it puts it in the right place.
+  MMagTech: *"i dont want to be reliant of romm for this."*
+
+#### Why RomM's title IDs were dropped: they are wrong, silently
+
+Measured 2026-09-28 after a *Recalculate hashes* scan of Switch on RomM 5.3.1
+(the scan that fills `title_id` without wiping matches; a Quick scan never
+reads it). **2 of 104 games got an ID, and both are wrong:**
+
+| Game | RomM stored | The file's own ticket |
+|---|---|---|
+| RADIANT SILVERGUN | `01CD8D0CD59FA000` | `0100F61010F22000` |
+| Rolling Gunner | `01A98C1284916000` | `010076200CA16000` |
+
+Two faults, both upstream:
+
+1. **RomM never passes `prod.keys` to its reader.** `sigil.extract(path,
+   platform=..., filename_fallback=False)` in
+   `backend/adapters/services/sigil.py` gives no key, and sigil's README says a
+   retail NSP needs one. The result is `NEEDS_KEY`, logged at debug level only,
+   so 102 games failed with nothing said.
+2. **sigil's no-key fallback matches half a file name.** For dumps whose NCAs
+   are named by title ID, `scan_string_table_for_nca_title`
+   (`src/switch_nsp.c`) looks for 16 hex characters, `.nca`, starting `01`,
+   at ANY offset in the name table. A retail NCA is named by a 32-hex content
+   ID, so the second half can match: `db705e4d85703803`**`01cd8d0cd59fbf16`**`.nca`
+   became `01CD8D0CD59FBF16`, which RomM rounded to a base ID. Any game with an
+   NCA whose 17th and 18th characters are `01` is misread, about 2 in 100,
+   and a wrong ID looks exactly like a right one.
+
+The fixes are small (pass the keys RomM already holds as Switch firmware;
+anchor the match to the start of a 16-hex name), and filing them is MMagTech's
+call. Nothing here waits on them.
+
+**Atari 7800 got no IDs and never will:** RomM reads title IDs for fourteen
+platforms only (PSX, PS2, PS3, PSP, Vita, Switch, Switch 2, 3DS, Wii, Wii U,
+GameCube, Dreamcast, Xbox, Xbox 360).
 
 **The pause menu is Resume and Exit to Home.** Switch fails question 25's rule
 (states tied to the emulator build, nothing to travel to), so no save states.
-**Screenshot**, which #169 lists, is still to confirm.
+**Screenshot is in**, since it is small: #79 already saves, names and uploads
+one, and only the picture's source changes, to a gamescope grab of the game
+plane that the glass backdrop needs anyway (question 24). Dropped only if the
+grab misbehaves on the television.
 
 #### Still to find out by building (#169)
 
