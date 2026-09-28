@@ -11,8 +11,14 @@
 // Waits WAIT seconds, taps the button TAPS times, EVERY seconds apart, and
 // stays a controller for five more seconds before it goes. `east` (Xbox B) is
 // the default because that position is A on a Switch.
+//
+// It also takes rumble, as a real pad does, and prints each one it is asked to
+// play: `rumble strong=... weak=... ms=...`. That is the other half of the
+// path, the game's vibration coming back to the pad in somebody's hand.
 
 #include <fcntl.h>
+#include <poll.h>
+#include <errno.h>
 #include <linux/input.h>
 #include <linux/uinput.h>
 #include <stdio.h>
@@ -30,6 +36,46 @@ static void emit(int fd, int type, int code, int value) {
     if (write(fd, &ev, sizeof ev) < 0) perror("write");
 }
 
+static struct ff_effect effects[16];
+
+// Waits `ms`, answering rumble uploads and printing every rumble played.
+static void service(int fd, int ms) {
+    struct pollfd p = {fd, POLLIN, 0};
+    while (ms > 0) {
+        const int step = ms < 50 ? ms : 50;
+        if (poll(&p, 1, step) > 0) {
+            struct input_event ev;
+            while (read(fd, &ev, sizeof ev) == (ssize_t)sizeof ev) {
+                if (ev.type == EV_UINPUT && ev.code == UI_FF_UPLOAD) {
+                    struct uinput_ff_upload up;
+                    memset(&up, 0, sizeof up);
+                    up.request_id = ev.value;
+                    if (ioctl(fd, UI_BEGIN_FF_UPLOAD, &up) == 0) {
+                        if (up.effect.id >= 0 && up.effect.id < 16) effects[up.effect.id] = up.effect;
+                        up.retval = 0;
+                        ioctl(fd, UI_END_FF_UPLOAD, &up);
+                    }
+                } else if (ev.type == EV_UINPUT && ev.code == UI_FF_ERASE) {
+                    struct uinput_ff_erase er;
+                    memset(&er, 0, sizeof er);
+                    er.request_id = ev.value;
+                    if (ioctl(fd, UI_BEGIN_FF_ERASE, &er) == 0) {
+                        er.retval = 0;
+                        ioctl(fd, UI_END_FF_ERASE, &er);
+                    }
+                } else if (ev.type == EV_FF && ev.code < 16) {
+                    const struct ff_effect* e = &effects[ev.code];
+                    printf("rumble %s strong=%u weak=%u ms=%u\n", ev.value ? "play" : "stop",
+                           e->u.rumble.strong_magnitude, e->u.rumble.weak_magnitude,
+                           e->replay.length);
+                    fflush(stdout);
+                }
+            }
+        }
+        ms -= step;
+    }
+}
+
 int main(int argc, char** argv) {
     if (argc < 4) {
         fprintf(stderr, "usage: %s WAIT TAPS EVERY [east|south|start]\n", argv[0]);
@@ -42,13 +88,15 @@ int main(int argc, char** argv) {
     if (argc > 4 && strcmp(argv[4], "south") == 0) code = BTN_SOUTH;
     if (argc > 4 && strcmp(argv[4], "start") == 0) code = BTN_START;
 
-    const int fd = open("/dev/uinput", O_WRONLY | O_NONBLOCK);
+    const int fd = open("/dev/uinput", O_RDWR | O_NONBLOCK);
     if (fd < 0) { perror("/dev/uinput"); return 1; }
     const int keys[] = {BTN_SOUTH, BTN_EAST, BTN_NORTH, BTN_WEST, BTN_TL, BTN_TR,
                         BTN_SELECT, BTN_START, BTN_MODE, BTN_THUMBL, BTN_THUMBR};
     const int axes[] = {ABS_X, ABS_Y, ABS_Z, ABS_RX, ABS_RY, ABS_RZ, ABS_HAT0X, ABS_HAT0Y};
     ioctl(fd, UI_SET_EVBIT, EV_KEY);
     ioctl(fd, UI_SET_EVBIT, EV_ABS);
+    ioctl(fd, UI_SET_EVBIT, EV_FF);
+    ioctl(fd, UI_SET_FFBIT, FF_RUMBLE);
     for (size_t i = 0; i < sizeof keys / sizeof keys[0]; ++i) ioctl(fd, UI_SET_KEYBIT, keys[i]);
     for (size_t i = 0; i < sizeof axes / sizeof axes[0]; ++i) ioctl(fd, UI_SET_ABSBIT, axes[i]);
 
@@ -59,6 +107,7 @@ int main(int argc, char** argv) {
     setup.id.product = 0x028e;
     setup.id.version = 0x0114;
     snprintf(setup.name, sizeof setup.name, "Microsoft X-Box 360 pad");
+    setup.ff_effects_max = 16;
     ioctl(fd, UI_DEV_SETUP, &setup);
     for (size_t i = 0; i < sizeof axes / sizeof axes[0]; ++i) {
         struct uinput_abs_setup a;
@@ -74,18 +123,18 @@ int main(int argc, char** argv) {
     printf("fake pad up\n");
     fflush(stdout);
 
-    usleep((useconds_t)(wait * 1e6));
+    service(fd, (int)(wait * 1000));
     for (int i = 0; i < taps; ++i) {
         emit(fd, EV_KEY, code, 1);
         emit(fd, EV_SYN, SYN_REPORT, 0);
-        usleep(120000);
+        service(fd, 120);
         emit(fd, EV_KEY, code, 0);
         emit(fd, EV_SYN, SYN_REPORT, 0);
         printf("tap %d\n", i + 1);
         fflush(stdout);
-        usleep((useconds_t)(every * 1e6));
+        service(fd, (int)(every * 1000));
     }
-    sleep(5);
+    service(fd, 5000);
     ioctl(fd, UI_DEV_DESTROY);
     close(fd);
     return 0;

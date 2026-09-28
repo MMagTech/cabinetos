@@ -1,5 +1,7 @@
 #include "vpad.h"
 
+#include "rumble.h"
+
 #include <fcntl.h>
 #include <linux/input.h>
 #include <linux/uinput.h>
@@ -55,6 +57,19 @@ constexpr Abs kAxes[] = {
 };
 
 int gFd[kMaxPlayers] = {-1, -1, -1, -1};
+
+// What the emulator uploaded, per pad: a rumble's two strengths and length.
+// SDL uploads one effect per pad and replays it; sixteen is plenty.
+constexpr int kEffects = 16;
+struct Effect {
+    bool used = false;
+    uint16_t strong = 0, weak = 0;
+    uint16_t lengthMs = 0;
+};
+Effect gEffects[kMaxPlayers][kEffects];
+// The rumble playing on each pad, and when it ends (0: until stopped).
+int gPlaying[kMaxPlayers] = {-1, -1, -1, -1};
+int64_t gEndsAt[kMaxPlayers] = {};
 int gCount = 0;
 // The d-pad is four buttons to SDL and one hat to evdev, so each pad's four
 // are remembered to work out the hat.
@@ -74,12 +89,14 @@ void emit(int fd, int type, int code, int value) {
 void sync(int fd) { emit(fd, EV_SYN, SYN_REPORT, 0); }
 
 int create(int index) {
-    const int fd = ::open("/dev/uinput", O_WRONLY | O_NONBLOCK | O_CLOEXEC);
+    // Read as well as written: force-feedback requests come back on it.
+    const int fd = ::open("/dev/uinput", O_RDWR | O_NONBLOCK | O_CLOEXEC);
     if (fd < 0) return -1;
     bool ok = ioctl(fd, UI_SET_EVBIT, EV_KEY) == 0 && ioctl(fd, UI_SET_EVBIT, EV_ABS) == 0;
     for (const Key& k : kKeys) ok = ok && ioctl(fd, UI_SET_KEYBIT, k.code) == 0;
     for (const Abs& a : kAxes) ok = ok && ioctl(fd, UI_SET_ABSBIT, a.code) == 0;
     ok = ok && ioctl(fd, UI_SET_ABSBIT, ABS_HAT0X) == 0 && ioctl(fd, UI_SET_ABSBIT, ABS_HAT0Y) == 0;
+    ok = ok && ioctl(fd, UI_SET_EVBIT, EV_FF) == 0 && ioctl(fd, UI_SET_FFBIT, FF_RUMBLE) == 0;
 
     uinput_setup setup{};
     setup.id.bustype = BUS_USB;
@@ -87,6 +104,7 @@ int create(int index) {
     setup.id.product = kProduct;
     setup.id.version = kVersion;
     std::snprintf(setup.name, sizeof setup.name, "CabinetOS player %d", index + 1);
+    setup.ff_effects_max = kEffects;
     ok = ok && ioctl(fd, UI_DEV_SETUP, &setup) == 0;
 
     auto absSetup = [&](int code, int min, int max) {
@@ -123,11 +141,16 @@ bool open(int players) {
         ++gCount;
     }
     std::memset(gDpad, 0, sizeof gDpad);
+    for (auto& pad : gEffects)
+        for (Effect& e : pad) e = Effect{};
+    for (int& p : gPlaying) p = -1;
+    rumble::reset();
     std::fprintf(stderr, "[vpad] %d virtual controller(s)\n", gCount);
     return true;
 }
 
 void close() {
+    if (gCount > 0) rumble::reset();
     for (int& fd : gFd) {
         if (fd < 0) continue;
         ioctl(fd, UI_DEV_DESTROY);
@@ -182,6 +205,61 @@ void releaseAll() {
         emit(fd, EV_ABS, ABS_HAT0Y, 0);
         sync(fd);
         std::memset(gDpad[p], 0, sizeof gDpad[p]);
+    }
+}
+
+void pump(int64_t nowMs) {
+    for (int p = 0; p < gCount; ++p) {
+        const int fd = gFd[p];
+        input_event ev;
+        while (::read(fd, &ev, sizeof ev) == static_cast<ssize_t>(sizeof ev)) {
+            if (ev.type == EV_UINPUT && ev.code == UI_FF_UPLOAD) {
+                uinput_ff_upload up{};
+                up.request_id = static_cast<uint32_t>(ev.value);
+                if (ioctl(fd, UI_BEGIN_FF_UPLOAD, &up) != 0) continue;
+                const int id = up.effect.id;
+                if (up.effect.type == FF_RUMBLE && id >= 0 && id < kEffects) {
+                    Effect& e = gEffects[p][id];
+                    e.used = true;
+                    e.strong = up.effect.u.rumble.strong_magnitude;
+                    e.weak = up.effect.u.rumble.weak_magnitude;
+                    e.lengthMs = up.effect.replay.length;
+                    up.retval = 0;
+                } else {
+                    up.retval = -EINVAL;
+                }
+                ioctl(fd, UI_END_FF_UPLOAD, &up);
+            } else if (ev.type == EV_UINPUT && ev.code == UI_FF_ERASE) {
+                uinput_ff_erase er{};
+                er.request_id = static_cast<uint32_t>(ev.value);
+                if (ioctl(fd, UI_BEGIN_FF_ERASE, &er) != 0) continue;
+                if (er.effect_id < kEffects) gEffects[p][er.effect_id] = Effect{};
+                if (gPlaying[p] == static_cast<int>(er.effect_id)) {
+                    gPlaying[p] = -1;
+                    rumble::set(static_cast<unsigned>(p), 0, 0);
+                    rumble::set(static_cast<unsigned>(p), 1, 0);
+                }
+                er.retval = 0;
+                ioctl(fd, UI_END_FF_ERASE, &er);
+            } else if (ev.type == EV_FF && ev.code < kEffects) {
+                const Effect& e = gEffects[p][ev.code];
+                if (ev.value > 0 && e.used) {
+                    gPlaying[p] = ev.code;
+                    gEndsAt[p] = e.lengthMs ? nowMs + e.lengthMs : 0;
+                    rumble::set(static_cast<unsigned>(p), 0, e.strong);
+                    rumble::set(static_cast<unsigned>(p), 1, e.weak);
+                } else if (gPlaying[p] == ev.code) {
+                    gPlaying[p] = -1;
+                    rumble::set(static_cast<unsigned>(p), 0, 0);
+                    rumble::set(static_cast<unsigned>(p), 1, 0);
+                }
+            }
+        }
+        if (gPlaying[p] >= 0 && gEndsAt[p] > 0 && nowMs >= gEndsAt[p]) {
+            gPlaying[p] = -1;
+            rumble::set(static_cast<unsigned>(p), 0, 0);
+            rumble::set(static_cast<unsigned>(p), 1, 0);
+        }
     }
 }
 

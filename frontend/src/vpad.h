@@ -14,8 +14,10 @@
 // player order is the console's (players.h), not the emulator's guess; and the
 // pause menu takes the controllers simply by passing nothing on.
 //
-// WHAT IT COSTS, SAID PLAINLY: motion (gyro) does not come through, and rumble
-// has to be passed back the other way, which this first version does not do.
+// WHAT IT COSTS, SAID PLAINLY: motion (gyro) does not come through. Rumble
+// comes back the other way: each virtual controller takes the emulator's
+// force-feedback the way a real pad does, and pump() hands it to rumble.h,
+// which drives the player's real pad under the console's Rumble switch.
 //
 // THE LAYOUT IS SDL'S OWN RULE FOR AN evdev DEVICE: buttons numbered in the
 // order of their key codes, axes in the order of theirs, the d-pad as hat 0.
@@ -47,6 +49,11 @@ void button(int player, SDL_GamepadButton b, bool down);
 void axis(int player, SDL_GamepadAxis a, int16_t value);
 // Everything let go and centred: the pause menu opening, a pad unplugged.
 void releaseAll();
+
+// Once a frame while an emulator runs: answers its force-feedback requests
+// and passes each player's rumble to rumble.h, and stops a rumble whose time
+// is up. `nowMs` is any steady clock in milliseconds.
+void pump(int64_t nowMs);
 
 // The identity an emulator knows them by, as Eden writes it: SDL's GUID for
 // the device, with the two bytes of name checksum cleared (Eden's GetGUID).

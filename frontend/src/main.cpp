@@ -10829,6 +10829,10 @@ int main(int argc, char** argv) {
                 std::fprintf(stderr, "[standalone] --standalone-exit: closing it\n");
                 standaloneRun.stop();
             }
+            // The game's rumble, to the pads in people's hands, and never
+            // while it is frozen under the pause menu.
+            cab::vpad::pump(static_cast<int64_t>(SDL_GetTicks()));
+            rumble::update(!standaloneRun.frozen());
             if (!standaloneRun.poll()) finishStandalone();
             // Until the next press or a sixtieth of a second, whichever is
             // first: presses pass straight on, and a watcher costs nothing.
