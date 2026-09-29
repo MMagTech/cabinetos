@@ -148,6 +148,26 @@ while read -r kind ref branch commit; do
 done < "${MANIFEST}"
 
 # ---------------------------------------------------------------------------
+# Remove any emulator the manifest no longer names.
+# ---------------------------------------------------------------------------
+#
+# THE MANIFEST IS THE WHOLE LIST, in both directions. Nothing else puts an app
+# into this installation (there is no app store), so an app it does not name
+# is one an earlier image installed and this one has dropped: RPCS3, which left
+# Flathub for the image on 2026-09-28, is the first. Left behind it would only
+# cost disk. Apps only; runtimes are shared and pinned above.
+listed=$(awk '$1 == "app" { print $2 }' "${MANIFEST}")
+while read -r app; do
+    [[ -z "${app}" ]] && continue
+    grep -qxF "${app}" <<<"${listed}" && continue
+    log "  ${app}: no longer in the manifest; removing"
+    if ! flatpak uninstall "${SCOPE[@]}" --noninteractive "${app}" 2>&1 | sed 's/^/      /'; then
+        log "  ERROR: could not remove ${app}"
+        failures=$((failures + 1))
+    fi
+done < <(flatpak list "${SCOPE[@]}" --app --columns=application 2>/dev/null)
+
+# ---------------------------------------------------------------------------
 # Record the outcome.
 # ---------------------------------------------------------------------------
 #

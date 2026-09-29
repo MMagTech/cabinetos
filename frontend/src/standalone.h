@@ -2,16 +2,20 @@
 //
 // WHAT THIS IS FOR. Switch (Eden), PS3 (RPCS3), Xbox (xemu) and Wii U (Cemu)
 // are not libretro cores and cannot be loaded into this process the way the
-// other systems are (PS2 included). They come from Flathub, pinned in
-// flatpaks.list, and each one opens its own window and draws its own picture.
+// other systems are (PS2 included). Eden and xemu come from Flathub, pinned in
+// flatpaks.list; RPCS3 is the RPCS3 team's own build, in the image
+// (build_files/install-rpcs3.sh), because its Flatpak shows a warning box on
+// every start. Each one opens its own window and draws its own picture.
 // So the console starts the emulator as a separate program, hands it the
 // television, and takes the screen back when it ends. docs/PROJECT.md, open
 // questions 21, 24 and 32; issue #169.
 //
 // ONE MECHANISM, ONE ROW PER EMULATOR. Everything here is the same for all of
-// them; what differs (the Flatpak, the program's name, where its keys and
-// settings go) is one row in the table in standalone.cpp and one `prepare`
-// case. PS3 is meant to be a row, not a second copy of this file.
+// them; what differs (where it comes from, the program's name, where its keys
+// and settings go) is one row in the table in standalone.cpp and one `prepare`
+// case. PS3 is a row, not a second copy of this file; what it needs that
+// Switch did not (games that are installed, a close through the window) is a
+// field on the row, so the next emulator that needs it gets it the same way.
 //
 // WHERE ITS STATE LIVES. Each emulator gets `emulators/<core>/` under the
 // storage root and runs with that as its working directory. Eden treats a
@@ -27,6 +31,7 @@
 
 #pragma once
 
+#include <atomic>
 #include <cstdint>
 #include <string>
 
@@ -35,19 +40,30 @@ namespace cab::standalone {
 struct Emulator {
     // The name the catalog uses for it, the way a libretro row names its core.
     const char* core;
-    // The Flatpak it comes from.
+    // WHERE IT COMES FROM: the Flatpak, or the program's path in the image.
+    // Exactly one is set.
     const char* flatpak;
-    // The program inside the sandbox, which is the process that takes signals.
+    const char* binary;
+    // The program itself, by process name, which is the process that takes
+    // signals: inside the sandbox for a Flatpak.
     const char* program;
-    // Its own log, under its home, and the two phrases it writes there when a
-    // game will not load. That case is an error box on the television that
-    // nobody can close, so the console reads the log and closes it instead.
+    // Its own log, and the two phrases it writes there when a game will not
+    // load. That case is an error box on the television that nobody can
+    // close, so the console reads the log and closes it instead. The log is
+    // under its home, or under the game's own folder when `cacheInGame`.
     const char* log;
     const char* loadFailed[2];
     // And the ones among those failures that mean the keys on the console are
     // too old for this game: a newer prod.keys in RomM is the whole fix, so
     // the console says that rather than "Couldn't start".
     const char* keysTooOld[4];
+    // A load that failed because the game's licence is not on the console
+    // (a PS3 PKG without its `.rap`), so the console says that instead.
+    const char* noLicence;
+    // WHAT IT WRITES WHEN IT HAS STOPPED FOR GOOD MID-GAME and left its window
+    // up with the picture held (RPCS3's "Emulation has been frozen!"). Watched
+    // for the whole game, not only the first minute, and closed as a crash.
+    const char* froze;
     // HOW TO TELL THE GAME HAS STOPPED while the emulator stays open on its
     // own window, which the console then closes as if the game had been
     // exited. Its window title starts with `titlePrefix`, and has at least
@@ -63,53 +79,88 @@ struct Emulator {
     // The game files it opens as they are, libretro's `valid_extensions`
     // format. The console never unpacks them.
     const char* extensions;
+    // What it cannot start a game without, in the words the console refuses
+    // with: "No Switch keys on your server", "No PS3 firmware on your server".
+    const char* needs;
+    // GAMES THAT HAVE TO BE INSTALLED BEFORE THEY RUN (a PS3 PKG). The game is
+    // always a folder, fetched file by file into it, and installGame runs
+    // before it is started. The folder is also where the emulator keeps what
+    // it builds for that game (`cacheInGame`), so removing the game removes
+    // both, and the cache never has to be told about either.
+    bool installs;
+    bool cacheInGame;
+    // ASKED TO CLOSE THROUGH ITS WINDOW, as a person closing it would, rather
+    // than by SIGTERM: RPCS3 has no handler for SIGTERM and simply dies, where
+    // a close asks the game to stop first.
+    bool closesByWindow;
 };
 
 // The emulator for a catalog core name, or nullptr for an ordinary core.
 const Emulator* find(const std::string& core);
 
-// Whether this console has it. First boot installs it from Flathub
+// Whether this console has it. First boot installs a Flatpak from Flathub
 // (cabinetos-flatpak-setup), so on a new machine, or one with no internet,
-// the answer can be no for a while or for good.
+// the answer can be no for a while or for good. One in the image is there.
 bool installed(const Emulator& e);
 
 // Its whole home: `<storage root>/emulators/<core>`.
 std::string home(const Emulator& e);
 
+// --- Games that are installed (`installs`) ---------------------------------
+//
+// Whether `fileName` (as it is named on the disk), of `sizeBytes`, was already
+// installed into the game at `entryPath` and deleted, so it is not fetched
+// again.
+bool installedFile(const std::string& entryPath, const std::string& fileName,
+                   int64_t sizeBytes);
+// What to start in a game's folder, or empty when there is nothing: the
+// installed game's EBOOT.BIN, or a disc image.
+std::string bootPath(const std::string& entryPath);
+// Runs on the download worker, after the files are in `entryPath`: whatever
+// the console must install once (PS3 firmware, from `bios/`), then every
+// package in the folder, each deleted once it is in. `*romPath` is what to
+// start. False with `*message`, the sentence for the game's screen.
+bool installGame(const Emulator& e, const std::string& entryPath,
+                 const std::atomic<bool>& cancel, std::string* romPath,
+                 std::string* message);
+
 // Everything the emulator needs before a game starts: the folders, its keys
 // out of `bios/` under the names it opens, and the settings the console
-// decides for it (fullscreen, no prompts, docked).
+// decides for it (fullscreen, no prompts, docked). `entryPath` is the game's
+// own file or folder on the disk.
 //
 // `saveDir` is this person's folder for this game (storage::savesDir), and
 // the emulator writes the game's save inside it, so two people and two games
 // never share one. `player` is the name a game shows for the person playing.
 //
-// False with `*missingKeys` when the keys it cannot run without are not on
-// the console; false with an `*err` for anything else.
+// False with `*missingKeys` when what it cannot run without (`needs`) is not
+// on the console; false with an `*err` for anything else.
 //
 // `players` is how many virtual controllers (vpad.h) there are, and each
 // player's controls are written for theirs, in the console's order.
-bool prepare(const Emulator& e, const std::string& saveDir, const std::string& player,
-             int players, bool* missingKeys, std::string* err);
+bool prepare(const Emulator& e, const std::string& entryPath, const std::string& saveDir,
+             const std::string& player, int players, bool* missingKeys, std::string* err);
 
 // Where, inside `saveDir`, the game's own save folders are: the root of what
 // travels to RomM as a zip, whose top-level folders are one per game. For
 // Eden, `user/save/0000000000000000/<profile>`, each folder inside named by
-// the game's title ID, which is why no title ID is ever asked for.
+// the game's title ID, which is why no title ID is ever asked for. For RPCS3,
+// `hdd0/home/00000001/savedata`, whose folders are named by the game too.
 std::string saveRoot(const Emulator& e, const std::string& saveDir);
 
 // One running game.
 class Run {
 public:
-    // Starts `romPath` in `e`, able to write `saveDir`. False with a reason
-    // when it could not start.
-    bool start(const Emulator& e, const std::string& romPath, const std::string& saveDir,
-               std::string* err);
+    // Starts `romPath` in `e`, able to write `saveDir`. `entryPath` is the
+    // game's own file or folder. False with a reason when it could not start.
+    bool start(const Emulator& e, const std::string& romPath, const std::string& entryPath,
+               const std::string& saveDir, std::string* err);
     // Once a frame. True while the game is still going; false once it has
     // ended, after which `ended()` says how.
     bool poll();
     // Asks it to close the way its own window close would: SIGTERM to the
-    // program. `poll` forces it after a deadline if it does not. A frozen
+    // program, or the close itself (`closesByWindow`). `poll` forces it after
+    // a deadline if it does not. A frozen
     // program is thawed first, or it never hears the request (measured: Eden
     // asked while frozen had to be forced after the full grace).
     void stop();
@@ -124,14 +175,14 @@ public:
     bool active() const { return root_ > 0; }
     bool stopping() const { return stopAtMs_ > 0; }
 
-    enum class End { None, Asked, Quit, Crashed, CouldNotLoad, KeysTooOld };
+    enum class End { None, Asked, Quit, Crashed, CouldNotLoad, KeysTooOld, NoLicence };
     End ended() const { return ended_; }
 
 private:
     void kill9();
 
     const Emulator* emu_ = nullptr;
-    int root_ = -1;          // what we started: the sandbox
+    int root_ = -1;          // what we started: the sandbox, or the program
     int program_ = -1;       // the emulator itself, once it is found
     int64_t startMs_ = 0;
     int64_t stopAtMs_ = 0;
@@ -139,6 +190,9 @@ private:
     long logRead_ = 0;
     bool failedLoad_ = false;
     bool oldKeys_ = false;
+    bool noLicence_ = false;
+    bool froze_ = false;
+    int64_t logCheckMs_ = 0;
     bool frozen_ = false;
     bool sawGameTitle_ = false;
     int64_t titleCheckMs_ = 0;

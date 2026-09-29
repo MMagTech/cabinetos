@@ -933,6 +933,52 @@ bool Client::fetchFirmware(int platformId, std::vector<Firmware>* out, std::stri
     return true;
 }
 
+bool Client::fetchRomFiles(int romId, std::vector<RomFile>* out, std::string* err) {
+    out->clear();
+    std::string body;
+    if (!get("/api/roms/" + std::to_string(romId), &body, err)) return false;
+    json_object* root = json_tokener_parse(body.c_str());
+    json_object* files = nullptr;
+    if (!root || !json_object_object_get_ex(root, "files", &files) ||
+        json_object_get_type(files) != json_type_array) {
+        if (root) json_object_put(root);
+        if (err) *err = "the game had no files array";
+        return false;
+    }
+    const size_t n = json_object_array_length(files);
+    for (size_t i = 0; i < n; ++i) {
+        json_object* o = json_object_array_get_idx(files, i);
+        RomFile f;
+        f.id = static_cast<int>(jint(o, "id"));
+        f.fileName = jstr(o, "file_name");
+        f.sizeBytes = jint(o, "file_size_bytes");
+        if (f.id != 0 && !f.fileName.empty()) out->push_back(std::move(f));
+    }
+    json_object_put(root);
+    if (out->empty() && err) *err = "the game lists no files";
+    return !out->empty();
+}
+
+std::string Client::romFilePath(int romId, const RomFile& f) {
+    // THE NAME IS ESCAPED WHOLE, here, because encodeUrl leaves `#`, `&` and
+    // `?` alone as delimiters, and a file name is not a place for them to
+    // mean anything.
+    static const char* kHex = "0123456789ABCDEF";
+    std::string name;
+    for (const unsigned char c : f.fileName) {
+        if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') ||
+            c == '-' || c == '.' || c == '_' || c == '~') {
+            name.push_back(static_cast<char>(c));
+        } else {
+            name.push_back('%');
+            name.push_back(kHex[c >> 4]);
+            name.push_back(kHex[c & 0x0F]);
+        }
+    }
+    return "/api/roms/" + std::to_string(romId) + "/content/" + name +
+           "?file_ids=" + std::to_string(f.id);
+}
+
 bool Client::fetchFavorites(int limit, std::vector<Game>* out, std::string* err) {
     return fetchFiltered("&favorite=true", limit, out, err);
 }

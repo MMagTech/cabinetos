@@ -22,6 +22,7 @@
 
 #include <dirent.h>
 #include <sys/resource.h>
+#include <strings.h>
 #include <sys/stat.h>
 
 #include <cctype>
@@ -1533,7 +1534,7 @@ static void pumpStateLoad(StateLoad& load, const GameSession& sess,
 // bytes go straight to disk. The client was deliberately built synchronous so
 // that callers could do exactly this, the same way ImageCache already does.
 struct LaunchJob {
-    enum class Stage { Idle, Firmware, Downloading, Unpacking, Ready, Failed };
+    enum class Stage { Idle, Firmware, Downloading, Unpacking, Installing, Ready, Failed };
 
     std::atomic<Stage> stage{Stage::Idle};
     // How long this job has been doing something a person would wait for, in
@@ -1607,7 +1608,8 @@ struct LaunchJob {
     }
     bool busy() const {
         const Stage st = stage.load();
-        return st == Stage::Firmware || st == Stage::Downloading || st == Stage::Unpacking;
+        return st == Stage::Firmware || st == Stage::Downloading || st == Stage::Unpacking ||
+               st == Stage::Installing;
     }
 };
 
@@ -1901,7 +1903,7 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
     const std::string fsName = game.fsName;
     const int64_t expectedSize = game.sizeBytes;
     const std::string entryPath = job.entryPath;
-    job.worker = std::thread([&job, &client, id, platformId, slug, fsSlug, fsName,
+    job.worker = std::thread([&job, &client, id, platformId, slug, fsSlug, fsName, emu,
                               entryPath, location, validExts, blockExtract, expectedSize]() {
         // FIRMWARE FIRST, and EVERY file the platform lists rather than
         // whichever one this game looks like it needs. A core looks BIOS up by
@@ -2038,6 +2040,94 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
             }
             job.got = 0;
             job.total = 0;
+        }
+
+        // A GAME THAT IS INSTALLED BEFORE IT RUNS (a PS3 PKG; the row's
+        // `installs`). Its folder is fetched FILE BY FILE rather than as the
+        // zip RomM makes of a folder, because the zip route would hold the
+        // zip, the PKG out of it and the installed game at once: three times
+        // a 20 GB game. This way it is twice, and only while the install
+        // runs; the PKG is deleted once the game it became is in place
+        // (measured: the installed game is the PKG's size, open question
+        // 19). The folder is never collapsed to one file, because the
+        // emulator keeps its compile cache in it, so removing the game
+        // removes both.
+        if (emu && emu->installs) {
+            storage::makeDirs(entryPath);
+            std::vector<romm::RomFile> files;
+            std::string lerr;
+            const bool listed = client.fetchRomFiles(id, &files, &lerr);
+            if (!listed) {
+                // OFFLINE, OR THE SERVER SAID NOTHING: a game already installed
+                // here still plays, which is all the list was for.
+                std::fprintf(stderr, "[launch] files of %d: %s\n", id, lerr.c_str());
+                if (cab::standalone::bootPath(entryPath).empty()) {
+                    job.message = "Couldn't download this game";
+                    job.stage = LaunchJob::Stage::Failed;
+                    return;
+                }
+            }
+            // What is missing, and what the install will need on top: each
+            // PKG not yet installed costs its size again while it goes in.
+            std::vector<std::pair<const romm::RomFile*, std::string>> fetch;
+            int64_t fetchBytes = 0, installBytes = 0;
+            for (const romm::RomFile& f : files) {
+                const std::string name = storage::safeSegment(f.fileName);
+                if (cab::standalone::installedFile(entryPath, name, f.sizeBytes)) continue;
+                const bool pkg = name.size() > 4 &&
+                                 strcasecmp(name.c_str() + name.size() - 4, ".pkg") == 0;
+                if (pkg) installBytes += f.sizeBytes;
+                struct stat st;
+                const std::string d = entryPath + "/" + name;
+                if (::stat(d.c_str(), &st) == 0 && st.st_size == f.sizeBytes) continue;
+                fetch.emplace_back(&f, d);
+                fetchBytes += f.sizeBytes;
+            }
+            const int64_t need =
+                fetchBytes + installBytes +
+                static_cast<int64_t>(static_cast<double>(fetchBytes + installBytes) *
+                                     cache::kOverheadFraction);
+            if (need > 0 && cache::freeBytes(location) < need) {
+                cache::evictUntilFree(location, need, id);
+                if (cache::freeBytes(location) < need) {
+                    job.message = job.keepWhenReady
+                                      ? "Not enough space. Remove downloads or add a drive"
+                                      : "Not enough space. Remove some downloads";
+                    job.stage = LaunchJob::Stage::Failed;
+                    return;
+                }
+            }
+            job.stage = LaunchJob::Stage::Downloading;
+            int64_t done = 0;
+            for (const auto& [f, d] : fetch) {
+                std::string derr;
+                const int64_t before = done;
+                if (!client.fetchToFile(romm::Client::romFilePath(id, *f), d,
+                        [&job, before, fetchBytes](int64_t got, int64_t) {
+                            job.got = before + got;
+                            job.total = fetchBytes;
+                            return !job.cancel.load();
+                        }, &derr)) {
+                    std::fprintf(stderr, "[launch] download %s: %s\n", f->fileName.c_str(),
+                                 derr.c_str());
+                    job.message = "Couldn't download this game";
+                    job.stage = LaunchJob::Stage::Failed;
+                    return;
+                }
+                done += f->sizeBytes;
+            }
+            job.got = 0;
+            job.total = 0;
+            job.stage = LaunchJob::Stage::Installing;
+            std::string rom, why;
+            if (!cab::standalone::installGame(*emu, entryPath, job.cancel, &rom, &why)) {
+                job.message = why;
+                job.stage = LaunchJob::Stage::Failed;
+                return;
+            }
+            job.romPath = rom;
+            job.stage = LaunchJob::Stage::Ready;
+            return;
         }
 
         // A GAME IS ONE ENTRY, AND THE ENTRY IS A FILE WHEN THE GAME IS ONE
@@ -9385,10 +9475,12 @@ int main(int argc, char** argv) {
         }
         bool missingKeys = false;
         std::string err;
-        if (!cab::standalone::prepare(emu, saveDir, user.name, pads, &missingKeys, &err)) {
+        if (!cab::standalone::prepare(emu, launchJob.entryPath, saveDir, user.name, pads,
+                                      &missingKeys, &err)) {
             cab::vpad::close();
             if (!err.empty()) std::fprintf(stderr, "[standalone] %s\n", err.c_str());
-            refuseLaunch(missingKeys ? "No " + launchJob.systemName + " keys on your server"
+            refuseLaunch(missingKeys ? "No " + launchJob.systemName + " " + emu.needs +
+                                           " on your server"
                                      : std::string("Couldn't start this game"));
             return;
         }
@@ -9399,7 +9491,7 @@ int main(int argc, char** argv) {
         const char* tag = catalog::saveTag(launchJob.coreName.c_str());
         if (!root.empty() && tag && liveClient.haveToken())
             restoreDirSave(liveClient, launchJob.romId, tag, root);
-        if (!standaloneRun.start(emu, launchJob.romPath, saveDir, &err)) {
+        if (!standaloneRun.start(emu, launchJob.romPath, launchJob.entryPath, saveDir, &err)) {
             cab::vpad::close();
             std::fprintf(stderr, "[standalone] %s\n", err.c_str());
             refuseLaunch("Couldn't start this game");
@@ -9472,6 +9564,9 @@ int main(int argc, char** argv) {
                 break;
             case cab::standalone::Run::End::KeysTooOld:
                 refuseLaunch("Needs newer " + launchJob.systemName + " keys on your server");
+                break;
+            case cab::standalone::Run::End::NoLicence:
+                refuseLaunch("No licence for this game on your server");
                 break;
             case cab::standalone::Run::End::Crashed:
                 menuNotice.say("The game closed unexpectedly", Tone::Problem);
@@ -12143,6 +12238,8 @@ int main(int argc, char** argv) {
                 prog.total = launchJob.total.load();
                 prog.unpacking =
                     launchJob.stage.load() == LaunchJob::Stage::Unpacking;
+                prog.installing =
+                    launchJob.stage.load() == LaunchJob::Stage::Installing;
             }
             detailScreen.setProgress(prog);
 
@@ -13315,8 +13412,11 @@ int main(int argc, char** argv) {
             if (launchJob.busy() && launchJob.busyFor >= kProgressDelay) {
                 const int64_t got = launchJob.got.load();
                 const int64_t total = launchJob.total.load();
+                // Installing has no fraction either (RPCS3 says nothing while
+                // it works), so it turns the same way.
                 const bool unpacking =
-                    launchJob.stage.load() == LaunchJob::Stage::Unpacking;
+                    launchJob.stage.load() == LaunchJob::Stage::Unpacking ||
+                    launchJob.stage.load() == LaunchJob::Stage::Installing;
                 // Clear of the chip's focus pill (kChipPillPadX), so the two
                 // never touch when focus lands on the chip.
                 const float chipLeft = discX - 10.0f - nameW - 22.0f;

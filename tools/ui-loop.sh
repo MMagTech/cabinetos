@@ -24,6 +24,10 @@
 #   tools/ui-loop.sh --via-vm            build on the VM instead of the console
 #   tools/ui-loop.sh --restore           put the console back on the image
 #
+#   tools/ui-loop.sh --env CABINETOS_BINARY_rpcs3=/var/home/cabinet/ps3work/AppDir/usr/bin/rpcs3
+#       An environment variable for the frontend, repeatable. For trying an
+#       emulator that no image carries yet (standalone.cpp, binaryOf).
+#
 #   tools/ui-loop.sh --args "--home-backdrop 0.6,0.22,28"
 #       Anything else the frontend takes, appended to its command line. This is
 #       what makes a tuning pass cheap: a number behind a flag is a redeploy
@@ -75,6 +79,7 @@ MENU=""
 SHOT=""
 RESTORE=0
 EXTRA=""
+ENVS=""
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -84,6 +89,7 @@ while [ $# -gt 0 ]; do
         --menu)     MENU="--overlay 400" ;;
         --shot)     SHOT="$2"; shift ;;
         --args)     EXTRA="$2"; shift ;;
+        --env)      ENVS="$ENVS $2"; shift ;;
         --restore)  RESTORE=1 ;;
         *) echo "unknown argument: $1" >&2; exit 1 ;;
     esac
@@ -182,6 +188,9 @@ fi
 echo "deployed ${SUM_LOCAL:0:12}"
 
 APP="/var/home/cabinet/cabinetos-frontend-dev --core-dir /var/home/cabinet/cores-dev"
+# The session splits CABINETOS_APP on spaces and runs it, so `env` in front
+# carries the variables, and then becomes the frontend.
+[ -n "$ENVS" ] && APP="env$ENVS $APP"
 [ -n "$GAME" ] && APP="$APP --launch $GAME"
 [ -n "$MENU" ] && APP="$APP $MENU"
 [ -n "$EXTRA" ] && APP="$APP $EXTRA"
