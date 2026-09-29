@@ -14347,3 +14347,15 @@ drive, protected, until they are the one here.
   still sends a small save (Claire's 3 KB row on RomM is from this test).
 - Untested: a full disc dump (none on the server), a missing BIOS on RomM,
   an Xbox game on the external drive.
+
+### 34. Xbox 360, and whether this machine can play it
+**Asked by MMagTech 2026-09-29; tested on the A9 the same night; issue #192.**
+
+Xenia Edge's native Linux build (`has207/xenia-edge` `a7c39fa`), run by hand
+outside the console, Vulkan, Batocera's settings, measured with MangoHud:
+Forza Horizon 2 and Left 4 Dead 2 both held their native 30 FPS (3% and 5.9%
+of frames later than 40 ms, mostly first-time shaders and loads), the GPU
+never past 39%. MMagTech on the TV: "pretty damn good". **Decided: Xbox 360
+is next in milestone 2, ahead of Wii and Wii U.** The integration work the
+test found (Xenia's desktop dialogs, SIGTERM ignored, profile-bound saves, a
+zipped `.iso` on RomM, XNA games that never run) is listed in #192.
