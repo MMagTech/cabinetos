@@ -6056,6 +6056,11 @@ int main(int argc, char** argv) {
     // the controllers, and the ordinary loop runs and draws the ordinary menu
     // over the frozen picture.
     bool standalonePaused = false;
+    // Frames still to clear to nothing after this window becomes the overlay.
+    // ONE WAS NOT ENOUGH: gamescope kept showing the launch page on top of the
+    // game until the next frame this window drew, which was the pause menu
+    // (2026-09-28, Metroid Prime 4 loading behind its own launch page).
+    int standaloneClearFrames = 0;
     // The shortcut button's tap, per player, as the in-process path reads it:
     // down, and whether anything else was pressed while it was.
     struct { bool down = false, used = false; } standaloneShortcut[cab::vpad::kMaxPlayers];
@@ -9436,9 +9441,7 @@ int main(int argc, char** argv) {
         // the curtain's black rather than the frozen game.
         curtain.from = curtain.to = 0.0f;
         curtain.elapsed = curtain.duration;
-        glClearColor(0, 0, 0, 0);
-        glClear(GL_COLOR_BUFFER_BIT);
-        SDL_GL_SwapWindow(window);
+        standaloneClearFrames = 30;
         standalonePaused = false;
     };
 
@@ -11007,6 +11010,14 @@ int main(int argc, char** argv) {
         // see, nothing drawn, and a short sleep so a watcher does not take a
         // core from the game. Play time counts as it does for any game.
         if (standaloneRun.active() && !standalonePaused) {
+            if (standaloneClearFrames > 0) {
+                --standaloneClearFrames;
+                glBindFramebuffer(GL_FRAMEBUFFER, 0);
+                glDisable(GL_SCISSOR_TEST);
+                glClearColor(0, 0, 0, 0);
+                glClear(GL_COLOR_BUFFER_BIT);
+                SDL_GL_SwapWindow(window);
+            }
             playClock.tick(dt, true);
             if (playClock.active() && (playCheckpointClock += dt) >= 60.0f) {
                 playCheckpointClock = 0.0f;
