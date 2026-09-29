@@ -61,7 +61,9 @@ if [[ "${got}" != "${RPCS3_SHA256}" ]]; then
     exit 1
 fi
 
-# The AppImage unpacks itself without FUSE, into squashfs-root beside it.
+# The AppImage unpacks itself without FUSE, into squashfs-root beside it. It
+# still prints "failed to utilize FUSE during startup!" in a container; the
+# unpack is unaffected, and the check below is what says whether it worked.
 chmod +x "${work}/rpcs3.AppImage"
 (cd "${work}" && ./rpcs3.AppImage --appimage-extract >/dev/null)
 root="${work}/squashfs-root"
@@ -76,11 +78,16 @@ cp -a "${root}/usr" "${DEST}/"
 printf '%s\n' "${RPCS3_VERSION}" > "${DEST}/VERSION"
 
 # THE CHECK THAT MATTERS: it starts, from where it now lives, against the
-# image's own libraries. `--version` prints and exits without a display.
+# image's own libraries, and it is the build this file pins. `--headless` as
+# well as `--version`: without it RPCS3 builds its Qt window layer first, and
+# the build container has no display for that (the first testing build died
+# here, 2026-09-29, "no Qt platform plugin could be initialized"). Headless it
+# makes a plain QCoreApplication (rpcs3.cpp, create_application).
 if ! XDG_CONFIG_HOME="${work}/cfg" XDG_CACHE_HOME="${work}/cache" \
-        "${DEST}/usr/bin/rpcs3" --version >"${work}/version.out" 2>&1; then
+        "${DEST}/usr/bin/rpcs3" --headless --version >"${work}/version.out" 2>&1 ||
+   ! grep -q "RPCS3 ${RPCS3_VERSION}" "${work}/version.out"; then
     cat "${work}/version.out"
-    log "ERROR: RPCS3 does not start in the image"
+    log "ERROR: RPCS3 does not start in the image, or is not ${RPCS3_VERSION}"
     exit 1
 fi
 missing="$(ldd "${DEST}/usr/bin/rpcs3" | grep 'not found' || true)"
