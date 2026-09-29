@@ -7,6 +7,11 @@
 //
 //   gcc -O2 -o fake-pad tools/fake-pad.c
 //   ./fake-pad WAIT TAPS EVERY [east|south|start]
+//   ./fake-pad script 40 press:l3+r3 3 press:south 5
+//
+// The second form is a script: a number waits that many seconds, and
+// `press:a+b` presses those buttons together and lets go. Names: south, east,
+// north, west, l, r, select, start, home, l3, r3, up, down, left, right.
 //
 // Waits WAIT seconds, taps the button TAPS times, EVERY seconds apart, and
 // stays a controller for five more seconds before it goes. `east` (Xbox B) is
@@ -76,17 +81,42 @@ static void service(int fd, int ms) {
     }
 }
 
+static int codeOf(const char* n) {
+    static const struct { const char* name; int code; } names[] = {
+        {"south", BTN_SOUTH}, {"east", BTN_EAST}, {"north", BTN_NORTH}, {"west", BTN_WEST},
+        {"l", BTN_TL}, {"r", BTN_TR}, {"select", BTN_SELECT}, {"start", BTN_START},
+        {"home", BTN_MODE}, {"l3", BTN_THUMBL}, {"r3", BTN_THUMBR},
+        {"up", -1}, {"down", -2}, {"left", -3}, {"right", -4},
+    };
+    for (size_t i = 0; i < sizeof names / sizeof names[0]; ++i)
+        if (strcmp(n, names[i].name) == 0) return names[i].code;
+    return 0;
+}
+
+static void press(int fd, const char* spec, int down) {
+    char buf[128];
+    snprintf(buf, sizeof buf, "%s", spec);
+    for (char* tok = strtok(buf, "+"); tok; tok = strtok(NULL, "+")) {
+        const int c = codeOf(tok);
+        if (c > 0) emit(fd, EV_KEY, c, down);
+        else if (c == -1 || c == -2) emit(fd, EV_ABS, ABS_HAT0Y, down ? (c == -1 ? -1 : 1) : 0);
+        else if (c == -3 || c == -4) emit(fd, EV_ABS, ABS_HAT0X, down ? (c == -3 ? -1 : 1) : 0);
+    }
+    emit(fd, EV_SYN, SYN_REPORT, 0);
+}
+
 int main(int argc, char** argv) {
-    if (argc < 4) {
+    const int scripted = argc > 1 && strcmp(argv[1], "script") == 0;
+    if (argc < 4 && !scripted) {
         fprintf(stderr, "usage: %s WAIT TAPS EVERY [east|south|start]\n", argv[0]);
         return 2;
     }
-    const double wait = atof(argv[1]);
-    const int taps = atoi(argv[2]);
-    const double every = atof(argv[3]);
+    const double wait = scripted ? 0 : atof(argv[1]);
+    const int taps = scripted ? 0 : atoi(argv[2]);
+    const double every = scripted ? 0 : atof(argv[3]);
     int code = BTN_EAST;
-    if (argc > 4 && strcmp(argv[4], "south") == 0) code = BTN_SOUTH;
-    if (argc > 4 && strcmp(argv[4], "start") == 0) code = BTN_START;
+    if (!scripted && argc > 4 && strcmp(argv[4], "south") == 0) code = BTN_SOUTH;
+    if (!scripted && argc > 4 && strcmp(argv[4], "start") == 0) code = BTN_START;
 
     const int fd = open("/dev/uinput", O_RDWR | O_NONBLOCK);
     if (fd < 0) { perror("/dev/uinput"); return 1; }
@@ -123,6 +153,19 @@ int main(int argc, char** argv) {
     printf("fake pad up\n");
     fflush(stdout);
 
+    if (scripted) {
+        for (int i = 2; i < argc; ++i) {
+            if (strncmp(argv[i], "press:", 6) == 0) {
+                press(fd, argv[i] + 6, 1);
+                service(fd, 150);
+                press(fd, argv[i] + 6, 0);
+                printf("pressed %s\n", argv[i] + 6);
+                fflush(stdout);
+            } else {
+                service(fd, (int)(atof(argv[i]) * 1000));
+            }
+        }
+    }
     service(fd, (int)(wait * 1000));
     for (int i = 0; i < taps; ++i) {
         emit(fd, EV_KEY, code, 1);

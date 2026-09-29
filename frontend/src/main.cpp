@@ -71,6 +71,7 @@
 #include "screens.h"
 #include "settings.h"
 #include "sound.h"
+#include "proc.h"
 #include "standalone.h"
 #include "vpad.h"
 #include "setup.h"
@@ -4448,8 +4449,14 @@ int main(int argc, char** argv) {
     // when it MAPS. Set the properties afterwards and they land on a window
     // nothing re-examines, and the overlay never appears — which looks exactly
     // like a compositor that refused. Hidden, marked, then shown.
-    SDL_WindowFlags windowFlags = SDL_WINDOW_OPENGL | SDL_WINDOW_FULLSCREEN;
-    if (overlayTest) windowFlags |= SDL_WINDOW_TRANSPARENT | SDL_WINDOW_HIDDEN;
+    // SEE-THROUGH CAPABLE, ALWAYS. While an emulator of its own has the screen
+    // (standalone.h) this window becomes its overlay and draws the pause menu
+    // over the frozen game, which needs an alpha channel the window cannot be
+    // given later. Everywhere else nothing changes: every frame starts from an
+    // opaque clear and the blending keeps it opaque (ui.cpp, presentScene).
+    SDL_WindowFlags windowFlags =
+        SDL_WINDOW_OPENGL | SDL_WINDOW_FULLSCREEN | SDL_WINDOW_TRANSPARENT;
+    if (overlayTest) windowFlags |= SDL_WINDOW_HIDDEN;
 
     SDL_Window* window = SDL_CreateWindow("CabinetOS", 1920, 1080, windowFlags);
     if (!window) {
@@ -6045,6 +6052,15 @@ int main(int argc, char** argv) {
     // it: nothing is drawn and nothing reaches the screens here.
     cab::standalone::Run standaloneRun;
     float standaloneRan = 0.0f;
+    // THE PAUSE MENU OVER IT. Paused, the emulator is frozen, this window has
+    // the controllers, and the ordinary loop runs and draws the ordinary menu
+    // over the frozen picture.
+    bool standalonePaused = false;
+    // The shortcut button's tap, per player, as the in-process path reads it:
+    // down, and whether anything else was pressed while it was.
+    struct { bool down = false, used = false; } standaloneShortcut[cab::vpad::kMaxPlayers];
+    // A screenshot being written by gamescope, which takes about two seconds.
+    struct { std::string path, name; int romId = 0; int64_t size = -1; } standaloneShot;
     // One worker for every upload. Started here and drained on the way out, so
     // quitting does not discard a save someone has already made.
     Uploader uploader;
@@ -9390,6 +9406,9 @@ int main(int argc, char** argv) {
         session.fsStem = launchJob.fsStem;
         session.saveDir = saveDir;
         if (tag) session.saveTag = tag;
+        // No save states: the pause menu is Resume, Screenshot and Exit to
+        // Home (open question 25; Switch fails its rule).
+        session.snapshots = catalog::snapshotsAllowed(launchJob.coreName.c_str());
         // The baseline: what changes between here and the end is what the
         // game saved. See GameSession.
         if (!root.empty()) {
@@ -9403,6 +9422,24 @@ int main(int argc, char** argv) {
             playClock.begin(session.romId, playtime::wallMs());
             playCheckpointClock = 0.0f;
         }
+        // THIS WINDOW STEPS OUT OF THE WAY AND WAITS ON TOP. It becomes
+        // gamescope's overlay (overlaywin.h), draws nothing, and leaves the
+        // controllers with the game, so the emulator has the screen; the pause
+        // menu is this same window drawing again. gamescope classifies a window
+        // when it maps, hence hidden, marked, shown.
+        SDL_HideWindow(window);
+        cab::overlaywin::mark(window, /*takeInput=*/false);
+        SDL_ShowWindow(window);
+        renderer.setTransparentBackground(true);
+        // The launch curtain is down, and nothing lifts it while the game runs
+        // because nothing is drawn. Up at once, or the first paused frame is
+        // the curtain's black rather than the frozen game.
+        curtain.from = curtain.to = 0.0f;
+        curtain.elapsed = curtain.duration;
+        glClearColor(0, 0, 0, 0);
+        glClear(GL_COLOR_BUFFER_BIT);
+        SDL_GL_SwapWindow(window);
+        standalonePaused = false;
     };
 
     // AND WHEN IT ENDS, however it ends, the console is where it was: Home,
@@ -9440,6 +9477,17 @@ int main(int argc, char** argv) {
                 break;
         }
         detailStates.stale = true;
+        // And Home again: an ordinary window, opaque, with the controllers.
+        if (cab::overlaywin::active()) {
+            SDL_HideWindow(window);
+            cab::overlaywin::unmark(window);
+            SDL_ShowWindow(window);
+        }
+        renderer.setTransparentBackground(false);
+        standalonePaused = false;
+        overlayOpen = false;
+        overlayFade.from = overlayFade.to = 0.0f;
+        overlayFade.elapsed = overlayFade.duration;
         std::fprintf(stderr, "[standalone] back to Home\n");
     };
 
@@ -10076,6 +10124,60 @@ int main(int argc, char** argv) {
         }
     };
 
+    // A SCREENSHOT OF A GAME THIS WINDOW DID NOT DRAW: gamescope's own, of the
+    // game's plane only, which leaves the menu out (open question 24, and
+    // measured: about two seconds for a 4K PNG, written by gamescope after
+    // the command returns). The menu says so once the file is whole, and it
+    // travels to RomM's gallery the way every other screenshot does.
+    auto standaloneScreenshot = [&]() {
+        if (!standaloneShot.path.empty()) return;   // one at a time
+        struct timespec ts{};
+        clock_gettime(CLOCK_REALTIME, &ts);
+        struct tm utc{};
+        gmtime_r(&ts.tv_sec, &utc);
+        char stamp[48];
+        const size_t n = std::strftime(stamp, sizeof stamp, "%Y-%m-%d %H-%M-%S", &utc);
+        std::snprintf(stamp + n, sizeof stamp - n, "-%03ld", ts.tv_nsec / 1000000L);
+        std::string base = session.fsStem.empty() ? sanitisedStem(session.title) : session.fsStem;
+        std::replace(base.begin(), base.end(), '/', '_');
+        const std::string dir = storage::screenshotsDir(storage::currentUser()) + "/" +
+                                std::to_string(session.romId);
+        storage::makeDirs(dir);
+        standaloneShot.name = base + " [" + stamp + "].png";
+        standaloneShot.path = dir + "/" + standaloneShot.name;
+        standaloneShot.romId = session.romId;
+        standaloneShot.size = -1;
+        const proc::Result r = proc::run({"gamescopectl", "screenshot", standaloneShot.path}, 5);
+        if (!r.ok()) {
+            std::fprintf(stderr, "[screenshot] gamescopectl: %s\n", proc::trimmed(r.err).c_str());
+            standaloneShot.path.clear();
+            menuNotice.say("Couldn't save the screenshot", Tone::Problem);
+        }
+    };
+    // Twice a second or so: the file is whole when its size stops changing.
+    auto pumpStandaloneShot = [&]() {
+        if (standaloneShot.path.empty()) return;
+        struct stat st;
+        if (::stat(standaloneShot.path.c_str(), &st) != 0 || st.st_size <= 0) return;
+        if (st.st_size != standaloneShot.size) {
+            standaloneShot.size = st.st_size;
+            return;
+        }
+        std::vector<uint8_t> png = cab::readBytes(standaloneShot.path);
+        std::fprintf(stderr, "[screenshot] %zu bytes, %s\n", png.size(),
+                     standaloneShot.name.c_str());
+        menuNotice.say("Screenshot saved", Tone::Done);
+        Uploader::Job job;
+        job.romId = standaloneShot.romId;
+        job.emulator = "screenshot";
+        job.fileName = standaloneShot.name;
+        job.data = std::move(png);
+        job.localPath = standaloneShot.path;
+        job.isScreenshot = true;
+        uploader.push(std::move(job));
+        standaloneShot.path.clear();
+    };
+
     auto overlayActivate = [&]() {
         if (powerMenu) {
             if (overlaySlot >= 0 && overlaySlot < static_cast<int>(powerItems.size()))
@@ -10094,14 +10196,28 @@ int main(int argc, char** argv) {
             // game's frame, not the screen. MMagTech's idea, 2026-09-27: pause
             // in an intense scene and take it without letting go of the game.
             // The menu stays open, saying "Screenshot saved".
-            case OvScreenshot: screenshotNow(session, uploader, menuNotice); break;
-            case OvExit: exitToHome(); break;
+            case OvScreenshot:
+                if (standaloneRun.active()) standaloneScreenshot();
+                else screenshotNow(session, uploader, menuNotice);
+                break;
+            case OvExit:
+                // An emulator of its own is asked to close (thawed first) and
+                // the menu goes; finishStandalone takes the rest of the way
+                // Home once it has gone, saves and all.
+                if (standaloneRun.active()) {
+                    overlayOpen = false;
+                    overlayFade.retarget(0.0f, overlayFadeSeconds);
+                    standaloneRun.stop();
+                } else {
+                    exitToHome();
+                }
+                break;
             default: break;
         }
     };
 
     auto toggleOverlay = [&]() {
-        if (!playing) return;
+        if (!playing && !standalonePaused) return;
         overlayOpen = !overlayOpen;
         // Only on the way IN: the list must not change under a panel that is
         // still fading out.
@@ -10122,6 +10238,23 @@ int main(int argc, char** argv) {
         overlayFade.retarget(overlayOpen ? 1.0f : 0.0f, overlayFadeSeconds);
         overlayFocus.retarget(1.0f, kOverlayFocusDuration);
         overlayFocus.elapsed = kOverlayFocusDuration;
+    };
+
+    // THE PAUSE MENU OVER A GAME THIS WINDOW DID NOT DRAW (#169). The same
+    // menu as every other system, from the same code; what differs is only
+    // what "pause" means. The emulator is frozen where it is, its controllers
+    // are let go, and this window, already the overlay, takes the controllers
+    // and draws the menu over the frozen picture. Resume hands them back.
+    auto openStandaloneMenu = [&]() {
+        if (!standaloneRun.active() || standaloneRun.stopping() || standalonePaused) return;
+        standaloneRun.freeze();
+        cab::vpad::releaseAll();
+        rumble::update(false);
+        cab::overlaywin::mark(window, /*takeInput=*/true);
+        standalonePaused = true;
+        for (auto& sh : standaloneShortcut) sh = {};
+        toggleOverlay();
+        std::fprintf(stderr, "[standalone] paused\n");
     };
 
     // Pressed while it is already open, it closes, like Resume.
@@ -10212,15 +10345,51 @@ int main(int argc, char** argv) {
             // sleeping while the emulator runs, so nothing is added to the
             // time between a press and the game. A pad arriving or leaving
             // still reaches players.h, so the order stays the console's.
-            if (standaloneRun.active() && e.type != SDL_EVENT_QUIT) {
+            //
+            // AND THE PAUSE MENU OPENS THE WAY IT DOES FOR EVERY SYSTEM: both
+            // stick clicks, always, or a tap of the shortcut button with the
+            // in-game shortcuts on. The shortcut button (Home, unless set) is
+            // never passed to the emulator at all: its Home is its own menu
+            // and a set of Home+button shortcuts, one of which leaves
+            // fullscreen, and none of them belong on a console.
+            if (standaloneRun.active() && !standalonePaused && e.type != SDL_EVENT_QUIT) {
                 switch (e.type) {
                     case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
-                    case SDL_EVENT_GAMEPAD_BUTTON_UP:
+                    case SDL_EVENT_GAMEPAD_BUTTON_UP: {
                         playClock.touch();
-                        cab::vpad::button(players::playerOf(e.gbutton.which),
-                                          static_cast<SDL_GamepadButton>(e.gbutton.button),
-                                          e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN);
+                        const int p = players::playerOf(e.gbutton.which);
+                        const auto b = static_cast<SDL_GamepadButton>(e.gbutton.button);
+                        const bool down = e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN;
+                        if (b == SDL_GAMEPAD_BUTTON_LEFT_STICK) l3Down = down;
+                        if (b == SDL_GAMEPAD_BUTTON_RIGHT_STICK) r3Down = down;
+                        if (down && l3Down && r3Down) {
+                            l3Down = r3Down = false;
+                            openStandaloneMenu();
+                            break;
+                        }
+                        SDL_Gamepad* gp = players::gamepad(p);
+                        const bool shortcut = gp && shortcuts::held(gp);
+                        if (p >= 0 && p < cab::vpad::kMaxPlayers && shortcuts::enabled()) {
+                            auto& sh = standaloneShortcut[p];
+                            if (shortcut && !sh.down) sh = {true, false};
+                            else if (shortcut && down) sh.used = true;
+                            if (!shortcut && sh.down) {
+                                const bool tap = !sh.used;
+                                sh = {};
+                                if (tap) {
+                                    std::fprintf(stderr,
+                                                 "[shortcuts] player %d: tap, opening the menu\n",
+                                                 p + 1);
+                                    openStandaloneMenu();
+                                    break;
+                                }
+                            }
+                            if (shortcut) break;   // held: the game hears none of it
+                        }
+                        if (b == SDL_GAMEPAD_BUTTON_GUIDE) break;
+                        cab::vpad::button(p, b, down);
                         break;
+                    }
                     case SDL_EVENT_GAMEPAD_AXIS_MOTION:
                         cab::vpad::axis(players::playerOf(e.gaxis.which),
                                         static_cast<SDL_GamepadAxis>(e.gaxis.axis),
@@ -10814,11 +10983,30 @@ int main(int argc, char** argv) {
             }
         }
 
+        // THE SCREENSHOT gamescope is writing, whenever there is one.
+        pumpStandaloneShot();
+        // PAUSED OVER AN EMULATOR OF ITS OWN, the ordinary loop below runs and
+        // draws the menu; here it only keeps watch. The emulator can still end
+        // (Exit to Home asked it to, or it fell over), and when the menu has
+        // closed and faded right out, the controllers go back and it thaws.
+        if (standaloneRun.active() && standalonePaused) {
+            if (!standaloneRun.poll()) {
+                finishStandalone();
+            } else if (!overlayOpen && overlayFade.value() <= 0.001f &&
+                       !standaloneRun.stopping()) {
+                cab::overlaywin::mark(window, /*takeInput=*/false);
+                standalonePaused = false;
+                for (auto& sh : standaloneShortcut) sh = {};
+                standaloneRun.thaw();
+                std::fprintf(stderr, "[standalone] resumed\n");
+            }
+        }
+
         // WHILE AN EMULATOR OF ITS OWN HAS THE SCREEN, this loop watches it and
         // does nothing else: no idle dimming over a game this process cannot
         // see, nothing drawn, and a short sleep so a watcher does not take a
         // core from the game. Play time counts as it does for any game.
-        if (standaloneRun.active()) {
+        if (standaloneRun.active() && !standalonePaused) {
             playClock.tick(dt, true);
             if (playClock.active() && (playCheckpointClock += dt) >= 60.0f) {
                 playCheckpointClock = 0.0f;
@@ -12053,7 +12241,10 @@ int main(int argc, char** argv) {
         // block, which meant a console with nothing playable in its recent
         // history had no way to reach Library at all.
         const float sc = renderer.scale();
-        if (playing) {
+        // A game is on the screen: ours, or one this window is paused over
+        // (standalone.h), where nothing of Home may be drawn under the menu.
+        const bool gameUp = playing || standalonePaused;
+        if (gameUp) {
             // BLACK behind a running game, not the menu's backdrop. The
             // reference implementation's player clears to black, and it is
             // right: a gradient around a game picture is decoration competing
@@ -12066,7 +12257,7 @@ int main(int argc, char** argv) {
             // top, so this fill would black the game out. Drawing nothing is
             // what lets it through — the scrim below still dims it, because a
             // translucent black rectangle composites exactly as it should.
-            if (!overlayTest)
+            if (!overlayTest && !standalonePaused)
                 renderer.draw(ui::Rect{0, 0, ui::kCanvasWidth, ui::kCanvasHeight, 0,
                                        ui::Color::black(1.0f)});
         } else {
@@ -12102,7 +12293,7 @@ int main(int argc, char** argv) {
         // 162x216 PNG is a 12x upscale of an image that was already a
         // thumbnail; the 810x1080 original costs about 1.5x the bytes and is
         // the only reason this looks like anything. romm.h has the measurement.
-        if (!playing && here() != Screen::Detail) {
+        if (!gameUp && here() != Screen::Detail) {
             // The launch screen is excluded because it already IS this idea,
             // at full strength: a game's cover filled, blurred and scrimmed
             // across the whole screen. Two of them would fight.
@@ -12247,15 +12438,15 @@ int main(int argc, char** argv) {
         // The arriving screen's content, held back until the old frame has
         // mostly dissolved. Under the bar, which does not fade; reset below.
         auto tabContent = [&]() {
-            if (tabSince < 0.0f || playing) return 1.0f;
+            if (tabSince < 0.0f || gameUp) return 1.0f;
             const float t = std::clamp((tabSince - kTabContentDelay) / kTabContentIn,
                                        0.0f, 1.0f);
             return design::easeInOut(t);
         };
         renderer.setContentFade(tabContent());
-        renderer.setContentOffsetY(playing ? 0.0f : (1.0f - tabContent()) * kTabRise);
+        renderer.setContentOffsetY(gameUp ? 0.0f : (1.0f - tabContent()) * kTabRise);
 
-        if (playing) {
+        if (gameUp) {
             cab::Core& core = cab::Core::shared();
             if (core.texture() && core.frameWidth() > 0) {
                 // Integer-scaled and centred. A Game Boy is 160x144 and its
@@ -12764,7 +12955,7 @@ int main(int argc, char** argv) {
 
         renderer.presentScene();
 
-        if (!playing && here() != Screen::Home) {
+        if (!gameUp && here() != Screen::Home) {
             screens::Ctx ctx{renderer, text, images, sc, &cards};
             switch (here()) {
                 case Screen::Library: libraryScreen.drawGlass(ctx); break;
@@ -12935,7 +13126,7 @@ int main(int argc, char** argv) {
         // A console whose recent history holds nothing this machine can play
         // once drew no hero, and the bar vanished with it — which left Library
         // unreachable on the one screen that is meant to reach everything.
-        if (!playing && here() != Screen::Detail) {
+        if (!gameUp && here() != Screen::Detail) {
             // SELECTION IS NOT FOCUS, and the design system has had both since
             // the switcher pills: a SELECTED destination is where you are, a
             // FOCUSED one is what you would open. Standing in the Library, the
