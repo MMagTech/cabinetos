@@ -2,9 +2,11 @@
 #
 # WHY THIS FILE EXISTS
 #
-# Three emulators cannot be libretro cores: RPCS3, xemu and Eden are standalone
-# applications with their own windows and renderers. They come from Flathub
-# rather than being built here.
+# Two emulators cannot be libretro cores and come from Flathub: xemu and Eden
+# are standalone applications with their own windows and renderers. RPCS3 was
+# the third until 2026-09-28; it is now the RPCS3 team's own build, in /usr,
+# because its Flatpak shows a warning box on every start. See
+# build_files/install-rpcs3.sh.
 #
 # They are NOT baked into the image, and that is not a limitation we are working
 # around — it is what bootc requires. A flatpak installs into /var, and bootc
@@ -51,10 +53,6 @@ runtime  org.freedesktop.Platform  25.08  d27f7a6a974e40b061070bec1be9e1b52a7a68
 runtime  org.kde.Platform          6.11   4da4797cdce707e1db7bc25720ac5e1f56818c087621f3737ea5482b0ed53c18
 
 # --- emulators ------------------------------------------------------------
-
-# PlayStation 3. Open question 19: this console launches a PKG install or a
-# stamped decrypted ISO, never a disc folder.
-app  net.rpcs3.RPCS3    stable  62f5a1f7ae8f6dae9e30cb0cb84413c322f652af9a3b9b6ccce04f8d82c2a5dd
 
 # Original Xbox. No games on the server yet — see the systems table in
 # docs/PROJECT.md — so this is here to prove the mechanism generalises.

@@ -78,11 +78,12 @@ const Entry kTable[] = {
     {"vectrex",              nullptr,     Support::Playable, "vecx",            nullptr},
     {"virtualboy",           nullptr,     Support::Playable, "beetle_vb",       nullptr},
 
-    // NOT A LIBRETRO CORE: a whole emulator from Flathub, run as a separate
-    // program. The name is a row in standalone.cpp rather than a file in the
-    // core directory, and `answer` asks Flatpak rather than stat'ing a .so.
-    // docs/PROJECT.md, open question 32.
+    // NOT A LIBRETRO CORE: a whole emulator, from Flathub or in the image, run
+    // as a separate program. The name is a row in standalone.cpp rather than
+    // a file in the core directory, and `answer` asks standalone::installed
+    // rather than stat'ing a .so. docs/PROJECT.md, open questions 19 and 32.
     {"switch",               nullptr,     Support::Playable, "eden",            nullptr},
+    {"ps3",                  nullptr,     Support::Playable, "rpcs3",           nullptr},
 
     // A core exists and Cabinet does not ship it. The manifest says so in as
     // many words — "iOS-only by decision" — and there is no tvOS build, which
@@ -291,7 +292,7 @@ const char* emulatorTag(const char* core) {
 bool snapshotsAllowed(const char* core) {
     if (!core) return true;
     // True to the machines: memory-card consoles, and everything after them.
-    static const char* const kNoSnapshots[] = {"pcsx2", "dolphin", "eden"};
+    static const char* const kNoSnapshots[] = {"pcsx2", "dolphin", "eden", "rpcs3"};
     for (const char* c : kNoSnapshots)
         if (std::strcmp(c, core) == 0) return false;
     return true;
@@ -337,6 +338,9 @@ const char* saveTag(const char* core) {
         // as the two above are. The save is a zip of the game's save folder,
         // travelling the way PSP's does (open question 32, decision D).
         {"eden", "eden"},
+        // PlayStation 3, in RPCS3, the same way and for the same reason: no
+        // Cabinet app plays it. A zip of the game's save folders.
+        {"rpcs3", "rpcs3"},
     };
     const std::string name = manifestName(core);
     for (const auto& t : kSaveTags)

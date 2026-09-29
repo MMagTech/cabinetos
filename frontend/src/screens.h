@@ -566,6 +566,8 @@ public:
         Action action = Action::Play;
         int64_t got = 0, total = 0;
         bool unpacking = false;
+        // A PS3 game going into the emulator after its download (#171).
+        bool installing = false;
     };
     void setProgress(const Progress& p) { progress_ = p; }
 

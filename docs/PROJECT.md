@@ -11192,6 +11192,115 @@ corrected it twice.**
   for a state to travel to. The absence costs the in-game snapshot on this
   console and nothing else. Progress still moves, because progress is save data.
 
+#### PS3 is built: what was decided and measured, 2026-09-28 (#171)
+
+**Decided by MMagTech on the walk-through, 2026-09-28**, each put to him as a
+plain choice with a recommendation:
+
+1. **RPCS3 is the RPCS3 team's official build, in the image**, not Flathub's.
+   Open question 21, *RPCS3 leaves Flathub*, has why. Switch stays on Flathub.
+2. **Play does it all.** Pressing Play on a PKG game that is not here downloads
+   it, installs it ("Installing…" on the Play row), deletes the PKG and starts
+   the game; later plays start at once. The first PS3 game on a console also
+   installs the firmware first.
+3. **The same cached/kept rule as every game.** Played is cached and may be
+   removed for room, and the next Play downloads and installs it again;
+   Downloaded is kept.
+4. **RPCS3's per-game cache lives with the game**, on the games drive, and goes
+   when the game goes. **The graphics driver's shader memory is shared**
+   instead (see below), with its 1 GB default cap to be revisited once PS3
+   games have been measured against it.
+5. **No sandbox around RPCS3.** It runs as the libretro cores do. A bubblewrap
+   fence can be added later without changing anything else.
+6. Multi-disc PS3 games are a possibility for after the first public release,
+   only if users ask (#162). Disc folders stay decided against.
+
+**Where things are:**
+
+| | |
+|---|---|
+| `emulators/rpcs3/rpcs3/` | its settings (written before every start) and the firmware, `dev_flash`, 189 MB, once per console |
+| the game's folder | the installed title (`<TITLE ID>/USRDIR/EBOOT.BIN`) or the `.iso`, every `.rap`, a `.cabinetos-installed` note of the PKGs that went in, and `rpcs3/`, its compile cache and log |
+| this person's save folder | `hdd0/`, the PS3 hard drive as the game sees it: `home/00000001/savedata` (zipped to RomM as the save, tag `rpcs3`), the licence in `exdata`, trophies |
+
+RPCS3 boots an installed game from outside its hard drive by itself: it mounts
+the game's folder at `/dev_hdd0/game/<TITLE ID>` (the HG category, in
+`Emu/System.cpp`). A PKG is installed with the hard drive pointed at a staging
+folder inside the game's own, so the result moves into place with a rename.
+
+**Fetched file by file**, never as the zip RomM makes of a folder
+(`?file_ids=`, RomM 5.3.1): the zip route would hold the zip, the PKG out of it
+and the installed game at once, three times the game.
+
+**Measured on the A9:**
+
+| | |
+|---|---|
+| Firmware install (4.96, reports 4.92) | 1.1 s, 189 MB |
+| Super Stardust HD PKG install, 287 MB | 0.27 s |
+| First start, Super Stardust HD: the shader interpreter's pipelines | **3 min 25 s**, all 24 threads, before the shared driver cache |
+| First start, Bioshock, after the shared cache held them | under a minute to its first screen |
+| God of War III, 37 GB ISO | played to its first autosave (8 min in) |
+
+**The 3 min 25 s is why the driver's cache is shared.** RPCS3's default shader
+mode draws with an interpreter while real shaders compile, and it builds the
+interpreter's pipelines on every start; they are the same for every game.
+Mesa keeps them, so shared (the console's own `~/.cache`) the wait is paid once
+per console and again only when an update brings a new Mesa. RPCS3's own cache
+still goes with the game (`XDG_CACHE_HOME` is the game's folder;
+`MESA_SHADER_CACHE_DIR` is not).
+
+**What the player sees go wrong, and what the console says:** no firmware on
+the server, "No PlayStation 3 firmware on your server"; a PKG without its
+licence, "No licence for this game on your server" (RPCS3's fatal line from
+`Crypto/unself.cpp`); a fatal error in the game (`·F` in its log, which also
+starts a second RPCS3 with an error box), RPCS3 and its box are killed, and
+the game's page says "Couldn't start this game" in the first minute and the
+pill "The game closed unexpectedly" after it; "Emulation has been frozen!" is
+closed as the latter.
+
+**Found on the way, and fixed:**
+
+- A PKG is recognised by its first four bytes (`7F 'PKG'`), not by name:
+  Zombie Apocalypse's has no extension on the reference server.
+- Exit to Home from the pause menu left the virtual controllers unanswered, and
+  RPCS3 asks its controller to stop rumbling as it closes: God of War III took a
+  minute to exit. The pause state now answers them.
+
+**The reference library's ISOs were not what the 2026-09-18 section above
+believed.** "Converted and verified" meant RPCS3 accepted the header; nobody
+could play past loading on the VM. MMagTech's builder fell back to macOS's
+`hdiutil`, and read the way RPCS3 reads an ISO (`Loader/ISO.cpp`: the last
+primary or Joliet descriptor, names matched exactly):
+
+- **`hdiutil` writes no Joliet table**, only the primary one, where every name
+  is in capitals. A game that asks for `build/main/pak22.psarc` finds nothing.
+  God of War III works only because its own names are capitals.
+- **It cannot record a file over 4 GB** there either: BioShock Infinite, The
+  Last of Us, Metal Gear Solid 4 and Uncharted 2 each had one, listed as 4 GB.
+  The whole file was in the UDF table, which RPCS3 does not read.
+- **Bioshock's `SYSTEM` folder was empty in both tables**, and the game stops
+  looking for `system/core.int`: a broken dump. `hdiutil` could not be made to
+  drop files in any way tried.
+- **Rebuilding works**: unpack through UDF (7z), `xorriso -as mkisofs
+  -iso-level 3 -J -joliet-long`, then the header. Uncharted 2's original died
+  opening `pak22.psarc` 44 s in; the rebuilt one opened it and ran on, and a
+  contents check matched 364 of 364 files against 14 of 364 for the original.
+- **What happened to them.** Bioshock 2 and Mass Effect 2 were called
+  unrecoverable on their empty folders before the Joliet fault was found, and
+  MMagTech deleted them on that word; they may have been fixable. He is
+  deleting the rest until he has new dumps, so **God of War III is the ISO test
+  case**. The builder script was fixed (xorriso only, a contents check against
+  the folder, empty folders listed) and handed to him; it lives on his server.
+
+**Designed, not built, because nothing here can test it: updates and DLC.** A
+PKG game's update or DLC in the same folder on RomM is already installed with
+it (every PKG in the folder, largest first, every `.rap` placed). A disc game's
+update installs under its disc ID, where RPCS3 looks in `/dev_hdd0/game`, which
+is this person's save folder, not the game's; linking the installed update into
+it before each start is the likely answer. RomM's `update/` and `dlc/`
+subfolders are the likely source. To discuss with MMagTech.
+
 ### 20. Vulkan, and how the host should choose a graphics API
 **Raised by MMagTech 2026-09-17. BUILT 2026-09-20, and it is what made
 PlayStation 2 and GameCube draw a picture.**
@@ -11648,6 +11757,29 @@ The UI half still waits for a television: a missing system and a
 and none of them is "present, but still downloading". **But a permanently absent
 system is a fifth case again**, and telling those two apart is the part that
 cannot be silent.
+
+#### RPCS3 leaves Flathub, 2026-09-28
+
+**MMagTech's call, on the #171 walk-through.** Since 2026-08-13 RPCS3 shows an
+"Unofficial Build Warning" box on every start whenever `FLATPAK_ID` is set
+(`rpcs3qt/gui_application.cpp`), with No as the default and No quitting, and no
+setting to turn it off; the Flathub package is community-made and the RPCS3
+team does not support it. Rejected: clearing `FLATPAK_ID` at launch (defeats a
+notice upstream added on purpose, and keeps the unsupported build), and
+answering Yes automatically.
+
+**So RPCS3 is the official AppImage, unpacked into `/usr/lib/cabinetos/rpcs3`
+at build time and pinned by URL and sha256** (`build_files/install-rpcs3.sh`),
+in its own image layer. **This is not the trap above**: that trap is `/var`'s,
+and this is `/usr`, which every update replaces, so RPCS3 moves with the image
+exactly as the cores do. It also answers the LAN-only case below for PS3: it is
+on the console from the first boot. Measured: 94 MB downloaded, 338 MB
+unpacked; `usr/bin/rpcs3` runs directly through its own RUNPATH, so the process
+the console signals is `rpcs3`.
+
+`cabinetos-flatpak-setup` now removes any installed app the manifest no longer
+names, so a console that had Flathub's RPCS3 gets the space back. Eden and xemu
+are unchanged.
 
 #### What it costs, and the thing to watch
 
@@ -13844,10 +13976,12 @@ MMagTech asked, and the answer is worth keeping in one place:
   library and Cabinet for Mac had already shown how. The libretro PS2 core was
   never an option: its source no longer exists (12b). Cabinet's code is not a
   dependency; `cores/build-pcsx2.sh` clones `PCSX2/pcsx2` directly.
-- **Eden, RPCS3, xemu and Cemu come from Flathub** (21) because that is the only
+- **Eden, xemu and Cemu come from Flathub** (21) because that is the only
   practical way to get them; building each in-process would be a PCSX2-sized
   port four times over. The reason for first-boot install was `/var`, not
-  licensing; all are GPL.
+  licensing; all are GPL. **RPCS3 is the exception since 2026-09-28**: the RPCS3
+  team's official build, unpacked into `/usr` and pinned by checksum, because
+  its Flatpak shows a warning box on every start (21, *RPCS3 leaves Flathub*).
 - **A legal point, not recorded before:** taking Eden from Flathub means this
   project never distributes a Switch emulator itself. Nintendo sent takedowns
   against Eden in February and July 2026. Batocera goes further and ships no

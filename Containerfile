@@ -64,15 +64,17 @@ ARG IMAGE_VENDOR="${IMAGE_VENDOR:-mmagtech}"
 # scripts in order. Keeping it in scripts rather than in RUN layers means the
 # reasoning for each removal lives next to the removal.
 #
-# FOUR LAYERS, ORDERED BY HOW OFTEN EACH CHANGES, 2026-09-23. This was one RUN,
-# so a 1.4 MB frontend change rebuilt and re-shipped everything CabinetOS adds:
-# 546 MB to the console. See docs/PROJECT.md open question 27.
+# FIVE LAYERS, ORDERED BY HOW OFTEN EACH CHANGES, 2026-09-23 (RPCS3 added
+# 2026-09-28). This was one RUN, so a 1.4 MB frontend change rebuilt and
+# re-shipped everything CabinetOS adds: 546 MB to the console. See
+# docs/PROJECT.md open question 27.
 #
 #   1. the OS        Bazzite stripped and configured. Moves on a base bump or a
 #                    change to build_files/ or system_files/.
 #   2. the cores     314 MB, pinned. Moves when a core is bumped.
-#   3. core files    23 MB of PPSSPP's and PCSX2's resources. Same.
-#   4. the frontend  1.4 MB. Moves with nearly every change.
+#   3. RPCS3         338 MB, pinned. Moves when RPCS3 is bumped.
+#   4. core files    23 MB of PPSSPP's and PCSX2's resources. Same.
+#   5. the frontend  1.4 MB. Moves with nearly every change.
 #
 # A console downloads only the layers whose bytes changed, so a frontend change
 # ships layer 4 — PROVIDED the layers before it rebuild to identical bytes. CI
@@ -91,6 +93,13 @@ RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
 RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
     --mount=type=tmpfs,dst=/tmp \
     /ctx/install-frontend.sh cores
+
+# RPCS3, the PS3 emulator: the RPCS3 team's own build, pinned by checksum,
+# 338 MB. Beside the cores because it moves as rarely as they do. Not from
+# Flathub; build_files/install-rpcs3.sh says why.
+RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
+    --mount=type=tmpfs,dst=/tmp \
+    /ctx/install-rpcs3.sh
 
 RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
     --mount=type=tmpfs,dst=/tmp \

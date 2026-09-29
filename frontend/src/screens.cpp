@@ -1452,7 +1452,9 @@ void DetailScreen::drawGlass(Ctx& c) {
             char buf[96];
             const double g = static_cast<double>(progress_.got);
             const double t = static_cast<double>(progress_.total);
-            if (progress_.unpacking)
+            if (progress_.installing)
+                std::snprintf(buf, sizeof buf, "Installing\xE2\x80\xA6");
+            else if (progress_.unpacking)
                 std::snprintf(buf, sizeof buf, "Unpacking\xE2\x80\xA6");
             else if (progress_.total > 0)
                 std::snprintf(buf, sizeof buf, "%.0f of %.0f MB", g / 1e6, t / 1e6);

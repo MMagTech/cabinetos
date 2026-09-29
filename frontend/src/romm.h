@@ -118,6 +118,21 @@ struct Firmware {
     bool verified = false;
 };
 
+// One file of a game, as RomM lists it under `files`. A game RomM holds as a
+// folder (a PS3 PKG and its licence) is several; a one-file game is one.
+//
+// WHY A GAME WOULD BE FETCHED FILE BY FILE rather than as the one zip RomM
+// makes of a folder: a PS3 PKG has to be installed after it arrives, and the
+// zip route would hold the zip, the PKG unpacked from it and the installed
+// game at once, three times a 20 GB game. File by file, it is twice, and only
+// while the install runs. `?file_ids=` on the content endpoint serves one
+// file as it is (RomM 5.3.1, checked 2026-09-28).
+struct RomFile {
+    int id = 0;
+    std::string fileName;
+    int64_t sizeBytes = 0;
+};
+
 // A save or a save state held by RomM.
 //
 // They are separate endpoints and separate ideas, and Cabinet keeps them apart
@@ -306,6 +321,11 @@ public:
     // Every firmware file a platform carries. Empty is a normal answer: most
     // platforms need none.
     bool fetchFirmware(int platformId, std::vector<Firmware>* out, std::string* err);
+
+    // A game's own files (`GET /api/roms/{id}`), and the server path that
+    // fetches one of them as it is, for fetchToFile.
+    bool fetchRomFiles(int romId, std::vector<RomFile>* out, std::string* err);
+    static std::string romFilePath(int romId, const RomFile& f);
 
     bool fetchSaves(int romId, std::vector<Asset>* out, std::string* err);
     bool fetchStates(int romId, std::vector<Asset>* out, std::string* err);
