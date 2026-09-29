@@ -20,7 +20,8 @@ session picks up is `docs/NEXT-SESSION.md`.
    first release.
 2. **New systems**, in MMagTech's order: the shared foundation for emulators
    that run as their own programs (#169), then Switch (#170), PS3 (#171), Xbox
-   (#172), Wii (#173) and Wii U (#174). Before picture quality, because that
+   (#172), Xbox 360 (#192), Wii (#173) and Wii U (#174). Xbox 360 moved ahead
+   of the Wiis on 2026-09-29, after it ran well on the A9. Before picture quality, because that
    is one setting across every system.
 3. **Settings: picture.** Picture quality (#63), the pause menu's per-system
    picture and controller options (#73, which also own the PS1 DualShock and
