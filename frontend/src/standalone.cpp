@@ -832,6 +832,15 @@ bool installPs3Firmware(const Emulator& e, const std::atomic<bool>& cancel,
     return true;
 }
 
+// A PS3 PACKAGE, BY WHAT IT IS rather than by its name: every PKG starts
+// 7F 'P' 'K' 'G'. Found 2026-09-28: Zombie Apocalypse's PKG on the reference
+// server has no extension at all, and a name test would have skipped it.
+bool isPkg(const std::string& path) {
+    char magic[4] = {};
+    std::ifstream in(path, std::ios::binary);
+    return in.read(magic, 4) && std::memcmp(magic, "\x7FPKG", 4) == 0;
+}
+
 // EVERY PACKAGE IN THE GAME'S FOLDER, installed into it, largest first (the
 // game before an update or add-on for it), then deleted. RPCS3 installs into
 // its hard drive's game/<title ID>; that drive is pointed at a staging folder
@@ -848,7 +857,7 @@ bool installPackages(const Emulator& e, const std::string& entryPath,
     for (const std::string& name : listDir(entryPath)) {
         struct stat st;
         const std::string p = entryPath + "/" + name;
-        if (endsWithNoCase(name, ".pkg") && ::stat(p.c_str(), &st) == 0 && S_ISREG(st.st_mode))
+        if (name[0] != '.' && ::stat(p.c_str(), &st) == 0 && S_ISREG(st.st_mode) && isPkg(p))
             pkgs.emplace_back(st.st_size, name);
     }
     if (pkgs.empty()) return true;
@@ -1160,10 +1169,26 @@ bool Run::start(const Emulator& e, const std::string& romPath, const std::string
     // builds per game goes in the game's folder (XDG_CACHE_HOME, when
     // `cacheInGame`), which is how a removed game takes its cache with it.
     if (e.binary) {
+        // THE GRAPHICS DRIVER'S MEMORY STAYS SHARED, where the console's own
+        // is, even though RPCS3's cache moves into the game's folder: Mesa
+        // would otherwise follow XDG_CACHE_HOME there too. The first thing
+        // RPCS3 does on every start is build its shader interpreter's
+        // pipelines, which are the same for every game: 3 min 25 s on the
+        // A9 the first time (Super Stardust HD, 2026-09-28), all 24 threads.
+        // Shared, that is paid once per console (and again when an update
+        // brings a new Mesa), not once per game. Mesa caps the folder (1 GB,
+        // its default) and ages out the oldest itself. MMagTech, 2026-09-28.
+        const char* xdgCache = std::getenv("XDG_CACHE_HOME");
+        const char* userHome = std::getenv("HOME");
+        const std::string mesaCache = xdgCache && *xdgCache
+                                          ? std::string(xdgCache)
+                                          : std::string(userHome ? userHome : "") + "/.cache";
         const std::vector<std::string> args = {
             "env",
             "XDG_CONFIG_HOME=" + dir,
             "XDG_CACHE_HOME=" + (e.cacheInGame ? entryPath : dir),
+            // Mesa adds mesa_shader_cache/ itself (util/disk_cache_os.c).
+            "MESA_SHADER_CACHE_DIR=" + mesaCache,
             // gamescope's Xwayland, as for Eden below.
             "QT_QPA_PLATFORM=xcb",
             "SDL_JOYSTICK_HIDAPI=0",

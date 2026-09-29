@@ -2068,15 +2068,17 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
                 }
             }
             // What is missing, and what the install will need on top: each
-            // PKG not yet installed costs its size again while it goes in.
+            // file not yet installed may cost its size again while it goes
+            // in. Counted for every large file rather than by a `.pkg` name,
+            // which a PKG does not always have (standalone.cpp, isPkg).
             std::vector<std::pair<const romm::RomFile*, std::string>> fetch;
             int64_t fetchBytes = 0, installBytes = 0;
             for (const romm::RomFile& f : files) {
                 const std::string name = storage::safeSegment(f.fileName);
                 if (cab::standalone::installedFile(entryPath, name, f.sizeBytes)) continue;
-                const bool pkg = name.size() > 4 &&
-                                 strcasecmp(name.c_str() + name.size() - 4, ".pkg") == 0;
-                if (pkg) installBytes += f.sizeBytes;
+                const bool iso = name.size() > 4 &&
+                                 strcasecmp(name.c_str() + name.size() - 4, ".iso") == 0;
+                if (!iso) installBytes += f.sizeBytes;
                 struct stat st;
                 const std::string d = entryPath + "/" + name;
                 if (::stat(d.c_str(), &st) == 0 && st.st_size == f.sizeBytes) continue;
