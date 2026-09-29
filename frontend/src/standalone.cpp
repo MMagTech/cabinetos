@@ -871,9 +871,11 @@ bool installPackages(const Emulator& e, const std::string& entryPath,
     writeFile(staging + "/rpcs3/vfs.yml",
               "/dev_hdd0/: " + yamlQuote(staging + "/hdd0/") + "\n" +
               "/dev_flash/: " + yamlQuote(rpcs3Flash(e) + "/") + "\n");
+    std::vector<std::string> hadBefore;
     for (const std::string& name : listDir(entryPath))
-        if (isFile(entryPath + "/" + name + "/PARAM.SFO"))
-            ::rename((entryPath + "/" + name).c_str(), (games + "/" + name).c_str());
+        if (isFile(entryPath + "/" + name + "/PARAM.SFO") &&
+            ::rename((entryPath + "/" + name).c_str(), (games + "/" + name).c_str()) == 0)
+            hadBefore.push_back(name);
 
     std::string note = readFile(entryPath + "/" + kInstalledNote);
     bool ok = true;
@@ -895,10 +897,15 @@ bool installPackages(const Emulator& e, const std::string& entryPath,
 
     // WHAT CAME OUT, back into the game's folder: every title directory with
     // its PARAM.SFO. RPCS3 also makes TEST12345 and a lock folder on any new
-    // hard drive, which are not the game.
-    for (const std::string& name : listDir(games))
-        if (isFile(games + "/" + name + "/PARAM.SFO"))
+    // hard drive, which are not the game. AFTER A FAILURE only what was
+    // installed before goes back: a half-installed new title in the folder
+    // would be found by bootPath and started, offline, as if it were whole.
+    for (const std::string& name : listDir(games)) {
+        const bool keep = ok || std::find(hadBefore.begin(), hadBefore.end(), name) !=
+                                    hadBefore.end();
+        if (keep && isFile(games + "/" + name + "/PARAM.SFO"))
             ::rename((games + "/" + name).c_str(), (entryPath + "/" + name).c_str());
+    }
     removeTree(staging);
     if (!ok) {
         *message = "Couldn't install this game";

@@ -122,6 +122,8 @@ here. See `frontend/src/catalog.cpp`.
 | **PCSX2**, linked into `cabinetos-ps2.so` | upstream `PCSX2/pcsx2` at v2.8.2, built by `cores/build-pcsx2.sh` | GPL v3 or later |
 | **PCSX2's resources** — `GameIndex.yaml`, the Redump database, fonts, GS shaders | PCSX2's own `bin/resources` | GPL v3 or later, as PCSX2 |
 | **rapidyaml** and **c4core**, carried beside the emulator | Fedora's packages, copied because the Bazzite base lacks them | MIT |
+| **RPCS3**, in `/usr/lib/cabinetos/rpcs3` | the RPCS3 team's official Linux build `0.0.42-20076-1707d7fc` (release `build-1707d7fc…` of `RPCS3/rpcs3-binaries-linux`), unmodified, pinned by checksum in `build_files/install-rpcs3.sh`; source is `RPCS3/rpcs3` at commit `1707d7fc883ef48ff21bdcbb0141a3211ae09cb2` | GPL v2 |
+| **The libraries RPCS3's build carries** (Qt 6, FFmpeg, SDL 3, OpenCV, OpenAL and others, in its `usr/lib`) | bundled by the RPCS3 team in the same build, unchanged | each under its own licence, as RPCS3 ships them (Qt LGPL v3, FFmpeg LGPL v2.1 or later, SDL zlib) |
 
 PSP is the only platform whose "firmware" ships with the emulator rather than
 coming from RomM. Every other system's BIOS is fetched at runtime from the
@@ -136,6 +138,12 @@ and this project's own sources are offered under the same terms — see
 `AudioStream::CreateStream` to stop PCSX2 opening a sound device of its own; it
 lives in `cores/build-pcsx2.sh` where anyone can read it, which is what GPL v3
 section 5 asks of a modified version.
+
+**PLAYSTATION 3 IS A WHOLE PROGRAM, NOT A CORE**, run beside the frontend
+rather than inside it. It is the RPCS3 team's own build, shipped exactly as
+they publish it, and only unpacked from its AppImage; nothing in it is patched.
+Switch (Eden) and Xbox (xemu) are not in the image at all: each console
+installs them from Flathub, which distributes them (open question 21).
 
 ## Libraries the frontend links
 
