@@ -1785,9 +1785,12 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
     std::string validExts;
     bool blockExtract = false;
     if (emu) {
-        // Never unpacked: the emulator opens the file as it came.
+        // The emulator opens the file as it came, and a Switch NSP is not an
+        // archive the console would open, so nothing is unpacked. NOT
+        // `blockExtract`: that also stops a one-file game collapsing into one
+        // file (`852 - Aqua Kitty UDX.nsp`), which is how every other system's
+        // one-file game is kept, and it left each Switch game a folder.
         validExts = emu->extensions;
-        blockExtract = true;
     } else {
         // The core is loaded here, on the frame thread, before the worker starts:
         // it is cheap, it is the thing that decides whether the archive gets
