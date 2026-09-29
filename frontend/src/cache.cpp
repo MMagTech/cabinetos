@@ -250,6 +250,12 @@ std::vector<Entry> candidates(const std::string& location) {
                  if (romId <= 0) return;
                  const std::string path =
                      storage::cacheDir(location) + "/" + platform + "/" + entry;
+                 // A GAME WHOSE SAVES ARE STILL ONLY IN ITS FOLDER: an Xbox
+                 // game's drive between the start of a game and the saves
+                 // coming off it (standalone::beforeStart). Deleting it would
+                 // take somebody's save, so it is not a candidate until they
+                 // are off, which the next start of the console sees to.
+                 if (::access((path + "/.cabinetos-playing").c_str(), F_OK) == 0) return;
                  out.push_back({path, storage::treeBytes(path), newestMtime(path), romId,
                                 platform});
              });

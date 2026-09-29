@@ -274,6 +274,39 @@ std::string edenGuid() {
     return out;
 }
 
+std::string sdlGuid(int player) {
+    // SDL_CreateJoystickGUID for a Linux evdev device (SDL_sysjoystick.c,
+    // IsJoystick): no vendor name, so the checksum is of the device name
+    // alone, the one create() gives it.
+    char name[32];
+    std::snprintf(name, sizeof name, "CabinetOS player %d", player + 1);
+    const uint16_t crc = SDL_crc16(0, name, std::strlen(name));
+    const uint16_t words[8] = {0x0003, crc, kVendor, 0, kProduct, 0, kVersion, 0};
+    char out[33];
+    for (int i = 0; i < 8; ++i)
+        std::snprintf(out + i * 4, 5, "%02x%02x", words[i] & 0xFF, words[i] >> 8);
+    return out;
+}
+
+std::string sdlMapping(int player) {
+    auto b = [](SDL_GamepadButton x) { return "b" + std::to_string(buttonIndex(x)); };
+    auto a = [](SDL_GamepadAxis x) { return "a" + std::to_string(axisIndex(x)); };
+    return sdlGuid(player) + ",CabinetOS player " + std::to_string(player + 1) +
+           ",a:" + b(SDL_GAMEPAD_BUTTON_SOUTH) + ",b:" + b(SDL_GAMEPAD_BUTTON_EAST) +
+           ",x:" + b(SDL_GAMEPAD_BUTTON_WEST) + ",y:" + b(SDL_GAMEPAD_BUTTON_NORTH) +
+           ",back:" + b(SDL_GAMEPAD_BUTTON_BACK) + ",guide:" + b(SDL_GAMEPAD_BUTTON_GUIDE) +
+           ",start:" + b(SDL_GAMEPAD_BUTTON_START) +
+           ",leftshoulder:" + b(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER) +
+           ",rightshoulder:" + b(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER) +
+           ",leftstick:" + b(SDL_GAMEPAD_BUTTON_LEFT_STICK) +
+           ",rightstick:" + b(SDL_GAMEPAD_BUTTON_RIGHT_STICK) +
+           ",leftx:" + a(SDL_GAMEPAD_AXIS_LEFTX) + ",lefty:" + a(SDL_GAMEPAD_AXIS_LEFTY) +
+           ",rightx:" + a(SDL_GAMEPAD_AXIS_RIGHTX) + ",righty:" + a(SDL_GAMEPAD_AXIS_RIGHTY) +
+           ",lefttrigger:" + a(SDL_GAMEPAD_AXIS_LEFT_TRIGGER) +
+           ",righttrigger:" + a(SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) +
+           ",dpup:h0.1,dpright:h0.2,dpdown:h0.4,dpleft:h0.8,platform:Linux,";
+}
+
 int buttonIndex(SDL_GamepadButton b) {
     for (size_t i = 0; i < sizeof kKeys / sizeof kKeys[0]; ++i)
         if (kKeys[i].button == b) return static_cast<int>(i);

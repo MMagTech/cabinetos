@@ -237,3 +237,29 @@ Read before working on a core, an emulator, input, saves or states.
 - **Flathub stalls from this network, silently.** A retry loop fixes it, because
   ostree resumes:
   `for i in $(seq 1 30); do timeout 240 flatpak install -y --user ... && break; done`.
+
+## Xbox (xemu)
+
+- **xemu's menu reads EVERY gamepad SDL shows it, bound to a port or not**
+  (ui/xui/input-manager.cc, "Combine all controller states"). Binding the
+  ports to the virtual controllers was not enough: a real pad's Guide, or
+  Back and Start together, opened xemu's menu over FlatOut. The fix is SDL's
+  own hint, `SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT` with the virtual pads'
+  ID, so xemu never sees a real pad. **Check what an emulator's own UI reads,
+  not only what its game ports are bound to.**
+
+- **A keyboard reaches xemu's hotkeys.** The backtick opens its debug
+  monitor over the game. Useful for tests (eject the disc and `system_reset`
+  to reach the dashboard); a known gap for anyone with a keyboard plugged in.
+
+- **xemu's window title never names the game** (ui/xemu.c), so Eden's
+  title rule cannot tell a game from the dashboard. The Xbox's running
+  program is read over QMP instead: `memsave` of 0x10000, the XBE header,
+  whose certificate holds the title ID.
+
+- **A RESTORE CAN UNDO A SAVE THAT IS STILL ON ITS WAY UP.** Found through
+  Xbox, true of every folder save: a save queued after a power cut, the game
+  started again at once, and the server's older zip came down over it. The
+  restore now skips while `cache::isPending` says the console owes that zip.
+  **Test a recovery with an immediate relaunch, not only a clean one.**
+

@@ -50,7 +50,8 @@ struct Emulator {
     // Its own log, and the two phrases it writes there when a game will not
     // load. That case is an error box on the television that nobody can
     // close, so the console reads the log and closes it instead. The log is
-    // under its home, or under the game's own folder when `cacheInGame`.
+    // under its home, or under the game's own folder when `cacheInGame`;
+    // nullptr when it keeps none and what it prints is the log (xemu).
     const char* log;
     const char* loadFailed[2];
     // And the ones among those failures that mean the keys on the console are
@@ -93,6 +94,18 @@ struct Emulator {
     // than by SIGTERM: RPCS3 has no handler for SIGTERM and simply dies, where
     // a close asks the game to stop first.
     bool closesByWindow;
+    // BACK AND START TOGETHER OPEN THE EMULATOR'S OWN MENU (xemu: for pads
+    // with no Guide button), which nothing can turn off. So the console holds
+    // back whichever of the two is pressed second. MMagTech, 2026-09-29.
+    bool blocksBackStart;
+    // THE XBOX'S DASHBOARD MEANS THE GAME HAS ENDED. A game that quits goes
+    // to the dashboard on the drive, inside the same xemu, and the console
+    // must never show it (MMagTech, 2026-09-29). So the program the Xbox is
+    // running is read once a second over qemu's control socket (QMP): the
+    // title ID in its header, where xemu itself reads it (xemu-xbe.c). The
+    // dashboard after a game closes xemu as a quit; the dashboard before any
+    // game means the disc did not boot.
+    bool watchesDashboard;
 };
 
 // The emulator for a catalog core name, or nullptr for an ordinary core.
@@ -148,6 +161,22 @@ bool prepare(const Emulator& e, const std::string& entryPath, const std::string&
 // `hdd0/home/00000001/savedata`, whose folders are named by the game too.
 std::string saveRoot(const Emulator& e, const std::string& saveDir);
 
+// AROUND A GAME, for an emulator whose saves live somewhere the console has to
+// carry them to and from (xemu: its hard drive image). `beforeStart` runs
+// after this person's saves are unpacked into saveRoot, `afterEnd` after the
+// emulator has gone and before they are zipped. Nothing for the others.
+//
+// While a game runs, its folder holds a note saying whose saves are on the
+// drive; eviction leaves such a folder alone (cache.cpp), and
+// `unfinishedGames` finds them after a crash or a power cut.
+bool beforeStart(const Emulator& e, const std::string& entryPath, const std::string& saveDir,
+                 const std::string& note, std::string* err);
+bool afterEnd(const Emulator& e, const std::string& entryPath, const std::string& saveDir,
+              std::string* err);
+// The note in a game's folder while a game runs there, or empty.
+std::string playingNote(const std::string& entryPath);
+bool hasPlayingNote(const std::string& entryPath);
+
 // One running game.
 class Run {
 public:
@@ -173,6 +202,8 @@ public:
     bool frozen() const { return frozen_; }
 
     bool active() const { return root_ > 0; }
+    // What is running, or nullptr.
+    const Emulator* emulator() const { return active() ? emu_ : nullptr; }
     bool stopping() const { return stopAtMs_ > 0; }
 
     enum class End { None, Asked, Quit, Crashed, CouldNotLoad, KeysTooOld, NoLicence };
@@ -196,6 +227,11 @@ private:
     bool frozen_ = false;
     bool sawGameTitle_ = false;
     int64_t titleCheckMs_ = 0;
+    // The Xbox's running program, over QMP (watchesDashboard).
+    int qmpFd_ = -1;
+    int64_t qmpCheckMs_ = 0;
+    uint32_t xboxTitle_ = 0;   // the game's, once one has run
+    uint32_t pollXboxTitle();
     End ended_ = End::None;
 };
 

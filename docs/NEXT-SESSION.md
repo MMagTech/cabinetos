@@ -11,21 +11,22 @@ specification is `docs/PROJECT.md`; the order is `docs/ROADMAP.md`.
 
 ## Where things stand
 
-PS3 plays through RPCS3's official build, in the image, from Play back to Home
-(#171, merged in #186; PROJECT.md open questions 19 and 21). Switch plays
-through Eden (#169, #170). Both run on `standalone.h`, one row per emulator,
-and `vpad.h`'s virtual controllers. Check `bootc status` on the A9 for the
-image it runs. **Never tell MMagTech something is unrecoverable or safe to
-delete before every cause is checked** (memory).
+Xbox plays through xemu (#172, branch `xbox-xemu`; PROJECT.md open question
+33): saves travel through RomM on and off each game's own drive, one EEPROM
+for every console, never the Xbox dashboard. Judged on the TV 2026-09-29,
+two players and rumble included. If it has not merged yet, that is first:
+check the `testing` image on the A9, then merge on MMagTech's word. PS3 plays
+through RPCS3 (#171) and Switch through Eden (#169, #170), all on
+`standalone.h` and `vpad.h`. Check `bootc status` on the A9 for the image it
+runs. **Never tell MMagTech something is unrecoverable or safe to delete
+before every cause is checked** (memory).
 
 ## Next: milestone 2, New systems
 
-1. **#172 Xbox (xemu), on the launcher Switch and PS3 built.** Research and a
-   walk-through for MMagTech first, no code: xemu's Flathub build (on
-   `flatpaks.list`), the BIOS, MCPX boot ROM and hard-drive image and how they
-   come from RomM, the game format (XISO), where saves live (inside the
-   hard-drive image) and whether they can sync, how to stop and freeze it, its
-   own dialogs and window, controllers, and what Batocera does. Check whether
-   its Flatpak has a warning like RPCS3's. *Lessons: emulators, image-and-ci.*
-   One rule for every game; never patch the emulator.
-2. Then #173 Wii, #174 Wii U.
+1. **#173 Wii.** Research and a walk-through for MMagTech first, no code, as
+   Xbox had: the emulator (Dolphin already plays GameCube in-process), game
+   formats, saves (the Wii's NAND) and whether they can travel as zips, Wii
+   Remotes and what a controller-only console does without a pointer, and
+   what Batocera does. *Lessons: emulators.* One rule for every game; never
+   patch the emulator.
+2. Then #174 Wii U (Cemu).

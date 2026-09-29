@@ -124,6 +124,8 @@ here. See `frontend/src/catalog.cpp`.
 | **rapidyaml** and **c4core**, carried beside the emulator | Fedora's packages, copied because the Bazzite base lacks them | MIT |
 | **RPCS3**, in `/usr/lib/cabinetos/rpcs3` | the RPCS3 team's official Linux build `0.0.42-20076-1707d7fc` (release `build-1707d7fc…` of `RPCS3/rpcs3-binaries-linux`), unmodified, pinned by checksum in `build_files/install-rpcs3.sh`; source is `RPCS3/rpcs3` at commit `1707d7fc883ef48ff21bdcbb0141a3211ae09cb2` | GPL v2 |
 | **The libraries RPCS3's build carries** (Qt 6, FFmpeg, SDL 3, OpenCV, OpenAL and others, in its `usr/lib`) | bundled by the RPCS3 team in the same build, unchanged | each under its own licence, as RPCS3 ships them (Qt LGPL v3, FFmpeg LGPL v2.1 or later, SDL zlib) |
+| **xemu's blank Xbox hard drive**, `/usr/share/cabinetos/xemu/xbox_hdd.qcow2` | `xbox_hdd.qcow2` from `xemu-project/xemu-dashboard` release `v20260516-0955`, unmodified, pinned by checksum in `build_files/install-xemu-drive.sh`. It holds the open-source xemu-dashboard and nothing of Microsoft's | MIT, with the libraries the dashboard is built from (nxdk and others) under their own licences, as xemu-dashboard ships them |
+| **The Xbox EEPROM**, `/usr/share/cabinetos/xemu/eeprom.bin` | made once by this project's `tools/xbox-eeprom.py`, the way xemu makes one | MIT, as CabinetOS |
 
 PSP is the only platform whose "firmware" ships with the emulator rather than
 coming from RomM. Every other system's BIOS is fetched at runtime from the
@@ -143,7 +145,10 @@ section 5 asks of a modified version.
 rather than inside it. It is the RPCS3 team's own build, shipped exactly as
 they publish it, and only unpacked from its AppImage; nothing in it is patched.
 Switch (Eden) and Xbox (xemu) are not in the image at all: each console
-installs them from Flathub, which distributes them (open question 21).
+installs them from Flathub, which distributes them (open question 21). Only
+xemu's blank drive and the EEPROM are in the image, in the table above; the
+Xbox BIOS and boot ROM come from the person's own RomM, like every other
+system's.
 
 ## Libraries the frontend links
 

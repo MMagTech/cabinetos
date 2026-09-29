@@ -49,6 +49,7 @@
 #include <map>
 #include <unordered_map>
 #include <set>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -75,6 +76,7 @@
 #include "proc.h"
 #include "standalone.h"
 #include "vpad.h"
+#include "xboxhdd.h"
 #include "setup.h"
 #include "accounts.h"
 #include "storage.h"
@@ -516,6 +518,10 @@ struct GameSession {
     std::string saveDir;
     std::string stateDir;
     std::vector<uint8_t> saveAtLaunch;   // to tell whether it actually changed
+    // An emulator of its own: which, and the game's folder, for whatever it
+    // needs doing once it has gone (standalone::afterEnd).
+    std::string standaloneCore;
+    std::string entryPath;
 
     // --- Directory saves, which is PSP and nothing else -------------------
     //
@@ -589,7 +595,19 @@ static bool writeLocal(const std::string& path, const std::vector<uint8_t>& data
 // holds under `tag` for this game, unpacked into `root`. PSP's memory stick
 // and a Switch game's save folder both travel this way.
 static void restoreDirSave(romm::Client& client, int romId, const char* tag,
-                           const std::string& root) {
+                           const std::string& root, const std::string& title) {
+    // NOT OVER A SAVE THIS CONSOLE HAS NOT SENT YET. The zip syncDirSave made
+    // is newer than anything the server holds until its upload lands, and
+    // unpacking the server's older one would write over it. Found 2026-09-29:
+    // an Xbox save recovered after a power cut was queued, the game started
+    // again at once, and the server's older zip came down over it. The same
+    // rule the battery save already keeps (cache.h, isPending).
+    const std::string name = sanitisedStem(title) + ".zip";
+    if (cache::isPending(storage::currentUser(), romId, name)) {
+        std::fprintf(stderr, "[save] %s is still on its way up; keeping this console's\n",
+                     name.c_str());
+        return;
+    }
     std::vector<romm::Asset> saves;
     std::string serr;
     if (!client.fetchSaves(romId, &saves, &serr)) return;
@@ -619,6 +637,18 @@ static void restoreDirSave(romm::Client& client, int romId, const char* tag,
                      newest->fileName.c_str(), data[0], data[1],
                      data.size() > 2 ? data[2] : 0, data.size() > 3 ? data[3] : 0);
     }
+}
+
+// The names in a folder, without . and .., or none.
+static std::vector<std::string> listNames(const std::string& dir) {
+    std::vector<std::string> out;
+    if (DIR* d = ::opendir(dir.c_str())) {
+        while (dirent* e = ::readdir(d))
+            if (std::strcmp(e->d_name, ".") != 0 && std::strcmp(e->d_name, "..") != 0)
+                out.push_back(e->d_name);
+        ::closedir(d);
+    }
+    return out;
 }
 
 static void syncDirSave(GameSession& sess, Uploader& up) {
@@ -4054,6 +4084,25 @@ int main(int argc, char** argv) {
         } else if (SDL_strcmp(argv[i], "--network-scan") == 0) {
             networkProbeMode = true;
             networkScan = true;
+        } else if ((SDL_strcmp(argv[i], "--xbox-saves-in") == 0 ||
+                    SDL_strcmp(argv[i], "--xbox-saves-out") == 0) && i + 2 < argc) {
+            // THE DRIVE'S SAVES, BY HAND: onto a drive from a folder holding
+            // UDATA/ and TDATA/, or off it into one. What beforeStart and
+            // afterEnd do around an Xbox game (xboxhdd.h), for testing.
+            std::string err;
+            const bool in = SDL_strcmp(argv[i], "--xbox-saves-in") == 0;
+            const bool ok = in ? cab::xboxhdd::writeSaves(argv[i + 1], argv[i + 2], &err)
+                               : cab::xboxhdd::readSaves(argv[i + 1], argv[i + 2], &err);
+            if (!ok) std::fprintf(stderr, "[xbox] %s\n", err.c_str());
+            return ok ? 0 : 1;
+        } else if (SDL_strcmp(argv[i], "--xbox-list") == 0 && i + 1 < argc) {
+            std::string out, err;
+            if (!cab::xboxhdd::list(argv[i + 1], &out, &err)) {
+                std::fprintf(stderr, "[xbox] %s\n", err.c_str());
+                return 1;
+            }
+            std::printf("%s", out.c_str());
+            return 0;
         } else if (SDL_strcmp(argv[i], "--gpu-probe") == 0) {
             gpuProbeMode = true;
         } else if (SDL_strcmp(argv[i], "--qr") == 0 && i + 1 < argc) {
@@ -6156,6 +6205,10 @@ int main(int argc, char** argv) {
     // The shortcut button's tap, per player, as the in-process path reads it:
     // down, and whether anything else was pressed while it was.
     struct { bool down = false, used = false; } standaloneShortcut[cab::vpad::kMaxPlayers];
+    // Back and Start as the emulator has them, per player: passed down, or
+    // held back because the other was already down (Emulator::blocksBackStart).
+    struct { bool passed[2] = {false, false}, held[2] = {false, false}; }
+        backStart[cab::vpad::kMaxPlayers];
     // A screenshot being written by gamescope, which takes about two seconds.
     struct { std::string path, name; int romId = 0; int64_t size = -1; } standaloneShot;
     // One worker for every upload. Started here and drained on the way out, so
@@ -6169,6 +6222,55 @@ int main(int argc, char** argv) {
     for (const storage::User& u : storage::knownUsers()) playtime::recover(u);
     // Whatever an earlier run could not send goes first.
     uploader.resendOwed();
+    // SAVES A POWER CUT LEFT ON A DRIVE: an Xbox game's folder still holding
+    // the note beforeStart wrote. Its saves come off now and go up as if the
+    // game had just ended; the note names the person's folder and the game.
+    // Nothing evicts such a folder in the meantime (cache.cpp, candidates).
+    if (const cab::standalone::Emulator* xemu = cab::standalone::find("xemu")) {
+        for (const std::string& loc : storage::locations()) {
+            for (const std::string& half : {storage::cacheDir(loc), storage::romsDir(loc)}) {
+                for (const std::string& platform : listNames(half)) {
+                    for (const std::string& entry : listNames(half + "/" + platform)) {
+                        const std::string path = half + "/" + platform + "/" + entry;
+                        if (!cab::standalone::hasPlayingNote(path)) continue;
+                        std::istringstream note(cab::standalone::playingNote(path));
+                        std::string id, dir, title, tag;
+                        std::getline(note, id);
+                        std::getline(note, dir);
+                        std::getline(note, title);
+                        std::getline(note, tag);
+                        // ONLY THIS PERSON'S. The upload goes as whoever the
+                        // console acts as, so somebody else's stays on the
+                        // drive, still protected, until they are the one here.
+                        const std::string mine =
+                            storage::userDir(storage::currentUser()) + "/";
+                        if (dir.compare(0, mine.size(), mine) != 0) {
+                            std::fprintf(stderr, "[xbox] %s holds another person's saves; "
+                                         "left for them\n", path.c_str());
+                            continue;
+                        }
+                        GameSession owed;
+                        owed.romId = std::atoi(id.c_str());
+                        owed.title = title;
+                        owed.saveDir = dir;
+                        owed.saveTag = tag;
+                        owed.dirSaveRoot = cab::standalone::saveRoot(*xemu, dir);
+                        owed.dirAtLaunch = cab::listTree(owed.dirSaveRoot);
+                        std::string aerr;
+                        if (dir.empty() ||
+                            !cab::standalone::afterEnd(*xemu, path, dir, &aerr)) {
+                            std::fprintf(stderr, "[xbox] saves left on %s: %s\n", path.c_str(),
+                                         aerr.c_str());
+                            continue;
+                        }
+                        std::fprintf(stderr, "[xbox] finished what a stop left on %s\n",
+                                     path.c_str());
+                        syncDirSave(owed, uploader);
+                    }
+                }
+            }
+        }
+    }
     float owedClock = 0.0f;   // seconds since the last try at what is owed
     StateLoad stateLoad;
     MenuNotice menuNotice;
@@ -9492,8 +9594,23 @@ int main(int argc, char** argv) {
         const std::string root = cab::standalone::saveRoot(emu, saveDir);
         const char* tag = catalog::saveTag(launchJob.coreName.c_str());
         if (!root.empty() && tag && liveClient.haveToken())
-            restoreDirSave(liveClient, launchJob.romId, tag, root);
+            restoreDirSave(liveClient, launchJob.romId, tag, root, launchJob.title);
+        // AND ONTO WHERE THE EMULATOR READS THEM, when that is not a folder
+        // (Xbox: its hard drive). The note says whose they are, should the
+        // console go down before the game ends.
+        {
+            const std::string note = std::to_string(launchJob.romId) + "\n" + saveDir + "\n" +
+                                     launchJob.title + "\n" + (tag ? tag : "") + "\n";
+            if (!cab::standalone::beforeStart(emu, launchJob.entryPath, saveDir, note, &err)) {
+                cab::vpad::close();
+                std::fprintf(stderr, "[standalone] %s\n", err.c_str());
+                refuseLaunch("Couldn't start this game");
+                return;
+            }
+        }
         if (!standaloneRun.start(emu, launchJob.romPath, launchJob.entryPath, saveDir, &err)) {
+            std::string aerr;
+            cab::standalone::afterEnd(emu, launchJob.entryPath, saveDir, &aerr);
             cab::vpad::close();
             std::fprintf(stderr, "[standalone] %s\n", err.c_str());
             refuseLaunch("Couldn't start this game");
@@ -9504,6 +9621,8 @@ int main(int argc, char** argv) {
         session.title = launchJob.title;
         session.fsStem = launchJob.fsStem;
         session.saveDir = saveDir;
+        session.standaloneCore = emu.core;
+        session.entryPath = launchJob.entryPath;
         if (tag) session.saveTag = tag;
         // No save states: the pause menu is Resume, Screenshot and Exit to
         // Home (open question 25; Switch fails its rule).
@@ -9547,6 +9666,12 @@ int main(int argc, char** argv) {
         // AFTER THE EMULATOR HAS GONE, which is when everything it wrote is
         // on the disk. Whatever changed is zipped and sent, crash or not: a
         // game that saved and then fell over still saved.
+        if (const cab::standalone::Emulator* ran =
+                cab::standalone::find(session.standaloneCore)) {
+            std::string aerr;
+            if (!cab::standalone::afterEnd(*ran, session.entryPath, session.saveDir, &aerr))
+                std::fprintf(stderr, "[standalone] saves stay on the drive: %s\n", aerr.c_str());
+        }
         if (!session.dirSaveRoot.empty()) syncDirSave(session, uploader);
         session.dirSaveRoot.clear();
         cab::vpad::close();
@@ -9722,7 +9847,8 @@ int main(int argc, char** argv) {
         const char* dirSub = catalog::directorySaveRoot(launchJob.coreName.c_str());
         const char* launchTag = catalog::saveTag(launchJob.coreName.c_str());
         if (dirSub && launchTag && liveClient.haveToken())
-            restoreDirSave(liveClient, launchJob.romId, launchTag, saveDir + "/" + dirSub);
+            restoreDirSave(liveClient, launchJob.romId, launchTag, saveDir + "/" + dirSub,
+                           launchJob.title);
 
         // AND THE SAVES THE CORE WRITES AS A FILE, which is most of the ones
         // on a real server and none of the ones this console used to handle.
@@ -10353,6 +10479,7 @@ int main(int argc, char** argv) {
         cab::overlaywin::mark(window, /*takeInput=*/true);
         standalonePaused = true;
         for (auto& sh : standaloneShortcut) sh = {};
+        for (auto& bs : backStart) bs = {};
         toggleOverlay();
         std::fprintf(stderr, "[standalone] paused\n");
     };
@@ -10487,6 +10614,25 @@ int main(int argc, char** argv) {
                             if (shortcut) break;   // held: the game hears none of it
                         }
                         if (b == SDL_GAMEPAD_BUTTON_GUIDE) break;
+                        // BACK AND START TOGETHER never reach an emulator that
+                        // opens its own menu on them (xemu): the second one
+                        // down is held back, press and release both.
+                        const cab::standalone::Emulator* running = standaloneRun.emulator();
+                        if (running && running->blocksBackStart && p >= 0 &&
+                            p < cab::vpad::kMaxPlayers &&
+                            (b == SDL_GAMEPAD_BUTTON_BACK || b == SDL_GAMEPAD_BUTTON_START)) {
+                            auto& bs = backStart[p];
+                            const int me = b == SDL_GAMEPAD_BUTTON_BACK ? 0 : 1;
+                            if (down && bs.passed[1 - me]) {
+                                bs.held[me] = true;
+                                break;
+                            }
+                            if (!down && bs.held[me]) {
+                                bs.held[me] = false;
+                                break;
+                            }
+                            bs.passed[me] = down;
+                        }
                         cab::vpad::button(p, b, down);
                         break;
                     }

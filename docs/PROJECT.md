@@ -14232,3 +14232,118 @@ next launch; motion (gyro) does not come through; updates and DLC (#181);
 Shredder's Revenge (above); a Switch game kept on an external drive is
 untested (the console grants Eden that folder per launch, as on the internal
 drive).
+
+### 33. Xbox (xemu), issue #172
+**Researched and decided with MMagTech 2026-09-29; built on `xbox-xemu` the
+same day and exercised on the A9 with nobody at the television. Not yet
+judged on the TV.**
+
+#### DECIDED, MMagTech 2026-09-29
+
+| | Decided |
+|---|---|
+| Emulator | xemu 0.8.136 from Flathub (`app.xemu.xemu`, already pinned), as it ships, never patched |
+| BIOS | `mcpx_1.0.bin` (512 bytes) and the Complex 4627 BIOS (`bios_retail_4627.bin`, 1 MB) from RomM; both are on platform 48. Recognised by contents, not name |
+| Drive | xemu's current official blank (xemu-dashboard `xbox_hdd.qcow2`, 8 GB, 1.6 MB file), in the image, pinned by checksum. Not the 2018 image on RomM, whose dashboard only says "insert a disc" |
+| Where the drive lives | in the game's folder beside the ISO, shared by everyone on the console, evicted with the game |
+| Saves | written onto the drive before play from the person's zip, copied off after and zipped to RomM. The zip holds only `UDATA/<title ID>` and `TDATA/<title ID>`, so it drops onto any xemu drive without CabinetOS |
+| Power cut or crash | a note in the game's folder while a game runs; such a folder is never evicted, and the next start of the console finishes the copy-off |
+| EEPROM | one for every install, published, never changed; 480p, 720p, 1080i and widescreen on. Some games lock saves to its key |
+| Games | XISO; full (redump) dumps trimmed to their game partition on download. Recognised by `MICROSOFT*XBOX*MEDIA` at 0x10000 or 0x18310000. All four on RomM are XISO |
+| Save states | none, as for PS3 |
+| Back and Start together | never reach xemu, which opens its own menu on them; no patch |
+| A game that quits to the dashboard | back to Home; the console must never show the Xbox dashboard |
+| Shader cache | the driver's, shared with the console's, as for PS3 |
+| Renderer | Vulkan on the Radeon, not xemu's OpenGL default: the console is built for it and PS3 and Switch use it |
+| Picture | xemu's default scale (1x) until #63 |
+
+**Why one EEPROM.** xemu makes a random one on first run; its key signs the
+saves some games lock to the console, so a save made on one install would not
+load on another. The same file everywhere, published, lets every save travel,
+including to someone's own xemu if they leave CabinetOS (Settings > System >
+EEPROM). It must never change: a new key strands every locked save. Its
+network address and serial matter only to system link, which is not planned;
+if it ever is, those can differ per console while the key stays.
+
+**Why the drive belongs to the game, not the person.** A game writes its
+saves and its scratch data (one of the X, Y, Z cache partitions, about 750
+MB at most) to the drive. The saves are copied off into the person's folder
+after every game, so nothing on the drive is worth keeping: it is part of
+the game, like the ISO, and goes when the cache needs the room. A per-person
+drive would cap at about 3 GB but put every game's saves in one file.
+
+#### What was built
+
+- `standalone.cpp`: an `xemu` row. `prepareXemu` finds the boot ROM and BIOS
+  in `bios/` by the Xbox reset code they both carry (`33 C0` ... `02 EE`),
+  copies them and the EEPROM into `emulators/xemu/`, gives the game a copy of
+  the blank drive, and writes `xemu.toml` whole before every start (welcome,
+  menu bar and toasts off, fullscreen, Vulkan on the GPU `gpu.cpp` chose,
+  ports bound to the virtual controllers by SDL GUID, no auto-binding).
+- `xboxhdd.cpp`: the console's own qcow2 and FATX code, reading and writing
+  E:\UDATA and E:\TDATA. Not mborgerson/fatx, which is GPL; linking it into
+  this MIT console is a decision nobody has made. qemu-img check of a drive it
+  wrote: no errors, one leaked cluster (a compressed one it replaced; qemu's
+  own words, "no harm to data").
+- `vpad`: each virtual controller's SDL GUID and a controller-database line,
+  so xemu gets a gamepad without guessing.
+- The dashboard watch: xemu's window title never names the game, so once a
+  second the console asks qemu's control socket (`-qmp`) for the header of
+  the program the Xbox is running, the same header xemu reads for its
+  snapshots (xemu-xbe.c), and takes the title ID. xemu-dashboard is
+  `FFFF0002` (read off the pinned drive). The dashboard after a game closes
+  xemu as a quit; the dashboard before any game means the disc did not boot.
+- The real pads are hidden from xemu (`SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT`
+  our virtual pads' ID): xemu's menu reads every gamepad SDL shows it, bound
+  or not (ui/xui/input-manager.cc), so a real pad's Guide, or Back and Start,
+  opened it over FlatOut. Then Back and Start are blocked in the console's
+  forwarding (`blocksBackStart`).
+- `tools/xbox-eeprom.py` made the EEPROM once, exactly as xemu's
+  `xbox_eeprom_generate` does, with the video flags set.
+- `build_files/install-xemu-drive.sh`: the drive into
+  `/usr/share/cabinetos/xemu/`, beside the EEPROM from `system_files`.
+
+#### Exercised on the A9, 2026-09-29 (driven over SSH with a fake pad)
+
+| Scenario | Result |
+|---|---|
+| Stubbs the Zombie boots | title menu on the TV; Vulkan on the Radeon 890M, llvmpipe offered and not chosen |
+| A press reaches the game | yes, through the virtual controller |
+| A save, Exit to Home | xemu closed cleanly (exit 0); 6 files off the drive, zipped, uploaded as `xemu` |
+| Play again | the save came down, onto the drive; Stubbs showed the profile |
+| Two people on one game | Claire saw no profile; MMagTech's came back when he did |
+| Power cut (xemu and the console killed mid-game) | on restart the copy-off finished and the save was queued; see the fault below |
+| Evicted and downloaded again, no local save | fresh drive, save from RomM alone; all three profiles there |
+| Two games in one run | Stubbs closed, FlatOut downloaded and ran with its own drive |
+| FlatOut (Europe) on the North American EEPROM | boots and plays its intro and menus; speed not judged |
+| Kept game | the folder, drive included, moved to `roms/` and played from there |
+| The game goes to the dashboard (disc ejected, Xbox reset from xemu's monitor) | seen within a second; xemu closed; Home |
+| Back and Start, and Guide, on a real pad | no xemu menu; Guide opens the console's pause menu |
+| A playing game in the storage report | not listed as evictable while its note is there |
+| Two players, and rumble on a real pad | both work: MMagTech on the TV, 2026-09-29 |
+
+**A fault this found, not Xbox's: a restore undid a save still on its way
+up.** After the power cut the recovered save was queued, the game started
+again at once, and the server's older zip came down over it. Folder saves
+(PSP, Switch, PS3, Xbox) now skip the restore while this console still owes
+the server that zip (`cache::isPending`, the rule battery saves already
+kept). Re-run: "still on its way up; keeping this console's", then the
+upload landed and nothing was lost.
+
+**And one in the recovery itself, fixed before it could happen:** a stop
+left by one person would have been uploaded as whoever the console acts as
+next. It now finishes only the current person's; anyone else's stays on the
+drive, protected, until they are the one here.
+
+#### Known, not done
+
+- **A keyboard reaches xemu.** Its hotkeys work with one plugged in: the
+  backtick opened xemu's debug monitor over the game during testing, and F1,
+  F2 and Ctrl+Q exist too. Not a problem with controllers only.
+- The dashboard can show for up to a second before the watch closes xemu.
+- A person's stop left on a drive is finished only when the console next
+  starts as them, not on an account switch.
+- Starting Stubbs writes its own title files, so a first run with no profile
+  still sends a small save (Claire's 3 KB row on RomM is from this test).
+- Untested: a full disc dump (none on the server), a missing BIOS on RomM,
+  an Xbox game on the external drive.
