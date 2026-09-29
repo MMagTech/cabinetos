@@ -14068,3 +14068,32 @@ game's release, so almost nobody played 1.0.0.
 **Airplane mode stays on for every game**: online never works under
 emulation, and Eden has an open change to make it its default (PR #4495). If
 a game ever needs it off, it is reconsidered for all of them.
+
+#### THE PAUSE MENU, BUILT AND JUDGED — MMagTech on the TV, 2026-09-28
+
+**The overlay route.** While a Switch game runs, the console's own window is
+gamescope's overlay and draws nothing; L3+R3, or a tap of the shortcut button
+with the in-game shortcuts on, freezes Eden and draws the ordinary menu
+(Resume, Screenshot, Exit to Home) over the frozen game at once. The panel has
+no blur of its own, but it is see-through and the frozen game shows through
+it: MMagTech, looking at it, *"the pause is blurred on switch i can see the
+image behind it"*. So the two-second still is not needed and was not built.
+
+- The window is created see-through capable; every frame outside this path is
+  still opaque (Home captured through gamescope: alpha 255 throughout).
+- The shortcut button never reaches Eden, which also ends Eden's own
+  Home+button shortcuts (Home+B left fullscreen).
+- Screenshot is gamescope's picture of the game plane alone, about 2 s, then
+  RomM's gallery. Measured: uploaded.
+- One frame of "nothing" after handing over was not enough; gamescope kept
+  the launch page on top until the next draw. It clears for half a second.
+
+**Seen working on the TV:** launch and exit, two players, rumble, saves up
+and down, pause, Resume, Screenshot, Exit to Home, a kept game promoted from
+cache without a download and kept as one file.
+
+**Known gaps, left for later:** a controller connected mid-game waits for the
+next launch; motion (gyro) does not come through; updates and DLC (#181);
+Shredder's Revenge (above); a Switch game kept on an external drive is
+untested (the console grants Eden that folder per launch, as on the internal
+drive).
