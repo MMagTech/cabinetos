@@ -11090,6 +11090,15 @@ int main(int argc, char** argv) {
         // (Exit to Home asked it to, or it fell over), and when the menu has
         // closed and faded right out, the controllers go back and it thaws.
         if (standaloneRun.active() && standalonePaused) {
+            // THE VIRTUAL CONTROLLERS ARE STILL ANSWERED, rumble held off. An
+            // emulator asks its controller to stop rumbling as it shuts down,
+            // and the kernel holds that request until this process answers or
+            // 30 s pass. Exit to Home is chosen from here, so unanswered, God
+            // of War III took a minute to close with the console sitting on
+            // it, SIGKILL included (2026-09-28: its Pad Thread in
+            // uinput_request_submit).
+            cab::vpad::pump(static_cast<int64_t>(SDL_GetTicks()));
+            rumble::update(false);
             if (!standaloneRun.poll()) {
                 finishStandalone();
             } else if (!overlayOpen && overlayFade.value() <= 0.001f &&
