@@ -11299,7 +11299,8 @@ it (every PKG in the folder, largest first, every `.rap` placed). A disc game's
 update installs under its disc ID, where RPCS3 looks in `/dev_hdd0/game`, which
 is this person's save folder, not the game's; linking the installed update into
 it before each start is the likely answer. RomM's `update/` and `dlc/`
-subfolders are the likely source. To discuss with MMagTech.
+subfolders are the likely source. **After the first release** (MMagTech,
+2026-09-29: he has none to test with yet): #187.
 
 ### 20. Vulkan, and how the host should choose a graphics API
 **Raised by MMagTech 2026-09-17. BUILT 2026-09-20, and it is what made
