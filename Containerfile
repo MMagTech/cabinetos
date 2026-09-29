@@ -101,6 +101,13 @@ RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
     --mount=type=tmpfs,dst=/tmp \
     /ctx/install-rpcs3.sh
 
+# xemu's blank Xbox hard drive, pinned by checksum, 1.6 MB, beside the EEPROM
+# that system_files puts in the same folder. xemu itself is a Flatpak
+# (flatpaks.list); build_files/install-xemu-drive.sh says why this is not.
+RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
+    --mount=type=tmpfs,dst=/tmp \
+    /ctx/install-xemu-drive.sh
+
 RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
     --mount=type=tmpfs,dst=/tmp \
     /ctx/install-frontend.sh system

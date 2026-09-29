@@ -54,8 +54,8 @@ runtime  org.kde.Platform          6.11   4da4797cdce707e1db7bc25720ac5e1f56818c
 
 # --- emulators ------------------------------------------------------------
 
-# Original Xbox. No games on the server yet — see the systems table in
-# docs/PROJECT.md — so this is here to prove the mechanism generalises.
+# Original Xbox, played since #172 (docs/PROJECT.md, open question 33). Its
+# blank drive and the EEPROM are in the image; see install-xemu-drive.sh.
 app  app.xemu.xemu      stable  2f8b8889edcf69fb2ba2a8691371a7bb49febeba360e9c87555379c50ba946e9
 
 # Nintendo Switch.

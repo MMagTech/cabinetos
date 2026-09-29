@@ -59,6 +59,16 @@ void pump(int64_t nowMs);
 // the device, with the two bytes of name checksum cleared (Eden's GetGUID).
 std::string edenGuid();
 
+// The same, as SDL itself writes it (SDL_GUIDToString), name checksum and
+// all: what xemu binds a port to. Each player's controller is named for its
+// seat ("CabinetOS player 2"), so each has its own. `player` from 0.
+std::string sdlGuid(int player);
+
+// A line of SDL's controller database for player `player`'s controller:
+// every button and axis where the layout above puts it, so an emulator that
+// asks SDL for a "gamepad" rather than a joystick gets it without guessing.
+std::string sdlMapping(int player);
+
 // Where each input lands in SDL's numbering of a virtual controller.
 int buttonIndex(SDL_GamepadButton b);   // -1 when it has none
 int axisIndex(SDL_GamepadAxis a);       // -1 when it has none
