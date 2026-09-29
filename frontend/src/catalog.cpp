@@ -1,6 +1,7 @@
 #include "catalog.h"
 
 #include "gpu.h"
+#include "standalone.h"
 
 #include <sys/stat.h>
 
@@ -76,6 +77,12 @@ const Entry kTable[] = {
     {"turbografx-cd",        nullptr,     Support::Playable, "beetle_pce_fast", nullptr},
     {"vectrex",              nullptr,     Support::Playable, "vecx",            nullptr},
     {"virtualboy",           nullptr,     Support::Playable, "beetle_vb",       nullptr},
+
+    // NOT A LIBRETRO CORE: a whole emulator from Flathub, run as a separate
+    // program. The name is a row in standalone.cpp rather than a file in the
+    // core directory, and `answer` asks Flatpak rather than stat'ing a .so.
+    // docs/PROJECT.md, open question 32.
+    {"switch",               nullptr,     Support::Playable, "eden",            nullptr},
 
     // A core exists and Cabinet does not ship it. The manifest says so in as
     // many words — "iOS-only by decision" — and there is no tvOS build, which
@@ -284,7 +291,7 @@ const char* emulatorTag(const char* core) {
 bool snapshotsAllowed(const char* core) {
     if (!core) return true;
     // True to the machines: memory-card consoles, and everything after them.
-    static const char* const kNoSnapshots[] = {"pcsx2", "dolphin"};
+    static const char* const kNoSnapshots[] = {"pcsx2", "dolphin", "eden"};
     for (const char* c : kNoSnapshots)
         if (std::strcmp(c, core) == 0) return false;
     return true;
@@ -325,6 +332,11 @@ const char* saveTag(const char* core) {
         // from either would not load in the Mac's build anyway.
         {"pcsx2", "pcsx2"},
         {"dolphin", "dolphin"},
+        // Switch, in Eden. No Cabinet app plays Switch, so there is no row to
+        // match and the name is this console's to choose: the emulator's own,
+        // as the two above are. The save is a zip of the game's save folder,
+        // travelling the way PSP's does (open question 32, decision D).
+        {"eden", "eden"},
     };
     const std::string name = manifestName(core);
     for (const auto& t : kSaveTags)
@@ -372,6 +384,18 @@ Coverage answer(const Entry* e) {
 
     Coverage c{e->support, e->core, e->reason};
     if (c.support != Support::Playable || !c.core) return c;
+
+    // An emulator that is its own application is installed by first boot
+    // from Flathub, not shipped in the image, so "not here" is an ordinary
+    // state for a while on a new machine, and a permanent one on a console
+    // that has never reached the internet (open question 21).
+    if (const cab::standalone::Emulator* emu = cab::standalone::find(c.core)) {
+        if (!cab::standalone::installed(*emu)) {
+            c.support = Support::NotInstalled;
+            c.reason = "its emulator is not installed on this console yet";
+        }
+        return c;
+    }
 
     const std::string path = gCoreDir + "/" + coreFileName(c.core);
     struct stat st;
@@ -853,6 +877,12 @@ const char* shortReason(Support s) {
         case Support::NeedsHardwareRender: return "Needs a 3D core";
     }
     return "Not playable here";
+}
+
+const char* shortReason(const Coverage& c) {
+    if (c.support == Support::NotInstalled && c.core && cab::standalone::find(c.core))
+        return "Emulator not installed";
+    return shortReason(c.support);
 }
 
 std::string displayQualifier(const romm::Platform& p) {

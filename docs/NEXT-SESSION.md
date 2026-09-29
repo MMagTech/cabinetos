@@ -11,16 +11,18 @@ specification is `docs/PROJECT.md`; the order is `docs/ROADMAP.md`.
 
 ## Where things stand
 
-`latest` and `testing` are both `2026.09.28.2`. The A9 runs it from the
-image. Check `bootc status` for the exact version.
+Switch plays through Eden, from Play back to Home, with the pause menu
+(#169, #170; PROJECT.md open question 32). Check `bootc status` on the A9 for
+the image it runs.
 
 ## Next: milestone 2, New systems
 
-1. **#169 and #170 together: the shared foundation, built with Switch
-   (Eden).** Research and a walk-through for MMagTech first, no code: Eden's
-   current state and Flathub package, the keys and firmware it needs and how
-   they come from RomM, game formats, where saves live, controllers, what
-   Batocera does with it, and what a player does from Play to back on Home.
-   *Lessons: emulators, image-and-ci.*
-2. **#171** PS3 (RPCS3), reusing #169.
-3. Then #172 Xbox, #173 Wii, #174 Wii U.
+1. **#171 PS3 (RPCS3), on the launcher Switch built.** `standalone.h` is one
+   row per emulator; `vpad.h` gives any emulator virtual controllers. Research
+   and a walk-through for MMagTech first, no code: RPCS3's Flathub build (on
+   `flatpaks.list` already), firmware from RomM, PKG installs against
+   decrypted ISOs (open question 19), where its saves and caches live, how to
+   stop and freeze it, its window title, its own dialogs, and what Batocera
+   does. *Lessons: emulators (the PS3 notes), image-and-ci.* One rule for
+   every game; never patch the emulator (memory, and question 32).
+2. Then #172 Xbox, #173 Wii, #174 Wii U.

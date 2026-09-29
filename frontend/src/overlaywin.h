@@ -37,6 +37,11 @@ namespace cab::overlaywin {
 // as though the window were an overlay.
 bool mark(SDL_Window* window, bool takeInput);
 
+// Undoes mark(): the window is an ordinary one again, the next time it maps.
+// For the console's own window, which is the overlay only while an emulator of
+// its own has the screen (standalone.h) and is Home again afterwards.
+bool unmark(SDL_Window* window);
+
 // Whether mark() has ever succeeded on this window, for reporting.
 bool active();
 

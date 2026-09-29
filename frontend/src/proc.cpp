@@ -1,5 +1,6 @@
 #include "proc.h"
 
+#include <dirent.h>
 #include <fcntl.h>
 #include <poll.h>
 #include <signal.h>
@@ -8,6 +9,9 @@
 
 #include <algorithm>
 #include <cerrno>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <ctime>
 
 namespace proc {
@@ -127,6 +131,73 @@ Result run(const std::vector<std::string>& args, int timeoutSeconds,
     int st = 0;
     if (waitpid(pid, &st, 0) == pid && WIFEXITED(st)) r.status = WEXITSTATUS(st);
     return r;
+}
+
+int spawn(const std::vector<std::string>& args, const std::string& logPath) {
+    if (args.empty()) return -1;
+    const pid_t pid = fork();
+    if (pid < 0) return -1;
+    if (pid == 0) {
+        setsid();
+        const int devnull = open("/dev/null", O_RDONLY);
+        if (devnull >= 0) { dup2(devnull, STDIN_FILENO); close(devnull); }
+        const int log = open(logPath.c_str(), O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0644);
+        if (log >= 0) {
+            dup2(log, STDOUT_FILENO);
+            dup2(log, STDERR_FILENO);
+        }
+        std::vector<char*> argv;
+        argv.reserve(args.size() + 1);
+        for (const std::string& a : args) argv.push_back(const_cast<char*>(a.c_str()));
+        argv.push_back(nullptr);
+        execvp(argv[0], argv.data());
+        _exit(127);
+    }
+    return pid;
+}
+
+int findDescendant(int root, const std::string& name) {
+    // Every process's parent and name, from /proc/<pid>/stat. The name is in
+    // brackets and may itself contain spaces or brackets, so it is everything
+    // between the first '(' and the LAST ')'.
+    std::vector<std::pair<int, int>> links;   // pid, parent
+    std::vector<std::string> names;
+    DIR* d = opendir("/proc");
+    if (!d) return -1;
+    while (dirent* e = readdir(d)) {
+        const int pid = std::atoi(e->d_name);
+        if (pid <= 0) continue;
+        char path[64];
+        std::snprintf(path, sizeof path, "/proc/%d/stat", pid);
+        FILE* f = std::fopen(path, "r");
+        if (!f) continue;
+        char buf[512];
+        const size_t n = std::fread(buf, 1, sizeof buf - 1, f);
+        std::fclose(f);
+        buf[n] = '\0';
+        const char* open = std::strchr(buf, '(');
+        const char* close = std::strrchr(buf, ')');
+        if (!open || !close || close < open) continue;
+        int parent = 0;
+        char state = 0;
+        if (std::sscanf(close + 1, " %c %d", &state, &parent) != 2) continue;
+        links.emplace_back(pid, parent);
+        names.emplace_back(open + 1, close);
+    }
+    closedir(d);
+
+    std::vector<int> frontier{root};
+    while (!frontier.empty()) {
+        std::vector<int> next;
+        for (size_t i = 0; i < links.size(); ++i) {
+            if (std::find(frontier.begin(), frontier.end(), links[i].second) == frontier.end())
+                continue;
+            if (names[i] == name) return links[i].first;
+            next.push_back(links[i].first);
+        }
+        frontier = std::move(next);
+    }
+    return -1;
 }
 
 std::string trimmed(const std::string& s) {

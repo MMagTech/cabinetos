@@ -180,6 +180,14 @@ std::string biosDir();
 std::string configDir();
 std::string logsDir();
 
+// An emulator that is a whole application keeps ALL of its own state here, one
+// folder each: `emulators/eden/user/` is Eden's keys, system memory, saves,
+// settings and shader cache. Shared by everyone on the console, like `bios/`,
+// and kept out of the emulator's default home so it is on the same disk as
+// everything else the console owns and can be counted. docs/PROJECT.md, open
+// question 32.
+std::string emulatorsDir();
+
 // Where the image puts the files a core needs and nobody may edit — today that
 // is PPSSPP's fonts and lookup tables. Read-only on a console by construction:
 // it is inside the bootc image. `ensureTree` links what it finds there into the

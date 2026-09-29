@@ -4,6 +4,7 @@
 
 #include <cstdio>
 #include <dlfcn.h>
+#include <initializer_list>
 
 namespace cab::overlaywin {
 namespace {
@@ -30,12 +31,14 @@ using PFN_XInternAtom = XAtom (*)(XDisplay*, const char*, int);
 using PFN_XChangeProperty = int (*)(XDisplay*, XID, XAtom, XAtom, int, int,
                                     const unsigned char*, int);
 using PFN_XFlush = int (*)(XDisplay*);
+using PFN_XDeleteProperty = int (*)(XDisplay*, XID, XAtom);
 
 struct Xlib {
     void* handle = nullptr;
     PFN_XInternAtom InternAtom = nullptr;
     PFN_XChangeProperty ChangeProperty = nullptr;
     PFN_XFlush Flush = nullptr;
+    PFN_XDeleteProperty DeleteProperty = nullptr;
     bool ok = false;
 };
 
@@ -51,7 +54,9 @@ Xlib& xlib() {
         r.ChangeProperty =
             reinterpret_cast<PFN_XChangeProperty>(dlsym(r.handle, "XChangeProperty"));
         r.Flush = reinterpret_cast<PFN_XFlush>(dlsym(r.handle, "XFlush"));
-        r.ok = r.InternAtom && r.ChangeProperty && r.Flush;
+        r.DeleteProperty =
+            reinterpret_cast<PFN_XDeleteProperty>(dlsym(r.handle, "XDeleteProperty"));
+        r.ok = r.InternAtom && r.ChangeProperty && r.Flush && r.DeleteProperty;
         if (!r.ok) std::fprintf(stderr, "[overlay] libX11 is missing a symbol\n");
         return r;
     }();
@@ -101,6 +106,23 @@ bool mark(SDL_Window* window, bool takeInput) {
                      xid, takeInput ? "ours" : "game's");
     }
     g_active = true;
+    return true;
+}
+
+bool unmark(SDL_Window* window) {
+    Xlib& x = xlib();
+    if (!x.ok) return false;
+    SDL_PropertiesID props = SDL_GetWindowProperties(window);
+    auto* dpy = static_cast<XDisplay*>(
+        SDL_GetPointerProperty(props, SDL_PROP_WINDOW_X11_DISPLAY_POINTER, nullptr));
+    const auto xid =
+        static_cast<XID>(SDL_GetNumberProperty(props, SDL_PROP_WINDOW_X11_WINDOW_NUMBER, 0));
+    if (!dpy || !xid) return false;
+    for (const char* name : {"STEAM_OVERLAY", "STEAM_INPUT_FOCUS", "GAMESCOPE_NO_FOCUS"})
+        x.DeleteProperty(dpy, xid, x.InternAtom(dpy, name, 0));
+    x.Flush(dpy);
+    g_active = false;
+    std::fprintf(stderr, "[overlay] window 0x%lx is an ordinary window again\n", xid);
     return true;
 }
 

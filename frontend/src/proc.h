@@ -58,6 +58,21 @@ Result run(const std::vector<std::string>& args, int timeoutSeconds,
            const std::atomic<bool>* cancel,
            const std::function<void(const std::string& line)>& onLine);
 
+// A program that runs ALONGSIDE the console rather than being waited for: an
+// emulator that is a whole application (docs/PROJECT.md, open question 32).
+// Returns its pid, or -1 when it could not be started. It gets a session of
+// its own, so a signal meant for the console never reaches it, and what it
+// prints is appended to `logPath` rather than mixed into the console's journal.
+// The caller reaps it with waitpid; nothing here waits.
+int spawn(const std::vector<std::string>& args, const std::string& logPath);
+
+// The first process below `root` whose name is `name`, or -1. A Flatpak is
+// three processes deep (the sandbox, its init, then the program), and a signal
+// to either sandbox process is ignored: measured 2026-09-28, SIGTERM to
+// `flatpak ps`'s own child-pid left Eden running, and the same signal to Eden
+// closed it in 0.8 s.
+int findDescendant(int root, const std::string& name);
+
 // Whitespace off both ends. Every one of these tools newline-terminates
 // everything, and a trailing newline in an error message reads badly on a
 // television.

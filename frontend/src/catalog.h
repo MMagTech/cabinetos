@@ -147,6 +147,9 @@ std::string displayQualifier(const romm::Platform& p);
 // gets the short form and the launch screen, which has a column to itself, gets
 // the sentence.
 const char* shortReason(Support s);
+// The same, for a platform: an emulator that is its own application is not a
+// core, so it is never "not built"; it is waiting for first boot to install it.
+const char* shortReason(const Coverage& c);
 
 // Deliberate core-option choices, keyed by the core's file or manifest name.
 //
