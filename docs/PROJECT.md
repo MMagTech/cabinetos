@@ -14320,6 +14320,7 @@ drive would cap at about 3 GB but put every game's saves in one file.
 | The game goes to the dashboard (disc ejected, Xbox reset from xemu's monitor) | seen within a second; xemu closed; Home |
 | Back and Start, and Guide, on a real pad | no xemu menu; Guide opens the console's pause menu |
 | A playing game in the storage report | not listed as evictable while its note is there |
+| Two players, and rumble on a real pad | both work: MMagTech on the TV, 2026-09-29 |
 
 **A fault this found, not Xbox's: a restore undid a save still on its way
 up.** After the power cut the recovered save was queued, the game started
@@ -14345,4 +14346,4 @@ drive, protected, until they are the one here.
 - Starting Stubbs writes its own title files, so a first run with no profile
   still sends a small save (Claire's 3 KB row on RomM is from this test).
 - Untested: a full disc dump (none on the server), a missing BIOS on RomM,
-  an Xbox game on the external drive, rumble.
+  an Xbox game on the external drive.
