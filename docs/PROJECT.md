@@ -14441,3 +14441,51 @@ the request with the profile already signed in on that slot, or cancels,
 without the dialog (has207/xenia-edge#286). Recommended until it lands: ship
 with the box as a known gap, since a pad can drive it and only a game's own
 request brings it up; then move the pin, no patch.
+
+Zips on RomM stay as they are for the older systems, whose cores expect them
+(MMagTech, 2026-09-30); for PS3, Xbox and Xbox 360 the library keeps plain
+files. Left 4 Dead 2 was replaced on RomM with its plain ISO.
+
+#### What was built, 2026-09-30
+
+- `build_files/install-xenia.sh`: Edge `a7c39fa`, its AppImage pinned by
+  checksum (GitHub's own digest agrees), unpacked into
+  `/usr/lib/cabinetos/xenia`, a layer of its own after RPCS3's.
+- `x360profile.cpp`: the profile file, written by the console. Checked
+  against one Edge made itself: byte for byte the same. The one profile ID is
+  `E030000043414231` ("CAB1"), never to change. The gamertag is the name on
+  Home: letters, digits and spaces, punctuation as a space, at most 15.
+- `standalone.cpp`: a `xenia` row. Edge's storage root is its home
+  (`emulators/xenia/`: shader cache, game scratch); its content root is the
+  person's folder for the game, `saves/<platform>/<rom>/xenia/content`, so
+  Edge writes the saves there itself and nothing is copied. Every setting is
+  on the command line and Edge's own settings file is deleted before each
+  start. Vulkan on the device the console chose (`gpu.cpp` now records its
+  place in the list, `--vulkan_device`). Only the virtual controllers, bound
+  to slots by SDL GUID (`--slot_bindings_passthrough`). Closed by its window.
+  A failed load or a fatal error mid-game is an `x>` line in its log.
+- A note in the person's folder while a game runs. A note found at the next
+  start of the console, or at the next launch of that game, means the save
+  was never zipped: the whole folder is zipped, owed and sent before any
+  restore.
+- **A fault in every folder save, found here and fixed:** only the folders
+  touched that session were zipped, and RomM replaces a save by filename, so
+  the server's copy lost whatever was not touched (Forza's shared
+  `0000000000000000` folder; a PSP game's second save folder). The whole
+  folder goes now.
+
+#### Exercised on the A9, 2026-09-30 (driven over SSH with fake pads)
+
+| Scenario | Result |
+|---|---|
+| Forza Horizon 2 from the console | downloaded, "signed in as MMagTech", title screen with no dialog and no menu bar; Edge on the Radeon; only "CabinetOS player 1" seen, in slot 0 |
+| A press reaches the game | Start began Forza's intro; Forza wrote its first save straight into the person's folder |
+| Guide | the console's pause menu; Edge frozen (state T); Resume thawed it |
+| Exit to Home | closed by its window, exit 0; 10 files zipped, uploaded as `xenia`; the note gone |
+| Play again | RomM's zip came down; Forza skipped the intro it had shown the first time (the save held); no "tampered" |
+| Power cut (the console and Edge killed mid-game) | at restart: "never zipped after its last game; sending it all", owed, the restore kept it, the upload landed |
+| Renegade Ops (Arcade, no extension) | opened as it is; full game; its Exit Game: "game requested exit to dashboard", the console closed Edge and was on Home within 0.14 s |
+| Charlie Murder (XNA) through the console | title screen, the pad works, closed and saved |
+| Two players, Left 4 Dead 2 | two virtual controllers, slots 0 and 1; player 2's Start made the game ask that player to sign in (the known gap) |
+
+Not yet: rumble on a real pad, and MMagTech's look on the TV.
