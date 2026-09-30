@@ -126,6 +126,8 @@ here. See `frontend/src/catalog.cpp`.
 | **The libraries RPCS3's build carries** (Qt 6, FFmpeg, SDL 3, OpenCV, OpenAL and others, in its `usr/lib`) | bundled by the RPCS3 team in the same build, unchanged | each under its own licence, as RPCS3 ships them (Qt LGPL v3, FFmpeg LGPL v2.1 or later, SDL zlib) |
 | **xemu's blank Xbox hard drive**, `/usr/share/cabinetos/xemu/xbox_hdd.qcow2` | `xbox_hdd.qcow2` from `xemu-project/xemu-dashboard` release `v20260516-0955`, unmodified, pinned by checksum in `build_files/install-xemu-drive.sh`. It holds the open-source xemu-dashboard and nothing of Microsoft's | MIT, with the libraries the dashboard is built from (nxdk and others) under their own licences, as xemu-dashboard ships them |
 | **The Xbox EEPROM**, `/usr/share/cabinetos/xemu/eeprom.bin` | made once by this project's `tools/xbox-eeprom.py`, the way xemu makes one | MIT, as CabinetOS |
+| **Xenia Edge**, in `/usr/lib/cabinetos/xenia` | its developer's official Linux build, release `a7c39fa` of `has207/xenia-edge` (`xenia_edge_linux.AppImage`), unmodified, pinned by checksum in `build_files/install-xenia.sh`; source is `has207/xenia-edge` at commit `a7c39fa7d9c54d83022e431da62c1c65bf3e6196` | BSD 3-Clause |
+| **The libraries Xenia Edge's build carries** (GTK 3, GLib, cairo, SDL 3, X11 libraries and others, in its `usr/lib`) | bundled by Edge's own AppImage build, unchanged | each under its own licence, as Edge ships them (GTK, GLib and cairo LGPL, SDL zlib, the X11 libraries MIT) |
 
 PSP is the only platform whose "firmware" ships with the emulator rather than
 coming from RomM. Every other system's BIOS is fetched at runtime from the
@@ -144,6 +146,11 @@ section 5 asks of a modified version.
 **PLAYSTATION 3 IS A WHOLE PROGRAM, NOT A CORE**, run beside the frontend
 rather than inside it. It is the RPCS3 team's own build, shipped exactly as
 they publish it, and only unpacked from its AppImage; nothing in it is patched.
+**XBOX 360 IS A WHOLE PROGRAM TOO**, Xenia Edge's own build, shipped as its
+developer publishes it and only unpacked; nothing is patched. The profile file
+the console writes for it (`frontend/src/x360profile.cpp`) is encrypted the
+way Edge encrypts its own, with the key Edge publishes in its BSD-licensed
+source; no game, BIOS or firmware is involved, and Xbox 360 needs none.
 Switch (Eden) and Xbox (xemu) are not in the image at all: each console
 installs them from Flathub, which distributes them (open question 21). Only
 xemu's blank drive and the EEPROM are in the image, in the table above; the
