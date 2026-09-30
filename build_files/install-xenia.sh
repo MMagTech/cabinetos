@@ -73,6 +73,23 @@ cp -a "${root}/usr" "${DEST}/"
 rm -f "${DEST}/usr/bin/"*.log
 printf '%s\n' "${XENIA_VERSION}" > "${DEST}/VERSION"
 
+# READABLE BY EVERYONE, which the AppImage is not. It unpacks with its top
+# folder 0700 and `cp -a` kept that, so the first testing image had
+# /usr/lib/cabinetos/xenia/usr readable by root alone: the console, which runs
+# as `cabinet`, could not see the program and said Xbox 360's emulator was not
+# installed (2026-09-30). RPCS3's AppImage does not do this. Every file gets
+# its owner's read bit for everyone, and the execute bit where the owner has
+# one; then the check below fails the build if anything is still shut.
+chmod -R u+rwX,go+rX,go-w "${DEST}"
+shut="$(find "${DEST}" ! -perm -o+r | head -5)"
+if [[ -n "${shut}" ]]; then
+    log "ERROR: files in ${DEST} that the console's user cannot read:"
+    echo "${shut}"
+    exit 1
+fi
+[[ -x "${DEST}/usr/bin/xenia_edge" && "$(stat -c %A "${DEST}/usr/bin/xenia_edge")" == *x ]] ||
+    { log "ERROR: xenia_edge is not executable by everyone"; exit 1; }
+
 # THE CHECK THAT CAN BE MADE HERE: every library it needs resolves, against
 # the image's own. It cannot be started in the build container: it opens its
 # window before anything else, and there is no display. The A9 is where it is
