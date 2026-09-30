@@ -4,6 +4,7 @@
 #include "proc.h"
 #include "storage.h"
 #include "vpad.h"
+#include "x360profile.h"
 #include "xboxhdd.h"
 
 #include <archive.h>
@@ -78,6 +79,25 @@ const Emulator kEmulators[] = {
      nullptr, nullptr,
      nullptr, 0,
      "iso|xiso", "BIOS", true, false, false, true, true},
+
+    // XBOX 360. Xenia Edge's own Linux build, in the image
+    // (build_files/install-xenia.sh). Its log is where the console tells it
+    // (`--log_file`); a load that fails, and any fatal error later, is an
+    // `x>` line there, then an error box nobody can press (base/logging.cc,
+    // FatalError). SIGTERM does nothing: SDL takes it and Edge never reads
+    // SDL's quit (measured on the A9, 2026-09-29), so it is closed by its
+    // window, which exits 0 at once. A game that quits to the dashboard
+    // leaves Edge open on its own list, and its window title loses the
+    // `| [TITLEID vVER] Name` part: `Xenia-edge (...) <x64>` idle,
+    // `Xenia-edge (...) | [4D530AA4 v0.0.0.12] Forza Horizon 2 <...>` in a
+    // game (emulator_window.cc). Issue #192; open question 34.
+    {"xenia", nullptr, "/usr/lib/cabinetos/xenia/usr/bin/xenia_edge", "xenia_edge", "xenia.log",
+     {"Failed to launch target", "x> "},
+     {nullptr, nullptr, nullptr, nullptr},
+     nullptr,
+     "x> ",
+     "Xenia-edge", 2,
+     "iso|xex|zar", "", false, false, true, false, false},
 };
 
 // How long a program that was asked to close gets before it is made to.
@@ -1298,6 +1318,49 @@ bool installXbox(const std::string& entryPath, std::string* romPath, std::string
     return true;
 }
 
+// --- Xbox 360 (Xenia Edge) --------------------------------------------------
+//
+// Decided with MMagTech 2026-09-29, issue #192, open question 34: Edge as it
+// ships, never patched; one profile ID on every console for good
+// (x360profile.h), named for the person on Home; the person's saves written
+// straight into their own folder for the game, as Eden's are.
+//
+// WHERE THINGS ARE. Edge's storage root is its home here, shared by every
+// game and person: its shader cache and the game-scratch `cache` folders,
+// none of which is progress. Its CONTENT ROOT, where the profile and the
+// saves live, is `<saveDir>/content`: this person's folder for this game.
+// So two people and two games never share one, nothing is copied in or out
+// around a game, and the zip that travels is Xenia's own layout,
+// `<XUID>/...` and `0000000000000000/...`, which drops into any Xenia.
+//
+// WHY THE WHOLE PROFILE FOLDER TRAVELS. A game's own GPD (achievements, and
+// the settings some games keep there) is rewritten empty at start unless the
+// profile's dashboard GPD, FFFE07D1.gpd, lists that game (user_profile.cc);
+// measured on the A9: 41,780 bytes became 35,208. Both sit in the profile
+// folder, which is in the content root, so they come down together.
+
+std::string xeniaContent(const std::string& saveDir) { return saveDir + "/content"; }
+
+bool prepareXenia(const Emulator& e, const std::string& saveDir, std::string* err) {
+    const std::string dir = home(e);
+    storage::makeDirs(dir);
+    storage::makeDirs(xeniaContent(saveDir));
+    // EACH PLAYER'S CONTROLLER, BY NAME, as for xemu: Edge binds slots to
+    // these SDL GUIDs (`--slot_bindings_passthrough`) and never sees a real
+    // pad (Run::start).
+    std::string db;
+    for (int p = 0; p < cab::vpad::kMaxPlayers; ++p) db += cab::vpad::sdlMapping(p) + "\n";
+    if (!writeFile(dir + "/gamecontrollerdb.txt", db)) {
+        *err = "could not write Xenia's controller list";
+        return false;
+    }
+    // THE CONSOLE'S SETTINGS ARE ALL ON THE COMMAND LINE (Run::start), so the
+    // settings file Edge writes back is thrown away before every start and
+    // nothing it kept from last time can differ.
+    ::unlink((dir + "/xenia-edge.config.toml").c_str());
+    return true;
+}
+
 }  // namespace
 
 const Emulator* find(const std::string& core) {
@@ -1376,6 +1439,7 @@ bool prepare(const Emulator& e, const std::string& entryPath, const std::string&
         return prepareRpcs3(e, entryPath, saveDir, player, players, missingKeys, err);
     if (std::strcmp(e.core, "xemu") == 0)
         return prepareXemu(e, entryPath, players, missingKeys, err);
+    if (std::strcmp(e.core, "xenia") == 0) return prepareXenia(e, saveDir, err);
     *err = std::string("nothing prepares ") + e.core;
     return false;
 }
@@ -1384,6 +1448,8 @@ std::string saveRoot(const Emulator& e, const std::string& saveDir) {
     // Xbox: a copy of the drive's E: as far as saves go, `UDATA/<title ID>/`
     // and `TDATA/<title ID>/`, so the zip drops straight onto any xemu drive.
     if (std::strcmp(e.core, "xemu") == 0) return saveDir + "/E";
+    // Xbox 360: Edge's content root, `<XUID>/` and `0000000000000000/`.
+    if (std::strcmp(e.core, "xenia") == 0) return xeniaContent(saveDir);
     if (std::strcmp(e.core, "rpcs3") == 0)
         return saveDir + "/hdd0/home/" + kPs3User + "/savedata";
     if (std::strcmp(e.core, "eden") == 0) {
@@ -1435,7 +1501,25 @@ uint32_t Run::pollXboxTitle() {
 }
 
 bool beforeStart(const Emulator& e, const std::string& entryPath, const std::string& saveDir,
-                 const std::string& note, std::string* err) {
+                 const std::string& player, const std::string& note, std::string* err) {
+    if (std::strcmp(e.core, "xenia") == 0) {
+        // The note first, in the person's folder: from here until the save
+        // is zipped, Edge writes there and nothing has been sent.
+        if (!writeFile(saveDir + "/" + kPlayingNote, note)) {
+            *err = "could not mark " + saveDir + " as playing";
+            return false;
+        }
+        // AFTER the save came down, which may hold a profile file of its own
+        // from another console or an older name: this one is who is here.
+        const std::string tag = x360profile::gamertag(player);
+        if (!x360profile::writeAccount(x360profile::accountPath(xeniaContent(saveDir)), tag,
+                                       err)) {
+            ::unlink((saveDir + "/" + kPlayingNote).c_str());
+            return false;
+        }
+        std::fprintf(stderr, "[x360] signed in as %s (%s)\n", tag.c_str(), x360profile::kXuid);
+        return true;
+    }
     if (std::strcmp(e.core, "xemu") != 0) return true;
     // The note first: from here until afterEnd, this folder holds somebody's
     // saves that are nowhere else once the game writes to the drive.
@@ -1471,6 +1555,10 @@ bool afterEnd(const Emulator& e, const std::string& entryPath, const std::string
     }
     ::unlink((entryPath + "/" + kPlayingNote).c_str());
     return true;
+}
+
+void finished(const Emulator& e, const std::string& saveDir) {
+    if (std::strcmp(e.core, "xenia") == 0) ::unlink((saveDir + "/" + kPlayingNote).c_str());
 }
 
 std::string playingNote(const std::string& entryPath) {
@@ -1547,9 +1635,53 @@ bool Run::start(const Emulator& e, const std::string& romPath, const std::string
             // gamescope's Xwayland, as for Eden below.
             "QT_QPA_PLATFORM=xcb",
             "SDL_JOYSTICK_HIDAPI=0",
-            binaryOf(e), "--no-gui", "--fullscreen", romPath,
+            binaryOf(e),
         };
-        root_ = proc::spawn(args, out);
+        std::vector<std::string> full = args;
+        if (std::strcmp(e.core, "xenia") == 0) {
+            // ONLY THE VIRTUAL CONTROLLERS, as for xemu: Edge's menus read
+            // what is bound to a slot, and its slots auto-bind whatever SDL
+            // shows it. SDL's own hint, no patch. GTK on gamescope's Xwayland.
+            full.insert(full.end() - 1, "SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT=0x1209/0xCAB0");
+            full.insert(full.end() - 1, "GDK_BACKEND=x11");
+            std::string slots;
+            for (int p = 0; p < 4; ++p) {
+                if (p) slots += ';';
+                if (p < cab::vpad::count()) slots += cab::vpad::sdlGuid(p);
+            }
+            const int gpu = cab::gpu::vulkan().deviceIndex;
+            // The settings the A9 measurement ran with (Batocera's), the
+            // integration's own, and nothing else. Names are Edge's cvars.
+            for (const std::string& a : std::vector<std::string>{
+                     "--storage_root=" + dir,
+                     "--content_root=" + xeniaContent(saveDir),
+                     "--log_file=" + logPath_,
+                     "--log_to_stdout=false",
+                     "--logged_profile_slot_0_xuid=" + std::string(x360profile::kXuid),
+                     "--fullscreen=true",
+                     // Vulkan on the GPU the console chose, never llvmpipe.
+                     "--gpu=vulkan",
+                     "--vulkan_device=" + std::to_string(gpu),
+                     "--discord=false",
+                     // Guide is the console's pause menu; no mouse menu.
+                     "--guide_button=false",
+                     "--disable_game_window_mouse=true",
+                     // Arcade games as the full game, not the trial.
+                     "--license_mask=1",
+                     "--mappings_file=" + dir + "/gamecontrollerdb.txt",
+                     "--slot_bindings_passthrough=" + slots,
+                     "--render_target_path=performance",
+                     "--occlusion_query=fast",
+                     "--async_shader_compilation=true",
+                     "--mount_scratch=true",
+                     "--protect_zero=false",
+                     romPath,
+                 })
+                full.push_back(a);
+        } else {
+            full.insert(full.end(), {"--no-gui", "--fullscreen", romPath});
+        }
+        root_ = proc::spawn(full, out);
         if (root_ <= 0) {
             *err = "could not start " + binaryOf(e);
             root_ = -1;

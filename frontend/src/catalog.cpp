@@ -85,6 +85,7 @@ const Entry kTable[] = {
     {"switch",               nullptr,     Support::Playable, "eden",            nullptr},
     {"ps3",                  nullptr,     Support::Playable, "rpcs3",           nullptr},
     {"xbox",                 nullptr,     Support::Playable, "xemu",            nullptr},
+    {"xbox360",              nullptr,     Support::Playable, "xenia",           nullptr},
 
     // A core exists and Cabinet does not ship it. The manifest says so in as
     // many words — "iOS-only by decision" — and there is no tvOS build, which
@@ -293,7 +294,8 @@ const char* emulatorTag(const char* core) {
 bool snapshotsAllowed(const char* core) {
     if (!core) return true;
     // True to the machines: memory-card consoles, and everything after them.
-    static const char* const kNoSnapshots[] = {"pcsx2", "dolphin", "eden", "rpcs3", "xemu"};
+    static const char* const kNoSnapshots[] = {"pcsx2", "dolphin", "eden", "rpcs3", "xemu",
+                                               "xenia"};
     for (const char* c : kNoSnapshots)
         if (std::strcmp(c, core) == 0) return false;
     return true;
@@ -346,6 +348,11 @@ const char* saveTag(const char* core) {
         // E:, which drops onto any xemu drive (xboxhdd.h). No Cabinet app
         // plays Xbox either.
         {"xemu", "xemu"},
+        // Xbox 360, in Xenia Edge: a zip of Xenia's own content folder, the
+        // profile's folder and the game's saves under the one profile ID
+        // (x360profile.h), which drops into any Xenia. No Cabinet app plays
+        // Xbox 360 either.
+        {"xenia", "xenia"},
     };
     const std::string name = manifestName(core);
     for (const auto& t : kSaveTags)

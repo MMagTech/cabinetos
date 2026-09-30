@@ -1,11 +1,13 @@
 // Emulators that are whole applications, played as games.
 //
-// WHAT THIS IS FOR. Switch (Eden), PS3 (RPCS3), Xbox (xemu) and Wii U (Cemu)
-// are not libretro cores and cannot be loaded into this process the way the
-// other systems are (PS2 included). Eden and xemu come from Flathub, pinned in
-// flatpaks.list; RPCS3 is the RPCS3 team's own build, in the image
-// (build_files/install-rpcs3.sh), because its Flatpak shows a warning box on
-// every start. Each one opens its own window and draws its own picture.
+// WHAT THIS IS FOR. Switch (Eden), PS3 (RPCS3), Xbox (xemu), Xbox 360 (Xenia
+// Edge) and Wii U (Cemu) are not libretro cores and cannot be loaded into this
+// process the way the other systems are (PS2 included). Eden and xemu come
+// from Flathub, pinned in flatpaks.list; RPCS3 is the RPCS3 team's own build,
+// in the image (build_files/install-rpcs3.sh), because its Flatpak shows a
+// warning box on every start; Xenia Edge is its developer's own build, in the
+// image too (build_files/install-xenia.sh), because it is not on Flathub.
+// Each one opens its own window and draws its own picture.
 // So the console starts the emulator as a separate program, hands it the
 // television, and takes the screen back when it ends. docs/PROJECT.md, open
 // questions 21, 24 and 32; issue #169.
@@ -161,21 +163,30 @@ bool prepare(const Emulator& e, const std::string& entryPath, const std::string&
 // `hdd0/home/00000001/savedata`, whose folders are named by the game too.
 std::string saveRoot(const Emulator& e, const std::string& saveDir);
 
-// AROUND A GAME, for an emulator whose saves live somewhere the console has to
-// carry them to and from (xemu: its hard drive image). `beforeStart` runs
-// after this person's saves are unpacked into saveRoot, `afterEnd` after the
-// emulator has gone and before they are zipped. Nothing for the others.
+// AROUND A GAME. `beforeStart` runs after this person's saves are unpacked
+// into saveRoot, `afterEnd` after the emulator has gone and before they are
+// zipped, `finished` once the zip is written and owed to the server.
 //
-// While a game runs, its folder holds a note saying whose saves are on the
-// drive; eviction leaves such a folder alone (cache.cpp), and
-// `unfinishedGames` finds them after a crash or a power cut.
+// xemu: the saves are carried onto its hard drive image and off it again.
+// While a game runs, the GAME's folder holds a note saying whose saves are on
+// the drive; eviction leaves such a folder alone (cache.cpp), and the next
+// start of the console finishes it after a crash or a power cut.
+//
+// Xenia: the profile is written, named `player` (x360profile.h), and the
+// note goes in the PERSON's folder for the game (`saveDir`), where Edge
+// writes the saves itself. A note still there at the next start or the next
+// launch of that game means the last one never got its saves zipped, and
+// the whole folder is sent then.
+//
+// Nothing for the others.
 bool beforeStart(const Emulator& e, const std::string& entryPath, const std::string& saveDir,
-                 const std::string& note, std::string* err);
+                 const std::string& player, const std::string& note, std::string* err);
 bool afterEnd(const Emulator& e, const std::string& entryPath, const std::string& saveDir,
               std::string* err);
-// The note in a game's folder while a game runs there, or empty.
-std::string playingNote(const std::string& entryPath);
-bool hasPlayingNote(const std::string& entryPath);
+void finished(const Emulator& e, const std::string& saveDir);
+// The note in a folder (a game's for xemu, a person's for Xenia), or empty.
+std::string playingNote(const std::string& folder);
+bool hasPlayingNote(const std::string& folder);
 
 // One running game.
 class Run {
