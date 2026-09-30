@@ -14489,3 +14489,193 @@ files. Left 4 Dead 2 was replaced on RomM with its plain ISO.
 | Two players, Left 4 Dead 2 | two virtual controllers, slots 0 and 1; player 2's Start made the game ask that player to sign in (the known gap) |
 
 Not yet: rumble on a real pad, and MMagTech's look on the TV.
+
+### 35. Wii (Dolphin), issue #173
+**Researched and decided with MMagTech 2026-09-30.** Research only; no code.
+
+#### DECIDED, MMagTech 2026-09-30
+
+| | Decided |
+|---|---|
+| The emulator | the Dolphin core GameCube already uses; nothing new to build or carry |
+| Which games play on a pad | a game plays on an ordinary pad when GameTDB (below) says it takes a Classic Controller or a GameCube pad. Every other Wii game needs a real Wii Remote and is greyed out, "Needs a Wii Remote", until one is paired. A game GameTDB does not list counts as needing a Remote. One rule, no per-game exceptions: Kirby's Return to Dream Land and Donkey Kong Country Returns would play well on a pad and are greyed out anyway, because the data cannot tell them from pointer and motion games. MMagTech: it "stays true to the console experience" |
+| Un-greying Remote games | **as a Wii does it**: pair a Remote once ("Pair a Wii Remote" in Bluetooth, the Remote's red sync button), and the console remembers it. While any Wii Remote is paired, Remote games are playable; a Remote connects by pressing a button, as on a Wii. Nothing searches in the background. Remove every paired Remote and they grey out again. No setting |
+| The sensor bar | asked once while pairing ("Above the TV" / "Below the TV"), as a Wii's own settings ask it, and always visible under Bluetooth's Wii Remote section beside "Pair a Wii Remote", paired or not. Dolphin's default is below |
+| The order | the pad half first (#173); real Wii Remotes after, #200, from what is recorded here and not reopened |
+| If a paired Remote cannot reconnect on its own | fall back to a Settings switch, "Wii Remotes", off by default; a Remote is then synced each time a Remote game starts |
+| WiiWare and Virtual Console (`.wad`) | in, with the rest of Wii, not after the release (MMagTech). Dolphin installs a WAD into the NAND and boots it; the NAND is per person per game here, so each install stays with its game. The same rule applies: Mega Man 9 (WR9E, Classic) plays on a pad, World of Goo (WGOE, Remote only) needs a Remote. Virtual Console mostly repeats systems the console already plays |
+| Motion from a pad's own gyro (DualSense, DualShock 4, Switch Pro) | after the first release. The core can use it (`RETRO_ENVIRONMENT_GET_SENSOR_INTERFACE`); the frontend does not offer it yet |
+| Hardware | MMagTech's own, ordered 2026-09-30, due 2026-10-03: two third-party Wii Remotes with MotionPlus built in, with Nunchuks (TechKen), and a USB-powered sensor bar (Aokin). The bar is two infrared lights on a USB power cable; the console never sees it. Not bought: the Mayflash DolphinBar, because copies like these are reported to pair badly with it or drop. It is plan C |
+
+#### What a person does, and what happens
+
+| Scenario | What happens |
+|---|---|
+| Mario Kart Wii, Xbox pad, no Remote | plays; the pad is a Classic Controller (or a GameCube pad, to be judged on the TV); a normal console-racer layout |
+| Kirby, no Remote ever paired | greyed out, "Needs a Wii Remote" |
+| First Remote | Bluetooth, Pair a Wii Remote, red button; "Wii Remote paired"; Kirby un-greys |
+| Next day | pick Kirby, press a button on the Remote, play |
+| Two Remotes and a pad in Mario Kart | to decide after the test: which player gets which |
+| A game shows "Press 2" or "Shake the Wii Remote" on a pad | only happens on Remote games now, which need a Remote; pad games use Classic or GameCube prompts |
+| The game's HOME menu, "Wii Menu" | untested; there is no Wii Menu installed, so it probably ends emulation. The console should treat that as the game ending |
+| A Wii Sports Resort or Skyward Sword owner | MotionPlus is built into the Remotes above; untested |
+
+#### The emulator, measured on the A9 2026-09-30
+
+`dolphin_libretro.so` at `1a0f97270b` reports **dolphin-emu 2606.0.678**:
+Dolphin's 2606 release plus 282 upstream commits (last merged from upstream
+2026-08-07), 131 behind upstream master. Not the stale fork it once was.
+Geometry Wars: Galaxies (RGLE7D) booted offscreen through `--core --rom`: Vulkan
+on the Radeon, 640x528 at 59.94 fps, aspect 1.7778 (16:9), the game's own
+wrist-strap screen. The console hides Wii only because `catalog.cpp` has no
+`wii` row ("no core in the manifest serves this system").
+
+Batocera plays Wii on standalone Dolphin (OpenGL by default), RetroArch on this
+same core. Neither is a reason to change: the core is current, already on
+Vulkan here, and GameCube runs on it.
+
+#### Dolphin's `Sys` folder is not in the image, and Wii needs it
+
+Found here, and true of GameCube too: `/var/lib/cabinetos/bios/dolphin-emu/Sys`
+(15 MB) on the A9 is a hand copy dated 2026-09-20. Nothing in `ci/`,
+`build_files/` or `cores/` puts it anywhere. With it set aside the same Wii
+game still booted, but the core logged `codehandler.bin missing`, the
+post-processing shader missing, and `Sys/Wii` missing. Silently lost as well:
+Dolphin's own per-game settings (1,875 files), for example
+`SafeTextureCacheColorSamples = 512` for Donkey Kong Country Returns,
+`EFBEmulateFormatChanges = True` for Mario Kart Wii, and an enabled fix for A
+Boy and His Blob ("Fix selecting right-most bean"). `Sys/Wii/shared2/wc24` is
+copied into the NAND at every Wii boot, and Mario Kart Wii uses it.
+**Dolphin's own database, not ours**, and RetroArch's core info names it as
+required. It ships from the pinned commit's `Data/Sys` into `/usr` (rule 9),
+linked into the system directory as PPSSPP's and PCSX2's files are.
+
+#### Controllers, from the core's source at the pin
+
+The console already calls `retro_set_controller_port_device` with
+`RETRO_DEVICE_JOYPAD` (1), which Dolphin reads as an upright Wii Remote: X and Y
+are 1 and 2, R2 shakes, R3 is HOME. Measured: `[input] port 0: ... X=1, Y=2,
+R2 (trigger)=Shake Wiimote, Start=+, Select=-, R3 (stick click)=Home`.
+
+| Device | Id | On a pad |
+|---|---|---|
+| Wii Remote, upright | 1 | pointer on the right stick (absolute), tilt on the left |
+| Wii Remote, sideways | 513 | an NES pad: 1 and 2 on the face, shake on R2 |
+| Remote + Nunchuk | 769 | Nunchuk stick left, pointer right, C and Z on X and Y |
+| Remote + Classic Controller | 1025 | a normal pad; L and R are **analogue only** |
+| Remote + Classic Controller Pro | 1281 | a normal pad; L and R digital |
+| MotionPlus variants | 1793 to 2817 | the same, with MotionPlus attached |
+| GameCube pad in a Wii game | 1537 | as on GameCube |
+| Real Wii Remote | 1536 | a subclass of NONE: never mask it to its base type |
+
+- Ids are sent AFTER `retro_load_game` (the list exists only then). An
+  unknown id is taken as sideways; a port never set has no controller at all.
+- **L3 flips a Remote between upright and sideways mid-game by default**
+  (`dolphin_hotkey_sideways_toggle`). To be `Disabled`.
+- Every option is declared only with a game loaded (about 93), one list for
+  GameCube and Wii. Wii's: `dolphin_language` English,
+  `dolphin_widescreen` on, `dolphin_progressive_scan` on, `dolphin_pal60` on
+  (Mario Kart Wii on RomM is the PAL release, RMCP01),
+  `dolphin_sensor_bar_position` Bottom, `dolphin_ir_mode` right stick absolute,
+  `dolphin_wiimote_continuous_scanning` off, `dolphin_bluetooth_passthrough`
+  off. The core writes these into SYSCONF at every boot; no file patching.
+- Per-game controller choice: the core has none.
+
+#### GameTDB, and why a list
+
+Every Wii disc names itself in its header (Kirby `SUKE01`). GameTDB
+(gametdb.com, community-kept since 2009, used by Wii loaders for controller
+icons) lists for each ID the controllers the game accepts: `wiimote`,
+`nunchuk`, `classiccontroller`, `gamecube`, `motionplus`, `wheel`, `zapper`,
+`balanceboard` and others. Its file says it is for "anyone to use in any
+Wii-related project"; permission is asked only for use on a website, which
+this is not (MMagTech, 2026-09-30). Credited in LICENCES.md. Shipped as a small
+extract (ID to controllers), no network at play. **Use the full file**
+(`wiitdb.zip` with no `LANG`, 10,170 entries): the English-filtered one leaves
+out WiiWare, Virtual Console and GameCube.
+
+**Dolphin has no such list.** Its `Sys/wiitdb-*.txt` are GameTDB's titles only
+(ID to name), and none of its 1,875 GameSettings files sets a controller.
+GameTDB keeps the same data for Wii U (`wiiutdb.zip`: GamePad, Pro
+Controller, Wii Remote, Nunchuk, Classic), for #174.
+
+Across the 3,485 Wii discs it lists controls for, 509 (15%) take a Classic
+Controller or GameCube pad. Nobody else chooses the controller for the player:
+Batocera maps a pad as a GameCube pad and otherwise expects real Remotes, with
+per-game choice by filename tags; EmuDeck names profiles for 15 games that do
+not exist in its repository; RetroArch leaves it to the player.
+
+The eight Wii games on RomM, by header (7 RVZ, 1 ISO; no saves on the server):
+
+| Game | ID | GameTDB | Under the rule |
+|---|---|---|---|
+| Mario Kart Wii | RMCP01 | Remote, Nunchuk, Classic, GameCube, wheel | pad |
+| Sonic Colors | SNCE8P | Remote, Nunchuk, Classic, GameCube | pad |
+| Muramasa: The Demon Blade | RSFE7U | Remote + Nunchuk, Classic, GameCube | pad |
+| Sonic & Sega All-Stars Racing | R3RE8P | Remote, Nunchuk, Classic, wheel | pad |
+| Geometry Wars: Galaxies | RGLE7D | Remote + Nunchuk, Classic | pad |
+| A Boy and His Blob | SBLE5G | Remote + Nunchuk, Classic | pad |
+| Donkey Kong Country Returns | SF8E01 | Remote, Nunchuk | Remote |
+| Kirby's Return to Dream Land | SUKE01 | Remote | Remote |
+
+#### Saves
+
+- Dolphin's user directory is `<saveDir>/User`, and the console's save
+  directory is per person, per game. So each person has a NAND per game,
+  `User/Wii`, and nothing is shared between people or games.
+- A Wii save is a folder: `User/Wii/title/00010000/<id in hex>/data/`
+  (`00010001` for WiiWare and Virtual Console). It travels zipped, as PSP's
+  and Xbox's folders do, the whole folder every time. Tag `dolphin`. Cabinet
+  for Mac does not play Wii, so there is no other spelling to match.
+- No save states, by question 25's rule: the core's states do not include the
+  NAND, so a state loaded later does not roll back the save files. `dolphin` is
+  already on `kNoSnapshots`.
+- Miis: Dolphin creates no Mii database; games make one or run without Miis.
+
+#### Real Wii Remotes on Linux (to test when the Remotes arrive, 2026-10-03)
+
+- **Copies answer only the Wii's own search** (the Limited Inquiry Access
+  Code). Linux's normal Bluetooth search sends the general one, so a copy is
+  invisible to an ordinary pairing screen. Nintendo's own Remotes answer both.
+  MMagTech found this first ("low level scan"). Linux can do the limited search
+  (the kernel's limited discovery).
+- **Dolphin's Linux Remote code does the Wii's search itself**
+  (`WiimoteReal/IOLinux.cpp`: "Use Limited Dedicated Inquiry Access Code
+  (LIAC) like the Wii does"), on the first adapter only (`hci_get_route`).
+  **Our build does not contain it**: the core on the A9 has only
+  `IOhidapi.cpp`, because the builder has no BlueZ headers and Dolphin's CMake
+  leaves the backend out without saying so. It needs `bluez-libs-devel` in the
+  builder, a build fix, not a patch.
+- The hidapi path the build does have reads a Remote the OS has already
+  connected, through `/dev/hidraw`. The image's udev rules give `uaccess` to
+  Nintendo's Switch pads only (`71-nintendo-controllers.rules`), not to the Wii
+  Remote (057e:0306, 057e:0330).
+- BlueZ on the A9 is 5.87 with `UserspaceHID=true`. `ClassicBondedOnly` is at
+  its default (true); Wii Remotes do not bond the usual way, and the Linux
+  guides set it false.
+- `dolphin_wiimote_continuous_scanning` is off by default; without it Dolphin
+  does not look for new Remotes.
+- **Bluetooth passthrough is ruled out on the console's own adapter**: it takes
+  the whole adapter from Linux, so every Bluetooth pad would drop. With a
+  second, dedicated USB adapter it is plan B: the Wii's own Bluetooth software
+  pairs copies as a Wii does. But only some adapters work, and while it is on,
+  every player in that game is on a real Remote.
+
+**The test, with MMagTech at the TV when the Remotes arrive:**
+1. Pair a copy through the limited search; does it pair?
+2. Turn it off; does a button press reconnect it by itself? (the part least
+   sure with copies; if not, the Settings-switch fallback)
+3. Does Dolphin take the connected Remote (hidapi), with the pointer on the
+   sensor bar?
+4. Do other Bluetooth pads stutter while anything searches?
+5. Classic Controller against GameCube pad on Mario Kart Wii, on the TV.
+
+Still to check: how Cemu (Wii U, #174) takes Wii Remotes, before any Remote
+design is final for both.
+
+Sources: GameTDB `wiitdb.xml` (2026-09-30); libretro/dolphin at `1a0f97270b`
+(`DolphinLibretro/Input.cpp`, `Boot.cpp`, `Common/Options.cpp`,
+`Core/HW/WiimoteReal/IOLinux.cpp`); Batocera `7b9aefc`
+(`python-src/batocera-launch-dolphin/`); EmuDeck and RetroDECK Dolphin configs;
+Dolphin PR #7861 (MotionPlus from a gamepad); github.com/larrylizard/wiibridge
+(copies invisible to general inquiry); batocera.linux issue #9333.
