@@ -263,3 +263,26 @@ Read before working on a core, an emulator, input, saves or states.
   restore now skips while `cache::isPending` says the console owes that zip.
   **Test a recovery with an immediate relaunch, not only a clean one.**
 
+
+## Xbox 360 (Xenia Edge)
+
+- **SDL CAN SWALLOW SIGTERM FOR A PROGRAM THAT NEVER ASKED.** Edge ignored
+  SIGTERM on the A9, which looked like Edge's own choice. It is SDL's:
+  initialising SDL's events installs a handler that turns SIGTERM into a quit
+  event, and Edge only pumps SDL for controllers and never reads it. Check
+  what a library installs before concluding a program handles a signal.
+
+- **A COMPATIBILITY LABEL IS A FACT CARRIED ACROSS.** "XNA games never run"
+  came from the original Xenia's WONTFIX labels; Edge had added what they
+  need ten days earlier, and both played. Launch it, or read the pinned
+  emulator's own log, before saying never.
+
+- **A SAVE UPLOADED IN PART REPLACES THE WHOLE ON THE SERVER.** Folder saves
+  sent only the folders touched that session, a rule from when games shared
+  one save folder; RomM overwrites by filename, so the server's copy lost the
+  rest. Found by downloading RomM's zip and listing it, not by reading the
+  upload log, which said "uploaded". **Check what the server holds.**
+
+- **A GAME CAN BIND ITS SAVE TO THE PROFILE ID.** Forza Horizon 2 called its
+  save "tampered" under any other ID. One ID on every console, for good, as
+  the Xbox EEPROM is.

@@ -43,6 +43,10 @@ struct VulkanCaps {
     std::string reason;
 
     std::string deviceName;      // "AMD Radeon 890M Graphics (RADV STRIX1)"
+    // Its place in the loader's list, for an emulator that is told a device
+    // by number rather than by name (Xenia's `vulkan_device`). The loader
+    // sorts the list the same way in every process on the machine.
+    int deviceIndex = -1;
     uint32_t apiVersion = 0;     // VK_MAKE_API_VERSION packed
     uint32_t driverVersion = 0;
     bool discrete = false;

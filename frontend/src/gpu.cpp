@@ -109,7 +109,9 @@ void probe() {
     // worthless.
     VkPhysicalDevice chosen = VK_NULL_HANDLE;
     VkPhysicalDeviceProperties chosenProps{};
-    for (VkPhysicalDevice d : devices) {
+    int chosenIndex = -1;
+    for (size_t i = 0; i < devices.size(); ++i) {
+        const VkPhysicalDevice d = devices[i];
         VkPhysicalDeviceProperties p{};
         getProps(d, &p);
         if (p.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU) continue;
@@ -120,6 +122,7 @@ void probe() {
         if (better) {
             chosen = d;
             chosenProps = p;
+            chosenIndex = static_cast<int>(i);
         }
     }
     if (chosen == VK_NULL_HANDLE) {
@@ -134,6 +137,7 @@ void probe() {
     if (extCount) devExts(chosen, nullptr, &extCount, exts.data());
 
     gCaps.deviceName = chosenProps.deviceName;
+    gCaps.deviceIndex = chosenIndex;
     gCaps.apiVersion = chosenProps.apiVersion;
     gCaps.driverVersion = chosenProps.driverVersion;
     gCaps.discrete = chosenProps.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU;

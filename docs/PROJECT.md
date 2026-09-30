@@ -14358,4 +14358,134 @@ of frames later than 40 ms, mostly first-time shaders and loads), the GPU
 never past 39%. MMagTech on the TV: "pretty damn good". **Decided: Xbox 360
 is next in milestone 2, ahead of Wii and Wii U.** The integration work the
 test found (Xenia's desktop dialogs, SIGTERM ignored, profile-bound saves, a
-zipped `.iso` on RomM, XNA games that never run) is listed in #192.
+zipped `.iso` on RomM, XNA games) is listed in #192.
+
+**"XNA games never run" was wrong, or at least out of date.** It came from
+the original Xenia's compatibility labels (`state-crash-xna-WONTFIX`, last
+touched early 2025). Edge added the kernel user mode that the .NET Compact
+Framework inside XNA titles needs on 2026-09-19 (`11583551b`, `efabe1d6a`,
+`2fe7b7d63`, `1af8dc6b2`), all in the pinned `a7c39fa`. Charlie Murder and
+The Dishwasher: Vampire Smile are untested, not unrunnable.
+
+#### Researched 2026-09-29, from Edge's source at `a7c39fa` and Batocera
+
+Nothing below has been run except where it says so. Batocera
+(`batocera_launch/emulators/xenia_edge.py`, Edge built from source at a
+pinned commit) writes one TOML, passes the game, closes with a synthetic
+Alt+F4, and handles no profile, title update or DLC.
+
+| | What Edge does | What the console does |
+|---|---|---|
+| Profiles | only its modal "no profile" dialog makes one (`emulator_window.cc`); no cvar or flag. The profile is `content/<XUID>/FFFE07D1/00010000/<XUID>/Account`, 404 bytes: an HMAC-SHA1 and RC4 of a 0x17C-byte big-endian struct (gamertag UTF-16 x16, flags) under a key in Edge's own source (`crypto_utils.cc`). The XUID is the folder name, not in the file. `[Profiles] logged_profile_slot_0_xuid` signs it in at boot | writes the Account file before every start with the current person's name; one fixed XUID everywhere. No dialog ever appears while a profile exists |
+| Desktop dialogs | "no profile" and "add games" only without a profile; storage selection off by default; no update check or telemetry on Linux | keeps a profile present |
+| A game that will not load | an SDL error box, then exit 1 once dismissed (`base/logging.cc`) | the load watch closes it and says "Couldn't start", as for Eden and RPCS3 |
+| SIGTERM | **swallowed by SDL**: `SDL_INIT_EVENTS` installs SDL's handler, which queues a quit event Edge never reads. Not ignored by Edge itself | closes the window (`closesByWindow`), which ends in `quick_exit(0)` without stopping the guest |
+| Save safety on close | guest writes go straight to host files with `pwrite`, unbuffered (`host_path_file.cc`), so a close or a SIGKILL loses only a write in progress, as switching off a real 360 would | nothing more is possible; Edge issue #112 (Linux save corruption, open) is a thing to watch for in tests |
+| A game that quits to the dashboard | returns to Edge's game list and stays open (`StopTitleAndReturnToList`) | watches the window title, `Xenia-edge \| [TITLEID vVER ...] Game`, as Eden's is watched, and closes it |
+| Guide and menus | Guide opens its menu only with `guide_button=true`; right-click opens it unless `disable_game_window_mouse=true`; F-keys and Esc stay live | both off; real pads hidden, slots pinned to the virtual pads (`--slot_bindings_passthrough` takes SDL GUIDs); a keyboard reaching F-keys is a known gap, as with xemu |
+| Screen sleep | no inhibit of its own | the console's idle watch counts a running game as play; the sleep in the hand test was the frozen frontend |
+| Formats | first 4 bytes: `XEX2`, `CON `, `LIVE`, `PIRS`; ZAR by its last 4 bytes; else XDVDFS with `MICROSOFT*XBOX*MEDIA` at 0x10000, 0x1FB20, 0x30600, 0x2090000 (XGD3) or 0xFDA0000 (XGD2). GOD is a header file with a `.data/` folder beside it. zip, 7z, CCI, CSO, CHD refused | full disc dumps as they are, no trimming; a zip unpacked (`romfile.cpp` already sniffs `PK`) |
+| XBLA licences | `license_mask=1` is the full-version bit; -1 risks licences the game never shipped | 1, as Batocera |
+| Title updates and DLC | a package file dropped in `content/0000000000000000/<TID>/000B0000/` or `00000002/` works; the first update by name wins | with #187, after the first release |
+| Multi-disc | disc swap lists discs Edge's library knows, otherwise a desktop file picker | after the first release; known gap |
+| Other storage | shader cache under `cache_host`; `cache`, `cache0/1`, `scratch` are game scratch; `library/<TID>/game.toml` feeds the swap list. None hold progress | one storage root per console |
+
+What RomM holds, read by header on 2026-09-29: Forza Horizon 2 (XGD3), Gears
+of War and Gears of War 2 (XGD2), all full redump dumps; Left 4 Dead 2, a zip
+named `.iso`; Renegade Ops, Charlie Murder and The Dishwasher: Vampire Smile,
+`LIVE` packages with no extension, content type `000D0000` (Arcade).
+
+#### DECIDED, MMagTech 2026-09-29
+
+| | Decided |
+|---|---|
+| Gamertag | each person's name as shown on Home (their RomM username), cut to the 360's 15 characters. The profile ID is the same for everyone, so saves travel whatever the name |
+| Removing and re-adding someone | nothing of the profile is kept per person, so there is nothing to clean up or rebuild. Only the current player's saves are ever in Xenia's content folder: put in before a game, copied off after. A save recovered after a power cut goes into its owner's folder at the next start, whoever is signed in, and its upload waits for them. A rename on RomM while removed strands owed uploads on every system: #194 |
+| Title updates and DLC | with #187, after the first release |
+| Multi-disc games | after the first release; none on RomM |
+| XNA games | "Couldn't start" if they fail, like any game; launched on the A9 first, since Edge may now run them |
+
+#### Measured on the A9, 2026-09-29, MMagTech at the TV
+
+Edge `a7c39fa` by hand (`~/x360/t360.sh`, the console's settings, the
+console frozen underneath), his real pads read directly.
+
+| Test | Result |
+|---|---|
+| A profile put in place by hand | Forza went straight in: no dialog, no menu bar. The log names it: "Loaded MMagTech ... to slot 0" |
+| Forza's save under a different profile ID | **"your profile has been tampered with"**, twice: once with the title GPD wiped, once with it intact. Forza ties its save to the XUID |
+| The same save copied into a fresh folder under its own ID | loads. What the console will do before every game works |
+| The title GPD without the dashboard GPD beside it | rewritten at start (41,780 to 35,208 bytes), as the source said. Left alone when `FFFE07D1.gpd` came with it |
+| Close through the window | gone in 0.10 to 0.15 s, exit 0 every time (seven closes); a save made just before loaded after |
+| Renegade Ops (Arcade) with `license_mask=1` | no trial wording; played |
+| Its menu's exit, to the dashboard | the log says "game requested exit to dashboard"; Edge stays open on its own app; the window title drops `[58410ABE v0.0.0.3] Renegade Ops` at the same moment |
+| Charlie Murder, The Dishwasher: Vampire Smile (XNA) | both play: the .NET runtime comes in the game's own package (`\runtime\v4.0\Netcfusermode.dll`) and Edge's new user mode runs it. "working great" |
+| A second player joins Left 4 Dead 2 | **the game asks for a sign-in and Edge shows its own Sign In box** (slot and profile lists, Create Profile, OK, Cancel). A pad can move in it. It came up again with a second profile already signed in to slot 1. Cancel led to the game's own "Play without gamer profile", which made the second pad a lone guest, not split-screen |
+| Screen asleep | the console had put the TV to sleep while idle and, frozen, could not wake it: a test artefact; `gamescopectl drm_sleep_external_screen 0` woke it |
+
+**What it settles.** One XUID, fixed for good on every console and never
+changed, exactly as the Xbox EEPROM: a save made under any other ID is
+"tampered" to at least one game, so a save from somebody's own Xenia will
+not load here, nor ours there, without moving its folder AND matching the
+XUID. The dashboard GPD has to be in place before a start or the title's
+own GPD is lost; the console carries or writes it. The dashboard watch is
+the window title.
+
+**What it leaves open: the Sign In box.** Edge shows it whenever a game
+calls `XamShowSigninUI` (`xam_ui.cc`, `xeXamShowSigninUI`), unconditionally;
+no cvar. It is Edge's stand-in for the 360's own sign-in screen, which a
+real console shows too, but it offers Create Profile and a list of slots.
+Unpatched, the console cannot stop it.
+Asked of Edge on 2026-09-29, filed with MMagTech's go: a cvar that answers
+the request with the profile already signed in on that slot, or cancels,
+without the dialog (has207/xenia-edge#286). Recommended until it lands: ship
+with the box as a known gap, since a pad can drive it and only a game's own
+request brings it up; then move the pin, no patch.
+
+Zips on RomM stay as they are for the older systems, whose cores expect them
+(MMagTech, 2026-09-30); for PS3, Xbox and Xbox 360 the library keeps plain
+files. Left 4 Dead 2 was replaced on RomM with its plain ISO.
+
+#### What was built, 2026-09-30
+
+- `build_files/install-xenia.sh`: Edge `a7c39fa`, its AppImage pinned by
+  checksum (GitHub's own digest agrees), unpacked into
+  `/usr/lib/cabinetos/xenia`, a layer of its own after RPCS3's.
+- `x360profile.cpp`: the profile file, written by the console. Checked
+  against one Edge made itself: byte for byte the same. The one profile ID is
+  `E030000043414231` ("CAB1"), never to change. The gamertag is the name on
+  Home: letters, digits and spaces, punctuation as a space, at most 15.
+- `standalone.cpp`: a `xenia` row. Edge's storage root is its home
+  (`emulators/xenia/`: shader cache, game scratch); its content root is the
+  person's folder for the game, `saves/<platform>/<rom>/xenia/content`, so
+  Edge writes the saves there itself and nothing is copied. Every setting is
+  on the command line and Edge's own settings file is deleted before each
+  start. Vulkan on the device the console chose (`gpu.cpp` now records its
+  place in the list, `--vulkan_device`). Only the virtual controllers, bound
+  to slots by SDL GUID (`--slot_bindings_passthrough`). Closed by its window.
+  A failed load or a fatal error mid-game is an `x>` line in its log.
+- A note in the person's folder while a game runs. A note found at the next
+  start of the console, or at the next launch of that game, means the save
+  was never zipped: the whole folder is zipped, owed and sent before any
+  restore.
+- **A fault in every folder save, found here and fixed:** only the folders
+  touched that session were zipped, and RomM replaces a save by filename, so
+  the server's copy lost whatever was not touched (Forza's shared
+  `0000000000000000` folder; a PSP game's second save folder). The whole
+  folder goes now.
+
+#### Exercised on the A9, 2026-09-30 (driven over SSH with fake pads)
+
+| Scenario | Result |
+|---|---|
+| Forza Horizon 2 from the console | downloaded, "signed in as MMagTech", title screen with no dialog and no menu bar; Edge on the Radeon; only "CabinetOS player 1" seen, in slot 0 |
+| A press reaches the game | Start began Forza's intro; Forza wrote its first save straight into the person's folder |
+| Guide | the console's pause menu; Edge frozen (state T); Resume thawed it |
+| Exit to Home | closed by its window, exit 0; 10 files zipped, uploaded as `xenia`; the note gone |
+| Play again | RomM's zip came down; Forza skipped the intro it had shown the first time (the save held); no "tampered" |
+| Power cut (the console and Edge killed mid-game) | at restart: "never zipped after its last game; sending it all", owed, the restore kept it, the upload landed |
+| Renegade Ops (Arcade, no extension) | opened as it is; full game; its Exit Game: "game requested exit to dashboard", the console closed Edge and was on Home within 0.14 s |
+| Charlie Murder (XNA) through the console | title screen, the pad works, closed and saved |
+| Two players, Left 4 Dead 2 | two virtual controllers, slots 0 and 1; player 2's Start made the game ask that player to sign in (the known gap) |
+
+Not yet: rumble on a real pad, and MMagTech's look on the TV.

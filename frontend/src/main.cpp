@@ -538,10 +538,10 @@ struct GameSession {
     //
     // THE SAVE DIRECTORY IS NOW PER ROM, which is the answer this comment
     // called "the better answer eventually", so the baseline no longer has
-    // anything to disambiguate — the tree holds one game's saves. It is kept
-    // because it still answers a second question the layout does not: whether
-    // this game wrote anything at all this run, which is what decides between
-    // an upload and a no-op.
+    // anything to disambiguate — the tree holds one game's saves, and all of
+    // it is sent (syncDirSave). It is kept because it still answers a second
+    // question the layout does not: whether this game wrote anything at all
+    // this run, which is what decides between an upload and a no-op.
     std::string dirSaveRoot;                  // empty for every core but PPSSPP
     std::vector<cab::DirEntry> dirAtLaunch;
 
@@ -583,14 +583,19 @@ static bool writeLocal(const std::string& path, const std::vector<uint8_t>& data
     return ok;
 }
 
-// A directory save, zipped and sent — PSP and nothing else. See dirsave.h for
-// why the archive is a zip and where it is rooted.
+// A directory save, zipped and sent: PSP, Switch, PS3, Xbox and Xbox 360. See
+// dirsave.h for why the archive is a zip and where it is rooted.
 //
-// WHICH FOLDERS. Only the ones created or touched since the game started, and
-// then those folders WHOLE rather than the individual files that changed: a
-// save slot is one thing, and shipping half of it would produce an archive that
-// restores a PARAM.SFO without its DATA.BIN. See GameSession for why the
-// baseline is needed at all.
+// THE WHOLE TREE, whenever anything in it changed. It used to be only the
+// top-level folders created or touched since the game started, which was how
+// one shared PSP save directory told its games apart. The directory is one
+// game's now (GameSession), and RomM replaces the row by filename, so sending
+// only the touched folders REPLACED the server's copy with part of the save:
+// found 2026-09-30 when an Xbox 360 upload of Forza's profile folder dropped
+// the game's shared `0000000000000000` folder from RomM, and a PSP game with
+// two save folders would lose the one not written that session. Another
+// console restoring that zip never got the rest. The baseline still decides
+// whether anything was written at all.
 // A DIRECTORY SAVE COMES DOWN before the game starts: the newest zip RomM
 // holds under `tag` for this game, unpacked into `root`. PSP's memory stick
 // and a Switch game's save folder both travel this way.
@@ -667,12 +672,7 @@ static void syncDirSave(GameSession& sess, Uploader& up) {
     if (touchedFolders.empty()) return;   // the game saved nothing. Normal.
 
     std::vector<std::string> paths;
-    for (const cab::DirEntry& e : now) {
-        const size_t slash = e.relPath.find('/');
-        const std::string top =
-            slash == std::string::npos ? e.relPath : e.relPath.substr(0, slash);
-        if (touchedFolders.count(top)) paths.push_back(e.relPath);
-    }
+    for (const cab::DirEntry& e : now) paths.push_back(e.relPath);
 
     std::vector<uint8_t> zip;
     std::string zerr;
@@ -688,7 +688,7 @@ static void syncDirSave(GameSession& sess, Uploader& up) {
         std::fprintf(stderr, "[save] could not write %s\n", path.c_str());
         return;
     }
-    std::fprintf(stderr, "[save] %zu file(s) in %zu folder(s), %zu bytes zipped to %s\n",
+    std::fprintf(stderr, "[save] %zu file(s), %zu folder(s) changed, %zu bytes zipped to %s\n",
                  paths.size(), touchedFolders.size(), zip.size(), path.c_str());
     sess.dirAtLaunch = now;   // this is the new baseline; do not send it twice
 
@@ -696,6 +696,33 @@ static void syncDirSave(GameSession& sess, Uploader& up) {
     Uploader::Job job{sess.romId, sess.saveTag, name, std::move(zip), false};
     job.localPath = path;
     up.push(std::move(job));
+}
+
+// A GAME WHOSE SAVES NEVER GOT ZIPPED: Xbox 360, where Edge writes straight
+// into the person's folder and a note says a game is running there
+// (standalone::beforeStart). The console went down, or the frontend did,
+// before the end of the game. The whole folder goes up now, as if the game
+// had just ended with everything changed, and is owed until it lands, so the
+// restore that follows keeps it rather than unpacking the server's older zip
+// over it (restoreDirSave, isPending). The note names the game and the tag.
+static void finishInterruptedSave(const cab::standalone::Emulator& emu,
+                                  const std::string& saveDir, Uploader& up) {
+    std::istringstream note(cab::standalone::playingNote(saveDir));
+    std::string id, dir, title, tag;
+    std::getline(note, id);
+    std::getline(note, dir);
+    std::getline(note, title);
+    std::getline(note, tag);
+    GameSession owed;
+    owed.romId = std::atoi(id.c_str());
+    owed.title = title;
+    owed.saveDir = saveDir;
+    owed.saveTag = tag;
+    owed.dirSaveRoot = cab::standalone::saveRoot(emu, saveDir);   // no baseline: all of it
+    std::fprintf(stderr, "[save] %s was never zipped after its last game; sending it all\n",
+                 saveDir.c_str());
+    if (owed.romId > 0 && !title.empty()) syncDirSave(owed, up);
+    cab::standalone::finished(emu, saveDir);
 }
 
 // The name a save travels under on RomM, and it is the REFERENCE
@@ -6271,6 +6298,19 @@ int main(int argc, char** argv) {
             }
         }
     }
+    // AND AN XBOX 360 GAME'S, whose note is in the person's own folder:
+    // `saves/<platform>/<rom id>/xenia/`. Only this person's, since the
+    // upload goes as them; anyone else's is finished when they next start a
+    // game of that kind here, or the console starts as them.
+    if (const cab::standalone::Emulator* xenia = cab::standalone::find("xenia")) {
+        const std::string saves = storage::userDir(storage::currentUser()) + "/saves";
+        for (const std::string& platform : listNames(saves))
+            for (const std::string& rom : listNames(saves + "/" + platform)) {
+                const std::string dir = saves + "/" + platform + "/" + rom + "/" + xenia->core;
+                if (cab::standalone::hasPlayingNote(dir))
+                    finishInterruptedSave(*xenia, dir, uploader);
+            }
+    }
     float owedClock = 0.0f;   // seconds since the last try at what is owed
     StateLoad stateLoad;
     MenuNotice menuNotice;
@@ -9593,6 +9633,10 @@ int main(int argc, char** argv) {
         // named by the game's title ID, so the console never has to know it.
         const std::string root = cab::standalone::saveRoot(emu, saveDir);
         const char* tag = catalog::saveTag(launchJob.coreName.c_str());
+        // A LAST GAME HERE THAT NEVER GOT ITS SAVES ZIPPED goes up first, so
+        // the restore below keeps it (finishInterruptedSave).
+        if (cab::standalone::hasPlayingNote(saveDir))
+            finishInterruptedSave(emu, saveDir, uploader);
         if (!root.empty() && tag && liveClient.haveToken())
             restoreDirSave(liveClient, launchJob.romId, tag, root, launchJob.title);
         // AND ONTO WHERE THE EMULATOR READS THEM, when that is not a folder
@@ -9601,7 +9645,8 @@ int main(int argc, char** argv) {
         {
             const std::string note = std::to_string(launchJob.romId) + "\n" + saveDir + "\n" +
                                      launchJob.title + "\n" + (tag ? tag : "") + "\n";
-            if (!cab::standalone::beforeStart(emu, launchJob.entryPath, saveDir, note, &err)) {
+            if (!cab::standalone::beforeStart(emu, launchJob.entryPath, saveDir, user.name, note,
+                                              &err)) {
                 cab::vpad::close();
                 std::fprintf(stderr, "[standalone] %s\n", err.c_str());
                 refuseLaunch("Couldn't start this game");
@@ -9611,6 +9656,7 @@ int main(int argc, char** argv) {
         if (!standaloneRun.start(emu, launchJob.romPath, launchJob.entryPath, saveDir, &err)) {
             std::string aerr;
             cab::standalone::afterEnd(emu, launchJob.entryPath, saveDir, &aerr);
+            cab::standalone::finished(emu, saveDir);
             cab::vpad::close();
             std::fprintf(stderr, "[standalone] %s\n", err.c_str());
             refuseLaunch("Couldn't start this game");
@@ -9674,6 +9720,10 @@ int main(int argc, char** argv) {
         }
         if (!session.dirSaveRoot.empty()) syncDirSave(session, uploader);
         session.dirSaveRoot.clear();
+        // The zip is on the disk and owed to the server: nothing left for a
+        // restart to finish.
+        if (const cab::standalone::Emulator* ran = cab::standalone::find(session.standaloneCore))
+            cab::standalone::finished(*ran, session.saveDir);
         cab::vpad::close();
         if (playClock.active()) {
             playtime::close(storage::currentUser(), playClock.finish(playtime::wallMs()));

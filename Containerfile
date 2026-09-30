@@ -73,6 +73,7 @@ ARG IMAGE_VENDOR="${IMAGE_VENDOR:-mmagtech}"
 #                    change to build_files/ or system_files/.
 #   2. the cores     314 MB, pinned. Moves when a core is bumped.
 #   3. RPCS3         338 MB, pinned. Moves when RPCS3 is bumped.
+#      Xenia Edge     53 MB, pinned. Moves when Edge is bumped (2026-09-29).
 #   4. core files    23 MB of PPSSPP's and PCSX2's resources. Same.
 #   5. the frontend  1.4 MB. Moves with nearly every change.
 #
@@ -100,6 +101,14 @@ RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
 RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
     --mount=type=tmpfs,dst=/tmp \
     /ctx/install-rpcs3.sh
+
+# Xenia Edge, the Xbox 360 emulator: its developer's own Linux build, pinned by
+# checksum, 53 MB. A layer of its own after RPCS3's, because Edge is released
+# many times a day and its pin will move more often than RPCS3's.
+# build_files/install-xenia.sh says why.
+RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
+    --mount=type=tmpfs,dst=/tmp \
+    /ctx/install-xenia.sh
 
 # xemu's blank Xbox hard drive, pinned by checksum, 1.6 MB, beside the EEPROM
 # that system_files puts in the same folder. xemu itself is a Flatpak

@@ -180,3 +180,11 @@ Read before touching `build_files/`, `system_files/`, `ci/`, the workflows, the 
   `gc_11_5_0_pfp.bin`, a file that *is* in Fedora's package and *is* in our
   image. **One thing that should not have failed was worth more than all the
   things that did.** Its kernel is stock Fedora's, not ours.
+
+- **AN APPIMAGE UNPACKS WITH ITS OWN PERMISSIONS.** Xenia Edge's
+  `squashfs-root/usr` is 0700, `cp -a` kept it, and the first testing image
+  had the emulator readable by root alone: the console runs as `cabinet` and
+  called it "not installed" (2026-09-30). The UI loop never saw it, because
+  there the test copy belonged to `cabinet`. **An emulator is judged from the
+  image, not only from a copy.** `install-xenia.sh` now fails the build on
+  any file others cannot read.
