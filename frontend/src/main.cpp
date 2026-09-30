@@ -538,10 +538,10 @@ struct GameSession {
     //
     // THE SAVE DIRECTORY IS NOW PER ROM, which is the answer this comment
     // called "the better answer eventually", so the baseline no longer has
-    // anything to disambiguate — the tree holds one game's saves. It is kept
-    // because it still answers a second question the layout does not: whether
-    // this game wrote anything at all this run, which is what decides between
-    // an upload and a no-op.
+    // anything to disambiguate — the tree holds one game's saves, and all of
+    // it is sent (syncDirSave). It is kept because it still answers a second
+    // question the layout does not: whether this game wrote anything at all
+    // this run, which is what decides between an upload and a no-op.
     std::string dirSaveRoot;                  // empty for every core but PPSSPP
     std::vector<cab::DirEntry> dirAtLaunch;
 
@@ -583,14 +583,19 @@ static bool writeLocal(const std::string& path, const std::vector<uint8_t>& data
     return ok;
 }
 
-// A directory save, zipped and sent — PSP and nothing else. See dirsave.h for
-// why the archive is a zip and where it is rooted.
+// A directory save, zipped and sent: PSP, Switch, PS3, Xbox and Xbox 360. See
+// dirsave.h for why the archive is a zip and where it is rooted.
 //
-// WHICH FOLDERS. Only the ones created or touched since the game started, and
-// then those folders WHOLE rather than the individual files that changed: a
-// save slot is one thing, and shipping half of it would produce an archive that
-// restores a PARAM.SFO without its DATA.BIN. See GameSession for why the
-// baseline is needed at all.
+// THE WHOLE TREE, whenever anything in it changed. It used to be only the
+// top-level folders created or touched since the game started, which was how
+// one shared PSP save directory told its games apart. The directory is one
+// game's now (GameSession), and RomM replaces the row by filename, so sending
+// only the touched folders REPLACED the server's copy with part of the save:
+// found 2026-09-30 when an Xbox 360 upload of Forza's profile folder dropped
+// the game's shared `0000000000000000` folder from RomM, and a PSP game with
+// two save folders would lose the one not written that session. Another
+// console restoring that zip never got the rest. The baseline still decides
+// whether anything was written at all.
 // A DIRECTORY SAVE COMES DOWN before the game starts: the newest zip RomM
 // holds under `tag` for this game, unpacked into `root`. PSP's memory stick
 // and a Switch game's save folder both travel this way.
@@ -667,12 +672,7 @@ static void syncDirSave(GameSession& sess, Uploader& up) {
     if (touchedFolders.empty()) return;   // the game saved nothing. Normal.
 
     std::vector<std::string> paths;
-    for (const cab::DirEntry& e : now) {
-        const size_t slash = e.relPath.find('/');
-        const std::string top =
-            slash == std::string::npos ? e.relPath : e.relPath.substr(0, slash);
-        if (touchedFolders.count(top)) paths.push_back(e.relPath);
-    }
+    for (const cab::DirEntry& e : now) paths.push_back(e.relPath);
 
     std::vector<uint8_t> zip;
     std::string zerr;
@@ -688,7 +688,7 @@ static void syncDirSave(GameSession& sess, Uploader& up) {
         std::fprintf(stderr, "[save] could not write %s\n", path.c_str());
         return;
     }
-    std::fprintf(stderr, "[save] %zu file(s) in %zu folder(s), %zu bytes zipped to %s\n",
+    std::fprintf(stderr, "[save] %zu file(s), %zu folder(s) changed, %zu bytes zipped to %s\n",
                  paths.size(), touchedFolders.size(), zip.size(), path.c_str());
     sess.dirAtLaunch = now;   // this is the new baseline; do not send it twice
 
