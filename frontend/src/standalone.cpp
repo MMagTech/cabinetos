@@ -1524,6 +1524,15 @@ bool prepareCemu(const Emulator& e, const std::string& saveDir, int players, std
     // volume defaults to 20.
     x += "  <Audio>\n    <api>3</api>\n    <TVChannels>1</TVChannels>\n";
     x += "    <TVVolume>100</TVVolume>\n    <TVDevice>default</TVDevice>\n  </Audio>\n";
+    // ITS KEYBOARD SHORTCUTS OFF: Escape leaves fullscreen, F11 and Alt+Enter
+    // toggle it, F12 saves a screenshot, all on by default, and a keyboard
+    // plugged into the console would reach them. `0 -1` is no key and no
+    // controller button (wxCemuConfig.h, sHotkeyCfg).
+    x += "  <Hotkeys>\n";
+    for (const char* k : {"ExitFullscreen", "ToggleFullscreen", "ToggleFullscreenAlt",
+                          "TakeScreenshot", "ToggleFastForward", "ExitApplication"})
+        x += std::string("    <") + k + ">0 -1</" + k + ">\n";
+    x += "  </Hotkeys>\n";
     x += "</content>\n";
     if (!writeFile(config + "/settings.xml", x)) {
         *err = "could not write Cemu's settings in " + config;

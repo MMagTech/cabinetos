@@ -14862,7 +14862,9 @@ Not judged: a full battle, Captain Toad greyed (no code yet).
   player's virtual controller (vpad.h), bound by SDL 3's GUID, which is the
   same in Cemu and the console. Buttons by position, as Switch's are here;
   the Pro Controller's HOME left off, since Guide is the pause menu. Rumble
-  on, through the console's own Rumble switch.
+  on, through the console's own Rumble switch. Cemu's keyboard shortcuts (Escape
+  leaves fullscreen, F11, Alt+Enter, F12), all on by default, are written
+  off, so a keyboard plugged into the console reaches none of them.
 - **Saves**: the mlc is `<saveDir>/mlc`, and what travels (tag `cemu`) is
   `mlc/usr/save/00050000/`, Cemu's own layout. Xbox 360's note that a game
   is running in the person's folder is now a field, `notesPlaying`, set for
