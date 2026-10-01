@@ -23,19 +23,17 @@ to delete before every cause is checked** (memory).
 
 ## Next: milestone 2, New systems
 
-1. **#173 Wii, judged on the TV.** The build was put on the TV with
-   `tools/ui-loop.sh --env CABINETOS_WII_CONTROLS=/var/home/cabinet/fb/frontend/data/wii-controls.txt`
-   on 2026-09-30; a reboot removes it, so run that again first. MMagTech's
-   steps, each with what success looks like (PROJECT.md 35, "For the TV"):
-   Library, Wii (33 games, the 15 Remote games greyed, "Needs a Wii Remote");
-   Kirby's page (the reason, no Play); Mario Kart Wii on a pad (stick steers,
-   A, B, right trigger drifts, left trigger items); first-time shader
-   stutter, noted for #63; a save made, Exit to Home, sent to RomM as a zip
-   (**the upload is approved**), started again with the licence still there;
-   R3, the Wii's HOME menu, and its "Wii Menu" choice; one GameCube game as
-   before. Then the testing image: **set aside the A9's hand copy at
-   `/var/lib/cabinetos/bios/dolphin-emu`** or it shadows the image's `Sys`.
-   Then merge on his go, close #173, and the Xenia Edge reply (#286 there):
-   test OK in Left 4 Dead 2's Sign In box first, show him the reply before
-   posting. *Lessons: emulators.*
+1. **#173 Wii, judged on the TV, three things left.** The build was put on
+   the TV with
+   `tools/ui-loop.sh --env CABINETOS_WII_CONTROLS=/var/home/cabinet/fb/frontend/data/wii-controls.txt`;
+   a reboot removes it, so run that again first. Judged so far (PROJECT.md
+   35): the grid (playable first, then greyed: "looks good now"), Geometry
+   Wars and Mario Kart Wii on a pad, both saves up to RomM. Left: start Mario
+   Kart Wii again (success: the licence is there; the log says "unpacked ...
+   Mario Kart Wii.zip"); R3, the Wii's HOME menu and its "Wii Menu"; one
+   GameCube game as before. Then the testing image: **set aside the A9's hand
+   copy at `/var/lib/cabinetos/bios/dolphin-emu`** or it shadows the image's
+   `Sys`. Then merge on his go, close #173, and the Xenia Edge reply (#286
+   there): test OK in Left 4 Dead 2's Sign In box first, show him the reply
+   before posting. *Lessons: emulators.*
 2. Then #174 Wii U.

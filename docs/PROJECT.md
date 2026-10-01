@@ -14766,3 +14766,12 @@ Dolphin PR #7861 (MotionPlus from a gamepad); github.com/larrylizard/wiibridge
 **For the TV, with MMagTech:** the greyed look; Mario Kart Wii on a pad; the
 shader stutter; a Wii save made, sent and restored (an upload to RomM); the
 HOME button (R3) and its "Wii Menu" choice; GameCube unchanged.
+
+#### Judged on the TV, MMagTech 2026-09-30 (the loop build, not an image)
+
+| | Result |
+|---|---|
+| The Wii grid | greyed games mixed in among the playable ones "looks weird and is hard to find games"; **changed**: playable first, greyed after, each half in title order, the letter index over the playable half. Then: "looks good now" |
+| Geometry Wars on a pad | "that worked"; its save went up as `Geometry Wars_ Galaxies.zip` (`dolphin`, 11 KB). Read back from RomM: exactly `00010000/52474c45/data/banner.bin` and `gwgsave.dat` |
+| Mario Kart Wii on a pad | "stuttered a few in the beginning and then seemed to settle and was good", shaders compiling (the shared cache then held RMCP01's); its save went up (4 files, 18 KB) |
+| Still to judge | the save coming back (start Mario Kart Wii again, the licence there); R3, the Wii's HOME menu and its "Wii Menu"; one GameCube game as before |
