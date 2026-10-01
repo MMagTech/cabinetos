@@ -14534,6 +14534,38 @@ Batocera plays Wii on standalone Dolphin (OpenGL by default), RetroArch on this
 same core. Neither is a reason to change: the core is current, already on
 Vulkan here, and GameCube runs on it.
 
+#### Dolphin's settings, every one, against Batocera (2026-09-30)
+
+The core declares about 100 options (`DolphinLibretro/Common/Options.cpp`,
+defaults read off the source at the pin); Batocera's standalone Dolphin
+writes its own (`batocera_launch_dolphin/emulator.py`) and exposes about 25 to
+the user per system and per game, every default plain. The console sets none
+of Dolphin's today. What changes, for GameCube and Wii alike (MMagTech: yes to
+GameCube too):
+
+| Setting | Default | Batocera | Here |
+|---|---|---|---|
+| `dolphin_cheats_import` | on: writes RetroArch `.cht` files to `<system>/../cheats/dolphin-emu/` | not applicable | **off**. Found on the A9: `/var/lib/cabinetos/cheats/dolphin-emu/`, two files from GameCube games, for a program this console does not have |
+| `dolphin_osd_enabled` | on | off by default | **off**: the console speaks for itself |
+| The shader cache, `User/Cache` | per person, per game (it is under the save directory) | one per machine | **one per console**: each effect is compiled once, not once per person. Helps every machine |
+| `dolphin_shader_compilation_mode` | Synchronous | Synchronous | unchanged here; **part of #63**: Async (UberShaders) costs GPU while an effect compiles, fine on a strong GPU and slower than the stutter on a weak one, so it is chosen from the hardware with resolution |
+| `dolphin_efb_scale`, filtering, anti-aliasing | 1x, none, none | same | #63, for every system at once, after an audit of every system (added to #63) |
+| CPU (JIT64), dual core, DSP HLE, 16:9, progressive scan, PAL60, skip the GameCube boot | Dolphin's | same | kept |
+
+Vulkan needs nothing forced: Dolphin asks `GET_PREFERRED_HW_RENDER` and the
+console answers Vulkan; its cache files are named `Vulkan-*.cache`.
+
+**Measured on the A9**, Kirby's Return to Dream Land, 4,000 frames (66.7 s
+emulated, boot to the title screen, not gameplay), offscreen and unpaced:
+
+| | Synchronous, cold | Synchronous, warm | Async (UberShaders), cold | Async (UberShaders), warm |
+|---|---|---|---|---|
+| 1x native | 4.8 s (14x realtime) | 5.8 s | 5.7 s | 5.7 s |
+| 3x (1920x1584) | 10.2 s (6.5x) | 8.9 s | 10.0 s | 9.4 s |
+
+On the A9 neither mode costs throughput worth measuring; the stutter itself is
+not visible to an unpaced run and is for the TV.
+
 #### Dolphin's `Sys` folder is not in the image, and Wii needs it
 
 Found here, and true of GameCube too: `/var/lib/cabinetos/bios/dolphin-emu/Sys`
