@@ -23,17 +23,15 @@ to delete before every cause is checked** (memory).
 
 ## Next: milestone 2, New systems
 
-1. **#173 Wii, judged on the TV, three things left.** The build was put on
-   the TV with
-   `tools/ui-loop.sh --env CABINETOS_WII_CONTROLS=/var/home/cabinet/fb/frontend/data/wii-controls.txt`;
-   a reboot removes it, so run that again first. Judged so far (PROJECT.md
-   35): the grid (playable first, then greyed: "looks good now"), Geometry
-   Wars and Mario Kart Wii on a pad, both saves up to RomM. Left: start Mario
-   Kart Wii again (success: the licence is there; the log says "unpacked ...
-   Mario Kart Wii.zip"); R3, the Wii's HOME menu and its "Wii Menu"; one
-   GameCube game as before. Then the testing image: **set aside the A9's hand
-   copy at `/var/lib/cabinetos/bios/dolphin-emu`** or it shadows the image's
-   `Sys`. Then merge on his go, close #173, and the Xenia Edge reply (#286
-   there): test OK in Left 4 Dead 2's Sign In box first, show him the reply
-   before posting. *Lessons: emulators.*
+1. **#173 Wii, the testing image.** Branch `wii-dolphin`, pushed to
+   `testing` on 2026-09-30. Judged on the TV from the loop build (PROJECT.md
+   35): the grid, Geometry Wars and Mario Kart Wii on a pad, the save up and
+   back, the HOME menu, GameCube unchanged. On the image, before the reboot:
+   **set aside the A9's hand copy at `/var/lib/cabinetos/bios/dolphin-emu`**
+   (`mv` to `dolphin-emu.hand`), or it shadows the image's `Sys`; then check
+   the log names the image's `Sys` and that `/usr/share/cabinetos/wii-controls.txt`
+   loads (`[wii] 6222 games`). Try the HOME menu's "Wii Menu" choice. Then
+   MMagTech judges, says "merge", close #173 with a comment, delete the
+   branch. Then the Xenia Edge reply (#286 there): test OK in Left 4 Dead 2's
+   Sign In box first, show him the reply before posting. *Lessons: emulators.*
 2. Then #174 Wii U.

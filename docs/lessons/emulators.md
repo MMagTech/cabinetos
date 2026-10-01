@@ -286,3 +286,35 @@ Read before working on a core, an emulator, input, saves or states.
 - **A GAME CAN BIND ITS SAVE TO THE PROFILE ID.** Forza Horizon 2 called its
   save "tampered" under any other ID. One ID on every console, for good, as
   the Xbox EEPROM is.
+
+## Wii (Dolphin)
+
+- **A FOLDER COPIED BY HAND ONTO THE REFERENCE CONSOLE HIDES ITS ABSENCE FROM
+  THE IMAGE.** Dolphin's `Sys` (its 1,875 per-game settings files and the
+  Wii's `shared2` files) sat in the A9's `bios/` from 2026-09-20 and was in no
+  image. A game boots without it, so nothing failed; it only loses Dolphin's
+  own fixes. Found by setting the folder aside and reading the core's log.
+  **For any emulator, ask what the image carries, not what the A9 has.**
+
+- **DOLPHIN CHOOSES DISC OR WAD BY THE FILE'S EXTENSION** (`Core/Boot/Boot.cpp`),
+  against this project's rule. The console hands it a link named for what the
+  bytes are when the name does not say.
+
+- **GameTDB FILES FAN MODS UNDER THE REAL GAME'S CODE.** Dozens of Mario Kart
+  Wii mods are RMCP02 to RMCPYP, some with no Classic Controller. A lookup by
+  the first four letters must leave mods and homebrew out.
+
+- **RomM'S `title_id` IS RELIABLE FOR WII AND NOT ALWAYS THERE.** The code is a
+  fixed spot near the start of the file, no keys, and all 33 on the reference
+  server matched the files. But RomM reads it only from 5.3, only in a scan
+  that reads files, and not from WIA, CISO or GCZ. The console reads the file
+  itself when RomM has none.
+
+- **A HEADLESS LAUNCH WITH THE REAL ACCOUNT IS PLAY HISTORY ON RomM.** A test
+  launch of Geometry Wars put it first on Home's Recent shelf. Say so, or use
+  a game nobody minds seeing there.
+
+- **DOLPHIN'S DEFAULTS WRITE WHERE NOTHING READS.** `dolphin_cheats_import`
+  wrote RetroArch `.cht` files beside the system directory on every GameCube
+  launch. Read every option's default from the source, not only the ones
+  that sound like picture settings.
