@@ -14775,3 +14775,12 @@ HOME button (R3) and its "Wii Menu" choice; GameCube unchanged.
 | Geometry Wars on a pad | "that worked"; its save went up as `Geometry Wars_ Galaxies.zip` (`dolphin`, 11 KB). Read back from RomM: exactly `00010000/52474c45/data/banner.bin` and `gwgsave.dat` |
 | Mario Kart Wii on a pad | "stuttered a few in the beginning and then seemed to settle and was good", shaders compiling (the shared cache then held RMCP01's); its save went up (4 files, 18 KB) |
 | Still to judge | the save coming back (start Mario Kart Wii again, the licence there); R3, the Wii's HOME menu and its "Wii Menu"; one GameCube game as before |
+
+#### Judged on the testing image, 2026-10-01, and merged (#205)
+
+| | Result |
+|---|---|
+| Mario Kart Wii again | the licence came back: "unpacked Mario Kart Wii.zip" before the game started |
+| GameCube | "gamecube was good" (Ikaruga; its card up as before) |
+| The HOME menu (R3) | opens and is driven with the stick. **"Wii Menu", then Yes: a black screen.** No Wii Menu is installed; Dolphin says so only in a log category the libretro core never passes on, because the core turns alerts off. The pause menu gets out. **Decided, MMagTech:** HOME stays as it is, so nothing has to be reversed when upstream fixes it; the fallback (withholding R3 from Wii games) is written out in full in #203. Asked of upstream with his go: libretro/dolphin#508 |
+| Dolphin's log | Mario Kart Wii writes "Oversized EFB copy" about sixty times a second at Dolphin's default level: #204 |
