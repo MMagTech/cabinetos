@@ -101,6 +101,10 @@ struct Game {
     std::string coverPath;
     std::string coverLargePath;
     int64_t sizeBytes = 0;
+    // RomM's `title_id`, as it sends it: hex, read off the file by RomM. Only
+    // Wii uses it so far, to look the game up in GameTDB's controller list
+    // (wii.h); empty for the many platforms RomM reads no ID for.
+    std::string titleId;
 };
 
 // One BIOS file a platform carries.
@@ -365,6 +369,11 @@ public:
     // fetchToFile.
     std::vector<uint8_t> fetchBytes(const std::string& path) const;
 
+    // The first `bytes` of a game's file, by an HTTP range: how the console
+    // reads a Wii game's code itself when RomM has none (wii.h). Empty on any
+    // failure, which the caller must not take for an answer.
+    std::vector<uint8_t> fetchHead(const Game& g, size_t bytes) const;
+
     // Streams a body straight to disk, never holding more than a buffer of it.
     //
     // `onProgress` is called from inside the transfer with bytes-so-far and the
@@ -377,6 +386,9 @@ public:
                      const ProgressFn& onProgress, std::string* err) const;
 
 private:
+    // Gives every Wii game in `games` from `first` on a code: RomM's, else one
+    // this console read before, else read now off the file (wii.h).
+    void fillWiiCodes(std::vector<Game>& games, size_t first = 0) const;
     bool fetchFiltered(const char* filter, int limit, std::vector<Game>* out,
                        std::string* err);
     bool postMultipart(const std::string& path, const char* partName,

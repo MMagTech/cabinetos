@@ -1,10 +1,13 @@
 #include "romm.h"
 
+#include "wii.h"
+
 #include <ctime>
 
 #include <curl/curl.h>
 #include <json-c/json.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 #include <fcntl.h>
@@ -127,6 +130,7 @@ bool parseGame(json_object* o, Game* g) {
     g->name = jstr(o, "name");
     g->fsName = jstr(o, "fs_name");
     g->sizeBytes = jint(o, "fs_size_bytes");
+    g->titleId = jstr(o, "title_id");
     // BOTH SIZES, because they are for different jobs. See romm.h: `small` is
     // a 162x216 thumbnail and `big` is 810x1080. Either may be absent — a game
     // the server never matched has neither — so each falls back to the other
@@ -580,6 +584,7 @@ bool Client::fetchRoms(const std::string& filter, int limit,
             out->push_back(std::move(g));
     }
     json_object_put(root);
+    fillWiiCodes(*out);
     return true;
 }
 
@@ -591,6 +596,11 @@ bool Client::fetchGame(int romId, Game* out, std::string* err) {
     const bool ok = parseGame(root, out);
     json_object_put(root);
     if (!ok && err) *err = "rom response did not parse as a game";
+    if (ok) {
+        std::vector<Game> one{*out};
+        fillWiiCodes(one);
+        out->titleId = one[0].titleId;
+    }
     return ok;
 }
 
@@ -652,12 +662,14 @@ bool Client::fetchGames(int platformId, std::vector<Game>* out, std::string* err
         }
 
         const size_t n = json_object_array_length(items);
+        const size_t first = out->size();
         for (size_t i = 0; i < n; ++i) {
             Game g;
             if (parseGame(json_object_array_get_idx(items, i), &g))
                 out->push_back(std::move(g));
         }
         json_object_put(root);
+        fillWiiCodes(*out, first);
 
         // Said after each page rather than at the end: a library of sixteen
         // hundred arrives in four of these and the screen waiting on it has
@@ -1011,6 +1023,7 @@ bool Client::fetchFiltered(const char* filter, int limit, std::vector<Game>* out
             out->push_back(std::move(g));
     }
     json_object_put(root);
+    fillWiiCodes(*out);
     return true;
 }
 
@@ -1136,6 +1149,87 @@ std::vector<uint8_t> Client::fetchBytes(const std::string& path) const {
 
     if (rc != CURLE_OK || status >= 400) data.clear();
     return data;
+}
+
+namespace {
+// Keeps at most `cap` bytes and then stops the transfer, so a server that
+// ignores the range cannot stream a 4 GB disc into memory.
+struct CappedSink {
+    std::vector<uint8_t>* data;
+    size_t cap;
+};
+size_t cappedSink(char* p, size_t sz, size_t n, void* user) {
+    auto* s = static_cast<CappedSink*>(user);
+    const size_t room = s->cap - std::min(s->cap, s->data->size());
+    const size_t take = std::min(room, sz * n);
+    s->data->insert(s->data->end(), p, p + take);
+    return s->data->size() >= s->cap ? 0 : sz * n;   // 0 ends the transfer
+}
+}  // namespace
+
+std::vector<uint8_t> Client::fetchHead(const Game& g, size_t bytes) const {
+    std::vector<uint8_t> data;
+    if (bytes == 0 || g.id == 0) return data;
+    // The name in the path is RomM's and is escaped whole, as romFilePath
+    // does: `Sonic & Sega All-Stars Racing` must not become a query.
+    static const char* kHex = "0123456789ABCDEF";
+    std::string name;
+    for (const unsigned char c : g.fsName) {
+        if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') ||
+            c == '-' || c == '.' || c == '_' || c == '~') {
+            name.push_back(static_cast<char>(c));
+        } else {
+            name.push_back('%');
+            name.push_back(kHex[c >> 4]);
+            name.push_back(kHex[c & 0x0F]);
+        }
+    }
+    CURL* c = curl_easy_init();
+    if (!c) return data;
+    const std::string url = base_ + "/api/roms/" + std::to_string(g.id) + "/content/" + name;
+    const std::string range = "0-" + std::to_string(bytes - 1);
+    curl_slist* hdrs = nullptr;
+    if (!token_.empty())
+        hdrs = curl_slist_append(hdrs, ("Authorization: Bearer " + token_).c_str());
+    curl_easy_setopt(c, CURLOPT_URL, url.c_str());
+    curl_easy_setopt(c, CURLOPT_RANGE, range.c_str());
+    CappedSink sink{&data, bytes};
+    curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, cappedSink);
+    curl_easy_setopt(c, CURLOPT_WRITEDATA, &sink);
+    curl_easy_setopt(c, CURLOPT_CONNECTTIMEOUT, kConnectTimeoutSec);
+    curl_easy_setopt(c, CURLOPT_TIMEOUT, kTimeoutSec);
+    curl_easy_setopt(c, CURLOPT_FOLLOWLOCATION, 1L);
+    if (hdrs) curl_easy_setopt(c, CURLOPT_HTTPHEADER, hdrs);
+    const CURLcode rc = curl_easy_perform(c);
+    long status = 0;
+    curl_easy_getinfo(c, CURLINFO_RESPONSE_CODE, &status);
+    if (hdrs) curl_slist_free_all(hdrs);
+    curl_easy_cleanup(c);
+    // 206 is the answer asked for. A 200 means the server ignored the range;
+    // the sink stopped it at `bytes`, which are still the right bytes. A
+    // write error is that stop, not a failure.
+    const bool stopped = rc == CURLE_WRITE_ERROR && data.size() >= bytes;
+    if ((rc != CURLE_OK && !stopped) || (status != 206 && status != 200)) data.clear();
+    return data;
+}
+
+void Client::fillWiiCodes(std::vector<Game>& games, size_t first) const {
+    for (size_t i = first; i < games.size(); ++i) {
+        Game& g = games[i];
+        if (g.platformSlug != "wii" || !wii::codeFromTitleId(g.titleId).empty()) continue;
+        bool known = false;
+        std::string code = wii::rememberedCode(g.id, &known);
+        if (!known) {
+            const std::vector<uint8_t> head = fetchHead(g, wii::kHeaderBytes);
+            // A failed read is not an answer: asked again next time.
+            if (head.empty()) continue;
+            code = wii::codeFromHeader(head.data(), head.size());
+            wii::rememberCode(g.id, code);
+            std::fprintf(stderr, "[wii] %s: RomM has no code; read %s off the file\n",
+                         g.name.c_str(), code.empty() ? "none" : code.c_str());
+        }
+        if (!code.empty()) g.titleId = wii::titleIdOf(code);
+    }
 }
 
 }  // namespace romm

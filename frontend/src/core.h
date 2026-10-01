@@ -311,6 +311,13 @@ public:
     // player whose pad went off keeps their controller in the machine.
     void setPlayers(int n);
 
+    // What each player's port holds, as a libretro device id, set before
+    // loadGame and kept until the game unloads. A plain joypad unless a
+    // platform says otherwise, and only Wii does: Dolphin reads the joypad as
+    // an upright Wii Remote, so a Wii game that takes a Classic Controller is
+    // told one is plugged in (wii.h).
+    void setPadDevice(unsigned device);
+
     // --- PlayStation 2 ---------------------------------------------------
     //
     // PCSX2 is a whole emulator rather than a libretro core, so three things

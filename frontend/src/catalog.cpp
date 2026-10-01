@@ -2,12 +2,14 @@
 
 #include "gpu.h"
 #include "standalone.h"
+#include "wii.h"
 
 #include <sys/stat.h>
 
 #include <map>
 #include <vector>
 
+#include <cctype>
 #include <cstring>
 #include <string>
 
@@ -77,6 +79,9 @@ const Entry kTable[] = {
     {"turbografx-cd",        nullptr,     Support::Playable, "beetle_pce_fast", nullptr},
     {"vectrex",              nullptr,     Support::Playable, "vecx",            nullptr},
     {"virtualboy",           nullptr,     Support::Playable, "beetle_vb",       nullptr},
+    // Wii on the same Dolphin as GameCube, which plays both from one core.
+    // Which games play on a pad is per game, in coverageFor below (wii.h).
+    {"wii",                  nullptr,     Support::Playable, "dolphin",         nullptr},
 
     // NOT A LIBRETRO CORE: a whole emulator, from Flathub or in the image, run
     // as a separate program. The name is a row in standalone.cpp rather than
@@ -444,7 +449,16 @@ Coverage coverageFor(const romm::Platform& p) {
     return answer(lookup(p.slug, p.fsSlug));
 }
 Coverage coverageFor(const romm::Game& g) {
-    return answer(lookup(g.platformSlug, g.platformFsSlug));
+    Coverage c = answer(lookup(g.platformSlug, g.platformFsSlug));
+    // A Wii game that takes neither a Classic Controller nor a GameCube pad
+    // needs a real Wii Remote. Pairing one is #200; until it is built, these
+    // stay greyed.
+    if (c.support == Support::Playable && g.platformSlug == "wii" &&
+        wii::padDevice(wii::codeFromTitleId(g.titleId)) == 0) {
+        c.support = Support::NeedsController;
+        c.reason = "Needs a Wii Remote";
+    }
+    return c;
 }
 
 std::map<std::string, std::string> optionOverrides(const std::string& core) {
@@ -639,6 +653,25 @@ std::map<std::string, std::string> optionOverrides(const std::string& core) {
             {"mupen64plus-parallel-rdp-upscaling", "2x"},
         };
     }
+    // GameCube and Wii, one Dolphin. Both from the settings audit of
+    // 2026-09-30 (docs/PROJECT.md open question 35), checked against Batocera:
+    //
+    // * CHEAT IMPORT OFF. On, the core writes RetroArch `.cht` files beside
+    //   the system directory, for a program this console does not have; the
+    //   reference console had /var/lib/cabinetos/cheats/dolphin-emu/ from two
+    //   GameCube games. main.cpp clears what it already wrote.
+    // * DOLPHIN'S OWN ON-SCREEN MESSAGES OFF, as Batocera ships them. The
+    //   console says what needs saying itself.
+    //
+    // Resolution, shader compilation and filtering are left at Dolphin's own
+    // defaults on purpose: they are picture quality, chosen from the hardware,
+    // and that is #63.
+    if (coreName == "dolphin") {
+        return {
+            {"dolphin_cheats_import", "disabled"},
+            {"dolphin_osd_enabled", "disabled"},
+        };
+    }
     if (coreName == "opera") {
         return {
             {"opera_bios", "panafz10.bin"},
@@ -648,10 +681,25 @@ std::map<std::string, std::string> optionOverrides(const std::string& core) {
     return {};
 }
 
-const char* directorySaveRoot(const char* core) {
+const char* directorySaveRoot(const char* core, const std::string& platformSlug) {
     if (!core) return nullptr;
     if (manifestName(core) == "ppsspp") return "PSP/SAVEDATA";
+    if (manifestName(core) == "dolphin" && platformSlug == "wii") return "User/Wii/title";
     return nullptr;
+}
+
+bool inDirectorySave(const char* core, const std::string& platformSlug,
+                     const std::string& relPath) {
+    if (!core || manifestName(core) != "dolphin" || platformSlug != "wii") return true;
+    // `<8 hex>/<8 hex>/data/...`, and not the system's own titles.
+    auto hex8 = [&](size_t at) {
+        if (relPath.size() < at + 9 || relPath[at + 8] != '/') return false;
+        for (size_t i = at; i < at + 8; ++i)
+            if (!std::isxdigit(static_cast<unsigned char>(relPath[i]))) return false;
+        return true;
+    };
+    return hex8(0) && hex8(9) && relPath.compare(0, 9, "00000001/") != 0 &&
+           relPath.compare(18, 5, "data/") == 0;
 }
 
 bool needsBios(const std::string& slug) {
@@ -891,6 +939,7 @@ const char* shortReason(Support s) {
         // desktop GL or Vulkan rather than GLES — which the host refuses by
         // name. Both cores tested asked for GLES 3.0 and got it.
         case Support::NeedsHardwareRender: return "Needs a 3D core";
+        case Support::NeedsController: return "Needs a Wii Remote";
     }
     return "Not playable here";
 }

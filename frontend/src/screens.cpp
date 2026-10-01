@@ -111,6 +111,11 @@ void drawCover(Ctx& c, const Card& card, float x, float y, float w, float h,
         c.r.draw(ui::Rect{x, y, w, h, radius,
                           ui::Color::black(look::restDim(design::kRestArtDim) * (1.0f - f))});
     drawKeptMark(c, card, x, y, w, radius);
+    // GREYED: a game this console cannot play until a controller is paired.
+    // Held back whether focused or not, so focus lands on it and it still
+    // reads as unavailable; its name says why.
+    if (!card.unavailable.empty())
+        c.r.draw(ui::Rect{x, y, w, h, radius, ui::Color::black(design::kUnavailableDim)});
     if (f > 0.0f && rim) {
         ui::Rect edge{x, y, w, h, radius, ui::Color::white(0)};
         edge.border = f * design::kFocusRimWidth;
@@ -573,6 +578,10 @@ void GridScreen::open(std::string title, std::vector<int> cards,
     for (size_t i = 0; i < cards_.size(); ++i) {
         const int idx = cards_[i];
         if (idx < 0 || idx >= static_cast<int>(all.size())) continue;
+        // The index covers the playable games only. Greyed ones follow them
+        // in an alphabet of their own, and a second A to Z down the side
+        // would send a jump to the wrong one.
+        if (!all[static_cast<size_t>(idx)].unavailable.empty()) continue;
         const std::string& n = all[static_cast<size_t>(idx)].title;
         char c = n.empty() ? '#' : static_cast<char>(std::toupper(
             static_cast<unsigned char>(n[0])));
@@ -600,9 +609,20 @@ void GridScreen::append(const std::vector<int>& more,
     // Rebuilding would be correct too and is not worth the risk of a jump
     // under somebody's thumb.
     for (int idx : more) {
-        const size_t at = cards_.size();
-        cards_.push_back(idx);
         if (idx < 0 || idx >= static_cast<int>(all.size())) continue;
+        // A GREYED GAME GOES ON THE END; a playable one goes before the first
+        // greyed one, so playable games stay first as pages arrive (main.cpp
+        // keeps the tile's own list the same way). Everything after that
+        // point moves down one, so focus there moves with its card; the
+        // letter index only ever points before it.
+        if (!all[static_cast<size_t>(idx)].unavailable.empty()) {
+            cards_.push_back(idx);
+            continue;
+        }
+        size_t at = 0;
+        while (at < cards_.size() && all[static_cast<size_t>(cards_[at])].unavailable.empty()) ++at;
+        cards_.insert(cards_.begin() + static_cast<long>(at), idx);
+        if (at < cards_.size() - 1 && slot_ >= static_cast<int>(at)) ++slot_;
         const std::string& n = all[static_cast<size_t>(idx)].title;
         char c = n.empty() ? '#' : static_cast<char>(std::toupper(
             static_cast<unsigned char>(n[0])));
@@ -612,7 +632,7 @@ void GridScreen::append(const std::vector<int>& more,
             letterFirst_.push_back(static_cast<int>(at));
         }
     }
-    // Focus and scroll are deliberately untouched. Somebody is looking at row
+    // Focus and scroll are otherwise untouched. Somebody is looking at row
     // three; growing the list below them must not move them.
 }
 
@@ -858,11 +878,24 @@ void GridScreen::drawGlass(Ctx& c) {
 
     const int idx = focusedCard();
     if (idx >= 0 && idx < static_cast<int>(c.cards->size())) {
-        const std::string& name = (*c.cards)[idx].title;
-        const float room = ui::kCanvasWidth - design::kLibraryInset - x -
-                           design::kLetterIndexWidth;
-        c.text.draw(c.r, c.text.truncate(name, ui::TextStyle::Callout, c.sc, room), x,
-                    baseline, ui::TextStyle::Callout, ui::Color::white(0.95f), c.sc);
+        const design::Card& card = (*c.cards)[idx];
+        float room = ui::kCanvasWidth - design::kLibraryInset - x - design::kLetterIndexWidth;
+        // A greyed game says why after its name, dimmer, and the reason is
+        // what survives when the two do not fit.
+        if (!card.unavailable.empty()) {
+            const float why = c.text.measure(card.unavailable, ui::TextStyle::Callout, c.sc);
+            const std::string name =
+                c.text.truncate(card.title, ui::TextStyle::Callout, c.sc,
+                                std::max(0.0f, room - why - 24.0f));
+            c.text.draw(c.r, name, x, baseline, ui::TextStyle::Callout,
+                        ui::Color::white(0.95f), c.sc);
+            const float wx = x + c.text.measure(name, ui::TextStyle::Callout, c.sc) + 24.0f;
+            c.text.draw(c.r, card.unavailable, wx, baseline, ui::TextStyle::Callout,
+                        ui::Color::white(0.45f), c.sc);
+        } else {
+            c.text.draw(c.r, c.text.truncate(card.title, ui::TextStyle::Callout, c.sc, room), x,
+                        baseline, ui::TextStyle::Callout, ui::Color::white(0.95f), c.sc);
+        }
     }
 
     // --- The letter index, down the right ---------------------------------

@@ -160,6 +160,12 @@ constexpr float kFocusedTint = 0.55f;
 // Black over the top dims honestly.
 constexpr float kRestArtDim = 0.22f;
 
+// A GREYED GAME: one this console cannot play until a controller is paired
+// (Card::unavailable). A heavier scrim than rest, laid over the cover focused
+// or not, so it still reads as unavailable with focus on it. A starting value,
+// to be judged on the television.
+constexpr float kUnavailableDim = 0.60f;
+
 // THE KEPT MARK — new 2026-09-21.
 //
 // MMagTech asked for the grid to say which games are already on the machine.
@@ -753,6 +759,11 @@ struct Card {
     // stat() on the filesystem, and twelve covers on screen at sixty frames a
     // second is seven hundred stats a second to draw a dot.
     bool kept = false;
+    // WHY THIS GAME CANNOT BE PLAYED HERE, when its platform can: a Wii game
+    // that needs a Wii Remote nobody has paired. Empty for every playable
+    // game. A grid shows such a card greyed, and its name says why; it opens
+    // onto the game's screen, which says it again and offers no Play.
+    std::string unavailable;
     Animated focus;
     Animated press;
 };
