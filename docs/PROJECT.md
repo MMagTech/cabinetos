@@ -14490,6 +14490,22 @@ files. Left 4 Dead 2 was replaced on RomM with its plain ISO.
 
 Not yet: rumble on a real pad, and MMagTech's look on the TV.
 
+#### Forza Horizon 2 "washed out", "the white a bit too much" (MMagTech, 2026-10-01)
+
+Researched read-only, then compared on the TV. **No setting is off.**
+gamescope passes SDR through untouched (its shaper and 3D colour tables
+measured identity on the A9, HDR off); amdgpu sends full-range RGB
+("Broadcast RGB" Automatic); every Xenia colour and gamma cvar is at its
+default, as Batocera leaves them (`kernel_display_gamma_type` 2, BT.709,
+chosen upstream as "the closest to the Xbox 360 connected to an HDTV"). The
+one Xenia approximation that touches highlights is the performance render
+path's float16 stand-in for the 360's 7e3 targets, so Forza was played once
+with `--render_target_path=accuracy` (confirmed on Xenia's command line):
+MMagTech, "looks the same to me". It is the game as Xenia draws it. The
+console stays on `performance`. Not done, and only worth doing if anything
+else ever looks off: a black-level pattern through a core, which would show
+a range or TV setting affecting everything.
+
 ### 35. Wii (Dolphin), issue #173
 **Researched and decided with MMagTech 2026-09-30.** Research only; no code.
 
@@ -14784,6 +14800,7 @@ HOME button (R3) and its "Wii Menu" choice; GameCube unchanged.
 | GameCube | "gamecube was good" (Ikaruga; its card up as before) |
 | The HOME menu (R3) | opens and is driven with the stick. **"Wii Menu", then Yes: a black screen.** No Wii Menu is installed; Dolphin says so only in a log category the libretro core never passes on, because the core turns alerts off. The pause menu gets out. **Decided, MMagTech:** HOME stays as it is, so nothing has to be reversed when upstream fixes it; the fallback (withholding R3 from Wii games) is written out in full in #203. Asked of upstream with his go: libretro/dolphin#508 |
 | Dolphin's log | Mario Kart Wii writes "Oversized EFB copy" about sixty times a second at Dolphin's default level: #204 |
+| Mario Kart Wii "not as fast as 150cc should be" (MMagTech, 2026-10-01) | **measured correct.** Headless on the A9: Dolphin declares 59.94 fps and 32,000 Hz (PAL60 on, the PAL release RMCP01); 3,600 frames are 60.06 s of picture and the sound made over them 60.04 s, within 0.03%, so the console's speaker pacing runs it at true speed. MMagTech: used to modern games; it is fine. A race was not measured (no input headless) |
 
 ### 36. Wii U (Cemu), issue #174
 **Researched 2026-10-01 (the research is on #174); decided with MMagTech the
@@ -14833,7 +14850,7 @@ v2.6 was not run: the decision is main, so it would answer nothing.
 | Pads | Cemu main is SDL3; a profile binds a pad by SDL3's GUID (`0_<guid>`), Batocera's Pro Controller mapping, `SDL_JOYSTICK_HIDAPI=0` as Batocera |
 | The screen | the console's X display is not always `:0` (`:1` that day); take it from the frontend |
 
-Not judged: a full battle, Captain Toad greyed (no code yet).
+Not judged: a full battle.
 
 #### What was built, 2026-10-01
 
@@ -14880,6 +14897,18 @@ Not judged: a full battle, Captain Toad greyed (no code yet).
   5 reads, 434 KB (plays); Captain Toad `AKBE`, GamePad only (greyed,
   "Needs a Wii U GamePad"), read through RomM by the console.
 
-**Next:** the testing image, then on the TV: Hyrule Warriors through the
-console (pad, sound, save sent to RomM and back), Captain Toad greyed, a
-game closed from the pause menu.
+#### Judged on the TV through the console, MMagTech 2026-10-01 (the loop build, not an image)
+
+The loop's frontend with `CABINETOS_BINARY_cemu` pointing at the Cemu built
+on the A9 by `cores/build-cemu.sh`.
+
+| | Result |
+|---|---|
+| The Wii U grid | four games; the console read all four product codes through RomM (`AKBE`, `BWPE`, `WKNE`, `AS2E`); Captain Toad greyed, "Needs a Wii U GamePad" (MMagTech: "yes it was greyed out") |
+| Hyrule Warriors | downloaded (7.65 GB), straight into the game; MMagTech: "hyura works" |
+| Pause menu, Quit | Cemu frozen and thawed; asked through its window, exit 0 after 717 s; the save (3 files) zipped and uploaded, tag `cemu` |
+| Started again | the save came down first ("holds 3 file(s) at launch"); no DLC cards, the same character: "worked" |
+| What RomM holds | `Hyrule Warriors.zip`, `1017d800/meta/{meta.xml,iconTex.tga}` and `1017d800/user/80000001/ProjectZ-SAVEDATA/APP.BIN`: Cemu's own layout |
+
+**Next:** push, the first CI build of Cemu, the testing image, and
+MMagTech's judgement on it before any merge.
