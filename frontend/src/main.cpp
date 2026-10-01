@@ -2640,6 +2640,14 @@ static bool loadTileGames(romm::Client& client, Library& lib, screens::Tile& til
     // the grid's letter-jump needs, and a later page has to concatenate onto
     // this one — a sort would fight the append and move cards out from under
     // whoever is looking at them.
+    //
+    // EXCEPT THAT GREYED GAMES GO LAST, each half still in title order.
+    // MMagTech, 2026-09-30, on the Wii grid: mixed in, the playable games were
+    // hard to find. A later page puts its playable games before the greyed
+    // ones (GridScreen::append), so the order holds as pages arrive.
+    std::stable_partition(tile.cards.begin(), tile.cards.end(), [&](int i) {
+        return lib.cards[static_cast<size_t>(i)].unavailable.empty();
+    });
     if (unplayable > 0) {
         // Say what is missing rather than quietly showing a shorter list: a
         // collection of twelve that opens onto four looks like a bug unless
@@ -12632,10 +12640,22 @@ int main(int argc, char** argv) {
                         for (screens::Tile& x : *v)
                             if (x.id == gridFill.tileId) { t = &x; break; }
                     for (const auto& g : got) {
-                        if (!catalog::playable(g)) continue;
+                        if (!catalog::playable(g) &&
+                            catalog::coverageFor(g).support !=
+                                catalog::Support::NeedsController)
+                            continue;
                         const int i = appendGame(lib, g);
                         added.push_back(i);
-                        if (t) t->cards.push_back(i);
+                        if (!t) continue;
+                        // Playable before the greyed ones, as the first page.
+                        if (cards[static_cast<size_t>(i)].unavailable.empty()) {
+                            auto at = std::find_if(t->cards.begin(), t->cards.end(), [&](int c) {
+                                return !cards[static_cast<size_t>(c)].unavailable.empty();
+                            });
+                            t->cards.insert(at, i);
+                        } else {
+                            t->cards.push_back(i);
+                        }
                     }
                     gridScreen.append(added, cards);
                 }

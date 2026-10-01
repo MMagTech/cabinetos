@@ -578,6 +578,10 @@ void GridScreen::open(std::string title, std::vector<int> cards,
     for (size_t i = 0; i < cards_.size(); ++i) {
         const int idx = cards_[i];
         if (idx < 0 || idx >= static_cast<int>(all.size())) continue;
+        // The index covers the playable games only. Greyed ones follow them
+        // in an alphabet of their own, and a second A to Z down the side
+        // would send a jump to the wrong one.
+        if (!all[static_cast<size_t>(idx)].unavailable.empty()) continue;
         const std::string& n = all[static_cast<size_t>(idx)].title;
         char c = n.empty() ? '#' : static_cast<char>(std::toupper(
             static_cast<unsigned char>(n[0])));
@@ -605,9 +609,20 @@ void GridScreen::append(const std::vector<int>& more,
     // Rebuilding would be correct too and is not worth the risk of a jump
     // under somebody's thumb.
     for (int idx : more) {
-        const size_t at = cards_.size();
-        cards_.push_back(idx);
         if (idx < 0 || idx >= static_cast<int>(all.size())) continue;
+        // A GREYED GAME GOES ON THE END; a playable one goes before the first
+        // greyed one, so playable games stay first as pages arrive (main.cpp
+        // keeps the tile's own list the same way). Everything after that
+        // point moves down one, so focus there moves with its card; the
+        // letter index only ever points before it.
+        if (!all[static_cast<size_t>(idx)].unavailable.empty()) {
+            cards_.push_back(idx);
+            continue;
+        }
+        size_t at = 0;
+        while (at < cards_.size() && all[static_cast<size_t>(cards_[at])].unavailable.empty()) ++at;
+        cards_.insert(cards_.begin() + static_cast<long>(at), idx);
+        if (at < cards_.size() - 1 && slot_ >= static_cast<int>(at)) ++slot_;
         const std::string& n = all[static_cast<size_t>(idx)].title;
         char c = n.empty() ? '#' : static_cast<char>(std::toupper(
             static_cast<unsigned char>(n[0])));
@@ -617,7 +632,7 @@ void GridScreen::append(const std::vector<int>& more,
             letterFirst_.push_back(static_cast<int>(at));
         }
     }
-    // Focus and scroll are deliberately untouched. Somebody is looking at row
+    // Focus and scroll are otherwise untouched. Somebody is looking at row
     // three; growing the list below them must not move them.
 }
 
