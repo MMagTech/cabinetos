@@ -14827,11 +14827,13 @@ v2.6 was not run: the decision is main, so it would answer nothing.
 | Sound effects | Cemu logs that the game uses an effect it plays fully only with `snd_user.rpl` and `snduser2.rpl` from a Wii U's firmware; Nintendo's files, not shippable. Matches Cemu #1086 (Hyrule Warriors effects sound poor). A known gap |
 | Account and save | `80000001` made silently; the save is `mlc/usr/save/00050000/1017d800/user/80000001/ProjectZ-SAVEDATA/APP.BIN` (3 MB) plus `meta/`, written during play. `usr/save/system/pdm` (play statistics) is not progress |
 | Closing | through the window, twice: gone in under 10 s, exit 0, save intact |
+| The save read back | the second start (after the sound fix) showed no DLC cards, and Legend Mode had the character MMagTech picked in the first session: the game read its save. His menu save then wrote `APP.BIN` at 07:51:17 |
+| Cemu's "Save path ... (not present)" | **wrong on Linux**: it checks `1017D800` (capitals) with a plain, case-sensitive check, while the folder is `1017d800`; the game's own file layer ignores case. The console must look for the lowercase folder when it syncs |
 | Where things go | the log `$XDG_DATA_HOME/Cemu/log.txt`; the shader cache `$XDG_CACHE_HOME/Cemu/shaderCache/` (`transferable`, `precompiled`, `driver/vk`; 4.5 MB after one session) |
 | Pads | Cemu main is SDL3; a profile binds a pad by SDL3's GUID (`0_<guid>`), Batocera's Pro Controller mapping, `SDL_JOYSTICK_HIDAPI=0` as Batocera |
 | The screen | the console's X display is not always `:0` (`:1` that day); take it from the frontend |
 
-Not judged: a save loaded back, a full battle, Captain Toad greyed (no code yet).
+Not judged: a full battle, Captain Toad greyed (no code yet).
 
 **Next:** the builder for Cemu main at a pin, then the `standalone.cpp` row
 described on #174.
