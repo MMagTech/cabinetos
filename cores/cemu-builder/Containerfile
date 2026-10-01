@@ -22,7 +22,7 @@ FROM registry.fedoraproject.org/fedora:44
 # vcpkg wants curl, zip, unzip, tar and git to fetch and unpack its ports, perl
 # for OpenSSL's, and autoconf, automake and libtool for a few others.
 RUN dnf install -y --setopt=install_weak_deps=False \
-        clang lld cmake ninja-build git make pkgconf-pkg-config nasm \
+        clang lld llvm cmake ninja-build git make pkgconf-pkg-config nasm \
         curl zip unzip tar perl-core autoconf automake libtool python3 \
         kernel-headers gtk3-devel libX11-devel libXext-devel libXrandr-devel \
         libXi-devel libXcursor-devel libXinerama-devel libXxf86vm-devel \
@@ -33,6 +33,10 @@ RUN dnf install -y --setopt=install_weak_deps=False \
         libgcrypt-devel libsecret-devel glm-devel \
     && dnf clean all
 
+# llvm for llvm-ar and llvm-ranlib: Cemu's release build links with LTO, and
+# CMake then archives with clang's own tools ("CMAKE_C_COMPILER_AR-NOTFOUND"
+# without them, A9, 2026-10-01). Cemu's BUILD.md lists it for Fedora.
+#
 # glm-devel because CMake found no glm configuration from vcpkg at this pin
 # ("Could not find a package configuration file provided by glm", A9,
 # 2026-10-01); upstream's Linux build installs the system's too (libglm-dev in
