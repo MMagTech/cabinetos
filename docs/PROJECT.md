@@ -14811,5 +14811,27 @@ Home's Recent shelf; leaving to the system menu (none installed) should end
 the game. Different from Wii: Cemu is a program of its own on `standalone.h`,
 as Xenia is, not a libretro core.
 
-**Next:** the hand test of Cemu main on the A9 (Hyrule Warriors), then the
-builder and the `standalone.cpp` row described on #174.
+#### Hand test on the A9, MMagTech at the TV, 2026-10-01
+
+Cemu main `4e3c824` (upstream's CI AppImage, by hand: `~/wiiu/tw.sh`, the
+console frozen underneath), Hyrule Warriors from RomM (one 7.65 GB `.wua`).
+v2.6 was not run: the decision is main, so it would answer nothing.
+
+| | Result |
+|---|---|
+| Start | `-g <file> -f`, straight into the game: no wizard, no menu bar, no dialog. Vulkan on the Radeon 890M (RADV, Mesa 26.2.2) without naming a device |
+| One `.wua` | base, update v208 and DLC all mounted from the one file (`DLC: ... [WUA] [0005000c1017d800_v208]`) |
+| DLC | the game handed out its DLC content on first start ("Weapon obtained: Epona!", a Master Quest item), with no graphic pack. The file carries what the DLC check needs. Adventure Mode's DLC maps not seen: it is locked on a fresh save until the first Legend Mode battle |
+| Picture | MMagTech: "working fine graphically". No sign of #1176. A full battle not played |
+| Sound | **silent at first: Cemu opens no sound at all when `Audio/TVDevice` is empty** (`IAudioAPI::CreateDeviceFromConfig` returns nothing). `default` is Cemu's own "Default Device", the system's output on any machine; with it MMagTech heard the game. The console chooses no output of its own, so Cemu follows the same one as everything else |
+| Sound effects | Cemu logs that the game uses an effect it plays fully only with `snd_user.rpl` and `snduser2.rpl` from a Wii U's firmware; Nintendo's files, not shippable. Matches Cemu #1086 (Hyrule Warriors effects sound poor). A known gap |
+| Account and save | `80000001` made silently; the save is `mlc/usr/save/00050000/1017d800/user/80000001/ProjectZ-SAVEDATA/APP.BIN` (3 MB) plus `meta/`, written during play. `usr/save/system/pdm` (play statistics) is not progress |
+| Closing | through the window, twice: gone in under 10 s, exit 0, save intact |
+| Where things go | the log `$XDG_DATA_HOME/Cemu/log.txt`; the shader cache `$XDG_CACHE_HOME/Cemu/shaderCache/` (`transferable`, `precompiled`, `driver/vk`; 4.5 MB after one session) |
+| Pads | Cemu main is SDL3; a profile binds a pad by SDL3's GUID (`0_<guid>`), Batocera's Pro Controller mapping, `SDL_JOYSTICK_HIDAPI=0` as Batocera |
+| The screen | the console's X display is not always `:0` (`:1` that day); take it from the frontend |
+
+Not judged: a save loaded back, a full battle, Captain Toad greyed (no code yet).
+
+**Next:** the builder for Cemu main at a pin, then the `standalone.cpp` row
+described on #174.

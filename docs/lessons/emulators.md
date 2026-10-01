@@ -318,3 +318,14 @@ Read before working on a core, an emulator, input, saves or states.
   wrote RetroArch `.cht` files beside the system directory on every GameCube
   launch. Read every option's default from the source, not only the ones
   that sound like picture settings.
+
+## Wii U (Cemu)
+
+- **CEMU PLAYS NO SOUND WHEN ITS OUTPUT DEVICE IS EMPTY, AND SAYS NOTHING.**
+  `Audio/TVDevice` empty means no TV audio device is created at all
+  (`IAudioAPI::CreateDeviceFromConfig`); the log still says "Cubeb:
+  available". Found on the TV, confirmed by PipeWire showing no Cemu stream.
+  `default` is Cemu's own "Default Device" and follows the system's output.
+  **When an emulator's settings file is written from scratch, read what every
+  missing key does, not only the ones being set.**
+
