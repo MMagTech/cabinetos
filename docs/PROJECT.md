@@ -14784,3 +14784,32 @@ HOME button (R3) and its "Wii Menu" choice; GameCube unchanged.
 | GameCube | "gamecube was good" (Ikaruga; its card up as before) |
 | The HOME menu (R3) | opens and is driven with the stick. **"Wii Menu", then Yes: a black screen.** No Wii Menu is installed; Dolphin says so only in a log category the libretro core never passes on, because the core turns alerts off. The pause menu gets out. **Decided, MMagTech:** HOME stays as it is, so nothing has to be reversed when upstream fixes it; the fallback (withholding R3 from Wii games) is written out in full in #203. Asked of upstream with his go: libretro/dolphin#508 |
 | Dolphin's log | Mario Kart Wii writes "Oversized EFB copy" about sixty times a second at Dolphin's default level: #204 |
+
+### 36. Wii U (Cemu), issue #174
+**Researched 2026-10-01 (the research is on #174); decided with MMagTech the
+same day.** No code yet. Most of question 35 carries over; what follows is only
+what is new or different.
+
+#### DECIDED, MMagTech 2026-10-01
+
+| | Decided |
+|---|---|
+| The emulator | **Cemu main, built from source at a pinned commit** in a builder of our own, as PCSX2. Chosen for every machine, not the A9: Cemu #1176 (Vulkan texture and shadow corruption on v2.6) is reported on Radeon 780M, 880M and 890M integrated graphics, the chips in most current handheld PCs and AMD mini PCs, and reported fixed on main. Batocera builds main at a pin. Rejected: v2.6 (2025-02-06, what Flathub, EmuDeck and RetroDECK ship), because of #1176. The A9 test confirms main runs and that the corruption is gone on main; it does not choose |
+| Which games play on a pad | **Wii's rule.** A game GameTDB (`wiiutdb`) says takes a Pro Controller or a Classic Controller plays. A game that takes only the GamePad is greyed, "Needs a Wii U GamePad", which nothing can provide. Captain Toad: Treasure Tracker is greyed. Derived from the rule, as for Wii: a game GameTDB does not list counts as needing the GamePad |
+| Wii Remotes in Wii U games | **Wii's rule**: a game that needs a Remote is greyed, "Needs a Wii Remote", while no Remote is paired, and plays once one is. How Cemu takes a real Remote is checked in #200 with MMagTech's Remotes |
+| Graphic packs | **None, ever.** Cemu has no resolution setting of its own; it renders sharper only through a community pack written for each game (about 75 games have one). MMagTech: it is not the same as the other systems' resolution setting, and problems in community packs would come to us as issues that are not ours. Fix packs were already out under the no-per-game-fixes rule. Wii U renders at its own 720p |
+| Picture quality (#63), for every system | **MMagTech's rule: the quality setting uses only settings that need no external files**, for every core. Nothing downloaded or shipped per game to make a level work |
+
+#### Carried over from Wii (question 35) unchanged
+
+GameTDB as the only source of which games play; the emulator's own per-game
+settings ship in the image from `/usr` (Cemu's `gameProfiles/default`, 236
+files at `4e3c824faa`, as Dolphin's `Sys`); one shader cache per console;
+on-screen messages off; Vulkan on the Radeon; saves per person per game,
+synced as a zipped folder; a test launch with the real account shows on
+Home's Recent shelf; leaving to the system menu (none installed) should end
+the game. Different from Wii: Cemu is a program of its own on `standalone.h`,
+as Xenia is, not a libretro core.
+
+**Next:** the hand test of Cemu main on the A9 (Hyrule Warriors), then the
+builder and the `standalone.cpp` row described on #174.
