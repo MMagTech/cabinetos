@@ -83,12 +83,25 @@ run_in_builder() {
 # presence, Feral's GameMode, and portable mode (a `portable` folder beside the
 # program would move every setting there, and /usr is read-only anyway).
 CMAKE_ARGS=(
+    # A clean configure every time, so nothing a previous run cached (a path
+    # to a library, an option) can stand in for what this one says. vcpkg's
+    # installed libraries stay; they are pinned and cached separately.
+    --fresh
     -S . -B "$BUILD" -G Ninja
     -DCMAKE_BUILD_TYPE=Release
     -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
     -DENABLE_DISCORD_RPC=OFF
     -DENABLE_FERAL_GAMEMODE=OFF
     -DALLOW_PORTABLE=OFF
+    # FEDORA'S zlib AND libpng CMAKE FILES ARE SKIPPED, so Cemu finds the
+    # copies vcpkg built for it, as on upstream's Ubuntu, which ships no such
+    # files. Both name a static library their package does not install, and
+    # CMake 4 reads them before vcpkg's: "The imported target ZLIB::ZLIBSTATIC
+    # references the file /usr/lib64/libz.a but this file does not exist", and
+    # the same for PNG::png_static (A9, 2026-10-01). They are the only two of
+    # the container's CMake files that name a missing `.a`. Both spellings of
+    # each, since /lib64 is /usr/lib64 on Fedora and CMake searches each.
+    "-DCMAKE_IGNORE_PATH=/usr/lib64/cmake/ZLIB;/lib64/cmake/ZLIB;/usr/lib64/cmake/PNG;/lib64/cmake/PNG"
 )
 
 run_in_builder "./dependencies/vcpkg/bootstrap-vcpkg.sh -disableMetrics"

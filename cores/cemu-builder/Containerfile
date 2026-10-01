@@ -30,9 +30,14 @@ RUN dnf install -y --setopt=install_weak_deps=False \
         wayland-devel wayland-protocols-devel libxkbcommon-devel \
         pulseaudio-libs-devel alsa-lib-devel \
         bluez-libs-devel libusb1-devel systemd-devel \
-        libgcrypt-devel libsecret-devel \
+        libgcrypt-devel libsecret-devel glm-devel \
     && dnf clean all
 
+# glm-devel because CMake found no glm configuration from vcpkg at this pin
+# ("Could not find a package configuration file provided by glm", A9,
+# 2026-10-01); upstream's Linux build installs the system's too (libglm-dev in
+# build.yml). Header-only, so nothing of it is linked.
+#
 # WHAT THE MISSING ONES LOOK LIKE, so the next person does not chase them:
 # without pulseaudio-libs-devel cubeb builds with no backend at all and Cemu is
 # silent with "Cubeb: available" in its log (the shape PCSX2's builder warns
