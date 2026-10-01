@@ -1,0 +1,117 @@
+# Build Wii U (Cemu) for Linux x86-64, on a machine nobody owns.
+#
+# WHY A WORKFLOW OF ITS OWN, as PlayStation 2 has: Cemu is a whole emulator
+# with a whole emulator's build (Cemu's own vcpkg recipe, every library it
+# uses compiled for it), not a libretro core. It runs as a program of its own
+# (frontend/src/standalone.cpp), so unlike PCSX2 nothing of the console is
+# compiled into it.
+#
+# WHY FROM SOURCE AND NOT A RELEASE: Cemu main at a pinned commit, decided with
+# MMagTech 2026-10-01 (issue #174, docs/PROJECT.md open question 36). The pin
+# and the reasons are in cores/build-cemu.sh.
+#
+# What it asserts: the source is at the pinned commit, and every library the
+# program still asks the system for is in Fedora 44, the image's base. What it
+# cannot: that a game runs. That is judged on the A9.
+
+name: Build Wii U
+
+# CALLED BY build.yml, like build-pcsx2.yml, and on pull requests aimed at
+# anything but main for the same reason that file gives.
+on:
+  workflow_call:
+  pull_request:
+    branches-ignore:
+      - main
+    paths:
+      - 'cores/build-cemu.sh'
+      - 'cores/cemu-builder/**'
+      - '.github/workflows/build-cemu.yml'
+  workflow_dispatch:
+
+# No `concurrency:`, for the reason build-core.yml sets out.
+
+jobs:
+  build:
+    name: Cemu
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+
+      # vcpkg's sources and build trees take several GB.
+      - name: Maximize build space
+        uses: ublue-os/remove-unwanted-software@695eb75bc387dbcd9685a8e72d23439d8686cba6
+        with:
+          remove-codeql: true
+
+      # NOTHING CHANGES UNLESS ONE OF THESE DOES: build-cemu.sh holds the
+      # pinned commit (and through it vcpkg's every library version) and the
+      # options, the Containerfile is the toolchain. The longest build there
+      # is, so worth the cache more than any other.
+      - name: Restore the build, if this exact one has been built before
+        id: cemucache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: cores/build/cemu
+          key: cemu-${{ hashFiles('cores/build-cemu.sh', 'cores/cemu-builder/Containerfile') }}
+
+      - name: Build it
+        if: steps.cemucache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          cores/build-cemu.sh 2>&1 | tee /tmp/cemu.log
+
+      # A CACHE HIT STILL HAS TO PROVE WHAT IT RESTORED, as PlayStation 2's
+      # does.
+      - name: Check what it has
+        run: |
+          set -euo pipefail
+          out=cores/build/cemu
+          fail=0
+          for f in bin/Cemu share/Cemu/resources share/Cemu/gameProfiles/default VERSION; do
+            if [ -e "$out/$f" ]; then echo "ok: $f"; else echo "MISSING: $f" >&2; fail=1; fi
+          done
+          pinned=$(sed -n 's/^COMMIT=//p' cores/build-cemu.sh)
+          built=$(cat "$out/VERSION" 2>/dev/null || true)
+          if [ "$pinned" != "$built" ]; then
+            echo "the build is of $built, the pin is $pinned" >&2
+            fail=1
+          fi
+          exit $fail
+
+      # THE SAME SHAPE AS EVERY OTHER PAYLOAD ARTIFACT, so build.yml's
+      # download merges it with no special case: one top folder, cemu/.
+      - name: Stage it
+        run: |
+          set -euo pipefail
+          mkdir -p artifact
+          cp -R cores/build/cemu artifact/cemu
+          find artifact -maxdepth 3 | sort
+
+      - name: Upload it
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          # The `-linux-x86_64` suffix is what build.yml's download matches.
+          name: cemu-linux-x86_64
+          path: artifact/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Wii U (Cemu) — Linux x86-64"
+            echo
+            if [[ -f /tmp/cemu.log ]]; then
+              echo '```'
+              tail -30 /tmp/cemu.log
+              echo '```'
+            else
+              echo "Restored from cache; see the check step above."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

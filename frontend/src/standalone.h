@@ -36,6 +36,7 @@
 #include <atomic>
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace cab::standalone {
 
@@ -79,6 +80,12 @@ struct Emulator {
     // with the log still ending at 12 s (2026-09-28).
     const char* titlePrefix;
     int titleParts;
+    // ITS OWN ERROR BOX, by window title, for a game it could not open: the
+    // ones that say so only in the box and not in the log. Cemu's "Unable to
+    // launch game because the base files were not found" is a box titled
+    // "Error" over its empty window (gui/wxgui/MainWindow.cpp, FileLoad).
+    // Watched in the first minute, as the log is, and closed the same way.
+    const char* errorBox;
     // The game files it opens as they are, libretro's `valid_extensions`
     // format. The console never unpacks them.
     const char* extensions;
@@ -108,10 +115,18 @@ struct Emulator {
     // dashboard after a game closes xemu as a quit; the dashboard before any
     // game means the disc did not boot.
     bool watchesDashboard;
+    // IT WRITES THE SAVES STRAIGHT INTO THE PERSON'S FOLDER FOR THE GAME
+    // (Xenia's content root, Cemu's mlc), so a note there says a game is
+    // running until its saves are zipped. One still there at the next start
+    // of the console, or of that game, means the last game never got its
+    // saves sent, and the whole folder goes then (beforeStart).
+    bool notesPlaying;
 };
 
 // The emulator for a catalog core name, or nullptr for an ordinary core.
 const Emulator* find(const std::string& core);
+// Every one, for what is done for all that share a field (notesPlaying).
+std::vector<const Emulator*> all();
 
 // Whether this console has it. First boot installs a Flatpak from Flathub
 // (cabinetos-flatpak-setup), so on a new machine, or one with no internet,
@@ -172,11 +187,11 @@ std::string saveRoot(const Emulator& e, const std::string& saveDir);
 // the drive; eviction leaves such a folder alone (cache.cpp), and the next
 // start of the console finishes it after a crash or a power cut.
 //
-// Xenia: the profile is written, named `player` (x360profile.h), and the
-// note goes in the PERSON's folder for the game (`saveDir`), where Edge
-// writes the saves itself. A note still there at the next start or the next
-// launch of that game means the last one never got its saves zipped, and
-// the whole folder is sent then.
+// Xenia and Cemu (`notesPlaying`): the note goes in the PERSON's folder for
+// the game (`saveDir`), where the emulator writes the saves itself. A note
+// still there at the next start or the next launch of that game means the
+// last one never got its saves zipped, and the whole folder is sent then.
+// Xenia's profile is written too, named `player` (x360profile.h).
 //
 // Nothing for the others.
 bool beforeStart(const Emulator& e, const std::string& entryPath, const std::string& saveDir,
@@ -238,6 +253,7 @@ private:
     bool frozen_ = false;
     bool sawGameTitle_ = false;
     int64_t titleCheckMs_ = 0;
+    int64_t errorCheckMs_ = 0;   // the last look for its error box (errorBox)
     // The Xbox's running program, over QMP (watchesDashboard).
     int qmpFd_ = -1;
     int64_t qmpCheckMs_ = 0;

@@ -14835,5 +14835,49 @@ v2.6 was not run: the decision is main, so it would answer nothing.
 
 Not judged: a full battle, Captain Toad greyed (no code yet).
 
-**Next:** the builder for Cemu main at a pin, then the `standalone.cpp` row
-described on #174.
+#### What was built, 2026-10-01
+
+- **Cemu from source** (`cores/build-cemu.sh`, `cores/cemu-builder/`): main at
+  `4e3c824faa`, by Cemu's own recipe (vcpkg, clang) in a Fedora 44 container.
+  Not Fedora's libraries, as Batocera uses its distribution's: Cemu at the pin
+  needs wxWidgets 3.3 and fmt 12.1, and Fedora 44 has 3.2.9 and 11.2.0. vcpkg
+  is a submodule and `vcpkg.json` names its baseline, so the pin fixes every
+  library's version; they are linked in statically, and what the program
+  still asks the system for (GTK 3, X11, PulseAudio, BlueZ and the like) the
+  image already has (checked on the A9). Options as upstream's, less Discord,
+  GameMode and portable mode. CI: `build-cemu.yml`, called by `build.yml`
+  like PlayStation 2's, cached on the script and the Containerfile; the
+  payload's `cemu/` goes to `/usr/lib/cabinetos/cemu` (`install-cemu.sh`),
+  laid out as `bin/Cemu` and `share/Cemu/{gameProfiles,resources}`.
+- **The row** in `standalone.cpp`: `closesByWindow`, the log watched for
+  "Mounting failed" and "Unable to find RPX executable", and a new field,
+  `errorBox`: Cemu says "Unable to launch game because the base files were
+  not found" and its other `-g` failures only in a desktop box titled
+  "Error", so a window of Cemu's with that title in the first minute is a
+  failed load. "Unrecoverable error in Vulkan" mid-game is a crash. No title
+  watch: started with `-g`, Cemu closes itself when the game ends.
+- **`prepareCemu`** writes `settings.xml` whole before every start (the
+  settings above, `TVDevice` `default`, the console's GPU by its UUID, now
+  read in `gpu.cpp`) and one profile per player: a Pro Controller on that
+  player's virtual controller (vpad.h), bound by SDL 3's GUID, which is the
+  same in Cemu and the console. Buttons by position, as Switch's are here;
+  the Pro Controller's HOME left off, since Guide is the pause menu. Rumble
+  on, through the console's own Rumble switch.
+- **Saves**: the mlc is `<saveDir>/mlc`, and what travels (tag `cemu`) is
+  `mlc/usr/save/00050000/`, Cemu's own layout. Xbox 360's note that a game
+  is running in the person's folder is now a field, `notesPlaying`, set for
+  Xenia and Cemu, and the start-up check that sends a save a power cut left
+  behind runs for both.
+- **Which games play** (`wiiu.h`, `tools/wiiu-controls.py`,
+  `wiiu-controls.txt`, 2,860 GameTDB entries): GameTDB keys on the product
+  code (`BWPE01`, `WKNE`), RomM has only the title ID, and GameTDB lists no
+  title IDs. So the console reads the product code out of the game's own
+  `meta/meta.xml`, from the end of the `.wua` in HTTP ranges, before any
+  download, and remembers it (`config/wiiu-codes.txt`). Only `.wua`, the
+  format this console takes for Wii U. Measured: Hyrule Warriors `BWPE` in
+  5 reads, 434 KB (plays); Captain Toad `AKBE`, GamePad only (greyed,
+  "Needs a Wii U GamePad"), read through RomM by the console.
+
+**Next:** the testing image, then on the TV: Hyrule Warriors through the
+console (pad, sound, save sent to RomM and back), Captain Toad greyed, a
+game closed from the pause menu.

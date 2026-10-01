@@ -47,6 +47,9 @@ struct VulkanCaps {
     // by number rather than by name (Xenia's `vulkan_device`). The loader
     // sorts the list the same way in every process on the machine.
     int deviceIndex = -1;
+    // Its VkPhysicalDeviceIDProperties::deviceUUID, 32 lower-case hex digits,
+    // for one told a device by UUID (Cemu's `vkDevice`). Empty when unknown.
+    std::string deviceUuid;
     uint32_t apiVersion = 0;     // VK_MAKE_API_VERSION packed
     uint32_t driverVersion = 0;
     bool discrete = false;

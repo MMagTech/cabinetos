@@ -1,6 +1,7 @@
 #include "romm.h"
 
 #include "wii.h"
+#include "wiiu.h"
 
 #include <ctime>
 
@@ -8,6 +9,7 @@
 #include <json-c/json.h>
 
 #include <algorithm>
+#include <cctype>
 #include <cstdio>
 #include <cstring>
 #include <fcntl.h>
@@ -600,6 +602,7 @@ bool Client::fetchGame(int romId, Game* out, std::string* err) {
         std::vector<Game> one{*out};
         fillWiiCodes(one);
         out->titleId = one[0].titleId;
+        out->productCode = one[0].productCode;
     }
     return ok;
 }
@@ -1168,6 +1171,10 @@ size_t cappedSink(char* p, size_t sz, size_t n, void* user) {
 }  // namespace
 
 std::vector<uint8_t> Client::fetchHead(const Game& g, size_t bytes) const {
+    return fetchRange(g, 0, bytes);
+}
+
+std::vector<uint8_t> Client::fetchRange(const Game& g, uint64_t offset, size_t bytes) const {
     std::vector<uint8_t> data;
     if (bytes == 0 || g.id == 0) return data;
     // The name in the path is RomM's and is escaped whole, as romFilePath
@@ -1187,7 +1194,7 @@ std::vector<uint8_t> Client::fetchHead(const Game& g, size_t bytes) const {
     CURL* c = curl_easy_init();
     if (!c) return data;
     const std::string url = base_ + "/api/roms/" + std::to_string(g.id) + "/content/" + name;
-    const std::string range = "0-" + std::to_string(bytes - 1);
+    const std::string range = std::to_string(offset) + "-" + std::to_string(offset + bytes - 1);
     curl_slist* hdrs = nullptr;
     if (!token_.empty())
         hdrs = curl_slist_append(hdrs, ("Authorization: Bearer " + token_).c_str());
@@ -1206,16 +1213,21 @@ std::vector<uint8_t> Client::fetchHead(const Game& g, size_t bytes) const {
     if (hdrs) curl_slist_free_all(hdrs);
     curl_easy_cleanup(c);
     // 206 is the answer asked for. A 200 means the server ignored the range;
-    // the sink stopped it at `bytes`, which are still the right bytes. A
-    // write error is that stop, not a failure.
+    // the sink stopped it at `bytes`, which are the right bytes only when they
+    // were asked for from the start. A write error is that stop, not a failure.
     const bool stopped = rc == CURLE_WRITE_ERROR && data.size() >= bytes;
-    if ((rc != CURLE_OK && !stopped) || (status != 206 && status != 200)) data.clear();
+    if ((rc != CURLE_OK && !stopped) || (status != 206 && !(status == 200 && offset == 0)))
+        data.clear();
     return data;
 }
 
 void Client::fillWiiCodes(std::vector<Game>& games, size_t first) const {
     for (size_t i = first; i < games.size(); ++i) {
         Game& g = games[i];
+        if (g.platformSlug == "wiiu") {
+            fillWiiUCode(g);
+            continue;
+        }
         if (g.platformSlug != "wii" || !wii::codeFromTitleId(g.titleId).empty()) continue;
         bool known = false;
         std::string code = wii::rememberedCode(g.id, &known);
@@ -1230,6 +1242,35 @@ void Client::fillWiiCodes(std::vector<Game>& games, size_t first) const {
         }
         if (!code.empty()) g.titleId = wii::titleIdOf(code);
     }
+}
+
+// A Wii U game's product code, which RomM does not have: remembered, else read
+// off the end of its `.wua` in a few ranges (wiiu.h). Only a `.wua`: the format
+// this console takes for Wii U.
+void Client::fillWiiUCode(Game& g) const {
+    bool known = false;
+    std::string code = wiiu::rememberedCode(g.id, &known);
+    if (!known) {
+        const size_t dot = g.fsName.find_last_of('.');
+        const bool wua = dot != std::string::npos && g.fsName.size() - dot == 4 &&
+                         std::tolower(static_cast<unsigned char>(g.fsName[dot + 1])) == 'w' &&
+                         std::tolower(static_cast<unsigned char>(g.fsName[dot + 2])) == 'u' &&
+                         std::tolower(static_cast<unsigned char>(g.fsName[dot + 3])) == 'a';
+        if (!wua || g.sizeBytes <= 0) return;
+        bool failed = false;
+        code = wiiu::codeFromWua(static_cast<uint64_t>(g.sizeBytes),
+                                 [&](uint64_t off, size_t n) {
+                                     std::vector<uint8_t> got = fetchRange(g, off, n);
+                                     if (got.size() != n) failed = true;
+                                     return got;
+                                 });
+        // A failed read is not an answer: asked again next time.
+        if (failed && code.empty()) return;
+        wiiu::rememberCode(g.id, code);
+        std::fprintf(stderr, "[wiiu] %s: read %s off the file\n", g.name.c_str(),
+                     code.empty() ? "no product code" : code.c_str());
+    }
+    g.productCode = code;
 }
 
 }  // namespace romm

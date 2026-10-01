@@ -105,6 +105,9 @@ struct Game {
     // Wii uses it so far, to look the game up in GameTDB's controller list
     // (wii.h); empty for the many platforms RomM reads no ID for.
     std::string titleId;
+    // A Wii U game's product code, `BWPE`, read off its file by the console:
+    // GameTDB's key for its controllers (wiiu.h). Empty for everything else.
+    std::string productCode;
 };
 
 // One BIOS file a platform carries.
@@ -373,6 +376,10 @@ public:
     // reads a Wii game's code itself when RomM has none (wii.h). Empty on any
     // failure, which the caller must not take for an answer.
     std::vector<uint8_t> fetchHead(const Game& g, size_t bytes) const;
+    // `bytes` from `offset`, the same way: how the console reads a Wii U
+    // game's product code off the end of its file (wiiu.h). A server that
+    // ignores the range gets no answer here unless `offset` is 0.
+    std::vector<uint8_t> fetchRange(const Game& g, uint64_t offset, size_t bytes) const;
 
     // Streams a body straight to disk, never holding more than a buffer of it.
     //
@@ -387,8 +394,10 @@ public:
 
 private:
     // Gives every Wii game in `games` from `first` on a code: RomM's, else one
-    // this console read before, else read now off the file (wii.h).
+    // this console read before, else read now off the file (wii.h). And every
+    // Wii U game its product code, which RomM does not have (fillWiiUCode).
     void fillWiiCodes(std::vector<Game>& games, size_t first = 0) const;
+    void fillWiiUCode(Game& g) const;
     bool fetchFiltered(const char* filter, int limit, std::vector<Game>* out,
                        std::string* err);
     bool postMultipart(const std::string& path, const char* partName,

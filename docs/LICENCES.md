@@ -129,6 +129,8 @@ here. See `frontend/src/catalog.cpp`.
 | **The Xbox EEPROM**, `/usr/share/cabinetos/xemu/eeprom.bin` | made once by this project's `tools/xbox-eeprom.py`, the way xemu makes one | MIT, as CabinetOS |
 | **Xenia Edge**, in `/usr/lib/cabinetos/xenia` | its developer's official Linux build, release `a7c39fa` of `has207/xenia-edge` (`xenia_edge_linux.AppImage`), unmodified, pinned by checksum in `build_files/install-xenia.sh`; source is `has207/xenia-edge` at commit `a7c39fa7d9c54d83022e431da62c1c65bf3e6196` | BSD 3-Clause |
 | **The libraries Xenia Edge's build carries** (GTK 3, GLib, cairo, SDL 3, X11 libraries and others, in its `usr/lib`) | bundled by Edge's own AppImage build, unchanged | each under its own licence, as Edge ships them (GTK, GLib and cairo LGPL, SDL zlib, the X11 libraries MIT) |
+| **Cemu**, in `/usr/lib/cabinetos/cemu` | built from source by `cores/build-cemu.sh`, unmodified, `cemu-project/Cemu` at commit `4e3c824faa00f6b85782db019f20f29f063f3a2a`, with Cemu's own game profiles and resources from the same commit | MPL 2.0 |
+| **The libraries compiled into Cemu** (wxWidgets, Boost, fmt, SDL 3, OpenSSL, curl, glslang, pugixml, libzip, zstd and others) | built by Cemu's own vcpkg recipe at the versions its pinned commit names, linked statically, unchanged | each under its own licence (wxWidgets licence, Boost licence, fmt MIT, SDL zlib, OpenSSL Apache 2.0, curl MIT-style, glslang BSD-style, pugixml MIT, libzip BSD 3-Clause, zstd BSD) |
 
 PSP is the only platform whose "firmware" ships with the emulator rather than
 coming from RomM. Every other system's BIOS is fetched at runtime from the
@@ -152,6 +154,12 @@ developer publishes it and only unpacked; nothing is patched. The profile file
 the console writes for it (`frontend/src/x360profile.cpp`) is encrypted the
 way Edge encrypts its own, with the key Edge publishes in its BSD-licensed
 source; no game, BIOS or firmware is involved, and Xbox 360 needs none.
+**WII U IS A WHOLE PROGRAM TOO**, Cemu built here from its own source at a
+pinned commit by its own recipe, with nothing patched; MPL 2.0 asks that its
+source be available, and it is, at that commit. The console reads a `.wua`'s
+table of contents itself (`frontend/src/wiiu.cpp`) to find a game's product
+code; that is this project's own code, written from the format's description
+in Exzap/ZArchive (MIT No Attribution). No game, firmware or key is involved.
 Switch (Eden) and Xbox (xemu) are not in the image at all: each console
 installs them from Flathub, which distributes them (open question 21). Only
 xemu's blank drive and the EEPROM are in the image, in the table above; the
@@ -190,6 +198,13 @@ full `wiitdb.xml` and pinned in `frontend/data/` with the database version in
 its first line. GameTDB's file offers it "for anyone to use in any Wii-related
 project" and asks for permission only for use on a website. It decides which
 Wii games play on an ordinary pad (docs/PROJECT.md open question 35).
+
+**GameTDB's Wii U database** is carried the same way:
+`/usr/share/cabinetos/wiiu-controls.txt`, made by `tools/wiiu-controls.py` from
+the full `wiiutdb.xml`, its version in its first line. The Wii U file carries
+no statement of its own; GameTDB's FAQ describes all its databases as "for
+anyone to use in any game-related project". It decides which Wii U games play
+on an ordinary pad (open question 36).
 
 ## Not bundled
 

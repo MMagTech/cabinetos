@@ -186,9 +186,18 @@ jobs:
       packages: write
     uses: ./.github/workflows/build-pcsx2.yml
 
+  # WII U, Cemu built from source at a pin (build-cemu.yml), for the same
+  # reasons and with the same refusal: ci/stage-image-payload.sh will not build
+  # an image without it.
+  wiiu:
+    name: Wii U
+    needs: [lint, promote]
+    if: ${{ !cancelled() && !failure() && needs.promote.outputs.promoted != 'true' && github.event_name != 'pull_request' }}
+    uses: ./.github/workflows/build-cemu.yml
+
   build_push:
     name: Build and push image
-    needs: [lint, promote, frontend, cores, playstation2]
+    needs: [lint, promote, frontend, cores, playstation2, wiiu]
     if: ${{ !cancelled() && !failure() && needs.promote.outputs.promoted != 'true' && github.event_name != 'pull_request' }}
     runs-on: ubuntu-24.04
 

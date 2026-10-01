@@ -138,6 +138,23 @@ void probe() {
 
     gCaps.deviceName = chosenProps.deviceName;
     gCaps.deviceIndex = chosenIndex;
+    // Its UUID, for an emulator told a device that way (Cemu's `vkDevice`).
+    // Core in 1.1, which the instance asked for.
+    if (auto getProps2 = reinterpret_cast<PFN_vkGetPhysicalDeviceProperties2>(
+            inst("vkGetPhysicalDeviceProperties2"))) {
+        VkPhysicalDeviceIDProperties id{};
+        id.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES;
+        VkPhysicalDeviceProperties2 p2{};
+        p2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+        p2.pNext = &id;
+        getProps2(chosen, &p2);
+        static const char* kHex = "0123456789abcdef";
+        gCaps.deviceUuid.clear();
+        for (const uint8_t b : id.deviceUUID) {
+            gCaps.deviceUuid.push_back(kHex[b >> 4]);
+            gCaps.deviceUuid.push_back(kHex[b & 15]);
+        }
+    }
     gCaps.apiVersion = chosenProps.apiVersion;
     gCaps.driverVersion = chosenProps.driverVersion;
     gCaps.discrete = chosenProps.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU;

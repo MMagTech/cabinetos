@@ -184,6 +184,10 @@ log "installed the controller list ($(grep -c 'platform:Linux' /usr/share/cabine
 # GameCube pad (catalog::wiiControls; docs/PROJECT.md open question 35).
 install -D -m 0644 /ctx/frontend-data/wii-controls.txt /usr/share/cabinetos/wii-controls.txt
 log "installed the Wii controller list ($(grep -vc '^#' /usr/share/cabinetos/wii-controls.txt) games)"
+# And each Wii U game (tools/wiiu-controls.py): it plays on a pad only when it
+# takes a Pro or a Classic Controller (wiiu.h; docs/PROJECT.md open question 36).
+install -D -m 0644 /ctx/frontend-data/wiiu-controls.txt /usr/share/cabinetos/wiiu-controls.txt
+log "installed the Wii U controller list ($(grep -vc '^#' /usr/share/cabinetos/wiiu-controls.txt) games)"
 
 group_end
 
