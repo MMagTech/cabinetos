@@ -14711,3 +14711,58 @@ Sources: GameTDB `wiitdb.xml` (2026-09-30); libretro/dolphin at `1a0f97270b`
 (`python-src/batocera-launch-dolphin/`); EmuDeck and RetroDECK Dolphin configs;
 Dolphin PR #7861 (MotionPlus from a gamepad); github.com/larrylizard/wiibridge
 (copies invisible to general inquiry); batocera.linux issue #9333.
+
+#### Decided while building, MMagTech 2026-09-30
+
+- **Other people's libraries.** RomM reads the code off ISO, WBFS, RVZ and WAD
+  files (argosy-sigil `src/wii.c`), from RomM 5.3, and only in a scan that reads
+  files. So the console does not depend on it: when RomM has no `title_id` it
+  reads the first 64 KB of the file itself (an HTTP range, capped so a server
+  that ignores the range cannot send a whole disc), finds the code where each
+  format keeps it (plain at 0, RVZ and WIA at 0x58, WBFS one sector in, CISO at
+  0x8000, a WAD's ticket), and remembers it in `config/wii-codes.txt`. GCZ is
+  compressed and stays unread: such a game reads as needing a Remote. All 33 on
+  the reference server had RomM's code.
+- **GameTDB's mods and homebrew are left out of the list.** It files fan mods
+  under the real game's first four letters (RMCP02 to RMCPYP for Mario Kart
+  Wii, some with no Classic Controller), and the console looks a game up by
+  those four letters.
+
+#### What was built, 2026-09-30
+
+- `cores/build-core.sh`: Dolphin's `Data/Sys` ships beside the core, as
+  PPSSPP's assets do (`/usr/share/cabinetos/system/dolphin-emu/Sys`, linked
+  into the system directory); `ci/stage-image-payload.sh` refuses an image
+  without it. **On the A9 the hand copy in `bios/dolphin-emu` is a real folder
+  and shadows the link**; set it aside when the testing image lands, or the
+  image's copy is never what runs there.
+- `tools/wii-controls.py` makes `frontend/data/wii-controls.txt` (6,222 games,
+  58 KB), installed to `/usr/share/cabinetos/wii-controls.txt`.
+- `wii.h`: the code, the lookup, the device. `catalog`: a `wii` row on
+  `dolphin`, `Support::NeedsController` ("Needs a Wii Remote") per game, the
+  Dolphin overrides, and the save root `User/Wii/title` with only
+  `<kind>/<code>/data/` in the zip (never `content/`, never `00000001/`).
+- `Core::setPadDevice`: Classic Controller (1025), or the GameCube pad (1537)
+  for a game that takes only that.
+- The Wii grid shows a Remote game greyed (`kUnavailableDim` 0.60, a starting
+  value) with "Needs a Wii Remote" after its name; it opens onto its own
+  screen, which says the same and has no Play.
+- Every Dolphin game: one shader cache (`emulators/dolphin/Cache`, the old
+  per-person folders replaced by a link); a file whose name does not say what
+  it is gets a link named for what its bytes are (Dolphin chooses disc or WAD
+  by extension); the RetroArch cheat folder is removed at start.
+
+#### Checked headless on the A9, 2026-09-30 (scratch root, the real server)
+
+| | Result |
+|---|---|
+| Wii on Library | a playable system; its grid holds all 33, the 15 Remote games greyed |
+| Geometry Wars (pad) | "each player's port holds device 1025"; Classic layout: A B X Y as they are, the triggers L and R, the bumpers ZL and ZR, Start +, Select −, R3 HOME; the cache linked |
+| Kirby (Remote) | refused before any download: "Wii: Needs a Wii Remote" |
+| Pokémon Rumble (WiiWare) | installed into its NAND (26 MB) and at its own menu |
+| Ikaruga (GameCube) | as before: its card made, no `cheats` folder |
+| The install line | in podman on the A9: 6,222 games, readable by any user |
+
+**For the TV, with MMagTech:** the greyed look; Mario Kart Wii on a pad; the
+shader stutter; a Wii save made, sent and restored (an upload to RomM); the
+HOME button (R3) and its "Wii Menu" choice; GameCube unchanged.
