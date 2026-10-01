@@ -125,6 +125,7 @@ here. See `frontend/src/catalog.cpp`.
 | **RPCS3**, in `/usr/lib/cabinetos/rpcs3` | the RPCS3 team's official Linux build `0.0.42-20076-1707d7fc` (release `build-1707d7fc…` of `RPCS3/rpcs3-binaries-linux`), unmodified, pinned by checksum in `build_files/install-rpcs3.sh`; source is `RPCS3/rpcs3` at commit `1707d7fc883ef48ff21bdcbb0141a3211ae09cb2` | GPL v2 |
 | **The libraries RPCS3's build carries** (Qt 6, FFmpeg, SDL 3, OpenCV, OpenAL and others, in its `usr/lib`) | bundled by the RPCS3 team in the same build, unchanged | each under its own licence, as RPCS3 ships them (Qt LGPL v3, FFmpeg LGPL v2.1 or later, SDL zlib) |
 | **xemu's blank Xbox hard drive**, `/usr/share/cabinetos/xemu/xbox_hdd.qcow2` | `xbox_hdd.qcow2` from `xemu-project/xemu-dashboard` release `v20260516-0955`, unmodified, pinned by checksum in `build_files/install-xemu-drive.sh`. It holds the open-source xemu-dashboard and nothing of Microsoft's | MIT, with the libraries the dashboard is built from (nxdk and others) under their own licences, as xemu-dashboard ships them |
+| **Dolphin's `Sys` folder** — per-game settings, the Wii's `shared2` files, shaders, the cheat code handler | Dolphin's own `Data/Sys` at the core's pinned commit, installed by `cores/build-core.sh` | GPL v2 or later, as Dolphin |
 | **The Xbox EEPROM**, `/usr/share/cabinetos/xemu/eeprom.bin` | made once by this project's `tools/xbox-eeprom.py`, the way xemu makes one | MIT, as CabinetOS |
 | **Xenia Edge**, in `/usr/lib/cabinetos/xenia` | its developer's official Linux build, release `a7c39fa` of `has207/xenia-edge` (`xenia_edge_linux.AppImage`), unmodified, pinned by checksum in `build_files/install-xenia.sh`; source is `has207/xenia-edge` at commit `a7c39fa7d9c54d83022e431da62c1c65bf3e6196` | BSD 3-Clause |
 | **The libraries Xenia Edge's build carries** (GTK 3, GLib, cairo, SDL 3, X11 libraries and others, in its `usr/lib`) | bundled by Edge's own AppImage build, unchanged | each under its own licence, as Edge ships them (GTK, GLib and cairo LGPL, SDL zlib, the X11 libraries MIT) |
@@ -181,6 +182,14 @@ refreshed by a weekly pull request (`.github/workflows/pad-db-update.yml`),
 which names the upstream commit; first pinned at `c6d6e7ecca57`
 (2026-09-24). It is the community's list of controllers SDL does not know by
 itself (issue #66).
+
+**GameTDB's Wii database** (www.gametdb.com, community-kept since 2009) is
+carried as data: `/usr/share/cabinetos/wii-controls.txt`, an extract of which
+controllers each Wii game accepts, made by `tools/wii-controls.py` from the
+full `wiitdb.xml` and pinned in `frontend/data/` with the database version in
+its first line. GameTDB's file offers it "for anyone to use in any Wii-related
+project" and asks for permission only for use on a website. It decides which
+Wii games play on an ordinary pad (docs/PROJECT.md open question 35).
 
 ## Not bundled
 

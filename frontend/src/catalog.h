@@ -84,6 +84,13 @@ enum class Support {
     // running real games and none of them answers this. Nothing is queued
     // behind them — the next core that wants desktop GL will be the first.
     NeedsHardwareRender,
+    // The console runs this system, and THIS GAME was made for a controller
+    // nobody has paired. Wii today: a game that takes neither a Classic
+    // Controller nor a GameCube pad needs a real Wii Remote (wii.h; docs/
+    // PROJECT.md open question 35). The only answer that is about one game
+    // rather than its whole platform, so a platform's grid shows it, greyed
+    // and saying why, rather than leaving it out.
+    NeedsController,
 };
 
 struct Coverage {
@@ -179,7 +186,22 @@ std::map<std::string, std::string> optionOverrides(const std::string& coreName);
 // compiled shaders. Uploading them would put tens of megabytes of nothing on
 // the server and mean nothing on the other end — the reference implementation
 // says exactly that and it is right.
-const char* directorySaveRoot(const char* core);
+//
+// WII TOO, from 2026-09-30, rooted at `User/Wii/title` in Dolphin's user
+// directory, which is under this person's save directory for this game, so
+// it is a NAND of its own. A game saves to `<kind>/<code in hex>/data/`
+// (`00010000/53554b45/data/` for Kirby's disc, `00010001/...` for WiiWare).
+// The kind is not known from here, so the zip keeps it: entries are relative
+// to `title/`, and only `data/` folders go, never `content/` (a WiiWare
+// game's installed program, tens of megabytes) and never `00000001/` (the
+// emulated system's own settings, rewritten at every boot). See
+// inDirectorySave.
+const char* directorySaveRoot(const char* core, const std::string& platformSlug);
+
+// Whether a file under that root is part of the save, by its path relative
+// to the root. Everything is, for PSP.
+bool inDirectorySave(const char* core, const std::string& platformSlug,
+                     const std::string& relPath);
 
 // --- Saves the CORE writes as a file ---------------------------------------
 //

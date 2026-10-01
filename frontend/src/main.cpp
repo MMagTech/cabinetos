@@ -21,12 +21,14 @@
 #include <SDL3/SDL.h>
 
 #include <dirent.h>
+#include <fcntl.h>
 #include <sys/resource.h>
 #include <strings.h>
 #include <sys/stat.h>
 
 #include <cctype>
 #include <cerrno>
+#include <cstdint>
 #include <cstring>
 #include <ctime>
 
@@ -60,6 +62,7 @@
 #include "keyboard.h"
 #include "cache.h"
 #include "catalog.h"
+#include "wii.h"
 #include "covercache.h"
 #include "dirsave.h"
 #include "filesave.h"
@@ -542,8 +545,12 @@ struct GameSession {
     // it is sent (syncDirSave). It is kept because it still answers a second
     // question the layout does not: whether this game wrote anything at all
     // this run, which is what decides between an upload and a no-op.
-    std::string dirSaveRoot;                  // empty for every core but PPSSPP
+    std::string dirSaveRoot;                  // empty but for PPSSPP and Wii
     std::vector<cab::DirEntry> dirAtLaunch;
+    // Which files under the root are the save (catalog::inDirectorySave):
+    // all of them for PSP, only the games' `data/` folders for Wii.
+    std::string dirSaveCore;
+    std::string dirSavePlatform;
 
     // --- Saves the core writes as a FILE ----------------------------------
     //
@@ -656,11 +663,21 @@ static std::vector<std::string> listNames(const std::string& dir) {
     return out;
 }
 
+// The save's files under a directory-save root, and only those.
+static std::vector<cab::DirEntry> listDirSave(const GameSession& sess) {
+    std::vector<cab::DirEntry> all = cab::listTree(sess.dirSaveRoot);
+    std::vector<cab::DirEntry> out;
+    for (cab::DirEntry& e : all)
+        if (catalog::inDirectorySave(sess.dirSaveCore.c_str(), sess.dirSavePlatform, e.relPath))
+            out.push_back(std::move(e));
+    return out;
+}
+
 static void syncDirSave(GameSession& sess, Uploader& up) {
     std::map<std::string, cab::DirEntry> before;
     for (const cab::DirEntry& e : sess.dirAtLaunch) before[e.relPath] = e;
 
-    const std::vector<cab::DirEntry> now = cab::listTree(sess.dirSaveRoot);
+    const std::vector<cab::DirEntry> now = listDirSave(sess);
     std::set<std::string> touchedFolders;
     for (const cab::DirEntry& e : now) {
         auto it = before.find(e.relPath);
@@ -821,6 +838,97 @@ static std::string regionOfRow(const std::string& fileName) {
 // launch after an offline session would fetch the older copy and write it over
 // the top. Otherwise the server's own row wins, because that is how a card
 // made on another device arrives. Failing both, whatever is on this disk plays.
+// DOLPHIN'S SHADER CACHE, ONE PER CONSOLE. Dolphin keeps it in its user
+// directory, which is under this person's save directory for this game, so
+// every person compiled every effect again for themselves. Linked to one
+// folder beside the other emulators' homes, as Xenia's already is: an effect
+// is compiled once per console. docs/PROJECT.md open question 35.
+//
+// A real folder already there is a cache made before this, by this person for
+// this game; checked on the reference console, it holds only Dolphin's own
+// shader, cover and achievement caches, all of which it rebuilds, so it goes.
+static void shareDolphinCache(const std::string& saveDir) {
+    const std::string shared = storage::emulatorsDir() + "/dolphin/Cache";
+    const std::string link = saveDir + "/User/Cache";
+    storage::makeDirs(shared);
+    storage::makeDirs(saveDir + "/User");
+    struct stat st;
+    if (::lstat(link.c_str(), &st) == 0) {
+        if (S_ISLNK(st.st_mode)) {
+            char target[4096];
+            const ssize_t n = ::readlink(link.c_str(), target, sizeof target - 1);
+            if (n > 0 && std::string(target, static_cast<size_t>(n)) == shared) return;
+        }
+        storage::removeEntry(link);
+    }
+    if (::symlink(shared.c_str(), link.c_str()) != 0)
+        std::fprintf(stderr, "[dolphin] could not share the shader cache at %s: %s\n",
+                     link.c_str(), std::strerror(errno));
+}
+
+// THE CHEAT FILES DOLPHIN WROTE FOR RETROARCH, removed. Until
+// `dolphin_cheats_import` was turned off (catalog::optionOverrides) every
+// GameCube launch wrote `<root>/cheats/dolphin-emu/<game>.cht`, made from
+// Dolphin's own game settings, for a program this console does not have.
+// Nothing here ever reads that folder or puts anything else in it.
+static void clearDolphinCheats() {
+    const std::string dir = storage::root() + "/cheats";
+    if (!storage::exists(dir + "/dolphin-emu")) return;
+    storage::removeEntry(dir + "/dolphin-emu");
+    ::rmdir(dir.c_str());   // only if nothing else is in it
+    std::fprintf(stderr, "[dolphin] removed the RetroArch cheat files it once wrote\n");
+}
+
+// A PATH DOLPHIN WILL OPEN. Dolphin decides disc or WAD by the file's
+// extension (Core/Boot/Boot.cpp), and a file on a server need not have one,
+// or the right one. So the console reads the start of the file, as it does
+// everywhere else, and when the name does not say what the bytes are, hands
+// Dolphin a link named for what they are. The file itself is not touched.
+static std::string dolphinReadablePath(const std::string& romPath, int romId) {
+    static const char* const kKnown[] = {"iso", "gcm", "tgc", "wbfs", "ciso", "gcz",
+                                         "wia", "rvz", "wad", "elf", "dol", "m3u",
+                                         "json", "dff"};
+    std::string ext;
+    if (const size_t dot = romPath.find_last_of('.');
+        dot != std::string::npos && romPath.find('/', dot) == std::string::npos) {
+        ext = romPath.substr(dot + 1);
+        for (char& ch : ext) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+    }
+    for (const char* k : kKnown)
+        if (ext == k) return romPath;
+
+    unsigned char b[0x40] = {};
+    const int fd = ::open(romPath.c_str(), O_RDONLY);
+    if (fd < 0) return romPath;
+    const ssize_t n = ::pread(fd, b, sizeof b, 0);
+    ::close(fd);
+    if (n < static_cast<ssize_t>(sizeof b)) return romPath;
+    auto be32 = [&](size_t at) {
+        return (uint32_t(b[at]) << 24) | (uint32_t(b[at + 1]) << 16) |
+               (uint32_t(b[at + 2]) << 8) | b[at + 3];
+    };
+    const char* want = nullptr;
+    if (std::memcmp(b, "RVZ\x01", 4) == 0) want = "rvz";
+    else if (std::memcmp(b, "WIA\x01", 4) == 0) want = "wia";
+    else if (std::memcmp(b, "WBFS", 4) == 0) want = "wbfs";
+    else if (std::memcmp(b, "CISO", 4) == 0) want = "ciso";
+    else if (be32(0) == 0x01C00BB1u) want = "gcz";   // 0xB10BC001, little-endian
+    else if (be32(0) == 0x20 && (be32(4) >> 16 == 0x4973 || be32(4) >> 16 == 0x6962 ||
+                                 be32(4) >> 16 == 0x426B)) want = "wad";
+    else if (be32(0x18) == 0x5D1C9EA3u || be32(0x1C) == 0xC2339F3Du) want = "iso";
+    if (!want) {
+        std::fprintf(stderr, "[dolphin] %s is not a disc or WAD Dolphin knows\n", romPath.c_str());
+        return romPath;
+    }
+    const std::string dir = storage::emulatorsDir() + "/dolphin/links";
+    storage::makeDirs(dir);
+    const std::string link = dir + "/" + std::to_string(romId) + "." + want;
+    ::unlink(link.c_str());
+    if (::symlink(romPath.c_str(), link.c_str()) != 0) return romPath;
+    std::fprintf(stderr, "[dolphin] the file says %s; handing Dolphin %s\n", want, link.c_str());
+    return link;
+}
+
 // Dolphin's own configuration, written before the core boots.
 //
 // WHY A FILE RATHER THAN A CORE OPTION: the libretro core does not expose the
@@ -1648,6 +1756,9 @@ struct LaunchJob {
     // RomM's own and is what catalog is keyed on. Both are carried because
     // each answers a different question, and the arcade rows need both.
     std::string platformSlug;
+    // RomM's `title_id`, or the code this console read off the file when RomM
+    // had none: Wii asks it which controller each player's port holds (wii.h).
+    std::string titleId;
     // The server's own file name for this game, with its extension removed —
     // `Ikaruga (Japan)`, `lethalen`. It is what a save's row on RomM is named
     // after; see saveRowName.
@@ -1815,6 +1926,7 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
     job.systemName = game.platformName;
     job.biosMissing = false;
     job.platformSlug = game.platformSlug;
+    job.titleId = game.titleId;
     job.fsStem = game.fsName;
     if (const size_t dot = job.fsStem.find_last_of('.'); dot != std::string::npos)
         job.fsStem.erase(dot);
@@ -2451,6 +2563,9 @@ static int appendGame(Library& lib, const romm::Game& g) {
     c.coverLarge = g.coverLargePath;
     c.platform = g.platformName;
     c.art = colorForTitle(c.title);
+    if (const catalog::Coverage cov = catalog::coverageFor(g);
+        cov.support == catalog::Support::NeedsController)
+        c.unavailable = cov.reason;
     const int idx = static_cast<int>(lib.cards.size());
     lib.cards.push_back(std::move(c));
     lib.games.push_back(g);
@@ -2506,7 +2621,15 @@ static bool loadTileGames(romm::Client& client, Library& lib, screens::Tile& til
         // A collection can hold games from systems this console cannot run.
         // Platform grids cannot, since the tile would not be enterable, but
         // the check is cheap and the two paths share it.
-        if (!catalog::playable(g)) { ++unplayable; continue; }
+        // EXCEPT A GAME THAT NEEDS A CONTROLLER NOBODY HAS PAIRED, which its
+        // own platform's grid shows, greyed and saying why: the system plays
+        // here, so a shorter list would read as games gone missing. MMagTech,
+        // 2026-09-30, for the Wii games that need a Wii Remote.
+        if (!catalog::playable(g) &&
+            catalog::coverageFor(g).support != catalog::Support::NeedsController) {
+            ++unplayable;
+            continue;
+        }
         tile.cards.push_back(appendGame(lib, g));
         if (tile.cover.empty()) {
             const int i = tile.cards.back();
@@ -4335,6 +4458,7 @@ int main(int argc, char** argv) {
             return 1;
         }
         std::fprintf(stderr, "[storage] root %s\n", storage::root().c_str());
+        clearDolphinCheats();
         const std::vector<std::string> locs = storage::locations();
         for (size_t i = 1; i < locs.size(); ++i)
             std::fprintf(stderr, "[storage] games drive %s\n", locs[i].c_str());
@@ -9894,7 +10018,8 @@ int main(int argc, char** argv) {
         // battery below, which the core can be handed afterwards. PPSSPP mounts
         // the memory stick while the game boots, so a folder that arrives later
         // is a folder the game has already decided is not there.
-        const char* dirSub = catalog::directorySaveRoot(launchJob.coreName.c_str());
+        const char* dirSub = catalog::directorySaveRoot(launchJob.coreName.c_str(),
+                                                        launchJob.platformSlug);
         const char* launchTag = catalog::saveTag(launchJob.coreName.c_str());
         if (dirSub && launchTag && liveClient.haveToken())
             restoreDirSave(liveClient, launchJob.romId, launchTag, saveDir + "/" + dirSub,
@@ -9922,13 +10047,22 @@ int main(int argc, char** argv) {
         // Before the restore, because the restore puts the card at the path
         // this names and the core reads both on startup.
         if (launchJob.platformSlug == "ngc") writeDolphinConfig(saveDir);
+        if (launchJob.coreName == "dolphin") shareDolphinCache(saveDir);
+        // What each player's port holds. Only Wii says anything but a joypad:
+        // a Classic Controller, or a GameCube pad for a game that takes only
+        // that. A game that takes neither never gets here (coverageFor).
+        if (launchJob.platformSlug == "wii")
+            core.setPadDevice(wii::padDevice(wii::codeFromTitleId(launchJob.titleId)));
+        const std::string romForCore = launchJob.coreName == "dolphin"
+                                           ? dolphinReadablePath(launchJob.romPath, launchJob.romId)
+                                           : launchJob.romPath;
 
         std::vector<cab::FileSaveState> restored =
             restoreFileSaves(saveSpecs, launchJob.fsStem, saveDir, launchJob.romId,
                              launchTag, liveClient);
 
         core.setPlayers(players::count());
-        if (!core.loadGame(launchJob.romPath, storage::biosDir(), saveDir)) {
+        if (!core.loadGame(romForCore, storage::biosDir(), saveDir)) {
             // AND SAY IT ON THE SCREEN, NOT ONLY TO STDERR — 2026-09-21.
             //
             // MMagTech: *"dreamcast game downloaded and didnt auto launch and
@@ -9990,7 +10124,9 @@ int main(int argc, char** argv) {
         // between here and the quit is what this game saved. See GameSession.
         if (dirSub) {
             session.dirSaveRoot = saveDir + "/" + dirSub;
-            session.dirAtLaunch = cab::listTree(session.dirSaveRoot);
+            session.dirSaveCore = launchJob.coreName;
+            session.dirSavePlatform = launchJob.platformSlug;
+            session.dirAtLaunch = listDirSave(session);
             std::fprintf(stderr, "[save] %s holds %zu file(s) at launch\n",
                          session.dirSaveRoot.c_str(), session.dirAtLaunch.size());
         }

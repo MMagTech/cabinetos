@@ -179,6 +179,11 @@ log "installed /usr/bin/cabinetos-frontend ($(du -h /usr/bin/cabinetos-frontend 
 # and in the same small layer, so its weekly update ships one file.
 install -D -m 0644 /ctx/frontend-data/gamecontrollerdb.txt /usr/share/cabinetos/gamecontrollerdb.txt
 log "installed the controller list ($(grep -c 'platform:Linux' /usr/share/cabinetos/gamecontrollerdb.txt) Linux entries)"
+# Which controllers each Wii game accepts, from GameTDB (tools/wii-controls.py):
+# a Wii game plays on a pad only when it takes a Classic Controller or a
+# GameCube pad (catalog::wiiControls; docs/PROJECT.md open question 35).
+install -D -m 0644 /ctx/frontend-data/wii-controls.txt /usr/share/cabinetos/wii-controls.txt
+log "installed the Wii controller list ($(grep -vc '^#' /usr/share/cabinetos/wii-controls.txt) games)"
 
 group_end
 

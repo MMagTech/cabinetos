@@ -47,9 +47,9 @@ BUILDSYS="make"
 # frontend's system directory, in ASSET_DIR — the folder name the core itself
 # looks for, which is not necessarily the manifest's name for it.
 #
-# Empty for twenty-one of the twenty-two: their firmware is a console's, and it
-# comes from RomM with the game. PPSSPP is the exception and its case arm says
-# why.
+# Empty for twenty of the twenty-two: their firmware is a console's, and it
+# comes from RomM with the game. PPSSPP and Dolphin are the exceptions and
+# their case arms say why.
 ASSETS=()
 ASSET_DIR=""
 ASSET_SRC=""
@@ -587,6 +587,20 @@ dolphin)
         -DLIBRETRO=ON
         -DENABLE_X11=OFF
     )
+    # DOLPHIN'S OWN `Sys` FOLDER, and it was on the reference console only as
+    # a hand copy from 2026-09-20 until the Wii work found it (docs/PROJECT.md
+    # open question 35). The core looks for `<system>/dolphin-emu/Sys`
+    # (DolphinLibretro/Boot.cpp). Without it a game still boots, which is why
+    # nobody noticed, and quietly loses Dolphin's 1,875 per-game settings
+    # files (Donkey Kong Country Returns' texture cache, Mario Kart Wii's EFB
+    # format changes, an enabled fix for A Boy and His Blob), the Wii's
+    # `shared2/wc24` files it copies into the NAND at every Wii boot, the
+    # cheat code handler and the post-processing shaders. Upstream's data, not
+    # ours, from the same commit as the core; RetroArch's core info names it
+    # as required.
+    ASSET_DIR=dolphin-emu
+    ASSET_SRC=Data
+    ASSETS=(Sys)
     ;;
 *)
     echo "unknown core: $CORE" >&2

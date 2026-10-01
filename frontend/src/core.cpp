@@ -73,6 +73,8 @@ PadState gPads[kMaxPorts];
 // been told hold a controller.
 int gPlayers = 1;
 unsigned gPortsPlugged = 0;
+// What goes into each player's port. See Core::setPadDevice.
+unsigned gPadDevice = RETRO_DEVICE_JOYPAD;
 
 // How many controller ports the CORE says it has, from
 // RETRO_ENVIRONMENT_SET_CONTROLLER_INFO. Four for Flycast, and it matters that
@@ -1456,8 +1458,10 @@ bool Core::loadGame(const std::string& romPath, const std::string& systemDir,
         const unsigned ports = std::max(gCorePorts, 1u);
         const unsigned players = std::clamp<unsigned>(static_cast<unsigned>(gPlayers), 1u, ports);
         for (unsigned p = 0; p < ports; ++p)
-            g.set_controller_port_device(p, p < players ? RETRO_DEVICE_JOYPAD : RETRO_DEVICE_NONE);
+            g.set_controller_port_device(p, p < players ? gPadDevice : RETRO_DEVICE_NONE);
         gPortsPlugged = players;
+        if (gPadDevice != RETRO_DEVICE_JOYPAD)
+            std::fprintf(stderr, "[input] each player's port holds device %u\n", gPadDevice);
     }
 
     retro_system_av_info av{};
@@ -1545,6 +1549,7 @@ void Core::unloadGame() {
     // saves for months by unloading lazily at the NEXT launch instead.
     if (g.unload_game) g.unload_game();
     gameLoaded_ = false;
+    gPadDevice = RETRO_DEVICE_JOYPAD;   // the next game says its own
     gHWFrame = false;
     destroyHWTarget();
     // AFTER unload_game, for the same reason context_destroy runs before it:
@@ -1839,10 +1844,14 @@ void Core::setPlayers(int n) {
     const unsigned ports = std::max(gCorePorts, 1u);
     const unsigned want = std::min(static_cast<unsigned>(gPlayers), ports);
     while (gPortsPlugged < want) {
-        g.set_controller_port_device(gPortsPlugged, RETRO_DEVICE_JOYPAD);
+        g.set_controller_port_device(gPortsPlugged, gPadDevice);
         std::fprintf(stderr, "[input] controller plugged into port %u\n", gPortsPlugged + 1);
         ++gPortsPlugged;
     }
+}
+
+void Core::setPadDevice(unsigned device) {
+    gPadDevice = device ? device : RETRO_DEVICE_JOYPAD;
 }
 
 void Core::setPad(int port, const PadState& pad) {

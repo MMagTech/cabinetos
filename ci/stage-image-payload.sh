@@ -36,6 +36,7 @@
 #   bin/cabinetos-frontend
 #   cores/<core>_libretro.so      x22
 #   system/PPSSPP/...             PPSSPP's fonts and lookup tables
+#   system/dolphin-emu/Sys/...    Dolphin's game settings and Wii files
 #
 # image_payload/ is gitignored, which also keeps `git status -s` clean — the
 # Justfile reads that to decide whether to stamp the image with a revision, so
@@ -144,6 +145,14 @@ if [ -d "$SYSTEM" ] && [ -n "$(ls -A "$SYSTEM" 2>/dev/null)" ]; then
 fi
 [ -f "$OUT/system/PPSSPP/compat.ini" ] || {
     echo "PPSSPP's system files are not in $SYSTEM — PSP would run with no fonts" >&2
+    exit 1
+}
+# DOLPHIN'S `Sys`, the same shape of failure and a quieter one: GameCube and
+# Wii boot without it and lose Dolphin's own per-game settings, which looks
+# like a game with a rendering bug rather than a missing file. See the dolphin
+# case arm in cores/build-core.sh.
+[ -d "$OUT/system/dolphin-emu/Sys/GameSettings" ] || {
+    echo "Dolphin's Sys folder is not in $SYSTEM - GameCube and Wii would lose their game settings" >&2
     exit 1
 }
 

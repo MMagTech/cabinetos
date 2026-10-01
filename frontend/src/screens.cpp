@@ -111,6 +111,11 @@ void drawCover(Ctx& c, const Card& card, float x, float y, float w, float h,
         c.r.draw(ui::Rect{x, y, w, h, radius,
                           ui::Color::black(look::restDim(design::kRestArtDim) * (1.0f - f))});
     drawKeptMark(c, card, x, y, w, radius);
+    // GREYED: a game this console cannot play until a controller is paired.
+    // Held back whether focused or not, so focus lands on it and it still
+    // reads as unavailable; its name says why.
+    if (!card.unavailable.empty())
+        c.r.draw(ui::Rect{x, y, w, h, radius, ui::Color::black(design::kUnavailableDim)});
     if (f > 0.0f && rim) {
         ui::Rect edge{x, y, w, h, radius, ui::Color::white(0)};
         edge.border = f * design::kFocusRimWidth;
@@ -858,11 +863,24 @@ void GridScreen::drawGlass(Ctx& c) {
 
     const int idx = focusedCard();
     if (idx >= 0 && idx < static_cast<int>(c.cards->size())) {
-        const std::string& name = (*c.cards)[idx].title;
-        const float room = ui::kCanvasWidth - design::kLibraryInset - x -
-                           design::kLetterIndexWidth;
-        c.text.draw(c.r, c.text.truncate(name, ui::TextStyle::Callout, c.sc, room), x,
-                    baseline, ui::TextStyle::Callout, ui::Color::white(0.95f), c.sc);
+        const design::Card& card = (*c.cards)[idx];
+        float room = ui::kCanvasWidth - design::kLibraryInset - x - design::kLetterIndexWidth;
+        // A greyed game says why after its name, dimmer, and the reason is
+        // what survives when the two do not fit.
+        if (!card.unavailable.empty()) {
+            const float why = c.text.measure(card.unavailable, ui::TextStyle::Callout, c.sc);
+            const std::string name =
+                c.text.truncate(card.title, ui::TextStyle::Callout, c.sc,
+                                std::max(0.0f, room - why - 24.0f));
+            c.text.draw(c.r, name, x, baseline, ui::TextStyle::Callout,
+                        ui::Color::white(0.95f), c.sc);
+            const float wx = x + c.text.measure(name, ui::TextStyle::Callout, c.sc) + 24.0f;
+            c.text.draw(c.r, card.unavailable, wx, baseline, ui::TextStyle::Callout,
+                        ui::Color::white(0.45f), c.sc);
+        } else {
+            c.text.draw(c.r, c.text.truncate(card.title, ui::TextStyle::Callout, c.sc, room), x,
+                        baseline, ui::TextStyle::Callout, ui::Color::white(0.95f), c.sc);
+        }
     }
 
     // --- The letter index, down the right ---------------------------------
