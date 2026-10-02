@@ -666,14 +666,12 @@ std::map<std::string, std::string> optionOverrides(const std::string& core) {
     // machine without it (the test VM, older or odd hardware) keeps GLideN64
     // on GLES exactly as before.
     //
-    // 2x is a starting value: the core's default 1x is the N64's own 320x240,
-    // softer than the 640x480 GLideN64 drew here. Judged on the TV; open
-    // question 23's quality setting is where it moves later.
+    // ITS RESOLUTION IS PICTURE QUALITY'S (quality.h, #63), on either
+    // renderer: the 2x that stood here was a starting value until then.
     if (coreName == "mupen64plus" && cab::gpu::vulkan().available) {
         return {
             {"mupen64plus-rdp-plugin", "parallel"},
             {"mupen64plus-rsp-plugin", "parallel"},
-            {"mupen64plus-parallel-rdp-upscaling", "2x"},
         };
     }
     // GameCube and Wii, one Dolphin. Both from the settings audit of
@@ -686,9 +684,8 @@ std::map<std::string, std::string> optionOverrides(const std::string& core) {
     // * DOLPHIN'S OWN ON-SCREEN MESSAGES OFF, as Batocera ships them. The
     //   console says what needs saying itself.
     //
-    // Resolution, shader compilation and filtering are left at Dolphin's own
-    // defaults on purpose: they are picture quality, chosen from the hardware,
-    // and that is #63.
+    // Resolution, shader compilation and filtering are picture quality's
+    // (quality.h, #63).
     if (coreName == "dolphin") {
         return {
             {"dolphin_cheats_import", "disabled"},

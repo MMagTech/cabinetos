@@ -214,6 +214,38 @@ void resetOptions() {
     gUndeclaredAsks.clear();
 }
 
+// AN UPGRADE THAT RENAMED A SETTING IS SILENT WITHOUT THIS (#63, MMagTech
+// 2026-10-02). A value we give for a key the core never declares is simply
+// never asked for, and a value outside its list is handed over as it is; a
+// core bump that renamed `dolphin_efb_scale` would quietly play every game at
+// native resolution. So once a game is in, every value we set is checked
+// against what the core declared, and anything that does not fit is logged.
+// It reaches us through the diagnostic report (#195). The pin-moving workflow
+// catches the same thing before an image is built; this covers the cores that
+// declare their options only with a game loaded, and every console after.
+void checkOverrides(const std::string& core) {
+    int bad = 0;
+    for (const auto& [key, value] : gOverrides) {
+        auto it = gByKey.find(key);
+        if (it == gByKey.end()) {
+            std::fprintf(stderr, "[options] %s does not offer %s (we set it to %s)\n",
+                         core.c_str(), key.c_str(), value.c_str());
+            ++bad;
+            continue;
+        }
+        const Option& o = gDeclared[it->second];
+        if (!o.values.empty() &&
+            std::find(o.values.begin(), o.values.end(), value) == o.values.end()) {
+            std::fprintf(stderr, "[options] %s: %s does not accept %s\n", core.c_str(),
+                         key.c_str(), value.c_str());
+            ++bad;
+        }
+    }
+    if (!gOverrides.empty() && bad == 0)
+        std::fprintf(stderr, "[options] %s: all %zu of our settings fit\n", core.c_str(),
+                     gOverrides.size());
+}
+
 void declareOption(const char* key, const char* desc,
                    std::vector<std::string> values, const char* defaultValue) {
     if (!key || !*key) return;
@@ -1430,6 +1462,7 @@ bool Core::loadGame(const std::string& romPath, const std::string& systemDir,
         return false;
     }
     gameLoaded_ = true;
+    checkOverrides(coreName_);
 
     // TELL THE CORE WHAT IS PLUGGED IN, and this was never being said.
     //

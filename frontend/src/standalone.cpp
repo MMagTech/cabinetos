@@ -669,7 +669,7 @@ std::vector<std::string> edenControls(int players) {
 }
 
 bool prepareEden(const Emulator& e, const std::string& saveDir, const std::string& player,
-                 int players, bool* missingKeys, std::string* err) {
+                 int players, quality::Level level, bool* missingKeys, std::string* err) {
     const std::string user = home(e) + "/user";
     storage::makeDirs(user + "/keys");
     storage::makeDirs(user + "/config");
@@ -742,6 +742,10 @@ bool prepareEden(const Emulator& e, const std::string& saveDir, const std::strin
     }
     for (size_t i = 0; i < controls.size(); ++i)
         sets.push_back({"Controls", keys[i].c_str(), values[i].c_str()});
+    // PICTURE QUALITY (#63): resolution, filtering and shader building.
+    const std::vector<quality::Setting> picture = quality::eden(level);
+    for (const quality::Setting& q : picture)
+        sets.push_back({q.section.c_str(), q.key.c_str(), q.value.c_str()});
     if (!writeFile(ini, applyIni(readFile(ini), sets))) {
         *err = "could not write " + ini;
         return false;
@@ -1071,7 +1075,8 @@ std::string rpcs3Controls(int players) {
 }
 
 bool prepareRpcs3(const Emulator& e, const std::string& entryPath, const std::string& saveDir,
-                  const std::string& player, int players, bool* missing, std::string* err) {
+                  const std::string& player, int players, quality::Level level, bool* missing,
+                  std::string* err) {
     // The download installs it; without it RPCS3 opens its own "no firmware"
     // box over the game, so the console refuses first.
     if (readFile(firmwareNote(e)).empty()) {
@@ -1117,7 +1122,8 @@ bool prepareRpcs3(const Emulator& e, const std::string& entryPath, const std::st
         {"main_window", "infoBoxEnabledInstallPUP", "false"},
         {"main_window", "confirmationObsoleteCfg", "false"},
     }, /*withDefaults=*/false);
-    if (!writeFile(config + "/vfs.yml", vfs) || !writeFile(config + "/config.yml", kRpcs3Settings) ||
+    if (!writeFile(config + "/vfs.yml", vfs) || !writeFile(config + "/config.yml",
+                   std::string(kRpcs3Settings) + quality::rpcs3(level)) ||
         !writeFile(gui, gui_text) ||
         !writeFile(config + "/input_configs/global/Default.yml", rpcs3Controls(players))) {
         *err = "could not write RPCS3's settings in " + config;
@@ -1229,8 +1235,8 @@ std::string tomlQuote(const std::string& v) {
     return out + "\"";
 }
 
-bool prepareXemu(const Emulator& e, const std::string& entryPath, int players, bool* missing,
-                 std::string* err) {
+bool prepareXemu(const Emulator& e, const std::string& entryPath, int players,
+                 quality::Level level, bool* missing, std::string* err) {
     const std::string mcpx = findXboxFile(true);
     const std::string flash = findXboxFile(false);
     if (mcpx.empty() || flash.empty()) {
@@ -1283,6 +1289,8 @@ bool prepareXemu(const Emulator& e, const std::string& entryPath, int players, b
     const std::string gpu = cab::gpu::vulkan().deviceName;
     if (!gpu.empty())
         t += "[display.vulkan]\npreferred_physical_device = " + tomlQuote(gpu) + "\n";
+    // PICTURE QUALITY (#63): xemu's internal resolution.
+    t += "[display.quality]\n" + quality::xemu(level);
     t += "[display.window]\nfullscreen_on_startup = true\n";
     t += "[display.ui]\nshow_menubar = false\nshow_notifications = false\nhide_cursor = true\n";
     t += "[input]\nauto_bind = false\n";
@@ -1627,15 +1635,16 @@ bool installGame(const Emulator& e, const std::string& entryPath,
 }
 
 bool prepare(const Emulator& e, const std::string& entryPath, const std::string& saveDir,
-             const std::string& player, int players, bool* missingKeys, std::string* err) {
+             const std::string& player, int players, quality::Level level, bool* missingKeys,
+             std::string* err) {
     *missingKeys = false;
     storage::makeDirs(saveDir);
     if (std::strcmp(e.core, "eden") == 0)
-        return prepareEden(e, saveDir, player, players, missingKeys, err);
+        return prepareEden(e, saveDir, player, players, level, missingKeys, err);
     if (std::strcmp(e.core, "rpcs3") == 0)
-        return prepareRpcs3(e, entryPath, saveDir, player, players, missingKeys, err);
+        return prepareRpcs3(e, entryPath, saveDir, player, players, level, missingKeys, err);
     if (std::strcmp(e.core, "xemu") == 0)
-        return prepareXemu(e, entryPath, players, missingKeys, err);
+        return prepareXemu(e, entryPath, players, level, missingKeys, err);
     if (std::strcmp(e.core, "xenia") == 0) return prepareXenia(e, saveDir, err);
     if (std::strcmp(e.core, "cemu") == 0) return prepareCemu(e, saveDir, players, err);
     *err = std::string("nothing prepares ") + e.core;
@@ -1771,7 +1780,7 @@ bool hasPlayingNote(const std::string& entryPath) {
 }
 
 bool Run::start(const Emulator& e, const std::string& romPath, const std::string& entryPath,
-                const std::string& saveDir, std::string* err) {
+                const std::string& saveDir, quality::Level level, std::string* err) {
     emu_ = &e;
     ended_ = End::None;
     program_ = -1;
@@ -1877,9 +1886,11 @@ bool Run::start(const Emulator& e, const std::string& romPath, const std::string
                      "--async_shader_compilation=true",
                      "--mount_scratch=true",
                      "--protect_zero=false",
-                     romPath,
                  })
                 full.push_back(a);
+            // PICTURE QUALITY (#63), and the game last.
+            for (const std::string& a : quality::xenia(level)) full.push_back(a);
+            full.push_back(romPath);
         } else if (std::strcmp(e.core, "cemu") == 0) {
             // ITS LOG under its home (XDG_DATA_HOME/Cemu); its settings and
             // shader cache are there already, by the two above. ONLY THE

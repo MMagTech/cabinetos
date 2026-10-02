@@ -91,6 +91,7 @@
 #include "power.h"
 #include "look.h"
 #include "prefs.h"
+#include "quality.h"
 #include "server.h"
 #include "update.h"
 #include "files.h"
@@ -1842,8 +1843,11 @@ static int countEntries(const std::string& dir) {
 // filtering — so a console that is given neither flag behaves exactly as it
 // did. See --ps2-upscale in the argument parser for what the multiplier means
 // on a 4K panel.
-static float gPs2Upscale = 1.0f;
-static int gPs2Anisotropy = 0;
+//
+// SINCE #63 NEITHER IS SET UNLESS A FLAG SAYS SO, and the picture quality level
+// decides (quality.h). -1 means "not given".
+static float gPs2Upscale = -1.0f;
+static int gPs2Anisotropy = -1;
 
 // "PRESS (A) TO ...", centred, with the A drawn as a button badge the way
 // consoles prompt: a white disc with a dark A, on the text's x-height. Home's
@@ -1985,7 +1989,18 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
         // meant the override table was being PRINTED rather than applied: every
         // core played on its declared defaults and the audit agreed with itself.
         // Invisible while the table was empty, wrong the moment it was not.
-        core.setOptionOverrides(catalog::optionOverrides(job.coreName));
+        //
+        // PICTURE QUALITY ON TOP (#63): the level this game runs at decides
+        // its resolution and shader building; quality.h is the one place that
+        // knows what each level means.
+        {
+            const quality::Level level = quality::forGame(game.id);
+            std::map<std::string, std::string> opts = catalog::optionOverrides(job.coreName);
+            for (const auto& kv : quality::coreOptions(job.coreName, game.platformSlug, level))
+                opts[kv.first] = kv.second;
+            core.setOptionOverrides(opts);
+            quality::logApplied(job.coreName, game.id, level);
+        }
 
         // PLAYSTATION 2 NEEDS THREE THINGS NO LIBRETRO CORE DOES, and the second
         // is the one that matters most.
@@ -2000,7 +2015,12 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
         // it on the server under the name Cabinet's Mac uses — works on it
         // unchanged.
         if (cov.core && std::string(cov.core) == "pcsx2") {
-            core.setPs2(storage::imageAssetsDir() + "/pcsx2/resources", gPs2Upscale, gPs2Anisotropy);
+            // The level's values, unless a --ps2-upscale or --ps2-anisotropy
+            // given for a measurement says otherwise.
+            const quality::Ps2 q = quality::ps2(quality::forGame(game.id));
+            core.setPs2(storage::imageAssetsDir() + "/pcsx2/resources",
+                        gPs2Upscale > 0.0f ? gPs2Upscale : q.upscale,
+                        gPs2Anisotropy >= 0 ? gPs2Anisotropy : q.anisotropy);
         }
 
         if (!core.load(job.corePath)) {
@@ -7385,7 +7405,7 @@ int main(int argc, char** argv) {
                      SetPinOff, SetRemoveAccount, SetScreenOff, SetWifi, SetServer,
                      SetUpdate, SetUpdateCheck, SetCredits, SetFiles, SetDownloads,
                      SetAddController, SetShortcuts, SetShortcutButton, SetAppearance,
-                     SetDarkHours, SetColour, SetRumble };
+                     SetDarkHours, SetColour, SetRumble, SetPictureQuality };
     // One Eject row per USB drive: this plus the drive's index in
     // storage::locations() when the rows were built.
     constexpr int kSetEject = 100;
@@ -8155,9 +8175,14 @@ int main(int argc, char** argv) {
                      !radioOn ? "Off" : (onWifi.empty() ? "Not connected" : onWifi)});
         }
 
+        // PICTURE QUALITY IS THE OWNER'S WHEN A PIN IS SET (MMagTech,
+        // 2026-10-02, #63): nobody else sees the row at all, and the owner is
+        // never asked for the PIN. With no PIN, everyone sees it, as with
+        // everything else. It is never urgent, and switching into the owner's
+        // account already asks for the PIN.
+        const bool showQuality =
+            !accounts::pinIsSet() || accounts::activeId() == accounts::ownerId();
         cats.push_back({"Display and Sound", {
-            {K::Unbuilt, 0, "Picture quality",
-             "Performance, Balanced or Quality, for the whole console", ""},
             [] {
                 Row r{K::Choice, SetInterfaceSounds, "Interface sounds",
                       "The clicks when you move around the menus", ""};
@@ -8183,7 +8208,15 @@ int main(int argc, char** argv) {
             // menus look. #129 and #75, 2026-09-27. Colour is the signed-in
             // person's; the account chip above already says who that is.
             auto& rows = cats.back().rows;
-            auto at = rows.begin() + 1;   // after Picture quality
+            if (showQuality) {
+                Row r{K::Choice, SetPictureQuality, "Picture quality", "For the whole console",
+                      ""};
+                for (int i = 0; i < quality::kLevelCount; ++i)
+                    r.choices.push_back(quality::levelName(static_cast<quality::Level>(i)));
+                r.choice = static_cast<int>(quality::console());
+                rows.insert(rows.begin(), r);
+            }
+            auto at = rows.begin() + (showQuality ? 1 : 0);   // after Picture quality
             std::vector<Row> lookRows;
             {
                 Row r{K::Choice, SetAppearance, "Appearance", "", ""};
@@ -9079,6 +9112,14 @@ int main(int argc, char** argv) {
                     }
                     sound::play(sound::Cue::Move);
                 }
+                if (res.value == SetPictureQuality) {
+                    // From each game's next start (quality.h); nothing running
+                    // changes.
+                    const int i = settingsScreen.choiceOf(SetPictureQuality);
+                    if (i >= 0 && i < quality::kLevelCount)
+                        quality::setConsole(static_cast<quality::Level>(i));
+                    sound::play(sound::Cue::Move);
+                }
                 if (res.value == SetInterfaceSounds) {
                     const int i = settingsScreen.choiceOf(SetInterfaceSounds);
                     if (i >= 0 && i < sound::kLevelCount) {
@@ -9753,7 +9794,10 @@ int main(int argc, char** argv) {
         }
         bool missingKeys = false;
         std::string err;
-        if (!cab::standalone::prepare(emu, launchJob.entryPath, saveDir, user.name, pads,
+        // THE GAME'S PICTURE QUALITY (#63), its own choice or the console's.
+        const quality::Level level = quality::forGame(launchJob.romId);
+        quality::logApplied(launchJob.coreName, launchJob.romId, level);
+        if (!cab::standalone::prepare(emu, launchJob.entryPath, saveDir, user.name, pads, level,
                                       &missingKeys, &err)) {
             cab::vpad::close();
             if (!err.empty()) std::fprintf(stderr, "[standalone] %s\n", err.c_str());
@@ -9787,7 +9831,8 @@ int main(int argc, char** argv) {
                 return;
             }
         }
-        if (!standaloneRun.start(emu, launchJob.romPath, launchJob.entryPath, saveDir, &err)) {
+        if (!standaloneRun.start(emu, launchJob.romPath, launchJob.entryPath, saveDir, level,
+                                 &err)) {
             std::string aerr;
             cab::standalone::afterEnd(emu, launchJob.entryPath, saveDir, &aerr);
             cab::standalone::finished(emu, saveDir);
