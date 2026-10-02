@@ -8209,8 +8209,10 @@ int main(int argc, char** argv) {
             // person's; the account chip above already says who that is.
             auto& rows = cats.back().rows;
             if (showQuality) {
-                Row r{K::Choice, SetPictureQuality, "Picture quality", "For the whole console",
-                      ""};
+                // NOTHING UNDER IT YET. Once the pause menu has its own row,
+                // "Each game can change it in its pause menu": a fact the row
+                // cannot otherwise show (MMagTech, 2026-10-02).
+                Row r{K::Choice, SetPictureQuality, "Picture quality", "", ""};
                 for (int i = 0; i < quality::kLevelCount; ++i)
                     r.choices.push_back(quality::levelName(static_cast<quality::Level>(i)));
                 r.choice = static_cast<int>(quality::console());

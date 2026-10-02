@@ -730,6 +730,11 @@ bool prepareEden(const Emulator& e, const std::string& saveDir, const std::strin
         // network, which made it hang instead and was taken out
         // (2026-09-28).
         {"Network", "airplane_mode", "true"},
+        // NO VSYNC, ITS OWN LIMITER (#209, MMagTech 2026-10-01): gamescope
+        // already lines every frame up with the screen, so Eden's own wait
+        // (Fifo by default) only adds one more. 0 is Immediate; the speed
+        // limit, on at 100% by default, keeps the game at its own speed.
+        {"Renderer", "use_vsync", "0"},
     };
     const std::vector<std::string> controls = edenControls(players);
     std::vector<std::string> keys, values;
@@ -1291,6 +1296,11 @@ bool prepareXemu(const Emulator& e, const std::string& entryPath, int players,
         t += "[display.vulkan]\npreferred_physical_device = " + tomlQuote(gpu) + "\n";
     // PICTURE QUALITY (#63): xemu's internal resolution.
     t += "[display.quality]\n" + quality::xemu(level);
+    // VSYNC STAYS ON, xemu's default, the one exception to #209's rule.
+    // Measured on the A9 2026-10-02 (FlatOut, frames.py): with it off the
+    // game ran at its right speed, timed by the emulated Xbox, but xemu
+    // redrew the screen 631 times a second, all wasted on the graphics chip.
+    // Its own limiter paces the game, not the picture.
     t += "[display.window]\nfullscreen_on_startup = true\n";
     t += "[display.ui]\nshow_menubar = false\nshow_notifications = false\nhide_cursor = true\n";
     t += "[input]\nauto_bind = false\n";
@@ -1517,7 +1527,12 @@ bool prepareCemu(const Emulator& e, const std::string& saveDir, int players, std
     x += "    <api>1</api>\n";
     const std::string uuid = cab::gpu::vulkan().deviceUuid;
     if (uuid.size() == 32) x += "    <vkDevice>" + uuid + "</vkDevice>\n";
-    x += "    <VSync>1</VSync>\n";
+    // NO VSYNC (#209). 1 was copied from Batocera, where the emulator
+    // presents straight to the screen; here gamescope already lines frames
+    // up with it. Cemu's own timer at 60 x 1.002 Hz keeps the game at speed
+    // whatever the present mode (LatteTiming.cpp). Never 3, "match display":
+    // on Linux release builds its thread is an empty stub.
+    x += "    <VSync>0</VSync>\n";
     x += "    <AsyncCompile>true</AsyncCompile>\n";
     x += "    <Overlay><FPS>false</FPS><DrawCalls>false</DrawCalls><CPUUsage>false</CPUUsage>"
          "<CPUPerCoreUsage>false</CPUPerCoreUsage><RAMUsage>false</RAMUsage>"
