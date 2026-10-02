@@ -270,6 +270,43 @@ if [ -d "$ROOT/frontend/ps2" ]; then
         echo "upstream has no bin/resources — PCSX2 would not start" >&2
         exit 1
     fi
+
+    # PCSX2'S OWN GAME PATCHES, patches.zip (#217). Every official PCSX2
+    # download carries it; it is not in the source, because upstream's CI
+    # downloads the newest one at build time ("releases/latest", rewritten on
+    # every change). That is not a pin, so the zip is packed here the way
+    # PCSX2/pcsx2_patches packs it (pack_patches.yml: the files of patches/,
+    # flat), from a fixed commit of that repository. Moving PATCHES_COMMIT is a
+    # version bump like any other.
+    PATCHES_REPO=https://github.com/PCSX2/pcsx2_patches.git
+    PATCHES_COMMIT=9f82a4d2b8a2aaf83807421f18d5d30263ea826c   # 2026-09-22
+    PATCHES_SRC="$SRC_ROOT/pcsx2_patches"
+    if [ ! -d "$PATCHES_SRC/.git" ]; then
+        git clone --quiet --filter=blob:none "$PATCHES_REPO" "$PATCHES_SRC"
+    fi
+    git -C "$PATCHES_SRC" fetch --quiet origin "$PATCHES_COMMIT" 2>/dev/null || true
+    git -C "$PATCHES_SRC" checkout --quiet --force "$PATCHES_COMMIT"
+    if [ "$(git -C "$PATCHES_SRC" rev-parse HEAD)" != "$PATCHES_COMMIT" ]; then
+        echo "pcsx2_patches is not at the pinned $PATCHES_COMMIT" >&2
+        exit 1
+    fi
+    # Sorted names and a fixed time, so the same commit makes the same bytes.
+    python3 - "$PATCHES_SRC/patches" "$OUT/resources/patches.zip" <<'PY'
+import os, sys, zipfile
+src, out = sys.argv[1], sys.argv[2]
+names = sorted(n for n in os.listdir(src) if n.lower().endswith(".pnach"))
+with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
+    for n in names:
+        info = zipfile.ZipInfo(n, date_time=(2026, 1, 1, 0, 0, 0))
+        info.compress_type = zipfile.ZIP_DEFLATED
+        with open(os.path.join(src, n), "rb") as f:
+            z.writestr(info, f.read())
+print(f"patches.zip: {len(names)} games, {os.path.getsize(out)} bytes")
+PY
+    if [ ! -s "$OUT/resources/patches.zip" ]; then
+        echo "patches.zip was not made — PS2 would have no widescreen patches" >&2
+        exit 1
+    fi
 fi
 
 # --- the probe -------------------------------------------------------------

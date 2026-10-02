@@ -845,6 +845,16 @@ static bool RunOnCPUThread(const CabinetPS2::Config& config, std::string* error)
 	// Anisotropic filtering. PCSX2 defaults it to 0, which is off.
 	s_settings.SetIntValue("EmuCore/GS", "MaxAnisotropy", s_config.anisotropy);
 
+	// WIDESCREEN AND NO-INTERLACING PATCHES ON (MMagTech, 2026-10-02, #217).
+	// They come from patches.zip in the resources folder, which the PCSX2 team
+	// writes and checks game by game; build-pcsx2.sh packs it at a pinned
+	// commit. Each switches on, by name, only the patch a game has: a game
+	// with none is left exactly as it was, and its picture changes shape only
+	// when its own patch asks (Patch.cpp), which the frame readback above then
+	// follows. The fixes games need to run are GameIndex.yaml's, not these.
+	s_settings.SetBoolValue("EmuCore", "EnableWideScreenPatches", true);
+	s_settings.SetBoolValue("EmuCore", "EnableNoInterlacingPatches", true);
+
 	// PCSX2's own input is off entirely, and stays off. Every pad on this
 	// console reaches a game through the frontend, and a second path onto the
 	// same hardware is how one button ends up doing two things.
