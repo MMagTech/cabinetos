@@ -26,6 +26,10 @@ session picks up is `docs/NEXT-SESSION.md`.
 3. **Settings: picture.** Picture quality (#63), the pause menu's per-system
    picture and controller options (#73, which also own the PS1 DualShock and
    the N64 Rumble Pak), and shaders and CRT looks (#122, to be designed).
+   **Then Steam (#223)**, straight after #63's three phases (MMagTech,
+   2026-10-02): one entry that hands over to Bazzite's Big Picture session,
+   audited first and built on his go. Moved up from After first release
+   because it is the selling point that brings testers to the alpha.
 4. **Offline play.** Kept games play with no server (#88).
 5. **RetroAchievements** (#74). Each account signs in with its own login.
    After offline, because achievements earned offline must wait and send.

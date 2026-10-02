@@ -3726,7 +3726,11 @@ across from Cabinet's list rather than checked here.
 
 ## Non goals
 
-- Not a Steam machine.
+- Not a Steam machine. **Narrowed 2026-10-02 (MMagTech, #223):** Steam may be
+  one entry that hands over to Bazzite's Big Picture session and returns.
+  It never runs unless picked, shows no screen or setting until then, and
+  gets its own walled-off part of the disk. The console stays an emulation
+  console; Steam is what makes it worth trying on a capable PC.
 - Not a general purpose desktop.
 - No app store.
 - No browser.
