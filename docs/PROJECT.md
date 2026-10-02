@@ -14147,6 +14147,45 @@ them. PlayStation 2x stays off because it glitches in some games and there are
 no per-game fixes; Mode 7 stays off because it changes how a 2D game looks.
 Nothing here needs an external file.
 
+#### BUILT ON `picture-quality`, 2026-10-02: #63 phase 1, with #73, #209 and #217
+
+Judged on the TV with MMagTech the same day, except PS2's patches, which
+need the image.
+
+- **`quality.h`, the one place.** Every emulator asks it at launch: the
+  libretro cores through their option overrides, PS2 through the host's
+  upscale and anisotropy, Eden, RPCS3 and xemu through the settings files the
+  console writes, Xenia through its flags. Cemu has no level. The console's
+  level is `picture_quality` in `config/settings.json`; a game's own is
+  `config/picture-quality.json`, by rom id, on this console only.
+- **Settings:** a "Picture" row (renamed from "Picture quality", which read
+  "Picture quality: Quality" in the pause menu). With a PIN set only the
+  owner sees it.
+- **Pause menu:** "Picture: Console" on the ten systems with a level,
+  Console or a locked level, from the next start, said in the pill;
+  Virtual Boy's one "Screen" row and Game Boy's "Colors" (`sysopts.h`),
+  changed live: the console now answers GET_VARIABLE_UPDATE, and a paused
+  game is run on by up to two silent frames so the change shows behind the
+  menu. Rows are centred like every button, with an arrow at each edge.
+- **Applied, read back on the A9 at Quality:** Wii 3200x2640, N64 4x, PS2 5x
+  with anisotropy 16, PSP 3840x2160, Eden Res2X and X16, RPCS3 300% and 16,
+  xemu surface_scale 4, Xenia's scaled resolve buffers.
+- **#209, measured with MMagTech at the TV** (frames.py, a minute each):
+  Eden 59.8 fps and Cemu 30.0 fps at their right speed with vsync off; xemu
+  kept on, because with it off it presented 631 frames a second.
+  `--adaptive-sync` on the drm rung of the session.
+- **#217:** patches.zip packed in build-pcsx2.sh from pcsx2_patches at a
+  pinned commit (4,710 games), widescreen and no-interlacing on; off-screen,
+  Burnout 3 enabled "Widescreen 16:9" and set 16:9.
+- **The version-bump check:** tools/core-options.c and cores/options/ in the
+  core build, `--check-option-tables` in the frontend build (129 values on 22
+  cores), tools/check-applied.sh on the A9, and a `[options]` log line at every
+  launch for anything a core does not declare.
+- **Looks, judged on the TV:** GBA blending Smart; Atari 2600 Medium
+  ghosting (Average still strobed, Heavy trailed). Integer scaling, counted
+  on the TV's own rows, made little visible difference; every system still
+  fills the height, and handhelds' look is #122's.
+
 #### DECIDED, MMagTech 2026-10-02: fast cores and full speed in games (#163, #150)
 
 Built on branch `fast-cores`; measurements on the issues.
