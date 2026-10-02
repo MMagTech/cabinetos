@@ -23,13 +23,23 @@ session picks up is `docs/NEXT-SESSION.md`.
    (#172), Xbox 360 (#192), Wii (#173) and Wii U (#174). Xbox 360 moved ahead
    of the Wiis on 2026-09-29, after it ran well on the A9. Before picture quality, because that
    is one setting across every system.
-3. **Settings: picture.** Picture quality (#63), the pause menu's per-system
-   picture and controller options (#73, which also own the PS1 DualShock and
-   the N64 Rumble Pak), and shaders and CRT looks (#122, to be designed).
-   **Then Steam (#223)**, straight after #63's three phases (MMagTech,
-   2026-10-02): one entry that hands over to Bazzite's Big Picture session,
-   audited first and built on his go. Moved up from After first release
-   because it is the selling point that brings testers to the alpha.
+3. **Settings: picture**, in this order (set 2026-10-02; MMagTech: "you tell
+   me"):
+   1. **#63 phase 1**, the dial and the fixed tables, with the VRR and vsync
+      rule (#209), PS2's patches (#217) and the pause menu's per-system
+      options (#73), because the per-game quality row lives in that same
+      menu and is designed with it.
+   2. **#63 phase 2**, the machine class.
+   3. **Before phase 3:** the slowed A9 (#210), rewind's cost (#168) and
+      whether built-in cores repeat or drop frames (#221), because the drop
+      rule reads smoothness and must not mistake these for a struggling game.
+   4. **#63 phase 3**, the drop rule, record-only first.
+   5. **Steam (#223)**: one entry that hands over to Bazzite's Big Picture
+      session, audited first and built on his go. Moved up from After first
+      release because it is the selling point that brings testers to the
+      alpha.
+   6. **Shaders and CRT looks (#122)**, to be designed: taste, not needed to
+      judge the console.
 4. **Offline play.** Kept games play with no server (#88).
 5. **RetroAchievements** (#74). Each account signs in with its own login.
    After offline, because achievements earned offline must wait and send.
