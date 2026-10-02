@@ -63,6 +63,11 @@ bool hasLevels(const std::string& core);
 // Applied on top of catalog::optionOverrides.
 std::map<std::string, std::string> coreOptions(const std::string& core,
                                                const std::string& platformSlug, Level l);
+// The same, saying whether there is Vulkan rather than asking the GPU, so the
+// option check (optcheck.h) can test both N64 renderers on any machine.
+std::map<std::string, std::string> coreOptions(const std::string& core,
+                                               const std::string& platformSlug, Level l,
+                                               bool vulkan);
 
 struct Ps2 {
     float upscale = 1.0f;

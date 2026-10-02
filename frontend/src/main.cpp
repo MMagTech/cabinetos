@@ -91,6 +91,7 @@
 #include "power.h"
 #include "look.h"
 #include "prefs.h"
+#include "optcheck.h"
 #include "quality.h"
 #include "sysopts.h"
 #include "server.h"
@@ -3867,6 +3868,10 @@ static int rommProbe(const char* address, bool allowPairing) {
 }
 
 int main(int argc, char** argv) {
+    // The version-bump check's frontend half (optcheck.h): before anything is
+    // opened, so CI runs it with no display, no GPU and no core.
+    if (argc == 3 && std::string(argv[1]) == "--check-option-tables")
+        return optcheck::run(argv[2]);
     bool shotMode = false;
     const char* shotPath = "/tmp/cabinetos-frame.bmp";
     int shotAfterFrames = 30;

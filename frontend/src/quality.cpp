@@ -119,6 +119,12 @@ bool hasLevels(const std::string& core) {
 
 std::map<std::string, std::string> coreOptions(const std::string& core,
                                                const std::string& platformSlug, Level l) {
+    return coreOptions(core, platformSlug, l, cab::gpu::vulkan().available);
+}
+
+std::map<std::string, std::string> coreOptions(const std::string& core,
+                                               const std::string& platformSlug, Level l,
+                                               bool vulkan) {
     // GameCube and Wii: internal resolution, and shaders built in the
     // background (2, Async UberShaders) above Performance, when first needed
     // (0, Synchronous) at it. Anisotropic filtering 16x is `4` in Dolphin's
@@ -149,7 +155,7 @@ std::map<std::string, std::string> coreOptions(const std::string& core,
     // spare at 60 fps on the A9 and there is no step between. Without Vulkan,
     // GLideN64 by the same rule: the N64's own 320x240, then 1280x960.
     if (core == "mupen64plus") {
-        if (cab::gpu::vulkan().available) {
+        if (vulkan) {
             static const char* const kScale[] = {"1x", "4x", "4x"};
             return {{"mupen64plus-parallel-rdp-upscaling", pick(l, kScale)}};
         }
