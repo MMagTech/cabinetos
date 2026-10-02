@@ -14004,6 +14004,31 @@ RetroArch and Batocera:
 Systems with a resolution to move: PS2, GameCube, Wii, PSP, N64, Dreamcast,
 Switch, PS3, Xbox, Xbox 360. Wii U has none without resolution packs (#207).
 
+#### DECIDED, MMagTech 2026-10-02: catching a setting an upgrade changed (#63)
+
+MMagTech: future core upgrades may rename settings, drop values or change
+defaults. Today none of that is noticed: an override key a core does not
+declare is ignored silently (core.cpp:239-241), and a value outside its list
+is passed through unchecked. Every emulator is pinned, so a setting can only
+change when a commit moves a pin; the check runs there.
+
+1. **A workflow check on any commit that moves a pin.** The built core is
+   loaded, its declared options (name, default, accepted values) compared
+   with a list saved in the repository and with the dial's tables; any
+   difference fails the run, which reports itself. Covers 20 of the 22
+   built-in cores without a game (NES and MAME 2003-Plus need only a stub
+   file). Dolphin and FBNeo declare options only with a real game; free
+   homebrew in the workflow is to be tried, untested.
+2. **A script run on the A9 over SSH** for bumps the workflow cannot check:
+   Dolphin and FBNeo (unless homebrew works), PS2, Eden, RPCS3, xemu, Xenia,
+   Cemu. One game per emulator, reading back what it applied (its log or the
+   settings file it rewrites; our own `[ps2]` line for PS2). Part of the A9
+   test every such bump already gets. Xenia matters most: a renamed
+   command-line flag makes it print help and exit before its log starts.
+3. **One log line in the console** when a core is given a setting it does
+   not declare, or a value outside its list. No screen. Reaches us through
+   the diagnostic report (#195).
+
 #### DECIDED, MMagTech 2026-10-02: the processor-side extras are fixed, not in the dial (#63)
 
 From the phase 1 audit (2026-10-02). Four options sharpen the picture on the
