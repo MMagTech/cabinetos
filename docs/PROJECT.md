@@ -13984,6 +13984,25 @@ the drop rule, record-only first. Before phase 1: #150 and #163 (busy time
 is wrong without them), both moved into milestone 3. Before phase 3: #168
 (an 18.6 ms N64 rewind snapshot reads as struggle) and #210.
 
+#### DECIDED, MMagTech 2026-10-02: the processor-side extras are fixed, not in the dial (#63)
+
+From the phase 1 audit (2026-10-02). Four options sharpen the picture on the
+processor rather than the graphics chip; none moves with the dial:
+
+| Extra | Option | Set to | RetroArch | Batocera |
+|---|---|---|---|---|
+| 3DO high resolution | `opera_high_resolution` | **on** | off | on |
+| Vector line sharpness, Vectrex | `vecx_res_multi` | **highest** | 1 | 1, exposed |
+| Vector line sharpness, MAME 2003-Plus vector games | `mame2003-plus_vector_resolution` | **highest** | 1024x768 | not written |
+| PlayStation 2x | `pcsx_rearmed_neon_enhancement_enable` | off | off | off, exposed |
+| SNES HD Mode 7 | `snes9x_mode7_hires` | off | off | not offered |
+
+MMagTech: the two that are on are simply on, with no measurement gate; this
+console is not meant for very old hardware, and any reasonable modern PC runs
+them. PlayStation 2x stays off because it glitches in some games and there are
+no per-game fixes; Mode 7 stays off because it changes how a 2D game looks.
+Nothing here needs an external file.
+
 #### DECIDED, MMagTech 2026-10-02: fast cores and full speed in games (#163, #150)
 
 Built on branch `fast-cores`; measurements on the issues.
