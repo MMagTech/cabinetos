@@ -188,3 +188,11 @@ Read before touching `build_files/`, `system_files/`, `ci/`, the workflows, the 
   there the test copy belonged to `cabinet`. **An emulator is judged from the
   image, not only from a copy.** `install-xenia.sh` now fails the build on
   any file others cannot read.
+
+- **A GITHUB ARTIFACT LOSES ITS FILES' EXECUTE BIT.** `actions/upload-artifact`
+  does not keep permissions, so Cemu's program reached the image build as a
+  plain file, and `install-cemu.sh`, which checked `-x` before copying, said
+  there was no Cemu at all (2026-10-02). PCSX2 never showed it, because a
+  shared library is never executed directly. **Check that a payload file
+  exists, then set its mode in the image**, as `install-cemu.sh` now does.
+

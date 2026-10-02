@@ -13958,6 +13958,32 @@ the old rows fade out as the new ones fade in. MMagTech asked whether it should
 be instant; a person runs down that list quickly, so a slide would be busy and
 an instant swap makes the whole right side jump. MMagTech on the TV: good.
 
+#### REVISED, MMagTech 2026-10-01: the automatic quality design (issue #63)
+
+Nothing built; milestone 3. The full proposal, with every fact tagged as
+read in source, measured on the A9 or inferred:
+https://claude.ai/artifact/NjccrYtGFqhKFwXGHygQfV. The checklist of what must
+be in place first is on #63.
+
+| | September (above) | Now |
+|---|---|---|
+| Starting tier | the system's table value | the table value **for this machine's class**, read from the hardware at first boot with no benchmark screen: GPU shader units × top clock (Vulkan's `VK_AMD_shader_core_properties2` or `VK_NV_shader_sm_builtins`, `pp_dpm_sclk`), CPU threads, top clock, AVX2/AVX-512. Unknown hardware gets Performance |
+| Direction | learns both ways | **drop only**; a machine classed too low is raised with the dial |
+| The dial | one control | the same, and it is a **ceiling**, not a target |
+| Display | not covered | gamescope `--adaptive-sync` (VRR only when the TV reports it), emulator vsync off, emulator limiter on: #209 |
+| Second check | not covered | **busy time corrected for clock** (busy × current clock ÷ top clock); the Radeon idles at 810 MHz reading 7% busy, so raw busy % lies |
+| Standalones | not covered | read from outside: gamescope's per-frame queue (every app, with its pid; on the A9 full and unread today), Cemu's and RPCS3's window titles, MangoHud as fallback; per-thread CPU from /proc. None takes a change mid-game, so launch only holds for all |
+| Testing | "cannot be exercised on either machine" | a **slowed A9** (GPU pinned to 600 MHz, CPU capped, cores offline): #210. Less power, not a different chip |
+| The drop rule's start | not covered | **record-only first**: it logs what it would have done, changing nothing, until real play shows good calls |
+| Removal | not covered | **one place answers**: every emulator asks one module; settings written fresh at launch; nothing synced. The whole feature comes out in one ordinary update |
+| Telemetry | not covered | dropped for the first release; no database anywhere |
+| External files | rule of 2026-10-01 | MMagTech's words were "from a user"; recorded as "any". Open; Cemu's resolution packs are #207 |
+
+**Order:** 1) the dial, the fixed tables and #209; 2) the machine class; 3)
+the drop rule, record-only first. Before phase 1: #150 and #163 (busy time
+is wrong without them), both moved into milestone 3. Before phase 3: #168
+(an 18.6 ms N64 rewind snapshot reads as struggle) and #210.
+
 ### 32. Standalone emulators as games, starting with Switch (Eden)
 **Raised by milestone 2 (#169, #170). Researched 2026-09-28; four decisions
 taken the same day. Nothing built yet: nothing below has been launched.**
@@ -14910,5 +14936,11 @@ on the A9 by `cores/build-cemu.sh`.
 | Started again | the save came down first ("holds 3 file(s) at launch"); no DLC cards, the same character: "worked" |
 | What RomM holds | `Hyrule Warriors.zip`, `1017d800/meta/{meta.xml,iconTex.tga}` and `1017d800/user/80000001/ProjectZ-SAVEDATA/APP.BIN`: Cemu's own layout |
 
-**Next:** push, the first CI build of Cemu, the testing image, and
-MMagTech's judgement on it before any merge.
+#### Judged on the testing image and merged, 2026-10-02 (#208)
+
+The image's own Cemu (`/usr/lib/cabinetos/cemu`, `4e3c824faa`) and Wii U
+list (2,860 entries). MMagTech: "everything is good". Captain Toad greyed;
+Hyrule Warriors played, paused, quit (exit 0); its save up to RomM and
+unpacked again before the next start. The first CI build of Cemu took 33
+minutes uncached; the first image build stopped at `install-cemu.sh`, because
+GitHub's artifact upload drops the execute bit (lessons, image and CI).

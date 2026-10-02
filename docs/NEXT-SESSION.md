@@ -11,21 +11,26 @@ specification is `docs/PROJECT.md`; the order is `docs/ROADMAP.md`.
 
 ## Where things stand
 
-Wii is merged (#205). **Wii U (#174) passed on the TV through the console
-(the loop build) on 2026-10-01** and is on branch `wiiu-cemu`, pushed to
-`testing` for its image. Decisions, what was built and what he judged:
-`docs/PROJECT.md` open question 36. Check `bootc status` on the A9 for the
-image it runs. **Never tell MMagTech something is unrecoverable or safe to
-delete before every cause is checked** (memory).
+Milestone 2 is done but for real Wii Remotes. Wii U is merged (#208; open
+question 36). Check `bootc status` on the A9 for the image it runs. **Never
+tell MMagTech something is unrecoverable or safe to delete before every
+cause is checked** (memory).
 
-## Next: milestone 2, New systems
+## Next: milestone 3, Settings: picture
 
-1. **#174 Wii U: the testing image.** Check the first CI build of Cemu
-   (`build-cemu.yml`, uncached; on the A9 its libraries took 8.7 min at 24
-   cores), then `bootc upgrade` the A9 to `testing` and have MMagTech run
-   the same steps from the image itself: Wii U grid (Captain Toad greyed),
-   Hyrule Warriors (pad, sound), save, Quit, start again (save back). Merge
-   only on his explicit go, then close #174. *Lessons: emulators.*
-2. **#204**, Dolphin's log level: one line, with the next testing push.
-3. **#200**, real Wii Remotes, when MMagTech's Remotes arrive (2026-10-03):
-   the test list is in the issue, now with a Cemu check (item 6).
+The automatic quality design is recorded (PROJECT.md, "REVISED,
+MMagTech 2026-10-01", after open question 31; #63 with its checklist).
+Nothing of it is built. Start with what its measurements depend on:
+
+1. **#150**, Bazzite's performance profile while a game runs, balanced on
+   Home. Measure first, on the A9, with a heavy game. *Lessons: image and CI,
+   testing.*
+2. **#163**, emulators on the fast cores: find first why the kernel's
+   preferred-core use is off on the A9.
+3. Then **#63 phase 1**: the dial, the fixed tables, #209 (VRR and vsync,
+   with its three TV tests), designed with #73 and #122 for the pause menu.
+
+Also open, not in the way:
+- **#200**, real Wii Remotes, when the hardware arrives (it may not on
+  2026-10-03); one TV session.
+- **#204**, Dolphin's log level, one line, with the next testing push.
