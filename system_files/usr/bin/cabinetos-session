@@ -110,14 +110,24 @@ else
     echo "cabinetos-session: no display reported a mode; asking for ${OUT_W}x${OUT_H}"
 fi
 
+# VARIABLE REFRESH WHEN THE TELEVISION HAS IT (#209, MMagTech 2026-10-01).
+# `--adaptive-sync` turns VRR on only if the display reports it can, and does
+# nothing otherwise; the emulators run with vsync off on their own limiters
+# (standalone.cpp), so a VRR set shows each frame when it is ready. Only on
+# drm: the other rungs have no display of their own to drive. The A9's LG C1
+# reports no VRR on its current input settings (2026-10-01), so on it this
+# changes nothing until the TV's game settings say otherwise.
 run_gamescope() {
     local backend="$1"
-    echo "cabinetos-session: starting gamescope (backend=${backend})"
+    local vrr=()
+    [[ "${backend}" == "drm" ]] && vrr=(--adaptive-sync)
+    echo "cabinetos-session: starting gamescope (backend=${backend}${vrr:+, adaptive sync})"
     # shellcheck disable=SC2086  # APP is a command plus arguments
     exec gamescope \
         --backend "${backend}" \
         --output-width "${OUT_W}" \
         --output-height "${OUT_H}" \
+        ${vrr[@]+"${vrr[@]}"} \
         -- ${APP}
 }
 
