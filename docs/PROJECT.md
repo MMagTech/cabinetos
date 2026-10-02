@@ -14022,6 +14022,14 @@ this setting, and an N64 exception would argue the same for PSP and PS2. The
 GLideN64 fallback (no Vulkan) follows the same rule, 320x240 at Performance.
 Revisit only if Performance on the slowed A9 (#210) looks unacceptable.
 
+**A game's own choice takes effect from its next start** (MMagTech,
+2026-10-02). The pause menu's Picture quality row saves the choice and says
+"From the next start"; the game never restarts by itself. Rejected: restarting
+at once with a save state, because only PSP, N64 and Dreamcast have states here
+(PS2, GameCube, Wii, Switch, PS3, Xbox and Xbox 360 do not, question 25), so on
+seven of the ten systems it would lose progress; and applying live where an
+emulator can, because one row would then behave two ways.
+
 **Starting level until phase 2:** every console starts on Performance (the
 design's rule for unknown hardware; nothing tells machines apart yet). The A9
 is set to Quality with the dial. Phase 2 lands in the same milestone, before
