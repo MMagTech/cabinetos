@@ -37,6 +37,7 @@
 #   cores/<core>_libretro.so      x22
 #   system/PPSSPP/...             PPSSPP's fonts and lookup tables
 #   system/dolphin-emu/Sys/...    Dolphin's game settings and Wii files
+#   cemu/{bin,share/Cemu}/...     Wii U's emulator, its game profiles and resources
 #
 # image_payload/ is gitignored, which also keeps `git status -s` clean — the
 # Justfile reads that to decide whether to stamp the image with a revision, so
@@ -53,10 +54,12 @@ if [ $# -ge 1 ]; then
     FRONTEND="$SRC/bin/cabinetos-frontend"
     CORES="$SRC/cores"
     SYSTEM="$SRC/system"
+    CEMUSRC="$SRC/cemu"
 else
     FRONTEND="$ROOT/frontend/build/cabinetos-frontend"
     CORES="$ROOT/cores/build"
     SYSTEM="$ROOT/cores/system"
+    CEMUSRC="$ROOT/cores/build/cemu"
 fi
 
 # The cores this console is supposed to have, read off the script that builds
@@ -223,6 +226,21 @@ fi
 # NOT SHIPPED: cabinet-ps2-probe. It is the headless harness for measuring
 # without a television, it is 28 MB, and nothing on a console runs it.
 
+# --- Wii U ----------------------------------------------------------------
+# Cemu, built by cores/build-cemu.sh at its pin: the program and the two
+# folders it reads. REQUIRED, for PlayStation 2's reason: without it Wii U
+# reads as "not installed" and nothing else would say so.
+# build_files/install-cemu.sh puts it at /usr/lib/cabinetos/cemu.
+for f in bin/Cemu share/Cemu/resources share/Cemu/gameProfiles/default VERSION; do
+    [ -e "$CEMUSRC/$f" ] || {
+        echo "Cemu's $f is not in $CEMUSRC — the image would lose Wii U" >&2
+        echo "Build it with cores/build-cemu.sh." >&2
+        exit 1
+    }
+done
+rm -rf "$OUT/cemu"
+cp -R "$CEMUSRC" "$OUT/cemu"
+
 # --- What went in ----------------------------------------------------------
 
 echo "staged $OUT"
@@ -235,6 +253,7 @@ printf '  ps2       %s emulator, %s libraries, %s resources\n' \
        "$(du -h "$OUT/cores/cabinetos-ps2.so" | cut -f1)" \
        "$(wc -l < "$OUT/cores/cabinetos-ps2.bundled" | tr -d ' ')" \
        "$(du -sh "$OUT/system/pcsx2/resources" | cut -f1)"
+printf '  wii u     Cemu %s, %s\n' "$(cut -c1-10 "$OUT/cemu/VERSION")" "$(du -sh "$OUT/cemu" | cut -f1)"
 printf '  system    %s, %s entries\n' "$(du -sh "$OUT/system" | cut -f1)" \
        "$(find "$OUT/system" -mindepth 2 -maxdepth 2 | wc -l | tr -d ' ')"
 printf '  total     %s\n' "$(du -sh "$OUT" | cut -f1)"

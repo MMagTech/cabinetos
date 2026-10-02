@@ -110,6 +110,11 @@ RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
     --mount=type=tmpfs,dst=/tmp \
     /ctx/install-xenia.sh
 
+# Wii U: Cemu, built from source at a pin by build-cemu.yml, from the payload.
+RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
+    --mount=type=tmpfs,dst=/tmp \
+    /ctx/install-cemu.sh
+
 # xemu's blank Xbox hard drive, pinned by checksum, 1.6 MB, beside the EEPROM
 # that system_files puts in the same folder. xemu itself is a Flatpak
 # (flatpaks.list); build_files/install-xemu-drive.sh says why this is not.

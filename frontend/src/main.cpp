@@ -715,8 +715,8 @@ static void syncDirSave(GameSession& sess, Uploader& up) {
     up.push(std::move(job));
 }
 
-// A GAME WHOSE SAVES NEVER GOT ZIPPED: Xbox 360, where Edge writes straight
-// into the person's folder and a note says a game is running there
+// A GAME WHOSE SAVES NEVER GOT ZIPPED: Xbox 360 and Wii U, where the emulator
+// writes straight into the person's folder and a note says a game is running there
 // (standalone::beforeStart). The console went down, or the frontend did,
 // before the end of the game. The whole folder goes up now, as if the game
 // had just ended with everything changed, and is owed until it lands, so the
@@ -6430,17 +6430,18 @@ int main(int argc, char** argv) {
             }
         }
     }
-    // AND AN XBOX 360 GAME'S, whose note is in the person's own folder:
-    // `saves/<platform>/<rom id>/xenia/`. Only this person's, since the
-    // upload goes as them; anyone else's is finished when they next start a
-    // game of that kind here, or the console starts as them.
-    if (const cab::standalone::Emulator* xenia = cab::standalone::find("xenia")) {
+    // AND AN XBOX 360 OR WII U GAME'S (`notesPlaying`), whose note is in the
+    // person's own folder: `saves/<platform>/<rom id>/<core>/`. Only this
+    // person's, since the upload goes as them; anyone else's is finished when
+    // they next start a game of that kind here, or the console starts as them.
+    for (const cab::standalone::Emulator* emu : cab::standalone::all()) {
+        if (!emu->notesPlaying) continue;
         const std::string saves = storage::userDir(storage::currentUser()) + "/saves";
         for (const std::string& platform : listNames(saves))
             for (const std::string& rom : listNames(saves + "/" + platform)) {
-                const std::string dir = saves + "/" + platform + "/" + rom + "/" + xenia->core;
+                const std::string dir = saves + "/" + platform + "/" + rom + "/" + emu->core;
                 if (cab::standalone::hasPlayingNote(dir))
-                    finishInterruptedSave(*xenia, dir, uploader);
+                    finishInterruptedSave(*emu, dir, uploader);
             }
     }
     float owedClock = 0.0f;   // seconds since the last try at what is owed

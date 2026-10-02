@@ -49,8 +49,8 @@ const Emulator kEmulators[] = {
      // "Eden | <version> | <compiler>" idle, and the game's name, its version
      // and the GPU after that while one runs (main_window.cpp,
      // UpdateWindowTitle).
-     "Eden |", 5,
-     "nsp|xci", "keys", false, false, false, false, false},
+     "Eden |", 5, nullptr,
+     "nsp|xci", "keys", false, false, false, false, false, false},
 
     // PLAYSTATION 3. Its log sits beside its cache, in the game's folder
     // (XDG_CACHE_HOME, rpcs3/ appended: Utilities/File.cpp, get_cache_dir).
@@ -64,8 +64,8 @@ const Emulator kEmulators[] = {
      {nullptr, nullptr, nullptr, nullptr},
      "Failed to locate the game license file",
      "Emulation has been frozen",
-     nullptr, 0,
-     "iso|pkg", "firmware", true, true, true, false, false},
+     nullptr, 0, nullptr,
+     "iso|pkg", "firmware", true, true, true, false, false, false},
 
     // ORIGINAL XBOX. xemu keeps no log of its own; what it prints is it. A
     // game is a folder, as a PS3 game is, because its hard drive lives beside
@@ -77,8 +77,8 @@ const Emulator kEmulators[] = {
      {nullptr, nullptr},
      {nullptr, nullptr, nullptr, nullptr},
      nullptr, nullptr,
-     nullptr, 0,
-     "iso|xiso", "BIOS", true, false, false, true, true},
+     nullptr, 0, nullptr,
+     "iso|xiso", "BIOS", true, false, false, true, true, false},
 
     // XBOX 360. Xenia Edge's own Linux build, in the image
     // (build_files/install-xenia.sh). Its log is where the console tells it
@@ -96,8 +96,27 @@ const Emulator kEmulators[] = {
      {nullptr, nullptr, nullptr, nullptr},
      nullptr,
      "x> ",
-     "Xenia-edge", 2,
-     "iso|xex|zar", "", false, false, true, false, false},
+     "Xenia-edge", 2, nullptr,
+     "iso|xex|zar", "", false, false, true, false, false, true},
+
+    // WII U. Cemu main, built from source at a pin (cores/build-cemu.sh) and in
+    // the image at /usr/lib/cabinetos/cemu. Its log is under its home
+    // (XDG_DATA_HOME/Cemu). Started with `-g`, it builds no game list and
+    // CLOSES ITSELF when the game ends, returning the game's own exit status
+    // (OnRequestGameExit, CemuApp::OnExit), so no title watch. A game it
+    // cannot open is a desktop box titled "Error" over its empty window, and
+    // only some of those reach the log, so both are watched. SIGTERM is
+    // `_Exit(0)`, no clean shutdown; the window close saves and stops the
+    // game (measured on the A9, 2026-10-01: exit 0, save intact). Mid-game,
+    // an unrecoverable Vulkan error is logged and thrown. Issue #174; open
+    // question 36.
+    {"cemu", nullptr, "/usr/lib/cabinetos/cemu/bin/Cemu", "Cemu", "Cemu/log.txt",
+     {"Mounting failed", "Unable to find RPX executable"},
+     {nullptr, nullptr, nullptr, nullptr},
+     nullptr,
+     "Unrecoverable error in Vulkan",
+     nullptr, 0, "Error",
+     "wua", "", false, false, true, false, false, true},
 };
 
 // How long a program that was asked to close gets before it is made to.
@@ -477,6 +496,40 @@ struct XTitles {
         if (kids) Free(kids);
         Flush(dpy);
         return asked;
+    }
+    // Whether process `pid` has a top-level window called exactly `title`:
+    // the emulator's own error box (`errorBox`).
+    bool hasWindowTitled(int pid, const char* title) {
+        if (!open()) return false;
+        const Atom wmPid = InternAtom(dpy, "_NET_WM_PID", 0);
+        const Atom netName = InternAtom(dpy, "_NET_WM_NAME", 0);
+        const Atom utf8 = InternAtom(dpy, "UTF8_STRING", 0);
+        const Atom cardinal = 6;   // XA_CARDINAL
+        Window rootRet = 0, parent = 0;
+        Window* kids = nullptr;
+        unsigned n = 0;
+        if (!QueryTree(dpy, DefaultRootWindow(dpy), &rootRet, &parent, &kids, &n)) return false;
+        bool found = false;
+        for (unsigned i = 0; i < n && !found; ++i) {
+            Atom type = 0;
+            int format = 0;
+            unsigned long count = 0, after = 0;
+            unsigned char* data = nullptr;
+            if (GetWindowProperty(dpy, kids[i], wmPid, 0, 1, 0, cardinal, &type, &format, &count,
+                                  &after, &data) != 0 || !data)
+                continue;
+            const long owner = count == 1 ? *reinterpret_cast<long*>(data) : -1;
+            Free(data);
+            if (owner != pid) continue;
+            data = nullptr;
+            if (GetWindowProperty(dpy, kids[i], netName, 0, 1024, 0, utf8, &type, &format,
+                                  &count, &after, &data) != 0 || !data)
+                continue;
+            found = std::string(reinterpret_cast<char*>(data), count) == title;
+            Free(data);
+        }
+        if (kids) Free(kids);
+        return found;
     }
 };
 XTitles gTitles;
@@ -1361,12 +1414,156 @@ bool prepareXenia(const Emulator& e, const std::string& saveDir, std::string* er
     return true;
 }
 
+// --- Wii U (Cemu) -------------------------------------------------------------
+//
+// Decided with MMagTech 2026-10-01, issue #174, open question 36: Cemu main
+// at a pin, never patched; no graphic packs (#207); one account ID for
+// everyone, `80000001`, which Cemu makes by itself when there is none; the
+// person's saves written straight into their own folder for the game.
+//
+// WHERE THINGS ARE. Its home holds its settings and controller profiles
+// (XDG_CONFIG_HOME), its log (XDG_DATA_HOME) and its shader cache
+// (XDG_CACHE_HOME), so the cache is one per console, as Dolphin's is. Its
+// mlc, the Wii U's own storage where the saves and the account are, is
+// `<saveDir>/mlc`: this person's folder for this game. What travels is
+// `mlc/usr/save/00050000/`, Cemu's own layout, which drops into any Cemu.
+
+std::string cemuMlc(const std::string& saveDir) { return saveDir + "/mlc"; }
+
+std::string xmlEscape(const std::string& v) {
+    std::string out;
+    for (const char c : v) {
+        switch (c) {
+            case '&': out += "&amp;"; break;
+            case '<': out += "&lt;"; break;
+            case '>': out += "&gt;"; break;
+            case '"': out += "&quot;"; break;
+            default: out += c;
+        }
+    }
+    return out;
+}
+
+// Cemu's numbers for a Pro Controller's inputs (input/emulated/ProController.h,
+// ButtonId, from 1) and for an SDL gamepad's (input/api/Controller.h: SDL's
+// button numbers, then ZL 32, ZR 33, the d-pad 34 to 37, and the axes from 38:
+// left stick X+ Y+, right X+ Y+, triggers L R, then the same negative). By
+// position, as Switch is here: Nintendo's A is the pad's right face button.
+// The Pro Controller's HOME is left out: Guide is the console's pause menu.
+// The same table as Batocera's.
+constexpr int kCemuPro[][2] = {
+    {1, SDL_GAMEPAD_BUTTON_EAST},          {2, SDL_GAMEPAD_BUTTON_SOUTH},
+    {3, SDL_GAMEPAD_BUTTON_NORTH},         {4, SDL_GAMEPAD_BUTTON_WEST},
+    {5, SDL_GAMEPAD_BUTTON_LEFT_SHOULDER}, {6, SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER},
+    {7, 42},                               {8, 43},
+    {9, SDL_GAMEPAD_BUTTON_START},         {10, SDL_GAMEPAD_BUTTON_BACK},
+    {12, SDL_GAMEPAD_BUTTON_DPAD_UP},      {13, SDL_GAMEPAD_BUTTON_DPAD_DOWN},
+    {14, SDL_GAMEPAD_BUTTON_DPAD_LEFT},    {15, SDL_GAMEPAD_BUTTON_DPAD_RIGHT},
+    {16, SDL_GAMEPAD_BUTTON_LEFT_STICK},   {17, SDL_GAMEPAD_BUTTON_RIGHT_STICK},
+    {18, 45}, {19, 39}, {20, 44}, {21, 38},   // left stick up, down, left, right
+    {22, 47}, {23, 41}, {24, 46}, {25, 40},   // right stick
+};
+
+std::string cemuProfile(int player) {
+    std::string x = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<emulated_controller>\n";
+    x += "  <type>Wii U Pro Controller</type>\n  <controller>\n";
+    x += "    <api>SDLController</api>\n";
+    // `<n>_<GUID>`: the n-th pad with that GUID. Each player's virtual
+    // controller has a GUID of its own (vpad.h), so always the first.
+    x += "    <uuid>0_" + cab::vpad::sdlGuid(player) + "</uuid>\n";
+    x += "    <display_name>CabinetOS player " + std::to_string(player + 1) + "</display_name>\n";
+    x += "    <rumble>1</rumble>\n";
+    for (const char* a : {"axis", "rotation", "trigger"})
+        x += std::string("    <") + a + "><deadzone>0.25</deadzone><range>1</range></" + a + ">\n";
+    x += "    <mappings>\n";
+    for (const auto& m : kCemuPro)
+        x += "      <entry><mapping>" + std::to_string(m[0]) + "</mapping><button>" +
+             std::to_string(m[1]) + "</button></entry>\n";
+    x += "    </mappings>\n  </controller>\n</emulated_controller>\n";
+    return x;
+}
+
+bool prepareCemu(const Emulator& e, const std::string& saveDir, int players, std::string* err) {
+    const std::string config = home(e) + "/Cemu";
+    storage::makeDirs(config + "/controllerProfiles");
+    storage::makeDirs(cemuMlc(saveDir));
+    // THE CONSOLE'S SETTINGS, written whole before every start; Cemu writes
+    // the file back on exit, so nothing it kept can differ. Without the file
+    // Cemu opens its first-run wizard. Names from config/CemuConfig.cpp and
+    // gui/wxgui/wxCemuConfig.cpp at the pin.
+    std::string x = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<content>\n";
+    x += "  <mlc_path>" + xmlEscape(cemuMlc(saveDir)) + "</mlc_path>\n";
+    // English, as the console's own words are.
+    x += "  <console_language>1</console_language>\n";
+    x += "  <check_update>false</check_update>\n";
+    x += "  <use_discord_presence>false</use_discord_presence>\n";
+    x += "  <fullscreen>true</fullscreen>\n";
+    x += "  <fullscreen_menubar>false</fullscreen_menubar>\n";
+    // "Already shown": its Vulkan notice and its offer to download graphic
+    // packs, which the console never takes (#207).
+    x += "  <vk_warning>true</vk_warning>\n";
+    x += "  <gp_download>true</gp_download>\n";
+    x += "  <open_pad>false</open_pad>\n";
+    x += "  <Graphic>\n";
+    // VULKAN on the GPU the console chose, never llvmpipe (gpu.cpp).
+    x += "    <api>1</api>\n";
+    const std::string uuid = cab::gpu::vulkan().deviceUuid;
+    if (uuid.size() == 32) x += "    <vkDevice>" + uuid + "</vkDevice>\n";
+    x += "    <VSync>1</VSync>\n";
+    x += "    <AsyncCompile>true</AsyncCompile>\n";
+    x += "    <Overlay><FPS>false</FPS><DrawCalls>false</DrawCalls><CPUUsage>false</CPUUsage>"
+         "<CPUPerCoreUsage>false</CPUPerCoreUsage><RAMUsage>false</RAMUsage>"
+         "<VRAMUsage>false</VRAMUsage></Overlay>\n";
+    x += "    <Notification><ControllerProfiles>false</ControllerProfiles>"
+         "<ControllerBattery>false</ControllerBattery><ShaderCompiling>false</ShaderCompiling>"
+         "<FriendService>false</FriendService></Notification>\n";
+    x += "  </Graphic>\n";
+    // SOUND THROUGH CUBEB TO THE SYSTEM'S OUTPUT. An empty TVDevice is no TV
+    // sound at all (audio/IAudioAPI.cpp, CreateDeviceFromConfig), which the
+    // log does not mention; `default` is Cemu's own "Default Device". Its
+    // volume defaults to 20.
+    x += "  <Audio>\n    <api>3</api>\n    <TVChannels>1</TVChannels>\n";
+    x += "    <TVVolume>100</TVVolume>\n    <TVDevice>default</TVDevice>\n  </Audio>\n";
+    // ITS KEYBOARD SHORTCUTS OFF: Escape leaves fullscreen, F11 and Alt+Enter
+    // toggle it, F12 saves a screenshot, all on by default, and a keyboard
+    // plugged into the console would reach them. `0 -1` is no key and no
+    // controller button (wxCemuConfig.h, sHotkeyCfg).
+    x += "  <Hotkeys>\n";
+    for (const char* k : {"ExitFullscreen", "ToggleFullscreen", "ToggleFullscreenAlt",
+                          "TakeScreenshot", "ToggleFastForward", "ExitApplication"})
+        x += std::string("    <") + k + ">0 -1</" + k + ">\n";
+    x += "  </Hotkeys>\n";
+    x += "</content>\n";
+    if (!writeFile(config + "/settings.xml", x)) {
+        *err = "could not write Cemu's settings in " + config;
+        return false;
+    }
+    // EACH PLAYER A PRO CONTROLLER, on their own virtual controller, in the
+    // console's order; and no profile for a seat nobody is in.
+    for (int p = 0; p < 8; ++p) {
+        const std::string file = config + "/controllerProfiles/controller" + std::to_string(p) + ".xml";
+        if (p >= players) {
+            ::unlink(file.c_str());
+        } else if (!writeFile(file, cemuProfile(p))) {
+            *err = "could not write Cemu's controller profile " + file;
+            return false;
+        }
+    }
+    return true;
+}
+
 }  // namespace
 
 const Emulator* find(const std::string& core) {
     for (const Emulator& e : kEmulators)
         if (core == e.core) return &e;
     return nullptr;
+}
+
+std::vector<const Emulator*> all() {
+    std::vector<const Emulator*> out;
+    for (const Emulator& e : kEmulators) out.push_back(&e);
+    return out;
 }
 
 bool installed(const Emulator& e) {
@@ -1440,6 +1637,7 @@ bool prepare(const Emulator& e, const std::string& entryPath, const std::string&
     if (std::strcmp(e.core, "xemu") == 0)
         return prepareXemu(e, entryPath, players, missingKeys, err);
     if (std::strcmp(e.core, "xenia") == 0) return prepareXenia(e, saveDir, err);
+    if (std::strcmp(e.core, "cemu") == 0) return prepareCemu(e, saveDir, players, err);
     *err = std::string("nothing prepares ") + e.core;
     return false;
 }
@@ -1450,6 +1648,9 @@ std::string saveRoot(const Emulator& e, const std::string& saveDir) {
     if (std::strcmp(e.core, "xemu") == 0) return saveDir + "/E";
     // Xbox 360: Edge's content root, `<XUID>/` and `0000000000000000/`.
     if (std::strcmp(e.core, "xenia") == 0) return xeniaContent(saveDir);
+    // Wii U: the games' save folders in this person's mlc, one per title,
+    // `<title low>/user/` and `<title low>/meta/`.
+    if (std::strcmp(e.core, "cemu") == 0) return cemuMlc(saveDir) + "/usr/save/00050000";
     if (std::strcmp(e.core, "rpcs3") == 0)
         return saveDir + "/hdd0/home/" + kPs3User + "/savedata";
     if (std::strcmp(e.core, "eden") == 0) {
@@ -1502,13 +1703,13 @@ uint32_t Run::pollXboxTitle() {
 
 bool beforeStart(const Emulator& e, const std::string& entryPath, const std::string& saveDir,
                  const std::string& player, const std::string& note, std::string* err) {
+    // The note first, in the person's folder: from here until the save is
+    // zipped, the emulator writes there and nothing has been sent.
+    if (e.notesPlaying && !writeFile(saveDir + "/" + kPlayingNote, note)) {
+        *err = "could not mark " + saveDir + " as playing";
+        return false;
+    }
     if (std::strcmp(e.core, "xenia") == 0) {
-        // The note first, in the person's folder: from here until the save
-        // is zipped, Edge writes there and nothing has been sent.
-        if (!writeFile(saveDir + "/" + kPlayingNote, note)) {
-            *err = "could not mark " + saveDir + " as playing";
-            return false;
-        }
         // AFTER the save came down, which may hold a profile file of its own
         // from another console or an older name: this one is who is here.
         const std::string tag = x360profile::gamertag(player);
@@ -1558,7 +1759,7 @@ bool afterEnd(const Emulator& e, const std::string& entryPath, const std::string
 }
 
 void finished(const Emulator& e, const std::string& saveDir) {
-    if (std::strcmp(e.core, "xenia") == 0) ::unlink((saveDir + "/" + kPlayingNote).c_str());
+    if (e.notesPlaying) ::unlink((saveDir + "/" + kPlayingNote).c_str());
 }
 
 std::string playingNote(const std::string& entryPath) {
@@ -1582,6 +1783,7 @@ bool Run::start(const Emulator& e, const std::string& romPath, const std::string
     frozen_ = false;
     sawGameTitle_ = false;
     titleCheckMs_ = 0;
+    errorCheckMs_ = 0;
     logCheckMs_ = 0;
     if (qmpFd_ >= 0) ::close(qmpFd_);
     qmpFd_ = -1;
@@ -1678,6 +1880,21 @@ bool Run::start(const Emulator& e, const std::string& romPath, const std::string
                      romPath,
                  })
                 full.push_back(a);
+        } else if (std::strcmp(e.core, "cemu") == 0) {
+            // ITS LOG under its home (XDG_DATA_HOME/Cemu); its settings and
+            // shader cache are there already, by the two above. ONLY THE
+            // VIRTUAL CONTROLLERS, as for xemu and Edge, with SDL told what
+            // each one is: Cemu (SDL 3) asks for gamepads, and its profiles
+            // bind them by GUID (prepareCemu). GTK on gamescope's Xwayland.
+            std::string db;
+            for (int p = 0; p < cab::vpad::kMaxPlayers; ++p) db += cab::vpad::sdlMapping(p) + "\n";
+            full.insert(full.end() - 1, "XDG_DATA_HOME=" + dir);
+            full.insert(full.end() - 1, "SDL_GAMECONTROLLERCONFIG=" + db);
+            full.insert(full.end() - 1, "SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT=0x1209/0xCAB0");
+            full.insert(full.end() - 1, "GDK_BACKEND=x11");
+            // `-g` starts the game with no game list and closes Cemu when it
+            // ends; `-f` is fullscreen.
+            full.insert(full.end(), {"-g", romPath, "-f"});
         } else {
             full.insert(full.end(), {"--no-gui", "--fullscreen", romPath});
         }
@@ -1908,6 +2125,21 @@ bool Run::poll() {
         // back (measured on Contra, which waited out the whole grace), and a
         // game that never started has nothing to write.
         if (failedLoad_ || froze_) {
+            stopAtMs_ = now;
+            kill9();
+        }
+    }
+
+    // ITS OWN ERROR BOX for a game it could not open (`errorBox`), which only
+    // some of its failures put in the log. Twice a second, in the same first
+    // minute.
+    if (!stopping() && watchLoad && emu_->errorBox && program_ > 0 &&
+        now - errorCheckMs_ >= 500) {
+        errorCheckMs_ = now;
+        if (gTitles.hasWindowTitled(program_, emu_->errorBox)) {
+            std::fprintf(stderr, "[standalone] %s could not open the game: its \"%s\" box is up\n",
+                         emu_->program, emu_->errorBox);
+            failedLoad_ = true;
             stopAtMs_ = now;
             kill9();
         }

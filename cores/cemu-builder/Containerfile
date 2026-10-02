@@ -1,0 +1,49 @@
+# The build environment for Cemu, the Wii U emulator, on Linux x86-64.
+#
+# SEPARATE FROM frontend/Containerfile AND FROM pcsx2-builder, for the reason
+# pcsx2-builder gives: a whole emulator's dependency list would slow every
+# other build to serve one thing.
+#
+# Fedora 44 for the same reason as the others: it is what Bazzite 44 is built
+# from, so every library the finished program still asks the system for is the
+# one the image has. Move it when the base moves.
+#
+# WHY CEMU'S OWN vcpkg AND NOT FEDORA'S LIBRARIES (the way Batocera builds it).
+# Cemu at the pin asks for wxWidgets 3.3 and fmt 12.1; Fedora 44 has 3.2.9 and
+# 11.2.0 (measured 2026-10-01). Cemu's own recipe builds its libraries with
+# vcpkg, pinned by the vcpkg submodule and vcpkg.json's baseline, and links
+# them in statically. What is left for the system is GTK, X11, sound, Bluetooth
+# and the like, every one of which the image already carries. So these
+# packages are what vcpkg's ports need to build, and the -devel packages for
+# what stays dynamic.
+FROM registry.fedoraproject.org/fedora:44
+
+# clang, as upstream's own Linux build uses (build.yml, clang-15 on Ubuntu).
+# vcpkg wants curl, zip, unzip, tar and git to fetch and unpack its ports, perl
+# for OpenSSL's, and autoconf, automake and libtool for a few others.
+RUN dnf install -y --setopt=install_weak_deps=False \
+        clang lld llvm cmake ninja-build git make pkgconf-pkg-config nasm \
+        curl zip unzip tar perl-core autoconf automake libtool python3 \
+        kernel-headers gtk3-devel libX11-devel libXext-devel libXrandr-devel \
+        libXi-devel libXcursor-devel libXinerama-devel libXxf86vm-devel \
+        mesa-libGL-devel mesa-libGLU-devel mesa-libEGL-devel freeglut-devel \
+        wayland-devel wayland-protocols-devel libxkbcommon-devel \
+        pulseaudio-libs-devel alsa-lib-devel \
+        bluez-libs-devel libusb1-devel systemd-devel \
+        libgcrypt-devel libsecret-devel glm-devel \
+    && dnf clean all
+
+# llvm for llvm-ar and llvm-ranlib: Cemu's release build links with LTO, and
+# CMake then archives with clang's own tools ("CMAKE_C_COMPILER_AR-NOTFOUND"
+# without them, A9, 2026-10-01). Cemu's BUILD.md lists it for Fedora.
+#
+# glm-devel because CMake found no glm configuration from vcpkg at this pin
+# ("Could not find a package configuration file provided by glm", A9,
+# 2026-10-01); upstream's Linux build installs the system's too (libglm-dev in
+# build.yml). Header-only, so nothing of it is linked.
+#
+# WHAT THE MISSING ONES LOOK LIKE, so the next person does not chase them:
+# without pulseaudio-libs-devel cubeb builds with no backend at all and Cemu is
+# silent with "Cubeb: available" in its log (the shape PCSX2's builder warns
+# of); without gtk3-devel vcpkg's wxWidgets port fails at its configure step.
+WORKDIR /src

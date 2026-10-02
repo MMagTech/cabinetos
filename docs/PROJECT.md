@@ -14490,6 +14490,22 @@ files. Left 4 Dead 2 was replaced on RomM with its plain ISO.
 
 Not yet: rumble on a real pad, and MMagTech's look on the TV.
 
+#### Forza Horizon 2 "washed out", "the white a bit too much" (MMagTech, 2026-10-01)
+
+Researched read-only, then compared on the TV. **No setting is off.**
+gamescope passes SDR through untouched (its shaper and 3D colour tables
+measured identity on the A9, HDR off); amdgpu sends full-range RGB
+("Broadcast RGB" Automatic); every Xenia colour and gamma cvar is at its
+default, as Batocera leaves them (`kernel_display_gamma_type` 2, BT.709,
+chosen upstream as "the closest to the Xbox 360 connected to an HDTV"). The
+one Xenia approximation that touches highlights is the performance render
+path's float16 stand-in for the 360's 7e3 targets, so Forza was played once
+with `--render_target_path=accuracy` (confirmed on Xenia's command line):
+MMagTech, "looks the same to me". It is the game as Xenia draws it. The
+console stays on `performance`. Not done, and only worth doing if anything
+else ever looks off: a black-level pattern through a core, which would show
+a range or TV setting affecting everything.
+
 ### 35. Wii (Dolphin), issue #173
 **Researched and decided with MMagTech 2026-09-30.** Research only; no code.
 
@@ -14784,3 +14800,115 @@ HOME button (R3) and its "Wii Menu" choice; GameCube unchanged.
 | GameCube | "gamecube was good" (Ikaruga; its card up as before) |
 | The HOME menu (R3) | opens and is driven with the stick. **"Wii Menu", then Yes: a black screen.** No Wii Menu is installed; Dolphin says so only in a log category the libretro core never passes on, because the core turns alerts off. The pause menu gets out. **Decided, MMagTech:** HOME stays as it is, so nothing has to be reversed when upstream fixes it; the fallback (withholding R3 from Wii games) is written out in full in #203. Asked of upstream with his go: libretro/dolphin#508 |
 | Dolphin's log | Mario Kart Wii writes "Oversized EFB copy" about sixty times a second at Dolphin's default level: #204 |
+| Mario Kart Wii "not as fast as 150cc should be" (MMagTech, 2026-10-01) | **measured correct.** Headless on the A9: Dolphin declares 59.94 fps and 32,000 Hz (PAL60 on, the PAL release RMCP01); 3,600 frames are 60.06 s of picture and the sound made over them 60.04 s, within 0.03%, so the console's speaker pacing runs it at true speed. MMagTech: used to modern games; it is fine. A race was not measured (no input headless) |
+
+### 36. Wii U (Cemu), issue #174
+**Researched 2026-10-01 (the research is on #174); decided with MMagTech the
+same day.** No code yet. Most of question 35 carries over; what follows is only
+what is new or different.
+
+#### DECIDED, MMagTech 2026-10-01
+
+| | Decided |
+|---|---|
+| The emulator | **Cemu main, built from source at a pinned commit** in a builder of our own, as PCSX2. Chosen for every machine, not the A9: Cemu #1176 (Vulkan texture and shadow corruption on v2.6) is reported on Radeon 780M, 880M and 890M integrated graphics, the chips in most current handheld PCs and AMD mini PCs, and reported fixed on main. Batocera builds main at a pin. Rejected: v2.6 (2025-02-06, what Flathub, EmuDeck and RetroDECK ship), because of #1176. The A9 test confirms main runs and that the corruption is gone on main; it does not choose |
+| Which games play on a pad | **Wii's rule.** A game GameTDB (`wiiutdb`) says takes a Pro Controller or a Classic Controller plays. A game that takes only the GamePad is greyed, "Needs a Wii U GamePad", which nothing can provide. Captain Toad: Treasure Tracker is greyed. Derived from the rule, as for Wii: a game GameTDB does not list counts as needing the GamePad |
+| Wii Remotes in Wii U games | **Wii's rule**: a game that needs a Remote is greyed, "Needs a Wii Remote", while no Remote is paired, and plays once one is. How Cemu takes a real Remote is checked in #200 with MMagTech's Remotes |
+| Graphic packs | **None now; not a hard no for later** (MMagTech, after the facts below; #207, After first release). Cemu has no resolution setting of its own; it renders sharper only through a community pack written for each game: 75 games have one out of about 2,860, about 8.5 MB together (Hyrule Warriors' is 7 text files, 57 KB), and the image would carry a pinned copy, not the user. MMagTech: it is not the same as the other systems' resolution setting, and problems in community packs would come to us as issues that are not ours. The fix packs (17, `Workarounds`) are decided with them in #207, not separately: MMagTech noted they do not patch Cemu and are not ours to maintain; against that, they are community-written, and Cemu itself leaves 16 of the 17 off until a player ticks one (only a Kirby Rainbow Curse fix declares `default = 1`), some for one graphics card only (Hyrule Warriors' for NVIDIA, a Wind Waker one for Intel), so using them means choosing per game and per card. Wii U renders at its own 720p with no packs |
+| Picture quality (#63), for every system | **MMagTech's rule: the quality setting uses only settings that need no external files**, for every core. Nothing downloaded or shipped per game to make a level work |
+
+#### Carried over from Wii (question 35) unchanged
+
+GameTDB as the only source of which games play; the emulator's own per-game
+settings ship in the image from `/usr` (Cemu's `gameProfiles/default`, 236
+files at `4e3c824faa`, as Dolphin's `Sys`); one shader cache per console;
+on-screen messages off; Vulkan on the Radeon; saves per person per game,
+synced as a zipped folder; a test launch with the real account shows on
+Home's Recent shelf; leaving to the system menu (none installed) should end
+the game. Different from Wii: Cemu is a program of its own on `standalone.h`,
+as Xenia is, not a libretro core.
+
+#### Hand test on the A9, MMagTech at the TV, 2026-10-01
+
+Cemu main `4e3c824` (upstream's CI AppImage, by hand: `~/wiiu/tw.sh`, the
+console frozen underneath), Hyrule Warriors from RomM (one 7.65 GB `.wua`).
+v2.6 was not run: the decision is main, so it would answer nothing.
+
+| | Result |
+|---|---|
+| Start | `-g <file> -f`, straight into the game: no wizard, no menu bar, no dialog. Vulkan on the Radeon 890M (RADV, Mesa 26.2.2) without naming a device |
+| One `.wua` | base, update v208 and DLC all mounted from the one file (`DLC: ... [WUA] [0005000c1017d800_v208]`) |
+| DLC | the game handed out its DLC content on first start ("Weapon obtained: Epona!", a Master Quest item), with no graphic pack. The file carries what the DLC check needs. Adventure Mode's DLC maps not seen: it is locked on a fresh save until the first Legend Mode battle |
+| Picture | MMagTech: "working fine graphically". No sign of #1176. A full battle not played |
+| Sound | **silent at first: Cemu opens no sound at all when `Audio/TVDevice` is empty** (`IAudioAPI::CreateDeviceFromConfig` returns nothing). `default` is Cemu's own "Default Device", the system's output on any machine; with it MMagTech heard the game. The console chooses no output of its own, so Cemu follows the same one as everything else |
+| Sound effects | Cemu logs that the game uses an effect it plays fully only with `snd_user.rpl` and `snduser2.rpl` from a Wii U's firmware; Nintendo's files, not shippable. Matches Cemu #1086 (Hyrule Warriors effects sound poor). A known gap |
+| Account and save | `80000001` made silently; the save is `mlc/usr/save/00050000/1017d800/user/80000001/ProjectZ-SAVEDATA/APP.BIN` (3 MB) plus `meta/`, written during play. `usr/save/system/pdm` (play statistics) is not progress |
+| Closing | through the window, twice: gone in under 10 s, exit 0, save intact |
+| The save read back | the second start (after the sound fix) showed no DLC cards, and Legend Mode had the character MMagTech picked in the first session: the game read its save. His menu save then wrote `APP.BIN` at 07:51:17 |
+| Cemu's "Save path ... (not present)" | **wrong on Linux**: it checks `1017D800` (capitals) with a plain, case-sensitive check, while the folder is `1017d800`; the game's own file layer ignores case. The console must look for the lowercase folder when it syncs |
+| Where things go | the log `$XDG_DATA_HOME/Cemu/log.txt`; the shader cache `$XDG_CACHE_HOME/Cemu/shaderCache/` (`transferable`, `precompiled`, `driver/vk`; 4.5 MB after one session) |
+| Pads | Cemu main is SDL3; a profile binds a pad by SDL3's GUID (`0_<guid>`), Batocera's Pro Controller mapping, `SDL_JOYSTICK_HIDAPI=0` as Batocera |
+| The screen | the console's X display is not always `:0` (`:1` that day); take it from the frontend |
+
+Not judged: a full battle.
+
+#### What was built, 2026-10-01
+
+- **Cemu from source** (`cores/build-cemu.sh`, `cores/cemu-builder/`): main at
+  `4e3c824faa`, by Cemu's own recipe (vcpkg, clang) in a Fedora 44 container.
+  Not Fedora's libraries, as Batocera uses its distribution's: Cemu at the pin
+  needs wxWidgets 3.3 and fmt 12.1, and Fedora 44 has 3.2.9 and 11.2.0. vcpkg
+  is a submodule and `vcpkg.json` names its baseline, so the pin fixes every
+  library's version; they are linked in statically, and what the program
+  still asks the system for (GTK 3, X11, PulseAudio, BlueZ and the like) the
+  image already has (checked on the A9). Options as upstream's, less Discord,
+  GameMode and portable mode. CI: `build-cemu.yml`, called by `build.yml`
+  like PlayStation 2's, cached on the script and the Containerfile; the
+  payload's `cemu/` goes to `/usr/lib/cabinetos/cemu` (`install-cemu.sh`),
+  laid out as `bin/Cemu` and `share/Cemu/{gameProfiles,resources}`.
+- **The row** in `standalone.cpp`: `closesByWindow`, the log watched for
+  "Mounting failed" and "Unable to find RPX executable", and a new field,
+  `errorBox`: Cemu says "Unable to launch game because the base files were
+  not found" and its other `-g` failures only in a desktop box titled
+  "Error", so a window of Cemu's with that title in the first minute is a
+  failed load. "Unrecoverable error in Vulkan" mid-game is a crash. No title
+  watch: started with `-g`, Cemu closes itself when the game ends.
+- **`prepareCemu`** writes `settings.xml` whole before every start (the
+  settings above, `TVDevice` `default`, the console's GPU by its UUID, now
+  read in `gpu.cpp`) and one profile per player: a Pro Controller on that
+  player's virtual controller (vpad.h), bound by SDL 3's GUID, which is the
+  same in Cemu and the console. Buttons by position, as Switch's are here;
+  the Pro Controller's HOME left off, since Guide is the pause menu. Rumble
+  on, through the console's own Rumble switch. Cemu's keyboard shortcuts (Escape
+  leaves fullscreen, F11, Alt+Enter, F12), all on by default, are written
+  off, so a keyboard plugged into the console reaches none of them.
+- **Saves**: the mlc is `<saveDir>/mlc`, and what travels (tag `cemu`) is
+  `mlc/usr/save/00050000/`, Cemu's own layout. Xbox 360's note that a game
+  is running in the person's folder is now a field, `notesPlaying`, set for
+  Xenia and Cemu, and the start-up check that sends a save a power cut left
+  behind runs for both.
+- **Which games play** (`wiiu.h`, `tools/wiiu-controls.py`,
+  `wiiu-controls.txt`, 2,860 GameTDB entries): GameTDB keys on the product
+  code (`BWPE01`, `WKNE`), RomM has only the title ID, and GameTDB lists no
+  title IDs. So the console reads the product code out of the game's own
+  `meta/meta.xml`, from the end of the `.wua` in HTTP ranges, before any
+  download, and remembers it (`config/wiiu-codes.txt`). Only `.wua`, the
+  format this console takes for Wii U. Measured: Hyrule Warriors `BWPE` in
+  5 reads, 434 KB (plays); Captain Toad `AKBE`, GamePad only (greyed,
+  "Needs a Wii U GamePad"), read through RomM by the console.
+
+#### Judged on the TV through the console, MMagTech 2026-10-01 (the loop build, not an image)
+
+The loop's frontend with `CABINETOS_BINARY_cemu` pointing at the Cemu built
+on the A9 by `cores/build-cemu.sh`.
+
+| | Result |
+|---|---|
+| The Wii U grid | four games; the console read all four product codes through RomM (`AKBE`, `BWPE`, `WKNE`, `AS2E`); Captain Toad greyed, "Needs a Wii U GamePad" (MMagTech: "yes it was greyed out") |
+| Hyrule Warriors | downloaded (7.65 GB), straight into the game; MMagTech: "hyura works" |
+| Pause menu, Quit | Cemu frozen and thawed; asked through its window, exit 0 after 717 s; the save (3 files) zipped and uploaded, tag `cemu` |
+| Started again | the save came down first ("holds 3 file(s) at launch"); no DLC cards, the same character: "worked" |
+| What RomM holds | `Hyrule Warriors.zip`, `1017d800/meta/{meta.xml,iconTex.tga}` and `1017d800/user/80000001/ProjectZ-SAVEDATA/APP.BIN`: Cemu's own layout |
+
+**Next:** push, the first CI build of Cemu, the testing image, and
+MMagTech's judgement on it before any merge.

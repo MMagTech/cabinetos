@@ -85,9 +85,11 @@ enum class Support {
     // behind them — the next core that wants desktop GL will be the first.
     NeedsHardwareRender,
     // The console runs this system, and THIS GAME was made for a controller
-    // nobody has paired. Wii today: a game that takes neither a Classic
-    // Controller nor a GameCube pad needs a real Wii Remote (wii.h; docs/
-    // PROJECT.md open question 35). The only answer that is about one game
+    // nobody has paired. Wii: a game that takes neither a Classic Controller
+    // nor a GameCube pad needs a real Wii Remote (wii.h; docs/PROJECT.md open
+    // question 35). Wii U: one that takes neither a Pro nor a Classic
+    // Controller needs a Wii Remote or the GamePad (wiiu.h; open question 36).
+    // The only answer that is about one game
     // rather than its whole platform, so a platform's grid shows it, greyed
     // and saying why, rather than leaving it out.
     NeedsController,

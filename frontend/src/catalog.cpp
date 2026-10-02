@@ -3,6 +3,7 @@
 #include "gpu.h"
 #include "standalone.h"
 #include "wii.h"
+#include "wiiu.h"
 
 #include <sys/stat.h>
 
@@ -91,6 +92,9 @@ const Entry kTable[] = {
     {"ps3",                  nullptr,     Support::Playable, "rpcs3",           nullptr},
     {"xbox",                 nullptr,     Support::Playable, "xemu",            nullptr},
     {"xbox360",              nullptr,     Support::Playable, "xenia",           nullptr},
+    // Wii U in Cemu. Which games play on a pad is per game, in coverageFor
+    // below (wiiu.h), as for Wii.
+    {"wiiu",                 nullptr,     Support::Playable, "cemu",            nullptr},
 
     // A core exists and Cabinet does not ship it. The manifest says so in as
     // many words — "iOS-only by decision" — and there is no tvOS build, which
@@ -300,7 +304,7 @@ bool snapshotsAllowed(const char* core) {
     if (!core) return true;
     // True to the machines: memory-card consoles, and everything after them.
     static const char* const kNoSnapshots[] = {"pcsx2", "dolphin", "eden", "rpcs3", "xemu",
-                                               "xenia"};
+                                               "xenia", "cemu"};
     for (const char* c : kNoSnapshots)
         if (std::strcmp(c, core) == 0) return false;
     return true;
@@ -358,6 +362,10 @@ const char* saveTag(const char* core) {
         // (x360profile.h), which drops into any Xenia. No Cabinet app plays
         // Xbox 360 either.
         {"xenia", "xenia"},
+        // Wii U, in Cemu: a zip of the person's `usr/save/00050000/` for the
+        // game, `<title>/user/` and `<title>/meta/` in Cemu's own layout, which
+        // drops into any Cemu's mlc01. No Cabinet app plays Wii U either.
+        {"cemu", "cemu"},
     };
     const std::string name = manifestName(core);
     for (const auto& t : kSaveTags)
@@ -457,6 +465,21 @@ Coverage coverageFor(const romm::Game& g) {
         wii::padDevice(wii::codeFromTitleId(g.titleId)) == 0) {
         c.support = Support::NeedsController;
         c.reason = "Needs a Wii Remote";
+    }
+    // A Wii U game that takes neither a Pro nor a Classic Controller was made
+    // for the GamePad or the Wii Remote (wiiu.h).
+    if (c.support == Support::Playable && g.platformSlug == "wiiu") {
+        switch (wiiu::needs(g.productCode)) {
+            case wiiu::Needs::Nothing: break;
+            case wiiu::Needs::WiiRemote:
+                c.support = Support::NeedsController;
+                c.reason = "Needs a Wii Remote";
+                break;
+            case wiiu::Needs::GamePad:
+                c.support = Support::NeedsController;
+                c.reason = "Needs a Wii U GamePad";
+                break;
+        }
     }
     return c;
 }

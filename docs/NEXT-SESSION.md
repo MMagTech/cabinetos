@@ -11,24 +11,21 @@ specification is `docs/PROJECT.md`; the order is `docs/ROADMAP.md`.
 
 ## Where things stand
 
-Wii is merged (#173, in #205; PROJECT.md open question 35): pad games play,
-Remote games greyed until #200. Xbox 360 (#192), Xbox (#172), PS3 (#171) and
-Switch (#169, #170) play as programs of their own on `standalone.h` and
-`vpad.h`. Check `bootc status` on the A9 for the image it runs. Before any
-testing push that adds or changes an install script, run it on the A9 on the
-image and check it as `cabinet` (memory). **Never tell MMagTech something is
-unrecoverable or safe to delete before every cause is checked** (memory).
+Wii is merged (#205). **Wii U (#174) passed on the TV through the console
+(the loop build) on 2026-10-01** and is on branch `wiiu-cemu`, pushed to
+`testing` for its image. Decisions, what was built and what he judged:
+`docs/PROJECT.md` open question 36. Check `bootc status` on the A9 for the
+image it runs. **Never tell MMagTech something is unrecoverable or safe to
+delete before every cause is checked** (memory).
 
 ## Next: milestone 2, New systems
 
-1. **#174 Wii U (Cemu).** The research is done and posted on #174 (Cemu's
-   source at `4e3c824faa`, Batocera, GameTDB, the four games on RomM, now
-   found again under `Nintendo Wii U/roms`). Start by walking it through
-   with MMagTech and taking the four decisions listed there: which Cemu
-   (v2.6 or main built from source; test both on the A9 first, Cemu #1176),
-   GamePad-only games (Captain Toad), graphic packs, Wii Remotes in Wii U
-   games. Then a hand test on the A9, as Xbox 360 had, then build on
-   `standalone.h`. *Lessons: emulators.*
+1. **#174 Wii U: the testing image.** Check the first CI build of Cemu
+   (`build-cemu.yml`, uncached; on the A9 its libraries took 8.7 min at 24
+   cores), then `bootc upgrade` the A9 to `testing` and have MMagTech run
+   the same steps from the image itself: Wii U grid (Captain Toad greyed),
+   Hyrule Warriors (pad, sound), save, Quit, start again (save back). Merge
+   only on his explicit go, then close #174. *Lessons: emulators.*
 2. **#204**, Dolphin's log level: one line, with the next testing push.
 3. **#200**, real Wii Remotes, when MMagTech's Remotes arrive (2026-10-03):
-   the test list is in the issue.
+   the test list is in the issue, now with a Cemu check (item 6).
