@@ -96,6 +96,7 @@
 #include "files.h"
 #include "drives.h"
 #include "players.h"
+#include "powerprofile.h"
 #include "playtime.h"
 #include "shortcuts.h"
 #include "rewind.h"
@@ -10755,6 +10756,8 @@ int main(int argc, char** argv) {
 
 
     while (running) {
+        // Full speed while any game runs, balanced on Home (powerprofile.h).
+        powerprofile::update(playing || standaloneRun.active());
         SDL_Event e;
         while (SDL_PollEvent(&e)) {
             // THE EMULATOR HAS THE TELEVISION AND THE CONTROLLERS. Nothing here

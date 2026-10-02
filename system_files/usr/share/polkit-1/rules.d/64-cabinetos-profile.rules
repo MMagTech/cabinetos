@@ -1,0 +1,20 @@
+// Let the console switch tuned's power profile: full speed while a game runs,
+// balanced on Home. frontend/src/powerprofile.h; issue #150.
+//
+// tuned's own policy already allows this to an active session
+// (`com.redhat.tuned.switch_profile`: allow_active yes), so this rule changes
+// nothing while the console's session is the active one. It is here so the
+// switch does not depend on logind's idea of "active", which a console with
+// nobody at a desktop does not always meet: its CanSuspend answers
+// "challenge" on the A9.
+//
+// `subject.local`, as in 60-cabinetos-network.rules: the console on its own
+// seat, not an SSH session.
+
+polkit.addRule(function(action, subject) {
+    if (action.id == "com.redhat.tuned.switch_profile" &&
+        subject.user == "cabinet" &&
+        subject.local) {
+        return polkit.Result.YES;
+    }
+});

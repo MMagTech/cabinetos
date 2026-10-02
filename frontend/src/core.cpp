@@ -1,4 +1,5 @@
 #include "core.h"
+#include "cpus.h"
 #include "ps2.h"
 
 #include <dlfcn.h>
@@ -1282,6 +1283,7 @@ void Core::setRefuseHWRender(bool on) { gRefuseHWRender = on; }
 
 
 void Core::unload() {
+    cpus::gameEnd();
     if (!handle_) return;
     if (gameLoaded_) unloadGame();
     if (gIsPs2) {
@@ -1313,6 +1315,13 @@ bool Core::loadGame(const std::string& romPath, const std::string& systemDir,
         error_ = "no core loaded";
         return false;
     }
+    // Before the emulator starts its threads, so they inherit the fast cores
+    // (cpus.h, #163). A game that fails to start hands them back.
+    cpus::gameStart();
+    struct Placed {
+        bool started = false;
+        ~Placed() { if (!started) cpus::gameEnd(); }
+    } placed;
     if (gIsPs2) {
         // THE CARD IS NAMED FROM THE ROM, HERE, BY THE SAME RULE main.cpp USES
         // FOR EVERY OTHER SAVE. `catalog::saveFiles` says a PlayStation 2 card
@@ -1364,6 +1373,7 @@ bool Core::loadGame(const std::string& romPath, const std::string& systemDir,
         // figure and a PAL disc simply runs at its own rate underneath.
         av_.fps = 60.0;
         av_.sampleRate = 48000.0;
+        placed.started = true;
         return true;
     }
     gSystemDir = absoluteDir(systemDir);
@@ -1519,11 +1529,14 @@ bool Core::loadGame(const std::string& romPath, const std::string& systemDir,
     std::fprintf(stderr, "[core] loaded %s\n", romPath.c_str());
     std::fprintf(stderr, "[core] %ux%u, %.4f fps, %.0f Hz, aspect %.4f\n", av_.baseWidth,
                  av_.baseHeight, av_.fps, av_.sampleRate, av_.aspectRatio);
+    placed.started = true;
     return true;
 }
 
 void Core::unloadGame() {
     rumble::reset();
+    // Home is back on every core, whatever happens below (cpus.h).
+    struct BackOnAllCores { ~BackOnAllCores() { cpus::gameEnd(); } } allCores;
     if (gIsPs2) {
         if (!gameLoaded_) return;
         // BLOCKS until PCSX2 has actually stopped, which is what makes the

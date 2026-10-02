@@ -1,5 +1,7 @@
 #include "proc.h"
 
+#include "cpus.h"
+
 #include <dirent.h>
 #include <fcntl.h>
 #include <poll.h>
@@ -57,6 +59,8 @@ Result run(const std::vector<std::string>& args, int timeoutSeconds,
     }
     if (pid == 0) {
         // The child: a few dups and an exec, and nothing that can throw.
+        // On every core, even when it was started from the game's thread.
+        cpus::childOnAllCores();
         dup2(outPipe[1], STDOUT_FILENO);
         dup2(errPipe[1], STDERR_FILENO);
         close(outPipe[0]); close(outPipe[1]);
@@ -139,6 +143,8 @@ int spawn(const std::vector<std::string>& args, const std::string& logPath) {
     if (pid < 0) return -1;
     if (pid == 0) {
         setsid();
+        // A separate emulator is not placed (cpus.h): every core.
+        cpus::childOnAllCores();
         const int devnull = open("/dev/null", O_RDONLY);
         if (devnull >= 0) { dup2(devnull, STDIN_FILENO); close(devnull); }
         const int log = open(logPath.c_str(), O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0644);
