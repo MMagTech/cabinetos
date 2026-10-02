@@ -11,26 +11,42 @@ specification is `docs/PROJECT.md`; the order is `docs/ROADMAP.md`.
 
 ## Where things stand
 
-Milestone 2 is done but for real Wii Remotes. Wii U is merged (#208; open
-question 36). Check `bootc status` on the A9 for the image it runs. **Never
-tell MMagTech something is unrecoverable or safe to delete before every
-cause is checked** (memory).
+Milestone 3 is under way on branch `fast-cores` (local, not pushed). The A9
+runs its image, on `balanced`, nothing deployed by hand. **Never tell
+MMagTech something is unrecoverable or safe to delete before every cause is
+checked** (memory).
 
-## Next: milestone 3, Settings: picture
+Measured 2026-10-01, written up on the issues:
+- **#163:** amd_pstate's `prefcore` reads disabled because AMD's HFI driver
+  owns the ranking, and the scheduler has it. A paced game still lands on
+  the slow cores (Dolphin 96%), costing 20 to 36% more work per frame.
+  Built: `frontend/src/cpus.{h,cpp}`, games inside the console on the fast
+  cores; Dolphin and Flycast measured 100% there. Separate emulators
+  untouched (proc children start on every core).
+- **#150:** no consistent difference at 1x, 3x or 4K on GameCube; the noise
+  was #163. The heavy separate emulators are not measured yet.
 
-The automatic quality design is recorded (PROJECT.md, "REVISED,
-MMagTech 2026-10-01", after open question 31; #63 with its checklist).
-Nothing of it is built. Start with what its measurements depend on:
+## Next: one TV session with MMagTech (about 20 minutes, agreed)
 
-1. **#150**, Bazzite's performance profile while a game runs, balanced on
-   Home. Measure first, on the A9, with a heavy game. *Lessons: image and CI,
-   testing.*
-2. **#163**, emulators on the fast cores: find first why the kernel's
-   preferred-core use is off on the A9.
-3. Then **#63 phase 1**: the dial, the fixed tables, #209 (VRR and vsync,
-   with its three TV tests), designed with #73 and #122 for the pause menu.
+Plan as given to him; tell him the steps again and wait for "go".
+Deploy the branch with `tools/ui-loop.sh`, restore with `--restore` after.
+
+1. GameCube Burnout, a minute, Exit to Home: plays as normal.
+2. PS2 Burnout 3, a minute, Exit to Home. Check with
+   `~/perf150/where.py <pid> 30` that PCSX2's threads are on the fast cores
+   (the `--core/--rom` path does not boot PS2 headless, so this is the only
+   check) and `[cpus] back on every core` in the journal after.
+3. Mario Kart 8 Deluxe, three races on one track (Time Trial): as today,
+   then `sudo tuned-adm profile throughput-performance-bazzite`, then back
+   to `balanced` and `taskset -a -c -p 0-3,12-15 <eden pid>`. Log each race
+   with `~/perf150/frames.py 120 <label>` (gamescope's frame times, read
+   from the mangoapp message queue nobody else reads) plus `where.py`.
+   Restore `balanced` after.
+
+Then: decide #150 and whether separate emulators get the fast cores, with
+MMagTech; testing push and his judgement before any merge.
 
 Also open, not in the way:
-- **#200**, real Wii Remotes, when the hardware arrives (it may not on
-  2026-10-03); one TV session.
+- **#200**, real Wii Remotes, when the hardware arrives; one TV session.
 - **#204**, Dolphin's log level, one line, with the next testing push.
+- Then **#63 phase 1**: the dial, the fixed tables, #209.
