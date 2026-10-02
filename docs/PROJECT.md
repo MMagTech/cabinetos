@@ -13984,6 +13984,30 @@ the drop rule, record-only first. Before phase 1: #150 and #163 (busy time
 is wrong without them), both moved into milestone 3. Before phase 3: #168
 (an 18.6 ms N64 rewind snapshot reads as struggle) and #210.
 
+#### DECIDED, MMagTech 2026-10-02: fast cores and full speed in games (#163, #150)
+
+Built on branch `fast-cores`; measurements on the issues.
+
+- **#163, built-in games on the fast cores.** amd_pstate's `prefcore` reads
+  disabled by design: AMD's HFI driver owns the ranking and the scheduler has
+  it. Steady work follows it; a game, which sleeps every frame, does not
+  (Dolphin 96% on the slow cores, 20 to 36% more work per frame there, and a
+  different cost every launch). So while a game runs inside the console its
+  threads are held on the fast cores (`cpus.h`), Home on every core. Fast
+  cores found by top clock (any processor); all alike, or fewer than 4 fast:
+  nothing. Pinned rather than nudged because Linux has no "prefer" for this.
+  Also faster with shaders built from nothing (worst stall 129 ms against 181).
+- **Separate emulators stay on every core.** Mario Kart 8 Deluxe on the fast
+  cores: same CPU time, same 6 frames over 20 ms. No gain, and they may want
+  more than 8 threads.
+- **#150, Bazzite's performance profile while any game runs, balanced on
+  Home** (`powerprofile.h`, tuned over D-Bus, `64-cabinetos-profile.rules`).
+  On the A9 nothing visible (GameCube: no difference; Mario Kart: 0 frames
+  over 20 ms against 6, 11% less CPU time). Built for #63, whose busy reading
+  is a tenth high on balanced, and for the weaker machines and heavier loads
+  to come. About 1 W, only while playing. MMagTech: "the next steps are where
+  it would probably have the most impact."
+
 ### 32. Standalone emulators as games, starting with Switch (Eden)
 **Raised by milestone 2 (#169, #170). Researched 2026-09-28; four decisions
 taken the same day. Nothing built yet: nothing below has been launched.**
