@@ -14040,7 +14040,11 @@ game, each off until a setting turns it on (mainly `Widescreen 16:9` and
 it**: they come from `GameIndex.yaml`, which is in the image (240 games with
 patches; Patch.cpp:727-733).
 
-**Decided: ship it, pinned in the image, with the widescreen patches on.**
+**Decided: ship it, pinned in the image, with the widescreen and no-interlacing
+patches on.** Both switch patches on by name, game by game (Patch.cpp:597-611):
+a game with no such patch in the file is left exactly as it was, 4:3 and
+PCSX2's normal deinterlacing; nothing is stretched (the aspect changes only
+when a game's own patch asks, Patch.cpp:823-828).
 MMagTech: the other systems' widescreen settings stretch every game the same
 way and distort it; PS2's are written and checked per game by the PCSX2 team,
 meant not to distort. So the rule for every system is: **a change to the game
