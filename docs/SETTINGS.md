@@ -650,7 +650,13 @@ right there and the choice is about a system:
   colours. MMagTech's condition: every one of Cabinet's choices.
 - Game Boy colours, GBA screen colours and blending, Atari 2600 flicker
   blending, Vectrex overlays.
-- Controller type: Mega Drive 3 or 6 button, PC Engine 2 or 6 button.
+- ~~Controller type: Mega Drive 3 or 6 button, PC Engine 2 or 6 button.~~
+  **Dropped, MMagTech 2026-10-02.** Mega Drive: Genesis Plus GX picks 3 or 6
+  buttons per game itself when handed a plain pad, as this console does (read
+  in source, not tested). PC Engine: stays on 2 buttons, its default; one
+  switch per system would be wrong for some games either way, and choosing
+  per game would need a list of games, which the no-per-game-fixes rule rules
+  out. Cabinet's option is not carried over.
 - Shader and glow, as already decided.
 
 **To build, #73.**
