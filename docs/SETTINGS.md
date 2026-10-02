@@ -650,8 +650,20 @@ right there and the choice is about a system:
 - **Virtual Boy:** 3D glasses (Off, red and blue, red and cyan, red and
   electric cyan, green and magenta, yellow and blue) and all eight screen
   colours. MMagTech's condition: every one of Cabinet's choices.
-- Game Boy colours, GBA screen colours and blending, Atari 2600 flicker
-  blending, Vectrex overlays.
+- **Game Boy colours** (Off, Auto, Game Boy Color, Super Game Boy), for
+  original Game Boy games only: Gambatte ignores it for a Game Boy Color game.
+- **Narrowed with MMagTech 2026-10-02**, to these three rows on two systems:
+  - **GBA screen colours: dropped.** Cabinet's own notes say it shifted hues
+    wrongly on device and left it off pending a fix.
+  - **GBA blending: no row, fixed on Smart** (`mix_smart`, blends only pixels
+    that flicker), and **Atari 2600 flicker blending: no row, fixed on
+    Average** (`mix`). Each checked on a game known to flicker before it ships.
+  - **Vectrex overlays: dropped for now.** Not a core setting: Cabinet draws
+    each cartridge's sheet from its own images, none of which is built here.
+    Its own issue, after the first release.
+- **How the rows behave:** centred like every other button, "3D glasses: Off",
+  with an arrow at each edge when selected; they change instantly, in front
+  of the game.
 - ~~Controller type: Mega Drive 3 or 6 button, PC Engine 2 or 6 button.~~
   **Dropped, MMagTech 2026-10-02.** Mega Drive: Genesis Plus GX picks 3 or 6
   buttons per game itself when handed a plain pad, as this console does (read
