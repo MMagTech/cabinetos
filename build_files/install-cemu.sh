@@ -23,7 +23,10 @@ readonly SRC=/ctx/payload/cemu
 readonly DEST=/usr/lib/cabinetos/cemu
 
 log "Cemu $(cut -c1-10 "${SRC}/VERSION")"
-[[ -x "${SRC}/bin/Cemu" ]] || { log "ERROR: no Cemu in the payload at ${SRC}"; exit 1; }
+# A FILE, NOT AN EXECUTABLE, IN THE PAYLOAD: GitHub's artifact upload does not
+# keep permissions, so the program arrives without its execute bit (the first
+# testing build stopped here, 2026-10-02). It is set below, after the copy.
+[[ -f "${SRC}/bin/Cemu" ]] || { log "ERROR: no Cemu in the payload at ${SRC}"; exit 1; }
 
 rm -rf "${DEST}"
 mkdir -p "${DEST}"
