@@ -652,7 +652,12 @@ right there and the choice is about a system:
   colours. MMagTech's condition: every one of Cabinet's choices.
 - **Game Boy colours** (Off, Auto, Game Boy Color, Super Game Boy), for
   original Game Boy games only: Gambatte ignores it for a Game Boy Color game.
-- **Narrowed with MMagTech 2026-10-02**, to these three rows on two systems:
+- **Virtual Boy's two are ONE ROW, "Screen"** (MMagTech on the TV,
+  2026-10-02): the eight colours, Red first and by default, then the five 3D
+  pairs ("3D red/blue"). With glasses on the core draws in the glasses' two
+  colours and ignores the screen colour, so two rows let a person set a
+  colour that did nothing, and made the menu seven buttons long.
+- **Narrowed with MMagTech 2026-10-02**, to two rows on two systems:
   - **GBA screen colours: dropped.** Cabinet's own notes say it shifted hues
     wrongly on device and left it off pending a fix.
   - **GBA blending: no row, fixed on Smart** (`mix_smart`, blends only pixels

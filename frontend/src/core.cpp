@@ -208,7 +208,11 @@ bool gAnswerOptions = true;
 // and they are a different amount of work.
 bool gRefuseHWRender = false;
 
+// Set by Core::setOptionLive, answered once by GET_VARIABLE_UPDATE.
+bool gOptionsUpdated = false;
+
 void resetOptions() {
+    gOptionsUpdated = false;
     gDeclared.clear();
     gByKey.clear();
     gUndeclaredAsks.clear();
@@ -787,8 +791,12 @@ bool environment(unsigned cmd, void* data) {
             return true;
         }
 
+        // TRUE ONCE AFTER setOptionLive, so a core that re-reads its options
+        // on this picks the change up on its next frame. False otherwise, as
+        // it always was: options were only ever set before a game started.
         case RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE:
-            *static_cast<bool*>(data) = false;
+            *static_cast<bool*>(data) = gOptionsUpdated;
+            gOptionsUpdated = false;
             return true;
 
         // The core telling us what it can be configured with. Whichever
@@ -1295,6 +1303,17 @@ void Core::setOptionOverrides(const std::map<std::string, std::string>& override
         o.overridden = (it != gOverrides.end());
         o.chosen = o.overridden ? it->second : o.defaultValue;
     }
+}
+
+void Core::setOptionLive(const std::string& key, const std::string& value) {
+    gOverrides[key] = value;
+    auto it = gByKey.find(key);
+    if (it == gByKey.end()) return;
+    Option& o = gDeclared[it->second];
+    o.overridden = true;
+    o.chosen = value;
+    gOptionsUpdated = true;
+    std::fprintf(stderr, "[options] %s = %s, now\n", key.c_str(), value.c_str());
 }
 
 std::vector<Core::OptionReport> Core::options() const {

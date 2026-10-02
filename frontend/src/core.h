@@ -148,6 +148,13 @@ public:
     // wants something other than what the core ships with.
     void setOptionOverrides(const std::map<std::string, std::string>& overrides);
 
+    // One option changed WHILE THE GAME RUNS (the pause menu's system rows,
+    // #73): kept with the overrides, and the core is told on its next
+    // GET_VARIABLE_UPDATE that something changed, so it reads it again. Only
+    // for options the core applies live; one that says it needs a restart
+    // takes it at the next start.
+    void setOptionLive(const std::string& key, const std::string& value);
+
     // What the currently loaded core declared, in declaration order, with what
     // it was answered. This is the audit: it is the only way to see what a core
     // can be configured with, and what it is actually running on.
