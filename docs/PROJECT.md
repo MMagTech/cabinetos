@@ -14036,6 +14036,16 @@ choices are **Console setting** (every game starts here and follows Settings),
 Performance, Balanced and Quality. Rejected: a Settings change resetting every
 game's own choice, which would quietly undo choices made game by game.
 
+**Who sees Picture quality** (MMagTech, 2026-10-02): with a PIN set, only the
+owner, in Settings and in the pause menu, with no PIN asked; every other
+account sees no row at all. With no PIN, everyone sees it (the existing rule:
+no PIN, every account can do everything). The other PIN items still ask
+rather than hide, because they may need fixing while a child is signed in;
+picture quality is never urgent, and switching into the owner's account
+already asks for the PIN. Rejected: asking for the PIN on the pause menu's
+row, which would put the pad over a game for the first time. This reverses
+SETTINGS.md's "open to everyone: picture quality".
+
 **Starting level until phase 2:** every console starts on Performance (the
 design's rule for unknown hardware; nothing tells machines apart yet). The A9
 is set to Quality with the dial. Phase 2 lands in the same milestone, before

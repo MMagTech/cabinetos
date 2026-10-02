@@ -73,7 +73,9 @@ status here to Built.
   - Adding an account, and removing one
   - File access (turning it on, making a new password)
 
-  Open to everyone: sounds, picture quality, system update.
+  Open to everyone: sounds, system update. **Picture quality**, with a PIN
+  set, is seen only by the owner, in Settings and the pause menu, and
+  never asks; with no PIN, by everyone (MMagTech, 2026-10-02, #63).
   **Adding an account needs the PIN when one is set**, from the account
   panel and from Settings alike. MMagTech, 2026-09-24: otherwise anyone
   holding the controller can add themselves. With no PIN, anyone can add one,
@@ -275,7 +277,10 @@ Decided with MMagTech 2026-09-26, from the things people will actually do.
 ## Display and Sound
 
 - **Picture quality:** Performance, Balanced or Quality for the whole console,
-  and a game's pause menu can override it for that game. **To build, #63.**
+  and a game's pause menu can override it for that game (Console setting,
+  Performance, Balanced, Quality; from the game's next start). With a PIN
+  set, only the owner sees it. **To build, #63.** Record: PROJECT.md, the
+  #63 decisions of 2026-10-02.
 - **Appearance:** Standard, Dark or Scheduled, the console's, in
   `config/settings.json`. Dark turns the menus down, never the game.
   Scheduled adds one **Dark hours** row (8 PM to 7 AM to start) that opens
