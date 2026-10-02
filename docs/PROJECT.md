@@ -14003,7 +14003,11 @@ RetroArch and Batocera:
    measured warm on the A9 before it is written into the table.
 3. **Shader compiling:** synchronous (a short stutter the first time) at
    Performance; in the background at Balanced and Quality. Today only Dolphin
-   and Eden compile synchronously.
+   and Eden compile synchronously. **Only those two follow the level**
+   (2026-10-02, the assistant's call, accepted by MMagTech): RPCS3, Xenia and
+   Cemu stay on background building at every level, their makers' default,
+   because their games make far more shaders and building each when first
+   needed would stutter through a game's first hour.
 
 **The values that follow from the targets** (each emulator's own "~1080p" and
 "~4K" labels where it has them), to be measured before they are written:
