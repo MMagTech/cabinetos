@@ -6551,6 +6551,9 @@ int main(int argc, char** argv) {
         std::function<void(int)> apply;
     };
     std::vector<PauseChoice> pauseChoices;
+    // Frames to run while paused so a system row's change shows behind the
+    // menu (the frame loop, `redrew`).
+    int pauseRedrawFrames = 0;
     // The pause menu's items for THIS game, built each time it opens: the two
     // state items only where the system has snapshots. PlayStation 2 and
     // GameCube get Resume, Screenshot and Exit to Home, and nothing to press
@@ -10795,10 +10798,11 @@ int main(int argc, char** argv) {
                     c.current = sysopts::chosen(session.platformSlug, o);
                     const std::string slug = session.platformSlug;
                     const sysopts::Option* opt = &o;
-                    c.apply = [slug, opt](int i) {
+                    c.apply = [slug, opt, &pauseRedrawFrames](int i) {
                         sysopts::choose(slug, *opt, i);
                         for (const auto& kv : opt->choices[i].sets)
                             cab::Core::shared().setOptionLive(kv.first, kv.second);
+                        pauseRedrawFrames = 2;
                     };
                     pauseChoices.push_back(std::move(c));
                 }
@@ -11943,13 +11947,26 @@ int main(int argc, char** argv) {
             }
             const bool frozen = overlayOpen || stateHold || stateHoldWaiting;
             core.setPaused(frozen);
+            // Set when a paused frame was run only to redraw it; its sound is
+            // dropped below, as rewind's is.
+            bool redrew = false;
             // RUMBLE (#149): what the game asked for, to each player's pad,
             // and nothing while the game is not being played. Rewind replays
             // frames backwards, which is not play either.
             if (core.isPs2()) ps2::pollRumble();
             rumble::update(!frozen && !rewinding);
 
-            if (frozen) {
+            if (frozen && pauseRedrawFrames > 0 && !core.isPs2()) {
+                // A SYSTEM ROW WAS CHANGED IN THE PAUSE MENU (#73): run the
+                // game on by a frame or two, silently, so the frozen picture
+                // behind the menu is redrawn with the new option. A core
+                // reads the change at the start of its next frame and draws
+                // it in that frame or the one after. MMagTech on the TV: the
+                // colour did not change behind the menu.
+                --pauseRedrawFrames;
+                core.runFor(1.0 / std::max(core.avInfo().fps, 1.0));
+                redrew = true;
+            } else if (frozen) {
                 // Nothing to step. The last frame stays uploaded, so the
                 // menu sits over a frozen picture rather than a black one.
             } else if (shotMode) {
@@ -12055,7 +12072,7 @@ int main(int argc, char** argv) {
                 static constexpr double kMaxWaitingMs = 1000.0;
                 static uint64_t droppedBytes = 0;
                 static uint64_t droppedLogAt = 0;
-                if (!samples.empty() && core.speed() <= 1.0 && !rewinding) {
+                if (!samples.empty() && core.speed() <= 1.0 && !rewinding && !redrew) {
                     const double bytesPerMs =
                         4.0 * std::max(core.avInfo().sampleRate, 1.0) / 1000.0;
                     const int room = static_cast<int>(kMaxWaitingMs * bytesPerMs) -
