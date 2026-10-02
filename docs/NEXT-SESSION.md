@@ -13,11 +13,11 @@ specification is `docs/PROJECT.md`; the order is `docs/ROADMAP.md`
 ## Where things stand
 
 Milestone 3. **#63 phase 1 is built on `picture-quality`** with #73, #209
-and #217, and pushed to `testing` (PROJECT.md, "BUILT ON picture-quality").
+and #217, and pushed to `testing` with #204 (PROJECT.md, "BUILT ON picture-quality").
 MMagTech judged most of it on the TV with the test build; **still to judge on
 the testing image: a PS2 game with a widescreen patch, at Quality** (Burnout
 3 has one). Merge only on his explicit go, then close #63's phase 1 items,
-#73, #209, #217 and delete the branch (and `docs-after-fast-cores`, whose
+#73, #204, #209, #217 and delete the branch (and `docs-after-fast-cores`, whose
 commits it carries).
 
 ## Next
@@ -35,6 +35,6 @@ Also open, not in the way:
   the blocker; four points of the brief to settle with MMagTech). Built after
   #63's phases.
 - **#200**, real Wii Remotes, when the hardware arrives.
-- **#204**, Dolphin's log level, one line, with the next testing push.
+
 - The A9 has a blank `bios/dc/vmu_save_A1.bin` from today's tests; harmless
   (the next Dreamcast launch files it as unattributed). MMagTech removes it.

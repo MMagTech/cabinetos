@@ -690,6 +690,12 @@ std::map<std::string, std::string> optionOverrides(const std::string& core) {
         return {
             {"dolphin_cheats_import", "disabled"},
             {"dolphin_osd_enabled", "disabled"},
+            // ERRORS ONLY IN THE LOG (#204). At Dolphin's default, Info,
+            // Mario Kart Wii writes "Oversized EFB copy" about sixty times a
+            // second into the journal: harmless to the game, wearing on the
+            // disk, and burying the lines that matter. 2 is Error
+            // (DolphinLibretro/Common/Options.cpp).
+            {"dolphin_log_level", "2"},
         };
     }
     // FLICKER BLENDED, NO ROW (#73, MMagTech 2026-10-02). Games on both drew
