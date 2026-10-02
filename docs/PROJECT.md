@@ -14030,6 +14030,12 @@ at once with a save state, because only PSP, N64 and Dreamcast have states here
 seven of the ten systems it would lose progress; and applying live where an
 emulator can, because one row would then behave two ways.
 
+**A game set by hand keeps its choice when the console's setting changes**
+(MMagTech, 2026-10-02, agreed until he has seen the UI on the TV). The row's
+choices are **Console setting** (every game starts here and follows Settings),
+Performance, Balanced and Quality. Rejected: a Settings change resetting every
+game's own choice, which would quietly undo choices made game by game.
+
 **Starting level until phase 2:** every console starts on Performance (the
 design's rule for unknown hardware; nothing tells machines apart yet). The A9
 is set to Quality with the dial. Phase 2 lands in the same milestone, before
