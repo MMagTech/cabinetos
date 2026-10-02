@@ -14001,6 +14001,27 @@ RetroArch and Batocera:
    Performance; in the background at Balanced and Quality. Today only Dolphin
    and Eden compile synchronously.
 
+**The values that follow from the targets** (each emulator's own "~1080p" and
+"~4K" labels where it has them), to be measured before they are written:
+
+| System | Performance | Balanced | Quality |
+|---|---|---|---|
+| PS2 | 1x | 3x | 6x |
+| GameCube, Wii | 1x | 3x | 6x |
+| PSP | 480x272 | 1920x1088 | 3840x2176 |
+| N64 | 1x | 4x | 8x |
+| Dreamcast | 640x480 | 1440x1080 | 2880x2160 |
+| Switch (docked) | 1x (1080p) | 1x | 2x |
+| PS3 | 720p | 150% | 300% |
+| Xbox | 1x | 2x | 4x |
+| Xbox 360 | 1x (720p) | 1x | 3x |
+
+**N64's Performance is 1x, not today's 2x** (MMagTech agreed): Performance
+only reaches weak or unknown machines, 2x was a starting value waiting for
+this setting, and an N64 exception would argue the same for PSP and PS2. The
+GLideN64 fallback (no Vulkan) follows the same rule, 320x240 at Performance.
+Revisit only if Performance on the slowed A9 (#210) looks unacceptable.
+
 **Starting level until phase 2:** every console starts on Performance (the
 design's rule for unknown hardware; nothing tells machines apart yet). The A9
 is set to Quality with the dial. Phase 2 lands in the same milestone, before
