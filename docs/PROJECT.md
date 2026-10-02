@@ -14001,6 +14001,11 @@ RetroArch and Batocera:
    Performance; in the background at Balanced and Quality. Today only Dolphin
    and Eden compile synchronously.
 
+**Starting level until phase 2:** every console starts on Performance (the
+design's rule for unknown hardware; nothing tells machines apart yet). The A9
+is set to Quality with the dial. Phase 2 lands in the same milestone, before
+the first release.
+
 Systems with a resolution to move: PS2, GameCube, Wii, PSP, N64, Dreamcast,
 Switch, PS3, Xbox, Xbox 360. Wii U has none without resolution packs (#207).
 
