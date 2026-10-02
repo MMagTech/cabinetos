@@ -276,10 +276,12 @@ Decided with MMagTech 2026-09-26, from the things people will actually do.
 
 ## Display and Sound
 
-- **Picture quality:** Performance, Balanced or Quality for the whole console,
-  and a game's pause menu can override it for that game (Console setting,
-  Performance, Balanced, Quality; from the game's next start). With a PIN
-  set, only the owner sees it. **To build, #63.** Record: PROJECT.md, the
+- **Picture** (picture quality): Performance, Balanced or Quality for the
+  whole console, and a game's pause menu can override it for that game with a
+  "Picture: Balanced" row (Console, Performance, Balanced, Quality; from the
+  game's next start, said in the pill). Named "Picture", not "Picture
+  quality", because "Picture quality: Quality" said it twice (MMagTech on the
+  TV, 2026-10-02). With a PIN set, only the owner sees it. **To build, #63.** Record: PROJECT.md, the
   #63 decisions of 2026-10-02.
 - **Appearance:** Standard, Dark or Scheduled, the console's, in
   `config/settings.json`. Dark turns the menus down, never the game.

@@ -110,6 +110,13 @@ Level forGame(int romId) {
     return console();
 }
 
+bool hasLevels(const std::string& core) {
+    for (const char* c : {"pcsx2", "dolphin", "ppsspp", "mupen64plus", "flycast", "eden",
+                          "rpcs3", "xemu", "xenia"})
+        if (core == c) return true;
+    return false;
+}
+
 std::map<std::string, std::string> coreOptions(const std::string& core,
                                                const std::string& platformSlug, Level l) {
     // GameCube and Wii: internal resolution, and shaders built in the

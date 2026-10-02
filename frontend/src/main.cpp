@@ -490,6 +490,9 @@ private:
 // the point, so they never overwrite.
 struct GameSession {
     int romId = 0;
+    // The core's manifest name, for the pause menu's Picture quality row
+    // (quality::hasLevels). Standalones set it to the emulator's.
+    std::string core;
     std::string title;
     // The server's own file name for the game, without its extension. A
     // save's row on RomM is named after it — see saveRowName.
@@ -6521,9 +6524,22 @@ int main(int argc, char** argv) {
     Animated overlayFade;
     overlayFade.smooth = true;    // 350 ms ease-in-out, per the design system
     Animated overlayFocus;
-    enum OverlayItem { OvResume = 0, OvSaveState, OvLoadState, OvScreenshot, OvExit, OvCount };
+    enum OverlayItem { OvResume = 0, OvSaveState, OvLoadState, OvScreenshot, OvQuality, OvExit,
+                       OvCount };
     const char* kOverlayLabels[OvCount] = {
-        "Resume", "Save state", "Load latest state", "Screenshot", "Exit to Home",
+        // "Picture", not "Picture quality": "Picture quality: Quality"
+        // says it twice (MMagTech, 2026-10-02).
+        "Resume", "Save state", "Load latest state", "Screenshot", "Picture", "Exit to Home",
+    };
+    // THE GAME'S PICTURE QUALITY, a choice row in a list of buttons (#63):
+    // 0 follows the console, 1 to 3 are Performance, Balanced and Quality.
+    // Read when the menu opens, not every frame. Left and right change it;
+    // A steps it on. It takes effect from the game's next start.
+    int qualityChoice = 0;
+    auto qualityValue = [&]() -> std::string {
+        if (qualityChoice == 0)
+            return "Console";
+        return quality::levelName(static_cast<quality::Level>(qualityChoice - 1));
     };
     // The pause menu's items for THIS game, built each time it opens: the two
     // state items only where the system has snapshots. PlayStation 2 and
@@ -8212,7 +8228,9 @@ int main(int argc, char** argv) {
                 // NOTHING UNDER IT YET. Once the pause menu has its own row,
                 // "Change per game in the pause menu", MMagTech's wording: a
                 // fact the row cannot otherwise show (2026-10-02).
-                Row r{K::Choice, SetPictureQuality, "Picture quality", "", ""};
+                // "Picture", as in the pause menu: "Picture quality ...
+                // Quality" said it twice (MMagTech, 2026-10-02).
+                Row r{K::Choice, SetPictureQuality, "Picture", "", ""};
                 for (int i = 0; i < quality::kLevelCount; ++i)
                     r.choices.push_back(quality::levelName(static_cast<quality::Level>(i)));
                 r.choice = static_cast<int>(quality::console());
@@ -9845,6 +9863,7 @@ int main(int argc, char** argv) {
         }
         session = GameSession{};
         session.romId = launchJob.romId;
+        session.core = launchJob.coreName;
         session.title = launchJob.title;
         session.fsStem = launchJob.fsStem;
         session.saveDir = saveDir;
@@ -10158,6 +10177,7 @@ int main(int argc, char** argv) {
 
         session = GameSession{};
         session.romId = launchJob.romId;
+        session.core = launchJob.coreName;
         session.title = launchJob.title;
         session.saveDir = saveDir;
         session.fsStem = launchJob.fsStem;
@@ -10647,6 +10667,29 @@ int main(int argc, char** argv) {
         standaloneShot.path.clear();
     };
 
+    // Steps the game's Picture quality by `delta`, wrapping, saves it, and
+    // says when it applies, in the pill the menu already answers in.
+    // AS A SETTINGS CHOICE ROW BEHAVES (settings.cpp): left and right stop at
+    // the ends with the edge sound, and A walks forward and wraps, so the row
+    // also works from A alone.
+    auto stepQuality = [&](int delta, bool wrap) {
+        constexpr int kChoices = quality::kLevelCount + 1;
+        int next = qualityChoice + delta;
+        if (wrap && next >= kChoices) next = 0;
+        if (next < 0 || next >= kChoices) {
+            sound::play(sound::Cue::Edge);
+            return;
+        }
+        qualityChoice = next;
+        quality::setGameChoice(session.romId,
+                               qualityChoice == 0
+                                   ? std::nullopt
+                                   : std::optional<quality::Level>(
+                                         static_cast<quality::Level>(qualityChoice - 1)));
+        menuNotice.say("From the next start", Tone::Done);
+        sound::play(sound::Cue::Move);
+    };
+
     auto overlayActivate = [&]() {
         if (powerMenu) {
             if (overlaySlot >= 0 && overlaySlot < static_cast<int>(powerItems.size()))
@@ -10669,6 +10712,7 @@ int main(int argc, char** argv) {
                 if (standaloneRun.active()) standaloneScreenshot();
                 else screenshotNow(session, uploader, menuNotice);
                 break;
+            case OvQuality: stepQuality(+1, /*wrap=*/true); break;
             case OvExit:
                 // An emulator of its own is asked to close (thawed first) and
                 // the menu goes; finishStandalone takes the rest of the way
@@ -10701,6 +10745,15 @@ int main(int argc, char** argv) {
             // wherever the shortcut button is recognised). PS2 reads PCSX2's
             // frame since #130; GameCube is a libretro core like the rest.
             pauseItems.push_back(OvScreenshot);
+            // PICTURE QUALITY, on the ten systems where a level changes
+            // something, and with a PIN set only for the owner, as in
+            // Settings (MMagTech, 2026-10-02).
+            if (quality::hasLevels(session.core) &&
+                (!accounts::pinIsSet() || accounts::activeId() == accounts::ownerId())) {
+                pauseItems.push_back(OvQuality);
+                const std::optional<quality::Level> own = quality::gameChoice(session.romId);
+                qualityChoice = own ? static_cast<int>(*own) + 1 : 0;
+            }
             pauseItems.push_back(OvExit);
         }
         overlaySlot = 0;
@@ -11121,6 +11174,10 @@ int main(int argc, char** argv) {
                             overlayFocus.elapsed = 0.0f;
                             overlayFocus.retarget(1.0f, kOverlayFocusDuration);
                         }
+                        if ((e.key.key == SDLK_LEFT || e.key.key == SDLK_RIGHT) && !powerMenu &&
+                            overlaySlot < static_cast<int>(pauseItems.size()) &&
+                            pauseItems[overlaySlot] == OvQuality)
+                            stepQuality(e.key.key == SDLK_RIGHT ? 1 : -1, false);
                         if (e.key.key == SDLK_RETURN || e.key.key == SDLK_SPACE)
                             overlayActivate();
                         break;
@@ -11264,6 +11321,12 @@ int main(int argc, char** argv) {
                             overlaySlot = std::max(0, overlaySlot - 1);
                         if (e.gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_DOWN)
                             overlaySlot = std::min(ovCount() - 1, overlaySlot + 1);
+                        if ((e.gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_LEFT ||
+                             e.gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_RIGHT) &&
+                            !powerMenu && overlaySlot < static_cast<int>(pauseItems.size()) &&
+                            pauseItems[overlaySlot] == OvQuality)
+                            stepQuality(e.gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_RIGHT ? 1 : -1,
+                                        false);
                         if (e.gbutton.button == SDL_GAMEPAD_BUTTON_SOUTH) overlayActivate();
                         // East is Back, and Back from the overlay is Resume —
                         // or, from the Power menu on Home, just closing it.
@@ -13584,6 +13647,32 @@ int main(int argc, char** argv) {
                 renderer.draw(btn);
 
                 const char* label = ovLabel(i);
+                // A CHOICE ROW, CENTRED LIKE EVERY OTHER BUTTON: "Picture
+                // quality: Balanced" on one line, and under focus an arrow at
+                // each edge of the button, bright where left or right still
+                // goes somewhere and faint at the end, as Settings shows it.
+                if (!powerMenu && pauseItems[i] == OvQuality) {
+                    const ui::TextStyle st = ui::TextStyle::Title3;
+                    const ui::Color c = ui::Color::white(
+                        (kOverlayButtonRestText + f * (1.0f - kOverlayButtonRestText)) * ovl);
+                    const float baseY = by + (bh - text.lineHeight(st, sc)) * 0.5f +
+                                        text.ascent(st, sc);
+                    const std::string line = std::string(label) + ": " + qualityValue();
+                    const float lw = text.measure(line.c_str(), st, sc);
+                    text.draw(renderer, line.c_str(), bx + (bw - lw) * 0.5f, baseY, st, c, sc);
+                    if (f > 0.0f) {
+                        const char* kNext = "\xE2\x80\xBA";
+                        const char* kBack = "\xE2\x80\xB9";
+                        const float aw = text.measure(kNext, st, sc);
+                        const bool canRight = qualityChoice < quality::kLevelCount;
+                        const bool canLeft = qualityChoice > 0;
+                        text.draw(renderer, kBack, bx + 28.0f, baseY, st,
+                                  ui::Color::white((canLeft ? 0.70f : 0.18f) * f * ovl), sc);
+                        text.draw(renderer, kNext, bx + bw - 28.0f - aw, baseY, st,
+                                  ui::Color::white((canRight ? 0.70f : 0.18f) * f * ovl), sc);
+                    }
+                    continue;
+                }
                 const float tw = text.measure(label, ui::TextStyle::Title3, sc);
                 // Dark on the light row, light on the dark ones. Crossfaded by
                 // the focus animation so the text does not snap between them.

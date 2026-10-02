@@ -50,6 +50,12 @@ void setGameChoice(int romId, std::optional<Level> l);
 // What a game runs at: its own choice, else the console's.
 Level forGame(int romId);
 
+// Whether a level changes anything for `core` (its manifest name): the ten
+// systems with a resolution to move. Only these get the pause menu's row;
+// Wii U (Cemu) has no lever without resolution packs (#207), and 3DO and the
+// vector systems are fixed at every level.
+bool hasLevels(const std::string& core);
+
 // --- What each emulator is told ----------------------------------------------
 
 // Libretro option values for `core` (the manifest name, e.g. "dolphin") on
