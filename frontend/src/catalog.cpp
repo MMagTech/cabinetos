@@ -696,10 +696,12 @@ std::map<std::string, std::string> optionOverrides(const std::string& core) {
     // more than the hardware allowed by flickering sprites every other frame
     // and let the screen smear them together; on a modern display that is
     // just flicker. GBA on mGBA's Smart blending, which blends only the
-    // pixels that flicker; the 2600 on Stella's plain average. Looks, not
-    // saves or states.
+    // pixels that flicker. The 2600 on Stella's Medium ghosting (75%):
+    // judged on the TV with Ms. Pac-Man (MMagTech, 2026-10-02), whose ghosts
+    // cycle over more frames than a plain two-frame average smooths; Heavy
+    // (85%) left trails behind everything. Looks, not saves or states.
     if (coreName == "mgba") return {{"mgba_interframe_blending", "mix_smart"}};
-    if (coreName == "stella2014") return {{"stella2014_mix_frames", "mix"}};
+    if (coreName == "stella2014") return {{"stella2014_mix_frames", "ghost_75"}};
     if (coreName == "opera") {
         return {
             {"opera_bios", "panafz10.bin"},

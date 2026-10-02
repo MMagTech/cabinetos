@@ -662,7 +662,8 @@ right there and the choice is about a system:
     wrongly on device and left it off pending a fix.
   - **GBA blending: no row, fixed on Smart** (`mix_smart`, blends only pixels
     that flicker), and **Atari 2600 flicker blending: no row, fixed on
-    Average** (`mix`). Each checked on a game known to flicker before it ships.
+    Medium ghosting** (`ghost_75`; Average still strobed Ms. Pac-Man's
+    ghosts and Heavy trailed, judged on the TV 2026-10-02). Each checked on a game known to flicker before it ships.
   - **Vectrex overlays: dropped for now.** Not a core setting: Cabinet draws
     each cartridge's sheet from its own images, none of which is built here.
     Its own issue, after the first release.
