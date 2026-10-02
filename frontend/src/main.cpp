@@ -8210,8 +8210,8 @@ int main(int argc, char** argv) {
             auto& rows = cats.back().rows;
             if (showQuality) {
                 // NOTHING UNDER IT YET. Once the pause menu has its own row,
-                // "Each game can change it in its pause menu": a fact the row
-                // cannot otherwise show (MMagTech, 2026-10-02).
+                // "Change per game in the pause menu", MMagTech's wording: a
+                // fact the row cannot otherwise show (2026-10-02).
                 Row r{K::Choice, SetPictureQuality, "Picture quality", "", ""};
                 for (int i = 0; i < quality::kLevelCount; ++i)
                     r.choices.push_back(quality::levelName(static_cast<quality::Level>(i)));
