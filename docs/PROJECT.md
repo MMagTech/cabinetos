@@ -13984,6 +13984,26 @@ the drop rule, record-only first. Before phase 1: #150 and #163 (busy time
 is wrong without them), both moved into milestone 3. Before phase 3: #168
 (an 18.6 ms N64 rewind snapshot reads as struggle) and #210.
 
+#### DECIDED, MMagTech 2026-10-02: what the dial moves (#63, phase 1)
+
+From the phase 1 audit (2026-10-02), every core and standalone against
+RetroArch and Batocera:
+
+1. **The dial moves internal resolution and shader compiling, nothing else.**
+   Filtering is fixed at the best free value for every system (anisotropic
+   16x wherever it exists; PS2 and Dolphin run 1x today, Flycast 4x). No
+   anti-aliasing (resolution does that job), no texture upscaling, no
+   frameskip.
+2. **Targets:** Performance is the system's own resolution, Balanced about
+   1080p, Quality about 4K. Each system's value follows from these and is
+   measured warm on the A9 before it is written into the table.
+3. **Shader compiling:** synchronous (a short stutter the first time) at
+   Performance; in the background at Balanced and Quality. Today only Dolphin
+   and Eden compile synchronously.
+
+Systems with a resolution to move: PS2, GameCube, Wii, PSP, N64, Dreamcast,
+Switch, PS3, Xbox, Xbox 360. Wii U has none without resolution packs (#207).
+
 #### DECIDED, MMagTech 2026-10-02: the processor-side extras are fixed, not in the dial (#63)
 
 From the phase 1 audit (2026-10-02). Four options sharpen the picture on the
