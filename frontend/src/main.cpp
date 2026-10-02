@@ -13192,8 +13192,16 @@ int main(int argc, char** argv) {
                 float scale = std::min(ui::kCanvasWidth / (shownRows * shownAspect),
                                        ui::kCanvasHeight / shownRows);
                 if (integerScale) {
-                    scale = std::floor(scale);
-                    if (scale < 1.0f) scale = 1.0f;
+                    // COUNTED IN THE SCREEN'S OWN ROWS, not the 1080-point
+                    // canvas (2026-10-02). On a 2160-line TV the canvas made
+                    // the steps twice as coarse: 240 rows got 4x, 960 of 1080
+                    // points with bars, where the real panel takes 9x and
+                    // fills exactly. Shown to MMagTech to decide again.
+                    const float perPoint =
+                        dh > 0 ? static_cast<float>(dh) / ui::kCanvasHeight : 1.0f;
+                    float rows = std::floor(scale * perPoint);
+                    if (rows < 1.0f) rows = 1.0f;
+                    scale = rows / perPoint;
                 }
                 const float dh = shownRows * scale;
                 const float dw = dh * shownAspect;
