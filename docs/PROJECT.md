@@ -14029,6 +14029,26 @@ change when a commit moves a pin; the check runs there.
    not declare, or a value outside its list. No screen. Reaches us through
    the diagnostic report (#195).
 
+#### DECIDED, MMagTech 2026-10-02: PS2 widescreen on, from PCSX2's own patches
+
+Found by the phase 1 audit: every PS2 start logs `Failed to open
+patches.zip`. The file is made by the PCSX2 team (`PCSX2/pcsx2_patches`) and
+added to every official PCSX2 download by their release process; it is not in
+the source we build, so our build never had it. It holds an optional patch per
+game, each off until a setting turns it on (mainly `Widescreen 16:9` and
+`No-Interlacing`, Patch.cpp:115-116). **The fixes games need to run are not in
+it**: they come from `GameIndex.yaml`, which is in the image (240 games with
+patches; Patch.cpp:727-733).
+
+**Decided: ship it, pinned in the image, with the widescreen patches on.**
+MMagTech: the other systems' widescreen settings stretch every game the same
+way and distort it; PS2's are written and checked per game by the PCSX2 team,
+meant not to distort. So the rule for every system is: **a change to the game
+ships on only where the emulator's own team curates it per game.** Today only
+PS2 meets it; GameCube, Dreamcast and N64 keep their widescreen hacks off.
+Judged on the TV with several PS2 games before it ships. Patches a person
+keeps in RomM are a separate idea, after the first release.
+
 #### DECIDED, MMagTech 2026-10-02: the processor-side extras are fixed, not in the dial (#63)
 
 From the phase 1 audit (2026-10-02). Four options sharpen the picture on the
