@@ -14010,15 +14010,32 @@ RetroArch and Batocera:
 
 | System | Performance | Balanced | Quality |
 |---|---|---|---|
-| PS2 | 1x | 3x | 6x |
-| GameCube, Wii | 1x | 3x | 6x |
+| PS2 | 1x | 3x | **5x** |
+| GameCube | 1x | 3x | 6x |
+| Wii | 1x | 3x | **5x** |
 | PSP | 480x272 | 1920x1088 | 3840x2176 |
-| N64 | 1x | 4x | 8x |
+| N64 | 1x | 4x | **4x** |
 | Dreamcast | 640x480 | 1440x1080 | 2880x2160 |
 | Switch (docked) | 1x (1080p) | 1x | 2x |
 | PS3 | 720p | 150% | 300% |
 | Xbox | 1x | 2x | 4x |
 | Xbox 360 | 1x (720p) | 1x | 3x |
+
+**Quality, measured on the A9 2026-10-02** (off-screen, warm, two or more runs
+each, on the balanced power profile so slightly pessimistic; realtime factor,
+1.5x and up counted comfortable): PS2 6x was tight (1.3x; copying each frame
+back from the GPU took 12.4 ms of the 16.7 ms frame, peaks over a frame) and
+5x comfortable (2.5x, 5.9 ms); Wii 6x tight (1.2 to 1.5x in race footage), 5x
+comfortable (1.8 to 2.1x); N64 8x tight (about 1.1x at 60 fps), with no step
+between 4x and 8x. GameCube 6x (2.6x), PSP 3840x2176 (3.7x) and Dreamcast
+2880x2160 (5.2x) comfortable. **So Quality is PS2 5x, Wii 5x, N64 4x** (MMagTech
+agreed: good starting values, adjustable later). PS2 at 5x is the first thing
+judged on the TV for stutter. A level change rebuilds no shaders (PS2,
+GameCube, Dreamcast, PSP: 0 bytes added; N64 about 102 KB of Mesa's), so no
+warning is needed and #133 does not move; turning on Dolphin's background
+shaders builds about 5 MB once. States made at one level load at another on
+N64 and PSP (identical sound after loading); Dreamcast loads but could not be
+proven exact (Flycast's sound varies between runs).
 
 **N64's Performance is 1x, not today's 2x** (MMagTech agreed): Performance
 only reaches weak or unknown machines, 2x was a starting value waiting for
