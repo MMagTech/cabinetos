@@ -14786,11 +14786,39 @@ a range or TV setting affecting everything.
 | Mario Kart Wii, Xbox pad, no Remote | plays; the pad is a Classic Controller (or a GameCube pad, to be judged on the TV); a normal console-racer layout |
 | Kirby, no Remote ever paired | greyed out, "Needs a Wii Remote" |
 | First Remote | Bluetooth, Pair a Wii Remote, red button; "Wii Remote paired"; Kirby un-greys |
-| Next day | pick Kirby, press a button on the Remote, play |
-| Two Remotes and a pad in Mario Kart | to decide after the test: which player gets which |
+| Next day | pick Kirby, press a button on the Remote, play. The Remote reaches Kirby by itself: its D-pad, A and B work the console's menus |
+| Wii Sports, Xbox pad also connected | the Remote plays; the pad has no player in a Remote game but still opens the console's in-game menu |
+| Quitting with only a Remote | hold HOME: the console's in-game menu. A press of HOME is still the game's own HOME menu |
+| Two Remotes and a pad in Mario Kart | three players, each on their own controller (decided 2026-10-02, below; to be seen in #200's test 5) |
 | A game shows "Press 2" or "Shake the Wii Remote" on a pad | only happens on Remote games now, which need a Remote; pad games use Classic or GameCube prompts |
 | The game's HOME menu, "Wii Menu" | untested; there is no Wii Menu installed, so it probably ends emulation. The console should treat that as the game ending |
 | A Wii Sports Resort or Skyward Sword owner | MotionPlus is built into the Remotes above; untested |
+
+#### DECIDED, MMagTech 2026-10-02, after the first tests with real Remotes (#200)
+
+What the TechKen Remotes showed at the TV (full record on #200): they pair
+only through bluetoothd's own `Device1.Pair()` (not `btmgmt`), refuse the Wii
+PIN BlueZ offers first (the console's address reversed, checked with btmon),
+and take **`0000`** from an agent on BlueZ's retry. Trusted, they reconnect by
+themselves on a button press, so the fallback switch above is not needed. They
+report Samsung's wireless keyboard ID (`04E8:7021`), so the kernel binds
+`hid-samsung`, they make a hidraw node and no input device, and SDL does not
+see them. They show no light once connected until the host sets one. Dolphin
+recognises a Remote by name ("Nintendo RVL-CNT"), so it accepts them.
+MMagTech: "for now; we could change later if need be".
+
+| | Decided |
+|---|---|
+| Pairing | "Pair a Wii Remote" runs the limited search and pairs through `Device1.Pair()`. BlueZ offers the Wii PIN; when it is refused, the console's agent answers `0000`. The agent answers only during Remote pairing and only for names starting "Nintendo RVL-CNT"; other pads pair as before. Then trust. No BlueZ patch, no BlueZ setting changed |
+| What unlocks Remote games | any paired device in BlueZ whose name starts "Nintendo RVL-CNT", the test Dolphin and Wii software use. Nothing else is stored |
+| Setting a Remote up on connect | every time a Remote connects, the console sends what a Wii sends: a status request (`0x15`), its player light (`0x11`) and a report mode (`0x12`, buttons on change). A TechKen shows no light while connected until the host sets one, so without this "connected" and "off" look the same. Measured 2026-10-02: a freshly paired TechKen left without these connected in the dark, hung up after 3 seconds and retried for 17 minutes (about 230 times, draining its batteries); with them it stayed connected. Held power then turns it off for good (HCI reason 0x15, no reconnect in a minute) |
+| Players in a Remote game | the Remotes, in light order, each as a real Remote: a Nunchuk, Classic Controller or MotionPlus plugged into it reaches the game as itself, so Nunchuk games need no rule of their own. Pads have no player |
+| Players in a pad game | pads as a Classic Controller (or GameCube pad) and Remotes as real Remotes, together, in the console's usual player order. A Wii game sets the lights to its own player numbers |
+| The menus | a Remote works the console's menus: D-pad moves, A selects, B goes back. The console reads its raw reports and stops when a game starts |
+| HOME on a Remote | a press is the game's own HOME menu, as on a Wii; holding it about a second opens the console's in-game menu (save, load, quit). The hold is judged on the TV |
+| From the core's source at the pin | a port set to Real Wii Remote (1536) is `WiimoteSource::Real` and the others stay emulated, slot by slot, so a real Remote and an emulated Classic Controller can share a game. With continuous scanning off, Dolphin still looks every 500 ms for Remotes the OS has already connected (`FindAttachedWiimotes`, hidapi, matched by name), seats each in the first free real slot and sets that slot's light; no Bluetooth search of its own, so no radio cost. The core in the image has the hidapi backend and not the BlueZ one, and does not need it: the OS pairs. Checked headless on the A9: Mario Kart Wii boots with port 1 as a real Remote |
+| The limited search needs root | bluetoothd cannot run it (no limited discovery in `src/adapter.c`); the kernel's needs `CAP_NET_ADMIN`. The console needs a small privileged helper for "Pair a Wii Remote". The L2CAP connect that makes bluetoothd know a found Remote, the pairing, the agent and the hidraw writes all work as `cabinet` |
+| Still to check | that a real Remote and an emulated Classic Controller play together in one game (test 5); whether the TechKens' constant reports (about 370 a second each) make other pads stutter (#200 test 4), and if so whether a report mode that sends only on change cures it |
 
 #### The emulator, measured on the A9 2026-09-30
 
