@@ -208,10 +208,46 @@ bool gAnswerOptions = true;
 // and they are a different amount of work.
 bool gRefuseHWRender = false;
 
+// Set by Core::setOptionLive, answered once by GET_VARIABLE_UPDATE.
+bool gOptionsUpdated = false;
+
 void resetOptions() {
+    gOptionsUpdated = false;
     gDeclared.clear();
     gByKey.clear();
     gUndeclaredAsks.clear();
+}
+
+// AN UPGRADE THAT RENAMED A SETTING IS SILENT WITHOUT THIS (#63, MMagTech
+// 2026-10-02). A value we give for a key the core never declares is simply
+// never asked for, and a value outside its list is handed over as it is; a
+// core bump that renamed `dolphin_efb_scale` would quietly play every game at
+// native resolution. So once a game is in, every value we set is checked
+// against what the core declared, and anything that does not fit is logged.
+// It reaches us through the diagnostic report (#195). The pin-moving workflow
+// catches the same thing before an image is built; this covers the cores that
+// declare their options only with a game loaded, and every console after.
+void checkOverrides(const std::string& core) {
+    int bad = 0;
+    for (const auto& [key, value] : gOverrides) {
+        auto it = gByKey.find(key);
+        if (it == gByKey.end()) {
+            std::fprintf(stderr, "[options] %s does not offer %s (we set it to %s)\n",
+                         core.c_str(), key.c_str(), value.c_str());
+            ++bad;
+            continue;
+        }
+        const Option& o = gDeclared[it->second];
+        if (!o.values.empty() &&
+            std::find(o.values.begin(), o.values.end(), value) == o.values.end()) {
+            std::fprintf(stderr, "[options] %s: %s does not accept %s\n", core.c_str(),
+                         key.c_str(), value.c_str());
+            ++bad;
+        }
+    }
+    if (!gOverrides.empty() && bad == 0)
+        std::fprintf(stderr, "[options] %s: all %zu of our settings fit\n", core.c_str(),
+                     gOverrides.size());
 }
 
 void declareOption(const char* key, const char* desc,
@@ -755,8 +791,12 @@ bool environment(unsigned cmd, void* data) {
             return true;
         }
 
+        // TRUE ONCE AFTER setOptionLive, so a core that re-reads its options
+        // on this picks the change up on its next frame. False otherwise, as
+        // it always was: options were only ever set before a game started.
         case RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE:
-            *static_cast<bool*>(data) = false;
+            *static_cast<bool*>(data) = gOptionsUpdated;
+            gOptionsUpdated = false;
             return true;
 
         // The core telling us what it can be configured with. Whichever
@@ -1265,6 +1305,17 @@ void Core::setOptionOverrides(const std::map<std::string, std::string>& override
     }
 }
 
+void Core::setOptionLive(const std::string& key, const std::string& value) {
+    gOverrides[key] = value;
+    auto it = gByKey.find(key);
+    if (it == gByKey.end()) return;
+    Option& o = gDeclared[it->second];
+    o.overridden = true;
+    o.chosen = value;
+    gOptionsUpdated = true;
+    std::fprintf(stderr, "[options] %s = %s, now\n", key.c_str(), value.c_str());
+}
+
 std::vector<Core::OptionReport> Core::options() const {
     std::vector<OptionReport> out;
     out.reserve(gDeclared.size());
@@ -1430,6 +1481,7 @@ bool Core::loadGame(const std::string& romPath, const std::string& systemDir,
         return false;
     }
     gameLoaded_ = true;
+    checkOverrides(coreName_);
 
     // TELL THE CORE WHAT IS PLUGGED IN, and this was never being said.
     //

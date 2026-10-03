@@ -38,6 +38,8 @@
 #include <string>
 #include <vector>
 
+#include "quality.h"
+
 namespace cab::standalone {
 
 struct Emulator {
@@ -168,8 +170,12 @@ bool installGame(const Emulator& e, const std::string& entryPath,
 //
 // `players` is how many virtual controllers (vpad.h) there are, and each
 // player's controls are written for theirs, in the console's order.
+//
+// `level` is the picture quality this game runs at (quality.h), written into
+// the emulator's settings with everything else.
 bool prepare(const Emulator& e, const std::string& entryPath, const std::string& saveDir,
-             const std::string& player, int players, bool* missingKeys, std::string* err);
+             const std::string& player, int players, quality::Level level, bool* missingKeys,
+             std::string* err);
 
 // Where, inside `saveDir`, the game's own save folders are: the root of what
 // travels to RomM as a zip, whose top-level folders are one per game. For
@@ -208,8 +214,9 @@ class Run {
 public:
     // Starts `romPath` in `e`, able to write `saveDir`. `entryPath` is the
     // game's own file or folder. False with a reason when it could not start.
+    // `level` as for prepare: Xenia takes its settings on the command line.
     bool start(const Emulator& e, const std::string& romPath, const std::string& entryPath,
-               const std::string& saveDir, std::string* err);
+               const std::string& saveDir, quality::Level level, std::string* err);
     // Once a frame. True while the game is still going; false once it has
     // ended, after which `ended()` says how.
     bool poll();

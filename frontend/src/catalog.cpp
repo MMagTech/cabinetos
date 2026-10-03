@@ -666,14 +666,12 @@ std::map<std::string, std::string> optionOverrides(const std::string& core) {
     // machine without it (the test VM, older or odd hardware) keeps GLideN64
     // on GLES exactly as before.
     //
-    // 2x is a starting value: the core's default 1x is the N64's own 320x240,
-    // softer than the 640x480 GLideN64 drew here. Judged on the TV; open
-    // question 23's quality setting is where it moves later.
+    // ITS RESOLUTION IS PICTURE QUALITY'S (quality.h, #63), on either
+    // renderer: the 2x that stood here was a starting value until then.
     if (coreName == "mupen64plus" && cab::gpu::vulkan().available) {
         return {
             {"mupen64plus-rdp-plugin", "parallel"},
             {"mupen64plus-rsp-plugin", "parallel"},
-            {"mupen64plus-parallel-rdp-upscaling", "2x"},
         };
     }
     // GameCube and Wii, one Dolphin. Both from the settings audit of
@@ -686,15 +684,30 @@ std::map<std::string, std::string> optionOverrides(const std::string& core) {
     // * DOLPHIN'S OWN ON-SCREEN MESSAGES OFF, as Batocera ships them. The
     //   console says what needs saying itself.
     //
-    // Resolution, shader compilation and filtering are left at Dolphin's own
-    // defaults on purpose: they are picture quality, chosen from the hardware,
-    // and that is #63.
+    // Resolution, shader compilation and filtering are picture quality's
+    // (quality.h, #63).
     if (coreName == "dolphin") {
         return {
             {"dolphin_cheats_import", "disabled"},
             {"dolphin_osd_enabled", "disabled"},
+            // ERRORS ONLY IN THE LOG (#204). At Dolphin's default, Info,
+            // Mario Kart Wii writes "Oversized EFB copy" about sixty times a
+            // second into the journal: harmless to the game, wearing on the
+            // disk, and burying the lines that matter. 2 is Error
+            // (DolphinLibretro/Common/Options.cpp).
+            {"dolphin_log_level", "2"},
         };
     }
+    // FLICKER BLENDED, NO ROW (#73, MMagTech 2026-10-02). Games on both drew
+    // more than the hardware allowed by flickering sprites every other frame
+    // and let the screen smear them together; on a modern display that is
+    // just flicker. GBA on mGBA's Smart blending, which blends only the
+    // pixels that flicker. The 2600 on Stella's Medium ghosting (75%):
+    // judged on the TV with Ms. Pac-Man (MMagTech, 2026-10-02), whose ghosts
+    // cycle over more frames than a plain two-frame average smooths; Heavy
+    // (85%) left trails behind everything. Looks, not saves or states.
+    if (coreName == "mgba") return {{"mgba_interframe_blending", "mix_smart"}};
+    if (coreName == "stella2014") return {{"stella2014_mix_frames", "ghost_75"}};
     if (coreName == "opera") {
         return {
             {"opera_bios", "panafz10.bin"},

@@ -1,0 +1,43 @@
+snes9x_aspect	4:3	4:3|4:3 scaled|uncorrected|auto|ntsc|pal
+snes9x_audio_interpolation	gaussian	gaussian|cubic|sinc|none|linear
+snes9x_blargg	disabled	disabled|monochrome|rf|composite|s-video|rgb
+snes9x_block_invalid_vram_access	enabled	enabled|disabled
+snes9x_echo_buffer_hack	disabled	disabled|enabled
+snes9x_gfx_transp	enabled	enabled|disabled
+snes9x_hires_blend	disabled	disabled|merge|blur
+snes9x_justifier1_color	Blue	Blue|Blue (blend)|Violet|Violet (blend)|Pink|Pink (blend)|Purple|Purple (blend)|Black|Black (blend)|25% Grey|25% Grey (blend)|50% Grey|50% Grey (blend)|75% Grey|75% Grey (blend)|White|White (blend)|Red|Red (blend)|Orange|Orange (blend)|Yellow|Yellow (blend)|Green|Green (blend)|Cyan|Cyan (blend)|Sky|Sky (blend)
+snes9x_justifier1_crosshair	4	0|1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|16
+snes9x_justifier2_color	Pink	Pink|Pink (blend)|Purple|Purple (blend)|Black|Black (blend)|25% Grey|25% Grey (blend)|50% Grey|50% Grey (blend)|75% Grey|75% Grey (blend)|White|White (blend)|Red|Red (blend)|Orange|Orange (blend)|Yellow|Yellow (blend)|Green|Green (blend)|Cyan|Cyan (blend)|Sky|Sky (blend)|Blue|Blue (blend)|Violet|Violet (blend)
+snes9x_justifier2_crosshair	4	0|1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|16
+snes9x_layer_1	enabled	enabled|disabled
+snes9x_layer_2	enabled	enabled|disabled
+snes9x_layer_3	enabled	enabled|disabled
+snes9x_layer_4	enabled	enabled|disabled
+snes9x_layer_5	enabled	enabled|disabled
+snes9x_lightgun_mode	Lightgun	Lightgun|Touchscreen
+snes9x_mode7_hires	disabled	disabled|2x|4x|2x_hv|4x_hv
+snes9x_mode7_hires_bilinear	disabled	disabled|stable|smooth
+snes9x_msu1_enhanced_audio	enabled	enabled|disabled
+snes9x_overclock_cycles	disabled	disabled|light|compatible|max
+snes9x_overclock_superfx	100%	50%|60%|70%|80%|90%|100%|150%|200%|250%|300%|350%|400%|450%|500%
+snes9x_overscan	enabled	enabled|12_pixels|16_pixels|auto|disabled
+snes9x_randomize_memory	disabled	disabled|enabled
+snes9x_reduce_sprite_flicker	disabled	disabled|enabled
+snes9x_region	auto	auto|ntsc|pal
+snes9x_rifle_color	White	White|White (blend)|Red|Red (blend)|Orange|Orange (blend)|Yellow|Yellow (blend)|Green|Green (blend)|Cyan|Cyan (blend)|Sky|Sky (blend)|Blue|Blue (blend)|Violet|Violet (blend)|Pink|Pink (blend)|Purple|Purple (blend)|Black|Black (blend)|25% Grey|25% Grey (blend)|50% Grey|50% Grey (blend)|75% Grey|75% Grey (blend)
+snes9x_rifle_crosshair	2	0|1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|16
+snes9x_show_advanced_av_settings	disabled	enabled|disabled
+snes9x_show_lightgun_settings	disabled	enabled|disabled
+snes9x_sndchan_volume_1	100	0|10|20|30|40|50|60|70|80|90|100
+snes9x_sndchan_volume_2	100	0|10|20|30|40|50|60|70|80|90|100
+snes9x_sndchan_volume_3	100	0|10|20|30|40|50|60|70|80|90|100
+snes9x_sndchan_volume_4	100	0|10|20|30|40|50|60|70|80|90|100
+snes9x_sndchan_volume_5	100	0|10|20|30|40|50|60|70|80|90|100
+snes9x_sndchan_volume_6	100	0|10|20|30|40|50|60|70|80|90|100
+snes9x_sndchan_volume_7	100	0|10|20|30|40|50|60|70|80|90|100
+snes9x_sndchan_volume_8	100	0|10|20|30|40|50|60|70|80|90|100
+snes9x_superfx_timing	compat	compat|hardware
+snes9x_superscope_color	White	White|White (blend)|Red|Red (blend)|Orange|Orange (blend)|Yellow|Yellow (blend)|Green|Green (blend)|Cyan|Cyan (blend)|Sky|Sky (blend)|Blue|Blue (blend)|Violet|Violet (blend)|Pink|Pink (blend)|Purple|Purple (blend)|Black|Black (blend)|25% Grey|25% Grey (blend)|50% Grey|50% Grey (blend)|75% Grey|75% Grey (blend)
+snes9x_superscope_crosshair	2	0|1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|16
+snes9x_superscope_reverse_buttons	disabled	disabled|enabled
+snes9x_up_down_allowed	disabled	disabled|enabled

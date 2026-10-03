@@ -1,0 +1,18 @@
+opera_active_devices	1	0|1|2|3|4|5|6|7|8
+opera_bios	disabled	disabled
+opera_cd_speed	unbounded	unbounded|1x|2x|4x|8x|16x|24x|32x
+opera_cpu_overclock	1.0x (12.50Mhz)	0.5x ( 6.25Mhz)|0.6x ( 7.50Mhz)|0.7x ( 8.75Mhz)|0.8x (10.00Mhz)|0.9x (11.25Mhz)|1.0x (12.50Mhz)|1.1x (13.75Mhz)|1.2x (15.00Mhz)|1.5x (18.75Mhz)|1.6x (20.00Mhz)|1.8x (22.50Mhz)|2.0x (25.00Mhz)|3.0x (37.50Mhz)|4.0x (50.00Mhz)
+opera_dsp_threaded	disabled	disabled|enabled
+opera_font	disabled	disabled
+opera_hide_lightgun_crosshairs	disabled	disabled|enabled
+opera_high_resolution	disabled	disabled|enabled
+opera_kprint	disabled	disabled|enabled
+opera_madam_matrix_engine	hardware	hardware|software
+opera_mem_capacity	21	21|22|41|42|81|82|E2|F1
+opera_nvram_storage	per game	per game|shared
+opera_nvram_version	0	0|1|2|3|4|5|6|7|8|9
+opera_random_seed	random	random|0x00000000|0x00000001|0xdeadbeef|0xcafebabe|0xfeedface|0xbaadf00d|0x8badf00d|0xdeadc0de|0xc001d00d|0x0badf00d|0x74726170|0x65786974
+opera_region	ntsc	ntsc|pal1|pal2
+opera_swi_hle	disabled	disabled|enabled
+opera_vdlp_bypass_clut	disabled	disabled|enabled
+opera_vdlp_pixel_format	RGB565	0RGB1555|RGB565|XRGB8888

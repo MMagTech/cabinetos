@@ -3726,7 +3726,11 @@ across from Cabinet's list rather than checked here.
 
 ## Non goals
 
-- Not a Steam machine.
+- Not a Steam machine. **Narrowed 2026-10-02 (MMagTech, #223):** Steam may be
+  one entry that hands over to Bazzite's Big Picture session and returns.
+  It never runs unless picked, shows no screen or setting until then, and
+  gets its own walled-off part of the disk. The console stays an emulation
+  console; Steam is what makes it worth trying on a capable PC.
 - Not a general purpose desktop.
 - No app store.
 - No browser.
@@ -13983,6 +13987,208 @@ be in place first is on #63.
 the drop rule, record-only first. Before phase 1: #150 and #163 (busy time
 is wrong without them), both moved into milestone 3. Before phase 3: #168
 (an 18.6 ms N64 rewind snapshot reads as struggle) and #210.
+
+#### DECIDED, MMagTech 2026-10-02: what the dial moves (#63, phase 1)
+
+From the phase 1 audit (2026-10-02), every core and standalone against
+RetroArch and Batocera:
+
+1. **The dial moves internal resolution and shader compiling, nothing else.**
+   Filtering is fixed at the best free value for every system (anisotropic
+   16x wherever it exists; PS2 and Dolphin run 1x today, Flycast 4x). No
+   anti-aliasing (resolution does that job), no texture upscaling, no
+   frameskip.
+2. **Targets:** Performance is the system's own resolution, Balanced about
+   1080p, Quality about 4K. Each system's value follows from these and is
+   measured warm on the A9 before it is written into the table.
+3. **Shader compiling:** synchronous (a short stutter the first time) at
+   Performance; in the background at Balanced and Quality. Today only Dolphin
+   and Eden compile synchronously. **Only those two follow the level**
+   (2026-10-02, the assistant's call, accepted by MMagTech): RPCS3, Xenia and
+   Cemu stay on background building at every level, their makers' default,
+   because their games make far more shaders and building each when first
+   needed would stutter through a game's first hour.
+
+**The values that follow from the targets** (each emulator's own "~1080p" and
+"~4K" labels where it has them), to be measured before they are written:
+
+| System | Performance | Balanced | Quality |
+|---|---|---|---|
+| PS2 | 1x | 3x | **3x** |
+| GameCube | 1x | 3x | 6x |
+| Wii | 1x | 3x | **5x** |
+| PSP | 480x272 | 1920x1088 | 3840x2176 |
+| N64 | 1x | 4x | **4x** |
+| Dreamcast | 640x480 | 1440x1080 | 2880x2160 |
+| Switch (docked) | 1x (1080p) | 1x | 2x |
+| PS3 | 720p | 150% | 300% |
+| Xbox | 1x | 2x | 4x |
+| Xbox 360 | 1x (720p) | 1x | 3x |
+
+**Quality, measured on the A9 2026-10-02** (off-screen, warm, two or more runs
+each, on the balanced power profile so slightly pessimistic; realtime factor,
+1.5x and up counted comfortable): PS2 6x was tight (1.3x; copying each frame
+back from the GPU took 12.4 ms of the 16.7 ms frame, peaks over a frame) and
+5x comfortable (2.5x, 5.9 ms); Wii 6x tight (1.2 to 1.5x in race footage), 5x
+comfortable (1.8 to 2.1x); N64 8x tight (about 1.1x at 60 fps), with no step
+between 4x and 8x. GameCube 6x (2.6x), PSP 3840x2176 (3.7x) and Dreamcast
+2880x2160 (5.2x) comfortable. **So Quality is PS2 5x, Wii 5x, N64 4x** (MMagTech
+agreed: good starting values, adjustable later). **PS2 CORRECTED ON THE TV the
+same night: Quality is 3x.** The off-screen runs left out the console's copy
+of each frame off the GPU and back; with Burnout 3's widescreen patch the 5x
+frame was 3982x2240 and 312 of 1,196 frames ran over 20 ms ("running
+horribly"); at 3x, 4. Higher waits for that copy to go (its own issue). PS2 at 5x is the first thing
+judged on the TV for stutter. A level change rebuilds no shaders (PS2,
+GameCube, Dreamcast, PSP: 0 bytes added; N64 about 102 KB of Mesa's), so no
+warning is needed and #133 does not move; turning on Dolphin's background
+shaders builds about 5 MB once. States made at one level load at another on
+N64 and PSP (identical sound after loading); Dreamcast loads but could not be
+proven exact (Flycast's sound varies between runs).
+
+**N64's Performance is 1x, not today's 2x** (MMagTech agreed): Performance
+only reaches weak or unknown machines, 2x was a starting value waiting for
+this setting, and an N64 exception would argue the same for PSP and PS2. The
+GLideN64 fallback (no Vulkan) follows the same rule, 320x240 at Performance.
+Revisit only if Performance on the slowed A9 (#210) looks unacceptable.
+
+**A game's own choice takes effect from its next start** (MMagTech,
+2026-10-02). The pause menu's Picture quality row saves the choice and says
+"From the next start"; the game never restarts by itself. Rejected: restarting
+at once with a save state, because only PSP, N64 and Dreamcast have states here
+(PS2, GameCube, Wii, Switch, PS3, Xbox and Xbox 360 do not, question 25), so on
+seven of the ten systems it would lose progress; and applying live where an
+emulator can, because one row would then behave two ways.
+
+**A game set by hand keeps its choice when the console's setting changes**
+(MMagTech, 2026-10-02, agreed until he has seen the UI on the TV). The row's
+choices are **Console setting** (every game starts here and follows Settings),
+Performance, Balanced and Quality. Rejected: a Settings change resetting every
+game's own choice, which would quietly undo choices made game by game.
+
+**Who sees Picture quality** (MMagTech, 2026-10-02): with a PIN set, only the
+owner, in Settings and in the pause menu, with no PIN asked; every other
+account sees no row at all. With no PIN, everyone sees it (the existing rule:
+no PIN, every account can do everything). The other PIN items still ask
+rather than hide, because they may need fixing while a child is signed in;
+picture quality is never urgent, and switching into the owner's account
+already asks for the PIN. Rejected: asking for the PIN on the pause menu's
+row, which would put the pad over a game for the first time. This reverses
+SETTINGS.md's "open to everyone: picture quality".
+
+**Starting level until phase 2:** every console starts on Performance (the
+design's rule for unknown hardware; nothing tells machines apart yet). The A9
+is set to Quality with the dial. Phase 2 lands in the same milestone, before
+the first release.
+
+Systems with a resolution to move: PS2, GameCube, Wii, PSP, N64, Dreamcast,
+Switch, PS3, Xbox, Xbox 360. Wii U has none without resolution packs (#207).
+
+#### DECIDED, MMagTech 2026-10-02: catching a setting an upgrade changed (#63)
+
+MMagTech: future core upgrades may rename settings, drop values or change
+defaults. Today none of that is noticed: an override key a core does not
+declare is ignored silently (core.cpp:239-241), and a value outside its list
+is passed through unchecked. Every emulator is pinned, so a setting can only
+change when a commit moves a pin; the check runs there.
+
+1. **A workflow check on any commit that moves a pin.** The built core is
+   loaded, its declared options (name, default, accepted values) compared
+   with a list saved in the repository and with the dial's tables; any
+   difference fails the run, which reports itself. Covers 20 of the 22
+   built-in cores without a game (NES and MAME 2003-Plus need only a stub
+   file). Dolphin and FBNeo declare options only with a real game; free
+   homebrew in the workflow is to be tried, untested.
+2. **A script run on the A9 over SSH** for bumps the workflow cannot check:
+   Dolphin and FBNeo (unless homebrew works), PS2, Eden, RPCS3, xemu, Xenia,
+   Cemu. One game per emulator, reading back what it applied (its log or the
+   settings file it rewrites; our own `[ps2]` line for PS2). Part of the A9
+   test every such bump already gets. Xenia matters most: a renamed
+   command-line flag makes it print help and exit before its log starts.
+3. **One log line in the console** when a core is given a setting it does
+   not declare, or a value outside its list. No screen. Reaches us through
+   the diagnostic report (#195).
+
+#### DECIDED, MMagTech 2026-10-02: PS2 widescreen on, from PCSX2's own patches
+
+Found by the phase 1 audit: every PS2 start logs `Failed to open
+patches.zip`. The file is made by the PCSX2 team (`PCSX2/pcsx2_patches`) and
+added to every official PCSX2 download by their release process; it is not in
+the source we build, so our build never had it. It holds an optional patch per
+game, each off until a setting turns it on (mainly `Widescreen 16:9` and
+`No-Interlacing`, Patch.cpp:115-116). **The fixes games need to run are not in
+it**: they come from `GameIndex.yaml`, which is in the image (240 games with
+patches; Patch.cpp:727-733).
+
+**Decided: ship it, pinned in the image, with the widescreen and no-interlacing
+patches on.** Both switch patches on by name, game by game (Patch.cpp:597-611):
+a game with no such patch in the file is left exactly as it was, 4:3 and
+PCSX2's normal deinterlacing; nothing is stretched (the aspect changes only
+when a game's own patch asks, Patch.cpp:823-828).
+MMagTech: the other systems' widescreen settings stretch every game the same
+way and distort it; PS2's are written and checked per game by the PCSX2 team,
+meant not to distort. So the rule for every system is: **a change to the game
+ships on only where the emulator's own team curates it per game.** Today only
+PS2 meets it; GameCube, Dreamcast and N64 keep their widescreen hacks off.
+Judged on the TV with several PS2 games before it ships. Patches a person
+keeps in RomM are a separate idea, after the first release.
+
+#### DECIDED, MMagTech 2026-10-02: the processor-side extras are fixed, not in the dial (#63)
+
+From the phase 1 audit (2026-10-02). Four options sharpen the picture on the
+processor rather than the graphics chip; none moves with the dial:
+
+| Extra | Option | Set to | RetroArch | Batocera |
+|---|---|---|---|---|
+| 3DO high resolution | `opera_high_resolution` | **on** | off | on |
+| Vector line sharpness, Vectrex | `vecx_res_multi` | **highest** | 1 | 1, exposed |
+| Vector line sharpness, MAME 2003-Plus vector games | `mame2003-plus_vector_resolution` | **highest** | 1024x768 | not written |
+| PlayStation 2x | `pcsx_rearmed_neon_enhancement_enable` | off | off | off, exposed |
+| SNES HD Mode 7 | `snes9x_mode7_hires` | off | off | not offered |
+
+MMagTech: the two that are on are simply on, with no measurement gate; this
+console is not meant for very old hardware, and any reasonable modern PC runs
+them. PlayStation 2x stays off because it glitches in some games and there are
+no per-game fixes; Mode 7 stays off because it changes how a 2D game looks.
+Nothing here needs an external file.
+
+#### BUILT ON `picture-quality`, 2026-10-02: #63 phase 1, with #73, #209 and #217
+
+Judged on the TV with MMagTech the same day, except PS2's patches, which
+need the image.
+
+- **`quality.h`, the one place.** Every emulator asks it at launch: the
+  libretro cores through their option overrides, PS2 through the host's
+  upscale and anisotropy, Eden, RPCS3 and xemu through the settings files the
+  console writes, Xenia through its flags. Cemu has no level. The console's
+  level is `picture_quality` in `config/settings.json`; a game's own is
+  `config/picture-quality.json`, by rom id, on this console only.
+- **Settings:** a "Picture" row (renamed from "Picture quality", which read
+  "Picture quality: Quality" in the pause menu). With a PIN set only the
+  owner sees it.
+- **Pause menu:** "Picture: Console" on the ten systems with a level,
+  Console or a locked level, from the next start, said in the pill;
+  Virtual Boy's one "Screen" row and Game Boy's "Colors" (`sysopts.h`),
+  changed live: the console now answers GET_VARIABLE_UPDATE, and a paused
+  game is run on by up to two silent frames so the change shows behind the
+  menu. Rows are centred like every button, with an arrow at each edge.
+- **Applied, read back on the A9 at Quality:** Wii 3200x2640, N64 4x, PS2 5x
+  with anisotropy 16, PSP 3840x2160, Eden Res2X and X16, RPCS3 300% and 16,
+  xemu surface_scale 4, Xenia's scaled resolve buffers.
+- **#209, measured with MMagTech at the TV** (frames.py, a minute each):
+  Eden 59.8 fps and Cemu 30.0 fps at their right speed with vsync off; xemu
+  kept on, because with it off it presented 631 frames a second.
+  `--adaptive-sync` on the drm rung of the session.
+- **#217:** patches.zip packed in build-pcsx2.sh from pcsx2_patches at a
+  pinned commit (4,710 games), widescreen and no-interlacing on; off-screen,
+  Burnout 3 enabled "Widescreen 16:9" and set 16:9.
+- **The version-bump check:** tools/core-options.c and cores/options/ in the
+  core build, `--check-option-tables` in the frontend build (129 values on 22
+  cores), tools/check-applied.sh on the A9, and a `[options]` log line at every
+  launch for anything a core does not declare.
+- **Looks, judged on the TV:** GBA blending Smart; Atari 2600 Medium
+  ghosting (Average still strobed, Heavy trailed). Integer scaling, counted
+  on the TV's own rows, made little visible difference; every system still
+  fills the height, and handhelds' look is #122's.
 
 #### DECIDED, MMagTech 2026-10-02: fast cores and full speed in games (#163, #150)
 

@@ -73,7 +73,9 @@ status here to Built.
   - Adding an account, and removing one
   - File access (turning it on, making a new password)
 
-  Open to everyone: sounds, picture quality, system update.
+  Open to everyone: sounds, system update. **Picture quality**, with a PIN
+  set, is seen only by the owner, in Settings and the pause menu, and
+  never asks; with no PIN, by everyone (MMagTech, 2026-10-02, #63).
   **Adding an account needs the PIN when one is set**, from the account
   panel and from Settings alike. MMagTech, 2026-09-24: otherwise anyone
   holding the controller can add themselves. With no PIN, anyone can add one,
@@ -274,8 +276,13 @@ Decided with MMagTech 2026-09-26, from the things people will actually do.
 
 ## Display and Sound
 
-- **Picture quality:** Performance, Balanced or Quality for the whole console,
-  and a game's pause menu can override it for that game. **To build, #63.**
+- **Picture** (picture quality): Performance, Balanced or Quality for the
+  whole console, and a game's pause menu can override it for that game with a
+  "Picture: Balanced" row (Console, Performance, Balanced, Quality; from the
+  game's next start, said in the pill). Named "Picture", not "Picture
+  quality", because "Picture quality: Quality" said it twice (MMagTech on the
+  TV, 2026-10-02). With a PIN set, only the owner sees it. **To build, #63.** Record: PROJECT.md, the
+  #63 decisions of 2026-10-02.
 - **Appearance:** Standard, Dark or Scheduled, the console's, in
   `config/settings.json`. Dark turns the menus down, never the game.
   Scheduled adds one **Dark hours** row (8 PM to 7 AM to start) that opens
@@ -643,9 +650,33 @@ right there and the choice is about a system:
 - **Virtual Boy:** 3D glasses (Off, red and blue, red and cyan, red and
   electric cyan, green and magenta, yellow and blue) and all eight screen
   colours. MMagTech's condition: every one of Cabinet's choices.
-- Game Boy colours, GBA screen colours and blending, Atari 2600 flicker
-  blending, Vectrex overlays.
-- Controller type: Mega Drive 3 or 6 button, PC Engine 2 or 6 button.
+- **Game Boy colours** (Off, Auto, Game Boy Color, Super Game Boy), for
+  original Game Boy games only: Gambatte ignores it for a Game Boy Color game.
+- **Virtual Boy's two are ONE ROW, "Screen"** (MMagTech on the TV,
+  2026-10-02): the eight colours, Red first and by default, then the five 3D
+  pairs ("3D red/blue"). With glasses on the core draws in the glasses' two
+  colours and ignores the screen colour, so two rows let a person set a
+  colour that did nothing, and made the menu seven buttons long.
+- **Narrowed with MMagTech 2026-10-02**, to two rows on two systems:
+  - **GBA screen colours: dropped.** Cabinet's own notes say it shifted hues
+    wrongly on device and left it off pending a fix.
+  - **GBA blending: no row, fixed on Smart** (`mix_smart`, blends only pixels
+    that flicker), and **Atari 2600 flicker blending: no row, fixed on
+    Medium ghosting** (`ghost_75`; Average still strobed Ms. Pac-Man's
+    ghosts and Heavy trailed, judged on the TV 2026-10-02). Each checked on a game known to flicker before it ships.
+  - **Vectrex overlays: dropped for now.** Not a core setting: Cabinet draws
+    each cartridge's sheet from its own images, none of which is built here.
+    Its own issue, after the first release.
+- **How the rows behave:** centred like every other button, "3D glasses: Off",
+  with an arrow at each edge when selected; they change instantly, in front
+  of the game.
+- ~~Controller type: Mega Drive 3 or 6 button, PC Engine 2 or 6 button.~~
+  **Dropped, MMagTech 2026-10-02.** Mega Drive: Genesis Plus GX picks 3 or 6
+  buttons per game itself when handed a plain pad, as this console does (read
+  in source, not tested). PC Engine: stays on 2 buttons, its default; one
+  switch per system would be wrong for some games either way, and choosing
+  per game would need a list of games, which the no-per-game-fixes rule rules
+  out. Cabinet's option is not carried over.
 - Shader and glow, as already decided.
 
 **To build, #73.**

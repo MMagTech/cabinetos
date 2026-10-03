@@ -165,6 +165,12 @@ if [[ ! -f /usr/share/cabinetos/system/pcsx2/resources/GameIndex.yaml ]]; then
     log "ERROR: PCSX2's resources did not land — the image would lose PlayStation 2"
     exit 1
 fi
+# And its game patches (#217): without the file PCSX2 says so on every start
+# and no widescreen or no-interlacing patch exists.
+if [[ ! -s /usr/share/cabinetos/system/pcsx2/resources/patches.zip ]]; then
+    log "ERROR: PCSX2's patches.zip did not land — PS2 would lose its widescreen patches"
+    exit 1
+fi
 log "installed PlayStation 2's resources ($(du -sh /usr/share/cabinetos/system/pcsx2 | cut -f1))"
 
 group_end

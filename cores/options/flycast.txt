@@ -1,0 +1,89 @@
+reicast_allow_service_buttons	disabled	disabled|enabled
+reicast_alpha_sorting	per-triangle (normal)	per-strip (fast, least accurate)|per-triangle (normal)|per-pixel (accurate)
+reicast_analog_stick_deadzone	15%	0%|5%|10%|15%|20%|25%|30%
+reicast_anisotropic_filtering	4	off|2|4|8|16
+reicast_auto_skip_frame	disabled	disabled|some|more
+reicast_broadcast	NTSC	NTSC|PAL|PAL_N|PAL_M|Default
+reicast_cable_type	TV (Composite)	VGA|TV (RGB)|TV (Composite)
+reicast_coin_limit	0	0|1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|16|17|18|19|20
+reicast_custom_textures	disabled	disabled|enabled
+reicast_dc_32mb_mod	disabled	disabled|enabled
+reicast_dcnet	enabled	disabled|enabled
+reicast_delay_frame_swapping	enabled	disabled|enabled
+reicast_detect_vsync_swap_interval	disabled	disabled|enabled
+reicast_device_port1_slot1	VMU	VMU|Purupuru|DreamPotato|None
+reicast_device_port1_slot2	Purupuru	VMU|Purupuru|None
+reicast_device_port2_slot1	VMU	VMU|Purupuru|DreamPotato|None
+reicast_device_port2_slot2	Purupuru	VMU|Purupuru|None
+reicast_device_port3_slot1	VMU	VMU|Purupuru|DreamPotato|None
+reicast_device_port3_slot2	Purupuru	VMU|Purupuru|None
+reicast_device_port4_slot1	VMU	VMU|Purupuru|DreamPotato|None
+reicast_device_port4_slot2	Purupuru	VMU|Purupuru|None
+reicast_digital_triggers	disabled	disabled|enabled
+reicast_dump_replaced_textures	disabled	disabled|enabled
+reicast_dump_textures	disabled	disabled|enabled
+reicast_emulate_bba	disabled	disabled|enabled
+reicast_emulate_framebuffer	disabled	disabled|enabled
+reicast_enable_dsp	enabled	disabled|enabled
+reicast_enable_rttb	disabled	disabled|enabled
+reicast_fix_upscale_bleeding_edge	enabled	disabled|enabled
+reicast_fog	enabled	disabled|enabled
+reicast_force_freeplay	enabled	disabled|enabled
+reicast_frame_skipping	disabled	disabled|1|2|3|4|5|6
+reicast_gdrom_fast_loading	disabled	disabled|enabled
+reicast_hle_bios	disabled	disabled|enabled
+reicast_internal_resolution	640x480	320x240|640x480|800x600|960x720|1024x768|1280x960|1440x1080|1600x1200|1920x1440|2560x1920|2880x2160|3200x2400|3840x2880|4480x3360|5120x3840|5760x4320|6400x4800|7040x5280|7680x5760|8320x6240|8960x6720|9600x7200|10240x7680|10880x8160|11520x8640|12160x9120|12800x9600
+reicast_language	English	Japanese|English|German|French|Spanish|Italian|Default
+reicast_lightgun1_crosshair	disabled	disabled|White|Red|Green|Blue
+reicast_lightgun2_crosshair	disabled	disabled|White|Red|Green|Blue
+reicast_lightgun3_crosshair	disabled	disabled|White|Red|Green|Blue
+reicast_lightgun4_crosshair	disabled	disabled|White|Red|Green|Blue
+reicast_lightgun_crosshair_size_scaling	100%	50%|60%|70%|80%|90%|100%|110%|120%|130%|140%|150%|160%|170%|180%|190%|200%|210%|220%|230%|240%|250%|260%|270%|280%|290%|300%
+reicast_linked_vmu_storage	disabled	disabled|enabled
+reicast_mipmapping	enabled	disabled|enabled
+reicast_native_depth_interpolation	disabled	disabled|enabled
+reicast_network_output	disabled	disabled|enabled
+reicast_oit_abuffer_size	512MB	512MB|1GB|2GB|4GB
+reicast_oit_layers	32	8|16|32|64|96|128
+reicast_per_content_vmus	disabled	disabled|VMU A1|All VMUs
+reicast_preload_custom_textures	disabled	disabled|enabled
+reicast_pvr2_filtering	disabled	disabled|enabled
+reicast_region	USA	Japan|USA|Europe|Default
+reicast_screen_rotation	horizontal	horizontal|vertical
+reicast_sh4clock	200	100|110|120|130|140|150|160|170|180|190|200|210|220|230|240|250|260|270|280|290|300|310|320|330|340|350|360|370|380|390|400|410|420|430|440|450|460|470|480|490|500
+reicast_show_lightgun_settings	disabled	enabled|disabled
+reicast_show_vmu_screen_settings	disabled	enabled|disabled
+reicast_texture_filtering	0	0|1|2
+reicast_texupscale	1	1|2|4|6
+reicast_texupscale_max_filtered_texture_size	256	256|512|1024
+reicast_threaded_rendering	enabled	disabled|enabled
+reicast_trigger_deadzone	0%	0%|5%|10%|15%|20%|25%|30%
+reicast_upnp	enabled	disabled|enabled
+reicast_vmu1_pixel_off_color	DEFAULT_OFF 01	DEFAULT_OFF 01|DEFAULT_ON 00|BLACK 02|BLUE 03|LIGHT_BLUE 04|GREEN 05|CYAN 06|CYAN_BLUE 07|LIGHT_GREEN 08|CYAN_GREEN 09|LIGHT_CYAN 10|RED 11|PURPLE 12|LIGHT_PURPLE 13|YELLOW 14|GRAY 15|LIGHT_PURPLE_2 16|LIGHT_GREEN_2 17|LIGHT_GREEN_3 18|LIGHT_CYAN_2 19|LIGHT_RED_2 20|MAGENTA 21|LIGHT_PURPLE_3 22|LIGHT_ORANGE 23|ORANGE 24|LIGHT_PURPLE_4 25|LIGHT_YELLOW 26|LIGHT_YELLOW_2 27|WHITE 28
+reicast_vmu1_pixel_on_color	DEFAULT_ON 00	DEFAULT_ON 00|DEFAULT_OFF 01|BLACK 02|BLUE 03|LIGHT_BLUE 04|GREEN 05|CYAN 06|CYAN_BLUE 07|LIGHT_GREEN 08|CYAN_GREEN 09|LIGHT_CYAN 10|RED 11|PURPLE 12|LIGHT_PURPLE 13|YELLOW 14|GRAY 15|LIGHT_PURPLE_2 16|LIGHT_GREEN_2 17|LIGHT_GREEN_3 18|LIGHT_CYAN_2 19|LIGHT_RED_2 20|MAGENTA 21|LIGHT_PURPLE_3 22|LIGHT_ORANGE 23|ORANGE 24|LIGHT_PURPLE_4 25|LIGHT_YELLOW 26|LIGHT_YELLOW_2 27|WHITE 28
+reicast_vmu1_screen_display	disabled	disabled|enabled
+reicast_vmu1_screen_opacity	100%	10%|20%|30%|40%|50%|60%|70%|80%|90%|100%
+reicast_vmu1_screen_position	Upper Left	Upper Left|Upper Right|Lower Left|Lower Right
+reicast_vmu1_screen_size_mult	1x	1x|2x|3x|4x|5x
+reicast_vmu2_pixel_off_color	DEFAULT_OFF 01	DEFAULT_OFF 01|DEFAULT_ON 00|BLACK 02|BLUE 03|LIGHT_BLUE 04|GREEN 05|CYAN 06|CYAN_BLUE 07|LIGHT_GREEN 08|CYAN_GREEN 09|LIGHT_CYAN 10|RED 11|PURPLE 12|LIGHT_PURPLE 13|YELLOW 14|GRAY 15|LIGHT_PURPLE_2 16|LIGHT_GREEN_2 17|LIGHT_GREEN_3 18|LIGHT_CYAN_2 19|LIGHT_RED_2 20|MAGENTA 21|LIGHT_PURPLE_3 22|LIGHT_ORANGE 23|ORANGE 24|LIGHT_PURPLE_4 25|LIGHT_YELLOW 26|LIGHT_YELLOW_2 27|WHITE 28
+reicast_vmu2_pixel_on_color	DEFAULT_ON 00	DEFAULT_ON 00|DEFAULT_OFF 01|BLACK 02|BLUE 03|LIGHT_BLUE 04|GREEN 05|CYAN 06|CYAN_BLUE 07|LIGHT_GREEN 08|CYAN_GREEN 09|LIGHT_CYAN 10|RED 11|PURPLE 12|LIGHT_PURPLE 13|YELLOW 14|GRAY 15|LIGHT_PURPLE_2 16|LIGHT_GREEN_2 17|LIGHT_GREEN_3 18|LIGHT_CYAN_2 19|LIGHT_RED_2 20|MAGENTA 21|LIGHT_PURPLE_3 22|LIGHT_ORANGE 23|ORANGE 24|LIGHT_PURPLE_4 25|LIGHT_YELLOW 26|LIGHT_YELLOW_2 27|WHITE 28
+reicast_vmu2_screen_display	disabled	disabled|enabled
+reicast_vmu2_screen_opacity	100%	10%|20%|30%|40%|50%|60%|70%|80%|90%|100%
+reicast_vmu2_screen_position	Upper Right	Upper Left|Upper Right|Lower Left|Lower Right
+reicast_vmu2_screen_size_mult	1x	1x|2x|3x|4x|5x
+reicast_vmu3_pixel_off_color	DEFAULT_OFF 01	DEFAULT_OFF 01|DEFAULT_ON 00|BLACK 02|BLUE 03|LIGHT_BLUE 04|GREEN 05|CYAN 06|CYAN_BLUE 07|LIGHT_GREEN 08|CYAN_GREEN 09|LIGHT_CYAN 10|RED 11|PURPLE 12|LIGHT_PURPLE 13|YELLOW 14|GRAY 15|LIGHT_PURPLE_2 16|LIGHT_GREEN_2 17|LIGHT_GREEN_3 18|LIGHT_CYAN_2 19|LIGHT_RED_2 20|MAGENTA 21|LIGHT_PURPLE_3 22|LIGHT_ORANGE 23|ORANGE 24|LIGHT_PURPLE_4 25|LIGHT_YELLOW 26|LIGHT_YELLOW_2 27|WHITE 28
+reicast_vmu3_pixel_on_color	DEFAULT_ON 00	DEFAULT_ON 00|DEFAULT_OFF 01|BLACK 02|BLUE 03|LIGHT_BLUE 04|GREEN 05|CYAN 06|CYAN_BLUE 07|LIGHT_GREEN 08|CYAN_GREEN 09|LIGHT_CYAN 10|RED 11|PURPLE 12|LIGHT_PURPLE 13|YELLOW 14|GRAY 15|LIGHT_PURPLE_2 16|LIGHT_GREEN_2 17|LIGHT_GREEN_3 18|LIGHT_CYAN_2 19|LIGHT_RED_2 20|MAGENTA 21|LIGHT_PURPLE_3 22|LIGHT_ORANGE 23|ORANGE 24|LIGHT_PURPLE_4 25|LIGHT_YELLOW 26|LIGHT_YELLOW_2 27|WHITE 28
+reicast_vmu3_screen_display	disabled	disabled|enabled
+reicast_vmu3_screen_opacity	100%	10%|20%|30%|40%|50%|60%|70%|80%|90%|100%
+reicast_vmu3_screen_position	Lower Left	Upper Left|Upper Right|Lower Left|Lower Right
+reicast_vmu3_screen_size_mult	1x	1x|2x|3x|4x|5x
+reicast_vmu4_pixel_off_color	DEFAULT_OFF 01	DEFAULT_OFF 01|DEFAULT_ON 00|BLACK 02|BLUE 03|LIGHT_BLUE 04|GREEN 05|CYAN 06|CYAN_BLUE 07|LIGHT_GREEN 08|CYAN_GREEN 09|LIGHT_CYAN 10|RED 11|PURPLE 12|LIGHT_PURPLE 13|YELLOW 14|GRAY 15|LIGHT_PURPLE_2 16|LIGHT_GREEN_2 17|LIGHT_GREEN_3 18|LIGHT_CYAN_2 19|LIGHT_RED_2 20|MAGENTA 21|LIGHT_PURPLE_3 22|LIGHT_ORANGE 23|ORANGE 24|LIGHT_PURPLE_4 25|LIGHT_YELLOW 26|LIGHT_YELLOW_2 27|WHITE 28
+reicast_vmu4_pixel_on_color	DEFAULT_ON 00	DEFAULT_ON 00|DEFAULT_OFF 01|BLACK 02|BLUE 03|LIGHT_BLUE 04|GREEN 05|CYAN 06|CYAN_BLUE 07|LIGHT_GREEN 08|CYAN_GREEN 09|LIGHT_CYAN 10|RED 11|PURPLE 12|LIGHT_PURPLE 13|YELLOW 14|GRAY 15|LIGHT_PURPLE_2 16|LIGHT_GREEN_2 17|LIGHT_GREEN_3 18|LIGHT_CYAN_2 19|LIGHT_RED_2 20|MAGENTA 21|LIGHT_PURPLE_3 22|LIGHT_ORANGE 23|ORANGE 24|LIGHT_PURPLE_4 25|LIGHT_YELLOW 26|LIGHT_YELLOW_2 27|WHITE 28
+reicast_vmu4_screen_display	disabled	disabled|enabled
+reicast_vmu4_screen_opacity	100%	10%|20%|30%|40%|50%|60%|70%|80%|90%|100%
+reicast_vmu4_screen_position	Lower Right	Upper Left|Upper Right|Lower Left|Lower Right
+reicast_vmu4_screen_size_mult	1x	1x|2x|3x|4x|5x
+reicast_vmu_sound	disabled	disabled|enabled
+reicast_volume_modifier_enable	enabled	disabled|enabled
+reicast_widescreen_cheats	disabled	disabled|enabled
+reicast_widescreen_hack	disabled	disabled|enabled

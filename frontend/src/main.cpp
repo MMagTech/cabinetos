@@ -91,6 +91,9 @@
 #include "power.h"
 #include "look.h"
 #include "prefs.h"
+#include "optcheck.h"
+#include "quality.h"
+#include "sysopts.h"
 #include "server.h"
 #include "update.h"
 #include "files.h"
@@ -489,6 +492,11 @@ private:
 // the point, so they never overwrite.
 struct GameSession {
     int romId = 0;
+    // The core's manifest name, for the pause menu's Picture quality row
+    // (quality::hasLevels). Standalones set it to the emulator's.
+    std::string core;
+    // RomM's platform slug, for the pause menu's system rows (sysopts.h).
+    std::string platformSlug;
     std::string title;
     // The server's own file name for the game, without its extension. A
     // save's row on RomM is named after it — see saveRowName.
@@ -1842,8 +1850,11 @@ static int countEntries(const std::string& dir) {
 // filtering — so a console that is given neither flag behaves exactly as it
 // did. See --ps2-upscale in the argument parser for what the multiplier means
 // on a 4K panel.
-static float gPs2Upscale = 1.0f;
-static int gPs2Anisotropy = 0;
+//
+// SINCE #63 NEITHER IS SET UNLESS A FLAG SAYS SO, and the picture quality level
+// decides (quality.h). -1 means "not given".
+static float gPs2Upscale = -1.0f;
+static int gPs2Anisotropy = -1;
 
 // "PRESS (A) TO ...", centred, with the A drawn as a button badge the way
 // consoles prompt: a white disc with a dark A, on the text's x-height. Home's
@@ -1985,7 +1996,21 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
         // meant the override table was being PRINTED rather than applied: every
         // core played on its declared defaults and the audit agreed with itself.
         // Invisible while the table was empty, wrong the moment it was not.
-        core.setOptionOverrides(catalog::optionOverrides(job.coreName));
+        //
+        // PICTURE QUALITY ON TOP (#63): the level this game runs at decides
+        // its resolution and shader building; quality.h is the one place that
+        // knows what each level means.
+        {
+            const quality::Level level = quality::forGame(game.id);
+            std::map<std::string, std::string> opts = catalog::optionOverrides(job.coreName);
+            for (const auto& kv : quality::coreOptions(job.coreName, game.platformSlug, level))
+                opts[kv.first] = kv.second;
+            // And the system's own pause menu rows (#73).
+            for (const auto& kv : sysopts::overrides(game.platformSlug))
+                opts[kv.first] = kv.second;
+            core.setOptionOverrides(opts);
+            quality::logApplied(job.coreName, game.id, level);
+        }
 
         // PLAYSTATION 2 NEEDS THREE THINGS NO LIBRETRO CORE DOES, and the second
         // is the one that matters most.
@@ -2000,7 +2025,12 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
         // it on the server under the name Cabinet's Mac uses — works on it
         // unchanged.
         if (cov.core && std::string(cov.core) == "pcsx2") {
-            core.setPs2(storage::imageAssetsDir() + "/pcsx2/resources", gPs2Upscale, gPs2Anisotropy);
+            // The level's values, unless a --ps2-upscale or --ps2-anisotropy
+            // given for a measurement says otherwise.
+            const quality::Ps2 q = quality::ps2(quality::forGame(game.id));
+            core.setPs2(storage::imageAssetsDir() + "/pcsx2/resources",
+                        gPs2Upscale > 0.0f ? gPs2Upscale : q.upscale,
+                        gPs2Anisotropy >= 0 ? gPs2Anisotropy : q.anisotropy);
         }
 
         if (!core.load(job.corePath)) {
@@ -3838,6 +3868,10 @@ static int rommProbe(const char* address, bool allowPairing) {
 }
 
 int main(int argc, char** argv) {
+    // The version-bump check's frontend half (optcheck.h): before anything is
+    // opened, so CI runs it with no display, no GPU and no core.
+    if (argc == 3 && std::string(argv[1]) == "--check-option-tables")
+        return optcheck::run(argv[2]);
     bool shotMode = false;
     const char* shotPath = "/tmp/cabinetos-frame.bmp";
     int shotAfterFrames = 30;
@@ -6501,15 +6535,45 @@ int main(int argc, char** argv) {
     Animated overlayFade;
     overlayFade.smooth = true;    // 350 ms ease-in-out, per the design system
     Animated overlayFocus;
-    enum OverlayItem { OvResume = 0, OvSaveState, OvLoadState, OvScreenshot, OvExit, OvCount };
+    enum OverlayItem { OvResume = 0, OvSaveState, OvLoadState, OvScreenshot, OvChoice, OvExit,
+                       OvCount };
     const char* kOverlayLabels[OvCount] = {
-        "Resume", "Save state", "Load latest state", "Screenshot", "Exit to Home",
+        "Resume", "Save state", "Load latest state", "Screenshot", "", "Exit to Home",
     };
+    // CHOICE ROWS in a list of buttons: "Picture: Console" (#63) and a
+    // system's own options, "3D glasses: Off" (#73). Built when the menu
+    // opens, in the order they appear, between Screenshot and Exit to Home.
+    // Left and right change one; A steps it on and wraps.
+    struct PauseChoice {
+        // "Picture", not "Picture quality": "Picture quality: Quality" says it
+        // twice (MMagTech, 2026-10-02).
+        std::string label;
+        std::vector<std::string> values;
+        int current = 0;
+        // Says "From the next start" when changed: Picture does, a system
+        // row changes in front of the game and needs no word.
+        bool nextStart = false;
+        std::function<void(int)> apply;
+    };
+    std::vector<PauseChoice> pauseChoices;
+    // Frames to run while paused so a system row's change shows behind the
+    // menu (the frame loop, `redrew`).
+    int pauseRedrawFrames = 0;
     // The pause menu's items for THIS game, built each time it opens: the two
     // state items only where the system has snapshots. PlayStation 2 and
     // GameCube get Resume, Screenshot and Exit to Home, and nothing to press
     // that says no.
     std::vector<OverlayItem> pauseItems{OvResume, OvSaveState, OvLoadState, OvExit};
+    // The choice row at pause menu slot `slot`, or nullptr.
+    auto choiceAt = [&](int slot) -> PauseChoice* {
+        int n = 0;
+        for (int i = 0; i < slot && i < static_cast<int>(pauseItems.size()); ++i)
+            if (pauseItems[i] == OvChoice) ++n;
+        if (slot < 0 || slot >= static_cast<int>(pauseItems.size()) ||
+            pauseItems[slot] != OvChoice || n >= static_cast<int>(pauseChoices.size()))
+            return nullptr;
+        return &pauseChoices[n];
+    };
 
     // ---- The Power menu — docs/PROJECT.md, open question 10b ------------
     //
@@ -7385,7 +7449,7 @@ int main(int argc, char** argv) {
                      SetPinOff, SetRemoveAccount, SetScreenOff, SetWifi, SetServer,
                      SetUpdate, SetUpdateCheck, SetCredits, SetFiles, SetDownloads,
                      SetAddController, SetShortcuts, SetShortcutButton, SetAppearance,
-                     SetDarkHours, SetColour, SetRumble };
+                     SetDarkHours, SetColour, SetRumble, SetPictureQuality };
     // One Eject row per USB drive: this plus the drive's index in
     // storage::locations() when the rows were built.
     constexpr int kSetEject = 100;
@@ -8155,9 +8219,14 @@ int main(int argc, char** argv) {
                      !radioOn ? "Off" : (onWifi.empty() ? "Not connected" : onWifi)});
         }
 
+        // PICTURE QUALITY IS THE OWNER'S WHEN A PIN IS SET (MMagTech,
+        // 2026-10-02, #63): nobody else sees the row at all, and the owner is
+        // never asked for the PIN. With no PIN, everyone sees it, as with
+        // everything else. It is never urgent, and switching into the owner's
+        // account already asks for the PIN.
+        const bool showQuality =
+            !accounts::pinIsSet() || accounts::activeId() == accounts::ownerId();
         cats.push_back({"Display and Sound", {
-            {K::Unbuilt, 0, "Picture quality",
-             "Performance, Balanced or Quality, for the whole console", ""},
             [] {
                 Row r{K::Choice, SetInterfaceSounds, "Interface sounds",
                       "The clicks when you move around the menus", ""};
@@ -8183,7 +8252,19 @@ int main(int argc, char** argv) {
             // menus look. #129 and #75, 2026-09-27. Colour is the signed-in
             // person's; the account chip above already says who that is.
             auto& rows = cats.back().rows;
-            auto at = rows.begin() + 1;   // after Picture quality
+            if (showQuality) {
+                // NOTHING UNDER IT YET. Once the pause menu has its own row,
+                // "Change per game in the pause menu", MMagTech's wording: a
+                // fact the row cannot otherwise show (2026-10-02).
+                // "Picture", as in the pause menu: "Picture quality ...
+                // Quality" said it twice (MMagTech, 2026-10-02).
+                Row r{K::Choice, SetPictureQuality, "Picture", "", ""};
+                for (int i = 0; i < quality::kLevelCount; ++i)
+                    r.choices.push_back(quality::levelName(static_cast<quality::Level>(i)));
+                r.choice = static_cast<int>(quality::console());
+                rows.insert(rows.begin(), r);
+            }
+            auto at = rows.begin() + (showQuality ? 1 : 0);   // after Picture quality
             std::vector<Row> lookRows;
             {
                 Row r{K::Choice, SetAppearance, "Appearance", "", ""};
@@ -9079,6 +9160,14 @@ int main(int argc, char** argv) {
                     }
                     sound::play(sound::Cue::Move);
                 }
+                if (res.value == SetPictureQuality) {
+                    // From each game's next start (quality.h); nothing running
+                    // changes.
+                    const int i = settingsScreen.choiceOf(SetPictureQuality);
+                    if (i >= 0 && i < quality::kLevelCount)
+                        quality::setConsole(static_cast<quality::Level>(i));
+                    sound::play(sound::Cue::Move);
+                }
                 if (res.value == SetInterfaceSounds) {
                     const int i = settingsScreen.choiceOf(SetInterfaceSounds);
                     if (i >= 0 && i < sound::kLevelCount) {
@@ -9753,7 +9842,10 @@ int main(int argc, char** argv) {
         }
         bool missingKeys = false;
         std::string err;
-        if (!cab::standalone::prepare(emu, launchJob.entryPath, saveDir, user.name, pads,
+        // THE GAME'S PICTURE QUALITY (#63), its own choice or the console's.
+        const quality::Level level = quality::forGame(launchJob.romId);
+        quality::logApplied(launchJob.coreName, launchJob.romId, level);
+        if (!cab::standalone::prepare(emu, launchJob.entryPath, saveDir, user.name, pads, level,
                                       &missingKeys, &err)) {
             cab::vpad::close();
             if (!err.empty()) std::fprintf(stderr, "[standalone] %s\n", err.c_str());
@@ -9787,7 +9879,8 @@ int main(int argc, char** argv) {
                 return;
             }
         }
-        if (!standaloneRun.start(emu, launchJob.romPath, launchJob.entryPath, saveDir, &err)) {
+        if (!standaloneRun.start(emu, launchJob.romPath, launchJob.entryPath, saveDir, level,
+                                 &err)) {
             std::string aerr;
             cab::standalone::afterEnd(emu, launchJob.entryPath, saveDir, &aerr);
             cab::standalone::finished(emu, saveDir);
@@ -9798,6 +9891,8 @@ int main(int argc, char** argv) {
         }
         session = GameSession{};
         session.romId = launchJob.romId;
+        session.core = launchJob.coreName;
+        session.platformSlug = launchJob.platformSlug;
         session.title = launchJob.title;
         session.fsStem = launchJob.fsStem;
         session.saveDir = saveDir;
@@ -10111,6 +10206,8 @@ int main(int argc, char** argv) {
 
         session = GameSession{};
         session.romId = launchJob.romId;
+        session.core = launchJob.coreName;
+        session.platformSlug = launchJob.platformSlug;
         session.title = launchJob.title;
         session.saveDir = saveDir;
         session.fsStem = launchJob.fsStem;
@@ -10600,6 +10697,25 @@ int main(int argc, char** argv) {
         standaloneShot.path.clear();
     };
 
+    // AS A SETTINGS CHOICE ROW BEHAVES (settings.cpp): left and right stop at
+    // the ends with the edge sound, and A walks forward and wraps, so the row
+    // also works from A alone.
+    auto stepChoice = [&](int slot, int delta, bool wrap) {
+        PauseChoice* c = choiceAt(slot);
+        if (!c) return;
+        const int count = static_cast<int>(c->values.size());
+        int next = c->current + delta;
+        if (wrap && next >= count) next = 0;
+        if (next < 0 || next >= count) {
+            sound::play(sound::Cue::Edge);
+            return;
+        }
+        c->current = next;
+        if (c->apply) c->apply(next);
+        if (c->nextStart) menuNotice.say("From the next start", Tone::Done);
+        sound::play(sound::Cue::Move);
+    };
+
     auto overlayActivate = [&]() {
         if (powerMenu) {
             if (overlaySlot >= 0 && overlaySlot < static_cast<int>(powerItems.size()))
@@ -10622,6 +10738,7 @@ int main(int argc, char** argv) {
                 if (standaloneRun.active()) standaloneScreenshot();
                 else screenshotNow(session, uploader, menuNotice);
                 break;
+            case OvChoice: stepChoice(overlaySlot, +1, /*wrap=*/true); break;
             case OvExit:
                 // An emulator of its own is asked to close (thawed first) and
                 // the menu goes; finishStandalone takes the rest of the way
@@ -10654,6 +10771,48 @@ int main(int argc, char** argv) {
             // wherever the shortcut button is recognised). PS2 reads PCSX2's
             // frame since #130; GameCube is a libretro core like the rest.
             pauseItems.push_back(OvScreenshot);
+            // PICTURE QUALITY, on the ten systems where a level changes
+            // something, and with a PIN set only for the owner, as in
+            // Settings (MMagTech, 2026-10-02).
+            pauseChoices.clear();
+            if (quality::hasLevels(session.core) &&
+                (!accounts::pinIsSet() || accounts::activeId() == accounts::ownerId())) {
+                PauseChoice c;
+                c.label = "Picture";
+                c.values.push_back("Console");
+                for (int l = 0; l < quality::kLevelCount; ++l)
+                    c.values.push_back(quality::levelName(static_cast<quality::Level>(l)));
+                const std::optional<quality::Level> own = quality::gameChoice(session.romId);
+                c.current = own ? static_cast<int>(*own) + 1 : 0;
+                c.nextStart = true;
+                const int romId = session.romId;
+                c.apply = [romId](int i) {
+                    quality::setGameChoice(romId, i == 0 ? std::nullopt
+                                                         : std::optional<quality::Level>(
+                                                               static_cast<quality::Level>(i - 1)));
+                };
+                pauseChoices.push_back(std::move(c));
+            }
+            // THE SYSTEM'S OWN ROWS (#73), for everyone: they are looks.
+            // Built-in cores only; none of the separate emulators has any.
+            if (session.standaloneCore.empty()) {
+                for (const sysopts::Option& o : sysopts::forSystem(session.platformSlug)) {
+                    PauseChoice c;
+                    c.label = o.label;
+                    for (const sysopts::Choice& ch : o.choices) c.values.push_back(ch.label);
+                    c.current = sysopts::chosen(session.platformSlug, o);
+                    const std::string slug = session.platformSlug;
+                    const sysopts::Option* opt = &o;
+                    c.apply = [slug, opt, &pauseRedrawFrames](int i) {
+                        sysopts::choose(slug, *opt, i);
+                        for (const auto& kv : opt->choices[i].sets)
+                            cab::Core::shared().setOptionLive(kv.first, kv.second);
+                        pauseRedrawFrames = 2;
+                    };
+                    pauseChoices.push_back(std::move(c));
+                }
+            }
+            for (size_t i = 0; i < pauseChoices.size(); ++i) pauseItems.push_back(OvChoice);
             pauseItems.push_back(OvExit);
         }
         overlaySlot = 0;
@@ -11074,6 +11233,9 @@ int main(int argc, char** argv) {
                             overlayFocus.elapsed = 0.0f;
                             overlayFocus.retarget(1.0f, kOverlayFocusDuration);
                         }
+                        if ((e.key.key == SDLK_LEFT || e.key.key == SDLK_RIGHT) && !powerMenu &&
+                            choiceAt(overlaySlot))
+                            stepChoice(overlaySlot, e.key.key == SDLK_RIGHT ? 1 : -1, false);
                         if (e.key.key == SDLK_RETURN || e.key.key == SDLK_SPACE)
                             overlayActivate();
                         break;
@@ -11217,6 +11379,12 @@ int main(int argc, char** argv) {
                             overlaySlot = std::max(0, overlaySlot - 1);
                         if (e.gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_DOWN)
                             overlaySlot = std::min(ovCount() - 1, overlaySlot + 1);
+                        if ((e.gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_LEFT ||
+                             e.gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_RIGHT) &&
+                            !powerMenu && choiceAt(overlaySlot))
+                            stepChoice(overlaySlot,
+                                       e.gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_RIGHT ? 1 : -1,
+                                       false);
                         if (e.gbutton.button == SDL_GAMEPAD_BUTTON_SOUTH) overlayActivate();
                         // East is Back, and Back from the overlay is Resume —
                         // or, from the Power menu on Home, just closing it.
@@ -11784,13 +11952,26 @@ int main(int argc, char** argv) {
             }
             const bool frozen = overlayOpen || stateHold || stateHoldWaiting;
             core.setPaused(frozen);
+            // Set when a paused frame was run only to redraw it; its sound is
+            // dropped below, as rewind's is.
+            bool redrew = false;
             // RUMBLE (#149): what the game asked for, to each player's pad,
             // and nothing while the game is not being played. Rewind replays
             // frames backwards, which is not play either.
             if (core.isPs2()) ps2::pollRumble();
             rumble::update(!frozen && !rewinding);
 
-            if (frozen) {
+            if (frozen && pauseRedrawFrames > 0 && !core.isPs2()) {
+                // A SYSTEM ROW WAS CHANGED IN THE PAUSE MENU (#73): run the
+                // game on by a frame or two, silently, so the frozen picture
+                // behind the menu is redrawn with the new option. A core
+                // reads the change at the start of its next frame and draws
+                // it in that frame or the one after. MMagTech on the TV: the
+                // colour did not change behind the menu.
+                --pauseRedrawFrames;
+                core.runFor(1.0 / std::max(core.avInfo().fps, 1.0));
+                redrew = true;
+            } else if (frozen) {
                 // Nothing to step. The last frame stays uploaded, so the
                 // menu sits over a frozen picture rather than a black one.
             } else if (shotMode) {
@@ -11896,7 +12077,7 @@ int main(int argc, char** argv) {
                 static constexpr double kMaxWaitingMs = 1000.0;
                 static uint64_t droppedBytes = 0;
                 static uint64_t droppedLogAt = 0;
-                if (!samples.empty() && core.speed() <= 1.0 && !rewinding) {
+                if (!samples.empty() && core.speed() <= 1.0 && !rewinding && !redrew) {
                     const double bytesPerMs =
                         4.0 * std::max(core.avInfo().sampleRate, 1.0) / 1000.0;
                     const int room = static_cast<int>(kMaxWaitingMs * bytesPerMs) -
@@ -13016,8 +13197,16 @@ int main(int argc, char** argv) {
                 float scale = std::min(ui::kCanvasWidth / (shownRows * shownAspect),
                                        ui::kCanvasHeight / shownRows);
                 if (integerScale) {
-                    scale = std::floor(scale);
-                    if (scale < 1.0f) scale = 1.0f;
+                    // COUNTED IN THE SCREEN'S OWN ROWS, not the 1080-point
+                    // canvas (2026-10-02). On a 2160-line TV the canvas made
+                    // the steps twice as coarse: 240 rows got 4x, 960 of 1080
+                    // points with bars, where the real panel takes 9x and
+                    // fills exactly. Shown to MMagTech to decide again.
+                    const float perPoint =
+                        dh > 0 ? static_cast<float>(dh) / ui::kCanvasHeight : 1.0f;
+                    float rows = std::floor(scale * perPoint);
+                    if (rows < 1.0f) rows = 1.0f;
+                    scale = rows / perPoint;
                 }
                 const float dh = shownRows * scale;
                 const float dw = dh * shownAspect;
@@ -13537,6 +13726,34 @@ int main(int argc, char** argv) {
                 renderer.draw(btn);
 
                 const char* label = ovLabel(i);
+                // A CHOICE ROW, CENTRED LIKE EVERY OTHER BUTTON: "Picture
+                // quality: Balanced" on one line, and under focus an arrow at
+                // each edge of the button, bright where left or right still
+                // goes somewhere and faint at the end, as Settings shows it.
+                if (PauseChoice* choice = powerMenu ? nullptr : choiceAt(i)) {
+                    const ui::TextStyle st = ui::TextStyle::Title3;
+                    const ui::Color c = ui::Color::white(
+                        (kOverlayButtonRestText + f * (1.0f - kOverlayButtonRestText)) * ovl);
+                    const float baseY = by + (bh - text.lineHeight(st, sc)) * 0.5f +
+                                        text.ascent(st, sc);
+                    const std::string line =
+                        choice->label + ": " + choice->values[choice->current];
+                    const float lw = text.measure(line.c_str(), st, sc);
+                    text.draw(renderer, line.c_str(), bx + (bw - lw) * 0.5f, baseY, st, c, sc);
+                    if (f > 0.0f) {
+                        const char* kNext = "\xE2\x80\xBA";
+                        const char* kBack = "\xE2\x80\xB9";
+                        const float aw = text.measure(kNext, st, sc);
+                        const bool canRight =
+                            choice->current + 1 < static_cast<int>(choice->values.size());
+                        const bool canLeft = choice->current > 0;
+                        text.draw(renderer, kBack, bx + 28.0f, baseY, st,
+                                  ui::Color::white((canLeft ? 0.70f : 0.18f) * f * ovl), sc);
+                        text.draw(renderer, kNext, bx + bw - 28.0f - aw, baseY, st,
+                                  ui::Color::white((canRight ? 0.70f : 0.18f) * f * ovl), sc);
+                    }
+                    continue;
+                }
                 const float tw = text.measure(label, ui::TextStyle::Title3, sc);
                 // Dark on the light row, light on the dark ones. Crossfaded by
                 // the focus animation so the text does not snap between them.
