@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+#
+# The Wii's own search, the root half of "Pair a Wii Remote". docs/PROJECT.md
+# open question 35; issue #200.
+#
+# Run only by cabinetos-wii-search.service, which the session starts through
+# 65-cabinetos-wii.rules. Everything after the search (making bluetoothd know
+# the Remote, pairing it, its PIN, trusting it, its light) the session does as
+# `cabinet`; only this needs root.
+#
+# WHY IT EXISTS: copies of the Wii Remote answer only the Wii's search, the
+# limited inquiry (LIAC). bluetoothd cannot run one (src/adapter.c has no
+# limited discovery at 5.87), so a normal Bluetooth search never shows them.
+# The kernel can, through the management socket, which needs CAP_NET_ADMIN.
+# Measured on the A9 2026-10-02: `btmgmt find -l -b` found both TechKens in
+# one pass (about 12 seconds); `bluetoothctl scan bredr` found neither.
+#
+# The answer is /run/cabinetos-wii-search.state, key=value, replaced whole:
+#   state=done | failed
+#   remote=<address>        one line per Wii Remote found (may be none)
+#   reason=<short text>     failed
+#   at=<epoch>
+# A Remote is anything whose name starts "Nintendo RVL-CNT", the test Dolphin
+# and Wii software use; the address is what the session pairs.
+
+set -uo pipefail
+
+STATE=/run/cabinetos-wii-search.state
+
+say() {
+    local tmp
+    tmp=$(mktemp /run/.cabinetos-wii-search.XXXXXX) || return
+    { printf '%s\n' "$@"; printf 'at=%s\n' "$(date +%s)"; } > "${tmp}"
+    chmod 0644 "${tmp}"
+    mv -f "${tmp}" "${STATE}"
+}
+
+if ! command -v btmgmt >/dev/null 2>&1; then
+    echo "cabinetos-wii-search: btmgmt is not installed" >&2
+    say state=failed "reason=btmgmt is not installed"
+    exit 1
+fi
+
+say state=searching
+
+# One limited inquiry, BR/EDR only. btmgmt prints a dev_found line per device
+# and, for one that gave its name, a "name ..." line after it.
+out=$(timeout 30 btmgmt find -l -b 2>&1)
+rc=$?
+if [[ ${rc} -ne 0 ]] && ! grep -q "dev_found" <<<"${out}"; then
+    echo "cabinetos-wii-search: btmgmt find -l failed (${rc}): ${out}" >&2
+    say state=failed "reason=the search did not run"
+    exit 1
+fi
+
+lines=(state=done)
+mapfile -t found < <(awk '
+    /dev_found:/ { addr = $3 }
+    /^name / && addr != "" {
+        sub(/^name /, "")
+        if (index($0, "Nintendo RVL-CNT") == 1 && !(addr in seen)) {
+            seen[addr] = 1
+            print addr
+        }
+    }' <<<"${out}")
+for a in "${found[@]}"; do
+    lines+=("remote=${a}")
+done
+say "${lines[@]}"
+echo "cabinetos-wii-search: ${#found[@]} Wii Remote(s) found"

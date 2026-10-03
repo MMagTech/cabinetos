@@ -63,6 +63,7 @@
 #include "cache.h"
 #include "catalog.h"
 #include "wii.h"
+#include "wiiremote.h"
 #include "covercache.h"
 #include "dirsave.h"
 #include "filesave.h"
@@ -4738,11 +4739,18 @@ int main(int argc, char** argv) {
     // every SDL on the machine, this one included, and a console that adopted
     // them as players would pass each press back to itself.
     SDL_SetHint(SDL_HINT_GAMECONTROLLER_IGNORE_DEVICES, "0x1209/0xCAB0");
+    // A WII REMOTE IS NOT ONE OF SDL'S PADS HERE (#200): wiiremote.h drives
+    // them, and the bridge's stand-ins carry Nintendo's id, which SDL's own Wii
+    // driver would otherwise take as a second controller.
+    SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_WII, "0");
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD | SDL_INIT_AUDIO)) {
         std::fprintf(stderr, "[frontend] SDL_Init failed: %s\n", SDL_GetError());
         return 1;
     }
     players::loadMappings();
+    // Real Wii Remotes (#200): whether one is paired, before the library is
+    // drawn, and the thread that sets each up as it connects.
+    wiiremote::start();
 
     // The interface's own sounds. Opened here rather than lazily, because the
     // first click a person hears should not be the second one they asked for —
@@ -7449,7 +7457,8 @@ int main(int argc, char** argv) {
                      SetPinOff, SetRemoveAccount, SetScreenOff, SetWifi, SetServer,
                      SetUpdate, SetUpdateCheck, SetCredits, SetFiles, SetDownloads,
                      SetAddController, SetShortcuts, SetShortcutButton, SetAppearance,
-                     SetDarkHours, SetColour, SetRumble, SetPictureQuality };
+                     SetDarkHours, SetColour, SetRumble, SetPictureQuality,
+                     SetWiiRemotes };
     // One Eject row per USB drive: this plus the drive's index in
     // storage::locations() when the rows were built.
     constexpr int kSetEject = 100;
@@ -7458,6 +7467,8 @@ int main(int argc, char** argv) {
     constexpr int kSetFormat = 200;
     // One row per connected controller: this plus its player, 0-based.
     constexpr int kSetPad = 300;
+    // The paired Wii Remotes as the Wii Remotes panel last listed them.
+    std::vector<wiiremote::Paired> wiiRowsShown;
     // The controllers the Controllers rows were built from, to rebuild them
     // when one connects or goes (players::generation).
     int settingsPadsSeen = -1;
@@ -7855,6 +7866,121 @@ int main(int argc, char** argv) {
             }
         });
     };
+    // ---- Pair a Wii Remote (#200) ---------------------------------------------
+    //
+    // The Wii's own search, over and over, until a Remote answers or the
+    // window is closed; then it is paired, trusted and connected, and the
+    // sensor bar is asked, as a Wii asks it. One pass of the search is about
+    // 12 seconds and a Remote's red button keeps it findable for longer.
+    struct WiiPairJob {
+        std::mutex m;
+        std::string detail;   // the line under the title, when it changes
+        bool fresh = false, done = false;
+        std::atomic<bool> stop{false};
+        std::thread th;
+        void quit() {
+            stop = true;
+            if (th.joinable()) th.join();
+        }
+        ~WiiPairJob() { quit(); }
+    };
+    WiiPairJob wiiPair;
+    bool wiiPairOpen = false;
+    auto openWiiPairWindow = [&]() {
+        wiiPair.quit();
+        wiiPair.stop = false;
+        {
+            std::lock_guard<std::mutex> lk(wiiPair.m);
+            wiiPair.fresh = wiiPair.done = false;
+        }
+        askChoice("Pair a Wii Remote", "Press the red sync button", {}, 0, [](int) {});
+        choiceScreen.setStaysOpen(true);
+        choiceScreen.setFixedWidth(kPadWindowWidth);
+        wiiPairOpen = true;
+        wiiPair.th = std::thread([&job = wiiPair]() {
+            auto say = [&](const std::string& d) {
+                std::lock_guard<std::mutex> lk(job.m);
+                job.detail = d;
+                job.fresh = true;
+            };
+            while (!job.stop) {
+                std::vector<std::string> found;
+                std::string err;
+                if (!wiiremote::search(&found, &err, &job.stop)) {
+                    if (job.stop) break;
+                    std::fprintf(stderr, "[wiiremote] search: %s\n", err.c_str());
+                    say("Couldn't search for Wii Remotes");
+                    break;
+                }
+                for (const std::string& address : found) {
+                    if (job.stop) break;
+                    say("Pairing\xE2\x80\xA6");
+                    if (wiiremote::pair(address, &err)) {
+                        std::lock_guard<std::mutex> lk(job.m);
+                        job.done = true;
+                        job.fresh = true;
+                        return;
+                    }
+                    say("Couldn't pair. Press the red sync button again");
+                }
+            }
+        });
+    };
+    auto closeWiiPairWindow = [&]() {
+        wiiPair.quit();
+        wiiPairOpen = false;
+    };
+    // THE WII REMOTES PANEL: each paired Remote (its value its light while
+    // connected; pressed, Remove), Pair a Wii Remote, and the sensor bar,
+    // which a press flips in place. Removing the last Remote greys the
+    // Remote games again.
+    std::function<void(int)> openWiiPanelAt;
+    std::function<void()> rebuildSettingsRows;   // buildSettings, set once it exists
+    openWiiPanelAt = [&](int focus) {
+        wiiRowsShown = wiiremote::known();
+        std::vector<std::string> names, values;
+        for (const wiiremote::Paired& w : wiiRowsShown) {
+            names.push_back("Wii Remote");
+            values.push_back(w.light ? "Player " + std::to_string(w.light)
+                                     : (w.connected ? "Connected" : "Off"));
+        }
+        const int pairAt = static_cast<int>(names.size());
+        names.push_back("Pair a Wii Remote");
+        values.push_back("");
+        const int barAt = static_cast<int>(names.size());
+        names.push_back("Sensor bar");
+        values.push_back(wiiremote::sensorBarAbove() ? "Above the TV" : "Below the TV");
+        askChoice("Wii Remotes", "", names, std::clamp(focus, 0, barAt), [&, pairAt, barAt](int i) {
+            if (i == barAt) {
+                wiiremote::setSensorBarAbove(!wiiremote::sensorBarAbove());
+                sound::play(sound::Cue::Move);
+                openWiiPanelAt(barAt);
+                return;
+            }
+            if (i == pairAt) {
+                choiceScreen.close();
+                openWiiPairWindow();
+                return;
+            }
+            if (i < 0 || i >= static_cast<int>(wiiRowsShown.size())) return;
+            const wiiremote::Paired w = wiiRowsShown[static_cast<size_t>(i)];
+            askChoice("Remove this Wii Remote?", "", {"Remove", "Cancel"}, 1, [&, w, i](int k) {
+                if (k == 0) {
+                    std::string err;
+                    if (wiiremote::remove(w.address, &err))
+                        std::fprintf(stderr, "[wiiremote] removed %s\n", w.address.c_str());
+                    else
+                        menuNotice.say("Couldn't remove the Wii Remote", Tone::Problem);
+                    if (rebuildSettingsRows) rebuildSettingsRows();
+                }
+                openWiiPanelAt(i);
+            });
+        });
+        choiceScreen.setValues(values);
+        choiceScreen.setStaysOpen(true);
+    };
+    auto openWiiPanel = [&]() { openWiiPanelAt(0); };
+
     auto askWifi = [&settingsWifi]() {
         if (settingsWifi.running.load()) return;
         if (settingsWifi.th.joinable()) settingsWifi.th.join();
@@ -8141,6 +8267,16 @@ int main(int argc, char** argv) {
                                 "Player " + std::to_string(p.player + 1)});
             }
             rows.push_back({K::Action, SetAddController, "Add a controller", "", ""});
+            // REAL WII REMOTES (#200, PROJECT.md question 35): pair one once,
+            // as on a Wii, and the Wii games made for it play. ONE ROW, opening
+            // a panel of its own (the paired Remotes, Pair a Wii Remote, the
+            // sensor bar): four rows of Wii here pushed the pads' own rows down
+            // (MMagTech, 2026-10-02).
+            {
+                const size_t n = wiiremote::known().size();
+                rows.push_back({K::Action, SetWiiRemotes, "Wii Remotes", "",
+                                n == 0 ? "None" : std::to_string(n) + " paired"});
+            }
             // RUMBLE, on by default, for every pad and every system with
             // motors: one switch, as Cabinet has it (rumble.h, #149). Above
             // the shortcuts so their button row stays under its own switch.
@@ -8404,6 +8540,8 @@ int main(int argc, char** argv) {
         if (const int p = players::playerOf(settingsLastPad); p >= 0)
             settingsScreen.mark(kSetPad + p);
     };
+    rebuildSettingsRows = buildSettings;
+
     // Start root's check or download, and say so at once rather than when
     // root's first write lands. A refusal is said in the row: the unit is not
     // in this image, or polkit said no.
@@ -8828,6 +8966,9 @@ int main(int argc, char** argv) {
                 } else if (res.value == SetAddController) {
                     sound::play(sound::Cue::Activate);
                     openPadWindow();
+                } else if (res.value == SetWiiRemotes) {
+                    sound::play(sound::Cue::Activate);
+                    openWiiPanel();
                 } else if (res.value == SetShortcutButton) {
                     // The pad that pressed A, which the row already names.
                     const std::vector<players::Pad> pads = players::connected();
@@ -9128,6 +9269,7 @@ int main(int argc, char** argv) {
                     rumble::setEnabled(settingsScreen.choiceOf(SetRumble) == 1);
                     sound::play(sound::Cue::Move);
                 }
+
                 if (res.value == SetShortcuts) {
                     shortcuts::setEnabled(settingsScreen.choiceOf(SetShortcuts) == 1);
                     sound::play(sound::Cue::Move);
@@ -10155,9 +10297,16 @@ int main(int argc, char** argv) {
         if (launchJob.coreName == "dolphin") shareDolphinCache(saveDir);
         // What each player's port holds. Only Wii says anything but a joypad:
         // a Classic Controller, or a GameCube pad for a game that takes only
-        // that. A game that takes neither never gets here (coverageFor).
-        if (launchJob.platformSlug == "wii")
-            core.setPadDevice(wii::padDevice(wii::codeFromTitleId(launchJob.titleId)));
+        // that, in the pads' ports; and, while a Wii Remote is paired, a real
+        // Remote in every port after them (#200). A game that takes neither
+        // pad gets Remotes only: pads have no player in it, and it is greyed
+        // out while no Remote is paired (coverageFor).
+        if (launchJob.platformSlug == "wii") {
+            const unsigned device = wii::padDevice(wii::codeFromTitleId(launchJob.titleId));
+            core.setPadDevice(device);
+            if (wiiremote::anyPaired())
+                core.setRealRemotesFrom(device == 0 ? 0 : static_cast<int>(players::connected().size()));
+        }
         const std::string romForCore = launchJob.coreName == "dolphin"
                                            ? dolphinReadablePath(launchJob.romPath, launchJob.romId)
                                            : launchJob.romPath;
@@ -11702,6 +11851,12 @@ int main(int argc, char** argv) {
                 images.get("covers/b-3x4.png#scrolled-past-" + std::to_string(i));
             }
         }
+        // REAL WII REMOTES (#200): while a Wii game runs Dolphin drives them,
+        // and HOME held on one is the console's own menu; a press of HOME is
+        // the game's HOME menu, as on a Wii. Out of the game each Remote gets
+        // its own light again.
+        wiiremote::setGameRunning(playing && session.platformSlug == "wii");
+        if (wiiremote::takeHomeHold() && (playing || overlayOpen)) toggleOverlay();
         if (playing) {
             cab::Core& core = cab::Core::shared();
             // Buttons first, then run: a core samples input inside retro_run,
@@ -12641,6 +12796,40 @@ int main(int argc, char** argv) {
                                                        : "");
                 }
                 if (fresh && here() == Screen::Settings) buildSettings();
+            }
+            if (wiiPairOpen) {
+                // Pair a Wii Remote: closed by Back, or paired.
+                if (!choiceScreen.isOpen() || here() != Screen::Settings) {
+                    choiceScreen.close();
+                    closeWiiPairWindow();
+                } else {
+                    bool fresh = false, done = false;
+                    std::string detail;
+                    {
+                        std::lock_guard<std::mutex> lk(wiiPair.m);
+                        fresh = wiiPair.fresh;
+                        wiiPair.fresh = false;
+                        done = wiiPair.done;
+                        detail = wiiPair.detail;
+                    }
+                    if (done) {
+                        choiceScreen.close();
+                        closeWiiPairWindow();
+                        menuNotice.say("Wii Remote paired", Tone::Done);
+                        buildSettings();
+                        // THE SENSOR BAR, asked while pairing as a Wii's own
+                        // settings ask it; the row under Controllers changes
+                        // it later.
+                        askChoice("Sensor bar", "", {"Below the TV", "Above the TV"},
+                                  wiiremote::sensorBarAbove() ? 1 : 0, [&](int k) {
+                            if (k < 0) return;
+                            wiiremote::setSensorBarAbove(k == 1);
+                            buildSettings();
+                        });
+                    } else if (fresh) {
+                        choiceScreen.replace({}, {}, detail);
+                    }
+                }
             }
             if (padWindowOpen) {
                 // Add a controller: closed by Back, or a round heard or a

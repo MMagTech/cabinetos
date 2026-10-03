@@ -1,0 +1,8 @@
+[Unit]
+Description=CabinetOS: search for Wii Remotes the way a Wii does
+Documentation=https://github.com/MMagTech/cabinetos/issues/200
+After=bluetooth.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/cabinetos-wii-search

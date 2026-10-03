@@ -67,6 +67,9 @@ for expected in \
     /usr/lib/systemd/system/cabinetos-dev-ssh.service \
     /usr/lib/systemd/system-preset/40-cabinetos.preset \
     /usr/share/polkit-1/rules.d/62-cabinetos-files.rules \
+    /usr/libexec/cabinetos-wii-search \
+    /usr/lib/systemd/system/cabinetos-wii-search.service \
+    /usr/share/polkit-1/rules.d/65-cabinetos-wii.rules \
     /etc/ssh/sshd_config.d/30-cabinetos.conf
 do
     if [[ -e "${expected}" ]]; then

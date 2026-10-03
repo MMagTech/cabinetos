@@ -1,0 +1,3 @@
+# A real Wii Remote is the Wii bridge's alone (issue #200, wiibridge/): no seat
+# access grant on its raw node. With 99-cabinetos-wii-remote.rules.
+SUBSYSTEM=="hidraw", KERNELS=="0005:*", PROGRAM="/usr/bin/grep -q ^HID_NAME=Nintendo.RVL-CNT /sys%p/device/uevent", TAG-="uaccess"

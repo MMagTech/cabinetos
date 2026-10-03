@@ -325,6 +325,13 @@ public:
     // told one is plugged in (wii.h).
     void setPadDevice(unsigned device);
 
+    // REAL WII REMOTES IN THE PORTS AFTER THE PADS (#200). Set before loadGame
+    // with the number of ports the pads take (0 for a game that needs a Remote:
+    // pads have no player in it); every port from there up is told a real Wii
+    // Remote is plugged in, and Dolphin seats each Remote the OS has connected
+    // in the first free one, now or mid-game. Cleared when the game unloads.
+    void setRealRemotesFrom(int firstPort);
+
     // --- PlayStation 2 ---------------------------------------------------
     //
     // PCSX2 is a whole emulator rather than a libretro core, so three things

@@ -7,34 +7,39 @@ session; list only the current milestone's work, never housekeeping.
 
 Every session: `docs/lessons/README.md` (ten rules, one page), then the
 lessons file named on the item. New here? `docs/WORKING.md`. The
-specification is `docs/PROJECT.md`; the order is `docs/ROADMAP.md`
-(milestone 3's order is written there).
+specification is `docs/PROJECT.md`; the order is `docs/ROADMAP.md`.
 
 ## Where things stand
 
-Milestone 3. **#63 phase 1 is built on `picture-quality`** with #73, #209
-and #217, and pushed to `testing` with #204 (PROJECT.md, "BUILT ON picture-quality").
-MMagTech judged most of it on the TV with the test build; **still to judge on
-the testing image: a PS2 game with a widescreen patch, at Quality** (Burnout
-3 has one). Merge only on his explicit go, then close #63's phase 1 items,
-#73, #204, #209, #217 and delete the branch (and `docs-after-fast-cores`, whose
-commits it carries).
+Milestone 3. **#200, real Wii Remotes, is built on branch `wii-remotes`** and
+working on the A9 TV from a hand build (tools/ui-loop.sh with
+`--env CABINETOS_WII_BRIDGE=/var/home/cabinet/wiibridge/cabinetos-wii-bridge`)
+and two temporary udev rules in `/run/udev/rules.d/` (gone at reboot). The
+decisions are in `docs/PROJECT.md` question 35 on branch
+`docs-after-picture-quality` (not merged yet). The full test record is on #200.
+
+Passed on the TV, 2026-10-02/03, MMagTech's TechKen copies: pairing (Wii PIN
+refused, `0000` taken), reconnect, lights, menus by Remote, unlock, hold HOME,
+pointer, Nunchuk games through the bridge (Geometry Wars, Donkey Kong, Wild West
+Guns), two Remotes and a pad in Mario Kart, a Remote switched off mid-game (no
+crash, Nunchuk right after it comes back), idle switch-off at Home.
 
 ## Next
 
-1. **Judge the testing image** with MMagTech, PS2 widescreen first; then
-   `tools/check-applied.sh` should show no FAIL (patches.zip now there).
-2. **#63 phase 2, the machine class**: what the hardware reports at first
-   boot sets the starting level (design in PROJECT.md, REVISED 2026-10-01;
-   the PROPOSED items on #63 are still undecided). Walk the scenarios first.
-3. Then before phase 3: #210, #168 (only: the drop rule ignores rewind
-   snapshot frames), #221 (measure first).
+1. **Test the bridge's setup replay** (installed, not yet tried): in Wild West
+   Guns, switch the Remote off and on mid-game; the pointer should be right.
+2. **Put #200 into the image**: build `wiibridge/` in the builder and install
+   it as `/usr/libexec/cabinetos-wii-bridge` (GPL, its own folder); add the two
+   udev rules, the search service, the polkit rule (already in system_files,
+   listed in build.sh except the udev rules); dry-run on the A9 as `cabinet`
+   (lessons: dry-run image scripts first). Then "Pair a Wii Remote" end to end.
+3. **Cemu (Wii U)**: it can see a Remote through the stand-in (Nintendo's id);
+   it still has to be told to use one in its controller profile.
+4. Judge the new Settings > Controllers > "Wii Remotes" panel on the TV.
 
-Also open, not in the way:
-- **#223, Steam:** the audit is on the issue (verdict moderate; cardwire is
-  the blocker; four points of the brief to settle with MMagTech). Built after
-  #63's phases.
-- **#200**, real Wii Remotes, when the hardware arrives.
-
-- The A9 has a blank `bios/dc/vmu_save_A1.bin` from today's tests; harmless
-  (the next Dreamcast launch files it as unattributed). MMagTech removes it.
+Known, recorded on #200, not chased: after a game's 5-minute idle drop a button
+does not bring the Remote back (Dolphin ignores it since 2019; libretro's
+Dolphin also crashes if a held Remote vanishes, which the bridge avoids); the
+`+` join prompt in Mario Kart; Bit.Trip Beat's paddle jitter (copy's sensor?);
+the Remote that came back on by itself 2026-10-02 22:23; the one game freeze
+2026-10-02 22:42. MMagTech does not want upstream reports for now.

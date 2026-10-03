@@ -1,0 +1,14 @@
+// "Pair a Wii Remote": the session may start the Wii's own search, the one
+// part of pairing a Wii Remote that needs root. docs/PROJECT.md open question
+// 35; issue #200; /usr/libexec/cabinetos-wii-search.
+polkit.addRule(function(action, subject) {
+    if (action.id != "org.freedesktop.systemd1.manage-units" ||
+        subject.user != "cabinet" || !subject.local) {
+        return polkit.Result.NOT_HANDLED;
+    }
+    if (action.lookup("unit") == "cabinetos-wii-search.service" &&
+        action.lookup("verb") == "start") {
+        return polkit.Result.YES;
+    }
+    return polkit.Result.NOT_HANDLED;
+});
