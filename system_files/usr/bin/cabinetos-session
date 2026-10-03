@@ -277,9 +277,13 @@ try_compositor() {
 if ls /dev/dri/card* >/dev/null 2>&1; then
     # --ready-fd goes BEFORE the `--`: everything after it is the app's.
     # shellcheck disable=SC2086
+    # --adaptive-sync: VRR when the television reports it (#209), as in
+    # run_gamescope. THIS is the line a console normally starts on; the first
+    # version put the flag only in run_gamescope, which runs when a backend is
+    # forced, and the testing image of 2026-10-02 started without it.
     try_compositor "gamescope (drm)" \
         gamescope --backend drm --output-width "${OUT_W}" --output-height "${OUT_H}" \
-                  --ready-fd 3 -- ${APP}
+                  --adaptive-sync --ready-fd 3 -- ${APP}
 
     # Degraded, and loudly so. A console that works without VRR beats a black
     # screen, but this should never be the state on real hardware — if it is,
