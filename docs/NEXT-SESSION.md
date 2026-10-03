@@ -34,7 +34,9 @@ crash, Nunchuk right after it comes back), idle switch-off at Home.
    console app on Home (tools/ui-loop.sh --no-build with the --env above), then
    in Wild West Guns switch the Remote off and on mid-game; the pointer should
    be right. If it is still off, the camera setup is not being captured or needs
-   slower pacing.
+   slower pacing. NOTE: a second test at 09:59, still on the OLD bridge, had the
+   pointer settle by itself a few seconds after the Remote came back; compare
+   old and new before deciding the replay is needed.
 2. **Put #200 into the image**: build `wiibridge/` in the builder and install
    it as `/usr/libexec/cabinetos-wii-bridge` (GPL, its own folder); add the two
    udev rules, the search service, the polkit rule (already in system_files,
