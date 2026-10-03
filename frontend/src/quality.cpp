@@ -190,10 +190,15 @@ std::map<std::string, std::string> coreOptions(const std::string& core,
 }
 
 Ps2 ps2(Level l) {
-    // PS2: 1x, 3x (PCSX2's "~1080p"), and 5x at Quality. 6x was tight on the
-    // A9: copying each frame back from the GPU took 12.4 ms of the 16.7 ms
-    // frame, against 5.9 ms at 5x. Anisotropic filtering 16x at every level.
-    static const float kUpscale[] = {1.0f, 3.0f, 5.0f};
+    // PS2: 1x, then 3x (PCSX2's "~1080p") at Balanced AND Quality. Every
+    // frame is copied off the GPU and uploaded again for the console to draw
+    // (CabinetPS2Host.cpp, GSSaveSnapshotToMemory), and with a widescreen
+    // patch the frame is a third wider: at 5x it was 3982x2240, and on the TV
+    // 312 of 1,196 frames ran over 20 ms (frames.py, MMagTech: "running
+    // horribly"). At 3x, 4 of 1,196 (2026-10-02). The off-screen measurement
+    // that chose 5x left that copy out. Higher waits for the copy to go.
+    // Anisotropic filtering 16x at every level.
+    static const float kUpscale[] = {1.0f, 3.0f, 3.0f};
     Ps2 p;
     p.upscale = pick(l, kUpscale);
     p.anisotropy = 16;

@@ -14014,7 +14014,7 @@ RetroArch and Batocera:
 
 | System | Performance | Balanced | Quality |
 |---|---|---|---|
-| PS2 | 1x | 3x | **5x** |
+| PS2 | 1x | 3x | **3x** |
 | GameCube | 1x | 3x | 6x |
 | Wii | 1x | 3x | **5x** |
 | PSP | 480x272 | 1920x1088 | 3840x2176 |
@@ -14033,7 +14033,11 @@ back from the GPU took 12.4 ms of the 16.7 ms frame, peaks over a frame) and
 comfortable (1.8 to 2.1x); N64 8x tight (about 1.1x at 60 fps), with no step
 between 4x and 8x. GameCube 6x (2.6x), PSP 3840x2176 (3.7x) and Dreamcast
 2880x2160 (5.2x) comfortable. **So Quality is PS2 5x, Wii 5x, N64 4x** (MMagTech
-agreed: good starting values, adjustable later). PS2 at 5x is the first thing
+agreed: good starting values, adjustable later). **PS2 CORRECTED ON THE TV the
+same night: Quality is 3x.** The off-screen runs left out the console's copy
+of each frame off the GPU and back; with Burnout 3's widescreen patch the 5x
+frame was 3982x2240 and 312 of 1,196 frames ran over 20 ms ("running
+horribly"); at 3x, 4. Higher waits for that copy to go (its own issue). PS2 at 5x is the first thing
 judged on the TV for stutter. A level change rebuilds no shaders (PS2,
 GameCube, Dreamcast, PSP: 0 bytes added; N64 about 102 KB of Mesa's), so no
 warning is needed and #133 does not move; turning on Dolphin's background
