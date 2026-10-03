@@ -23,23 +23,23 @@ session picks up is `docs/NEXT-SESSION.md`.
    (#172), Xbox 360 (#192), Wii (#173) and Wii U (#174). Xbox 360 moved ahead
    of the Wiis on 2026-09-29, after it ran well on the A9. Before picture quality, because that
    is one setting across every system.
-3. **Settings: picture**, in this order (set 2026-10-02; MMagTech: "you tell
-   me"):
-   1. **#63 phase 1**, the dial and the fixed tables, with the VRR and vsync
-      rule (#209), PS2's patches (#217) and the pause menu's per-system
-      options (#73), because the per-game quality row lives in that same
-      menu and is designed with it.
-   2. **#63 phase 2**, the machine class.
-   3. **Before phase 3:** the slowed A9 (#210), rewind's cost (#168) and
-      whether built-in cores repeat or drop frames (#221), because the drop
-      rule reads smoothness and must not mistake these for a struggling game.
-   4. **#63 phase 3**, the drop rule, record-only first.
-   5. **Steam (#223)**: one entry that hands over to Bazzite's Big Picture
-      session, audited first and built on his go. Moved up from After first
-      release because it is the selling point that brings testers to the
-      alpha.
-   6. **Shaders and CRT looks (#122)**, to be designed: taste, not needed to
-      judge the console.
+3. **Settings: picture**, in this order (set with MMagTech 2026-10-02):
+   1. ~~**#63 phase 1**, with #73, #204, #209 and #217.~~ **Merged in #225,
+      2026-10-02.**
+   2. **Wii Remotes (#200)**, from milestone 2: the hardware arrived; pairing
+      fails at BlueZ's Wii PIN step (findings on the issue).
+   3. **PS2's picture without the copy (#226)**: its own window, as the
+      separate emulators are shown, so Quality can go back toward 5x. PCSX2
+      asked upstream for the other route (PCSX2/pcsx2#15040).
+   4. **#63 phase 2**, the machine class, including whether PS2 and N64 keep
+      Balanced and Quality equal.
+   5. **Before phase 3:** the slowed A9 (#210), the drop rule ignoring rewind
+      snapshot frames (#168), whether built-in cores repeat or drop frames
+      (#221).
+   6. **#63 phase 3**, the drop rule, record-only first.
+   7. **Steam (#223)**: the audit is on the issue; built on his go.
+   8. **Shaders and CRT looks (#122).**
+   Also in the milestone: the gamescope flag check on base updates (#227).
 4. **Offline play.** Kept games play with no server (#88).
 5. **RetroAchievements** (#74). Each account signs in with its own login.
    After offline, because achievements earned offline must wait and send.
