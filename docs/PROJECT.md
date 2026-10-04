@@ -14184,7 +14184,9 @@ is set to Quality with the dial. Phase 2 lands in the same milestone, before
 the first release.
 
 Systems with a resolution to move: PS2, GameCube, Wii, PSP, N64, Dreamcast,
-Switch, PS3, Xbox, Xbox 360. Wii U has none without resolution packs (#207).
+Switch, PS3, Xbox. Wii U has none without resolution packs (#207); Xbox 360
+lost its levels on 2026-10-04, when the A9 measured 4K at 7.5 frames a
+second (phase 2 below).
 
 #### DECIDED, MMagTech 2026-10-02: catching a setting an upgrade changed (#63)
 
@@ -14292,6 +14294,73 @@ need the image.
   ghosting (Average still strobed, Heavy trailed). Integer scaling, counted
   on the TV's own rows, made little visible difference; every system still
   fills the height, and handhelds' look is #122's.
+
+#### DECIDED, MMagTech 2026-10-04: the machine class (#63 phase 2), and vsync on (#209)
+
+1. **The class comes from the graphics chip alone:** shader units x top
+   clock, scored against the A9 (16 units at 2.9 GHz, 46). 40 and up starts
+   on Quality, 20 and up Balanced, below Performance. A Radeon 780M
+   (12 at 2.7, 32) would start on Balanced, a Steam Deck (8 at 1.6, 13) on
+   Performance. The processor is logged and does not count: the dial moves
+   only what the graphics chip draws, so a slow processor is just as slow
+   at Performance. To be checked with the slowed A9 (#210): one demanding
+   game (God of War III) at Performance and Quality with the processor
+   capped; the same frame rate at both confirms it (MMagTech, 2026-10-04).
+2. **Hardware that does not report both gets Performance:** Intel (no
+   shader count from its driver), NVIDIA (no image for it yet, open question
+   11, and no clock reported), anything without Vulkan. Scoring either needs
+   one of each to set the lines on; until then the owner raises the dial.
+   MMagTech: NVIDIA need not be accounted for.
+3. **The class only picks the starting level.** Once a person moves the dial
+   it is theirs and the console never changes it. The class is worked out at
+   every start, so while nobody has moved the dial a new graphics card is
+   noticed at the next start. It costs about 33 ms (asking the driver; the
+   A9 takes about 3.9 s from start to Home).
+4. **N64 is 1x, 2x, 4x** (was 1x, 4x, 4x): with machines starting on their
+   class, Balanced has to be lighter than Quality to be worth having. PS2 is
+   already 1x, 3x, 4x since #226.
+5. **Vsync on in every separate emulator** (MMagTech on #209, 2026-10-04,
+   after #226): Eden Fifo, Cemu 1, RPCS3 on, xemu on as before, and Xenia
+   with immediate, mailbox and relaxed FIFO disallowed, which leaves FIFO
+   (Edge has no vsync setting of its own). Without vsync gamescope holds one
+   picture and replaces it, so frames are lost: PCSX2 got 56 of 60.
+
+**Built on `machine-class`, 2026-10-04:** `gpu.cpp` reads the active shader
+units (VK_AMD_shader_core_properties2) and the top clock (`pp_dpm_sclk`, by
+the device's PCI address); `quality::machineClass()` scores it and logs
+`[quality] this machine: ...` at every start. On the A9: Quality, 16 units
+at 2900 MHz, score 46; processor 24 threads, 5157 MHz, AVX-512.
+
+**The TV round, 2026-10-04, with MMagTech** (testing 2026.10.04.13,
+frames.py, about 50 s each). With the hand-set `picture_quality` removed,
+Settings showed Quality, chosen by the console. Vsync on, every emulator at
+its right speed, nothing seen or heard wrong:
+
+| Game | Level | Frames a second | Graphics chip |
+|---|---|---|---|
+| Mario Kart 8 Deluxe (Switch) | Quality | 60.0, one frame over 20 ms (59.8 with vsync off) | |
+| God of War III (PS3) | Quality, 300% | **20.8** | 87% busy at ~2.6 GHz |
+| God of War III | Performance, 100% | 57.3 | 43% at ~1.7 GHz |
+| God of War III | Balanced, 150% | 54.3 | ~70% at ~1.4 GHz |
+| Hyrule Warriors (Wii U) | (none) | 30.0, its own rate, as before | |
+| Forza Horizon 2 (Xbox 360) | Quality, 3x | **7.5** | 99% at ~2.7 GHz |
+| Forza Horizon 2 | Balanced, 1x | 30.0, steady | 48% at ~1.8 GHz |
+
+**So vsync was cleared, and two Quality values were never measured and are
+too heavy for the A9:** PS3 300% and Xbox 360 3x, both written in phase 1
+as "not yet measured". Fixed under the existing rule (each Quality is what
+the A9 holds): **PS3 Quality 150%**, the same as Balanced; **Xbox 360 1x
+at every level**, since 2x is four times 1x's pixels and 1x already used
+about a third of the chip, so its pause-menu row is gone. A class above the
+A9, if one is ever made, is where PS3 200% and Xbox 360 2x would go. 200% on
+PS3 was tried once and the game never left its loading menu; not pursued
+(MMagTech: no drawn-out session).
+
+**God of War III goes too white above 720p:** RPCS3's own wiki says the game
+needs two per-game settings to upscale cleanly (a resolution-scale
+threshold and a "Disable MLAA" patch; RPCS3/rpcs3#16981). Under the
+no-per-game-fixes rule it waits for the emulator; it looks right at
+Performance.
 
 #### DECIDED, MMagTech 2026-10-02: fast cores and full speed in games (#163, #150)
 

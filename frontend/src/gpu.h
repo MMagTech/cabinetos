@@ -53,6 +53,17 @@ struct VulkanCaps {
     uint32_t apiVersion = 0;     // VK_MAKE_API_VERSION packed
     uint32_t driverVersion = 0;
     bool discrete = false;
+    uint32_t vendorId = 0;       // PCI: 0x1002 AMD, 0x10de NVIDIA, 0x8086 Intel
+
+    // HOW BIG AND HOW FAST, for picture quality's machine class (#63 phase
+    // 2, quality.cpp). Zero when the hardware does not say. AMD only today:
+    // its driver reports the shader units it has switched on
+    // (VK_AMD_shader_core_properties2) and the kernel its top clock
+    // (pp_dpm_sclk). NVIDIA reports units but not a clock, Intel neither;
+    // both get the class for unknown hardware until there is one of each to
+    // measure (MMagTech, 2026-10-04).
+    uint32_t computeUnits = 0;   // 16 on the A9's Radeon 890M
+    uint32_t topClockMhz = 0;    // 2900 on the A9
 
     // THE INTEROP EXTENSIONS, AND WHY THEY DECIDE THE WHOLE SHAPE.
     //

@@ -4500,6 +4500,7 @@ int main(int argc, char** argv) {
     if (networkProbeMode) return networkProbe(networkScan);
     if (gpuProbeMode) {
         cab::gpu::report();
+        quality::machineClass();
         return 0;
     }
 
@@ -4534,6 +4535,11 @@ int main(int argc, char** argv) {
                          "[storage] the games drive at %s is not connected — games "
                          "kept on it will be fetched from RomM again\n", gone.c_str());
     }
+
+    // THE MACHINE CLASS, worked out at every start (#63 phase 2), so a new
+    // graphics card is noticed the next time the console comes up. It only
+    // decides anything while nobody has moved the dial. quality.h.
+    if (!shotMode) quality::machineClass();
 
     // Runs before SDL, deliberately. This needs no window, no GL and no
     // controller, and on a headless machine it must work anyway — the whole
@@ -11465,7 +11471,7 @@ int main(int argc, char** argv) {
             // wherever the shortcut button is recognised). PS2 reads PCSX2's
             // frame since #130; GameCube is a libretro core like the rest.
             pauseItems.push_back(OvScreenshot);
-            // PICTURE QUALITY, on the ten systems where a level changes
+            // PICTURE QUALITY, on the nine systems where a level changes
             // something, and with a PIN set only for the owner, as in
             // Settings (MMagTech, 2026-10-02).
             pauseChoices.clear();

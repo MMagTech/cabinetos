@@ -281,8 +281,10 @@ Decided with MMagTech 2026-09-26, from the things people will actually do.
   "Picture: Balanced" row (Console, Performance, Balanced, Quality; from the
   game's next start, said in the pill). Named "Picture", not "Picture
   quality", because "Picture quality: Quality" said it twice (MMagTech on the
-  TV, 2026-10-02). With a PIN set, only the owner sees it. **To build, #63.** Record: PROJECT.md, the
-  #63 decisions of 2026-10-02.
+  TV, 2026-10-02). With a PIN set, only the owner sees it. Until somebody
+  moves it, it shows the level the console picked from its graphics chip at
+  start (#63 phase 2); after that it is theirs. Record: PROJECT.md, the #63
+  decisions of 2026-10-02 and 2026-10-04.
 - **Appearance:** Standard, Dark or Scheduled, the console's, in
   `config/settings.json`. Dark turns the menus down, never the game.
   Scheduled adds one **Dark hours** row (8 PM to 7 AM to start) that opens

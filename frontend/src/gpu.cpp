@@ -3,7 +3,10 @@
 #include <dlfcn.h>
 
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
+#include <fstream>
+#include <string>
 #include <vector>
 
 // VK_NO_PROTOTYPES because nothing here links the loader — every entry point
@@ -29,6 +32,37 @@ bool has(const std::vector<VkExtensionProperties>& list, const char* name) {
     for (const auto& e : list)
         if (std::strcmp(e.extensionName, name) == 0) return true;
     return false;
+}
+
+// The highest clock in an amdgpu `pp_dpm_sclk`, whose lines read
+// "2: 2900Mhz *". 0 when the file is missing or says nothing.
+uint32_t topSclkMhz(const std::string& path) {
+    std::ifstream in(path);
+    uint32_t top = 0;
+    std::string line;
+    while (std::getline(in, line)) {
+        const size_t colon = line.find(':');
+        if (colon == std::string::npos) continue;
+        const unsigned long mhz = std::strtoul(line.c_str() + colon + 1, nullptr, 10);
+        if (mhz > top) top = static_cast<uint32_t>(mhz);
+    }
+    return top;
+}
+
+// The same device's top clock from the kernel. By PCI address when Vulkan
+// gave one; otherwise the first card with the same vendor and device ids,
+// which is the same chip whichever of two identical cards it is.
+uint32_t amdTopClockMhz(const std::string& pciAddress, uint32_t vendor, uint32_t device) {
+    if (!pciAddress.empty())
+        return topSclkMhz("/sys/bus/pci/devices/" + pciAddress + "/pp_dpm_sclk");
+    for (int i = 0; i < 16; ++i) {
+        const std::string dev = "/sys/class/drm/card" + std::to_string(i) + "/device/";
+        unsigned v = 0, d = 0;
+        std::ifstream fv(dev + "vendor"), fd(dev + "device");
+        if (!(fv >> std::hex >> v) || !(fd >> std::hex >> d)) continue;
+        if (v == vendor && d == device) return topSclkMhz(dev + "pp_dpm_sclk");
+    }
+    return 0;
 }
 
 void probe() {
@@ -140,10 +174,22 @@ void probe() {
     gCaps.deviceIndex = chosenIndex;
     // Its UUID, for an emulator told a device that way (Cemu's `vkDevice`).
     // Core in 1.1, which the instance asked for.
+    // Asked in the same call: its shader units and PCI address, each only
+    // when the device has the extension that defines it.
+    std::string pciAddress;
     if (auto getProps2 = reinterpret_cast<PFN_vkGetPhysicalDeviceProperties2>(
             inst("vkGetPhysicalDeviceProperties2"))) {
         VkPhysicalDeviceIDProperties id{};
         id.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES;
+        VkPhysicalDeviceShaderCoreProperties2AMD cores{};
+        cores.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_CORE_PROPERTIES_2_AMD;
+        VkPhysicalDevicePCIBusInfoPropertiesEXT pci{};
+        pci.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PCI_BUS_INFO_PROPERTIES_EXT;
+        const bool hasCores = has(exts, VK_AMD_SHADER_CORE_PROPERTIES_2_EXTENSION_NAME);
+        const bool hasPci = has(exts, VK_EXT_PCI_BUS_INFO_EXTENSION_NAME);
+        void** next = &id.pNext;
+        if (hasCores) { *next = &cores; next = &cores.pNext; }
+        if (hasPci) { *next = &pci; next = &pci.pNext; }
         VkPhysicalDeviceProperties2 p2{};
         p2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
         p2.pNext = &id;
@@ -154,7 +200,17 @@ void probe() {
             gCaps.deviceUuid.push_back(kHex[b >> 4]);
             gCaps.deviceUuid.push_back(kHex[b & 15]);
         }
+        if (hasCores) gCaps.computeUnits = cores.activeComputeUnitCount;
+        if (hasPci) {
+            char addr[32];
+            std::snprintf(addr, sizeof addr, "%04x:%02x:%02x.%x", pci.pciDomain, pci.pciBus,
+                          pci.pciDevice, pci.pciFunction);
+            pciAddress = addr;
+        }
     }
+    gCaps.vendorId = chosenProps.vendorID;
+    if (gCaps.vendorId == 0x1002)
+        gCaps.topClockMhz = amdTopClockMhz(pciAddress, chosenProps.vendorID, chosenProps.deviceID);
     gCaps.apiVersion = chosenProps.apiVersion;
     gCaps.driverVersion = chosenProps.driverVersion;
     gCaps.discrete = chosenProps.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU;
@@ -212,6 +268,8 @@ void report() {
     }
     std::printf("  USABLE\n");
     std::printf("  device      %s%s\n", v.deviceName.c_str(), v.discrete ? " (discrete)" : "");
+    std::printf("  size        %u shader units, top clock %u MHz (0: not reported)\n",
+                v.computeUnits, v.topClockMhz);
     std::printf("  api         %s\n", versionString(v.apiVersion).c_str());
     std::printf("  external memory fd      yes\n");
     std::printf("  external memory dma_buf yes\n");

@@ -1,6 +1,10 @@
 #include "quality.h"
 
+#include <chrono>
 #include <cstdio>
+#include <cstring>
+#include <fstream>
+#include <thread>
 
 #include <json-c/json.h>
 
@@ -62,10 +66,67 @@ bool levelFromWord(const std::string& word, Level* out) {
     return false;
 }
 
+namespace {
+
+// What the log says about the processor, which does not decide anything:
+// its threads, its fastest core and its widest vector instructions.
+std::string processorLine() {
+    unsigned long topKhz = 0;
+    const unsigned threads = std::thread::hardware_concurrency();
+    for (unsigned i = 0; i < threads; ++i) {
+        std::ifstream f("/sys/devices/system/cpu/cpu" + std::to_string(i) +
+                        "/cpufreq/cpuinfo_max_freq");
+        unsigned long khz = 0;
+        if (f >> khz && khz > topKhz) topKhz = khz;
+    }
+    std::ifstream info("/proc/cpuinfo");
+    std::string line, vector = "no AVX2";
+    while (std::getline(info, line)) {
+        if (line.compare(0, 5, "flags") != 0) continue;
+        if (line.find(" avx512f") != std::string::npos) vector = "AVX-512";
+        else if (line.find(" avx2") != std::string::npos) vector = "AVX2";
+        break;
+    }
+    char buf[128];
+    std::snprintf(buf, sizeof buf, "%u threads, top %lu MHz, %s", threads, topKhz / 1000,
+                  vector.c_str());
+    return buf;
+}
+
+}  // namespace
+
+Level machineClass() {
+    static const Level kClass = [] {
+        const auto t0 = std::chrono::steady_clock::now();
+        const cab::gpu::VulkanCaps& v = cab::gpu::vulkan();
+        Level l = Level::Performance;
+        char why[256];
+        if (!v.available || v.vendorId != 0x1002 || v.computeUnits == 0 || v.topClockMhz == 0) {
+            std::snprintf(why, sizeof why, "%s does not report its size (%u units, %u MHz)",
+                          v.deviceName.empty() ? "no Vulkan device" : v.deviceName.c_str(),
+                          v.computeUnits, v.topClockMhz);
+        } else {
+            const double score = v.computeUnits * (v.topClockMhz / 1000.0);
+            if (score >= 40) l = Level::Quality;
+            else if (score >= 20) l = Level::Balanced;
+            std::snprintf(why, sizeof why, "%s, %u units at %u MHz, score %.0f",
+                          v.deviceName.c_str(), v.computeUnits, v.topClockMhz, score);
+        }
+        const std::string cpu = processorLine();
+        const long long ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                 std::chrono::steady_clock::now() - t0).count();
+        std::fprintf(stderr,
+                     "[quality] this machine: %s (%s; processor %s, not counted; %lld ms)\n",
+                     levelName(l), why, cpu.c_str(), ms);
+        return l;
+    }();
+    return kClass;
+}
+
 Level console() {
-    Level l = Level::Performance;
-    levelFromWord(prefs::get("picture_quality", ""), &l);
-    return l;
+    Level l;
+    if (levelFromWord(prefs::get("picture_quality", ""), &l)) return l;
+    return machineClass();
 }
 
 void setConsole(Level l) { prefs::set("picture_quality", levelWord(l)); }
@@ -112,7 +173,7 @@ Level forGame(int romId) {
 
 bool hasLevels(const std::string& core) {
     for (const char* c : {"pcsx2", "dolphin", "ppsspp", "mupen64plus", "flycast", "eden",
-                          "rpcs3", "xemu", "xenia"})
+                          "rpcs3", "xemu"})
         if (core == c) return true;
     return false;
 }
@@ -151,15 +212,17 @@ std::map<std::string, std::string> coreOptions(const std::string& core,
         };
     }
     // Nintendo 64. ParaLLEl-RDP with Vulkan (catalog::optionOverrides chooses
-    // it): 1x, 4x, and 4x again at Quality, because 8x left about 10% to
-    // spare at 60 fps on the A9 and there is no step between. Without Vulkan,
-    // GLideN64 by the same rule: the N64's own 320x240, then 1280x960.
+    // it): 1x, 2x, 4x. Quality is 4x because 8x left about 10% to spare at
+    // 60 fps on the A9. Balanced was 4x too until phase 2 (MMagTech,
+    // 2026-10-04): once machines start on their class, Balanced has to be
+    // lighter than Quality to be worth choosing. Without Vulkan, GLideN64 by
+    // the same rule: 320x240, 640x480, 1280x960.
     if (core == "mupen64plus") {
         if (vulkan) {
-            static const char* const kScale[] = {"1x", "4x", "4x"};
+            static const char* const kScale[] = {"1x", "2x", "4x"};
             return {{"mupen64plus-parallel-rdp-upscaling", pick(l, kScale)}};
         }
-        static const char* const kSize[] = {"320x240", "1280x960", "1280x960"};
+        static const char* const kSize[] = {"320x240", "640x480", "1280x960"};
         return {{"mupen64plus-43screensize", pick(l, kSize)}};
     }
     // Dreamcast and Naomi: 640x480, 1440x1080, 2880x2160. Anisotropic
@@ -223,10 +286,15 @@ std::vector<Setting> eden(Level l) {
 }
 
 std::string rpcs3(Level l) {
-    // PS3, whose games are 720p: 100%, 150% (1080p), 300% (4K). The game's own
-    // video mode stays 720p; that one changes the game. Not yet measured.
-    static const char* const kScale[] = {"100", "150", "300"};
-    return std::string("Video:\n  Resolution Scale: ") + pick(l, kScale) +
+    // PS3, whose games are 720p: 100%, 150% (1080p), 150% again at Quality.
+    // Measured on the A9, 2026-10-04 (God of War III, frames.py): 300% ran
+    // 21 frames a second with the graphics chip 87% busy at its top clock;
+    // 150% 54, at about a third of its capacity; 100% 57. 200% was not
+    // measured (the game would not load past its menu that once). The game's
+    // own video mode stays 720p; that one changes the game. Lines inside
+    // RPCS3's `Video:` section, which standalone.cpp opens.
+    static const char* const kScale[] = {"100", "150", "150"};
+    return std::string("  Resolution Scale: ") + pick(l, kScale) +
            "\n  Anisotropic Filter Override: 16\n";
 }
 
@@ -238,10 +306,13 @@ std::string xemu(Level l) {
 }
 
 std::vector<std::string> xenia(Level l) {
-    // Xbox 360, 720p: 1x, 1x, 3x (2160p). 2x would be 1440p, neither target.
-    // Edge's anisotropic override counts 1 to 5 for 1x to 16x. Not yet
-    // measured; Xenia's upscaling needs sparse binding on Vulkan.
-    static const char* const kScale[] = {"1", "1", "3"};
+    // Xbox 360, 720p, at every level on the A9. Measured 2026-10-04 (Forza
+    // Horizon 2, frames.py): 3x ran 7.5 frames a second with the graphics
+    // chip 99% busy; 1x a steady 30 at under a third of its capacity, so 2x,
+    // four times the pixels, would not hold either. A machine stronger than
+    // the A9 could take more; that waits for a class above it. Edge's
+    // anisotropic override counts 1 to 5 for 1x to 16x.
+    static const char* const kScale[] = {"1", "1", "1"};
     const std::string s = pick(l, kScale);
     return {
         "--draw_resolution_scale_x=" + s,

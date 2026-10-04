@@ -11,25 +11,21 @@ specification is `docs/PROJECT.md`; the order is `docs/ROADMAP.md`.
 
 ## Where things stand
 
-Milestone 3, item 6. **Build plumbing, on `build-plumbing`, no TV round**:
-the Steam session install retries when Terra's mirror trips; a merge still
-promotes the tested image when only documentation changed since the testing
-push (#156), and `docs/LICENCES.md` alone builds; the core option check is
-`cores/check-options.sh`, so editing it no longer rebuilds every core. This
-file was committed after that branch's testing push, so its merge
-promoting rather than building is the proof of #156. Merged if this file is
-on main.
+Milestone 3, item 6 done. **#63 phase 2 with #209, on `machine-class`,
+judged on the A9 TV 2026-10-04**: the console picks its starting picture
+level from its graphics chip until someone moves the dial (the A9 picks
+Quality); N64 Balanced 2x; vsync on in Eden, RPCS3, Cemu and Xenia. The TV
+round found two Quality values that were never measured and too heavy for
+the A9, now fixed: PS3 1080p, Xbox 360 720p at every level. PROJECT.md,
+"DECIDED, MMagTech 2026-10-04: the machine class". Merged if this file is on
+main.
 
 ## Next
 
-1. If not merged: merge on his go. After the merge, prove the other half of
-   #156: a pull request changing only `docs/LICENCES.md` runs the image
-   workflow, one changing only another doc runs none. Close both unmerged.
-2. **#63 phase 2, the machine class, with #209 in the same image and one TV
-   round** (lessons: `emulators.md`, `testing.md`). Walk the scenarios and
-   name the options with MMagTech before building: what the class reads
-   from the hardware (PROJECT.md, "REVISED ... the automatic quality
-   design"), what unknown hardware gets, and whether PS2 and N64 keep
-   Balanced equal to Quality (comment on #63, 2026-10-02). #209's part:
-   the separate emulators (Eden, RPCS3, xemu, Xenia, Cemu) back to vsync on
-   where #209 set them off (MMagTech, 2026-10-04, on #209).
+1. If not merged: merge on his go.
+2. **Item 7, before phase 3** (lessons: `testing.md`, `emulators.md`):
+   the slowed A9 (#210), including the processor check noted there (God of
+   War III at Performance and Quality with the processor capped); the drop
+   rule ignoring rewind snapshot frames (#168); whether built-in cores
+   repeat or drop frames (#221).
+3. Then **#63 phase 3**, the drop rule, record-only first.

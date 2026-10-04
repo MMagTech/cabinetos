@@ -37,9 +37,10 @@ session picks up is `docs/NEXT-SESSION.md`.
       (PCSX2/pcsx2#15040).
    5. ~~**ext4 for extra drives, shared with Steam (#236)**~~ **Merged in
       #240, 2026-10-04.**
-   6. **#63 phase 2**, the machine class, including whether PS2 and N64 keep
-      Balanced and Quality equal. In the same image and TV round: the
-      separate emulators back to vsync on (#209).
+   6. ~~**#63 phase 2**, the machine class, with #209 (vsync on).~~
+      **Built on `machine-class` and judged on the A9 TV, 2026-10-04**: the
+      starting level from the graphics chip, N64 Balanced 2x, PS3 Quality
+      1080p, Xbox 360 720p. An Ultra level for stronger machines is #245.
    7. **Before phase 3:** the slowed A9 (#210), the drop rule ignoring rewind
       snapshot frames (#168), whether built-in cores repeat or drop frames
       (#221).
