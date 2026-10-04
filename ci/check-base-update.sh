@@ -15,6 +15,9 @@
 #   3. Flags strip-list drift: removal targets in build_files/ that no longer
 #      exist in the base, which means a strip script has silently become a
 #      no-op and a desktop application may be creeping back in.
+#   4. Checks the new gamescope still takes every flag cabinetos-session
+#      passes it (ci/check-gamescope-flags.sh, #227). One gone makes the
+#      update RELEVANT and says which, before it can reach a television.
 #
 # Writes to the working directory:
 #   base-manifest.txt   the new base's package list (committed with the bump)
@@ -117,6 +120,27 @@ podman run --rm "${BASE_REPO}@${new_digest}" \
     | sort -u > /tmp/new-manifest.txt
 
 say "new base has $(count /tmp/new-manifest.txt) packages"
+
+# gamescope's flags (#227). Copied out before it runs: the binary carries a
+# file capability (cap_sys_nice), and a container refuses to execute it as
+# shipped ("Operation not permitted", found on the A9). The copy has none, and
+# --help needs none.
+podman run --rm "${BASE_REPO}@${new_digest}" \
+    sh -c 'cp "$(command -v gamescope)" /tmp/gamescope && /tmp/gamescope --help' \
+    > /tmp/gamescope-help.txt 2>&1 || true
+gamescope_check=ok
+if ci/check-gamescope-flags.sh /tmp/gamescope-help.txt > /tmp/gamescope-missing.txt; then
+    say "gamescope takes every flag the session passes"
+else
+    rc=$?
+    if (( rc == 1 )); then
+        gamescope_check=missing
+        say "gamescope no longer takes: $(tr '\n' ' ' < /tmp/gamescope-missing.txt)"
+    else
+        gamescope_check=unknown
+        say "could not check gamescope's flags"
+    fi
+fi
 
 first_run=false
 if [[ ! -s "${MANIFEST}" ]]; then
@@ -237,6 +261,9 @@ drift_count=$(count /tmp/drift.txt)
 if [[ "${first_run}" == true ]]; then
     verdict="BASELINE"
     summary="Baseline manifest recorded — no comparison was possible."
+elif [[ "${gamescope_check}" == missing ]]; then
+    verdict="RELEVANT"
+    summary="gamescope no longer takes a flag the session passes; the console would lose 4K and VRR."
 elif (( relevant_count > 0 )); then
     verdict="RELEVANT"
     summary="${relevant_count} change(s) to packages CabinetOS depends on."
@@ -269,6 +296,25 @@ emit summary "${summary}"
         echo "There was no committed \`base-manifest.txt\` to compare against, so"
         echo "this run only records one. The next base update will produce a real"
         echo "diff."
+        echo
+    fi
+
+    if [[ "${gamescope_check}" == missing ]]; then
+        echo "### ⛔ gamescope no longer takes what the session passes"
+        echo
+        echo "\`cabinetos-session\` starts gamescope with these, and the new"
+        echo "gamescope's \`--help\` no longer lists them. gamescope would refuse to"
+        echo "start and the console would fall to a lower rung: no 4K, no VRR,"
+        echo "software drawing. **Fix the session before merging.**"
+        echo
+        echo '```'; cat /tmp/gamescope-missing.txt; echo '```'
+        echo
+    elif [[ "${gamescope_check}" == unknown ]]; then
+        echo "### gamescope's flags could not be checked"
+        echo
+        echo "\`gamescope --help\` did not run in the new base, so nobody has"
+        echo "confirmed it still takes what \`cabinetos-session\` passes. Check by"
+        echo "hand before merging (\`ci/check-gamescope-flags.sh\`)."
         echo
     fi
 
