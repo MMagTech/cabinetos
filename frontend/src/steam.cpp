@@ -19,6 +19,7 @@
 
 #include "cache.h"
 #include "prefs.h"
+#include "proc.h"
 #include "storage.h"
 #include "unit.h"
 
@@ -156,6 +157,53 @@ bool sliceOn(const std::string& location) {
            ::stat(location.c_str(), &b) == 0 && a.st_dev == b.st_dev;
 }
 
+// THE MARK NAMES THE SLICE IT WAS EARNED BY: the slice file's inode. A
+// "yes" outlived a slice removed by other means on the A9 (2026-10-04), and
+// the next pick went straight to a handover onto an empty Steam. A new slice
+// is a new file, so it is never taken for a finished install.
+static std::string sliceMark() {
+    struct stat st;
+    if (::stat(kSlice, &st) != 0 || !S_ISREG(st.st_mode)) return "";
+    return "slice-" + std::to_string(static_cast<unsigned long long>(st.st_ino));
+}
+
+bool installed() {
+    const std::string mark = sliceMark();
+    return !mark.empty() && prefs::get("steam_installed", "no") == mark;
+}
+
+bool download(const std::atomic<bool>* cancel, const std::function<void(int64_t)>& onBytes,
+              std::string* why) {
+    std::string failed;
+    bool ready = false;
+    // No deadline that means anything: the script ends on Steam's own signal,
+    // an error, or Cancel. A day is only there because run() wants a number.
+    const proc::Result r = proc::run({"/usr/libexec/cabinetos-steam-download"}, 24 * 60 * 60,
+                                     cancel, [&](const std::string& line) {
+        if (line.rfind("progress ", 0) == 0) {
+            if (onBytes) onBytes(std::strtoll(line.c_str() + 9, nullptr, 10));
+        } else if (line == "ready") {
+            ready = true;
+        } else if (line.rfind("failed ", 0) == 0) {
+            failed = line.substr(7);
+        }
+    });
+    if (ready) {
+        prefs::set("steam_installed", sliceMark());
+        std::fprintf(stderr, "[steam] downloaded; ready to hand over\n");
+        return true;
+    }
+    if (cancel && cancel->load()) {
+        std::fprintf(stderr, "[steam] download cancelled\n");
+        if (why) why->clear();
+        return false;
+    }
+    std::fprintf(stderr, "[steam] download failed (%d): %s %s\n", r.status, failed.c_str(),
+                 proc::trimmed(r.err).c_str());
+    if (why) *why = failed.empty() ? "Couldn't download Steam" : failed;
+    return false;
+}
+
 bool hidden() { return prefs::get("steam", "shown") == "hidden"; }
 
 void setHidden(bool hide) { prefs::set("steam", hide ? "hidden" : "shown"); }
@@ -206,6 +254,7 @@ bool grow(int64_t bytes, std::string* why) {
 
 bool remove(std::string* why) {
     if (!runHelper("remove", why)) return false;
+    prefs::set("steam_installed", "no");
     // Steam's own files outside its folder, as the console's user: the links
     // it keeps in ~/.steam, its pid and path files, the screen modes its
     // session saved, an autostart entry, and the shortcuts it makes for games

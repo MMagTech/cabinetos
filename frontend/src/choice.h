@@ -69,6 +69,17 @@ public:
         canRight_ = canRight;
     }
     int stepped() const { return stepDir_; }
+    // A PANEL WITH NOTHING TO PRESS BUT A BUTTON, said rather than focused:
+    // "Press (B) to cancel", the letter drawn as a button badge, in place of
+    // the answers (open it with none). A focused Cancel under a run of A
+    // presses gets pressed by the next one (Steam's install, #223; the
+    // unearned-focus rule). Back answers Cancelled, as for any panel. open()
+    // clears it.
+    void setPrompt(std::string before, std::string button, std::string after) {
+        promptBefore_ = std::move(before);
+        promptButton_ = std::move(button);
+        promptAfter_ = std::move(after);
+    }
     // The title alone, keeping everything else ("Paired successfully").
     void setTitle(std::string title) { title_ = std::move(title); }
     // The detail line alone, keeping the answers and focus.
@@ -97,6 +108,7 @@ private:
     std::vector<std::string> options_;
     std::vector<std::string> values_;
     std::vector<bool> disabled_;
+    std::string promptBefore_, promptButton_, promptAfter_;
     int stepper_ = -1;
     bool canLeft_ = false, canRight_ = false;
     int stepDir_ = 0;

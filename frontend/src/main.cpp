@@ -8798,9 +8798,29 @@ int main(int argc, char** argv) {
         });
         return true;
     };
+    // Steam's install in progress, for the panel's line (installSteam).
+    struct SteamInstall {
+        std::atomic<bool> cancel{false};
+        std::atomic<int64_t> bytes{-1};
+        bool ok = false;
+        std::string why;
+    };
+    std::shared_ptr<SteamInstall> steamInstall;
     auto pollSteamJob = [&]() {
         if (!steamJob.th.joinable()) return;
         if (!steamJob.done) {
+            // The install panel's line: how much of Steam is on the drive.
+            if (steamInstall && choiceScreen.isOpen() &&
+                choiceScreen.title() == "Installing Steam") {
+                const int64_t b = steamInstall->bytes.load();
+                // One decimal under 10 GB, so the line visibly moves on a
+                // slow connection ("1.2 GB"); driveSize's whole GB above.
+                char gb[32] = "";
+                if (b > 0 && b < 10'000'000'000LL)
+                    std::snprintf(gb, sizeof gb, "%.1f GB", static_cast<double>(b) / 1e9);
+                choiceScreen.setDetail(b <= 0 ? std::string()
+                                              : gb[0] ? std::string(gb) : driveSize(b));
+            }
             // A Busy pill lasts fifteen seconds; a grow over a big slice takes
             // longer, and the pill must not go quiet while it works.
             if (!steamJob.busy.empty() && SDL_GetTicks() - steamJob.saidAt > 10000) {
@@ -8846,18 +8866,38 @@ int main(int argc, char** argv) {
 
     std::function<void()> showSteamSetup;
     // Making the slice and handing over: Install on the storage screen.
+    // INSTALLING, WITH THE CONSOLE ON SCREEN (MMagTech on the TV, 2026-10-04:
+    // Steam's first start was a black screen for as long as its download took,
+    // "it still kind of looks like a stall"). One panel from Install to the
+    // handover: the slice is made (clearing cached games if it must), then
+    // Steam downloads itself on an invisible display (steam::download) while
+    // the panel shows how much is on the drive, and only then does the console
+    // hand over, to a Steam that opens in seconds. Cancel, or B, stops it and
+    // stays here; an install stopped or failed half way picks up where it left
+    // off the next time Steam is picked. Nothing is timed: it ends when Steam
+    // says so, on a slow connection or a fast one.
     auto installSteam = [&](int64_t want) {
-        auto ok = std::make_shared<bool>(false);
-        runSteamJob("Freeing space\xE2\x80\xA6", [want, ok]() {
-            std::string why;
-            *ok = steam::create(want, &why);
-        }, [&, ok]() {
-            if (!*ok) {
-                menuNotice.say("Couldn't set up Steam", Tone::Problem);
-                return;
+        auto job = std::make_shared<SteamInstall>();
+        steamInstall = job;
+        askChoice("Installing Steam", "", {}, 0, nullptr);
+        choiceScreen.setPrompt("Press", "B", "to cancel");
+        choiceBack = [job]() { job->cancel = true; };
+        runSteamJob("", [job, want]() {
+            if (!steam::isSetUp() && !steam::create(want, &job->why)) return;
+            if (job->cancel) return;
+            job->ok = steam::download(&job->cancel,
+                                      [job](int64_t b) { job->bytes = b; }, &job->why);
+        }, [&, job]() {
+            if (steamInstall == job) steamInstall.reset();
+            if (choiceScreen.isOpen() && choiceScreen.title() == "Installing Steam")
+                choiceScreen.close();
+            if (job->ok) {
+                startLeaving(Leave::Steam, "Starting Steam");
+            } else if (!job->cancel) {
+                menuNotice.say(job->why.empty() ? std::string("Couldn't download Steam")
+                                                : job->why,
+                               Tone::Problem);
             }
-            menuNotice.life = 0.0f;
-            startLeaving(Leave::Steam, "Starting Steam");
         });
     };
     // The size panel: one row Left and Right change, 25 GB a press, with the
@@ -8941,6 +8981,11 @@ int main(int argc, char** argv) {
         }
         const bool pinFirst = accounts::pinIsSet() && accounts::activeId() != accounts::ownerId();
         auto go = [&, pinFirst]() {
+            if (steam::isSetUp() && !steam::installed()) {
+                // An install stopped or failed half way: carry on with it.
+                installSteam(steam::sliceBytes());
+                return;
+            }
             if (!steam::isSetUp()) {
                 auto read = std::make_shared<SteamSizes>();
                 runSteamJob("", [read, readSteamSizes]() { readSteamSizes(read.get()); },
@@ -11715,6 +11760,12 @@ int main(int argc, char** argv) {
                         // from the middle of the Library would throw away the
                         // whole stack the person had walked down.
                         else if (overlayOpen) closeOverlay();
+                        // A question or Downloads open over any screen, Home
+                        // included, takes Escape as B does: Back. On Home it
+                        // opened the Power menu over the panel instead, so a
+                        // keyboard could not cancel Steam's install (#223).
+                        else if (choiceScreen.isOpen() || downloadsPanel.isOpen())
+                            navigate(screens::Nav::Back);
                         else if (stack.size() > 1) navigate(screens::Nav::Back);
                         // At the root, Escape is Start: the Power menu.
                         else openPowerMenu();

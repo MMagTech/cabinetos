@@ -75,6 +75,7 @@ for expected in \
     /usr/share/polkit-1/rules.d/66-cabinetos-steam.rules \
     /usr/libexec/os-session-select \
     /usr/libexec/cabinetos-system-disk \
+    /usr/libexec/cabinetos-steam-download \
     /usr/lib/udev/rules.d/90-cabinetos-system-disk.rules \
     /usr/lib/udev/rules.d/72-cabinetos-wii-remote.rules \
     /usr/lib/udev/rules.d/99-cabinetos-wii-remote.rules \

@@ -38,6 +38,9 @@ void ChoiceScreen::open(std::string title, std::string detail,
     options_ = std::move(options);
     values_.clear();
     disabled_.clear();
+    promptBefore_.clear();
+    promptButton_.clear();
+    promptAfter_.clear();
     stepper_ = -1;
     stepDir_ = 0;
     slot_ = options_.empty() ? 0 : std::clamp(focus, 0, static_cast<int>(options_.size()) - 1);
@@ -168,7 +171,8 @@ void ChoiceScreen::draw(Ctx& c) {
     const float detailH = lines.empty() ? 0.0f : 8.0f + lineH * lines.size();
     const int n = static_cast<int>(options_.size());
     const int shown = grows_ ? std::max(1, std::min(n, kMaxVisible)) : std::min(n, kMaxVisible);
-    float listH = shown * kButtonH + std::max(0, shown - 1) * kButtonGap;
+    const bool prompt = n == 0 && !promptButton_.empty();
+    float listH = prompt ? kButtonH : shown * kButtonH + std::max(0, shown - 1) * kButtonGap;
     if (grows_) {
         if (!listHSet_) {
             listH_.settle(listH);
@@ -203,6 +207,29 @@ void ChoiceScreen::draw(Ctx& c) {
     y += detailH;
     y += 36.0f;
 
+    if (prompt) {
+        // "Press (B) to cancel": the words, and the button as a white disc
+        // with its dark letter on the text's x-height, as Home's empty state
+        // draws "Press (A) to open the Library" (main.cpp, drawPressPrompt).
+        const TextStyle st = TextStyle::Title3;
+        const float gap = 16.0f;
+        const float badge = c.text.lineHeight(st, sc) * 0.95f;
+        const float w1 = c.text.measure(promptBefore_, st, sc);
+        const float w2 = c.text.measure(promptAfter_, st, sc);
+        const float base = y + kButtonH * 0.5f + c.text.ascent(st, sc) * 0.40f;
+        float x = (W - (w1 + gap + badge + gap + w2)) * 0.5f;
+        c.text.draw(c.r, promptBefore_, x, base, st, ui::Color::white(0.92f), sc);
+        x += w1 + gap;
+        const float capMid = base - c.text.ascent(st, sc) * 0.36f;
+        c.r.draw(ui::Rect{x, capMid - badge * 0.5f, badge, badge, badge * 0.5f,
+                          ui::Color::white(0.95f)});
+        const float bw = c.text.measure(promptButton_, st, sc);
+        c.text.draw(c.r, promptButton_, x + (badge - bw) * 0.5f,
+                    capMid + c.text.ascent(st, sc) * 0.36f, st,
+                    ui::Color{0.07f, 0.05f, 0.12f, 1.0f}, sc);
+        x += badge + gap;
+        c.text.draw(c.r, promptAfter_, x, base, st, ui::Color::white(0.92f), sc);
+    }
     if (n == 0 && !placeholder_.empty())
         centred(placeholder_, y + listH * 0.5f + c.text.ascent(TextStyle::Callout, sc) * 0.4f,
                 TextStyle::Callout, 0.45f);

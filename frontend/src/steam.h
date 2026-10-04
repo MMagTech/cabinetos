@@ -20,7 +20,9 @@
 
 #pragma once
 
+#include <atomic>
 #include <cstdint>
+#include <functional>
 #include <string>
 
 namespace steam {
@@ -31,6 +33,19 @@ bool available();
 
 // Steam is set up: its slice exists. Cheap (one stat).
 bool isSetUp();
+
+// Steam is downloaded into its slice and ready to hand over to. Set when the
+// first download finishes (download()), cleared by remove(). A slice without
+// it is an install somebody cancelled or that failed: picking Steam resumes
+// the download instead of handing over to a black screen. Cheap.
+bool installed();
+
+// Steam's first download, with the console on screen (/usr/libexec/
+// cabinetos-steam-download, which says how). Blocks until it is done, failed
+// or cancelled; `onBytes` is called as the slice fills. True when Steam is
+// ready to hand over to; `why` says otherwise, empty when cancelled.
+bool download(const std::atomic<bool>* cancel, const std::function<void(int64_t)>& onBytes,
+              std::string* why);
 
 // The slice's size in bytes, 0 when not set up. Cheap.
 int64_t sliceBytes();
