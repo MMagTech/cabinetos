@@ -173,6 +173,22 @@ int cps2_take_frame(const uint32_t** pixels, unsigned* width, unsigned* height, 
 	return 1;
 }
 
+// The window PCSX2 presents to, set before cps2_start; 0 for none, which is
+// every frame read back for cps2_take_frame (#226). See
+// CabinetPS2::SetWindow. Optional for the frontend: an older library lacks it
+// and plays the old way.
+void cps2_set_window(const char* display, unsigned long window, unsigned width, unsigned height)
+{
+	CabinetPS2::SetWindow(display, window, width, height);
+}
+
+// Reads the picture on screen back once, for a screenshot, and waits for it.
+// Returns 1 when cps2_take_frame now has it.
+int cps2_capture_frame(unsigned timeout_ms)
+{
+	return CabinetPS2::CaptureFrame(timeout_ms) ? 1 : 0;
+}
+
 // Fills `dest` with up to `max_frames` stereo frames and returns how many were
 // written. Interleaved 16-bit, the same shape every libretro core produces.
 unsigned cps2_drain_audio(int16_t* dest, unsigned max_frames)

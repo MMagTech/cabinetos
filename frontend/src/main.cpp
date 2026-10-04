@@ -1866,6 +1866,9 @@ static int countEntries(const std::string& dir) {
 // decides (quality.h). -1 means "not given".
 static float gPs2Upscale = -1.0f;
 static int gPs2Anisotropy = -1;
+// --ps2-copy: PCSX2 without a window of its own, every frame copied back for
+// this window to draw, as before #226. For measuring the two side by side.
+static bool gPs2Copy = false;
 
 // "PRESS (A) TO ...", centred, with the A drawn as a button badge the way
 // consoles prompt: a white disc with a dark A, on the text's x-height. Home's
@@ -4227,6 +4230,8 @@ int main(int argc, char** argv) {
             // open question 23 will want — one quality setting for the whole
             // console, not a per-emulator menu.
             gPs2Upscale = static_cast<float>(SDL_atof(argv[++i]));
+        } else if (SDL_strcmp(argv[i], "--ps2-copy") == 0) {
+            gPs2Copy = true;
         } else if (SDL_strcmp(argv[i], "--ps2-aniso") == 0 && i + 1 < argc) {
             // Anisotropic filtering: 0, 2, 4, 8 or 16. PCSX2 ships it OFF.
             // It sharpens surfaces seen at a steep angle, which on a
@@ -6400,6 +6405,65 @@ int main(int argc, char** argv) {
     // opened, and the worker puts what comes out where the core can open it.
     LaunchJob launchJob;
     GameSession session;
+    // PCSX2'S OWN WINDOW (#226). PS2 runs inside this process, as before, but
+    // presents its picture to a window of its own, which gamescope shows; this
+    // window becomes gamescope's overlay over it, as for the separate
+    // emulators, and draws only the pause menu and what else is over a game.
+    // Every frame used to be copied off the GPU for this window to draw, and
+    // that copy is what held Quality at 3x (quality.cpp). Everything else
+    // about a PS2 game (pads, sound, saves, the menu) is unchanged.
+    //
+    // ONLY UNDER GAMESCOPE ON X11, which is the console. Anywhere else (the
+    // VM's cage, an offscreen run) nothing could draw the menu over another
+    // window, so the copy stays; so does an older PS2 library.
+    SDL_Window* ps2Window = nullptr;
+    bool ps2InputOurs = false;
+    int ps2ClearFrames = 0;
+    auto openPs2Window = [&]() {
+        if (gPs2Copy || !std::getenv("GAMESCOPE_WAYLAND_DISPLAY")) return;
+        const char* driver = SDL_GetCurrentVideoDriver();
+        if (!driver || SDL_strcmp(driver, "x11") != 0) return;
+        int w = 0, h = 0;
+        SDL_GetWindowSizeInPixels(window, &w, &h);
+        ps2Window = SDL_CreateWindow("PlayStation 2", w, h, SDL_WINDOW_FULLSCREEN);
+        if (!ps2Window) {
+            std::fprintf(stderr, "[ps2] no window of its own (%s); copying frames\n",
+                         SDL_GetError());
+            return;
+        }
+        const auto xid = static_cast<unsigned long>(SDL_GetNumberProperty(
+            SDL_GetWindowProperties(ps2Window), SDL_PROP_WINDOW_X11_WINDOW_NUMBER, 0));
+        const char* display = std::getenv("DISPLAY");
+        SDL_GetWindowSizeInPixels(ps2Window, &w, &h);
+        if (!xid || !ps2::setWindow(display ? display : "", xid, static_cast<unsigned>(w),
+                                    static_cast<unsigned>(h))) {
+            std::fprintf(stderr, "[ps2] this PS2 library cannot take a window; copying frames\n");
+            SDL_DestroyWindow(ps2Window);
+            ps2Window = nullptr;
+            return;
+        }
+        // This window steps over it, as for an emulator of its own: hidden,
+        // marked, shown, because gamescope classifies a window when it maps.
+        SDL_HideWindow(window);
+        cab::overlaywin::mark(window, /*takeInput=*/false);
+        SDL_ShowWindow(window);
+        ps2InputOurs = false;
+        renderer.setTransparentBackground(true);
+        ps2ClearFrames = 30;
+        std::fprintf(stderr, "[ps2] its own window 0x%lx, %dx%d\n", xid, w, h);
+    };
+    // After the game has stopped, which is when PCSX2 has let go of it.
+    auto closePs2Window = [&]() {
+        if (!ps2Window) return;
+        SDL_DestroyWindow(ps2Window);
+        ps2Window = nullptr;
+        SDL_HideWindow(window);
+        cab::overlaywin::unmark(window);
+        SDL_ShowWindow(window);
+        renderer.setTransparentBackground(false);
+        ps2InputOurs = false;
+    };
+
     // A game in an emulator that is its own application (standalone.h). While
     // it is active the emulator has the television and this loop only watches
     // it: nothing is drawn and nothing reaches the screens here.
@@ -10705,7 +10769,9 @@ int main(int argc, char** argv) {
                              launchTag, liveClient);
 
         core.setPlayers(players::count());
+        if (core.isPs2()) openPs2Window();
         if (!core.loadGame(romForCore, storage::biosDir(), saveDir)) {
+            closePs2Window();
             // AND SAY IT ON THE SCREEN, NOT ONLY TO STDERR — 2026-09-21.
             //
             // MMagTech: *"dreamcast game downloaded and didnt auto launch and
@@ -11089,6 +11155,7 @@ int main(int argc, char** argv) {
         curtain.elapsed = curtain.duration;
         curtain.retarget(0.0f, kCurtainUp);
         cab::Core::shared().unloadGame();
+        closePs2Window();
         // AFTER the unload, for the one platform whose save is a tree. The
         // battery above is read out of the core's own memory and is finished
         // the moment the game stopped writing to it; a directory save is files
@@ -12533,7 +12600,10 @@ int main(int argc, char** argv) {
             // RUMBLE (#149): what the game asked for, to each player's pad,
             // and nothing while the game is not being played. Rewind replays
             // frames backwards, which is not play either.
-            if (core.isPs2()) ps2::pollRumble();
+            if (core.isPs2()) {
+                ps2::pollRumble();
+                ps2::report();
+            }
             rumble::update(!frozen && !rewinding);
 
             if (frozen && pauseRedrawFrames > 0 && !core.isPs2()) {
@@ -13530,6 +13600,40 @@ int main(int argc, char** argv) {
             slotAnim(slotPress, focusRow, focusSlot)
                 .retarget(pressIsHomes ? 1.0f : 0.0f, kPressDuration);
 
+        // OVER PCSX2'S OWN WINDOW (#226) this window draws only what is over
+        // the game: the pause menu, a notice, the curtain, the dim. With none
+        // of them showing it draws nothing at all, as over an emulator of its
+        // own, so gamescope shows PCSX2's picture straight and this loop does
+        // not render 4K for nobody; the game above (pads, sound) still runs
+        // every pass. The menu has the controllers while it is up, so a press
+        // meant for it never reaches the game.
+        if (ps2Window && playing) {
+            const bool over = overlayOpen || overlayFade.value() > 0.001f ||
+                              curtain.value() > 0.001f || menuNotice.alpha() > 0.001f ||
+                              dimLayer.value() > 0.001f;
+            if (overlayOpen != ps2InputOurs) {
+                cab::overlaywin::mark(window, /*takeInput=*/overlayOpen);
+                ps2InputOurs = overlayOpen;
+            }
+            if (over) {
+                ps2ClearFrames = 30;
+            } else {
+                if (ps2ClearFrames > 0) {
+                    --ps2ClearFrames;
+                    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+                    glDisable(GL_SCISSOR_TEST);
+                    glClearColor(0, 0, 0, 0);
+                    glClear(GL_COLOR_BUFFER_BIT);
+                    SDL_GL_SwapWindow(window);
+                } else {
+                    // Until the next press or 4 ms: the pads are read again
+                    // that often, which is sooner than PCSX2 asks for them.
+                    SDL_WaitEventTimeout(nullptr, 4);
+                }
+                continue;
+            }
+        }
+
         int dw = 0, dh = 0;
         SDL_GetWindowSizeInPixels(window, &dw, &dh);
         bool offscreen = false;
@@ -13563,7 +13667,7 @@ int main(int argc, char** argv) {
             // top, so this fill would black the game out. Drawing nothing is
             // what lets it through — the scrim below still dims it, because a
             // translucent black rectangle composites exactly as it should.
-            if (!overlayTest && !standalonePaused)
+            if (!overlayTest && !standalonePaused && !ps2Window)
                 renderer.draw(ui::Rect{0, 0, ui::kCanvasWidth, ui::kCanvasHeight, 0,
                                        ui::Color::black(1.0f)});
         } else {

@@ -1,11 +1,11 @@
 // Marking this console's window as a gamescope overlay, for the one case where
 // it is not the only thing on the screen.
 //
-// WHAT THIS IS FOR. An emulator that is not a libretro core — PCSX2, and PS3,
-// Switch, Xbox and Wii U after it — makes its own graphics device and presents
-// its own picture. Today CabinetOS copies that picture off the GPU and back on
-// so it can draw the pause menu over it. gamescope will instead composite our
-// menu on top of a window the emulator owns, which removes the copy entirely.
+// WHAT THIS IS FOR. An emulator that is not a libretro core — PCSX2, PS3,
+// Switch, Xbox and Wii U — makes its own graphics device and presents its own
+// picture. gamescope composites our menu on top of a window the emulator owns,
+// so the picture is never copied off the GPU and back for us to draw over it.
+// PCSX2 was copied that way until #226 (main.cpp, openPs2Window).
 // docs/PROJECT.md, open question 24, has the measurements and the decision.
 //
 // THE SLOT IS NOT THE OBVIOUS ONE. `GAMESCOPE_EXTERNAL_OVERLAY` composites and

@@ -5,6 +5,8 @@
 
 #include "rumble.h"
 
+#include <SDL3/SDL.h>
+
 #include <cstdio>
 #include <cstring>
 #include <dlfcn.h>
@@ -33,7 +35,15 @@ struct Api {
     // Optional: a library built before rumble (#149) lacks it, and PS2 plays
     // on without motors rather than refusing to start.
     void     (*getRumble)(unsigned, float*, float*) = nullptr;
+    // Optional too: a library built before #226 has no window and no capture,
+    // and reads every frame back as it always did.
+    void     (*setWindow)(const char*, unsigned long, unsigned, unsigned) = nullptr;
+    int      (*captureFrame)(unsigned) = nullptr;
 } gApi;
+
+bool gWindowed = false;
+bool gPaused = false;
+uint64_t gFramesTaken = 0;
 
 uint64_t gFrameSerial = 0;
 
@@ -78,6 +88,10 @@ bool ps2::load(const std::string& soPath) {
 
     gApi.getRumble =
         reinterpret_cast<decltype(gApi.getRumble)>(dlsym(gHandle, "cps2_get_rumble"));
+    gApi.setWindow =
+        reinterpret_cast<decltype(gApi.setWindow)>(dlsym(gHandle, "cps2_set_window"));
+    gApi.captureFrame =
+        reinterpret_cast<decltype(gApi.captureFrame)>(dlsym(gHandle, "cps2_capture_frame"));
 
     if (!ok) {
         dlclose(gHandle);
@@ -122,15 +136,60 @@ bool ps2::startGame(const std::string& discPath, const std::string& biosDir,
     return true;
 }
 
+bool ps2::setWindow(const std::string& display, unsigned long window, unsigned width,
+                    unsigned height) {
+    gWindowed = false;
+    if (!gHandle || !gApi.setWindow || !gApi.captureFrame) return window == 0;
+    gApi.setWindow(display.c_str(), window, width, height);
+    gWindowed = window != 0;
+    return true;
+}
+
+bool ps2::windowed() { return gWindowed; }
+
+bool ps2::captureFrame(unsigned timeoutMs) {
+    if (!gHandle || !gApi.captureFrame) return false;
+    return gApi.captureFrame(timeoutMs) != 0;
+}
+
+void ps2::report() {
+    static uint64_t nextNs = 0, takenAtLast = 0;
+    // Not while paused: PCSX2's reading is the last one from before the
+    // pause, and a line saying 60 fps over a frozen game misleads.
+    if (!gHandle || gPaused) return;
+    const uint64_t now = SDL_GetTicksNS();
+    if (nextNs == 0 || now < nextNs) {
+        if (nextNs == 0) { nextNs = now + 10'000'000'000ull; takenAtLast = gFramesTaken; }
+        return;
+    }
+    float fps = 0, speed = 0;
+    double readbackUs = 0;
+    gApi.metrics(&fps, &speed, &readbackUs);
+    if (gWindowed)
+        std::fprintf(stderr, "[ps2] %.1f fps, speed %.0f%%, presented by PCSX2\n", fps,
+                     speed);
+    else
+        std::fprintf(stderr, "[ps2] %.1f fps, speed %.0f%%, %.1f new frames/s shown, "
+                     "readback %.0f us\n", fps, speed,
+                     (gFramesTaken - takenAtLast) / 10.0, readbackUs);
+    takenAtLast = gFramesTaken;
+    nextNs = now + 10'000'000'000ull;
+}
+
 void ps2::stopGame() {
     if (!gHandle) return;
     gApi.stop();
     gFrameSerial = 0;
+    gPaused = false;
+    // The window goes with the game; the next one is given its own, or none.
+    if (gApi.setWindow) gApi.setWindow("", 0, 0, 0);
+    gWindowed = false;
 }
 
 bool ps2::running() { return gHandle && gApi.running() != 0; }
 
 void ps2::setPaused(bool paused) {
+    gPaused = paused;
     if (gHandle) gApi.setPaused(paused ? 1 : 0);
 }
 
@@ -158,6 +217,7 @@ bool ps2::takeFrame(const uint32_t** pixels, unsigned& width, unsigned& height) 
     if (!gHandle) return false;
     unsigned w = 0, h = 0;
     if (!gApi.takeFrame(pixels, &w, &h, &gFrameSerial)) return false;
+    ++gFramesTaken;
     width = w;
     height = h;
     return true;

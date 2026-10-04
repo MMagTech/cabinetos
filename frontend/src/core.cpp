@@ -1736,6 +1736,9 @@ int Core::runFor(double dt) {
 
 bool Core::uploadFrame() {
     if (gIsPs2) {
+        // PCSX2 PRESENTS ITS OWN PICTURE (#226): there is nothing to upload,
+        // and nothing of the game for this window to draw.
+        if (ps2::windowed()) return false;
         const uint32_t* pixels = nullptr;
         unsigned w = 0, h = 0;
         if (!ps2::takeFrame(&pixels, w, h)) {
@@ -2124,6 +2127,19 @@ bool Core::snapshot(std::vector<uint8_t>& rgba, unsigned& width, unsigned& heigh
     // the game's own resolution. So a screenshot works in every game where
     // the shortcut button does. Not a save state's picture: PS2 has none.
     const bool ps2Frame = isPs2();
+    // WITH ITS OWN WINDOW (#226) nothing is copied off the GPU each frame, so
+    // the picture on screen is read back once, now, for this.
+    if (ps2Frame && ps2::windowed()) {
+        const uint32_t* pixels = nullptr;
+        unsigned pw = 0, ph = 0;
+        if (!ps2::captureFrame(1000) || !ps2::takeFrame(&pixels, pw, ph) || pw == 0 || ph == 0)
+            return false;
+        rgba.assign(reinterpret_cast<const uint8_t*>(pixels),
+                    reinterpret_cast<const uint8_t*>(pixels) + static_cast<size_t>(pw) * ph * 4);
+        width = pw;
+        height = ph;
+        return true;
+    }
     const unsigned w = ps2Frame ? frameWidth_ : gFrameW;
     const unsigned h = ps2Frame ? frameHeight_ : gFrameH;
     if (w == 0 || h == 0) return false;

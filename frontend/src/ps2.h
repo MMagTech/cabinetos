@@ -79,6 +79,24 @@ void setPad(int port, uint32_t buttons, float leftX, float leftY, float rightX, 
 // Once a frame; PCSX2 runs on its own thread, so this is read, not told.
 void pollRumble();
 
+// THE WINDOW PCSX2 PRESENTS TO (#226), before startGame; 0 for none. With
+// one, PCSX2 draws its own picture there and gamescope shows it, as it shows
+// the separate emulators, and no frame is copied back: takeFrame answers only
+// after captureFrame. False when the library is older than this and cannot
+// take a window, which leaves it reading every frame back as before.
+bool setWindow(const std::string& display, unsigned long window, unsigned width, unsigned height);
+// Whether the game now starting was given a window.
+bool windowed();
+
+// Reads the picture on screen back once, for a screenshot, and waits up to
+// `timeoutMs` for it; takeFrame then has it.
+bool captureFrame(unsigned timeoutMs);
+
+// Once a frame while a game runs. Every ten seconds it logs PCSX2's own
+// frame rate and speed, and on the copy path how many new frames reached
+// the screen: gamescope's frame times see only the window that presents.
+void report();
+
 // Takes the newest finished frame, if there is one. The pixels stay valid
 // until the next call.
 bool takeFrame(const uint32_t** pixels, unsigned& width, unsigned& height);
