@@ -11,44 +11,33 @@ specification is `docs/PROJECT.md`; the order is `docs/ROADMAP.md`.
 
 ## Where things stand
 
-Milestone 3. **#200, real Wii Remotes, is built on branch `wii-remotes`** and
-working on the A9 TV from a hand build (tools/ui-loop.sh with
-`--env CABINETOS_WII_BRIDGE=/var/home/cabinet/wiibridge/cabinetos-wii-bridge`)
-and two temporary udev rules in `/run/udev/rules.d/` (gone at reboot). The
-decisions are in `docs/PROJECT.md` question 35 on branch
-`docs-after-picture-quality` (not merged yet). The full test record is on #200.
+Milestone 3. **#200, real Wii Remotes, is on `testing`** (branch
+`wii-remotes`, up to date with main): the bridge, its udev rules, the search
+service and the polkit rule are in the image, dry-run on the A9 2026-10-03.
+Passed on the TV from the hand build: everything in the #200 test record,
+plus the setup replay (pointer right after a mid-game power cycle) and the
+ack fix (Geometry Wars after Wild West Guns, no "Communication interrupted").
+The Wii Remotes panel was judged; Back and a finished pairing now return to
+it, and the sensor bar is asked with the first Remote only.
 
-Passed on the TV, 2026-10-02/03, MMagTech's TechKen copies: pairing (Wii PIN
-refused, `0000` taken), reconnect, lights, menus by Remote, unlock, hold HOME,
-pointer, Nunchuk games through the bridge (Geometry Wars, Donkey Kong, Wild West
-Guns), two Remotes and a pad in Mario Kart, a Remote switched off mid-game (no
-crash, Nunchuk right after it comes back), idle switch-off at Home.
+PCSX2/pcsx2#15040 was closed by the PCSX2 team 2026-10-03 (no embedding API,
+no AI contributions). Moved out: Wii U Remotes in Cemu (#231), the empty
+battery in the Wii HOME menu (#230), both After first release.
 
 ## Next
 
-1. **Test the bridge's setup replay.** It is installed at
-   ~/wiibridge/cabinetos-wii-bridge but has never run: the console app was not
-   restarted after it was copied in, so the 2026-10-03 09:55 test ran the old
-   bridge (its log says "extension set up again", not "N setup command(s) sent
-   again") and the pointer was way off after the power cycle. Restart the
-   console app on Home (tools/ui-loop.sh --no-build with the --env above), then
-   in Wild West Guns switch the Remote off and on mid-game; the pointer should
-   be right. If it is still off, the camera setup is not being captured or needs
-   slower pacing. NOTE: a second test at 09:59, still on the OLD bridge, had the
-   pointer settle by itself a few seconds after the Remote came back; compare
-   old and new before deciding the replay is needed.
-2. **Put #200 into the image**: build `wiibridge/` in the builder and install
-   it as `/usr/libexec/cabinetos-wii-bridge` (GPL, its own folder); add the two
-   udev rules, the search service, the polkit rule (already in system_files,
-   listed in build.sh except the udev rules); dry-run on the A9 as `cabinet`
-   (lessons: dry-run image scripts first). Then "Pair a Wii Remote" end to end.
-3. **Cemu (Wii U)**: it can see a Remote through the stand-in (Nintendo's id);
-   it still has to be told to use one in its controller profile.
-4. Judge the new Settings > Controllers > "Wii Remotes" panel on the TV.
+1. **#200 on the testing image**, with MMagTech at the TV, steps first:
+   "Pair a Wii Remote" end to end (remove both, pair one: sensor bar asked;
+   pair the second: not asked; lands in the panel on the new Remote), then a
+   Nunchuk game with a mid-game power cycle, proving from the log that
+   `/usr/libexec/cabinetos-wii-bridge` is the bridge running. Merge on his
+   "merge"; close #200; delete `wii-remotes` on his go.
+2. **#226, PS2 without the copy**: give PCSX2 its own window, shown by
+   gamescope with the pause menu over it as for the separate emulators;
+   measure in the real path with frames.py before raising Quality. Upstream
+   said no, so this is the route.
+3. Then #63 phase 2 (ROADMAP).
 
-Known, recorded on #200, not chased: after a game's 5-minute idle drop a button
-does not bring the Remote back (Dolphin ignores it since 2019; libretro's
-Dolphin also crashes if a held Remote vanishes, which the bridge avoids); the
-`+` join prompt in Mario Kart; Bit.Trip Beat's paddle jitter (copy's sensor?);
-the Remote that came back on by itself 2026-10-02 22:23; the one game freeze
-2026-10-02 22:42. MMagTech does not want upstream reports for now.
+Owed, small: move the option check out of `cores/build-core.sh` into its own
+script, so editing the check stops rebuilding all 22 cores (it did once on
+2026-10-02). Not done in the #200 image, which does not touch the cores.
