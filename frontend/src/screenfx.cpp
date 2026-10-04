@@ -316,11 +316,13 @@ const std::vector<Look>& looksFor(const std::string& slug) {
 // ON BY DEFAULT (MMagTech, 2026-10-04): the plain picture is the weakest on a
 // 4K set. Every TV system starts on crt-easymode: flat, so nothing in a corner
 // is bent or cut, the brightest of the CRT looks, Batocera's own "Scanlines",
-// and steady on N64. The handheld default waits for MMagTech's pick of LCD.
+// and steady on N64. Every handheld starts on lcd3x, MMagTech's pick of the
+// LCD looks on the TV.
 const char* defaultFor(const std::string& slug) {
     const auto& looks = looksFor(slug);
+    if (looks.empty()) return "plain";
     if (&looks == &kConsole || &looks == &kUpscaled) return "crt-easymode";
-    return "plain";
+    return "lcd3x";
 }
 
 int chosen(const std::string& slug) {
