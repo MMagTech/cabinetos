@@ -36,7 +36,7 @@ while i < len(args):
     a = args[i]
     if a in ("-isystem", "-I"):
         keep += [a, args[i + 1]]; i += 2; continue
-    if a.startswith(("-I", "-D", "-isystem", "-std=", "-march=", "-mtune=")) or a == "-fPIC":
+    if a.startswith(("-I", "-D", "-isystem", "-std=", "-march=", "-mtune=", "-msse", "-mfxsr")) or a == "-fPIC":
         keep.append(a)
     i += 1
 print(" ".join(shlex.quote(k) for k in keep))
@@ -76,11 +76,32 @@ SYS="$SYS -lX11 -lXrandr -lXi -lXext -ldbus-1 -lSDL3 -lshaderc_shared -ldl -lpth
 
 mapfile -t THIRDPARTY < <(find "$BUILD/3rdparty" -name '*.a')
 
+# PCSX2 ITSELF, LINKED AS ITS OWN APP LINKS IT. A multi-ISA build (build-pcsx2.sh,
+# DISABLE_ADVANCE_SIMD) has the GS, IPU and SPU2 code three more times, once per
+# instruction set, and pcsx2/CMakeLists.txt links them WHOLE and IN THIS ORDER,
+# oldest first: the copies share inline functions, the linker keeps the first
+# one it sees, and an AVX2 copy kept first would run on a processor without
+# AVX2, which is the SIGILL this build was fixing. All of PCSX2's own objects
+# go in whole as well, as pcsx2-qt has them. A build without the three (an
+# older build directory) links the one archive, as before.
+GS_ISA=()
+for isa in sse4 avx avx2; do
+    [ -f "$BUILD/pcsx2/libGS-$isa.a" ] && GS_ISA+=("$BUILD/pcsx2/libGS-$isa.a")
+done
+if [ ${#GS_ISA[@]} -eq 3 ]; then
+    PCSX2_LINK=(-Wl,--whole-archive "$BUILD/pcsx2/libpcsx2.a" "${GS_ISA[@]}" -Wl,--no-whole-archive)
+elif [ ${#GS_ISA[@]} -eq 0 ]; then
+    PCSX2_LINK=("$BUILD/pcsx2/libpcsx2.a")
+else
+    echo "only ${#GS_ISA[@]} of PCSX2's three per-ISA GS libraries are built" >&2
+    exit 1
+fi
+
 # shellcheck disable=SC2086  # SYS is a deliberately word-split flag list
 clang++ -o "$BUILD/cabinet-ps2-probe" \
     "$BUILD/CabinetPS2Host.o" "$BUILD/CabinetPS2Audio.o" "$BUILD/CabinetPS2Probe.o" \
     -Wl,--start-group \
-    "$BUILD/pcsx2/libpcsx2.a" "$BUILD/common/libcommon.a" \
+    "${PCSX2_LINK[@]}" "$BUILD/common/libcommon.a" \
     "${THIRDPARTY[@]}" \
     -Wl,--end-group \
     $SYS
@@ -131,7 +152,7 @@ clang++ -shared -Wl,-z,defs -Wl,-rpath,'$ORIGIN' -Wl,--disable-new-dtags -o "$BU
     -Wl,--wrap=_ZN12InputManager24SetPadVibrationIntensityEjff \
     "$BUILD/CabinetPS2Host.o" "$BUILD/CabinetPS2Audio.o" "$BUILD/CabinetPS2Bridge.o" \
     -Wl,--start-group \
-    "$BUILD/pcsx2/libpcsx2.a" "$BUILD/common/libcommon.a" \
+    "${PCSX2_LINK[@]}" "$BUILD/common/libcommon.a" \
     "${THIRDPARTY[@]}" \
     -Wl,--end-group \
     $SYS

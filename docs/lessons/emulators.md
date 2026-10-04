@@ -240,6 +240,21 @@ Read before working on a core, an emulator, input, saves or states.
   packages the frontend does not. Putting them in `frontend/Containerfile` would
   have slowed every one of the twenty-one core builds to serve one thing.
 
+- **PCSX2'S DEFAULT BUILD IS FOR THE BUILD MACHINE'S PROCESSOR ONLY**
+  (`-march=native` unless `DISABLE_ADVANCE_SIMD=ON`). Every image until
+  2026-10-04 carried a PCSX2 built that way on a CI runner, and played only
+  because the runners happened to suit the A9. The rebuild for #226 landed
+  on an Intel runner and used `vmovw`, an AVX-512 FP16 instruction the A9's
+  Zen 5 lacks: SIGILL in `ReverbDownsample_avx` the moment a game made a
+  sound. build-pcsx2.sh now builds multi-ISA, as PCSX2's own releases do,
+  and refuses `-march=native`. **Check the release build flags of anything
+  upstream ships, not only its default build.**
+
+- **TEST THE MODULE THE IMAGE WILL CARRY, NOT THE ONE BUILT BY HAND.** A
+  PS2 library built on the A9 always suits the A9, so every test of it
+  passed while CI's copy crashed. Download the CI artifact, or upgrade, and
+  launch a game from that before asking anyone to look.
+
 ## PS3 (parked)
 
 - **RPCS3 will not install a PKG or firmware unless you say `--headless`**, and

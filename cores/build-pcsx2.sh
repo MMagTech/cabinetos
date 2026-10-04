@@ -170,6 +170,18 @@ fi
 #                       incidental: open question 12's correction says each
 #                       emulator becomes its own .so, and a non-PIC static
 #                       library cannot be linked into one at all.
+#   DISABLE_ADVANCE_SIMD=ON
+#                       PCSX2's "multi-ISA" build: SSE4.1 as the floor, with
+#                       AVX and AVX2 versions of the hot code chosen at run
+#                       time. WITHOUT IT PCSX2 BUILDS WITH -march=native, for
+#                       whatever processor the CI runner has. Every image
+#                       until 2026-10-04 did, and played only because the
+#                       runners happened to suit the A9; the PCSX2 rebuilt for
+#                       #226 got one that did not, and PS2 died with SIGILL in
+#                       ReverbDownsample_avx the moment a game made sound.
+#                       PCSX2's own Linux, Flatpak, Windows and Mac release
+#                       builds all set this. The check after the build below
+#                       refuses -march=native if it ever comes back.
 CMAKE_ARGS=(
     -G Ninja
     -DCMAKE_BUILD_TYPE=Release
@@ -183,6 +195,8 @@ CMAKE_ARGS=(
     -DWAYLAND_API=OFF
     -DUSE_BACKTRACE=OFF
     -DPOSITION_INDEPENDENT_CODE=ON
+    -DDISABLE_ADVANCE_SIMD=ON
+    -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 )
 
 run_in_builder() {
@@ -200,10 +214,34 @@ run_in_builder() {
 
 if [ "$PROBE_ONLY" -eq 0 ]; then
     run_in_builder "cmake -B $BUILD $(printf '%q ' "${CMAKE_ARGS[@]}") ."
-    run_in_builder "cmake --build $BUILD --target PCSX2 --parallel \$(nproc)"
+    run_in_builder "cmake --build $BUILD --target PCSX2 GS-sse4 GS-avx GS-avx2 --parallel \$(nproc)"
+
+    # MULTI-ISA MAKES PCSX2 AN OBJECT LIBRARY, NOT libpcsx2.a (pcsx2/
+    # CMakeLists.txt: `add_library(PCSX2 OBJECT)` under DISABLE_ADVANCE_SIMD),
+    # with the GS, IPU and SPU2 code built three more times, once per
+    # instruction set, as libGS-sse4.a, libGS-avx.a and libGS-avx2.a. The
+    # objects are archived here as libpcsx2.a, so everything after this reads
+    # one library as before; compile.sh links the three beside it.
+    run_in_builder "rm -f $BUILD/pcsx2/libpcsx2.a && find $BUILD/pcsx2/CMakeFiles/PCSX2.dir -name '*.o' | sort | xargs ar qcs $BUILD/pcsx2/libpcsx2.a"
+    for a in libpcsx2.a libGS-sse4.a libGS-avx.a libGS-avx2.a; do
+        test -s "$SRC/$BUILD/pcsx2/$a" || { echo "PCSX2's build did not produce $a" >&2; exit 1; }
+    done
+
+    # A BUILD FOR ONE PROCESSOR IS NOT A BUILD FOR THE CONSOLE. See
+    # DISABLE_ADVANCE_SIMD above: the runner's CPU is not the player's.
+    # Asserted to exist first: a grep of a missing file finds nothing and
+    # would pass.
+    test -s "$SRC/$BUILD/compile_commands.json" || {
+        echo "no compile_commands.json to check the processor target in" >&2
+        exit 1
+    }
+    if grep -q -- '-march=native' "$SRC/$BUILD/compile_commands.json"; then
+        echo "PCSX2 was built with -march=native, for the build machine's processor only" >&2
+        exit 1
+    fi
 
     mkdir -p "$OUT"
-    cp "$SRC/$BUILD/pcsx2/libpcsx2.a" "$OUT/"
+    cp "$SRC/$BUILD/pcsx2/"{libpcsx2.a,libGS-sse4.a,libGS-avx.a,libGS-avx2.a} "$OUT/"
     cp "$SRC/$BUILD/common/libcommon.a" "$OUT/"
     find "$SRC/$BUILD/3rdparty" -name '*.a' -exec cp {} "$OUT/" \;
     echo "wrote $OUT ($(du -sh "$OUT" | cut -f1), $(find "$OUT" -name '*.a' | wc -l) archives)"
@@ -369,7 +407,8 @@ SYS="-lpng -ljpeg -lz -lzstd -llz4 -lwebp -lsharpyuv -lfreetype -lharfbuzz"
 SYS="$SYS -lplutovg -lplutosvg -lryml -lcurl -lpcap -lfontconfig -ludev"
 SYS="$SYS -lX11 -lXrandr -lXi -lXext -ldbus-1 -lSDL3 -lshaderc_shared -ldl -lpthread"
 clang++ -shared -Wl,-z,defs -o /tmp/strict.so \
-    -Wl,--whole-archive pcsx2/libpcsx2.a common/libcommon.a -Wl,--no-whole-archive \
+    -Wl,--whole-archive pcsx2/libpcsx2.a pcsx2/libGS-sse4.a pcsx2/libGS-avx.a pcsx2/libGS-avx2.a \
+    common/libcommon.a -Wl,--no-whole-archive \
     $(find 3rdparty -name '*.a') $SYS >/tmp/link.txt 2>&1 || true
 grep -oE "undefined reference to .[^']+" /tmp/link.txt \
     | sed "s/undefined reference to .//" | c++filt \
