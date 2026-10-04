@@ -11471,7 +11471,7 @@ int main(int argc, char** argv) {
             // wherever the shortcut button is recognised). PS2 reads PCSX2's
             // frame since #130; GameCube is a libretro core like the rest.
             pauseItems.push_back(OvScreenshot);
-            // PICTURE QUALITY, on the ten systems where a level changes
+            // PICTURE QUALITY, on the nine systems where a level changes
             // something, and with a PIN set only for the owner, as in
             // Settings (MMagTech, 2026-10-02).
             pauseChoices.clear();

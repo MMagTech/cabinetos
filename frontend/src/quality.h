@@ -60,9 +60,10 @@ void setGameChoice(int romId, std::optional<Level> l);
 // What a game runs at: its own choice, else the console's.
 Level forGame(int romId);
 
-// Whether a level changes anything for `core` (its manifest name): the ten
+// Whether a level changes anything for `core` (its manifest name): the nine
 // systems with a resolution to move. Only these get the pause menu's row;
-// Wii U (Cemu) has no lever without resolution packs (#207), and 3DO and the
+// Wii U (Cemu) has no lever without resolution packs (#207), Xbox 360 is
+// 720p at every level since the A9 measured it (2026-10-04), and 3DO and the
 // vector systems are fixed at every level.
 bool hasLevels(const std::string& core);
 

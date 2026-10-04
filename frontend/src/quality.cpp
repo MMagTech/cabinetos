@@ -173,7 +173,7 @@ Level forGame(int romId) {
 
 bool hasLevels(const std::string& core) {
     for (const char* c : {"pcsx2", "dolphin", "ppsspp", "mupen64plus", "flycast", "eden",
-                          "rpcs3", "xemu", "xenia"})
+                          "rpcs3", "xemu"})
         if (core == c) return true;
     return false;
 }
@@ -286,10 +286,14 @@ std::vector<Setting> eden(Level l) {
 }
 
 std::string rpcs3(Level l) {
-    // PS3, whose games are 720p: 100%, 150% (1080p), 300% (4K). The game's own
-    // video mode stays 720p; that one changes the game. Not yet measured.
-    // Lines inside RPCS3's `Video:` section, which standalone.cpp opens.
-    static const char* const kScale[] = {"100", "150", "300"};
+    // PS3, whose games are 720p: 100%, 150% (1080p), 150% again at Quality.
+    // Measured on the A9, 2026-10-04 (God of War III, frames.py): 300% ran
+    // 21 frames a second with the graphics chip 87% busy at its top clock;
+    // 150% 54, at about a third of its capacity; 100% 57. 200% was not
+    // measured (the game would not load past its menu that once). The game's
+    // own video mode stays 720p; that one changes the game. Lines inside
+    // RPCS3's `Video:` section, which standalone.cpp opens.
+    static const char* const kScale[] = {"100", "150", "150"};
     return std::string("  Resolution Scale: ") + pick(l, kScale) +
            "\n  Anisotropic Filter Override: 16\n";
 }
@@ -302,10 +306,13 @@ std::string xemu(Level l) {
 }
 
 std::vector<std::string> xenia(Level l) {
-    // Xbox 360, 720p: 1x, 1x, 3x (2160p). 2x would be 1440p, neither target.
-    // Edge's anisotropic override counts 1 to 5 for 1x to 16x. Not yet
-    // measured; Xenia's upscaling needs sparse binding on Vulkan.
-    static const char* const kScale[] = {"1", "1", "3"};
+    // Xbox 360, 720p, at every level on the A9. Measured 2026-10-04 (Forza
+    // Horizon 2, frames.py): 3x ran 7.5 frames a second with the graphics
+    // chip 99% busy; 1x a steady 30 at under a third of its capacity, so 2x,
+    // four times the pixels, would not hold either. A machine stronger than
+    // the A9 could take more; that waits for a class above it. Edge's
+    // anisotropic override counts 1 to 5 for 1x to 16x.
+    static const char* const kScale[] = {"1", "1", "1"};
     const std::string s = pick(l, kScale);
     return {
         "--draw_resolution_scale_x=" + s,
