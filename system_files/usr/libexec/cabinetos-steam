@@ -201,6 +201,12 @@ remove)
         umount "${MP}" || fail "Steam's slice is still in use"
     fi
     rm -f "${IMG}" "${IMG}.new" || fail "could not delete the slice"
+    # COMMITTED BEFORE "done". btrfs shows a delete in its free space only once
+    # a transaction commits, and Settings, Storage redraws the moment this
+    # answers: on the A9 (2026-10-04) it showed the whole 2 TB with the
+    # slice's 500 GB still missing from free, which read as 800 GB used. The
+    # same trap cache::evictUntilFree commits its way out of.
+    sync -f "${DIR}" 2>/dev/null || true
     if [[ -d "${MP}" && ! -L "${MP}" ]]; then
         chattr -i "${MP}" 2>/dev/null || true
         rmdir "${MP}" 2>/dev/null || true
