@@ -41,11 +41,13 @@ session picks up is `docs/NEXT-SESSION.md`.
       **Built on `machine-class` and judged on the A9 TV, 2026-10-04**: the
       starting level from the graphics chip, N64 Balanced 2x, PS3 Quality
       1080p, Xbox 360 720p. An Ultra level for stronger machines is #245.
-   7. **Before phase 3:** the slowed A9 (#210), the drop rule ignoring rewind
+   7. **Shaders and CRT looks (#122)**, moved ahead of phase 3 (MMagTech,
+      2026-10-04: "at least that's something fun"). Discussed before
+      anything is built; not a copy of Cabinet's.
+   8. **Before phase 3:** the slowed A9 (#210), the drop rule ignoring rewind
       snapshot frames (#168), whether built-in cores repeat or drop frames
       (#221).
-   8. **#63 phase 3**, the drop rule, record-only first.
-   9. **Shaders and CRT looks (#122).**
+   9. **#63 phase 3**, the drop rule, record-only first.
    Also in the milestone: the gamescope flag check on base updates (#227).
 4. **Offline play.** Kept games play with no server (#88).
 5. **RetroAchievements** (#74). Each account signs in with its own login.
