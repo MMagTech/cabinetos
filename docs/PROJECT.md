@@ -1387,7 +1387,7 @@ said to keep them all: *"it's really not that many entries"*.
 
 | Systems | Looks, in menu order | Starts on |
 |---|---|---|
-| NES, SNES, Genesis, Master System, Sega CD, 32X, TurboGrafx and CD, Atari 2600 and 7800, arcade, PS1, Saturn | Plain, Sharp, CRT easymode, CRT easymode halation, CRT lottes, CRT geom, CRT zfast, CRT aperture, CRT guest, Composite | CRT easymode |
+| NES, SNES, Genesis, Master System, Sega CD, 32X, TurboGrafx and CD, Atari 2600 and 7800, arcade, PS1, Saturn | Plain, Sharp, CRT easymode, CRT easymode halation, CRT lottes, CRT geom, CRT zfast, CRT aperture, CRT guest | CRT easymode |
 | N64, Dreamcast, 3DO | the same without geom and zfast | CRT easymode |
 | GBA, Game Gear, Neo Geo Pocket Color | Plain, Sharp, LCD 3x, LCD grid, LCD zfast | LCD 3x |
 | Game Boy | those, plus Dot matrix, Dot matrix Pocket, Dot matrix Light | LCD 3x |
@@ -1409,7 +1409,10 @@ said to keep them all: *"it's really not that many entries"*.
   picture over 400 lines as interlaced and flickers. easymode and lottes held
   steady. This matches the libretro forums' advice for upscaled 3D: no
   scanlines, or a soft CRT such as lottes.
-- **Dropped:** crt-pi (made cheap for a Raspberry Pi; MMagTech liked it on
+- **Dropped:** Composite (ntsc-adaptive), judged on the TV: it does blend a
+  dithered picture as a TV cable did (Jurassic Park), but MMagTech: *"looks
+  like ass to me"*, and it does not suit a television this large; its every-
+  frame colour flicker on 320-wide games was the smaller part. crt-pi (made cheap for a Raspberry Pi; MMagTech liked it on
   nothing); crt-royale and crt-hyllian (desktop OpenGL only: GLSL ES forbids
   their globals initialised from uniforms, so RetroArch's GLES builds cannot
   run them either); the gimmick sets (Mega Bezel, glow, bezels) and the

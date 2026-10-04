@@ -30,7 +30,6 @@ PRESETS = [
     "crt/zfast-crt",
     "crt/crt-aperture",
     "crt/crt-guest-dr-venom",
-    "ntsc/ntsc-adaptive",
     "handheld/lcd3x",
     "handheld/lcd-grid-v2",
     "handheld/zfast-lcd",

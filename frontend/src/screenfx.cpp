@@ -31,7 +31,6 @@ const std::vector<Look> kConsole = {
     {"zfast-crt", "CRT zfast", "crt/zfast-crt.glslp"},
     {"crt-aperture", "CRT aperture", "crt/crt-aperture.glslp"},
     {"crt-guest", "CRT guest", "crt/crt-guest-dr-venom.glslp"},
-    {"composite", "Composite", "ntsc/ntsc-adaptive.glslp"},
 };
 // N64, Dreamcast and 3DO are drawn above their own size (3DO at 640x480), and
 // most CRT shaders draw one scanline per line of what they are given: close to
@@ -46,7 +45,6 @@ const std::vector<Look> kUpscaled = {
     {"crt-lottes", "CRT lottes", "crt/crt-lottes.glslp"},
     {"crt-aperture", "CRT aperture", "crt/crt-aperture.glslp"},
     {"crt-guest", "CRT guest", "crt/crt-guest-dr-venom.glslp"},
-    {"composite", "Composite", "ntsc/ntsc-adaptive.glslp"},
 };
 #define CABINETOS_LCD_LOOKS                                                     \
     {"plain", "Plain", nullptr},                                                \
