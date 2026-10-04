@@ -4,7 +4,7 @@
 # the A9, after a version bump of anything CI cannot load.
 #
 # THE A9 HALF OF THE VERSION-BUMP CHECK (#63, MMagTech 2026-10-02). CI lists
-# every built-in core's options and fails on a difference (build-core.sh,
+# every built-in core's options and fails on a difference (check-options.sh,
 # tools/core-options.c), and checks every value the console sets against
 # those lists (frontend --check-option-tables). Two kinds of emulator are out
 # of its reach:

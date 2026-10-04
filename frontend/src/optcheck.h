@@ -1,7 +1,7 @@
 // Does every option value the console sets exist in the core it is set on?
 //
 // THE OTHER HALF OF THE VERSION-BUMP CHECK (#63, MMagTech 2026-10-02).
-// build-core.sh fails when a core's options differ from cores/options/<core>.txt;
+// cores/check-options.sh fails when a core's options differ from cores/options/<core>.txt;
 // this fails when the console's own tables (catalog::optionOverrides,
 // quality::coreOptions at every level and on both N64 renderers, and every
 // choice of every sysopts row) name a key a core does not declare, or a value
