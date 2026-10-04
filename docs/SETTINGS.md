@@ -629,9 +629,9 @@ Decided with MMagTech 2026-09-26, from the things people will actually do.
   separate channel and main rebuilt everything, so a feature was built
   three times and `latest` was a rebuild of what had been judged.
 
-- **Steam · Hidden**, only while somebody has chosen Hide Steam on the Steam
-  tile's first screen (#223): pressing it (PIN if set) puts the tile back in
-  the Library and the row goes. Odd company for System update, and the
+- **Steam · Hidden**, only while somebody has chosen Hide Steam on Steam's
+  first screen (#223): pressing it (PIN if set) puts "Switch to Steam" back in
+  the Start menu and the row goes. Odd company for System update, and the
   least odd place (MMagTech, 2026-10-03). **Built on `steam-handoff`.**
 
 ## About

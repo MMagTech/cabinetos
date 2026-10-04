@@ -1,8 +1,8 @@
-// The Steam entry: one tile that hands the screen to Steam's own Big Picture
-// session and comes back when Steam closes. Issue #223; docs/SETTINGS.md,
-// Library, Storage and System; docs/PROJECT.md, "Steam".
+// The Steam entry: "Switch to Steam" in the Start menu, which hands the screen
+// to Steam's own Big Picture session and comes back when Steam closes. Issue
+// #223; docs/SETTINGS.md, Storage and System; docs/PROJECT.md, open question 37.
 //
-// WHAT THE CONSOLE OWNS IS SMALL: the tile, its first-pick screen, Steam's
+// WHAT THE CONSOLE OWNS IS SMALL: the menu row, its first-pick screens, Steam's
 // slice of the main drive (a fixed-size file, /usr/libexec/cabinetos-steam)
 // and the handover. Steam itself, its login, its games, Proton and its
 // settings pages are Steam's, and Steam updates itself from Valve while it is
@@ -12,8 +12,8 @@
 // and quits; the session script (cabinetos-session, steam_step) attaches the
 // slice, runs Steam's session in the console's own login session, stops
 // everything left of Steam when it closes, detaches the slice, writes
-// $XDG_RUNTIME_DIR/cabinetos-from-steam and starts the console again, which
-// lands on the tile.
+// $XDG_RUNTIME_DIR/cabinetos-from-steam and starts the console again, on
+// Home.
 //
 // Every call that runs the root helper BLOCKS until it answers; call them off
 // the frame thread.
@@ -26,7 +26,7 @@
 namespace steam {
 
 // The image carries Steam and its session. A console built without them
-// shows no tile at all.
+// shows no "Switch to Steam" at all.
 bool available();
 
 // Steam is set up: its slice exists. Cheap (one stat).
@@ -41,7 +41,7 @@ int64_t sliceBytes();
 bool sliceOn(const std::string& location);
 
 // Hide Steam (first-pick screen) and show it again (Settings, System, only
-// while hidden). The console's, not a person's: it hides the tile for
+// while hidden). The console's, not a person's: it hides the menu row for
 // everyone.
 bool hidden();
 void setHidden(bool hide);
@@ -82,8 +82,7 @@ bool remove(std::string* why);
 // Asks the session to hand the screen to Steam once the frontend quits.
 bool requestHandover();
 
-// True once, at the console's first start after Steam closed, so it lands on
-// the tile.
+// True once, at the console's first start after Steam closed.
 bool takeReturned();
 
 }  // namespace steam
