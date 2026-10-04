@@ -31,4 +31,9 @@ namespace powerprofile {
 // Once a frame: is a game running? Acts only when the answer changes.
 void update(bool gameRunning);
 
+// Now, on this thread, and waits for tuned: for handing the screen to Steam
+// (#223), where the frontend quits straight after and a worker would be cut
+// off. The console's next start sets balanced again through update().
+void applyNow(bool game);
+
 }  // namespace powerprofile

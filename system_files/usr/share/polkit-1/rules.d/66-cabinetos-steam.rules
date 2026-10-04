@@ -1,0 +1,21 @@
+// Steam's slice of the main drive: the console may make it, grow it, attach
+// it around Steam and remove it. Issue #223; /usr/libexec/cabinetos-steam.
+//
+// The action is the instance name, so the rule names each one: a size is
+// digits only, and the helper checks it again.
+//
+// `subject.local`, as in 60-cabinetos-network.rules: the console on its own
+// seat (the frontend, and the session script around Steam), not an SSH
+// session.
+polkit.addRule(function(action, subject) {
+    if (action.id != "org.freedesktop.systemd1.manage-units" ||
+        subject.user != "cabinet" || !subject.local) {
+        return polkit.Result.NOT_HANDLED;
+    }
+    var unit = action.lookup("unit");
+    if (action.lookup("verb") == "start" && unit &&
+        /^cabinetos-steam@(mount|unmount|remove|create-[0-9]{1,15}|grow-[0-9]{1,15})\.service$/.test(unit)) {
+        return polkit.Result.YES;
+    }
+    return polkit.Result.NOT_HANDLED;
+});

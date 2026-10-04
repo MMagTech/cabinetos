@@ -1,0 +1,216 @@
+#!/usr/bin/env bash
+#
+# Steam's slice of the main drive, the root half. Issue #223; docs/SETTINGS.md,
+# Storage and System; docs/PROJECT.md, "Steam".
+#
+#   cabinetos-steam create-<bytes>   make the slice, empty, at that size
+#   cabinetos-steam grow-<bytes>     make it bigger (never smaller: MMagTech,
+#                                    2026-10-03, grow only)
+#   cabinetos-steam mount            attach it as Steam's folder
+#   cabinetos-steam unmount          detach it, and re-reserve its space
+#   cabinetos-steam remove           delete it, every game in it with it
+#
+# Run only by cabinetos-steam@.service (the action is the instance name),
+# which the console starts through 66-cabinetos-steam.rules: create, grow and
+# remove from the frontend, mount and unmount from the session script around
+# Steam.
+#
+# WHAT THE SLICE IS: one fixed-size file, /var/lib/cabinetos-steam/steam.img,
+# holding an ext4 filesystem, mounted on ~cabinet/.local/share/Steam only
+# while Steam runs. Steam sees a disk exactly that size by any method it asks
+# (statvfs on its folder), and the main drive's own free space already leaves
+# the file's blocks out. A btrfs quota cannot do this: btrfs's statfs never
+# looks at qgroups, so Steam would be told the whole drive is free (audit,
+# #223, question 12).
+#
+# THE TRIM TRAP. fstrim.timer trims every mounted filesystem, and a trim
+# inside the loop punches holes in the file, which silently hands Steam's
+# reserved space back to the console. So the slice is mounted only while
+# Steam runs, and every mount and unmount runs fallocate over the whole file
+# again, which allocates any holes and touches no data.
+#
+# THE EMPTY FOLDER UNDER IT is immutable (chattr +i) while nothing is mounted
+# on it, so nothing can ever write Steam's files onto the main drive by
+# starting Steam without the slice.
+#
+# The answer is /run/cabinetos-steam.state, key=value, replaced whole:
+#   state=working | done | failed
+#   op=<action>
+#   reason=<short text>     failed
+#   at=<epoch>
+
+set -uo pipefail
+
+DIR=/var/lib/cabinetos-steam
+IMG="${DIR}/steam.img"
+USER_NAME=cabinet
+MP="/var/home/${USER_NAME}/.local/share/Steam"
+STATE=/run/cabinetos-steam.state
+# ~/.local/share's own label, so Steam's files look like any other file there
+# to SELinux. A fresh ext4 carries no labels; this gives every file one
+# without writing any.
+CONTEXT="system_u:object_r:data_home_t:s0"
+# Far above any real disk; the frontend never asks for more than the drive.
+MAX_BYTES=$((64 * 1024 * 1024 * 1024 * 1024))
+
+OP="${1:-}"
+
+say() {
+    local tmp
+    tmp=$(mktemp /run/.cabinetos-steam.XXXXXX) || return
+    { printf '%s\n' "$@"; printf 'at=%s\n' "$(date +%s)"; } > "${tmp}"
+    chmod 0644 "${tmp}"
+    mv -f "${tmp}" "${STATE}"
+}
+
+fail() {
+    echo "cabinetos-steam: ${OP}: $1" >&2
+    say state=failed "op=${OP}" "reason=$1"
+    exit 1
+}
+
+# A size from the instance name: digits only, a whole MiB, in range.
+bytes_of() {
+    local n="$1"
+    [[ "${n}" =~ ^[0-9]{1,15}$ ]] || return 1
+    (( n > 0 && n <= MAX_BYTES && n % 1048576 == 0 )) || return 1
+    printf '%s' "${n}"
+}
+
+is_mounted() { mountpoint -q "${MP}"; }
+
+# Every block of the file allocated again. On a file with no holes this does
+# nothing; after a trim it takes back exactly what the trim gave away.
+reserve() {
+    local size
+    size=$(stat -c %s "${IMG}") || return 1
+    fallocate -l "${size}" "${IMG}"
+}
+
+# The empty folder Steam's slice is mounted on: Steam's own path, owned by the
+# console's user, and immutable while empty so nothing lands on the main drive.
+prepare_mountpoint() {
+    # Made only when missing: an existing folder keeps its owner and mode, and
+    # the immutable one cannot be changed anyway.
+    local d
+    for d in "/var/home/${USER_NAME}/.local" "/var/home/${USER_NAME}/.local/share"; do
+        [[ -L "${d}" ]] && return 1
+        [[ -d "${d}" ]] || install -d -m 0755 -o "${USER_NAME}" -g "${USER_NAME}" "${d}" || return 1
+    done
+    if [[ -L "${MP}" ]]; then
+        return 1   # never mount over a link somebody else placed
+    fi
+    if [[ ! -d "${MP}" ]]; then
+        install -d -m 0755 -o "${USER_NAME}" -g "${USER_NAME}" "${MP}" || return 1
+    fi
+    # Anything already in the folder was written without the slice; refuse
+    # rather than hide it under a mount.
+    if [[ -n "$(ls -A "${MP}" 2>/dev/null)" ]]; then
+        return 1
+    fi
+    chattr +i "${MP}" 2>/dev/null || true
+    return 0
+}
+
+say state=working "op=${OP}"
+
+case "${OP}" in
+create-*)
+    size=$(bytes_of "${OP#create-}") || fail "not a size: ${OP#create-}"
+    [[ -e "${IMG}" ]] && fail "Steam is already set up"
+    # The directory is no-copy-on-write (tmpfiles.d, `h ... +C`), so the file
+    # inherits it; set again here for a directory made before that rule.
+    install -d -m 0755 -o root -g root "${DIR}" || fail "could not make ${DIR}"
+    chattr +C "${DIR}" 2>/dev/null || true
+    new="${IMG}.new"
+    rm -f "${new}"
+    touch "${new}" && chattr +C "${new}" 2>/dev/null
+    if ! fallocate -l "${size}" "${new}"; then
+        rm -f "${new}"
+        fail "not enough room on the drive"
+    fi
+    # No reserved blocks (-m 0): the whole slice is Steam's. NO DISCARD: mkfs
+    # trims the whole device by default, which on a file punches every block
+    # back out, and the slice came out of a 1 GB create holding 33 MB of disk
+    # (dry run on the A9, 2026-10-03). reserve() below is the backstop.
+    if ! mkfs.ext4 -q -F -m 0 -E nodiscard -L Steam "${new}"; then
+        rm -f "${new}"
+        fail "could not format the slice"
+    fi
+    # The filesystem's own top folder belongs to the console's user, or Steam
+    # cannot write into it.
+    tmp=$(mktemp -d /run/cabinetos-steam-mnt.XXXXXX) || { rm -f "${new}"; fail "no scratch folder"; }
+    if mount -t ext4 -o loop "${new}" "${tmp}"; then
+        chown "${USER_NAME}:${USER_NAME}" "${tmp}" && chmod 0755 "${tmp}"
+        umount "${tmp}"
+    else
+        rmdir "${tmp}"
+        rm -f "${new}"
+        fail "could not open the new slice"
+    fi
+    rmdir "${tmp}"
+    mv -f "${new}" "${IMG}" || fail "could not put the slice in place"
+    reserve || fail "could not reserve the slice"
+    prepare_mountpoint || echo "cabinetos-steam: ${MP} is not empty; it is left alone" >&2
+    echo "cabinetos-steam: made a ${size}-byte slice"
+    ;;
+
+grow-*)
+    size=$(bytes_of "${OP#grow-}") || fail "not a size: ${OP#grow-}"
+    [[ -f "${IMG}" ]] || fail "Steam is not set up"
+    is_mounted && fail "Steam's slice is in use"
+    old=$(stat -c %s "${IMG}") || fail "could not read the slice"
+    (( size > old )) || fail "the slice only grows"
+    fallocate -l "${size}" "${IMG}" || fail "not enough room on the drive"
+    # resize2fs wants a checked filesystem; -p repairs only what is safe to.
+    e2fsck -f -p "${IMG}" >/dev/null
+    rc=$?
+    (( rc < 4 )) || fail "the slice needs a check it could not finish (${rc})"
+    resize2fs "${IMG}" >/dev/null 2>&1 || fail "could not grow the slice"
+    echo "cabinetos-steam: grew the slice from ${old} to ${size} bytes"
+    ;;
+
+mount)
+    [[ -f "${IMG}" ]] || fail "Steam is not set up"
+    if is_mounted; then
+        echo "cabinetos-steam: already mounted"
+    else
+        prepare_mountpoint || fail "${MP} is not an empty folder"
+        reserve || fail "could not reserve the slice"
+        e2fsck -p "${IMG}" >/dev/null
+        rc=$?
+        (( rc < 4 )) || fail "the slice needs a check it could not finish (${rc})"
+        mount -t ext4 -o "loop,noatime,context=${CONTEXT}" "${IMG}" "${MP}" \
+            || fail "could not attach the slice"
+        echo "cabinetos-steam: mounted on ${MP}"
+    fi
+    ;;
+
+unmount)
+    if is_mounted; then
+        umount "${MP}" || fail "Steam's slice is still in use"
+        echo "cabinetos-steam: unmounted"
+    fi
+    if [[ -f "${IMG}" ]]; then
+        reserve || fail "could not reserve the slice"
+    fi
+    ;;
+
+remove)
+    if is_mounted; then
+        umount "${MP}" || fail "Steam's slice is still in use"
+    fi
+    rm -f "${IMG}" "${IMG}.new" || fail "could not delete the slice"
+    if [[ -d "${MP}" && ! -L "${MP}" ]]; then
+        chattr -i "${MP}" 2>/dev/null || true
+        rmdir "${MP}" 2>/dev/null || true
+    fi
+    echo "cabinetos-steam: removed"
+    ;;
+
+*)
+    fail "unknown action"
+    ;;
+esac
+
+say state=done "op=${OP}"

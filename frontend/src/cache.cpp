@@ -312,16 +312,16 @@ int64_t evictUntilFree(const std::string& location, int64_t needBytes,
 }
 
 int64_t saveFloorBytes(const std::string& path) {
-    struct statvfs vfs;
-    if (::statvfs(path.c_str(), &vfs) != 0) {
+    // storage::spaceOf, so the size is the console's part of the drive and
+    // Steam's slice (#223) is not counted.
+    const storage::Space sp = storage::spaceOf(path);
+    if (!sp.ok) {
         // An unreadable disk looks full elsewhere in this file, and the same
         // pessimism applies: take the whole 2 GB rather than a percentage of a
         // size we do not know.
         return 2LL << 30;
     }
-    const int64_t total =
-        static_cast<int64_t>(vfs.f_blocks) * static_cast<int64_t>(vfs.f_frsize);
-    return std::min<int64_t>(2LL << 30, total / 20);   // 5%
+    return std::min<int64_t>(2LL << 30, sp.totalBytes / 20);   // 5%
 }
 
 bool isKeptBy(const storage::User& u, int romId) {

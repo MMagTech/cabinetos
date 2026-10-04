@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+#
+# What Steam's "Switch to Desktop" does on CabinetOS: close Steam. Issue #223.
+#
+# Steam runs `steamos-session-select` (gamescope-session-steam), which hands
+# over to this file when it exists. CabinetOS has no desktop; closing Steam
+# ends its session, and the console's session script brings the console back.
+# Upstream's fallback with no file here is the same `steam -shutdown`; this
+# file makes it ours by name, so a later base cannot route it to a desktop.
+#
+# The label stays Steam's ("Switch to Desktop"): renaming it means changing
+# Steam, which CabinetOS does not do (MMagTech, 2026-10-03).
+
+exec steam -shutdown

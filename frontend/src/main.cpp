@@ -101,6 +101,7 @@
 #include "drives.h"
 #include "players.h"
 #include "powerprofile.h"
+#include "steam.h"
 #include "playtime.h"
 #include "shortcuts.h"
 #include "rewind.h"
@@ -1345,6 +1346,14 @@ constexpr GalleryNotice kNoticeGallery[] = {
     {"Couldn't reach RomM", Tone::Problem},
     {"Couldn't load that state", Tone::Problem},
     {"Download removed", Tone::Done},
+    {"Freeing space\xE2\x80\xA6", Tone::Busy},
+    {"Couldn't set up Steam", Tone::Problem},
+    {"Couldn't start Steam", Tone::Problem},
+    {"Steam now has 600 GB", Tone::Done},
+    {"Couldn't change Steam's storage", Tone::Problem},
+    {"Removing Steam\xE2\x80\xA6", Tone::Busy},
+    {"Steam removed", Tone::Done},
+    {"Couldn't remove Steam", Tone::Problem},
     {"Removed. Someone else keeps it, so no space came back", Tone::Info},
     {"Removed. Others keep it, so no space came back", Tone::Info},
     {"Removed. The space comes back when you stop playing it", Tone::Info},
@@ -2888,6 +2897,30 @@ static Library loadLibrary(romm::Client& client) {
     else
         std::fprintf(stderr, "[library] nothing recent is playable here\n");
     return lib;
+}
+
+// THE STEAM TILE (#223): the one way into Steam. Not a RomM platform, so an id
+// no platform can have, and never fetched for games or a cover. The last of
+// the playable systems, before the greyed ones (and simply last once those
+// move), MMagTech 2026-10-03. Not there when the image has no Steam, or when
+// somebody chose Hide Steam. Placed after the library loads, never inside
+// loadLibrary: an empty platform list is what says the server did not answer,
+// and the tile must not answer for it.
+constexpr int kSteamTileId = -223;
+
+static void placeSteamTile(std::vector<screens::Tile>& tiles) {
+    tiles.erase(std::remove_if(tiles.begin(), tiles.end(),
+                               [](const screens::Tile& t) { return t.id == kSteamTileId; }),
+                tiles.end());
+    if (!steam::available() || steam::hidden()) return;
+    screens::Tile t;
+    t.id = kSteamTileId;
+    t.title = "Steam";
+    t.art = colorForTitle(t.title);
+    t.enterable = true;
+    auto at = std::find_if(tiles.begin(), tiles.end(),
+                           [](const screens::Tile& x) { return !x.enterable; });
+    tiles.insert(at, std::move(t));
 }
 
 // Talks to a RomM server and reports, without opening a window.
@@ -6191,6 +6224,7 @@ int main(int argc, char** argv) {
         std::fprintf(stderr, "[search] %s: %zu of %d\n", q.c_str(), idx.size(), total);
         searchScreen.setResults(q, std::move(idx), total);
     };
+    placeSteamTile(platformTiles);
     libraryScreen.build(platformTiles, collectionTiles);
 
     // THE TILE COVERS, FETCHED BEHIND HOME RATHER THAN BEFORE IT.
@@ -6252,7 +6286,7 @@ int main(int argc, char** argv) {
         const std::map<int, covercache::Tile> saved = covercache::loadTiles();
         int reused = 0;
         for (screens::Tile& t : platformTiles) {
-            if (!t.enterable || !t.cover.empty()) continue;
+            if (!t.enterable || !t.cover.empty() || t.id == kSteamTileId) continue;
             auto mine = lib.tileCache.find(t.id);
             auto was = saved.find(t.id);
             if (mine != lib.tileCache.end() && was != saved.end() &&
@@ -6344,7 +6378,8 @@ int main(int argc, char** argv) {
     std::thread coverTidy;
     if (rommAddress && !platformTiles.empty()) {
         std::vector<int> live;
-        for (const screens::Tile& t : platformTiles) live.push_back(t.id);
+        for (const screens::Tile& t : platformTiles)
+            if (t.id != kSteamTileId) live.push_back(t.id);
         coverTidy = std::thread([live]() {
             covercache::sweep(live);
             covercache::evict(covercache::kBudgetBytes);
@@ -7098,6 +7133,7 @@ int main(int argc, char** argv) {
             return false;
         }
         lib = std::move(fresh);
+        placeSteamTile(platformTiles);
         libraryScreen.build(platformTiles, collectionTiles);
         startCoverFill();
         // HOME STARTS OVER FOR THE NEW PERSON: the first card of Recent, every
@@ -7237,7 +7273,7 @@ int main(int argc, char** argv) {
     // LEAVING: Sign out, or a new server address saved. The curtain is the
     // startup screen with this line under the name, and once it is down (and
     // uploads are through) the app starts itself again; see pumpLeave.
-    enum class Leave { None, SignOut, NewAddress };
+    enum class Leave { None, SignOut, NewAddress, Steam };
     Leave leaving = Leave::None;
     std::string leaveLabel;
     Uint64 leaveDownAt = 0;
@@ -7414,10 +7450,17 @@ int main(int argc, char** argv) {
     // open another question ("who?" then "are you sure?").
     screens::ChoiceScreen choiceScreen;
     std::function<void(int)> choiceThen;
+    // For a panel with a stepper row (Steam's size): Left or Right on it, and
+    // Back, which on a panel opened from another goes back to that one. Both
+    // cleared by every askChoice; set after it.
+    std::function<void(int)> choiceStep;
+    std::function<void()> choiceBack;
     auto askChoice = [&](const std::string& title, const std::string& detail,
                          std::vector<std::string> options, int focus,
                          std::function<void(int)> then) {
         choiceThen = std::move(then);
+        choiceStep = nullptr;
+        choiceBack = nullptr;
         choiceScreen.open(title, detail, std::move(options), focus);
     };
     // Settings > Display and Sound > Dark hours: From and Until, and the hours
@@ -7426,6 +7469,18 @@ int main(int argc, char** argv) {
     auto choiceOutcome = [&](screens::ChoiceScreen::Outcome o) {
         using O = screens::ChoiceScreen::Outcome;
         if (o == O::None) return;
+        if (o == O::Stepped) {
+            if (auto step = choiceStep) step(choiceScreen.stepped());
+            return;
+        }
+        if (o == O::Cancelled && choiceBack) {
+            auto back = std::move(choiceBack);
+            choiceBack = nullptr;
+            choiceThen = nullptr;
+            choiceScreen.close();
+            back();
+            return;
+        }
         if (o == O::Chosen && choiceScreen.staysOpen()) {
             // A copy: the answer may open another question over this one.
             if (auto then = choiceThen) then(choiceScreen.chosen());
@@ -7458,7 +7513,7 @@ int main(int argc, char** argv) {
                      SetUpdate, SetUpdateCheck, SetCredits, SetFiles, SetDownloads,
                      SetAddController, SetShortcuts, SetShortcutButton, SetAppearance,
                      SetDarkHours, SetColour, SetRumble, SetPictureQuality,
-                     SetWiiRemotes };
+                     SetWiiRemotes, SetSteam, SetSteamShow };
     // One Eject row per USB drive: this plus the drive's index in
     // storage::locations() when the rows were built.
     constexpr int kSetEject = 100;
@@ -8486,6 +8541,12 @@ int main(int argc, char** argv) {
             store.push_back({external ? K::Action : K::Info,
                              external ? kSetEject + static_cast<int>(i) : 0, name, space, value});
             if (external) driveNames[kSetEject + static_cast<int>(i)] = name;
+            // STEAM'S SHARE, under the main drive, once it is set up (#223):
+            // the main drive's own row leaves it out, and this says where it
+            // went. The one place to grow it or remove Steam. MMagTech,
+            // 2026-10-03: nothing here for somebody who never set Steam up.
+            if (i == 0 && steam::isSetUp())
+                store.push_back({K::Action, SetSteam, "Steam", gb(steam::sliceBytes()), ""});
         }
         // DRIVES FOUND AND NOT USABLE, greyed, with the reason. A new internal
         // SSD arrives blank; without this row it would be invisible, because
@@ -8535,7 +8596,7 @@ int main(int argc, char** argv) {
         }
         cats.push_back({"Storage", std::move(store)});
 
-        cats.push_back({"System", {
+        std::vector<Row> sys = {
             updateRow(),
             [&] {
                 // Weekly only ever checks, never downloads.
@@ -8544,7 +8605,12 @@ int main(int argc, char** argv) {
                 r.choice = updWeekly ? 1 : 0;
                 return r;
             }(),
-        }});
+        };
+        // ONLY WHILE STEAM IS HIDDEN (#223, MMagTech 2026-10-03): the one way
+        // to bring the tile back. Somebody who never hid it never sees it.
+        if (steam::available() && steam::hidden())
+            sys.push_back({K::Action, SetSteamShow, "Steam", "", "Hidden"});
+        cats.push_back({"System", std::move(sys)});
 
         // VERSION: the date version, with Bazzite's under it. A console that
         // does not follow `latest` says which tag it does follow, which is how
@@ -8723,6 +8789,200 @@ int main(int argc, char** argv) {
         std::fprintf(stderr, "[server] %s\n", label.c_str());
     };
 
+    // ---- Steam (#223) ------------------------------------------------------
+    //
+    // The tile, its first-pick screen, its size and its removal. Everything
+    // that runs the root helper, walks the cache or asks the network runs in
+    // ONE background job at a time (steamJob), and its answer is acted on here,
+    // on the frame thread, by pollSteamJob. A pill says what is happening
+    // meanwhile. The handover itself is the leave curtain: "Starting Steam",
+    // then the frontend quits and the session runs Steam (cabinetos-session).
+    struct SteamJob {
+        std::thread th;
+        std::atomic<bool> done{false};
+        std::function<void()> finish;
+        std::string busy;        // the pill while it runs, said again until done
+        Uint64 saidAt = 0;
+    };
+    SteamJob steamJob;
+    struct SteamJobStop {
+        SteamJob& j;
+        ~SteamJobStop() { if (j.th.joinable()) j.th.join(); }
+    } steamJobStop{steamJob};
+    auto runSteamJob = [&](const std::string& busy, std::function<void()> work,
+                           std::function<void()> finish) {
+        if (steamJob.th.joinable()) return false;
+        steamJob.done = false;
+        steamJob.finish = std::move(finish);
+        steamJob.busy = busy;
+        steamJob.saidAt = SDL_GetTicks();
+        if (!busy.empty()) menuNotice.say(busy, Tone::Busy);
+        steamJob.th = std::thread([&j = steamJob, w = std::move(work)]() {
+            w();
+            j.done = true;
+        });
+        return true;
+    };
+    auto pollSteamJob = [&]() {
+        if (!steamJob.th.joinable()) return;
+        if (!steamJob.done) {
+            // A Busy pill lasts fifteen seconds; a grow over a big slice takes
+            // longer, and the pill must not go quiet while it works.
+            if (!steamJob.busy.empty() && SDL_GetTicks() - steamJob.saidAt > 10000) {
+                menuNotice.say(steamJob.busy, Tone::Busy);
+                steamJob.saidAt = SDL_GetTicks();
+            }
+            return;
+        }
+        steamJob.th.join();
+        auto finish = std::move(steamJob.finish);
+        steamJob.finish = nullptr;
+        if (finish) finish();
+    };
+
+    // What the first-pick screen and the size panel show, read off the frame
+    // thread: what the main drive could give Steam without touching a kept
+    // game, the default, and whether the console is online (Steam downloads
+    // itself the first time).
+    struct SteamSizes {
+        int64_t room = 0;      // the most Steam can have
+        int64_t size = 0;      // what is chosen; 0 = does not fit
+        int64_t drive = 0;     // the main drive, Steam's slice included
+        int64_t current = 0;   // the slice now, 0 when not set up
+        bool online = false;
+    };
+    SteamSizes steamSizes;
+    auto readSteamSizes = [](SteamSizes* out) {
+        out->current = steam::sliceBytes();
+        out->room = steam::roomBytes();
+        out->size = out->current > 0 ? out->current : steam::defaultBytes(out->room);
+        const std::vector<std::string> locs = storage::locations();
+        const storage::Space sp = storage::spaceOf(locs.empty() ? storage::root() : locs.front());
+        out->drive = sp.totalBytes + out->current;
+        out->online = net::status().online;
+    };
+    // "Games 1.55 TB": what the console keeps for itself beside Steam, the
+    // other side of the slider (MMagTech's brief: show both sides).
+    auto steamGamesLine = [&](int64_t size) {
+        return "Games " + driveSize(std::max<int64_t>(0, steamSizes.drive - size));
+    };
+    auto refreshSteamTile = [&]() {
+        placeSteamTile(platformTiles);
+        libraryScreen.build(platformTiles, collectionTiles);
+    };
+
+    std::function<void()> showSteamSetup;
+    // The size panel: one row Left and Right change, 25 GB a press. On the
+    // first-pick screen it goes both ways from 100 GB, since nothing exists
+    // yet; once Steam is set up it only grows (MMagTech, 2026-10-03).
+    std::function<void(bool)> showSteamSize = [&](bool growing) {
+        const int64_t step = steam::kStepBytes;
+        const int64_t lo = growing ? steamSizes.current : steam::kMinBytes;
+        const int64_t hi = steamSizes.room - steamSizes.room % step;
+        auto shown = std::make_shared<int64_t>(
+            growing ? std::min(hi, steamSizes.current - steamSizes.current % step + step)
+                    : steamSizes.size);
+        if (growing && *shown <= steamSizes.current) *shown = steamSizes.current;
+        auto refresh = [&, lo, hi, step, shown]() {
+            choiceScreen.setValues({driveSize(*shown), ""});
+            choiceScreen.setDetail(steamGamesLine(*shown));
+            choiceScreen.setStepper(0, *shown - step >= lo, *shown + step <= hi);
+        };
+        askChoice("Adjust storage", steamGamesLine(*shown), {"Steam", "Done"}, 0,
+                  [&, growing, shown](int) {
+            if (!growing) {
+                steamSizes.size = *shown;
+                if (showSteamSetup) showSteamSetup();
+                return;
+            }
+            const int64_t want = *shown;
+            if (want <= steamSizes.current) return;
+            runSteamJob("Freeing space\xE2\x80\xA6", [want]() {
+                std::string why;
+                steam::grow(want, &why);
+            }, [&, want]() {
+                if (rebuildSettingsRows) rebuildSettingsRows();
+                if (steam::sliceBytes() >= want - (1 << 20))
+                    menuNotice.say("Steam now has " + driveSize(steam::sliceBytes()), Tone::Done);
+                else
+                    menuNotice.say("Couldn't change Steam's storage", Tone::Problem);
+            });
+        });
+        refresh();
+        choiceStep = [&, lo, hi, step, shown, refresh](int dir) {
+            *shown = std::clamp<int64_t>(*shown + dir * step, lo, hi);
+            refresh();
+        };
+        if (!growing) choiceBack = [&]() { if (showSteamSetup) showSteamSetup(); };
+    };
+
+    // The first-pick screen. MMagTech, 2026-10-03: Continue (greyed while
+    // offline, or when even 100 GB does not fit), Adjust storage, Hide Steam,
+    // and a clear way back that sets nothing up.
+    showSteamSetup = [&]() {
+        const bool fits = steamSizes.size >= steam::kMinBytes;
+        const std::string detail =
+            fits ? "Steam " + driveSize(steamSizes.size) + "  \xC2\xB7  " +
+                       steamGamesLine(steamSizes.size)
+                 : "Needs " + driveSize(steam::kMinBytes) + " of space";
+        askChoice("Steam", detail, {"Continue", "Adjust storage", "Hide Steam", "Back to the console"},
+                  0, [&](int a) {
+            if (a == 0) {
+                const int64_t want = steamSizes.size;
+                auto ok = std::make_shared<bool>(false);
+                runSteamJob("Freeing space\xE2\x80\xA6", [want, ok]() {
+                    std::string why;
+                    *ok = steam::create(want, &why);
+                }, [&, ok]() {
+                    if (!*ok) {
+                        menuNotice.say("Couldn't set up Steam", Tone::Problem);
+                        return;
+                    }
+                    menuNotice.life = 0.0f;
+                    startLeaving(Leave::Steam, "Starting Steam");
+                });
+            } else if (a == 1) {
+                showSteamSize(false);
+            } else if (a == 2) {
+                steam::setHidden(true);
+                std::fprintf(stderr, "[steam] hidden\n");
+                refreshSteamTile();
+            }
+        });
+        choiceScreen.setDisabled({!fits || !steamSizes.online, !fits, false, false});
+    };
+
+    // The tile. With a PIN set, anyone but the owner enters it first, and the
+    // PIN is the confirmation; otherwise "Start Steam?" catches a stray press
+    // (MMagTech, 2026-10-03). The first time, the first-pick screen instead.
+    auto steamPressed = [&]() {
+        if (steamJob.th.joinable()) {
+            sound::play(sound::Cue::Edge);
+            return;
+        }
+        const bool pinFirst = accounts::pinIsSet() && accounts::activeId() != accounts::ownerId();
+        auto go = [&, pinFirst]() {
+            if (!steam::isSetUp()) {
+                auto read = std::make_shared<SteamSizes>();
+                runSteamJob("", [read, readSteamSizes]() { readSteamSizes(read.get()); },
+                            [&, read]() {
+                                steamSizes = *read;
+                                showSteamSetup();
+                            });
+                return;
+            }
+            if (pinFirst) {
+                startLeaving(Leave::Steam, "Starting Steam");
+                return;
+            }
+            askChoice("Start Steam?", "", {"Start", "Cancel"}, 0, [&](int a) {
+                if (a == 0) startLeaving(Leave::Steam, "Starting Steam");
+            });
+        };
+        if (pinFirst) askPin("Enter the PIN", "To use Steam", go, true);
+        else go();
+    };
+
     askServerAddress = [&](const std::string& typed, const std::string& why) {
         const ui::Keyboard::Config cfg = serverKeyboardConfig(typed);
         keyboard.open(cfg);
@@ -8774,6 +9034,10 @@ int main(int argc, char** argv) {
                 // membership it already filled and returns.
                 const bool isCollection = libraryScreen.tab() != 0;
                 const int tileId = tiles[res.value].id;
+                if (tileId == kSteamTileId) {
+                    steamPressed();
+                    break;
+                }
                 auto& own = isCollection ? collectionTiles : platformTiles;
                 screens::Tile* t = nullptr;
                 for (auto& x : own) if (x.id == tileId) { t = &x; break; }
@@ -9147,6 +9411,47 @@ int main(int argc, char** argv) {
                         });
                         sound::play(sound::Cue::Activate);
                     }
+                } else if (res.value == SetSteam) {
+                    // Grow it, or remove Steam: the PIN when set, once per
+                    // visit, as Downloads (it gives or takes space for the
+                    // whole console).
+                    askPin("Enter the PIN", "To change Steam", [&]() {
+                        askChoice("Steam", driveSize(steam::sliceBytes()),
+                                  {"Adjust storage", "Remove Steam"}, 0, [&](int a) {
+                            if (a == 0) {
+                                auto read = std::make_shared<SteamSizes>();
+                                runSteamJob("", [read, readSteamSizes]() {
+                                    readSteamSizes(read.get());
+                                }, [&, read]() {
+                                    steamSizes = *read;
+                                    showSteamSize(true);
+                                });
+                                return;
+                            }
+                            askChoice("Remove Steam?", "", {"Remove", "Cancel"}, 1, [&](int b) {
+                                if (b != 0) return;
+                                auto ok = std::make_shared<bool>(false);
+                                runSteamJob("Removing Steam\xE2\x80\xA6", [ok]() {
+                                    std::string why;
+                                    *ok = steam::remove(&why);
+                                }, [&, ok]() {
+                                    buildSettings();
+                                    refreshSteamTile();
+                                    menuNotice.say(*ok ? "Steam removed" : "Couldn't remove Steam",
+                                                   *ok ? Tone::Done : Tone::Problem);
+                                });
+                            });
+                        });
+                    });
+                    sound::play(sound::Cue::Activate);
+                } else if (res.value == SetSteamShow) {
+                    askPin("Enter the PIN", "To show Steam", [&]() {
+                        steam::setHidden(false);
+                        std::fprintf(stderr, "[steam] shown\n");
+                        refreshSteamTile();
+                        buildSettings();
+                    });
+                    sound::play(sound::Cue::Activate);
                 } else if (res.value == SetDownloads) {
                     // AN ADMIN SCREEN: the PIN to open it, once per Settings
                     // visit, so clearing several games is one PIN. MMagTech,
@@ -9816,6 +10121,18 @@ int main(int argc, char** argv) {
         }
     }
 
+    // BACK FROM STEAM (#223): the session started the console again after
+    // Steam closed, and it lands where the person left, on the Steam tile.
+    if (!initialScreen && steam::takeReturned()) {
+        goToDestination(1);
+        const auto& shownTiles = libraryScreen.visible();
+        for (size_t i = 0; i < shownTiles.size(); ++i)
+            if (shownTiles[i].id == kSteamTileId) {
+                libraryScreen.focusTile(static_cast<int>(i));
+                break;
+            }
+    }
+
     // Picks up a finished job. Loading the game happens HERE, on the frame
     // thread, because the core is not thread-safe and the worker only ever
     // moved bytes.
@@ -9911,6 +10228,22 @@ int main(int argc, char** argv) {
         if (uploader.pending() > 0)
             std::fprintf(stderr, "[server] leaving with %d upload(s) still owed\n",
                          uploader.pending());
+        if (leaving == Leave::Steam) {
+            // Full speed for Steam's games, as for a game here (the frontend
+            // is not running to ask while Steam is); the console's own start
+            // puts it back to balanced. Then the request, and out: the session
+            // script does the rest.
+            powerprofile::applyNow(true);
+            if (!steam::requestHandover()) {
+                std::fprintf(stderr, "[steam] could not ask the session to hand over\n");
+                leaving = Leave::None;
+                curtain.retarget(0.0f, kCurtainUp);
+                menuNotice.say("Couldn't start Steam", Tone::Problem);
+                return;
+            }
+            running = false;
+            return;
+        }
         if (leaving == Leave::SignOut) {
             std::string err;
             if (!server::signOut(&err)) {
@@ -12461,6 +12794,7 @@ int main(int argc, char** argv) {
         pumpLaunch();
         pumpSwitch();
         pumpLeave();
+        pollSteamJob();
         pumpArrive();
         pumpExit();
         pumpStateLoad(stateLoad, session, menuNotice);

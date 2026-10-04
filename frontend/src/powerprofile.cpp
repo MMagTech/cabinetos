@@ -65,6 +65,8 @@ void worker() {
 
 }  // namespace
 
+void applyNow(bool game) { apply(game); }
+
 void update(bool gameRunning) {
     const int want = gameRunning ? 1 : 0;
     std::lock_guard<std::mutex> lk(gLock);

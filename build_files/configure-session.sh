@@ -53,6 +53,8 @@ group_start "Disabling services a console has no use for"
 disable_units "84 MB; CabinetOS owns controller mapping in Phase 5" \
     input-remapper.service
 
+# cardwire itself is removed since #223 (strip-steam.sh): Steam's session
+# launched through it. The mask stays, for a base that brings it back.
 disable_units "38 MB and 6.8s of boot" \
     cardwired.service
 
