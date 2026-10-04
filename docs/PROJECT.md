@@ -14135,6 +14135,10 @@ the drop rule, record-only first. Before phase 1: #150 and #163 (busy time
 is wrong without them), both moved into milestone 3. Before phase 3: #168
 (an 18.6 ms N64 rewind snapshot reads as struggle) and #210.
 
+**MOVED, MMagTech 2026-10-04: phase 3 (the drop rule) is after the first
+release, #250.** Phases 1 and 2 cover the common case and the dial covers the
+rest; #63 is closed, and #168's piece for the drop rule went with it.
+
 #### DECIDED, MMagTech 2026-10-02: what the dial moves (#63, phase 1)
 
 From the phase 1 audit (2026-10-02), every core and standalone against
