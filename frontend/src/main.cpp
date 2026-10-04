@@ -3981,7 +3981,8 @@ int main(int argc, char** argv) {
     // `--menu-rise 0` drops the slide the menus arrive with. Tuning only.
     float overlayRise = 24.0f;
     // Off / subtle / strong, the reference implementation's own three levels.
-    float glowPeak = 0.025f;
+    // Always Strong, with no setting (MMagTech, 2026-10-04).
+    float glowPeak = 0.04f;
     // Running a core. Both are needed: a core without a ROM has nothing to do.
     const char* corePath = nullptr;
     const char* romPath = nullptr;
@@ -4187,7 +4188,8 @@ int main(int argc, char** argv) {
             const char* g = argv[++i];
             glowPeak = SDL_strcmp(g, "off") == 0      ? 0.0f
                        : SDL_strcmp(g, "strong") == 0 ? 0.04f
-                                                      : 0.025f;
+                       : SDL_strcmp(g, "subtle") == 0 ? 0.025f
+                                                      : 0.04f;
         } else if (SDL_strcmp(argv[i], "--safe-area") == 0) {
             safeGuides = true;
         } else if (SDL_strcmp(argv[i], "--keyboard") == 0) {

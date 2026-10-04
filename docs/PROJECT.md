@@ -1364,6 +1364,64 @@ into the picture, banding, not reaching the edge. A continuous slider on a real
 panel found the numbers, and only then were presets chosen. Do not guess these;
 build the slider.
 
+**DECIDED, MMagTech 2026-10-04: the glow is always on at Strong (0.04), with
+no setting anywhere.** The pause-menu row recorded above was never built, and
+he chose to leave it that way for now (fewer settings is the rule), raised from
+Subtle to Strong. `--glow off|subtle|strong` remains for testing only.
+
+#### DECIDED, MMagTech 2026-10-04: screen looks are RetroArch's own shaders (#122)
+
+**Not a copy of Cabinet.** Cabinet had to rewrite every look in Metal; this
+console draws libretro games with OpenGL ES, the language RetroArch's GLSL
+shaders are written in, so the files ship exactly as libretro publishes them
+(`libretro/glsl-shaders`, one pinned commit, `frontend/data/shaders/README.md`,
+fetched by `tools/fetch-shaders.py`). `frontend/src/screenfx.cpp` is the part of
+RetroArch that runs them: presets, passes, sizes, filtering, the uniforms,
+previous frames, lookup textures, `#pragma parameter`.
+
+**How the list was chosen.** Batocera's short "shader set" menu (Scanlines =
+crt-easymode, Curvature = crt-lottes, Retro = sharp-bilinear, LCD grid on
+handhelds) and EmulatorJS's list (RomM's player) were the guide to what is
+popular and not gimmicky; MMagTech then judged every candidate on the A9 TV and
+said to keep them all: *"it's really not that many entries"*.
+
+| Systems | Looks, in menu order | Starts on |
+|---|---|---|
+| NES, SNES, Genesis, Master System, Sega CD, 32X, TurboGrafx and CD, Atari 2600 and 7800, arcade, PS1, Saturn | Plain, Sharp, CRT easymode, CRT easymode halation, CRT lottes, CRT geom, CRT zfast, CRT aperture, CRT guest, Composite | CRT easymode |
+| N64, Dreamcast, 3DO | the same without geom and zfast | CRT easymode |
+| GBA, Game Gear, Neo Geo Pocket Color | Plain, Sharp, LCD 3x, LCD grid, LCD zfast | LCD 3x |
+| Game Boy | those, plus Dot matrix, Dot matrix Pocket, Dot matrix Light | LCD 3x |
+| Game Boy Color | those, plus Dot matrix (the colour one) | LCD 3x |
+| Everything else | none | |
+
+- **Where:** one Look row in the pause menu, per system, for everyone, stored
+  in settings.json as `look.<slug>`; it changes at once behind the menu.
+  Consoles never see handheld looks and handhelds never see TV ones, as in
+  Cabinet.
+- **On by default**, because the plain picture is the weakest on a 4K set.
+  easymode for TV systems: flat (nothing in a corner bent or cut), the
+  brightest CRT look, Batocera's own Scanlines pick, steady on N64. lcd3x for
+  handhelds, MMagTech's pick. The dot-matrix screens are not defaults: they
+  repaint the picture and would silently override the Game Boy Colors row.
+- **N64, Dreamcast and 3DO get a shorter list** because they are drawn above
+  their own size: zfast (and crt-pi) crawled on N64 and Dreamcast on the TV, as
+  scanlines drawn per source line land near one per TV row; crt-geom treats any
+  picture over 400 lines as interlaced and flickers. easymode and lottes held
+  steady. This matches the libretro forums' advice for upscaled 3D: no
+  scanlines, or a soft CRT such as lottes.
+- **Dropped:** crt-pi (made cheap for a Raspberry Pi; MMagTech liked it on
+  nothing); crt-royale and crt-hyllian (desktop OpenGL only: GLSL ES forbids
+  their globals initialised from uniforms, so RetroArch's GLES builds cannot
+  run them either); the gimmick sets (Mega Bezel, glow, bezels) and the
+  near-duplicates (mattias, caligari, beam, yeetron, potato and mini versions).
+- **Scope:** systems the console draws itself, up to Dreamcast. None for PS2 or
+  newer (played upscaled; PCSX2 presents its own picture). DS is out while
+  MMagTech decides whether DS stays on the console at all; Virtual Boy has its
+  own Screen row; Vectrex draws lines, not pixels.
+- **Licences:** each file keeps its own (public domain: lottes, lcd3x,
+  sharp-bilinear; the rest GPL), loaded at run time like the cores, credited
+  with them.
+
 ### The in-game overlay, and the input-mode rule
 
 The overlay is not composited by anything clever. **The frontend owns the frame
