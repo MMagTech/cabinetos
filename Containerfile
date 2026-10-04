@@ -134,9 +134,12 @@ RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
 # anywhere earlier it would drag a layer that did not change into every
 # update. Here it is one small file. The console reads it after booting to
 # tell whether an update applied; docs/SETTINGS.md, System. The number comes
-# from ci/next-version.sh through the Justfile.
+# from ci/next-version.sh through the Justfile. os-release is named here for
+# the same reason (#137): its PRETTY_NAME carries the version.
 ARG CABINETOS_VERSION=dev
-RUN printf '%s\n' "${CABINETOS_VERSION}" > /usr/share/cabinetos/version
+RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
+    printf '%s\n' "${CABINETOS_VERSION}" > /usr/share/cabinetos/version && \
+    /ctx/brand-os-release.sh "${CABINETOS_VERSION}"
 
 # ---------------------------------------------------------------------------
 # Lint

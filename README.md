@@ -47,6 +47,13 @@ may not be present — HDMI-CEC, for instance — are detected at runtime rather
 designed around. NVIDIA is out of scope until there is hardware that needs it;
 Bazzite publishes NVIDIA variants, so it is a base-image change, not a rewrite.
 
+### RomM
+
+- **Works with RomM 5.1 or newer**, tested on 5.1.0 and 5.3.1.
+- **Saves and save states made by Cabinet and CabinetOS carry over** between
+  them. Progress saved in RomM's web player or in other apps does not: the
+  console does not read it, and leaves it untouched on the server.
+
 ---
 
 ## How it is built

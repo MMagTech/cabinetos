@@ -7,6 +7,7 @@
 #include <cstring>
 #include <ctime>
 #include <fcntl.h>
+#include <mutex>
 #include <string>
 #include <thread>
 #include <unistd.h>
@@ -28,6 +29,32 @@ int gButtonLock = -1;
 int gDelayLock = -1;
 sd_bus* gSignals = nullptr;
 Event gPending = Event::None;
+
+std::mutex gRefusalMutex;
+std::string gRefusal;
+
+// Who blocks `what` ("shutdown" or "sleep"), in the holder's own words: the
+// first block inhibitor logind lists for it, its reason, else its name. ""
+// when none is listed or the list cannot be read.
+std::string blocker(sd_bus* bus, const char* what) {
+    sd_bus_error err = SD_BUS_ERROR_NULL;
+    sd_bus_message* reply = nullptr;
+    std::string out;
+    if (sd_bus_call_method(bus, kLogind, kPath, kManager, "ListInhibitors", &err, &reply,
+                           "") >= 0 &&
+        sd_bus_message_enter_container(reply, 'a', "(ssssuu)") >= 0) {
+        const char *w, *who, *why, *mode;
+        uint32_t uid, pid;
+        while (out.empty() && sd_bus_message_read(reply, "(ssssuu)", &w, &who, &why, &mode,
+                                                  &uid, &pid) > 0) {
+            if (std::strcmp(mode, "block") != 0 || !std::strstr(w, what)) continue;
+            out = why && *why ? why : (who ? who : "");
+        }
+    }
+    sd_bus_error_free(&err);
+    sd_bus_message_unref(reply);
+    return out;
+}
 
 int onPrepare(sd_bus_message* m, void* userdata, sd_bus_error*) {
     int starting = 0;
@@ -188,9 +215,30 @@ void act(Action a) {
         std::fprintf(stderr, "[power] %s: %s\n", name(a),
                      r >= 0 ? "logind took it"
                             : (err.message ? err.message : std::strerror(-r)));
+        // A REFUSAL IS SAID ON SCREEN (#241). Found on the A9, 2026-10-04: a
+        // restart pressed while a drive formatted was refused three times and
+        // the television showed nothing, which reads as a frozen console.
+        if (r < 0) {
+            const std::string who =
+                blocker(bus, a == Action::Rest ? "sleep" : "shutdown");
+            const char* verb = a == Action::Rest      ? "rest"
+                               : a == Action::Restart ? "restart"
+                                                      : "power off";
+            std::string say = std::string("Can't ") + verb + (who.empty() ? " right now" : ": " + who);
+            std::fprintf(stderr, "[power] said: %s\n", say.c_str());
+            std::lock_guard<std::mutex> lock(gRefusalMutex);
+            gRefusal = std::move(say);
+        }
         sd_bus_error_free(&err);
         sd_bus_unref(bus);
     }).detach();
+}
+
+std::string refusal() {
+    std::lock_guard<std::mutex> lock(gRefusalMutex);
+    std::string out;
+    out.swap(gRefusal);
+    return out;
 }
 
 bool justWoke() {

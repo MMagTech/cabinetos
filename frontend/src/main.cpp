@@ -1342,6 +1342,7 @@ constexpr GalleryNotice kNoticeGallery[] = {
     {"Saved on this console only", Tone::Info},
     {"Save states aren't available for this system", Tone::Info},
     {"Couldn't save the state", Tone::Problem},
+    {"Can't restart right now", Tone::Problem},
     {"Couldn't forget Pro Controller", Tone::Problem},
     {"8BitDo Lite 2 is player 2", Tone::Done},
     {"Loading\xE2\x80\xA6", Tone::Busy},
@@ -6044,6 +6045,22 @@ int main(int argc, char** argv) {
     // Whether there is a game to resume. It is shelf slot 0 when there is.
     auto haveResume = [&]() { return heroIndex >= 0 && !shelf.empty(); };
     auto haveFavorites = [&]() { return !favorites.empty(); };
+    // A GAME JUST PLAYED GOES TO THE FRONT OF RECENT (#196), as Resume. Recent
+    // is RomM's play history, fetched only at start and on an account switch,
+    // so Forza stayed behind the night before's game until a restart (A9,
+    // 2026-09-30) although RomM already had it first. Moved here instead of
+    // refetched: no network, so it is right offline too, and it is what the
+    // next fetch will say. Every system, built-in and separate alike.
+    auto playedJustNow = [&](int romId) {
+        auto it = lib.byRomId.find(romId);
+        if (it == lib.byRomId.end() || !catalog::playable(lib.games[it->second])) return;
+        const int idx = it->second;
+        shelf.erase(std::remove(shelf.begin(), shelf.end(), idx), shelf.end());
+        shelf.insert(shelf.begin(), idx);
+        if (shelf.size() > 16) shelf.resize(16);   // as many as fetchRecent asks for
+        heroIndex = idx;
+        heroPlatform = lib.games[idx].platformName;
+    };
     // A HOME WITH NOTHING ON IT: a new account that has played nothing and
     // starred nothing. MMagTech, switching to one on the A9, 2026-09-24: the
     // screen was "just purple", focus was nowhere, and finding the Library
@@ -9752,10 +9769,13 @@ int main(int argc, char** argv) {
                               [&]() { buildSettings(); });
                     sound::play(sound::Cue::Activate);
                 } else if (res.value == SetPinChange) {
+                    // ALWAYS ASKS (#237), even after the PIN was entered once
+                    // this visit: the once-per-visit rule is for Downloads, and
+                    // changing or removing the PIN itself must prove you know it.
                     askPin("Enter your current PIN", "", [&]() {
                         choosePin("Choose a new PIN", "",
                                   [&]() { buildSettings(); });
-                    });
+                    }, true);
                     sound::play(sound::Cue::Activate);
                 } else if (res.value == SetPinOff) {
                     askPin("Enter the PIN", "To turn it off", [&]() {
@@ -9763,7 +9783,7 @@ int main(int argc, char** argv) {
                         if (accounts::setPin("", &err))
                             std::fprintf(stderr, "[pin] turned off\n");
                         buildSettings();
-                    });
+                    }, true);
                     sound::play(sound::Cue::Activate);
                 }
                 break;
@@ -9862,10 +9882,23 @@ int main(int argc, char** argv) {
             case screens::Action::Download:
                 downloadById(res.value);
                 break;
-            case screens::Action::RemoveDownload:
-                removeDownload(res.value);
-                refreshKeeps();
+            case screens::Action::RemoveDownload: {
+                // ASKS FIRST (#188): a mis-press cost a re-download, 37 GB and
+                // a reinstall for a PS3 game. The same question, words and
+                // order as Settings' Downloads list, focus on Cancel.
+                const int romId = res.value;
+                int64_t bytes = 0;
+                for (const screens::DownloadItem& d : downloadItems())
+                    if (d.romId == romId) bytes = d.bytes;
+                askChoice("Remove " + detailScreen.game().title + "?",
+                          bytes > 0 ? screens::sizeText(bytes) : std::string(),
+                          {"Cancel", "Remove"}, 0, [&, romId](int answer) {
+                              if (answer != 1) return;
+                              removeDownload(romId);
+                              refreshKeeps();
+                          });
                 break;
+            }
         }
     };
 
@@ -10644,6 +10677,7 @@ int main(int argc, char** argv) {
         if (playClock.active()) {
             playtime::close(storage::currentUser(), playClock.finish(playtime::wallMs()));
             uploader.sendPlay();
+            playedJustNow(session.romId);
         }
         curtain.from = curtain.to = 1.0f;
         curtain.elapsed = curtain.duration;
@@ -11239,6 +11273,7 @@ int main(int argc, char** argv) {
         if (playClock.active()) {
             playtime::close(storage::currentUser(), playClock.finish(playtime::wallMs()));
             uploader.sendPlay();
+            playedJustNow(session.romId);
         }
         syncSave(session, uploader);
         // And the same curtain on the way out — `unloadGame` blocks too, and a
@@ -12253,6 +12288,10 @@ int main(int argc, char** argv) {
         // Kept current every frame, so it can tell a wake the moment one
         // happens rather than only when a key asks.
         power::justWoke();
+        // A restart, power off or rest that logind refused (#241), said in the
+        // pill rather than left looking frozen. Pressing again tries again.
+        if (const std::string no = power::refusal(); !no.empty())
+            menuNotice.say(no, Tone::Problem);
 
         // THE MACHINE IS ABOUT TO GO DOWN OR SLEEP, and logind is holding it
         // for us. Leave the game the one way games are left — finishExit, every
