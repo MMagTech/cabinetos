@@ -1388,7 +1388,7 @@ said to keep them all: *"it's really not that many entries"*.
 | Systems | Looks, in menu order | Starts on |
 |---|---|---|
 | NES, SNES, Genesis, Master System, Sega CD, 32X, TurboGrafx and CD, Atari 2600 and 7800, arcade, PS1, Saturn | Plain, Sharp, CRT easymode, CRT easymode halation, CRT lottes, CRT geom, CRT zfast, CRT aperture, CRT guest | CRT easymode |
-| N64, Dreamcast, 3DO | the same without geom and zfast | CRT easymode |
+| N64, Dreamcast, 3DO | Plain, Sharp, CRT easymode, CRT lottes, CRT aperture | CRT easymode |
 | GBA, Game Gear, Neo Geo Pocket Color | Plain, Sharp, LCD 3x, LCD grid, LCD zfast | LCD 3x |
 | Game Boy | those, plus Dot matrix, Dot matrix Pocket | LCD 3x |
 | Game Boy Color | those, plus Dot matrix (the colour one) | LCD 3x |
@@ -1407,7 +1407,11 @@ said to keep them all: *"it's really not that many entries"*.
   their own size: zfast (and crt-pi) crawled on N64 and Dreamcast on the TV, as
   scanlines drawn per source line land near one per TV row; crt-geom treats any
   picture over 400 lines as interlaced and flickers. easymode and lottes held
-  steady. This matches the libretro forums' advice for upscaled 3D: no
+  steady. easymode-halation and guest switch to interlaced scanlines at 400
+  lines too (read in their code), so they are left off the same way. easymode
+  holds steady because it is built for this: at 400 lines and up it drops its
+  scanlines and keeps only its mask (SCANLINE_CUTOFF), so on these three it is
+  a mask look, not a scanline look. This matches the libretro forums' advice for upscaled 3D: no
   scanlines, or a soft CRT such as lottes.
 - **Dropped:** Composite (ntsc-adaptive), judged on the TV: it does blend a
   dithered picture as a TV cable did (Jurassic Park), but MMagTech: *"looks

@@ -36,15 +36,16 @@ const std::vector<Look> kConsole = {
 // most CRT shaders draw one scanline per line of what they are given: close to
 // one per TV row here, which crawls as the picture moves (zfast on N64 and
 // Dreamcast, judged on the TV 2026-10-04), and crt-geom takes anything over 400
-// lines for an interlaced signal and flickers. easymode and lottes held steady.
+// lines for an interlaced signal and flickers, as do easymode-halation and
+// guest (their own code: interlaced at 400 lines and up). easymode and lottes
+// held steady; easymode by design, since it drops its scanlines at 400 lines
+// and up (SCANLINE_CUTOFF) and keeps only its mask.
 const std::vector<Look> kUpscaled = {
     {"plain", "Plain", nullptr},
     {"sharp-bilinear", "Sharp", "interpolation/sharp-bilinear-simple.glslp"},
     {"crt-easymode", "CRT easymode", "crt/crt-easymode.glslp"},
-    {"crt-easymode-halation", "CRT easymode halation", "crt/crt-easymode-halation.glslp"},
     {"crt-lottes", "CRT lottes", "crt/crt-lottes.glslp"},
     {"crt-aperture", "CRT aperture", "crt/crt-aperture.glslp"},
-    {"crt-guest", "CRT guest", "crt/crt-guest-dr-venom.glslp"},
 };
 #define CABINETOS_LCD_LOOKS                                                     \
     {"plain", "Plain", nullptr},                                                \
