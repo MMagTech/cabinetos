@@ -35,7 +35,6 @@ PRESETS = [
     "handheld/zfast-lcd",
     "handheld/gameboy",
     "handheld/gameboy-pocket",
-    "handheld/gameboy-light",
     "handheld/gbc-dot-matrix-white",
 ]
 

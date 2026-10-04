@@ -53,13 +53,13 @@ const std::vector<Look> kUpscaled = {
     {"lcd-grid-v2", "LCD grid", "handheld/lcd-grid-v2.glslp"},                  \
     {"zfast-lcd", "LCD zfast", "handheld/zfast-lcd.glslp"}
 const std::vector<Look> kHandheld = {CABINETOS_LCD_LOOKS};
-// The original Game Boy's three screens. Each repaints the picture in its
+// The original Game Boy's screens. The Game Boy Light's backlit one was
+// dropped on the TV: far too bright on a modern set (MMagTech, 2026-10-04). Each repaints the picture in its
 // own shades, so they suit a mono game and override the Colors row.
 const std::vector<Look> kGameBoy = {
     CABINETOS_LCD_LOOKS,
     {"gameboy", "Dot matrix", "handheld/gameboy.glslp"},
     {"gameboy-pocket", "Dot matrix Pocket", "handheld/gameboy-pocket.glslp"},
-    {"gameboy-light", "Dot matrix Light", "handheld/gameboy-light.glslp"},
 };
 // Game Boy Color: the dot matrix that keeps the game's colours, since the
 // green one turns a colour game green.
