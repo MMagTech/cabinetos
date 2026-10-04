@@ -12,8 +12,10 @@ MMagTech wants it done. This changes rarely. What to work on next is
   session script) needs an image build: push to `testing`.
 - **A merge promotes the tested image; it does not build.** Push the branch's
   final commit to `testing`, have MMagTech judge it on the A9, merge on his
-  explicit go. Anything committed after the testing push, docs included, makes
-  main build instead. Write `NEXT-SESSION.md` inside the work's own branch.
+  explicit go. Anything committed after the testing push makes main build
+  instead, except documentation: `.md` files and `docs/` are not in the image
+  and do not count (#156), apart from `docs/LICENCES.md`, which is. Write
+  `NEXT-SESSION.md` inside the work's own branch, before or after the push.
 - **Every session starts with only `main` and `testing`.** Delete a branch
   once it merges, on GitHub and locally. The one exception is PR #42's
   `base-update/44.20260921`, left open until after the first release
