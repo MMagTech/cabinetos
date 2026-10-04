@@ -14138,6 +14138,11 @@ is wrong without them), both moved into milestone 3. Before phase 3: #168
 **MOVED, MMagTech 2026-10-04: phase 3 (the drop rule) is after the first
 release, #250.** Phases 1 and 2 cover the common case and the dial covers the
 rest; #63 is closed, and #168's piece for the drop rule went with it.
+**The processor question (#210) is answered by research, not measured**:
+PS3, Xbox 360 and Switch emulation are processor-limited, and the resolution
+scale barely moves a processor-limited game's frame rate, so a weak processor
+is slow at every picture level and the class rightly reads the graphics chip
+alone. #210 (the slowed A9) went after the release with #250.
 
 #### DECIDED, MMagTech 2026-10-02: what the dial moves (#63, phase 1)
 

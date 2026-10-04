@@ -26,5 +26,7 @@ around the picture*. DS filed as #248 (stays or goes, milestone 7).
    merge #249 on his explicit go, close #122, delete the branch on his go.
    Not seen on the TV yet in any build: CRT aperture on N64, Dot matrix
    Pocket, the Game Boy Color dot matrix, a 3DO game.
-2. Then item 8, before phase 3: the slowed A9 (#210, with the processor
-   check noted there), #168, #221. Then #63 phase 3.
+2. Then #221, the last of milestone 3: built-in cores have no audio rate
+   control, so a frame repeats or drops every 10 to 17 s. #63 is closed;
+   its phase 3 (#250), #210 and #168 moved after the first release
+   (MMagTech, 2026-10-04).
