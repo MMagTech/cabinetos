@@ -488,6 +488,14 @@ Decided with MMagTech 2026-09-26, from the things people will actually do.
     GB below. With one decimal the A9's main drive, 23 GB used, read "2.0 TB
     free of 2.0 TB". Decimal units, as the box, the Mac and the PS5 count.
 
+- **Steam** (#223; PROJECT.md open question 37): **only once Steam is set
+  up**, a line under the main drive with the size of Steam's slice; the main
+  drive's own line leaves that slice out. Pressing it (PIN if set, once per
+  visit) offers **Adjust storage**, which only grows it, 25 GB a press,
+  clearing cached games and never kept ones, and **Remove Steam**, "Remove
+  Steam?" with Cancel focused, which gives the whole slice back. **Built on
+  `steam-handoff`.**
+
 ## System
 
 - **System update.** Decided with MMagTech, 2026-09-25; **built on the
@@ -620,6 +628,11 @@ Decided with MMagTech 2026-09-26, from the things people will actually do.
   image; they lint and compile the frontend. Until that day `testing` was a
   separate channel and main rebuilt everything, so a feature was built
   three times and `latest` was a rebuild of what had been judged.
+
+- **Steam · Hidden**, only while somebody has chosen Hide Steam on Steam's
+  first screen (#223): pressing it (PIN if set) puts "Switch to Steam" back in
+  the Start menu and the row goes. Odd company for System update, and the
+  least odd place (MMagTech, 2026-10-03). **Built on `steam-handoff`.**
 
 ## About
 

@@ -15202,3 +15202,189 @@ Hyrule Warriors played, paused, quit (exit 0); its save up to RomM and
 unpacked again before the next start. The first CI build of Cemu took 33
 minutes uncached; the first image build stopped at `install-cemu.sh`, because
 GitHub's artifact upload drops the execute bit (lessons, image and CI).
+
+### 37. Steam: one entry that hands over to Big Picture, issue #223
+
+**Decided with MMagTech, 2026-10-02 and 2026-10-03; built on `steam-handoff`.**
+The audit (read-only, 2026-10-02) is the fourth comment on #223 and the full
+list of decisions is the comment of 2026-10-03; this is the record of what was
+built from them and why.
+
+**Why at all.** Asking someone to wipe a capable PC to play only older
+consoles is a hard sell; "you can still use it as a Steam machine" invites
+more people to try the console. It must cost nothing to anyone who never
+uses it: no process, nothing at boot, no screens, no settings, and their disk
+exactly as it was. The only cost every console pays is the image: Steam's 20
+MB bootstrapper and 45 KB of session scripts, against 31 MB of cardwire
+removed.
+
+**What the console owns:** the door ("Switch to Steam"), its first-pick screens, Steam's slice of
+the drive and the handover. Steam, its login, Proton, its games and its own
+settings pages are Steam's, and Steam updates itself from Valve while it is
+open; the image only carries the launcher and the session (the brief's
+"updates with the image" corrected by the audit, accepted).
+
+- **The image.** `strip-steam.sh` keeps `steam`; `install-steam-session.sh`
+  adds `gamescope-session` and `gamescope-session-steam` from terra (disabled
+  in the base, enabled for that one install; a dry run found it), without
+  weak dependencies. **cardwire is removed**: upstream's session launches the
+  client through `cardwire launch` whenever it exists, and with `cardwired`
+  masked (6.8 s of boot) that failed every time. A machine with two AMD GPUs
+  gets the system's default, as the emulators do; if that is ever wrong it is
+  fixed for the whole console (MMagTech). Bazzite's loose `bazzite-steam*`,
+  `switcherooctl` and `protontricks` scripts go too.
+- **The handover runs in the console's own login session**, not as upstream's
+  user unit. The frontend writes `steam` to `$XDG_RUNTIME_DIR/cabinetos-next`
+  and quits; `cabinetos-session` (steam_step) attaches the slice, runs
+  `/usr/share/gamescope-session-plus/gamescope-session-plus steam` exactly as
+  shipped with the display's size and VRR, then stops everything left in the
+  session's cgroup (TERM, 5 s, KILL; Steam double-forks, so a process group
+  would lose some), detaches the slice and execs itself, so the console comes
+  back on a fresh gamescope. A user unit would leave gamescope outside any
+  logind session, opening the display only through libseat's fallback, which
+  the audit could not test. The request file is deleted before Steam starts,
+  so a crash can never bring Steam back on its own. Upstream's "five short
+  sessions means broken" counter is cleared each time.
+- **Switch to Desktop** keeps Steam's name and runs our
+  `/usr/libexec/os-session-select`, `steam -shutdown`. Renaming it means
+  changing Steam, which the console does not do. Shut down and Restart are
+  upstream's sentinels, then `poweroff`/`reboot`; the default target is still
+  multi-user and nothing starts Steam at boot. Sleep waits on #132.
+- **Steam's slice is one file**, `/var/lib/cabinetos-steam/steam.img` (no
+  copy-on-write), holding ext4 with no reserved blocks, mounted on
+  `~/.local/share/Steam` with `~/.local/share`'s SELinux label, only while
+  Steam runs. A btrfs quota was rejected: btrfs's statfs never reads qgroups,
+  so Steam would see the whole drive. The empty folder under it is immutable,
+  so nothing can write Steam's files onto the main drive without the slice.
+  `/usr/libexec/cabinetos-steam` (create, grow, mount, unmount, remove) runs
+  as `cabinetos-steam@<action>.service` through `66-cabinetos-steam.rules`.
+  **The trim trap, measured in the dry run on the A9:** `mkfs.ext4` trims the
+  whole device by default, which left a 1 GB slice holding 33 MB of disk
+  (`-E nodiscard` now), and an `fstrim` inside the mounted slice punched 973
+  MB back out; every mount and unmount runs `fallocate` over the file again,
+  which took it back to the full 1 GB.
+- **Sizes.** Default 25% of the main drive, at least 100 GB, at most 500 GB
+  (500 GB drive 125 GB, 1 TB 250 GB, the A9 500 GB), 25 GB a press. Setting
+  up or growing only ever clears cached games, oldest first, once; kept games
+  are never touched, and the console always keeps its floors plus 50 GB of
+  headroom for games it only plays (a starting value, the audit's). If even
+  100 GB does not fit, Continue is greyed. **Grow only** (MMagTech): shrinking
+  is the one slow, data-moving, power-cut-sensitive operation, and Remove
+  Steam is the way to get space back.
+- **Kept games overflow exactly as before.** `storage::spaceOf` leaves the
+  slice out of the main drive's size, so the console's part of the drive is
+  the drive minus Steam, and the 80% keep share, "Storage almost full" and
+  Settings, Storage all work on that part (A9 with a 500 GB slice: the stick
+  takes over at 80% of 1.5 TB, about 1.2 TB). "At the same point as with no
+  slice" cannot hold literally once the console has less drive; MMagTech
+  agreed the same rule on the console's part. Steam may also use other
+  drives through its own storage settings; both sides read true free space,
+  and the console's cache never goes on extra drives, so nothing is
+  double-counted.
+- **The door is the Start menu, "Switch to Steam", straight under Cancel**,
+  never over a game, gone when Steam is hidden. Built first as a tile at the
+  end of the Library's playable systems; MMagTech on the TV, 2026-10-04: *"it
+  makes it seem like it's part of ROM when it's in the library"*. The menu
+  makes it a mode the machine switches into, the mirror of Steam's own
+  "Switch to Desktop". Under Cancel rather than last, his call: it is what
+  Start will most often be pressed for, and a slip still meets "Start
+  Steam?" or the PIN. Rejected: the top bar (on every screen, an equal of the
+  console's own sections) and Home (among the games). **Start now opens the
+  menu on every screen but Search** (it was Home only, which nothing
+  explained): Search's keyboard is always up, is drawn over everything (the
+  menu opened under it), and takes Start as "done". Back from Steam the
+  console lands on Home.
+- **First pick, as an install** (MMagTech on the TV: "Continue" and "Adjust
+  storage" read as jargon to someone new): "Steam" with Install (greyed while
+  offline, since Steam downloads itself the first time, or when even 100 GB
+  does not fit), Hide Steam, Cancel; then "Steam storage", the size row and
+  Install, focused, so A twice installs at the default. The other side of the
+  size reads **"CabinetOS 1.55 TB"**, as Storage names the drive; "Games" read
+  as games already installed. **Every later pick** asks "Start Steam?"
+  (cheaper than waiting for Steam to start just to leave it); with a PIN set,
+  anyone but the owner gets the PIN pad instead, which is the confirmation
+  (checked on a child's account). There is one Steam login for the whole
+  console, so the PIN is what keeps children out of it, and out of Steam's
+  settings pages.
+- **Settings.** Storage shows a Steam line under the main drive, only once
+  the slice exists: Adjust storage (grow) and Remove Steam ("Remove Steam?",
+  Cancel focused), PIN once per visit. System shows "Steam · Hidden" only
+  while hidden, to bring the door back. Someone who never picks it
+  sees neither.
+- **Remove Steam** deletes the slice and Steam's own few files in the home
+  folder (`~/.steam`, its pid and path files, `~/.config/gamescope`, its game
+  shortcuts); Switch to Steam returns to its first-pick state. Steam libraries on
+  other drives are left alone (MMagTech: Steam's setup and removal never
+  touch other drives).
+- **Full speed for Steam.** The frontend switches tuned to the game profile
+  synchronously before it quits; its next start puts balanced back.
+
+**Found at the TV and fixed (2026-10-03/04), each proven on the A9:**
+
+- **The console's exit hung for good** after a game had started the power
+  profile's worker: glibc blocks destroying a condition variable somebody
+  waits on. Hidden until now by systemd's kill and Sign out's exec; it sat on
+  "Starting Steam". The variables are never destroyed (old binary hung to the
+  40 s timeout, the fixed one exits in 0.45 s).
+- **Black screen: Steam's sandbox refused to start.** The console's login
+  carries CAP_WAKE_ALARM in its ambient set (an SSH login has none), and
+  bubblewrap refuses any capability it is not setuid for; Steam's error
+  window is one gamescope never shows. Steam's session starts under
+  `setpriv --inh-caps=-all --ambient-caps=-all`.
+- **Steam switched Bluetooth off before its own setup.** Its setting System >
+  Bluetooth > Enabled lives in `config/config.vdf`; with no file it reads off
+  and powers the adapter down as its interface loads, so the controller
+  dropped on the language screen. The session writes that one setting, on,
+  before Steam's first start only; and the console never comes back from
+  Steam with Bluetooth off. (Drops later in that session were the
+  controller's batteries: the controller itself ended the link, "Remote
+  Device Terminated due to Power Off", with its battery report at level 0;
+  fresh batteries ended it. #230 is the console not showing battery.)
+- **Steam's Storage page listed the console's own drive** and offered to
+  format it. `90-cabinetos-system-disk.rules` marks the disk CabinetOS boots
+  from (found from `/sysroot`, never named) for udisks to ignore; Steam leaves
+  it out. The console's drive code already skips ignored drives and finds its
+  own drive from the mounts. Steam also stopped listing the exFAT stick, its
+  own choice (the rule does not mark it).
+- **The clean-up after Steam stopped the login's PAM helper**, `(sd-pam)`; it
+  is now left alone. **A slice left attached** by a session that ended inside
+  Steam is detached as the session starts. **Remove Steam commits the delete**
+  (`sync -f`) before answering, or Storage briefly read 800 GB used.
+- **Not caught:** the first two handovers sat about 25 s between the frontend
+  leaving ("Primary child shut down") and gamescope exiting; every later one
+  took about 1.5 s from the press to Steam's display, and the recorder never
+  saw it again. If it comes back the session log shows the gap.
+
+**Installing with the console on screen** (MMagTech, 2026-10-04: the
+first start was a black screen for as long as Steam's download took, "it
+still kind of looks like a stall"; built overnight on his go). A recorder
+showed Steam has no window gamescope will show for the whole download: only
+a zenity progress dialog, which Steam-mode gamescope leaves off. So Install
+opens one panel, "Installing Steam", from the press to the handover: the
+slice is made, then `/usr/libexec/cabinetos-steam-download` runs Steam on
+gamescope's headless backend with the session's flags (the same client
+branch), the panel showing how much is on the drive, and stops Steam when it
+starts its interface, Steam's own sign that it is done (a polite `-shutdown`
+is ignored at that stage: still running after 180 s). Only then the
+handover; measured, Steam's interface 4.7 s after the request, 4 MB more on
+disk. **Nothing is timed** (MMagTech: connections differ): it ends on that
+signal, on a Steam error dialog ("Couldn't download Steam", the console
+stays), when Steam's display dies, or on "Press (B) to cancel", a prompt
+rather than a focused Cancel a run of A presses would hit. A stopped or
+failed install resumes on the next pick; the "installed" mark is the slice
+file's inode, so a stale mark never hands over to an empty Steam. **Not
+proven:** Steam's behaviour with no internet mid-download (a network
+namespace also breaks the headless display's sockets, and a firewall rule
+was not made unattended); if Steam retries silently the count stops and B
+cancels, and Install is greyed when the console is offline at the start.
+
+**Measured:** Steam's first download 2.4 GB in about 40 s; Steam's interface
+up about 3 s after the press; back to Home 1.8 to 1.9 s after Steam closes.
+Games played well (MMagTech). Shut down from Steam powers the console off,
+by design; Switch to Desktop is the way back.
+
+**Left out, on purpose:** Proton GE (Bazzite ships none, so it would be ours
+to pin; #235 if cutscenes in less popular games break); hiding Steam's own
+Wi-Fi, Bluetooth and sound pages (possible by filtering what Steam sees on
+the system bus, judged not worth the complication; the PIN covers children);
+a per-person Steam.

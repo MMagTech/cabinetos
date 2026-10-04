@@ -18,6 +18,7 @@
 #include <json-c/json.h>
 
 #include "romm.h"
+#include "steam.h"
 
 namespace storage {
 namespace {
@@ -355,6 +356,15 @@ Space spaceOf(const std::string& location) {
     // what a download is. The difference is the root reserve on ext4.
     out.freeBytes = static_cast<int64_t>(v.f_bavail) * static_cast<int64_t>(v.f_frsize);
     out.totalBytes = static_cast<int64_t>(v.f_blocks) * static_cast<int64_t>(v.f_frsize);
+    // STEAM'S SLICE IS NOT THE CONSOLE'S (#223, MMagTech 2026-10-03). It is a
+    // fixed-size file on the main drive, so its blocks are already out of
+    // the free space; taking it out of the size as well makes the console's
+    // part of the drive the drive minus the slice. Then the 80% keep share,
+    // "Storage almost full" and Settings, Storage all work on that part, and
+    // kept games overflow to another drive exactly as before, by the same
+    // rule. Without it, the slice would read as console data.
+    if (steam::sliceOn(location))
+        out.totalBytes = std::max<int64_t>(0, out.totalBytes - steam::sliceBytes());
     return out;
 }
 

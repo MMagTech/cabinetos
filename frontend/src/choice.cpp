@@ -37,6 +37,12 @@ void ChoiceScreen::open(std::string title, std::string detail,
     detail_ = std::move(detail);
     options_ = std::move(options);
     values_.clear();
+    disabled_.clear();
+    promptBefore_.clear();
+    promptButton_.clear();
+    promptAfter_.clear();
+    stepper_ = -1;
+    stepDir_ = 0;
     slot_ = options_.empty() ? 0 : std::clamp(focus, 0, static_cast<int>(options_.size()) - 1);
     top_ = std::max(0, slot_ - (kMaxVisible - 1));
     appear_.from = appear_.to = 0.0f;
@@ -60,12 +66,29 @@ void ChoiceScreen::replace(std::vector<std::string> options, std::vector<std::st
     if (slot_ >= top_ + kMaxVisible) top_ = slot_ - kMaxVisible + 1;
 }
 
+void ChoiceScreen::setDisabled(std::vector<bool> disabled) {
+    disabled_ = std::move(disabled);
+    const int n = static_cast<int>(options_.size());
+    if (!isDisabled(slot_)) return;
+    for (int i = 0; i < n; ++i) {
+        const int j = (slot_ + i) % n;
+        if (!isDisabled(j)) {
+            slot_ = j;
+            break;
+        }
+    }
+    top_ = std::max(0, slot_ - (kMaxVisible - 1));
+}
+
 ChoiceScreen::Outcome ChoiceScreen::key(Nav n) {
     if (!open_) return Outcome::None;
     switch (n) {
         case Nav::Up:
         case Nav::Down: {
-            const int next = slot_ + (n == Nav::Down ? 1 : -1);
+            // Past any greyed answer: focus never lands on one.
+            int next = slot_ + (n == Nav::Down ? 1 : -1);
+            while (next >= 0 && next < static_cast<int>(options_.size()) && isDisabled(next))
+                next += (n == Nav::Down ? 1 : -1);
             if (next < 0 || next >= static_cast<int>(options_.size())) {
                 sound::play(sound::Cue::Edge);
                 return Outcome::None;
@@ -81,10 +104,18 @@ ChoiceScreen::Outcome ChoiceScreen::key(Nav n) {
         }
         case Nav::Left:
         case Nav::Right:
+            if (slot_ == stepper_ && (n == Nav::Left ? canLeft_ : canRight_)) {
+                stepDir_ = n == Nav::Left ? -1 : 1;
+                sound::play(sound::Cue::Move);
+                return Outcome::Stepped;
+            }
             sound::play(sound::Cue::Edge);
             return Outcome::None;
         case Nav::Activate:
-            if (options_.empty()) { sound::play(sound::Cue::Edge); return Outcome::None; }
+            if (options_.empty() || isDisabled(slot_)) {
+                sound::play(sound::Cue::Edge);
+                return Outcome::None;
+            }
             sound::play(sound::Cue::Activate);
             return Outcome::Chosen;
         case Nav::Back:
@@ -140,7 +171,8 @@ void ChoiceScreen::draw(Ctx& c) {
     const float detailH = lines.empty() ? 0.0f : 8.0f + lineH * lines.size();
     const int n = static_cast<int>(options_.size());
     const int shown = grows_ ? std::max(1, std::min(n, kMaxVisible)) : std::min(n, kMaxVisible);
-    float listH = shown * kButtonH + std::max(0, shown - 1) * kButtonGap;
+    const bool prompt = n == 0 && !promptButton_.empty();
+    float listH = prompt ? kButtonH : shown * kButtonH + std::max(0, shown - 1) * kButtonGap;
     if (grows_) {
         if (!listHSet_) {
             listH_.settle(listH);
@@ -175,6 +207,29 @@ void ChoiceScreen::draw(Ctx& c) {
     y += detailH;
     y += 36.0f;
 
+    if (prompt) {
+        // "Press (B) to cancel": the words, and the button as a white disc
+        // with its dark letter on the text's x-height, as Home's empty state
+        // draws "Press (A) to open the Library" (main.cpp, drawPressPrompt).
+        const TextStyle st = TextStyle::Title3;
+        const float gap = 16.0f;
+        const float badge = c.text.lineHeight(st, sc) * 0.95f;
+        const float w1 = c.text.measure(promptBefore_, st, sc);
+        const float w2 = c.text.measure(promptAfter_, st, sc);
+        const float base = y + kButtonH * 0.5f + c.text.ascent(st, sc) * 0.40f;
+        float x = (W - (w1 + gap + badge + gap + w2)) * 0.5f;
+        c.text.draw(c.r, promptBefore_, x, base, st, ui::Color::white(0.92f), sc);
+        x += w1 + gap;
+        const float capMid = base - c.text.ascent(st, sc) * 0.36f;
+        c.r.draw(ui::Rect{x, capMid - badge * 0.5f, badge, badge, badge * 0.5f,
+                          ui::Color::white(0.95f)});
+        const float bw = c.text.measure(promptButton_, st, sc);
+        c.text.draw(c.r, promptButton_, x + (badge - bw) * 0.5f,
+                    capMid + c.text.ascent(st, sc) * 0.36f, st,
+                    ui::Color{0.07f, 0.05f, 0.12f, 1.0f}, sc);
+        x += badge + gap;
+        c.text.draw(c.r, promptAfter_, x, base, st, ui::Color::white(0.92f), sc);
+    }
     if (n == 0 && !placeholder_.empty())
         centred(placeholder_, y + listH * 0.5f + c.text.ascent(TextStyle::Callout, sc) * 0.4f,
                 TextStyle::Callout, 0.45f);
@@ -199,10 +254,26 @@ void ChoiceScreen::draw(Ctx& c) {
         const std::string label = c.text.truncate(options_[i], TextStyle::Title3, sc, room);
         const float lw = c.text.measure(label, TextStyle::Title3, sc);
         const float lx = list ? dx + 24.0f : dx + (dw - lw) * 0.5f;
-        c.text.draw(c.r, label, lx, base, TextStyle::Title3, design::menuLabel(bf, 1.0f), sc);
-        if (!value.empty())
-            c.text.draw(c.r, value, dx + dw - 24.0f - vw, base, TextStyle::Callout,
-                        ui::Color::white(0.60f), sc);
+        const float la = isDisabled(i) ? 0.35f : 1.0f;
+        c.text.draw(c.r, label, lx, base, TextStyle::Title3, design::menuLabel(bf, la), sc);
+        if (!value.empty()) {
+            float vx = dx + dw - 24.0f - vw;
+            // THE STEPPER'S ARROWS, as a Settings choice row draws them: only
+            // under focus, dim at an end (settings.cpp).
+            if (i == stepper_ && on) {
+                const char* back = "\xE2\x80\xB9";
+                const char* fwd = "\xE2\x80\xBA";
+                const float aw = c.text.measure(fwd, TextStyle::Callout, sc);
+                vx -= aw + 14.0f;
+                c.text.draw(c.r, fwd, dx + dw - 24.0f - aw, base, TextStyle::Callout,
+                            ui::Color::white((canRight_ ? 0.70f : 0.18f) * f), sc);
+                const float bw = c.text.measure(back, TextStyle::Callout, sc);
+                c.text.draw(c.r, back, vx - 14.0f - bw, base, TextStyle::Callout,
+                            ui::Color::white((canLeft_ ? 0.70f : 0.18f) * f), sc);
+            }
+            c.text.draw(c.r, value, vx, base, TextStyle::Callout,
+                        ui::Color::white(0.60f * la), sc);
+        }
         y += kButtonH + kButtonGap;
     }
     if (grows_) c.r.clearScissor();

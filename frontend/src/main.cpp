@@ -101,6 +101,7 @@
 #include "drives.h"
 #include "players.h"
 #include "powerprofile.h"
+#include "steam.h"
 #include "playtime.h"
 #include "shortcuts.h"
 #include "rewind.h"
@@ -1287,6 +1288,7 @@ constexpr Credit kCredits[] = {
     {"Universal Blue", "Image tooling \xC2\xB7 Apache 2.0"},
     {"Fedora", "Under Bazzite \xC2\xB7 Per package"},
     {"gamescope", "Compositor, by Valve \xC2\xB7 BSD 2-clause"},
+    {"gamescope-session", "Steam's session \xC2\xB7 MIT"},
     {"FinalBurn Neo", "Arcade \xC2\xB7 Non-commercial"},
     {"MAME 2003-Plus", "Arcade \xC2\xB7 Non-commercial"},
     {"Snes9x", "SNES \xC2\xB7 Non-commercial"},
@@ -1345,6 +1347,14 @@ constexpr GalleryNotice kNoticeGallery[] = {
     {"Couldn't reach RomM", Tone::Problem},
     {"Couldn't load that state", Tone::Problem},
     {"Download removed", Tone::Done},
+    {"Freeing space\xE2\x80\xA6", Tone::Busy},
+    {"Couldn't set up Steam", Tone::Problem},
+    {"Couldn't start Steam", Tone::Problem},
+    {"Steam now has 600 GB", Tone::Done},
+    {"Couldn't change Steam's storage", Tone::Problem},
+    {"Removing Steam\xE2\x80\xA6", Tone::Busy},
+    {"Steam removed", Tone::Done},
+    {"Couldn't remove Steam", Tone::Problem},
     {"Removed. Someone else keeps it, so no space came back", Tone::Info},
     {"Removed. Others keep it, so no space came back", Tone::Info},
     {"Removed. The space comes back when you stop playing it", Tone::Info},
@@ -6595,7 +6605,7 @@ int main(int argc, char** argv) {
     // first — the one way out of a game, which uploads every kind of save — so
     // this is true for every emulator without any of them knowing.
     bool powerMenu = false;
-    enum PowerItem { PwResume, PwCancel, PwRest, PwRestart, PwPowerOff };
+    enum PowerItem { PwResume, PwCancel, PwRest, PwRestart, PwPowerOff, PwSteam };
     std::vector<PowerItem> powerItems;
     bool restAvailable = false;
     // Rest waits for the uploads finishExit queued: a machine that sleeps
@@ -6616,6 +6626,7 @@ int main(int argc, char** argv) {
             case PwRest: return "Sleep";
             case PwRestart: return "Restart";
             case PwPowerOff: return "Power off";
+            case PwSteam: return "Switch to Steam";
         }
         return "";
     };
@@ -7237,7 +7248,7 @@ int main(int argc, char** argv) {
     // LEAVING: Sign out, or a new server address saved. The curtain is the
     // startup screen with this line under the name, and once it is down (and
     // uploads are through) the app starts itself again; see pumpLeave.
-    enum class Leave { None, SignOut, NewAddress };
+    enum class Leave { None, SignOut, NewAddress, Steam };
     Leave leaving = Leave::None;
     std::string leaveLabel;
     Uint64 leaveDownAt = 0;
@@ -7414,10 +7425,17 @@ int main(int argc, char** argv) {
     // open another question ("who?" then "are you sure?").
     screens::ChoiceScreen choiceScreen;
     std::function<void(int)> choiceThen;
+    // For a panel with a stepper row (Steam's size): Left or Right on it, and
+    // Back, which on a panel opened from another goes back to that one. Both
+    // cleared by every askChoice; set after it.
+    std::function<void(int)> choiceStep;
+    std::function<void()> choiceBack;
     auto askChoice = [&](const std::string& title, const std::string& detail,
                          std::vector<std::string> options, int focus,
                          std::function<void(int)> then) {
         choiceThen = std::move(then);
+        choiceStep = nullptr;
+        choiceBack = nullptr;
         choiceScreen.open(title, detail, std::move(options), focus);
     };
     // Settings > Display and Sound > Dark hours: From and Until, and the hours
@@ -7426,6 +7444,18 @@ int main(int argc, char** argv) {
     auto choiceOutcome = [&](screens::ChoiceScreen::Outcome o) {
         using O = screens::ChoiceScreen::Outcome;
         if (o == O::None) return;
+        if (o == O::Stepped) {
+            if (auto step = choiceStep) step(choiceScreen.stepped());
+            return;
+        }
+        if (o == O::Cancelled && choiceBack) {
+            auto back = std::move(choiceBack);
+            choiceBack = nullptr;
+            choiceThen = nullptr;
+            choiceScreen.close();
+            back();
+            return;
+        }
         if (o == O::Chosen && choiceScreen.staysOpen()) {
             // A copy: the answer may open another question over this one.
             if (auto then = choiceThen) then(choiceScreen.chosen());
@@ -7458,7 +7488,7 @@ int main(int argc, char** argv) {
                      SetUpdate, SetUpdateCheck, SetCredits, SetFiles, SetDownloads,
                      SetAddController, SetShortcuts, SetShortcutButton, SetAppearance,
                      SetDarkHours, SetColour, SetRumble, SetPictureQuality,
-                     SetWiiRemotes };
+                     SetWiiRemotes, SetSteam, SetSteamShow };
     // One Eject row per USB drive: this plus the drive's index in
     // storage::locations() when the rows were built.
     constexpr int kSetEject = 100;
@@ -8486,6 +8516,12 @@ int main(int argc, char** argv) {
             store.push_back({external ? K::Action : K::Info,
                              external ? kSetEject + static_cast<int>(i) : 0, name, space, value});
             if (external) driveNames[kSetEject + static_cast<int>(i)] = name;
+            // STEAM'S SHARE, under the main drive, once it is set up (#223):
+            // the main drive's own row leaves it out, and this says where it
+            // went. The one place to grow it or remove Steam. MMagTech,
+            // 2026-10-03: nothing here for somebody who never set Steam up.
+            if (i == 0 && steam::isSetUp())
+                store.push_back({K::Action, SetSteam, "Steam", gb(steam::sliceBytes()), ""});
         }
         // DRIVES FOUND AND NOT USABLE, greyed, with the reason. A new internal
         // SSD arrives blank; without this row it would be invisible, because
@@ -8535,7 +8571,7 @@ int main(int argc, char** argv) {
         }
         cats.push_back({"Storage", std::move(store)});
 
-        cats.push_back({"System", {
+        std::vector<Row> sys = {
             updateRow(),
             [&] {
                 // Weekly only ever checks, never downloads.
@@ -8544,7 +8580,12 @@ int main(int argc, char** argv) {
                 r.choice = updWeekly ? 1 : 0;
                 return r;
             }(),
-        }});
+        };
+        // ONLY WHILE STEAM IS HIDDEN (#223, MMagTech 2026-10-03): the one way
+        // to bring the tile back. Somebody who never hid it never sees it.
+        if (steam::available() && steam::hidden())
+            sys.push_back({K::Action, SetSteamShow, "Steam", "", "Hidden"});
+        cats.push_back({"System", std::move(sys)});
 
         // VERSION: the date version, with Bazzite's under it. A console that
         // does not follow `latest` says which tag it does follow, which is how
@@ -8721,6 +8762,249 @@ int main(int argc, char** argv) {
         curtain.retarget(1.0f, kCurtainDown);
         sound::play(sound::Cue::Activate);
         std::fprintf(stderr, "[server] %s\n", label.c_str());
+    };
+
+    // ---- Steam (#223) ------------------------------------------------------
+    //
+    // The tile, its first-pick screen, its size and its removal. Everything
+    // that runs the root helper, walks the cache or asks the network runs in
+    // ONE background job at a time (steamJob), and its answer is acted on here,
+    // on the frame thread, by pollSteamJob. A pill says what is happening
+    // meanwhile. The handover itself is the leave curtain: "Starting Steam",
+    // then the frontend quits and the session runs Steam (cabinetos-session).
+    struct SteamJob {
+        std::thread th;
+        std::atomic<bool> done{false};
+        std::function<void()> finish;
+        std::string busy;        // the pill while it runs, said again until done
+        Uint64 saidAt = 0;
+    };
+    SteamJob steamJob;
+    struct SteamJobStop {
+        SteamJob& j;
+        ~SteamJobStop() { if (j.th.joinable()) j.th.join(); }
+    } steamJobStop{steamJob};
+    auto runSteamJob = [&](const std::string& busy, std::function<void()> work,
+                           std::function<void()> finish) {
+        if (steamJob.th.joinable()) return false;
+        steamJob.done = false;
+        steamJob.finish = std::move(finish);
+        steamJob.busy = busy;
+        steamJob.saidAt = SDL_GetTicks();
+        if (!busy.empty()) menuNotice.say(busy, Tone::Busy);
+        steamJob.th = std::thread([&j = steamJob, w = std::move(work)]() {
+            w();
+            j.done = true;
+        });
+        return true;
+    };
+    // Steam's install in progress, for the panel's line (installSteam).
+    struct SteamInstall {
+        std::atomic<bool> cancel{false};
+        std::atomic<int64_t> bytes{-1};
+        bool ok = false;
+        std::string why;
+    };
+    std::shared_ptr<SteamInstall> steamInstall;
+    auto pollSteamJob = [&]() {
+        if (!steamJob.th.joinable()) return;
+        if (!steamJob.done) {
+            // The install panel's line: how much of Steam is on the drive.
+            if (steamInstall && choiceScreen.isOpen() &&
+                choiceScreen.title() == "Installing Steam") {
+                const int64_t b = steamInstall->bytes.load();
+                // One decimal under 10 GB, so the line visibly moves on a
+                // slow connection ("1.2 GB"); driveSize's whole GB above.
+                char gb[32] = "";
+                if (b > 0 && b < 10'000'000'000LL)
+                    std::snprintf(gb, sizeof gb, "%.1f GB", static_cast<double>(b) / 1e9);
+                choiceScreen.setDetail(b <= 0 ? std::string()
+                                              : gb[0] ? std::string(gb) : driveSize(b));
+            }
+            // A Busy pill lasts fifteen seconds; a grow over a big slice takes
+            // longer, and the pill must not go quiet while it works.
+            if (!steamJob.busy.empty() && SDL_GetTicks() - steamJob.saidAt > 10000) {
+                menuNotice.say(steamJob.busy, Tone::Busy);
+                steamJob.saidAt = SDL_GetTicks();
+            }
+            return;
+        }
+        steamJob.th.join();
+        auto finish = std::move(steamJob.finish);
+        steamJob.finish = nullptr;
+        if (finish) finish();
+    };
+
+    // What the first-pick screen and the size panel show, read off the frame
+    // thread: what the main drive could give Steam without touching a kept
+    // game, the default, and whether the console is online (Steam downloads
+    // itself the first time).
+    struct SteamSizes {
+        int64_t room = 0;      // the most Steam can have
+        int64_t size = 0;      // what is chosen; 0 = does not fit
+        int64_t drive = 0;     // the main drive, Steam's slice included
+        int64_t current = 0;   // the slice now, 0 when not set up
+        bool online = false;
+    };
+    SteamSizes steamSizes;
+    auto readSteamSizes = [](SteamSizes* out) {
+        out->current = steam::sliceBytes();
+        out->room = steam::roomBytes();
+        out->size = out->current > 0 ? out->current : steam::defaultBytes(out->room);
+        const std::vector<std::string> locs = storage::locations();
+        const storage::Space sp = storage::spaceOf(locs.empty() ? storage::root() : locs.front());
+        out->drive = sp.totalBytes + out->current;
+        out->online = net::status().online;
+    };
+    // "CabinetOS 1.55 TB": what the console keeps for itself beside Steam, the
+    // other side of the slider (MMagTech's brief: show both sides). Named as
+    // Settings, Storage names the main drive; "Games" read as games already
+    // installed (MMagTech on the TV, 2026-10-04).
+    auto steamGamesLine = [&](int64_t size) {
+        return "CabinetOS " + driveSize(std::max<int64_t>(0, steamSizes.drive - size));
+    };
+
+    std::function<void()> showSteamSetup;
+    // Making the slice and handing over: Install on the storage screen.
+    // INSTALLING, WITH THE CONSOLE ON SCREEN (MMagTech on the TV, 2026-10-04:
+    // Steam's first start was a black screen for as long as its download took,
+    // "it still kind of looks like a stall"). One panel from Install to the
+    // handover: the slice is made (clearing cached games if it must), then
+    // Steam downloads itself on an invisible display (steam::download) while
+    // the panel shows how much is on the drive, and only then does the console
+    // hand over, to a Steam that opens in seconds. Cancel, or B, stops it and
+    // stays here; an install stopped or failed half way picks up where it left
+    // off the next time Steam is picked. Nothing is timed: it ends when Steam
+    // says so, on a slow connection or a fast one.
+    auto installSteam = [&](int64_t want) {
+        auto job = std::make_shared<SteamInstall>();
+        steamInstall = job;
+        askChoice("Installing Steam", "", {}, 0, nullptr);
+        choiceScreen.setPrompt("Press", "B", "to cancel");
+        choiceBack = [job]() { job->cancel = true; };
+        runSteamJob("", [job, want]() {
+            if (!steam::isSetUp() && !steam::create(want, &job->why)) return;
+            if (job->cancel) return;
+            job->ok = steam::download(&job->cancel,
+                                      [job](int64_t b) { job->bytes = b; }, &job->why);
+        }, [&, job]() {
+            if (steamInstall == job) steamInstall.reset();
+            if (choiceScreen.isOpen() && choiceScreen.title() == "Installing Steam")
+                choiceScreen.close();
+            if (job->ok) {
+                startLeaving(Leave::Steam, "Starting Steam");
+            } else if (!job->cancel) {
+                menuNotice.say(job->why.empty() ? std::string("Couldn't download Steam")
+                                                : job->why,
+                               Tone::Problem);
+            }
+        });
+    };
+    // The size panel: one row Left and Right change, 25 GB a press, with the
+    // console's side shown under the title (MMagTech's brief: both sides).
+    //
+    // INSTALLING, it is the second of the two install screens and goes both
+    // ways from 100 GB, since nothing exists yet; focus starts on Install, so
+    // (A) twice installs at the default and the size is there for anyone who
+    // looks (MMagTech on the TV, 2026-10-03: the first screen read as jargon).
+    // Back returns to the first screen. GROWING, from Storage, it only goes up
+    // (grow only, MMagTech 2026-10-03).
+    std::function<void(bool)> showSteamSize = [&](bool growing) {
+        const int64_t step = steam::kStepBytes;
+        const int64_t lo = growing ? steamSizes.current : steam::kMinBytes;
+        const int64_t hi = steamSizes.room - steamSizes.room % step;
+        auto shown = std::make_shared<int64_t>(
+            growing ? std::min(hi, steamSizes.current - steamSizes.current % step + step)
+                    : steamSizes.size);
+        if (growing && *shown <= steamSizes.current) *shown = steamSizes.current;
+        auto refresh = [&, lo, hi, step, shown]() {
+            choiceScreen.setValues({driveSize(*shown), ""});
+            choiceScreen.setDetail(steamGamesLine(*shown));
+            choiceScreen.setStepper(0, *shown - step >= lo, *shown + step <= hi);
+        };
+        askChoice(growing ? "Adjust storage" : "Steam storage", steamGamesLine(*shown),
+                  {"Steam", growing ? "Done" : "Install"}, growing ? 0 : 1,
+                  [&, growing, shown](int) {
+            const int64_t want = *shown;
+            if (!growing) {
+                installSteam(want);
+                return;
+            }
+            if (want <= steamSizes.current) return;
+            runSteamJob("Freeing space\xE2\x80\xA6", [want]() {
+                std::string why;
+                steam::grow(want, &why);
+            }, [&, want]() {
+                if (rebuildSettingsRows) rebuildSettingsRows();
+                if (steam::sliceBytes() >= want - (1 << 20))
+                    menuNotice.say("Steam now has " + driveSize(steam::sliceBytes()), Tone::Done);
+                else
+                    menuNotice.say("Couldn't change Steam's storage", Tone::Problem);
+            });
+        });
+        refresh();
+        choiceStep = [&, lo, hi, step, shown, refresh](int dir) {
+            *shown = std::clamp<int64_t>(*shown + dir * step, lo, hi);
+            refresh();
+        };
+        if (!growing) choiceBack = [&, shown]() {
+            steamSizes.size = *shown;
+            if (showSteamSetup) showSteamSetup();
+        };
+    };
+
+    // The first install screen, as an install (MMagTech on the TV,
+    // 2026-10-03): Install (greyed while offline, since Steam downloads itself
+    // the first time, or when even 100 GB does not fit), Hide Steam, Cancel.
+    // The size is the next screen's.
+    showSteamSetup = [&]() {
+        const bool fits = steamSizes.size >= steam::kMinBytes;
+        askChoice("Steam", fits ? "" : "Needs " + driveSize(steam::kMinBytes) + " of space",
+                  {"Install", "Hide Steam", "Cancel"}, 0, [&](int a) {
+            if (a == 0) {
+                showSteamSize(false);
+            } else if (a == 1) {
+                steam::setHidden(true);
+                std::fprintf(stderr, "[steam] hidden\n");
+            }
+        });
+        choiceScreen.setDisabled({!fits || !steamSizes.online, false, false});
+    };
+
+    // The tile. With a PIN set, anyone but the owner enters it first, and the
+    // PIN is the confirmation; otherwise "Start Steam?" catches a stray press
+    // (MMagTech, 2026-10-03). The first time, the first-pick screen instead.
+    auto steamPressed = [&]() {
+        if (steamJob.th.joinable()) {
+            sound::play(sound::Cue::Edge);
+            return;
+        }
+        const bool pinFirst = accounts::pinIsSet() && accounts::activeId() != accounts::ownerId();
+        auto go = [&, pinFirst]() {
+            if (steam::isSetUp() && !steam::installed()) {
+                // An install stopped or failed half way: carry on with it.
+                installSteam(steam::sliceBytes());
+                return;
+            }
+            if (!steam::isSetUp()) {
+                auto read = std::make_shared<SteamSizes>();
+                runSteamJob("", [read, readSteamSizes]() { readSteamSizes(read.get()); },
+                            [&, read]() {
+                                steamSizes = *read;
+                                showSteamSetup();
+                            });
+                return;
+            }
+            if (pinFirst) {
+                startLeaving(Leave::Steam, "Starting Steam");
+                return;
+            }
+            askChoice("Start Steam?", "", {"Start", "Cancel"}, 0, [&](int a) {
+                if (a == 0) startLeaving(Leave::Steam, "Starting Steam");
+            });
+        };
+        if (pinFirst) askPin("Enter the PIN", "To use Steam", go, true);
+        else go();
     };
 
     askServerAddress = [&](const std::string& typed, const std::string& why) {
@@ -9147,6 +9431,45 @@ int main(int argc, char** argv) {
                         });
                         sound::play(sound::Cue::Activate);
                     }
+                } else if (res.value == SetSteam) {
+                    // Grow it, or remove Steam: the PIN when set, once per
+                    // visit, as Downloads (it gives or takes space for the
+                    // whole console).
+                    askPin("Enter the PIN", "To change Steam", [&]() {
+                        askChoice("Steam", driveSize(steam::sliceBytes()),
+                                  {"Adjust storage", "Remove Steam"}, 0, [&](int a) {
+                            if (a == 0) {
+                                auto read = std::make_shared<SteamSizes>();
+                                runSteamJob("", [read, readSteamSizes]() {
+                                    readSteamSizes(read.get());
+                                }, [&, read]() {
+                                    steamSizes = *read;
+                                    showSteamSize(true);
+                                });
+                                return;
+                            }
+                            askChoice("Remove Steam?", "", {"Remove", "Cancel"}, 1, [&](int b) {
+                                if (b != 0) return;
+                                auto ok = std::make_shared<bool>(false);
+                                runSteamJob("Removing Steam\xE2\x80\xA6", [ok]() {
+                                    std::string why;
+                                    *ok = steam::remove(&why);
+                                }, [&, ok]() {
+                                    buildSettings();
+                                                        menuNotice.say(*ok ? "Steam removed" : "Couldn't remove Steam",
+                                                   *ok ? Tone::Done : Tone::Problem);
+                                });
+                            });
+                        });
+                    });
+                    sound::play(sound::Cue::Activate);
+                } else if (res.value == SetSteamShow) {
+                    askPin("Enter the PIN", "To show Steam", [&]() {
+                        steam::setHidden(false);
+                        std::fprintf(stderr, "[steam] shown\n");
+                                buildSettings();
+                    });
+                    sound::play(sound::Cue::Activate);
                 } else if (res.value == SetDownloads) {
                     // AN ADMIN SCREEN: the PIN to open it, once per Settings
                     // visit, so clearing several games is one PIN. MMagTech,
@@ -9816,6 +10139,10 @@ int main(int argc, char** argv) {
         }
     }
 
+    // BACK FROM STEAM (#223): Home, where the console starts anyway; the
+    // file is only taken so it is not read again.
+    if (!initialScreen) steam::takeReturned();
+
     // Picks up a finished job. Loading the game happens HERE, on the frame
     // thread, because the core is not thread-safe and the worker only ever
     // moved bytes.
@@ -9911,6 +10238,22 @@ int main(int argc, char** argv) {
         if (uploader.pending() > 0)
             std::fprintf(stderr, "[server] leaving with %d upload(s) still owed\n",
                          uploader.pending());
+        if (leaving == Leave::Steam) {
+            // Full speed for Steam's games, as for a game here (the frontend
+            // is not running to ask while Steam is); the console's own start
+            // puts it back to balanced. Then the request, and out: the session
+            // script does the rest.
+            powerprofile::applyNow(true);
+            if (!steam::requestHandover()) {
+                std::fprintf(stderr, "[steam] could not ask the session to hand over\n");
+                leaving = Leave::None;
+                curtain.retarget(0.0f, kCurtainUp);
+                menuNotice.say("Couldn't start Steam", Tone::Problem);
+                return;
+            }
+            running = false;
+            return;
+        }
         if (leaving == Leave::SignOut) {
             std::string err;
             if (!server::signOut(&err)) {
@@ -10822,6 +11165,11 @@ int main(int argc, char** argv) {
             closeOverlay();
             return;
         }
+        if (item == PwSteam) {
+            closeOverlay();
+            steamPressed();
+            return;
+        }
         const power::Action act = item == PwRest      ? power::Action::Rest
                                   : item == PwRestart ? power::Action::Restart
                                                       : power::Action::PowerOff;
@@ -11046,6 +11394,13 @@ int main(int argc, char** argv) {
         // that is Resume; on Home it is Cancel. MMagTech, 2026-09-27: Start
         // pressed by accident opened the menu on Sleep, one A from asleep.
         powerItems.push_back(playing ? PwResume : PwCancel);
+        // STEAM'S DOOR (#223), never over a game. MMagTech, 2026-10-04: in
+        // the Library it read as part of the ROM library, and it is not; here
+        // it is a mode the machine switches into, the mirror of Steam's own
+        // "Switch to Desktop". Straight under Cancel, his call: it is what
+        // Start will most often be pressed for, and a slip still meets "Start
+        // Steam?" or the PIN. Gone when somebody chose Hide Steam.
+        if (!playing && steam::available() && !steam::hidden()) powerItems.push_back(PwSteam);
         if (restAvailable) powerItems.push_back(PwRest);
         powerItems.push_back(PwRestart);
         powerItems.push_back(PwPowerOff);
@@ -11405,6 +11760,12 @@ int main(int argc, char** argv) {
                         // from the middle of the Library would throw away the
                         // whole stack the person had walked down.
                         else if (overlayOpen) closeOverlay();
+                        // A question or Downloads open over any screen, Home
+                        // included, takes Escape as B does: Back. On Home it
+                        // opened the Power menu over the panel instead, so a
+                        // keyboard could not cancel Steam's install (#223).
+                        else if (choiceScreen.isOpen() || downloadsPanel.isOpen())
+                            navigate(screens::Nav::Back);
                         else if (stack.size() > 1) navigate(screens::Nav::Back);
                         // At the root, Escape is Start: the Power menu.
                         else openPowerMenu();
@@ -11645,7 +12006,19 @@ int main(int argc, char** argv) {
                             // 2026-09-22. It used to quit the frontend, a
                             // development leftover that just got the session
                             // restarted under whoever was watching.
-                            if (here() == Screen::Home) openPowerMenu();
+                            // AND ON EVERY SCREEN OUTSIDE A GAME since #223
+                            // (MMagTech, 2026-10-04): it only did on Home,
+                            // which nothing explained, and the menu is now
+                            // Steam's door too. Not over the PIN pad, a
+                            // question or the Downloads panel. NOT ON SEARCH:
+                            // its keyboard is always up and is drawn over
+                            // everything, so the menu opened under it (on the
+                            // TV, 2026-10-04), and there Start is the
+                            // keyboard's "done", as its legend says. The rule
+                            // is: Start opens the menu except while typing.
+                            if (here() != Screen::Search && !pinScreen.isOpen() &&
+                                !choiceScreen.isOpen() && !downloadsPanel.isOpen())
+                                openPowerMenu();
                             break;
                         default: break;
                     }
@@ -12461,6 +12834,7 @@ int main(int argc, char** argv) {
         pumpLaunch();
         pumpSwitch();
         pumpLeave();
+        pollSteamJob();
         pumpArrive();
         pumpExit();
         pumpStateLoad(stateLoad, session, menuNotice);
@@ -13146,9 +13520,15 @@ int main(int argc, char** argv) {
                                                                 : ui::kCanvasHeight);
             detailScreen.tick(dt);
         }
+        // THE PRESS IS THE COVER'S ONLY WHEN THE COVER HAS THE PRESS. With the
+        // PIN pad, a question, Downloads or a menu over Home, A belongs to
+        // them, and the cover under them swelled with every digit of the PIN
+        // (MMagTech on the TV, 2026-10-04, entering it for Switch to Steam).
+        const bool pressIsHomes = pressing && !pinScreen.isOpen() && !choiceScreen.isOpen() &&
+                                  !downloadsPanel.isOpen() && !overlayOpen;
         if (cardAt(focusRow, focusSlot))
             slotAnim(slotPress, focusRow, focusSlot)
-                .retarget(pressing ? 1.0f : 0.0f, kPressDuration);
+                .retarget(pressIsHomes ? 1.0f : 0.0f, kPressDuration);
 
         int dw = 0, dh = 0;
         SDL_GetWindowSizeInPixels(window, &dw, &dh);

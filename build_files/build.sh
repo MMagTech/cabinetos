@@ -70,6 +70,13 @@ for expected in \
     /usr/libexec/cabinetos-wii-search \
     /usr/lib/systemd/system/cabinetos-wii-search.service \
     /usr/share/polkit-1/rules.d/65-cabinetos-wii.rules \
+    /usr/libexec/cabinetos-steam \
+    /usr/lib/systemd/system/cabinetos-steam@.service \
+    /usr/share/polkit-1/rules.d/66-cabinetos-steam.rules \
+    /usr/libexec/os-session-select \
+    /usr/libexec/cabinetos-system-disk \
+    /usr/libexec/cabinetos-steam-download \
+    /usr/lib/udev/rules.d/90-cabinetos-system-disk.rules \
     /usr/lib/udev/rules.d/72-cabinetos-wii-remote.rules \
     /usr/lib/udev/rules.d/99-cabinetos-wii-remote.rules \
     /etc/ssh/sshd_config.d/30-cabinetos.conf
@@ -218,6 +225,10 @@ log "base image has $(wc -l < /usr/share/cabinetos/packages-before-strip.txt) pa
 # entries and we want Steam's gone before then.
 /ctx/strip-steam.sh
 /ctx/strip-desktop.sh
+
+# Steam's Big Picture session, for the one Steam entry (#223). After the strip,
+# which removes cardwire: the session would launch Steam through it.
+/ctx/install-steam-session.sh
 
 # ---------------------------------------------------------------------------
 # Enable SSH.
@@ -454,6 +465,35 @@ fi
 # built into the image, because /var in a bootc image is unpacked from the
 # FIRST image only and never updated — see the file itself.
 check_present "the storage root's tmpfiles rule" /usr/lib/tmpfiles.d/cabinetos.conf || failed=1
+
+# THE STEAM ENTRY (#223). Steam starts only from its tile: never at boot, never
+# from an autostart entry, never through cardwire. The slice helper's tools
+# are all in the base and none is something we install, so a strip pass that
+# took one away would ship a tile that cannot set Steam up.
+check_present "Steam's bootstrapper" /usr/bin/steam || failed=1
+check_present "Steam's session" /usr/share/gamescope-session-plus/gamescope-session-plus || failed=1
+for autostart in /etc/xdg/autostart/steam.desktop /etc/skel/.config/autostart/steam.desktop; do
+    if [[ -e "${autostart}" ]]; then
+        log "  WRONG: ${autostart} exists; Steam would start at login"
+        failed=1
+    fi
+done
+if [[ -e /usr/bin/cardwire ]]; then
+    log "  WRONG: cardwire is in the image; Steam's session would launch through it and fail"
+    failed=1
+fi
+for needed in fallocate chattr mkfs.ext4 e2fsck resize2fs losetup mountpoint setpriv; do
+    if command -v "${needed}" >/dev/null 2>&1; then
+        log "  ok: ${needed} ($(command -v "${needed}"))"
+    else
+        log "  MISSING: ${needed}, which the Steam entry runs (cabinetos-steam, and setpriv around Steam)"
+        failed=1
+    fi
+done
+grep -q 'cabinetos-steam@' /usr/share/polkit-1/rules.d/66-cabinetos-steam.rules || {
+    log "  MISSING: 66-cabinetos-steam.rules no longer names cabinetos-steam@"
+    failed=1
+}
 
 # The default target must be multi-user. The session is pulled in by it; a
 # graphical.target default would try to start a desktop.

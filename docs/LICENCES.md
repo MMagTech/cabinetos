@@ -76,6 +76,14 @@ from those projects, and their terms are satisfied by that provenance and by the
 credit given here and in the README. The base is pinned by digest in
 `Containerfile`.
 
+Two things for the Steam entry (#223) come from Bazzite's own package
+sources rather than its base image: `gamescope-session` and
+`gamescope-session-steam`, from terra, both MIT (OpenGamingCollective,
+formerly ChimeraOS). The `steam` package itself is Valve's bootstrapper,
+redistributed by Bazzite and Fedora under Valve's terms; the Steam client it
+downloads, and everything Steam installs, are under the Steam Subscriber
+Agreement and are never part of this image.
+
 ## Emulator cores
 
 Each is built from upstream at the commit below by `cores/build-core.sh`, which

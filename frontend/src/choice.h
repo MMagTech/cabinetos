@@ -19,7 +19,9 @@ namespace screens {
 
 class ChoiceScreen {
 public:
-    enum class Outcome { None, Chosen, Cancelled };
+    // Stepped: Left or Right on the stepper row (setStepper); stepped() says
+    // which way. The app changes the value and calls setValues again.
+    enum class Outcome { None, Chosen, Cancelled, Stepped };
 
     // `focus` is the answer focus starts on. For a question whose first
     // answer destroys something, start on the harmless one.
@@ -52,6 +54,32 @@ public:
         grows_ = true;
         placeholder_ = std::move(placeholder);
     }
+    // GREYED ANSWERS, one flag per answer: drawn dim, never focused, never
+    // chosen. Steam's Continue while the console is offline (#223): grey it
+    // out, do not explain (no spoon-feeding). Call after open; focus moves
+    // off a greyed answer to the next one that is not.
+    void setDisabled(std::vector<bool> disabled);
+    // ONE ROW WHOSE VALUE LEFT AND RIGHT CHANGE, with an arrow either side
+    // of it while focused, as a Settings choice row (Steam's size, #223).
+    // `canLeft`/`canRight` dim the arrow at an end. -1 for none; open()
+    // clears it.
+    void setStepper(int slot, bool canLeft, bool canRight) {
+        stepper_ = slot;
+        canLeft_ = canLeft;
+        canRight_ = canRight;
+    }
+    int stepped() const { return stepDir_; }
+    // A PANEL WITH NOTHING TO PRESS BUT A BUTTON, said rather than focused:
+    // "Press (B) to cancel", the letter drawn as a button badge, in place of
+    // the answers (open it with none). A focused Cancel under a run of A
+    // presses gets pressed by the next one (Steam's install, #223; the
+    // unearned-focus rule). Back answers Cancelled, as for any panel. open()
+    // clears it.
+    void setPrompt(std::string before, std::string button, std::string after) {
+        promptBefore_ = std::move(before);
+        promptButton_ = std::move(button);
+        promptAfter_ = std::move(after);
+    }
     // The title alone, keeping everything else ("Paired successfully").
     void setTitle(std::string title) { title_ = std::move(title); }
     // The detail line alone, keeping the answers and focus.
@@ -79,6 +107,14 @@ private:
     std::string title_, detail_;
     std::vector<std::string> options_;
     std::vector<std::string> values_;
+    std::vector<bool> disabled_;
+    std::string promptBefore_, promptButton_, promptAfter_;
+    int stepper_ = -1;
+    bool canLeft_ = false, canRight_ = false;
+    int stepDir_ = 0;
+    bool isDisabled(int i) const {
+        return i >= 0 && i < static_cast<int>(disabled_.size()) && disabled_[i];
+    }
     int slot_ = 0;
     int top_ = 0;              // first answer shown, once there are too many
     design::Animated appear_;

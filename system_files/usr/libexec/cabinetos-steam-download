@@ -1,0 +1,116 @@
+#!/usr/bin/bash
+#
+# Steam's first download, with the console still on screen. Issue #223.
+#
+# Run by the console as its own user when somebody presses Install, after
+# Steam's slice is made. It attaches the slice, starts Steam on an invisible
+# display (gamescope's headless backend) so Steam fetches and unpacks itself,
+# and stops it the moment Steam starts its interface, which is Steam's own
+# sign that the download is complete. Then the console hands over, and Steam
+# opens in seconds instead of after a black screen of however long the
+# download takes (MMagTech on the TV, 2026-10-04: "it still kind of looks
+# like a stall").
+#
+# WHY HEADLESS: measured on the A9, 2026-10-04, Steam's first start shows
+# nothing gamescope will put on the screen for the whole download: its only
+# window then is a zenity progress dialog, which Steam-mode gamescope does
+# not show. Run here, the same download finishes the same way, and the real
+# start afterwards brought Steam's interface up 4.7 s after the request with
+# 4 MB more on disk.
+#
+# NOTHING HERE IS TIMED. It ends when Steam says it is done (its interface
+# starts), when Steam reports an error (a zenity error, warning or question),
+# when Steam's display goes away, when the console asks it to stop (SIGTERM:
+# Cancel), or when the console itself goes away. A slow connection only makes
+# it take longer.
+#
+# Speaks one line at a time on stdout, which the console reads:
+#   progress <bytes>     how much of the slice Steam fills, as it grows
+#   ready                downloaded and unpacked; hand over
+#   failed <reason>      say so on the console, stay on the console
+#
+# A polite `steam -shutdown` is ignored at this stage (measured: still
+# running after 180 s), so Steam is stopped by signal once its download is
+# complete; the install it leaves is whole (the handover above).
+
+set -uo pipefail
+
+STEAM="${HOME}/.local/share/Steam"
+LOG="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/cabinetos-steam-download.log"
+PARENT=${PPID}
+gs=""
+
+say() { printf '%s\n' "$*"; }
+
+# Everything this started, by process group (the display and what runs in it)
+# and by path (Steam's own processes, which re-parent and start sessions of
+# their own), then the slice detached. Quick: the console waits two seconds
+# after asking before it stops asking.
+cleanup() {
+    [[ -n "${gs}" ]] && kill -KILL -- "-${gs}" 2>/dev/null
+    local p
+    for p in $(pgrep -f "${STEAM}/|ubuntu12_32/steam|steamwebhelper|srt-logger|pressure-vessel|zenity"); do
+        [[ "${p}" == "$$" ]] || kill -KILL "${p}" 2>/dev/null
+    done
+    systemctl --no-ask-password start cabinetos-steam@unmount.service >/dev/null 2>&1
+}
+
+finish() {
+    cleanup
+    exit "$1"
+}
+trap 'finish 2' TERM INT HUP
+
+if ! systemctl --no-ask-password start cabinetos-steam@mount.service >/dev/null 2>&1; then
+    say "failed Couldn't open Steam's storage"
+    exit 1
+fi
+
+# Steam's own Bluetooth setting, on, before its first start (cabinetos-session,
+# steam_step, says why); written here too, since this is now the first start.
+cfg="${STEAM}/config/config.vdf"
+if [[ ! -e "${cfg}" ]]; then
+    mkdir -p "${cfg%/*}" && printf '%s\n' \
+        '"InstallConfigStore"' '{' '	"System"' '	{' '		"Bluetooth"' '		{' \
+        '			"Enabled"		"1"' '		}' '	}' '}' > "${cfg}"
+fi
+rm -f "${HOME}/.config/autostart/steam.desktop"
+
+# Steam's session flags, exactly (sessions.d/steam's CLIENTCMD): the same
+# client branch is fetched here as the real start will look for. And without
+# the login's capabilities, as in the session, or Steam's sandbox refuses.
+setsid gamescope --backend headless -W 1280 -H 720 -- \
+    setpriv --inh-caps=-all --ambient-caps=-all -- \
+    steam -silent -gamepadui -steamos3 -steampal -steamdeck > "${LOG}" 2>&1 &
+gs=$!
+
+last=""
+while :; do
+    # The console went away: nobody is waiting for this.
+    # (/proc, not kill -0: kill answers "not permitted" for a parent of
+    # another user, which is not the same as gone.)
+    [[ -d "/proc/${PARENT}" ]] || finish 2
+    used=$(df -B1 --output=used "${STEAM}" 2>/dev/null | tail -1 | tr -d ' ')
+    if [[ -n "${used}" && "${used}" != "${last}" ]]; then
+        say "progress ${used}"
+        last="${used}"
+    fi
+    if pgrep -f steamwebhelper >/dev/null; then
+        cleanup
+        say "ready"
+        exit 0
+    fi
+    if pgrep -f "zenity --(error|warning|question)" >/dev/null; then
+        echo "cabinetos-steam-download: Steam reported: $(pgrep -af 'zenity --' | head -1)" >&2
+        cleanup
+        say "failed Couldn't download Steam"
+        exit 1
+    fi
+    if ! kill -0 "${gs}" 2>/dev/null; then
+        echo "cabinetos-steam-download: Steam's display ended early; see ${LOG}" >&2
+        cleanup
+        say "failed Couldn't download Steam"
+        exit 1
+    fi
+    sleep 0.5
+done

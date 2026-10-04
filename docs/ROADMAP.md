@@ -28,20 +28,21 @@ session picks up is `docs/NEXT-SESSION.md`.
       2026-10-02.**
    2. ~~**Wii Remotes (#200)**.~~ **Merged in #232, 2026-10-03**: pair once,
       the Wii bridge in the image, judged on the A9 TV.
-   3. **Steam (#223)**, moved up by MMagTech 2026-10-03, ahead of PS2 and
-      the rest of #63: the audit and his decisions are on the issue; the
-      audit is reviewed and the scenarios walked with him, then built on
-      his go.
+   3. ~~**Steam (#223)**~~ **Built on `steam-handoff` and judged on the A9
+      TV, 2026-10-03/04**: "Switch to Steam" in the Start menu, its own
+      slice of the drive (PROJECT.md open question 37).
    4. **PS2's picture without the copy (#226)**: its own window, as the
       separate emulators are shown, so Quality can go back toward 5x.
       Upstream declined the other route (PCSX2/pcsx2#15040).
-   5. **#63 phase 2**, the machine class, including whether PS2 and N64 keep
+   5. **ext4 for extra drives, shared with Steam (#236)**: walk it with
+      MMagTech first.
+   6. **#63 phase 2**, the machine class, including whether PS2 and N64 keep
       Balanced and Quality equal.
-   6. **Before phase 3:** the slowed A9 (#210), the drop rule ignoring rewind
+   7. **Before phase 3:** the slowed A9 (#210), the drop rule ignoring rewind
       snapshot frames (#168), whether built-in cores repeat or drop frames
       (#221).
-   7. **#63 phase 3**, the drop rule, record-only first.
-   8. **Shaders and CRT looks (#122).**
+   8. **#63 phase 3**, the drop rule, record-only first.
+   9. **Shaders and CRT looks (#122).**
    Also in the milestone: the gamescope flag check on base updates (#227).
 4. **Offline play.** Kept games play with no server (#88).
 5. **RetroAchievements** (#74). Each account signs in with its own login.

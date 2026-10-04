@@ -1,0 +1,7 @@
+[Unit]
+Description=CabinetOS: Steam's slice of the main drive (%i)
+Documentation=https://github.com/MMagTech/cabinetos/issues/223
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/cabinetos-steam %i

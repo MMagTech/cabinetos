@@ -162,11 +162,21 @@ openssh
 openssh-server
 openssh-clients
 
+# --- The Steam entry (#223) -------------------------------------------------
+# Kept for the one Steam tile, and its Big Picture session (terra). A change to
+# any of these can stop the tile reaching Steam or coming back from it. The
+# 32-bit Mesa and Vulkan libraries are already watched under Graphics.
+steam
+gamescope-session
+gamescope-session-steam
+
 # --- Things CabinetOS removes ----------------------------------------------
 # Listed so that a base bump which renames, splits or drops a removal target
 # shows up as relevant. A strip list that has silently become a no-op is a
 # desktop application quietly returning to the image.
-steam
+# cardwire since #223: Steam's session would launch Steam through it.
+cardwire
+cardwire-gui
 lutris
 sddm
 sddm-*

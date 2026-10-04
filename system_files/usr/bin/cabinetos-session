@@ -254,7 +254,7 @@ try_compositor() {
         # reading a demotion into an ordinary exit.
         echo "cabinetos-session: ${label} exited with ${status} AFTER coming up —" \
              "that is the app's exit, not a display fault; not falling back"
-        exit "${status}"
+        after_app "${status}"
     fi
 
     if kill -0 "${pid}" 2>/dev/null; then
@@ -273,6 +273,186 @@ try_compositor() {
     echo "cabinetos-session: ${label} failed to start (status ${status})"
     return 1
 }
+
+# ---------------------------------------------------------------------------
+# The Steam entry: hand the screen to Steam, then take it back (#223).
+# ---------------------------------------------------------------------------
+#
+# Picking the Steam tile makes the frontend write `steam` into the request
+# file and quit. gamescope ends with it; instead of exiting, the session runs
+# Steam's own Big Picture session HERE, in this same login session on tty1,
+# and when Steam closes it starts itself again from the top, so the console
+# comes back on a fresh gamescope (about 0.8 s on the A9) and lands on the
+# tile (the frontend reads the returned file).
+#
+# IN THIS SESSION, NOT AS A USER UNIT. Upstream's wrapper starts
+# gamescope-session-plus@steam as a systemd user unit, which leaves gamescope
+# outside any logind session, opening the display only through libseat's
+# fallback to "the user's display session" (the audit's untested step). Run
+# from here it is in the session that owns the seat, exactly as the console's
+# own gamescope is. The wrapper's environment steps are copied below; the real
+# script, /usr/share/gamescope-session-plus/gamescope-session-plus, runs as
+# upstream ships it.
+#
+# NOTHING OF STEAM OUTLIVES IT. When the script returns, everything left in
+# this session's cgroup except this shell is Steam's (steamwebhelper, a game,
+# pressure-vessel's bwrap: Steam double-forks, so a process group would lose
+# some), and is stopped: TERM, five seconds, KILL. Then the slice is detached,
+# so not even Steam's files are reachable while the console runs.
+#
+# The request file is deleted BEFORE Steam starts, so a crash anywhere in
+# here can never bring Steam back on its own: the next start is the console.
+REQUEST_FILE="$(runtime_dir)/cabinetos-next"
+RETURNED_FILE="$(runtime_dir)/cabinetos-from-steam"
+
+# Read in this shell, not by grep: a grep would find itself in the list.
+others_in() {
+    local pid
+    while read -r pid; do
+        [[ "${pid}" == "$$" ]] && continue
+        [[ "$(cat "/proc/${pid}/comm" 2>/dev/null)" == "(sd-pam)" ]] && continue
+        return 0
+    done < "$1"
+    return 1
+}
+
+stop_leftovers() {
+    local procs pid sig waited left
+    procs="/sys/fs/cgroup$(cut -d: -f3 /proc/self/cgroup)/cgroup.procs"
+    [[ -r "${procs}" ]] || { echo "cabinetos-session: cannot read ${procs}; not checking for leftovers"; return; }
+    for sig in TERM KILL; do
+        left=()
+        while read -r pid; do
+            [[ "${pid}" == "$$" ]] && continue
+            # The login's own PAM helper is the console's, not Steam's: it is
+            # what closes this session cleanly when the service ends. The first
+            # handover on the A9 (2026-10-03) stopped it along with Steam.
+            [[ "$(cat "/proc/${pid}/comm" 2>/dev/null)" == "(sd-pam)" ]] && continue
+            left+=("${pid}")
+        done < "${procs}"
+        if (( ${#left[@]} == 0 )); then
+            echo "cabinetos-session: nothing of Steam is left running"
+            return
+        fi
+        # Named, because this line is the proof Steam was fully stopped, or
+        # the record of what was not.
+        echo "cabinetos-session: stopping ${#left[@]} left over (${sig}):" \
+             "$(ps -o comm= -p "$(IFS=,; echo "${left[*]}")" 2>/dev/null | sort -u | tr '\n' ' ')"
+        kill -s "${sig}" "${left[@]}" 2>/dev/null
+        waited=0
+        while (( waited < 50 )) && others_in "${procs}"; do
+            sleep 0.1
+            (( waited++ ))
+        done
+    done
+}
+
+steam_step() {
+    echo "cabinetos-session: handing the screen to Steam"
+    if ! systemctl --no-ask-password start cabinetos-steam@mount.service; then
+        echo "cabinetos-session: Steam's slice could not be attached; back to the console"
+        return
+    fi
+
+    # Steam starts only from its tile: an autostart entry it may have written
+    # is never left for anything to find. And upstream's "five short sessions
+    # in a row means Steam is broken" counter is cleared, since a person
+    # opening Steam and closing it again is not a fault here.
+    rm -f "${HOME}/.config/autostart/steam.desktop" \
+          /tmp/chimeraos-short-session-tracker \
+          /tmp/steamos-reboot-sentinel /tmp/steamos-shutdown-sentinel
+
+    # STEAM MUST NOT SWITCH THE CONTROLLERS OFF. Steam keeps its own setting,
+    # System > Bluetooth > Enabled, in config/config.vdf, and with no such file
+    # yet (a first start) it reads it as off and powers the adapter down as
+    # its interface loads, before its own setup reaches the step that turns it
+    # back on: every Bluetooth controller drops on the language screen and the
+    # console's one-controller promise breaks (A9, 2026-10-03, "SetEnabled:
+    # adapter ... enable: 0" in Steam's steamui_system.txt). So before Steam's
+    # first start, and only then, the file is written with that one setting
+    # on, exactly as Steam itself writes it once its setup has run. Never
+    # touched again: after that it is Steam's, and a person who turns
+    # Bluetooth off inside Steam gets it off inside Steam.
+    local steamcfg="${HOME}/.local/share/Steam/config/config.vdf"
+    if [[ ! -e "${steamcfg}" ]]; then
+        mkdir -p "${steamcfg%/*}" && printf '%s\n' \
+            '"InstallConfigStore"' '{' '	"System"' '	{' '		"Bluetooth"' '		{' \
+            '			"Enabled"		"1"' '		}' '	}' '}' > "${steamcfg}" \
+            && echo "cabinetos-session: Steam's first start: its Bluetooth setting written as on"
+    fi
+
+    # Upstream's wrapper (/usr/bin/gamescope-session-plus), less the user unit.
+    export XDG_SESSION_TYPE=x11
+    # shellcheck disable=SC2046  # the names, one word each, as upstream does
+    dbus-update-activation-environment --systemd DESKTOP_SESSION \
+        $(env | grep ^XDG_ | cut -d = -f 1) 2>/dev/null
+    systemctl --user set-environment XDG_DESKTOP_PORTAL_DIR="" 2>/dev/null
+    systemctl --user unset-environment DISPLAY XAUTHORITY 2>/dev/null
+
+    # The display's own size, as the console uses, and VRR when the TV has it
+    # (#209); upstream turns these into gamescope's -W/-H and --adaptive-sync.
+    #
+    # WITHOUT THE LOGIN'S CAPABILITIES. The console's login session carries
+    # CAP_WAKE_ALARM in its ambient set (CapAmb 0x800000000; an SSH login
+    # has none), and Steam's sandbox, bubblewrap, refuses to run with any
+    # capability it is not setuid for ("Unexpected capabilities but not
+    # setuid"), which Steam reports as "Steam now requires user namespaces
+    # to be enabled" in a window gamescope never shows: a black screen. Found
+    # on the A9's first handover, 2026-10-03; reproduced and fixed there with
+    # exactly this. gamescope keeps its own cap_sys_nice from its file.
+    SCREEN_WIDTH="${OUT_W}" SCREEN_HEIGHT="${OUT_H}" ADAPTIVE_SYNC=1 \
+    SRT_LOG_TO_JOURNAL=1 \
+        setpriv --inh-caps=-all --ambient-caps=-all -- \
+        /usr/share/gamescope-session-plus/gamescope-session-plus steam
+    echo "cabinetos-session: Steam's session ended (status $?)"
+
+    systemctl --user unset-environment XDG_DESKTOP_PORTAL_DIR 2>/dev/null
+    stop_leftovers
+
+    if ! systemctl --no-ask-password start cabinetos-steam@unmount.service; then
+        echo "cabinetos-session: Steam's slice could not be detached"
+    fi
+
+    # THE CONSOLE NEVER COMES BACK WITHOUT ITS CONTROLLERS. Bluetooth is the
+    # console's, and whatever Steam did with it (its own setting, a person
+    # switching it off in Steam's menus), it is on again before the console
+    # starts. bluetoothctl as the console's user, as the console's own
+    # pairing does.
+    if bluetoothctl show 2>/dev/null | grep -q "Powered: no"; then
+        bluetoothctl power on >/dev/null 2>&1 \
+            && echo "cabinetos-session: Bluetooth was off after Steam; switched back on"
+    fi
+    : > "${RETURNED_FILE}"
+}
+
+# Called when the app has exited after its compositor came up. A request to
+# hand over to Steam is acted on and the session starts again from the top;
+# anything else exits as before, and systemd restarts the session.
+after_app() {
+    local status="$1" request=""
+    [[ -r "${REQUEST_FILE}" ]] && request=$(<"${REQUEST_FILE}")
+    rm -f "${REQUEST_FILE}"
+    if [[ "${request}" == steam && -x /usr/share/gamescope-session-plus/gamescope-session-plus ]]; then
+        steam_step
+        echo "cabinetos-session: back to the console"
+        exec "$0"
+    fi
+    exit "${status}"
+}
+
+# A request left by a session that died before acting on it is not acted on.
+rm -f "${REQUEST_FILE}"
+
+# NOR IS A SLICE LEFT ATTACHED. A session that ended inside Steam (a crash, a
+# restart of this service, a deploy) never reached steam_step's clean-up, and
+# Steam's files would stay mounted under the console, outside the trim guard.
+# Nothing of Steam is running at this point: whatever was is gone with the
+# old session. Found on the A9, 2026-10-04, after a deploy restarted the
+# session while Steam was open.
+if mountpoint -q "${HOME}/.local/share/Steam" 2>/dev/null; then
+    systemctl --no-ask-password start cabinetos-steam@unmount.service \
+        && echo "cabinetos-session: Steam's slice was left attached; detached"
+fi
 
 if ls /dev/dri/card* >/dev/null 2>&1; then
     # --ready-fd goes BEFORE the `--`: everything after it is the app's.
