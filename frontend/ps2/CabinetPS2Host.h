@@ -138,6 +138,25 @@ namespace CabinetPS2
 	/// television and as nothing at all in a capture.
 	bool TakeFrame(Frame* out, uint64_t since);
 
+	/// THE WINDOW PCSX2 PRESENTS TO (#226), set before Run. Zero means none,
+	/// and PCSX2 renders surfacelessly with every frame read back for the
+	/// frontend to draw, as it did until 2026-10-04.
+	///
+	/// With a window, PCSX2 presents its own picture and gamescope shows it,
+	/// the way Switch, PS3 and the other separate emulators are shown, with
+	/// the console's window composited over it for the pause menu. Nothing is
+	/// read back, so the copy that held Quality at 3x is gone; TakeFrame then
+	/// answers only after CaptureFrame, for a screenshot.
+	///
+	/// The window is the frontend's, an X11 one under gamescope's Xwayland;
+	/// this layer opens a display connection of its own to it (`display` is
+	/// its name, empty for $DISPLAY), so PCSX2's threads never share SDL's.
+	void SetWindow(const char* display, unsigned long window, unsigned width, unsigned height);
+
+	/// Reads the picture on screen back once, for a screenshot, running or
+	/// paused, and waits for it up to `timeout_ms`. TakeFrame then has it.
+	bool CaptureFrame(unsigned timeout_ms);
+
 	/// A controller, in **exactly** the shape the frontend already produces.
 	///
 	/// This mirrors `PadState` in frontend/src/core.h field for field, and

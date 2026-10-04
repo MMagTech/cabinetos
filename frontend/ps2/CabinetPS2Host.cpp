@@ -59,6 +59,12 @@
 #include "pcsx2/SIO/Pad/PadDualshock2.h"
 #include "pcsx2/VMManager.h"
 
+// libX11's one call this layer makes, declared by hand: Xlib.h defines `None`,
+// `Bool`, `Status` and `Success` as macros, which PCSX2's own headers use as
+// names (OsdOverlayPos::None). The library is already linked (compile.sh).
+struct _XDisplay;
+extern "C" struct _XDisplay* XOpenDisplay(const char* name);
+
 namespace
 {
 	// Everything PCSX2 is told lives in memory. There is no pcsx2.ini on a
@@ -101,6 +107,28 @@ namespace
 		static const bool off = std::getenv("CABINETOS_PS2_NO_READBACK") != nullptr;
 		return off;
 	}
+	// THE WINDOW, when the frontend gave one (#226; SetWindow in the header).
+	// Written by the frontend before a game starts, read by the GS thread when
+	// it opens its device. The display connection is this layer's own and is
+	// opened once, on first use, and kept for the life of the process: every
+	// game's window is on the same Xwayland.
+	std::mutex s_window_lock;
+	std::string s_window_display;
+	unsigned long s_window = 0;
+	u32 s_window_width = 0, s_window_height = 0;
+	struct _XDisplay* s_xdisplay = nullptr;
+
+	bool Windowed()
+	{
+		std::lock_guard<std::mutex> lock(s_window_lock);
+		return s_window != 0;
+	}
+
+	// A screenshot asked for while there is a window, and so no readback of
+	// every frame. Served by the GS thread's next present, or while paused by
+	// the CPU thread queueing the readback onto the GS thread.
+	std::atomic<bool> s_capture_requested{false};
+
 	std::atomic<bool> s_stop_requested{false};
 	std::atomic<bool> s_paused{false};
 	std::atomic<uint64_t> s_frames{0};
@@ -211,54 +239,17 @@ void Host::EndTextInput()
 // ---------------------------------------------------------------------------
 // The display path. THESE SIX ARE THE ONLY ONES THAT ARE REAL WORK.
 //
-// Surfaceless for now, deliberately. PCSX2 renders and the GS produces a
-// picture, which is what a capture reads; nothing is presented to a window.
-// The real path hands back the Vulkan surface frontend/src/vkhost.cpp already
-// owns — a device, a queue and an image that crosses into the GLES texture the
-// UI draws. Open question 20.
+// Two ways, chosen by the frontend (SetWindow). With a window, PCSX2 presents
+// to it and gamescope shows it, the console's window composited over it for
+// the pause menu (#226). Without one, surfaceless: PCSX2 renders, every frame
+// is read back in BeginPresentFrame, and the frontend draws it; that is what
+// a machine without gamescope still gets.
 // ---------------------------------------------------------------------------
 
-std::optional<WindowInfo> Host::GetTopLevelWindowInfo()
+namespace
 {
-	// Unreferenced in this configuration — the linker does not even ask for it
-	// — but implemented because upstream's gsrunner and Cabinet's host both do,
-	// and building only what the linker complains about leaves this layer one
-	// configuration change from a link error.
-	return Host::AcquireRenderWindow(false);
-}
-
-std::optional<WindowInfo> Host::AcquireRenderWindow(bool recreate_window)
-{
-	// SURFACELESS, ALWAYS, AND THAT IS THE DESIGN RATHER THAN A LIMITATION.
-	//
-	// PCSX2 never gets a window on this console. The frontend owns the one
-	// window there is, draws every screen in it and draws the in-game overlay
-	// on top — which is what makes Pause, Save state and Exit to Home work the
-	// same way for a PlayStation 2 game as for a Mega Drive one. A PCSX2 with
-	// its own surface would be a second thing on the television that the
-	// console could not draw over.
-	//
-	// It still RENDERS. The GS produces a finished picture every frame and
-	// BeginPresentFrame below reads it back; "surfaceless" means only that
-	// there is nowhere for PCSX2 to present it to.
-	WindowInfo wi;
-	wi.type = WindowInfo::Type::Surfaceless;
-	wi.surface_scale = 1.0f;
-	return wi;
-}
-
-void Host::ReleaseRenderWindow()
-{
-}
-
-void Host::BeginPresentFrame()
-{
-	// CALLED ON THE GS THREAD, once per finished frame. It is the only point
-	// at which the picture is complete and still exists, which is why the
-	// handover happens here rather than anywhere more convenient.
-	const uint64_t frame = s_frames.fetch_add(1);
-
-	if (!NoReadback())
+	// The finished picture into s_frame, for the frontend. On the GS thread.
+	void ReadBackFrame()
 	{
 		const auto started = std::chrono::steady_clock::now();
 
@@ -304,6 +295,75 @@ void Host::BeginPresentFrame()
 		if (us > 16666.0)
 			s_readback_over.fetch_add(1);
 	}
+} // namespace
+
+std::optional<WindowInfo> Host::GetTopLevelWindowInfo()
+{
+	// Unreferenced in this configuration — the linker does not even ask for it
+	// — but implemented because upstream's gsrunner and Cabinet's host both do,
+	// and building only what the linker complains about leaves this layer one
+	// configuration change from a link error.
+	return Host::AcquireRenderWindow(false);
+}
+
+std::optional<WindowInfo> Host::AcquireRenderWindow(bool recreate_window)
+{
+	WindowInfo wi;
+	wi.surface_scale = 1.0f;
+
+	// THE FRONTEND'S WINDOW, WHEN IT GAVE ONE (#226). PCSX2 makes a Vulkan
+	// surface on it (VK_KHR_xlib_surface, X11_API in build-pcsx2.sh) and
+	// presents there itself; gamescope shows it, and the console's own
+	// window, marked as gamescope's overlay, draws the pause menu over it.
+	{
+		std::lock_guard<std::mutex> lock(s_window_lock);
+		if (s_window != 0)
+		{
+			if (!s_xdisplay)
+				s_xdisplay = XOpenDisplay(s_window_display.empty() ? nullptr : s_window_display.c_str());
+			if (s_xdisplay)
+			{
+				wi.type = WindowInfo::Type::X11;
+				wi.display_connection = s_xdisplay;
+				wi.window_handle = reinterpret_cast<void*>(static_cast<uintptr_t>(s_window));
+				wi.surface_width = s_window_width;
+				wi.surface_height = s_window_height;
+				Console.WriteLn("[ps2] presenting to window 0x%lx, %ux%u", s_window, s_window_width,
+					s_window_height);
+				return wi;
+			}
+			// Said, and then the old way: a picture read back is a game that
+			// still plays, where no picture at all is not.
+			Console.Error("[ps2] could not open X display '%s'; reading frames back instead",
+				s_window_display.c_str());
+			s_window = 0;
+		}
+	}
+
+	// SURFACELESS OTHERWISE. PCSX2 still RENDERS: the GS produces a finished
+	// picture every frame and BeginPresentFrame below reads it back for the
+	// frontend to draw in its own window; "surfaceless" means only that there
+	// is nowhere for PCSX2 to present it to.
+	wi.type = WindowInfo::Type::Surfaceless;
+	return wi;
+}
+
+void Host::ReleaseRenderWindow()
+{
+	// The window is the frontend's and goes when the game has stopped; the
+	// display connection stays for the next game.
+}
+
+void Host::BeginPresentFrame()
+{
+	// CALLED ON THE GS THREAD, once per finished frame. It is the only point
+	// at which the picture is complete and still exists, which is why the
+	// handover happens here rather than anywhere more convenient.
+	const uint64_t frame = s_frames.fetch_add(1);
+
+	// With a window, nothing is read back unless a screenshot asked for it.
+	if (Windowed() ? s_capture_requested.exchange(false) : !NoReadback())
+		ReadBackFrame();
 
 	if (s_config.dump_count == 0 || s_config.dump_dir.empty())
 		return;
@@ -925,10 +985,36 @@ static bool RunOnCPUThread(const CabinetPS2::Config& config, std::string* error)
 	s_settings.SetBoolValue("EmuCore/GS", "OsdShowResolution", false);
 	s_settings.SetBoolValue("EmuCore/GS", "OsdShowGSStats", false);
 	s_settings.SetBoolValue("EmuCore/GS", "OsdShowMessages", false);
+	// AND THE REST OF IT, WHICH NOBODY SAW UNTIL PCSX2 HAD A WINDOW (#226).
+	// Surfaceless, its overlay was drawn nowhere; presenting to the
+	// television, it is drawn on the game. The pause icon (Indicators) is on
+	// by PCSX2's default and would sit over the console's own pause menu.
+	s_settings.SetBoolValue("EmuCore/GS", "OsdShowIndicators", false);
+	s_settings.SetBoolValue("EmuCore/GS", "OsdShowVideoCapture", false);
+	s_settings.SetBoolValue("EmuCore/GS", "OsdShowInputRec", false);
+	s_settings.SetIntValue("EmuCore/GS", "OsdMessagesPos", static_cast<int>(OsdOverlayPos::None));
+	s_settings.SetIntValue("EmuCore/GS", "OsdPerformancePos", static_cast<int>(OsdOverlayPos::None));
 
 	s_settings.SetBoolValue("Logging", "EnableSystemConsole", true);
 	s_settings.SetBoolValue("Logging", "EnableTimestamps", true);
 	s_settings.SetBoolValue("Logging", "EnableVerbose", config.verbose_log);
+
+	// VSYNC ON, IN THE QUEUE, WHEN PCSX2 HAS A WINDOW (#226). gamescope never
+	// tears, so with vsync off a picture handed over between two refreshes
+	// waits in a one-picture mailbox, and the next one replaces it: PCSX2 at
+	// 59.94 against the television's 60 drifts in and out of step, and 56
+	// pictures a second reached the screen of the 60 it drew (Burnout 3, A9,
+	// frames.py, 2026-10-04). Vsync on, the pictures queue and none are lost:
+	// 59.8 a second. VsyncEnable alone gives the mailbox again unless PCSX2
+	// times itself to the screen (GetEffectiveVSyncMode), so the mailbox is
+	// turned off as well. Not timed to the screen (SyncToHostRefreshRate):
+	// that runs the game 0.1% fast, and its sound would build up behind the
+	// picture in a stream nothing stretches.
+	if (Windowed())
+	{
+		s_settings.SetBoolValue("EmuCore/GS", "VsyncEnable", true);
+		s_settings.SetBoolValue("EmuCore/GS", "DisableMailboxPresentation", true);
+	}
 
 	if (config.unlimited)
 	{
@@ -1009,6 +1095,11 @@ static bool RunOnCPUThread(const CabinetPS2::Config& config, std::string* error)
 			}
 			else if (state == VMState::Paused)
 			{
+				// A SCREENSHOT OVER THE PAUSE MENU (#226): nothing presents
+				// while paused, so the readback is queued onto the GS thread
+				// from here, the thread that may feed it.
+				if (s_capture_requested.exchange(false))
+					MTGS::RunOnGSThread(ReadBackFrame);
 				if (s_stop_requested.load())
 					VMManager::SetState(VMState::Stopping);
 				else if (!s_paused.load())
@@ -1135,6 +1226,32 @@ bool CabinetPS2::TakeFrame(Frame* out, uint64_t since)
 
 	*out = s_frame; // A copy. See the header for why it is not a loan.
 	return true;
+}
+
+void CabinetPS2::SetWindow(const char* display, unsigned long window, unsigned width, unsigned height)
+{
+	std::lock_guard<std::mutex> lock(s_window_lock);
+	s_window_display = display ? display : "";
+	s_window = window;
+	s_window_width = width;
+	s_window_height = height;
+}
+
+bool CabinetPS2::CaptureFrame(unsigned timeout_ms)
+{
+	if (!s_running.load())
+		return false;
+	const uint64_t before = s_frame_serial.load();
+	s_capture_requested.store(true);
+	const auto until = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
+	while (std::chrono::steady_clock::now() < until)
+	{
+		if (s_frame_serial.load() > before)
+			return true;
+		std::this_thread::sleep_for(std::chrono::milliseconds(2));
+	}
+	s_capture_requested.store(false);
+	return false;
 }
 
 void CabinetPS2::RequestStop()

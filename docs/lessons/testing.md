@@ -205,6 +205,18 @@ then `YDOTOOL_SOCKET=/tmp/ydotool.sock ydotool key 108:1 108:0` (Down; Up
   file busy" and the restart brings back the OLD build, which reads exactly
   like the fix not working. Stop the session, copy, start.
 
+- **NEVER COPY A NEW `.so` OVER ONE A RUNNING PROCESS HAS LOADED.** The
+  process has the file mapped, and writing into it kills the process with
+  SIGBUS (2026-10-04: the console died in `UpdateTargetSpeed` inside
+  `cabinetos-ps2.so`, the session restarted the game by itself, and the
+  scripted presses that followed landed on the wrong screens). Put the
+  console on Home first (`tools/ui-loop.sh --no-build`): PS2 and the cores
+  are loaded only when a game starts. `coredumpctl list` shows it.
+
+- **gamescope crashes on its way out when the app is stopped**
+  (`wl_display_destroy`, SIGSEGV or SIGABRT). It is every session stop, not
+  the thing being tested; look at what stopped the app.
+
 ## Logs
 
 

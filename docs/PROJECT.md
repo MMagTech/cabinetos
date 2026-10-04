@@ -6537,7 +6537,7 @@ it did not. Either way the session carried on.
 
 | | Starting value | Why |
 |---|---|---|
-| Pixel shift | ±2 points (±4 px at 4K), one point every 3 minutes, a 25-position walk that starts centred | runs always, in menus AND games — every game's picture, PS2 and GameCube included, is drawn by our renderer, so it moves with the rest |
+| Pixel shift | ±2 points (±4 px at 4K), one point every 3 minutes, a 25-position walk that starts centred | runs always, in menus AND games — every game's picture drawn by our renderer moves with the rest, GameCube included; PS2 since #226 and the separate emulators present their own and do not move |
 | Menus, and a PAUSED game | dim at 5 min, blank at 15 min | a paused game is a menu over a frozen HUD |
 | A game running unpaused | dim at 20 min, **never blank** | an attract loop or a cut-scene is not idle |
 | Dim | black at 60% over everything, 2 s fade down, 0.25 s back up | whether that reads as "resting" or "broken" is still MMagTech's to judge on the panel |
@@ -14038,7 +14038,36 @@ same night: Quality is 3x.** The off-screen runs left out the console's copy
 of each frame off the GPU and back; with Burnout 3's widescreen patch the 5x
 frame was 3982x2240 and 312 of 1,196 frames ran over 20 ms ("running
 horribly"); at 3x, 4. Higher waits for that copy to go (its own issue). PS2 at 5x is the first thing
-judged on the TV for stutter. A level change rebuilds no shaders (PS2,
+judged on the TV for stutter.
+
+**THE COPY IS GONE (#226, 2026-10-04), AND QUALITY IS 4x, NOT 5x.** PCSX2 now
+presents to a window of its own, which gamescope shows; the console's window
+is gamescope's overlay over it, as for the separate emulators, and draws only
+the pause menu, notices, the curtain and the dim. PCSX2 still runs inside the
+console, so pads, sound, the card and the menu are unchanged; a screenshot
+reads the picture back once, on request. Without gamescope on X11 (the VM, an
+offscreen run) or with an older PS2 library, the copy is still the path, and
+`--ps2-copy` forces it. Measured on the A9 in Burnout 3's Waterfront Westbound
+race, 40 s holding the accelerator, frames.py on what gamescope shows:
+3x, 11 and 14 frames late of about 2,390 (GPU 36% busy); 4x, 17, 98 and 129
+late (GPU 57%, the late ones its heaviest moments); **5x, PCSX2 itself at 68
+to 77% speed with the GPU at 99%**, and the same with anisotropic filtering
+off. So the copy was never the only limit at 5x: the Radeon 890M cannot draw
+this race at 5x. Filtering costs next to nothing and stays 16x. MMagTech
+agreed 4x with 16x for Quality; Balanced stays 3x, Performance 1x.
+
+**Vsync is ON in PCSX2 when it has a window**, with mailbox presentation off.
+gamescope never tears, so with vsync off PCSX2's pictures go into a
+one-picture mailbox and the newer one replaces the older: at 59.94 against
+the television's 60 they drift in and out of step, and 56 a second reached
+the screen of the 60 PCSX2 drew. With vsync on, 59.8. Not "sync to host
+refresh rate": it runs the game 0.1% fast and the sound would pile up in a
+stream nothing stretches. PCSX2's on-screen indicators, never seen while it
+was surfaceless, are off too (the pause icon would sit over our menu).
+
+**Lost, and agreed:** the bias glow around the picture (MMagTech, 2026-10-02:
+widescreen leaves no side borders for it), and pixel shift no longer moves a
+PS2 game's picture, as it never moved a separate emulator's. A level change rebuilds no shaders (PS2,
 GameCube, Dreamcast, PSP: 0 bytes added; N64 about 102 KB of Mesa's), so no
 warning is needed and #133 does not move; turning on Dolphin's background
 shaders builds about 5 MB once. States made at one level load at another on
