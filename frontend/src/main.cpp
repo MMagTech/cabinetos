@@ -2900,30 +2900,6 @@ static Library loadLibrary(romm::Client& client) {
     return lib;
 }
 
-// THE STEAM TILE (#223): the one way into Steam. Not a RomM platform, so an id
-// no platform can have, and never fetched for games or a cover. The last of
-// the playable systems, before the greyed ones (and simply last once those
-// move), MMagTech 2026-10-03. Not there when the image has no Steam, or when
-// somebody chose Hide Steam. Placed after the library loads, never inside
-// loadLibrary: an empty platform list is what says the server did not answer,
-// and the tile must not answer for it.
-constexpr int kSteamTileId = -223;
-
-static void placeSteamTile(std::vector<screens::Tile>& tiles) {
-    tiles.erase(std::remove_if(tiles.begin(), tiles.end(),
-                               [](const screens::Tile& t) { return t.id == kSteamTileId; }),
-                tiles.end());
-    if (!steam::available() || steam::hidden()) return;
-    screens::Tile t;
-    t.id = kSteamTileId;
-    t.title = "Steam";
-    t.art = colorForTitle(t.title);
-    t.enterable = true;
-    auto at = std::find_if(tiles.begin(), tiles.end(),
-                           [](const screens::Tile& x) { return !x.enterable; });
-    tiles.insert(at, std::move(t));
-}
-
 // Talks to a RomM server and reports, without opening a window.
 //
 //   --romm <address>              connect and list the library
@@ -6225,7 +6201,6 @@ int main(int argc, char** argv) {
         std::fprintf(stderr, "[search] %s: %zu of %d\n", q.c_str(), idx.size(), total);
         searchScreen.setResults(q, std::move(idx), total);
     };
-    placeSteamTile(platformTiles);
     libraryScreen.build(platformTiles, collectionTiles);
 
     // THE TILE COVERS, FETCHED BEHIND HOME RATHER THAN BEFORE IT.
@@ -6287,7 +6262,7 @@ int main(int argc, char** argv) {
         const std::map<int, covercache::Tile> saved = covercache::loadTiles();
         int reused = 0;
         for (screens::Tile& t : platformTiles) {
-            if (!t.enterable || !t.cover.empty() || t.id == kSteamTileId) continue;
+            if (!t.enterable || !t.cover.empty()) continue;
             auto mine = lib.tileCache.find(t.id);
             auto was = saved.find(t.id);
             if (mine != lib.tileCache.end() && was != saved.end() &&
@@ -6379,8 +6354,7 @@ int main(int argc, char** argv) {
     std::thread coverTidy;
     if (rommAddress && !platformTiles.empty()) {
         std::vector<int> live;
-        for (const screens::Tile& t : platformTiles)
-            if (t.id != kSteamTileId) live.push_back(t.id);
+        for (const screens::Tile& t : platformTiles) live.push_back(t.id);
         coverTidy = std::thread([live]() {
             covercache::sweep(live);
             covercache::evict(covercache::kBudgetBytes);
@@ -6631,7 +6605,7 @@ int main(int argc, char** argv) {
     // first — the one way out of a game, which uploads every kind of save — so
     // this is true for every emulator without any of them knowing.
     bool powerMenu = false;
-    enum PowerItem { PwResume, PwCancel, PwRest, PwRestart, PwPowerOff };
+    enum PowerItem { PwResume, PwCancel, PwRest, PwRestart, PwPowerOff, PwSteam };
     std::vector<PowerItem> powerItems;
     bool restAvailable = false;
     // Rest waits for the uploads finishExit queued: a machine that sleeps
@@ -6652,6 +6626,7 @@ int main(int argc, char** argv) {
             case PwRest: return "Sleep";
             case PwRestart: return "Restart";
             case PwPowerOff: return "Power off";
+            case PwSteam: return "Switch to Steam";
         }
         return "";
     };
@@ -7134,7 +7109,6 @@ int main(int argc, char** argv) {
             return false;
         }
         lib = std::move(fresh);
-        placeSteamTile(platformTiles);
         libraryScreen.build(platformTiles, collectionTiles);
         startCoverFill();
         // HOME STARTS OVER FOR THE NEW PERSON: the first card of Recent, every
@@ -8869,10 +8843,6 @@ int main(int argc, char** argv) {
     auto steamGamesLine = [&](int64_t size) {
         return "CabinetOS " + driveSize(std::max<int64_t>(0, steamSizes.drive - size));
     };
-    auto refreshSteamTile = [&]() {
-        placeSteamTile(platformTiles);
-        libraryScreen.build(platformTiles, collectionTiles);
-    };
 
     std::function<void()> showSteamSetup;
     // Making the slice and handing over: Install on the storage screen.
@@ -8956,7 +8926,6 @@ int main(int argc, char** argv) {
             } else if (a == 1) {
                 steam::setHidden(true);
                 std::fprintf(stderr, "[steam] hidden\n");
-                refreshSteamTile();
             }
         });
         choiceScreen.setDisabled({!fits || !steamSizes.online, false, false});
@@ -9044,10 +9013,6 @@ int main(int argc, char** argv) {
                 // membership it already filled and returns.
                 const bool isCollection = libraryScreen.tab() != 0;
                 const int tileId = tiles[res.value].id;
-                if (tileId == kSteamTileId) {
-                    steamPressed();
-                    break;
-                }
                 auto& own = isCollection ? collectionTiles : platformTiles;
                 screens::Tile* t = nullptr;
                 for (auto& x : own) if (x.id == tileId) { t = &x; break; }
@@ -9446,8 +9411,7 @@ int main(int argc, char** argv) {
                                     *ok = steam::remove(&why);
                                 }, [&, ok]() {
                                     buildSettings();
-                                    refreshSteamTile();
-                                    menuNotice.say(*ok ? "Steam removed" : "Couldn't remove Steam",
+                                                        menuNotice.say(*ok ? "Steam removed" : "Couldn't remove Steam",
                                                    *ok ? Tone::Done : Tone::Problem);
                                 });
                             });
@@ -9458,8 +9422,7 @@ int main(int argc, char** argv) {
                     askPin("Enter the PIN", "To show Steam", [&]() {
                         steam::setHidden(false);
                         std::fprintf(stderr, "[steam] shown\n");
-                        refreshSteamTile();
-                        buildSettings();
+                                buildSettings();
                     });
                     sound::play(sound::Cue::Activate);
                 } else if (res.value == SetDownloads) {
@@ -10131,17 +10094,9 @@ int main(int argc, char** argv) {
         }
     }
 
-    // BACK FROM STEAM (#223): the session started the console again after
-    // Steam closed, and it lands where the person left, on the Steam tile.
-    if (!initialScreen && steam::takeReturned()) {
-        goToDestination(1);
-        const auto& shownTiles = libraryScreen.visible();
-        for (size_t i = 0; i < shownTiles.size(); ++i)
-            if (shownTiles[i].id == kSteamTileId) {
-                libraryScreen.focusTile(static_cast<int>(i));
-                break;
-            }
-    }
+    // BACK FROM STEAM (#223): Home, where the console starts anyway; the
+    // file is only taken so it is not read again.
+    if (!initialScreen) steam::takeReturned();
 
     // Picks up a finished job. Loading the game happens HERE, on the frame
     // thread, because the core is not thread-safe and the worker only ever
@@ -11165,6 +11120,11 @@ int main(int argc, char** argv) {
             closeOverlay();
             return;
         }
+        if (item == PwSteam) {
+            closeOverlay();
+            steamPressed();
+            return;
+        }
         const power::Action act = item == PwRest      ? power::Action::Rest
                                   : item == PwRestart ? power::Action::Restart
                                                       : power::Action::PowerOff;
@@ -11389,6 +11349,13 @@ int main(int argc, char** argv) {
         // that is Resume; on Home it is Cancel. MMagTech, 2026-09-27: Start
         // pressed by accident opened the menu on Sleep, one A from asleep.
         powerItems.push_back(playing ? PwResume : PwCancel);
+        // STEAM'S DOOR (#223), never over a game. MMagTech, 2026-10-04: in
+        // the Library it read as part of the ROM library, and it is not; here
+        // it is a mode the machine switches into, the mirror of Steam's own
+        // "Switch to Desktop". Straight under Cancel, his call: it is what
+        // Start will most often be pressed for, and a slip still meets "Start
+        // Steam?" or the PIN. Gone when somebody chose Hide Steam.
+        if (!playing && steam::available() && !steam::hidden()) powerItems.push_back(PwSteam);
         if (restAvailable) powerItems.push_back(PwRest);
         powerItems.push_back(PwRestart);
         powerItems.push_back(PwPowerOff);
@@ -11988,7 +11955,19 @@ int main(int argc, char** argv) {
                             // 2026-09-22. It used to quit the frontend, a
                             // development leftover that just got the session
                             // restarted under whoever was watching.
-                            if (here() == Screen::Home) openPowerMenu();
+                            // AND ON EVERY SCREEN OUTSIDE A GAME since #223
+                            // (MMagTech, 2026-10-04): it only did on Home,
+                            // which nothing explained, and the menu is now
+                            // Steam's door too. Not over the PIN pad, a
+                            // question or the Downloads panel. NOT ON SEARCH:
+                            // its keyboard is always up and is drawn over
+                            // everything, so the menu opened under it (on the
+                            // TV, 2026-10-04), and there Start is the
+                            // keyboard's "done", as its legend says. The rule
+                            // is: Start opens the menu except while typing.
+                            if (here() != Screen::Search && !pinScreen.isOpen() &&
+                                !choiceScreen.isOpen() && !downloadsPanel.isOpen())
+                                openPowerMenu();
                             break;
                         default: break;
                     }
@@ -13490,9 +13469,15 @@ int main(int argc, char** argv) {
                                                                 : ui::kCanvasHeight);
             detailScreen.tick(dt);
         }
+        // THE PRESS IS THE COVER'S ONLY WHEN THE COVER HAS THE PRESS. With the
+        // PIN pad, a question, Downloads or a menu over Home, A belongs to
+        // them, and the cover under them swelled with every digit of the PIN
+        // (MMagTech on the TV, 2026-10-04, entering it for Switch to Steam).
+        const bool pressIsHomes = pressing && !pinScreen.isOpen() && !choiceScreen.isOpen() &&
+                                  !downloadsPanel.isOpen() && !overlayOpen;
         if (cardAt(focusRow, focusSlot))
             slotAnim(slotPress, focusRow, focusSlot)
-                .retarget(pressing ? 1.0f : 0.0f, kPressDuration);
+                .retarget(pressIsHomes ? 1.0f : 0.0f, kPressDuration);
 
         int dw = 0, dh = 0;
         SDL_GetWindowSizeInPixels(window, &dw, &dh);
