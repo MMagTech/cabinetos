@@ -95,6 +95,7 @@
 #include "prefs.h"
 #include "optcheck.h"
 #include "quality.h"
+#include "screenfx.h"
 #include "sysopts.h"
 #include "server.h"
 #include "update.h"
@@ -11493,6 +11494,19 @@ int main(int argc, char** argv) {
                 };
                 pauseChoices.push_back(std::move(c));
             }
+            // THE SCREEN LOOK (#122), for everyone, on the systems this
+            // console draws itself. Changes at once, behind the menu.
+            if (session.standaloneCore.empty() &&
+                !screenfx::looksFor(session.platformSlug).empty()) {
+                PauseChoice c;
+                c.label = "Look";
+                for (const screenfx::Look& l : screenfx::looksFor(session.platformSlug))
+                    c.values.push_back(l.label);
+                c.current = screenfx::chosen(session.platformSlug);
+                const std::string slug = session.platformSlug;
+                c.apply = [slug](int i) { screenfx::choose(slug, i); };
+                pauseChoices.push_back(std::move(c));
+            }
             // THE SYSTEM'S OWN ROWS (#73), for everyone: they are looks.
             // Built-in cores only; none of the separate emulators has any.
             if (session.standaloneCore.empty()) {
@@ -14059,6 +14073,10 @@ int main(int argc, char** argv) {
                     if (rows < 1.0f) rows = 1.0f;
                     scale = rows / perPoint;
                 }
+                // Real screen pixels per canvas point, for a screen look's
+                // output size: read here, before `dh` means the picture.
+                const float physPerPoint =
+                    dh > 0 ? static_cast<float>(dh) / ui::kCanvasHeight : 1.0f;
                 const float dh = shownRows * scale;
                 const float dw = dh * shownAspect;
                 const float px = (ui::kCanvasWidth - dw) * 0.5f;
@@ -14102,8 +14120,29 @@ int main(int argc, char** argv) {
                 // rows are; rotation says how the picture it found is turned,
                 // and the two compose — which is what a hardware-rendered
                 // vertical board needs.
-                ui::drawImageTexture(renderer, core.texture(), px, py, dw, dh, u0, v0, u1,
-                                     v1, true, static_cast<int>(core.rotation()));
+                // THE SCREEN LOOK (#122): RetroArch's shader files over the
+                // picture, sized to the real pixels it covers on the screen,
+                // in the game's own orientation and turned afterwards, as
+                // RetroArch does. None chosen, or one that failed to load,
+                // draws the picture as before.
+                screenfx::Chain& look = screenfx::shared();
+                look.use(screenfx::presetFor(session.platformSlug));
+                GLuint looked = 0;
+                if (look.active()) {
+                    const int rot = static_cast<int>(core.rotation());
+                    const int qw = static_cast<int>(std::lround(dw * physPerPoint));
+                    const int qh = static_cast<int>(std::lround(dh * physPerPoint));
+                    const bool turned = rot == 1 || rot == 3;
+                    looked = look.run(core.texture(), u0, v0, u1, v1, static_cast<int>(srcW),
+                                      static_cast<int>(srcH), turned ? qh : qw,
+                                      turned ? qw : qh);
+                }
+                if (looked)
+                    ui::drawImageTexture(renderer, looked, px, py, dw, dh, 0, 0, 1, 1, true,
+                                         static_cast<int>(core.rotation()));
+                else
+                    ui::drawImageTexture(renderer, core.texture(), px, py, dw, dh, u0, v0, u1,
+                                         v1, true, static_cast<int>(core.rotation()));
 
                 // The glow goes over the bars, not under the picture: it is
                 // drawn after, and its shader discards inside the picture rect,
