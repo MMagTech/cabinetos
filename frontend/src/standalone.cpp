@@ -730,11 +730,12 @@ bool prepareEden(const Emulator& e, const std::string& saveDir, const std::strin
         // network, which made it hang instead and was taken out
         // (2026-09-28).
         {"Network", "airplane_mode", "true"},
-        // NO VSYNC, ITS OWN LIMITER (#209, MMagTech 2026-10-01): gamescope
-        // already lines every frame up with the screen, so Eden's own wait
-        // (Fifo by default) only adds one more. 0 is Immediate; the speed
-        // limit, on at 100% by default, keeps the game at its own speed.
-        {"Renderer", "use_vsync", "0"},
+        // VSYNC ON (#209, MMagTech 2026-10-04): 2 is Fifo, Eden's own
+        // default. #209 first set 0 (Immediate) on the reasoning that
+        // gamescope already lines frames up with the screen; then PS2 showed
+        // that without vsync gamescope keeps one picture waiting and replaces
+        // it, so frames are lost (4 in 60, #226). Fifo queues them.
+        {"Renderer", "use_vsync", "2"},
     };
     const std::vector<std::string> controls = edenControls(players);
     std::vector<std::string> keys, values;
@@ -1127,8 +1128,13 @@ bool prepareRpcs3(const Emulator& e, const std::string& entryPath, const std::st
         {"main_window", "infoBoxEnabledInstallPUP", "false"},
         {"main_window", "confirmationObsoleteCfg", "false"},
     }, /*withDefaults=*/false);
+    // VSYNC ON (#209, MMagTech 2026-10-04), off by RPCS3's default. Under
+    // gamescope a frame shown without it waits in a one-picture mailbox and
+    // the next replaces it, so some never reach the screen (PS2 lost 4 in
+    // 60, #226). With it they queue. On a VRR television it costs nothing.
+    const std::string video = "Video:\n  VSync: true\n" + quality::rpcs3(level);
     if (!writeFile(config + "/vfs.yml", vfs) || !writeFile(config + "/config.yml",
-                   std::string(kRpcs3Settings) + quality::rpcs3(level)) ||
+                   std::string(kRpcs3Settings) + video) ||
         !writeFile(gui, gui_text) ||
         !writeFile(config + "/input_configs/global/Default.yml", rpcs3Controls(players))) {
         *err = "could not write RPCS3's settings in " + config;
@@ -1296,11 +1302,10 @@ bool prepareXemu(const Emulator& e, const std::string& entryPath, int players,
         t += "[display.vulkan]\npreferred_physical_device = " + tomlQuote(gpu) + "\n";
     // PICTURE QUALITY (#63): xemu's internal resolution.
     t += "[display.quality]\n" + quality::xemu(level);
-    // VSYNC STAYS ON, xemu's default, the one exception to #209's rule.
-    // Measured on the A9 2026-10-02 (FlatOut, frames.py): with it off the
-    // game ran at its right speed, timed by the emulated Xbox, but xemu
-    // redrew the screen 631 times a second, all wasted on the graphics chip.
-    // Its own limiter paces the game, not the picture.
+    // VSYNC ON, xemu's default, as for every emulator since 2026-10-04
+    // (#209). Also measured on the A9 2026-10-02 (FlatOut, frames.py): with
+    // it off xemu redrew the screen 631 times a second, all wasted on the
+    // graphics chip; its own limiter paces the game, not the picture.
     t += "[display.window]\nfullscreen_on_startup = true\n";
     t += "[display.ui]\nshow_menubar = false\nshow_notifications = false\nhide_cursor = true\n";
     t += "[input]\nauto_bind = false\n";
@@ -1527,12 +1532,11 @@ bool prepareCemu(const Emulator& e, const std::string& saveDir, int players, std
     x += "    <api>1</api>\n";
     const std::string uuid = cab::gpu::vulkan().deviceUuid;
     if (uuid.size() == 32) x += "    <vkDevice>" + uuid + "</vkDevice>\n";
-    // NO VSYNC (#209). 1 was copied from Batocera, where the emulator
-    // presents straight to the screen; here gamescope already lines frames
-    // up with it. Cemu's own timer at 60 x 1.002 Hz keeps the game at speed
-    // whatever the present mode (LatteTiming.cpp). Never 3, "match display":
-    // on Linux release builds its thread is an empty stub.
-    x += "    <VSync>0</VSync>\n";
+    // VSYNC ON (#209, MMagTech 2026-10-04), 1, as Batocera ships it. #209
+    // first set 0; then PS2 showed that without vsync gamescope keeps one
+    // picture waiting and replaces it, so frames are lost (#226). Never 3,
+    // "match display": on Linux release builds its thread is an empty stub.
+    x += "    <VSync>1</VSync>\n";
     x += "    <AsyncCompile>true</AsyncCompile>\n";
     x += "    <Overlay><FPS>false</FPS><DrawCalls>false</DrawCalls><CPUUsage>false</CPUUsage>"
          "<CPUPerCoreUsage>false</CPUPerCoreUsage><RAMUsage>false</RAMUsage>"
@@ -1901,6 +1905,14 @@ bool Run::start(const Emulator& e, const std::string& romPath, const std::string
                      "--async_shader_compilation=true",
                      "--mount_scratch=true",
                      "--protect_zero=false",
+                     // VSYNC ON (#209, MMagTech 2026-10-04). Edge has no vsync
+                     // setting: it takes the first present mode allowed of
+                     // immediate, mailbox, relaxed FIFO, FIFO, and under
+                     // gamescope got mailbox, which loses frames (#226). With
+                     // the first three off it is plain FIFO, vsync.
+                     "--vulkan_allow_present_mode_immediate=false",
+                     "--vulkan_allow_present_mode_mailbox=false",
+                     "--vulkan_allow_present_mode_fifo_relaxed=false",
                  })
                 full.push_back(a);
             // PICTURE QUALITY (#63), and the game last.
