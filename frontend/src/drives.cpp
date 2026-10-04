@@ -165,21 +165,26 @@ std::string driveOf(sd_bus* bus, const std::string& block) {
     return d == "/" ? std::string() : d;
 }
 
-// How many partitions a partition table lists. -1 when it is not one.
-int partitionCount(sd_bus* bus, const std::string& path) {
-    sd_bus_error err = SD_BUS_ERROR_NULL;
-    sd_bus_message* reply = nullptr;
-    const int r = sd_bus_get_property(bus, kUDisks, path.c_str(), kPartitionTable, "Partitions",
-                                      &err, &reply, "ao");
-    sd_bus_error_free(&err);
-    int n = -1;
-    if (r >= 0 && sd_bus_message_enter_container(reply, 'a', "o") > 0) {
-        n = 0;
-        const char* p = nullptr;
-        while (sd_bus_message_read(reply, "o", &p) > 0) ++n;
-        sd_bus_message_exit_container(reply);
+// How many partitions the KERNEL has for a whole disk (/dev/sda: sda1 and
+// on, each a folder with a `partition` file in /sys/class/block/sda). Not
+// udisks' Partitions list: when a drive is plugged in, udisks announces the
+// disk before its partitions, and the list is empty for that moment. The
+// stick read as blank for a tenth of a second on the A9 (2026-10-04). The
+// kernel has read the table before it announces the disk at all. -1 when
+// it cannot tell.
+int kernelPartitions(const std::string& device) {
+    const std::string name = device.substr(device.rfind('/') + 1);
+    if (name.empty()) return -1;
+    const std::string dir = "/sys/class/block/" + name;
+    DIR* d = ::opendir(dir.c_str());
+    if (!d) return -1;
+    int n = 0;
+    while (struct dirent* e = ::readdir(d)) {
+        if (e->d_name[0] == '.') continue;
+        struct stat st;
+        if (::stat((dir + "/" + e->d_name + "/partition").c_str(), &st) == 0) ++n;
     }
-    sd_bus_message_unref(reply);
+    ::closedir(d);
     return n;
 }
 
@@ -361,6 +366,41 @@ bool anyMounted(const std::vector<dev_t>& devs, const std::vector<std::string>& 
     return false;
 }
 
+// WAITS FOR A RELOAD OF A UNIT TO FINISH, up to `seconds`. File access
+// takes its view of a drive down in its reload, and the drive's last
+// unmount does not return until everything written to it is out: on the
+// SanDisk stick, 1.5 s after the mount had already gone from the mount table
+// (A9, 2026-10-04). Until then the drive is held, so "Safe to unplug" would
+// be early and Format's wipe is refused ("Device or resource busy").
+void waitReloaded(sd_bus* bus, const char* unitName, int seconds) {
+    sd_bus_error err = SD_BUS_ERROR_NULL;
+    sd_bus_message* reply = nullptr;
+    const char* path = nullptr;
+    std::string unitPath;
+    if (sd_bus_call_method(bus, "org.freedesktop.systemd1", "/org/freedesktop/systemd1",
+                           "org.freedesktop.systemd1.Manager", "GetUnit", &err, &reply, "s",
+                           unitName) >= 0 &&
+        sd_bus_message_read(reply, "o", &path) >= 0 && path)
+        unitPath = path;
+    sd_bus_error_free(&err);
+    sd_bus_message_unref(reply);
+    if (unitPath.empty()) return;
+    for (int i = 0; i < seconds * 10; ++i) {
+        char* state = nullptr;
+        sd_bus_error e = SD_BUS_ERROR_NULL;
+        const int r = sd_bus_get_property_string(bus, "org.freedesktop.systemd1",
+                                                 unitPath.c_str(),
+                                                 "org.freedesktop.systemd1.Unit", "ActiveState",
+                                                 &e, &state);
+        sd_bus_error_free(&e);
+        const bool reloading = r >= 0 && state && std::strcmp(state, "reloading") == 0;
+        std::free(state);
+        if (!reloading) return;
+        usleep(100 * 1000);
+    }
+    std::fprintf(stderr, "[drives] %s still reloading after %d s\n", unitName, seconds);
+}
+
 // What the console knows about one block device it has looked at.
 struct Seen {
     std::string drive;
@@ -477,7 +517,9 @@ struct Watcher {
         // Its partitions arrive as objects of their own. A TABLE WITH NO
         // PARTITIONS is as good as blank: what Windows' Disk Management
         // leaves on a new SSD it was asked to "initialise".
-        const bool emptyTable = !isPartition && hasTable && partitionCount(bus, block) == 0;
+        std::string node;
+        pathBytesProp(bus, block, kBlock, "Device", &node);
+        const bool emptyTable = !isPartition && hasTable && kernelPartitions(node) == 0;
         if (!isPartition && hasTable && !emptyTable) return;
         if (isPartition && systemPartitionType(partType)) return;
 
@@ -639,7 +681,8 @@ struct Watcher {
     // mount table that nothing on the machine still has it. On failure
     // everything unmounted here is mounted back, so the drive is not left
     // missing from Storage while still held. Eject and Format both.
-    bool letGo(const std::string& drive, const char* what) {
+    bool letGo(const std::string& drive, const char* what,
+               std::vector<std::string>* releasedOut = nullptr) {
         // Every filesystem on the drive, not only the one holding CabinetOS/.
         // UDISKS' OWN MOUNTS ONLY (under /run/media): File access's view of a
         // drive is a second mount made by root, which udisks will not let
@@ -695,6 +738,15 @@ struct Watcher {
             std::fprintf(stderr, "[drives] %s: asked File access to let go: %s\n", what,
                          asked ? "taken" : why.c_str());
             for (int i = 0; i < 40 && anyMounted(devs, nodes); ++i) usleep(250 * 1000);
+            // Gone from the mount table is not let go of: the unmount is
+            // still writing the drive out. A big drive may take a while.
+            if (asked && !anyMounted(devs, nodes)) {
+                const auto t0 = std::chrono::steady_clock::now();
+                waitReloaded(bus, "cabinetos-files.service", 120);
+                std::fprintf(stderr, "[drives] %s: File access let go after %.1f s more\n", what,
+                             std::chrono::duration<double>(std::chrono::steady_clock::now() - t0)
+                                 .count());
+            }
         }
         if (anyMounted(devs, nodes)) {
             std::fprintf(stderr, "[drives] %s: %s is still mounted somewhere\n", what,
@@ -702,6 +754,7 @@ struct Watcher {
             putBack();
             return false;
         }
+        if (releasedOut) *releasedOut = released;
         return true;
     }
 
@@ -737,23 +790,45 @@ struct Watcher {
             disk = b;
         }
         if (disk.empty()) return false;
-        if (!letGo(drive, "format")) return false;
+        std::vector<std::string> released;
+        if (!letGo(drive, "format", &released)) return false;
+        // NOTHING WRITTEN YET: a refusal from here on puts the drive back as
+        // it was, so it is not left unmounted and missing from Storage.
+        auto putBack = [&]() {
+            for (const std::string& b : released) {
+                std::string at, why;
+                if (callNoPrompt(bus, b, kFs, "Mount", &at, &why)) {
+                    if (auto it = seen.find(b); it != seen.end()) it->second.mounted = true;
+                    std::fprintf(stderr, "[drives] format: put %s back at %s\n", b.c_str(),
+                                 at.c_str());
+                }
+            }
+        };
         std::fprintf(stderr, "[drives] format: %s (%d mounted, %d other) is let go of; wiping it\n",
                      disk.c_str(), static_cast<int>(d.mounts.size()), d.otherParts);
         // A NEW, EMPTY PARTITION TABLE over the whole disk. udisks wipes every
         // signature on it first. The old partitions go with the table.
+        // RETRIED WHILE THE DRIVE IS BUSY, for up to ten seconds: udev looks
+        // at a drive again right after it is unmounted. The wipe opens the
+        // drive before writing anything, so a refusal has erased nothing.
         std::string why;
-        {
+        for (int tries = 0;; ++tries) {
             sd_bus_error err = SD_BUS_ERROR_NULL;
             const int r = sd_bus_call_method(bus, kUDisks, disk.c_str(), kBlock, "Format", &err,
                                              nullptr, "sa{sv}", "gpt", 1,
                                              "auth.no_user_interaction", "b", 1);
-            if (r < 0) why = err.message ? err.message : std::strerror(-r);
+            why = r >= 0 ? "" : err.message ? err.message : std::strerror(-r);
             sd_bus_error_free(&err);
-            if (r < 0) {
-                std::fprintf(stderr, "[drives] format: no partition table: %s\n", why.c_str());
-                return false;
+            if (r >= 0) break;
+            if (why.find("busy") != std::string::npos && tries < 20) {
+                std::fprintf(stderr, "[drives] format: %s is busy; again in half a second\n",
+                             disk.c_str());
+                usleep(500 * 1000);
+                continue;
             }
+            std::fprintf(stderr, "[drives] format: no partition table: %s\n", why.c_str());
+            putBack();
+            return false;
         }
         // NAMED "Games", or "Games 2" and on if a drive of that name is
         // attached, so two drives this formatted are told apart in Storage

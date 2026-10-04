@@ -9309,6 +9309,15 @@ drives arrive exFAT or NTFS, which the console still uses straight away.
   mounted when the console comes back.
 - The cost said plainly: an ext4 drive cannot be read by plugging it into a
   Windows PC or a Mac. File access reaches it over the network either way.
+- **Found in the first TV test (2026-10-04), and fixed for Eject too:** with
+  File access on, a drive's last unmount is File access's view, and it keeps
+  writing the drive out after the mount has left the mount table (1.5 s on
+  the SanDisk stick). Format's wipe was refused as "busy", and Eject could say
+  "Safe to unplug" during it. Both now wait for File access's reload to
+  finish; Format also retries a busy wipe and remounts the drive if it
+  refuses. And a drive just plugged in read as blank for a tenth of a second
+  (udisks announces the disk before its partitions); partitions are now
+  counted from the kernel.
 
 The two paragraphs below are the 09-25 record, kept for the reasoning.
 
