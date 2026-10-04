@@ -1423,6 +1423,10 @@ said to keep them all: *"it's really not that many entries"*.
   newer (played upscaled; PCSX2 presents its own picture). DS is out while
   MMagTech decides whether DS stays on the console at all; Virtual Boy has its
   own Screen row; Vectrex draws lines, not pixels.
+- **Cost: the defaults are single-pass** (easymode, lcd3x) and cost next to
+  nothing. The heavier looks (CRT guest, 11 passes; the dot-matrix screens, 5
+  passes at 4K) are not measured, by MMagTech's decision: they are never a
+  default, and a person who picks one on a weak machine can pick another.
 - **Licences:** each file keeps its own (public domain: lottes, lcd3x,
   sharp-bilinear; the rest GPL), loaded at run time like the cores, credited
   with them.
