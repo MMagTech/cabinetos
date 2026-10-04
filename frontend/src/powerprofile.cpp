@@ -14,8 +14,15 @@ namespace {
 constexpr const char* kHome = "balanced";
 constexpr const char* kGame = "throughput-performance-bazzite";
 
-std::mutex gLock;
-std::condition_variable gWake;
+// NEVER DESTROYED, on purpose. The worker is detached and waits on gWake for
+// ever; destroying a condition variable somebody is waiting on blocks in
+// glibc, so exit() hung for good after the first game had started the worker.
+// Ordinary exits hid it (systemd kills a stopping session, Sign out execs);
+// handing over to Steam (#223) is the first exit that has to finish on its
+// own, and it sat on "Starting Steam" (A9, 2026-10-03: the stack was
+// pthread_cond_destroy under __run_exit_handlers).
+std::mutex& gLock = *new std::mutex;
+std::condition_variable& gWake = *new std::condition_variable;
 int gWanted = -1;     // 1 a game, 0 Home, -1 nothing asked yet
 bool gStarted = false;
 bool gComplained = false;

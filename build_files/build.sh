@@ -479,11 +479,11 @@ if [[ -e /usr/bin/cardwire ]]; then
     log "  WRONG: cardwire is in the image; Steam's session would launch through it and fail"
     failed=1
 fi
-for needed in fallocate chattr mkfs.ext4 e2fsck resize2fs losetup mountpoint; do
+for needed in fallocate chattr mkfs.ext4 e2fsck resize2fs losetup mountpoint setpriv; do
     if command -v "${needed}" >/dev/null 2>&1; then
         log "  ok: ${needed} ($(command -v "${needed}"))"
     else
-        log "  MISSING: ${needed}, which cabinetos-steam runs for Steam's slice"
+        log "  MISSING: ${needed}, which the Steam entry runs (cabinetos-steam, and setpriv around Steam)"
         failed=1
     fi
 done

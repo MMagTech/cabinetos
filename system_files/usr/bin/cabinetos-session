@@ -309,7 +309,9 @@ RETURNED_FILE="$(runtime_dir)/cabinetos-from-steam"
 others_in() {
     local pid
     while read -r pid; do
-        [[ "${pid}" != "$$" ]] && return 0
+        [[ "${pid}" == "$$" ]] && continue
+        [[ "$(cat "/proc/${pid}/comm" 2>/dev/null)" == "(sd-pam)" ]] && continue
+        return 0
     done < "$1"
     return 1
 }
@@ -322,6 +324,10 @@ stop_leftovers() {
         left=()
         while read -r pid; do
             [[ "${pid}" == "$$" ]] && continue
+            # The login's own PAM helper is the console's, not Steam's: it is
+            # what closes this session cleanly when the service ends. The first
+            # handover on the A9 (2026-10-03) stopped it along with Steam.
+            [[ "$(cat "/proc/${pid}/comm" 2>/dev/null)" == "(sd-pam)" ]] && continue
             left+=("${pid}")
         done < "${procs}"
         if (( ${#left[@]} == 0 )); then
@@ -366,8 +372,18 @@ steam_step() {
 
     # The display's own size, as the console uses, and VRR when the TV has it
     # (#209); upstream turns these into gamescope's -W/-H and --adaptive-sync.
+    #
+    # WITHOUT THE LOGIN'S CAPABILITIES. The console's login session carries
+    # CAP_WAKE_ALARM in its ambient set (CapAmb 0x800000000; an SSH login
+    # has none), and Steam's sandbox, bubblewrap, refuses to run with any
+    # capability it is not setuid for ("Unexpected capabilities but not
+    # setuid"), which Steam reports as "Steam now requires user namespaces
+    # to be enabled" in a window gamescope never shows: a black screen. Found
+    # on the A9's first handover, 2026-10-03; reproduced and fixed there with
+    # exactly this. gamescope keeps its own cap_sys_nice from its file.
     SCREEN_WIDTH="${OUT_W}" SCREEN_HEIGHT="${OUT_H}" ADAPTIVE_SYNC=1 \
     SRT_LOG_TO_JOURNAL=1 \
+        setpriv --inh-caps=-all --ambient-caps=-all -- \
         /usr/share/gamescope-session-plus/gamescope-session-plus steam
     echo "cabinetos-session: Steam's session ended (status $?)"
 
