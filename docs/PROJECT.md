@@ -15355,6 +15355,29 @@ open; the image only carries the launcher and the session (the brief's
   took about 1.5 s from the press to Steam's display, and the recorder never
   saw it again. If it comes back the session log shows the gap.
 
+**Installing with the console on screen** (MMagTech, 2026-10-04: the
+first start was a black screen for as long as Steam's download took, "it
+still kind of looks like a stall"; built overnight on his go). A recorder
+showed Steam has no window gamescope will show for the whole download: only
+a zenity progress dialog, which Steam-mode gamescope leaves off. So Install
+opens one panel, "Installing Steam", from the press to the handover: the
+slice is made, then `/usr/libexec/cabinetos-steam-download` runs Steam on
+gamescope's headless backend with the session's flags (the same client
+branch), the panel showing how much is on the drive, and stops Steam when it
+starts its interface, Steam's own sign that it is done (a polite `-shutdown`
+is ignored at that stage: still running after 180 s). Only then the
+handover; measured, Steam's interface 4.7 s after the request, 4 MB more on
+disk. **Nothing is timed** (MMagTech: connections differ): it ends on that
+signal, on a Steam error dialog ("Couldn't download Steam", the console
+stays), when Steam's display dies, or on "Press (B) to cancel", a prompt
+rather than a focused Cancel a run of A presses would hit. A stopped or
+failed install resumes on the next pick; the "installed" mark is the slice
+file's inode, so a stale mark never hands over to an empty Steam. **Not
+proven:** Steam's behaviour with no internet mid-download (a network
+namespace also breaks the headless display's sockets, and a firewall rule
+was not made unattended); if Steam retries silently the count stops and B
+cancels, and Install is greyed when the console is offline at the start.
+
 **Measured:** Steam's first download 2.4 GB in about 40 s; Steam's interface
 up about 3 s after the press; back to Home 1.8 to 1.9 s after Steam closes.
 Games played well (MMagTech). Shut down from Steam powers the console off,
