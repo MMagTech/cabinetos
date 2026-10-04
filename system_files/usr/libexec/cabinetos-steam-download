@@ -87,7 +87,9 @@ gs=$!
 last=""
 while :; do
     # The console went away: nobody is waiting for this.
-    kill -0 "${PARENT}" 2>/dev/null || finish 2
+    # (/proc, not kill -0: kill answers "not permitted" for a parent of
+    # another user, which is not the same as gone.)
+    [[ -d "/proc/${PARENT}" ]] || finish 2
     used=$(df -B1 --output=used "${STEAM}" 2>/dev/null | tail -1 | tr -d ' ')
     if [[ -n "${used}" && "${used}" != "${last}" ]]; then
         say "progress ${used}"
