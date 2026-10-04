@@ -7875,6 +7875,7 @@ int main(int argc, char** argv) {
     struct WiiPairJob {
         std::mutex m;
         std::string detail;   // the line under the title, when it changes
+        std::string address;  // the Remote paired, once done
         bool fresh = false, done = false;
         std::atomic<bool> stop{false};
         std::thread th;
@@ -7886,13 +7887,18 @@ int main(int argc, char** argv) {
     };
     WiiPairJob wiiPair;
     bool wiiPairOpen = false;
+    // THE SENSOR BAR IS ASKED WITH THE FIRST REMOTE ONLY: a second Remote does
+    // not move the bar (MMagTech, 2026-10-03). The panel's row changes it later.
+    bool wiiPairFirst = false;
     auto openWiiPairWindow = [&]() {
         wiiPair.quit();
         wiiPair.stop = false;
         {
             std::lock_guard<std::mutex> lk(wiiPair.m);
             wiiPair.fresh = wiiPair.done = false;
+            wiiPair.address.clear();
         }
+        wiiPairFirst = wiiremote::known().empty();
         askChoice("Pair a Wii Remote", "Press the red sync button", {}, 0, [](int) {});
         choiceScreen.setStaysOpen(true);
         choiceScreen.setFixedWidth(kPadWindowWidth);
@@ -7917,6 +7923,7 @@ int main(int argc, char** argv) {
                     say("Pairing\xE2\x80\xA6");
                     if (wiiremote::pair(address, &err)) {
                         std::lock_guard<std::mutex> lk(job.m);
+                        job.address = address;
                         job.done = true;
                         job.fresh = true;
                         return;
@@ -12798,34 +12805,48 @@ int main(int argc, char** argv) {
                 if (fresh && here() == Screen::Settings) buildSettings();
             }
             if (wiiPairOpen) {
-                // Pair a Wii Remote: closed by Back, or paired.
+                // Pair a Wii Remote: closed by Back, or paired. EITHER WAY BACK
+                // TO THE WII REMOTES PANEL it was opened from, one step, as Back
+                // goes everywhere else: on Pair a Wii Remote after Back, on the
+                // new Remote after a pairing (MMagTech, 2026-10-03).
                 if (!choiceScreen.isOpen() || here() != Screen::Settings) {
+                    const bool back = here() == Screen::Settings;
                     choiceScreen.close();
                     closeWiiPairWindow();
+                    if (back) openWiiPanelAt(static_cast<int>(wiiremote::known().size()));
                 } else {
                     bool fresh = false, done = false;
-                    std::string detail;
+                    std::string detail, address;
                     {
                         std::lock_guard<std::mutex> lk(wiiPair.m);
                         fresh = wiiPair.fresh;
                         wiiPair.fresh = false;
                         done = wiiPair.done;
                         detail = wiiPair.detail;
+                        address = wiiPair.address;
                     }
                     if (done) {
                         choiceScreen.close();
                         closeWiiPairWindow();
                         menuNotice.say("Wii Remote paired", Tone::Done);
                         buildSettings();
-                        // THE SENSOR BAR, asked while pairing as a Wii's own
-                        // settings ask it; the row under Controllers changes
-                        // it later.
-                        askChoice("Sensor bar", "", {"Below the TV", "Above the TV"},
-                                  wiiremote::sensorBarAbove() ? 1 : 0, [&](int k) {
-                            if (k < 0) return;
-                            wiiremote::setSensorBarAbove(k == 1);
-                            buildSettings();
-                        });
+                        int at = 0;
+                        const auto paired = wiiremote::known();
+                        for (size_t j = 0; j < paired.size(); ++j)
+                            if (strcasecmp(paired[j].address.c_str(), address.c_str()) == 0)
+                                at = static_cast<int>(j);
+                        // THE SENSOR BAR, asked with the first Remote as a Wii's
+                        // own settings ask it; the panel's row changes it later.
+                        if (wiiPairFirst) {
+                            askChoice("Sensor bar", "", {"Below the TV", "Above the TV"},
+                                      wiiremote::sensorBarAbove() ? 1 : 0, [&, at](int k) {
+                                if (k >= 0) wiiremote::setSensorBarAbove(k == 1);
+                                buildSettings();
+                                openWiiPanelAt(at);
+                            });
+                        } else {
+                            openWiiPanelAt(at);
+                        }
                     } else if (fresh) {
                         choiceScreen.replace({}, {}, detail);
                     }
