@@ -7943,20 +7943,40 @@ int main(int argc, char** argv) {
     // Remote games again.
     std::function<void(int)> openWiiPanelAt;
     std::function<void()> rebuildSettingsRows;   // buildSettings, set once it exists
-    openWiiPanelAt = [&](int focus) {
-        wiiRowsShown = wiiremote::known();
-        std::vector<std::string> names, values;
-        for (const wiiremote::Paired& w : wiiRowsShown) {
-            names.push_back("Wii Remote");
+    // BY PLAYER: the connected Remotes in light order, then any that are off
+    // (MMagTech, 2026-10-03; Bluetooth's own order put Player 2 above Player
+    // 1). Sorted when the panel is drawn; while it is open the values follow
+    // the Remotes in place, so a row never moves under the cursor.
+    auto wiiPanelRemotes = []() {
+        std::vector<wiiremote::Paired> rows = wiiremote::known();
+        std::stable_sort(rows.begin(), rows.end(),
+                         [](const wiiremote::Paired& a, const wiiremote::Paired& b) {
+                             auto rank = [](const wiiremote::Paired& w) {
+                                 return w.light ? w.light : (w.connected ? 10 : 20);
+                             };
+                             return rank(a) < rank(b);
+                         });
+        return rows;
+    };
+    auto wiiPanelValues = [](const std::vector<wiiremote::Paired>& rows) {
+        std::vector<std::string> values;
+        for (const wiiremote::Paired& w : rows)
             values.push_back(w.light ? "Player " + std::to_string(w.light)
                                      : (w.connected ? "Connected" : "Off"));
-        }
+        values.push_back("");
+        values.push_back(wiiremote::sensorBarAbove() ? "Above the TV" : "Below the TV");
+        return values;
+    };
+    std::vector<std::string> wiiValuesShown;
+    openWiiPanelAt = [&](int focus) {
+        wiiRowsShown = wiiPanelRemotes();
+        std::vector<std::string> names;
+        for (size_t j = 0; j < wiiRowsShown.size(); ++j) names.push_back("Wii Remote");
+        const std::vector<std::string> values = wiiPanelValues(wiiRowsShown);
         const int pairAt = static_cast<int>(names.size());
         names.push_back("Pair a Wii Remote");
-        values.push_back("");
         const int barAt = static_cast<int>(names.size());
         names.push_back("Sensor bar");
-        values.push_back(wiiremote::sensorBarAbove() ? "Above the TV" : "Below the TV");
         askChoice("Wii Remotes", "", names, std::clamp(focus, 0, barAt), [&, pairAt, barAt](int i) {
             if (i == barAt) {
                 wiiremote::setSensorBarAbove(!wiiremote::sensorBarAbove());
@@ -7985,6 +8005,7 @@ int main(int argc, char** argv) {
         });
         choiceScreen.setValues(values);
         choiceScreen.setStaysOpen(true);
+        wiiValuesShown = values;
     };
     auto openWiiPanel = [&]() { openWiiPanelAt(0); };
 
@@ -10086,6 +10107,23 @@ int main(int argc, char** argv) {
     // or the game's screen, under the curtain lifting. A game that could not
     // load says so where the press came from; one that fell over says so in
     // the pill, because the person was playing, not choosing.
+    // A PRESS THAT ARRIVED WHILE A GAME CLOSED IS DROPPED, from every
+    // controller, on both ways home (a core here, an emulator of its own).
+    // Closing blocks for a moment (the unload, the saves), and a press queued
+    // meanwhile, a second press of A or a Remote's button bouncing, reached
+    // Home as a fresh one and started the game it had just left: A9
+    // 2026-10-03 21:53:49, Geometry Wars again 34 ms after Exit. The same
+    // family as #103, on the way out. Releases stay, and the power and Sleep
+    // keys always go through.
+    auto dropPressesFromClosing = []() {
+        SDL_PumpEvents();
+        SDL_FilterEvents([](void*, SDL_Event* ev) {
+            if (ev->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN) return false;
+            if (ev->type == SDL_EVENT_KEY_DOWN)
+                return ev->key.key == SDLK_POWER || ev->key.key == SDLK_SLEEP;
+            return true;
+        }, nullptr);
+    };
     auto finishStandalone = [&]() {
         // AFTER THE EMULATOR HAS GONE, which is when everything it wrote is
         // on the disk. Whatever changed is zipped and sent, crash or not: a
@@ -10141,6 +10179,7 @@ int main(int argc, char** argv) {
         overlayOpen = false;
         overlayFade.from = overlayFade.to = 0.0f;
         overlayFade.elapsed = overlayFade.duration;
+        dropPressesFromClosing();
         std::fprintf(stderr, "[standalone] back to Home\n");
     };
 
@@ -10736,6 +10775,7 @@ int main(int argc, char** argv) {
         playing = false;
         overlayOpen = false;
         overlayFade.retarget(0.0f, overlayFadeSeconds);
+        dropPressesFromClosing();
         std::fprintf(stderr, "[overlay] exited to Home\n");
     };
 
@@ -12804,6 +12844,26 @@ int main(int argc, char** argv) {
                 }
                 if (fresh && here() == Screen::Settings) buildSettings();
             }
+            // THE WII REMOTES PANEL FOLLOWS THE REMOTES while it is open: one
+            // switched on, off, or connecting a moment after its pairing (it
+            // read "Off" with its light on, MMagTech 2026-10-03). Values only,
+            // in place.
+            if (choiceScreen.isOpen() && choiceScreen.title() == "Wii Remotes" &&
+                here() == Screen::Settings) {
+                std::vector<wiiremote::Paired> now = wiiremote::known();
+                std::vector<wiiremote::Paired> inPlace;
+                for (const wiiremote::Paired& shown : wiiRowsShown)
+                    for (const wiiremote::Paired& w : now)
+                        if (w.address == shown.address) inPlace.push_back(w);
+                if (inPlace.size() == wiiRowsShown.size()) {
+                    std::vector<std::string> values = wiiPanelValues(inPlace);
+                    if (values != wiiValuesShown) {
+                        choiceScreen.setValues(values);
+                        wiiValuesShown = values;
+                        wiiRowsShown = inPlace;
+                    }
+                }
+            }
             if (wiiPairOpen) {
                 // Pair a Wii Remote: closed by Back, or paired. EITHER WAY BACK
                 // TO THE WII REMOTES PANEL it was opened from, one step, as Back
@@ -12831,7 +12891,7 @@ int main(int argc, char** argv) {
                         menuNotice.say("Wii Remote paired", Tone::Done);
                         buildSettings();
                         int at = 0;
-                        const auto paired = wiiremote::known();
+                        const auto paired = wiiPanelRemotes();
                         for (size_t j = 0; j < paired.size(); ++j)
                             if (strcasecmp(paired[j].address.c_str(), address.c_str()) == 0)
                                 at = static_cast<int>(j);

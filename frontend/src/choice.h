@@ -58,6 +58,7 @@ public:
     void setDetail(std::string detail) { detail_ = std::move(detail); }
     void close() { open_ = false; }
     bool isOpen() const { return open_; }
+    const std::string& title() const { return title_; }
     // The answer, after Chosen.
     int chosen() const { return slot_; }
 
