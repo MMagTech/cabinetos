@@ -104,7 +104,16 @@ struct Remote {
     bool keyDirty = true;
     WiimoteEmu::EncryptionKey key;
     std::deque<PendingRead> reads;
-    int swallowAcks = 0;     // acks for our own writes, not the game's
+    // ANSWERS TO THE BRIDGE'S OWN COMMANDS, kept from the game, but only for a
+    // second after the last of them. A count that outlived its commands hid the
+    // game's own answers instead, and a Wii game that misses one says
+    // "Communication with the Wii Remote has been interrupted": measured on the
+    // A9 2026-10-03 20:29, Geometry Wars right after a replay in Wild West Guns.
+    // The count can be high because these copies drop commands sent too fast,
+    // and a dropped command is never answered.
+    int swallowAcks = 0;
+    int swallowed = 0;
+    std::chrono::steady_clock::time_point swallowUntil{};
     // WHEN THE GAME LETS THE REMOTE GO (a Wii game's idle disconnect, about
     // five minutes untouched). See checkDropped.
     std::chrono::steady_clock::time_point lastOut{};
@@ -122,6 +131,20 @@ struct Remote {
 };
 
 constexpr size_t kSetupMax = 96;
+
+// Whether the Remote answers a command with an acknowledgement (0x22): every
+// memory write, and anything with the acknowledge bit set (WiiBrew, "Wiimote",
+// Output Reports). A report mode without that bit is not answered.
+bool answered(const uint8_t* d, size_t n) {
+    return n >= 2 && (d[0] == 0x16 || (d[1] & 0x02));
+}
+
+// Sent by the bridge, not the game: its answer is the bridge's.
+void sentOurs(Remote& r, const uint8_t* d, size_t n) {
+    if (!answered(d, n)) return;
+    ++r.swallowAcks;
+    r.swallowUntil = std::chrono::steady_clock::now() + std::chrono::seconds(1);
+}
 
 bool isSetup(const uint8_t* d, size_t n) {
     if (n < 2) return false;
@@ -175,8 +198,9 @@ void ensurePlain(Remote& r) {
     uint8_t w1[22] = {0x16, 0x04, 0xa4, 0x00, 0xf0, 0x01, 0x55};
     uint8_t w2[22] = {0x16, 0x04, 0xa4, 0x00, 0xfb, 0x01, 0x00};
     toReal(r, w1, sizeof w1);
+    sentOurs(r, w1, sizeof w1);
     toReal(r, w2, sizeof w2);
-    r.swallowAcks += 2;
+    sentOurs(r, w2, sizeof w2);
     r.plain = true;
     std::fprintf(stderr, "[wiibridge] %s: extension put in plain mode\n", r.uniq.c_str());
 }
@@ -277,8 +301,10 @@ void fromReal(Remote& r, uint8_t* d, size_t n) {
         r.btn1 = d[1];
         r.btn2 = d[2];
     }
-    if (id == 0x22 && n >= 5 && r.swallowAcks > 0) {
+    if (id == 0x22 && n >= 5 && r.swallowAcks > 0 &&
+        std::chrono::steady_clock::now() < r.swallowUntil) {
         --r.swallowAcks;   // an answer to something the bridge sent, not the game
+        ++r.swallowed;
         return;
     }
     if (id == 0x20 && n >= 4) {
@@ -356,6 +382,17 @@ void checkDropped(Remote& r) {
     }
 }
 
+// A SECOND AFTER THE BRIDGE'S LAST COMMAND every answer is the game's again,
+// whatever the count says.
+void settleAnswers(Remote& r) {
+    if (r.swallowAcks == 0 && r.swallowed == 0) return;
+    if (std::chrono::steady_clock::now() < r.swallowUntil) return;
+    std::fprintf(stderr, "[wiibridge] %s: %d answer(s) to the bridge's commands kept from the game, %d never came\n",
+                 r.uniq.c_str(), r.swallowed, r.swallowAcks);
+    r.swallowAcks = 0;
+    r.swallowed = 0;
+}
+
 // THE REMOTE WENT AWAY (switched off, batteries, out of reach): its stand-in
 // STAYS. libretro's Dolphin crashes when a Remote it holds disappears mid-game:
 // its SetSource returns early on a null source (#ifdef __LIBRETRO__, commit
@@ -370,6 +407,7 @@ void detach(Remote& r) {
     r.node.clear();
     r.reads.clear();
     r.swallowAcks = 0;
+    r.swallowed = 0;
     // The real extension forgets its setup when the Remote goes off; what the
     // GAME believes (extension in, encryption on, its key) is kept, because the
     // game never saw the Remote go.
@@ -390,16 +428,19 @@ void reattach(Remote& r, const std::string& node, int fd) {
     // are the bridge's, not the game's.
     for (const auto& c : r.setup) {
         toReal(r, c.data(), c.size());
-        if (c[0] == 0x16 || (c.size() >= 2 && (c[1] & 0x02))) ++r.swallowAcks;
+        sentOurs(r, c.data(), c.size());
         if (c[0] == 0x16 && c[2] == 0xa4 && c[4] == 0xfb) r.plain = true;
         ::usleep(15000);
     }
     if (r.ext) ensurePlain(r);   // a game that skipped the plain setup
     if (!r.lastMode.empty()) {
         toReal(r, r.lastMode.data(), r.lastMode.size());
-        ++r.swallowAcks;
+        sentOurs(r, r.lastMode.data(), r.lastMode.size());
     }
-    if (!r.lastLed.empty()) toReal(r, r.lastLed.data(), r.lastLed.size());
+    if (!r.lastLed.empty()) {
+        toReal(r, r.lastLed.data(), r.lastLed.size());
+        sentOurs(r, r.lastLed.data(), r.lastLed.size());
+    }
     std::fprintf(stderr, "[wiibridge] %s back on %s, to the same stand-in; %zu setup command(s) sent again\n",
                  r.uniq.c_str(), node.c_str(), r.setup.size());
 }
@@ -591,6 +632,7 @@ int main() {
                 }
             }
             checkDropped(r);
+            settleAnswers(r);
             if (r.real >= 0 && (gone || ::access(("/dev/" + r.node).c_str(), F_OK) != 0)) detach(r);
             ++i;
         }
