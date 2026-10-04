@@ -443,6 +443,17 @@ after_app() {
 # A request left by a session that died before acting on it is not acted on.
 rm -f "${REQUEST_FILE}"
 
+# NOR IS A SLICE LEFT ATTACHED. A session that ended inside Steam (a crash, a
+# restart of this service, a deploy) never reached steam_step's clean-up, and
+# Steam's files would stay mounted under the console, outside the trim guard.
+# Nothing of Steam is running at this point: whatever was is gone with the
+# old session. Found on the A9, 2026-10-04, after a deploy restarted the
+# session while Steam was open.
+if mountpoint -q "${HOME}/.local/share/Steam" 2>/dev/null; then
+    systemctl --no-ask-password start cabinetos-steam@unmount.service \
+        && echo "cabinetos-session: Steam's slice was left attached; detached"
+fi
+
 if ls /dev/dri/card* >/dev/null 2>&1; then
     # --ready-fd goes BEFORE the `--`: everything after it is the app's.
     # shellcheck disable=SC2086
