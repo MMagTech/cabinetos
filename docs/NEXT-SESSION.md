@@ -21,13 +21,18 @@ around the picture*. DS filed as #248 (stays or goes, milestone 7).
 
 ## Next
 
-1. **Finish #122:** MMagTech installs the `testing` image on the A9 and
-   judges it as shipped (he said he will raise anything he catches later);
-   merge #249 on his explicit go, close #122, delete the branch on his go.
-   Not seen on the TV yet in any build: CRT aperture on N64, Dot matrix
-   Pocket, the Game Boy Color dot matrix, a 3DO game.
-2. Then the rest of milestone 3: #221 (built-in cores have no audio rate
-   control, so a frame repeats or drops every 10 to 17 s) and #227 (check a
-   new gamescope still takes every flag the session passes). #63 is closed;
-   its phase 3 (#250), #210 and #168 moved after the first release
-   (MMagTech, 2026-10-04).
+1. **#227 on `gamescope-flags`** (the base-update check that gamescope
+   still takes every flag the session passes): built and dry-run on the A9,
+   PR open; merge on MMagTech's go, close #227, delete the branch on his go.
+   Only `ci/` changed, so the merge builds main itself (no testing image to
+   judge; the image's contents do not change).
+2. **#221** (lessons: `emulators.md`, `testing.md`), the last of milestone 3:
+   built-in cores have no audio rate control, so a frame repeats or drops
+   every 10 to 17 s. Measure on the A9; at the end MMagTech watches a
+   scrolling game on the TV.
+3. Then milestone 4, offline play (#88): start with the scenario walk-through.
+   Discussed 2026-10-04: the narrow version (no server: Home shows the games
+   on the drive and they play; saves already stay on the console and the
+   "which copy wins" rule is built, `main.cpp:849`); missing is reaching Home
+   without a server, covers saved at keep time, owed-save retry, and a backup
+   of RomM's copy when another device saved in between.
