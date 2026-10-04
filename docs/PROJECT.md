@@ -11979,7 +11979,9 @@ in.** `snes9x_overclock_cycles` and `genesis_plus_gx_overclock` trade accuracy
 for compatibility, not quality for speed, and on any machine this OS runs on a
 SNES is not a performance problem. Those get set correctly once and are never
 part of a performance choice. `blargg_ntsc_filter` is a LOOK, free, and belongs
-wherever the shader and glow settings end up — not here.
+wherever the shader and glow settings end up — not here. **Not offered
+(2026-10-04, #122):** it is the same composite-cable look as the Composite
+shader MMagTech judged on the TV and dropped.
 
 #### The hardware is unknown and that is not the problem it looks like
 
