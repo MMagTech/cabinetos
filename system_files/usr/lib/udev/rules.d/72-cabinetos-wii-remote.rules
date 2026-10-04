@@ -1,0 +1,7 @@
+# A real Wii Remote is the Wii bridge's alone (issue #200, wiibridge/): no seat
+# access grant on its raw node. With 99-cabinetos-wii-remote.rules.
+SUBSYSTEM=="hidraw", KERNELS=="0005:*", PROGRAM="/usr/bin/grep -q ^HID_NAME=Nintendo.RVL-CNT /sys%p/device/uevent", TAG-="uaccess"
+# The bridge makes its stand-ins through /dev/uhid. Bazzite grants it today, in
+# ublue-os-udev-rules (60-sunshine-ublue.rules, for Sunshine); said here too, so
+# real Wii Remotes do not depend on a streaming app's rule staying in the base.
+KERNEL=="uhid", TAG+="uaccess"

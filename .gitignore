@@ -24,6 +24,8 @@ cores/system/
 
 # The frontend binary, built in a container on the test VM or in CI.
 frontend/build/
+# The Wii bridge, built the same way (wiibridge/Makefile).
+wiibridge/cabinetos-wii-bridge
 
 # What the image build copies in that is not in this repository: the frontend
 # binary, the twenty-one cores and PPSSPP's system files, collected by

@@ -34,6 +34,7 @@
 # Output, always, at image_payload/ in the repository root:
 #
 #   bin/cabinetos-frontend
+#   bin/cabinetos-wii-bridge      the Wii Remotes' bridge (#200, wiibridge/)
 #   cores/<core>_libretro.so      x22
 #   system/PPSSPP/...             PPSSPP's fonts and lookup tables
 #   system/dolphin-emu/Sys/...    Dolphin's game settings and Wii files
@@ -52,11 +53,13 @@ OUT="$ROOT/image_payload"
 if [ $# -ge 1 ]; then
     SRC="$1"
     FRONTEND="$SRC/bin/cabinetos-frontend"
+    BRIDGE="$SRC/bin/cabinetos-wii-bridge"
     CORES="$SRC/cores"
     SYSTEM="$SRC/system"
     CEMUSRC="$SRC/cemu"
 else
     FRONTEND="$ROOT/frontend/build/cabinetos-frontend"
+    BRIDGE="$ROOT/wiibridge/cabinetos-wii-bridge"
     CORES="$ROOT/cores/build"
     SYSTEM="$ROOT/cores/system"
     CEMUSRC="$ROOT/cores/build/cemu"
@@ -88,16 +91,22 @@ mkdir -p "$OUT/bin" "$OUT/cores" "$OUT/system"
 
 [ -f "$FRONTEND" ] || { echo "no frontend binary at $FRONTEND" >&2; exit 1; }
 install -m 0755 "$FRONTEND" "$OUT/bin/cabinetos-frontend"
+# The Wii bridge, built beside it (build-frontend.yml). Without it a real Wii
+# Remote still pairs, but no game gets a Nunchuk and Cemu sees no Remote.
+[ -f "$BRIDGE" ] || { echo "no Wii bridge at $BRIDGE" >&2; exit 1; }
+install -m 0755 "$BRIDGE" "$OUT/bin/cabinetos-wii-bridge"
 
 # It has to be an executable this machine's kernel will run, not a script, an
 # empty file, or — the one that has actually happened in this project — an
 # artifact that downloaded as a directory. `file` is in every runner image.
 if command -v file >/dev/null 2>&1; then
-    case "$(file -b "$OUT/bin/cabinetos-frontend")" in
-        ELF\ 64-bit\ LSB\ *executable*|ELF\ 64-bit\ LSB\ *shared\ object*) ;;
-        *) echo "the frontend is not an x86-64 ELF: $(file -b "$OUT/bin/cabinetos-frontend")" >&2
-           exit 1 ;;
-    esac
+    for bin in cabinetos-frontend cabinetos-wii-bridge; do
+        case "$(file -b "$OUT/bin/$bin")" in
+            ELF\ 64-bit\ LSB\ *executable*|ELF\ 64-bit\ LSB\ *shared\ object*) ;;
+            *) echo "$bin is not an x86-64 ELF: $(file -b "$OUT/bin/$bin")" >&2
+               exit 1 ;;
+        esac
+    done
 fi
 
 # --- The cores -------------------------------------------------------------

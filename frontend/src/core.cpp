@@ -76,6 +76,12 @@ int gPlayers = 1;
 unsigned gPortsPlugged = 0;
 // What goes into each player's port. See Core::setPadDevice.
 unsigned gPadDevice = RETRO_DEVICE_JOYPAD;
+// The first port given to real Wii Remotes, or -1 for none. See
+// Core::setRealRemotesFrom.
+int gRealRemotesFrom = -1;
+// Dolphin's id for a real Wii Remote: a subclass of NONE, so never mask it to
+// its base type (DolphinLibretro/Input.cpp, RETRO_DEVICE_REAL_WIIMOTE).
+constexpr unsigned kRealWiiRemote = (6u << 8) | RETRO_DEVICE_NONE;
 
 // How many controller ports the CORE says it has, from
 // RETRO_ENVIRONMENT_SET_CONTROLLER_INFO. Four for Flycast, and it matters that
@@ -1519,11 +1525,22 @@ bool Core::loadGame(const std::string& romPath, const std::string& systemDir,
     if (g.set_controller_port_device) {
         const unsigned ports = std::max(gCorePorts, 1u);
         const unsigned players = std::clamp<unsigned>(static_cast<unsigned>(gPlayers), 1u, ports);
-        for (unsigned p = 0; p < ports; ++p)
-            g.set_controller_port_device(p, p < players ? gPadDevice : RETRO_DEVICE_NONE);
-        gPortsPlugged = players;
-        if (gPadDevice != RETRO_DEVICE_JOYPAD)
-            std::fprintf(stderr, "[input] each player's port holds device %u\n", gPadDevice);
+        if (gRealRemotesFrom >= 0) {
+            // Pads first, in the console's order, then a real Remote in every
+            // port left: a Remote that connects mid-game takes the next one.
+            const unsigned pads = std::min(players, static_cast<unsigned>(gRealRemotesFrom));
+            for (unsigned p = 0; p < ports; ++p)
+                g.set_controller_port_device(p, p < pads ? gPadDevice : kRealWiiRemote);
+            gPortsPlugged = ports;
+            std::fprintf(stderr, "[input] %u pad port(s) holding device %u, %u real Wii Remote port(s)\n",
+                         pads, gPadDevice, ports - pads);
+        } else {
+            for (unsigned p = 0; p < ports; ++p)
+                g.set_controller_port_device(p, p < players ? gPadDevice : RETRO_DEVICE_NONE);
+            gPortsPlugged = players;
+            if (gPadDevice != RETRO_DEVICE_JOYPAD)
+                std::fprintf(stderr, "[input] each player's port holds device %u\n", gPadDevice);
+        }
     }
 
     retro_system_av_info av{};
@@ -1615,6 +1632,7 @@ void Core::unloadGame() {
     if (g.unload_game) g.unload_game();
     gameLoaded_ = false;
     gPadDevice = RETRO_DEVICE_JOYPAD;   // the next game says its own
+    gRealRemotesFrom = -1;
     gHWFrame = false;
     destroyHWTarget();
     // AFTER unload_game, for the same reason context_destroy runs before it:
@@ -1918,6 +1936,8 @@ void Core::setPlayers(int n) {
 void Core::setPadDevice(unsigned device) {
     gPadDevice = device ? device : RETRO_DEVICE_JOYPAD;
 }
+
+void Core::setRealRemotesFrom(int firstPort) { gRealRemotesFrom = firstPort; }
 
 void Core::setPad(int port, const PadState& pad) {
     if (port < 0 || port >= kMaxPorts) return;

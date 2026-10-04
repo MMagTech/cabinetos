@@ -1,0 +1,5 @@
+# A real Wii Remote is the Wii bridge's alone (issue #200, wiibridge/): cabinet
+# owns its raw node, mode 0000; the bridge opens it for a moment and hides it
+# again, so Dolphin and Cemu see only the bridge's stand-in. After 92-viia.rules,
+# which makes every hidraw node 0666. Tested on the A9 from /run, 2026-10-03.
+SUBSYSTEM=="hidraw", KERNELS=="0005:*", PROGRAM="/usr/bin/grep -q ^HID_NAME=Nintendo.RVL-CNT /sys%p/device/uevent", OWNER="cabinet", MODE="0000"

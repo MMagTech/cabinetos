@@ -3,6 +3,7 @@
 #include "gpu.h"
 #include "standalone.h"
 #include "wii.h"
+#include "wiiremote.h"
 #include "wiiu.h"
 
 #include <sys/stat.h>
@@ -459,10 +460,11 @@ Coverage coverageFor(const romm::Platform& p) {
 Coverage coverageFor(const romm::Game& g) {
     Coverage c = answer(lookup(g.platformSlug, g.platformFsSlug));
     // A Wii game that takes neither a Classic Controller nor a GameCube pad
-    // needs a real Wii Remote. Pairing one is #200; until it is built, these
-    // stay greyed.
+    // needs a real Wii Remote, and plays while any Wii Remote is paired, as
+    // on a Wii (#200, PROJECT.md question 35). Remove every Remote and they
+    // grey out again.
     if (c.support == Support::Playable && g.platformSlug == "wii" &&
-        wii::padDevice(wii::codeFromTitleId(g.titleId)) == 0) {
+        wii::padDevice(wii::codeFromTitleId(g.titleId)) == 0 && !wiiremote::anyPaired()) {
         c.support = Support::NeedsController;
         c.reason = "Needs a Wii Remote";
     }
@@ -696,6 +698,9 @@ std::map<std::string, std::string> optionOverrides(const std::string& core) {
             // disk, and burying the lines that matter. 2 is Error
             // (DolphinLibretro/Common/Options.cpp).
             {"dolphin_log_level", "2"},
+            // WHERE THE SENSOR BAR IS, as the console was told under
+            // Controllers (#200). 0 is below the TV, 1 above.
+            {"dolphin_sensor_bar_position", wiiremote::sensorBarAbove() ? "1" : "0"},
         };
     }
     // FLICKER BLENDED, NO ROW (#73, MMagTech 2026-10-02). Games on both drew
