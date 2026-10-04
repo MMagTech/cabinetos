@@ -162,6 +162,26 @@ Read before working on a core, an emulator, input, saves or states.
   directory. Deleted 2026-09-20 with MMagTech's say-so, each re-verified empty
   immediately beforehand.
 
+- **VSYNC OFF UNDER GAMESCOPE IS NOT "FASTER", IT IS A ONE-PICTURE
+  MAILBOX.** gamescope never tears, so PCSX2 with vsync off got mailbox
+  presentation ("Immediate not supported ... using mailbox" in its log), and
+  at 59.94 against the TV's 60 a newer picture replaced a waiting one: 56 of
+  60 reached the screen (#226). Vsync on alone is mailbox again in PCSX2
+  unless it times itself to the screen; `DisableMailboxPresentation` is what
+  makes it a queue. **Read which present mode the emulator actually got.**
+
+- **REMOVING A COPY DOES NOT PROVE THE COPY WAS THE LIMIT.** Quality was held
+  at 3x "until the copy goes"; with the copy gone, 5x still ran at 68 to 77%
+  speed, because the GPU was at 99% (`/sys/class/drm/card1/device/
+  gpu_busy_percent`). Read the GPU's load beside the frame times before
+  blaming the path.
+
+- **frames.py MEASURES THE WINDOW THAT PRESENTS, NOT THE GAME.** On the copy
+  path it timed the console redrawing at 60 whether PCSX2 had a new frame or
+  not. With PCSX2 presenting itself it times PCSX2's own pictures, which is
+  the honest number; the console's `[ps2] N fps, speed N%` line every ten
+  seconds is PCSX2's own reading.
+
 ## Building a whole emulator (PCSX2)
 
 - **A LIBRARY THAT BUILDS TELLS YOU ALMOST NOTHING. A LIBRARY THAT LINKS TELLS
