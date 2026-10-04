@@ -11,33 +11,25 @@ specification is `docs/PROJECT.md`; the order is `docs/ROADMAP.md`.
 
 ## Where things stand
 
-Milestone 3. **#200, real Wii Remotes, is on `testing`** (branch
-`wii-remotes`, up to date with main): the bridge, its udev rules, the search
-service and the polkit rule are in the image, dry-run on the A9 2026-10-03.
-Passed on the TV from the hand build: everything in the #200 test record,
-plus the setup replay (pointer right after a mid-game power cycle) and the
-ack fix (Geometry Wars after Wild West Guns, no "Communication interrupted").
-The Wii Remotes panel was judged; Back and a finished pairing now return to
-it, and the sensor bar is asked with the first Remote only.
-
-PCSX2/pcsx2#15040 was closed by the PCSX2 team 2026-10-03 (no embedding API,
-no AI contributions). Moved out: Wii U Remotes in Cemu (#231), the empty
-battery in the Wii HOME menu (#230), both After first release.
+Milestone 3. **#200, real Wii Remotes, merged in #232** (2026-10-03); main
+promoted the image judged on the A9 (2026.10.04.2). PS2's Quality is 3x
+because the console copies every PS2 frame off the GPU (#226).
+PCSX2/pcsx2#15040 was closed by the PCSX2 team (no embedding API, no AI
+contributions), so our own route is the only one.
 
 ## Next
 
-1. **#200 on the testing image**, with MMagTech at the TV, steps first:
-   "Pair a Wii Remote" end to end (remove both, pair one: sensor bar asked;
-   pair the second: not asked; lands in the panel on the new Remote), then a
-   Nunchuk game with a mid-game power cycle, proving from the log that
-   `/usr/libexec/cabinetos-wii-bridge` is the bridge running. Merge on his
-   "merge"; close #200; delete `wii-remotes` on his go.
-2. **#226, PS2 without the copy**: give PCSX2 its own window, shown by
+1. **#226, PS2 without the copy**: give PCSX2 its own window, shown by
    gamescope with the pause menu over it as for the separate emulators;
-   measure in the real path with frames.py before raising Quality. Upstream
-   said no, so this is the route.
-3. Then #63 phase 2 (ROADMAP).
+   measure in the real path with frames.py before raising Quality.
+   **MMagTech's ask (2026-10-03): this should need little of him.** The PS2
+   decisions are made and it runs; the work is making it run better. Measure,
+   build and compare on the A9 yourself; bring him to the TV once, at the
+   end, to judge the picture and the feel, steps first. Never build on the A9
+   while he is playing.
+2. Then #63 phase 2 (ROADMAP). Steam (#223) is recorded as straight after
+   #63's three phases; his decisions on it are in the issue's comments.
 
 Owed, small: move the option check out of `cores/build-core.sh` into its own
 script, so editing the check stops rebuilding all 22 cores (it did once on
-2026-10-02). Not done in the #200 image, which does not touch the cores.
+2026-10-02). Do it with the next change that touches the cores.

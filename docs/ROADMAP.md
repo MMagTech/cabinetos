@@ -26,8 +26,8 @@ session picks up is `docs/NEXT-SESSION.md`.
 3. **Settings: picture**, in this order (set with MMagTech 2026-10-02):
    1. ~~**#63 phase 1**, with #73, #204, #209 and #217.~~ **Merged in #225,
       2026-10-02.**
-   2. **Wii Remotes (#200)**, from milestone 2: the hardware arrived; pairing
-      fails at BlueZ's Wii PIN step (findings on the issue).
+   2. ~~**Wii Remotes (#200)**.~~ **Merged in #232, 2026-10-03**: pair once,
+      the Wii bridge in the image, judged on the A9 TV.
    3. **PS2's picture without the copy (#226)**: its own window, as the
       separate emulators are shown, so Quality can go back toward 5x. PCSX2
       asked upstream for the other route (PCSX2/pcsx2#15040).
@@ -59,7 +59,8 @@ session picks up is `docs/NEXT-SESSION.md`.
 **After first release:** everything in that milestone on GitHub, including
 the Dreamcast crash (#151), the performance profile (#150), rewind's cost
 (#168), multi-disc swapping (#162), PCSX2's per-game fixes (#154), the RomM
-5.2/5.3 features (#158 to #161) and the system tuning ideas (#163 to #167).
+5.2/5.3 features (#158 to #161), the system tuning ideas (#163 to #167),
+Wii U Remotes in Cemu (#231) and controller batteries (#230).
 
 Done: Settings (#57 to #72, except #63), the emulator block (#82 to #90), the
 in-game features (#76 to #80).
