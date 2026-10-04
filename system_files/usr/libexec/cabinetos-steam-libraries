@@ -132,6 +132,14 @@ def main():
     libs = libraries()
     if not libs:
         return 0
+    # STEAM WANTS steamapps/ THERE ALREADY. Its own "Add Drive" makes it; a
+    # folder added by this file was answered "not writable (Disk write
+    # failure)" at the first install until it existed (A9, 2026-10-04).
+    for lib in libs:
+        try:
+            os.makedirs(os.path.join(lib, "steamapps"), exist_ok=True)
+        except OSError as e:
+            say(f"could not make {lib}/steamapps ({e})")
     if not os.path.isdir(STEAM):
         say(f"{STEAM} is not there; nothing written")
         return 1

@@ -77,6 +77,7 @@ for expected in \
     /usr/libexec/cabinetos-system-disk \
     /usr/libexec/cabinetos-steam-download \
     /usr/libexec/cabinetos-steam-libraries \
+    /etc/gamescope-session-plus/sessions.d/steam \
     /usr/libexec/cabinetos-drive-claim \
     /usr/lib/systemd/system/cabinetos-drive-claim.service \
     /usr/share/polkit-1/rules.d/63-cabinetos-drives.rules \

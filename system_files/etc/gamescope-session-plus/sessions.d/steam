@@ -1,0 +1,16 @@
+# CabinetOS: read by Steam's session after Bazzite's own
+# (/usr/share/gamescope-session-plus/sessions.d/steam), so these win.
+# Issue #236; docs/PROJECT.md, ext4 drives.
+#
+# THE CONSOLE IS THE ONLY THING THAT MOUNTS, UNMOUNTS OR FORMATS A DRIVE.
+# Bazzite turns both of these on. With drive adopt on, Steam's Storage page
+# listed the console's own drive as "1.9 TB free of 1.9 TB" and said "Press Y
+# to format this drive" (A9, 2026-10-04): the drive with the system, every
+# save and every kept game. It hides that drive from udisks, so Steam took it
+# for an empty one. Its format helper is not in the image, so the press would
+# have failed, but it must never be offered. Steam still installs to any
+# drive with a library on it: the main drive's slice, and every drive's
+# SteamLibrary/, which the console adds at each handover
+# (cabinetos-steam-libraries).
+STEAM_ALLOW_DRIVE_ADOPT=0
+STEAM_ALLOW_DRIVE_UNMOUNT=0

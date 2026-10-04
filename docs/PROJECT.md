@@ -9326,6 +9326,18 @@ drives arrive exFAT or NTFS, which the console still uses straight away.
   MMagTech's pick: a Formatting screen with a spinner until the new drive is
   mounted, then "External drive formatted". A real SSD is expected to take
   seconds; not yet measured.
+- **Third TV test, Steam: a Windows game (Assault Android Cactus) installed to
+  the stick and ran through Proton 11 from it.** Two faults on the way.
+  Steam's first install said "not writable (Disk write failure)": Steam
+  wants `steamapps/` in a library before it will use it (its own Add Drive
+  makes it); the console now makes it at each handover. And Steam's Storage
+  listed the console's own drive, "1.9 TB free of 1.9 TB, Press Y to format
+  this drive": Bazzite's Steam session turns on `STEAM_ALLOW_DRIVE_ADOPT`
+  (and `STEAM_ALLOW_DRIVE_UNMOUNT`), and with the drive hidden from udisks
+  (#223) Steam took it for an empty one. Its format helper is not in the
+  image, so it would have failed, but it must never be offered.
+  `/etc/gamescope-session-plus/sessions.d/steam` turns both off: the console
+  is the only thing that mounts, unmounts or formats a drive.
 
 The two paragraphs below are the 09-25 record, kept for the reasoning.
 
