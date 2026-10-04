@@ -37,10 +37,20 @@ const char* levelName(Level l);
 const char* levelWord(Level l);
 bool levelFromWord(const std::string& word, Level* out);
 
-// The console's level. PERFORMANCE UNTIL PHASE 2: nothing tells machines
-// apart yet, and the design's rule for unknown hardware is Performance.
+// The console's level: the dial's setting once a person has moved it,
+// otherwise this machine's class. Never changed by the console after that.
 Level console();
 void setConsole(Level l);
+
+// THE MACHINE CLASS (#63 phase 2, MMagTech 2026-10-04): the level this
+// machine starts on, from its graphics chip alone, worked out at every start
+// so a new graphics card is noticed. Shader units x top clock, against the
+// A9 (16 units at 2.9 GHz, 46): 40 and up Quality, 20 and up Balanced,
+// below that Performance. Hardware that does not report both (Intel and
+// NVIDIA today, any machine without Vulkan) gets Performance and is raised
+// with the dial. The processor is logged and does not count: the dial moves
+// only what the graphics chip draws.
+Level machineClass();
 
 // A game's own choice from its pause menu, if it has one. Kept on this
 // console only, never synced.

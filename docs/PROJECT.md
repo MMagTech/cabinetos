@@ -14293,6 +14293,41 @@ need the image.
   on the TV's own rows, made little visible difference; every system still
   fills the height, and handhelds' look is #122's.
 
+#### DECIDED, MMagTech 2026-10-04: the machine class (#63 phase 2), and vsync on (#209)
+
+1. **The class comes from the graphics chip alone:** shader units x top
+   clock, scored against the A9 (16 units at 2.9 GHz, 46). 40 and up starts
+   on Quality, 20 and up Balanced, below Performance. A Radeon 780M
+   (12 at 2.7, 32) would start on Balanced, a Steam Deck (8 at 1.6, 13) on
+   Performance. The processor is logged and does not count: the dial moves
+   only what the graphics chip draws, so a slow processor is just as slow
+   at Performance. To be checked on the A9 in the TV round, by slowing the
+   processor and comparing one demanding game at Performance and Quality.
+2. **Hardware that does not report both gets Performance:** Intel (no
+   shader count from its driver), NVIDIA (no image for it yet, open question
+   11, and no clock reported), anything without Vulkan. Scoring either needs
+   one of each to set the lines on; until then the owner raises the dial.
+   MMagTech: NVIDIA need not be accounted for.
+3. **The class only picks the starting level.** Once a person moves the dial
+   it is theirs and the console never changes it. The class is worked out at
+   every start, so while nobody has moved the dial a new graphics card is
+   noticed at the next start. It costs about 33 ms (asking the driver; the
+   A9 takes about 3.9 s from start to Home).
+4. **N64 is 1x, 2x, 4x** (was 1x, 4x, 4x): with machines starting on their
+   class, Balanced has to be lighter than Quality to be worth having. PS2 is
+   already 1x, 3x, 4x since #226.
+5. **Vsync on in every separate emulator** (MMagTech on #209, 2026-10-04,
+   after #226): Eden Fifo, Cemu 1, RPCS3 on, xemu on as before, and Xenia
+   with immediate, mailbox and relaxed FIFO disallowed, which leaves FIFO
+   (Edge has no vsync setting of its own). Without vsync gamescope holds one
+   picture and replaces it, so frames are lost: PCSX2 got 56 of 60.
+
+**Built on `machine-class`, 2026-10-04:** `gpu.cpp` reads the active shader
+units (VK_AMD_shader_core_properties2) and the top clock (`pp_dpm_sclk`, by
+the device's PCI address); `quality::machineClass()` scores it and logs
+`[quality] this machine: ...` at every start. On the A9: Quality, 16 units
+at 2900 MHz, score 46; processor 24 threads, 5157 MHz, AVX-512.
+
 #### DECIDED, MMagTech 2026-10-02: fast cores and full speed in games (#163, #150)
 
 Built on branch `fast-cores`; measurements on the issues.
