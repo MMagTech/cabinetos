@@ -58,3 +58,4 @@ what breaks for the product, not the subsystem.** Keep the detail, after the
 plain statement. Check the running machine before theorising, and say what is
 verified and what is assumed. **Use the `MMagTech` handle, never a personal
 name**: the repo is public.
+
