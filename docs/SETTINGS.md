@@ -718,6 +718,9 @@ right there and the choice is about a system:
   switch per system would be wrong for some games either way, and choosing
   per game would need a list of games, which the no-per-game-fixes rule rules
   out. Cabinet's option is not carried over.
-- Shader and glow, as already decided.
+- ~~Shader and glow, as already decided.~~ **Reopened and decided
+  2026-10-04 (#122):** one Look row per system, RetroArch's own shaders,
+  on by default; the glow has no row and is always on at Strong. Both in
+  docs/PROJECT.md, *Shaders, and the glow around the picture*.
 
 **To build, #73.**

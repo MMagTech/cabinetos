@@ -1364,6 +1364,77 @@ into the picture, banding, not reaching the edge. A continuous slider on a real
 panel found the numbers, and only then were presets chosen. Do not guess these;
 build the slider.
 
+**DECIDED, MMagTech 2026-10-04: the glow is always on at Strong (0.04), with
+no setting anywhere.** The pause-menu row recorded above was never built, and
+he chose to leave it that way for now (fewer settings is the rule), raised from
+Subtle to Strong. `--glow off|subtle|strong` remains for testing only.
+
+#### DECIDED, MMagTech 2026-10-04: screen looks are RetroArch's own shaders (#122)
+
+**Not a copy of Cabinet.** Cabinet had to rewrite every look in Metal; this
+console draws libretro games with OpenGL ES, the language RetroArch's GLSL
+shaders are written in, so the files ship exactly as libretro publishes them
+(`libretro/glsl-shaders`, one pinned commit, `frontend/data/shaders/README.md`,
+fetched by `tools/fetch-shaders.py`). `frontend/src/screenfx.cpp` is the part of
+RetroArch that runs them: presets, passes, sizes, filtering, the uniforms,
+previous frames, lookup textures, `#pragma parameter`.
+
+**How the list was chosen.** Batocera's short "shader set" menu (Scanlines =
+crt-easymode, Curvature = crt-lottes, Retro = sharp-bilinear, LCD grid on
+handhelds) and EmulatorJS's list (RomM's player) were the guide to what is
+popular and not gimmicky; MMagTech then judged every candidate on the A9 TV and
+said to keep them all: *"it's really not that many entries"*.
+
+| Systems | Looks, in menu order | Starts on |
+|---|---|---|
+| NES, SNES, Genesis, Master System, Sega CD, 32X, TurboGrafx and CD, Atari 2600 and 7800, arcade, PS1, Saturn | Plain, Sharp, CRT easymode, CRT easymode halation, CRT lottes, CRT geom, CRT zfast, CRT aperture, CRT guest | CRT easymode |
+| N64, Dreamcast, 3DO | Plain, Sharp, CRT easymode, CRT lottes, CRT aperture | CRT easymode |
+| GBA, Game Gear, Neo Geo Pocket Color | Plain, Sharp, LCD 3x, LCD grid, LCD zfast | LCD 3x |
+| Game Boy | those, plus Dot matrix, Dot matrix Pocket | LCD 3x |
+| Game Boy Color | those, plus Dot matrix (the colour one) | LCD 3x |
+| Everything else | none | |
+
+- **Where:** one Look row in the pause menu, per system, for everyone, stored
+  in settings.json as `look.<slug>`; it changes at once behind the menu.
+  Consoles never see handheld looks and handhelds never see TV ones, as in
+  Cabinet.
+- **On by default**, because the plain picture is the weakest on a 4K set.
+  easymode for TV systems: flat (nothing in a corner bent or cut), the
+  brightest CRT look, Batocera's own Scanlines pick, steady on N64. lcd3x for
+  handhelds, MMagTech's pick. The dot-matrix screens are not defaults: they
+  repaint the picture and would silently override the Game Boy Colors row.
+- **N64, Dreamcast and 3DO get a shorter list** because they are drawn above
+  their own size: zfast (and crt-pi) crawled on N64 and Dreamcast on the TV, as
+  scanlines drawn per source line land near one per TV row; crt-geom treats any
+  picture over 400 lines as interlaced and flickers. easymode and lottes held
+  steady. easymode-halation and guest switch to interlaced scanlines at 400
+  lines too (read in their code), so they are left off the same way. easymode
+  holds steady because it is built for this: at 400 lines and up it drops its
+  scanlines and keeps only its mask (SCANLINE_CUTOFF), so on these three it is
+  a mask look, not a scanline look. This matches the libretro forums' advice for upscaled 3D: no
+  scanlines, or a soft CRT such as lottes.
+- **Dropped:** Composite (ntsc-adaptive), judged on the TV: it does blend a
+  dithered picture as a TV cable did (Jurassic Park), but MMagTech: *"looks
+  like ass to me"*, and it does not suit a television this large; its every-
+  frame colour flicker on 320-wide games was the smaller part. Dot matrix Light
+  (the Game Boy Light's backlit screen: *"way too bright for modern TVs"*).
+  crt-pi (made cheap for a Raspberry Pi; MMagTech liked it on
+  nothing); crt-royale and crt-hyllian (desktop OpenGL only: GLSL ES forbids
+  their globals initialised from uniforms, so RetroArch's GLES builds cannot
+  run them either); the gimmick sets (Mega Bezel, glow, bezels) and the
+  near-duplicates (mattias, caligari, beam, yeetron, potato and mini versions).
+- **Scope:** systems the console draws itself, up to Dreamcast. None for PS2 or
+  newer (played upscaled; PCSX2 presents its own picture). DS is out while
+  MMagTech decides whether DS stays on the console at all; Virtual Boy has its
+  own Screen row; Vectrex draws lines, not pixels.
+- **Cost: the defaults are single-pass** (easymode, lcd3x) and cost next to
+  nothing. The heavier looks (CRT guest, 11 passes; the dot-matrix screens, 5
+  passes at 4K) are not measured, by MMagTech's decision: they are never a
+  default, and a person who picks one on a weak machine can pick another.
+- **Licences:** each file keeps its own (public domain: lottes, lcd3x,
+  sharp-bilinear; the rest GPL), loaded at run time like the cores, credited
+  with them.
+
 ### The in-game overlay, and the input-mode rule
 
 The overlay is not composited by anything clever. **The frontend owns the frame
@@ -11918,7 +11989,9 @@ in.** `snes9x_overclock_cycles` and `genesis_plus_gx_overclock` trade accuracy
 for compatibility, not quality for speed, and on any machine this OS runs on a
 SNES is not a performance problem. Those get set correctly once and are never
 part of a performance choice. `blargg_ntsc_filter` is a LOOK, free, and belongs
-wherever the shader and glow settings end up — not here.
+wherever the shader and glow settings end up — not here. **Not offered
+(2026-10-04, #122):** it is the same composite-cable look as the Composite
+shader MMagTech judged on the TV and dropped.
 
 #### The hardware is unknown and that is not the problem it looks like
 
@@ -14061,6 +14134,15 @@ be in place first is on #63.
 the drop rule, record-only first. Before phase 1: #150 and #163 (busy time
 is wrong without them), both moved into milestone 3. Before phase 3: #168
 (an 18.6 ms N64 rewind snapshot reads as struggle) and #210.
+
+**MOVED, MMagTech 2026-10-04: phase 3 (the drop rule) is after the first
+release, #250.** Phases 1 and 2 cover the common case and the dial covers the
+rest; #63 is closed, and #168's piece for the drop rule went with it.
+**The processor question (#210) is answered by research, not measured**:
+PS3, Xbox 360 and Switch emulation are processor-limited, and the resolution
+scale barely moves a processor-limited game's frame rate, so a weak processor
+is slow at every picture level and the class rightly reads the graphics chip
+alone. #210 (the slowed A9) went after the release with #250.
 
 #### DECIDED, MMagTech 2026-10-02: what the dial moves (#63, phase 1)
 

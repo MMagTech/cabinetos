@@ -11,24 +11,23 @@ specification is `docs/PROJECT.md`; the order is `docs/ROADMAP.md`.
 
 ## Where things stand
 
-Milestone 3, item 6 done; shaders moved ahead of phase 3. **#63 phase 2 with #209, on `machine-class`,
-judged on the A9 TV 2026-10-04**: the console picks its starting picture
-level from its graphics chip until someone moves the dial (the A9 picks
-Quality); N64 Balanced 2x; vsync on in Eden, RPCS3, Cemu and Xenia. The TV
-round found two Quality values that were never measured and too heavy for
-the A9, now fixed: PS3 1080p, Xbox 360 720p at every level. PROJECT.md,
-"DECIDED, MMagTech 2026-10-04: the machine class". Merged in #246.
+Milestone 3. **Screen looks (#122) built on `shaders`, PR #249, judged on the
+A9 TV 2026-10-04 with the test build, pushed to `testing`.** RetroArch's own
+GLSL shaders, unchanged, run by `frontend/src/screenfx.cpp`; one Look row in
+the pause menu per system; TV systems start on CRT easymode, handhelds on
+LCD 3x; N64, Dreamcast and 3DO get a shorter list. The glow is always on at
+Strong, no setting. Decisions and reasons: PROJECT.md, *Shaders, and the glow
+around the picture*. DS filed as #248 (stays or goes, milestone 7).
 
 ## Next
 
-1. **Shaders and CRT looks (#122), a discussion with MMagTech before
-   anything is built** (lessons: `frontend.md`, `testing.md`). MMagTech,
-   2026-10-04: it "needs a discussion because it can't be a direct copy" of
-   Cabinet. Read #122 and PROJECT.md *Shaders, and the glow around the
-   picture* (Cabinet's eleven looks, the three it dropped), then walk the
-   choices with him: which looks, where they are chosen (the old "pause
-   menu, per system" is reopened), how few settings, and something fun for
-   the kids. Name every real option before he decides; each look is judged
-   on the TV.
-2. Then item 8, before phase 3: the slowed A9 (#210, with the processor
-   check noted there), #168, #221. Then #63 phase 3.
+1. **Finish #122:** MMagTech installs the `testing` image on the A9 and
+   judges it as shipped (he said he will raise anything he catches later);
+   merge #249 on his explicit go, close #122, delete the branch on his go.
+   Not seen on the TV yet in any build: CRT aperture on N64, Dot matrix
+   Pocket, the Game Boy Color dot matrix, a 3DO game.
+2. Then the rest of milestone 3: #221 (built-in cores have no audio rate
+   control, so a frame repeats or drops every 10 to 17 s) and #227 (check a
+   new gamescope still takes every flag the session passes). #63 is closed;
+   its phase 3 (#250), #210 and #168 moved after the first release
+   (MMagTech, 2026-10-04).

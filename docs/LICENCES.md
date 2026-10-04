@@ -124,6 +124,7 @@ here. See `frontend/src/catalog.cpp`.
 
 | What | Where it comes from | Licence |
 |---|---|---|
+| **The screen looks** (#122), `/usr/share/cabinetos/shaders/` | RetroArch's GLSL shaders from [libretro/glsl-shaders](https://github.com/libretro/glsl-shaders) at `435612fe4f10`, unmodified, read at run time and never compiled into the frontend; `frontend/data/shaders/`, fetched by `tools/fetch-shaders.py` | Each file's own: **public domain** for crt-lottes (Timothy Lottes), lcd3x (Gigaherz) and sharp-bilinear-simple; **GPL** for crt-easymode and its halation version (EasyMode), crt-geom (cgwg, Themaister, DOLLS), zfast-crt and zfast-lcd (Greg Hogan), crt-aperture (EasyMode), crt-guest-dr-venom (guest.r) and the Game Boy dot-matrix (Harlequin). lcd-grid-v2 (cgwg) and some helper passes of halation and guest carry no header; cgwg distributes his shaders under the GPL (his note in crt-geom), and the helpers are parts of GPL works, so they are treated as GPL |
 | **PPSSPP system files** — fonts, VFPU tables, `compat.ini`, the atlases | PPSSPP's own `assets/`, installed by `cores/build-core.sh` | GPL v2 or later, as PPSSPP |
 | **FFmpeg**, statically linked inside PPSSPP | the prebuilt `ffmpeg/linux/x86_64` in PPSSPP's own tree | LGPL v2.1 or later |
 | **Noto Sans** and Noto Sans CJK, the interface type | already in the Bazzite base; nothing is bundled | SIL Open Font License 1.1 |
