@@ -105,6 +105,61 @@ def dump(items, depth=0):
     return "".join(out)
 
 
+# THE DRIVE'S NAME AS THE CONSOLE'S STORAGE SAYS IT (frontend/src/main.cpp,
+# locationNames): "External" for a drive that can be unplugged, "Internal"
+# for any other, and with two of a kind the drive's own name after it,
+# "External (Games)". Steam shows a library's label in place of its path
+# ("/run/media/cabinet/Games"); with the label empty it shows the path.
+# Counted over the drives the console uses (a CabinetOS/ or SteamLibrary/
+# folder), close to what Storage counts.
+def external(path):
+    try:
+        st = os.stat(path)
+        at = os.path.realpath(f"/sys/dev/block/{os.major(st.st_dev)}:{os.minor(st.st_dev)}")
+    except OSError:
+        return False
+    if "/usb" in at:
+        return True
+    while len(at) > len("/sys/devices"):
+        try:
+            with open(os.path.join(at, "removable")) as fh:
+                if fh.read().strip() in ("1", "removable"):
+                    return True
+        except OSError:
+            pass
+        at = os.path.dirname(at)
+    return False
+
+
+def names():
+    drives = []
+    for base in SEARCH:
+        try:
+            for name in sorted(os.listdir(base)):
+                m = os.path.join(base, name)
+                if any(os.path.isdir(os.path.join(m, d)) for d in ("CabinetOS", "SteamLibrary")):
+                    drives.append(m)
+        except OSError:
+            continue
+    kinds = {m: "External" if external(m) else "Internal" for m in drives}
+    out = {}
+    for m, kind in kinds.items():
+        twin = sum(1 for k in kinds.values() if k == kind) > 1
+        out[os.path.join(m, "SteamLibrary")] = f"{kind} ({os.path.basename(m)})" if twin else kind
+    return out
+
+
+def setLabel(items, label):
+    for i, (k, v) in enumerate(items):
+        if k == "label":
+            if v:
+                return False   # somebody named it in Steam: theirs
+            items[i] = (k, label)
+            return True
+    items.insert(1, ("label", label))
+    return True
+
+
 def entry(path):
     # As Steam writes one (steamapps/libraryfolders.vdf on the A9). The
     # contentid is the folder's own random number; Steam fills in the rest.
@@ -170,14 +225,43 @@ def main():
                 if k2 == "path" and isinstance(v2, str):
                     listed.add(os.path.normpath(v2))
     added = [lib for lib in libs if os.path.normpath(lib) not in listed]
-    if not added:
+    # A NAME FOR EVERY ONE OF THEM whose label is still empty, added now or
+    # before, in Steam's list and in the folder's own libraryfolder.vdf.
+    named = names()
+    relabelled = False
+    for _, v in top:
+        if not isinstance(v, list):
+            continue
+        path = next((v2 for k2, v2 in v if k2 == "path" and isinstance(v2, str)), "")
+        label = named.get(os.path.normpath(path))
+        if label and setLabel(v, label):
+            relabelled = True
+            say(f"named {path} \"{label}\" in Steam")
+    for lib in libs:
+        own = os.path.join(lib, "libraryfolder.vdf")
+        try:
+            with open(own, encoding="utf-8") as fh:
+                doc = parse(fh.read())
+        except (OSError, ValueError):
+            continue
+        for k, v in doc:
+            if k == "libraryfolder" and isinstance(v, list) and named.get(lib) and \
+                    setLabel(v, named[lib]):
+                tmp = own + ".cabinetos"
+                with open(tmp, "w", encoding="utf-8") as fh:
+                    fh.write(dump(doc))
+                os.replace(tmp, own)
+    if not added and not relabelled:
         return 0
     used = {k for k, _ in top}
     n = 0
     for lib in added:
         while str(n) in used:
             n += 1
-        top.append((str(n), entry(lib)))
+        e = entry(lib)
+        if named.get(lib):
+            setLabel(e, named[lib])
+        top.append((str(n), e))
         used.add(str(n))
         say(f"added {lib} to Steam's libraries")
     text = dump([("libraryfolders", top)])
