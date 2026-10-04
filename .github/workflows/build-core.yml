@@ -28,7 +28,7 @@ name: Build cores
 # place that asserts the pinned revision.
 #
 # WHICH IS WHY THIS NO LONGER RUNS ITSELF ON MAIN. build.yml runs on every
-# pull request aimed at main and on every push to it, its paths-ignore is
+# pull request aimed at main and on every push to it, its path filter skips
 # documentation only and can therefore never skip a change under `cores/`, and
 # it calls this workflow — so a `pull_request`/`push` trigger here as well
 # meant the same twenty-one core builds queued TWICE for one change. That is

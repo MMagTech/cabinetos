@@ -14,7 +14,7 @@
 //
 //     <key>\t<default>\t<value>|<value>|...
 //
-// build-core.sh compares that with cores/options/<core>.txt and fails on any
+// cores/check-options.sh compares that with cores/options/<core>.txt and fails on any
 // difference; the frontend's --check-option-tables then checks every value
 // the console sets against the same files.
 //

@@ -636,7 +636,7 @@ Decided with MMagTech 2026-09-26, from the things people will actually do.
   its version, never `latest` or the date tags. Push work to it with
   `git push origin <branch>:testing`. **A push that brings no new commits
   builds nothing** (creating `testing` at a commit GitHub already had from
-  another branch): `paths-ignore` sees no changed files. Start that one by
+  another branch): the trigger's `paths` filter sees no changed files. Start that one by
   hand, `gh workflow run build.yml --ref testing`. The A9 was switched to it
   on 2026-09-25 (a 60.2 MB download), to go back to `latest` when System
   update is done.
@@ -645,7 +645,10 @@ Decided with MMagTech 2026-09-26, from the things people will actually do.
   go to main."* So a merge to main does not build: if main's files are
   exactly those `testing` was built from (the git tree, so a merge commit
   from an up-to-date branch counts), that image is tagged `latest` in
-  seconds, same digest, same version (`ci/promote-tested.sh`). Otherwise it
+  seconds, same digest, same version (`ci/promote-tested.sh`). Documentation
+  does not count (#156): `.md` files and `docs/` are not in the image, so a
+  handover written after the testing push still promotes; `docs/LICENCES.md`
+  is in the image and does count, and a change to it alone builds. Otherwise it
   builds, as before. **The rule: push the final commit of a branch to
   `testing`, judge it, then merge.** Pull requests no longer build the whole
   image; they lint and compile the frontend. Until that day `testing` was a

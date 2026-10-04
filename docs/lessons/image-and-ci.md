@@ -59,8 +59,8 @@ Read before touching `build_files/`, `system_files/`, `ci/`, the workflows, the 
   hand leaves a red cross on a pull request whose code is fine, which is how a
   check stops meaning anything. So both called workflows now use
   **`pull_request: branches-ignore: [main]`** and have no `push:` trigger at
-  all — build.yml covers main in both directions, and its paths-ignore is
-  documentation-only so it can never skip a change under `cores/`.
+  all — build.yml covers main in both directions, and its path filter skips
+  documentation only so it can never skip a change under `cores/`.
   **Do not narrow them to `branches: [main]`**: that is the 2026-09-16 hole
   where a stack of branches slipped past every check.
 
@@ -131,17 +131,19 @@ Read before touching `build_files/`, `system_files/`, `ci/`, the workflows, the 
 
 ## Promotion, the testing channel and updates
 
-- **PROMOTION COMPARES WHOLE TREES, DOCS INCLUDED** (`ci/promote-tested.sh`,
-  learned 2026-09-27). A handover committed to `main` while a tested PR is
-  still open makes main's tree differ from the tested one, and the merge then
-  BUILDS a new image instead of promoting the judged one. Merge the tested
-  PR first; write the handover to `main` after.
+- **PROMOTION COMPARES THE FILES THE IMAGE IS BUILT FROM** (`ci/promote-tested.sh`).
+  Until #156 it compared whole trees, docs included (learned 2026-09-27): a
+  handover committed after the testing push made the merge BUILD a new image
+  instead of promoting the judged one. Now `.md` files and `docs/` are
+  ignored, the same files `build.yml`'s trigger ignores, except
+  `docs/LICENCES.md`, which the image carries. Any other file committed
+  after the testing push still makes main build.
 
 - **CREATING `testing` AT A COMMIT GITHUB ALREADY HAS BUILDS NOTHING.** The
   first push to it carried no new commits (the same commit had gone up on
-  `system-update`), so `paths-ignore` saw no changed files and no run
-  started, silently. Start it by hand: `gh workflow run build.yml --ref
-  testing`. Any later push with a new commit builds on its own.
+  `system-update`), so the trigger's path filter saw no changed files and
+  no run started, silently. Start it by hand: `gh workflow run build.yml
+  --ref testing`. Any later push with a new commit builds on its own.
 
 - **A test on the TV that fakes an update state writes the REAL
   `settings.json`.** `--update-dir <dir>` makes the frontend read a status

@@ -14,6 +14,14 @@
 # "The same files" is the git TREE, not the commit: a merge commit has a new
 # hash but, from a branch that was up to date with main, the same tree.
 #
+# DOCUMENTATION DOES NOT COUNT, EXCEPT docs/LICENCES.md (#156). Every `.md`
+# file and everything under docs/ is ignored, the same files build.yml's
+# trigger ignores, because none of them is in the image; so a handover or a
+# roadmap line written after the testing push no longer costs a rebuild.
+# docs/LICENCES.md IS in the image (the Containerfile copies it to
+# /licences/), so a change to it still builds. Keep this rule and build.yml's
+# `paths` list the same.
+#
 # Writes promoted=true|false to $GITHUB_OUTPUT.
 #
 # Usage: ci/promote-tested.sh <registry/image>     needs REGISTRY_USER and
@@ -37,18 +45,35 @@ if [[ -z "${rev}" ]] || ! git cat-file -e "${rev}^{commit}" 2>/dev/null; then
     out false; exit 0
 fi
 
-tested=$(git rev-parse "${rev}^{tree}")
-here=$(git rev-parse "HEAD^{tree}")
-if [[ "${tested}" != "${here}" ]]; then
-    echo "main (${here:0:12}) is not what testing was built from (${rev}, ${tested:0:12}); building"
-    echo "the difference:"
-    git diff --stat "${rev}" HEAD | tail -20
+# A file the image is built from: anything but documentation, and the
+# licence list, which is documentation the image carries.
+in_image() {
+    case "$1" in
+        docs/LICENCES.md) return 0 ;;
+        docs/*|*.md) return 1 ;;
+        *) return 0 ;;
+    esac
+}
+
+differ=()
+while IFS= read -r -d '' path; do
+    in_image "${path}" && differ+=("${path}")
+done < <(git diff -z --no-renames --name-only "${rev}" HEAD)
+if [[ ${#differ[@]} -gt 0 ]]; then
+    echo "main is not what testing was built from (${rev}); building"
+    echo "the files the image is built from that differ (${#differ[@]}):"
+    printf '  %s\n' "${differ[@]}" | head -20
     out false; exit 0
+fi
+docs=$(git diff --name-only "${rev}" HEAD | wc -l | tr -d " ")
+if [[ ${docs} -gt 0 ]]; then
+    echo "main differs from ${rev} only in documentation (${docs} file(s)), which is not in the image:"
+    git diff --name-only "${rev}" HEAD | sed 's/^/  /' | head -20
 fi
 
 sha=$(git rev-parse --short HEAD)
 date=$(date +%Y%m%d)
-echo "main is exactly ${rev}, tested as ${version} (${digest}): promoting it"
+echo "main is ${rev} for every file in the image, tested as ${version} (${digest}): promoting it"
 for tag in latest "latest-${sha}" "${date}-${sha}" "${date}"; do
     skopeo copy --preserve-digests \
         --dest-creds "${REGISTRY_USER}:${REGISTRY_TOKEN}" \

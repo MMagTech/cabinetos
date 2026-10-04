@@ -31,15 +31,15 @@ session picks up is `docs/NEXT-SESSION.md`.
    3. ~~**Steam (#223)**~~ **Built on `steam-handoff` and judged on the A9
       TV, 2026-10-03/04**: "Switch to Steam" in the Start menu, its own
       slice of the drive (PROJECT.md open question 37).
-   4. **PS2's picture without the copy (#226)**: its own window, as the
-      separate emulators are shown. **Built on `ps2-own-window`,
-      2026-10-04**: Quality 4x with 16x filtering; 5x is beyond the A9's GPU
-      in a race, copy or not. Upstream declined the other route
+   4. ~~**PS2's picture without the copy (#226)**~~ **Merged in #239,
+      2026-10-04**: its own window, as the separate emulators are shown;
+      Quality 4x with 16x filtering. Upstream declined the other route
       (PCSX2/pcsx2#15040).
-   5. **ext4 for extra drives, shared with Steam (#236)**: walk it with
-      MMagTech first.
+   5. ~~**ext4 for extra drives, shared with Steam (#236)**~~ **Merged in
+      #240, 2026-10-04.**
    6. **#63 phase 2**, the machine class, including whether PS2 and N64 keep
-      Balanced and Quality equal.
+      Balanced and Quality equal. In the same image and TV round: the
+      separate emulators back to vsync on (#209).
    7. **Before phase 3:** the slowed A9 (#210), the drop rule ignoring rewind
       snapshot frames (#168), whether built-in cores repeat or drop frames
       (#221).

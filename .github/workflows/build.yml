@@ -21,7 +21,7 @@ on:
   pull_request:
     branches:
       - main
-    # The same paths-ignore the push trigger has always had. Without it here,
+    # The same path filter the push trigger has always had. Without it here,
     # a documentation-only pull request cost twelve minutes of runner time to
     # rebuild an image whose inputs had not changed — which is how a check
     # becomes something people route around rather than wait for.
@@ -36,9 +36,22 @@ on:
     # binary in the image is built from frontend/, and leaving the line in
     # would mean a change to the console's own source no longer builds the
     # thing that ships it.
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
+    #
+    # `paths`, NOT `paths-ignore`, SINCE #156: docs/LICENCES.md is the one
+    # document in the image (the Containerfile copies it to /licences/), and
+    # under the old ignore list a change to it alone built nothing, so
+    # consoles kept the old list. Only `paths` can take a file back after
+    # ignoring its folder; the last pattern that matches wins.
+    # `.github/**` is named because GitHub's documentation does not say `**`
+    # reaches a folder whose name starts with a dot, and a workflow change
+    # built before. ci/promote-tested.sh ignores the same files, and the push
+    # trigger below has the same list; keep all three the same.
+    paths:
+      - '**'
+      - '.github/**'
+      - '!**.md'
+      - '!docs/**'
+      - 'docs/LICENCES.md'
   push:
     branches:
       - main
@@ -49,9 +62,13 @@ on:
       # in tools/ui-loop.sh, so this is how both get tried on a television
       # before anything reaches main. docs/SETTINGS.md, System.
       - testing
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
+    # The same list as the pull request trigger above; read the comment there.
+    paths:
+      - '**'
+      - '.github/**'
+      - '!**.md'
+      - '!docs/**'
+      - 'docs/LICENCES.md'
   workflow_dispatch:
 
 env:

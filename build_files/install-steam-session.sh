@@ -34,9 +34,28 @@ group_start "Installing Steam's gamescope session (#223)"
 # terra is in the base DISABLED (enabled=0; Bazzite turns it off at the end of
 # its own build), so it is enabled for this one install and stays off after.
 # Found by the dry run on the A9, 2026-10-03: "No match for argument".
-dnf5 -y install --enablerepo=terra --setopt=install_weak_deps=False \
-    gamescope-session \
-    gamescope-session-steam
+#
+# FOUR TRIES, A MINUTE APART. Terra's mirror now and then serves a package
+# that does not match its own metadata while it is publishing ("Downloading
+# successful, but checksum doesn't match"). It failed the image build that way
+# twice by 2026-10-04 and a re-run passed both times, so a build that fails
+# for it has nothing wrong with it. Each retry drops the downloaded packages
+# and refetches the metadata, so it asks the mirror afresh.
+refresh=()
+for attempt in 1 2 3 4; do
+    if dnf5 -y install --enablerepo=terra --setopt=install_weak_deps=False \
+        "${refresh[@]}" \
+        gamescope-session \
+        gamescope-session-steam
+    then
+        break
+    fi
+    log "  install attempt ${attempt} failed"
+    [[ ${attempt} -eq 4 ]] && { log "ERROR: could not install Steam's session from terra"; exit 1; }
+    dnf5 clean packages --enablerepo=terra || true
+    refresh=(--refresh)
+    sleep 60
+done
 
 # Asserted, file by file: each is what the entry actually runs, and a rename
 # upstream would otherwise ship a tile that does nothing.
