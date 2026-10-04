@@ -1,5 +1,6 @@
 // Let the console mount an extra INTERNAL drive, as it already may a USB one,
-// and format a BLANK internal drive, as it already may a blank USB one.
+// and format an internal drive, as it already may a USB one; and make its
+// folder on an ext4 drive made elsewhere (cabinetos-drive-claim, #236).
 //
 // udisks' stock policy lets the active session mount and format a removable
 // drive (`filesystem-mount`, `modify-device`: allow_active: yes), which is
@@ -12,11 +13,11 @@
 //
 // WHAT IS MOUNTED AND WHAT IS FORMATTED is decided by the frontend
 // (frontend/src/drives.cpp): never the console's own drive; never Windows'
-// EFI, reserved or recovery partitions; mounted only if exFAT or NTFS;
-// formatted only if the whole drive is blank (no partition table, no
-// filesystem, nothing mounted), checked again from udisks immediately before,
-// and only after the PIN, a confirm naming the drive and its size, and a code
-// the console chose. udisks itself refuses to format anything mounted, so the
+// EFI, reserved or recovery partitions; mounted only if exFAT, NTFS or ext4;
+// formatted only if nothing of the console's is on it (no file under
+// CabinetOS/) and nothing but the console has it mounted, checked again from
+// udisks immediately before, and only after the PIN, a confirm naming the
+// drive, its size and what is on it, and a code the console chose. udisks itself refuses to format anything mounted, so the
 // console's own filesystems are out of reach twice over.
 //
 // `subject.local`, as in 60-cabinetos-network.rules: the console on its own
@@ -25,6 +26,18 @@
 polkit.addRule(function(action, subject) {
     if ((action.id == "org.freedesktop.udisks2.filesystem-mount-system" ||
          action.id == "org.freedesktop.udisks2.modify-device-system") &&
+        subject.user == "cabinet" &&
+        subject.local) {
+        return polkit.Result.YES;
+    }
+});
+
+// cabinetos-drive-claim takes no arguments and only ever makes an empty
+// CabinetOS/ on an ext4 drive mounted for the console that has none.
+polkit.addRule(function(action, subject) {
+    if (action.id == "org.freedesktop.systemd1.manage-units" &&
+        action.lookup("unit") == "cabinetos-drive-claim.service" &&
+        action.lookup("verb") == "start" &&
         subject.user == "cabinet" &&
         subject.local) {
         return polkit.Result.YES;

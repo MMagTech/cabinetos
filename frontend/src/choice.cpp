@@ -1,5 +1,7 @@
 #include "choice.h"
 
+#include <cmath>
+
 #include "sound.h"
 
 #include <algorithm>
@@ -29,6 +31,7 @@ void ChoiceScreen::open(std::string title, std::string detail,
                         std::vector<std::string> options, int focus) {
     open_ = true;
     staysOpen_ = false;
+    busy_ = false;
     fixedW_ = 0.0f;
     grows_ = false;
     placeholder_.clear();
@@ -119,6 +122,10 @@ ChoiceScreen::Outcome ChoiceScreen::key(Nav n) {
             sound::play(sound::Cue::Activate);
             return Outcome::Chosen;
         case Nav::Back:
+            if (busy_) {
+                sound::play(sound::Cue::Edge);
+                return Outcome::None;
+            }
             sound::play(sound::Cue::Back);
             return Outcome::Cancelled;
     }
@@ -129,6 +136,7 @@ void ChoiceScreen::tick(float dt) {
     appear_.tick(dt);
     listH_.tick(dt);
     focus_.tick(dt);
+    if (busy_) spin_ += dt;
 }
 
 void ChoiceScreen::draw(Ctx& c) {
@@ -172,7 +180,7 @@ void ChoiceScreen::draw(Ctx& c) {
     const int n = static_cast<int>(options_.size());
     const int shown = grows_ ? std::max(1, std::min(n, kMaxVisible)) : std::min(n, kMaxVisible);
     const bool prompt = n == 0 && !promptButton_.empty();
-    float listH = prompt ? kButtonH : shown * kButtonH + std::max(0, shown - 1) * kButtonGap;
+    float listH = prompt || busy_ ? kButtonH : shown * kButtonH + std::max(0, shown - 1) * kButtonGap;
     if (grows_) {
         if (!listHSet_) {
             listH_.settle(listH);
@@ -229,6 +237,24 @@ void ChoiceScreen::draw(Ctx& c) {
                     ui::Color{0.07f, 0.05f, 0.12f, 1.0f}, sc);
         x += badge + gap;
         c.text.draw(c.r, promptAfter_, x, base, st, ui::Color::white(0.92f), sc);
+    }
+    if (busy_) {
+        // EIGHT DOTS IN A RING, the bright one going round once a second and
+        // the others fading behind it: moving, so the console is plainly not
+        // stuck, with no percentage it could not honestly give.
+        constexpr int kDots = 8;
+        const float cx = W * 0.5f, cy = y + kButtonH * 0.5f;
+        const float ring = kButtonH * 0.32f, dot = kButtonH * 0.11f;
+        const float lead = spin_ * kDots;
+        for (int i = 0; i < kDots; ++i) {
+            const float ang = 6.2831853f * i / kDots - 1.5707963f;
+            float behind = std::fmod(lead - i, static_cast<float>(kDots));
+            if (behind < 0.0f) behind += kDots;
+            const float alpha = 0.18f + 0.77f * (1.0f - behind / kDots);
+            const float dx = cx + ring * std::cos(ang) - dot * 0.5f;
+            const float dy = cy + ring * std::sin(ang) - dot * 0.5f;
+            c.r.draw(ui::Rect{dx, dy, dot, dot, dot * 0.5f, ui::Color::white(alpha)});
+        }
     }
     if (n == 0 && !placeholder_.empty())
         centred(placeholder_, y + listH * 0.5f + c.text.ascent(TextStyle::Callout, sc) * 0.4f,
