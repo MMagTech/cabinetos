@@ -1,0 +1,7 @@
+[Unit]
+Description=CabinetOS: the console's folder on an ext4 drive made elsewhere
+Documentation=https://github.com/MMagTech/cabinetos/issues/236
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/cabinetos-drive-claim

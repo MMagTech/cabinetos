@@ -202,6 +202,32 @@ disable_units "Phase 7 owns updates; no partial version state" \
 
 group_end
 
+group_start "Removing Bazzite's drive automounters"
+
+# THE CONSOLE IS THE ONLY THING THAT MOUNTS A DRIVE (frontend/src/drives.cpp,
+# #236). Bazzite ships three automounters for desktops and handhelds, and each
+# would take a drive away from the console or race it (read on the A9,
+# 2026-10-04):
+#
+#   - ublue-os-media-automount.service mounts every labelled INTERNAL ext4 or
+#     btrfs partition at boot, as root, under /run/media/system/. The console
+#     looks in /run/media/cabinet/, so an internal ext4 drive it formatted
+#     would be "already mounted by something else": not in Storage, no games.
+#   - 99-steamos-automount.rules (SD cards) runs `fsck -y` on a card and
+#     mounts it itself, rewriting udisks' mount options file while it does,
+#     at the moment the console mounts the same card.
+#   - 99-framework-steam-automount.rules does the same for a drive labelled
+#     "steamgames".
+#
+# The cost: a card or drive plugged in while Steam is open is mounted when
+# the console comes back, not inside Steam.
+disable_units "the console mounts every drive itself" \
+    ublue-os-media-automount.service
+rm -f /usr/lib/udev/rules.d/99-steamos-automount.rules \
+      /usr/lib/udev/rules.d/99-framework-steam-automount.rules
+
+group_end
+
 # ---------------------------------------------------------------------------
 # PHASE 2 CANDIDATES — DO NOT ENABLE WITHOUT A VM BOOT TEST
 # ---------------------------------------------------------------------------

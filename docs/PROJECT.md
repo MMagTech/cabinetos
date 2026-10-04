@@ -9267,6 +9267,51 @@ drive after all, down to the two floors.**
 - The duplicate rule below still holds as written: a kept copy under `roms/`
   wins over a stand-in in `cache/`, wherever each is.
 
+**REVISED 2026-10-04 (#236), MMagTech: exFAT, NTFS and ext4, and Format on
+any drive the console is not using for its games.** ext4 was never put to him
+as an option on 09-25 ("a decision should have never been made on it"), and it
+is the only one of the three that holds Steam's Windows games properly (Proton
+writes per-game files with names exFAT does not allow), so one drive can hold
+both. His reason for Format: "I got this new drive, and I want to just plug it
+into my CabinetOS and go", as a PS5 or an Xbox formats a drive for you; most
+drives arrive exFAT or NTFS, which the console still uses straight away.
+
+- **ext4 is mounted like the others.** The root-owned top folder that ruled it
+  out has a small fix: a drive the console formats has its top folder made the
+  console's user's (udisks' take-ownership), and one made elsewhere gets an
+  empty `CabinetOS/` from a root helper that takes no arguments
+  (`cabinetos-drive-claim`), touching nothing else.
+- **Format is offered on any drive with no file under `CabinetOS/`** (the
+  console's empty folders do not count). Never the console's own, never one
+  mounted by something other than the console (fstab, by hand), never one with
+  a filesystem the console reads but could not mount (it cannot see what is in
+  it). Same steps as before: PIN, a confirm naming the drive and its size AND
+  WHAT IS ON IT ("Holds 3 files, 12 GB", "and 1 partition in another format",
+  or "Empty"), Cancel focused, the 4-digit code. Everything is checked again
+  from udisks right before writing, and the drive's filesystems are let go of
+  (File access's view too) as Eject does. It makes one ext4 partition, no
+  blocks held back for root (`-m 0`: 5% of a 4 TB drive is 200 GB), named
+  "Games", holding `CabinetOS/` and `SteamLibrary/`.
+- **`SteamLibrary/` is Steam's**, a folder of its own so Steam's files never
+  land loose at the top of the drive. The console adds every plugged-in
+  drive's `SteamLibrary/` to Steam's `libraryfolders.vdf` at each handover to
+  Steam, while Steam is not running (`cabinetos-steam-libraries`), not at
+  format time: the drive may be formatted before Steam is set up. Only ever
+  adds; an unplugged drive's folder stays listed, as a Steam Deck keeps an SD
+  card's.
+- **The console is the only thing that mounts a drive.** Bazzite's three
+  automounters are removed (checked on the A9): `ublue-os-media-automount`
+  mounts labelled internal ext4 drives at boot under `/run/media/system/`,
+  where the console does not look, so an internal ext4 drive would vanish from
+  Storage; the SteamOS SD card one runs `fsck -y` and its own mount at the
+  moment the console mounts the card; Framework's does the same for a drive
+  labelled "steamgames". The cost: a drive plugged in while Steam is open is
+  mounted when the console comes back.
+- The cost said plainly: an ext4 drive cannot be read by plugging it into a
+  Windows PC or a Mac. File access reaches it over the network either way.
+
+The two paragraphs below are the 09-25 record, kept for the reasoning.
+
 **Only exFAT and NTFS**, MMagTech. FAT32 cannot hold a file over 4 GB, which
 many PS2 and GameCube games are; Linux filesystems mount with a root-owned top
 folder the console cannot write into; Mac formats do not mount writable. Each

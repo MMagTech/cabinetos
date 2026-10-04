@@ -49,6 +49,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <map>
+#include <optional>
 #include <unordered_map>
 #include <set>
 #include <sstream>
@@ -1369,7 +1370,7 @@ constexpr GalleryNotice kNoticeGallery[] = {
     {"Safe to unplug", Tone::Done},
     {"Couldn't eject the external drive", Tone::Problem},
     {"External drive removed", Tone::Info},
-    {"External drive isn't exFAT or NTFS", Tone::Problem},
+    {"External drive isn't exFAT, NTFS or ext4", Tone::Problem},
     {"Storage almost full", Tone::Info},
     {"Couldn't format the drive", Tone::Problem},
 };
@@ -7556,8 +7557,8 @@ int main(int argc, char** argv) {
     // One Eject row per USB drive: this plus the drive's index in
     // storage::locations() when the rows were built.
     constexpr int kSetEject = 100;
-    // One Format row per blank drive: this plus its index in formatIds, the
-    // drives as they were when the rows were built.
+    // One Format row per drive whose row formats it: this plus its index in
+    // `formatable`, the drives as they were when the rows were built.
     constexpr int kSetFormat = 200;
     // One row per connected controller: this plus its player, 0-based.
     constexpr int kSetPad = 300;
@@ -7575,8 +7576,13 @@ int main(int argc, char** argv) {
     // must not also leave Settings.
     SDL_JoystickID shortcutListen = 0;
     Uint64 shortcutTakenAt = 0;
-    std::vector<drives::Unusable> formatable;
+    std::vector<drives::Drive> formatable;
     std::map<int, std::string> driveNames;   // a drive row's id -> its name
+    // An Eject row's id -> its drive in `formatable`, when Format is offered
+    // beside Eject.
+    std::map<int, size_t> ejectFormats;
+    // Format, from a drive's row. Set once buildSettings exists.
+    std::function<void(const drives::Drive&)> askFormat;
 
     // THE DRIVES' NAMES, as Storage shows them: the main drive is
     // "CabinetOS", any other internal disk "Internal", one that can be
@@ -8553,14 +8559,21 @@ int main(int argc, char** argv) {
         // "External". With two of one kind, counting drives that cannot be
         // used, the drive's own name tells them apart: its label for one in
         // use, its model for one that is not. THE DRIVE'S OWN ROW IS THE
-        // BUTTON: an External drive in use offers Eject, a blank drive offers
-        // Format, and there are no separate action rows, so there is never a
+        // BUTTON: an External drive in use offers Eject (and Format, when
+        // nothing of the console's is on it), any other drive Format, and
+        // there are no separate action rows, so there is never a
         // question of which drive a row means. MMagTech on the TV, 2026-09-25:
         // a Format row under the drive "can make me feel like I'm formatting
         // something that isn't the unformatted drive".
         std::vector<Row> store;
         const std::vector<std::string> locs = storage::locations();
         const std::vector<drives::Unusable> unusableDrives = drives::unusable();
+        const std::vector<drives::Drive> found = drives::found();
+        formatable.clear();
+        ejectFormats.clear();
+        auto formatValue = [] {
+            return std::string(drives::formatting() ? "Formatting\xE2\x80\xA6" : "Format");
+        };
         int internals = 0, externals = 0;
         for (size_t i = 1; i < locs.size(); ++i)
             (storage::isExternal(locs[i]) ? externals : internals)++;
@@ -8575,10 +8588,25 @@ int main(int argc, char** argv) {
             const storage::Space sp = storage::spaceOf(locs[i]);
             const std::string space = sp.ok ? gb(sp.freeBytes) + " free of " + gb(sp.totalBytes)
                                             : std::string("Unknown");
-            const std::string value =
-                !external ? "" : drives::ejecting() ? "Ejecting\xE2\x80\xA6" : "Eject";
-            store.push_back({external ? K::Action : K::Info,
-                             external ? kSetEject + static_cast<int>(i) : 0, name, space, value});
+            // FORMAT ON A DRIVE IN USE, when nothing of the console's is on
+            // it (#236): an External drive's row asks Eject or Format, an
+            // Internal one's row is Format.
+            const drives::Drive* dr = i > 0 ? drives::driveAt(found, locs[i]) : nullptr;
+            const bool canFormat = dr && drives::mayFormat(*dr);
+            std::string value = external ? (drives::ejecting() ? "Ejecting\xE2\x80\xA6" : "Eject")
+                                         : canFormat ? formatValue() : "";
+            int id = 0;
+            if (external) {
+                id = kSetEject + static_cast<int>(i);
+                if (canFormat) {
+                    ejectFormats[id] = formatable.size();
+                    formatable.push_back(*dr);
+                }
+            } else if (canFormat) {
+                id = kSetFormat + static_cast<int>(formatable.size());
+                formatable.push_back(*dr);
+            }
+            store.push_back({id ? K::Action : K::Info, id, name, space, value});
             if (external) driveNames[kSetEject + static_cast<int>(i)] = name;
             // STEAM'S SHARE, under the main drive, once it is set up (#223):
             // the main drive's own row leaves it out, and this says where it
@@ -8587,23 +8615,28 @@ int main(int argc, char** argv) {
             if (i == 0 && steam::isSetUp())
                 store.push_back({K::Action, SetSteam, "Steam", gb(steam::sliceBytes()), ""});
         }
-        // DRIVES FOUND AND NOT USABLE, greyed, with the reason. A new internal
-        // SSD arrives blank; without this row it would be invisible, because
-        // internal drives get no notices. A blank one has Format under it.
-        formatable.clear();
+        // DRIVES FOUND AND NOT USABLE, with the reason. A new internal SSD
+        // arrives blank; without this row it would be invisible, because
+        // internal drives get no notices. Format is offered on any of them
+        // whose contents the console can see: blank, or another format.
+        // One that would not mount stays greyed: what is on it is unknown.
         for (const drives::Unusable& u : unusableDrives) {
             std::string name = u.external ? "External" : "Internal";
             if ((u.external ? externals : internals) > 1 && !u.model.empty())
                 name += " (" + u.model + ")";
             const std::string size = u.sizeBytes ? gb(static_cast<int64_t>(u.sizeBytes)) : "";
-            if (u.blank) {
+            std::string why = u.blank         ? std::string("Blank")
+                              : u.wrongFormat ? std::string("Isn't exFAT, NTFS or ext4")
+                                              : std::string("Couldn't use this drive");
+            if (!size.empty()) why += " \xC2\xB7 " + size;
+            const drives::Drive* dr = nullptr;
+            for (const drives::Drive& d : found)
+                if (d.id == u.id) dr = &d;
+            if (dr && drives::mayFormat(*dr)) {
                 store.push_back({K::Action, kSetFormat + static_cast<int>(formatable.size()),
-                                 name, size.empty() ? "Blank" : "Blank \xC2\xB7 " + size,
-                                 drives::formatting() ? "Formatting\xE2\x80\xA6" : "Format"});
-                formatable.push_back(u);
+                                 name, why, formatValue()});
+                formatable.push_back(*dr);
             } else {
-                std::string why = u.wrongFormat ? "Isn't exFAT or NTFS" : "Couldn't use this drive";
-                if (!size.empty()) why += " \xC2\xB7 " + size;
                 store.push_back({K::Disabled, 0, name, why, ""});
             }
         }
@@ -8672,6 +8705,55 @@ int main(int argc, char** argv) {
         settingsScreen.setCategories(std::move(cats));
         if (const int p = players::playerOf(settingsLastPad); p >= 0)
             settingsScreen.mark(kSetPad + p);
+    };
+
+    // FORMAT, from a drive's row. THREE STEPS, MMagTech 2026-09-25: the PIN
+    // if set; the drive by name and size, AND WHAT IS ON IT (#236, now that
+    // a drive with files on it can be formatted), with Cancel focused; then
+    // a code the console chose. The only thing on the console that erases
+    // anything; the worker checks it all again before it does.
+    askFormat = [&](const drives::Drive& d) {
+        const std::string what =
+            std::string(d.external ? "External" : "Internal") +
+            (d.model.empty() ? "" : ", " + d.model) +
+            (d.sizeBytes ? ", " + driveSize(static_cast<int64_t>(d.sizeBytes)) : "");
+        askPin("Enter the PIN", "To format a drive", [&, d, what]() {
+            // Counted now, not when Storage was drawn: a computer on File
+            // access may have put files there since.
+            const drives::Contents c = drives::contents(d);
+            auto amount = [](int64_t b) {
+                char buf[32];
+                if (b >= 1000LL * 1000 * 1000) return driveSize(b);
+                if (b >= 1000LL * 1000) std::snprintf(buf, sizeof buf, "%.0f MB", b / 1e6);
+                else std::snprintf(buf, sizeof buf, "%.0f KB", b / 1e3);
+                return std::string(buf);
+            };
+            auto many = [](int64_t n, const char* one, const char* more) {
+                return std::to_string(n) + " " + (n == 1 ? one : more);
+            };
+            std::string holds;
+            if (!c.counted) holds = amount(c.bytes);
+            else if (c.files > 0) holds = many(c.files, "file", "files") + ", " + amount(c.bytes);
+            if (c.otherParts > 0) {
+                const std::string parts = many(c.otherParts, "partition in another format",
+                                               "partitions in other formats");
+                holds = holds.empty() ? parts : holds + ", and " + parts;
+            }
+            holds = holds.empty() ? "Empty" : "Holds " + holds;
+            std::fprintf(stderr, "[drives] format confirm for %s: %s\n", d.id.c_str(),
+                         holds.c_str());
+            askChoice("Format this drive?", what + "\n" + holds, {"Cancel", "Format"}, 0,
+                      [&, d](int k) {
+                if (k != 1) return;
+                char code[8];
+                std::snprintf(code, sizeof code, "%04u", static_cast<unsigned>(SDL_rand(10000)));
+                askCode(code, std::string("Enter ") + code, "To format it as ext4", [&, d]() {
+                    std::fprintf(stderr, "[drives] format asked for %s\n", d.id.c_str());
+                    drives::format(d.id);
+                    buildSettings();
+                });
+            });
+        });
     };
     rebuildSettingsRows = buildSettings;
 
@@ -9283,32 +9365,7 @@ int main(int argc, char** argv) {
                         sound::play(sound::Cue::Edge);
                         break;
                     }
-                    // THREE STEPS, MMagTech 2026-09-25: the PIN if set; the
-                    // drive by name and size with Cancel focused, so a drive
-                    // wrongly read as blank is recognised before anything
-                    // happens; then a code the console chose. The only thing
-                    // on the console that erases anything.
-                    const drives::Unusable u = formatable[i];
-                    const std::string what =
-                        std::string(u.external ? "External" : "Internal") +
-                        (u.model.empty() ? "" : ", " + u.model) +
-                        (u.sizeBytes ? ", " + driveSize(static_cast<int64_t>(u.sizeBytes)) : "");
-                    askPin("Enter the PIN", "To format a drive", [&, u, what]() {
-                        askChoice("Format this drive?", what, {"Cancel", "Format"}, 0,
-                                  [&, u](int k) {
-                            if (k != 1) return;
-                            char code[8];
-                            std::snprintf(code, sizeof code, "%04u",
-                                          static_cast<unsigned>(SDL_rand(10000)));
-                            askCode(code, std::string("Enter ") + code, "To format it as exFAT",
-                                    [&, u]() {
-                                std::fprintf(stderr, "[drives] format asked for %s\n",
-                                             u.id.c_str());
-                                drives::format(u.id);
-                                buildSettings();
-                            });
-                        });
-                    });
+                    askFormat(formatable[i]);
                     sound::play(sound::Cue::Activate);
                 } else if (res.value >= kSetEject) {
                     const std::vector<std::string> locs = storage::locations();
@@ -9322,7 +9379,21 @@ int main(int argc, char** argv) {
                     const std::string loc = locs[i];
                     const std::string ejName =
                         driveNames.count(res.value) ? driveNames[res.value] : "External";
-                    askChoice(ejName, "", {"Eject", "Cancel"}, 0, [&, loc](int k) {
+                    // FORMAT BESIDE EJECT when nothing of the console's is on
+                    // the drive (#236). Eject stays first: it is what the row
+                    // says.
+                    std::optional<drives::Drive> fmt;
+                    if (auto f = ejectFormats.find(res.value);
+                        f != ejectFormats.end() && f->second < formatable.size() &&
+                        !drives::formatting())
+                        fmt = formatable[f->second];
+                    std::vector<std::string> opts = {"Eject", "Cancel"};
+                    if (fmt) opts = {"Eject", "Format", "Cancel"};
+                    askChoice(ejName, "", opts, 0, [&, loc, fmt](int k) {
+                    if (fmt && k == 1) {
+                        askFormat(*fmt);
+                        return;
+                    }
                     if (k != 0) return;
                     // FINISHES OR STOPS ANYTHING WRITING TO IT. The only thing
                     // that writes to a drive is a download being kept there;
@@ -12177,7 +12248,7 @@ int main(int argc, char** argv) {
                     menuNotice.say(drive + " connected", Tone::Done);
                     break;
                 case drives::Event::WrongFormat:
-                    menuNotice.say(drive + " isn't exFAT or NTFS", Tone::Problem);
+                    menuNotice.say(drive + " isn't exFAT, NTFS or ext4", Tone::Problem);
                     break;
                 case drives::Event::CouldNotUse:
                     menuNotice.say("Couldn't use the " + std::string(dn.external ? "external" : "internal") +

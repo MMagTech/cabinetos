@@ -1,0 +1,186 @@
+#!/usr/bin/python3
+#
+# Tell Steam about every plugged-in drive's SteamLibrary/ folder. Issue #236;
+# docs/SETTINGS.md, Storage.
+#
+# A drive the console formats gets two folders, CabinetOS/ and SteamLibrary/
+# (MMagTech, 2026-10-04), so Steam's files never land loose at the top of the
+# drive. Steam is told about the second here, AT EACH HANDOVER, not when the
+# drive is formatted: the drive may be formatted before Steam is ever set up,
+# and Steam is not running at this point, so its file can be written safely.
+# Order of drive and Steam setup then does not matter.
+#
+# Run by the session script (cabinetos-session, steam_step) as the console's
+# user, after Steam's slice is attached and before Steam starts. It only ever
+# ADDS a folder Steam does not list yet; a folder on a drive that is not
+# plugged in stays listed, as a Steam Deck keeps an SD card's.
+#
+# Steam keeps the list twice, steamapps/libraryfolders.vdf and
+# config/libraryfolders.vdf, the same text in both (read on the A9,
+# 2026-10-04). Both are written, each whole, through a temporary file.
+
+import os
+import random
+import sys
+
+USER = os.environ.get("USER") or "cabinet"
+STEAM = os.path.expanduser("~/.local/share/Steam")
+FILES = [os.path.join(STEAM, "steamapps", "libraryfolders.vdf"),
+         os.path.join(STEAM, "config", "libraryfolders.vdf")]
+# Where the console's drives are mounted (frontend/src/storage.cpp).
+SEARCH = [os.path.join("/run/media", USER), "/var/mnt"]
+
+
+def say(msg):
+    print(f"cabinetos-steam-libraries: {msg}", flush=True)
+
+
+# --- Valve's KeyValues text: quoted strings and braces, nothing else here. ---
+
+def tokens(text):
+    i, n = 0, len(text)
+    while i < n:
+        c = text[i]
+        if c.isspace():
+            i += 1
+        elif c == "/" and text.startswith("//", i):
+            while i < n and text[i] != "\n":
+                i += 1
+        elif c in "{}":
+            yield c
+            i += 1
+        elif c == '"':
+            i += 1
+            out = []
+            while i < n and text[i] != '"':
+                if text[i] == "\\" and i + 1 < n:
+                    i += 1
+                    out.append({"n": "\n", "t": "\t"}.get(text[i], text[i]))
+                else:
+                    out.append(text[i])
+                i += 1
+            i += 1
+            yield ("s", "".join(out))
+        else:
+            raise ValueError(f"unexpected {c!r} at {i}")
+
+
+def parse(text):
+    stack = [[]]
+    key = None
+    for t in tokens(text):
+        if t == "{":
+            if key is None:
+                raise ValueError("a block with no name")
+            block = []
+            stack[-1].append((key, block))
+            stack.append(block)
+            key = None
+        elif t == "}":
+            if len(stack) == 1:
+                raise ValueError("an unmatched }")
+            stack.pop()
+        elif key is None:
+            key = t[1]
+        else:
+            stack[-1].append((key, t[1]))
+            key = None
+    if len(stack) != 1 or key is not None:
+        raise ValueError("cut short")
+    return stack[0]
+
+
+def quote(s):
+    return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def dump(items, depth=0):
+    out = []
+    pad = "\t" * depth
+    for k, v in items:
+        if isinstance(v, list):
+            out.append(f"{pad}{quote(k)}\n{pad}{{\n{dump(v, depth + 1)}{pad}}}\n")
+        else:
+            out.append(f"{pad}{quote(k)}\t\t{quote(v)}\n")
+    return "".join(out)
+
+
+def entry(path):
+    # As Steam writes one (steamapps/libraryfolders.vdf on the A9). The
+    # contentid is the folder's own random number; Steam fills in the rest.
+    return [("path", path), ("label", ""),
+            ("contentid", str(random.getrandbits(63))), ("totalsize", "0"),
+            ("update_clean_bytes_tally", "0"), ("time_last_update_verified", "0"),
+            ("apps", [])]
+
+
+def libraries():
+    found = []
+    for base in SEARCH:
+        try:
+            names = sorted(os.listdir(base))
+        except OSError:
+            continue
+        for name in names:
+            lib = os.path.join(base, name, "SteamLibrary")
+            if os.path.isdir(lib) and not os.path.islink(lib) and os.access(lib, os.W_OK):
+                found.append(lib)
+    return found
+
+
+def main():
+    libs = libraries()
+    if not libs:
+        return 0
+    if not os.path.isdir(STEAM):
+        say(f"{STEAM} is not there; nothing written")
+        return 1
+    # The list as Steam last wrote it: the steamapps copy, or the config one.
+    # Neither yet (Steam has never finished starting): a new one, whose first
+    # folder is Steam's own, as Steam's own file always has.
+    top = None
+    for f in FILES:
+        try:
+            with open(f, encoding="utf-8") as fh:
+                doc = parse(fh.read())
+        except FileNotFoundError:
+            continue
+        except (OSError, ValueError) as e:
+            say(f"could not read {f} ({e}); nothing written")
+            return 1
+        for k, v in doc:
+            if k.lower() == "libraryfolders" and isinstance(v, list):
+                top = v
+        if top is not None:
+            break
+    if top is None:
+        top = [("0", entry(STEAM))]
+    listed = set()
+    for _, v in top:
+        if isinstance(v, list):
+            for k2, v2 in v:
+                if k2 == "path" and isinstance(v2, str):
+                    listed.add(os.path.normpath(v2))
+    added = [lib for lib in libs if os.path.normpath(lib) not in listed]
+    if not added:
+        return 0
+    used = {k for k, _ in top}
+    n = 0
+    for lib in added:
+        while str(n) in used:
+            n += 1
+        top.append((str(n), entry(lib)))
+        used.add(str(n))
+        say(f"added {lib} to Steam's libraries")
+    text = dump([("libraryfolders", top)])
+    for f in FILES:
+        os.makedirs(os.path.dirname(f), exist_ok=True)
+        tmp = f + ".cabinetos"
+        with open(tmp, "w", encoding="utf-8") as fh:
+            fh.write(text)
+        os.replace(tmp, f)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

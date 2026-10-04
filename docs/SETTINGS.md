@@ -313,8 +313,10 @@ Decided with MMagTech 2026-09-26, from the things people will actually do.
   full): the main drive is **CabinetOS**, another internal drive is
   **Internal**, a drive that can be unplugged (USB, Thunderbolt, SD) is
   **External**; two of one kind are told apart by the drive's name. **Built.**
-- **Drives found and not usable are listed greyed**, with the reason ("Isn't
-  exFAT or NTFS", "Couldn't use this drive") and the size. Without this a
+- **Drives found and not usable are listed**, with the reason ("Blank",
+  "Isn't exFAT, NTFS or ext4", "Couldn't use this drive") and the size;
+  Format on any of them whose contents the console can see, greyed
+  otherwise. Without this a
   blank SSD fitted inside the PC would be invisible. **Built on `usb-drives`.**
 - **Eject** for an External drive: stops a download going to it, unmounts
   every filesystem on it, checks nothing on the machine still has it mounted
@@ -428,9 +430,13 @@ Decided with MMagTech 2026-09-26, from the things people will actually do.
     2026-09-25: nothing mounted a USB drive, because the desktop's automounter
     went with the desktop. Never the console's own drive, never Windows' EFI,
     reserved or recovery partitions.
-  - **exFAT and NTFS only.** Anything else, and a blank drive: "isn't exFAT
-    or NTFS". Users are technical and made the installer on a computer that
-    can format a drive.
+  - **exFAT, NTFS and ext4** (ext4 added 2026-10-04, #236: only it holds
+    Steam's Windows games properly, so one drive can hold both). Anything
+    else, and a blank drive: "isn't exFAT, NTFS or ext4". An ext4 drive made
+    elsewhere gets an empty `CabinetOS/` from a root helper
+    (`cabinetos-drive-claim`), since its top folder is root's.
+  - **The console is the only thing that mounts a drive**: Bazzite's
+    automounters are removed from the image (#236, docs/PROJECT.md).
   - **Kept games go on the main drive first**, up to 80% of it (not counting
     the cache, which clears itself), then to the extra drive with the most
     room; with none, the main drive after all, down to the floors. Replaces
@@ -444,7 +450,7 @@ Decided with MMagTech 2026-09-26, from the things people will actually do.
   - **Notices, in the pill, no sound** (a chime would play over a game):
     "External drive connected" once mounted and usable, "Safe to unplug"
     after Eject, "External drive removed" when pulled without it, "External
-    drive isn't exFAT or NTFS", "Couldn't use the external drive". A drive
+    drive isn't exFAT, NTFS or ext4", "Couldn't use the external drive". A drive
     attached before the console started is mounted without "connected".
     **Internal drives get no notices** (a bad one would say so every boot);
     they are listed greyed in Storage instead.
@@ -458,7 +464,18 @@ Decided with MMagTech 2026-09-26, from the things people will actually do.
     and rebuilds the folders when a drive comes or goes. Before this, a
     second External drive never appeared, and one plugged in while File
     access was on only appeared after turning it off and on.
-  - **Format, for a BLANK drive only** (no partition table, no filesystem:
+  - **Format, on any drive with no file under `CabinetOS/`** (2026-10-04,
+    #236, MMagTech: "I got this new drive, and I want to just plug it into
+    my CabinetOS and go"). Replaces "a blank drive only", below. An External
+    drive in use asks "Eject / Format / Cancel" (Eject first: it is what the
+    row says); an Internal one in use, a blank one and one in another format
+    say Format on their row. The confirm says what is on the drive ("Holds 3
+    files, 12 GB", "Empty", "and 1 partition in another format"), counted
+    when asked. It makes one **ext4** partition named "Games" with
+    `CabinetOS/` and `SteamLibrary/`; Steam is told about `SteamLibrary/` at
+    each handover. Never the console's own drive, one mounted by anything
+    but the console, or one with a filesystem it reads but could not mount.
+  - *Was:* **Format, for a BLANK drive only** (no partition table, no filesystem:
     a new SSD). MMagTech first decided the console never formats (a
     formatting bug is a wiped drive), then raised the case that breaks it the
     same evening: a blank SSD fitted inside the PC cannot be formatted

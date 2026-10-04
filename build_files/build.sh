@@ -76,6 +76,10 @@ for expected in \
     /usr/libexec/os-session-select \
     /usr/libexec/cabinetos-system-disk \
     /usr/libexec/cabinetos-steam-download \
+    /usr/libexec/cabinetos-steam-libraries \
+    /usr/libexec/cabinetos-drive-claim \
+    /usr/lib/systemd/system/cabinetos-drive-claim.service \
+    /usr/share/polkit-1/rules.d/63-cabinetos-drives.rules \
     /usr/lib/udev/rules.d/90-cabinetos-system-disk.rules \
     /usr/lib/udev/rules.d/72-cabinetos-wii-remote.rules \
     /usr/lib/udev/rules.d/99-cabinetos-wii-remote.rules \
@@ -492,6 +496,32 @@ for needed in fallocate chattr mkfs.ext4 e2fsck resize2fs losetup mountpoint set
 done
 grep -q 'cabinetos-steam@' /usr/share/polkit-1/rules.d/66-cabinetos-steam.rules || {
     log "  MISSING: 66-cabinetos-steam.rules no longer names cabinetos-steam@"
+    failed=1
+}
+
+# EXTRA DRIVES (#236): the console is the only thing that mounts one, ext4
+# drives made elsewhere get their folder from cabinetos-drive-claim, and
+# Steam's libraries on them are listed by a Python script.
+for gone in /usr/lib/udev/rules.d/99-steamos-automount.rules \
+            /usr/lib/udev/rules.d/99-framework-steam-automount.rules; do
+    if [[ -e "${gone}" ]]; then
+        log "  WRONG: ${gone} is in the image; it would mount drives behind the console"
+        failed=1
+    fi
+done
+if [[ -e /usr/lib/systemd/system/ublue-os-media-automount.service ]] && \
+   [[ "$(systemctl is-enabled ublue-os-media-automount.service 2>/dev/null)" != masked ]]; then
+    log "  WRONG: ublue-os-media-automount.service is not masked; it would take internal ext4 drives"
+    failed=1
+fi
+for needed in python3 findmnt install; do
+    if ! command -v "${needed}" >/dev/null 2>&1; then
+        log "  MISSING: ${needed}, which the extra drive helpers run"
+        failed=1
+    fi
+done
+grep -q 'cabinetos-drive-claim.service' /usr/share/polkit-1/rules.d/63-cabinetos-drives.rules || {
+    log "  MISSING: 63-cabinetos-drives.rules no longer names cabinetos-drive-claim.service"
     failed=1
 }
 

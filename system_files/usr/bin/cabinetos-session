@@ -381,6 +381,13 @@ steam_step() {
             && echo "cabinetos-session: Steam's first start: its Bluetooth setting written as on"
     fi
 
+    # EVERY DRIVE'S SteamLibrary/ IS ONE OF STEAM'S LIBRARIES (#236). A drive
+    # the console formats gets the folder; Steam is told here, at each
+    # handover, while it is not running, so a drive formatted before Steam
+    # was set up is listed all the same. Only ever adds.
+    /usr/libexec/cabinetos-steam-libraries \
+        || echo "cabinetos-session: Steam's drive libraries could not be listed"
+
     # Upstream's wrapper (/usr/bin/gamescope-session-plus), less the user unit.
     export XDG_SESSION_TYPE=x11
     # shellcheck disable=SC2046  # the names, one word each, as upstream does

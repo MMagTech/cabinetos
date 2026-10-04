@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+#
+# The console's folder on an ext4 drive made elsewhere. Issue #236;
+# docs/SETTINGS.md, Storage.
+#
+# A Linux filesystem's top folder belongs to whoever made it, usually root,
+# so the console (user `cabinet`) cannot make CabinetOS/ there itself. This
+# makes it, empty, owned by the console's user, and touches nothing else on
+# the drive. A drive the console formatted needs none of this: its top folder
+# is the console's user's already (udisks' take-ownership).
+#
+# NO ARGUMENTS, on purpose. It looks at every ext4 filesystem udisks has
+# mounted for the console (/run/media/cabinet/<name>) and claims each that has
+# no CabinetOS/ yet; nothing the caller says can point it anywhere else. Run
+# only by cabinetos-drive-claim.service, which the console starts through
+# 63-cabinetos-drives.rules when it mounts such a drive (frontend/src/
+# drives.cpp, claim).
+
+set -uo pipefail
+
+USER_NAME=cabinet
+MEDIA="/run/media/${USER_NAME}"
+
+# The filesystems the console runs from: never claimed, however mounted.
+# A btrfs source carries its subvolume in brackets; the device is before them.
+own=$( { findmnt -n -o SOURCE --target / ; findmnt -n -o SOURCE --target /var ; \
+         findmnt -n -o SOURCE --target /boot ; } 2>/dev/null | sed 's/\[.*//')
+
+shopt -s nullglob
+for mp in "${MEDIA}"/*; do
+    [[ -d "${mp}" && ! -L "${mp}" ]] || continue
+    mountpoint -q "${mp}" || continue
+    [[ "$(findmnt -n -o FSTYPE --mountpoint "${mp}")" == ext4 ]] || continue
+    src=$(findmnt -n -o SOURCE --mountpoint "${mp}")
+    if grep -qxF -- "${src}" <<< "${own}"; then
+        echo "cabinetos-drive-claim: ${mp} is the console's own; left alone" >&2
+        continue
+    fi
+    claim="${mp}/CabinetOS"
+    # Already there, as a folder or anything else: not this script's to change.
+    [[ -e "${claim}" || -L "${claim}" ]] && continue
+    if install -d -m 0755 -o "${USER_NAME}" -g "${USER_NAME}" "${claim}"; then
+        echo "cabinetos-drive-claim: made ${claim}"
+    else
+        echo "cabinetos-drive-claim: could not make ${claim}" >&2
+    fi
+done
