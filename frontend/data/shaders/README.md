@@ -8,7 +8,7 @@ them, so a preset's relative paths still work.
 
 Each file keeps its own licence, stated in its header: crt-lottes, lcd3x and
 sharp-bilinear-simple are public domain; crt-easymode, crt-geom, zfast-crt,
-crt-pi, crt-aperture, zfast-lcd, lcd-grid-v2 and the Game Boy dot-matrix are
+crt-aperture, zfast-lcd, lcd-grid-v2 and the Game Boy dot-matrix are
 GPL. They are loaded at run time by `frontend/src/screenfx.cpp`, not compiled
 into the frontend.
 

@@ -29,16 +29,16 @@ const std::vector<Look> kConsole = {
     {"crt-lottes", "CRT lottes", "crt/crt-lottes.glslp"},
     {"crt-geom", "CRT geom", "crt/crt-geom.glslp"},
     {"zfast-crt", "CRT zfast", "crt/zfast-crt.glslp"},
-    {"crt-pi", "CRT pi", "crt/crt-pi.glslp"},
     {"crt-aperture", "CRT aperture", "crt/crt-aperture.glslp"},
     {"crt-guest", "CRT guest", "crt/crt-guest-dr-venom.glslp"},
     {"composite", "Composite", "ntsc/ntsc-adaptive.glslp"},
 };
-// N64, Dreamcast and 3DO are drawn at two to four times their own size, and
-// most CRT shaders draw one scanline per line of what they are given: about one
-// per TV row here, which crawls as the picture moves (zfast, pi on N64, judged
-// on the TV 2026-10-04), and crt-geom takes anything over 400 lines for an
-// interlaced signal and flickers. easymode and lottes held steady on N64.
+// N64 is drawn at up to four times its own size, and most CRT shaders draw one
+// scanline per line of what they are given: about 1,900 lines on a 2,160-row
+// TV, which crawls as the picture moves (zfast, judged on the TV 2026-10-04),
+// and crt-geom takes anything over 400 lines for an interlaced signal and
+// flickers. easymode and lottes held steady. Dreamcast at its Quality level is
+// exactly 2,160 lines, one per row, and showed none of it.
 const std::vector<Look> kUpscaled = {
     {"plain", "Plain", nullptr},
     {"sharp-bilinear", "Sharp", "interpolation/sharp-bilinear-simple.glslp"},
@@ -77,9 +77,9 @@ const std::vector<Look> kNone;
 // (MMagTech, 2026-10-04). Not PS2 or newer, which are played upscaled.
 const char* const kConsoleSlugs[] = {
     "nes", "snes", "genesis", "sms", "segacd", "sega32", "tg16", "turbografx-cd",
-    "atari2600", "atari7800", "arcade", "psx", "saturn",
+    "atari2600", "atari7800", "arcade", "psx", "saturn", "dc", "3do",
 };
-const char* const kUpscaledSlugs[] = {"n64", "dc", "3do"};
+const char* const kUpscaledSlugs[] = {"n64"};
 const char* const kHandheldSlugs[] = {"gba", "gamegear", "neo-geo-pocket-color"};
 
 std::string prefKey(const std::string& slug) { return "look." + slug; }

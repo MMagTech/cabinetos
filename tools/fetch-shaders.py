@@ -28,7 +28,6 @@ PRESETS = [
     "crt/crt-lottes",
     "crt/crt-geom",
     "crt/zfast-crt",
-    "crt/crt-pi",
     "crt/crt-aperture",
     "crt/crt-guest-dr-venom",
     "ntsc/ntsc-adaptive",
