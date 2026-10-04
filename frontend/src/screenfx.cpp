@@ -25,35 +25,61 @@ const std::vector<Look> kConsole = {
     {"plain", "Plain", nullptr},
     {"sharp-bilinear", "Sharp", "interpolation/sharp-bilinear-simple.glslp"},
     {"crt-easymode", "CRT easymode", "crt/crt-easymode.glslp"},
+    {"crt-easymode-halation", "CRT easymode glow", "crt/crt-easymode-halation.glslp"},
     {"crt-lottes", "CRT lottes", "crt/crt-lottes.glslp"},
     {"crt-geom", "CRT geom", "crt/crt-geom.glslp"},
     {"zfast-crt", "CRT zfast", "crt/zfast-crt.glslp"},
     {"crt-pi", "CRT pi", "crt/crt-pi.glslp"},
     {"crt-aperture", "CRT aperture", "crt/crt-aperture.glslp"},
+    {"crt-guest", "CRT guest", "crt/crt-guest-dr-venom.glslp"},
+    {"composite", "Composite", "ntsc/ntsc-adaptive.glslp"},
 };
-const std::vector<Look> kHandheld = {
+// N64, Dreamcast and 3DO are drawn at two to four times their own size, and
+// most CRT shaders draw one scanline per line of what they are given: about one
+// per TV row here, which crawls as the picture moves (zfast, pi on N64, judged
+// on the TV 2026-10-04), and crt-geom takes anything over 400 lines for an
+// interlaced signal and flickers. easymode and lottes held steady on N64.
+const std::vector<Look> kUpscaled = {
     {"plain", "Plain", nullptr},
     {"sharp-bilinear", "Sharp", "interpolation/sharp-bilinear-simple.glslp"},
-    {"lcd3x", "LCD 3x", "handheld/lcd3x.glslp"},
-    {"lcd-grid-v2", "LCD grid", "handheld/lcd-grid-v2.glslp"},
-    {"zfast-lcd", "LCD zfast", "handheld/zfast-lcd.glslp"},
+    {"crt-easymode", "CRT easymode", "crt/crt-easymode.glslp"},
+    {"crt-easymode-halation", "CRT easymode glow", "crt/crt-easymode-halation.glslp"},
+    {"crt-lottes", "CRT lottes", "crt/crt-lottes.glslp"},
+    {"crt-aperture", "CRT aperture", "crt/crt-aperture.glslp"},
+    {"crt-guest", "CRT guest", "crt/crt-guest-dr-venom.glslp"},
+    {"composite", "Composite", "ntsc/ntsc-adaptive.glslp"},
 };
+#define CABINETOS_LCD_LOOKS                                                     \
+    {"plain", "Plain", nullptr},                                                \
+    {"sharp-bilinear", "Sharp", "interpolation/sharp-bilinear-simple.glslp"},   \
+    {"lcd3x", "LCD 3x", "handheld/lcd3x.glslp"},                                \
+    {"lcd-grid-v2", "LCD grid", "handheld/lcd-grid-v2.glslp"},                  \
+    {"zfast-lcd", "LCD zfast", "handheld/zfast-lcd.glslp"}
+const std::vector<Look> kHandheld = {CABINETOS_LCD_LOOKS};
+// The original Game Boy's three screens. Each repaints the picture in its
+// own shades, so they suit a mono game and override the Colors row.
 const std::vector<Look> kGameBoy = {
-    {"plain", "Plain", nullptr},
-    {"sharp-bilinear", "Sharp", "interpolation/sharp-bilinear-simple.glslp"},
-    {"lcd3x", "LCD 3x", "handheld/lcd3x.glslp"},
-    {"lcd-grid-v2", "LCD grid", "handheld/lcd-grid-v2.glslp"},
-    {"zfast-lcd", "LCD zfast", "handheld/zfast-lcd.glslp"},
+    CABINETOS_LCD_LOOKS,
     {"gameboy", "Dot matrix", "handheld/gameboy.glslp"},
+    {"gameboy-pocket", "Dot matrix Pocket", "handheld/gameboy-pocket.glslp"},
+    {"gameboy-light", "Dot matrix Light", "handheld/gameboy-light.glslp"},
 };
+// Game Boy Color: the dot matrix that keeps the game's colours, since the
+// green one turns a colour game green.
+const std::vector<Look> kGameBoyColor = {
+    CABINETOS_LCD_LOOKS,
+    {"gbc-dot-matrix", "Dot matrix", "handheld/gbc-dot-matrix-white.glslp"},
+};
+#undef CABINETOS_LCD_LOOKS
 const std::vector<Look> kNone;
 
 // Up to and including Dreamcast, the systems this console draws itself
 // (MMagTech, 2026-10-04). Not PS2 or newer, which are played upscaled.
 const char* const kConsoleSlugs[] = {
     "nes", "snes", "genesis", "sms", "segacd", "sega32", "tg16", "turbografx-cd",
-    "atari2600", "atari7800", "arcade", "3do", "psx", "saturn", "n64", "dc",
+    "atari2600", "atari7800", "arcade", "psx", "saturn",
 };
+const char* const kUpscaledSlugs[] = {"n64", "dc", "3do"};
 const char* const kHandheldSlugs[] = {"gba", "gamegear", "neo-geo-pocket-color"};
 
 std::string prefKey(const std::string& slug) { return "look." + slug; }
@@ -277,19 +303,36 @@ void setFilter(GLuint tex, bool linear, bool mipmap, GLenum wrap) {
 }  // namespace
 
 const std::vector<Look>& looksFor(const std::string& slug) {
-    if (slug == "gb" || slug == "gbc") return kGameBoy;
+    if (slug == "gb") return kGameBoy;
+    if (slug == "gbc") return kGameBoyColor;
     for (const char* s : kHandheldSlugs)
         if (slug == s) return kHandheld;
     for (const char* s : kConsoleSlugs)
         if (slug == s) return kConsole;
+    for (const char* s : kUpscaledSlugs)
+        if (slug == s) return kUpscaled;
     return kNone;
+}
+
+// ON BY DEFAULT (MMagTech, 2026-10-04): the plain picture is the weakest on a
+// 4K set. Every TV system starts on crt-easymode: flat, so nothing in a corner
+// is bent or cut, the brightest of the CRT looks, Batocera's own "Scanlines",
+// and steady on N64. The handheld default waits for MMagTech's pick of LCD.
+const char* defaultFor(const std::string& slug) {
+    const auto& looks = looksFor(slug);
+    if (&looks == &kConsole || &looks == &kUpscaled) return "crt-easymode";
+    return "plain";
 }
 
 int chosen(const std::string& slug) {
     const auto& looks = looksFor(slug);
-    const std::string v = prefs::get(prefKey(slug), "plain");
+    const std::string v = prefs::get(prefKey(slug), defaultFor(slug));
     for (size_t i = 0; i < looks.size(); ++i)
         if (v == looks[i].id) return static_cast<int>(i);
+    // A look this system no longer offers (zfast on N64) falls back to the
+    // default rather than being trusted, as in Cabinet.
+    for (size_t i = 0; i < looks.size(); ++i)
+        if (std::strcmp(defaultFor(slug), looks[i].id) == 0) return static_cast<int>(i);
     return 0;
 }
 
