@@ -122,6 +122,8 @@ struct Remote {
     // The last light and report mode asked for, put back when the Remote
     // comes back (see reattach).
     std::vector<uint8_t> lastLed, lastMode;
+    // The Remote's last status report (0x20), answered from while it is off.
+    std::vector<uint8_t> lastStatus;
     // EVERY OTHER SETUP COMMAND THE GAME SENT, in order: the camera (0x13, 0x1a,
     // registers 0xB0..), the speaker (0x14, 0x19, 0xA2..), the extension and
     // MotionPlus (0xA4.., 0xA6..). A Remote switched off forgets all of it;
@@ -249,8 +251,30 @@ void fromGame(Remote& r, const uint8_t* d, size_t n) {
     if (isSetup(d, n) && !encryptionWrite) remember(r, d, n);
     if (r.real < 0) {
         // The Remote is off. Writes are answered so nothing waits on them;
-        // the rest goes nowhere until it is back.
+        // the rest goes nowhere until it is back, EXCEPT THE TWO QUESTIONS
+        // DOLPHIN ASKS A REMOTE IT HAS JUST FOUND: its status, and whether it
+        // is a Balance Board (a read of 0xA400FE). Dolphin waits for those
+        // answers with no time limit (WiimoteReal.cpp, IsBalanceBoard), on the
+        // thread it joins when the game ends, so a game started while a
+        // Remote was off and its stand-in stayed could never be left: A9
+        // 2026-10-03 21:54, Geometry Wars hung on Exit. The status is the
+        // Remote's last, with no buttons held; the read is refused, which
+        // Dolphin takes as "not a Balance Board".
         if (id == 0x16) ackToGame(r, 0x16);
+        if (id == 0x15) {
+            uint8_t st[7] = {0x20, 0x00, 0x00, static_cast<uint8_t>(r.ext ? 0x02 : 0x00), 0x00, 0x00, 0x00};
+            if (r.lastStatus.size() >= 7) {
+                st[3] = r.lastStatus[3];
+                st[6] = r.lastStatus[6];
+            }
+            toGame(r, st, sizeof st);
+        }
+        if (id == 0x17 && n >= 7 && (d[1] & 0x04) && d[2] == 0xa4 && d[3] == 0x00 && d[4] == 0xfe) {
+            uint8_t rd[22] = {0x21, 0x00, 0x00, 0x08, 0x00, 0xfe};   // error 8: nothing to read
+            toGame(r, rd, sizeof rd);
+            std::fprintf(stderr, "[wiibridge] %s is off; answered a new player's check for it\n",
+                         r.uniq.c_str());
+        }
         return;
     }
     if (id == 0x16 && n >= 7 && (d[1] & 0x04) && d[2] == 0xa4) {
@@ -307,6 +331,7 @@ void fromReal(Remote& r, uint8_t* d, size_t n) {
         ++r.swallowed;
         return;
     }
+    if (id == 0x20 && n >= 7) r.lastStatus.assign(d, d + n);
     if (id == 0x20 && n >= 4) {
         const bool ext = (d[3] & 0x02) != 0;
         if (ext != r.ext) {
