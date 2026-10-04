@@ -1288,6 +1288,7 @@ constexpr Credit kCredits[] = {
     {"Universal Blue", "Image tooling \xC2\xB7 Apache 2.0"},
     {"Fedora", "Under Bazzite \xC2\xB7 Per package"},
     {"gamescope", "Compositor, by Valve \xC2\xB7 BSD 2-clause"},
+    {"gamescope-session", "Steam's session \xC2\xB7 MIT"},
     {"FinalBurn Neo", "Arcade \xC2\xB7 Non-commercial"},
     {"MAME 2003-Plus", "Arcade \xC2\xB7 Non-commercial"},
     {"Snes9x", "SNES \xC2\xB7 Non-commercial"},
