@@ -471,7 +471,13 @@ Decided with MMagTech 2026-09-26, from the things people will actually do.
     row says); an Internal one in use, a blank one and one in another format
     say Format on their row. The confirm says what is on the drive ("Holds 3
     files, 12 GB", "Empty", "and 1 partition in another format"), counted
-    when asked. It makes one **ext4** partition named "Games" with
+    when asked. **While it formats, a screen of its own** ("Formatting
+    External", the drive, "Don't unplug the drive", a spinner; Back does
+    nothing) stays up until the new drive is mounted, then the pill says
+    "External drive formatted" (MMagTech on the TV, 2026-10-04: the drive
+    left Storage and nothing said a format was running; the SanDisk stick
+    takes about two minutes, its small writes being that slow; exFAT wrote
+    far less and took 5 s). It makes one **ext4** partition named "Games" with
     `CabinetOS/` and `SteamLibrary/`; Steam is told about `SteamLibrary/` at
     each handover. Never the console's own drive, one mounted by anything
     but the console, or one with a filesystem it reads but could not mount.

@@ -63,6 +63,7 @@ enum class Event {
     Removed,        // pulled out without Eject
     SafeToUnplug,   // Eject finished: nothing on the machine has it open
     EjectFailed,    // something still has it open
+    Formatted,      // Format finished and the drive is mounted, ready
     FormatFailed,   // Format did not finish; the drive may be blank or half done
     Changed,        // no notice; the list of unusable drives changed
 };
@@ -140,8 +141,9 @@ Contents contents(const Drive& d);
 // drive of that name is attached), holding CabinetOS/ and SteamLibrary/,
 // after checking again, from udisks, everything mayFormat checked. Its
 // filesystems are unmounted first, File access's view of them included. On
-// the worker. Success is the drive then mounting as any drive does, with
-// "connected"; failure is FormatFailed.
+// the worker. formatting() stays true until the new drive is mounted (or
+// gave up), so a panel over it closes on a drive that is there; then
+// Formatted, or FormatFailed.
 void format(const std::string& driveId);
 bool formatting();
 

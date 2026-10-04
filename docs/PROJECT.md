@@ -9318,6 +9318,14 @@ drives arrive exFAT or NTFS, which the console still uses straight away.
   refuses. And a drive just plugged in read as blank for a tenth of a second
   (udisks announces the disk before its partitions); partitions are now
   counted from the kernel.
+- **Second TV test: it formatted, in 2 min 5 s, with nothing on screen.** The
+  drive leaves Storage while it is formatted, and "connected" at the end did
+  not say "formatted". Measured on the A9: `mke2fs` writes only 7 MB to the
+  SanDisk stick, in small pieces across it, and spends 106-114 s waiting on
+  the stick; skipping discard and the journal zeroing changed nothing. So,
+  MMagTech's pick: a Formatting screen with a spinner until the new drive is
+  mounted, then "External drive formatted". A real SSD is expected to take
+  seconds; not yet measured.
 
 The two paragraphs below are the 09-25 record, kept for the reasoning.
 

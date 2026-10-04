@@ -416,6 +416,19 @@ struct Watcher {
     std::map<std::string, Event> announced;   // what was last said of each drive
     std::set<std::string> ejected;         // drives Eject let go of
     std::set<std::string> fresh;           // drives Format just made: SteamLibrary/ too
+    // THE DRIVE FORMAT IS WAITING TO SEE MOUNTED, and until when. Format
+    // counts as finished when its new filesystem is mounted, not when the
+    // format call returns: in between the drive is in no list at all.
+    std::string awaiting;
+    std::chrono::steady_clock::time_point awaitUntil;
+
+    void finishFormat(Event e, bool external) {
+        awaiting.clear();
+        post(e, external);
+        std::lock_guard<std::mutex> lk(gM);
+        gFormatting = false;
+        gNotices.push_back({Event::Changed, true});
+    }
     std::vector<std::string> added;        // filled by the signal handlers
     std::vector<std::string> removed;
     std::vector<std::string> changed;      // an interface went, the block stayed
@@ -458,6 +471,8 @@ struct Watcher {
     // drive that cannot be used is also listed for Storage, which is how an
     // internal one is seen at all.
     void say(const std::string& drive, bool external, Event e, bool blank = false) {
+        // The formatted drive came up and cannot be used: Format failed.
+        if (drive == awaiting && e != Event::Connected) finishFormat(Event::FormatFailed, external);
         if (e == Event::WrongFormat || e == Event::CouldNotUse) {
             Unusable u;
             u.id = drive;
@@ -572,7 +587,12 @@ struct Watcher {
                      type.c_str(), external ? "external" : "internal", at.c_str(),
                      quiet ? ", already attached" : "");
         usableAfterAll(drive);
-        if (quiet) {
+        if (drive == awaiting) {
+            // "formatted", not "connected", and for an internal drive too:
+            // somebody just asked for it.
+            announced[drive] = Event::Connected;
+            finishFormat(Event::Formatted, external);
+        } else if (quiet) {
             // No notice, but File access, if on, still has to show it.
             announced[drive] = Event::Connected;
             post(Event::Changed, external);
@@ -878,6 +898,8 @@ struct Watcher {
         std::fprintf(stderr, "[drives] format: %s is ext4 now, named %s\n", drive.c_str(),
                      label.c_str());
         fresh.insert(drive);
+        awaiting = drive;
+        awaitUntil = std::chrono::steady_clock::now() + std::chrono::seconds(30);
         // What was said of it before (blank, connected) no longer holds: the
         // new partition is news, and says "connected" when it mounts.
         announced.erase(drive);
@@ -947,12 +969,14 @@ struct Watcher {
                 }
             }
             if (!fmt.empty()) {
-                if (!formatOne(fmt)) post(Event::FormatFailed, true);
+                const bool ok = formatOne(fmt);
                 rescan();
-                std::lock_guard<std::mutex> lk(gM);
-                gFormatting = false;
-                gNotices.push_back({Event::Changed, true});
+                if (!ok) finishFormat(Event::FormatFailed, true);
                 continue;
+            }
+            if (!awaiting.empty() && std::chrono::steady_clock::now() > awaitUntil) {
+                std::fprintf(stderr, "[drives] format: %s never came up\n", awaiting.c_str());
+                finishFormat(Event::FormatFailed, true);
             }
 
             std::string loc;

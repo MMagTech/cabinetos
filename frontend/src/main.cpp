@@ -1373,6 +1373,7 @@ constexpr GalleryNotice kNoticeGallery[] = {
     {"External drive isn't exFAT, NTFS or ext4", Tone::Problem},
     {"Storage almost full", Tone::Info},
     {"Couldn't format the drive", Tone::Problem},
+    {"External drive formatted", Tone::Done},
 };
 
 // A drive's size as Storage says it: "2.02 TB", "125 GB". TWO DECIMALS FROM
@@ -8751,6 +8752,17 @@ int main(int argc, char** argv) {
                     std::fprintf(stderr, "[drives] format asked for %s\n", d.id.c_str());
                     drives::format(d.id);
                     buildSettings();
+                    // ITS OWN SCREEN UNTIL IT IS DONE (MMagTech, 2026-10-04):
+                    // the drive leaves Storage while it is formatted, and on
+                    // a slow USB stick that is two minutes of nothing. Closed
+                    // by the frame loop when the new drive is mounted.
+                    const std::string kind = d.external ? "External" : "Internal";
+                    askChoice("Formatting " + kind,
+                              (d.model.empty() ? std::string() : d.model + ", ") +
+                                  driveSize(static_cast<int64_t>(d.sizeBytes)) +
+                                  "\nDon't unplug the drive",
+                              {}, 0, nullptr);
+                    choiceScreen.setBusy(true);
                 });
             });
         });
@@ -12239,6 +12251,11 @@ int main(int argc, char** argv) {
             case power::Event::None:
                 break;
         }
+        // The Formatting screen goes when the format is done, the pill then
+        // saying how it went.
+        if (choiceScreen.isOpen() && choiceScreen.busy() && !drives::formatting() &&
+            choiceScreen.title().rfind("Formatting ", 0) == 0)
+            choiceScreen.close();
         // USB DRIVES coming, going and ejected. The pill and nothing else: no
         // sound, because a chime would play over a game. MMagTech, 2026-09-25.
         if (const drives::Notice dn = drives::poll(); dn.event != drives::Event::None) {
@@ -12262,6 +12279,9 @@ int main(int argc, char** argv) {
                     break;
                 case drives::Event::EjectFailed:
                     menuNotice.say("Couldn't eject the external drive", Tone::Problem);
+                    break;
+                case drives::Event::Formatted:
+                    menuNotice.say(drive + " formatted", Tone::Done);
                     break;
                 case drives::Event::FormatFailed:
                     menuNotice.say("Couldn't format the drive", Tone::Problem);

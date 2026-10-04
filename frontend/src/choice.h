@@ -80,6 +80,11 @@ public:
         promptButton_ = std::move(button);
         promptAfter_ = std::move(after);
     }
+    // A PANEL FOR SOMETHING THAT CANNOT BE STOPPED (Format, #236): a
+    // spinner where the answers go, and Back does nothing. The app closes it
+    // when the work is done. open() clears it.
+    void setBusy(bool on) { busy_ = on; }
+    bool busy() const { return busy_; }
     // The title alone, keeping everything else ("Paired successfully").
     void setTitle(std::string title) { title_ = std::move(title); }
     // The detail line alone, keeping the answers and focus.
@@ -99,6 +104,8 @@ public:
 private:
     bool open_ = false;
     bool staysOpen_ = false;
+    bool busy_ = false;
+    float spin_ = 0.0f;
     float fixedW_ = 0.0f;
     bool grows_ = false;
     std::string placeholder_;
