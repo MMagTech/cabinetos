@@ -8862,10 +8862,12 @@ int main(int argc, char** argv) {
         out->drive = sp.totalBytes + out->current;
         out->online = net::status().online;
     };
-    // "Games 1.55 TB": what the console keeps for itself beside Steam, the
-    // other side of the slider (MMagTech's brief: show both sides).
+    // "CabinetOS 1.55 TB": what the console keeps for itself beside Steam, the
+    // other side of the slider (MMagTech's brief: show both sides). Named as
+    // Settings, Storage names the main drive; "Games" read as games already
+    // installed (MMagTech on the TV, 2026-10-04).
     auto steamGamesLine = [&](int64_t size) {
-        return "Games " + driveSize(std::max<int64_t>(0, steamSizes.drive - size));
+        return "CabinetOS " + driveSize(std::max<int64_t>(0, steamSizes.drive - size));
     };
     auto refreshSteamTile = [&]() {
         placeSteamTile(platformTiles);
@@ -8873,9 +8875,30 @@ int main(int argc, char** argv) {
     };
 
     std::function<void()> showSteamSetup;
-    // The size panel: one row Left and Right change, 25 GB a press. On the
-    // first-pick screen it goes both ways from 100 GB, since nothing exists
-    // yet; once Steam is set up it only grows (MMagTech, 2026-10-03).
+    // Making the slice and handing over: Install on the storage screen.
+    auto installSteam = [&](int64_t want) {
+        auto ok = std::make_shared<bool>(false);
+        runSteamJob("Freeing space\xE2\x80\xA6", [want, ok]() {
+            std::string why;
+            *ok = steam::create(want, &why);
+        }, [&, ok]() {
+            if (!*ok) {
+                menuNotice.say("Couldn't set up Steam", Tone::Problem);
+                return;
+            }
+            menuNotice.life = 0.0f;
+            startLeaving(Leave::Steam, "Starting Steam");
+        });
+    };
+    // The size panel: one row Left and Right change, 25 GB a press, with the
+    // console's side shown under the title (MMagTech's brief: both sides).
+    //
+    // INSTALLING, it is the second of the two install screens and goes both
+    // ways from 100 GB, since nothing exists yet; focus starts on Install, so
+    // (A) twice installs at the default and the size is there for anyone who
+    // looks (MMagTech on the TV, 2026-10-03: the first screen read as jargon).
+    // Back returns to the first screen. GROWING, from Storage, it only goes up
+    // (grow only, MMagTech 2026-10-03).
     std::function<void(bool)> showSteamSize = [&](bool growing) {
         const int64_t step = steam::kStepBytes;
         const int64_t lo = growing ? steamSizes.current : steam::kMinBytes;
@@ -8889,14 +8912,14 @@ int main(int argc, char** argv) {
             choiceScreen.setDetail(steamGamesLine(*shown));
             choiceScreen.setStepper(0, *shown - step >= lo, *shown + step <= hi);
         };
-        askChoice("Adjust storage", steamGamesLine(*shown), {"Steam", "Done"}, 0,
+        askChoice(growing ? "Adjust storage" : "Steam storage", steamGamesLine(*shown),
+                  {"Steam", growing ? "Done" : "Install"}, growing ? 0 : 1,
                   [&, growing, shown](int) {
+            const int64_t want = *shown;
             if (!growing) {
-                steamSizes.size = *shown;
-                if (showSteamSetup) showSteamSetup();
+                installSteam(want);
                 return;
             }
-            const int64_t want = *shown;
             if (want <= steamSizes.current) return;
             runSteamJob("Freeing space\xE2\x80\xA6", [want]() {
                 std::string why;
@@ -8914,43 +8937,29 @@ int main(int argc, char** argv) {
             *shown = std::clamp<int64_t>(*shown + dir * step, lo, hi);
             refresh();
         };
-        if (!growing) choiceBack = [&]() { if (showSteamSetup) showSteamSetup(); };
+        if (!growing) choiceBack = [&, shown]() {
+            steamSizes.size = *shown;
+            if (showSteamSetup) showSteamSetup();
+        };
     };
 
-    // The first-pick screen. MMagTech, 2026-10-03: Continue (greyed while
-    // offline, or when even 100 GB does not fit), Adjust storage, Hide Steam,
-    // and a clear way back that sets nothing up.
+    // The first install screen, as an install (MMagTech on the TV,
+    // 2026-10-03): Install (greyed while offline, since Steam downloads itself
+    // the first time, or when even 100 GB does not fit), Hide Steam, Cancel.
+    // The size is the next screen's.
     showSteamSetup = [&]() {
         const bool fits = steamSizes.size >= steam::kMinBytes;
-        const std::string detail =
-            fits ? "Steam " + driveSize(steamSizes.size) + "  \xC2\xB7  " +
-                       steamGamesLine(steamSizes.size)
-                 : "Needs " + driveSize(steam::kMinBytes) + " of space";
-        askChoice("Steam", detail, {"Continue", "Adjust storage", "Hide Steam", "Back to the console"},
-                  0, [&](int a) {
+        askChoice("Steam", fits ? "" : "Needs " + driveSize(steam::kMinBytes) + " of space",
+                  {"Install", "Hide Steam", "Cancel"}, 0, [&](int a) {
             if (a == 0) {
-                const int64_t want = steamSizes.size;
-                auto ok = std::make_shared<bool>(false);
-                runSteamJob("Freeing space\xE2\x80\xA6", [want, ok]() {
-                    std::string why;
-                    *ok = steam::create(want, &why);
-                }, [&, ok]() {
-                    if (!*ok) {
-                        menuNotice.say("Couldn't set up Steam", Tone::Problem);
-                        return;
-                    }
-                    menuNotice.life = 0.0f;
-                    startLeaving(Leave::Steam, "Starting Steam");
-                });
-            } else if (a == 1) {
                 showSteamSize(false);
-            } else if (a == 2) {
+            } else if (a == 1) {
                 steam::setHidden(true);
                 std::fprintf(stderr, "[steam] hidden\n");
                 refreshSteamTile();
             }
         });
-        choiceScreen.setDisabled({!fits || !steamSizes.online, !fits, false, false});
+        choiceScreen.setDisabled({!fits || !steamSizes.online, false, false});
     };
 
     // The tile. With a PIN set, anyone but the owner enters it first, and the
