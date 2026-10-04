@@ -1,0 +1,4 @@
+# The drive CabinetOS boots from is hidden from drive lists: Steam's Storage
+# page offered to format it (#223). /usr/libexec/cabinetos-system-disk says
+# why, and how the drive is found.
+SUBSYSTEM=="block", ACTION=="add|change", ENV{DEVTYPE}=="disk|partition", PROGRAM="/usr/libexec/cabinetos-system-disk %k", RESULT=="system", ENV{UDISKS_IGNORE}="1"

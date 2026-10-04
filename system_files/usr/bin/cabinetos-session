@@ -362,6 +362,25 @@ steam_step() {
           /tmp/chimeraos-short-session-tracker \
           /tmp/steamos-reboot-sentinel /tmp/steamos-shutdown-sentinel
 
+    # STEAM MUST NOT SWITCH THE CONTROLLERS OFF. Steam keeps its own setting,
+    # System > Bluetooth > Enabled, in config/config.vdf, and with no such file
+    # yet (a first start) it reads it as off and powers the adapter down as
+    # its interface loads, before its own setup reaches the step that turns it
+    # back on: every Bluetooth controller drops on the language screen and the
+    # console's one-controller promise breaks (A9, 2026-10-03, "SetEnabled:
+    # adapter ... enable: 0" in Steam's steamui_system.txt). So before Steam's
+    # first start, and only then, the file is written with that one setting
+    # on, exactly as Steam itself writes it once its setup has run. Never
+    # touched again: after that it is Steam's, and a person who turns
+    # Bluetooth off inside Steam gets it off inside Steam.
+    local steamcfg="${HOME}/.local/share/Steam/config/config.vdf"
+    if [[ ! -e "${steamcfg}" ]]; then
+        mkdir -p "${steamcfg%/*}" && printf '%s\n' \
+            '"InstallConfigStore"' '{' '	"System"' '	{' '		"Bluetooth"' '		{' \
+            '			"Enabled"		"1"' '		}' '	}' '}' > "${steamcfg}" \
+            && echo "cabinetos-session: Steam's first start: its Bluetooth setting written as on"
+    fi
+
     # Upstream's wrapper (/usr/bin/gamescope-session-plus), less the user unit.
     export XDG_SESSION_TYPE=x11
     # shellcheck disable=SC2046  # the names, one word each, as upstream does
@@ -392,6 +411,16 @@ steam_step() {
 
     if ! systemctl --no-ask-password start cabinetos-steam@unmount.service; then
         echo "cabinetos-session: Steam's slice could not be detached"
+    fi
+
+    # THE CONSOLE NEVER COMES BACK WITHOUT ITS CONTROLLERS. Bluetooth is the
+    # console's, and whatever Steam did with it (its own setting, a person
+    # switching it off in Steam's menus), it is on again before the console
+    # starts. bluetoothctl as the console's user, as the console's own
+    # pairing does.
+    if bluetoothctl show 2>/dev/null | grep -q "Powered: no"; then
+        bluetoothctl power on >/dev/null 2>&1 \
+            && echo "cabinetos-session: Bluetooth was off after Steam; switched back on"
     fi
     : > "${RETURNED_FILE}"
 }

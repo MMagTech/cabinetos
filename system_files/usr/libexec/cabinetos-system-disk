@@ -1,0 +1,26 @@
+#!/usr/bin/bash
+#
+# Prints "system" when the block device named by $1 (a disk or a partition,
+# as udev's %k gives it) is on the disk CabinetOS boots from, and nothing
+# otherwise. Run by 90-cabinetos-system-disk.rules. Issue #223.
+#
+# WHY: Steam's Storage page lists every drive the system's disk service
+# (udisks) knows and offers to format any it does not use itself, and the
+# console's own drive was one of them on the A9 (2026-10-03): the drive with
+# the system, every kept game, every save and Steam's own slice. A drive
+# udisks is told to ignore is left out of such lists. The console's own drive
+# code already skips ignored drives and finds its own drive from the mounts,
+# not from this (frontend/src/drives.cpp), so nothing of the console changes.
+#
+# Found from the mounts, never named: on another machine the system disk is
+# an SSD called something else, or a SATA disk.
+
+root=$(/usr/bin/findmnt -n -o SOURCE /sysroot 2>/dev/null || /usr/bin/findmnt -n -o SOURCE /)
+root=${root%%[*}
+[[ "${root}" == /dev/* ]] || exit 0
+rootdisk=$(/usr/bin/lsblk -n -d -o PKNAME "${root}" 2>/dev/null)
+[[ -n "${rootdisk}" ]] || rootdisk=${root#/dev/}
+mine=$(/usr/bin/lsblk -n -d -o PKNAME "/dev/$1" 2>/dev/null)
+[[ -n "${mine}" ]] || mine=$1
+[[ "${mine}" == "${rootdisk}" ]] && echo system
+exit 0
