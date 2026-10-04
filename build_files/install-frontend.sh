@@ -198,6 +198,21 @@ log "installed the Wii controller list ($(grep -vc '^#' /usr/share/cabinetos/wii
 # takes a Pro or a Classic Controller (wiiu.h; docs/PROJECT.md open question 36).
 install -D -m 0644 /ctx/frontend-data/wiiu-controls.txt /usr/share/cabinetos/wiiu-controls.txt
 log "installed the Wii U controller list ($(grep -vc '^#' /usr/share/cabinetos/wiiu-controls.txt) games)"
+# The screen looks (#122): RetroArch's own GLSL shaders, unchanged, where
+# screenfx::shaderDir looks for them. Read at run time, never compiled in.
+# Checked by the preset each default names, so a list that lost one fails here
+# rather than drawing a plain picture on every console.
+mkdir -p /usr/share/cabinetos/shaders
+cp -R /ctx/frontend-data/shaders/. /usr/share/cabinetos/shaders/
+find /usr/share/cabinetos/shaders -type d -exec chmod 0755 {} +
+find /usr/share/cabinetos/shaders -type f -exec chmod 0644 {} +
+for preset in crt/crt-easymode.glslp handheld/lcd3x.glslp; do
+    if [[ ! -s "/usr/share/cabinetos/shaders/${preset}" ]]; then
+        log "ERROR: screen look ${preset} did not land — every game would draw plainly"
+        exit 1
+    fi
+done
+log "installed the screen looks ($(find /usr/share/cabinetos/shaders -name '*.glslp' | wc -l) presets, $(du -sh /usr/share/cabinetos/shaders | cut -f1))"
 
 group_end
 

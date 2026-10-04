@@ -1315,6 +1315,7 @@ constexpr Credit kCredits[] = {
     {"DraStic FreeBIOS", "DS BIOS \xC2\xB7 BSD 2-clause"},
     {"vecx", "Vectrex \xC2\xB7 GPL v3"},
     {"mGBA", "Game Boy Advance \xC2\xB7 MPL 2.0"},
+    {"RetroArch shaders", "Screen looks \xC2\xB7 GPL, public domain"},
     {"FFmpeg", "Inside PPSSPP \xC2\xB7 LGPL v2.1+"},
     {"rapidyaml, c4core", "Inside PCSX2 \xC2\xB7 MIT"},
     {"SDL3", "Input and audio \xC2\xB7 zlib"},
