@@ -119,6 +119,7 @@ here. See `frontend/src/catalog.cpp`.
 | **PPSSPP system files** — fonts, VFPU tables, `compat.ini`, the atlases | PPSSPP's own `assets/`, installed by `cores/build-core.sh` | GPL v2 or later, as PPSSPP |
 | **FFmpeg**, statically linked inside PPSSPP | the prebuilt `ffmpeg/linux/x86_64` in PPSSPP's own tree | LGPL v2.1 or later |
 | **Noto Sans** and Noto Sans CJK, the interface type | already in the Bazzite base; nothing is bundled | SIL Open Font License 1.1 |
+| **The Wii bridge**, `/usr/libexec/cabinetos-wii-bridge` | this repository's `wiibridge/`, a program of its own that the console app only starts; it carries Dolphin's extension encryption (`encryption.cpp`/`.h`) from `libretro/dolphin` at `1a0f97270b70`, credited in each file | GPL v2 or later, as Dolphin |
 | **PCSX2**, linked into `cabinetos-ps2.so` | upstream `PCSX2/pcsx2` at v2.8.2, built by `cores/build-pcsx2.sh` | GPL v3 or later |
 | **PCSX2's resources** — `GameIndex.yaml`, the Redump database, fonts, GS shaders | PCSX2's own `bin/resources` | GPL v3 or later, as PCSX2 |
 | **rapidyaml** and **c4core**, carried beside the emulator | Fedora's packages, copied because the Bazzite base lacks them | MIT |

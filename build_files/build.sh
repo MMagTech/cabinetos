@@ -70,6 +70,8 @@ for expected in \
     /usr/libexec/cabinetos-wii-search \
     /usr/lib/systemd/system/cabinetos-wii-search.service \
     /usr/share/polkit-1/rules.d/65-cabinetos-wii.rules \
+    /usr/lib/udev/rules.d/72-cabinetos-wii-remote.rules \
+    /usr/lib/udev/rules.d/99-cabinetos-wii-remote.rules \
     /etc/ssh/sshd_config.d/30-cabinetos.conf
 do
     if [[ -e "${expected}" ]]; then

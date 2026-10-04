@@ -46,6 +46,7 @@ on:
       - main
     paths:
       - 'frontend/**'
+      - 'wiibridge/**'
       - 'cores/options/**'
       - '.github/workflows/build-frontend.yml'
   workflow_dispatch:
@@ -75,6 +76,15 @@ jobs:
           podman run --rm -v "$PWD/frontend":/src:Z -w /src cabinetos-builder \
             make -j"$(nproc)" 2>&1 | tee /tmp/build.log
 
+      # THE WII BRIDGE (#200, wiibridge/): its own program, GPL, in the same
+      # container. Built here so the image carries it beside the frontend that
+      # starts it, and so it moves in the frontend's small layer.
+      - name: Compile the Wii bridge
+        run: |
+          set -euo pipefail
+          podman run --rm -v "$PWD/wiibridge":/src:Z -w /src cabinetos-builder \
+            make 2>&1 | tee -a /tmp/build.log
+
       # EVERY OPTION VALUE THE CONSOLE SETS, AGAINST WHAT EACH CORE DECLARES
       # (#63, the version-bump check, frontend/src/optcheck.h). A table that
       # names a key a core does not have, or a value it does not accept,
@@ -98,7 +108,8 @@ jobs:
           set -euo pipefail
           mkdir -p artifact/bin
           cp frontend/build/cabinetos-frontend artifact/bin/
-          file artifact/bin/cabinetos-frontend
+          cp wiibridge/cabinetos-wii-bridge artifact/bin/
+          file artifact/bin/cabinetos-frontend artifact/bin/cabinetos-wii-bridge
 
       - name: Upload the frontend
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1

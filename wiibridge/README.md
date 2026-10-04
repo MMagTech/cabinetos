@@ -13,8 +13,9 @@ for that); keeps the stand-in when a Remote goes off (libretro's Dolphin crashes
 when a held Remote vanishes) and replays the game's setup when it comes back; and
 switches a Remote off when a game lets it go.
 
-Build (in the builder container):
+Build (in the builder container): `make`.
 
-    g++ -std=c++20 -O2 -Wall -Wextra -o cabinetos-wii-bridge bridge.cpp encryption.cpp
-
-Not yet built by the image; see docs/NEXT-SESSION.md on branch wii-remotes.
+The image carries it as `/usr/libexec/cabinetos-wii-bridge`, which is where the
+console app looks (frontend/src/wiiremote.cpp). CI builds it beside the frontend
+(.github/workflows/build-frontend.yml), ci/stage-image-payload.sh collects it,
+and build_files/install-frontend.sh installs it in the frontend layer.
