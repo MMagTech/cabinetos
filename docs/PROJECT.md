@@ -12447,6 +12447,24 @@ What does it, and where:
   install file list): what is on the disk is used.
 - **Back:** owed saves go at once; a console that started offline loads its
   library properly the next time it is on Home with nothing in progress.
+- **RomM's newest saves are kept for every game on the drive**
+  (`users/<id> - <name>/server-saves/<romId>/`, savemirror.h), fetched in one
+  call while online and again every quarter of an hour: offline, a launch
+  reads that copy exactly as it reads the server online, so a game last
+  played on another device starts from its newest save (the vacation case,
+  moved here from #261). The copy is forgotten whenever a save of ours lands,
+  then read again, so it can never be older than a save the console sent.
+- **The game's page offline** shows the save's date and the newest three
+  states from the console (pictures included), and the year, maker and
+  players as last seen (`games/<romId>.facts.json`). Online, a state still
+  waiting to upload is listed with RomM's. Picking one of the console's own
+  loads that file.
+- **Favorites offline**: each person's favourites are kept while online
+  (`favorites.json` in their folder); offline, the ones on the drive form the
+  shelf, in order. None on the drive, no shelf.
+- No message when owed saves go up after a reconnect (MMagTech, 2026-10-05):
+  the Offline chip going is the sign, and the pause menu already said "Will
+  upload when RomM is back".
 
 Not changed, on purpose: the three-states rule and state loading (#259's scope
 comment), the startup screen's words (the agreed sequence keeps them), first

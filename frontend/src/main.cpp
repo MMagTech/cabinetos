@@ -2067,6 +2067,41 @@ static void drawPressPrompt(ui::Renderer& r, ui::TextRenderer& text, float sc,
 // WHEN A STATE WAS SAVED, as the launch screen says it: "Today, 8:13 PM",
 // "Yesterday, 8:13 PM", "Sep 23, 8:13 PM", with the year only when it is not
 // this one. From RomM's `updated_at`, which is UTC, into this console's time.
+// A file time the way RomM writes one, so the two sort and read alike.
+static std::string isoUtc(time_t t) {
+    struct tm g;
+    gmtime_r(&t, &g);
+    char buf[40];
+    std::strftime(buf, sizeof buf, "%Y-%m-%dT%H:%M:%S+00:00", &g);
+    return buf;
+}
+
+// A GAME'S YEAR, MAKER AND PLAYERS, kept for the page offline (#88), beside
+// the game's record: `games/<romId>.facts.json`.
+static void rememberFacts(int romId, const romm::Client::Facts& f) {
+    json_object* o = json_object_new_object();
+    json_object_object_add(o, "year", json_object_new_int(f.year));
+    json_object_object_add(o, "maker", json_object_new_string(f.maker.c_str()));
+    json_object_object_add(o, "players", json_object_new_string(f.players.c_str()));
+    storage::makeDirs(storage::gamesDir());
+    const std::string path = storage::gamesDir() + "/" + std::to_string(romId) + ".facts.json";
+    const std::string tmp = path + ".part";
+    if (json_object_to_file(tmp.c_str(), o) == 0) ::rename(tmp.c_str(), path.c_str());
+    json_object_put(o);
+}
+
+static bool knownFacts(int romId, romm::Client::Facts* f) {
+    json_object* o = json_object_from_file(
+        (storage::gamesDir() + "/" + std::to_string(romId) + ".facts.json").c_str());
+    if (!o) return false;
+    json_object* v = nullptr;
+    if (json_object_object_get_ex(o, "year", &v)) f->year = json_object_get_int(v);
+    if (json_object_object_get_ex(o, "maker", &v)) f->maker = json_object_get_string(v);
+    if (json_object_object_get_ex(o, "players", &v)) f->players = json_object_get_string(v);
+    json_object_put(o);
+    return true;
+}
+
 static std::string stateWhen(const std::string& iso) {
     int Y, M, D, h, m, sec;
     if (std::sscanf(iso.c_str(), "%d-%d-%dT%d:%d:%d", &Y, &M, &D, &h, &m, &sec) != 6) return "";
@@ -3123,6 +3158,17 @@ static Library loadLibrary(romm::Client& client) {
             if (!catalog::playable(g)) continue;
             lib.favorites.push_back(appendGame(lib, g));
         }
+        // KEPT FOR OFFLINE (#88): this person's favourites, in order, so the
+        // offline Home shows the ones on the drive. `favorites.json` in their
+        // folder.
+        if (const storage::User& who = storage::currentUser(); who.valid()) {
+            json_object* arr = json_object_new_array();
+            for (const auto& g : favs) json_object_array_add(arr, json_object_new_int(g.id));
+            const std::string path = storage::userDir(who) + "/favorites.json";
+            const std::string tmp = path + ".part";
+            if (json_object_to_file(tmp.c_str(), arr) == 0) ::rename(tmp.c_str(), path.c_str());
+            json_object_put(arr);
+        }
         std::fprintf(stderr, "[library] %zu favourites\n", lib.favorites.size());
     }
 
@@ -3307,6 +3353,21 @@ static Library offlineLibrary() {
         platformTitle[g.platformId] = g.platformName;
         lib.platformNames[g.platformId] = g.platformName;
     }
+    // FAVORITES: this person's, as last seen online, that are on the drive,
+    // in their order (MMagTech, 2026-10-05). None on the drive: no shelf, as
+    // online with none.
+    if (const storage::User& who = storage::currentUser(); who.valid()) {
+        if (json_object* arr = json_object_from_file(
+                (storage::userDir(who) + "/favorites.json").c_str())) {
+            if (json_object_is_type(arr, json_type_array))
+                for (size_t i = 0; i < json_object_array_length(arr); ++i) {
+                    const int id = json_object_get_int(json_object_array_get_idx(arr, i));
+                    if (auto it = lib.byRomId.find(id); it != lib.byRomId.end())
+                        lib.favorites.push_back(it->second);
+                }
+            json_object_put(arr);
+        }
+    }
     for (auto& [pid, idxs] : byPlatform) {
         screens::Tile tile;
         tile.id = pid;
@@ -3353,8 +3414,9 @@ static Library offlineLibrary() {
                      });
     std::fprintf(stderr,
                  "[offline] %zu game(s) on the drive: %zu shown, %d with no record, %d not "
-                 "playable here; %zu system(s)\n",
-                 drive.size(), lib.cards.size(), noRecord, notHere, lib.platformTiles.size());
+                 "playable here; %zu system(s), %zu favourite(s)\n",
+                 drive.size(), lib.cards.size(), noRecord, notHere, lib.platformTiles.size(),
+                 lib.favorites.size());
     return lib;
 }
 
@@ -6045,6 +6107,8 @@ int main(int argc, char** argv) {
         images.init(imageBudget, 4, [](const std::string& key) {
             // A PERSON'S PICTURE is asked for fresh (it can change), and a
             // copy kept so the chip and the switcher show faces offline (#88).
+            // A STATE'S PICTURE ON THIS CONSOLE (#88): a file, read as one.
+            if (key.rfind(storage::root() + "/", 0) == 0) return cab::readBytes(key);
             if (key.rfind("/api/users/", 0) == 0) {
                 const std::string kept =
                     covercache::dir() + "/avatars/" + storage::safeSegment(key);
@@ -7506,23 +7570,30 @@ int main(int argc, char** argv) {
         std::string saveWhen;
         screens::DetailScreen::Facts facts;
         int wantRom = 0;
-        std::string wantTag, wantSaveTag;
+        std::string wantTag, wantSaveTag, wantStateDir;
+        // The console's own states in `list` (#88): a StateChoice id of -(i+1)
+        // is localPaths[i]. Offline, they are the states; online, only the
+        // ones still waiting to upload are added to RomM's.
+        std::vector<std::string> localPaths;
         // Asked again once the uploads are done: a game just left may have
         // saved a state that is still on its way to RomM.
         bool stale = false;
         ~DetailStates() { if (worker.joinable()) worker.join(); }
     };
     static DetailStates detailStates;
+    // The open page's own states, by the negative ids its list carries.
+    std::vector<std::string> detailLocalStates;
     auto startDetailStates = [&]() {
         if (detailStates.busy.load() || !detailStates.wantRom) return;
         if (detailStates.worker.joinable()) detailStates.worker.join();
         const int romId = detailStates.wantRom;
         const std::string tag = detailStates.wantTag;
         const std::string saveTag = detailStates.wantSaveTag;
+        const std::string stateDir = detailStates.wantStateDir;
         detailStates.wantRom = 0;
         detailStates.busy = true;
         const storage::User who = storage::currentUser();
-        detailStates.worker = std::thread([romId, tag, saveTag, who]() {
+        detailStates.worker = std::thread([romId, tag, saveTag, stateDir, who]() {
             std::vector<romm::Asset> all;
             std::vector<screens::StateChoice> out;
             std::string err, saveWhen;
@@ -7531,7 +7602,10 @@ int main(int argc, char** argv) {
             {
                 romm::Client::Facts f;
                 std::string ferr;
-                if (liveClient.fetchFacts(romId, &f, &ferr)) {
+                // Offline (#88): as last seen, kept beside the game's record.
+                const bool fresh = !romm::serverAway() && liveClient.fetchFacts(romId, &f, &ferr);
+                if (fresh) rememberFacts(romId, f);
+                if (fresh || knownFacts(romId, &f)) {
                     if (f.year > 0) facts.year = std::to_string(f.year);
                     facts.maker = f.maker;
                     if (!f.players.empty())
@@ -7544,42 +7618,88 @@ int main(int argc, char** argv) {
             {
                 int64_t ms = 0;
                 std::string perr;
-                bool have = liveClient.fetchPlayedMs(romId, &ms, &perr);
+                bool have = !romm::serverAway() && liveClient.fetchPlayedMs(romId, &ms, &perr);
                 if (have) playtime::remember(who, romId, ms);
                 else have = playtime::known(who, romId, &ms);
                 if (have) facts.played = playtime::describe(ms + playtime::owedMs(who, romId));
             }
             // THE GAME'S OWN SAVE, the newest under the tag it travels by, as
-            // the launch reads it. "Saved today, 8:17 PM".
-            if (!saveTag.empty() && liveClient.fetchSaves(romId, &all, &err)) {
-                const romm::Asset* newest = nullptr;
+            // the launch reads it. "Saved today, 8:17 PM". RomM's, or its copy
+            // offline (savesFor); or this console's own when that is newer and
+            // still waiting to upload (#88).
+            std::string savedAt;
+            if (!saveTag.empty() && savesFor(liveClient, romId, &all, &err))
                 for (const romm::Asset& a : all)
-                    if (a.emulator == saveTag && (!newest || a.updatedAt > newest->updatedAt))
-                        newest = &a;
-                if (newest) {
-                    std::string w = stateWhen(newest->updatedAt);
-                    if (w.rfind("Today", 0) == 0 || w.rfind("Yesterday", 0) == 0)
-                        w[0] = static_cast<char>(std::tolower(static_cast<unsigned char>(w[0])));
-                    if (!w.empty()) saveWhen = "Saved " + w;
-                }
+                    if (a.emulator == saveTag && a.updatedAt > savedAt) savedAt = a.updatedAt;
+            const std::vector<cache::Owed> owedHere = cache::owed(who);
+            auto owedNamed = [&](const std::string& name, bool state) {
+                for (const cache::Owed& o : owedHere)
+                    if (o.romId == romId && o.isState == state && !o.isScreenshot &&
+                        o.fileName == name)
+                        return true;
+                return false;
+            };
+            for (const cache::Owed& o : owedHere) {
+                if (o.romId != romId || o.isState || o.isScreenshot) continue;
+                struct stat st;
+                if (::stat(o.localPath.c_str(), &st) == 0 && isoUtc(st.st_mtime) > savedAt)
+                    savedAt = isoUtc(st.st_mtime);
             }
+            if (!savedAt.empty()) {
+                std::string w = stateWhen(savedAt);
+                if (w.rfind("Today", 0) == 0 || w.rfind("Yesterday", 0) == 0)
+                    w[0] = static_cast<char>(std::tolower(static_cast<unsigned char>(w[0])));
+                if (!w.empty()) saveWhen = "Saved " + w;
+            }
+            // THE NEWEST THREE STATES. RomM's, and with them this console's
+            // own (#88): all of them when RomM could not be asked (offline,
+            // or a system whose states never leave the console), and only the
+            // ones still waiting to upload when it could. One file name is one
+            // state, shown once.
+            struct Shown { int id; std::string picture, at, name, path; };
+            std::vector<Shown> shown;
+            bool askedRomm = false;
             all.clear();
-            if (!tag.empty() && liveClient.fetchStates(romId, &all, &err)) {
-                std::vector<romm::Asset> mine;
+            if (!tag.empty() && !romm::serverAway() && liveClient.fetchStates(romId, &all, &err)) {
+                askedRomm = true;
                 for (const romm::Asset& a : all)
-                    if (a.emulator == tag) mine.push_back(a);
-                std::sort(mine.begin(), mine.end(),
-                          [](const romm::Asset& a, const romm::Asset& b) {
-                              return a.updatedAt > b.updatedAt;
-                          });
-                for (size_t i = 0; i < mine.size() && i < 3; ++i)
-                    out.push_back({mine[i].id, mine[i].picturePath, stateWhen(mine[i].updatedAt)});
+                    if (a.emulator == tag)
+                        shown.push_back({a.id, a.picturePath, a.updatedAt, a.fileName, ""});
             } else if (!err.empty()) {
                 std::fprintf(stderr, "[detail] states and saves: %s\n", err.c_str());
+            }
+            if (DIR* d = stateDir.empty() ? nullptr : ::opendir(stateDir.c_str())) {
+                while (dirent* e = ::readdir(d)) {
+                    const std::string name = e->d_name;
+                    if (name.size() < 7 || name.compare(name.size() - 6, 6, ".state") != 0) continue;
+                    if (askedRomm && !owedNamed(name, true)) continue;
+                    bool dup = false;
+                    for (const Shown& x : shown) dup = dup || x.name == name;
+                    if (dup) continue;
+                    const std::string full = stateDir + "/" + name;
+                    struct stat st;
+                    if (::stat(full.c_str(), &st) != 0 || !S_ISREG(st.st_mode)) continue;
+                    const std::string png = full.substr(0, full.size() - 6) + ".png";
+                    shown.push_back({0, ::access(png.c_str(), R_OK) == 0 ? png : std::string(),
+                                     isoUtc(st.st_mtime), name, full});
+                }
+                ::closedir(d);
+            }
+            std::sort(shown.begin(), shown.end(),
+                      [](const Shown& a, const Shown& b) { return a.at > b.at; });
+            std::vector<std::string> localPaths;
+            for (size_t i = 0; i < shown.size() && i < 3; ++i) {
+                int id = shown[i].id;
+                if (!shown[i].path.empty()) {
+                    localPaths.push_back(shown[i].path);
+                    id = -static_cast<int>(localPaths.size());
+                }
+                out.push_back({id, shown[i].picture, stateWhen(shown[i].at)});
             }
             std::lock_guard<std::mutex> lk(detailStates.m);
             detailStates.romId = romId;
             detailStates.list = std::move(out);
+            detailStates.localPaths = std::move(localPaths);
             detailStates.saveWhen = std::move(saveWhen);
             detailStates.facts = std::move(facts);
             detailStates.ready = true;
@@ -7601,6 +7721,10 @@ int main(int argc, char** argv) {
             detailStates.wantRom = romId;
             detailStates.wantTag = tag ? tag : "";
             detailStates.wantSaveTag = saveTag ? saveTag : "";
+            detailStates.wantStateDir =
+                cov.core && catalog::snapshotsAllowed(cov.core)
+                    ? storage::statesDir(storage::currentUser(), g.platformFsSlug, romId, cov.core)
+                    : std::string();
             startDetailStates();
             return;
         }
@@ -7610,6 +7734,7 @@ int main(int argc, char** argv) {
             std::lock_guard<std::mutex> lk(detailStates.m);
             if (here() == Screen::Detail && detailScreen.game().romId == detailStates.romId) {
                 detailScreen.setStates(detailStates.list);
+                detailLocalStates = detailStates.localPaths;
                 detailScreen.setSaveWhen(detailStates.saveWhen);
                 detailScreen.setFacts(detailStates.facts);
                 detailScreen.detailsArrived();
@@ -7623,6 +7748,8 @@ int main(int argc, char** argv) {
     };
     // A state picked on the launch screen, loaded once the game is running.
     int pendingStateId = 0;
+    // ...or one of this console's own (#88), by its file.
+    std::string pendingStatePath;
     // HOME'S RESUME: the newest state, if there is one, loaded the same way;
     // none, and the game simply starts (MMagTech, 2026-09-27). Only where the
     // system has states.
@@ -10569,6 +10696,13 @@ int main(int argc, char** argv) {
                 break;
             case screens::Action::PlayState:
                 std::fprintf(stderr, "[detail] play from state %d\n", res.value);
+                // Negative: one of this console's own states, by its file.
+                if (res.value < 0 &&
+                    static_cast<size_t>(-res.value) <= detailLocalStates.size()) {
+                    pendingStatePath = detailLocalStates[static_cast<size_t>(-res.value) - 1];
+                    if (!launchById(detailScreen.game().romId)) pendingStatePath.clear();
+                    break;
+                }
                 pendingStateId = res.value;
                 if (!launchById(detailScreen.game().romId)) pendingStateId = 0;
                 break;
@@ -12070,6 +12204,7 @@ int main(int argc, char** argv) {
         // on over Home (see where the stream's rate is set, at launch).
         if (audioStream) SDL_ClearAudioStream(audioStream);
         pendingStateId = 0;
+        pendingStatePath.clear();
         pendingResume = false;
         stateHold = stateHoldWaiting = false;
         rewindKeep.reset();
@@ -13957,6 +14092,19 @@ int main(int argc, char** argv) {
             beginLoadLatestState(stateLoad, session, liveClient, menuNotice, pendingStateId);
             pendingStateId = 0;
             if (stateLoad.running.load()) stateHoldWaiting = true;
+        }
+        // ONE OF THIS CONSOLE'S OWN STATES, picked on the game's page (#88):
+        // read off the disk, so there is nothing to wait for.
+        if (!pendingStatePath.empty() && playing && cab::Core::shared().running() &&
+            cab::Core::shared().framesRun() >= 1 && !stateLoad.running.load()) {
+            const std::vector<uint8_t> bytes = cab::readBytes(pendingStatePath);
+            const bool ok = !bytes.empty() && cab::Core::shared().loadState(bytes);
+            std::fprintf(stderr, "[state] picked on the game's page: %s -> %s\n",
+                         pendingStatePath.c_str(), ok ? "restored" : "REFUSED");
+            menuNotice.say(ok ? "State loaded" : "Couldn't load that state",
+                           ok ? Tone::Done : Tone::Problem);
+            stateLoad.loaded = ok;   // and it waits on that frame, as any load does
+            pendingStatePath.clear();
         }
         if (pendingResume && playing && cab::Core::shared().running() &&
             cab::Core::shared().framesRun() >= 1 && !stateLoad.running.load()) {
