@@ -125,9 +125,12 @@ bool add(const Account& a, const std::string& token, std::string* err);
 // of reason: ownership would pass silently to whoever was added next.
 //
 // Does NOT touch `users/<id> - <name>/`. Forgetting a login is not the same as
-// throwing away somebody's saves, and the second one needs its own deliberate
-// act somewhere that says so.
+// throwing away somebody's saves; Settings' Remove (#194) deletes the folder
+// itself, after sending what is owed, and calls this last.
 bool remove(int id, std::string* err);
+
+// Whether remove() would agree, asked BEFORE anything of theirs is deleted.
+bool canRemove(int id, std::string* err);
 
 // Makes `id` the account the console acts as. Writes the choice down; it does
 // NOT re-point the client or reload anything — that is `activate`.

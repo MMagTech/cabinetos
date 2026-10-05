@@ -221,6 +221,23 @@ bool add(const Account& a, const std::string& token, std::string* err) {
     return save(b, err);
 }
 
+bool canRemove(int id, std::string* err) {
+    const Book b = load();
+    if (id == b.active) {
+        if (err) *err = "cannot remove the account this console is signed in as";
+        return false;
+    }
+    if (!b.list.empty() && id == b.list.front().id) {
+        if (err) *err = "cannot remove the console's owner";
+        return false;
+    }
+    if (!find(b.list, id)) {
+        if (err) *err = "no account with id " + std::to_string(id);
+        return false;
+    }
+    return true;
+}
+
 bool remove(int id, std::string* err) {
     Book b = load();
     if (id == b.active) {
