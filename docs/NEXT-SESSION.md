@@ -11,15 +11,15 @@ specification is `docs/PROJECT.md`; the order is `docs/ROADMAP.md`.
 
 ## Where things stand
 
-2026-10-05: #221 done on branch `frame-lock` (games lock to the screen, one
-frame per refresh; PROJECT.md has the measurements). MMagTech judged it on
-the TV: sounds the same, and he could not see the difference, which matches
-the numbers (the hitches left are #253's). Not yet on `testing`: the push
-was refused by the permission check, so he pushes it. Then watch the
-build, check the A9 runs it (`[pace] screen ... locked` in the log), and
-merge on his "merge". Filed today: #253 (4K hitch, gamescope, cause open),
-#254 (N64 makes 3.4% extra sound), #255 (high-refresh monitors); all after
-the first release.
+2026-10-05: #221 merged (games lock to the screen, one frame per refresh;
+PROJECT.md has the measurements). MMagTech judged it on the TV: sounds the
+same, and the difference is too small to see, which matches the numbers (the
+hitches left are #253's). Filed today: #253 (4K hitch, gamescope, cause
+open), #254 (N64 makes 3.4% extra sound), #255 (high-refresh monitors), all
+after the first release; #256 (test on his LG C1 right before release).
+#194 was started on branch `remove-person` (design option A: send a removed
+person's owed saves with their own login); test it with Claire's account,
+which MMagTech said may be removed and re-added.
 
 ## Next
 
