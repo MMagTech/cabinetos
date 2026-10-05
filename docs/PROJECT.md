@@ -2757,6 +2757,12 @@ separately rather than as one number:
   appliance: the size should be a number CabinetOS chooses, via
   `MESA_SHADER_CACHE_MAX_SIZE`, and the Storage screen should be able to say
   what it is.
+  **SUPERSEDED, MMagTech 2026-10-05 (#133, closed):** Mesa's own cap (1 GB,
+  oldest aged out) is kept as the number; setting the same ourselves changes
+  nothing. Showing this space on the Storage page was built and judged on the
+  TV: two rows of space nobody can free (2.8 GB of 1.55 TB on the A9) pushed
+  the drives down for nothing to act on, so they were taken out. The sizes go
+  in the diagnostic report instead (#195).
 - **The system directory is mixed**, and that is the part to be careful with.
   `mupen64plus.ini` is a database that can be deleted and will come back.
   `dc_nvmem.bin` is a Dreamcast's saved flash — **console settings, and a
