@@ -10652,6 +10652,7 @@ to leave room for it.
 ├── roms/      kept games                shared
 ├── cache/     pulled games              shared, and the only thing eviction touches
 ├── bios/      firmware from RomM        shared
+├── games/     a record per game on the drive, for offline play (#88)   shared
 ├── users/
 │   └── <id> - <name>/
 │       ├── saves/<platform>/<romId>/<core>/
@@ -12189,7 +12190,8 @@ with a game in front of you.
 
 ### 22. What the console does when the server is away
 **Raised by the A9 Max's first reboot, 2026-09-19. Partly decided the same day.
-Not built.**
+Offline play built 2026-10-05 (#88): see "Built, 2026-10-05" at the end of this
+section. The decisions are the comments on issue #88.**
 
 **REPRODUCED IN FULL ON 2026-09-19**, on the first boot after the A9 was moved
 onto the image, and worth reading because the whole sequence is in one journal
@@ -12411,6 +12413,52 @@ the wrong person's games on the kept shelf — silently, and only noticed later.
 
 Caching the user *list* would allow offline switching, and it is not decided
 here; it belongs with account switching, which is already its own topic.
+
+#### Built, 2026-10-05 (#88, and #259 first)
+
+Decided by MMagTech on 2026-10-05, each a comment on #88: offline is the normal
+console with fewer games; it starts after 15 s with no server if any game is on
+the drive; the games shown are every game on the drive, downloaded or cached,
+whoever got them there; the Recent shelf is shared (the drive's own last-used
+order); switching people works offline and adding one is greyed; Search works
+over the same games; a small "Offline" chip sits by the account chip; the
+server is retried in the background, quickly at first and then about once a
+minute; there is no Offline switch. Two devices saving the same game across an
+outage is deferred to #261 (the console's save still wins, as before).
+
+What does it, and where:
+
+- **#259, cartridge saves.** The battery save loaded only RomM's copy. Now the
+  console's own `.srm` wins when its upload is still owed, and is loaded
+  whenever RomM has none to give (no server, no row, a system with no save
+  tag). The rule the disc and directory saves already kept; RetroArch's too.
+- **Whether the server is away is one fact** (`romm::serverAway`), set by what
+  requests actually meet: no connection, no name, or a deadline before any
+  connection. Any answer clears it. A heartbeat once a minute while online
+  notices a server that goes while the console sits on Home.
+- **`games/<romId>.json`**, one record per game in RomM's own field names,
+  written at every launch and download, and fetched while online for any game
+  on the drive without one (with both its covers). `games/platforms.json` keeps
+  the server's system names so offline tiles read as online ones do. People's
+  pictures are kept in `covers/avatars/`.
+- **The startup wait** tries the server on a client of its own, so going
+  offline at 15 s leaves a try that is still waiting to finish alone.
+- **While away, a launch asks the server nothing** (firmware list, saves, the
+  install file list): what is on the disk is used.
+- **Back:** owed saves go at once; a console that started offline loads its
+  library properly the next time it is on Home with nothing in progress.
+
+Not changed, on purpose: the three-states rule and state loading (#259's scope
+comment), the startup screen's words (the agreed sequence keeps them), first
+run (needs a server).
+
+Verified on the A9 2026-10-05 with a wrong address (`CABINETOS_ROMM`), never by
+stopping RomM: offline start in 15 s, Home, Library, a system's grid, Search,
+a game's page, Download on a cached game (marks it kept, no server), switching
+to a second person, launches of PS1, N64, arcade, GameCube, PS2, Sega CD and
+3DO, loading the newest state, the cartridge save offline and while owed, and
+the server returning both from an offline start and mid-session (a local relay
+switched on and off). Not measured: a backlog of hundreds of owed uploads.
 
 ### 24. Will gamescope composite our overlay over a window we do not own?
 **Raised by MMagTech, 2026-09-21, before any more measuring. ANSWERED THE SAME
