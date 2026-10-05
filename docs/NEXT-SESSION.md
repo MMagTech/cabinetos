@@ -11,23 +11,24 @@ specification is `docs/PROJECT.md`; the order is `docs/ROADMAP.md`.
 
 ## Where things stand
 
-2026-10-05: #221 merged (games lock to the screen). #194 merged: Remove
-sends a person's unsent saves with their own login, then deletes their
-folder; Sign out now sends everyone's first, and both ask "Saves waiting to
-upload will be lost." only for what could not be sent. Judged on the TV.
-Claire's account was removed from the A9 during the test (MMagTech re-adds
-her when he wants); her old folder is backed up at
-`~/fb/claire-backup-20261005` on the A9. RomM holds a junk test save
-`cabinet-test-194.srm` on Claire's account (Aerostar, rom 2); MMagTech was
-told to delete it. Filed, after the release: #253 (4K hitch, gamescope),
-#254 (N64 extra sound), #255 (high-refresh monitors); #256 (LG C1 test
-before release).
+2026-10-05: #221 (games lock to the screen), #194 (Remove and Sign out send
+owed saves first) and #108 (CabinetOS boot splash) merged and promoted;
+image 2026.10.05.4 is on the A9. #133 closed (not worth the space on the
+Storage page; sizes go in the diagnostic report, #195). #228 (sound chip
+power) still open: the udev rule did not hold across a reboot because tuned
+turns controller power saving back on; next try is through tuned, tested
+across a real reboot. Claire's account was removed during #194's test; her
+old folder is backed up at `~/fb/claire-backup-20261005` on the A9.
 
 ## Next
 
-1. **Offline play (#88)**, milestone 4: start with the scenario walk-through.
-   Discussed 2026-10-04: the narrow version (no server: Home shows the games
-   on the drive and they play). Saves already stay on the console and the
-   "which copy wins" rule is built (`main.cpp`, near line 849). Missing:
-   reaching Home without a server, covers saved at keep time, owed-save retry,
-   and a backup of RomM's copy when another device saved in between.
+1. **Offline play (#88), built from the walkthrough on the issue.** Read
+   every comment on #88 first: the decisions are there (15 s, every game on
+   the drive, the normal Home and Library with fewer games, a shared Recent
+   shelf, switching works offline, quiet background reconnects, no Offline
+   switch). **Fix #259 first** (cartridge battery saves ignore the local
+   copy, a save-loss bug today; leave the three-states rule untouched).
+   Two-device conflicts are deferred to #261. Still to judge on the TV: an
+   "Offline" label or none, and Search working offline or greyed. Walk the
+   build on the A9 with the server stopped (a firewall rule or a wrong
+   address via `tools/ui-loop.sh --env`), never by stopping RomM.
