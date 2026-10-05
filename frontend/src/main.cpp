@@ -13054,17 +13054,33 @@ int main(int argc, char** argv) {
                                                     static_cast<long long>(paceShown) *
                                                         std::max(paceEvery, 1))
                                 : 0;
+                        // SOUND PER GAME FRAME against what the core's own rate
+                        // and frame rate promise. A core above 0 makes more
+                        // sound than real time and gets held by the speaker
+                        // (N64 and Dreamcast, PROJECT.md #221).
+                        static uint64_t lastAudio = 0, lastFrames = 0;
+                        const uint64_t a = core.audioFramesTotal(), f = core.framesRun();
+                        double perFrame = 0.0;
+                        if (f > lastFrames && a >= lastAudio && lastFrames > 0 &&
+                            core.avInfo().fps > 0.0)
+                            perFrame = (static_cast<double>(a - lastAudio) / (f - lastFrames)) /
+                                           (rate / core.avInfo().fps) -
+                                       1.0;
+                        lastAudio = a;
+                        lastFrames = f;
                         if (paceShown > 0)
                             std::fprintf(stderr,
                                          "[pace] %llu frames shown at %.3f Hz: %llu repeated "
                                          "(%llu held for the speaker), %llu game frames "
-                                         "skipped, %lld refreshes missed; sound %+.2f%%\n",
+                                         "skipped, %lld refreshes missed; sound %+.2f%%, "
+                                         "sound per game frame %+.2f%%\n",
                                          static_cast<unsigned long long>(paceShown),
                                          paceShown / std::max(paceDtSum, 1e-9),
                                          static_cast<unsigned long long>(paceRepeated),
                                          static_cast<unsigned long long>(paceHeld),
                                          static_cast<unsigned long long>(paceSkipped),
-                                         missed, (paceRatio - 1.0f) * 100.0f);
+                                         missed, (paceRatio - 1.0f) * 100.0f,
+                                         perFrame * 100.0);
                         paceShown = paceRepeated = paceHeld = paceSkipped = 0;
                         paceDtSum = 0.0;
                     }

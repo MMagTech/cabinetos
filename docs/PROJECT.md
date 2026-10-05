@@ -1974,6 +1974,9 @@ with a new `[audio]` log line and each wrong in its own way:
    Cabinet's "the governor slowed N64 down" was most likely this, slowed to
    true speed. The core's timing options are marked "will break stuff" and
    Batocera leaves them alone; RetroArch absorbs it with audio sync.
+   **2026-10-05: the VI-clock explanation above is not supported by the
+   core's source; the 3.4% is real (measured again) and its cause is open.
+   See #221's section below.**
 4. The brake on every core still crackled, because N64 delivers sound in
    bursts. Pacing by the speaker covers all of it, and nothing is thrown
    away.
@@ -2038,19 +2041,36 @@ the next, so the game keeps time as it did on the clock and the rate
 control only has the rates to absorb. Without it the queue fell to 17 ms
 on GBA. The misses (1 to 5 per 10 s at 4K, none at 1440p) are the swap
 waiting two refreshes on gamescope while the frame's own work is 0.5 ms;
-they happen at Home too and predate this. Filed separately.
+they happen at Home too and predate this. Not the see-through window
+(measured opaque and see-through, two minutes each: no difference). Read
+in gamescope 3.16.28's source: it wakes about 4 to 5 ms before each
+refresh to compose, and its estimate of that time only grows after a
+frame has already missed; a 4K composition on a GPU idling at low clocks
+is the likely overrun. #253, with what to try.
 
 **N64 and Dreamcast still hold a frame about twice a second, locked or
 not** (measured both ways: Hydro Thunder 17 to 21 holds per 10 s on the
 clock, 18 to 20 locked; Cannon Spike the same either way, while the lock
-cut its other glitches from 14 to 34 per 10 s to 6 to 8). Their cores make
-about 3% more sound than real time (the N64 finding in the section before
-this one); 0.5% of rate control cannot take that up, so the speaker holds
-the game, as RetroArch's blocking audio write does. Filed separately.
+cut its other glitches from 14 to 34 per 10 s to 6 to 8). 0.5% of rate
+control cannot take up 3%, so the speaker holds the game, as RetroArch's
+blocking audio write does. The two causes differ:
+
+- **N64, measured:** the `[pace]` line's "sound per game frame" reads
+  +3.25 to +3.51% on Hydro Thunder (SNES reads 0.00). **The explanation in
+  the section before this one does not hold:** in the core's source
+  (mupen64plus-core `vi_controller.c`, `ai_controller.c`) the picture and
+  the sound are timed from the same clock, so the cause is not known.
+  Nobody reports it upstream; the nearest is mupen64plus-core#1176 (round
+  50/60 Hz constants, no replies). #254.
+- **Dreamcast, from Flycast's source:** `retro_run` returns when the game
+  draws a frame, not at each refresh, and a game that skipped one hands
+  over two frames of sound (`shell/libretro/audiostream.cpp` says so).
+  Holding the picture for it is then the right thing: it is the game's own
+  slowdown.
 
 **The log:** every 10 s of play, `[pace] N frames shown at H Hz: R
 repeated (S held for the speaker), K game frames skipped, M refreshes
-missed; sound +x%`, and at launch `[pace] screen ... locked` or `paced by
+missed; sound +x%, sound per game frame +y%`, and at launch `[pace] screen ... locked` or `paced by
 the clock`. `CABINETOS_PACE=clock` brings back the old pacing for a
 comparison on the TV; headless (offscreen) runs always use the clock,
 because nothing there waits for a refresh.
