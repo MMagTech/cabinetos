@@ -13,6 +13,7 @@
 #include <cctype>
 #include <cstdio>
 #include <cstring>
+#include <set>
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -780,6 +781,7 @@ bool parseAssets(const std::string& body, std::vector<Asset>* out, std::string* 
         json_object* o = json_object_array_get_idx(arr, i);
         Asset a;
         a.id = static_cast<int>(jint(o, "id"));
+        a.romId = static_cast<int>(jint(o, "rom_id"));
         a.fileName = jstr(o, "file_name");
         a.sizeBytes = jint(o, "file_size_bytes");
         a.emulator = jstr(o, "emulator");
@@ -800,6 +802,43 @@ bool Client::fetchSaves(int romId, std::vector<Asset>* out, std::string* err) {
     std::string body;
     if (!get("/api/saves?rom_id=" + std::to_string(romId), &body, err)) return false;
     return parseAssets(body, out, err);
+}
+
+bool Client::fetchSavesFor(const std::vector<int>& romIds, std::vector<Asset>* out,
+                           std::string* err) {
+    out->clear();
+    constexpr size_t kPerCall = 500;
+    for (size_t at = 0; at < romIds.size(); at += kPerCall) {
+        std::string q;
+        for (size_t i = at; i < romIds.size() && i < at + kPerCall; ++i)
+            q += (q.empty() ? "?rom_ids=" : "&rom_ids=") + std::to_string(romIds[i]);
+        std::string body;
+        std::vector<Asset> got;
+        if (get("/api/saves" + q, &body, err) && parseAssets(body, &got, err)) {
+            // Only rows for the games asked about count: a server that
+            // ignored rom_ids answers with every save. A row with no game
+            // cannot be placed, and then it is asked one game at a time.
+            std::set<int> asked(romIds.begin() + static_cast<long>(at),
+                                romIds.begin() + static_cast<long>(std::min(at + kPerCall,
+                                                                            romIds.size())));
+            bool placed = true;
+            for (const Asset& a : got)
+                if (a.romId <= 0) placed = false;
+            if (placed) {
+                for (Asset& a : got)
+                    if (asked.count(a.romId)) out->push_back(std::move(a));
+                continue;
+            }
+        }
+        // One game at a time, as before RomM 5.3.
+        for (size_t i = at; i < romIds.size() && i < at + kPerCall; ++i) {
+            std::vector<Asset> one;
+            if (!fetchSaves(romIds[i], &one, err)) return false;
+            for (Asset& a : one) a.romId = romIds[i];
+            out->insert(out->end(), one.begin(), one.end());
+        }
+    }
+    return true;
 }
 
 bool Client::fetchStates(int romId, std::vector<Asset>* out, std::string* err) {
