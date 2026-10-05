@@ -5700,6 +5700,16 @@ int main(int argc, char** argv) {
     // --- The core, if one was asked for --------------------------------------
     bool playing = false;
     SDL_AudioStream* audioStream = nullptr;
+    // LOCKED TO THE SCREEN (#221), RetroArch's way: one game frame per refresh
+    // (or per two on a 120 Hz screen), and the sound played that much faster
+    // or slower so it still keeps time. Set at each launch. 0 is paced by the
+    // clock, as every game was before: a game too far from the screen's rate
+    // (a 50 Hz game on a 60 Hz TV), or no rate known.
+    int paceEvery = 0;
+    double paceBaseRatio = 1.0;
+    int paceCount = 0;
+    double paceScreenHz = 0.0;   // as SDL reports it, for the [pace] line
+    float paceRatio = 1.0f;      // the sound's speed now, for the [pace] line
     if (corePath && romPath) {
         cab::Core& core = cab::Core::shared();
         // THE DEVELOPER PATH USES THE SAME TREE AS THE PRODUCT, under a user
@@ -11274,6 +11284,53 @@ int main(int argc, char** argv) {
             }
         }
 
+        {
+            // THE SCREEN'S OWN RATE, read for every game, so the console does
+            // the right thing on whatever television it is plugged into. Off
+            // by a little (gamescope says 59.980 for a 60.000 TV) is fine: the
+            // rate control below takes up the difference.
+            //
+            // 5% IS RETROARCH'S LIMIT (video_max_timing_skew, default 0.05):
+            // the furthest a game's sound may be sped up or slowed to lock it.
+            // Further than that and it is paced by the clock instead, with a
+            // repeated frame now and then, which is what RetroArch does too.
+            static constexpr double kMaxSkew = 0.05;
+            const SDL_DisplayMode* dm =
+                SDL_GetCurrentDisplayMode(SDL_GetDisplayForWindow(window));
+            const double hz = dm ? dm->refresh_rate : 0.0;
+            paceScreenHz = hz;
+            paceRatio = 1.0f;
+            const double fps = core.avInfo().fps;
+            paceEvery = 0;
+            paceBaseRatio = 1.0;
+            paceCount = 0;
+            // Headless (offscreen) there is no refresh to lock to: nothing
+            // waits for one, so a frame per loop would run the game flat out.
+            const char* vd = SDL_GetCurrentVideoDriver();
+            const bool realScreen =
+                vd && std::strcmp(vd, "offscreen") != 0 && std::strcmp(vd, "dummy") != 0;
+            // CABINETOS_PACE=clock: the old pacing, for comparing on the TV.
+            const char* paceEnv = std::getenv("CABINETOS_PACE");
+            const bool clockAsked = paceEnv && std::strcmp(paceEnv, "clock") == 0;
+            if (realScreen && !clockAsked && !core.isPs2() && hz >= 20.0 && fps > 0.0) {
+                const int k = std::max(1, static_cast<int>(std::lround(hz / fps)));
+                const double ratio = hz / k / fps;
+                if (std::fabs(ratio - 1.0) <= kMaxSkew) {
+                    paceEvery = k;
+                    paceBaseRatio = ratio;
+                }
+            }
+            if (audioStream) SDL_SetAudioStreamFrequencyRatio(audioStream, 1.0f);
+            if (paceEvery > 0)
+                std::fprintf(stderr,
+                             "[pace] screen %.3f Hz, game %.4f fps: locked, one game frame "
+                             "every %d refresh%s, sound %+.2f%%\n",
+                             hz, fps, paceEvery, paceEvery == 1 ? "" : "es",
+                             (paceBaseRatio - 1.0) * 100.0);
+            else
+                std::fprintf(stderr, "[pace] screen %.3f Hz, game %.4f fps: paced by the "
+                             "clock\n", hz, fps);
+        }
         std::fprintf(stderr, "[launch] running %s\n", core.coreName().c_str());
         playing = true;
         if (session.romId > 0) {
@@ -12950,6 +13007,9 @@ int main(int argc, char** argv) {
             // Set when a paused frame was run only to redraw it; its sound is
             // dropped below, as rewind's is.
             bool redrew = false;
+            // Frames shown, repeated and skipped in play, for the [pace] line.
+            static uint64_t paceShown = 0, paceRepeated = 0, paceHeld = 0, paceSkipped = 0;
+            static double paceDtSum = 0.0;
             // RUMBLE (#149): what the game asked for, to each player's pad,
             // and nothing while the game is not being played. Rewind replays
             // frames backwards, which is not play either.
@@ -13030,7 +13090,37 @@ int main(int argc, char** argv) {
                     }
                     lastWaitingMs = waitingMs;
                 }
-                if (!holdForSpeaker) core.runFor(dt);
+                // One game frame per refresh when locked (see paceEvery),
+                // counted in refreshes, not by the clock, so a wobble in the
+                // clock never runs two frames or none. A refresh the console
+                // was too late for (dt of two refreshes) is run on the next,
+                // so the game keeps time as it did on the clock; the rate
+                // control below is left with only the rates to take up.
+                // Fast forward is paced by the clock, which is what makes it
+                // fast.
+                const bool locked = paceEvery > 0 && core.speed() <= 1.0;
+                int due = 1;
+                if (locked) {
+                    paceCount += std::clamp(
+                        static_cast<int>(std::lround(dt * paceScreenHz)), 1, 4);
+                    due = std::min(paceCount / paceEvery, 3);
+                    paceCount = due > 0 ? paceCount - due * paceEvery : paceCount;
+                    if (paceCount >= paceEvery) paceCount %= paceEvery;
+                }
+                int ran = 0;
+                if (!holdForSpeaker && due > 0) {
+                    if (!locked) ran = core.runFor(dt);
+                    else for (int i = 0; i < due; ++i) ran += core.runFrame();
+                }
+                // HOW SMOOTH IT WAS (#221): a frame shown with no new game frame
+                // behind it is a repeat, and every run past the first in one
+                // frame is a game frame nobody saw. Said with the [audio] line.
+                if (due > 0) ++paceShown;
+                if (due == 0) ran = 1;   // not a repeat: the screen is faster than the game
+                if (ran == 0) ++paceRepeated;
+                if (ran == 0 && holdForSpeaker) ++paceHeld;
+                if (ran > 1) paceSkipped += static_cast<uint64_t>(ran - 1);
+                paceDtSum += dt;
                 // A SNAPSHOT EVERY HALF SECOND OF PLAY, counted in the game's
                 // own frames so fast forward keeps them half a game-second
                 // apart. Taken here, compressed on rewind's worker.
@@ -13085,6 +13175,26 @@ int main(int argc, char** argv) {
                     if (take > 0) SDL_PutAudioStreamData(audioStream, samples.data(), take);
                     droppedBytes += static_cast<uint64_t>(want - take);
                 }
+                // THE RATE CONTROL, while locked (#221). The lock sets the
+                // sound's speed from the two rates; this bends it up to 0.5%
+                // either way to hold the queue near kPaceTargetMs, which takes
+                // up what the rates got wrong (the screen's reported rate, the
+                // sound card's own clock, a missed refresh). RetroArch's
+                // dynamic rate control, at its default (audio_rate_control_
+                // delta 0.005), which is below what an ear can hear.
+                // Measured after the frame's sound went in, so always at the
+                // same point of the queue's rise and fall.
+                if (paceEvery > 0 && !frozen && !rewinding && core.speed() <= 1.0) {
+                    static constexpr double kPaceTargetMs = 40.0;
+                    static constexpr double kRateControl = 0.005;
+                    const double rate = std::max(core.avInfo().sampleRate, 1.0);
+                    const double queuedMs =
+                        SDL_GetAudioStreamQueued(audioStream) / (4.0 * rate) * 1000.0;
+                    const double off =
+                        std::clamp((queuedMs - kPaceTargetMs) / kPaceTargetMs, -1.0, 1.0);
+                    paceRatio = static_cast<float>(paceBaseRatio * (1.0 + kRateControl * off));
+                    SDL_SetAudioStreamFrequencyRatio(audioStream, paceRatio);
+                }
                 // Said at most every ten seconds, so a system that trips it
                 // constantly shows up in the log rather than hiding in it.
                 if (droppedBytes > 0 && SDL_GetTicksNS() >= droppedLogAt) {
@@ -13109,6 +13219,44 @@ int main(int argc, char** argv) {
                         // core, the core's output against runFor's clock
                         // stops meaning anything while it is being held.
                         std::fprintf(stderr, "[audio] %.0f ms waiting to play\n", queuedMs);
+                        // MISSED is refreshes the console itself was too
+                        // late for: the screen showed the last picture again,
+                        // whatever the game did. Only known with a screen rate.
+                        const long long missed =
+                            paceScreenHz > 0.0
+                                ? std::max(0LL, std::llround(paceDtSum * paceScreenHz) -
+                                                    static_cast<long long>(paceShown) *
+                                                        std::max(paceEvery, 1))
+                                : 0;
+                        // SOUND PER GAME FRAME against what the core's own rate
+                        // and frame rate promise. A core above 0 makes more
+                        // sound than real time and gets held by the speaker
+                        // (N64 and Dreamcast, PROJECT.md #221).
+                        static uint64_t lastAudio = 0, lastFrames = 0;
+                        const uint64_t a = core.audioFramesTotal(), f = core.framesRun();
+                        double perFrame = 0.0;
+                        if (f > lastFrames && a >= lastAudio && lastFrames > 0 &&
+                            core.avInfo().fps > 0.0)
+                            perFrame = (static_cast<double>(a - lastAudio) / (f - lastFrames)) /
+                                           (rate / core.avInfo().fps) -
+                                       1.0;
+                        lastAudio = a;
+                        lastFrames = f;
+                        if (paceShown > 0)
+                            std::fprintf(stderr,
+                                         "[pace] %llu frames shown at %.3f Hz: %llu repeated "
+                                         "(%llu held for the speaker), %llu game frames "
+                                         "skipped, %lld refreshes missed; sound %+.2f%%, "
+                                         "sound per game frame %+.2f%%\n",
+                                         static_cast<unsigned long long>(paceShown),
+                                         paceShown / std::max(paceDtSum, 1e-9),
+                                         static_cast<unsigned long long>(paceRepeated),
+                                         static_cast<unsigned long long>(paceHeld),
+                                         static_cast<unsigned long long>(paceSkipped),
+                                         missed, (paceRatio - 1.0f) * 100.0f,
+                                         perFrame * 100.0);
+                        paceShown = paceRepeated = paceHeld = paceSkipped = 0;
+                        paceDtSum = 0.0;
                     }
                     audioLogAt = nowNs + 10'000'000'000ull;
                 }

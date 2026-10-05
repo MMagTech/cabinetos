@@ -11,25 +11,24 @@ specification is `docs/PROJECT.md`; the order is `docs/ROADMAP.md`.
 
 ## Where things stand
 
-2026-10-04, a long session: screen looks (#122, PR #249), the gamescope flag
-check (#227, PR #251) and a batch of quick fixes (PR #252: #237, #188, #196,
-#241, #184, #185, #212, #117, #213, #137, #118, #81), all judged on the A9
-and merged. #63 closed (phase 3 is #250, after the first release, with #210
-and #168); #124, #231 and #119 closed; #157 after the release; DS filed as
-#248. 26 issues remain before the first release.
+2026-10-05: #221 merged (games lock to the screen, one frame per refresh;
+PROJECT.md has the measurements). MMagTech judged it on the TV: sounds the
+same, and the difference is too small to see, which matches the numbers (the
+hitches left are #253's). Filed today: #253 (4K hitch, gamescope, cause
+open), #254 (N64 makes 3.4% extra sound), #255 (high-refresh monitors), all
+after the first release; #256 (test on his LG C1 right before release).
+#194 was started on branch `remove-person` (design option A: send a removed
+person's owed saves with their own login); test it with Claire's account,
+which MMagTech said may be removed and re-added.
 
 ## Next
 
-1. **#221** (lessons: `emulators.md`, `testing.md`), the last of milestone 3:
-   built-in cores have no audio rate control, so a frame repeats or drops
-   every 10 to 17 s. Measure on the A9 with frames.py first; at the end
-   MMagTech watches a scrolling game on the TV.
-2. **#194, removing a person deletes their folder** (milestone 7), designed
+1. **#194, removing a person deletes their folder** (milestone 7), designed
    with MMagTech 2026-10-04 and written on the issue: send what is owed
    first; if anything cannot be sent, "Some saves haven't reached RomM" /
    Remove anyway · Cancel (no count); then delete the folder and release
    their downloads. Test on a scratch account: it deletes data.
-3. **Offline play (#88)**, milestone 4: start with the scenario walk-through.
+2. **Offline play (#88)**, milestone 4: start with the scenario walk-through.
    Discussed 2026-10-04: the narrow version (no server: Home shows the games
    on the drive and they play). Saves already stay on the console and the
    "which copy wins" rule is built (`main.cpp`, near line 849). Missing:

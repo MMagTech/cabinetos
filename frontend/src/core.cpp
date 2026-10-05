@@ -1714,24 +1714,39 @@ int Core::runFor(double dt) {
             ++governorSkips_;
             break;
         }
-        if (gHWWanted && gHWFBO) {
-            // Bound before the core runs as well as answered on request. Cores
-            // differ about when they ask for the framebuffer, and one that
-            // draws before asking would otherwise land on the window.
-            glBindFramebuffer(GL_FRAMEBUFFER, gHWFBO);
-            glViewport(0, 0, static_cast<GLsizei>(gHWTargetW),
-                       static_cast<GLsizei>(gHWTargetH));
-        }
-        g.run();
-        // Only the GLES path disturbs our GL state. A Vulkan core has not
-        // touched the context at all, and calling this for it would be a
-        // handful of redundant GL calls per frame for nothing.
-        if (gHWWanted && !gHWVulkan) restoreGLState();
-        ++gFramesRun;
+        step();
         ++ran;
         accumulator_ -= interval;
     }
     return ran;
+}
+
+int Core::runFrame() {
+    if (!gameLoaded_) return 0;
+    if (gIsPs2) return 1;   // paces itself, as in runFor
+    // The accumulator and the governor's clock are runFor's; kept moving so a
+    // switch back to it (fast forward) starts from now, not from a debt.
+    accumulator_ = 0.0;
+    paceClock_ = static_cast<double>(gAudioFrames) / std::max(av_.sampleRate, 1.0);
+    step();
+    return 1;
+}
+
+void Core::step() {
+    if (gHWWanted && gHWFBO) {
+        // Bound before the core runs as well as answered on request. Cores
+        // differ about when they ask for the framebuffer, and one that
+        // draws before asking would otherwise land on the window.
+        glBindFramebuffer(GL_FRAMEBUFFER, gHWFBO);
+        glViewport(0, 0, static_cast<GLsizei>(gHWTargetW),
+                   static_cast<GLsizei>(gHWTargetH));
+    }
+    g.run();
+    // Only the GLES path disturbs our GL state. A Vulkan core has not
+    // touched the context at all, and calling this for it would be a
+    // handful of redundant GL calls per frame for nothing.
+    if (gHWWanted && !gHWVulkan) restoreGLState();
+    ++gFramesRun;
 }
 
 bool Core::uploadFrame() {

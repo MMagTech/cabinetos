@@ -103,6 +103,12 @@ Read before touching `build_files/`, `system_files/`, `ci/`, the workflows, the 
   is the one that needs the pull request closed and reopened. Seen 2026-09-21,
   where it briefly looked like the dangerous case and was not.
 
+- **A PUSH TO `testing` CAN TAKE TWO MINUTES TO SHOW A RUN.** 2026-10-05 the
+  run for a push appeared about 100 s after it, by which time a manual
+  `gh workflow run` had been started; the push's run then cancelled the
+  manual one (one image build per branch at a time). Wait three minutes
+  before deciding a push fired nothing, and do not dispatch on top of it.
+
 - **`ci/base-watch.txt` now watches the CORES' libraries too**, added
   2026-09-19 off a real `ldd` sweep rather than guessed at — including
   `libX11` and `libXext`, which are PPSSPP's and which nothing had written

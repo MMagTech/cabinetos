@@ -190,6 +190,10 @@ public:
     // Returns how many emulated frames actually ran.
     int runFor(double dtSeconds);
 
+    // EXACTLY ONE emulated frame, whatever the clock says (#221). For a game
+    // locked to the screen: one per refresh, the sound bent to match.
+    int runFrame();
+
     // FAST FORWARD (#77): how many emulated seconds pass per real one. 1 is
     // normal. runFor steps up to this many times more frames per draw; the
     // caller discards the sound meanwhile. No effect on PlayStation 2, whose
@@ -453,6 +457,7 @@ private:
 
     // Wall-clock pacing. Capped so a stall cannot bank a debt the core then
     // tries to repay all at once, which stutters and floods the audio buffer.
+    void step();   // one retro_run, with the GL state around it
     double accumulator_ = 0.0;
     double speed_ = 1.0;
     // The clock audioAhead measures against, and whether this core is braked
