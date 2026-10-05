@@ -9127,6 +9127,7 @@ int main(int argc, char** argv) {
         bool finished = false;
         int left = 0;   // still owed after trying
         accounts::Account who;
+        bool everyone = false;   // Sign out: every account's, then leave
     };
     auto removeJob = std::make_shared<RemoveJob>();
 
@@ -9149,11 +9150,35 @@ int main(int argc, char** argv) {
         }
         removeJob->running = true;
         { std::lock_guard<std::mutex> lk(removeJob->m);
-          removeJob->finished = false; removeJob->left = 0; removeJob->who = who; }
+          removeJob->finished = false; removeJob->left = 0; removeJob->who = who;
+          removeJob->everyone = false; }
         menuNotice.say("Removing " + who.name, Tone::Info);
         const std::string addr = rommAddress ? rommAddress : "";
         std::thread([removeJob, who, addr]() {
             const int left = sendOwedBeforeRemoving(who, addr);
+            std::lock_guard<std::mutex> lk(removeJob->m);
+            removeJob->left = left;
+            removeJob->finished = true;
+            removeJob->running = false;
+        }).detach();
+    };
+
+    // SIGN OUT SENDS FIRST TOO, the same way (MMagTech, 2026-10-05: "the two
+    // screens and behavior should be similar"). Everyone's owed saves go with
+    // their own logins; the uploader only ever sends the signed-in person's,
+    // so anybody else's would otherwise be lost to a sign out.
+    auto startSignOut = [&, removeJob]() {
+        if (removeJob->running.load()) return;
+        removeJob->running = true;
+        { std::lock_guard<std::mutex> lk(removeJob->m);
+          removeJob->finished = false; removeJob->left = 0;
+          removeJob->who = accounts::Account{}; removeJob->everyone = true; }
+        menuNotice.say("Signing out", Tone::Info);
+        const std::string addr = rommAddress ? rommAddress : "";
+        std::thread([removeJob, addr]() {
+            int left = 0;
+            for (const accounts::Account& a : accounts::all())
+                left += sendOwedBeforeRemoving(a, addr);
             std::lock_guard<std::mutex> lk(removeJob->m);
             removeJob->left = left;
             removeJob->finished = true;
@@ -9931,18 +9956,14 @@ int main(int argc, char** argv) {
                                 }
                                 askServerAddress(addr, "");
                             } else if (i == 1) {
-                                // ONE CONFIRMATION, focus on Cancel. Unsent
-                                // saves are said, not counted (MMagTech,
-                                // 2026-09-25); by design there are none.
-                                const bool unsent = server::unsentSaves() > 0;
+                                // Focus on Cancel. Then everyone's unsent
+                                // saves are sent, and only what could not be
+                                // is said, not counted (MMagTech, 2026-09-25),
+                                // as Remove does (#194).
                                 askChoice("Sign out?",
-                                          std::string("Removes every game and account from "
-                                                      "this console.\n") +
-                                              (unsent ? "Saves waiting to upload will be lost."
-                                                      : "Saves stay on the server."),
+                                          "Removes every game and account from this console.",
                                           {"Sign out", "Cancel"}, 1, [&](int k) {
-                                              if (k == 0)
-                                                  startLeaving(Leave::SignOut, "Signing out");
+                                              if (k == 0) startSignOut();
                                           });
                             }
                         });
@@ -13289,11 +13310,13 @@ int main(int argc, char** argv) {
             }
             downloadById(id);
         }
-        // A removal's sending done (#194): delete now, or ask first when
-        // something could not reach RomM. No count and no list (MMagTech,
-        // 2026-10-04). Focus on Cancel, which keeps everything.
+        // A removal's or a sign out's sending done (#194): go ahead, or ask
+        // the same question again with what would be lost, when something
+        // could not reach RomM. The words are Sign out's own, for both
+        // (MMagTech, 2026-10-05). No count and no list. Focus on Cancel,
+        // which keeps everything.
         {
-            bool fin = false;
+            bool fin = false, everyone = false;
             int left = 0;
             accounts::Account who;
             {
@@ -13301,12 +13324,19 @@ int main(int argc, char** argv) {
                 fin = removeJob->finished;
                 left = removeJob->left;
                 who = removeJob->who;
+                everyone = removeJob->everyone;
                 removeJob->finished = false;
             }
-            if (fin && left == 0) finishRemove(who);
-            if (fin && left > 0)
-                askChoice("Some saves haven't reached RomM", "", {"Remove anyway", "Cancel"},
-                          1, [&, who](int k) {
+            if (fin && everyone && left == 0) startLeaving(Leave::SignOut, "Signing out");
+            if (fin && everyone && left > 0)
+                askChoice("Sign out?", "Saves waiting to upload will be lost.",
+                          {"Sign out", "Cancel"}, 1, [&](int k) {
+                              if (k == 0) startLeaving(Leave::SignOut, "Signing out");
+                          });
+            if (fin && !everyone && left == 0) finishRemove(who);
+            if (fin && !everyone && left > 0)
+                askChoice("Remove " + who.name + "?", "Saves waiting to upload will be lost.",
+                          {"Remove", "Cancel"}, 1, [&, who](int k) {
                               if (k == 0) finishRemove(who);
                           });
         }

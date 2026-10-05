@@ -14160,12 +14160,22 @@ cache and unsent saves when pairing to a different server?
      over making the remover switch to them first (option B), which needed a
      sign-in as the person being removed;
   3. if anything could not be sent (no server, login refused, a marker too old
-     to resend), asks "Some saves haven't reached RomM", Remove anyway or
-     Cancel, focus on Cancel. No count and no list (MMagTech);
+     to resend), asks again: "Remove <name>?" with "Saves waiting to upload
+     will be lost.", Remove or Cancel, focus on Cancel. No count and no list.
+     MMagTech judged the first wording ("Some saves haven't reached RomM") on
+     the TV and did not like it; this is Sign out's own line;
   4. releases their downloads (a game nobody else downloaded drops to the
      cache, still playable until room is needed), deletes their folder, and
      forgets the login LAST, so a power cut at any point leaves them listed
      and Remove can be run again. Nothing on RomM is touched.
+  **SIGN OUT DOES THE SAME (MMagTech, 2026-10-05: "the two screens and
+  behavior should be similar").** "Sign out?" / "Removes every game and
+  account from this console.", then everyone's unsent saves are sent with
+  their own logins, then, only if something could not be, "Sign out?" /
+  "Saves waiting to upload will be lost." Before this it warned up front and
+  sent nothing, so anyone but the signed-in person lost what they owed. Not
+  changed: "A different server" (a new address that is another server), which
+  signs out from the address screen with the old one-question warning.
   States sent this way are not cut to three on RomM; their next save
   elsewhere tidies. `--remove-account N [--remove-anyway]` runs the same code
   without the screens, for a test on a console whose PIN the tester does not
