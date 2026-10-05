@@ -28,6 +28,11 @@
 #       An environment variable for the frontend, repeatable. For trying an
 #       emulator that no image carries yet (standalone.cpp, binaryOf).
 #
+#   tools/ui-loop.sh --session-env CABINETOS_OUTPUT=2560x1440
+#       An environment variable for the SESSION script rather than the
+#       frontend (--env goes on the frontend's command line, which the script
+#       never reads). For trying another screen mode.
+#
 #   tools/ui-loop.sh --args "--home-backdrop 0.6,0.22,28"
 #       Anything else the frontend takes, appended to its command line. This is
 #       what makes a tuning pass cheap: a number behind a flag is a redeploy
@@ -80,6 +85,7 @@ SHOT=""
 RESTORE=0
 EXTRA=""
 ENVS=""
+SESSION_ENV=""
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -90,6 +96,7 @@ while [ $# -gt 0 ]; do
         --shot)     SHOT="$2"; shift ;;
         --args)     EXTRA="$2"; shift ;;
         --env)      ENVS="$ENVS $2"; shift ;;
+        --session-env) SESSION_ENV="$SESSION_ENV\nEnvironment=\"$2\""; shift ;;
         --restore)  RESTORE=1 ;;
         *) echo "unknown argument: $1" >&2; exit 1 ;;
     esac
@@ -195,7 +202,7 @@ APP="/var/home/cabinet/cabinetos-frontend-dev --core-dir /var/home/cabinet/cores
 [ -n "$MENU" ] && APP="$APP $MENU"
 [ -n "$EXTRA" ] && APP="$APP $EXTRA"
 
-"${A9SSH[@]}" "$A9" "printf '[Service]\nEnvironment=\"CABINETOS_APP=$APP\"\n' > /tmp/50-ui-loop.conf
+"${A9SSH[@]}" "$A9" "printf '[Service]\nEnvironment=\"CABINETOS_APP=$APP\"$SESSION_ENV\n' > /tmp/50-ui-loop.conf
                    $SUDO mkdir -p $DROPIN_DIR >/dev/null 2>&1
                    $SUDO cp /tmp/50-ui-loop.conf $DROPIN >/dev/null 2>&1
                    $SUDO systemctl daemon-reload >/dev/null 2>&1

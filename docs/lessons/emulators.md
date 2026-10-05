@@ -109,6 +109,17 @@ Read before working on a core, an emulator, input, saves or states.
   MAME-derived JSON files it ships hold `rotary`, `dial`, `trackball`,
   `pedals`, `lightgun` and `paddle` — control panels, not screens.
 
+- **MEASURE THE GLITCH BEFORE BELIEVING THE ARITHMETIC.** #221 predicted one
+  dropped frame every 10 s on SNES from the 60.10 against 60.00 Hz beat. The
+  TV showed 4 to 11 skipped and up to 9 repeated every 10 s, because the
+  clock pacing ran 2 frames or 0 whenever the stopwatch wobbled near a
+  frame boundary. The beat was the smallest cause.
+
+- **SDL'S SCREEN RATE IS CLOSE, NOT EXACT.** It says 59.980 for a TV whose
+  EDID says 60.000, and 59.91 for a mode that measures 59.95. Anything locked
+  to the screen needs a rate control to take up the difference; never
+  compute timing from that number alone.
+
 ## Cores, naming and coverage
 
 - **`catalog::coverageFor` answers FOUR different questions.** No core exists, a
