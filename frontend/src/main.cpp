@@ -1343,6 +1343,7 @@ constexpr GalleryNotice kNoticeGallery[] = {
     {"Save states aren't available for this system", Tone::Info},
     {"Couldn't save the state", Tone::Problem},
     {"Can't restart right now", Tone::Problem},
+    {"God of War III is still downloading", Tone::Info},
     {"Couldn't forget Pro Controller", Tone::Problem},
     {"8BitDo Lite 2 is player 2", Tone::Done},
     {"Loading\xE2\x80\xA6", Tone::Busy},
@@ -6748,6 +6749,9 @@ int main(int argc, char** argv) {
                              launchJob.title.c_str());
                 return true;
             }
+            // SAID, NOT SILENT (#184): a press that did nothing looked like a
+            // broken button. One download at a time until there is a queue.
+            menuNotice.say(launchJob.title + " is still downloading", Tone::Info);
             return false;    // one at a time
         }
         const romm::Game* g = nullptr;
@@ -6784,7 +6788,13 @@ int main(int argc, char** argv) {
     // Both floors are checked here, before a byte moves, because refusing after
     // a two-gigabyte download would be the same answer at a much higher price.
     auto downloadById = [&](int romId) -> void {
-        if (launchJob.busy()) return;    // one at a time
+        if (launchJob.busy()) {
+            // The same answer as Play's (#184), unless it is this game's own
+            // download, which the page already shows.
+            if (launchJob.romId != romId)
+                menuNotice.say(launchJob.title + " is still downloading", Tone::Info);
+            return;    // one at a time
+        }
         const romm::Game* g = nullptr;
         for (const auto& x : games) if (x.id == romId) { g = &x; break; }
         if (!g) return;
@@ -14017,7 +14027,12 @@ int main(int argc, char** argv) {
 
         if (gameUp) {
             cab::Core& core = cab::Core::shared();
-            if (core.texture() && core.frameWidth() > 0) {
+            // OURS ONLY WHILE A BUILT-IN GAME RUNS (#212). Paused over a separate
+            // emulator, gameUp is true and the core still holds the LAST
+            // built-in game's picture: Burnout 3 was drawn behind the pause
+            // menu over Mario Kart in Eden and stayed after Resume. That
+            // emulator draws its own picture; this window draws none of it.
+            if (playing && core.texture() && core.frameWidth() > 0) {
                 // Integer-scaled and centred. A Game Boy is 160x144 and its
                 // pixels were each a deliberate choice; scaling by 6.4 makes
                 // some of them twice the size of their neighbours, which is

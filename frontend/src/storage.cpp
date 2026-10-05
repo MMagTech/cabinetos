@@ -14,6 +14,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <map>
+#include <mutex>
 
 #include <json-c/json.h>
 
@@ -465,8 +467,39 @@ int romIdFromEntry(const std::string& entry) {
     return static_cast<int>(id);
 }
 
+// FOUND BY THE ROMM ID, NAMED ONCE (#194). The id is the key; the name is for
+// a person reading the folder. A person renamed on RomM kept getting a new,
+// empty folder, and anything owed to RomM stayed stranded in the old one. The
+// folder is not renamed to follow: what is owed is recorded with its full path
+// (cache::Owed::localPath), so a rename would strand it all the same. An
+// existing `<id> - <any name>` folder is used as it is, and only a person with
+// none gets one under their current name. Looked up once per id.
 std::string User::dirName() const {
-    return std::to_string(id) + " - " + safeSegment(name);
+    const std::string fresh = std::to_string(id) + " - " + safeSegment(name);
+    if (id <= 0) return fresh;
+    static std::mutex m;
+    static std::map<int, std::string> chosen;
+    std::lock_guard<std::mutex> lock(m);
+    if (auto it = chosen.find(id); it != chosen.end()) return it->second;
+    std::string pick = fresh;
+    const std::string dir = root() + "/users";
+    if (!isDir(dir + "/" + fresh)) {
+        const std::string prefix = std::to_string(id) + " - ";
+        if (DIR* d = ::opendir(dir.c_str())) {
+            while (struct dirent* e = ::readdir(d)) {
+                const std::string n = e->d_name;
+                if (n.compare(0, prefix.size(), prefix) == 0 && isDir(dir + "/" + n)) {
+                    pick = n;
+                    std::fprintf(stderr, "[storage] %s is %s on RomM now; keeping the folder\n",
+                                 n.c_str(), name.c_str());
+                    break;
+                }
+            }
+            ::closedir(d);
+        }
+    }
+    chosen[id] = pick;
+    return pick;
 }
 
 const User& currentUser() { return gUser; }
