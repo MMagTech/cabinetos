@@ -9,6 +9,7 @@
 #include <json-c/json.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cctype>
 #include <cstdio>
 #include <cstring>
@@ -146,6 +147,14 @@ bool parseGame(json_object* o, Game* g) {
 
 }  // namespace
 
+bool gameFromJson(const std::string& json, Game* out) {
+    json_object* o = json_tokener_parse(json.c_str());
+    if (!o) return false;
+    const bool ok = parseGame(o, out);
+    json_object_put(o);
+    return ok;
+}
+
 bool looksLocal(const std::string& host) {
     std::string h = host;
     auto colon = h.find(':');
@@ -162,6 +171,39 @@ bool looksLocal(const std::string& host) {
         if (second >= 16 && second <= 31) return true;
     }
     return false;
+}
+
+// WHETHER THE SERVER IS AWAY (#88). One fact for the whole console, set by
+// what every request actually met rather than by a separate check: a request
+// that could not reach the server at all says so, and any answer at all says
+// it is back. "Could not reach" is narrow on purpose: no connection, no name,
+// or a deadline that passed before a connection was ever made. A slow
+// download, an HTTP error and a refused token are a server that is there.
+namespace {
+std::atomic<bool> gAway{false};
+std::atomic<long long> gAwaySince{0};
+}  // namespace
+
+bool serverAway() { return gAway.load(); }
+
+void setServerAway(bool away) {
+    const bool was = gAway.exchange(away);
+    if (away && !was) gAwaySince = static_cast<long long>(std::time(nullptr));
+}
+
+long long serverAwaySince() { return gAwaySince.load(); }
+
+void noteTransport(void* handle, int code) {
+    CURL* c = static_cast<CURL*>(handle);
+    const CURLcode rc = static_cast<CURLcode>(code);
+    if (rc == CURLE_OK) { setServerAway(false); return; }
+    bool unreachable = rc == CURLE_COULDNT_CONNECT || rc == CURLE_COULDNT_RESOLVE_HOST;
+    if (rc == CURLE_OPERATION_TIMEDOUT) {
+        double connected = 0.0;
+        curl_easy_getinfo(c, CURLINFO_CONNECT_TIME, &connected);
+        unreachable = connected <= 0.0;
+    }
+    if (unreachable) setServerAway(true);
 }
 
 Client::Client() { curl_global_init(CURL_GLOBAL_DEFAULT); }
@@ -185,6 +227,7 @@ bool Client::get(const std::string& path, std::string* body, std::string* err) c
     if (hdrs) curl_easy_setopt(c, CURLOPT_HTTPHEADER, hdrs);
 
     CURLcode rc = curl_easy_perform(c);
+    noteTransport(c, rc);
     long status = 0;
     curl_easy_getinfo(c, CURLINFO_RESPONSE_CODE, &status);
     if (hdrs) curl_slist_free_all(hdrs);
@@ -222,6 +265,7 @@ bool Client::postJson(const std::string& path, const std::string& json,
     curl_easy_setopt(c, CURLOPT_HTTPHEADER, hdrs);
 
     CURLcode rc = curl_easy_perform(c);
+    noteTransport(c, rc);
     long code = 0;
     curl_easy_getinfo(c, CURLINFO_RESPONSE_CODE, &code);
     if (status) *status = code;
@@ -913,6 +957,7 @@ bool Client::postMultipart(const std::string& path, const char* partName,
     curl_easy_setopt(c, CURLOPT_HTTPHEADER, hdrs);
 
     const CURLcode rc = curl_easy_perform(c);
+    noteTransport(c, rc);
     long status = 0;
     curl_easy_getinfo(c, CURLINFO_RESPONSE_CODE, &status);
     curl_slist_free_all(hdrs);
@@ -1104,6 +1149,7 @@ bool Client::fetchToFile(const std::string& path, const std::string& destPath,
     if (hdrs) curl_easy_setopt(c, CURLOPT_HTTPHEADER, hdrs);
 
     const CURLcode rc = curl_easy_perform(c);
+    noteTransport(c, rc);
     long status = 0;
     curl_easy_getinfo(c, CURLINFO_RESPONSE_CODE, &status);
     std::fclose(sink.f);
@@ -1151,6 +1197,7 @@ std::vector<uint8_t> Client::fetchBytes(const std::string& path) const {
     if (hdrs) curl_easy_setopt(c, CURLOPT_HTTPHEADER, hdrs);
 
     CURLcode rc = curl_easy_perform(c);
+    noteTransport(c, rc);
     long status = 0;
     curl_easy_getinfo(c, CURLINFO_RESPONSE_CODE, &status);
     if (hdrs) curl_slist_free_all(hdrs);
@@ -1214,6 +1261,7 @@ std::vector<uint8_t> Client::fetchRange(const Game& g, uint64_t offset, size_t b
     curl_easy_setopt(c, CURLOPT_FOLLOWLOCATION, 1L);
     if (hdrs) curl_easy_setopt(c, CURLOPT_HTTPHEADER, hdrs);
     const CURLcode rc = curl_easy_perform(c);
+    noteTransport(c, rc);
     long status = 0;
     curl_easy_getinfo(c, CURLINFO_RESPONSE_CODE, &status);
     if (hdrs) curl_slist_free_all(hdrs);

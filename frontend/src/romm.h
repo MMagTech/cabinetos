@@ -414,6 +414,22 @@ private:
     std::string serverVersion_;
 };
 
+// WHETHER THE SERVER IS AWAY (#88, offline play). Every request reports what
+// it met: one that could not reach the server at all (no connection, no name,
+// or a deadline before any connection) sets it, and any answer clears it.
+// Read from any thread. `serverAwaySince` is when it last went away, in
+// seconds since the epoch. `noteTransport` is the requests' own hook, taking
+// a CURL handle and a CURLcode so this header needs no curl.
+bool serverAway();
+void setServerAway(bool away);
+long long serverAwaySince();
+void noteTransport(void* curlHandle, int curlCode);
+
+// A game read back from a record written in RomM's own field names: a keep
+// record, or the console's note of a game it has on its drive. False when it
+// is not one.
+bool gameFromJson(const std::string& json, Game* out);
+
 // True for addresses that are obviously on a local network, which decides
 // whether http or https is tried first. A hostname with no dots is local by
 // construction, and so is anything in the private ranges or .local/.lan.

@@ -1658,7 +1658,10 @@ Result AccountScreen::key(Nav n) {
         case Nav::Back: return {Action::Back, 0};
         case Nav::Activate:
             if (slot_ < 0 || slot_ >= rowCount()) return {};
-            if (isAddRow(slot_)) return {Action::AddAccount, 0};
+            if (isAddRow(slot_)) {
+                if (!addEnabled_) return {};
+                return {Action::AddAccount, 0};
+            }
             // THE ID, NOT THE ROW. A list that changed underneath this screen
             // must not be able to switch the console to the wrong person.
             return {Action::SwitchAccount, rows_[slot_].id};
@@ -1752,11 +1755,12 @@ void AccountScreen::draw(Ctx& c) {
             c.text.draw(c.r, "+", dx + (discD - pw) * 0.5f,
                         dy + (discD - c.text.lineHeight(rowStyle, c.sc)) * 0.5f +
                             c.text.ascent(rowStyle, c.sc),
-                        rowStyle, ui::Color::white(0.8f * a), c.sc);
+                        rowStyle, ui::Color::white(0.8f * (addEnabled_ ? 1.0f : 0.4f) * a), c.sc);
             c.text.draw(c.r, "Add user", dx + discD + 14.0f,
                         y + (rowH - c.text.lineHeight(rowStyle, c.sc)) * 0.5f +
                             c.text.ascent(rowStyle, c.sc),
-                        rowStyle, ui::Color::white(nameA * a), c.sc);
+                        rowStyle,
+                        ui::Color::white(nameA * (addEnabled_ ? 1.0f : 0.4f) * a), c.sc);
             y += rowH + 8.0f;
             continue;
         }

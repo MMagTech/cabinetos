@@ -194,6 +194,15 @@ std::string emulatorsDir();
 // system directory, and leaves alone any name that is already a real file.
 std::string imageAssetsDir();
 
+// WHAT THE CONSOLE KNOWS ABOUT EACH GAME ON ITS DRIVE (#88): one record per
+// game, `games/<romId>.json`, in RomM's own field names, written whenever a
+// game is played or downloaded. It is what lets Home, the Library and Search
+// show the games on the drive with no server: a game's folder name carries its
+// id, title and platform folder and nothing else a launch needs. Shared by
+// everyone, like `bios/`; a record whose game has left the drive is ignored,
+// so nothing has to tidy it.
+std::string gamesDir();
+
 // --- The per-user half ------------------------------------------------------
 //
 // WHAT IS NOT PER USER MATTERS AS MUCH AS WHAT IS. Two people on one console

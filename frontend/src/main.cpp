@@ -739,6 +739,12 @@ static void restoreDirSave(romm::Client& client, int romId, const char* tag,
                      name.c_str());
         return;
     }
+    // Offline (#88): this console's own copy, which is already in place.
+    if (romm::serverAway()) {
+        std::fprintf(stderr, "[save] the server is away; keeping this console's %s\n",
+                     name.c_str());
+        return;
+    }
     std::vector<romm::Asset> saves;
     std::string serr;
     if (!client.fetchSaves(romId, &saves, &serr)) return;
@@ -1097,7 +1103,7 @@ static std::vector<cab::FileSaveState> restoreFileSaves(
     if (specs.empty()) return out;
 
     std::vector<romm::Asset> rows;
-    if (tag && client.haveToken()) {
+    if (tag && client.haveToken() && !romm::serverAway()) {
         std::string err;
         if (!client.fetchSaves(romId, &rows, &err))
             std::fprintf(stderr, "[save] could not ask the server: %s\n", err.c_str());
@@ -1930,6 +1936,8 @@ static std::string gameRecordJson(const romm::Game& g) {
     json_object_object_add(o, "name", json_object_new_string(g.name.c_str()));
     json_object_object_add(o, "fs_name", json_object_new_string(g.fsName.c_str()));
     json_object_object_add(o, "path_cover_small", json_object_new_string(g.coverPath.c_str()));
+    json_object_object_add(o, "path_cover_large", json_object_new_string(g.coverLargePath.c_str()));
+    json_object_object_add(o, "title_id", json_object_new_string(g.titleId.c_str()));
     json_object_object_add(o, "fs_size_bytes", json_object_new_int64(g.sizeBytes));
     const std::string out = json_object_to_json_string_ext(o, JSON_C_TO_STRING_PRETTY);
     json_object_put(o);
@@ -2053,6 +2061,10 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
         *err = game.platformName + ": " + (cov.reason ? cov.reason : "not playable here");
         return false;
     }
+
+    // REMEMBERED, so it can be shown and played with no server (#88): the
+    // game is on its way onto the drive, or already there.
+    cache::rememberGame(game.id, gameRecordJson(game));
 
     job.stop();
     job.cancel = false;
@@ -2255,7 +2267,12 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
             // them on alphabetical order. It happened to choose correctly and
             // that is not a property anyone should rely on.
             std::vector<std::string> platformFirmware;
-            const bool listed = client.fetchFirmware(platformId, &firmware, &ferr);
+            // NOT ASKED WHEN THE SERVER IS AWAY (#88): what an earlier
+            // launch fetched is in bios/ and the core finds it there; asking
+            // would only hold the launch for a timeout.
+            const bool away = romm::serverAway();
+            if (away) ferr = "the server is away; using what is in bios/";
+            const bool listed = !away && client.fetchFirmware(platformId, &firmware, &ferr);
             if (listed) {
                 for (const auto& f : firmware) {
                     if (job.cancel.load()) break;
@@ -2382,7 +2399,9 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
             storage::makeDirs(entryPath);
             std::vector<romm::RomFile> files;
             std::string lerr;
-            const bool listed = client.fetchRomFiles(id, &files, &lerr);
+            if (romm::serverAway()) lerr = "the server is away";
+            const bool listed =
+                !romm::serverAway() && client.fetchRomFiles(id, &files, &lerr);
             if (!listed) {
                 // OFFLINE, OR THE SERVER SAID NOTHING: a game already installed
                 // here still plays, which is all the list was for.
@@ -3031,6 +3050,151 @@ static Library loadLibrary(romm::Client& client) {
     return lib;
 }
 
+// WHAT OFFLINE WILL NEED, FETCHED WHILE ONLINE (#88). A game on the drive
+// with no record cannot be shown offline, and one whose covers were never
+// drawn here would show as a colour. Both are fetched once per start, behind
+// Home, on a client of their own: the records first (a game cached before
+// records existed, or kept with an older one), then the two covers of every
+// game on the drive that the cover cache does not hold. MMagTech, on #88:
+// "fetch covers once for games already kept", and cached games the same.
+static void backfillDrive(const std::string& address) {
+    static std::atomic<bool> running{false};
+    if (running.exchange(true)) return;
+    std::thread([address]() {
+        romm::Client c;
+        std::string err;
+        if (!c.setAddress(address, &err) || !accounts::loadActiveToken(c)) {
+            running = false;
+            return;
+        }
+        int records = 0, covers = 0, missing = 0;
+        for (const cache::OnDrive& d : cache::onDrive()) {
+            const std::string note =
+                storage::gamesDir() + "/" + std::to_string(d.romId) + ".json";
+            romm::Game g;
+            if (::access(note.c_str(), F_OK) != 0) {
+                if (c.fetchGame(d.romId, &g, &err)) {
+                    cache::rememberGame(g.id, gameRecordJson(g));
+                    ++records;
+                } else {
+                    ++missing;   // gone from the server, or not this person's
+                    continue;
+                }
+            } else if (!romm::gameFromJson(cache::gameRecord(d.romId), &g)) {
+                continue;
+            }
+            for (const std::string& key : {g.coverPath, g.coverLargePath}) {
+                if (key.empty() || !covercache::read(key).empty()) continue;
+                std::vector<uint8_t> bytes = c.fetchBytes(key);
+                if (bytes.empty()) continue;
+                covercache::write(key, bytes);
+                ++covers;
+            }
+        }
+        std::fprintf(stderr, "[offline] ready for offline: %d record(s) and %d cover(s) "
+                             "fetched%s\n", records, covers,
+                     missing ? (", " + std::to_string(missing) +
+                                " game(s) the server would not describe").c_str() : "");
+        running = false;
+    }).detach();
+}
+
+// THE SERVER, TRIED IN THE BACKGROUND WHILE IT IS AWAY (#88). Never on the
+// frame thread. Quick tries first (every ten seconds for two minutes: a
+// router coming back), then about once a minute (a server that is off, a
+// hotel). A try that answers clears serverAway() by itself (noteTransport),
+// and the frame loop does the rest. Its own client, so the live one is
+// never touched from here.
+static void startReconnect(const std::string& address) {
+    std::thread([address]() {
+        long long lastTry = 0;
+        for (;;) {
+            if (romm::serverAway()) {
+                const long long now = static_cast<long long>(std::time(nullptr));
+                const long long awayFor = now - romm::serverAwaySince();
+                const long long every = awayFor < 120 ? 10 : 60;
+                if (now - lastTry >= every) {
+                    lastTry = now;
+                    romm::Client c;
+                    std::string err;
+                    c.setAddress(address, &err);
+                }
+            }
+            SDL_Delay(250);
+        }
+    }).detach();
+}
+
+// THE LIBRARY WITH NO SERVER (#88): the games on the drive, downloaded or
+// cached, whoever got them there. MMagTech, 2026-10-05: offline is the normal
+// console with fewer games. So Recent is the games on the drive played most
+// recently by anyone (the entry's own time, a launch touches it), capped as
+// the server's is; the Library has a tile per system with games on the drive,
+// each holding only those; there are no favourites or collections, which are
+// the server's. A game with no record cannot be shown (its folder carries no
+// platform slug to launch it with); while online the console fetches the
+// missing ones (backfillDrive), so that is only a game never seen online.
+static Library offlineLibrary() {
+    Library lib;
+    const std::vector<cache::OnDrive> drive = cache::onDrive();
+    std::map<int, std::vector<int>> byPlatform;   // platform id -> cards
+    std::map<int, std::string> platformTitle;
+    int noRecord = 0, notHere = 0;
+    for (const cache::OnDrive& d : drive) {
+        romm::Game g;
+        if (d.record.empty() || !romm::gameFromJson(d.record, &g)) { ++noRecord; continue; }
+        if (!catalog::playable(g)) { ++notHere; continue; }
+        const int idx = appendGame(lib, g);
+        if (lib.shelf.size() < 16) lib.shelf.push_back(idx);   // as many as fetchRecent asks for
+        if (lib.heroIndex < 0) {
+            lib.heroIndex = idx;
+            lib.heroPlatform = g.platformName;
+        }
+        byPlatform[g.platformId].push_back(idx);
+        platformTitle[g.platformId] = g.platformName;
+        lib.platformNames[g.platformId] = g.platformName;
+    }
+    for (auto& [pid, idxs] : byPlatform) {
+        screens::Tile tile;
+        tile.id = pid;
+        tile.title = platformTitle[pid];
+        tile.art = colorForTitle(tile.title);
+        tile.enterable = true;
+        // Title order, as RomM returns a grid, so the letter-jump works.
+        std::sort(idxs.begin(), idxs.end(), [&](int a, int b) {
+            const std::string& x = lib.cards[static_cast<size_t>(a)].title;
+            const std::string& y = lib.cards[static_cast<size_t>(b)].title;
+            return std::lexicographical_compare(
+                x.begin(), x.end(), y.begin(), y.end(), [](unsigned char p, unsigned char q) {
+                    return std::tolower(p) < std::tolower(q);
+                });
+        });
+        tile.cards = idxs;
+        for (int i : idxs)
+            if (!lib.cards[static_cast<size_t>(i)].cover.empty()) {
+                tile.cover = lib.cards[static_cast<size_t>(i)].cover;
+                break;
+            }
+        char count[48];
+        std::snprintf(count, sizeof count, "%zu game%s", idxs.size(), idxs.size() == 1 ? "" : "s");
+        tile.detail = count;
+        lib.platformTiles.push_back(std::move(tile));
+    }
+    std::stable_sort(lib.platformTiles.begin(), lib.platformTiles.end(),
+                     [](const screens::Tile& a, const screens::Tile& b) {
+                         return std::lexicographical_compare(
+                             a.title.begin(), a.title.end(), b.title.begin(), b.title.end(),
+                             [](unsigned char x, unsigned char y) {
+                                 return std::tolower(x) < std::tolower(y);
+                             });
+                     });
+    std::fprintf(stderr,
+                 "[offline] %zu game(s) on the drive: %zu shown, %d with no record, %d not "
+                 "playable here; %zu system(s)\n",
+                 drive.size(), lib.cards.size(), noRecord, notHere, lib.platformTiles.size());
+    return lib;
+}
+
 // Talks to a RomM server and reports, without opening a window.
 //
 //   --romm <address>              connect and list the library
@@ -3098,6 +3262,22 @@ static bool adoptUser(romm::Client& client) {
                  "[storage] no RomM user (%s) — saves and keeps have nobody to "
                  "belong to until this console is paired\n", err.c_str());
     return false;
+}
+
+// WHO THE CONSOLE IS, WITH NO SERVER TO ASK (#88): the account's own id,
+// name and picture, from accounts.json. Switching people works offline
+// (MMagTech, 2026-10-05); /api/users/me is only how an online console checks.
+static bool adoptAccountOffline(int id) {
+    const std::vector<accounts::Account> known = accounts::all();
+    const accounts::Account* a = accounts::find(known, id);
+    if (!a) return false;
+    storage::User u;
+    u.id = a->id;
+    u.name = a->name;
+    u.avatar = a->avatar;
+    storage::setCurrentUser(u);
+    std::fprintf(stderr, "[storage] user %s (offline)\n", u.dirName().c_str());
+    return true;
 }
 
 // Downloads one ROM and says what a core would actually be given.
@@ -5214,6 +5394,9 @@ int main(int argc, char** argv) {
     // frame that was already on the television.
     static constexpr const char* kLoadingLine = "Loading your library";
     bool startupShown = false;
+    // STARTED WITH NO SERVER (#88): Home is the games on the drive until the
+    // server answers, and then it is loaded properly (the frame loop).
+    bool startedOffline = false;
 
     // A capture of the startup screen, which otherwise exists only for the few
     // seconds between the window appearing and the library arriving — and on a
@@ -5281,24 +5464,37 @@ int main(int argc, char** argv) {
         // (A) line is the cue to go and look at the server.
         {
             constexpr double kOfferAfter = 10.0;
+            // OFFLINE AFTER FIFTEEN SECONDS (#88, MMagTech 2026-10-05), when
+            // there is a game on the drive to play: the screen lifts onto
+            // Home with the games on the drive, and the server is tried in
+            // the background from then on. With none, this waits as before.
+            constexpr double kOfflineAfter = 15.0;
+            // THE TRIES ARE ON A CLIENT OF THEIR OWN, so going offline can
+            // walk away from one still in flight (a server that does not
+            // answer at all holds a try for its whole connect timeout) and
+            // leave it to finish alone. The live client is set on this thread
+            // once a try has answered.
             struct Probe {
                 std::atomic<bool> stop{false}, answered{false};
                 std::mutex m;
                 std::string err;
-                std::thread th;
-            } probe;
+            };
+            auto probe = std::make_shared<Probe>();
             const std::string firstAddress = rommAddress;
-            probe.th = std::thread([&probe, firstAddress]() {
+            std::thread probeThread([probe, firstAddress]() {
+                romm::Client scratch;
                 std::string e;
-                while (!probe.stop.load()) {
-                    if (liveClient.setAddress(firstAddress, &e)) { probe.answered = true; return; }
+                while (!probe->stop.load()) {
+                    if (scratch.setAddress(firstAddress, &e)) { probe->answered = true; return; }
                     {
-                        std::lock_guard<std::mutex> lk(probe.m);
-                        probe.err = e;
+                        std::lock_guard<std::mutex> lk(probe->m);
+                        probe->err = e;
                     }
-                    for (int i = 0; i < 20 && !probe.stop.load(); ++i) SDL_Delay(100);
+                    for (int i = 0; i < 20 && !probe->stop.load(); ++i) SDL_Delay(100);
                 }
             });
+            bool goOffline = false;
+            double driveCheckedAt = -1.0;
             struct CheckJob {
                 std::thread th;
                 std::atomic<bool> done{false};
@@ -5393,15 +5589,33 @@ int main(int argc, char** argv) {
                     openKeyboard(rommAddress, "");
             };
 
-            while (!probe.answered.load() && newAddress.empty() && !signOutNow && !quit) {
+            while (!probe->answered.load() && newAddress.empty() && !signOutNow && !quit &&
+                   !goOffline) {
                 const Uint64 now = SDL_GetTicks();
+                // Not while somebody is typing a new address or a PIN: the
+                // screen does not leave from under them.
+                {
+                    const double waited = (now - start) / 1000.0;
+                    if (waited >= kOfflineAfter && waited - driveCheckedAt >= 5.0 &&
+                        !addrKeyboard.isOpen() && !pad.isOpen() && !question.isOpen()) {
+                        driveCheckedAt = waited;
+                        for (const cache::OnDrive& d : cache::onDrive()) {
+                            romm::Game g;
+                            if (!d.record.empty() && romm::gameFromJson(d.record, &g) &&
+                                catalog::playable(g)) {
+                                goOffline = true;
+                                break;
+                            }
+                        }
+                    }
+                }
                 // Once, not once per attempt: a line a second for a minute and
                 // a half buries whatever else the boot had to say.
                 if (!said && now - start > 2500) {
-                    std::lock_guard<std::mutex> lk(probe.m);
-                    if (!probe.err.empty()) {
+                    std::lock_guard<std::mutex> lk(probe->m);
+                    if (!probe->err.empty()) {
                         said = true;
-                        std::fprintf(stderr, "[romm] %s, waiting for it\n", probe.err.c_str());
+                        std::fprintf(stderr, "[romm] %s, waiting for it\n", probe->err.c_str());
                     }
                 }
 
@@ -5552,14 +5766,28 @@ int main(int argc, char** argv) {
                 if (idleShown == idle::Level::Blank && dimLayer.value() >= 0.999f) SDL_Delay(100);
             }
 
-            probe.stop = true;
-            if (!probe.answered.load() && (!newAddress.empty() || signOutNow)) {
+            probe->stop = true;
+            if (!probe->answered.load() && (!newAddress.empty() || signOutNow)) {
                 // Said while the old address's last try runs out.
                 setup::showWaiting(waitDeps, "",
                                    signOutNow ? "Signing out"
                                               : ("Connecting to " + newAddress).c_str());
             }
-            probe.th.join();
+            // Offline does not wait for the last try: it finishes alone.
+            if (goOffline && !probe->answered.load()) probeThread.detach();
+            else probeThread.join();
+            if (probe->answered.load()) {
+                // The live client, now that a try has answered: one quick
+                // call. Should the server go in between, start offline.
+                goOffline = !liveClient.setAddress(rommAddress, &err);
+            }
+            if (goOffline) {
+                romm::setServerAway(true);
+                startedOffline = true;
+                std::fprintf(stderr,
+                             "[offline] no server after %.0f s; starting with the games on "
+                             "the drive\n", kOfflineAfter);
+            }
             if (quit) return 0;
             if (signOutNow) {
                 std::string serr;
@@ -5577,7 +5805,7 @@ int main(int argc, char** argv) {
                              std::strerror(errno));
                 return 1;
             }
-            if (!probe.answered.load() && !newAddress.empty()) {
+            if (!probe->answered.load() && !newAddress.empty()) {
                 std::string cerr;
                 const std::string from = rommAddress;
                 if (!server::changeAddress(from, newAddress, &cerr))
@@ -5611,7 +5839,8 @@ int main(int argc, char** argv) {
         if (const accounts::Account* who = accounts::find(known, accounts::activeId()))
             std::fprintf(stderr, "[accounts] acting as %d - %s\n", who->id,
                          who->name.c_str());
-        adoptUser(liveClient);
+        if (startedOffline) adoptAccountOffline(accounts::activeId());
+        else adoptUser(liveClient);
         // FOUR SMALL CALLS NOW, not the catalogue — open question 28. This
         // used to count games onto the screen as they arrived, because it took
         // several seconds and a still sentence is indistinguishable from a
@@ -5624,7 +5853,7 @@ int main(int argc, char** argv) {
         // coming back after a power cut is not something this can make faster.
         setup::showWaiting(waitDeps, "Starting up", kLoadingLine);
         startupShown = true;
-        lib = loadLibrary(liveClient);
+        lib = startedOffline ? offlineLibrary() : loadLibrary(liveClient);
         // The references above name lib's own members, so there is nothing to
         // copy out any more.
 
@@ -5635,7 +5864,7 @@ int main(int argc, char** argv) {
         // been told its library came back empty and refused to start. The
         // question worth asking is whether the SERVER answered, and the
         // platform list is what answers it.
-        if (platformTiles.empty()) {
+        if (platformTiles.empty() && !startedOffline) {
             std::fprintf(stderr, "[romm] the library came back empty\n");
             return 1;
         }
@@ -6378,6 +6607,33 @@ int main(int argc, char** argv) {
     // same path a person does rather than a second implementation of it.
     auto runSearch = [&](const std::string& q) {
         if (q.empty()) return;
+        // OFFLINE (#88, MMagTech 2026-10-05): by name over the games on the
+        // drive, the same games the offline Library shows. Results are simply
+        // what is here; nothing says what might be on the server.
+        if (romm::serverAway()) {
+            auto lower = [](std::string x) {
+                for (char& ch : x) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+                return x;
+            };
+            const std::string want = lower(q);
+            std::vector<int> idx;
+            for (const cache::OnDrive& d : cache::onDrive()) {
+                romm::Game g;
+                if (d.record.empty() || !romm::gameFromJson(d.record, &g)) continue;
+                if (!catalog::playable(g)) continue;
+                const std::string name = lower(g.name.empty() ? g.fsName : g.name);
+                if (name.find(want) == std::string::npos) continue;
+                idx.push_back(appendGame(lib, g));
+            }
+            std::sort(idx.begin(), idx.end(), [&](int a, int b) {
+                return lower(cards[static_cast<size_t>(a)].title) <
+                       lower(cards[static_cast<size_t>(b)].title);
+            });
+            const int n = static_cast<int>(idx.size());
+            std::fprintf(stderr, "[search] %s: %d on the drive (offline)\n", q.c_str(), n);
+            searchScreen.setResults(q, std::move(idx), n);
+            return;
+        }
         std::vector<romm::Game> found;
         std::string err;
         int total = 0;
@@ -6694,6 +6950,14 @@ int main(int argc, char** argv) {
     for (const storage::User& u : storage::knownUsers()) playtime::recover(u);
     // Whatever an earlier run could not send goes first.
     uploader.resendOwed();
+    // OFFLINE PLAY (#88): the server tried in the background whenever it is
+    // away, and what offline needs fetched while it is not.
+    if (rommAddress) {
+        startReconnect(rommAddress);
+        if (!startedOffline) backfillDrive(rommAddress);
+    }
+    bool shownAway = romm::serverAway();
+    float onlineAgainClock = 5.0f;   // a failed reload waits before the next
     // SAVES A POWER CUT LEFT ON A DRIVE: an Xbox game's folder still holding
     // the note beforeStart wrote. Its saves come off now and go up as if the
     // game had just ended; the note names the person's folder and the game.
@@ -7356,6 +7620,23 @@ int main(int argc, char** argv) {
             if (why) *why = err;
             return false;
         }
+        // OFFLINE (#88): the person is who accounts.json says, and Home is
+        // the games on the drive, which are the console's and not anybody's
+        // (MMagTech, 2026-10-05). Their saves are their own, as always.
+        if (romm::serverAway()) {
+            if (!adoptAccountOffline(id)) {
+                if (why) *why = "Couldn't switch.";
+                return false;
+            }
+            lib = offlineLibrary();
+            startedOffline = true;   // loaded properly when the server answers
+            libraryScreen.build(platformTiles, collectionTiles);
+            homeFromTheStart();
+            refreshKeeps();
+            std::fprintf(stderr, "[accounts] switched to %d offline, %zu games\n", id,
+                         cards.size());
+            return true;
+        }
         // ASKED AGAIN, NOT ASSUMED. The token changed, so the answer to "who is
         // this" changed, and every save path below is built from it.
         if (!adoptUser(liveClient)) {
@@ -7485,6 +7766,7 @@ int main(int argc, char** argv) {
         for (const accounts::Account& a : accounts::all())
             if (a.id != active) rows.push_back({a.id, a.name, a.avatar});
         accountScreen.setRows(std::move(rows));
+        accountScreen.setAddEnabled(!romm::serverAway());
     };
 
     // WHERE THE BAR'S FOCUS LIVES. Not in Home's row model and not in any
@@ -11200,23 +11482,49 @@ int main(int argc, char** argv) {
                          session.dirSaveRoot.c_str(), session.dirAtLaunch.size());
         }
 
-        if (core.saveRamSize() > 0 && !session.saveTag.empty()) {
-            std::vector<romm::Asset> saves;
-            std::string serr;
-            if (liveClient.fetchSaves(session.romId, &saves, &serr)) {
-                const romm::Asset* newest = nullptr;
-                for (const auto& a : saves) {
-                    if (a.emulator != session.saveTag) continue;
-                    if (!newest || a.updatedAt > newest->updatedAt) newest = &a;
-                }
-                if (newest) {
-                    std::vector<uint8_t> data = liveClient.fetchAsset("saves", newest->id);
-                    if (!data.empty() && core.writeSaveRam(data)) {
-                        session.saveAtLaunch = data;
-                        std::fprintf(stderr, "[save] restored %s (%zu bytes)\n",
-                                     newest->fileName.c_str(), data.size());
+        // THE BATTERY SAVE: RomM's newest, unless this console's own copy is
+        // still owed, and this console's copy whenever RomM has none to give
+        // (#259). Until 2026-10-05 the local `.srm` syncSave writes at every
+        // quit was never read back, so a game started with the server away
+        // began with an empty battery, and one started while its upload was
+        // still owed got RomM's OLDER copy over the newer one. The same rule
+        // restoreFileSaves and restoreDirSave keep (cache.h, isPending), and
+        // what RetroArch does: the frontend loads the local `.srm`.
+        if (core.saveRamSize() > 0) {
+            const std::string name = saveRowName(session.fsStem, std::string(), "srm");
+            const std::vector<uint8_t> local = cab::readBytes(saveDir + "/" + name);
+            const bool owed =
+                !session.saveTag.empty() && cache::isPending(user, session.romId, name);
+            bool fromServer = false;
+            if (owed) {
+                std::fprintf(stderr, "[save] %s has not reached the server yet - it wins\n",
+                             name.c_str());
+            } else if (!session.saveTag.empty() && !romm::serverAway()) {
+                std::vector<romm::Asset> saves;
+                std::string serr;
+                if (liveClient.fetchSaves(session.romId, &saves, &serr)) {
+                    const romm::Asset* newest = nullptr;
+                    for (const auto& a : saves) {
+                        if (a.emulator != session.saveTag) continue;
+                        if (!newest || a.updatedAt > newest->updatedAt) newest = &a;
                     }
+                    if (newest) {
+                        std::vector<uint8_t> data = liveClient.fetchAsset("saves", newest->id);
+                        if (!data.empty() && core.writeSaveRam(data)) {
+                            session.saveAtLaunch = data;
+                            fromServer = true;
+                            std::fprintf(stderr, "[save] restored %s (%zu bytes)\n",
+                                         newest->fileName.c_str(), data.size());
+                        }
+                    }
+                } else {
+                    std::fprintf(stderr, "[save] could not ask the server: %s\n", serr.c_str());
                 }
+            }
+            if (!fromServer && !local.empty() && core.writeSaveRam(local)) {
+                session.saveAtLaunch = local;
+                std::fprintf(stderr, "[save] restored this console's %s (%zu bytes)\n",
+                             name.c_str(), local.size());
             }
         }
         if (session.saveAtLaunch.empty()) core.readSaveRam(session.saveAtLaunch);
@@ -13767,6 +14075,56 @@ int main(int argc, char** argv) {
             owedClock = 0.0f;
             uploader.resendOwed();
         }
+        // OFFLINE AND BACK (#88). One line going, one coming back. Back, what
+        // is owed goes at once rather than at the next five-minute try, and a
+        // console that started offline loads its library properly, on Home
+        // only and never during a game or a launch, so nothing is replaced
+        // under somebody's feet; the shelves come in as an account switch's do.
+        if (rommAddress) {
+            const bool away = romm::serverAway();
+            if (away != shownAway) {
+                shownAway = away;
+                if (away) {
+                    std::fprintf(stderr, "[offline] can't reach the server; trying in the "
+                                         "background\n");
+                } else {
+                    std::fprintf(stderr, "[offline] the server answered after %llds\n",
+                                 static_cast<long long>(std::time(nullptr)) -
+                                     romm::serverAwaySince());
+                    images.forgetFailed();
+                    if (!startedOffline) {
+                        owedClock = 0.0f;
+                        uploader.resendOwed();
+                    }
+                }
+            }
+            onlineAgainClock += dt;
+            if (!away && startedOffline && !playing && here() == Screen::Home &&
+                !accountsOpen && !launchJob.busy() && uploader.pending() == 0 &&
+                onlineAgainClock >= 5.0f) {
+                onlineAgainClock = 0.0f;
+                std::string e;
+                if (!liveClient.setAddress(rommAddress, &e)) {
+                    std::fprintf(stderr, "[offline] the server went again: %s\n", e.c_str());
+                } else {
+                    adoptUser(liveClient);
+                    Library fresh = loadLibrary(liveClient);
+                    if (!fresh.platformTiles.empty()) {
+                        lib = std::move(fresh);
+                        libraryScreen.build(platformTiles, collectionTiles);
+                        startCoverFill();
+                        homeFromTheStart();
+                        refreshKeeps();
+                        startedOffline = false;
+                        std::fprintf(stderr, "[offline] online again: %zu game(s) on Home\n",
+                                     cards.size());
+                        owedClock = 0.0f;
+                        uploader.resendOwed();
+                        backfillDrive(rommAddress);
+                    }
+                }
+            }
+        }
         if (const int outcome = uploader.stateOutcome.exchange(0); outcome != 0)
             menuNotice.say(outcome == 1 ? "Saved to RomM"
                                         : "Saved. Will upload when RomM is back",
@@ -15315,6 +15673,29 @@ int main(int argc, char** argv) {
             text.draw(renderer, who, discX - 10.0f - nameW, chipBaseline,
                       chipStyle, ui::Color::white(chipOn ? 1.0f : 0.62f), sc);
 
+            // OFFLINE (#88): a small capsule left of the account chip while
+            // the server cannot be reached, gone when it answers. MMagTech,
+            // 2026-10-05. Stated, not explained: the console is the normal
+            // console with fewer games, and this is the only word about it.
+            // Everything left of the chip moves left past it (the download
+            // ring), so the chip itself never moves.
+            float leftOfChip = discX - 10.0f - nameW - 22.0f;
+            if (romm::serverAway()) {
+                const char* kOffline = "Offline";
+                const ui::TextStyle os = ui::TextStyle::Caption1;
+                const float ow = text.measure(kOffline, os, sc);
+                constexpr float kPadX = 16.0f, kInsetY = 14.0f;
+                const float ph = barHeight - kInsetY * 2.0f;
+                const float px = leftOfChip - 12.0f - ow - kPadX * 2.0f;
+                renderer.draw(ui::Rect{px, barTop + kInsetY, ow + kPadX * 2.0f, ph, ph * 0.5f,
+                                       ui::Color::white(0.16f)});
+                text.draw(renderer, kOffline, px + kPadX,
+                          barTop + (barHeight - text.lineHeight(os, sc)) * 0.5f +
+                              text.ascent(os, sc),
+                          os, ui::Color::white(0.80f), sc);
+                leftOfChip = px - 12.0f;
+            }
+
             // A DOWNLOAD IN FLIGHT: A RING LEFT OF THE ACCOUNT CHIP (#145).
             // For the person who started one and walked away: without it a
             // background fetch of a 1.78 GB arcade set is invisible the moment
@@ -15339,7 +15720,7 @@ int main(int argc, char** argv) {
                     launchJob.stage.load() == LaunchJob::Stage::Installing;
                 // Clear of the chip's focus pill (kChipPillPadX), so the two
                 // never touch when focus lands on the chip.
-                const float chipLeft = discX - 10.0f - nameW - 22.0f;
+                const float chipLeft = leftOfChip;
                 const float ringD = discD;
                 const float cx = chipLeft - 24.0f - ringD * 0.5f;
                 const float cy = barTop + barHeight * 0.5f;
