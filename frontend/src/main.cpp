@@ -3334,6 +3334,7 @@ static void startReconnect(const std::string& address) {
 // missing ones (backfillDrive), so that is only a game never seen online.
 static Library offlineLibrary() {
     Library lib;
+    const Uint64 t0 = SDL_GetTicksNS();
     const std::vector<cache::OnDrive> drive = cache::onDrive();
     std::map<int, std::vector<int>> byPlatform;   // platform id -> cards
     std::map<int, std::string> platformTitle;
@@ -3414,9 +3415,9 @@ static Library offlineLibrary() {
                      });
     std::fprintf(stderr,
                  "[offline] %zu game(s) on the drive: %zu shown, %d with no record, %d not "
-                 "playable here; %zu system(s), %zu favourite(s)\n",
+                 "playable here; %zu system(s), %zu favourite(s); %.1f ms\n",
                  drive.size(), lib.cards.size(), noRecord, notHere, lib.platformTiles.size(),
-                 lib.favorites.size());
+                 lib.favorites.size(), (SDL_GetTicksNS() - t0) / 1e6);
     return lib;
 }
 
@@ -6861,10 +6862,21 @@ int main(int argc, char** argv) {
             };
             const std::string want = lower(q);
             std::vector<int> idx;
-            for (const cache::OnDrive& d : cache::onDrive()) {
-                romm::Game g;
-                if (d.record.empty() || !romm::gameFromJson(d.record, &g)) continue;
-                if (!catalog::playable(g)) continue;
+            // THE DRIVE'S GAMES ARE READ ONCE, NOT PER SEARCH: a file per game,
+            // which on a drive of a thousand would be a stutter per keystroke.
+            // Read again at most every half minute (a drive plugged in).
+            static std::vector<romm::Game> onDrive;
+            static Uint64 readAt = 0;
+            if (onDrive.empty() || SDL_GetTicks() - readAt > 30000) {
+                readAt = SDL_GetTicks();
+                onDrive.clear();
+                for (const cache::OnDrive& d : cache::onDrive()) {
+                    romm::Game g;
+                    if (d.record.empty() || !romm::gameFromJson(d.record, &g)) continue;
+                    if (catalog::playable(g)) onDrive.push_back(std::move(g));
+                }
+            }
+            for (const romm::Game& g : onDrive) {
                 const std::string name = lower(g.name.empty() ? g.fsName : g.name);
                 if (name.find(want) == std::string::npos) continue;
                 idx.push_back(appendGame(lib, g));

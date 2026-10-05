@@ -12454,6 +12454,15 @@ What does it, and where:
   played on another device starts from its newest save (the vacation case,
   moved here from #261). The copy is forgotten whenever a save of ours lands,
   then read again, so it can never be older than a save the console sent.
+  Its size grows with the saves of the games on the drive: 44 MB for 47 games
+  with saves on the A9 (2026-10-05); a drive of hundreds of PS2 or GameCube
+  games (8 to 16 MB a card) would hold a few GB. Not capped: the price of the
+  vacation case, small beside the games.
+- **Larger drives:** building the offline library reads one small record per
+  game on the drive: 2.7 ms for 79 games on the A9, so about 35 ms for a
+  thousand, once per offline start. Offline Search reads the drive once and
+  again at most every 30 s, not per keystroke. Coming back online loads the
+  same few requests whatever the size of the library (open question 28).
 - **The game's page offline** shows the save's date and the newest three
   states from the console (pictures included), and the year, maker and
   players as last seen (`games/<romId>.facts.json`). Online, a state still
