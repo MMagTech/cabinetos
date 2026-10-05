@@ -141,6 +141,13 @@ RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
     printf '%s\n' "${CABINETOS_VERSION}" > /usr/share/cabinetos/version && \
     /ctx/brand-os-release.sh "${CABINETOS_VERSION}"
 
+# THE BOOT SPLASH (#108): the initramfs rebuilt with the CabinetOS watermark
+# build.sh put in place. After the branding on purpose, so the initramfs's
+# copy of os-release names CabinetOS too.
+RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
+    --mount=type=tmpfs,dst=/tmp \
+    /ctx/boot-splash.sh
+
 # ---------------------------------------------------------------------------
 # Lint
 # ---------------------------------------------------------------------------
