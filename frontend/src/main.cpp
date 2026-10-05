@@ -2318,8 +2318,10 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
             // Saturn game on this console from starting. See
             // catalog::firmwareAliases for why the match is on SIZE and why
             // the copy goes under every name rather than the likeliest one.
+            // Only from a list the server gave: offline, the copies an earlier
+            // launch placed are already there.
             if (const catalog::FirmwareAliases fa = catalog::firmwareAliases(slug, fsSlug);
-                fa.sizeBytes > 0) {
+                fa.sizeBytes > 0 && listed) {
                 // The source is whichever of THIS PLATFORM's firmware files
                 // is exactly the right length — never just whatever in `bios/`
                 // happens to match, which would reach into another platform's
@@ -2858,6 +2860,48 @@ static bool loadTileGames(romm::Client& client, Library& lib, screens::Tile& til
 // So boot is CONSTANT rather than proportional, which is the whole prize: the
 // person with twenty thousand games boots as fast as the person with two
 // hundred.
+// THE SERVER'S SYSTEMS, KEPT FOR OFFLINE (#88), so an offline Library tile
+// says what the online one says ("Arcade" over "FinalBurn Neo") rather than
+// whatever a game's own record calls its system. `games/platforms.json`,
+// rewritten at every online start.
+static void savePlatforms(const std::vector<romm::Platform>& platforms) {
+    json_object* arr = json_object_new_array();
+    for (const romm::Platform& p : platforms) {
+        json_object* o = json_object_new_object();
+        json_object_object_add(o, "id", json_object_new_int(p.id));
+        json_object_object_add(o, "name", json_object_new_string(p.name.c_str()));
+        json_object_object_add(o, "slug", json_object_new_string(p.slug.c_str()));
+        json_object_object_add(o, "fs_slug", json_object_new_string(p.fsSlug.c_str()));
+        json_object_array_add(arr, o);
+    }
+    storage::makeDirs(storage::gamesDir());
+    const std::string path = storage::gamesDir() + "/platforms.json";
+    const std::string tmp = path + ".part";
+    if (json_object_to_file_ext(tmp.c_str(), arr, JSON_C_TO_STRING_PRETTY) == 0)
+        ::rename(tmp.c_str(), path.c_str());
+    json_object_put(arr);
+}
+
+static std::map<int, romm::Platform> savedPlatforms() {
+    std::map<int, romm::Platform> out;
+    json_object* arr = json_object_from_file((storage::gamesDir() + "/platforms.json").c_str());
+    if (!arr) return out;
+    if (json_object_is_type(arr, json_type_array)) {
+        for (size_t i = 0; i < json_object_array_length(arr); ++i) {
+            json_object* o = json_object_array_get_idx(arr, i);
+            json_object* v = nullptr;
+            romm::Platform p;
+            if (json_object_object_get_ex(o, "id", &v)) p.id = json_object_get_int(v);
+            if (json_object_object_get_ex(o, "name", &v)) p.name = json_object_get_string(v);
+            if (json_object_object_get_ex(o, "slug", &v)) p.slug = json_object_get_string(v);
+            if (json_object_object_get_ex(o, "fs_slug", &v)) p.fsSlug = json_object_get_string(v);
+            if (p.id > 0) out[p.id] = p;
+        }
+    }
+    json_object_put(arr);
+    return out;
+}
+
 static Library loadLibrary(romm::Client& client) {
     Library lib;
     std::string err;
@@ -2867,6 +2911,7 @@ static Library loadLibrary(romm::Client& client) {
         std::fprintf(stderr, "[romm] platforms: %s\n", err.c_str());
         return lib;
     }
+    savePlatforms(platforms);
 
     int skippedGames = 0;
     // A tile per platform, built whether or not this console can play it. The
@@ -3104,12 +3149,24 @@ static void backfillDrive(const std::string& address) {
 // router coming back), then about once a minute (a server that is off, a
 // hotel). A try that answers clears serverAway() by itself (noteTransport),
 // and the frame loop does the rest. Its own client, so the live one is
-// never touched from here.
+// never touched from here. AND ONCE A MINUTE WHILE IT IS THERE, the same
+// heartbeat, so a server that goes while the console sits on Home is
+// noticed (the Offline chip, launches that stop asking it) without waiting
+// for somebody to need it.
 static void startReconnect(const std::string& address) {
     std::thread([address]() {
         long long lastTry = 0;
+        long long lastBeat = static_cast<long long>(std::time(nullptr));
         for (;;) {
-            if (romm::serverAway()) {
+            if (!romm::serverAway()) {
+                const long long now = static_cast<long long>(std::time(nullptr));
+                if (now - lastBeat >= 60) {
+                    lastBeat = now;
+                    romm::Client c;
+                    std::string err;
+                    c.setAddress(address, &err);
+                }
+            } else {
                 const long long now = static_cast<long long>(std::time(nullptr));
                 const long long awayFor = now - romm::serverAwaySince();
                 const long long every = awayFor < 120 ? 10 : 60;
@@ -3139,6 +3196,7 @@ static Library offlineLibrary() {
     const std::vector<cache::OnDrive> drive = cache::onDrive();
     std::map<int, std::vector<int>> byPlatform;   // platform id -> cards
     std::map<int, std::string> platformTitle;
+    const std::map<int, romm::Platform> known = savedPlatforms();
     int noRecord = 0, notHere = 0;
     for (const cache::OnDrive& d : drive) {
         romm::Game g;
@@ -3158,7 +3216,16 @@ static Library offlineLibrary() {
         screens::Tile tile;
         tile.id = pid;
         tile.title = platformTitle[pid];
-        tile.art = colorForTitle(tile.title);
+        std::string qualifier;
+        if (auto k = known.find(pid); k != known.end()) {
+            // The same name and qualifier the online tile has (loadLibrary).
+            if (!k->second.name.empty()) tile.title = k->second.name;
+            qualifier = catalog::displayQualifier(k->second);
+            lib.platformNames[pid] = catalog::displayName(k->second);
+            tile.art = colorForTitle(catalog::displayName(k->second));
+        } else {
+            tile.art = colorForTitle(tile.title);
+        }
         tile.enterable = true;
         // Title order, as RomM returns a grid, so the letter-jump works.
         std::sort(idxs.begin(), idxs.end(), [&](int a, int b) {
@@ -3177,7 +3244,8 @@ static Library offlineLibrary() {
             }
         char count[48];
         std::snprintf(count, sizeof count, "%zu game%s", idxs.size(), idxs.size() == 1 ? "" : "s");
-        tile.detail = count;
+        tile.detail = qualifier.empty() ? std::string(count)
+                                        : qualifier + "  \xC2\xB7  " + count;
         lib.platformTiles.push_back(std::move(tile));
     }
     std::stable_sort(lib.platformTiles.begin(), lib.platformTiles.end(),
@@ -5818,7 +5886,7 @@ int main(int argc, char** argv) {
                     return 1;
                 }
             }
-            if (said) std::fprintf(stderr, "[romm] the server answered\n");
+            if (said && !goOffline) std::fprintf(stderr, "[romm] the server answered\n");
         }
         // WHOEVER PLAYED LAST. The active account's token is what this console
         // starts as — open question 26, decision 2. No account means a machine
@@ -5880,8 +5948,23 @@ int main(int argc, char** argv) {
         // open question 29.
         covercache::setServer(rommAddress);
         images.init(imageBudget, 4, [](const std::string& key) {
+            // A PERSON'S PICTURE is asked for fresh (it can change), and a
+            // copy kept so the chip and the switcher show faces offline (#88).
+            if (key.rfind("/api/users/", 0) == 0) {
+                const std::string kept =
+                    covercache::dir() + "/avatars/" + storage::safeSegment(key);
+                std::vector<uint8_t> got =
+                    romm::serverAway() ? std::vector<uint8_t>() : liveClient.fetchBytes(key);
+                if (got.empty()) return cab::readBytes(kept);
+                storage::makeDirs(covercache::dir() + "/avatars");
+                cab::writeBytes(kept, got);
+                return got;
+            }
             if (std::vector<uint8_t> have = covercache::read(key); !have.empty())
                 return have;
+            // Not asked while the server is away: each would wait out a
+            // timeout. Asked again when it answers (forgetFailed).
+            if (romm::serverAway()) return std::vector<uint8_t>();
             std::vector<uint8_t> got = liveClient.fetchBytes(key);
             covercache::write(key, got);
             return got;
