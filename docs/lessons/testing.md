@@ -217,6 +217,17 @@ then `YDOTOOL_SOCKET=/tmp/ydotool.sock ydotool key 108:1 108:0` (Down; Up
   (`wl_display_destroy`, SIGSEGV or SIGABRT). It is every session stop, not
   the thing being tested; look at what stopped the app.
 
+- **frames.py CANNOT SEE A REPEATED GAME FRAME.** The console presents at
+  every refresh whether the game made a new picture or not, so gamescope's
+  frame times read a clean 16.67 ms over a game that repeats and skips
+  frames every second. Read the console's own `[pace]` line (#221).
+
+- **`--env` REACHES THE FRONTEND, NOT THE SESSION SCRIPT.** It goes on the
+  frontend's command line, so `CABINETOS_OUTPUT` given that way changes
+  nothing and the TV stays at 4K. `tools/ui-loop.sh --session-env` puts it
+  on the session. The LG's 2560x1440 mode is 59.95 Hz, the one non-60.000
+  rate this TV has for testing.
+
 ## Logs
 
 

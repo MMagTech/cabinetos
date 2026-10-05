@@ -1974,6 +1974,9 @@ with a new `[audio]` log line and each wrong in its own way:
    Cabinet's "the governor slowed N64 down" was most likely this, slowed to
    true speed. The core's timing options are marked "will break stuff" and
    Batocera leaves them alone; RetroArch absorbs it with audio sync.
+   **2026-10-05: the VI-clock explanation above is not supported by the
+   core's source; the 3.4% is real (measured again) and its cause is open.
+   See #221's section below.**
 4. The brake on every core still crackled, because N64 delivers sound in
    bursts. Pacing by the speaker covers all of it, and nothing is thrown
    away.
@@ -1998,12 +2001,86 @@ Genesis, Neo Geo Pocket Color) plus PSP. The full sweep of the final build
 was stopped part way, on purpose, to move on: **run it before relying on a
 system nobody has played since** (`~/fb/sweep.sh` on the A9).
 
-**Not done:** RetroArch's dynamic rate control (±0.5%, on by default on
-PCs) is not built; nothing today drifts slowly enough to need it. Quality
+**Not done then:** RetroArch's dynamic rate control; built 2026-10-05
+with the lock to the screen (#221, the section after this one). Quality
 settings per level are open question 23, which gained a gap today: sound
 can tell the console to step a game DOWN, but not that it has room to step
 UP; that needs the time the core takes per frame against the frame's
 budget.
+
+### One game frame per refresh, the sound bent to match (#221) — 2026-10-05
+
+**What it does:** a built-in core whose frame rate is within 5% of the
+screen's runs exactly one game frame per screen refresh (one per two on a
+120 Hz screen), and its sound is played that much faster or slower so it
+still keeps time. A small automatic adjustment (up to 0.5% either way)
+holds the sound queue near 40 ms, which takes up whatever the rates got
+wrong. Further than 5% from the screen (a 50 Hz European game on a 60 Hz
+TV, some arcade boards) and it is paced by the clock as before. PS2 paces
+itself and is not touched. This is RetroArch's arrangement: vsync, its
+`video_max_timing_skew` of 0.05 and its `audio_rate_control_delta` of
+0.005, both defaults.
+
+**Why:** the clock pacing it replaces decided how many game frames to run
+from a stopwatch reading that wobbles by about half a millisecond, so near
+the boundary it ran two frames on one refresh and none on the next. The
+issue predicted one glitch every 10 s from the 60.10 vs 60.00 Hz beat;
+measured on the A9 TV, Axelay (SNES) had 0 to 9 repeated and 4 to 11
+skipped frames every 10 s. Locked: 0 and 0.
+
+**Measured on the A9 (60.000 Hz by its EDID; SDL says 59.980),** three or
+four 10 s windows each, repeated / skipped per window: SNES, GBA (59.73 Hz,
+sound +0.4%), Genesis, Master System, NES, PlayStation, Sega CD, CPS2
+arcade (59.63 Hz, sound +0.6%), PSP: all 0 repeated; the only skipped
+frames are the catch-up after a refresh the console itself missed (next
+paragraph). **Another screen:** the same TV in its 2560x1440 mode, which is
+59.95 Hz (SDL said 59.91): Axelay 0 and 0, sound -0.2 to -0.36%.
+
+**A refresh the console misses is caught up**, one extra game frame on
+the next, so the game keeps time as it did on the clock and the rate
+control only has the rates to absorb. Without it the queue fell to 17 ms
+on GBA. The misses (1 to 5 per 10 s at 4K, none at 1440p) are the swap
+waiting two refreshes on gamescope while the frame's own work is 0.5 ms;
+they happen at Home too and predate this. Not the see-through window
+(measured opaque and see-through, two minutes each: no difference). Read
+in gamescope 3.16.28's source: it wakes about 4 to 5 ms before each
+refresh to compose, and its estimate of that time only grows after a
+frame has already missed. Locking the GPU's clocks high did not help
+(Home, a minute each: 11, 12, 6 late as shipped; 3, 2, 46 locked), so the
+cause is open. #253. High-refresh monitors (144 Hz, VRR) are #255.
+
+**N64 and Dreamcast still hold a frame about twice a second, locked or
+not** (measured both ways: Hydro Thunder 17 to 21 holds per 10 s on the
+clock, 18 to 20 locked; Cannon Spike the same either way, while the lock
+cut its other glitches from 14 to 34 per 10 s to 6 to 8). 0.5% of rate
+control cannot take up 3%, so the speaker holds the game, as RetroArch's
+blocking audio write does. The two causes differ:
+
+- **N64, measured:** the `[pace]` line's "sound per game frame" reads
+  +3.25 to +3.51% on Hydro Thunder (SNES reads 0.00). **The explanation in
+  the section before this one does not hold:** in the core's source
+  (mupen64plus-core `vi_controller.c`, `ai_controller.c`) the picture and
+  the sound are timed from the same clock, so the cause is not known.
+  Nobody reports it upstream; the nearest is mupen64plus-core#1176 (round
+  50/60 Hz constants, no replies). #254.
+- **Dreamcast, from Flycast's source:** `retro_run` returns when the game
+  draws a frame, not at each refresh, and a game that skipped one hands
+  over two frames of sound (`shell/libretro/audiostream.cpp` says so).
+  Holding the picture for it is then the right thing: it is the game's own
+  slowdown.
+
+**The log:** every 10 s of play, `[pace] N frames shown at H Hz: R
+repeated (S held for the speaker), K game frames skipped, M refreshes
+missed; sound +x%, sound per game frame +y%`, and at launch `[pace] screen ... locked` or `paced by
+the clock`. `CABINETOS_PACE=clock` brings back the old pacing for a
+comparison on the TV; headless (offscreen) runs always use the clock,
+because nothing there waits for a refresh.
+
+**Off the A9:** the screen's rate is read from SDL for every game, so a
+59.94, 50 or 120 Hz set is handled by the same rule (59.95 tested above;
+50 and 120 Hz untested, no such screen here). A machine that cannot keep
+up misses refreshes, and those are caught up exactly as the clock did.
+No screen rate known means the clock, as before.
 
 ### The emulator settings audit (#89) — 2026-09-27
 
