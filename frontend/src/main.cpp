@@ -7202,6 +7202,15 @@ int main(int argc, char** argv) {
     }
     bool shownAway = romm::serverAway();
     float onlineAgainClock = 5.0f;   // a failed reload waits before the next
+    // The library being fetched for a console that started offline (#88).
+    struct OnlineLoad {
+        std::thread th;
+        std::atomic<bool> running{false}, ready{false};
+        int forAccount = 0;
+        Library lib;
+        ~OnlineLoad() { if (th.joinable()) th.join(); }
+    };
+    static OnlineLoad onlineLoad;
     // SAVES A POWER CUT LEFT ON A DRIVE: an Xbox game's folder still holding
     // the note beforeStart wrote. Its saves come off now and go up as if the
     // game had just ended; the note names the person's folder and the game.
@@ -14428,31 +14437,59 @@ int main(int argc, char** argv) {
                 }
             }
             onlineAgainClock += dt;
-            if (!away && startedOffline && !playing && here() == Screen::Home &&
-                !accountsOpen && !launchJob.busy() && uploader.pending() == 0 &&
+            // THE LIBRARY IS FETCHED OFF THE FRAME THREAD, on a client of its
+            // own, and swapped in here once it is in hand: fetched in place,
+            // the picture froze for the length of the fetch and the fade below
+            // was spent during the freeze, so it read as a flash (MMagTech on
+            // the TV, 2026-10-05).
+            if (!away && startedOffline && !onlineLoad.running.load() && !onlineLoad.ready &&
                 onlineAgainClock >= 5.0f) {
                 onlineAgainClock = 0.0f;
+                onlineLoad.running = true;
+                onlineLoad.forAccount = accounts::activeId();
+                if (onlineLoad.th.joinable()) onlineLoad.th.join();
+                const std::string address = rommAddress;
+                onlineLoad.th = std::thread([address]() {
+                    romm::Client c;
+                    std::string e;
+                    Library fresh;
+                    if (c.setAddress(address, &e) && accounts::loadActiveToken(c))
+                        fresh = loadLibrary(c);
+                    onlineLoad.lib = std::move(fresh);
+                    onlineLoad.ready = true;
+                    onlineLoad.running = false;
+                });
+            }
+            if (onlineLoad.ready.load() && !playing && here() == Screen::Home && !accountsOpen &&
+                !launchJob.busy() && uploader.pending() == 0) {
+                onlineLoad.ready = false;
+                if (onlineLoad.th.joinable()) onlineLoad.th.join();
                 std::string e;
-                if (!liveClient.setAddress(rommAddress, &e)) {
+                if (onlineLoad.forAccount != accounts::activeId() ||
+                    onlineLoad.lib.platformTiles.empty()) {
+                    std::fprintf(stderr, "[offline] library not loaded; trying again\n");
+                } else if (!liveClient.setAddress(rommAddress, &e)) {
                     std::fprintf(stderr, "[offline] the server went again: %s\n", e.c_str());
                 } else {
                     adoptUser(liveClient);
-                    Library fresh = loadLibrary(liveClient);
-                    if (!fresh.platformTiles.empty()) {
-                        lib = std::move(fresh);
-                        libraryScreen.build(platformTiles, collectionTiles);
-                        startCoverFill();
-                        homeFromTheStart();
-                        refreshKeeps();
-                        startedOffline = false;
-                        images.forgetFailed();
-                        std::fprintf(stderr, "[offline] online again: %zu game(s) on Home\n",
-                                     cards.size());
-                        owedClock = 0.0f;
-                        uploader.resendOwed();
-                        backfillDrive(rommAddress);
-                    }
+                    lib = std::move(onlineLoad.lib);
+                    libraryScreen.build(platformTiles, collectionTiles);
+                    startCoverFill();
+                    homeFromTheStart();
+                    refreshKeeps();
+                    startedOffline = false;
+                    images.forgetFailed();
+                    // HOME ARRIVES AGAIN, as it does from the bar: the
+                    // shelves fade in and rise (#88's agreed sequence, "the
+                    // shelves fade in"). The change is the signal.
+                    tabSince = 0.0f;
+                    std::fprintf(stderr, "[offline] online again: %zu game(s) on Home\n",
+                                 cards.size());
+                    owedClock = 0.0f;
+                    uploader.resendOwed();
+                    backfillDrive(rommAddress);
                 }
+                onlineLoad.lib = Library{};
             }
         }
         if (const int outcome = uploader.stateOutcome.exchange(0); outcome != 0)
