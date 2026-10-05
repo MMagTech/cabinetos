@@ -14071,6 +14071,32 @@ cache and unsent saves when pairing to a different server?
   adding. Remove an account and the PIN are in Settings > Accounts only.
   Removing an account takes it off this console; the RomM user and its saves
   are untouched.
+- **REMOVING A PERSON DELETES THEIR FOLDER (#194, MMagTech 2026-10-04,
+  built 2026-10-05).** He pointed out that a person deleted and made again on
+  RomM gets a new id, so to RomM they are someone new, and a folder kept "just
+  in case" is left behind for good. Remove now:
+  1. asks "Remove <name>?" (focus on Cancel), behind the PIN, as before;
+  2. sends everything they still owe RomM (saves, states, screenshots, play
+     time) with THEIR OWN login, which is still on the console until the end.
+     They are never the person signed in (that is refused), so the ordinary
+     uploader, which sends only the signed-in person's, could not. Chosen
+     over making the remover switch to them first (option B), which needed a
+     sign-in as the person being removed;
+  3. if anything could not be sent (no server, login refused, a marker too old
+     to resend), asks "Some saves haven't reached RomM", Remove anyway or
+     Cancel, focus on Cancel. No count and no list (MMagTech);
+  4. releases their downloads (a game nobody else downloaded drops to the
+     cache, still playable until room is needed), deletes their folder, and
+     forgets the login LAST, so a power cut at any point leaves them listed
+     and Remove can be run again. Nothing on RomM is touched.
+  States sent this way are not cut to three on RomM; their next save
+  elsewhere tidies. `--remove-account N [--remove-anyway]` runs the same code
+  without the screens, for a test on a console whose PIN the tester does not
+  have. Tested on the A9 2026-10-05: on a copy (owner refused; no server and a
+  refused login both ask and delete nothing; Remove anyway released a
+  download only she had to the cache, left one MMagTech shares, and dropped
+  her from the list), then for real on Claire's account with one planted
+  owed save, which RomM accepted under her login before her folder went.
 - **THE PIN IS OFFERED WHEN THE SECOND ACCOUNT IS ADDED**, not in first run,
   because with one account a PIN protects nothing and first run should get a
   person to their games. Right after the new person's pairing succeeds, before

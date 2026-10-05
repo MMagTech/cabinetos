@@ -234,6 +234,63 @@ static int sendEverythingOwed(const romm::Client& c, const storage::User& who) {
     return cache::pendingCount(who) + static_cast<int>(playtime::owed(who).size());
 }
 
+// THE SENDING HALF OF REMOVE (#194): what `who` owes, with their own login
+// (they are never the person signed in; accounts::remove refuses that).
+// Returns how much is still owed afterwards. Blocks: off the frame thread.
+static int sendOwedBeforeRemoving(const accounts::Account& who, const std::string& addr) {
+    storage::User u;
+    u.id = who.id;
+    u.name = who.name;
+    u.avatar = who.avatar;
+    int left = cache::pendingCount(u) + static_cast<int>(playtime::owed(u).size());
+    std::fprintf(stderr, "[remove] %s owes RomM %d thing(s)\n", who.name.c_str(), left);
+    if (left == 0) return 0;
+    romm::Client c;   // ITS OWN, with THEIR login
+    std::string err;
+    if (addr.empty() || !c.setAddress(addr, &err))
+        std::fprintf(stderr, "[remove] no server to send %s's saves to\n", who.name.c_str());
+    else if (!c.loadToken(accounts::tokenPath(who.id)))
+        std::fprintf(stderr, "[remove] %s's login would not load\n", who.name.c_str());
+    else
+        left = sendEverythingOwed(c, u);
+    std::fprintf(stderr, "[remove] %s: %d still owed\n", who.name.c_str(), left);
+    return left;
+}
+
+// THE DELETING HALF OF REMOVE (#194), once what is owed has been sent or the
+// person removing has said Remove anyway. THE ORDER IS THE SAFETY: their
+// downloads are released (a game nobody else downloaded drops to the cache:
+// still playable, cleared when room is needed), then their folder goes, then
+// the login LAST, so a power cut at any point leaves them listed and Remove
+// can simply be run again. Nothing on RomM is touched.
+static bool removePersonNow(const accounts::Account& who, std::string* err) {
+    if (!accounts::canRemove(who.id, err)) return false;
+    storage::User u;
+    u.id = who.id;
+    u.name = who.name;
+    u.avatar = who.avatar;
+    int released = 0;
+    for (int romId : cache::keptRoms(u))
+        if (cache::unkeep(u, romId, /*keepTheBytes=*/true)) ++released;
+    const std::string dir = storage::userDir(u);
+    const bool had = storage::exists(dir);
+    const int64_t bytes = had ? storage::treeBytes(dir) : 0;
+    if (had && !storage::removeEntry(dir)) {
+        if (err) *err = "could not delete all of " + dir;
+        return false;
+    }
+    if (!accounts::remove(who.id, err)) {
+        if (err) *err = "folder deleted but the login stayed: " + *err;
+        return false;
+    }
+    std::fprintf(stderr,
+                 "[accounts] removed %d - %s: %d download(s) released, %.1f MB of their "
+                 "folder deleted%s, now %zu accounts\n",
+                 who.id, who.name.c_str(), released, bytes / 1048576.0,
+                 had ? "" : " (there was none)", accounts::all().size());
+    return true;
+}
+
 // Uploads, off the thread that draws.
 //
 // A game must never stop because a file is going to a server. On a LAN with a
@@ -4114,6 +4171,8 @@ int main(int argc, char** argv) {
     bool accountsTestMode = false;
     bool playersTestMode = false;
     bool playtimeTestMode = false;
+    int removeAccountId = 0;     // --remove-account N (#194)
+    bool removeAnyway = false;   // --remove-anyway
     int padsSeconds = 0;
     bool firstRunRulesMode = false;
     bool firstRunWriteMode = false;
@@ -4419,6 +4478,10 @@ int main(int argc, char** argv) {
             playersTestMode = true;
         } else if (SDL_strcmp(argv[i], "--playtime-test") == 0) {
             playtimeTestMode = true;
+        } else if (SDL_strcmp(argv[i], "--remove-account") == 0 && i + 1 < argc) {
+            removeAccountId = SDL_atoi(argv[++i]);
+        } else if (SDL_strcmp(argv[i], "--remove-anyway") == 0) {
+            removeAnyway = true;
         } else if (SDL_strcmp(argv[i], "--pads") == 0) {
             padsSeconds = 30;
             if (i + 1 < argc && argv[i + 1][0] != '-') padsSeconds = SDL_atoi(argv[++i]);
@@ -4564,6 +4627,34 @@ int main(int argc, char** argv) {
     if (accountsTestMode) return accountsTest();
     if (playersTestMode) return players::test();
     if (playtimeTestMode) return playtime::test();
+    // REMOVE A PERSON WITHOUT THE SCREENS (#194): exactly what Settings'
+    // Remove runs, for a test on a console whose PIN the tester does not
+    // have. When something is still owed it says what Remove would ask and
+    // deletes nothing, unless --remove-anyway (the "Remove anyway" answer).
+    if (removeAccountId > 0) {
+        const std::vector<accounts::Account> list = accounts::all();
+        const accounts::Account* who = accounts::find(list, removeAccountId);
+        std::string err;
+        if (!who) {
+            std::fprintf(stderr, "[remove] no account %d\n", removeAccountId);
+            return 1;
+        }
+        if (!accounts::canRemove(who->id, &err)) {
+            std::fprintf(stderr, "[remove] refused: %s\n", err.c_str());
+            return 1;
+        }
+        const int left = sendOwedBeforeRemoving(*who, rommAddress ? rommAddress : "");
+        if (left > 0 && !removeAnyway) {
+            std::fprintf(stderr, "[remove] would ask \"Some saves haven't reached RomM\"; "
+                                 "nothing deleted\n");
+            return 2;
+        }
+        if (!removePersonNow(*who, &err)) {
+            std::fprintf(stderr, "[remove] could not: %s\n", err.c_str());
+            return 1;
+        }
+        return 0;
+    }
     if (padsSeconds > 0) return players::report(padsSeconds);
     if (firstRunRulesMode) return firstRunRules();
     if (firstRunWriteMode) return firstRunWriteTest();
@@ -9013,6 +9104,53 @@ int main(int argc, char** argv) {
 
     // THE CURTAIN COMES DOWN ON THE STARTUP SCREEN, and pumpLeave does the
     // rest once it is down.
+    // REMOVING A PERSON DELETES THEIR FOLDER (#194, MMagTech 2026-10-04). A
+    // person deleted and made again on RomM gets a new id, so to RomM and to
+    // this console they are someone new, and a folder kept "just in case" is
+    // left behind for good. So Remove sends what they still owe RomM, with
+    // their own login (they are never the person signed in: accounts::remove
+    // refuses that), and only then deletes. Off the frame thread, because a
+    // server that does not answer costs curl's whole timeout.
+    struct RemoveJob {
+        std::mutex m;
+        std::atomic<bool> running{false};
+        bool finished = false;
+        int left = 0;   // still owed after trying
+        accounts::Account who;
+    };
+    auto removeJob = std::make_shared<RemoveJob>();
+
+    auto finishRemove = [&](const accounts::Account& who) {
+        std::string err;
+        if (!removePersonNow(who, &err)) {
+            std::fprintf(stderr, "[accounts] could not remove %d: %s\n", who.id, err.c_str());
+            menuNotice.say("Couldn't remove " + who.name, Tone::Problem);
+        }
+        refreshAccountRows();
+        buildSettings();
+    };
+
+    auto startRemove = [&, removeJob](const accounts::Account& who) {
+        if (removeJob->running.load()) return;
+        std::string err;
+        if (!accounts::canRemove(who.id, &err)) {
+            std::fprintf(stderr, "[accounts] could not remove %d: %s\n", who.id, err.c_str());
+            return;
+        }
+        removeJob->running = true;
+        { std::lock_guard<std::mutex> lk(removeJob->m);
+          removeJob->finished = false; removeJob->left = 0; removeJob->who = who; }
+        menuNotice.say("Removing " + who.name, Tone::Info);
+        const std::string addr = rommAddress ? rommAddress : "";
+        std::thread([removeJob, who, addr]() {
+            const int left = sendOwedBeforeRemoving(who, addr);
+            std::lock_guard<std::mutex> lk(removeJob->m);
+            removeJob->left = left;
+            removeJob->finished = true;
+            removeJob->running = false;
+        }).detach();
+    };
+
     auto startLeaving = [&](Leave what, const std::string& label) {
         leaving = what;
         leaveLabel = label;
@@ -9810,20 +9948,7 @@ int main(int argc, char** argv) {
                             // feed them everything with an explanation".
                             askChoice("Remove " + who.name + "?", "",
                                       {"Remove", "Cancel"}, 1, [&, who](int i) {
-                                          if (i != 0) return;
-                                          std::string err;
-                                          if (accounts::remove(who.id, &err))
-                                              std::fprintf(stderr,
-                                                           "[accounts] removed %d - %s, "
-                                                           "now %zu accounts\n",
-                                                           who.id, who.name.c_str(),
-                                                           accounts::all().size());
-                                          else
-                                              std::fprintf(stderr,
-                                                           "[accounts] could not remove "
-                                                           "%d: %s\n", who.id, err.c_str());
-                                          refreshAccountRows();
-                                          buildSettings();
+                                          if (i == 0) startRemove(who);
                                       });
                         };
                         const std::vector<accounts::Account> people = removableAccounts();
@@ -13015,6 +13140,27 @@ int main(int argc, char** argv) {
                                   err.c_str());
             }
             downloadById(id);
+        }
+        // A removal's sending done (#194): delete now, or ask first when
+        // something could not reach RomM. No count and no list (MMagTech,
+        // 2026-10-04). Focus on Cancel, which keeps everything.
+        {
+            bool fin = false;
+            int left = 0;
+            accounts::Account who;
+            {
+                std::lock_guard<std::mutex> lk(removeJob->m);
+                fin = removeJob->finished;
+                left = removeJob->left;
+                who = removeJob->who;
+                removeJob->finished = false;
+            }
+            if (fin && left == 0) finishRemove(who);
+            if (fin && left > 0)
+                askChoice("Some saves haven't reached RomM", "", {"Remove anyway", "Cancel"},
+                          1, [&, who](int k) {
+                              if (k == 0) finishRemove(who);
+                          });
         }
         // The pairing worker's answer, picked up on the frame thread. Nothing
         // here touches the network — it reads what the thread published.
