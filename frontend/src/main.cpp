@@ -6692,8 +6692,10 @@ int main(int argc, char** argv) {
         if (q.empty()) return;
         // OFFLINE (#88, MMagTech 2026-10-05): by name over the games on the
         // drive, the same games the offline Library shows. Results are simply
-        // what is here; nothing says what might be on the server.
-        if (romm::serverAway()) {
+        // what is here; nothing says what might be on the server. Also while
+        // the library is still the drive's, the server back but not yet
+        // loaded (the frame loop loads it on Home).
+        if (romm::serverAway() || startedOffline) {
             auto lower = [](std::string x) {
                 for (char& ch : x) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
                 return x;
@@ -14199,6 +14201,7 @@ int main(int argc, char** argv) {
                         homeFromTheStart();
                         refreshKeeps();
                         startedOffline = false;
+                        images.forgetFailed();
                         std::fprintf(stderr, "[offline] online again: %zu game(s) on Home\n",
                                      cards.size());
                         owedClock = 0.0f;
@@ -15771,7 +15774,7 @@ int main(int argc, char** argv) {
                 const float ph = barHeight - kInsetY * 2.0f;
                 const float px = leftOfChip - 12.0f - ow - kPadX * 2.0f;
                 renderer.draw(ui::Rect{px, barTop + kInsetY, ow + kPadX * 2.0f, ph, ph * 0.5f,
-                                       ui::Color::white(0.16f)});
+                                       ui::Color::white(0.22f)});
                 text.draw(renderer, kOffline, px + kPadX,
                           barTop + (barHeight - text.lineHeight(os, sc)) * 0.5f +
                               text.ascent(os, sc),
