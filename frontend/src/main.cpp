@@ -2804,7 +2804,13 @@ static Library loadLibrary(romm::Client& client) {
     std::stable_sort(lib.platformTiles.begin(), lib.platformTiles.end(),
                      [](const screens::Tile& a, const screens::Tile& b) {
                          if (a.enterable != b.enterable) return a.enterable;
-                         return a.title < b.title;
+                         // Ignoring case: a server owner's "Playstation" sorts
+                         // with "PlayStation 2", not after every capital P.
+                         return std::lexicographical_compare(
+                             a.title.begin(), a.title.end(), b.title.begin(), b.title.end(),
+                             [](unsigned char x, unsigned char y) {
+                                 return std::tolower(x) < std::tolower(y);
+                             });
                      });
 
     // Collections. The membership used to be resolved against a catalogue that
