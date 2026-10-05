@@ -12248,6 +12248,16 @@ its cover and a record beside it.
   "listing them would set up a tap that fails regardless of what is actually
   stored". Here that means a game whose core this console has not built.
 
+#### DECIDED, MMagTech 2026-10-04: the Library shows only systems this console plays (#117)
+
+Reverses the earlier "neither show everything nor hide quietly" rule for the
+Library's system tiles, as Cabinet's tvOS app does. A system with no emulator
+here (NoCore: Jaguar, ColecoVision, Vita) or left out by decision (Excluded:
+Game & Watch) gets no tile. Search and collections are unchanged, and a game
+from a hidden system still opens to a page that says why. A system whose core
+should be installed and is not (NotInstalled) keeps its greyed tile: that is a
+fault, and hiding it would hide the fault.
+
 #### DECIDED, MMagTech 2026-10-04: other apps' saves are not read (#124, closed)
 
 The console loads only saves and states tagged as Cabinet's or CabinetOS's

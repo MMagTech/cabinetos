@@ -2775,6 +2775,16 @@ static Library loadLibrary(romm::Client& client) {
             tile.detail = catalog::shortReason(cov);
             std::fprintf(stderr, "[library] %s (%d games) — %s\n", tile.title.c_str(),
                          p.romCount, cov.reason ? cov.reason : tile.detail.c_str());
+            // ONLY WHAT THIS CONSOLE CAN PLAY (#117, MMagTech 2026-10-04), as
+            // Cabinet's tvOS Library does: a system with no emulator here
+            // (Jaguar, ColecoVision, Vita) or left out by decision (Game &
+            // Watch) gets no tile. Search and collections still find its
+            // games, whose page says why. A core that SHOULD be here and is
+            // missing (NotInstalled) keeps its greyed tile, because that is a
+            // fault worth seeing, not a choice.
+            if (cov.support == catalog::Support::NoCore ||
+                cov.support == catalog::Support::Excluded)
+                continue;
             lib.platformTiles.push_back(std::move(tile));
             continue;
         }
