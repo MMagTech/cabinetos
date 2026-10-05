@@ -439,4 +439,9 @@ bool isPending(const storage::User& u, int romId, const std::string& fileName);
 // disk does not care whose upload is queued on it.
 int64_t pendingBytes();
 
+// How many things this one person still owes the server, sendable or not (a
+// marker from before 2026-09-26 cannot be sent again but is still owed).
+// Removing a person (#194) asks before throwing any of them away.
+int pendingCount(const storage::User& u);
+
 }  // namespace cache

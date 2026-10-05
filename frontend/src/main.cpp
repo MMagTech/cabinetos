@@ -157,6 +157,83 @@ const SampleEntry kSampleLibrary[] = {
 
 }  // namespace
 
+// ONE FILE TO RomM, as whoever `c` is signed in as: a save, a state (with its
+// picture) or a screenshot. The uploader sends the signed-in person's this way,
+// and removing a person (#194) sends theirs with their own login.
+static bool uploadOne(const romm::Client& c, int romId, bool isState, bool isScreenshot,
+                      const std::string& emulator, const std::string& fileName,
+                      const std::vector<uint8_t>& data, const std::string& shotName,
+                      const std::vector<uint8_t>& shot, std::string* err) {
+    return isScreenshot ? c.uploadScreenshot(romId, fileName, data, err)
+           : isState    ? c.uploadState(romId, emulator, fileName, data, err, shotName, shot)
+                        : c.uploadSave(romId, emulator, fileName, data, err);
+}
+
+// Every play session `who` owes, a hundred at a time, RomM's most. Whatever
+// RomM has now (new, or a copy of one it already had) or has refused for good
+// stops being owed.
+static bool sendPlaySessionsAs(const romm::Client& c, const storage::User& who,
+                               std::string* err) {
+    std::vector<playtime::Session> list = playtime::owed(who);
+    constexpr size_t kBatch = 100;
+    for (size_t at = 0; at < list.size(); at += kBatch) {
+        const size_t end = std::min(list.size(), at + kBatch);
+        std::vector<romm::Client::PlaySession> out;
+        for (size_t i = at; i < end; ++i)
+            out.push_back({list[i].romId, playtime::iso(list[i].startMs),
+                           playtime::iso(list[i].endMs), list[i].playedMs});
+        std::vector<int> outcome;
+        if (!c.postPlaySessions(out, &outcome, err)) return false;
+        std::vector<playtime::Session> done;
+        for (size_t i = at; i < end; ++i)
+            if (outcome[i - at] != 0) done.push_back(list[i]);
+        playtime::sent(who, done);
+        std::fprintf(stderr, "[playtime] sent %zu session(s), %zu taken\n", end - at,
+                     done.size());
+        if (done.size() < end - at) {
+            if (err) *err = "RomM did not say what became of some";
+            return false;
+        }
+    }
+    return true;
+}
+
+// EVERYTHING `who` STILL OWES RomM, sent now with their own login, before their
+// folder is deleted (#194). Synchronous: called off the frame thread. Stops at
+// the first failure, because a server that refused one or did not answer will
+// do the same for the rest, and each try can take curl's whole timeout.
+// States are not rotated to three here (the uploader's rotate): a person being
+// removed may keep a fourth on RomM, which their next save elsewhere tidies.
+// Returns how much is still owed afterwards: refused, unanswered, or a marker
+// from before 2026-09-26 that cannot be sent at all.
+static int sendEverythingOwed(const romm::Client& c, const storage::User& who) {
+    for (const cache::Owed& o : cache::owed(who)) {
+        const std::vector<uint8_t> data = cab::readBytes(o.localPath);
+        if (data.empty()) {
+            // Its file is gone, so nothing is left to send or to lose.
+            cache::clearPending(who, o.romId, o.fileName);
+            continue;
+        }
+        const std::vector<uint8_t> shot =
+            o.shotPath.empty() ? std::vector<uint8_t>() : cab::readBytes(o.shotPath);
+        std::string err;
+        const bool ok = uploadOne(c, o.romId, o.isState, o.isScreenshot, o.emulator,
+                                  o.fileName, data, o.shotName, shot, &err);
+        std::fprintf(stderr, "[remove] %s %s for %s%s%s\n", o.fileName.c_str(),
+                     ok ? "sent" : "not sent", who.name.c_str(), ok ? "" : ": ",
+                     ok ? "" : err.c_str());
+        if (!ok) break;
+        cache::clearPending(who, o.romId, o.fileName);
+    }
+    if (!playtime::owed(who).empty()) {
+        std::string err;
+        if (!sendPlaySessionsAs(c, who, &err))
+            std::fprintf(stderr, "[remove] play time not sent for %s: %s\n", who.name.c_str(),
+                         err.c_str());
+    }
+    return cache::pendingCount(who) + static_cast<int>(playtime::owed(who).size());
+}
+
 // Uploads, off the thread that draws.
 //
 // A game must never stop because a file is going to a server. On a LAN with a
@@ -404,13 +481,9 @@ private:
                 err = "its file is gone";
                 cache::clearPending(storage::currentUser(), job.romId, job.fileName);
             } else {
-                ok = job.isScreenshot
-                    ? client_->uploadScreenshot(job.romId, job.fileName, job.data, &err)
-                    : job.isState
-                    ? client_->uploadState(job.romId, job.emulator, job.fileName, job.data,
-                                           &err, job.shotName, job.shot)
-                    : client_->uploadSave(job.romId, job.emulator, job.fileName, job.data,
-                                          &err);
+                ok = uploadOne(*client_, job.romId, job.isState, job.isScreenshot,
+                               job.emulator, job.fileName, job.data, job.shotName, job.shot,
+                               &err);
                 // Cleared only on success. A failed upload leaves the marker,
                 // which is the point: the file is still on disk, it still has
                 // not reached RomM, and the console still owes it.
@@ -443,32 +516,8 @@ private:
         if (resendNow) resendOwed();
     }
 
-    // A hundred at a time, RomM's most. Whatever RomM has now (new, or a copy
-    // of one it already had) or has refused for good stops being owed.
     bool sendPlaySessions(std::string* err) {
-        const storage::User who = storage::currentUser();
-        std::vector<playtime::Session> list = playtime::owed(who);
-        constexpr size_t kBatch = 100;
-        for (size_t at = 0; at < list.size(); at += kBatch) {
-            const size_t end = std::min(list.size(), at + kBatch);
-            std::vector<romm::Client::PlaySession> out;
-            for (size_t i = at; i < end; ++i)
-                out.push_back({list[i].romId, playtime::iso(list[i].startMs),
-                               playtime::iso(list[i].endMs), list[i].playedMs});
-            std::vector<int> outcome;
-            if (!client_->postPlaySessions(out, &outcome, err)) return false;
-            std::vector<playtime::Session> done;
-            for (size_t i = at; i < end; ++i)
-                if (outcome[i - at] != 0) done.push_back(list[i]);
-            playtime::sent(who, done);
-            std::fprintf(stderr, "[playtime] sent %zu session(s), %zu taken\n", end - at,
-                         done.size());
-            if (done.size() < end - at) {
-                if (err) *err = "RomM did not say what became of some";
-                return false;
-            }
-        }
-        return true;
+        return sendPlaySessionsAs(*client_, storage::currentUser(), err);
     }
 
     romm::Client* client_ = nullptr;

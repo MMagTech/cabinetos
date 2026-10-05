@@ -658,6 +658,17 @@ bool isPending(const storage::User& u, int romId, const std::string& fileName) {
     return ::stat(path.c_str(), &st) == 0;
 }
 
+int pendingCount(const storage::User& u) {
+    if (!u.valid()) return 0;
+    DIR* d = ::opendir(storage::pendingDir(u).c_str());
+    if (!d) return 0;
+    int n = 0;
+    while (struct dirent* f = ::readdir(d))
+        if (f->d_name[0] != '.') ++n;
+    ::closedir(d);
+    return n;
+}
+
 int64_t pendingBytes() {
     int64_t total = 0;
     for (const storage::User& u : storage::knownUsers()) {
