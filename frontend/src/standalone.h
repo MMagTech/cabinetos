@@ -118,7 +118,8 @@ struct Emulator {
     // game means the disc did not boot.
     bool watchesDashboard;
     // IT WRITES THE SAVES STRAIGHT INTO THE PERSON'S FOLDER FOR THE GAME
-    // (Xenia's content root, Cemu's mlc), so a note there says a game is
+    // (Xenia's content root, Cemu's mlc, Eden's user/save, RPCS3's hdd0
+    // savedata; the last two since #213), so a note there says a game is
     // running until its saves are zipped. One still there at the next start
     // of the console, or of that game, means the last game never got its
     // saves sent, and the whole folder goes then (beforeStart).
@@ -193,7 +194,7 @@ std::string saveRoot(const Emulator& e, const std::string& saveDir);
 // the drive; eviction leaves such a folder alone (cache.cpp), and the next
 // start of the console finishes it after a crash or a power cut.
 //
-// Xenia and Cemu (`notesPlaying`): the note goes in the PERSON's folder for
+// Xenia, Cemu, Eden and RPCS3 (`notesPlaying`): the note goes in the PERSON's folder for
 // the game (`saveDir`), where the emulator writes the saves itself. A note
 // still there at the next start or the next launch of that game means the
 // last one never got its saves zipped, and the whole folder is sent then.

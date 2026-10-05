@@ -895,7 +895,8 @@ on the internal drive instead of re-fetched every time.
 **Where** games live is the user's choice, not a fixed path. A console with a
 small system drive and a big second drive is the normal shape, and a USB drive
 should work too. Settings offers a storage location; the rest of the system
-follows it.
+follows it. **Superseded (#81): there is no choice of location to make;
+plugging a drive in is all it takes (open question 14).**
 
 That has a consequence for anyone building Phase 4: **do not hard-code the game
 storage path.** It is configuration from the first line of code. Retrofitting
@@ -2275,6 +2276,10 @@ seat are confirmed; the ACL actually appearing on a real pad is not.
 ---
 
 ## Developer mode
+
+> **SUPERSEDED 2026-09-19 (#81):** there is no hidden developer mode. Settings
+> has an ordinary, visible File access row that gives SFTP, not a shell (open
+> question 9; issue #69). Kept below as the history of how it was first planned.
 
 CabinetOS has no terminal, no file browser and no package manager. That makes it
 a console, and it also makes it very hard to work on — and hard for anyone else
@@ -6029,7 +6034,8 @@ Install on real hardware — the GEEKOM A9 Max is the reference machine. Perform
 tuning, Bluetooth controller pairing, audio output, display and resolution
 handling.
 
-Ship **developer mode** as specified above: hidden, opt-in from Settings,
+**Superseded 2026-09-19 (#81): File access replaced developer mode; open
+question 9.** Ship **developer mode** as specified above: hidden, opt-in from Settings,
 enabling SSH and SFTP, visibly indicated while active, and genuinely stopped
 when switched off. This is what lets builds be pushed to a running console
 without reflashing it, and what makes the project contributable by anyone other
@@ -6441,6 +6447,8 @@ project stops being built over SSH.
 
 ### 10. Waking the machine, and turning the TV on
 **Raised: Phase 1. Largely DECIDED — HDMI-CEC is a requirement. Phase 6 tunes it.**
+**Superseded 2026-09-24 (#81): HDMI-CEC is shelved and its row is gone; see
+"HDMI-CEC IS SHELVED" under open question 31 and docs/SETTINGS.md.**
 
 Superseded by the hardware requirement above. CEC is no longer "use it if the
 machine happens to have it"; the console turns the television on and is woken by
@@ -12239,6 +12247,26 @@ its cover and a record beside it.
 - And **a kept game whose emulator is unavailable is hidden**, because
   "listing them would set up a tap that fails regardless of what is actually
   stored". Here that means a game whose core this console has not built.
+
+#### DECIDED, MMagTech 2026-10-04: the Library shows only systems this console plays (#117)
+
+Reverses the earlier "neither show everything nor hide quietly" rule for the
+Library's system tiles, as Cabinet's tvOS app does. A system with no emulator
+here (NoCore: Jaguar, ColecoVision, Vita) or left out by decision (Excluded:
+Game & Watch) gets no tile. Search and collections are unchanged, and a game
+from a hidden system still opens to a page that says why. A system whose core
+should be installed and is not (NotInstalled) keeps its greyed tile: that is a
+fault, and hiding it would hide the fault.
+
+#### DECIDED, MMagTech 2026-10-04: other apps' saves are not read (#124, closed)
+
+The console loads only saves and states tagged as Cabinet's or CabinetOS's
+(`main.cpp`, every fetch filters on the tag). Reading RomM's web player's or
+other apps' saves means too many emulator, version and format combinations to
+test, and a save that loads wrongly is worse than none. Considered and
+rejected: a best-effort fallback to another app's newest save, which would
+promise something unsupported. The README says plainly that such progress
+does not carry over and is left untouched on the server.
 
 #### Saves offline: the disk always wins first
 

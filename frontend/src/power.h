@@ -20,6 +20,8 @@
 
 #pragma once
 
+#include <string>
+
 namespace power {
 
 // Take the power key (and the Sleep key some keyboards have) from logind.
@@ -36,6 +38,12 @@ const char* name(Action a);
 // Asks logind, on a worker so the frame loop is not held. Says on stderr what
 // logind answered.
 void act(Action a);
+
+// WHAT TO SAY WHEN LOGIND SAID NO (#241), once: "" when nothing was refused
+// since the last ask. Polled from the frame thread, where the pill is. When a
+// block inhibitor is the reason, it names what holds it in the holder's own
+// words ("Can't restart: Formatting /dev/sda"), which is what logind reports.
+std::string refusal();
 
 // ---- Being warned before the machine goes down ----------------------------
 //

@@ -1246,9 +1246,22 @@ Result DetailScreen::key(Nav n) {
         if (next != slot_) { slot_ = next; refocus(); }
         return {};
     }
-    if (n == Nav::Activate && rows_[slot_].enabled)
+    // A row that is showing a download's progress does nothing (#185): the
+    // game counts as downloaded from the first byte, so the row under the
+    // progress is Remove download, and what removing a half-written game
+    // should do was never designed. It is answered when the download lands.
+    if (n == Nav::Activate && rows_[slot_].enabled && !rowBusy(slot_))
         return {rows_[slot_].action, game_.romId};
     return {};
+}
+
+bool DetailScreen::rowBusy(int i) const {
+    if (!progress_.active || i < 0 || i >= static_cast<int>(rows_.size())) return false;
+    if (progress_.action == rows_[i].action) return true;
+    // COMING BACK TO A DOWNLOAD (#185). A Download records the keep before the
+    // first byte moves, so a page opened mid-download is built as kept and
+    // has Remove download where Download was. The progress goes on that row.
+    return progress_.action == Action::Download && rows_[i].action == Action::RemoveDownload;
 }
 
 void DetailScreen::draw(Ctx& c) {
@@ -1469,7 +1482,7 @@ void DetailScreen::drawGlass(Ctx& c) {
         // THE ROW IS THE PROGRESS BAR. Not a bar drawn inside the row — the
         // row's own surface fills from the left, so the thing you pressed is
         // the thing that is loading rather than a widget that appeared on it.
-        const bool busy = progress_.active && progress_.action == rows_[i].action;
+        const bool busy = rowBusy(i);
         std::string label = rows_[i].label;
         if (busy) {
             if (progress_.total > 0) {

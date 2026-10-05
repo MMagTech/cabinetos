@@ -50,7 +50,11 @@ const Emulator kEmulators[] = {
      // and the GPU after that while one runs (main_window.cpp,
      // UpdateWindowTitle).
      "Eden |", 5, nullptr,
-     "nsp|xci", "keys", false, false, false, false, false, false},
+     // notesPlaying (#213): Eden writes its saves straight into the person's
+     // folder (user/save/), as Xenia and Cemu do, so a session cut off by a
+     // crash, a power cut or an app restart is sent at the next start or
+     // launch instead of being overwritten by the older copy on RomM.
+     "nsp|xci", "keys", false, false, false, false, false, true},
 
     // PLAYSTATION 3. Its log sits beside its cache, in the game's folder
     // (XDG_CACHE_HOME, rpcs3/ appended: Utilities/File.cpp, get_cache_dir).
@@ -65,7 +69,9 @@ const Emulator kEmulators[] = {
      "Failed to locate the game license file",
      "Emulation has been frozen",
      nullptr, 0, nullptr,
-     "iso|pkg", "firmware", true, true, true, false, false, false},
+     // notesPlaying (#213): its savedata is in the person's folder too
+     // (hdd0/home/<user>/savedata), the same case as Eden's.
+     "iso|pkg", "firmware", true, true, true, false, false, true},
 
     // ORIGINAL XBOX. xemu keeps no log of its own; what it prints is it. A
     // game is a folder, as a PS3 game is, because its hard drive lives beside

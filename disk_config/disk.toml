@@ -1,11 +1,13 @@
 # Disk layout for the qcow2 VM image used to test Phase 1.
 #
-# 20 GiB is enough for the OS with room to spare. Real hardware gets far more,
-# and the game cache is sized at install time on the target machine's own drive.
+# 64 GiB (#118). 20 GiB held the OS, but the test VM also builds cores and
+# frontends and keeps two deployments: on 2026-10-04 its 22 GB /var was 17 GB
+# used. Real hardware gets far more, and the game cache is sized at install
+# time on the target machine's own drive.
 
 [[customizations.filesystem]]
 mountpoint = "/"
-minsize = "20 GiB"
+minsize = "64 GiB"
 
 # A user exists so the VM test is possible at all: Phase 1's done-criterion is
 # "boots to a console prompt", and a prompt you cannot log into proves less than

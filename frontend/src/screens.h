@@ -581,6 +581,8 @@ private:
         std::string value;   // on the right, as a Settings row's is
     };
     void rebuildRows();
+    // Whether row `i` is the one showing the download's progress.
+    bool rowBusy(int i) const;
 
     GameDetail game_;
     std::vector<Row> rows_;

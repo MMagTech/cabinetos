@@ -446,7 +446,13 @@ bool Client::fetchPlatforms(std::vector<Platform>* out, std::string* err) {
         json_object* o = json_object_array_get_idx(root, i);
         Platform p;
         p.id = static_cast<int>(jint(o, "id"));
-        p.name = jstr(o, "name");
+        // The name the server's owner gave it, else RomM's own: what a game's
+        // card already shows (`platform_display_name`, above), so a tile and
+        // its games agree. MMagTech's library renames five ("Sega Genesis" for
+        // "Sega Mega Drive/Genesis"). Labels only: folders on the drive come
+        // from `fs_slug` and the catalogue from `slug`, so nothing moves.
+        p.name = jstr(o, "display_name");
+        if (p.name.empty()) p.name = jstr(o, "name");
         p.slug = jstr(o, "slug");
         p.fsSlug = jstr(o, "fs_slug");
         p.romCount = static_cast<int>(jint(o, "rom_count"));
