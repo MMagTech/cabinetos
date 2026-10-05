@@ -8818,6 +8818,25 @@ int main(int argc, char** argv) {
             // 2026-10-03: nothing here for somebody who never set Steam up.
             if (i == 0 && steam::isSetUp())
                 store.push_back({K::Action, SetSteam, "Steam", gb(steam::sliceBytes()), ""});
+            // WHAT NOTHING CLEANS UP, under the main drive (#133): everyone's
+            // saves, and the emulators' own files (BIOS and firmware, their
+            // settings and shader caches, and the graphics driver's shared
+            // shader cache, which Mesa caps at 1 GB itself). Counted, not
+            // offered: none of it is cache the console may throw away, and
+            // eviction never sees it. Downloads are their own row below.
+            if (i == 0) {
+                store.push_back({K::Info, 0, "Saves",
+                                 screens::sizeText(storage::treeBytes(storage::root() + "/users")), ""});
+                const char* xdg = std::getenv("XDG_CACHE_HOME");
+                const char* home = std::getenv("HOME");
+                const std::string mesa =
+                    (xdg && *xdg ? std::string(xdg) : std::string(home ? home : "") + "/.cache") +
+                    "/mesa_shader_cache";
+                const int64_t emu = storage::treeBytes(storage::emulatorsDir()) +
+                                    storage::treeBytes(storage::biosDir()) +
+                                    storage::treeBytes(mesa);
+                store.push_back({K::Info, 0, "Emulator files", screens::sizeText(emu), ""});
+            }
         }
         // DRIVES FOUND AND NOT USABLE, with the reason. A new internal SSD
         // arrives blank; without this row it would be invisible, because
