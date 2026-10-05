@@ -2045,8 +2045,9 @@ they happen at Home too and predate this. Not the see-through window
 (measured opaque and see-through, two minutes each: no difference). Read
 in gamescope 3.16.28's source: it wakes about 4 to 5 ms before each
 refresh to compose, and its estimate of that time only grows after a
-frame has already missed; a 4K composition on a GPU idling at low clocks
-is the likely overrun. #253, with what to try.
+frame has already missed. Locking the GPU's clocks high did not help
+(Home, a minute each: 11, 12, 6 late as shipped; 3, 2, 46 locked), so the
+cause is open. #253. High-refresh monitors (144 Hz, VRR) are #255.
 
 **N64 and Dreamcast still hold a frame about twice a second, locked or
 not** (measured both ways: Hydro Thunder 17 to 21 holds per 10 s on the
