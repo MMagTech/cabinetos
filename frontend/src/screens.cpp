@@ -1656,9 +1656,19 @@ void DetailScreen::drawGlass(Ctx& c) {
         const float u = favS_ * 0.8f * s;   // the cup's size
         const float cx = x + h * 0.5f + u * 0.5f, cy = y0 + h * 0.5f;
         const ui::Color ink = ui::Color::white(strength);
-        c.r.draw(ui::Rect{cx - u * 0.40f, cy - u * 0.50f, u * 0.80f, u * 0.55f, u * 0.26f, ink});
-        c.r.draw(ui::Rect{cx - u * 0.07f, cy, u * 0.14f, u * 0.28f, 0.0f, ink});
-        c.r.draw(ui::Rect{cx - u * 0.28f, cy + u * 0.26f, u * 0.56f, u * 0.16f, u * 0.05f, ink});
+        // A flat rim over a round bowl, a handle each side, a stem and a foot.
+        const float top = cy - u * 0.50f;
+        c.r.draw(ui::Rect{cx - u * 0.31f, top, u * 0.62f, u * 0.31f, u * 0.04f, ink});
+        c.r.draw(ui::Rect{cx - u * 0.31f, top - u * 0.01f, u * 0.62f, u * 0.62f, u * 0.31f, ink});
+        for (float side : {-1.0f, 1.0f}) {
+            ui::Rect handle{cx + side * u * 0.33f - u * 0.15f, top + u * 0.06f, u * 0.30f,
+                            u * 0.30f, u * 0.15f, ui::Color::white(0)};
+            handle.border = u * 0.07f;
+            handle.borderColor = ink;
+            c.r.draw(handle);
+        }
+        c.r.draw(ui::Rect{cx - u * 0.06f, top + u * 0.56f, u * 0.12f, u * 0.26f, 0.0f, ink});
+        c.r.draw(ui::Rect{cx - u * 0.24f, top + u * 0.80f, u * 0.48f, u * 0.14f, u * 0.04f, ink});
         const std::string v = achievementsValue();
         c.text.draw(c.r, v, cx + u * 0.5f + 14.0f * s,
                     cy + c.text.ascent(ui::TextStyle::Callout, c.sc) * 0.36f,

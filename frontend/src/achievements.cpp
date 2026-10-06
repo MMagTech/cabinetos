@@ -600,9 +600,40 @@ void useAccount(int accountId) {
     loginWithToken();
 }
 
-bool signedIn() { return gAccount > 0 && !gUser.empty(); }
+bool gSample = false;
+uint64_t gSampleFrames = 0;
 
-std::string username() { return signedIn() ? gUser : std::string(); }
+GameList sampleList() {
+    // Real badges from RetroAchievements' own server, so the pictures are the
+    // shape and weight real ones are; the words are made up.
+    static const char* kTitles[] = {"First Steps", "Getting Warmer", "Collector",
+                                    "No Time to Lose", "Hidden Path", "Perfect Run"};
+    GameList l;
+    l.known = true;
+    for (int i = 0; i < 40; ++i) {
+        Achievement a;
+        a.id = 1000 + i;
+        a.title = std::string(kTitles[i % 6]) + (i >= 6 ? " " + std::to_string(i / 6 + 1) : "");
+        a.description = "Reach the end of stage " + std::to_string(i + 1) + " without a continue";
+        a.badgeUrl = "https://media.retroachievements.org/Badge/" + std::to_string(250000 + i * 7) + ".png";
+        a.lockedBadgeUrl = "https://media.retroachievements.org/Badge/" +
+                           std::to_string(250000 + i * 7) + "_lock.png";
+        a.points = (i % 4 == 0) ? 25 : (i % 3 == 0) ? 10 : 5;
+        a.unlocked = (i % 3 == 0) && i < 36;
+        l.items.push_back(std::move(a));
+    }
+    order(l);
+    return l;
+}
+
+bool signedIn() { return gSample || (gAccount > 0 && !gUser.empty()); }
+
+std::string username() { return gSample ? std::string("sample") : signedIn() ? gUser : std::string(); }
+
+void useSample() {
+    gSample = true;
+    std::fprintf(stderr, "[ra] sample mode: a made-up set, nothing sent\n");
+}
 
 void signIn(const std::string& user, const std::string& password,
             std::function<void(bool ok, const std::string& why)> done) {
@@ -675,8 +706,11 @@ uint32_t consoleFor(const std::string& s) {
     return it == kConsole.end() ? 0 : it->second;
 }
 
+bool coreReadable(const std::string& manifestCore) { return manifestCore != "mame2003_plus"; }
+
 void beginGame(const std::string& raHash, const std::string& platformSlug, bool ps2) {
     endGame();
+    gSampleFrames = 0;
     const uint32_t console = consoleFor(platformSlug);
     if (console == 0) return;
     if (!signedIn() && std::getenv("CABINETOS_RA_PROBE")) {
@@ -691,7 +725,7 @@ void beginGame(const std::string& raHash, const std::string& platformSlug, bool 
         if (ps2) ps2::setFrameCallback(ps2Frame, nullptr);
         return;
     }
-    if (!gClient || !signedIn()) return;
+    if (!gClient || !signedIn() || gSample) return;
     if (raHash.empty()) {
         std::fprintf(stderr, "[ra] RomM has no RetroAchievements hash for this game\n");
         return;
@@ -760,6 +794,21 @@ void idle() {
     if (gClient) rc_client_idle(gClient);
 }
 
+// The sample unlock, counted in the frame loop's own calls (main.cpp calls
+// frame() or idle() every frame of a game).
+void sampleTick() {
+    if (!gSample || ++gSampleFrames != 300) return;
+    std::fprintf(stderr, "[ra] sample unlock\n");
+    const GameList l = sampleList();
+    Popup p;
+    p.title = l.items[3].title;
+    p.detail = l.items[3].description;
+    p.points = l.items[3].points;
+    p.badgeUrl = l.items[3].badgeUrl;
+    std::lock_guard<std::mutex> lk(gPopupMutex);
+    gPopups.push_back(std::move(p));
+}
+
 bool takePopup(Popup* out) {
     std::lock_guard<std::mutex> lk(gPopupMutex);
     if (gPopups.empty()) return false;
@@ -771,6 +820,10 @@ bool takePopup(Popup* out) {
 // --- The game's page --------------------------------------------------------------
 
 void fetchList(const std::string& raHash, std::function<void(const GameList&)> done) {
+    if (gSample) {
+        done(sampleList());
+        return;
+    }
     if (!signedIn() || raHash.empty()) {
         done(GameList{});
         return;

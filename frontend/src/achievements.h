@@ -72,6 +72,13 @@ void signOut();
 // RetroAchievements' number for a platform, 0 for one it does not cover.
 uint32_t consoleFor(const std::string& platformSlug);
 
+// Whether a core lets a frontend read the game's memory at all. MAME
+// 2003-Plus returns nothing from retro_get_memory_data and sends no map, so a
+// game it runs can earn nothing here even when RetroAchievements has a set:
+// its page says "None" rather than a count that could never move. Measured on
+// the A9 with CABINETOS_RA_PROBE, 2026-10-06; every other core gives memory.
+bool coreReadable(const std::string& manifestCore);
+
 // After the core has loaded the game. Does nothing unless somebody is signed
 // in, the platform is covered and RomM gave a hash. `ps2` reads PCSX2's
 // memory through the bridge instead of the libretro core's.
@@ -86,6 +93,8 @@ void frame();
 // Instead of frame() while the game is not running (the pause menu): keeps the
 // session alive without reading memory.
 void idle();
+// --ra-sample only: once a frame while a game is up.
+void sampleTick();
 
 // Microseconds the per-frame check took, averaged over the last second, for
 // the log; 0 when no game is being checked.
@@ -126,6 +135,11 @@ struct GameList {
 // frame thread. The last answer is kept, per person and game, so the page
 // still has it offline.
 void fetchList(const std::string& raHash, std::function<void(const GameList&)> done);
+
+// --ra-sample (main.cpp): signed in as "sample", a made-up set of 40 with 12
+// unlocked on every page, and one unlock five seconds into any game. Nothing
+// is sent anywhere. For captures only.
+void useSample();
 
 // A badge's bytes, for the image cache's workers. Blocking; any thread.
 std::vector<uint8_t> fetchBytes(const std::string& url);

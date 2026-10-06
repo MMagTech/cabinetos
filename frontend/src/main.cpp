@@ -4653,6 +4653,10 @@ int main(int argc, char** argv) {
     bool lookDark = false;
     // Walks the notification pill through every message it can show.
     bool noticeGallery = false;
+    // --ra-sample: RetroAchievements as for somebody signed in, with a made-up
+    // set on every game's page and an unlock a few seconds into a game, so
+    // the page and the pop-up can be captured without an account (#74).
+    bool raSample = false;
     // `--menu-fade 4` stretches the menus' fade so a person can watch it in
     // slow motion and say what is wrong with it. Tuning only.
     float overlayFadeSeconds = kOverlayFade;
@@ -4815,6 +4819,8 @@ int main(int argc, char** argv) {
             lookColour = argv[++i];
         } else if (SDL_strcmp(argv[i], "--dark") == 0) {
             lookDark = true;
+        } else if (SDL_strcmp(argv[i], "--ra-sample") == 0) {
+            raSample = true;
         } else if (SDL_strcmp(argv[i], "--notice-gallery") == 0) {
             noticeGallery = true;
         } else if (SDL_strcmp(argv[i], "--menu-rise") == 0 && i + 1 < argc) {
@@ -6224,6 +6230,7 @@ int main(int argc, char** argv) {
         // person who chose to (achievements.h).
         ra::init(update::bootedVersion());
         ra::useAccount(accounts::activeId());
+        if (raSample) ra::useSample();
         // FOUR SMALL CALLS NOW, not the catalogue — open question 28. This
         // used to count games onto the screen as they arrived, because it took
         // several seconds and a still sentence is indistinguishable from a
@@ -7977,6 +7984,7 @@ int main(int argc, char** argv) {
         d.coverLarge = cards[cardIndex].coverLarge;
         d.art = cards[cardIndex].art;
         std::string raHash, raPlatform;
+        bool raReadable = true;
         for (const auto& g : games) {
             if (g.id != d.romId) continue;
             raHash = g.raHash;
@@ -7984,6 +7992,7 @@ int main(int argc, char** argv) {
             d.platform = g.platformName;
             d.sizeBytes = g.sizeBytes;
             const catalog::Coverage cov = catalog::coverageFor(g);
+            raReadable = !cov.core || ra::coreReadable(cov.core);
             d.playable = cov.support == catalog::Support::Playable;
             d.reason = cov.reason ? cov.reason : "not playable on this console";
             break;
@@ -8020,7 +8029,7 @@ int main(int argc, char** argv) {
         if (ra::signedIn()) {
             screens::DetailScreen::Achievements a;
             a.show = true;
-            if (raHash.empty() || ra::consoleFor(raPlatform) == 0) {
+            if (raHash.empty() || ra::consoleFor(raPlatform) == 0 || !raReadable) {
                 a.known = a.none = true;
                 detailScreen.setAchievements(a);
             } else {
@@ -14205,6 +14214,7 @@ int main(int argc, char** argv) {
             // Frozen, rewinding or PlayStation 2 (which checks on PCSX2's
             // own thread): the session is kept alive without reading memory.
             if (frozen || rewinding || core.isPs2()) ra::idle();
+            ra::sampleTick();
             core.uploadFrame();
 
             if (audioStream) {
@@ -14712,6 +14722,8 @@ int main(int argc, char** argv) {
                 raToast.on = true;
                 raToast.age = 0.0f;
                 sound::playChime();
+                std::fprintf(stderr, "[ra] pop-up: %s%s\n", raToast.p.title.c_str(),
+                             badge ? "" : " (badge not in yet)");
             }
         }
         // ---- System update: root's answers, the weekly check, the panel ----

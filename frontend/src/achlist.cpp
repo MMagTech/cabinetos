@@ -122,7 +122,8 @@ void AchievementList::draw(Ctx& c) {
             c.r.draw(ui::Rect{bx, by, kBadge, kBadge, 12.0f, ui::Color::white(0.08f * vis)});
         }
         const float tx = bx + kBadge + 24.0f;
-        const std::string pts = std::to_string(it.points);
+        const std::string pts =
+            std::to_string(it.points) + (it.points == 1 ? " point" : " points");
         const float pw = c.text.measure(pts, TextStyle::Callout, sc);
         const float textW = rowX + rowW - 24.0f - pw - 24.0f - tx;
         const float t3 = c.text.lineHeight(TextStyle::Title3, sc);
