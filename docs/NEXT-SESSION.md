@@ -11,11 +11,9 @@ specification is `docs/PROJECT.md`; the order is `docs/ROADMAP.md`.
 
 ## Where things stand
 
-2026-10-06: RetroAchievements (#74, milestone 5) and the Search fixes (#277)
-are on `retroachievements`, PR #278, judged on the TV that evening and pushed
-to `testing`. **Merge only on MMagTech's word**, after the testing image is
-verified from the A9 and he has picked its checks. The decisions are
-docs/PROJECT.md open question 38.
+2026-10-06: RetroAchievements (#74) and the Search fixes (#277) are merged
+(PR #278) and the tested image 2026.10.06.4 is promoted. The decisions are
+docs/PROJECT.md open question 38. Milestone 5 is done.
 
 The A9 sits at the LG C1, on Wi-Fi at **192.168.1.109**: run
 `tools/ui-loop.sh` with `CABINETOS_A9=cabinet@192.168.1.109`.
@@ -28,7 +26,8 @@ Milestone 6, UI polish (docs/ROADMAP.md), in this order:
    Lessons file: frontend.md (words on screen).
 2. **Sound that dies until a restart (#228):** the TV's HDMI audio chip
    failing to power down.
-3. **Offer the sleep this machine can really do (#132).**
+
+#132 (sleep) moved to After first release.
 
 Never run a headless frontend on the A9 while MMagTech is at the TV: it reads
 the same controllers (docs/lessons/testing.md). After a testing image installs,
