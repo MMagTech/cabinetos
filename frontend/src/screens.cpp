@@ -934,8 +934,15 @@ void GridScreen::drawGlass(Ctx& c) {
 // ---------------------------------------------------------------------------
 
 void SearchScreen::open() {
+    // Everything setQuery("") drops, not only the box and the covers: a state
+    // and total left from the last visit drew "0 of 200 games" over an empty
+    // box (#277).
     query_.clear();
     results_.clear();
+    resultsFor_.clear();
+    total_ = 0;
+    state_ = State::Empty;
+    failure_.clear();
     slot_ = 0;
     focused_ = false;
     scroll_.from = scroll_.to = 0.0f;

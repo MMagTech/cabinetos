@@ -11000,6 +11000,7 @@ int main(int argc, char** argv) {
         } else if (d == 2) {
             searchScreen.open();
             searchTyped.clear();
+            searchPending.clear();
             stack.push_back(Screen::Search);
             ui::Keyboard::Config cfg;
             cfg.title = "Search";
