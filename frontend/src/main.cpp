@@ -85,6 +85,8 @@
 #include "xboxhdd.h"
 #include "setup.h"
 #include "accounts.h"
+#include "achievements.h"
+#include "achlist.h"
 #include "storage.h"
 #include "text.h"
 #include "overlaywin.h"
@@ -702,6 +704,8 @@ private:
 // the point, so they never overwrite.
 struct GameSession {
     int romId = 0;
+    // RomM's `ra_hash` for RetroAchievements (achievements.h); empty when none.
+    std::string raHash;
     // The core's manifest name, for the pause menu's Picture quality row
     // (quality::hasLevels). Standalones set it to the emulator's.
     std::string core;
@@ -1519,6 +1523,30 @@ struct MenuNotice {
 };
 using Tone = MenuNotice::Tone;
 
+// A RETROACHIEVEMENTS UNLOCK (#74), over the game: it fades in at the top
+// right of the screen, says what was earned, and fades out on its own. It
+// never pauses the game or takes a button (MMagTech, 2026-10-06). One at a
+// time, in the order they were earned. It waits up to a second and a half
+// for its badge so the picture and the chime arrive together.
+struct AchievementToast {
+    ra::Popup p;
+    bool waiting = false;   // taken, badge not in yet
+    bool on = false;
+    // Whether it shows its badge. Decided as it appears and kept: no badge
+    // in by then (offline, first time) and the card is words only, with no
+    // empty square, and it does not grow if the picture lands later.
+    bool badge = false;
+    float age = 0.0f;
+    static constexpr float kIn = 0.35f, kHold = 4.0f, kOut = 0.6f, kBadgeWait = 1.5f;
+    float alpha() const {
+        if (!on) return 0.0f;
+        if (age < kIn) return age / kIn;
+        if (age < kIn + kHold) return 1.0f;
+        return std::max(0.0f, 1.0f - (age - kIn - kHold) / kOut);
+    }
+    bool over() const { return age >= kIn + kHold + kOut; }
+};
+
 // CREDITS AND LICENCES, Settings > About. One line per project whose work
 // this console is: what it does, and its licence. The same facts as
 // docs/LICENCES.md, which is the record; change one, change both. One list,
@@ -1568,6 +1596,7 @@ constexpr Credit kCredits[] = {
     {"libcurl", "Talking to RomM \xC2\xB7 curl"},
     {"json-c", "RomM's answers \xC2\xB7 MIT"},
     {"libarchive", "Game archives \xC2\xB7 BSD 2-clause"},
+    {"rcheevos", "RetroAchievements \xC2\xB7 MIT"},
     {"zlib", "Compression \xC2\xB7 zlib"},
     {"Noto Sans", "The type \xC2\xB7 OFL 1.1"},
 };
@@ -2027,6 +2056,8 @@ struct LaunchJob {
     // RomM's `title_id`, or the code this console read off the file when RomM
     // had none: Wii asks it which controller each player's port holds (wii.h).
     std::string titleId;
+    // RomM's `ra_hash`, for RetroAchievements (achievements.h).
+    std::string raHash;
     // The server's own file name for this game, with its extension removed —
     // `Ikaruga (Japan)`, `lethalen`. It is what a save's row on RomM is named
     // after; see saveRowName.
@@ -2068,6 +2099,7 @@ static std::string gameRecordJson(const romm::Game& g) {
     json_object_object_add(o, "path_cover_small", json_object_new_string(g.coverPath.c_str()));
     json_object_object_add(o, "path_cover_large", json_object_new_string(g.coverLargePath.c_str()));
     json_object_object_add(o, "title_id", json_object_new_string(g.titleId.c_str()));
+    json_object_object_add(o, "ra_hash", json_object_new_string(g.raHash.c_str()));
     json_object_object_add(o, "fs_size_bytes", json_object_new_int64(g.sizeBytes));
     const std::string out = json_object_to_json_string_ext(o, JSON_C_TO_STRING_PRETTY);
     json_object_put(o);
@@ -2242,6 +2274,7 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
     job.biosMissing = false;
     job.platformSlug = game.platformSlug;
     job.titleId = game.titleId;
+    job.raHash = game.raHash;
     job.fsStem = game.fsName;
     if (const size_t dot = job.fsStem.find_last_of('.'); dot != std::string::npos)
         job.fsStem.erase(dot);
@@ -4623,6 +4656,10 @@ int main(int argc, char** argv) {
     bool lookDark = false;
     // Walks the notification pill through every message it can show.
     bool noticeGallery = false;
+    // --ra-sample: RetroAchievements as for somebody signed in, with a made-up
+    // set on every game's page and an unlock a few seconds into a game, so
+    // the page and the pop-up can be captured without an account (#74).
+    bool raSample = false;
     // `--menu-fade 4` stretches the menus' fade so a person can watch it in
     // slow motion and say what is wrong with it. Tuning only.
     float overlayFadeSeconds = kOverlayFade;
@@ -4785,6 +4822,8 @@ int main(int argc, char** argv) {
             lookColour = argv[++i];
         } else if (SDL_strcmp(argv[i], "--dark") == 0) {
             lookDark = true;
+        } else if (SDL_strcmp(argv[i], "--ra-sample") == 0) {
+            raSample = true;
         } else if (SDL_strcmp(argv[i], "--notice-gallery") == 0) {
             noticeGallery = true;
         } else if (SDL_strcmp(argv[i], "--menu-rise") == 0 && i + 1 < argc) {
@@ -5481,6 +5520,11 @@ int main(int argc, char** argv) {
         sound::levelFromWord(prefs::get("interface_sounds", ""), &lv);
         sound::setLevel(lv);
         std::fprintf(stderr, "[sound] interface sounds %s\n", sound::levelName(lv));
+    }
+    {
+        sound::Level chime = sound::Level::Medium;
+        sound::levelFromWord(prefs::get("achievement_sound", ""), &chime);
+        sound::setChimeLevel(chime);
     }
 
     // GLES 3.0, which is what the libretro hardware-rendered cores ask for via
@@ -6185,6 +6229,11 @@ int main(int argc, char** argv) {
                          who->name.c_str());
         if (libFromDrive) adoptAccountOffline(accounts::activeId());
         else adoptUser(liveClient);
+        // RetroAchievements: started for everyone, signed in only for a
+        // person who chose to (achievements.h).
+        ra::init(update::bootedVersion());
+        ra::useAccount(accounts::activeId());
+        if (raSample) ra::useSample();
         // FOUR SMALL CALLS NOW, not the catalogue — open question 28. This
         // used to count games onto the screen as they arrived, because it took
         // several seconds and a still sentence is indistinguishable from a
@@ -6228,6 +6277,22 @@ int main(int argc, char** argv) {
             // copy kept so the chip and the switcher show faces offline (#88).
             // A STATE'S PICTURE ON THIS CONSOLE (#88): a file, read as one.
             if (key.rfind(storage::root() + "/", 0) == 0) return cab::readBytes(key);
+            // A RETROACHIEVEMENTS BADGE (#74): from their server, and a copy
+            // kept so a game's page shows its badges offline.
+            if (ra::isBadgeUrl(key)) {
+                // The whole path after the host: a badge and a game's icon
+                // can share a file name in different folders.
+                const size_t host = key.find('/', key.find("//") + 2);
+                const std::string kept = covercache::dir() + "/achievements/badges/" +
+                                         storage::safeSegment(key.substr(host + 1));
+                if (std::vector<uint8_t> have = cab::readBytes(kept); !have.empty())
+                    return have;
+                std::vector<uint8_t> got = ra::fetchBytes(key);
+                if (got.empty()) return got;
+                storage::makeDirs(covercache::dir() + "/achievements/badges");
+                cab::writeBytes(kept, got);
+                return got;
+            }
             if (key.rfind("/api/users/", 0) == 0) {
                 const std::string kept =
                     covercache::dir() + "/avatars/" + storage::safeSegment(key);
@@ -6940,6 +7005,11 @@ int main(int argc, char** argv) {
     screens::LibraryScreen libraryScreen;
     screens::GridScreen gridScreen;
     screens::DetailScreen detailScreen;
+    // RETROACHIEVEMENTS ON THE GAME'S PAGE (#74): the list behind its row,
+    // and the answer it shows, for the page that asked.
+    screens::AchievementList raList;
+    ra::GameList detailAch;
+    int detailAchRom = 0;
     screens::SearchScreen searchScreen;
     screens::AccountScreen accountScreen;
     screens::AddAccountScreen addAccountScreen;
@@ -7407,6 +7477,7 @@ int main(int argc, char** argv) {
     float owedClock = 0.0f;   // seconds since the last try at what is owed
     StateLoad stateLoad;
     MenuNotice menuNotice;
+    AchievementToast raToast;
 
     // The in-game overlay: a scrim, a panel and buttons drawn over the game
     // surface. No compositing trick — the frontend owns the frame loop, which
@@ -7521,6 +7592,14 @@ int main(int argc, char** argv) {
     uint64_t restWaitStart = 0;
     auto ovCount = [&]() {
         return static_cast<int>(powerMenu ? powerItems.size() : pauseItems.size());
+    };
+    // UP FROM THE TOP IS THE BOTTOM, and Down from the bottom the top: the
+    // pause menu is short, and Exit to Home is last (MMagTech on the TV,
+    // 2026-10-06). The same for the Power menu, which is the same panel.
+    auto ovStep = [&](int delta) {
+        const int n = ovCount();
+        if (n <= 0) return;
+        overlaySlot = ((overlaySlot + delta) % n + n) % n;
     };
     auto ovLabel = [&](int i) -> const char* {
         if (!powerMenu) return kOverlayLabels[pauseItems[i]];
@@ -7911,11 +7990,16 @@ int main(int argc, char** argv) {
         d.cover = cards[cardIndex].cover;
         d.coverLarge = cards[cardIndex].coverLarge;
         d.art = cards[cardIndex].art;
+        std::string raHash, raPlatform;
+        bool raReadable = true;
         for (const auto& g : games) {
             if (g.id != d.romId) continue;
+            raHash = g.raHash;
+            raPlatform = g.platformSlug;
             d.platform = g.platformName;
             d.sizeBytes = g.sizeBytes;
             const catalog::Coverage cov = catalog::coverageFor(g);
+            raReadable = !cov.core || ra::coreReadable(cov.core);
             d.playable = cov.support == catalog::Support::Playable;
             d.reason = cov.reason ? cov.reason : "not playable on this console";
             break;
@@ -7941,6 +8025,36 @@ int main(int argc, char** argv) {
         detailScreen.open(std::move(d));
         stack.push_back(Screen::Detail);
         loadDetailStates(romId);
+
+        // RETROACHIEVEMENTS (#74), only for somebody signed in. A platform
+        // RetroAchievements does not cover, or a game RomM has no hash for,
+        // has none, and no cup, without asking anybody.
+        detailAch = ra::GameList{};
+        detailAchRom = romId;
+        if (ra::signedIn()) {
+            screens::DetailScreen::Achievements a;
+            a.show = true;
+            if (raHash.empty() || ra::consoleFor(raPlatform) == 0 || !raReadable) {
+                a.known = a.none = true;
+                detailScreen.setAchievements(a);
+            } else {
+                detailScreen.setAchievements(a);
+                ra::fetchList(raHash, [&, romId](const ra::GameList& l) {
+                    if (here() != Screen::Detail || detailScreen.game().romId != romId) return;
+                    detailAch = l;
+                    screens::DetailScreen::Achievements got;
+                    got.show = true;
+                    // Not asked and nothing kept (offline, first visit): no
+                    // cup, rather than a guess.
+                    got.known = true;
+                    got.unavailable = !l.known;
+                    got.none = !l.known || l.none || l.total == 0;
+                    got.unlocked = l.unlocked;
+                    got.total = l.total;
+                    detailScreen.setAchievements(got);
+                });
+            }
+        }
     };
 
     // OPENING A GAME'S PAGE, AND LEAVING IT, DISSOLVE like a top-bar switch:
@@ -8501,7 +8615,8 @@ int main(int argc, char** argv) {
                      SetUpdate, SetUpdateCheck, SetCredits, SetFiles, SetDownloads,
                      SetAddController, SetShortcuts, SetShortcutButton, SetAppearance,
                      SetDarkHours, SetColour, SetRumble, SetPictureQuality,
-                     SetWiiRemotes, SetSteam, SetSteamShow };
+                     SetWiiRemotes, SetSteam, SetSteamShow, SetRetroAchievements,
+                     SetAchievementSound };
     // One Eject row per USB drive: this plus the drive's index in
     // storage::locations() when the rows were built.
     constexpr int kSetEject = 100;
@@ -9224,6 +9339,13 @@ int main(int argc, char** argv) {
         askWifiPassword;
     // The network the keyboard is waiting on, while it says "Joining…".
     std::string wifiKeyboardFor;
+    // RETROACHIEVEMENTS SIGN-IN (#74): the username, then the password, on the
+    // same keyboard, the password the way Wi-Fi's is. `why` is the last
+    // answer's reason, said in the field. Assigned once buildSettings exists.
+    std::function<void(const std::string& initial)> askRaUser;
+    std::function<void(const std::string& user, const std::string& why)> askRaPassword;
+    // True while the keyboard says "Signing in…" and waits on the answer.
+    bool raKeyboardWaiting = false;
     // A server address on the keyboard; `why` is what went wrong with the
     // last one, said in the field with the address kept behind it. Assigned
     // once buildSettings exists.
@@ -9320,8 +9442,10 @@ int main(int argc, char** argv) {
             } else {
                 rows.push_back({K::Info, 0, "PIN", "Only " + ownerName + " can set one", "Off"});
             }
-            rows.push_back({K::Unbuilt, 0, "RetroAchievements",
-                            "Sign in with your own RetroAchievements account", ""});
+            // RETROACHIEVEMENTS (#74), this person's own sign-in. The one
+            // place it shows for somebody who has not signed in.
+            rows.push_back({K::Action, SetRetroAchievements, "RetroAchievements", "",
+                            ra::signedIn() ? ra::username() : "Sign in"});
         }
 
         // ONE ROW PER CONTROLLER: its name, and its player as the value, the
@@ -9447,6 +9571,16 @@ int main(int argc, char** argv) {
                 r.choice = static_cast<int>(sound::level());
                 return r;
             }(),
+            // THE ACHIEVEMENT CHIME (#74), its own row and not the clicks'
+            // (MMagTech, 2026-10-06). Only for somebody signed in to
+            // RetroAchievements: nobody else ever hears it.
+            [] {
+                Row r{K::Choice, SetAchievementSound, "Achievement sound", "", ""};
+                for (int i = 0; i < sound::kLevelCount; ++i)
+                    r.choices.push_back(sound::levelName(static_cast<sound::Level>(i)));
+                r.choice = static_cast<int>(sound::chimeLevel());
+                return r;
+            }(),
             // Here, not under System: it is about the screen, and it is where a
             // person looks for it. MMagTech, 2026-09-24.
             [&] {
@@ -9464,6 +9598,10 @@ int main(int argc, char** argv) {
             // menus look. #129 and #75, 2026-09-27. Colour is the signed-in
             // person's; the account chip above already says who that is.
             auto& rows = cats.back().rows;
+            if (!ra::signedIn())
+                rows.erase(std::remove_if(rows.begin(), rows.end(),
+                                          [](const Row& r) { return r.id == SetAchievementSound; }),
+                           rows.end());
             if (showQuality) {
                 // NOTHING UNDER IT YET. Once the pause menu has its own row,
                 // "Change per game in the pause menu", MMagTech's wording: a
@@ -9856,6 +9994,57 @@ int main(int argc, char** argv) {
         };
     };
 
+    askRaUser = [&](const std::string& initial) {
+        ui::Keyboard::Config cfg;
+        cfg.title = "RetroAchievements";
+        cfg.placeholder = "Username";
+        cfg.initial = initial;
+        keyboard.open(cfg);
+        keyboardThen = [&](ui::KeyboardResult r) {
+            if (r != ui::KeyboardResult::Committed) return;
+            std::string user = keyboard.value();
+            while (!user.empty() && user.back() == ' ') user.pop_back();
+            while (!user.empty() && user.front() == ' ') user.erase(user.begin());
+            if (user.empty()) return;
+            askRaPassword(user, "");
+        };
+    };
+    askRaPassword = [&](const std::string& user, const std::string& why) {
+        ui::Keyboard::Config cfg;
+        cfg.title = user;
+        cfg.placeholder = "Password";
+        cfg.conceal = true;
+        keyboard.open(cfg);
+        if (!why.empty()) keyboard.sayInField(why, /*problem=*/true);
+        keyboardThen = [&, user, cfg](ui::KeyboardResult r) {
+            if (r != ui::KeyboardResult::Committed) return;
+            const std::string pass = keyboard.value();
+            if (pass.empty()) { askRaPassword(user, ""); return; }
+            // UP WHILE IT ASKS, as Wi-Fi's does while it joins; B leaves and
+            // the answer still lands (Settings is rebuilt either way).
+            keyboard.open(cfg);
+            keyboard.sayInField("Signing in\xE2\x80\xA6", /*problem=*/false);
+            keyboard.setBusy(true);
+            raKeyboardWaiting = true;
+            keyboardThen = [&](ui::KeyboardResult) { raKeyboardWaiting = false; };
+            ra::signIn(user, pass, [&, user](bool ok, const std::string& why) {
+                const bool waiting = raKeyboardWaiting && keyboard.isOpen();
+                raKeyboardWaiting = false;
+                if (!ok && waiting) {
+                    askRaPassword(user, why);
+                    return;
+                }
+                if (waiting) {
+                    keyboard.cancel();
+                    keyboardThen = nullptr;
+                }
+                if (ok) menuNotice.say("Signed in as " + ra::username(), Tone::Done);
+                else menuNotice.say(why, Tone::Problem);
+                if (here() == Screen::Settings) buildSettings();
+            });
+        };
+    };
+
     // THE CURTAIN COMES DOWN ON THE STARTUP SCREEN, and pumpLeave does the
     // rest once it is down.
     // REMOVING A PERSON DELETES THEIR FOLDER (#194, MMagTech 2026-10-04). A
@@ -10219,6 +10408,17 @@ int main(int argc, char** argv) {
                     sound::play(sound::Cue::Back);
                 } else if (stack.size() > 1 && here() == Screen::Detail && !shotMode) {
                     pendingDetailBack = true;
+                    sound::play(sound::Cue::Back);
+                } else if (here() == Screen::Search) {
+                    // B FROM SEARCH'S RESULTS goes Home the way B from its keys
+                    // does, keyboard and all. Popping the screen alone left the
+                    // keyboard, still open below the results, over Home with
+                    // the search in it (MMagTech on the TV, 2026-10-06). The
+                    // same steps as goToDestination(0), declared further down.
+                    if (keyboard.isOpen()) keyboard.cancel();
+                    searchScreen.setFocused(false);
+                    stack.clear();
+                    stack.push_back(Screen::Home);
                     sound::play(sound::Cue::Back);
                 } else if (stack.size() > 1) {
                     stack.pop_back(); sound::play(sound::Cue::Back);
@@ -10752,6 +10952,17 @@ int main(int argc, char** argv) {
                                   [&]() { buildSettings(); });
                     }, true);
                     sound::play(sound::Cue::Activate);
+                } else if (res.value == SetRetroAchievements) {
+                    if (ra::signedIn()) {
+                        askChoice("RetroAchievements", "Signed in as " + ra::username(),
+                                  {"Sign out", "Cancel"}, 1, [&](int k) {
+                                      if (k == 0) ra::signOut();
+                                      buildSettings();
+                                  });
+                    } else {
+                        askRaUser("");
+                    }
+                    sound::play(sound::Cue::Activate);
                 } else if (res.value == SetPinOff) {
                     askPin("Enter the PIN", "To turn it off", [&]() {
                         std::string err;
@@ -10813,6 +11024,17 @@ int main(int argc, char** argv) {
                         quality::setConsole(static_cast<quality::Level>(i));
                     sound::play(sound::Cue::Move);
                 }
+                if (res.value == SetAchievementSound) {
+                    const int i = settingsScreen.choiceOf(SetAchievementSound);
+                    if (i >= 0 && i < sound::kLevelCount) {
+                        const auto lv = static_cast<sound::Level>(i);
+                        sound::setChimeLevel(lv);
+                        prefs::set("achievement_sound", sound::levelWord(lv));
+                    }
+                    // The chime itself, at the level just chosen, as the
+                    // clicks row plays a click.
+                    sound::playChime();
+                }
                 if (res.value == SetInterfaceSounds) {
                     const int i = settingsScreen.choiceOf(SetInterfaceSounds);
                     if (i >= 0 && i < sound::kLevelCount) {
@@ -10868,6 +11090,12 @@ int main(int argc, char** argv) {
                 break;
             case screens::Action::Download:
                 downloadById(res.value);
+                break;
+            case screens::Action::ShowAchievements:
+                if (detailAchRom == res.value && detailAch.known && !detailAch.items.empty()) {
+                    raList.open(detailScreen.game().title, detailAch);
+                    sound::play(sound::Cue::Activate);
+                }
                 break;
             case screens::Action::ToggleFavorite: {
                 // THE HEART ANSWERS AT ONCE (#267): the page, Home's shelf and
@@ -11000,6 +11228,7 @@ int main(int argc, char** argv) {
         } else if (d == 2) {
             searchScreen.open();
             searchTyped.clear();
+            searchPending.clear();
             stack.push_back(Screen::Search);
             ui::Keyboard::Config cfg;
             cfg.title = "Search";
@@ -11237,6 +11466,7 @@ int main(int argc, char** argv) {
         // it may take a press.
         if (pinScreen.isOpen()) { pinOutcome(pinScreen.key(n)); return true; }
         if (choiceScreen.isOpen()) { choiceOutcome(choiceScreen.key(n)); return true; }
+        if (raList.isOpen()) { raList.key(n); return true; }
         if (downloadsPanel.isOpen()) { downloadsOutcome(downloadsPanel.key(n)); return true; }
         // Nothing takes a press while an account switch is behind the curtain.
         // Nor while the startup screen is still fully down over Home: a
@@ -11395,6 +11625,9 @@ int main(int argc, char** argv) {
             const Uint64 t0 = SDL_GetTicks();
             switchWhy.clear();
             switchOk = switchAccount(switchPendingId, &switchWhy);
+            // Whatever the switch got to: a half-finished one has still
+            // changed who is active, and RetroAchievements follows that.
+            ra::useAccount(accounts::activeId());
             std::fprintf(stderr, "[accounts] switch took %llu ms\n",
                          static_cast<unsigned long long>(SDL_GetTicks() - t0));
             switchDone = true;
@@ -11967,6 +12200,7 @@ int main(int argc, char** argv) {
 
         session = GameSession{};
         session.romId = launchJob.romId;
+        session.raHash = launchJob.raHash;
         session.core = launchJob.coreName;
         session.platformSlug = launchJob.platformSlug;
         session.title = launchJob.title;
@@ -12180,6 +12414,9 @@ int main(int argc, char** argv) {
         }
         std::fprintf(stderr, "[launch] running %s\n", core.coreName().c_str());
         playing = true;
+        // RetroAchievements, when this person signed in (achievements.h):
+        // after the battery save and before the first frame it checks.
+        ra::beginGame(session.raHash, session.platformSlug, core.isPs2());
         if (session.romId > 0) {
             playClock.begin(session.romId, playtime::wallMs());
             playCheckpointClock = 0.0f;
@@ -12380,6 +12617,8 @@ int main(int argc, char** argv) {
             playedJustNow(session.romId);
         }
         syncSave(session, uploader);
+        // Before the unload: rcheevos reads the core's memory until told not to.
+        ra::endGame();
         // And the same curtain on the way out — `unloadGame` blocks too, and a
         // game vanishing into Home mid-frame is the same cut in the other
         // direction.
@@ -12781,6 +13020,8 @@ int main(int argc, char** argv) {
     while (running) {
         // Full speed while any game runs, balanced on Home (powerprofile.h).
         powerprofile::update(playing || standaloneRun.active());
+        // RetroAchievements' network answers, on this thread (achievements.h).
+        ra::pump();
         SDL_Event e;
         while (SDL_PollEvent(&e)) {
             // THE EMULATOR HAS THE TELEVISION AND THE CONTROLLERS. Nothing here
@@ -13097,8 +13338,7 @@ int main(int argc, char** argv) {
                     }
                     if (owner == InputOwner::Overlay) {
                         if (e.key.key == SDLK_UP || e.key.key == SDLK_DOWN) {
-                            const int delta = (e.key.key == SDLK_DOWN) ? 1 : -1;
-                            overlaySlot = std::clamp(overlaySlot + delta, 0, ovCount() - 1);
+                            ovStep(e.key.key == SDLK_DOWN ? 1 : -1);
                             overlayFocus.retarget(0.0f, 0.0f);
                             overlayFocus.elapsed = 0.0f;
                             overlayFocus.retarget(1.0f, kOverlayFocusDuration);
@@ -13245,10 +13485,8 @@ int main(int argc, char** argv) {
                         break;
                     }
                     if (owner == InputOwner::Overlay) {
-                        if (e.gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_UP)
-                            overlaySlot = std::max(0, overlaySlot - 1);
-                        if (e.gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_DOWN)
-                            overlaySlot = std::min(ovCount() - 1, overlaySlot + 1);
+                        if (e.gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_UP) ovStep(-1);
+                        if (e.gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_DOWN) ovStep(+1);
                         if ((e.gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_LEFT ||
                              e.gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_RIGHT) &&
                             !powerMenu && choiceAt(overlaySlot))
@@ -13957,8 +14195,12 @@ int main(int argc, char** argv) {
                 }
                 int ran = 0;
                 if (!holdForSpeaker && due > 0) {
+                    // RetroAchievements checks each frame run here, and only
+                    // here: this is play (achievements.h).
+                    core.setAfterFrame(ra::frame);
                     if (!locked) ran = core.runFor(dt);
                     else for (int i = 0; i < due; ++i) ran += core.runFrame();
+                    core.setAfterFrame(nullptr);
                 }
                 // HOW SMOOTH IT WAS (#221): a frame shown with no new game frame
                 // behind it is a repeat, and every run past the first in one
@@ -13984,6 +14226,10 @@ int main(int argc, char** argv) {
                     }
                 }
             }
+            // Frozen, rewinding or PlayStation 2 (which checks on PCSX2's
+            // own thread): the session is kept alive without reading memory.
+            if (frozen || rewinding || core.isPs2()) ra::idle();
+            ra::sampleTick();
             core.uploadFrame();
 
             if (audioStream) {
@@ -14249,6 +14495,7 @@ int main(int argc, char** argv) {
             std::string why;
             if (!switchAccount(id, &why))
                 std::fprintf(stderr, "[accounts] refused: %s\n", why.c_str());
+            ra::useAccount(accounts::activeId());
         }
         if (autoUnkeepId > 0) {
             const int id = autoUnkeepId;
@@ -14330,6 +14577,7 @@ int main(int argc, char** argv) {
         if (stateLoad.loaded) {
             stateLoad.loaded = false;
             rewindKeep.reset();   // the history led somewhere else
+            ra::stateLoaded();    // and so did what each achievement was waiting for
             rewindLastFrame = cab::Core::shared().framesRun();
             closeOverlay();
             stateHold = true;
@@ -14472,6 +14720,35 @@ int main(int argc, char** argv) {
         curtain.tick(dt);
         switchText.tick(dt);
         menuNotice.tick(dt);
+        if (raToast.on) {
+            raToast.age += dt;
+            if (raToast.over()) raToast.on = false;
+        }
+        // ONLY OVER A GAME. One that lands as the game is left is not shown on
+        // Home, where the card's corner is the account chip's: the game's page
+        // has it (MMagTech, 2026-10-06).
+        if (!playing) {
+            ra::Popup dropped;
+            while (ra::takePopup(&dropped)) {}
+            raToast.on = raToast.waiting = false;
+        }
+        if (!raToast.on && !raToast.waiting && ra::takePopup(&raToast.p)) {
+            raToast.waiting = true;
+            raToast.age = 0.0f;
+        }
+        if (raToast.waiting) {
+            raToast.age += dt;
+            const bool badge = raToast.p.badgeUrl.empty() || images.get(raToast.p.badgeUrl).ready;
+            if (badge || raToast.age >= AchievementToast::kBadgeWait) {
+                raToast.waiting = false;
+                raToast.on = true;
+                raToast.age = 0.0f;
+                raToast.badge = !raToast.p.badgeUrl.empty() && badge;
+                sound::playChime();
+                std::fprintf(stderr, "[ra] pop-up: %s%s\n", raToast.p.title.c_str(),
+                             badge ? "" : " (badge not in yet)");
+            }
+        }
         // ---- System update: root's answers, the weekly check, the panel ----
         updPoll -= dt;
         updAutoWait -= dt;
@@ -14733,6 +15010,7 @@ int main(int argc, char** argv) {
             settingsScreen.tick(dt);
             pinScreen.tick(dt);
             choiceScreen.tick(dt);
+            raList.tick(dt);
             downloadsPanel.tick(dt);
             tabDissolve.tick(dt);
             keyboardSlide.tick(dt);
@@ -15107,7 +15385,7 @@ int main(int argc, char** argv) {
         if (ps2Window && playing) {
             const bool over = overlayOpen || overlayFade.value() > 0.001f ||
                               curtain.value() > 0.001f || menuNotice.alpha() > 0.001f ||
-                              dimLayer.value() > 0.001f;
+                              raToast.alpha() > 0.001f || dimLayer.value() > 0.001f;
             if (overlayOpen != ps2InputOurs) {
                 cab::overlaywin::mark(window, /*takeInput=*/overlayOpen);
                 ps2InputOurs = overlayOpen;
@@ -16420,6 +16698,67 @@ int main(int argc, char** argv) {
             renderer.setContentAlpha(keepAlpha);
         }
 
+        // ---- A RetroAchievements unlock (#74) -------------------------------
+        //
+        // The same surface and edge as the notice pill, as a card: the badge
+        // on the left, what it was and its points above, its name below. TOP
+        // RIGHT inside the safe area, where consoles put these (MMagTech on
+        // the TV, 2026-10-06: bottom left was "horrible"), and clear of the
+        // notice pill at the foot. It drops in a little as it fades in.
+        if (const float ta = raToast.alpha(); ta > 0.01f) {
+            const float keepAlpha = renderer.contentAlpha();
+            renderer.setContentAlpha(1.0f);
+            // SMALL: enough to say "you got one", not to read about it; the
+            // game's page has the rest (MMagTech on the TV, 2026-10-06: the
+            // first size was "more distracting than informing").
+            constexpr float kH = 84.0f, kPad = 12.0f, kBadge = 60.0f, kGap = 16.0f,
+                            kMaxText = 520.0f;
+            const ui::TextStyle top = ui::TextStyle::Caption1, name = ui::TextStyle::Callout;
+            const ra::Popup& p = raToast.p;
+            const std::string line1 =
+                p.complete ? "Every achievement unlocked" : "Achievement unlocked";
+            const std::string line2 = text.truncate(p.title, name, sc, kMaxText);
+            const float tw = std::min(kMaxText, std::max(text.measure(line1, top, sc),
+                                                         text.measure(line2, name, sc)));
+            const float badgeRoom = raToast.badge ? kBadge + kGap : 4.0f;
+            const float w = kPad + badgeRoom + tw + kPad + 8.0f;
+            // TUCKED INTO THE CORNER: closer to the top than to the side, so
+            // on a screen wider than it is tall the two gaps look the same
+            // (MMagTech on the TV, 2026-10-06: equal margins read as low).
+            constexpr float kTop = 32.0f, kRight = 48.0f;
+            const float x = ui::kCanvasWidth - kRight - w;
+            const float drop = (1.0f - std::min(1.0f, raToast.age / AchievementToast::kIn));
+            const float y = kTop - drop * 10.0f;
+            // A LITTLE OF THE GAME SHOWS THROUGH, so it passes over the game
+            // rather than sitting on it; no lower, or white text washes out
+            // over a bright screen (MMagTech, 2026-10-06).
+            ui::Color fill = look::surface();
+            fill.a = 0.80f * ta;
+            ui::Rect card{x, y, w, kH, 20.0f, fill};
+            card.border = 1.5f;
+            card.borderColor = ui::Color::white(0.14f * ta);
+            card.edgeLight = ui::Color::white(0.18f * ta);
+            card.shadowBlur = 18.0f;
+            card.shadowOffsetY = 6.0f;
+            card.shadowColor = ui::Color::black(0.40f * ta);
+            renderer.draw(card);
+            const float bx = x + kPad, by = y + (kH - kBadge) * 0.5f;
+            if (raToast.badge) {
+                const ui::Image& img = images.get(p.badgeUrl);
+                renderer.drawTextured(bx, by, kBadge, kBadge, img.texture, 0, 0, 1, 1,
+                                      ui::Color{1, 1, 1, ta * img.fade}, false, 0.0f, bx, by,
+                                      kBadge, kBadge, 10.0f);
+            }
+            const float tx = bx + badgeRoom;
+            const float l1 = text.lineHeight(top, sc), l2 = text.lineHeight(name, sc);
+            const float ty = y + (kH - (l1 + l2)) * 0.5f;
+            text.draw(renderer, line1, tx, ty + text.ascent(top, sc), top,
+                      ui::Color::white(0.66f * ta), sc);
+            text.draw(renderer, line2, tx, ty + l1 + text.ascent(name, sc), name,
+                      ui::Color::white(0.96f * ta), sc);
+            renderer.setContentAlpha(keepAlpha);
+        }
+
         // ---- The account switcher, over the screen and over the bar -------
         //
         // AFTER THE BAR, because it hangs from the chip the bar draws and has
@@ -16434,6 +16773,11 @@ int main(int argc, char** argv) {
         if (choiceScreen.isOpen() && !playing) {
             screens::Ctx cctx{renderer, text, images, sc, &cards};
             choiceScreen.draw(cctx);
+            renderer.setContentAlpha(1.0f);
+        }
+        if (raList.isOpen() && !playing) {
+            screens::Ctx lctx{renderer, text, images, sc, &cards};
+            raList.draw(lctx);
             renderer.setContentAlpha(1.0f);
         }
         if (pinScreen.isOpen() && !playing) {
@@ -16688,6 +17032,7 @@ int main(int argc, char** argv) {
         std::fprintf(stderr, "[sync] finishing %d upload(s)\n", uploader.pending());
     uploader.shutdown();
 
+    ra::shutdown();
     images.shutdown();
     text.shutdown();
     renderer.shutdown();

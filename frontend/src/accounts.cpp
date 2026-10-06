@@ -265,6 +265,10 @@ bool remove(int id, std::string* err) {
     // account is still whole, rather than listed with no credential.
     if (!save(b, err)) return false;
     ::unlink(tokenPath(id).c_str());
+    ::unlink(raPath(id).c_str());
+    const std::string ra = homeDir() + "/.config/cabinetos/accounts/" + std::to_string(id) +
+                           ".retroachievements";
+    if (storage::exists(ra)) storage::removeEntry(ra);
     return true;
 }
 
@@ -348,6 +352,47 @@ bool recordPairing(romm::Client& client, Paired* out, std::string* err) {
     if (out) { out->id = me.id; out->name = me.username; out->isNew = !already; }
     return true;
 }
+
+// --- RetroAchievements (#74) -----------------------------------------------
+
+std::string raPath(int id) {
+    return homeDir() + "/.config/cabinetos/accounts/" + std::to_string(id) +
+           ".retroachievements.json";
+}
+
+std::string raDir(int id) {
+    const std::string d = homeDir() + "/.config/cabinetos/accounts/" + std::to_string(id) +
+                          ".retroachievements";
+    makeDirs0700(d);
+    return d;
+}
+
+bool raLogin(int id, std::string* username, std::string* token) {
+    json_object* o = json_tokener_parse(readFile(raPath(id)).c_str());
+    if (!o) return false;
+    const std::string u = jstr(o, "username"), t = jstr(o, "token");
+    json_object_put(o);
+    if (u.empty() || t.empty()) return false;
+    if (username) *username = u;
+    if (token) *token = t;
+    return true;
+}
+
+bool setRaLogin(int id, const std::string& username, const std::string& token) {
+    if (id <= 0 || username.empty() || token.empty()) return false;
+    // json-c writes it, not concatenation: a RetroAchievements username is
+    // the person's own text, and a quote in it must not break the file.
+    json_object* o = json_object_new_object();
+    json_object_object_add(o, "username", json_object_new_string(username.c_str()));
+    json_object_object_add(o, "token", json_object_new_string(token.c_str()));
+    std::string body = json_object_to_json_string_ext(o, JSON_C_TO_STRING_PLAIN);
+    body += '\n';
+    json_object_put(o);
+    makeDirs0700(homeDir() + "/.config/cabinetos/accounts");
+    return writeFileAtomic(raPath(id), body, 0600);
+}
+
+void clearRaLogin(int id) { ::unlink(raPath(id).c_str()); }
 
 int ownerId() {
     const std::vector<Account> list = all();

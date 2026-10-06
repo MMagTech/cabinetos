@@ -1,0 +1,9 @@
+rcheevos v12.5.0, commit 1433173220a7eaede6a9ed7a18e94117be1821e0
+https://github.com/RetroAchievements/rcheevos (MIT, see LICENSE)
+
+Copied unchanged: include/, and from src/ the client, the API, the runtime,
+rhash and rc_libretro. Left out: the RAIntegration and external-client glue
+(Windows toolkit hooks), the 3DS decryption (rhash/hash_encrypted.c and
+aes.c, compiled out by RC_HASH_NO_ENCRYPTED), the tests, the validator and
+the build files.
+To update, copy the same files from a newer tag and change this note.

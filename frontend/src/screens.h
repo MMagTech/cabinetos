@@ -59,6 +59,7 @@ enum class Action {
     RemoveDownload,    // value is a rom id — release the keep AND delete the game
     PlayState,         // value is a RomM state id — play, starting from that state
     ToggleFavorite,    // value is a rom id — the game's page heart/star (#267)
+    ShowAchievements,  // value is a rom id — its RetroAchievements list (#74)
     // UP OUT OF THE TOP ROW, INTO THE BAR. MMagTech: *"if the library has the
     // top bar in view shouldnt i be able to up and access it."* Yes — chrome
     // that is on screen and cannot be reached is worse than chrome that is
@@ -532,6 +533,25 @@ public:
     // RomM HAS ANSWERED: the facts, the save and Continue from fade in
     // together now, rather than each popping in as it arrived.
     void detailsArrived();
+
+    // RETROACHIEVEMENTS (#74), for the person using the console. `show` only
+    // when they signed in: for anybody else the page is exactly as it was.
+    // While `known` is false the answer is still coming; `none` is
+    // RetroAchievements having no set for the game, said greyed, never focused.
+    struct Achievements {
+        bool show = false;
+        bool known = false;
+        bool none = false;
+        // RetroAchievements could not be asked and nothing was kept from a
+        // visit before: not the same as having none, so not said as it.
+        bool unavailable = false;
+        int unlocked = 0, total = 0;
+    };
+    // Shown as a cup beside the heart, which opens the list (MMagTech chose
+    // it on the TV over a third row, 2026-10-06: the row pushed Continue
+    // from to the foot of the screen). The page fades in once the answer is
+    // here, as it waits for RomM's.
+    void setAchievements(Achievements a);
     void tick(float dt);
     Result key(Nav n);
     void draw(Ctx& c);
@@ -615,6 +635,18 @@ private:
     // draw() put it, for the glass pass, as with the rows.
     bool onFav_ = false;
     float favX_ = 0, favY_ = 0, favS_ = 0;
+    Achievements ach_;
+    // The cup beside the heart, focused Right from the heart. Where draw()
+    // put it, for the glass pass.
+    bool onTrophy_ = false;
+    float trophyX_ = 0, trophyY_ = 0, trophyW_ = 0, trophyH_ = 0;
+    // ONLY WHERE THERE IS SOMETHING TO EARN (MMagTech, 2026-10-06): a game
+    // with no set, or one that could not be asked about, has no cup. Beside
+    // the heart, its absence moves nothing else on the page.
+    bool trophyShown() const {
+        return ach_.show && ach_.known && !ach_.none && !ach_.unavailable;
+    }
+    bool trophyFocusable() const { return trophyShown(); }
     int stateSlot_ = 0;
     std::string notice_;
     // Where draw() put the action column, so the glass pass can put the rows in

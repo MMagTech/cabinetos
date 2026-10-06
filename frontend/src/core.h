@@ -31,6 +31,8 @@
 #include <string>
 #include <vector>
 
+struct retro_memory_map;
+
 namespace cab {
 
 // What the core asked to be run at, and how big its picture is.
@@ -405,6 +407,24 @@ public:
     bool memoryRegion(unsigned id, std::vector<uint8_t>& out) const;
     bool loadMemoryRegion(unsigned id, const std::vector<uint8_t>& data);
 
+    // --- RetroAchievements (#74) ---------------------------------------------
+    //
+    // The emulated machine's memory, LIVE rather than copied: rcheevos reads it
+    // every frame. The map is the one the core handed over in retro_load_game
+    // (null when it gave none); the pointer is retro_get_memory_data's. Both
+    // libretro only; PlayStation 2's memory comes from ps2.h. Valid until
+    // unloadGame.
+    const retro_memory_map* memoryMap() const;
+    // Moves each time a core hands over a map (Dolphin's comes on its first
+    // frame), so a reader knows to lay memory out again.
+    unsigned memoryMapGeneration() const;
+    // Called after every retro_run while set: RetroAchievements checks each
+    // emulated frame, and one screen refresh can run several. The frame loop
+    // sets it around normal play only, so rewind and the pause menu's redraw
+    // frames are not counted. Not used for PlayStation 2 (ps2.h).
+    void setAfterFrame(void (*fn)()) { afterFrame_ = fn; }
+    uint8_t* memoryPointer(unsigned id, size_t* size) const;
+
     const AVInfo& avInfo() const { return av_; }
     const std::string& coreName() const { return coreName_; }
     // The core's own answers about what it will open. Both come from
@@ -458,6 +478,7 @@ private:
     // Wall-clock pacing. Capped so a stall cannot bank a debt the core then
     // tries to repay all at once, which stutters and floods the audio buffer.
     void step();   // one retro_run, with the GL state around it
+    void (*afterFrame_)() = nullptr;
     double accumulator_ = 0.0;
     double speed_ = 1.0;
     // The clock audioAhead measures against, and whether this core is braked

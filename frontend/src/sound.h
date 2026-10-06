@@ -83,6 +83,15 @@ const char* levelWord(Level l);
 // else, so a hand-edited file cannot set something that is not on the row.
 bool levelFromWord(const std::string& word, Level* out);
 
+// THE ACHIEVEMENT CHIME (#74), with its own row in Display and Sound and its
+// own level: MMagTech, 2026-10-06, did not want it tied to the menu clicks.
+// Off, Quiet, Medium or Loud, the same words and volumes as Interface sounds.
+// Played when a RetroAchievements pop-up arrives, whatever Interface sounds
+// is set to.
+void setChimeLevel(Level l);
+Level chimeLevel();
+void playChime();
+
 // Plays a cue, or does nothing if there is no device or the switch is off.
 // Safe to call from the frame loop as often as input arrives — a cue that is
 // already sounding is simply overlapped rather than queued, so running along a

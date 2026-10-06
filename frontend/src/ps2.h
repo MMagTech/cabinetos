@@ -110,4 +110,15 @@ unsigned sampleRate();
 // GS costs, and the whole picture path rests on it staying small.
 void metrics(float& fps, float& speed, double& readbackUs);
 
+// RETROACHIEVEMENTS (#74). The emulated machine's memory, live: region 0 is
+// the EE's 32 MB of main RAM, region 1 its 16 KB scratchpad, in the order
+// RetroAchievements numbers PS2 addresses. Null until the game is running,
+// and null for a library built before this.
+uint8_t* memory(unsigned region, size_t* size);
+// `cb` once per emulated frame, ON PCSX2's CPU THREAD and only while the game
+// runs, which is where PCSX2's own achievements code checks them: the memory
+// is still between frames there. Null clears it. False when the library is
+// older than this.
+bool setFrameCallback(void (*cb)(void*), void* user);
+
 } // namespace ps2

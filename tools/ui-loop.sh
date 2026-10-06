@@ -146,6 +146,8 @@ if [ "$BUILD" -eq 1 ]; then
         # The Makefile too: a new library in it (libsystemd, 2026-09-22) is
         # otherwise a link error here that CI would never have.
         rsync -az -e "ssh -i $KEY -o ConnectTimeout=20" "$ROOT/frontend/Makefile" "$VM:~/frontend/Makefile" || exit 1
+        # And the vendored libraries (rcheevos, #74), which the Makefile builds.
+        rsync -az --delete -e "ssh -i $KEY -o ConnectTimeout=20" "$ROOT/frontend/third_party/" "$VM:~/frontend/third_party/" || exit 1
         # DELETE THE ARTIFACT FIRST. `test -f` on a binary that was already
         # there passes after a failed compile, and then the deploy below
         # cheerfully ships the PREVIOUS build with a checksum that matches
@@ -164,8 +166,12 @@ if [ "$BUILD" -eq 1 ]; then
         # The Makefile too: a new library in it (libsystemd, 2026-09-22) is
         # otherwise a link error here that CI would never have.
         rsync -az -e "ssh -i $KEY -p $A9_PORT -o ConnectTimeout=20" "$ROOT/frontend/Makefile" "$A9:~/frontend/Makefile" || exit 1
-        # Same rule as above, and for the same reason.
-        "${A9SSH[@]}" "$A9" 'rm -f ~/frontend/build/cabinetos-frontend'
+        # And the vendored libraries (rcheevos, #74), which the Makefile builds.
+        rsync -az --delete -e "ssh -i $KEY -p $A9_PORT -o ConnectTimeout=20" "$ROOT/frontend/third_party/" "$A9:~/frontend/third_party/" || exit 1
+        # Same rule as above, and for the same reason. The objects go too:
+        # rsync keeps the Mac's times, so a copied source can look no newer
+        # than its old object and make skips it (6.5 s for a clean build).
+        "${A9SSH[@]}" "$A9" 'rm -f ~/frontend/build/cabinetos-frontend ~/frontend/src/*.o ~/frontend/src/*.d'
         "${A9SSH[@]}" "$A9" 'cd ~/frontend && podman run --rm -v "$PWD":/src:Z -w /src cabinetos-builder make -j24 2>&1 | grep -E "error|Error|warning: unused|built " | head -20'
         "${A9SSH[@]}" "$A9" 'test -f ~/frontend/build/cabinetos-frontend' || {
             echo "build failed — nothing was deployed, the console still runs what it had" >&2

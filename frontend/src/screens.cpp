@@ -934,8 +934,15 @@ void GridScreen::drawGlass(Ctx& c) {
 // ---------------------------------------------------------------------------
 
 void SearchScreen::open() {
+    // Everything setQuery("") drops, not only the box and the covers: a state
+    // and total left from the last visit drew "0 of 200 games" over an empty
+    // box (#277).
     query_.clear();
     results_.clear();
+    resultsFor_.clear();
+    total_ = 0;
+    state_ = State::Empty;
+    failure_.clear();
     slot_ = 0;
     focused_ = false;
     scroll_.from = scroll_.to = 0.0f;
@@ -1135,6 +1142,8 @@ void DetailScreen::open(GameDetail d) {
     detailsIn_ = false;
     inStates_ = false;
     onFav_ = false;
+    onTrophy_ = false;
+    ach_ = {};
     stateSlot_ = 0;
     rebuildRows();
     focus_.settle(1.0f);
@@ -1169,6 +1178,11 @@ void DetailScreen::rebuildRows() {
 }
 
 void DetailScreen::setFacts(Facts f) { facts_ = std::move(f); }
+
+void DetailScreen::setAchievements(Achievements a) {
+    ach_ = a;
+    if (onTrophy_ && !trophyFocusable()) { onTrophy_ = false; onFav_ = true; }
+}
 
 void DetailScreen::detailsArrived() { detailsIn_ = true; }
 
@@ -1221,6 +1235,27 @@ Result DetailScreen::key(Nav n) {
     // THE FAVOURITE MARK sits above the rows, beside the title: Up from the
     // top row reaches it, Down comes back to that row. A game this console
     // cannot play has no rows, and its mark is the only thing to focus.
+    // THE CUP beside the heart: Left goes back to the heart, Down to the
+    // rows, A opens the list.
+    if (onTrophy_) {
+        if (n == Nav::Activate) return {Action::ShowAchievements, game_.romId};
+        if (n == Nav::Left) {
+            onTrophy_ = false;
+            onFav_ = true;
+            refocus();
+        } else if (n == Nav::Down && !rows_.empty()) {
+            onTrophy_ = false;
+            slot_ = 0;
+            refocus();
+        }
+        return {};
+    }
+    if (onFav_ && n == Nav::Right && trophyFocusable()) {
+        onFav_ = false;
+        onTrophy_ = true;
+        refocus();
+        return {};
+    }
     if (onFav_ || rows_.empty()) {
         if (n == Nav::Activate) return {Action::ToggleFavorite, game_.romId};
         if (n == Nav::Down && !rows_.empty()) {
@@ -1292,7 +1327,7 @@ void DetailScreen::draw(Ctx& c) {
     // stuff in the background was loaded"). RomM slow or away, it stops
     // waiting at kDetailsWait and fades in with what it has.
     if (!started_) {
-        bool ready = detailsIn_;
+        bool ready = detailsIn_ && (!ach_.show || ach_.known);
         if (ready && !game_.coverLarge.empty()) ready = c.images.get(game_.coverLarge).ready;
         for (const StateChoice& st : states_)
             if (ready && !st.picture.empty()) ready = c.images.get(st.picture).ready;
@@ -1436,11 +1471,18 @@ void DetailScreen::draw(Ctx& c) {
     // Clear of the title even with its focus disc round it (MMagTech on the
     // TV: the circle sat too close to the words).
     const float favGap = cap * 1.05f;
+    // THE CUP (#74) follows the heart, the heart's size, so
+    // a long title loses no more than a heart's width to it (MMagTech on the
+    // TV, 2026-10-06: the pill with the count cut titles short).
+    trophyH_ = trophyW_ = trophyShown() ? favS_ : 0.0f;
+    const float trophyRoom = trophyShown() ? favGap + trophyW_ : 0.0f;
     const std::string title = c.text.truncate(game_.title, ui::TextStyle::LargeTitle, c.sc,
-                                              textW - favGap - favS_);
+                                              textW - favGap - favS_ - trophyRoom);
     c.text.draw(c.r, title, textX, y, ui::TextStyle::LargeTitle, ui::Color::white(a), c.sc);
     favX_ = textX + c.text.measure(title, ui::TextStyle::LargeTitle, c.sc) + favGap;
     favY_ = y - cap * 0.5f - favS_ * 0.5f;
+    trophyX_ = favX_ + favS_ + favGap;
+    trophyY_ = favY_;
     y += c.text.lineHeight(ui::TextStyle::LargeTitle, c.sc) * 0.55f +
          c.text.ascent(ui::TextStyle::Callout, c.sc);
 
@@ -1498,7 +1540,11 @@ void DetailScreen::drawGlass(Ctx& c) {
                        design::kRowPadY * 2.0f;
     float y = rowsY_;
     for (size_t i = 0; i < rows_.size(); ++i) {
-        const bool on = !inStates_ && static_cast<int>(i) == slot_;
+        // NOT while focus is up on the heart or the cup: the row stayed lit
+        // there and flashed each time focus moved between them, because
+        // every move restarts the shared focus animation (MMagTech on the
+        // TV, 2026-10-06; since the heart, #267).
+        const bool on = !inStates_ && !onFav_ && !onTrophy_ && static_cast<int>(i) == slot_;
         const float f = on ? focus_.value() : 0.0f;
         const float s = 1.0f + f * (design::kRowFocusScale - 1.0f);
         const float w = rowsW_ * s, h = rowH * s;
@@ -1576,6 +1622,39 @@ void DetailScreen::drawGlass(Ctx& c) {
             mark.borderColor = ui::Color::white(strength);
         }
         c.r.draw(mark);
+    }
+
+    // THE CUP (#74), drawn like the heart beside it and
+    // saying where the person is without a number (MMagTech, 2026-10-06):
+    // outlined with none unlocked, filled with some, gold with every one. The
+    // count is in the list it opens. Focused, it sits on the same glass disc.
+    if (trophyShown()) {
+        const float f = onTrophy_ ? focus_.value() : 0.0f;
+        const float pad = trophyW_ * 0.45f;
+        const float disc = trophyW_ + 2.0f * pad;
+        const float s = 1.0f + f * (design::kFavFocusScale - 1.0f);
+        const float cx = trophyX_ + trophyW_ * 0.5f, cy = trophyY_ + trophyW_ * 0.5f;
+        const float da = a * details_.value();
+        if (f > 0.0f)
+            c.r.drawGlass(ui::Rect{cx - disc * s * 0.5f, cy - disc * s * 0.5f, disc * s,
+                                   disc * s, disc * s * 0.5f, ui::Color::white(0)},
+                          design::kRegularMaterialBlur, ui::Color::white(0.22f * f * da));
+        const float m = trophyW_ * s;
+        ui::Rect cup{cx - m * 0.5f, cy - m * 0.5f, m, m, 0.0f, ui::Color::white(0)};
+        cup.shape = ui::Rect::Shape::Trophy;
+        const bool all = ach_.total > 0 && ach_.unlocked >= ach_.total;
+        const float strength = (onTrophy_ ? 1.0f : 0.60f) * da;
+        if (all) {
+            ui::Color gold = design::kTrophyGold;
+            gold.a = onTrophy_ ? da : 0.85f * da;
+            cup.fill = gold;
+        } else if (ach_.unlocked > 0) {
+            cup.fill = ui::Color::white(strength);
+        } else {
+            cup.border = std::max(2.0f, m * 0.09f);
+            cup.borderColor = ui::Color::white(strength);
+        }
+        c.r.draw(cup);
     }
 
     // CONTINUE FROM, as Cabinet's tvOS launch screen calls it: the game's

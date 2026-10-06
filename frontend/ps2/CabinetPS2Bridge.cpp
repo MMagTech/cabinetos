@@ -223,6 +223,42 @@ void cps2_metrics(float* fps, float* speed, double* readback_us)
 		*readback_us = m.readback_us;
 }
 
+// RETROACHIEVEMENTS (#74). The frontend runs rcheevos itself, as it does for
+// every libretro core, so all this library owes it is the emulated memory and
+// a tick once a frame. CabinetPS2::Memory and CabinetPS2::SetFrameCallback
+// say which memory and which point in the frame, and why they are the ones
+// PCSX2's own achievements code uses.
+//
+// region 0 = EE main RAM (32 MB, RetroAchievements PS2 addresses
+// 0x0000000-0x1FFFFFF), region 1 = EE scratchpad (16 KB, 0x2000000-0x2003FFF).
+// Returns the base pointer and sets *size; NULL and *size 0 when no game is
+// running or the region is not one of the two. Valid from when cps2_running()
+// first returns 1 until cps2_stop returns. Both are LIVE: the CPU thread
+// writes them while the game runs, so a read is only a consistent frame from
+// inside the frame callback, which is where rcheevos reads.
+uint8_t* cps2_memory(unsigned region, size_t* size)
+{
+	if (!size)
+		return nullptr;
+	return CabinetPS2::Memory(region, size);
+}
+
+// cb(user) once per emulated frame (vsync), ON PCSX2'S CPU THREAD, from
+// Host::PumpMessagesOnCPUThread, only while the game is Running (not paused,
+// not stopping) and only once its ELF has booted: nothing during the BIOS,
+// matching PCSX2's Achievements::FrameUpdate, which runs rc_client_do_frame
+// only when VMManager::Internal::HasBootedELF() and rc_client_idle before.
+// The frontend keeps calling rc_client_idle on its own thread, so the BIOS
+// seconds need nothing from here. NULL clears it. Safe at any time, before cps2_start included,
+// and from inside cb. The pair changes as one, and once this returns the old
+// cb is not running and will not run again, so the frontend may free what
+// `user` points at straight after clearing it. cb must not wait on a lock
+// held by whoever calls this.
+void cps2_set_frame_callback(void (*cb)(void* user), void* user)
+{
+	CabinetPS2::SetFrameCallback(cb, user);
+}
+
 // The version of PCSX2 behind this, so the frontend can print what it is
 // actually running rather than what it believes it pinned. Every libretro core
 // answers the same question through retro_get_system_info, and the reason is

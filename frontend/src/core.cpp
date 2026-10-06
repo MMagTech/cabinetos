@@ -67,6 +67,38 @@ struct {
     size_t (*get_memory_size)(unsigned) = nullptr;
 } g;
 
+// THE CORE'S MEMORY MAP, KEPT FOR RETROACHIEVEMENTS (#74). A core hands it
+// over once, inside retro_load_game, and owns the descriptors' storage only
+// for the length of that call; the pointers INTO the emulated machine stay
+// valid until the game is unloaded. So the descriptors are copied, and the
+// address-space names with them. rcheevos' rc_libretro reads this the way
+// RetroArch hands it over. Cleared with the game.
+std::vector<retro_memory_descriptor> gMemDescs;
+std::vector<std::string> gMemNames;
+retro_memory_map gMemMap{nullptr, 0};
+// Counts the maps handed over. Dolphin sends its map from inside the first
+// retro_run, not from retro_load_game, so whoever laid memory out from an
+// earlier one does it again when this moves.
+unsigned gMemMapGeneration = 0;
+
+void keepMemoryMap(const retro_memory_map* mm) {
+    ++gMemMapGeneration;
+    gMemDescs.clear();
+    gMemNames.clear();
+    gMemMap = {nullptr, 0};
+    if (!mm || !mm->descriptors || mm->num_descriptors == 0) return;
+    gMemDescs.assign(mm->descriptors, mm->descriptors + mm->num_descriptors);
+    // Reserved first: the descriptors point at these strings, so the vector
+    // must not move once they do.
+    gMemNames.reserve(gMemDescs.size());
+    for (retro_memory_descriptor& d : gMemDescs) {
+        gMemNames.emplace_back(d.addrspace ? d.addrspace : "");
+        d.addrspace = d.addrspace ? gMemNames.back().c_str() : nullptr;
+    }
+    gMemMap.descriptors = gMemDescs.data();
+    gMemMap.num_descriptors = static_cast<unsigned>(gMemDescs.size());
+}
+
 // Four players (players.h). PlayStation 2's own host takes two of them.
 constexpr int kMaxPorts = 4;
 PadState gPads[kMaxPorts];
@@ -901,8 +933,11 @@ bool environment(unsigned cmd, void* data) {
             return true;
         }
 
-        case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY:
         case RETRO_ENVIRONMENT_SET_MEMORY_MAPS:
+            keepMemoryMap(static_cast<const retro_memory_map*>(data));
+            return true;
+
+        case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY:
         case RETRO_ENVIRONMENT_SET_SUPPORT_ACHIEVEMENTS:
         case RETRO_ENVIRONMENT_SET_SERIALIZATION_QUIRKS:
             return true;
@@ -1479,6 +1514,8 @@ bool Core::loadGame(const std::string& romPath, const std::string& systemDir,
     info.data = needFullpath_ ? nullptr : rom.data();
     info.size = needFullpath_ ? 0 : rom.size();
 
+    // A map left from the last game would point into freed memory.
+    keepMemoryMap(nullptr);
     if (!g.load_game(&info)) {
         // Deliberately does not claim the core is wrong, because nothing here
         // knows that: a refusal looks identical for a missing BIOS, an
@@ -1747,6 +1784,7 @@ void Core::step() {
     // handful of redundant GL calls per frame for nothing.
     if (gHWWanted && !gHWVulkan) restoreGLState();
     ++gFramesRun;
+    if (afterFrame_) afterFrame_();
 }
 
 bool Core::uploadFrame() {
@@ -2028,6 +2066,22 @@ bool Core::memoryRegion(unsigned id, std::vector<uint8_t>& out) const {
     if (!p || n == 0) return false;
     out.assign(static_cast<const uint8_t*>(p), static_cast<const uint8_t*>(p) + n);
     return true;
+}
+
+const retro_memory_map* Core::memoryMap() const {
+    return (gameLoaded_ && !gIsPs2 && gMemMap.num_descriptors > 0) ? &gMemMap : nullptr;
+}
+
+unsigned Core::memoryMapGeneration() const { return gMemMapGeneration; }
+
+uint8_t* Core::memoryPointer(unsigned id, size_t* size) const {
+    *size = 0;
+    if (!gameLoaded_ || gIsPs2 || !g.get_memory_data || !g.get_memory_size) return nullptr;
+    void* p = g.get_memory_data(id);
+    const size_t n = g.get_memory_size(id);
+    if (!p || n == 0) return nullptr;
+    *size = n;
+    return static_cast<uint8_t*>(p);
 }
 
 bool Core::loadMemoryRegion(unsigned id, const std::vector<uint8_t>& data) {
