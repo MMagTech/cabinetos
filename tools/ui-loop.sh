@@ -33,6 +33,12 @@
 #       frontend (--env goes on the frontend's command line, which the script
 #       never reads). For trying another screen mode.
 #
+#   tools/ui-loop.sh --session-script
+#       Run the repository's system_files/usr/bin/cabinetos-session instead of
+#       the image's, for trying a change to the session (screen modes, the
+#       Steam handover) without an image. Copied to the console's home and
+#       started through bash; transient like the rest of the drop-in.
+#
 #   tools/ui-loop.sh --args "--home-backdrop 0.6,0.22,28"
 #       Anything else the frontend takes, appended to its command line. This is
 #       what makes a tuning pass cheap: a number behind a flag is a redeploy
@@ -88,6 +94,7 @@ RESTORE=0
 EXTRA=""
 ENVS=""
 SESSION_ENV=""
+SESSION_SCRIPT=0
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -99,6 +106,7 @@ while [ $# -gt 0 ]; do
         --args)     EXTRA="$2"; shift ;;
         --env)      ENVS="$ENVS $2"; shift ;;
         --session-env) SESSION_ENV="$SESSION_ENV\nEnvironment=\"$2\""; shift ;;
+        --session-script) SESSION_SCRIPT=1 ;;
         --restore)  RESTORE=1 ;;
         *) echo "unknown argument: $1" >&2; exit 1 ;;
     esac
@@ -203,6 +211,16 @@ APP="/var/home/cabinet/cabinetos-frontend-dev --core-dir /var/home/cabinet/cores
 [ -n "$GAME" ] && APP="$APP --launch $GAME"
 [ -n "$MENU" ] && APP="$APP $MENU"
 [ -n "$EXTRA" ] && APP="$APP $EXTRA"
+
+# The session script from the repository, when asked. Started through bash, a
+# system binary, so nothing depends on how a file in a home directory may be
+# executed by systemd.
+if [ "$SESSION_SCRIPT" -eq 1 ]; then
+    "${A9SSH[@]}" -o ConnectTimeout=20 "$A9" 'cat > /var/home/cabinet/cabinetos-session-dev' \
+        < "$ROOT/system_files/usr/bin/cabinetos-session" || exit 1
+    SESSION_ENV="$SESSION_ENV\nExecStart=\nExecStart=/usr/bin/bash /var/home/cabinet/cabinetos-session-dev"
+    echo "session script: the repository's"
+fi
 
 "${A9SSH[@]}" "$A9" "printf '[Service]\nEnvironment=\"CABINETOS_APP=$APP\"$SESSION_ENV\n' > /tmp/50-ui-loop.conf
                    $SUDO mkdir -p $DROPIN_DIR >/dev/null 2>&1
