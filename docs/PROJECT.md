@@ -15897,22 +15897,41 @@ this frontend and keep every release to their checklist. Nothing hardcore is
 built, hidden or otherwise. States and rewind work as always; loading a state
 restarts what each achievement was waiting for, as RetroArch does.
 
-**During play: only the unlock.** A card fades in at the foot of the screen on
-the left (badge, "Achievement unlocked · 10 points", the name) and fades out
-after five seconds. It never pauses the game or takes a button. No "3 of 40"
-note at the start, no progress counters, no challenge icons; softcore has no
+**During play: only the unlock, small.** A card fades in at the top right
+(the badge, "Achievement unlocked", the name) and fades out after four
+seconds. It never pauses the game or takes a button, and it shows only while a
+game is on screen: one that lands as the game is left is not shown over Home,
+where that corner is the account chip's. Judged on the TV, 2026-10-06: bottom
+left was "horrible"; the first size was "more distracting than informing", so
+it is a third smaller with the points left to the page; equal margins read as
+low, so it is tucked in, 32 points from the top and 48 from the right; and it
+is 80% opaque, so a little of the game shows through (any less and white text
+washes out over a bright screen). It can cover a score or timer in that
+corner for those four seconds, as any corner would. No "3 of 40" note at the
+start, no progress counters, no challenge icons; softcore has no
 leaderboards. Finishing a set shows one card, "Every achievement unlocked",
 with the game's badge. **A chime** plays with it, with its own row in Display
 and Sound (Off, Quiet, Medium, Loud), deliberately not tied to Interface
 sounds (MMagTech: someone who turns the clicks off may still want it).
 
-**On the game's page**, for somebody signed in: "Achievements" with "12 of 40"
-and a list of every achievement, unlocked first in colour, locked greyed. Two
-placements were built so MMagTech could choose on the television: a third row
-under Play and Download, or a trophy beside the heart. A game
-RetroAchievements has no set for says "None", greyed and never focused; one
-that could not be asked says "Unavailable". The last answer is kept, so the
-page has it offline.
+**On the game's page: a cup beside the heart**, for somebody signed in, and
+only where there is something to earn (MMagTech: "the trophy should show only
+if a game or even a platform has trophies that could be earned"). It is the
+heart's size and is drawn like it: **outlined** with none unlocked, **filled**
+with some, **gold** with every one. Up from Play reaches the heart, Right the
+cup, and A opens the list: every achievement with its badge, name,
+description and points, unlocked first in colour, locked greyed, "12 of 40
+unlocked" at the top. No cup on a platform RetroAchievements does not cover,
+a game with no set, a MAME 2003 game, or when RetroAchievements could not be
+asked and nothing was kept. The last answer is kept, so the page has it
+offline. **Built both ways and chosen on the TV, 2026-10-06:** a third row
+("Achievements, 12 of 40") pushed Continue from to the foot of the screen and
+weighed as much as Play; a pill with the count beside the heart cut long
+titles short; the cup alone costs a long title only a heart's width.
+
+**RomM does not receive unlocks.** RetroAchievements is the one record. RomM
+shows a person's progress from RetroAchievements itself once they put their
+RetroAchievements username in their RomM profile.
 
 **How it identifies a game: RomM's `ra_hash`.** RomM works out the
 RetroAchievements fingerprint when it scans and stores it per game; the

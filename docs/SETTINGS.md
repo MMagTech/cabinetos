@@ -108,9 +108,10 @@ status here to Built.
   offers **Sign out**. No PIN: it is the person's own account. The username is
   typed, not taken from RomM (RomM's `ra_username` is a field a person fills
   in separately, and was empty for MMagTech). **Somebody who never signs in
-  never sees RetroAchievements anywhere else.** **Softcore only**: nothing
-  hardcore is built, hidden or otherwise (decided 2026-10-05). **Built on
-  `retroachievements`, to judge on the TV.**
+  never sees RetroAchievements anywhere else.** Signing out takes the game
+  pages' cups, the unlock cards and the Achievement sound row away with it.
+  **Softcore only**: nothing hardcore is built, hidden or otherwise (decided
+  2026-10-05). **Built on `retroachievements`, judged on the TV 2026-10-06.**
 - **Background colour per account:** a few hand-picked choices (purple, blue,
   green, red, graphite), so the console takes on the colour of whoever is
   signed in. The boot screen stays purple. **Later, #75.**
@@ -314,7 +315,7 @@ Decided with MMagTech 2026-09-26, from the things people will actually do.
   (MMagTech, 2026-10-06). Shown only to somebody signed in to
   RetroAchievements. Console-wide, in `config/settings.json`, like Interface
   sounds. Each step plays the chime at that level. **Built on
-  `retroachievements`, to judge on the TV.**
+  `retroachievements`, judged on the TV 2026-10-06.**
 - **Turn off screen after:** 10 min, 15 min (to start), 30 min. The screen
   always dims at 5 minutes. Saved in `config/settings.json`. **Built, #71.**
   Under Display and Sound, not System: it is about the screen. MMagTech,

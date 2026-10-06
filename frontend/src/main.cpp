@@ -7006,13 +7006,6 @@ int main(int argc, char** argv) {
     screens::AchievementList raList;
     ra::GameList detailAch;
     int detailAchRom = 0;
-    // Where the page puts them while MMagTech picks one on the television:
-    // CABINETOS_RA_PAGE=trophy for the trophy beside the heart, otherwise the
-    // row under Play and Download.
-    const bool raTrophy = [] {
-        const char* v = std::getenv("CABINETOS_RA_PAGE");
-        return v && std::string(v) == "trophy";
-    }();
     screens::SearchScreen searchScreen;
     screens::AccountScreen accountScreen;
     screens::AddAccountScreen addAccountScreen;
@@ -8023,9 +8016,7 @@ int main(int argc, char** argv) {
 
         // RETROACHIEVEMENTS (#74), only for somebody signed in. A platform
         // RetroAchievements does not cover, or a game RomM has no hash for,
-        // has none, and says so greyed without asking anybody.
-        detailScreen.setAchievementPlace(raTrophy ? screens::DetailScreen::AchievementPlace::Trophy
-                                                  : screens::DetailScreen::AchievementPlace::Row);
+        // has none, and no cup, without asking anybody.
         detailAch = ra::GameList{};
         detailAchRom = romId;
         if (ra::signedIn()) {
@@ -8041,8 +8032,8 @@ int main(int argc, char** argv) {
                     detailAch = l;
                     screens::DetailScreen::Achievements got;
                     got.show = true;
-                    // Not asked and nothing kept (offline, first visit):
-                    // greyed, and said differently from a game with none.
+                    // Not asked and nothing kept (offline, first visit): no
+                    // cup, rather than a guess.
                     got.known = true;
                     got.unavailable = !l.known;
                     got.none = !l.known || l.none || l.total == 0;

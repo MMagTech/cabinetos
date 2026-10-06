@@ -45,7 +45,7 @@ uniform vec4 uBorderColor;
 uniform vec2 uShadowParams;  // blur, offsetY
 uniform vec4 uShadowColor;
 uniform vec4 uEdgeLight;     // alpha 0 = off
-uniform int uShape;          // 0 box, 1 heart (ui::Rect::Shape)
+uniform int uShape;          // 0 box, 1 heart, 2 trophy (ui::Rect::Shape)
 out vec4 fragColor;
 
 float roundedBoxSDF(vec2 p, vec2 halfSize, float r) {
@@ -63,9 +63,32 @@ float heartSDF(vec2 p) {
            sign(p.x - p.y);
 }
 
+float boxSDF(vec2 p, vec2 b) {
+    vec2 d = abs(p) - b;
+    return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0);
+}
+
+// The RetroAchievements cup (#74), y pointing down: a bowl with a flat rim, a
+// ring of a handle each side, a stem and a foot. About 1.45 wide and 1.1
+// tall in its own units, centred. Built from exact pieces like the heart, so
+// an outline of it is as clean as the heart's; the bowl's ellipse is a
+// scaled circle, near enough at the size it is drawn.
+float trophySDF(vec2 p) {
+    vec2 s = p + vec2(0.0, -0.25);
+    float bowl = max(length(vec2(s.x, (s.y + 0.80) / 1.3)) - 0.5, -(s.y + 0.80));
+    float handle = abs(length(vec2(abs(s.x) - 0.50, s.y + 0.62)) - 0.16) - 0.055;
+    float stem = boxSDF(s - vec2(0.0, -0.06), vec2(0.07, 0.16));
+    float foot = boxSDF(s - vec2(0.0, 0.20), vec2(0.28, 0.07)) - 0.02;
+    return min(min(bowl, handle), min(stem, foot));
+}
+
 // The distance to whichever shape this is, in design points, from the centre.
-// The heart fits its rectangle's shorter side, centred.
+// The heart and the cup fit their rectangle's shorter side, centred.
 float shapeSDF(vec2 p, vec2 halfSize, float r) {
+    if (uShape == 2) {
+        float k = 2.0 * min(halfSize.x, halfSize.y) / 1.45;
+        return trophySDF(p / k) * k - r;
+    }
     if (uShape == 1) {
         // The heart spans 1.21 wide and 1.10 tall in its own units, point at 0.
         float k = 2.0 * min(halfSize.x, halfSize.y) / 1.21;

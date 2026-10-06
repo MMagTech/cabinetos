@@ -547,13 +547,11 @@ public:
         bool unavailable = false;
         int unlocked = 0, total = 0;
     };
+    // Shown as a cup beside the heart, which opens the list (MMagTech chose
+    // it on the TV over a third row, 2026-10-06: the row pushed Continue
+    // from to the foot of the screen). The page fades in once the answer is
+    // here, as it waits for RomM's.
     void setAchievements(Achievements a);
-    // WHERE THEY GO ON THE PAGE, both built so MMagTech can pick on the
-    // television (2026-10-06): a row under Play and Download, or a trophy
-    // beside the heart. The page fades in once the answer is here, as it
-    // waits for RomM's.
-    enum class AchievementPlace { Row, Trophy };
-    void setAchievementPlace(AchievementPlace p) { achPlace_ = p; rebuildRows(); }
     void tick(float dt);
     Result key(Nav n);
     void draw(Ctx& c);
@@ -638,21 +636,17 @@ private:
     bool onFav_ = false;
     float favX_ = 0, favY_ = 0, favS_ = 0;
     Achievements ach_;
-    AchievementPlace achPlace_ = AchievementPlace::Row;
-    // The trophy beside the heart, in the Trophy place: focused Right from
-    // the heart. Where draw() put it, for the glass pass.
+    // The cup beside the heart, focused Right from the heart. Where draw()
+    // put it, for the glass pass.
     bool onTrophy_ = false;
     float trophyX_ = 0, trophyY_ = 0, trophyW_ = 0, trophyH_ = 0;
+    // ONLY WHERE THERE IS SOMETHING TO EARN (MMagTech, 2026-10-06): a game
+    // with no set, or one that could not be asked about, has no cup. Beside
+    // the heart, its absence moves nothing else on the page.
     bool trophyShown() const {
-        return ach_.show && ach_.known && achPlace_ == AchievementPlace::Trophy;
+        return ach_.show && ach_.known && !ach_.none && !ach_.unavailable;
     }
-    bool trophyFocusable() const { return trophyShown() && !ach_.none; }
-    std::string achievementsValue() const {
-        if (!ach_.known) return "";
-        if (ach_.unavailable) return "Unavailable";
-        if (ach_.none) return "None";
-        return std::to_string(ach_.unlocked) + " of " + std::to_string(ach_.total);
-    }
+    bool trophyFocusable() const { return trophyShown(); }
     int stateSlot_ = 0;
     std::string notice_;
     // Where draw() put the action column, so the glass pass can put the rows in

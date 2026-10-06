@@ -200,6 +200,9 @@ constexpr float kFavFocusScale = 1.12f;
 // A HEART, picked over a star on the TV (MMagTech, 2026-10-06): a star reads
 // as a rating.
 constexpr ui::Rect::Shape kFavMarkShape = ui::Rect::Shape::Heart;
+// The game page's cup once every achievement is unlocked (#74): a warm gold
+// that reads as a reward on any cover's colours.
+constexpr ui::Color kTrophyGold = ui::Color::rgb(0xF2C14E);
 
 // --- Home -------------------------------------------------------------------
 
