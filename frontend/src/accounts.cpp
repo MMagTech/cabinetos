@@ -266,6 +266,9 @@ bool remove(int id, std::string* err) {
     if (!save(b, err)) return false;
     ::unlink(tokenPath(id).c_str());
     ::unlink(raPath(id).c_str());
+    const std::string ra = homeDir() + "/.config/cabinetos/accounts/" + std::to_string(id) +
+                           ".retroachievements";
+    if (storage::exists(ra)) storage::removeEntry(ra);
     return true;
 }
 
@@ -355,6 +358,13 @@ bool recordPairing(romm::Client& client, Paired* out, std::string* err) {
 std::string raPath(int id) {
     return homeDir() + "/.config/cabinetos/accounts/" + std::to_string(id) +
            ".retroachievements.json";
+}
+
+std::string raDir(int id) {
+    const std::string d = homeDir() + "/.config/cabinetos/accounts/" + std::to_string(id) +
+                          ".retroachievements";
+    makeDirs0700(d);
+    return d;
 }
 
 bool raLogin(int id, std::string* username, std::string* token) {

@@ -235,6 +235,9 @@ bool checkPin(const std::string& pin);
 // and by forgetEveryone with the folder.
 std::string raPath(int id);   // ~/.config/cabinetos/accounts/<id>.retroachievements.json
 bool raLogin(int id, std::string* username, std::string* token);
+// The person's RetroAchievements answers kept for playing offline, and the
+// unlocks still to send (achievements.cpp). Made 0700 on first use.
+std::string raDir(int id);    // ~/.config/cabinetos/accounts/<id>.retroachievements/
 bool setRaLogin(int id, const std::string& username, const std::string& token);
 void clearRaLogin(int id);
 

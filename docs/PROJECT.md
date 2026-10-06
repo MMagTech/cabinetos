@@ -15940,6 +15940,15 @@ has no RetroAchievements hash for any of them. MAME 2003-Plus exposes no
 memory to a frontend at all, so those arcade games have none; FinalBurn Neo's
 do.
 
-**Offline.** An unlock earned while the connection drops mid-game is kept and
-sent when it is back (rc_client retries). A game started with no connection
-gets no achievements that session: rc_client needs the server to load the set.
+**Offline: earned offline, sent later** (docs/ROADMAP.md's "achievements
+earned offline must wait and send"). rcheevos alone keeps an unsent unlock
+only in memory while the game runs, and cannot start a game without the
+server. So the console keeps every sign-in, set and session answer per person
+(0700, beside their tokens), gives the kept one when the network does not
+answer, and writes an unlock that cannot be sent to a queue on disk, answered
+"done". The queue is sent when the network answers again (tried every 30
+seconds while signed in), each unlock with how long ago it was earned, the
+field RetroAchievements has for exactly that. A game never played or opened
+online on this console has no kept set, so nothing can be earned in it until
+it has been. `CABINETOS_RA_OFFLINE=1` makes every request fail as offline,
+for testing.

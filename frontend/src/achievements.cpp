@@ -7,6 +7,8 @@
 #include "storage.h"
 
 #include <curl/curl.h>
+#include <strings.h>
+#include <sys/stat.h>
 #include <json-c/json.h>
 
 #include "rc_client.h"
@@ -61,6 +63,10 @@ size_t appendBody(char* p, size_t size, size_t n, void* out) {
 // that one, which is what makes a dropped connection mid-game lose nothing.
 int request(const std::string& url, const char* post, const char* contentType,
             std::string* body, long timeoutSeconds) {
+    // CABINETOS_RA_OFFLINE=1: every request fails as with no network, for
+    // trying the offline path without taking the console off its network.
+    static const bool offline = std::getenv("CABINETOS_RA_OFFLINE") != nullptr;
+    if (offline) return RC_API_SERVER_RESPONSE_RETRYABLE_CLIENT_ERROR;
     CURL* c = curl_easy_init();
     if (!c) return RC_API_SERVER_RESPONSE_RETRYABLE_CLIENT_ERROR;
     const std::string ua = userAgent();
@@ -146,10 +152,255 @@ void send(const rc_api_request_t& r, std::function<void(int, const std::string&)
     gJobCv.notify_one();
 }
 
+// --- Offline (#74) ------------------------------------------------------------
+//
+// "ACHIEVEMENTS EARNED OFFLINE MUST WAIT AND SEND" (docs/ROADMAP.md). rcheevos
+// keeps an unlock that could not be sent only in memory, retrying while the
+// game runs, so one earned with the network down was lost if the game was
+// quit first, and a game started offline could not be checked at all. So the
+// console sits between rcheevos and the network:
+//
+//   ANSWERS ARE KEPT. Each sign-in, set and session answer RetroAchievements
+//   gives is written to the person's private folder, so a game played online
+//   once can be played offline after.
+//
+//   OFFLINE, THE KEPT ANSWER IS GIVEN instead of the failure, and an unlock
+//   goes into a queue on disk (pending.json) and is answered "done".
+//
+//   THE QUEUE IS SENT when the network answers again, each with how long ago
+//   it was earned, the field RetroAchievements has for a delayed unlock.
+//
+// Every one of these lives under accounts::raDir, 0700, removed with the
+// account.
+
+int gAccount = 0;
+std::string gUser;            // stored username for gAccount; empty when none
+std::string gToken;
+bool gLoginBusy = false;      // a sign-in is in flight
+bool gLoggedIn = false;       // rc_client accepted it
+
+std::string param(const std::string& form, const std::string& key) {
+    size_t at = 0;
+    while (at < form.size()) {
+        size_t amp = form.find('&', at);
+        if (amp == std::string::npos) amp = form.size();
+        const std::string kv = form.substr(at, amp - at);
+        const size_t eq = kv.find('=');
+        if (eq != std::string::npos && kv.compare(0, eq, key) == 0) {
+            std::string v;
+            const std::string raw = kv.substr(eq + 1);
+            for (size_t i = 0; i < raw.size(); ++i) {
+                if (raw[i] == '%' && i + 2 < raw.size()) {
+                    v += static_cast<char>(std::strtol(raw.substr(i + 1, 2).c_str(), nullptr, 16));
+                    i += 2;
+                } else {
+                    v += raw[i] == '+' ? ' ' : raw[i];
+                }
+            }
+            return v;
+        }
+        at = amp + 1;
+    }
+    return {};
+}
+
+std::string keptPath(const std::string& name) {
+    return accounts::raDir(gAccount) + "/" + storage::safeSegment(name);
+}
+
+void keepAnswer(const std::string& name, const std::string& body) {
+    if (gAccount <= 0 || body.empty()) return;
+    const std::string path = keptPath(name);
+    const std::string part = path + ".part";
+    FILE* f = std::fopen(part.c_str(), "wb");
+    if (!f) return;
+    ::fchmod(::fileno(f), 0600);
+    std::fwrite(body.data(), 1, body.size(), f);
+    std::fclose(f);
+    std::rename(part.c_str(), path.c_str());
+}
+
+std::string keptAnswer(const std::string& name) {
+    if (gAccount <= 0) return {};
+    FILE* f = std::fopen(keptPath(name).c_str(), "rb");
+    if (!f) return {};
+    std::string body;
+    char buf[16384];
+    size_t n;
+    while ((n = std::fread(buf, 1, sizeof buf, f)) > 0) body.append(buf, n);
+    std::fclose(f);
+    return body;
+}
+
+struct Owed {
+    std::string user;
+    uint32_t id = 0;
+    std::string hash;
+    long long when = 0;   // unix seconds it was earned
+};
+
+std::vector<Owed> loadOwed() {
+    std::vector<Owed> out;
+    json_object* arr = json_tokener_parse(keptAnswer("pending.json").c_str());
+    if (!arr) return out;
+    if (json_object_get_type(arr) == json_type_array) {
+        for (size_t i = 0; i < json_object_array_length(arr); ++i) {
+            json_object* o = json_object_array_get_idx(arr, i);
+            json_object* v = nullptr;
+            Owed w;
+            if (json_object_object_get_ex(o, "user", &v)) w.user = json_object_get_string(v);
+            if (json_object_object_get_ex(o, "id", &v)) w.id = static_cast<uint32_t>(json_object_get_int64(v));
+            if (json_object_object_get_ex(o, "hash", &v)) w.hash = json_object_get_string(v);
+            if (json_object_object_get_ex(o, "when", &v)) w.when = json_object_get_int64(v);
+            if (w.id) out.push_back(std::move(w));
+        }
+    }
+    json_object_put(arr);
+    return out;
+}
+
+void saveOwed(const std::vector<Owed>& owed) {
+    json_object* arr = json_object_new_array();
+    for (const Owed& w : owed) {
+        json_object* o = json_object_new_object();
+        json_object_object_add(o, "user", json_object_new_string(w.user.c_str()));
+        json_object_object_add(o, "id", json_object_new_int64(w.id));
+        json_object_object_add(o, "hash", json_object_new_string(w.hash.c_str()));
+        json_object_object_add(o, "when", json_object_new_int64(w.when));
+        json_object_array_add(arr, o);
+    }
+    keepAnswer("pending.json", json_object_to_json_string_ext(arr, JSON_C_TO_STRING_PLAIN));
+    json_object_put(arr);
+}
+
+long long nowSeconds() {
+    return std::chrono::duration_cast<std::chrono::seconds>(
+               std::chrono::system_clock::now().time_since_epoch()).count();
+}
+
+// What rcheevos is given instead of a failure, when there is something to
+// give. False leaves the failure as it was.
+bool offlineAnswer(const std::string& api, const std::string& form, std::string* body) {
+    const std::string hash = param(form, "m");
+    if (api == "login2") {
+        // Only the same person's kept sign-in, and only with their token.
+        if (param(form, "t").empty()) return false;
+        json_object* o = json_tokener_parse(keptAnswer("login.json").c_str());
+        if (!o) return false;
+        json_object* u = nullptr;
+        const bool same = json_object_object_get_ex(o, "User", &u) &&
+                          strcasecmp(json_object_get_string(u), param(form, "u").c_str()) == 0;
+        json_object_put(o);
+        if (!same) return false;
+        *body = keptAnswer("login.json");
+        std::fprintf(stderr, "[ra] offline: signed in from the kept answer\n");
+        return true;
+    }
+    if (api == "achievementsets" && !hash.empty()) {
+        *body = keptAnswer("sets-" + hash + ".json");
+        if (!body->empty()) std::fprintf(stderr, "[ra] offline: the kept set for %s\n", hash.c_str());
+        return !body->empty();
+    }
+    if (api == "startsession") {
+        *body = keptAnswer("session-" + hash + ".json");
+        // Never played online: no unlocks known, which only means one earned
+        // elsewhere may be earned again here and sent twice; the server keeps
+        // the first.
+        if (body->empty()) *body = "{\"Success\":true}";
+        return true;
+    }
+    if (api == "awardachievement") {
+        Owed w;
+        w.user = param(form, "u");
+        w.id = static_cast<uint32_t>(std::strtoul(param(form, "a").c_str(), nullptr, 10));
+        w.hash = hash;
+        w.when = nowSeconds() - std::strtoll(param(form, "o").c_str(), nullptr, 10);
+        if (w.id == 0) return false;
+        std::vector<Owed> owed = loadOwed();
+        bool have = false;
+        for (const Owed& o : owed) have = have || (o.id == w.id && o.user == w.user);
+        if (!have) owed.push_back(w);
+        saveOwed(owed);
+        std::fprintf(stderr, "[ra] offline: unlock %u kept to send later (%zu waiting)\n", w.id,
+                     owed.size());
+        *body = "{\"Success\":true,\"AchievementID\":" + std::to_string(w.id) + "}";
+        return true;
+    }
+    if (api == "ping") {
+        *body = "{\"Success\":true}";
+        return true;
+    }
+    return false;
+}
+
+void rememberAnswer(const std::string& api, const std::string& form, const std::string& body) {
+    // Only answers that say they succeeded: a refusal kept would be replayed.
+    if (body.find("\"Success\":true") == std::string::npos) return;
+    const std::string hash = param(form, "m");
+    if (api == "login2") keepAnswer("login.json", body);
+    else if (api == "achievementsets" && !hash.empty()) keepAnswer("sets-" + hash + ".json", body);
+    else if (api == "startsession" && !hash.empty()) keepAnswer("session-" + hash + ".json", body);
+}
+
+bool gSending = false;
+auto gLastSendTry = std::chrono::steady_clock::now() - std::chrono::hours(1);
+
+// The queue, oldest first, one at a time; stops at the first that cannot
+// reach the server and tries again later.
+void sendOwed() {
+    if (gSending || !gLoggedIn || gUser.empty() || gToken.empty()) return;
+    std::vector<Owed> owed = loadOwed();
+    auto it = std::find_if(owed.begin(), owed.end(), [](const Owed& w) {
+        return strcasecmp(w.user.c_str(), gUser.c_str()) == 0;
+    });
+    if (it == owed.end()) return;
+    const Owed w = *it;
+    rc_api_award_achievement_request_t a{};
+    a.username = gUser.c_str();
+    a.api_token = gToken.c_str();
+    a.achievement_id = w.id;
+    a.hardcore = 0;
+    a.game_hash = w.hash.c_str();
+    a.seconds_since_unlock = static_cast<uint32_t>(std::max(1LL, nowSeconds() - w.when));
+    rc_api_request_t req{};
+    if (rc_api_init_award_achievement_request(&req, &a) != RC_OK) return;
+    gSending = true;
+    const int account = gAccount;
+    send(req, [w, account](int status, const std::string& body) {
+        gSending = false;
+        if (account != gAccount) return;
+        if (status == RC_API_SERVER_RESPONSE_RETRYABLE_CLIENT_ERROR || status >= 500) return;
+        // Answered, either way: sent, or refused for good (already unlocked,
+        // achievement gone). Off the queue, and on to the next.
+        std::vector<Owed> owed = loadOwed();
+        owed.erase(std::remove_if(owed.begin(), owed.end(),
+                                  [&](const Owed& o) { return o.id == w.id && o.user == w.user; }),
+                   owed.end());
+        saveOwed(owed);
+        std::fprintf(stderr, "[ra] sent the unlock of %u earned offline: %s (%zu waiting)\n", w.id,
+                     body.find("\"Success\":true") != std::string::npos ? "accepted" : "refused",
+                     owed.size());
+        sendOwed();
+    });
+    rc_api_destroy_request(&req);
+}
+
 void RC_CCONV serverCall(const rc_api_request_t* r, rc_client_server_callback_t callback,
                          void* callbackData, rc_client_t*) {
-    send(*r, [callback, callbackData](int status, const std::string& body) {
+    const std::string form = r->post_data ? r->post_data : "";
+    const std::string api = param(form, "r");
+    send(*r, [callback, callbackData, form, api](int status, const std::string& body) {
+        std::string substitute;
         rc_api_server_response_t resp{};
+        if (status == RC_API_SERVER_RESPONSE_RETRYABLE_CLIENT_ERROR &&
+            offlineAnswer(api, form, &substitute)) {
+            resp.body = substitute.c_str();
+            resp.body_length = substitute.size();
+            resp.http_status_code = 200;
+            callback(&resp, callbackData);
+            return;
+        }
+        if (status >= 200 && status < 300) rememberAnswer(api, form, body);
         resp.body = body.c_str();
         resp.body_length = body.size();
         resp.http_status_code = status;
@@ -162,12 +413,6 @@ void RC_CCONV logMessage(const char* message, const rc_client_t*) {
 }
 
 // --- Who is signed in ------------------------------------------------------
-
-int gAccount = 0;
-std::string gUser;            // stored username for gAccount; empty when none
-std::string gToken;
-bool gLoginBusy = false;      // a sign-in is in flight
-bool gLoggedIn = false;       // rc_client accepted it
 
 struct LoginCtx {
     int account = 0;
@@ -204,6 +449,7 @@ void RC_CCONV onLogin(int result, const char* message, rc_client_t* client, void
             gToken = u->token;
         }
         std::fprintf(stderr, "[ra] signed in as %s\n", gUser.c_str());
+        sendOwed();
         if (ctx->done) ctx->done(true, "");
         return;
     }
@@ -570,6 +816,13 @@ void pump() {
     }
     for (auto& f : ready) f();
 
+    // Unlocks earned offline: tried again every half a minute until sent.
+    if (gLoggedIn && !gSending &&
+        std::chrono::steady_clock::now() - gLastSendTry >= std::chrono::seconds(30)) {
+        gLastSendTry = std::chrono::steady_clock::now();
+        sendOwed();
+    }
+
     // The per-frame check's cost, in the log every ten seconds while a game
     // is checked: the number to hold against a 16.7 ms frame.
     const auto now = std::chrono::steady_clock::now();
@@ -857,6 +1110,10 @@ void fetchList(const std::string& raHash, std::function<void(const GameList&)> d
     if (rc_api_init_fetch_game_sets_request(&req, &sets) != RC_OK) { failed(); return; }
     send(req, [=](int status, const std::string& body) {
         if (account != gAccount) return;
+        // The same answer a game's start asks for: kept, so a game whose page
+        // was opened online can be played offline.
+        if (status >= 200 && status < 300 && body.find("\"Success\":true") != std::string::npos)
+            keepAnswer("sets-" + raHash + ".json", body);
         rc_api_server_response_t sr{body.c_str(), body.size(), status};
         rc_api_fetch_game_sets_response_t r{};
         const int rc = rc_api_process_fetch_game_sets_server_response(&r, &sr);
