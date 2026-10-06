@@ -546,10 +546,6 @@ rc_libretro_memory_regions_t gRegions{};
 // that is running on PCSX2's thread before the game goes.
 std::mutex gFrameMutex;
 
-std::atomic<uint64_t> gFrameNs{0};
-std::atomic<uint64_t> gFrames{0};
-double gFrameMicros = 0.0;
-auto gLastReport = std::chrono::steady_clock::now();
 
 uint32_t RC_CCONV readMemory(uint32_t address, uint8_t* buffer, uint32_t n, rc_client_t*) {
     return rc_libretro_memory_read(&gRegions, address, buffer, n);
@@ -612,14 +608,9 @@ void probeReport() {
     }
 }
 
-void timedFrame() {
+void checkFrame() {
     if (gProbe) { probeReport(); return; }
-    const auto t0 = std::chrono::steady_clock::now();
     rc_client_do_frame(gClient);
-    const auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                        std::chrono::steady_clock::now() - t0).count();
-    gFrameNs += static_cast<uint64_t>(ns);
-    gFrames += 1;
 }
 
 // PCSX2's CPU thread, once per emulated frame, between frames: where PCSX2's
@@ -628,7 +619,7 @@ void ps2Frame(void*) {
     std::lock_guard<std::mutex> lk(gFrameMutex);
     if (!gGameActive.load()) return;
     if (gRegions.total_size == 0 && !mapPs2Memory()) return;
-    timedFrame();
+    checkFrame();
 }
 
 // --- Pop-ups ---------------------------------------------------------------
@@ -885,22 +876,8 @@ void pump() {
         gLastSendTry = std::chrono::steady_clock::now();
         sendOwed();
     }
-
-    // The per-frame check's cost, in the log every ten seconds while a game
-    // is checked: the number to hold against a 16.7 ms frame.
-    const auto now = std::chrono::steady_clock::now();
-    if (now - gLastReport >= std::chrono::seconds(10)) {
-        gLastReport = now;
-        const uint64_t frames = gFrames.exchange(0);
-        const uint64_t ns = gFrameNs.exchange(0);
-        gFrameMicros = frames ? static_cast<double>(ns) / static_cast<double>(frames) / 1000.0 : 0.0;
-        if (frames && gGameActive.load())
-            std::fprintf(stderr, "[ra] check %.1f us a frame over %llu frames\n", gFrameMicros,
-                         static_cast<unsigned long long>(frames));
-    }
 }
 
-double frameMicros() { return gFrameMicros; }
 
 // --- Signing in -----------------------------------------------------------------
 
@@ -1109,7 +1086,7 @@ void frame() {
          gMapGeneration != cab::Core::shared().memoryMapGeneration()) &&
         !mapLibretroMemory() && !gProbe)
         return;
-    timedFrame();
+    checkFrame();
 }
 
 // NOT BEFORE THE MEMORY IS THERE. With background reads off, rcheevos switches

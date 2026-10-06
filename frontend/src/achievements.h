@@ -96,10 +96,6 @@ void idle();
 // --ra-sample only: once a frame while a game is up.
 void sampleTick();
 
-// Microseconds the per-frame check took, averaged over the last second, for
-// the log; 0 when no game is being checked.
-double frameMicros();
-
 // --- What happened ----------------------------------------------------------
 
 struct Popup {
