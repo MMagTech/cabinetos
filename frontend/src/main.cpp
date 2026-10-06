@@ -199,6 +199,68 @@ static bool sendPlaySessionsAs(const romm::Client& c, const storage::User& who,
     return true;
 }
 
+// FAVOURITES NOT YET ON THE SERVER (#267). The heart on a game's page answers
+// at once; what the server still has to hear is kept per person in
+// `favorites-owed.json`, rom id to wanted state, and sent by the uploader
+// whenever it sends anything owed. The last press wins: pressing twice while
+// the server is away leaves nothing to send. Locked: the frame thread writes
+// it and the uploader's worker reads it.
+static std::mutex gFavOwedMutex;
+
+static std::map<int, bool> favOwedLocked(const storage::User& u) {
+    std::map<int, bool> m;
+    if (json_object* o = json_object_from_file((storage::userDir(u) + "/favorites-owed.json").c_str())) {
+        if (json_object_is_type(o, json_type_object)) {
+            json_object_object_foreach(o, k, v) m[std::atoi(k)] = json_object_get_boolean(v);
+        }
+        json_object_put(o);
+    }
+    return m;
+}
+
+static void putFavOwedLocked(const storage::User& u, const std::map<int, bool>& m) {
+    const std::string path = storage::userDir(u) + "/favorites-owed.json";
+    if (m.empty()) { cab::removeFile(path); return; }
+    json_object* o = json_object_new_object();
+    for (const auto& [id, on] : m)
+        json_object_object_add(o, std::to_string(id).c_str(), json_object_new_boolean(on));
+    const std::string tmp = path + ".part";
+    if (json_object_to_file(tmp.c_str(), o) == 0) ::rename(tmp.c_str(), path.c_str());
+    json_object_put(o);
+}
+
+static std::map<int, bool> favOwed(const storage::User& u) {
+    std::lock_guard<std::mutex> lock(gFavOwedMutex);
+    return favOwedLocked(u);
+}
+
+static void oweFavorite(const storage::User& u, int romId, bool on) {
+    std::lock_guard<std::mutex> lock(gFavOwedMutex);
+    std::map<int, bool> m = favOwedLocked(u);
+    m[romId] = on;
+    putFavOwedLocked(u, m);
+}
+
+// Every favourite `who` owes, sent; each stops being owed once the server has
+// it, unless it was pressed again meanwhile.
+static bool sendFavoritesAs(romm::Client& c, const storage::User& who, std::string* err) {
+    for (const auto& [romId, on] : favOwed(who)) {
+        bool forbidden = false;
+        if (!c.setFavorite(romId, on, &forbidden, err)) {
+            if (forbidden)
+                std::fprintf(stderr, "[favorite] RomM refused: this console was paired "
+                                     "before favourites needed collections.write\n");
+            return false;
+        }
+        std::lock_guard<std::mutex> lock(gFavOwedMutex);
+        std::map<int, bool> m = favOwedLocked(who);
+        if (auto it = m.find(romId); it != m.end() && it->second == on) m.erase(it);
+        putFavOwedLocked(who, m);
+        std::fprintf(stderr, "[favorite] %d %s on RomM\n", romId, on ? "added" : "removed");
+    }
+    return true;
+}
+
 // EVERYTHING `who` STILL OWES RomM, sent now with their own login, before their
 // folder is deleted (#194). Synchronous: called off the frame thread. Stops at
 // the first failure, because a server that refused one or did not answer will
@@ -332,6 +394,8 @@ public:
         // off the disk when it runs. No bytes, no marker; playtime.json is
         // its own record of what is owed.
         bool isPlay = false;
+        // Favourites (#267): every one owed, read off favorites-owed.json.
+        bool isFavorite = false;
     };
 
     // An upload that has not reached the server is the ONE irreplaceable thing
@@ -394,6 +458,16 @@ public:
             enqueue(std::move(j));
         }
         if (!playtime::owed(storage::currentUser()).empty()) sendPlay();
+        if (!favOwed(storage::currentUser()).empty()) sendFavorites();
+    }
+
+    // Everything owed in favorites-owed.json, in one job, as sendPlay.
+    void sendFavorites() {
+        Job j;
+        j.isFavorite = true;
+        j.fileName = "favourites";
+        j.resend = true;
+        enqueue(std::move(j));
     }
 
     // Everything owed in playtime.json, in one job. Queued once however often
@@ -519,6 +593,13 @@ private:
                 queue_.pop_front();
             }
 
+            if (job.isFavorite) {
+                std::string err;
+                const bool ok = sendFavoritesAs(*client_, storage::currentUser(), &err);
+                if (!ok) std::fprintf(stderr, "[favorite] not sent, kept locally: %s\n", err.c_str());
+                finished(job, ok, /*leftSomething=*/!ok);
+                continue;
+            }
             if (job.isPlay) {
                 std::string err;
                 const bool ok = sendPlaySessions(&err);
@@ -3154,6 +3235,20 @@ static Library loadLibrary(romm::Client& client) {
     std::fprintf(stderr, "[library] favourites in %llu ms\n",
                  static_cast<unsigned long long>(SDL_GetTicks() - tFavs));
     if (gotFavs) {
+        // WHAT THE SERVER HAS NOT HEARD YET WINS (#267): a favourite taken
+        // off while it was away stays off, one added stays on, until sent.
+        const std::map<int, bool> owedFav = favOwed(storage::currentUser());
+        favs.erase(std::remove_if(favs.begin(), favs.end(), [&](const romm::Game& g) {
+                       auto it = owedFav.find(g.id);
+                       return it != owedFav.end() && !it->second;
+                   }), favs.end());
+        for (const auto& [id, on] : owedFav) {
+            if (!on || std::any_of(favs.begin(), favs.end(),
+                                   [&](const romm::Game& g) { return g.id == id; }))
+                continue;
+            for (const auto& g : lib.games)
+                if (g.id == id) { favs.insert(favs.begin(), g); break; }
+        }
         for (const auto& g : favs) {
             if (!catalog::playable(g)) continue;
             lib.favorites.push_back(appendGame(lib, g));
@@ -7826,6 +7921,22 @@ int main(int argc, char** argv) {
             break;
         }
         d.kept = cache::isKeptBy(storage::currentUser(), d.romId);
+        // A favourite if Home has it, or the person's list does (a game this
+        // console cannot play is on the list but not on Home), or a press not
+        // yet sent says so.
+        d.favorite = std::find(favorites.begin(), favorites.end(), cardIndex) != favorites.end();
+        if (const storage::User& who = storage::currentUser(); who.valid()) {
+            if (json_object* arr = json_object_from_file(
+                    (storage::userDir(who) + "/favorites.json").c_str())) {
+                if (json_object_is_type(arr, json_type_array))
+                    for (size_t i = 0; i < json_object_array_length(arr); ++i)
+                        if (json_object_get_int(json_object_array_get_idx(arr, i)) == d.romId)
+                            d.favorite = true;
+                json_object_put(arr);
+            }
+            const std::map<int, bool> owedFav = favOwed(who);
+            if (auto it = owedFav.find(d.romId); it != owedFav.end()) d.favorite = it->second;
+        }
         const int romId = d.romId;
         detailScreen.open(std::move(d));
         stack.push_back(Screen::Detail);
@@ -10733,6 +10844,11 @@ int main(int argc, char** argv) {
                 sound::play(sound::Cue::Move);
                 break;
             case screens::Action::OpenGame:
+                // A GAME OPENED FROM SEARCH'S RESULTS CLOSES ITS KEYBOARD. Up
+                // from the keys leaves them open below the results, so typing
+                // can go on; opening a game left them open over its page,
+                // taking every press until B (MMagTech on the TV, 2026-10-06).
+                if (here() == Screen::Search && keyboard.isOpen()) keyboard.cancel();
                 openDetailSoon(res.value);
                 break;
             case screens::Action::Play:
@@ -10753,6 +10869,49 @@ int main(int argc, char** argv) {
             case screens::Action::Download:
                 downloadById(res.value);
                 break;
+            case screens::Action::ToggleFavorite: {
+                // THE HEART ANSWERS AT ONCE (#267): the page, Home's shelf and
+                // the person's list on the drive change now; the server hears
+                // it from the uploader, now or when it is back.
+                const int romId = res.value;
+                const bool on = !detailScreen.game().favorite;
+                detailScreen.setFavorite(on);
+                sound::play(sound::Cue::Activate);
+                const int card = detailScreen.game().cardIndex;
+                auto it = std::find(favorites.begin(), favorites.end(), card);
+                if (on && it == favorites.end() && card >= 0) favorites.insert(favorites.begin(), card);
+                if (!on && it != favorites.end()) favorites.erase(it);
+                // Home's place on the Favorites shelf, which just changed
+                // under it: kept in range, or Recent if the shelf is gone.
+                slotFocus[RowFavorites].clear();
+                slotPress[RowFavorites].clear();
+                if (focusRow == RowFavorites) {
+                    if (favorites.empty()) { focusRow = RowRecent; focusSlot = 0; }
+                    else focusSlot = std::clamp(focusSlot, 0, static_cast<int>(favorites.size()) - 1);
+                    if (cardAt(focusRow, focusSlot)) slotAnim(slotFocus, focusRow, focusSlot).settle(1.0f);
+                }
+                if (const storage::User& who = storage::currentUser(); who.valid()) {
+                    const std::string path = storage::userDir(who) + "/favorites.json";
+                    std::vector<int> ids;
+                    if (json_object* arr = json_object_from_file(path.c_str())) {
+                        if (json_object_is_type(arr, json_type_array))
+                            for (size_t i = 0; i < json_object_array_length(arr); ++i)
+                                ids.push_back(json_object_get_int(json_object_array_get_idx(arr, i)));
+                        json_object_put(arr);
+                    }
+                    ids.erase(std::remove(ids.begin(), ids.end(), romId), ids.end());
+                    if (on) ids.insert(ids.begin(), romId);
+                    json_object* arr = json_object_new_array();
+                    for (int id : ids) json_object_array_add(arr, json_object_new_int(id));
+                    const std::string tmp = path + ".part";
+                    if (json_object_to_file(tmp.c_str(), arr) == 0) ::rename(tmp.c_str(), path.c_str());
+                    json_object_put(arr);
+                    oweFavorite(who, romId, on);
+                    uploader.sendFavorites();
+                }
+                std::fprintf(stderr, "[favorite] %d %s\n", romId, on ? "on" : "off");
+                break;
+            }
             case screens::Action::RemoveDownload: {
                 // ASKS FIRST (#188): a mis-press cost a re-download, 37 GB and
                 // a reinstall for a PS3 game. The same question, words and

@@ -45,11 +45,34 @@ uniform vec4 uBorderColor;
 uniform vec2 uShadowParams;  // blur, offsetY
 uniform vec4 uShadowColor;
 uniform vec4 uEdgeLight;     // alpha 0 = off
+uniform int uShape;          // 0 box, 1 heart (ui::Rect::Shape)
 out vec4 fragColor;
 
 float roundedBoxSDF(vec2 p, vec2 halfSize, float r) {
     vec2 q = abs(p) - halfSize + r;
     return min(max(q.x, q.y), 0.0) + length(max(q, 0.0)) - r;
+}
+
+// The heart is Inigo Quilez's exact 2D distance function
+// (iquilezles.org/articles/distfunctions2d), y pointing up.
+float dot2(vec2 v) { return dot(v, v); }
+float heartSDF(vec2 p) {
+    p.x = abs(p.x);
+    if (p.y + p.x > 1.0) return sqrt(dot2(p - vec2(0.25, 0.75))) - sqrt(2.0) / 4.0;
+    return sqrt(min(dot2(p - vec2(0.0, 1.0)), dot2(p - 0.5 * max(p.x + p.y, 0.0)))) *
+           sign(p.x - p.y);
+}
+
+// The distance to whichever shape this is, in design points, from the centre.
+// The heart fits its rectangle's shorter side, centred.
+float shapeSDF(vec2 p, vec2 halfSize, float r) {
+    if (uShape == 1) {
+        // The heart spans 1.21 wide and 1.10 tall in its own units, point at 0.
+        float k = 2.0 * min(halfSize.x, halfSize.y) / 1.21;
+        vec2 q = vec2(p.x, -p.y) / k + vec2(0.0, 0.552);
+        return heartSDF(q) * k - r;
+    }
+    return roundedBoxSDF(p, halfSize, r);
 }
 
 void main() {
@@ -59,7 +82,7 @@ void main() {
     vec2 halfSize = uRect.zw * 0.5;
     float r = min(uRadius, min(halfSize.x, halfSize.y));
 
-    float d = roundedBoxSDF(vPoint - center, halfSize, r);
+    float d = shapeSDF(vPoint - center, halfSize, r);
 
     // One point of feathering. The canvas is scaled to the panel, so this is
     // deliberately in design points and not in pixels: the softness of an edge
@@ -72,7 +95,7 @@ void main() {
     // Shadow first, behind everything, offset downward and blurred by feeding
     // the SDF through a wider smoothstep.
     if (uShadowParams.x > 0.0) {
-        float sd = roundedBoxSDF(vPoint - center - vec2(0.0, uShadowParams.y), halfSize, r);
+        float sd = shapeSDF(vPoint - center - vec2(0.0, uShadowParams.y), halfSize, r);
         float sa = 1.0 - smoothstep(-uShadowParams.x, uShadowParams.x, sd);
         // Square it: a linear falloff reads as a grey halo with a visible edge,
         // where a real shadow is dense near the object and fades fast.
@@ -458,6 +481,7 @@ bool Renderer::init() {
     loc_.fill = glGetUniformLocation(program_, "uFill");
     loc_.fillBottom = glGetUniformLocation(program_, "uFillBottom");
     loc_.edgeLight = glGetUniformLocation(program_, "uEdgeLight");
+    loc_.shape = glGetUniformLocation(program_, "uShape");
     loc_.border = glGetUniformLocation(program_, "uBorder");
     loc_.borderColor = glGetUniformLocation(program_, "uBorderColor");
     loc_.shadow = glGetUniformLocation(program_, "uShadowParams");
@@ -810,6 +834,7 @@ void Renderer::draw(const Rect& r) {
     glUniform4f(loc_.fillBottom, bottom.r, bottom.g, bottom.b, bottom.a * k);
     glUniform4f(loc_.edgeLight, r.edgeLight.r, r.edgeLight.g, r.edgeLight.b,
                 r.edgeLight.a * k);
+    glUniform1i(loc_.shape, static_cast<int>(r.shape));
     glUniform1f(loc_.border, r.border);
     glUniform4f(loc_.borderColor, r.borderColor.r, r.borderColor.g, r.borderColor.b,
                 r.borderColor.a * k);

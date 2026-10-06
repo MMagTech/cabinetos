@@ -92,6 +92,13 @@ struct Rect {
     // off. This is not the same thing as `border`: a rim of even weight all the
     // way round says "outline", where a top-only highlight says "edge".
     Color edgeLight = Color::white(0);
+
+    // THE OUTLINE, when it is not a rectangle (#267): a favourite's heart,
+    // drawn by the same shader so fill, rim and shadow work the same.
+    // The shape fits inside the rectangle, centred; `radius` softens its
+    // corners. Box is every shape that existed before this.
+    enum class Shape { Box, Heart };
+    Shape shape = Shape::Box;
 };
 
 // A three-stop vertical gradient, which is exactly what the backdrop is and
@@ -312,7 +319,7 @@ private:
 
     struct {
         GLint canvas, rect, radius, fill, border, borderColor, shadow, shadowColor,
-            shadowVS, fillBottom, edgeLight;
+            shadowVS, fillBottom, edgeLight, shape;
     } loc_{};
     struct {
         GLint top, mid, bottom, midStop, alpha;
