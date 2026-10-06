@@ -385,9 +385,7 @@ std::string Machine::because() const {
                        "fallback.";
             if (facts_.wifiConfigured) return "Connected over Wi-Fi.";
             if (!facts_.wifiPresent) return "Connected over Ethernet.";
-            return "Connected over Ethernet. Wi-Fi is optional. Setting it up "
-                   "now gives the console a way back if the cable is ever "
-                   "unplugged.";
+            return "Connected over Ethernet. Wi-Fi is optional.";
 
         case Step::Server:
             if (facts_.serverAnswered) return {};

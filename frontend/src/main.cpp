@@ -1505,7 +1505,18 @@ struct MenuNotice {
         tone = k;
         // Busy holds until the answer replaces it; a stuck "Saving…" is still
         // gone in fifteen seconds rather than for ever.
-        life = k == Tone::Busy ? 15.0f : 3.2f;
+        //
+        // EVERYTHING ELSE STAYS AS LONG AS IT TAKES TO READ (#110): 1.5 s and
+        // 60 ms a character, from 2.5 s to 4.5 s. It was a flat 3.2 s, too
+        // long for "Saved to RomM" and short for a sentence.
+        if (k == Tone::Busy) {
+            life = 15.0f;
+        } else {
+            int chars = 0;
+            for (unsigned char ch : text)
+                if ((ch & 0xC0) != 0x80) ++chars;   // characters, not UTF-8 bytes
+            life = std::clamp(1.5f + 0.06f * static_cast<float>(chars), 2.5f, 4.5f);
+        }
         age = 0.0f;
     }
     void tick(float dt) {
@@ -1591,7 +1602,7 @@ constexpr Credit kCredits[] = {
     {"SDL3", "Input and audio \xC2\xB7 zlib"},
     {"SDL_GameControllerDB", "The controller list \xC2\xB7 zlib"},
     {"Mesa", "Graphics \xC2\xB7 MIT"},
-    {"FreeType", "Text \xC2\xB7 FreeType licence"},
+    {"FreeType", "Text \xC2\xB7 FreeType License"},
     {"libjpeg-turbo, libpng", "Cover art \xC2\xB7 BSD, libpng"},
     {"libcurl", "Talking to RomM \xC2\xB7 curl"},
     {"json-c", "RomM's answers \xC2\xB7 MIT"},
@@ -1611,7 +1622,7 @@ constexpr GalleryNotice kNoticeGallery[] = {
     {"Saved to RomM", Tone::Done},
     {"Saved. Will upload when RomM is back", Tone::Info},
     {"Saved on this console only", Tone::Info},
-    {"Save states aren't available for this system", Tone::Info},
+    {"No save states for this system", Tone::Info},
     {"Couldn't save the state", Tone::Problem},
     {"Can't restart right now", Tone::Problem},
     {"God of War III is still downloading", Tone::Info},
@@ -1631,9 +1642,9 @@ constexpr GalleryNotice kNoticeGallery[] = {
     {"Removing Steam\xE2\x80\xA6", Tone::Busy},
     {"Steam removed", Tone::Done},
     {"Couldn't remove Steam", Tone::Problem},
-    {"Removed. Someone else keeps it, so no space came back", Tone::Info},
-    {"Removed. Others keep it, so no space came back", Tone::Info},
-    {"Removed. The space comes back when you stop playing it", Tone::Info},
+    {"Removed. Another account still keeps it", Tone::Info},
+    {"Removed. Other accounts still keep it", Tone::Info},
+    {"Removed. The space frees when the game closes", Tone::Info},
     {"Removed, but its files couldn't be deleted", Tone::Problem},
     {"Update available", Tone::Info},
     {"Updated to 2026.09.28", Tone::Done},
@@ -1669,7 +1680,7 @@ static void saveStateNow(GameSession& sess, Uploader& up, MenuNotice& notice) {
     std::vector<uint8_t> st;
     if (!core.saveState(st) || st.empty()) {
         std::fprintf(stderr, "[state] this core cannot serialize\n");
-        notice.say("Save states aren't available for this system", Tone::Info);
+        notice.say("No save states for this system", Tone::Info);
         return;
     }
     // Named with a timestamp because states accumulate on purpose; a save
@@ -5937,7 +5948,7 @@ int main(int argc, char** argv) {
                 if (o == screens::PinScreen::Outcome::Cancelled) pad.close();
                 if (o != screens::PinScreen::Outcome::Entered) return;
                 if (!accounts::checkPin(pad.pin())) {
-                    pad.reject("That is not the PIN");
+                    pad.reject("Wrong PIN");
                     if (++pinFails >= 5) { pinFails = 0; pad.lockFor(30.0f); }
                     return;
                 }
@@ -7757,13 +7768,13 @@ int main(int argc, char** argv) {
                 // and the first thing that account switching makes real.
                 detailScreen.setNotice("");
                 menuNotice.say(r.otherKeepers == 1
-                                   ? "Removed. Someone else keeps it, so no space came back"
-                                   : "Removed. Others keep it, so no space came back",
+                                   ? "Removed. Another account still keeps it"
+                                   : "Removed. Other accounts still keep it",
                                Tone::Info);
                 break;
             case cache::Release::What::Demoted:
                 detailScreen.setNotice("");
-                menuNotice.say("Removed. The space comes back when you stop playing it",
+                menuNotice.say("Removed. The space frees when the game closes",
                                Tone::Info);
                 break;
             case cache::Release::What::DeleteFailed:
@@ -8186,8 +8197,7 @@ int main(int argc, char** argv) {
         // making somebody wait.
         if (const int owed = uploader.pending(); owed > 0) {
             if (why)
-                *why = owed == 1 ? "A save is still going up. One moment."
-                                 : "Saves are still going up. One moment.";
+                *why = owed == 1 ? "A save is still uploading" : "Saves are still uploading";
             return false;
         }
 
@@ -8326,7 +8336,7 @@ int main(int argc, char** argv) {
                 return;
             }
             std::lock_guard<std::mutex> lk(addJob->m);
-            if (addJob->err.empty()) addJob->err = "that code expired before anybody approved it";
+            if (addJob->err.empty()) addJob->err = "expired";
             addJob->finished = true; addJob->running = false;
         });
         addAccountScreen.setBusy(true);
@@ -8508,7 +8518,7 @@ int main(int argc, char** argv) {
         if (!pinExpect.empty()) {
             if (pinScreen.pin() != pinExpect) {
                 sound::play(sound::Cue::Edge);
-                pinScreen.reject("That is not the code");
+                pinScreen.reject("Wrong code");
                 return;
             }
             pinExpect.clear();
@@ -8517,7 +8527,7 @@ int main(int argc, char** argv) {
                 ++pinFails;
                 sound::play(sound::Cue::Edge);
                 std::fprintf(stderr, "[pin] wrong, %d of %d\n", pinFails, kPinTries);
-                pinScreen.reject("That is not the PIN");
+                pinScreen.reject("Wrong PIN");
                 if (pinFails >= kPinTries) {
                     pinFails = 0;
                     pinScreen.lockFor(kPinLockSeconds);
@@ -9091,7 +9101,7 @@ int main(int argc, char** argv) {
                         job.fresh = true;
                         return;
                     }
-                    say("Couldn't pair. Press the red sync button again");
+                    say("Couldn't pair");
                 }
             }
         });
@@ -9412,8 +9422,7 @@ int main(int argc, char** argv) {
         std::vector<screens::SettingsCategory> cats;
 
         cats.push_back({"Accounts", {
-            {K::Action, SetAddAccount, "Add an account",
-             "Pair another RomM user with this console", ""},
+            {K::Action, SetAddAccount, "Add an account", "", ""},
         }});
         // REMOVE AN ACCOUNT: from this console only. Greyed out when there is
         // nobody it could remove (not the person signed in, not the owner).
@@ -9427,7 +9436,7 @@ int main(int argc, char** argv) {
         // somebody else is signed in, the owner switches in, which asks for it.
         {
             auto& rows = cats.back().rows;
-            const char* protects = "Protects accounts, Wi-Fi, sign out and file access";
+            const char* protects = "Protects accounts, network, storage, Steam and updates";
             const bool isOwner = accounts::activeId() == accounts::ownerId();
             const std::vector<accounts::Account> list = accounts::all();
             const accounts::Account* owner = accounts::find(list, accounts::ownerId());
@@ -9564,8 +9573,7 @@ int main(int argc, char** argv) {
             !accounts::pinIsSet() || accounts::activeId() == accounts::ownerId();
         cats.push_back({"Display and Sound", {
             [] {
-                Row r{K::Choice, SetInterfaceSounds, "Interface sounds",
-                      "The clicks when you move around the menus", ""};
+                Row r{K::Choice, SetInterfaceSounds, "Interface sounds", "", ""};
                 for (int i = 0; i < sound::kLevelCount; ++i)
                     r.choices.push_back(sound::levelName(static_cast<sound::Level>(i)));
                 r.choice = static_cast<int>(sound::level());
@@ -9783,7 +9791,7 @@ int main(int argc, char** argv) {
             const std::string base = update::baseVersion();
             cats.push_back({"About", {
                 {K::Info, 0, "Version", base.empty() ? "" : "Bazzite " + base, version},
-                {K::Action, SetCredits, "Credits and licences", "", ""},
+                {K::Action, SetCredits, "Credits and licenses", "", ""},
             }});
         }
 
@@ -10855,7 +10863,7 @@ int main(int argc, char** argv) {
                         names.push_back(cr.name);
                         values.push_back(cr.what);
                     }
-                    askChoice("Credits and licences", "", names, 0, [](int) {});
+                    askChoice("Credits and licenses", "", names, 0, [](int) {});
                     choiceScreen.setValues(values);
                     sound::play(sound::Cue::Activate);
                 } else if (res.value == SetUpdate) {
@@ -11437,7 +11445,7 @@ int main(int argc, char** argv) {
         if (failed > 0)
             menuNotice.say("Couldn't delete some of the files", Tone::Problem);
         else if (demoted > 0)
-            menuNotice.say("Removed. The space comes back when you stop playing it", Tone::Info);
+            menuNotice.say("Removed. The space frees when the game closes", Tone::Info);
         else
             menuNotice.say(removed == 1 ? "Download removed"
                                         : std::to_string(removed) + " downloads removed",
@@ -11956,7 +11964,7 @@ int main(int argc, char** argv) {
                 refuseLaunch("Needs newer " + launchJob.systemName + " keys on your server");
                 break;
             case cab::standalone::Run::End::NoLicence:
-                refuseLaunch("No licence for this game on your server");
+                refuseLaunch("No license for this game on your server");
                 break;
             case cab::standalone::Run::End::Crashed:
                 menuNotice.say("The game closed unexpectedly", Tone::Problem);
@@ -13981,7 +13989,7 @@ int main(int argc, char** argv) {
                                     screenshotNow(session, uploader, menuNotice);
                                 }
                                 if ((save || load) && !session.snapshots) {
-                                    menuNotice.say("Save states aren't available here",
+                                    menuNotice.say("No save states for this system",
                                                    Tone::Info);
                                 } else if (save) {
                                     std::fprintf(stderr, "[shortcuts] player %d: save state\n",
@@ -14466,14 +14474,16 @@ int main(int argc, char** argv) {
                         accounts::loadActiveToken(liveClient))
                         uploader.resendOwed();
                     addAccountScreen.setError(
-                        who.name + " is already on this console; their sign-in is "
-                        "renewed. To add someone else, sign in to RomM as them (a "
-                        "private window is easiest) and try again.");
+                        who.name + " is already on this console. Sign in to RomM as "
+                        "the person you are adding.");
                     std::fprintf(stderr, "[accounts] NOT ADDED: approved as %d - %s, "
                                          "who is already here. %zu accounts.\n",
                                  who.id, who.name.c_str(), accounts::all().size());
                 } else {
-                    addAccountScreen.setError(err.empty() ? "That did not pair." : err);
+                    // The reason stays in the log; the screen says it plainly.
+                    addAccountScreen.setError(err.find("expired") != std::string::npos
+                                                  ? "The code expired"
+                                                  : "Couldn't add the account");
                     std::fprintf(stderr, "[accounts] add failed: %s\n",
                                  err.empty() ? "no reason given" : err.c_str());
                 }
@@ -14866,7 +14876,9 @@ int main(int argc, char** argv) {
             updStartNotice.clear();
         }
         if (noticeGallery) {
-            // Four seconds each, the first after two so the screen has settled.
+            // Each for as long as it really stays up, a second apart, the
+            // first after two so the screen has settled. A Busy one is held
+            // 3.8 s, since nothing will answer it.
             static float galleryClock = -2.0f;
             static int galleryNext = 0;
             galleryClock += dt;
@@ -14876,10 +14888,9 @@ int main(int argc, char** argv) {
                 std::fprintf(stderr, "[notice] gallery %d/%d: %s\n", galleryNext % kN + 1, kN,
                              g.text);
                 menuNotice.say(g.text, g.tone);
-                // Hold it for the whole slot, including a Busy one.
-                menuNotice.life = 3.8f;
+                if (g.tone == Tone::Busy) menuNotice.life = 3.8f;
                 ++galleryNext;
-                galleryClock = -4.0f;
+                galleryClock = -(menuNotice.life + 1.0f);
             }
         }
         // The other half of the sentence Save started. Cabinet's own words,
@@ -15156,7 +15167,7 @@ int main(int argc, char** argv) {
                         // Said in the title, as MMagTech asked (2026-09-26):
                         // "Pairing…" on the row gave way to a line alone.
                         choiceScreen.setTitle(ok ? "Paired successfully" : "Add a controller");
-                        padDetail = ok ? "Press a button on it" : "Couldn't pair. Try again";
+                        padDetail = ok ? "Press a button on it" : "Couldn't pair";
                         padPairingName.clear();
                     }
                     if (fresh || done) padWindowRefresh();
@@ -15238,7 +15249,7 @@ int main(int argc, char** argv) {
                         askServerAddress(addr, "Couldn't save it");
                     } else {
                         askServerAddress(addr,
-                                         r == server::Check::Different ? "A different server: use Sign out"
+                                         r == server::Check::Different ? "A different server. Sign out first"
                                          : r == server::Check::NoServer
                                              ? "No RomM server there"
                                              : "Couldn't check it");
@@ -16133,7 +16144,7 @@ int main(int argc, char** argv) {
             const char* title = "Nothing played yet";
             // One line. A second, pointing at the Library, was dropped on
             // MMagTech's word: Library is already lit in the bar.
-            const char* detail = "Games you play or favourite will show up here.";
+            const char* detail = "Games you play or favorite show up here.";
             const float tw = text.measure(title, ui::TextStyle::Title2, sc);
             const float dw = text.measure(detail, ui::TextStyle::Callout, sc);
             const float ty = ui::kCanvasHeight * 0.45f;
