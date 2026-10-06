@@ -11,26 +11,39 @@ specification is `docs/PROJECT.md`; the order is `docs/ROADMAP.md`.
 
 ## Where things stand
 
-2026-10-06: offline play (#88), the cartridge-save fix (#259) and the build's
-Steam-session fallback (#270) merged in #264; image 2026.10.06 is `latest`.
-The A9 now sits at the LG C1, on Wi-Fi at **192.168.1.109** (not the cable
-address): run `tools/ui-loop.sh` with `CABINETOS_A9=cabinet@192.168.1.109`.
+2026-10-06, branch `c1-favourite-wii` (pushed, no PR yet, no testing image):
+- #256 done at the C1: Steam's own Display > Resolution pick (incl. 4K 120)
+  now reaches the TV (no forced size on Steam's gamescope); the console stays
+  at 60 by decision. Findings on #256.
+- #267 done and judged: the heart beside the title (Up from Play), sent to
+  RomM's Favorites collection, kept and sent later when offline. Needs
+  `collections.write`: the A9 was re-paired and its kept presses landed.
+  Also fixed: Search's keyboard stayed open over a game's page; pairing
+  showed the link without its code, then the code twice.
+- Steam VRR (#272): Steam's VRR switch never applies ("Set VRR enabled: 0"
+  at every start in `~/.local/share/Steam/logs/systemperfmanager.txt`);
+  forcing gamescope's `GAMESCOPE_VRR_ENABLED` atom to 1 works and the C1's
+  green-button info shows VRR. MMagTech wants Steam VRR; undecided between a
+  console workaround (force the atom when the TV supports VRR) and adding
+  Valve's steamos-manager (lead: Steam may route its Performance settings
+  through it). Research results go on #272.
+
+The A9 sits at the LG C1, on Wi-Fi at **192.168.1.109**: run
+`tools/ui-loop.sh` with `CABINETOS_A9=cabinet@192.168.1.109`
+(`--session-script` runs the branch's session script).
 
 ## Next
 
-One session, in this order, one testing image judged together, then merged.
-
-1. **120 Hz and VRR on the C1 (#256).** The console picks the TV's
-   resolution but always 60 Hz; ask for 120 when offered. The C1 reports VRR
-   40-120 Hz to the GPU (Game Optimizer on). Then check games still pace
-   cleanly (`[pace]` lines) with VRR.
-2. **The favourite button (#267).** A heart or a star by the title on the
-   game's page, reached with Up from Play; build both, MMagTech picks on the
-   TV. Works offline, sent when the server is back.
-3. **Player 2 in Wild West Guns (#269).** Two Remotes work in Mario Kart Wii
-   and Bit.Trip Beat; this game says "register a second Remote". Start with
-   Dolphin's Wii Remote log and the `BT.DINF` list before and after a launch.
-   If it turns out deep, say so and decide with MMagTech.
+1. **Steam VRR (#272):** MMagTech decides workaround, steamos-manager, or
+   both, from the research on #272. Then one look with a console game and
+   the C1's green-button info (FreeSync Premium on) to confirm the TV goes
+   VRR for the console too.
+2. **Player 2 in Wild West Guns (#269)**, rom 3608 (Mario Kart Wii 208
+   works). Start with Dolphin's Wii Remote log and the `BT.DINF` list in each
+   game's `User/Wii/shared2/sys/SYSCONF` before and after a launch. If it
+   turns out deep, say so and decide with MMagTech.
+3. **One testing image** for all of it, judged together on the TV, merged on
+   MMagTech's word (Closes #256, #267, and whatever #269/#272 become).
 
 Never run a headless frontend on the A9 while MMagTech is at the TV: it reads
 the same controllers (docs/lessons/testing.md).
