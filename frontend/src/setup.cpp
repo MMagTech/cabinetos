@@ -1528,21 +1528,16 @@ void Flow::draw() {
     // a shortcut past typing them.
     if (machine_.step() == firstrun::Step::Pair && pairingLive_) {
         y += 34.0f;
-        for (const std::string& line :
-             wrap(t, pairing_.verificationUrl, ui::TextStyle::Body, sc, kProseWidth)) {
+        // Without "http://", as Add a user shows it: a browser adds it.
+        std::string link = pairing_.verificationUrl;
+        if (link.rfind("http://", 0) == 0) link = link.substr(7);
+        for (const std::string& line : wrap(t, link, ui::TextStyle::Body, sc, kProseWidth)) {
             t.draw(r, line, kInset, y + t.ascent(ui::TextStyle::Body, sc),
                    ui::TextStyle::Body, ui::palette::kScreenCyan, sc);
             y += t.lineHeight(ui::TextStyle::Body, sc);
         }
-        y += 22.0f;
-        // THE CODE IS THE BIGGEST THING ON THE SCREEN AFTER THE TITLE. It is
-        // what somebody reads out loud, checks against their phone, or types
-        // when the QR will not scan — and RomM shows the same characters on the
-        // page they are approving, so the two have to be comparable at a
-        // glance from a sofa.
-        t.draw(r, "Code " + pairing_.userCode, kInset,
-               y + t.ascent(ui::TextStyle::Title1, sc), ui::TextStyle::Title1,
-               Color::white(1.0f), sc);
+        // NO SEPARATE "Code" LINE: the link carries the code, and showing it
+        // twice read as a mistake (MMagTech, 2026-10-06, on Add a user).
     }
 
     // THE PANEL IS THE SIZE OF WHAT IS IN IT. A fixed-height box with one line

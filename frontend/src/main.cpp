@@ -14210,10 +14210,19 @@ int main(int argc, char** argv) {
                     // already has an account here. Staying on this screen and
                     // saying so is right — going back to a panel that looks
                     // exactly as it did is what made this look broken.
+                    // IT RENEWED THEIR SIGN-IN, which is also how a console
+                    // paired before a new permission gets it (collections.write
+                    // for favourites, #267): say that, and use the new key now
+                    // if it is the person the console is acting as, as the
+                    // account switch does: only with nothing going up, since
+                    // the uploader holds this client. Otherwise at next start.
+                    if (who.id == accounts::activeId() && uploader.pending() == 0 &&
+                        accounts::loadActiveToken(liveClient))
+                        uploader.resendOwed();
                     addAccountScreen.setError(
-                        who.name + " is already on this console. "
-                        "Sign in to RomM as the person you are adding (a private "
-                        "window is easiest) and try again.");
+                        who.name + " is already on this console; their sign-in is "
+                        "renewed. To add someone else, sign in to RomM as them (a "
+                        "private window is easiest) and try again.");
                     std::fprintf(stderr, "[accounts] NOT ADDED: approved as %d - %s, "
                                          "who is already here. %zu accounts.\n",
                                  who.id, who.name.c_str(), accounts::all().size());

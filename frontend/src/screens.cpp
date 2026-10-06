@@ -1964,25 +1964,19 @@ void AddAccountScreen::draw(Ctx& c) {
     if (!code_.empty()) {
         y += 30.0f;
         if (!url_.empty()) {
-            // Without the code repeated on the end of it: it is printed below,
-            // at four times the size, and once is enough.
+            // THE WHOLE LINK, code and all, as first run shows it. It was
+            // shown without `?user_code=`, and typed into a browser that
+            // opens RomM's page with nowhere to put the code (MMagTech, with
+            // no phone to scan the QR, 2026-10-06).
             std::string shown = url_;
-            if (const size_t q = shown.find("?user_code="); q != std::string::npos)
-                shown = shown.substr(0, q);
             if (shown.rfind("http://", 0) == 0) shown = shown.substr(7);
             c.text.draw(c.r, shown, kInset,
                         y + c.text.ascent(ui::TextStyle::Body, c.sc),
                         ui::TextStyle::Body, ui::palette::kScreenCyan, c.sc);
             y += c.text.lineHeight(ui::TextStyle::Body, c.sc);
         }
-        y += 20.0f;
-        // THE BIGGEST THING AFTER THE TITLE, for setup.cpp's reason: it is what
-        // somebody reads off the screen and checks against their phone, and
-        // RomM shows the same characters on the page they are approving.
-        c.text.draw(c.r, "Code " + code_, kInset,
-                    y + c.text.ascent(ui::TextStyle::Title1, c.sc),
-                    ui::TextStyle::Title1, ui::Color::white(0.97f * a), c.sc);
-        y += c.text.lineHeight(ui::TextStyle::Title1, c.sc);
+        // NO SEPARATE "Code" LINE: the link carries the code, and showing it
+        // twice read as a mistake (MMagTech, 2026-10-06).
     }
 
     // AN OUTCOME BELONGS IN THE PROSE COLUMN, not over the code. This is where
