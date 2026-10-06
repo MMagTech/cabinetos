@@ -1523,18 +1523,17 @@ struct MenuNotice {
 };
 using Tone = MenuNotice::Tone;
 
-// A RETROACHIEVEMENTS UNLOCK (#74), over the game: it fades in at the
-// foot of the screen on the left, says what was earned, and fades out on
-// its own. It never pauses the game or takes a button (MMagTech,
-// 2026-10-06). One at a time, in the order they were earned. It waits up
-// to a second and a half for its badge so the picture and the chime
-// arrive together.
+// A RETROACHIEVEMENTS UNLOCK (#74), over the game: it fades in at the top
+// right of the screen, says what was earned, and fades out on its own. It
+// never pauses the game or takes a button (MMagTech, 2026-10-06). One at a
+// time, in the order they were earned. It waits up to a second and a half
+// for its badge so the picture and the chime arrive together.
 struct AchievementToast {
     ra::Popup p;
     bool waiting = false;   // taken, badge not in yet
     bool on = false;
     float age = 0.0f;
-    static constexpr float kIn = 0.35f, kHold = 5.0f, kOut = 0.6f, kBadgeWait = 1.5f;
+    static constexpr float kIn = 0.35f, kHold = 4.0f, kOut = 0.6f, kBadgeWait = 1.5f;
     float alpha() const {
         if (!on) return 0.0f;
         if (age < kIn) return age / kIn;
@@ -10407,6 +10406,17 @@ int main(int argc, char** argv) {
                 } else if (stack.size() > 1 && here() == Screen::Detail && !shotMode) {
                     pendingDetailBack = true;
                     sound::play(sound::Cue::Back);
+                } else if (here() == Screen::Search) {
+                    // B FROM SEARCH'S RESULTS goes Home the way B from its keys
+                    // does, keyboard and all. Popping the screen alone left the
+                    // keyboard, still open below the results, over Home with
+                    // the search in it (MMagTech on the TV, 2026-10-06). The
+                    // same steps as goToDestination(0), declared further down.
+                    if (keyboard.isOpen()) keyboard.cancel();
+                    searchScreen.setFocused(false);
+                    stack.clear();
+                    stack.push_back(Screen::Home);
+                    sound::play(sound::Cue::Back);
                 } else if (stack.size() > 1) {
                     stack.pop_back(); sound::play(sound::Cue::Back);
                 } else sound::play(sound::Cue::Edge);
@@ -14714,6 +14724,14 @@ int main(int argc, char** argv) {
             raToast.age += dt;
             if (raToast.over()) raToast.on = false;
         }
+        // ONLY OVER A GAME. One that lands as the game is left is not shown on
+        // Home, where the card's corner is the account chip's: the game's page
+        // has it (MMagTech, 2026-10-06).
+        if (!playing) {
+            ra::Popup dropped;
+            while (ra::takePopup(&dropped)) {}
+            raToast.on = raToast.waiting = false;
+        }
         if (!raToast.on && !raToast.waiting && ra::takePopup(&raToast.p)) {
             raToast.waiting = true;
             raToast.age = 0.0f;
@@ -16682,49 +16700,54 @@ int main(int argc, char** argv) {
         // ---- A RetroAchievements unlock (#74) -------------------------------
         //
         // The same surface and edge as the notice pill, as a card: the badge
-        // on the left, what it was and its points above, its name below.
-        // Bottom left inside the safe area, clear of the notice in the middle.
+        // on the left, what it was and its points above, its name below. TOP
+        // RIGHT inside the safe area, where consoles put these (MMagTech on
+        // the TV, 2026-10-06: bottom left was "horrible"), and clear of the
+        // notice pill at the foot. It drops in a little as it fades in.
         if (const float ta = raToast.alpha(); ta > 0.01f) {
             const float keepAlpha = renderer.contentAlpha();
             renderer.setContentAlpha(1.0f);
-            constexpr float kH = 132.0f, kPad = 18.0f, kBadge = 96.0f, kGap = 22.0f,
-                            kMaxText = 900.0f;
-            const ui::TextStyle top = ui::TextStyle::Footnote, name = ui::TextStyle::Title3;
+            // SMALL: enough to say "you got one", not to read about it; the
+            // game's page has the rest (MMagTech on the TV, 2026-10-06: the
+            // first size was "more distracting than informing").
+            constexpr float kH = 84.0f, kPad = 12.0f, kBadge = 60.0f, kGap = 16.0f,
+                            kMaxText = 520.0f;
+            const ui::TextStyle top = ui::TextStyle::Caption1, name = ui::TextStyle::Callout;
             const ra::Popup& p = raToast.p;
-            std::string line1;
-            if (p.complete) {
-                line1 = "Every achievement unlocked";
-            } else {
-                line1 = "Achievement unlocked";
-                if (p.points > 0)
-                    line1 += "  \xC2\xB7  " + std::to_string(p.points) +
-                             (p.points == 1 ? " point" : " points");
-            }
+            const std::string line1 =
+                p.complete ? "Every achievement unlocked" : "Achievement unlocked";
             const std::string line2 = text.truncate(p.title, name, sc, kMaxText);
             const float tw = std::min(kMaxText, std::max(text.measure(line1, top, sc),
                                                          text.measure(line2, name, sc)));
-            const float w = kPad + kBadge + kGap + tw + kPad + 12.0f;
-            const float x = ui::kSafeInset + 24.0f;
-            const float rise = (1.0f - std::min(1.0f, raToast.age / AchievementToast::kIn));
-            const float y = ui::kCanvasHeight - ui::kSafeInset - kH - 24.0f + rise * 14.0f;
+            const float w = kPad + kBadge + kGap + tw + kPad + 8.0f;
+            // TUCKED INTO THE CORNER: closer to the top than to the side, so
+            // on a screen wider than it is tall the two gaps look the same
+            // (MMagTech on the TV, 2026-10-06: equal margins read as low).
+            constexpr float kTop = 32.0f, kRight = 48.0f;
+            const float x = ui::kCanvasWidth - kRight - w;
+            const float drop = (1.0f - std::min(1.0f, raToast.age / AchievementToast::kIn));
+            const float y = kTop - drop * 10.0f;
+            // A LITTLE OF THE GAME SHOWS THROUGH, so it passes over the game
+            // rather than sitting on it; no lower, or white text washes out
+            // over a bright screen (MMagTech, 2026-10-06).
             ui::Color fill = look::surface();
-            fill.a = 0.96f * ta;
-            ui::Rect card{x, y, w, kH, 26.0f, fill};
+            fill.a = 0.80f * ta;
+            ui::Rect card{x, y, w, kH, 20.0f, fill};
             card.border = 1.5f;
             card.borderColor = ui::Color::white(0.14f * ta);
             card.edgeLight = ui::Color::white(0.18f * ta);
-            card.shadowBlur = 26.0f;
-            card.shadowOffsetY = 10.0f;
-            card.shadowColor = ui::Color::black(0.45f * ta);
+            card.shadowBlur = 18.0f;
+            card.shadowOffsetY = 6.0f;
+            card.shadowColor = ui::Color::black(0.40f * ta);
             renderer.draw(card);
             const float bx = x + kPad, by = y + (kH - kBadge) * 0.5f;
             const ui::Image* img = p.badgeUrl.empty() ? nullptr : &images.get(p.badgeUrl);
             if (img && img->ready) {
                 renderer.drawTextured(bx, by, kBadge, kBadge, img->texture, 0, 0, 1, 1,
                                       ui::Color{1, 1, 1, ta * img->fade}, false, 0.0f, bx, by,
-                                      kBadge, kBadge, 14.0f);
+                                      kBadge, kBadge, 10.0f);
             } else {
-                renderer.draw(ui::Rect{bx, by, kBadge, kBadge, 14.0f, ui::Color::white(0.10f * ta)});
+                renderer.draw(ui::Rect{bx, by, kBadge, kBadge, 10.0f, ui::Color::white(0.10f * ta)});
             }
             const float tx = bx + kBadge + kGap;
             const float l1 = text.lineHeight(top, sc), l2 = text.lineHeight(name, sc);
