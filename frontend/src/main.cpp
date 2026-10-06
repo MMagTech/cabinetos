@@ -2648,9 +2648,7 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
             if (need > 0 && cache::freeBytes(location) < need) {
                 cache::evictUntilFree(location, need, id);
                 if (cache::freeBytes(location) < need) {
-                    job.message = job.keepWhenReady
-                                      ? "Not enough space. Remove downloads or add a drive"
-                                      : "Not enough space. Remove some downloads";
+                    job.message = "Not enough space";
                     job.stage = LaunchJob::Stage::Failed;
                     return;
                 }
@@ -2733,13 +2731,10 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
                 if (cache::freeBytes(location) < want) {
                     cache::evictUntilFree(location, want, /*protectRomId=*/0);
                     if (cache::freeBytes(location) < want) {
-                        // WHAT TO DO, SHORT (MMagTech, 2026-09-26). Play
-                        // only ever fetches onto the console's own drive, so
-                        // a new drive would not help it; a Download would
-                        // spill onto one.
-                        job.message = job.keepWhenReady
-                                          ? "Not enough space. Remove downloads or add a drive"
-                                          : "Not enough space. Remove some downloads";
+                        // THE CONSTRAINT, NOT WHAT TO DO ABOUT IT (#110,
+                        // MMagTech, 2026-10-06). It said "Remove downloads or
+                        // add a drive" from 2026-09-26.
+                        job.message = "Not enough space";
                         job.stage = LaunchJob::Stage::Failed;
                         return;
                     }
@@ -2817,9 +2812,7 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
             unpacked > 0 && cache::freeBytes(location) < unpacked) {
             cache::evictUntilFree(location, unpacked, id);
             if (cache::freeBytes(location) < unpacked) {
-                job.message = job.keepWhenReady
-                                  ? "Not enough space. Remove downloads or add a drive"
-                                  : "Not enough space. Remove some downloads";
+                job.message = "Not enough space";
                 job.stage = LaunchJob::Stage::Failed;
                 return;
             }
@@ -7707,10 +7700,10 @@ int main(int argc, char** argv) {
             // The one failure the person ever sees, and the number is what makes
             // it actionable: without it "the disk is full" is a dead end.
             //
-            // SHORT, AND IT SAYS WHAT TO DO (MMagTech, 2026-09-26). A drive
-            // helps here: a Download spills onto an extra drive.
-            detailScreen.setNotice("Needs " + gigabytes(v.shortfallBytes) +
-                                   " more. Remove downloads or add a drive");
+            // THE CONSTRAINT AND THE NUMBER, NOT WHAT TO DO (#110, MMagTech,
+            // 2026-10-06). It said "Remove downloads or add a drive" from
+            // 2026-09-26.
+            detailScreen.setNotice("Needs " + gigabytes(v.shortfallBytes) + " more space");
             std::fprintf(stderr,
                          "[keep] refused %s: %lld reclaimable against a %lld floor\n",
                          g->name.c_str(), static_cast<long long>(v.reclaimableBytes),

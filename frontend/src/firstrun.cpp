@@ -349,8 +349,11 @@ std::string Machine::because() const {
             // saying what to do about it. Neither is a sentence somebody can
             // act on.
             if (!facts_.online) {
-                // Nothing is carrying the connection, so this is the hard gate
-                // and the sentence has to end in an instruction.
+                // Nothing is carrying the connection, so this is the hard gate.
+                // It said what to do ("Pick a network to join, or plug in a
+                // cable") until #110, 2026-10-06: the panel beside it already
+                // shows the networks, or "plug in a cable" when there is no
+                // Wi-Fi, so the sentence states the constraint and stops.
                 // NO PHONE TETHERING ON THIS SCREEN, and that reverses what
                 // open question 17 decided.
                 //
@@ -373,10 +376,7 @@ std::string Machine::because() const {
                 // somebody is already stuck and out of options. A console
                 // should not suggest a fix it has never seen work. It stays in
                 // the documentation as a trick; it does not go on a television.
-                if (!facts_.wifiPresent)
-                    return "A network connection is required. Plug in a cable.";
-                return "A network connection is required. Pick a network to "
-                       "join, or plug in a cable.";
+                return "A network connection is required.";
             }
             // Online. What is carrying it, and whether anything below is worth
             // touching.
