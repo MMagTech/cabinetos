@@ -396,8 +396,16 @@ steam_step() {
     systemctl --user set-environment XDG_DESKTOP_PORTAL_DIR="" 2>/dev/null
     systemctl --user unset-environment DISPLAY XAUTHORITY 2>/dev/null
 
-    # The display's own size, as the console uses, and VRR when the TV has it
-    # (#209); upstream turns these into gamescope's -W/-H and --adaptive-sync.
+    # VRR when the TV has it (#209); upstream turns it into --adaptive-sync.
+    #
+    # NO SIZE IS FORCED ON STEAM'S SCREEN (#256). Steam has its own Display >
+    # Resolution list, with rates ("3840x2160 @ 120Hz"), and saves the pick in
+    # ~/.config/gamescope/modes.cfg, which gamescope reads when it starts. The
+    # console used to pass its own size here (SCREEN_WIDTH/HEIGHT, gamescope's
+    # -W/-H), and that overrode the pick: Steam always ran at 4K 60 whatever
+    # was chosen. Measured on the LG C1, 2026-10-06: without it, Steam opens
+    # at the saved 1080p 120, switches live to 4K 120 when that is picked, and
+    # with nothing saved opens at the TV's own default, 4K 60, as before.
     #
     # WITHOUT THE LOGIN'S CAPABILITIES. The console's login session carries
     # CAP_WAKE_ALARM in its ambient set (CapAmb 0x800000000; an SSH login
@@ -407,7 +415,7 @@ steam_step() {
     # to be enabled" in a window gamescope never shows: a black screen. Found
     # on the A9's first handover, 2026-10-03; reproduced and fixed there with
     # exactly this. gamescope keeps its own cap_sys_nice from its file.
-    SCREEN_WIDTH="${OUT_W}" SCREEN_HEIGHT="${OUT_H}" ADAPTIVE_SYNC=1 \
+    ADAPTIVE_SYNC=1 \
     SRT_LOG_TO_JOURNAL=1 \
         setpriv --inh-caps=-all --ambient-caps=-all -- \
         /usr/share/gamescope-session-plus/gamescope-session-plus steam

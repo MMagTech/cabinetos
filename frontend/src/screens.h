@@ -58,6 +58,7 @@ enum class Action {
     Download,          // value is a rom id — fetch it AND keep it
     RemoveDownload,    // value is a rom id — release the keep AND delete the game
     PlayState,         // value is a RomM state id — play, starting from that state
+    ToggleFavorite,    // value is a rom id — the game's page heart/star (#267)
     // UP OUT OF THE TOP ROW, INTO THE BAR. MMagTech: *"if the library has the
     // top bar in view shouldnt i be able to up and access it."* Yes — chrome
     // that is on screen and cannot be reached is worse than chrome that is
@@ -502,6 +503,9 @@ struct GameDetail {
     // eviction may never take it. Unlike the cache, this IS visible — the cache
     // is invisible by decision, a kept game is a promise the person made.
     bool kept = false;
+    // ONE OF THIS PERSON'S FAVOURITES (#267): the mark beside the title is
+    // filled. It is theirs, so it follows the account, not the console.
+    bool favorite = false;
 };
 
 // One of the three states on the launch screen (docs/PROJECT.md, "The in-game
@@ -545,6 +549,10 @@ public:
         rebuildRows();
         if (slot_ >= static_cast<int>(rows_.size())) slot_ = rows_.empty() ? 0 : static_cast<int>(rows_.size()) - 1;
     }
+
+    // THE MARK BESIDE THE TITLE, filled or not, the moment it is pressed:
+    // the console answers at once and the server hears about it after.
+    void setFavorite(bool on) { game_.favorite = on; }
 
     // A refusal, or anything else the person needs to read once. The screen
     // shows it under the actions until they do something else.
@@ -603,6 +611,10 @@ private:
     float statesX_ = 0, statesY_ = 0;
     // Focus is in Continue from rather than the rows, and on which state.
     bool inStates_ = false;
+    // FOCUS IS ON THE FAVOURITE MARK, Up from the top row (#267). Where
+    // draw() put it, for the glass pass, as with the rows.
+    bool onFav_ = false;
+    float favX_ = 0, favY_ = 0, favS_ = 0;
     int stateSlot_ = 0;
     std::string notice_;
     // Where draw() put the action column, so the glass pass can put the rows in

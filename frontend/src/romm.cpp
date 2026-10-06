@@ -34,7 +34,10 @@ constexpr long kTimeoutSec = 30;
 // WRITE: only the person's own play data. assets.write uploads saves, memory
 // cards and save states, which is the whole point of the server holding them —
 // a console that could only download would lose progress the moment it
-// reclaimed a game. roms.user.write is favourites and play state.
+// reclaimed a game. roms.user.write is play state. collections.write is
+// favourites: on RomM 5 a favourite is a member of the person's flagged
+// collection, and adding to it needs this scope, not roms.user.write (found
+// building #267; a console paired before then has to pair again to set one).
 //
 // NOT ASKED FOR, deliberately: roms.write, platforms.write and firmware.write
 // (the console must never alter the library it is reading), users.*, tasks.run
@@ -47,7 +50,7 @@ constexpr long kTimeoutSec = 30;
 const char* kScopes[] = {
     "me.read", "platforms.read", "roms.read", "assets.read",
     "roms.user.read", "collections.read", "firmware.read",
-    "assets.write", "roms.user.write",
+    "assets.write", "roms.user.write", "collections.write",
 };
 
 size_t sink(char* p, size_t sz, size_t n, void* user) {
@@ -248,6 +251,11 @@ bool Client::get(const std::string& path, std::string* body, std::string* err) c
 
 bool Client::postJson(const std::string& path, const std::string& json,
                       std::string* body, long* status, std::string* err) const {
+    return sendJson("POST", path, json, body, status, err);
+}
+
+bool Client::sendJson(const char* method, const std::string& path, const std::string& json,
+                      std::string* body, long* status, std::string* err) const {
     CURL* c = curl_easy_init();
     if (!c) { if (err) *err = "curl init failed"; return false; }
     const std::string url = base_ + path;
@@ -259,6 +267,7 @@ bool Client::postJson(const std::string& path, const std::string& json,
     curl_easy_setopt(c, CURLOPT_URL, url.c_str());
     curl_easy_setopt(c, CURLOPT_POSTFIELDS, json.c_str());
     curl_easy_setopt(c, CURLOPT_POSTFIELDSIZE, static_cast<long>(json.size()));
+    if (std::strcmp(method, "POST") != 0) curl_easy_setopt(c, CURLOPT_CUSTOMREQUEST, method);
     curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, sink);
     curl_easy_setopt(c, CURLOPT_WRITEDATA, body);
     curl_easy_setopt(c, CURLOPT_CONNECTTIMEOUT, kConnectTimeoutSec);
@@ -890,6 +899,71 @@ bool Client::deleteStates(const std::vector<int>& ids, std::string* err) const {
     if (!postJson("/api/states/delete", json, &body, &status, err)) return false;
     if (status >= 400) {
         if (err) *err = "HTTP " + std::to_string(status) + " deleting states";
+        return false;
+    }
+    return true;
+}
+
+bool Client::setFavorite(int romId, bool on, bool* forbidden, std::string* err) {
+    *forbidden = false;
+    std::vector<Collection> cols;
+    if (!fetchCollections(&cols, err)) return false;
+    int id = 0;
+    for (const Collection& c : cols)
+        if (c.isFavorite) { id = c.id; break; }
+    if (!id && !on) return true;  // no favourites at all: nothing to take out of
+    if (!id) {
+        // THEIR FIRST FAVOURITE ANYWHERE: the collection RomM's own web page
+        // would make, a form with its name, flagged by the query.
+        const std::string boundary = "CabinetOSBoundary7f3a91c4";
+        const std::string form = "--" + boundary +
+                                 "\r\nContent-Disposition: form-data; name=\"name\"\r\n\r\n"
+                                 "Favourites\r\n--" + boundary + "--\r\n";
+        CURL* c = curl_easy_init();
+        if (!c) { if (err) *err = "curl init failed"; return false; }
+        curl_slist* hdrs = curl_slist_append(
+            nullptr, ("Content-Type: multipart/form-data; boundary=" + boundary).c_str());
+        if (!token_.empty())
+            hdrs = curl_slist_append(hdrs, ("Authorization: Bearer " + token_).c_str());
+        std::string reply;
+        const std::string url = base_ + "/api/collections?is_favorite=true";
+        curl_easy_setopt(c, CURLOPT_URL, url.c_str());
+        curl_easy_setopt(c, CURLOPT_POSTFIELDS, form.data());
+        curl_easy_setopt(c, CURLOPT_POSTFIELDSIZE, static_cast<long>(form.size()));
+        curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, sink);
+        curl_easy_setopt(c, CURLOPT_WRITEDATA, &reply);
+        curl_easy_setopt(c, CURLOPT_CONNECTTIMEOUT, kConnectTimeoutSec);
+        curl_easy_setopt(c, CURLOPT_TIMEOUT, kTimeoutSec);
+        curl_easy_setopt(c, CURLOPT_HTTPHEADER, hdrs);
+        const CURLcode rc = curl_easy_perform(c);
+        noteTransport(c, rc);
+        long status = 0;
+        curl_easy_getinfo(c, CURLINFO_RESPONSE_CODE, &status);
+        curl_slist_free_all(hdrs);
+        curl_easy_cleanup(c);
+        if (rc != CURLE_OK) { if (err) *err = curl_easy_strerror(rc); return false; }
+        if (status == 401 || status == 403) *forbidden = true;
+        if (status >= 400) {
+            if (err) *err = "HTTP " + std::to_string(status) + " making the favourites";
+            return false;
+        }
+        if (json_object* o = json_tokener_parse(reply.c_str())) {
+            json_object* v = nullptr;
+            if (json_object_object_get_ex(o, "id", &v)) id = json_object_get_int(v);
+            json_object_put(o);
+        }
+        if (!id) { if (err) *err = "the new favourites collection had no id"; return false; }
+    }
+    std::string body;
+    long status = 0;
+    const std::string json = "{\"rom_ids\":[" + std::to_string(romId) + "]}";
+    if (!sendJson(on ? "POST" : "DELETE", "/api/collections/" + std::to_string(id) + "/roms",
+                  json, &body, &status, err))
+        return false;
+    if (status == 401 || status == 403) *forbidden = true;
+    if (status >= 400) {
+        if (err) *err = "HTTP " + std::to_string(status) + (on ? " adding" : " removing") +
+                        " a favourite";
         return false;
     }
     return true;

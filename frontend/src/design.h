@@ -192,6 +192,15 @@ constexpr float kKeptMarkSize = 22.0f;
 constexpr float kKeptMarkInset = 12.0f;
 constexpr float kKeptMarkRing = 3.0f;
 
+// THE FAVOURITE MARK beside a game's title (#267): the capitals' height times
+// this, and how much it grows when focused (a small target grows more than a
+// full-width row, or the growth cannot be seen).
+constexpr float kFavMarkScale = 1.0f;
+constexpr float kFavFocusScale = 1.12f;
+// A HEART, picked over a star on the TV (MMagTech, 2026-10-06): a star reads
+// as a rating.
+constexpr ui::Rect::Shape kFavMarkShape = ui::Rect::Shape::Heart;
+
 // --- Home -------------------------------------------------------------------
 
 // THE TOP BAR IS ITS OWN STRIP — 2026-09-21.

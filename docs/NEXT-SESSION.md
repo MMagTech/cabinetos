@@ -11,26 +11,25 @@ specification is `docs/PROJECT.md`; the order is `docs/ROADMAP.md`.
 
 ## Where things stand
 
-2026-10-06: offline play (#88), the cartridge-save fix (#259) and the build's
-Steam-session fallback (#270) merged in #264; image 2026.10.06 is `latest`.
-The A9 now sits at the LG C1, on Wi-Fi at **192.168.1.109** (not the cable
-address): run `tools/ui-loop.sh` with `CABINETOS_A9=cabinet@192.168.1.109`.
+2026-10-06: #273 merged (Steam picks its own resolution and refresh, the
+favourite heart, Search and pairing fixes, a Wii Remote switched on during a
+game joins it). Image 2026.10.06.3 was the tested one. Milestones 2, 3 and 4
+are done.
+
+The A9 sits at the LG C1, on Wi-Fi at **192.168.1.109**: run
+`tools/ui-loop.sh` with `CABINETOS_A9=cabinet@192.168.1.109`.
 
 ## Next
 
-One session, in this order, one testing image judged together, then merged.
-
-1. **120 Hz and VRR on the C1 (#256).** The console picks the TV's
-   resolution but always 60 Hz; ask for 120 when offered. The C1 reports VRR
-   40-120 Hz to the GPU (Game Optimizer on). Then check games still pace
-   cleanly (`[pace]` lines) with VRR.
-2. **The favourite button (#267).** A heart or a star by the title on the
-   game's page, reached with Up from Play; build both, MMagTech picks on the
-   TV. Works offline, sent when the server is back.
-3. **Player 2 in Wild West Guns (#269).** Two Remotes work in Mario Kart Wii
-   and Bit.Trip Beat; this game says "register a second Remote". Start with
-   Dolphin's Wii Remote log and the `BT.DINF` list before and after a launch.
-   If it turns out deep, say so and decide with MMagTech.
+1. **RetroAchievements (#74), milestone 5.** Softcore only, decided: no
+   hardcore built, hidden or otherwise. Read every comment on #74 first (the
+   2026-10-05 research: rcheevos `rc_client`, `rc_libretro` for the libretro
+   cores, the PS2 bridge needs its own memory hook; RomM already stores each
+   user's `ra_username`). Start with the walkthrough of what real users will
+   do with it (docs/lessons, and the memory on walking the scenarios), then
+   decide with MMagTech: where sign-in lives, pop-ups during play, what the
+   game's page shows. Lessons file: frontend.md (screens, words on screen).
 
 Never run a headless frontend on the A9 while MMagTech is at the TV: it reads
-the same controllers (docs/lessons/testing.md).
+the same controllers (docs/lessons/testing.md). After a testing image installs,
+verify it from the A9 and list the possible checks; MMagTech decides which.

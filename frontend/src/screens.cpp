@@ -1134,6 +1134,7 @@ void DetailScreen::open(GameDetail d) {
     waited_ = 0.0f;
     detailsIn_ = false;
     inStates_ = false;
+    onFav_ = false;
     stateSlot_ = 0;
     rebuildRows();
     focus_.settle(1.0f);
@@ -1211,13 +1212,32 @@ void DetailScreen::tick(float dt) {
 
 Result DetailScreen::key(Nav n) {
     if (n == Nav::Back) return {Action::Back, 0};
-    if (rows_.empty()) return {};
     auto refocus = [&]() {
         notice_.clear();
         focus_.retarget(0.0f, 0.0f);
         focus_.elapsed = 0.0f;
         focus_.retarget(1.0f, design::kFocusDuration);
     };
+    // THE FAVOURITE MARK sits above the rows, beside the title: Up from the
+    // top row reaches it, Down comes back to that row. A game this console
+    // cannot play has no rows, and its mark is the only thing to focus.
+    if (onFav_ || rows_.empty()) {
+        if (n == Nav::Activate) return {Action::ToggleFavorite, game_.romId};
+        if (n == Nav::Down && !rows_.empty()) {
+            onFav_ = false;
+            slot_ = 0;
+            refocus();
+        } else if (rows_.empty() && !onFav_) {
+            onFav_ = true;
+            refocus();
+        }
+        return {};
+    }
+    if (n == Nav::Up && slot_ == 0 && !inStates_) {
+        onFav_ = true;
+        refocus();
+        return {};
+    }
     // CONTINUE FROM is one line of up to three, under the rows: Down from the
     // last row goes in, on the newest; Up comes back out to the row it left.
     if (inStates_) {
@@ -1409,8 +1429,18 @@ void DetailScreen::draw(Ctx& c) {
     const float textX = colX;
     const float textW = colW;
     float y = blockTop + c.text.ascent(ui::TextStyle::LargeTitle, c.sc);
-    c.text.draw(c.r, c.text.truncate(game_.title, ui::TextStyle::LargeTitle, c.sc, textW),
-                textX, y, ui::TextStyle::LargeTitle, ui::Color::white(a), c.sc);
+    // THE FAVOURITE MARK FOLLOWS THE TITLE (#267), its height the capitals',
+    // centred on them; a long title is shortened to leave it room.
+    const float cap = c.text.capHeight(ui::TextStyle::LargeTitle, c.sc);
+    favS_ = cap * design::kFavMarkScale;
+    // Clear of the title even with its focus disc round it (MMagTech on the
+    // TV: the circle sat too close to the words).
+    const float favGap = cap * 1.05f;
+    const std::string title = c.text.truncate(game_.title, ui::TextStyle::LargeTitle, c.sc,
+                                              textW - favGap - favS_);
+    c.text.draw(c.r, title, textX, y, ui::TextStyle::LargeTitle, ui::Color::white(a), c.sc);
+    favX_ = textX + c.text.measure(title, ui::TextStyle::LargeTitle, c.sc) + favGap;
+    favY_ = y - cap * 0.5f - favS_ * 0.5f;
     y += c.text.lineHeight(ui::TextStyle::LargeTitle, c.sc) * 0.55f +
          c.text.ascent(ui::TextStyle::Callout, c.sc);
 
@@ -1519,6 +1549,33 @@ void DetailScreen::drawGlass(Ctx& c) {
                         ui::Color::white(0.60f * a * details_.value()), c.sc);
         }
         y += rowH + design::kDetailRowGap;
+    }
+
+    // THE FAVOURITE MARK (#267). Outlined until it is a favourite, then
+    // filled; focused, it sits on the rows' own glass, as a disc, and grows
+    // as they do.
+    {
+        const float f = onFav_ ? focus_.value() : 0.0f;
+        const float pad = favS_ * 0.45f;
+        const float disc = favS_ + 2.0f * pad;
+        const float s = 1.0f + f * (design::kFavFocusScale - 1.0f);
+        const float cx = favX_ + favS_ * 0.5f, cy = favY_ + favS_ * 0.5f;
+        if (f > 0.0f)
+            c.r.drawGlass(ui::Rect{cx - disc * s * 0.5f, cy - disc * s * 0.5f, disc * s,
+                                   disc * s, disc * s * 0.5f, ui::Color::white(0)},
+                          design::kRegularMaterialBlur,
+                          ui::Color::white(0.22f * f * a));
+        const float m = favS_ * s;
+        ui::Rect mark{cx - m * 0.5f, cy - m * 0.5f, m, m, m * 0.06f, ui::Color::white(0)};
+        mark.shape = design::kFavMarkShape;
+        const float strength = (onFav_ ? 1.0f : 0.60f) * a;
+        if (game_.favorite) {
+            mark.fill = ui::Color::white(strength);
+        } else {
+            mark.border = std::max(2.0f, m * 0.09f);
+            mark.borderColor = ui::Color::white(strength);
+        }
+        c.r.draw(mark);
     }
 
     // CONTINUE FROM, as Cabinet's tvOS launch screen calls it: the game's
@@ -1907,25 +1964,19 @@ void AddAccountScreen::draw(Ctx& c) {
     if (!code_.empty()) {
         y += 30.0f;
         if (!url_.empty()) {
-            // Without the code repeated on the end of it: it is printed below,
-            // at four times the size, and once is enough.
+            // THE WHOLE LINK, code and all, as first run shows it. It was
+            // shown without `?user_code=`, and typed into a browser that
+            // opens RomM's page with nowhere to put the code (MMagTech, with
+            // no phone to scan the QR, 2026-10-06).
             std::string shown = url_;
-            if (const size_t q = shown.find("?user_code="); q != std::string::npos)
-                shown = shown.substr(0, q);
             if (shown.rfind("http://", 0) == 0) shown = shown.substr(7);
             c.text.draw(c.r, shown, kInset,
                         y + c.text.ascent(ui::TextStyle::Body, c.sc),
                         ui::TextStyle::Body, ui::palette::kScreenCyan, c.sc);
             y += c.text.lineHeight(ui::TextStyle::Body, c.sc);
         }
-        y += 20.0f;
-        // THE BIGGEST THING AFTER THE TITLE, for setup.cpp's reason: it is what
-        // somebody reads off the screen and checks against their phone, and
-        // RomM shows the same characters on the page they are approving.
-        c.text.draw(c.r, "Code " + code_, kInset,
-                    y + c.text.ascent(ui::TextStyle::Title1, c.sc),
-                    ui::TextStyle::Title1, ui::Color::white(0.97f * a), c.sc);
-        y += c.text.lineHeight(ui::TextStyle::Title1, c.sc);
+        // NO SEPARATE "Code" LINE: the link carries the code, and showing it
+        // twice read as a mistake (MMagTech, 2026-10-06).
     }
 
     // AN OUTCOME BELONGS IN THE PROSE COLUMN, not over the code. This is where

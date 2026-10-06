@@ -701,6 +701,14 @@ std::map<std::string, std::string> optionOverrides(const std::string& core) {
             // WHERE THE SENSOR BAR IS, as the console was told under
             // Controllers (#200). 0 is below the TV, 1 above.
             {"dolphin_sensor_bar_position", wiiremote::sensorBarAbove() ? "1" : "0"},
+            // A REMOTE SWITCHED ON DURING A GAME JOINS IT (#269, MMagTech
+            // 2026-10-06), as on a Wii: without this Dolphin looks for Remotes
+            // once, at boot. Only for one the console has not met since it
+            // started (the bridge keeps a stand-in for every Remote it has
+            // seen); a Remote a game dropped still cannot come back, which is
+            // Dolphin's. This build scans with hidapi only, no Bluetooth
+            // inquiry: measured 0.3% of one core on the A9.
+            {"dolphin_wiimote_continuous_scanning", "enabled"},
         };
     }
     // FLICKER BLENDED, NO ROW (#73, MMagTech 2026-10-02). Games on both drew

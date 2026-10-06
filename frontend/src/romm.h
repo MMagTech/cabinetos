@@ -362,6 +362,14 @@ public:
     // whole request if one id is not theirs.
     bool deleteStates(const std::vector<int>& ids, std::string* err) const;
 
+    // MAKES A GAME ONE OF THIS PERSON'S FAVOURITES, OR NOT (#267). On RomM 5
+    // a favourite is a member of their collection flagged `is_favorite`, so
+    // this adds the game to it or takes it out (`POST`/`DELETE
+    // /api/collections/<id>/roms`), making the collection first if they have
+    // none. Needs the `collections.write` scope; `*forbidden` says the
+    // pairing lacks it, which only pairing again can mend.
+    bool setFavorite(int romId, bool on, bool* forbidden, std::string* err);
+
     // A screenshot into this person's gallery on RomM 5.1 (`POST
     // /api/screenshots?rom_id=`: stored under the user, private until shared),
     // not among the pictures RomM's metadata sources give a game (#79).
@@ -411,6 +419,10 @@ private:
                        const std::vector<uint8_t>& shot = {}) const;
     bool get(const std::string& path, std::string* body, std::string* err) const;
     bool postJson(const std::string& path, const std::string& json,
+                  std::string* body, long* status, std::string* err) const;
+    // postJson with another method: DELETE carries a body on RomM's
+    // collection calls.
+    bool sendJson(const char* method, const std::string& path, const std::string& json,
                   std::string* body, long* status, std::string* err) const;
     bool probe(const std::string& candidate);
 
