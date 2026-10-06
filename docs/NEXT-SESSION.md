@@ -20,13 +20,10 @@ specification is `docs/PROJECT.md`; the order is `docs/ROADMAP.md`.
   `collections.write`: the A9 was re-paired and its kept presses landed.
   Also fixed: Search's keyboard stayed open over a game's page; pairing
   showed the link without its code, then the code twice.
-- Steam VRR (#272): Steam's VRR switch never applies ("Set VRR enabled: 0"
-  at every start in `~/.local/share/Steam/logs/systemperfmanager.txt`);
-  forcing gamescope's `GAMESCOPE_VRR_ENABLED` atom to 1 works and the C1's
-  green-button info shows VRR. MMagTech wants Steam VRR; undecided between a
-  console workaround (force the atom when the TV supports VRR) and adding
-  Valve's steamos-manager (lead: Steam may route its Performance settings
-  through it). Research results go on #272.
+- VRR: confirmed on the C1 for console games and for Steam games. Steam's
+  own switch works (in a game: guide + A, Performance, Enable VRR); it is
+  saved in Steam's shared profile (gameid 769) and carried to the next game.
+  Research on #272: steamos-manager is not involved and stays ruled out.
 
 The A9 sits at the LG C1, on Wi-Fi at **192.168.1.109**: run
 `tools/ui-loop.sh` with `CABINETOS_A9=cabinet@192.168.1.109`
@@ -34,12 +31,9 @@ The A9 sits at the LG C1, on Wi-Fi at **192.168.1.109**: run
 
 ## Next
 
-1. **Steam VRR (#272):** research is on #272 (steamos-manager will not fix
-   it). At the TV, with a game running, read the line under Steam's Enable
-   VRR switch ("Display is VRR capable" / "not VRR capable" / "Display
-   state"), then make Steam's own switch work or fall back to the console
-   setting gamescope's atom when the TV reports VRR. The console's own VRR
-   is confirmed on the TV.
+1. **Steam VRR (#272):** one check: close and reopen Steam, start a game,
+   read `Set VRR enabled` in `~/.local/share/Steam/logs/systemperfmanager.txt`
+   and gamescope's `GAMESCOPE_VRR_ENABLED`. Still on: close #272.
 2. **Player 2 in Wild West Guns (#269)**, rom 3608 (Mario Kart Wii 208
    works). Start with Dolphin's Wii Remote log and the `BT.DINF` list in each
    game's `User/Wii/shared2/sys/SYSCONF` before and after a launch. If it
