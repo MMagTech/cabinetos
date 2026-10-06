@@ -6277,8 +6277,11 @@ int main(int argc, char** argv) {
             // A RETROACHIEVEMENTS BADGE (#74): from their server, and a copy
             // kept so a game's page shows its badges offline.
             if (ra::isBadgeUrl(key)) {
+                // The whole path after the host: a badge and a game's icon
+                // can share a file name in different folders.
+                const size_t host = key.find('/', key.find("//") + 2);
                 const std::string kept = covercache::dir() + "/achievements/badges/" +
-                                         storage::safeSegment(key.substr(key.rfind('/') + 1));
+                                         storage::safeSegment(key.substr(host + 1));
                 if (std::vector<uint8_t> have = cab::readBytes(kept); !have.empty())
                     return have;
                 std::vector<uint8_t> got = ra::fetchBytes(key);
@@ -11609,7 +11612,9 @@ int main(int argc, char** argv) {
             const Uint64 t0 = SDL_GetTicks();
             switchWhy.clear();
             switchOk = switchAccount(switchPendingId, &switchWhy);
-            if (switchOk) ra::useAccount(accounts::activeId());
+            // Whatever the switch got to: a half-finished one has still
+            // changed who is active, and RetroAchievements follows that.
+            ra::useAccount(accounts::activeId());
             std::fprintf(stderr, "[accounts] switch took %llu ms\n",
                          static_cast<unsigned long long>(SDL_GetTicks() - t0));
             switchDone = true;
@@ -14480,8 +14485,7 @@ int main(int argc, char** argv) {
             std::string why;
             if (!switchAccount(id, &why))
                 std::fprintf(stderr, "[accounts] refused: %s\n", why.c_str());
-            else
-                ra::useAccount(accounts::activeId());
+            ra::useAccount(accounts::activeId());
         }
         if (autoUnkeepId > 0) {
             const int id = autoUnkeepId;

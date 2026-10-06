@@ -53,6 +53,14 @@ std::string userAgent() {
     return gUaBase + gUaCore + gUaRc;
 }
 
+std::atomic<bool> gStopping{false};
+
+// Shutting down: a request in flight stops at once rather than waiting out
+// curl's timeouts, and comes back as "no answer" (shutdown queues it).
+int abortTransfer(void*, curl_off_t, curl_off_t, curl_off_t, curl_off_t) {
+    return gStopping ? 1 : 0;
+}
+
 size_t appendBody(char* p, size_t size, size_t n, void* out) {
     static_cast<std::string*>(out)->append(p, size * n);
     return size * n;
@@ -78,6 +86,8 @@ int request(const std::string& url, const char* post, const char* contentType,
     curl_easy_setopt(c, CURLOPT_FOLLOWLOCATION, 1L);
     curl_easy_setopt(c, CURLOPT_NOSIGNAL, 1L);
     curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, appendBody);
+    curl_easy_setopt(c, CURLOPT_NOPROGRESS, 0L);
+    curl_easy_setopt(c, CURLOPT_XFERINFOFUNCTION, abortTransfer);
     curl_easy_setopt(c, CURLOPT_WRITEDATA, body);
     if (post) {
         curl_easy_setopt(c, CURLOPT_POSTFIELDS, post);
@@ -112,7 +122,6 @@ struct Job {
 std::mutex gJobMutex;
 std::condition_variable gJobCv;
 std::deque<Job> gJobs;
-bool gStopping = false;
 std::thread gWorker;
 
 std::mutex gDoneMutex;
@@ -414,7 +423,19 @@ void RC_CCONV logMessage(const char* message, const rc_client_t*) {
 
 // --- Who is signed in ------------------------------------------------------
 
+// ONE SIGN-IN AT A TIME. rcheevos takes whatever sign-in answer arrives as
+// the current one's, so a second sign-in started while a first is in flight
+// can be answered with the first person's account. So a new one waits for
+// the one in flight (which a sign-out turns into "aborted"), and an answer
+// that is not the latest sign-in's is thrown away.
+uint32_t gLoginSeq = 0;
+std::function<void()> gNextLogin;
+// A game started before the sign-in finished: loaded when it does.
+std::string gDeferredLoad;
+void RC_CCONV onGameLoaded(int result, const char* message, rc_client_t* client, void*);
+
 struct LoginCtx {
+    uint32_t seq = 0;
     int account = 0;
     bool password = false;
     std::function<void(bool, const std::string&)> done;
@@ -437,7 +458,16 @@ std::string sayWhy(int result, const char* message) {
 void RC_CCONV onLogin(int result, const char* message, rc_client_t* client, void* userdata) {
     std::unique_ptr<LoginCtx> ctx(static_cast<LoginCtx*>(userdata));
     gLoginBusy = false;
-    if (ctx->account != gAccount) return;  // somebody else is using the console now
+    if (ctx->seq != gLoginSeq) {
+        // Overtaken (another person, or another try): never kept, and the
+        // sign-in waiting behind it starts now.
+        if (result == RC_OK) rc_client_logout(client);
+        std::fprintf(stderr, "[ra] an earlier sign-in's answer, dropped\n");
+        auto next = std::move(gNextLogin);
+        gNextLogin = nullptr;
+        if (next) next();
+        return;
+    }
     if (result == RC_OK) {
         const rc_client_user_t* u = rc_client_get_user_info(client);
         gLoggedIn = true;
@@ -450,10 +480,18 @@ void RC_CCONV onLogin(int result, const char* message, rc_client_t* client, void
         }
         std::fprintf(stderr, "[ra] signed in as %s\n", gUser.c_str());
         sendOwed();
+        if (!gDeferredLoad.empty()) {
+            const std::string hash = std::move(gDeferredLoad);
+            gDeferredLoad.clear();
+            rc_client_begin_load_game(client, hash.c_str(), onGameLoaded, nullptr);
+        }
         if (ctx->done) ctx->done(true, "");
         return;
     }
     gLoggedIn = false;
+    if (!gDeferredLoad.empty())
+        std::fprintf(stderr, "[ra] not signed in, so no achievements this game\n");
+    gDeferredLoad.clear();
     std::fprintf(stderr, "[ra] sign-in refused (%d): %s\n", result, message ? message : "");
     // A STORED TOKEN THE SERVER NOW REFUSES is gone for good (the password
     // changed, or the account went), so it is forgotten and Settings offers
@@ -473,8 +511,23 @@ void loginWithToken() {
     if (!gClient || gUser.empty() || gToken.empty() || gLoginBusy || gLoggedIn) return;
     gLoginBusy = true;
     auto* ctx = new LoginCtx;
+    ctx->seq = ++gLoginSeq;
     ctx->account = gAccount;
     rc_client_begin_login_with_token(gClient, gUser.c_str(), gToken.c_str(), onLogin, ctx);
+}
+
+// Stops whatever sign-in there is, and runs `next` once rcheevos has let go of
+// it: now when nothing is in flight, otherwise when the in-flight one answers.
+void afterSignOut(std::function<void()> next) {
+    if (gClient && (gLoggedIn || gLoginBusy)) rc_client_logout(gClient);
+    gLoggedIn = false;
+    if (gLoginBusy) {
+        ++gLoginSeq;   // the answer in flight is no longer anybody's
+        gNextLogin = std::move(next);
+        return;
+    }
+    gNextLogin = nullptr;
+    if (next) next();
 }
 
 // --- The game being played -------------------------------------------------
@@ -654,9 +707,9 @@ void RC_CCONV onGameLoaded(int result, const char* message, rc_client_t* client,
     rc_client_user_game_summary_t s{};
     rc_client_get_user_game_summary(client, &s);
     const rc_client_game_t* g = rc_client_get_game_info(client);
-    std::fprintf(stderr, "[ra] \"%s\" (game %u): %u of %u unlocked\n",
+    std::fprintf(stderr, "[ra] \"%s\" (game %u): %u of %u unlocked, %u unsupported\n",
                  g ? str(g->title).c_str() : "?", g ? g->id : 0, s.num_unlocked_achievements,
-                 s.num_core_achievements);
+                 s.num_core_achievements, s.num_unsupported_achievements);
 }
 
 // --- The game's page -------------------------------------------------------
@@ -793,13 +846,23 @@ void init(const std::string& consoleVersion) {
 void shutdown() {
     if (!gClient) return;
     endGame();
+    // NOTHING EARNED IS LOST TO A POWER-OFF. An unlock still waiting to go
+    // out is written to the queue on disk, and the one on the wire is cut
+    // short (abortTransfer) and comes back as a failure, which queues it too.
+    std::deque<Job> left;
     {
         std::lock_guard<std::mutex> lk(gJobMutex);
         gStopping = true;
-        gJobs.clear();
+        left.swap(gJobs);
     }
     gJobCv.notify_all();
     if (gWorker.joinable()) gWorker.join();
+    for (const Job& j : left) {
+        std::string ignored;
+        if (param(j.post, "r") == "awardachievement")
+            offlineAnswer("awardachievement", j.post, &ignored);
+    }
+    pump();
     {
         std::lock_guard<std::mutex> lk(gDoneMutex);
         gDone.clear();
@@ -842,15 +905,13 @@ double frameMicros() { return gFrameMicros; }
 // --- Signing in -----------------------------------------------------------------
 
 void useAccount(int accountId) {
-    if (accountId == gAccount && (gLoggedIn || gLoginBusy)) return;
-    if (gClient && (gLoggedIn || gLoginBusy)) rc_client_logout(gClient);
-    gLoggedIn = false;
-    gLoginBusy = false;
+    if (accountId == gAccount && (gLoggedIn || gLoginBusy) && !gNextLogin) return;
+    gDeferredLoad.clear();
     gAccount = accountId;
     gUser.clear();
     gToken.clear();
     if (accountId > 0) accounts::raLogin(accountId, &gUser, &gToken);
-    loginWithToken();
+    afterSignOut([] { loginWithToken(); });
 }
 
 bool gSample = false;
@@ -894,26 +955,27 @@ void signIn(const std::string& user, const std::string& password,
         if (done) done(false, "Sign-in failed");
         return;
     }
-    if (gLoggedIn || gLoginBusy) rc_client_logout(gClient);
-    gLoggedIn = false;
-    gLoginBusy = true;
     gUser = user;
-    auto* ctx = new LoginCtx;
-    ctx->account = gAccount;
-    ctx->password = true;
-    ctx->done = [done](bool ok, const std::string& why) {
-        // A refused password leaves nobody signed in, rather than the name
-        // that was typed looking as though it worked.
-        if (!ok) { gUser.clear(); gToken.clear(); }
-        if (done) done(ok, why);
-    };
-    rc_client_begin_login_with_password(gClient, user.c_str(), password.c_str(), onLogin, ctx);
+    gToken.clear();
+    afterSignOut([user, password, done] {
+        gLoginBusy = true;
+        auto* ctx = new LoginCtx;
+        ctx->seq = ++gLoginSeq;
+        ctx->account = gAccount;
+        ctx->password = true;
+        ctx->done = [done](bool ok, const std::string& why) {
+            // A refused password leaves nobody signed in, rather than the
+            // name that was typed looking as though it worked.
+            if (!ok) { gUser.clear(); gToken.clear(); }
+            if (done) done(ok, why);
+        };
+        rc_client_begin_login_with_password(gClient, user.c_str(), password.c_str(), onLogin, ctx);
+    });
 }
 
 void signOut() {
-    if (gClient && (gLoggedIn || gLoginBusy)) rc_client_logout(gClient);
-    gLoggedIn = false;
-    gLoginBusy = false;
+    gDeferredLoad.clear();
+    afterSignOut(nullptr);
     if (gAccount > 0) accounts::clearRaLogin(gAccount);
     gUser.clear();
     gToken.clear();
@@ -1000,11 +1062,15 @@ void beginGame(const std::string& raHash, const std::string& platformSlug, bool 
     gHash = raHash;
     std::memset(&gRegions, 0, sizeof gRegions);
     if (!ps2) mapLibretroMemory();
-    // A sign-in that failed for want of a network is tried again here; the
-    // load below waits for it.
-    loginWithToken();
     gGameActive = true;
-    rc_client_begin_load_game(gClient, raHash.c_str(), onGameLoaded, nullptr);
+    if (gLoggedIn) {
+        rc_client_begin_load_game(gClient, raHash.c_str(), onGameLoaded, nullptr);
+    } else {
+        // Loaded once the sign-in lands: one still in flight, or one that
+        // failed for want of a network, tried again here.
+        gDeferredLoad = raHash;
+        loginWithToken();
+    }
     if (ps2 && !ps2::setFrameCallback(ps2Frame, nullptr))
         std::fprintf(stderr, "[ra] this PS2 library has no frame hook; no achievements\n");
     std::fprintf(stderr, "[ra] checking %s for achievements (console %u)\n", raHash.c_str(),
@@ -1012,14 +1078,15 @@ void beginGame(const std::string& raHash, const std::string& platformSlug, bool 
 }
 
 void endGame() {
+    gDeferredLoad.clear();
     if (!gGameActive.exchange(false)) return;
-    const bool probe = gProbe;
-    gProbe = false;
     if (gPs2) {
         ps2::setFrameCallback(nullptr, nullptr);
         // Waits out a check running on PCSX2's thread right now.
         std::lock_guard<std::mutex> lk(gFrameMutex);
     }
+    const bool probe = gProbe;
+    gProbe = false;
     if (gClient && !probe) rc_client_unload_game(gClient);
     if (!gPs2) rc_libretro_memory_destroy(&gRegions);
     std::memset(&gRegions, 0, sizeof gRegions);
@@ -1031,7 +1098,9 @@ void endGame() {
 }
 
 void stateLoaded() {
-    if (gClient && gGameActive.load() && !gProbe) rc_client_reset(gClient);
+    if (!gClient || !gGameActive.load() || gProbe) return;
+    std::lock_guard<std::mutex> lk(gFrameMutex);
+    rc_client_reset(gClient);
 }
 
 void frame() {
@@ -1043,8 +1112,21 @@ void frame() {
     timedFrame();
 }
 
+// NOT BEFORE THE MEMORY IS THERE. With background reads off, rcheevos switches
+// a game's achievements on in the next do_frame OR idle, and checks every
+// address as it does; memory not mapped yet reads as nothing and every
+// achievement is switched off for the session. So while a game's memory is
+// not laid out, idle waits. For PlayStation 2 it holds the frame lock, so
+// nothing rcheevos does here overlaps a check on PCSX2's thread.
 void idle() {
-    if (gClient) rc_client_idle(gClient);
+    if (!gClient) return;
+    if (!gGameActive.load() || gProbe) {
+        if (!gProbe) rc_client_idle(gClient);
+        return;
+    }
+    std::lock_guard<std::mutex> lk(gFrameMutex);
+    if (gRegions.total_size == 0) return;
+    rc_client_idle(gClient);
 }
 
 // The sample unlock, counted in the frame loop's own calls (main.cpp calls
@@ -1117,8 +1199,16 @@ void fetchList(const std::string& raHash, std::function<void(const GameList&)> d
         rc_api_server_response_t sr{body.c_str(), body.size(), status};
         rc_api_fetch_game_sets_response_t r{};
         const int rc = rc_api_process_fetch_game_sets_server_response(&r, &sr);
-        if (status < 0) { rc_api_destroy_fetch_game_sets_response(&r); failed(); return; }
-        if (rc != RC_OK || !r.response.succeeded || r.id == 0) {
+        // "NO SET" ONLY WHEN THE SERVER SAID SO. A 502 page, a refused token or
+        // a garbled answer is a failure, and keeps what was kept before.
+        const bool answered = status >= 200 && status < 300 && rc == RC_OK && r.response.succeeded;
+        const bool unknown = rc == RC_NOT_FOUND || (answered && r.id == 0);
+        if (!answered && !unknown) {
+            rc_api_destroy_fetch_game_sets_response(&r);
+            failed();
+            return;
+        }
+        if (unknown) {
             // Answered, and the answer is "no set": kept, so the page says it
             // offline too.
             rc_api_destroy_fetch_game_sets_response(&r);
@@ -1164,9 +1254,13 @@ void fetchList(const std::string& raHash, std::function<void(const GameList&)> d
             u.game_id = gameId;
             u.hardcore = hardcore;
             rc_api_request_t ureq{};
-            if (rc_api_init_fetch_user_unlocks_request(&ureq, &u) != RC_OK) { failed(); return; }
+            if (rc_api_init_fetch_user_unlocks_request(&ureq, &u) != RC_OK) {
+                *unlocks = nullptr;
+                failed();
+                return;
+            }
             send(ureq, [=](int st, const std::string& b) {
-                if (account != gAccount) return;
+                if (account != gAccount) { *unlocks = nullptr; return; }
                 rc_api_server_response_t usr{b.c_str(), b.size(), st};
                 rc_api_fetch_user_unlocks_response_t ur{};
                 const int urc = rc_api_process_fetch_user_unlocks_server_response(&ur, &usr);
