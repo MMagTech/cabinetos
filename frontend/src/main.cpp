@@ -1623,6 +1623,9 @@ constexpr GalleryNotice kNoticeGallery[] = {
     {"Saved. Will upload when RomM is back", Tone::Info},
     {"Saved on this console only", Tone::Info},
     {"No save states for this system", Tone::Info},
+    {"No screenshots for this system", Tone::Info},
+    {"No fast forward for this system", Tone::Info},
+    {"No rewind for this system", Tone::Info},
     {"Couldn't save the state", Tone::Problem},
     {"Can't restart right now", Tone::Problem},
     {"God of War III is still downloading", Tone::Info},
@@ -1767,7 +1770,7 @@ static void screenshotNow(GameSession& sess, Uploader& up, MenuNotice& notice) {
     unsigned w = 0, h = 0;
     if (!core.snapshot(rgba, w, h) || !ui::encodePNG(rgba, w, h, png)) {
         std::fprintf(stderr, "[screenshot] no picture to take\n");
-        notice.say("Screenshots aren't available here", Tone::Info);
+        notice.say("No screenshots for this system", Tone::Info);
         return;
     }
     struct timespec ts{};
@@ -14052,7 +14055,7 @@ int main(int argc, char** argv) {
             // rather than behind a test somebody has to remember.
             stateHoldJustEnded = false;
             if (fastForward && !session.snapshots) {
-                if (!fastForwardSaid) menuNotice.say("Fast forward isn't available here", Tone::Info);
+                if (!fastForwardSaid) menuNotice.say("No fast forward for this system", Tone::Info);
                 fastForwardSaid = true;
                 fastForward = false;
             } else if (!fastForward) {
@@ -14083,7 +14086,7 @@ int main(int argc, char** argv) {
             }
             wasRewinding = rewinding;
             if (rewinding && rewindAvailable != 1) {
-                if (!rewindSaid) menuNotice.say("Rewind isn't available here", Tone::Info);
+                if (!rewindSaid) menuNotice.say("No rewind for this system", Tone::Info);
                 rewindSaid = true;
                 rewinding = false;
             } else if (!rewinding) {
