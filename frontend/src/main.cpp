@@ -1532,6 +1532,10 @@ struct AchievementToast {
     ra::Popup p;
     bool waiting = false;   // taken, badge not in yet
     bool on = false;
+    // Whether it shows its badge. Decided as it appears and kept: no badge
+    // in by then (offline, first time) and the card is words only, with no
+    // empty square, and it does not grow if the picture lands later.
+    bool badge = false;
     float age = 0.0f;
     static constexpr float kIn = 0.35f, kHold = 4.0f, kOut = 0.6f, kBadgeWait = 1.5f;
     float alpha() const {
@@ -7589,6 +7593,14 @@ int main(int argc, char** argv) {
     auto ovCount = [&]() {
         return static_cast<int>(powerMenu ? powerItems.size() : pauseItems.size());
     };
+    // UP FROM THE TOP IS THE BOTTOM, and Down from the bottom the top: the
+    // pause menu is short, and Exit to Home is last (MMagTech on the TV,
+    // 2026-10-06). The same for the Power menu, which is the same panel.
+    auto ovStep = [&](int delta) {
+        const int n = ovCount();
+        if (n <= 0) return;
+        overlaySlot = ((overlaySlot + delta) % n + n) % n;
+    };
     auto ovLabel = [&](int i) -> const char* {
         if (!powerMenu) return kOverlayLabels[pauseItems[i]];
         switch (powerItems[i]) {
@@ -13326,8 +13338,7 @@ int main(int argc, char** argv) {
                     }
                     if (owner == InputOwner::Overlay) {
                         if (e.key.key == SDLK_UP || e.key.key == SDLK_DOWN) {
-                            const int delta = (e.key.key == SDLK_DOWN) ? 1 : -1;
-                            overlaySlot = std::clamp(overlaySlot + delta, 0, ovCount() - 1);
+                            ovStep(e.key.key == SDLK_DOWN ? 1 : -1);
                             overlayFocus.retarget(0.0f, 0.0f);
                             overlayFocus.elapsed = 0.0f;
                             overlayFocus.retarget(1.0f, kOverlayFocusDuration);
@@ -13474,10 +13485,8 @@ int main(int argc, char** argv) {
                         break;
                     }
                     if (owner == InputOwner::Overlay) {
-                        if (e.gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_UP)
-                            overlaySlot = std::max(0, overlaySlot - 1);
-                        if (e.gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_DOWN)
-                            overlaySlot = std::min(ovCount() - 1, overlaySlot + 1);
+                        if (e.gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_UP) ovStep(-1);
+                        if (e.gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_DOWN) ovStep(+1);
                         if ((e.gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_LEFT ||
                              e.gbutton.button == SDL_GAMEPAD_BUTTON_DPAD_RIGHT) &&
                             !powerMenu && choiceAt(overlaySlot))
@@ -14734,6 +14743,7 @@ int main(int argc, char** argv) {
                 raToast.waiting = false;
                 raToast.on = true;
                 raToast.age = 0.0f;
+                raToast.badge = !raToast.p.badgeUrl.empty() && badge;
                 sound::playChime();
                 std::fprintf(stderr, "[ra] pop-up: %s%s\n", raToast.p.title.c_str(),
                              badge ? "" : " (badge not in yet)");
@@ -16710,7 +16720,8 @@ int main(int argc, char** argv) {
             const std::string line2 = text.truncate(p.title, name, sc, kMaxText);
             const float tw = std::min(kMaxText, std::max(text.measure(line1, top, sc),
                                                          text.measure(line2, name, sc)));
-            const float w = kPad + kBadge + kGap + tw + kPad + 8.0f;
+            const float badgeRoom = raToast.badge ? kBadge + kGap : 4.0f;
+            const float w = kPad + badgeRoom + tw + kPad + 8.0f;
             // TUCKED INTO THE CORNER: closer to the top than to the side, so
             // on a screen wider than it is tall the two gaps look the same
             // (MMagTech on the TV, 2026-10-06: equal margins read as low).
@@ -16732,15 +16743,13 @@ int main(int argc, char** argv) {
             card.shadowColor = ui::Color::black(0.40f * ta);
             renderer.draw(card);
             const float bx = x + kPad, by = y + (kH - kBadge) * 0.5f;
-            const ui::Image* img = p.badgeUrl.empty() ? nullptr : &images.get(p.badgeUrl);
-            if (img && img->ready) {
-                renderer.drawTextured(bx, by, kBadge, kBadge, img->texture, 0, 0, 1, 1,
-                                      ui::Color{1, 1, 1, ta * img->fade}, false, 0.0f, bx, by,
+            if (raToast.badge) {
+                const ui::Image& img = images.get(p.badgeUrl);
+                renderer.drawTextured(bx, by, kBadge, kBadge, img.texture, 0, 0, 1, 1,
+                                      ui::Color{1, 1, 1, ta * img.fade}, false, 0.0f, bx, by,
                                       kBadge, kBadge, 10.0f);
-            } else {
-                renderer.draw(ui::Rect{bx, by, kBadge, kBadge, 10.0f, ui::Color::white(0.10f * ta)});
             }
-            const float tx = bx + kBadge + kGap;
+            const float tx = bx + badgeRoom;
             const float l1 = text.lineHeight(top, sc), l2 = text.lineHeight(name, sc);
             const float ty = y + (kH - (l1 + l2)) * 0.5f;
             text.draw(renderer, line1, tx, ty + text.ascent(top, sc), top,

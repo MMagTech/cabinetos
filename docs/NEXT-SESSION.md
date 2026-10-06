@@ -11,24 +11,24 @@ specification is `docs/PROJECT.md`; the order is `docs/ROADMAP.md`.
 
 ## Where things stand
 
-2026-10-06: #273 merged (Steam picks its own resolution and refresh, the
-favourite heart, Search and pairing fixes, a Wii Remote switched on during a
-game joins it). Image 2026.10.06.3 was the tested one. Milestones 2, 3 and 4
-are done.
+2026-10-06: RetroAchievements (#74, milestone 5) and the Search fixes (#277)
+are on `retroachievements`, PR #278, judged on the TV that evening and pushed
+to `testing`. **Merge only on MMagTech's word**, after the testing image is
+verified from the A9 and he has picked its checks. The decisions are
+docs/PROJECT.md open question 38.
 
 The A9 sits at the LG C1, on Wi-Fi at **192.168.1.109**: run
 `tools/ui-loop.sh` with `CABINETOS_A9=cabinet@192.168.1.109`.
 
 ## Next
 
-1. **RetroAchievements (#74), milestone 5.** Softcore only, decided: no
-   hardcore built, hidden or otherwise. Read every comment on #74 first (the
-   2026-10-05 research: rcheevos `rc_client`, `rc_libretro` for the libretro
-   cores, the PS2 bridge needs its own memory hook; RomM already stores each
-   user's `ra_username`). Start with the walkthrough of what real users will
-   do with it (docs/lessons, and the memory on walking the scenarios), then
-   decide with MMagTech: where sign-in lives, pop-ups during play, what the
-   game's page shows. Lessons file: frontend.md (screens, words on screen).
+Milestone 6, UI polish (docs/ROADMAP.md), in this order:
+
+1. **Wording pass over every screen, and notification length (#110).**
+   Lessons file: frontend.md (words on screen).
+2. **Sound that dies until a restart (#228):** the TV's HDMI audio chip
+   failing to power down.
+3. **Offer the sleep this machine can really do (#132).**
 
 Never run a headless frontend on the A9 while MMagTech is at the TV: it reads
 the same controllers (docs/lessons/testing.md). After a testing image installs,

@@ -15907,7 +15907,9 @@ it is a third smaller with the points left to the page; equal margins read as
 low, so it is tucked in, 32 points from the top and 48 from the right; and it
 is 80% opaque, so a little of the game shows through (any less and white text
 washes out over a bright screen). It can cover a score or timer in that
-corner for those four seconds, as any corner would. No "3 of 40" note at the
+corner for those four seconds, as any corner would. A badge not downloaded by
+the time the card appears (offline, earned for the first time) makes it a
+words-only card, never an empty square. No "3 of 40" note at the
 start, no progress counters, no challenge icons; softcore has no
 leaderboards. Finishing a set shows one card, "Every achievement unlocked",
 with the game's badge. **A chime** plays with it, with its own row in Display
@@ -15970,4 +15972,7 @@ seconds while signed in), each unlock with how long ago it was earned, the
 field RetroAchievements has for exactly that. A game never played or opened
 online on this console has no kept set, so nothing can be earned in it until
 it has been. `CABINETOS_RA_OFFLINE=1` makes every request fail as offline,
-for testing.
+for testing. **Tested on the A9, 2026-10-06:** offline, Super Mario Land
+loaded from the kept set, "Weaponized Balls" unlocked and was queued; back
+online, it was sent at sign-in and accepted. (An earlier flower that same
+evening did not count; the cause was not found, and the next one did.)
