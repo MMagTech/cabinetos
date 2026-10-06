@@ -34,10 +34,12 @@ The A9 sits at the LG C1, on Wi-Fi at **192.168.1.109**: run
 
 ## Next
 
-1. **Steam VRR (#272):** MMagTech decides workaround, steamos-manager, or
-   both, from the research on #272. Then one look with a console game and
-   the C1's green-button info (FreeSync Premium on) to confirm the TV goes
-   VRR for the console too.
+1. **Steam VRR (#272):** research is on #272 (steamos-manager will not fix
+   it). At the TV, with a game running, read the line under Steam's Enable
+   VRR switch ("Display is VRR capable" / "not VRR capable" / "Display
+   state"), then make Steam's own switch work or fall back to the console
+   setting gamescope's atom when the TV reports VRR. The console's own VRR
+   is confirmed on the TV.
 2. **Player 2 in Wild West Guns (#269)**, rom 3608 (Mario Kart Wii 208
    works). Start with Dolphin's Wii Remote log and the `BT.DINF` list in each
    game's `User/Wii/shared2/sys/SYSCONF` before and after a launch. If it
