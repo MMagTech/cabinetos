@@ -96,49 +96,6 @@ detect_output() {
     return 1
 }
 
-# The fastest refresh the connected display offers at WxH, from the kernel's
-# own mode list (the modes it will actually drive, not every one the EDID
-# names). sysfs lists sizes without rates, so libdrm is asked, from Python's
-# standard library. Prints nothing when it cannot tell.
-fastest_refresh() {
-    python3 - "$1" "$2" <<'PY' 2>/dev/null
-import ctypes, glob, os, sys
-w, h = int(sys.argv[1]), int(sys.argv[2])
-class Mode(ctypes.Structure):
-    _fields_ = [("clock", ctypes.c_uint32)] + [(n, ctypes.c_uint16) for n in
-        "hdisplay hsync_start hsync_end htotal hskew vdisplay vsync_start "
-        "vsync_end vtotal vscan".split()] + [("vrefresh", ctypes.c_uint32),
-        ("flags", ctypes.c_uint32), ("type", ctypes.c_uint32), ("name", ctypes.c_char * 32)]
-class Conn(ctypes.Structure):
-    _fields_ = [(n, ctypes.c_uint32) for n in
-        "connector_id encoder_id connector_type connector_type_id".split()] + [
-        ("connection", ctypes.c_int), ("mmWidth", ctypes.c_uint32),
-        ("mmHeight", ctypes.c_uint32), ("subpixel", ctypes.c_int),
-        ("count_modes", ctypes.c_int), ("modes", ctypes.POINTER(Mode))]
-drm = ctypes.CDLL("libdrm.so.2")
-drm.drmModeGetConnector.restype = ctypes.POINTER(Conn)
-best = 0
-for c in glob.glob("/sys/class/drm/card*-*/"):
-    try:
-        if open(c + "status").read().strip() != "connected":
-            continue
-        card = "/dev/dri/" + os.path.basename(c.rstrip("/")).split("-")[0]
-        fd = os.open(card, os.O_RDWR)
-        conn = drm.drmModeGetConnector(fd, int(open(c + "connector_id").read()))
-        if conn:
-            for i in range(conn.contents.count_modes):
-                m = conn.contents.modes[i]
-                if m.hdisplay == w and m.vdisplay == h and not m.flags & 0x10:
-                    best = max(best, m.vrefresh)
-            drm.drmModeFreeConnector(conn)
-        os.close(fd)
-    except (OSError, ValueError):
-        pass
-if best:
-    print(best)
-PY
-}
-
 OUTPUT="${CABINETOS_OUTPUT:-$(detect_output || true)}"
 if [[ "${OUTPUT}" =~ ^([0-9]+)x([0-9]+)$ ]]; then
     OUT_W="${BASH_REMATCH[1]}"
@@ -431,24 +388,6 @@ steam_step() {
     /usr/libexec/cabinetos-steam-libraries \
         || echo "cabinetos-session: Steam's drive libraries could not be listed"
 
-    # STEAM GETS THE FASTEST REFRESH THE TELEVISION OFFERS (#256, MMagTech
-    # 2026-10-06: "steam should get 120 regardless of the resolution"). PC
-    # games can run faster than 60, and Steam's own resolution setting only
-    # changes the size a game is drawn at, never the mode sent to the TV, so
-    # the rate is chosen here, at the console's resolution. gamescope takes
-    # the first mode of a size, which on the C1 is 60 Hz; `-r` asks for the
-    # rate. Upstream's script reads GAMESCOPE_BIN unquoted, so the flag rides
-    # along with the binary. The console itself stays at 60: its games are
-    # 60 fps and gain nothing, and on the A9 4K at 120 reaches the TV only
-    # with halved colour detail (no HDMI 2.1 in the open AMD driver).
-    local steam_hz
-    steam_hz=$(fastest_refresh "${OUT_W}" "${OUT_H}" || true)
-    local steam_bin=/usr/bin/gamescope
-    if [[ "${steam_hz}" =~ ^[0-9]+$ ]] && (( steam_hz > 60 )); then
-        steam_bin="/usr/bin/gamescope -r ${steam_hz}"
-        echo "cabinetos-session: Steam asks for ${OUT_W}x${OUT_H} at ${steam_hz} Hz"
-    fi
-
     # Upstream's wrapper (/usr/bin/gamescope-session-plus), less the user unit.
     export XDG_SESSION_TYPE=x11
     # shellcheck disable=SC2046  # the names, one word each, as upstream does
@@ -457,8 +396,16 @@ steam_step() {
     systemctl --user set-environment XDG_DESKTOP_PORTAL_DIR="" 2>/dev/null
     systemctl --user unset-environment DISPLAY XAUTHORITY 2>/dev/null
 
-    # The display's own size, as the console uses, and VRR when the TV has it
-    # (#209); upstream turns these into gamescope's -W/-H and --adaptive-sync.
+    # VRR when the TV has it (#209); upstream turns it into --adaptive-sync.
+    #
+    # NO SIZE IS FORCED ON STEAM'S SCREEN (#256). Steam has its own Display >
+    # Resolution list, with rates ("3840x2160 @ 120Hz"), and saves the pick in
+    # ~/.config/gamescope/modes.cfg, which gamescope reads when it starts. The
+    # console used to pass its own size here (SCREEN_WIDTH/HEIGHT, gamescope's
+    # -W/-H), and that overrode the pick: Steam always ran at 4K 60 whatever
+    # was chosen. Measured on the LG C1, 2026-10-06: without it, Steam opens
+    # at the saved 1080p 120, switches live to 4K 120 when that is picked, and
+    # with nothing saved opens at the TV's own default, 4K 60, as before.
     #
     # WITHOUT THE LOGIN'S CAPABILITIES. The console's login session carries
     # CAP_WAKE_ALARM in its ambient set (CapAmb 0x800000000; an SSH login
@@ -468,8 +415,7 @@ steam_step() {
     # to be enabled" in a window gamescope never shows: a black screen. Found
     # on the A9's first handover, 2026-10-03; reproduced and fixed there with
     # exactly this. gamescope keeps its own cap_sys_nice from its file.
-    SCREEN_WIDTH="${OUT_W}" SCREEN_HEIGHT="${OUT_H}" ADAPTIVE_SYNC=1 \
-    GAMESCOPE_BIN="${steam_bin}" \
+    ADAPTIVE_SYNC=1 \
     SRT_LOG_TO_JOURNAL=1 \
         setpriv --inh-caps=-all --ambient-caps=-all -- \
         /usr/share/gamescope-session-plus/gamescope-session-plus steam
