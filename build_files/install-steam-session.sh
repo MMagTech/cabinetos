@@ -51,7 +51,23 @@ for attempt in 1 2 3 4; do
         break
     fi
     log "  install attempt ${attempt} failed"
-    [[ ${attempt} -eq 4 ]] && { log "ERROR: could not install Steam's session from terra"; exit 1; }
+    if [[ ${attempt} -eq 4 ]]; then
+        # THE STORED COPY (#270), when terra will not answer properly. On
+        # 2026-10-05 its index stayed broken for over an hour (a 404, then a
+        # checksum list that never caught up), and three builds in a row
+        # failed for it. build_files/terra-fallback/ holds the two packages,
+        # refreshed weekly by terra-fallback-update.yml. Checked against
+        # terra's own key first: a copy that does not verify is not used.
+        log "  terra failed four times; installing the stored copy (#270)"
+        keys=$(mktemp -d)
+        rpmkeys --dbpath "${keys}" --import /etc/pki/rpm-gpg/RPM-GPG-KEY-terra44
+        rpmkeys --dbpath "${keys}" -K /ctx/terra-fallback/*.rpm || {
+            log "ERROR: the stored copy does not verify against terra's key"; exit 1; }
+        rm -rf "${keys}"
+        dnf5 -y install --setopt=install_weak_deps=False /ctx/terra-fallback/*.rpm || {
+            log "ERROR: could not install Steam's session, from terra or the stored copy"; exit 1; }
+        break
+    fi
     dnf5 clean packages --enablerepo=terra || true
     refresh=(--refresh)
     sleep 60
