@@ -11,24 +11,19 @@ specification is `docs/PROJECT.md`; the order is `docs/ROADMAP.md`.
 
 ## Where things stand
 
-2026-10-05: #221 (games lock to the screen), #194 (Remove and Sign out send
-owed saves first) and #108 (CabinetOS boot splash) merged and promoted;
-image 2026.10.05.4 is on the A9. #133 closed (not worth the space on the
-Storage page; sizes go in the diagnostic report, #195). #228 (sound chip
-power) still open: the udev rule did not hold across a reboot because tuned
-turns controller power saving back on; next try is through tuned, tested
-across a real reboot. Claire's account was removed during #194's test; her
-old folder is backed up at `~/fb/claire-backup-20261005` on the A9.
+2026-10-05: offline play (#88) and the cartridge-save fix (#259) are built on
+branch `offline-play`, tested headless and on the A9 with a wrong address, and
+not merged or pushed to testing. What was built and verified is in
+docs/PROJECT.md, open question 22, "Built, 2026-10-05". The A9 is back on its
+image. #228 (sound chip power) is still open.
 
 ## Next
 
-1. **Offline play (#88), built from the walkthrough on the issue.** Read
-   every comment on #88 first: the decisions are there (15 s, every game on
-   the drive, the normal Home and Library with fewer games, a shared Recent
-   shelf, switching works offline, quiet background reconnects, no Offline
-   switch). **Fix #259 first** (cartridge battery saves ignore the local
-   copy, a save-loss bug today; leave the three-states rule untouched).
-   Two-device conflicts are deferred to #261. Still to judge on the TV: an
-   "Offline" label or none, and Search working offline or greyed. Walk the
-   build on the A9 with the server stopped (a firewall rule or a wrong
-   address via `tools/ui-loop.sh --env`), never by stopping RomM.
+1. **Judge offline play on the TV, then merge #88 and #259.** Deploy with
+   `tools/ui-loop.sh --env CABINETOS_ROMM=192.168.1.10:6099` (offline from
+   boot; link the covers folder as docs/lessons/testing.md says). Judge: the "Offline" chip's look, the lift from the startup screen
+   at 15 s, Home, Library, Search, a game, switching person. Then the #259
+   test with a real in-game save on a cartridge game, offline and then online
+   before the retry. For the server coming back, use the relay in
+   docs/lessons/testing.md. After his go: push to testing, judge the image,
+   merge on his word.

@@ -574,6 +574,74 @@ std::vector<Download> downloads() {
     return out;
 }
 
+void rememberGame(int romId, const std::string& record) {
+    if (romId <= 0 || record.empty()) return;
+    storage::makeDirs(storage::gamesDir());
+    const std::string path = storage::gamesDir() + "/" + std::to_string(romId) + ".json";
+    const std::string tmp = path + ".part";
+    FILE* f = std::fopen(tmp.c_str(), "wb");
+    if (!f) return;
+    const bool ok = std::fwrite(record.data(), 1, record.size(), f) == record.size();
+    if (std::fclose(f) != 0 || !ok || ::rename(tmp.c_str(), path.c_str()) != 0)
+        ::unlink(tmp.c_str());
+}
+
+namespace {
+std::string readText(const std::string& path) {
+    std::string out;
+    if (FILE* f = std::fopen(path.c_str(), "rb")) {
+        char buf[4096];
+        size_t n;
+        while ((n = std::fread(buf, 1, sizeof buf, f)) > 0) out.append(buf, n);
+        std::fclose(f);
+    }
+    return out;
+}
+}  // namespace
+
+std::string gameRecord(int romId) {
+    std::string r = readText(storage::gamesDir() + "/" + std::to_string(romId) + ".json");
+    if (!r.empty()) return r;
+    for (const storage::User& u : storage::knownUsers()) {
+        r = readText(keepPath(u, romId));
+        if (!r.empty()) return r;
+    }
+    return {};
+}
+
+std::vector<OnDrive> onDrive() {
+    std::map<int, OnDrive> by;
+    for (const std::string& loc : storage::locations()) {
+        for (const bool kept : {true, false}) {
+            const std::string half = kept ? storage::romsDir(loc) : storage::cacheDir(loc);
+            walkHalf(half, [&](const std::string& platform, const std::string& entry) {
+                const int id = storage::romIdFromEntry(entry);
+                if (id <= 0) return;
+                const int64_t used = newestMtime(half + "/" + platform + "/" + entry);
+                OnDrive& d = by[id];
+                if (d.romId == 0) {
+                    d.romId = id;
+                    d.kept = kept;
+                    d.lastUsed = used;
+                } else {
+                    d.kept = d.kept || kept;
+                    d.lastUsed = std::max(d.lastUsed, used);
+                }
+            });
+        }
+    }
+    std::vector<OnDrive> out;
+    out.reserve(by.size());
+    for (auto& [id, d] : by) {
+        d.record = gameRecord(id);
+        out.push_back(std::move(d));
+    }
+    std::sort(out.begin(), out.end(), [](const OnDrive& a, const OnDrive& b) {
+        return a.lastUsed != b.lastUsed ? a.lastUsed > b.lastUsed : a.romId < b.romId;
+    });
+    return out;
+}
+
 void markPending(const storage::User& u, const Owed& o, int64_t bytes) {
     if (!u.valid()) return;
     storage::makeDirs(storage::pendingDir(u));

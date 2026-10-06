@@ -385,6 +385,34 @@ std::vector<int> keptRoms(const storage::User& u);
 // the floors care about.
 std::vector<int> allKeptRoms();
 
+// --- What is on the drive, for offline play (#88) ---------------------------
+//
+// Offline, the console shows every game on its drives, downloaded or cached,
+// whoever downloaded or played it (MMagTech, 2026-10-05, on #88). Each needs
+// its library entry, which is what `rememberGame` keeps: written at every
+// launch and download, so a game that is on the drive has normally been
+// remembered on the way there. A downloaded game also has its keep record,
+// which is used when there is no note.
+
+// Writes `storage::gamesDir()/<romId>.json`, through a temporary.
+void rememberGame(int romId, const std::string& record);
+
+// The note for this game, or any person's keep record for it, or nothing.
+std::string gameRecord(int romId);
+
+// One game on a drive that is here now.
+struct OnDrive {
+    int romId = 0;
+    std::string record;      // gameRecord(romId); empty when there is none
+    int64_t lastUsed = 0;    // the entry's mtime: download or last launch
+    bool kept = false;       // under roms/ rather than cache/
+};
+
+// Every game on every drive that is here, one each, most recently used first.
+// Read off the disk every time, like find(). Includes games with no record,
+// which offline cannot show but a backfill can fetch while online.
+std::vector<OnDrive> onDrive();
+
 // --- What has not reached RomM yet ------------------------------------------
 //
 // The one genuinely irreplaceable thing on the machine. A ROM comes back, a

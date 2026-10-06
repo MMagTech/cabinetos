@@ -228,6 +228,13 @@ int ImageCache::pendingCount() const {
     return static_cast<int>(requests_.size() + finished_.size());
 }
 
+void ImageCache::forgetFailed() {
+    for (auto it = entries_.begin(); it != entries_.end();) {
+        if (it->second.image.failed && !it->second.image.texture) it = entries_.erase(it);
+        else ++it;
+    }
+}
+
 int ImageCache::settlingCount() const {
     int n = 0;
     for (const auto& [key, e] : entries_)

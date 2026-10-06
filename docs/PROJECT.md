@@ -10652,6 +10652,7 @@ to leave room for it.
 ├── roms/      kept games                shared
 ├── cache/     pulled games              shared, and the only thing eviction touches
 ├── bios/      firmware from RomM        shared
+├── games/     a record per game on the drive, for offline play (#88)   shared
 ├── users/
 │   └── <id> - <name>/
 │       ├── saves/<platform>/<romId>/<core>/
@@ -12189,7 +12190,8 @@ with a game in front of you.
 
 ### 22. What the console does when the server is away
 **Raised by the A9 Max's first reboot, 2026-09-19. Partly decided the same day.
-Not built.**
+Offline play built 2026-10-05 (#88): see "Built, 2026-10-05" at the end of this
+section. The decisions are the comments on issue #88.**
 
 **REPRODUCED IN FULL ON 2026-09-19**, on the first boot after the A9 was moved
 onto the image, and worth reading because the whole sequence is in one journal
@@ -12411,6 +12413,86 @@ the wrong person's games on the kept shelf — silently, and only noticed later.
 
 Caching the user *list* would allow offline switching, and it is not decided
 here; it belongs with account switching, which is already its own topic.
+
+#### Built, 2026-10-05 (#88, and #259 first)
+
+Decided by MMagTech on 2026-10-05, each a comment on #88: offline is the normal
+console with fewer games; it starts after 15 s with no server if any game is on
+the drive; the games shown are every game on the drive, downloaded or cached,
+whoever got them there; the Recent shelf is shared (the drive's own last-used
+order); switching people works offline and adding one is greyed; Search works
+over the same games; a small "Offline" chip sits by the account chip; the
+server is retried in the background, quickly at first and then about once a
+minute; there is no Offline switch. Two devices saving the same game across an
+outage is deferred to #261 (the console's save still wins, as before).
+
+What does it, and where:
+
+- **#259, cartridge saves.** The battery save loaded only RomM's copy. Now the
+  console's own `.srm` wins when its upload is still owed, and is loaded
+  whenever RomM has none to give (no server, no row, a system with no save
+  tag). The rule the disc and directory saves already kept; RetroArch's too.
+- **Whether the server is away is one fact** (`romm::serverAway`), set by what
+  requests actually meet: no connection, no name, or a deadline before any
+  connection. Any answer clears it. A heartbeat once a minute while online
+  notices a server that goes while the console sits on Home.
+- **`games/<romId>.json`**, one record per game in RomM's own field names,
+  written at every launch and download, and fetched while online for any game
+  on the drive without one (with both its covers). `games/platforms.json` keeps
+  the server's system names so offline tiles read as online ones do. People's
+  pictures are kept in `covers/avatars/`.
+- **The startup wait** tries the server on a client of its own, so going
+  offline at 15 s leaves a try that is still waiting to finish alone.
+- **While away, a launch asks the server nothing** (firmware list, saves, the
+  install file list): what is on the disk is used.
+- **Back:** owed saves go at once; a console showing the drive's games loads
+  its library properly, in the background, the next time it is on Home with
+  nothing in progress, and Home fades in as it does from the bar (loaded on
+  the frame thread it froze the picture and read as a flash).
+- **Lost while on:** after a minute away (a blip changes nothing), Home and
+  the Library become the drive's games, on Home only (MMagTech, 2026-10-05:
+  offline looks the same however you got there). Judged on the TV both ways.
+- **Retries:** every 10 s for two minutes, then once a minute, and at once
+  when a network route appears (Wi-Fi switched on, a cable plugged in).
+- **RomM's newest saves are kept for every game on the drive**
+  (`users/<id> - <name>/server-saves/<romId>/`, savemirror.h), fetched in one
+  call while online and again every quarter of an hour: offline, a launch
+  reads that copy exactly as it reads the server online, so a game last
+  played on another device starts from its newest save (the vacation case,
+  moved here from #261). The copy is forgotten whenever a save of ours lands,
+  then read again, so it can never be older than a save the console sent.
+  Its size grows with the saves of the games on the drive: 44 MB for 47 games
+  with saves on the A9 (2026-10-05); a drive of hundreds of PS2 or GameCube
+  games (8 to 16 MB a card) would hold a few GB. Not capped: the price of the
+  vacation case, small beside the games.
+- **Larger drives:** building the offline library reads one small record per
+  game on the drive: 2.7 ms for 79 games on the A9, so about 35 ms for a
+  thousand, once per offline start. Offline Search reads the drive once and
+  again at most every 30 s, not per keystroke. Coming back online loads the
+  same few requests whatever the size of the library (open question 28).
+- **The game's page offline** shows the save's date and the newest three
+  states from the console (pictures included), and the year, maker and
+  players as last seen (`games/<romId>.facts.json`). Online, a state still
+  waiting to upload is listed with RomM's. Picking one of the console's own
+  loads that file.
+- **Favorites offline**: each person's favourites are kept while online
+  (`favorites.json` in their folder); offline, the ones on the drive form the
+  shelf, in order. None on the drive, no shelf.
+- No message when owed saves go up after a reconnect (MMagTech, 2026-10-05):
+  the Offline chip going is the sign, and the pause menu already said "Will
+  upload when RomM is back".
+
+Not changed, on purpose: the three-states rule and state loading (#259's scope
+comment), the startup screen's words (the agreed sequence keeps them), first
+run (needs a server).
+
+Verified on the A9 2026-10-05 with a wrong address (`CABINETOS_ROMM`), never by
+stopping RomM: offline start in 15 s, Home, Library, a system's grid, Search,
+a game's page, Download on a cached game (marks it kept, no server), switching
+to a second person, launches of PS1, N64, arcade, GameCube, PS2, Sega CD and
+3DO, loading the newest state, the cartridge save offline and while owed, and
+the server returning both from an offline start and mid-session (a local relay
+switched on and off). Not measured: a backlog of hundreds of owed uploads.
 
 ### 24. Will gamescope composite our overlay over a window we do not own?
 **Raised by MMagTech, 2026-09-21, before any more measuring. ANSWERED THE SAME

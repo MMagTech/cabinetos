@@ -414,6 +414,7 @@ std::string biosDir() { return root() + "/bios"; }
 std::string configDir() { return root() + "/config"; }
 std::string logsDir() { return root() + "/logs"; }
 std::string emulatorsDir() { return root() + "/emulators"; }
+std::string gamesDir() { return root() + "/games"; }
 
 std::string imageAssetsDir() {
     // Inside the bootc image, replaced wholesale on every update and never

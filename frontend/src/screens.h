@@ -413,11 +413,16 @@ public:
     // a save still going up — so it owns the words for them too.
     void setNotice(std::string s);
 
+    // Greyed while the server is away (#88): pairing needs it. Still
+    // focusable, so the list does not change shape.
+    void setAddEnabled(bool on) { addEnabled_ = on; }
+
     void tick(float dt);
     Result key(Nav n);
     void draw(Ctx& c);
 
 private:
+    bool addEnabled_ = true;
     // Everything is selectable now, so this is only here to keep the Add row
     // focused on a console with one account.
     int firstSelectable() const;

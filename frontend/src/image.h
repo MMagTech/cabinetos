@@ -93,6 +93,11 @@ public:
     // pendingCount it sees the ones a worker is holding. Frame thread only.
     int settlingCount() const;
 
+    // Forgets every image that failed to load, so the next get() asks again.
+    // For the server coming back (#88): a cover that failed offline is
+    // otherwise failed for the rest of the session. Frame thread only.
+    void forgetFailed();
+
     // Reads a file. The default loader, and what Phase 4 replaces.
     static std::vector<uint8_t> readFile(const std::string& path);
 

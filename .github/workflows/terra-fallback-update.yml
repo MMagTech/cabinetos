@@ -1,0 +1,75 @@
+# Keep the stored copy of Steam's session current: open a pull request when it
+# changes (#270).
+#
+# The image build installs gamescope-session and gamescope-session-steam from
+# terra, and falls back to build_files/terra-fallback/ when terra will not
+# answer properly (build_files/install-steam-session.sh). A spare that never
+# moves would one day install a session older than the one Bazzite runs, so
+# this checks weekly, like the controller list. It never merges anything.
+
+name: Check Steam session copy
+
+on:
+  schedule:
+    # Monday 10:00 UTC, after the base and controller list checks.
+    - cron: '0 10 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: terra-fallback-update
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Check terra for a newer Steam session
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+
+      - name: Fetch and verify
+        id: fetch
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq rpm zstd >/dev/null
+          tools/terra-fallback-update.py | tee /tmp/out.txt
+          LAST=$(tail -1 /tmp/out.txt)
+          echo "${LAST}" >> "${GITHUB_OUTPUT}"
+          if [ "${LAST}" = "changed=true" ]; then
+            NOW=$(grep '^now: ' /tmp/out.txt | sed 's/^now: //')
+            echo "now=${NOW}" >> "${GITHUB_OUTPUT}"
+            echo "short=$(echo "${NOW}" | md5sum | cut -c1-10)" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Open a pull request
+        if: steps.fetch.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.BASE_UPDATE_TOKEN || secrets.GITHUB_TOKEN }}
+          NOW: ${{ steps.fetch.outputs.now }}
+          SHORT: ${{ steps.fetch.outputs.short }}
+        run: |
+          set -euo pipefail
+          BRANCH="terra-fallback/${SHORT}"
+          if git ls-remote --exit-code --heads origin "${BRANCH}" >/dev/null 2>&1; then
+            echo "Branch ${BRANCH} already exists; leaving the open PR alone."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "${BRANCH}"
+          git add -A build_files/terra-fallback
+          git commit -m "Steam session spare copy: ${NOW}"
+          git push origin "${BRANCH}"
+          cat > /tmp/pr-body.md <<EOF
+          **What it does:** updates the stored copy of Steam's session (the image's fallback when terra will not answer) to what terra serves now: ${NOW}. Both packages verified against terra's key.
+
+          **Why:** the spare should match what Bazzite runs (#270). It is used only when terra fails during an image build.
+          EOF
+          gh pr create --title "Steam session spare copy update" --body-file /tmp/pr-body.md \
+            --base "${{ github.event.repository.default_branch }}" --head "${BRANCH}"

@@ -270,6 +270,35 @@ minute and guessing at it for twenty.
 - **A frame capture of a game has a pause menu over it** when the headless
   window loses focus. Read the picture around it.
 
+- **A headless `--launch` on the A9 is a real play as far as the drive is
+  concerned.** It touches the game's entry, so the game jumps to the front
+  of the drive's last-used order: the offline Recent shelf (#88) and the
+  order the cache is cleared in. 2026-10-05: eight test launches reordered
+  the console's offline Home and the dates had to be put back by hand with
+  `touch -h -d`. Note an entry's time (`stat -c %Y`) before a launch test and
+  restore it after, or test with the game that is already first. Kill with
+  SIGKILL before two minutes and no play session is recorded.
+
+- **A headless run on the A9 reads the real controllers.** Pads and Wii
+  Remotes go to every frontend on the machine, not only the one on the TV.
+  2026-10-05: while MMagTech played at the TV, a headless test copy took his
+  presses, opened its power menu and started Wild West Guns offscreen (it
+  restored a save folder; nothing was lost). **Never run a headless frontend
+  while he is at the TV**; use `tools/ui-loop.sh` and let him watch instead.
+
+- **Offline is tested with a wrong address, never by stopping RomM.**
+  `CABINETOS_ROMM=192.168.1.10:6099` (headless, or `tools/ui-loop.sh --env`)
+  is offline from boot. For the server COMING BACK, point the console at a
+  relay on the A9 itself, `CABINETOS_ROMM=127.0.0.1:16005` with
+  `tools/offline-relay.py` copied to the A9 (it forwards to RomM): relay off is no server, relay
+  on is the server back. Covers are filed by address, so link
+  `covers/<that address>` to `covers/192.168.1.10_6005` for the test and
+  remove the link after.
+
+- **Reading a game with `GET /api/roms/<id>` makes RomM create that person's
+  empty `rom_user` row**, which moves its `updated_at`. Harmless, but do not
+  read it as something the console sent.
+
 ### TWO GAMES AT DIFFERENT SOUND RATES, WITHOUT A RESTART — learned 2026-09-27
 
 The audio stream was opened once, at the first game's sample rate, and kept
