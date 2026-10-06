@@ -47,7 +47,9 @@
 set -uo pipefail
 
 VM=cabinet@192.168.1.250
-A9=cabinet@192.168.1.212
+# The A9 by its cable address unless told otherwise: CABINETOS_A9=cabinet@<ip>
+# when it is on Wi-Fi elsewhere (at the LG C1 since 2026-10-05, 192.168.1.109).
+A9=${CABINETOS_A9:-cabinet@192.168.1.212}
 KEY=~/.ssh/cabinetos
 SSH=(ssh -i "$KEY" -o ConnectTimeout=20 -o StrictHostKeyChecking=no)
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"

@@ -3287,9 +3287,26 @@ static void backfillDrive(const std::string& address) {
 // heartbeat, so a server that goes while the console sits on Home is
 // noticed (the Offline chip, launches that stop asking it) without waiting
 // for somebody to need it.
+// WHETHER THIS MACHINE HAS A ROUTE OUT AT ALL: a default route in the kernel's
+// table. Read only to notice the network coming back (startReconnect).
+static bool haveDefaultRoute() {
+    FILE* f = std::fopen("/proc/net/route", "r");
+    if (!f) return false;
+    char line[256];
+    bool found = false;
+    while (!found && std::fgets(line, sizeof line, f)) {
+        char iface[64];
+        unsigned long dest = 1;
+        if (std::sscanf(line, "%63s %lx", iface, &dest) == 2 && dest == 0) found = true;
+    }
+    std::fclose(f);
+    return found;
+}
+
 static void startReconnect(const std::string& address) {
     std::thread([address]() {
         long long lastTry = 0;
+        bool hadRoute = haveDefaultRoute();
         long long lastBeat = static_cast<long long>(std::time(nullptr));
         long long lastFill = lastBeat;
         for (;;) {
@@ -3309,6 +3326,11 @@ static void startReconnect(const std::string& address) {
                 }
             } else {
                 const long long now = static_cast<long long>(std::time(nullptr));
+                // THE NETWORK CAME BACK (a cable, Wi-Fi switched on): try at
+                // once rather than at the next minute's try.
+                const bool route = haveDefaultRoute();
+                if (route && !hadRoute) lastTry = 0;
+                hadRoute = route;
                 const long long awayFor = now - romm::serverAwaySince();
                 const long long every = awayFor < 120 ? 10 : 60;
                 if (now - lastTry >= every) {
@@ -5620,9 +5642,10 @@ int main(int argc, char** argv) {
     // frame that was already on the television.
     static constexpr const char* kLoadingLine = "Loading your library";
     bool startupShown = false;
-    // STARTED WITH NO SERVER (#88): Home is the games on the drive until the
-    // server answers, and then it is loaded properly (the frame loop).
-    bool startedOffline = false;
+    // HOME IS THE DRIVE'S GAMES (#88): the console started with no server, or
+    // the server went away while it was on, or a person was switched offline.
+    // The frame loop loads the library properly once the server answers.
+    bool libFromDrive = false;
 
     // A capture of the startup screen, which otherwise exists only for the few
     // seconds between the window appearing and the library arriving — and on a
@@ -6009,7 +6032,7 @@ int main(int argc, char** argv) {
             }
             if (goOffline) {
                 romm::setServerAway(true);
-                startedOffline = true;
+                libFromDrive = true;
                 std::fprintf(stderr,
                              "[offline] no server after %.0f s; starting with the games on "
                              "the drive\n", kOfflineAfter);
@@ -6065,7 +6088,7 @@ int main(int argc, char** argv) {
         if (const accounts::Account* who = accounts::find(known, accounts::activeId()))
             std::fprintf(stderr, "[accounts] acting as %d - %s\n", who->id,
                          who->name.c_str());
-        if (startedOffline) adoptAccountOffline(accounts::activeId());
+        if (libFromDrive) adoptAccountOffline(accounts::activeId());
         else adoptUser(liveClient);
         // FOUR SMALL CALLS NOW, not the catalogue — open question 28. This
         // used to count games onto the screen as they arrived, because it took
@@ -6079,7 +6102,7 @@ int main(int argc, char** argv) {
         // coming back after a power cut is not something this can make faster.
         setup::showWaiting(waitDeps, "Starting up", kLoadingLine);
         startupShown = true;
-        lib = startedOffline ? offlineLibrary() : loadLibrary(liveClient);
+        lib = libFromDrive ? offlineLibrary() : loadLibrary(liveClient);
         // The references above name lib's own members, so there is nothing to
         // copy out any more.
 
@@ -6090,7 +6113,7 @@ int main(int argc, char** argv) {
         // been told its library came back empty and refused to start. The
         // question worth asking is whether the SERVER answered, and the
         // platform list is what answers it.
-        if (platformTiles.empty() && !startedOffline) {
+        if (platformTiles.empty() && !libFromDrive) {
             std::fprintf(stderr, "[romm] the library came back empty\n");
             return 1;
         }
@@ -6855,7 +6878,7 @@ int main(int argc, char** argv) {
         // what is here; nothing says what might be on the server. Also while
         // the library is still the drive's, the server back but not yet
         // loaded (the frame loop loads it on Home).
-        if (romm::serverAway() || startedOffline) {
+        if (romm::serverAway() || libFromDrive) {
             auto lower = [](std::string x) {
                 for (char& ch : x) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
                 return x;
@@ -7210,7 +7233,7 @@ int main(int argc, char** argv) {
     // away, and what offline needs fetched while it is not.
     if (rommAddress) {
         startReconnect(rommAddress);
-        if (!startedOffline) backfillDrive(rommAddress);
+        if (!libFromDrive) backfillDrive(rommAddress);
     }
     bool shownAway = romm::serverAway();
     float onlineAgainClock = 5.0f;   // a failed reload waits before the next
@@ -7957,7 +7980,7 @@ int main(int argc, char** argv) {
                 return false;
             }
             lib = offlineLibrary();
-            startedOffline = true;   // loaded properly when the server answers
+            libFromDrive = true;   // loaded properly when the server answers
             libraryScreen.build(platformTiles, collectionTiles);
             homeFromTheStart();
             refreshKeeps();
@@ -14442,19 +14465,36 @@ int main(int argc, char** argv) {
                                  static_cast<long long>(std::time(nullptr)) -
                                      romm::serverAwaySince());
                     images.forgetFailed();
-                    if (!startedOffline) {
+                    if (!libFromDrive) {
                         owedClock = 0.0f;
                         uploader.resendOwed();
                     }
                 }
             }
             onlineAgainClock += dt;
+            // THE SERVER WENT WHILE THE CONSOLE WAS ON: after a minute, so a
+            // blip changes nothing, Home and the Library become the games on
+            // the drive, as at an offline start (MMagTech, 2026-10-05: offline
+            // looks the same however you got there). On Home only, never under
+            // a game, a grid or a game's page; the same arrival as coming back.
+            if (away && !libFromDrive && !playing && here() == Screen::Home && !accountsOpen &&
+                !launchJob.busy() &&
+                static_cast<long long>(std::time(nullptr)) - romm::serverAwaySince() >= 60) {
+                lib = offlineLibrary();
+                libFromDrive = true;
+                libraryScreen.build(platformTiles, collectionTiles);
+                homeFromTheStart();
+                refreshKeeps();
+                tabSince = 0.0f;
+                std::fprintf(stderr, "[offline] the server has been away a minute; Home is the "
+                                     "games on the drive\n");
+            }
             // THE LIBRARY IS FETCHED OFF THE FRAME THREAD, on a client of its
             // own, and swapped in here once it is in hand: fetched in place,
             // the picture froze for the length of the fetch and the fade below
             // was spent during the freeze, so it read as a flash (MMagTech on
             // the TV, 2026-10-05).
-            if (!away && startedOffline && !onlineLoad.running.load() && !onlineLoad.ready &&
+            if (!away && libFromDrive && !onlineLoad.running.load() && !onlineLoad.ready &&
                 onlineAgainClock >= 5.0f) {
                 onlineAgainClock = 0.0f;
                 onlineLoad.running = true;
@@ -14489,7 +14529,7 @@ int main(int argc, char** argv) {
                     startCoverFill();
                     homeFromTheStart();
                     refreshKeeps();
-                    startedOffline = false;
+                    libFromDrive = false;
                     images.forgetFailed();
                     // HOME ARRIVES AGAIN, as it does from the bar: the
                     // shelves fade in and rise (#88's agreed sequence, "the

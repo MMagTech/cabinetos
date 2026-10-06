@@ -12445,8 +12445,15 @@ What does it, and where:
   offline at 15 s leaves a try that is still waiting to finish alone.
 - **While away, a launch asks the server nothing** (firmware list, saves, the
   install file list): what is on the disk is used.
-- **Back:** owed saves go at once; a console that started offline loads its
-  library properly the next time it is on Home with nothing in progress.
+- **Back:** owed saves go at once; a console showing the drive's games loads
+  its library properly, in the background, the next time it is on Home with
+  nothing in progress, and Home fades in as it does from the bar (loaded on
+  the frame thread it froze the picture and read as a flash).
+- **Lost while on:** after a minute away (a blip changes nothing), Home and
+  the Library become the drive's games, on Home only (MMagTech, 2026-10-05:
+  offline looks the same however you got there). Judged on the TV both ways.
+- **Retries:** every 10 s for two minutes, then once a minute, and at once
+  when a network route appears (Wi-Fi switched on, a cable plugged in).
 - **RomM's newest saves are kept for every game on the drive**
   (`users/<id> - <name>/server-saves/<romId>/`, savemirror.h), fetched in one
   call while online and again every quarter of an hour: offline, a launch

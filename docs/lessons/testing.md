@@ -279,6 +279,13 @@ minute and guessing at it for twenty.
   restore it after, or test with the game that is already first. Kill with
   SIGKILL before two minutes and no play session is recorded.
 
+- **A headless run on the A9 reads the real controllers.** Pads and Wii
+  Remotes go to every frontend on the machine, not only the one on the TV.
+  2026-10-05: while MMagTech played at the TV, a headless test copy took his
+  presses, opened its power menu and started Wild West Guns offscreen (it
+  restored a save folder; nothing was lost). **Never run a headless frontend
+  while he is at the TV**; use `tools/ui-loop.sh` and let him watch instead.
+
 - **Offline is tested with a wrong address, never by stopping RomM.**
   `CABINETOS_ROMM=192.168.1.10:6099` (headless, or `tools/ui-loop.sh --env`)
   is offline from boot. For the server COMING BACK, point the console at a
