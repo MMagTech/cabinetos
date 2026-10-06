@@ -192,6 +192,20 @@ carries them under the terms Fedora ships them with.
 | libarchive | ROM archives, and PSP save zips | BSD 2-clause |
 | zlib | Compression under several of the above | zlib licence |
 
+**rcheevos** (github.com/RetroAchievements/rcheevos, MIT) is compiled into
+the frontend for RetroAchievements (#74): the copy in
+`frontend/third_party/rcheevos/`, unmodified, at tag v12.5.0 (commit
+`1433173220a7`), with its `LICENSE` beside it and the files left out listed in
+its `VERSION`. It is the library RetroArch, Dolphin and PCSX2 use.
+
+**Signing in to RetroAchievements sends data to RetroAchievements**, and only
+then: it is opt-in, per person, in Settings. The username and password go to
+retroachievements.org once; afterwards the console sends the token it was
+given, which game is being played (its RetroAchievements fingerprint, from
+RomM), each achievement as it is earned, and a periodic "still playing" note,
+as every RetroAchievements client does. Its User-Agent names CabinetOS, its
+version and the emulator. Nothing is sent for anybody who has not signed in.
+
 **SDL_GameControllerDB** (github.com/mdqinc/SDL_GameControllerDB, zlib
 licence) is carried as data, not linked: `gamecontrollerdb.txt` in
 `/usr/share/cabinetos/`, unmodified. Pinned in this repository

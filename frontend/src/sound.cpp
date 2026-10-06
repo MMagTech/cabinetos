@@ -26,6 +26,7 @@ struct Voice {
     std::vector<int16_t> pcm;
 };
 Voice gVoices[4];
+Voice gChime;
 
 // A cue is two sine partials under one exponential envelope, and that is the
 // whole synthesiser.
@@ -70,6 +71,40 @@ void build(Voice& v, float hz, float partialHz, float partialGain,
     }
 }
 
+// THE CHIME: two bell notes a fifth apart, the second struck 110 ms after the
+// first and both left to ring, which is the shape a "you got something" sound
+// has on every console that has one. Built from the same two-partial voice,
+// with a third partial a little above the octave so it reads as a bell rather
+// than a beep, and longer: it is an occasion, not punctuation.
+void buildChime(Voice& v) {
+    const float seconds = 0.9f;
+    const int n = static_cast<int>(seconds * kRate);
+    std::vector<float> mix(static_cast<size_t>(n), 0.0f);
+    auto strike = [&](float hz, float at, float gain) {
+        const int start = static_cast<int>(at * kRate);
+        const int attack = static_cast<int>(0.003f * kRate);
+        double p1 = 0.0, p2 = 0.0, p3 = 0.0;
+        for (int i = start; i < n; ++i) {
+            const int k = i - start;
+            const float t = static_cast<float>(k) / static_cast<float>(n - start);
+            float env = std::exp(-5.0f * t);
+            if (k < attack) env *= static_cast<float>(k) / static_cast<float>(attack);
+            p1 += 2.0 * M_PI * hz / kRate;
+            p2 += 2.0 * M_PI * hz * 2.0 / kRate;
+            p3 += 2.0 * M_PI * hz * 2.76 / kRate;
+            mix[static_cast<size_t>(i)] +=
+                gain * env * (static_cast<float>(std::sin(p1)) +
+                              0.30f * static_cast<float>(std::sin(p2)) +
+                              0.12f * static_cast<float>(std::sin(p3)) * std::exp(-12.0f * t));
+        }
+    };
+    strike(1046.5f, 0.0f, 0.55f);    // C6
+    strike(1568.0f, 0.11f, 0.55f);   // G6
+    v.pcm.resize(mix.size());
+    for (size_t i = 0; i < mix.size(); ++i)
+        v.pcm[i] = static_cast<int16_t>(SDL_clamp(mix[i] * 0.55f, -1.0f, 1.0f) * 32767.0f);
+}
+
 }  // namespace
 
 bool init() {
@@ -105,6 +140,7 @@ bool init() {
     // worked. Without it, a controller pressed against the end of a row is
     // silent, which feels like the console stopped listening.
     build(gVoices[3], 320.0f, 480.0f, 0.12f, 0.055f, -0.10f);
+    buildChime(gChime);
 
     gReady = true;
     std::fprintf(stderr, "[sound] interface audio at %d Hz\n", kRate);
@@ -147,6 +183,22 @@ void setLevelVolumes(float quiet, float medium, float loud) {
     gLevelVolume[2] = medium;
     gLevelVolume[3] = loud;
     setLevel(gLevel);
+}
+
+Level gChimeLevel = Level::Medium;
+void setChimeLevel(Level l) { gChimeLevel = l; }
+Level chimeLevel() { return gChimeLevel; }
+
+void playChime() {
+    const float volume = gLevelVolume[static_cast<int>(gChimeLevel)];
+    if (!gReady || volume <= 0.0f || gChime.pcm.empty()) return;
+    // Queued behind whatever click is waiting rather than clearing it, as
+    // play() does: the chime is the one sound here that must not be cut short.
+    // Nothing clicks during play, so in practice nothing is ahead of it.
+    std::vector<int16_t> out(gChime.pcm.size());
+    for (size_t i = 0; i < out.size(); ++i)
+        out[i] = static_cast<int16_t>(static_cast<float>(gChime.pcm[i]) * volume);
+    SDL_PutAudioStreamData(gStream, out.data(), static_cast<int>(out.size() * sizeof(int16_t)));
 }
 
 void setEnabled(bool on) { gEnabled = on; }

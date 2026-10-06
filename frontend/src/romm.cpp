@@ -138,6 +138,7 @@ bool parseGame(json_object* o, Game* g) {
     g->fsName = jstr(o, "fs_name");
     g->sizeBytes = jint(o, "fs_size_bytes");
     g->titleId = jstr(o, "title_id");
+    g->raHash = jstr(o, "ra_hash");
     // BOTH SIZES, because they are for different jobs. See romm.h: `small` is
     // a 162x216 thumbnail and `big` is 810x1080. Either may be absent — a game
     // the server never matched has neither — so each falls back to the other

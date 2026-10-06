@@ -15871,3 +15871,75 @@ to pin; #235 if cutscenes in less popular games break); hiding Steam's own
 Wi-Fi, Bluetooth and sound pages (possible by filtering what Steam sees on
 the system bus, judged not worth the complication; the PIN covers children);
 a per-person Steam.
+
+### 38. RetroAchievements, issue #74
+
+**Decided with MMagTech, 2026-10-05 and 2026-10-06; built on
+`retroachievements`.** The research is the 2026-10-05 comment on #74; this is
+what was decided and built from it.
+
+**Why at all.** MMagTech rarely uses RetroAchievements. It is an
+incentive for other people to choose this console, so the bar is that it
+works on every system it can, with no fuss, and costs nothing to anyone who
+does not want it.
+
+**Opt-in, per person, and invisible otherwise.** One row in Settings >
+Accounts is the only way in. Somebody who never signs in sees nothing about
+it anywhere: no row on a game's page, no pop-up, no sound row. Each account
+signs in with its own RetroAchievements login, typed on the keyboard (RomM's
+`ra_username` is a separate field a person fills in, and was empty for
+MMagTech, so it is not used to prefill). The password goes to
+RetroAchievements once; the token it returns is kept beside the person's RomM
+token (0600) and removed with the account.
+
+**Softcore only** (2026-10-05). Hardcore needs RetroAchievements to approve
+this frontend and keep every release to their checklist. Nothing hardcore is
+built, hidden or otherwise. States and rewind work as always; loading a state
+restarts what each achievement was waiting for, as RetroArch does.
+
+**During play: only the unlock.** A card fades in at the foot of the screen on
+the left (badge, "Achievement unlocked · 10 points", the name) and fades out
+after five seconds. It never pauses the game or takes a button. No "3 of 40"
+note at the start, no progress counters, no challenge icons; softcore has no
+leaderboards. Finishing a set shows one card, "Every achievement unlocked",
+with the game's badge. **A chime** plays with it, with its own row in Display
+and Sound (Off, Quiet, Medium, Loud), deliberately not tied to Interface
+sounds (MMagTech: someone who turns the clicks off may still want it).
+
+**On the game's page**, for somebody signed in: "Achievements" with "12 of 40"
+and a list of every achievement, unlocked first in colour, locked greyed. Two
+placements were built so MMagTech could choose on the television: a third row
+under Play and Download, or a trophy beside the heart. A game
+RetroAchievements has no set for says "None", greyed and never focused; one
+that could not be asked says "Unavailable". The last answer is kept, so the
+page has it offline.
+
+**How it identifies a game: RomM's `ra_hash`.** RomM works out the
+RetroAchievements fingerprint when it scans and stores it per game; the
+console hands it over rather than reading the file. So a `.chd` disc needs no
+disc reader here. On the reference server every covered platform has its
+games hashed, and RomM's matched RetroAchievements ids show the hashes are
+the ones RetroAchievements knows.
+
+**How it reads the game: rcheevos.** `rc_client`, vendored at v12.5.0
+(`frontend/third_party/rcheevos`), as RetroArch, Dolphin and PCSX2 use it. The
+libretro cores' memory comes through `rc_libretro` from the core's memory map
+or its system RAM, checked after every emulated frame of play (a screen
+refresh can run several), not during rewind or the pause menu's redraws.
+Dolphin hands over its map on its first frame, so the layout is redone when a
+new map arrives. **PlayStation 2** reads the EE's RAM and scratchpad through
+two new bridge calls, `cps2_memory` and `cps2_set_frame_callback`, checked on
+PCSX2's own thread at each vsync once the game's ELF has booted, which is
+where PCSX2's own achievements code checks. RetroAchievements adds a "Warning:
+Unknown Emulator" entry for clients it has not registered; it concerns
+hardcore and is logged, not shown.
+
+**What cannot have achievements here.** Switch, PS3, Xbox, Xbox 360 and Wii U
+run as separate emulators with no memory access from the console, and RomM
+has no RetroAchievements hash for any of them. MAME 2003-Plus exposes no
+memory to a frontend at all, so those arcade games have none; FinalBurn Neo's
+do.
+
+**Offline.** An unlock earned while the connection drops mid-game is kept and
+sent when it is back (rc_client retries). A game started with no connection
+gets no achievements that session: rc_client needs the server to load the set.

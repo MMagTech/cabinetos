@@ -108,6 +108,11 @@ struct Game {
     // A Wii U game's product code, `BWPE`, read off its file by the console:
     // GameTDB's key for its controllers (wiiu.h). Empty for everything else.
     std::string productCode;
+    // RomM's `ra_hash`: the fingerprint RetroAchievements knows this game by,
+    // which RomM works out when it scans (#74). The console hands it over as
+    // it is instead of reading the file itself, so a .chd disc needs no disc
+    // reader here. Empty where RomM could not work one out.
+    std::string raHash;
 };
 
 // One BIOS file a platform carries.

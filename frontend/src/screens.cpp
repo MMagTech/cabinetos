@@ -1142,6 +1142,8 @@ void DetailScreen::open(GameDetail d) {
     detailsIn_ = false;
     inStates_ = false;
     onFav_ = false;
+    onTrophy_ = false;
+    ach_ = {};
     stateSlot_ = 0;
     rebuildRows();
     focus_.settle(1.0f);
@@ -1170,12 +1172,27 @@ void DetailScreen::rebuildRows() {
             rows_.push_back({Action::RemoveDownload, "Remove download", true, ""});
         else
             rows_.push_back({Action::Download, "Download", true, ""});
+        // RETROACHIEVEMENTS (#74), the Row place: there on every game for
+        // somebody signed in, so the page is laid out the same on all of
+        // them; greyed with "None" where RetroAchievements has no set.
+        if (ach_.show && achPlace_ == AchievementPlace::Row)
+            rows_.push_back({Action::ShowAchievements, "Achievements", ach_.known && !ach_.none,
+                             achievementsValue()});
     }
     // A different save state, a different core and an export belong here too.
     // They are not built yet and a row that does nothing is worse than no row.
 }
 
 void DetailScreen::setFacts(Facts f) { facts_ = std::move(f); }
+
+void DetailScreen::setAchievements(Achievements a) {
+    ach_ = a;
+    rebuildRows();
+    if (slot_ >= static_cast<int>(rows_.size())) slot_ = rows_.empty() ? 0 : static_cast<int>(rows_.size()) - 1;
+    // Never left on a row that has just greyed.
+    while (slot_ > 0 && !rows_[slot_].enabled) --slot_;
+    if (onTrophy_ && !trophyFocusable()) { onTrophy_ = false; onFav_ = true; }
+}
 
 void DetailScreen::detailsArrived() { detailsIn_ = true; }
 
@@ -1228,6 +1245,27 @@ Result DetailScreen::key(Nav n) {
     // THE FAVOURITE MARK sits above the rows, beside the title: Up from the
     // top row reaches it, Down comes back to that row. A game this console
     // cannot play has no rows, and its mark is the only thing to focus.
+    // THE TROPHY, beside the heart in the Trophy place: Left goes back to the
+    // heart, Down to the rows, A opens the list.
+    if (onTrophy_) {
+        if (n == Nav::Activate) return {Action::ShowAchievements, game_.romId};
+        if (n == Nav::Left) {
+            onTrophy_ = false;
+            onFav_ = true;
+            refocus();
+        } else if (n == Nav::Down && !rows_.empty()) {
+            onTrophy_ = false;
+            slot_ = 0;
+            refocus();
+        }
+        return {};
+    }
+    if (onFav_ && n == Nav::Right && trophyFocusable()) {
+        onFav_ = false;
+        onTrophy_ = true;
+        refocus();
+        return {};
+    }
     if (onFav_ || rows_.empty()) {
         if (n == Nav::Activate) return {Action::ToggleFavorite, game_.romId};
         if (n == Nav::Down && !rows_.empty()) {
@@ -1263,14 +1301,16 @@ Result DetailScreen::key(Nav n) {
     if (n == Nav::Up || n == Nav::Down) {
         const int d = (n == Nav::Down) ? 1 : -1;
         const int last = static_cast<int>(rows_.size()) - 1;
-        if (d > 0 && slot_ == last && !states_.empty() && game_.playable) {
+        // PAST A GREYED ROW: focus never lands on one (Achievements, "None").
+        int next = slot_ + d;
+        while (next >= 0 && next <= last && !rows_[next].enabled) next += d;
+        if (next > last && !states_.empty() && game_.playable) {
             inStates_ = true;
             stateSlot_ = 0;
             refocus();
             return {};
         }
-        const int next = std::clamp(slot_ + d, 0, last);
-        if (next != slot_) { slot_ = next; refocus(); }
+        if (next >= 0 && next <= last && next != slot_) { slot_ = next; refocus(); }
         return {};
     }
     // A row that is showing a download's progress does nothing (#185): the
@@ -1299,7 +1339,7 @@ void DetailScreen::draw(Ctx& c) {
     // stuff in the background was loaded"). RomM slow or away, it stops
     // waiting at kDetailsWait and fades in with what it has.
     if (!started_) {
-        bool ready = detailsIn_;
+        bool ready = detailsIn_ && (!ach_.show || ach_.known);
         if (ready && !game_.coverLarge.empty()) ready = c.images.get(game_.coverLarge).ready;
         for (const StateChoice& st : states_)
             if (ready && !st.picture.empty()) ready = c.images.get(st.picture).ready;
@@ -1392,7 +1432,10 @@ void DetailScreen::draw(Ctx& c) {
     // open space where the shelf would be. (The cover grew only when there
     // was a shelf, first, and MMagTech: a game without saves and states
     // should look like one with them.)
-    const float rowsH = 2.0f * rowH + design::kDetailRowGap;
+    // Three for somebody signed in to RetroAchievements in the Row place, on
+    // every game alike (#74).
+    const int rowCount = (ach_.show && achPlace_ == AchievementPlace::Row) ? 3 : 2;
+    const float rowsH = rowCount * rowH + (rowCount - 1) * design::kDetailRowGap;
     const float shelfH = design::kStateShelfGap + calloutLH + design::kDetailRowGap + cardH_ +
               design::kDetailRowGap * 0.75f + calloutLH;
     const float colH = headToRows + rowsH + shelfH;
@@ -1443,11 +1486,21 @@ void DetailScreen::draw(Ctx& c) {
     // Clear of the title even with its focus disc round it (MMagTech on the
     // TV: the circle sat too close to the words).
     const float favGap = cap * 1.05f;
+    // THE TROPHY (#74, the Trophy place) follows the heart: a pill holding a
+    // small cup and the count, as tall as the heart's focus disc.
+    trophyH_ = favS_ * 1.9f;
+    trophyW_ = trophyShown()
+        ? trophyH_ * 0.5f + favS_ * 0.8f + 14.0f +
+              c.text.measure(achievementsValue(), ui::TextStyle::Callout, c.sc) + trophyH_ * 0.5f
+        : 0.0f;
+    const float trophyRoom = trophyShown() ? favGap + trophyW_ : 0.0f;
     const std::string title = c.text.truncate(game_.title, ui::TextStyle::LargeTitle, c.sc,
-                                              textW - favGap - favS_);
+                                              textW - favGap - favS_ - trophyRoom);
     c.text.draw(c.r, title, textX, y, ui::TextStyle::LargeTitle, ui::Color::white(a), c.sc);
     favX_ = textX + c.text.measure(title, ui::TextStyle::LargeTitle, c.sc) + favGap;
     favY_ = y - cap * 0.5f - favS_ * 0.5f;
+    trophyX_ = favX_ + favS_ + favGap;
+    trophyY_ = favY_ + favS_ * 0.5f - trophyH_ * 0.5f;
     y += c.text.lineHeight(ui::TextStyle::LargeTitle, c.sc) * 0.55f +
          c.text.ascent(ui::TextStyle::Callout, c.sc);
 
@@ -1547,13 +1600,16 @@ void DetailScreen::drawGlass(Ctx& c) {
         }
 
         const float base = ry + design::kRowPadY * s + c.text.ascent(ui::TextStyle::Title3, c.sc);
+        // A GREYED ROW (Achievements with no set) reads as one: fainter than
+        // a row at rest, and focus never reaches it.
+        const bool off = !rows_[i].enabled;
         c.text.draw(c.r, label, x + design::kRowPadX, base, ui::TextStyle::Title3,
-                    ui::Color::white((on || busy ? 1.0f : 0.60f) * a), c.sc);
+                    ui::Color::white((off ? 0.30f : on || busy ? 1.0f : 0.60f) * a), c.sc);
         if (!busy && !rows_[i].value.empty()) {
             const float vw = c.text.measure(rows_[i].value, ui::TextStyle::Callout, c.sc);
             c.text.draw(c.r, rows_[i].value, x + w - design::kRowPadX - vw, base,
                         ui::TextStyle::Callout,
-                        ui::Color::white(0.60f * a * details_.value()), c.sc);
+                        ui::Color::white((off ? 0.30f : 0.60f) * a * details_.value()), c.sc);
         }
         y += rowH + design::kDetailRowGap;
     }
@@ -1583,6 +1639,30 @@ void DetailScreen::drawGlass(Ctx& c) {
             mark.borderColor = ui::Color::white(strength);
         }
         c.r.draw(mark);
+    }
+
+    // THE TROPHY PILL (#74, the Trophy place): the rows' glass, a cup drawn
+    // from three rounded boxes, and the count. Greyed and never focused when
+    // RetroAchievements has no set.
+    if (trophyShown()) {
+        const float f = onTrophy_ ? focus_.value() : 0.0f;
+        const float s = 1.0f + f * (design::kFavFocusScale - 1.0f);
+        const float w = trophyW_ * s, h = trophyH_ * s;
+        const float x = trophyX_ - (w - trophyW_) * 0.5f, y0 = trophyY_ - (h - trophyH_) * 0.5f;
+        c.r.drawGlass(ui::Rect{x, y0, w, h, h * 0.5f, ui::Color::white(0)},
+                      design::kRegularMaterialBlur,
+                      ui::Color::white((0.08f + 0.14f * f) * a * details_.value()));
+        const float strength = (ach_.none ? 0.30f : onTrophy_ ? 1.0f : 0.60f) * a;
+        const float u = favS_ * 0.8f * s;   // the cup's size
+        const float cx = x + h * 0.5f + u * 0.5f, cy = y0 + h * 0.5f;
+        const ui::Color ink = ui::Color::white(strength);
+        c.r.draw(ui::Rect{cx - u * 0.40f, cy - u * 0.50f, u * 0.80f, u * 0.55f, u * 0.26f, ink});
+        c.r.draw(ui::Rect{cx - u * 0.07f, cy, u * 0.14f, u * 0.28f, 0.0f, ink});
+        c.r.draw(ui::Rect{cx - u * 0.28f, cy + u * 0.26f, u * 0.56f, u * 0.16f, u * 0.05f, ink});
+        const std::string v = achievementsValue();
+        c.text.draw(c.r, v, cx + u * 0.5f + 14.0f * s,
+                    cy + c.text.ascent(ui::TextStyle::Callout, c.sc) * 0.36f,
+                    ui::TextStyle::Callout, ui::Color::white(strength), c.sc);
     }
 
     // CONTINUE FROM, as Cabinet's tvOS launch screen calls it: the game's

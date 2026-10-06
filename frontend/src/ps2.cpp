@@ -39,6 +39,10 @@ struct Api {
     // and reads every frame back as it always did.
     void     (*setWindow)(const char*, unsigned long, unsigned, unsigned) = nullptr;
     int      (*captureFrame)(unsigned) = nullptr;
+    // Optional: RetroAchievements (#74). A library without them plays on with
+    // no achievements rather than refusing to start.
+    uint8_t* (*memory)(unsigned, size_t*) = nullptr;
+    void     (*setFrameCallback)(void (*)(void*), void*) = nullptr;
 } gApi;
 
 bool gWindowed = false;
@@ -92,6 +96,9 @@ bool ps2::load(const std::string& soPath) {
         reinterpret_cast<decltype(gApi.setWindow)>(dlsym(gHandle, "cps2_set_window"));
     gApi.captureFrame =
         reinterpret_cast<decltype(gApi.captureFrame)>(dlsym(gHandle, "cps2_capture_frame"));
+    gApi.memory = reinterpret_cast<decltype(gApi.memory)>(dlsym(gHandle, "cps2_memory"));
+    gApi.setFrameCallback = reinterpret_cast<decltype(gApi.setFrameCallback)>(
+        dlsym(gHandle, "cps2_set_frame_callback"));
 
     if (!ok) {
         dlclose(gHandle);
@@ -241,4 +248,16 @@ unsigned ps2::sampleRate() { return gHandle ? gApi.sampleRate() : 0; }
 void ps2::metrics(float& fps, float& speed, double& readbackUs) {
     fps = 0.0f; speed = 0.0f; readbackUs = 0.0;
     if (gHandle) gApi.metrics(&fps, &speed, &readbackUs);
+}
+
+uint8_t* ps2::memory(unsigned region, size_t* size) {
+    *size = 0;
+    if (!gHandle || !gApi.memory) return nullptr;
+    return gApi.memory(region, size);
+}
+
+bool ps2::setFrameCallback(void (*cb)(void*), void* user) {
+    if (!gHandle || !gApi.setFrameCallback) return false;
+    gApi.setFrameCallback(cb, user);
+    return true;
 }

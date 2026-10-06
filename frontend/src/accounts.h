@@ -226,6 +226,18 @@ bool setPin(const std::string& pin, std::string* err);
 // that has none — check `pinIsSet` to decide whether to ask at all.
 bool checkPin(const std::string& pin);
 
+// --- RetroAchievements (#74) -----------------------------------------------
+//
+// A person's RetroAchievements sign-in: their username and the token the
+// server gave in exchange for the password, which is never kept. Beside their
+// RomM token and as private (0600 in a 0700 folder), because it is a
+// credential for their RetroAchievements account. Removed with the account,
+// and by forgetEveryone with the folder.
+std::string raPath(int id);   // ~/.config/cabinetos/accounts/<id>.retroachievements.json
+bool raLogin(int id, std::string* username, std::string* token);
+bool setRaLogin(int id, const std::string& username, const std::string& token);
+void clearRaLogin(int id);
+
 // --- Signing out -----------------------------------------------------------
 
 // Every account on this console, their tokens and the PIN, for signing out of

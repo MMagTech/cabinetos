@@ -20,6 +20,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -227,6 +228,40 @@ namespace CabinetPS2
 	void SetPaused(bool paused);
 
 	bool IsRunning();
+
+	/// THE EMULATED MACHINE'S MEMORY, FOR RETROACHIEVEMENTS (#74). Region 0 is
+	/// the EE's main RAM, region 1 its 16 KB scratchpad; anything else, or no
+	/// running game, is null with `*size` 0.
+	///
+	/// **THE FRONTEND RUNS rcheevos ITSELF AND THIS LAYER ONLY LENDS IT THE
+	/// BYTES.** PCSX2 has an achievements client of its own, and using it would
+	/// mean a second RetroAchievements login, a second HTTP stack and a second
+	/// set of notifications, drawn by PCSX2's ImGui and looking like nothing
+	/// else on the console. Every libretro core already works the other way:
+	/// the frontend reads `retro_get_memory_data` and owns the client. So
+	/// PlayStation 2 does too, and the two regions here are exactly what
+	/// PCSX2's own client reads (Achievements::ClientReadMemory, quoted in
+	/// the .cpp), so the addresses mean what the RetroAchievements sets
+	/// written against PCSX2 expect them to mean.
+	uint8_t* Memory(unsigned region, size_t* size);
+
+	/// Called once per emulated frame, on PCSX2's CPU thread, while the game
+	/// is running and nothing has asked it to stop, and only once the game's
+	/// own program (its ELF) has started: not during the BIOS boot. That gate
+	/// is PCSX2's own, from Achievements::FrameUpdate, which calls
+	/// rc_client_do_frame only when VMManager::Internal::HasBootedELF() and
+	/// rc_client_idle before; the frontend idles the client itself meanwhile.
+	/// Null clears it. Safe from any thread at any time, including from
+	/// inside the callback itself.
+	///
+	/// **WHEN THIS RETURNS, THE OLD CALLBACK IS NOT RUNNING AND WILL NOT RUN
+	/// AGAIN.** That is stronger than swapping a pointer, and it is the
+	/// guarantee the frontend actually needs: it clears the callback and then
+	/// destroys its rcheevos client, and a swap alone would let a call already
+	/// in flight on the CPU thread use the client after it was freed. The
+	/// price is that the callback must never wait on a lock the thread calling
+	/// this holds, or the two wait on each other.
+	void SetFrameCallback(void (*callback)(void* user), void* user);
 
 	/// Live performance, all zero when nothing is running.
 	struct Metrics

@@ -99,7 +99,18 @@ status here to Built.
 - **Remove an account** is in Settings only. It removes the account from this
   console; the RomM account and its saves are untouched. The account playing
   now cannot be removed. **To build, #58.**
-- **RetroAchievements**, a sign-in per account. **Later, #74.**
+- **RetroAchievements**, a sign-in per account, **opt-in** (#74, decided with
+  MMagTech 2026-10-06). One row, "RetroAchievements", its value "Sign in" or
+  the username. Pressing it asks for the username, then the password, on the
+  keyboard (hidden like a Wi-Fi password; a wrong one is said in the field).
+  The password is sent once and never kept; the token RetroAchievements gives
+  back is, privately, beside the person's RomM token. Signed in, pressing it
+  offers **Sign out**. No PIN: it is the person's own account. The username is
+  typed, not taken from RomM (RomM's `ra_username` is a field a person fills
+  in separately, and was empty for MMagTech). **Somebody who never signs in
+  never sees RetroAchievements anywhere else.** **Softcore only**: nothing
+  hardcore is built, hidden or otherwise (decided 2026-10-05). **Built on
+  `retroachievements`, to judge on the TV.**
 - **Background colour per account:** a few hand-picked choices (purple, blue,
   green, red, graphite), so the console takes on the colour of whoever is
   signed in. The boot screen stays purple. **Later, #75.**
@@ -298,6 +309,12 @@ Decided with MMagTech 2026-09-26, from the things people will actually do.
   Medium, Loud, and remembered in `config/settings.json`. Left and right
   change it; Back returns to the list. Judged on the TV 2026-09-24.
   **Built, #62.**
+- **Achievement sound** (#74): the chime with a RetroAchievements unlock, its
+  own row with the same four levels, **not** tied to Interface sounds
+  (MMagTech, 2026-10-06). Shown only to somebody signed in to
+  RetroAchievements. Console-wide, in `config/settings.json`, like Interface
+  sounds. Each step plays the chime at that level. **Built on
+  `retroachievements`, to judge on the TV.**
 - **Turn off screen after:** 10 min, 15 min (to start), 30 min. The screen
   always dims at 5 minutes. Saved in `config/settings.json`. **Built, #71.**
   Under Display and Sound, not System: it is about the screen. MMagTech,

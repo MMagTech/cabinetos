@@ -18,6 +18,20 @@ LIBS     := $(shell pkg-config --libs $(PKGS)) -lpthread -ldl
 
 SRC      := $(wildcard src/*.cpp)
 OBJ      := $(SRC:.cpp=.o)
+
+# RETROACHIEVEMENTS: rcheevos, vendored at the tag in its VERSION file. It is
+# C, so it gets its own rule and flags; nothing in it is changed. Softcore
+# needs no encrypted-ROM hashing (3DS only), so that part is compiled out.
+RC       := third_party/rcheevos
+RC_SRC   := $(wildcard $(RC)/src/*.c) $(wildcard $(RC)/src/rapi/*.c) \
+            $(wildcard $(RC)/src/rcheevos/*.c) $(wildcard $(RC)/src/rhash/*.c)
+RC_OBJ   := $(RC_SRC:.c=.o)
+CC       ?= gcc
+CFLAGS   ?= -O2 -MMD -MP
+CFLAGS   += -I$(RC)/include -Isrc -DRC_HASH_NO_ENCRYPTED
+CXXFLAGS += -I$(RC)/include -I$(RC)/src -Isrc
+OBJ      += $(RC_OBJ)
+
 DEP      := $(OBJ:.o=.d)
 BIN      := build/cabinetos-frontend
 
@@ -30,6 +44,9 @@ $(BIN): $(OBJ)
 
 %.o: %.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+$(RC)/%.o: $(RC)/%.c
+	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
 	rm -f $(OBJ) $(DEP)

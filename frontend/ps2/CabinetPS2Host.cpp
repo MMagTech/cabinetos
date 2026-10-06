@@ -53,6 +53,7 @@
 #include "pcsx2/ImGui/ImGuiFullscreen.h"
 #include "pcsx2/ImGui/ImGuiManager.h"
 #include "pcsx2/Input/InputManager.h"
+#include "pcsx2/Memory.h"
 #include "pcsx2/MTGS.h"
 #include "pcsx2/PerformanceMetrics.h"
 #include "pcsx2/SIO/Pad/Pad.h"
@@ -132,6 +133,32 @@ namespace
 	std::atomic<bool> s_stop_requested{false};
 	std::atomic<bool> s_paused{false};
 	std::atomic<uint64_t> s_frames{0};
+
+	// THE FRONTEND'S PER-FRAME HOOK, for RetroAchievements (#74). A mutex
+	// rather than two atomics, because the pair has to change as one (a CPU
+	// thread that read the new function with the old `user` would hand
+	// rcheevos somebody else's pointer), and because the lock is also what
+	// lets SetFrameCallback promise that a cleared callback is not still
+	// running. It is taken once a frame and never contended in play: the
+	// frontend sets the hook when a game starts and clears it when it stops.
+	//
+	// The thread_local is how the callback may clear or replace itself: on
+	// the CPU thread inside the call the lock is already held, and taking it
+	// again would deadlock.
+	std::mutex s_frame_callback_lock;
+	void (*s_frame_callback)(void*) = nullptr;
+	void* s_frame_callback_user = nullptr;
+	thread_local bool t_in_frame_callback = false;
+
+	void RunFrameCallback()
+	{
+		std::lock_guard<std::mutex> lock(s_frame_callback_lock);
+		if (!s_frame_callback)
+			return;
+		t_in_frame_callback = true;
+		s_frame_callback(s_frame_callback_user);
+		t_in_frame_callback = false;
+	}
 
 	// Owned by the GS thread.
 	uint32_t s_dumped = 0;
@@ -606,6 +633,41 @@ void Host::PumpMessagesOnCPUThread()
 		VMManager::SetState(VMState::Stopping);
 		return;
 	}
+
+	// THE FRAME HOOK, FOR RETROACHIEVEMENTS (#74), AND THIS IS THE SAME POINT
+	// IN THE FRAME PCSX2'S OWN ACHIEVEMENTS CODE CHECKS AT. At the pinned
+	// v2.8.2, Counters.cpp's VSyncStart is the end of every emulated frame
+	// (every field, on an interlaced game, which is what RetroAchievements
+	// counts too) and does, in order:
+	//
+	//   VMManager::Internal::VSyncOnCPUThread()   -> Achievements::FrameUpdate()
+	//   VMManager::Internal::Throttle()           frame pacing, sleeps only
+	//   gsPostVsyncStart()                        hands the frame to the GS thread
+	//   VMManager::Internal::PollInputOnCPUThread() -> Host::PumpMessagesOnCPUThread()
+	//
+	// The EE runs no instructions between the first line and the last, so the
+	// memory rcheevos sees here is byte for byte what PCSX2's rc_client_do_frame
+	// would have seen. This function is the only one of the two that is ours.
+	//
+	// Only while Running, and not once a stop has been asked for (the return
+	// above has already left): PCSX2 calls none of this while paused, because
+	// Execute is not running (see the loop in Run), and the frame a stop cuts
+	// short is not one to award anything on. It sits ABOVE the pause handling
+	// below on purpose: the frame that has just run did run, even if the
+	// overlay opens straight after it.
+	//
+	// AND ONLY ONCE THE GAME'S OWN PROGRAM HAS STARTED, as PCSX2 has it.
+	// Achievements::FrameUpdate at the pin calls rc_client_do_frame only
+	// `if (VMManager::Internal::HasBootedELF())` and rc_client_idle before
+	// that, so no achievement is ever tested against the BIOS's memory while
+	// it boots. Fast boot skips the splash but not the BIOS loading the disc,
+	// and that is measured at about three and a half seconds of frames on the
+	// reference console, every one of them a chance for a condition written
+	// against the game's RAM to match bytes that are not the game's. The
+	// frontend runs rc_client_idle on its own thread, so nothing is owed here
+	// before the ELF; the callback simply starts with the game's first frame.
+	if (VMManager::GetState() == VMState::Running && VMManager::Internal::HasBootedELF())
+		RunFrameCallback();
 
 	// Pause and resume. Applied here rather than from the calling thread
 	// because VMManager::SetState expects the CPU thread, and this is the one
@@ -1267,6 +1329,70 @@ void CabinetPS2::SetPaused(bool paused)
 bool CabinetPS2::IsRunning()
 {
 	return s_running.load();
+}
+
+uint8_t* CabinetPS2::Memory(unsigned region, size_t* size)
+{
+	*size = 0;
+
+	// eeMem is allocated once, by CPUThreadInitialize, and lives as long as
+	// the process; it is NOT freed between games (see Run). So the pointer
+	// would stay readable after a game ends, but what is in it is then the
+	// last game's memory or nothing, and achievements tested against that are
+	// wrong rather than absent. Null when no game is running is the honest
+	// answer, and it is also what the frontend's contract says.
+	if (!s_running.load() || !eeMem)
+		return nullptr;
+
+	// THE SAME TWO POINTERS AND THE SAME SIZES PCSX2'S OWN CLIENT READS. At
+	// the pinned v2.8.2, Achievements::ClientReadMemory is:
+	//
+	//   (address < Ps2MemSize::ExposedRam)
+	//       ? &eeMem->Main[address]
+	//       : &eeMem->Scratch[address - Ps2MemSize::ExposedRam]
+	//
+	// bounded by GetExposedEEMemorySize(), which is ExposedRam + Scratch. Its
+	// comment says why the scratchpad is there at all: "RA uses a fake memory
+	// map with the scratchpad directly above physical memory". So region 1
+	// starts, in RetroAchievements' numbering, at region 0's size.
+	//
+	// ExposedRam rather than the 32 MB constant, as PCSX2 has it: it is 32 MB
+	// unless the devkit's 128 MB is switched on (EmuCore/CPU ExtraMemory,
+	// memSetExtraMemMode), which this console never sets, so region 1 is at
+	// 0x2000000. Were it ever set, eeMem->Main is 128 MB long and the
+	// scratchpad moves up with it, exactly as it would in PCSX2.
+	switch (region)
+	{
+		case 0:
+			*size = Ps2MemSize::ExposedRam;
+			return eeMem->Main;
+		case 1:
+			*size = Ps2MemSize::Scratch;
+			return eeMem->Scratch;
+		default:
+			return nullptr;
+	}
+}
+
+void CabinetPS2::SetFrameCallback(void (*callback)(void* user), void* user)
+{
+	// Said once each way, so a log shows whether achievements were watching a
+	// game at all. The frontend sets it when a game starts and clears it when
+	// it stops, so this is two lines a game, not one a frame. stderr for the
+	// reason OnVMStarted gives: PCSX2's Console is not set up before a game.
+	std::fprintf(stderr, "[ps2] achievements frame hook %s\n", callback ? "set" : "cleared");
+
+	// From inside the callback, on the CPU thread, the lock is already ours.
+	if (t_in_frame_callback)
+	{
+		s_frame_callback = callback;
+		s_frame_callback_user = user;
+		return;
+	}
+
+	std::lock_guard<std::mutex> lock(s_frame_callback_lock);
+	s_frame_callback = callback;
+	s_frame_callback_user = user;
 }
 
 CabinetPS2::Metrics CabinetPS2::GetMetrics()
