@@ -11,19 +11,26 @@ specification is `docs/PROJECT.md`; the order is `docs/ROADMAP.md`.
 
 ## Where things stand
 
-2026-10-05: offline play (#88) and the cartridge-save fix (#259) are built on
-branch `offline-play`, tested headless and on the A9 with a wrong address, and
-not merged or pushed to testing. What was built and verified is in
-docs/PROJECT.md, open question 22, "Built, 2026-10-05". The A9 is back on its
-image. #228 (sound chip power) is still open.
+2026-10-06: offline play (#88), the cartridge-save fix (#259) and the build's
+Steam-session fallback (#270) merged in #264; image 2026.10.06 is `latest`.
+The A9 now sits at the LG C1, on Wi-Fi at **192.168.1.109** (not the cable
+address): run `tools/ui-loop.sh` with `CABINETOS_A9=cabinet@192.168.1.109`.
 
 ## Next
 
-1. **Judge offline play on the TV, then merge #88 and #259.** Deploy with
-   `tools/ui-loop.sh --env CABINETOS_ROMM=192.168.1.10:6099` (offline from
-   boot; link the covers folder as docs/lessons/testing.md says). Judge: the "Offline" chip's look, the lift from the startup screen
-   at 15 s, Home, Library, Search, a game, switching person. Then the #259
-   test with a real in-game save on a cartridge game, offline and then online
-   before the retry. For the server coming back, use the relay in
-   docs/lessons/testing.md. After his go: push to testing, judge the image,
-   merge on his word.
+One session, in this order, one testing image judged together, then merged.
+
+1. **120 Hz and VRR on the C1 (#256).** The console picks the TV's
+   resolution but always 60 Hz; ask for 120 when offered. The C1 reports VRR
+   40-120 Hz to the GPU (Game Optimizer on). Then check games still pace
+   cleanly (`[pace]` lines) with VRR.
+2. **The favourite button (#267).** A heart or a star by the title on the
+   game's page, reached with Up from Play; build both, MMagTech picks on the
+   TV. Works offline, sent when the server is back.
+3. **Player 2 in Wild West Guns (#269).** Two Remotes work in Mario Kart Wii
+   and Bit.Trip Beat; this game says "register a second Remote". Start with
+   Dolphin's Wii Remote log and the `BT.DINF` list before and after a launch.
+   If it turns out deep, say so and decide with MMagTech.
+
+Never run a headless frontend on the A9 while MMagTech is at the TV: it reads
+the same controllers (docs/lessons/testing.md).
