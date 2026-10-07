@@ -92,7 +92,7 @@ bool SettingsScreen::focusable(int cat, int row) const {
     const auto& rows = cats_[cat].rows;
     if (row < 0 || row >= static_cast<int>(rows.size())) return false;
     return rows[row].kind == Kind::Action || rows[row].kind == Kind::Toggle ||
-           rows[row].kind == Kind::Choice;
+           rows[row].kind == Kind::Choice || (rows[row].kind == Kind::Info && rows[row].pressable);
 }
 
 int SettingsScreen::choiceOf(int id) const {

@@ -687,7 +687,15 @@ Decided with MMagTech 2026-09-26, from the things people will actually do.
 
 - **Developer access** (#134; decided with MMagTech 2026-10-07, built on
   `developer-access`): **one row**, "Developer access", "SSH" under it, On
-  or Off, after Check for updates. The full command line over SSH, port
+  or Off, **in About, under Version, and hidden until Version is pressed
+  seven times** (each within two seconds of the last), the way Android hides
+  its developer options. Seven more hide it again, **and hiding turns it
+  off**: nothing listens behind a switch nobody can see. A console with it on
+  always shows it. Why hidden: families never see it, and on a console with
+  no PIN a child on the owner's account cannot find it to choose one; the
+  PIN and the password are still what protect it (MMagTech, 2026-10-07: "if
+  you can show it you should also be able to hide it again"). Why About: the
+  row appears where it was unlocked, and About is the least visited screen. The full command line over SSH, port
   2222, user `cabinet`: "when they turn it on, they now are a developer.
   Same install." **One image for everyone**: there is no development image
   any more, and nothing listens on 2222 until this is turned on.

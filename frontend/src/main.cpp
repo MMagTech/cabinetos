@@ -33,6 +33,7 @@
 #include <ctime>
 
 #include <atomic>
+#include <chrono>
 #include <csignal>
 #include <condition_variable>
 #include <deque>
@@ -8725,7 +8726,7 @@ int main(int argc, char** argv) {
                      SetAddController, SetShortcuts, SetShortcutButton, SetAppearance,
                      SetDarkHours, SetColour, SetRumble, SetPictureQuality,
                      SetWiiRemotes, SetSteam, SetSteamShow, SetRetroAchievements,
-                     SetAchievementSound, SetDeveloper };
+                     SetAchievementSound, SetDeveloper, SetVersion };
     // One Eject row per USB drive: this plus the drive's index in
     // storage::locations() when the rows were built.
     constexpr int kSetEject = 100;
@@ -8939,6 +8940,16 @@ int main(int argc, char** argv) {
     int64_t devNewPassAt = 0;   // the panel comes back once a new password is made
     std::string devFailed;      // a refusal or a start that failed, said in the row
     bool devWant = prefs::get("developer_access", "off") == "on";
+    // HIDDEN UNTIL UNLOCKED (MMagTech, 2026-10-07): the row is under About's
+    // Version, and only once Version has been pressed seven times, the way
+    // Android hides its developer options; seven more hide it again, and
+    // hiding turns it off, so nothing can be listening behind a switch
+    // nobody can see. A console with it on always shows it. Families never
+    // see it, and on a console with no PIN a child on the owner's account
+    // cannot find it to choose one. The PIN is still what protects it.
+    bool devShown = devWant || prefs::get("developer_shown", "off") == "on";
+    int versionPresses = 0;
+    std::chrono::steady_clock::time_point versionPressAt{};
     if (devWant && devState != "active") {
         std::string why;
         if (unit::start(kDevUnit, &why)) devSaidAt = std::time(nullptr);
@@ -9893,15 +9904,6 @@ int main(int argc, char** argv) {
                 return r;
             }(),
         };
-        // DEVELOPER ACCESS: one row, as File access; everything a computer
-        // needs is in the panel it opens. Port 2222, the full command line.
-        {
-            std::string value = devState == "active" ? "On" : "Off";
-            std::string detail = "SSH";
-            if (devSaidAt != 0) value = devWant ? "Turning on\xE2\x80\xA6" : "Turning off\xE2\x80\xA6";
-            else if (!devFailed.empty()) detail = devFailed;
-            sys.push_back({K::Toggle, SetDeveloper, "Developer access", detail, value});
-        }
         // ONLY WHILE STEAM IS HIDDEN (#223, MMagTech 2026-10-03): the one way
         // to bring the tile back. Somebody who never hid it never sees it.
         if (steam::available() && steam::hidden())
@@ -9919,10 +9921,23 @@ int main(int argc, char** argv) {
             if (ch == "testing") version += " \xC2\xB7 Testing";
             else if (!ch.empty() && ch != "latest") version += " \xC2\xB7 " + ch;
             const std::string base = update::baseVersion();
-            cats.push_back({"About", {
-                {K::Info, 0, "Version", base.empty() ? "" : "Bazzite " + base, version},
-                {K::Action, SetCredits, "Credits and licenses", "", ""},
-            }});
+            std::vector<screens::SettingsRow> about;
+            screens::SettingsRow v{K::Info, SetVersion, "Version",
+                                   base.empty() ? "" : "Bazzite " + base, version};
+            v.pressable = true;
+            about.push_back(v);
+            // DEVELOPER ACCESS: one row, as File access; everything a computer
+            // needs is in the panel it opens. Port 2222, the full command
+            // line. Under Version, where pressing seven times shows it.
+            if (devShown) {
+                std::string value = devState == "active" ? "On" : "Off";
+                std::string detail = "SSH";
+                if (devSaidAt != 0) value = devWant ? "Turning on\xE2\x80\xA6" : "Turning off\xE2\x80\xA6";
+                else if (!devFailed.empty()) detail = devFailed;
+                about.push_back({K::Toggle, SetDeveloper, "Developer access", detail, value});
+            }
+            about.push_back({K::Action, SetCredits, "Credits and licenses", "", ""});
+            cats.push_back({"About", std::move(about)});
         }
 
 
@@ -10991,6 +11006,23 @@ int main(int argc, char** argv) {
                             filesPanelWhenOn = true;
                             setFiles(true);
                         });
+                        sound::play(sound::Cue::Activate);
+                    }
+                } else if (res.value == SetVersion) {
+                    // Seven presses, each within two seconds of the last,
+                    // show Developer access, or hide it (and turn it off).
+                    // Silent until the seventh: the row appearing or going
+                    // is the answer.
+                    const auto now = std::chrono::steady_clock::now();
+                    if (now - versionPressAt > std::chrono::seconds(2)) versionPresses = 0;
+                    versionPressAt = now;
+                    if (++versionPresses >= 7) {
+                        versionPresses = 0;
+                        devShown = !devShown;
+                        prefs::set("developer_shown", devShown ? "on" : "off");
+                        if (!devShown && (devWant || devState == "active")) setDeveloper(false);
+                        std::fprintf(stderr, "[developer] %s\n", devShown ? "shown" : "hidden");
+                        buildSettings();
                         sound::play(sound::Cue::Activate);
                     }
                 } else if (res.value == SetDeveloper) {
