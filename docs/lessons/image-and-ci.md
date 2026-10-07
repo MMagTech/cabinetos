@@ -187,12 +187,36 @@ Read before touching `build_files/`, `system_files/`, `ci/`, the workflows, the 
 
 ## The installer
 
-- **The installer is not fit for anyone but us**, and open question 5 now says
-  so with the detail. It brands itself Bazzite, its media check FAILS on good
-  media (`Supported ISO: no`, aborting at 4.8% — the write was byte-exact and
-  the install from it worked), it scrolls `amdgpu: Fatal error during GPU
-  init`, and it asks about UIDs. Installing works; the experience does not
-  ship.
+- **Try every installer change in the VM first: `tools/installer-vm.sh`.**
+  QEMU in podman on the A9 (`/dev/kvm` is open to all), an empty NVMe disk,
+  no network unless `--net`, and a picture of the screen after each step.
+  `repack` puts this checkout's `disk_config/iso.toml` into an existing ISO
+  (kickstart as `/osbuild.ks`, the module list as `images/updates.img`) for a
+  try in minutes; the ISO that ships is always CI's. Open question 5, *Built
+  2026-10-07*, has what the installer does now and why.
+
+- **After an install the VM boots the ISO again**, because QEMU's
+  `bootindex` overrides the boot order the installer wrote. Real firmware
+  boots the new drive. Switch the VM off and `boot` the disk alone.
+
+- **The installer runtime has no `clear`, `stty`, `tput` or fb0.** Clear with
+  escape codes; take the screen's width from
+  `/sys/class/drm/card*-*/modes` of the connected output. Its only console
+  font is `Lat2-Terminus16`; `setfont -d` doubles it.
+
+- **Switching an Anaconda module off does not always hide its screen.** The
+  Network module was off and the installer said so, and Network & Host Name
+  was still drawn. Users really did go. Check the screen, not the config.
+
+- **Keys typed into the VM go to whatever has focus.** An `n` in a shell
+  command typed before the console switch landed answered the erase question
+  and switched the VM off (correctly, with nothing written). Take a picture
+  before typing; type slowly (very fast keys jam a key down); and read a disk
+  with guestfish rather than by typing commands.
+
+- **The media check passes on a perfect copy.** Run in the VM on the ISO
+  itself, it counted to 100% and went on. The 2026-09-19 failure (`Supported
+  ISO: no`, aborting at 4.8%) was reading the USB stick, not the ISO.
 
 - **The installer runtime carries NO firmware**, which is why the GPU and
   Wi-Fi die in it and why neither matters. The tell: it also failed to load

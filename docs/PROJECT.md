@@ -6302,7 +6302,8 @@ symbol-renaming apparatus disappears and nothing replaces it. See open question
 
 ### 5. Anaconda ISO vs. a plain disk image for installing to real hardware
 **Raised: Phase 1. TESTED FOR THE FIRST TIME 2026-09-19, installing the A9 Max.
-It works, and it is not acceptable for anyone but us.**
+It works, and it is not acceptable for anyone but us. ANSWERED 2026-10-07:
+keep the ISO, automated down to one question; see *Built 2026-10-07* below.**
 
 CI produces both a `qcow2` (for the VM boot test) and an `anaconda-iso` (for
 real hardware). The ISO installs correctly — the A9 Max went from bare metal to
@@ -6355,6 +6356,52 @@ USB-NVMe adapter.
 
 **Decide the rest in Phase 6**, but the direction is settled: keep the ISO,
 automate it, and brand it.
+
+#### Built 2026-10-07 (#105, #106, #107, #136)
+
+**The installer now asks one question and keeps one screen.** Tried in a
+throwaway VM on the A9 (`tools/installer-vm.sh`: QEMU in podman with
+`/dev/kvm`, an empty NVMe disk, no network, pictures of every screen) and then
+on the real CI-built ISO. What a person sees:
+
+1. The boot menu: **Install CabinetOS 44**. The stick is labelled `CabinetOS`
+   (`[customizations.iso] volume_id`).
+2. Startup text, then a black screen with: *This will erase this machine's
+   2.0 TB drive (WPBSN4M8-2TGP). Continue? (y/n)*. Asked by the kickstart's
+   `%pre` on tty8, in double-size text on any screen 1600 pixels wide or
+   more. Two or more internal drives: a numbered list, then the same question
+   naming the one picked. USB drives and the stick are never offered. **n**
+   switches the machine off with nothing written.
+3. Anaconda's summary with only **Time & Date** to visit (kept: #107's
+   comment), then **Begin Installation**. Disk layout is automatic
+   (`autopart --type=btrfs --nohome --noswap`, the same EFI, /boot and btrfs
+   layout the A9 got by hand).
+4. It reboots into the console, which starts first run.
+
+**The account is made by the kickstart, not a screen.** `%post` runs
+`useradd --uid 1000 --groups wheel --home-dir /var/home/cabinet`, then locks
+it. Not left to `sysusers.d`: that makes `cabinet` a system account with no
+home, and every console so far got uid 1000, wheel and a home from the old
+Users screen. Checked on the VM's disk: uid 1000, wheel, home present, root
+and `cabinet` both locked, updates from `ghcr.io/mmagtech/cabinetos:latest`.
+
+**The install needs no network: proved.** In a VM with no network device at
+all, the real ISO installed and the console came up in first run (*Connect to
+a network*). So the Network module is off, and Wi-Fi is set up where its
+firmware is, in first run (#136's plan).
+
+**The ISO builder is pinned and its limits are known.** bootc-image-builder's
+`:latest` is pinned by digest in `build-disk.yml`; upstream moved its sources
+to osbuild/image-builder on 2026-10-01, so `:latest` will not move by itself
+again, and a new builder is a deliberate change. The ISO is built once per
+release. Its config cannot touch the boot menu, the kernel command line or the
+installer's own files, so four things stay (#284, after first release): the
+Network & Host Name screen is still drawn (module off, screen shown); the
+**Test this media** entry stays, though not as the default, and it passes on a
+perfect copy (the 2026-09-19 failure was the USB read); the startup text is
+not quiet beyond the `quiet` the builder adds; and Fedora's logo strip and
+"44" stay. Each would need the ISO repacked or the successor builder's
+`bootc-installer` type; MMagTech, 2026-10-07: skip what needs repacking.
 
 #### The installer runtime carries no firmware — 2026-09-19
 

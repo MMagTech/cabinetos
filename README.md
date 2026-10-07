@@ -188,11 +188,13 @@ boot it before merging.
 
 ### `build-disk.yml` — the disk images
 
-Manual only (**Actions → Build disk images → Run workflow**), because disk
-builds are slow and you only want one when you are about to install something.
-
-Produces a `qcow2` for VM testing and an `anaconda-iso` for real hardware, and
-uploads both as workflow artifacts with a 7-day retention.
+Manual only (**Actions → Build disk images → Run workflow**). Build the
+installer ISO **once per release**: an installed console updates itself from
+GHCR, so a stick only has to be new enough to install, and a change to
+`disk_config/iso.toml` is the other reason to make one. It builds the
+`anaconda-iso` alone by default; `qcow2` (a VM disk) or both are an option.
+Artifacts are kept for 90 days. The ISO builder is pinned by digest; try any
+installer change in a throwaway VM first with `tools/installer-vm.sh`.
 
 ---
 
@@ -305,89 +307,25 @@ diskutil eject /dev/diskN
 
 ## Installing to real hardware
 
-1. Plug in the USB stick, plus a keyboard and mouse. The installer is the one
-   part of CabinetOS that *requires* them. Afterwards a keyboard still works if
-   you leave one attached — it is just never necessary, and any CabinetOS screen
-   that cannot be completed with a controller alone is a bug.
-2. Power on and press **Delete** or **F7** during the firmware splash for the
-   boot menu. Those are the Beelink keys and they are what was written down
-   here before the reference machine changed; a GEEKOM A9 Pro is **Delete**
-   for setup and **F7** for the boot menu too, but do not take that on trust —
-   tap both. Select the USB device.
-3. Anaconda starts. Set the destination to the internal NVMe and create a
-   user.
+1. Plug in the USB stick and a keyboard. The installer is the one part of
+   CabinetOS that *requires* one (and the mouse makes its one screen easier).
+   Afterwards it is never necessary; any CabinetOS screen that cannot be
+   completed with a controller alone is a bug.
+2. Power on and press **F7** during the firmware splash for the boot menu
+   (**Delete** for setup) on a GEEKOM A9 Pro; other machines differ. Select
+   the USB device, then **Install CabinetOS**.
+3. One question: *This will erase this machine's 2.0 TB drive (model).
+   Continue? (y/n)*. With more than one internal drive it lists them first
+   and asks which. USB drives are never offered. **n** switches the machine
+   off with nothing written.
+4. **Time & Date**: pick the time zone (it drives Appearance's scheduled dark
+   hours), **Done**, then **Begin Installation**. The disk, the `cabinet`
+   account and everything else are already answered, and no network is
+   needed.
+5. It restarts by itself into CabinetOS. Take the stick out once it has.
 
-   > **NAME THAT USER `cabinet`, and give it a password.** The image already
-   > creates a `cabinet` account via `sysusers.d` — it is the account
-   > `cabinetos-session.service` runs as, and creating it again in the
-   > installer is a no-op that only adds the password. **It matters because
-   > the console's RomM token lives in that account's home directory.** Pair
-   > the machine while logged in as anyone else and the token lands in the
-   > wrong `~`, where the session will never look: the console keeps showing
-   > the stand-in library and nothing says why. If you have already installed
-   > under another name, every command in the next section still works —
-   > prefix them with `sudo -u cabinet`.
-4. Reboot and remove the stick.
-
-**It boots into CabinetOS — the frontend, full screen, with every emulator.**
-There is no login prompt: `cabinetos-session.service` takes tty1 and there is
-no getty behind it.
-
-The first boot shows the **stand-in library**, because the machine does not yet
-know which RomM server it belongs to and there is no first-run screen to ask
-(open question 15). Two things are needed, and both are done once, over SSH:
-
-```bash
-ssh cabinet@cabinetos.local
-```
-
-If mDNS does not resolve, find the address from the machine with `ip addr`.
-
-**1. Pair it with your RomM server.** Run this **as `cabinet`**. It writes a
-token to that account's `~/.config/cabinetos/romm.json` at 0600, and the
-session runs as `cabinet`, which is the only reason the console can read it —
-a token in anybody else's home directory is a console that stays on the
-stand-in library and says nothing about why:
-
-```bash
-cabinetos-frontend --romm 192.168.1.10:6005 --romm-probe --romm-pair
-```
-
-**2. Tell the session which server that was.** Nothing is baked into the image;
-this repository is public, and an image with one person's LAN address in it is
-useful to one person.
-
-```bash
-sudo mkdir -p /etc/cabinetos
-echo 'CABINETOS_ROMM=192.168.1.10:6005' | sudo tee /etc/cabinetos/session.env
-sudo systemctl restart cabinetos-session
-```
-
-`/etc` because that is the part of a bootc machine that belongs to the machine
-and survives an update. The first-run screen will write the same file.
-
-**Then check what it actually did**, rather than what it should have:
-
-```bash
-journalctl -u cabinetos-session -b --no-pager | tail -40
-```
-
-The first three lines the frontend prints are the three things most worth
-knowing — which core directory it chose, where it is keeping games and saves,
-and which games drive it found:
-
-```
-[cores] /usr/lib/cabinetos/cores
-[storage] root /var/lib/cabinetos
-[library] 1147 playable games, 1147 with art; 501 games skipped
-```
-
-`[cores] cores/build` on a console means it is reading a directory that is not
-there, and every platform will report as *"the core for this system is not
-built on this console yet"*. `[storage] root /` means the `tmpfiles.d` rule did
-not run.
-
-Push a build over SFTP with `sftp` or `scp` to the same host.
+**It boots into first run**: network (Wi-Fi works here, where the console's
+firmware is), then your RomM server, then pairing a controller.
 
 While you are in the firmware, two settings worth changing now:
 
