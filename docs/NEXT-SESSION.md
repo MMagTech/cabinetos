@@ -26,8 +26,13 @@ image-and-ci.md (the installer).
 1. **No sound from the Wii Remote's speaker (#276).** MMagTech, 2026-10-07:
    a release blocker unless it proves impossible; at least a real attempt.
    Lessons file: emulators.md. Read every comment on the issue first.
-2. **The Wii Menu and Miis (#275): a discussion session with MMagTech
-   first**, nothing built before it. He has the WAD files on RomM.
+2. **Mii Channel support (#275): a feasibility investigation and a plan, no
+   production code.** MMagTech's proposal (2026-10-07) is the latest comment
+   on #275: answer its four open questions on the A9 (a WAD booted through
+   the Dolphin core, the IOS install, the bridge's 0x16/0x17 handling, the
+   `RFL_DB.dat` path), then a short plan with the order of work, including
+   the speaker volume and rumble setting (#274). He reviews the plan before
+   anything is built. He has the WAD files on RomM.
 3. **The installer:** Bazzite branding out (#105), the media check that fails
    good media (#106), Anaconda's disk and user screens replaced (#107), its
    own quiet splash and Wi-Fi during setup (#136).
