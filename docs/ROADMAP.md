@@ -55,7 +55,9 @@ session picks up is `docs/NEXT-SESSION.md`.
 6. **UI polish.** The wording pass and notification length (#110), then
    sound dying until a restart (#228). Sleep (#132) moved to After first
    release.
-7. **Ready to ship.** The installer (#105 to #108, #136), a release image
+7. **Ready to ship.** First the Wii Remote's speaker (#276, a release
+   blocker unless impossible) and a discussion of the Wii Menu and Miis
+   (#275). Then the installer (#105 to #108, #136), a release image
    without the development shell (#134), signed images (#135), CabinetOS named
    in the system's version info (#137), licences checked and shipped (#120).
 8. **Testing at the TV.** The release gate: covers and art on the TV (#112), a

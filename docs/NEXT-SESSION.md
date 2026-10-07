@@ -23,12 +23,17 @@ The A9 sits at the LG C1, on Wi-Fi at **192.168.1.109**: run
 Milestone 7, Ready to ship (docs/ROADMAP.md), in this order. Lessons file:
 image-and-ci.md (the installer).
 
-1. **The installer:** Bazzite branding out (#105), the media check that fails
+1. **No sound from the Wii Remote's speaker (#276).** MMagTech, 2026-10-07:
+   a release blocker unless it proves impossible; at least a real attempt.
+   Lessons file: emulators.md. Read every comment on the issue first.
+2. **The Wii Menu and Miis (#275): a discussion session with MMagTech
+   first**, nothing built before it. He has the WAD files on RomM.
+3. **The installer:** Bazzite branding out (#105), the media check that fails
    good media (#106), Anaconda's disk and user screens replaced (#107), its
    own quiet splash and Wi-Fi during setup (#136).
-2. **A shipping image without the development shell (#134).**
-3. **Signed images (#135).**
-4. **Licences checked and the full texts shipped (#120).**
+4. **A shipping image without the development shell (#134).**
+5. **Signed images (#135).**
+6. **Licences checked and the full texts shipped (#120).**
 
 Also in the milestone: booting with the TV off (#268), whether Nintendo DS
 stays (#248), a diagnostic report (#195), a showcase page and README (#190).
