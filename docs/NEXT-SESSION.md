@@ -30,15 +30,17 @@ image-and-ci.md (the installer).
    production code.** MMagTech's proposal (2026-10-07) is the latest comment
    on #275: answer its four open questions on the A9 (a WAD booted through
    the Dolphin core, the IOS install, the bridge's 0x16/0x17 handling, the
-   `RFL_DB.dat` path), then a short plan with the order of work, including
-   the speaker volume and rumble setting (#274). He reviews the plan before
-   anything is built. He has the WAD files on RomM.
-3. **The installer:** Bazzite branding out (#105), the media check that fails
+   `RFL_DB.dat` path), then a short plan with the order of work. He reviews
+   the plan before anything is built. He has the WAD files on RomM.
+3. **The Wii Remote's speaker volume and rumble kept across games (#274)**,
+   in the same plan: Dolphin's `WiimoteNew.ini` written at launch, no change
+   to the core.
+4. **The installer:** Bazzite branding out (#105), the media check that fails
    good media (#106), Anaconda's disk and user screens replaced (#107), its
    own quiet splash and Wi-Fi during setup (#136).
-4. **A shipping image without the development shell (#134).**
-5. **Signed images (#135).**
-6. **Licences checked and the full texts shipped (#120).**
+5. **A shipping image without the development shell (#134).**
+6. **Signed images (#135).**
+7. **Licences checked and the full texts shipped (#120).**
 
 Also in the milestone: booting with the TV off (#268), whether Nintendo DS
 stays (#248), a diagnostic report (#195), a showcase page and README (#190).
