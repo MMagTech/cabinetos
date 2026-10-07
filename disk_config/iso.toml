@@ -1,41 +1,157 @@
 # Installer ISO configuration.
 #
 # This produces an Anaconda installer that writes CabinetOS to the target
-# machine's internal drive. It is a keyboard-and-mouse experience, which
-# contradicts the product's principles — but it happens exactly once, on a
-# machine that has not been set up yet. See docs/PROJECT.md open question 5.
-
-# After installation, point the installed system at the CabinetOS image on GHCR
-# rather than at whatever was baked into the ISO. From that moment on, the
-# machine updates by pulling this reference.
+# machine's internal drive. It asks one thing, which drive it is about to
+# erase, and keeps one screen, Time & Date; everything else is answered here.
+# See docs/PROJECT.md open question 5, and #105, #106, #107, #136.
 #
-# IMPORTANT: this must be lowercase and must match the published package. If the
-# GHCR package is private, the installed machine cannot pull updates — make it
-# public, or configure a pull secret in Phase 7.
+# Try a change in the VM before building an ISO for it: tools/installer-vm.sh.
+#
+# WHAT THE ISO BUILDER ADDS. bootc-image-builder writes /osbuild.ks on the ISO
+# as `%include /run/install/repo/osbuild-base.ks` followed by `contents` below,
+# verbatim. The base file installs the image carried on the ISO
+# (`ostreecontainer --url=/run/install/repo/container`) and switches it to the
+# reference the ISO was built from. So the install needs no network at all,
+# which is why the Network screen is gone (#136).
 [customizations.installer.kickstart]
 contents = """
+# THE ONE QUESTION. Anaconda has no screen that names a drive and asks once,
+# so it is asked here, on a text console, before Anaconda shows anything. It
+# writes the disk lines below into /tmp/cabinetos-disk.ks, which the %include
+# reads once %pre has run (the usual kickstart pattern).
+#
+# Which drives it offers: every disk except the one the installer booted from,
+# USB drives (a console installs onto its own drive; a games stick left
+# plugged in is not a target), and anything read-only. One drive left: it is
+# named and the question is asked. Several: they are listed, and the chosen
+# one is named in the same question. None: it says so and switches off.
+# "No" switches the machine off with nothing touched.
+%pre --interpreter=/usr/bin/bash
+tty=/dev/tty8
+exec <"$tty" >"$tty" 2>&1
+chvt 8
+# The installer has no `clear`. Its only console font is 8x16, which is tiny
+# on a television, so it is drawn at double size on any screen 1600 wide or
+# more (the fb size is "width,height").
+cls() { printf '\033[2J\033[H\n\n'; }
+width=$(cut -d, -f1 /sys/class/graphics/fb0/virtual_size 2>/dev/null)
+[ "${width:-0}" -ge 1600 ] && setfont -d -C "$tty" Lat2-Terminus16 2>/dev/null
+cls
+
+off() {
+  printf '\\n  %s\\n' "$1"
+  sleep 4
+  systemctl poweroff
+  sleep 60
+}
+
+# The drive the installer is running from, as a whole disk.
+media=$(findmnt -no SOURCE /run/install/repo 2>/dev/null)
+media=$(lsblk -no PKNAME "$media" 2>/dev/null | head -n1)
+[ -n "$media" ] || media=$(basename "$(findmnt -no SOURCE /run/install/repo)")
+
+# Sizes the way the box and the shop say them: decimal, one decimal place.
+size() {
+  awk -v b="$1" 'BEGIN {
+    if (b >= 1e12) printf "%.1f TB", b / 1e12; else printf "%.0f GB", b / 1e9 }'
+}
+
+names=() labels=()
+while read -r name type ro tran bytes; do
+  [ "$type" = disk ] || continue
+  [ "$ro" = 0 ] || continue
+  [ "$tran" = usb ] && continue
+  [ "$name" = "$media" ] && continue
+  case "$name" in zram*|loop*|sr*) continue ;; esac
+  model=$(tr -s ' ' < "/sys/block/$name/device/model" 2>/dev/null | sed 's/^ //; s/ $//')
+  names+=("$name")
+  labels+=("$(size "$bytes") drive${model:+ ($model)}")
+done < <(lsblk -dnbo NAME,TYPE,RO,TRAN,SIZE)
+
+if [ ${#names[@]} -eq 0 ]; then
+  off "CabinetOS found no drive to install on. Switching off."
+fi
+
+pick=0
+if [ ${#names[@]} -gt 1 ]; then
+  printf '\\n  CabinetOS can be installed on:\\n\\n'
+  for i in "${!names[@]}"; do printf '    %d  %s\\n' $((i + 1)) "${labels[$i]}"; done
+  while :; do
+    printf '\\n  Which drive? '
+    read -r n
+    [[ $n =~ ^[0-9]+$ ]] && [ "$n" -ge 1 ] && [ "$n" -le ${#names[@]} ] && break
+  done
+  pick=$((n - 1))
+  cls
+fi
+
+printf '\\n  This will erase this machine'"'"'s %s.\\n  Continue? (y/n) ' "${labels[$pick]}"
+while :; do
+  read -r -n1 a
+  case "$a" in
+    y|Y) break ;;
+    n|N) off "Nothing was erased. Switching off." ;;
+  esac
+done
+cls
+chvt 1
+
+disk=${names[$pick]}
+cat > /tmp/cabinetos-disk.ks <<EOF
+ignoredisk --only-use=$disk
+zerombr
+clearpart --all --initlabel --drives=$disk
+autopart --type=btrfs --nohome --noswap
+EOF
+%end
+
+%include /tmp/cabinetos-disk.ks
+
+# The installer reboots into the console when it is done.
+reboot
+
+# THE ACCOUNT, made here and not on a screen. The image's sysusers.d makes
+# `cabinet` only if it does not exist, and as a system account with no home
+# (system_files/usr/lib/sysusers.d/cabinetos.conf); every console so far got
+# its account from the installer's Users screen instead: uid 1000, wheel, home
+# /var/home/cabinet. This makes exactly that, with no password: File access
+# sets one when it is turned on, and the session logs in by itself.
+%post --erroronfail
+set -e
+if ! getent passwd cabinet >/dev/null; then
+  useradd --uid 1000 --user-group --groups wheel --comment CabinetOS \\
+    --home-dir /var/home/cabinet --create-home cabinet
+fi
+passwd --lock cabinet
+%end
+
+# After installation, point the installed system at the CabinetOS image on GHCR
+# rather than at whatever tag the ISO was built from. From that moment on, the
+# machine updates by pulling this reference. It downloads nothing.
+#
+# IMPORTANT: this must be lowercase and must match the published package. If the
+# GHCR package is private, the installed machine cannot pull updates.
 %post
 bootc switch --mutate-in-place --transport registry ghcr.io/mmagtech/cabinetos:latest
 %end
 """
 
-# Trim the installer to the screens that are actually needed. Every module left
-# enabled is another page the installer shows.
+# The installer's screens. bootc-image-builder always enables Users, Services,
+# Security, Network, Payloads, Runtime and Storage, and a module in `disable`
+# wins over one in `enable`; each module left on is another screen.
 #
-# Users is enabled because the installed system needs an account to exist before
-# Phase 2's autologin session is built. Once Phase 2 lands, revisit whether the
-# installer can create it silently instead.
+# - Timezone: KEPT. The network gives the console the time but not its zone,
+#   and the zone set here is what makes Appearance's scheduled dark hours
+#   switch at the right local hour (#107's comment, #129).
+# - Users: off. The account is made by the %post above.
+# - Network: off. The install needs none (#136); Wi-Fi is set up in the
+#   console's own first run, where its firmware is.
 [customizations.installer.modules]
 enable = [
-  "org.fedoraproject.Anaconda.Modules.Storage",
-  "org.fedoraproject.Anaconda.Modules.Runtime",
-  "org.fedoraproject.Anaconda.Modules.Network",
-  "org.fedoraproject.Anaconda.Modules.Security",
-  "org.fedoraproject.Anaconda.Modules.Services",
-  "org.fedoraproject.Anaconda.Modules.Users",
   "org.fedoraproject.Anaconda.Modules.Timezone",
 ]
 
 disable = [
-  "org.fedoraproject.Anaconda.Modules.Subscription",
+  "org.fedoraproject.Anaconda.Modules.Network",
+  "org.fedoraproject.Anaconda.Modules.Users",
 ]

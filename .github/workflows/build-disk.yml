@@ -11,8 +11,11 @@
 #   anaconda-iso An installer ISO. Write it to a USB stick and install to the
 #                target machine. See README.md.
 #
-# Run manually. It is deliberately not on a push trigger: disk builds are slow
-# and you only want one when you are about to install something.
+# Run manually, ONCE PER RELEASE, not per update. The ISO carries the whole
+# image, but an installed console updates itself from GHCR from then on, so an
+# ISO only has to be new enough to install; it does not have to be current. It
+# is not on a push trigger: disk builds are slow and the installer changes
+# rarely. Build one for a release, and for a change to disk_config/iso.toml.
 
 name: Build disk images
 
@@ -24,11 +27,24 @@ on:
         required: true
         default: "latest"
         type: string
+      types:
+        description: "Which disk images: anaconda-iso, qcow2, or both"
+        required: true
+        default: "anaconda-iso"
+        type: choice
+        options: ["anaconda-iso", "qcow2", "both"]
 
 env:
   IMAGE_NAME: ${{ github.event.repository.name }}  # must match build.yml
   IMAGE_REGISTRY: "ghcr.io/${{ github.repository_owner }}"
-  BIB_IMAGE: "quay.io/centos-bootc/bootc-image-builder:latest"
+  # PINNED, by digest. `:latest` is the only tag upstream ever moved, and it
+  # stopped moving: bootc-image-builder's sources were deleted on 2026-10-01
+  # and moved to osbuild/image-builder, so the next `:latest` (if any) would
+  # come from a different codebase. This is the build of 2026-06-18 (bib
+  # a686afe, osbuild/images v0.251.0), the one every ISO so far was made with.
+  # Move it on purpose, with an installer test in the VM (tools/installer-vm.sh),
+  # never by accident.
+  BIB_IMAGE: "quay.io/centos-bootc/bootc-image-builder:latest@sha256:2b52843ea2bfda73b0a08d97e76b734393b1d3a804681b9fabb26723bd3a2f0b"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref || github.run_id }}
@@ -38,14 +54,13 @@ jobs:
   build:
     name: Build ${{ matrix.disk-type }}
     runs-on: ubuntu-24.04
-    # Both types, always. They run as parallel matrix jobs, so building both
-    # costs no more wall-clock time than building one, and it avoids selecting
-    # between them — `matrix` is not available in a job-level `if`, and a
-    # computed matrix is fiddly to get right for no benefit here.
+    # The ISO alone by default: the qcow2 is only for making a new test VM,
+    # which is updated in place and almost never remade. A computed matrix,
+    # because `matrix` is not available in a job-level `if`.
     strategy:
       fail-fast: false
       matrix:
-        disk-type: ["qcow2", "anaconda-iso"]
+        disk-type: ${{ fromJSON(inputs.types == 'both' && '["qcow2","anaconda-iso"]' || format('["{0}"]', inputs.types)) }}
 
     permissions:
       contents: read
