@@ -8577,6 +8577,33 @@ int main(int argc, char** argv) {
         pinThen = std::move(then);
         pinScreen.open(screens::PinScreen::Mode::Choose, title, detail);
     };
+    // DEVELOPER ACCESS NEEDS A PIN TO EXIST (MMagTech, 2026-10-07). It hands
+    // over the whole machine, so turning it on is the one place a console
+    // with no PIN asks for one: the PIN is what a Linux install's admin
+    // password would be. It only lets somebody at the television turn it on
+    // and see the password; the network still needs the password. NOT File
+    // access: the PIN is one lock for the whole console, and requiring it
+    // there would put every family that only copies saves behind PIN prompts
+    // for Wi-Fi, accounts and updates too. Only the owner can set a PIN, so
+    // another account on a console without one is told who can.
+    auto askPinToOpen = [&](const std::string& detail, std::function<void()> then) {
+        if (accounts::pinIsSet()) {
+            askPin("Enter the PIN", detail, std::move(then));
+            return;
+        }
+        if (accounts::activeId() != accounts::ownerId()) {
+            const std::vector<accounts::Account> list = accounts::all();
+            const accounts::Account* owner = accounts::find(list, accounts::ownerId());
+            menuNotice.say("Needs a PIN from " + (owner ? owner->name : std::string("the owner")),
+                           Tone::Problem);
+            sound::play(sound::Cue::Edge);
+            return;
+        }
+        choosePin("Choose a PIN", detail, [&, then = std::move(then)]() {
+            pinUnlocked = true;
+            then();
+        });
+    };
     auto pinOutcome = [&](screens::PinScreen::Outcome o) {
         using O = screens::PinScreen::Outcome;
         if (o == O::None) return;
@@ -10953,7 +10980,9 @@ int main(int argc, char** argv) {
                     if (filesSaidAt != 0) {
                         sound::play(sound::Cue::Edge);
                     } else if (filesState.on) {
-                        openFilesPanel();
+                        // The password is in the panel: the PIN first, when
+                        // one is set (MMagTech, 2026-10-07).
+                        askPin("Enter the PIN", "To see file access", [&]() { openFilesPanel(); });
                         sound::play(sound::Cue::Activate);
                     } else {
                         // On behind the PIN, then the panel opens by itself
@@ -10968,10 +10997,10 @@ int main(int argc, char** argv) {
                     if (devSaidAt != 0) {
                         sound::play(sound::Cue::Edge);
                     } else if (devState == "active") {
-                        openDevPanel();
+                        askPin("Enter the PIN", "To see developer access", [&]() { openDevPanel(); });
                         sound::play(sound::Cue::Activate);
                     } else {
-                        askPin("Enter the PIN", "To turn on developer access", [&]() {
+                        askPinToOpen("To turn on developer access", [&]() {
                             devPanelWhenOn = true;
                             setDeveloper(true);
                         });

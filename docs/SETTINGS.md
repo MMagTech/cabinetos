@@ -411,7 +411,9 @@ Decided with MMagTech 2026-09-26, from the things people will actually do.
     XXXX-XXXX", then **Done** (focused), **New password**, **Turn off**.
     Judged readable from the sofa as it is.
   - Turning it on asks for the PIN when one is set, then the panel opens by
-    itself once it is on. **Turning it off never asks**: closing a door
+    itself once it is on. **Opening the panel again, while on, asks for the
+    PIN too** when one is set (once per visit): the password is in it
+    (MMagTech, 2026-10-07). **Turning it off never asks**: closing a door
     needs no key. **New password** asks the PIN, then "New password?" with
     focus on Cancel (every computer that saved the old one breaks), then
     the panel comes back with the new one. A failure shows in the row:
@@ -695,10 +697,20 @@ Decided with MMagTech 2026-09-26, from the things people will actually do.
     access is, until it is turned off.
   - **The password is File access's** (one password, shown in one place;
     MMagTech: the people using this are technical, and turn each off when
-    done). A key works too. Turning it on asks for the PIN; the panel opens
-    by itself: the address and `<hostname>.local`, "Port 2222", "User name
-    cabinet", "Password XXXX-XXXX", then **Done**, **New password**,
-    **Turn off**. **New password** changes File access's too.
+    done). A key works too. The panel opens by itself once it is on: the
+    address and `<hostname>.local`, "Port 2222", "User name cabinet",
+    "Password XXXX-XXXX", then **Done**, **New password**, **Turn off**.
+    **New password** changes File access's too. Opening the panel again asks
+    for the PIN, once per visit.
+  - **IT NEEDS A PIN TO EXIST** (MMagTech, 2026-10-07). On a console with no
+    PIN, turning it on first asks the owner to choose one; another account
+    is told "Needs a PIN from <owner>". The PIN is what a Linux install's
+    admin password would be: it lets somebody at the TV turn it on and see
+    the password, and never leaves the console; the network still needs the
+    password. **Not File access**, which keeps "the PIN when one is set": the
+    PIN is one lock for the whole console, and requiring it there would put a
+    family that only copies saves behind PIN prompts for Wi-Fi, accounts and
+    updates too.
   - **After a fresh install** a console has no key on it: turn this on and
     copy a key over once with the password,
     `ssh-copy-id -p 2222 cabinet@<hostname>.local`.
