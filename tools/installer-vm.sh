@@ -18,6 +18,7 @@
 #   tools/installer-vm.sh install ISO        empty 64 GB disk, boot ISO from it
 #                                            (ISO is a file in ~/installer-vm)
 #   tools/installer-vm.sh boot               boot what was installed, no ISO
+#   tools/installer-vm.sh iso ISO            boot the ISO, keeping the disks
 #   tools/installer-vm.sh shot FILE.png      the VM's screen, to FILE.png here
 #   tools/installer-vm.sh key ret [tab ...]  press keys (QEMU qcodes: ret, tab,
 #                                            spc, esc, up, down, left, right,
@@ -81,7 +82,7 @@ SHIFTED = {'!':'1','@':'2','#':'3','$':'4','%':'5','^':'6','&':'7','*':'8','(':'
 PLAIN = {' ':'spc','-':'minus','=':'equal','[':'bracket_left',']':'bracket_right',';':'semicolon',
          "'":'apostrophe',',':'comma','.':'dot','/':'slash','\\':'backslash','`':'grave_accent','\n':'ret'}
 def keys(names):
-    call("send-key", keys=[{"type": "qcode", "data": k} for k in names], **{"hold-time": 30})
+    call("send-key", keys=[{"type": "qcode", "data": k} for k in names], **{"hold-time": 50})
 if op == "shot":
     call("screendump", filename="/work/shot.png", format="png")  # the path inside the container
 elif op == "key":
@@ -95,7 +96,7 @@ elif op == "type":
         elif ch in SHIFTED: keys(["shift", SHIFTED[ch]])
         elif ch in PLAIN: keys([PLAIN[ch]])
         else: keys([ch])
-        time.sleep(0.01)
+        time.sleep(0.04)
 elif op == "click":
     # Screen pixels of the last shot (the VM's mode, 1280x800 by default).
     import time
@@ -136,7 +137,7 @@ case "$CMD" in
   setup)
     "${SSH[@]}" "mkdir -p ~/$DIR && cd ~/$DIR && printf '%s\n' \
       'FROM registry.fedoraproject.org/fedora:44' \
-      'RUN dnf -y install --setopt=install_weak_deps=False qemu-system-x86-core qemu-img edk2-ovmf qemu-device-display-virtio-vga qemu-device-display-virtio-gpu qemu-device-usb-host xorriso cpio && dnf clean all' \
+      'RUN dnf -y install --setopt=install_weak_deps=False qemu-system-x86-core qemu-img edk2-ovmf qemu-device-display-virtio-vga qemu-device-display-virtio-gpu qemu-device-usb-host xorriso cpio guestfs-tools && dnf clean all' \
       > Containerfile && podman build -t $NAME:latest ." ;;
   install)
     ISO=${1:?install needs the ISO path on the A9}
@@ -146,6 +147,10 @@ case "$CMD" in
     run_vm "$ISO" ;;
   boot)
     run_vm "" ;;
+  iso)
+    # The ISO again with the disks as they are, for reading what an install
+    # wrote from the installer's shell (ctrl-alt-f2) while its question waits.
+    run_vm "${1:?iso needs the ISO}" ;;
   repack)
     # A TEST ISO, never a shipping one: an existing ISO with this checkout's
     # disk_config/iso.toml put into it the way bootc-image-builder would (the
