@@ -373,6 +373,17 @@ Read before working on a core, an emulator, input, saves or states.
   RetroArch or Batocera either: before chasing a missing sound, read which
   setting turns it into something else (`WiimoteReal.cpp` makes it rumble).
 
+- **A WAD BOOTED THROUGH THE CORE IS INSTALLED "TEMPORARY".** Dolphin puts
+  it in the NAND before starting it and marks it in SYSCONF `IPL.TID`; the
+  next WAD booted in the SAME NAND deletes it (`WiiUtils.cpp`). Harmless here,
+  where every entry has its own NAND; fatal to any plan that boots several
+  WADs into one NAND to install them (#275).
+
+- **DEVELOPER MODE (`--core ... --rom ...`) SHARES ONE SCRATCH NAND** across
+  every file run with that core (`users/0 - local/saves/local/0/<core>`). It
+  is not empty just because the folder above it looks empty; list it before
+  reading a test's result off it.
+
 - **A LIST KEPT FOR REPLAY MUST HOLD ONLY WHAT NEEDS REPLAYING.** The bridge
   kept the speaker's per-sound commands as Remote setup, they filled its list,
   and the motion setup fell off the end. Nothing failed until a Remote dropped
