@@ -30,6 +30,8 @@
 #             network device at all, which is the point: the install is meant
 #             to need none (#136).
 #   --disks N add N-1 more empty disks, for trying a machine with two drives.
+#   --res WxH the screen's size (default 1280x800), e.g. 1920x1080 for a TV.
+#             Shots and clicks are then in that size: click X Y W H.
 #
 # The VM's disk is an NVMe drive, as on the A9, so the installer sees a model
 # name ("QEMU NVMe Ctrl") and a size, the two things its question must name.
@@ -43,11 +45,13 @@ NAME=installer-vm            # container and image name
 
 NET=0
 DISKS=1
+RES=""
 ARGS=()
 while (($#)); do
   case "$1" in
     --net) NET=1 ;;
     --disks) DISKS=$2; shift ;;
+    --res) RES=$2; shift ;;
     *) ARGS+=("$1") ;;
   esac
   shift
@@ -77,7 +81,7 @@ SHIFTED = {'!':'1','@':'2','#':'3','$':'4','%':'5','^':'6','&':'7','*':'8','(':'
 PLAIN = {' ':'spc','-':'minus','=':'equal','[':'bracket_left',']':'bracket_right',';':'semicolon',
          "'":'apostrophe',',':'comma','.':'dot','/':'slash','\\':'backslash','`':'grave_accent','\n':'ret'}
 def keys(names):
-    call("send-key", keys=[{"type": "qcode", "data": k} for k in names], **{"hold-time": 80})
+    call("send-key", keys=[{"type": "qcode", "data": k} for k in names], **{"hold-time": 30})
 if op == "shot":
     call("screendump", filename="/work/shot.png", format="png")  # the path inside the container
 elif op == "key":
@@ -91,7 +95,7 @@ elif op == "type":
         elif ch in SHIFTED: keys(["shift", SHIFTED[ch]])
         elif ch in PLAIN: keys([PLAIN[ch]])
         else: keys([ch])
-        time.sleep(0.05)
+        time.sleep(0.01)
 elif op == "click":
     # Screen pixels of the last shot (the VM's mode, 1280x800 by default).
     import time
@@ -122,7 +126,7 @@ run_vm() {   # $1 = ISO path on the A9, or empty to boot the disk
       qemu-system-x86_64 -machine q35,accel=kvm -cpu host -smp 8 -m 6144 \
         -drive if=pflash,format=raw,readonly=on,file=/usr/share/edk2/ovmf/OVMF_CODE.fd \
         -drive if=pflash,format=raw,file=/work/vars.fd \
-        -device virtio-vga -display none -vnc 127.0.0.1:1 \
+        -device virtio-vga${RES:+,xres=${RES%x*},yres=${RES#*x}} -display none -vnc 127.0.0.1:1 \
         -device qemu-xhci -device usb-kbd -device usb-tablet \
         $net $disks $extra \
         -qmp unix:/work/qmp.sock,server,wait=off >/dev/null && echo 'VM running'"

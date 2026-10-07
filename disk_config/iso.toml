@@ -30,12 +30,19 @@ contents = """
 tty=/dev/tty8
 exec <"$tty" >"$tty" 2>&1
 chvt 8
-# The installer has no `clear`. Its only console font is 8x16, which is tiny
-# on a television, so it is drawn at double size on any screen 1600 wide or
-# more (the fb size is "width,height").
+# The installer has no `clear` (nor `stty`, nor an fb0). Its only console font
+# is 8x16, which is tiny on a television, so it is drawn at double size when
+# the screen in use is 1600 pixels wide or more. The width is the connected
+# display's current mode, which the firmware's own display driver (the one the
+# installer falls back to without GPU firmware) also reports.
 cls() { printf '\\033[2J\\033[H\\n\\n'; }
-width=$(cut -d, -f1 /sys/class/graphics/fb0/virtual_size 2>/dev/null)
-[ "${width:-0}" -ge 1600 ] && setfont -d -C "$tty" Lat2-Terminus16 2>/dev/null
+width=0
+for c in /sys/class/drm/card*-*; do
+  [ "$(cat "$c/status" 2>/dev/null)" = connected ] || continue
+  w=$(head -n1 "$c/modes" 2>/dev/null | cut -dx -f1)
+  [ "${w:-0}" -gt "$width" ] && width=$w
+done
+[ "$width" -ge 1600 ] && setfont -d -C "$tty" Lat2-Terminus16 2>/dev/null
 cls
 
 off() {
