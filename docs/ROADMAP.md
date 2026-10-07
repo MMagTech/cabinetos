@@ -55,16 +55,20 @@ session picks up is `docs/NEXT-SESSION.md`.
 6. **UI polish.** The wording pass and notification length (#110), then
    sound dying until a restart (#228). Sleep (#132) moved to After first
    release.
-7. **Ready to ship.** The Wii Remote's speaker (#276) is closed as not
-   possible with the TechKen Remotes. First the Mii Channel and Miis in every
-   Wii game (#275, planned and reviewed), with rumble kept across games
-   (#274). Then the installer (#105 to #108, #136), a release image
-   without the development shell (#134), signed images (#135), CabinetOS named
-   in the system's version info (#137), licences checked and shipped (#120).
+7. **Ready to ship.** Done: the Mii Channel and Miis (#275), rumble kept
+   across Wii games (#274), the installer down to one question (#105 to #107,
+   #136; what the ISO builder cannot change is #284, after first release) and
+   Developer access, one image for everyone (#134). The Nintendo DS stays
+   (#248). Next: Remote Play (#286, MMagTech 2026-10-07: before the first
+   release; a feasibility test on the A9 first), signed images (#135),
+   CabinetOS named in the system's version info (#137), licences checked and
+   shipped (#120).
 8. **Testing at the TV.** The release gate: covers and art on the TV (#112), a
    PS2 save reaching the server (#113), Cabinet on Apple TV loading our states
    (#114), players 3 and 4 (#115), the owed hardware tests (#140), and last,
-   the first-hour walk-through as a new user on the real installer (#111).
+   the first-hour walk-through as a new user on the real installer (#111):
+   **the last step, on the release stick, after Remote Play** (MMagTech,
+   2026-10-07: the release image may need things added), wiping the A9.
 
 **After first release:** everything in that milestone on GitHub, including
 the Dreamcast crash (#151), the performance profile (#150), rewind's cost

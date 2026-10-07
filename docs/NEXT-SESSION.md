@@ -11,11 +11,14 @@ specification is `docs/PROJECT.md`; the order is `docs/ROADMAP.md`.
 
 ## Where things stand
 
-2026-10-07: #275 (Mii Channel, Miis in every Wii game, Miis on Remotes) and
-#274 (rumble kept across Wii games) merged as PR #282; image 2026.10.07.3 is
-promoted and on the A9. A second-account check is #283 (a TV check, no code
-expected). RomM's Mii Channel still has IGDB's "Check Mii Out Channel" cover
-and summary; MMagTech's to unmatch in RomM.
+2026-10-07: the installer (#105 to #107, #136) and Developer access (#134)
+merged as PR #287; image 2026.10.07.5 is promoted and on the A9. The
+installer asks one question and needs no network (proved in a VM); the real
+install is the last step before release (#111, on the release stick). There
+is no development image any more: the command line on port 2222 is
+**Developer access**, off by default, in Settings, About, hidden until
+Version is pressed seven times. It is on on the A9 and on the Unraid VM, so
+the key works as before.
 
 The A9 sits at the LG C1, on Wi-Fi at **192.168.1.109**: run
 `tools/ui-loop.sh` with `CABINETOS_A9=cabinet@192.168.1.109`.
@@ -24,27 +27,26 @@ The A9 sits at the LG C1, on Wi-Fi at **192.168.1.109**: run
 
 Milestone 7, Ready to ship (docs/ROADMAP.md). Lessons file: image-and-ci.md.
 
-1. **The installer:** Bazzite branding out (#105), the media check that fails
-   good media (#106), Anaconda's disk and user screens replaced (#107), its
-   own quiet splash and Wi-Fi during setup (#136). Agreed 2026-10-07 (#136's
-   comment): no firmware in the installer; prove the install needs no network
-   (a VM with none), then drop Anaconda's Network screen. Iterate in a VM (on
-   the A9 or the Unraid server: check first that one can be made from an
-   ISO), so MMagTech's install is never wiped; one real install at the end,
-   onto a spare drive. The one remaining question must name the disk (size,
-   model) before erasing it. Also: pin bootc-image-builder (build-disk.yml
-   uses `:latest`), and build the ISO once per release, not per update.
-   MMagTech, 2026-10-07: do the milestone as planned; anything that turns
-   out too hard (the installer's own splash and artwork most likely) is
-   skipped, not forced. MMagTech sees the work as it goes: a picture of
-   every installer screen from the VM sent to him (or the VM's screen
-   opened live), and the final look judged on the TV.
-2. **A shipping image without the development shell (#134).**
-3. **Signed images (#135).**
+1. **Remote Play (#286).** Sunshine on the console, Moonlight to play from,
+   off by default. MMagTech wants it before the first release. **First a
+   feasibility test on the A9**, as #202 was: can Sunshine capture the
+   running console under gamescope on the 890M, at what cost, and what happens
+   to the TV. Bazzite installs Sunshine on demand (`ujust setup-sunshine`,
+   Flatpak or Homebrew) and has a `virtual-monitor` option: try that first.
+   If the display question turns out very large, decide again with MMagTech
+   before building. Whether Sunshine is in the image or downloaded on first
+   use is decided when it is built.
+2. **Signed images (#135).**
+3. **CabinetOS in the system's version info (#137).**
 4. **Licences checked and the full texts shipped (#120).**
 
-Also in the milestone: booting with the TV off (#268), whether Nintendo DS
-stays (#248), a diagnostic report (#195), a showcase page and README (#190).
+Also in the milestone: booting with the TV off (#268), a diagnostic report
+(#195), a showcase page and README (#190).
+
+**After a console is installed fresh** it has no key: About, press Version
+seven times, Developer access, PIN; then from the Mac, with the password on
+the TV, `ssh-copy-id -i ~/.ssh/cabinetos.pub -p 2222 cabinet@<address>`.
+Password logins are MMagTech's to type, never the assistant's.
 
 Never run a headless frontend on the A9 while MMagTech is at the TV: it reads
 the same controllers (docs/lessons/testing.md). After a testing image installs,
