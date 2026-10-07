@@ -15446,6 +15446,8 @@ The eight Wii games on RomM, by header (7 RVZ, 1 ISO; no saves on the server):
   NAND, so a state loaded later does not roll back the save files. `dolphin` is
   already on `kNoSnapshots`.
 - Miis: Dolphin creates no Mii database; games make one or run without Miis.
+  Since #275 the Mii Channel makes it and every Wii game gets a copy: see
+  "Miis and rumble" below.
 
 #### Real Wii Remotes on Linux (to test when the Remotes arrive, 2026-10-03)
 
@@ -15568,6 +15570,34 @@ HOME button (R3) and its "Wii Menu" choice; GameCube unchanged.
 | The HOME menu (R3) | opens and is driven with the stick. **"Wii Menu", then Yes: a black screen.** No Wii Menu is installed; Dolphin says so only in a log category the libretro core never passes on, because the core turns alerts off. The pause menu gets out. **Decided, MMagTech:** HOME stays as it is, so nothing has to be reversed when upstream fixes it; the fallback (withholding R3 from Wii games) is written out in full in #203. Asked of upstream with his go: libretro/dolphin#508 |
 | Dolphin's log | Mario Kart Wii writes "Oversized EFB copy" about sixty times a second at Dolphin's default level: #204 |
 | Mario Kart Wii "not as fast as 150cc should be" (MMagTech, 2026-10-01) | **measured correct.** Headless on the A9: Dolphin declares 59.94 fps and 32,000 Hz (PAL60 on, the PAL release RMCP01); 3,600 frames are 60.06 s of picture and the sound made over them 60.04 s, within 0.03%, so the console's speaker pacing runs it at true speed. MMagTech: used to modern games; it is fine. A race was not measured (no input headless) |
+
+#### Miis and rumble (#275, #274): built and judged on the TV, 2026-10-07
+
+The plan on #275 and #274 (reviewed by MMagTech 2026-10-06) as built. No
+change to the Dolphin core.
+
+| | Decided and built |
+|---|---|
+| The Mii Channel | its WAD alone on RomM (rom 3629, `Mii Channel.wad`), an ordinary Wii entry that needs a Remote (GameTDB: `HACA w`). Found by its title, `0001000248414341`, the same in every region (`wii::isMiiChannel`). IGDB has no Mii Channel and the console's RomM token cannot edit roms (no `roms.write`, HTTP 403), so MMagTech renamed it by hand in RomM. **The cover and summary are still IGDB's "Check Mii Out Channel"** until it is unmatched there |
+| Its save | the only Wii zip rooted one level up, at `User/Wii`: `title/<kind>/<code>/data/...` and `shared2/menu/FaceLib/RFL_DB.dat`, the Mii list (`catalog::directorySaveRoot`). Every other Wii game's zip is unchanged, rooted at `User/Wii/title` |
+| Miis in every Wii game | at each Wii launch but the Mii Channel's, the console finds the Mii Channel among the server's Wii games (remembered in `settings.json` for offline), brings its save up to date exactly as its own launch would (`restoreDirSave`: RomM's newest online, the copy last seen offline, never over a save still owed), and copies `RFL_DB.dat` over the game's. **MMagTech chose this over "only when the console has none"**: "what ever works best for supporting offline mode". No Mii Channel or no Miis yet: nothing copied, the game keeps what it had, so a game's player list never loses a Mii by accident |
+| A game's copy | never uploaded; a change a game makes to the list lasts until its next launch. Erasing a Mii in the Mii Channel removes it from every game at their next launch, which Wii Sports itself warns of when it adds a Mii to its player list (a Wii does the same) |
+| Rumble | console-wide, as on a Wii. When a Wii game closes the console reads `BT.MOT` from that game's SYSCONF and keeps it (`wii_rumble` in `settings.json`); every later Wii game starts with `dolphin_enable_rumble` to match, which is also the rumble of pads standing in for Remotes and of GameCube pads in Wii games: off is off for every controller (MMagTech). GameCube games are not touched. `WiimoteNew.ini` cannot do it (it maps a stand-in's motor only) |
+| Speaker volume (#274) | dropped: after #276 no Remote sound plays on this console |
+| Miis on a Remote | the bridge answers reads and writes of the Remote's Mii area (EEPROM 0x0FCA to 0x15A9, two copies of a 752-byte block) from `/var/lib/cabinetos/wii-remote-miis/player-<light>.bin`, by the light the game gave the Remote; the real Remote is never written there. Local to the console, not synced, not tied to an account. A file nobody wrote reads as 0xFF, what a TechKen holds there |
+
+**Judged on the TV, MMagTech, 2026-10-07 (the loop build):**
+
+| | Result |
+|---|---|
+| The Mii Channel | booted from the library with a Remote; a Mii made and saved; its save went up as `Mii Channel.zip` (row 133, 1,402 bytes), read back from RomM: `RFL_DB.dat` (779,968 bytes, `RNOD`) and the channel's own `NigaoeCh.dat` |
+| Miis in Wii Sports | his Mii in Bowling's list of the console's Miis; the log: 779,968 bytes copied in before boot. Also in Punch-Out!! |
+| Rumble | off in Wii Sports' HOME Menu: `BT.MOT` 0 on disk 5 s before the exit (watched every half second), kept at the exit, "rumble off". Wii Sports again and then Punch-Out!!: no rumble when hit. On again in Punch-Out!!'s HOME Menu: kept, "on" |
+| Miis on a Remote | the Mii Channel read the area from the console (all 0xFF), offered Format, then took a Mii: both blocks written to `player-1.bin` (`RNCD`). **Wii Sports then took that Mii "out of the remote"**, read from the console. Wii Sports says a Remote's Mii cannot save progress: a Wii does the same (a visiting Mii) |
+
+The first rumble try did not stick: the HOME Menu writes its settings when it
+closes, and the game was left with the menu still open. Not a fault here; see
+docs/lessons/emulators.md.
 
 ### 36. Wii U (Cemu), issue #174
 **Researched 2026-10-01 (the research is on #174); decided with MMagTech the
