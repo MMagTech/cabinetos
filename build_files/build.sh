@@ -385,8 +385,11 @@ check_present "kernel modules directory" /usr/lib/modules || failed=1
 # Port 22 is File access and port 2222 is Developer access; both start off,
 # and each is started only by its switch in Settings. The always-on
 # development shell (cabinetos-dev-ssh.service) is gone and must stay gone.
+# The word, not the exit status: `is-enabled` also exits 0 for "static", which
+# is what cabinetos-developer.service is (no [Install]: nothing can enable it),
+# and that failed the first build of this check (2026-10-07).
 for unit in sshd.service sshd.socket cabinetos-developer.service; do
-    if systemctl is-enabled "${unit}" >/dev/null 2>&1; then
+    if [[ "$(systemctl is-enabled "${unit}" 2>/dev/null)" == enabled* ]]; then
         log "  WRONG: ${unit} is enabled; a port would be open with its switch off"
         failed=1
     fi
