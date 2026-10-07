@@ -2,6 +2,7 @@
 
 #include "prefs.h"
 #include "proc.h"
+#include "storage.h"
 #include "unit.h"
 
 #include <SDL3/SDL.h>
@@ -663,6 +664,9 @@ void refresh() {
 // Dolphin's extension encryption): started with the console and stopped with
 // it. Without it Remotes still work, Nunchuk games do not on copies, and Cemu
 // does not see a copy at all.
+//
+// Its one argument is where it keeps the Miis sent to a Remote, one file per
+// player light (#275): the console's, beside its other state, not synced.
 void startBridge() {
     const char* env = std::getenv("CABINETOS_WII_BRIDGE");
     const std::string path = env && *env ? env : "/usr/libexec/cabinetos-wii-bridge";
@@ -670,10 +674,11 @@ void startBridge() {
         std::fprintf(stderr, "[wiiremote] no bridge at %s\n", path.c_str());
         return;
     }
+    const std::string miis = storage::root() + "/wii-remote-miis";
     const pid_t pid = ::fork();
     if (pid == 0) {
         ::prctl(PR_SET_PDEATHSIG, SIGTERM);
-        ::execl(path.c_str(), path.c_str(), static_cast<char*>(nullptr));
+        ::execl(path.c_str(), path.c_str(), miis.c_str(), static_cast<char*>(nullptr));
         std::_Exit(127);
     }
     if (pid > 0) std::fprintf(stderr, "[wiiremote] bridge started (%s, pid %d)\n", path.c_str(), pid);

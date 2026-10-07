@@ -71,4 +71,41 @@ unsigned padDevice(const std::string& code);
 constexpr unsigned kClassicController = (4u << 8) | 1u;   // RETRO_DEVICE_WIIMOTE_CC, 1025
 constexpr unsigned kGameCubePad = (6u << 8) | 1u;         // RETRO_DEVICE_GC_ON_WII, 1537
 
+// --- Miis (#275) ------------------------------------------------------------
+//
+// THE MII CHANNEL IS AN ORDINARY ENTRY: its WAD alone on RomM, booted as any
+// WiiWare title is. Its title is the same in every region, 00010002-48414341
+// ("HACA"). Its NAND holds the Wii's Mii list, `RFL_DB.dat`, where desktop
+// Dolphin keeps it (Common::GetMiiDatabasePath), and that file is the master
+// copy of a person's Miis: it travels to RomM in the Mii Channel's own save
+// (catalog::directorySaveRoot) and is copied into every other Wii game's NAND
+// at launch. A game's copy is never uploaded, so Miis are made in the Mii
+// Channel, as the Wii's own games expect.
+constexpr const char* kMiiChannelTitleId = "0001000248414341";
+bool isMiiChannel(const std::string& titleId);
+// Relative to Dolphin's `User/Wii`.
+constexpr const char* kMiiDatabase = "shared2/menu/FaceLib/RFL_DB.dat";
+
+// --- Rumble (#274) ----------------------------------------------------------
+//
+// THE WII'S OWN RUMBLE SWITCH, IN THE HOME MENU, KEPT ACROSS GAMES. A Wii keeps
+// it in SYSCONF (`BT.MOT`), one file for the console. Here every game has its
+// own NAND, and the core overwrites `BT.MOT` at every boot from its option
+// `dolphin_enable_rumble` (DolphinLibretro/Boot.cpp, SYSCONF_WIIMOTE_MOTOR).
+// So when a Wii game closes the console reads `BT.MOT` back from that game's
+// SYSCONF (Dolphin keeps a guest's change on a clean exit: WiiRoot.cpp,
+// RestoreWiiSettings) and starts every later Wii game with the option to
+// match. The option also sets the rumble of pads standing in for Remotes and
+// of GameCube pads in Wii games (DolphinLibretro/Input.cpp), so off is off
+// for every controller in every Wii game (MMagTech, 2026-10-06). Console-wide,
+// as on a Wii. GameCube games are not touched.
+//
+// `BT.MOT` from a SYSCONF file: 1 on, 0 off, -1 when the file or the entry is
+// not there.
+int readMotor(const std::string& sysconfPath);
+// What the console last read, as the core's word: "enabled" or "disabled".
+std::string rumbleOption();
+// Reads a closed game's SYSCONF and keeps what it says.
+void keepRumbleFrom(const std::string& sysconfPath);
+
 }  // namespace wii

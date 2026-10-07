@@ -198,12 +198,18 @@ std::map<std::string, std::string> optionOverrides(const std::string& coreName);
 // game's installed program, tens of megabytes) and never `00000001/` (the
 // emulated system's own settings, rewritten at every boot). See
 // inDirectorySave.
-const char* directorySaveRoot(const char* core, const std::string& platformSlug);
+//
+// THE MII CHANNEL ONE LEVEL UP, at `User/Wii` (#275): its save is also the
+// Wii's Mii list, `shared2/menu/FaceLib/RFL_DB.dat`, which is outside
+// `title/`. Its zip holds `title/<kind>/<code>/data/...` and that one file.
+// No other game's zip changes. `titleId` is RomM's (wii::isMiiChannel).
+const char* directorySaveRoot(const char* core, const std::string& platformSlug,
+                              const std::string& titleId);
 
 // Whether a file under that root is part of the save, by its path relative
 // to the root. Everything is, for PSP.
 bool inDirectorySave(const char* core, const std::string& platformSlug,
-                     const std::string& relPath);
+                     const std::string& titleId, const std::string& relPath);
 
 // --- Saves the CORE writes as a file ---------------------------------------
 //

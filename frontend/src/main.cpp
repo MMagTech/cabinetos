@@ -774,6 +774,7 @@ struct GameSession {
     // all of them for PSP, only the games' `data/` folders for Wii.
     std::string dirSaveCore;
     std::string dirSavePlatform;
+    std::string dirSaveTitleId;   // the Mii Channel's is rooted higher (#275)
 
     // --- Saves the core writes as a FILE ----------------------------------
     //
@@ -922,12 +923,78 @@ static std::vector<std::string> listNames(const std::string& dir) {
     return out;
 }
 
+// THE MII CHANNEL ON THIS SERVER (#275): the Wii game whose title is the
+// Mii Channel's, asked of RomM online and remembered for when it is away.
+// Online and not there, it is forgotten: nobody's Miis go into games.
+static bool findMiiChannel(romm::Client& client, int platformId, int* romId,
+                           std::string* title) {
+    if (!romm::serverAway() && client.haveToken() && platformId > 0) {
+        std::vector<romm::Game> games;
+        std::string err;
+        if (client.fetchRoms("platform_ids=" + std::to_string(platformId), 1000, &games, &err)) {
+            std::string id, name;
+            for (const romm::Game& g : games)
+                if (wii::isMiiChannel(g.titleId)) {
+                    id = std::to_string(g.id);
+                    name = g.name.empty() ? g.fsName : g.name;
+                    break;
+                }
+            if (prefs::get("wii_mii_channel", "") != id) prefs::set("wii_mii_channel", id);
+            if (prefs::get("wii_mii_channel_title", "") != name)
+                prefs::set("wii_mii_channel_title", name);
+        } else {
+            std::fprintf(stderr, "[mii] could not list the Wii games: %s\n", err.c_str());
+        }
+    }
+    *romId = std::atoi(prefs::get("wii_mii_channel", "").c_str());
+    *title = prefs::get("wii_mii_channel_title", "");
+    return *romId > 0 && !title->empty();
+}
+
+// THIS PERSON'S MIIS INTO A WII GAME'S NAND, before it boots (#275). The
+// master copy is the Mii Channel's own `RFL_DB.dat`, brought up to date first
+// exactly as the Mii Channel's own launch would (restoreDirSave: RomM's newest
+// online, the copy last seen offline, and never over a save still owed to the
+// server). It replaces whatever the game's NAND held, so a change a game makes
+// to the Mii list lasts until its next launch; the game's own zip never
+// carries it (catalog::inDirectorySave). No Mii Channel, or no Miis made in
+// it yet: nothing is copied, and the game is as it was.
+static void copyMiisInto(romm::Client& client, int platformId, const std::string& platformFsSlug,
+                         const std::string& core, const std::string& saveDir) {
+    int miiRom = 0;
+    std::string miiTitle;
+    if (!findMiiChannel(client, platformId, &miiRom, &miiTitle)) {
+        std::fprintf(stderr, "[mii] no Mii Channel on the server; the game keeps its own Miis\n");
+        return;
+    }
+    const std::string miiWii =
+        storage::savesDir(storage::currentUser(), platformFsSlug, miiRom, core) + "/User/Wii";
+    if (const char* tag = catalog::saveTag(core.c_str()); tag && client.haveToken())
+        restoreDirSave(client, miiRom, tag, miiWii, miiTitle);
+    const std::vector<uint8_t> db = cab::readBytes(miiWii + "/" + wii::kMiiDatabase);
+    if (db.empty()) {
+        std::fprintf(stderr, "[mii] no Miis made in the Mii Channel yet; nothing copied\n");
+        return;
+    }
+    const std::string to = saveDir + "/User/Wii/" + wii::kMiiDatabase;
+    storage::makeDirs(to.substr(0, to.find_last_of('/')));
+    const std::string tmp = to + ".new";
+    if (!writeLocal(tmp, db) || std::rename(tmp.c_str(), to.c_str()) != 0) {
+        std::fprintf(stderr, "[mii] could not copy the Miis into %s\n", to.c_str());
+        std::remove(tmp.c_str());
+        return;
+    }
+    std::fprintf(stderr, "[mii] %zu bytes of Miis from the Mii Channel (rom %d) copied in\n",
+                 db.size(), miiRom);
+}
+
 // The save's files under a directory-save root, and only those.
 static std::vector<cab::DirEntry> listDirSave(const GameSession& sess) {
     std::vector<cab::DirEntry> all = cab::listTree(sess.dirSaveRoot);
     std::vector<cab::DirEntry> out;
     for (cab::DirEntry& e : all)
-        if (catalog::inDirectorySave(sess.dirSaveCore.c_str(), sess.dirSavePlatform, e.relPath))
+        if (catalog::inDirectorySave(sess.dirSaveCore.c_str(), sess.dirSavePlatform,
+                                     sess.dirSaveTitleId, e.relPath))
             out.push_back(std::move(e));
     return out;
 }
@@ -2070,6 +2137,9 @@ struct LaunchJob {
     // RomM's `title_id`, or the code this console read off the file when RomM
     // had none: Wii asks it which controller each player's port holds (wii.h).
     std::string titleId;
+    // RomM's platform id: a Wii launch looks for the Mii Channel among its
+    // games (copyMiisInto).
+    int platformId = 0;
     // RomM's `ra_hash`, for RetroAchievements (achievements.h).
     std::string raHash;
     // The server's own file name for this game, with its extension removed —
@@ -2288,6 +2358,7 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
     job.biosMissing = false;
     job.platformSlug = game.platformSlug;
     job.titleId = game.titleId;
+    job.platformId = game.platformId;
     job.raHash = game.raHash;
     job.fsStem = game.fsName;
     if (const size_t dot = job.fsStem.find_last_of('.'); dot != std::string::npos)
@@ -2358,6 +2429,10 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
             // And the system's own pause menu rows (#73).
             for (const auto& kv : sysopts::overrides(game.platformSlug))
                 opts[kv.first] = kv.second;
+            // The Wii's rumble switch as the last Wii game's HOME Menu left
+            // it (#274, wii.h).
+            if (game.platformSlug == "wii" && job.coreName == "dolphin")
+                opts["dolphin_enable_rumble"] = wii::rumbleOption();
             core.setOptionOverrides(opts);
             quality::logApplied(job.coreName, game.id, level);
         }
@@ -12113,7 +12188,8 @@ int main(int argc, char** argv) {
         // the memory stick while the game boots, so a folder that arrives later
         // is a folder the game has already decided is not there.
         const char* dirSub = catalog::directorySaveRoot(launchJob.coreName.c_str(),
-                                                        launchJob.platformSlug);
+                                                        launchJob.platformSlug,
+                                                        launchJob.titleId);
         const char* launchTag = catalog::saveTag(launchJob.coreName.c_str());
         if (dirSub && launchTag && liveClient.haveToken())
             restoreDirSave(liveClient, launchJob.romId, launchTag, saveDir + "/" + dirSub,
@@ -12141,6 +12217,12 @@ int main(int argc, char** argv) {
         // Before the restore, because the restore puts the card at the path
         // this names and the core reads both on startup.
         if (launchJob.platformSlug == "ngc") writeDolphinConfig(saveDir);
+        // This person's Miis into every Wii game but the Mii Channel, whose
+        // own are the master copy (#275).
+        if (launchJob.platformSlug == "wii" && launchJob.coreName == "dolphin" &&
+            !wii::isMiiChannel(launchJob.titleId))
+            copyMiisInto(liveClient, launchJob.platformId, launchJob.platformFsSlug,
+                         launchJob.coreName, saveDir);
         if (launchJob.coreName == "dolphin") shareDolphinCache(saveDir);
         // What each player's port holds. Only Wii says anything but a joypad:
         // a Classic Controller, or a GameCube pad for a game that takes only
@@ -12232,6 +12314,7 @@ int main(int argc, char** argv) {
             session.dirSaveRoot = saveDir + "/" + dirSub;
             session.dirSaveCore = launchJob.coreName;
             session.dirSavePlatform = launchJob.platformSlug;
+            session.dirSaveTitleId = launchJob.titleId;
             session.dirAtLaunch = listDirSave(session);
             std::fprintf(stderr, "[save] %s holds %zu file(s) at launch\n",
                          session.dirSaveRoot.c_str(), session.dirAtLaunch.size());
@@ -12642,6 +12725,11 @@ int main(int argc, char** argv) {
         // Safe to run twice: syncDirSave compares against its own baseline and
         // sends nothing when nothing moved.
         if (!session.dirSaveRoot.empty()) syncDirSave(session, uploader);
+        // The HOME Menu's rumble switch, read back from the game's SYSCONF
+        // now that Dolphin has written it (#274, wii.h). Every Wii game has
+        // its NAND under its save directory.
+        if (session.platformSlug == "wii" && session.core == "dolphin")
+            wii::keepRumbleFrom(session.saveDir + "/User/Wii/shared2/sys/SYSCONF");
         // And the same trigger for the same reason, for the class that is one
         // file rather than a tree. This is where a Dreamcast's card is read
         // back out of the system directory and taken out of `bios/`.

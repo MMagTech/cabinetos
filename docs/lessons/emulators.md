@@ -384,6 +384,18 @@ Read before working on a core, an emulator, input, saves or states.
   is not empty just because the folder above it looks empty; list it before
   reading a test's result off it.
 
+- **THE WII'S HOME MENU SAVES ITS SETTINGS WHEN IT CLOSES.** Rumble turned
+  off there and the game exited with the menu still open: `BT.MOT` stayed 1
+  on disk, and the console rightly kept rumble on. Closed with its Close
+  button, the file had 0 within the second (#274). Before calling a guest
+  setting unsaved, watch the file while the game runs (a half-second poll of
+  its mtime and value); the shutdown path was not the cause.
+
+- **A FRESH REMOTE'S MII AREA IS NOT EMPTY, IT IS UNFORMATTED.** The Mii
+  Channel read 0xFF there and offered Format, as it would for a new Remote;
+  format, then send. And Wii Sports refuses to save progress for a Mii taken
+  from a Remote: a visiting Mii on a Wii too, not a fault (#275).
+
 - **A LIST KEPT FOR REPLAY MUST HOLD ONLY WHAT NEEDS REPLAYING.** The bridge
   kept the speaker's per-sound commands as Remote setup, they filled its list,
   and the motion setup fell off the end. Nothing failed until a Remote dropped

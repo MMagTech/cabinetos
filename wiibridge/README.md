@@ -11,7 +11,11 @@ Nunchuk unencrypted (copies drop it when a game writes the encryption key) and
 encrypts for the game itself; gives every Remote Nintendo's id (Cemu looks only
 for that); keeps the stand-in when a Remote goes off (libretro's Dolphin crashes
 when a held Remote vanishes) and replays the game's setup when it comes back; and
-switches a Remote off when a game lets it go.
+switches a Remote off when a game lets it go. And it keeps the Miis a game sends
+to a Remote on the console instead (#275): the Remote's Mii area is answered from
+one file per player light, in the folder the console app gives it as its one
+argument (`/var/lib/cabinetos/wii-remote-miis`); the Remote is never written
+there.
 
 Build (in the builder container): `make`.
 
