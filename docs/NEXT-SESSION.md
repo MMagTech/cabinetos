@@ -38,7 +38,11 @@ Milestone 7, Ready to ship (docs/ROADMAP.md). Lessons file: image-and-ci.md.
    the A9 or the Unraid server: check first that one can be made from an
    ISO), so MMagTech's install is never wiped; one real install at the end,
    onto a spare drive. The one remaining question must name the disk (size,
-   model) before erasing it.
+   model) before erasing it. Also: pin bootc-image-builder (build-disk.yml
+   uses `:latest`), and build the ISO once per release, not per update.
+   MMagTech, 2026-10-07: do the milestone as planned; anything that turns
+   out too hard (the installer's own splash and artwork most likely) is
+   skipped, not forced.
 3. **A shipping image without the development shell (#134).**
 4. **Signed images (#135).**
 5. **Licences checked and the full texts shipped (#120).**
