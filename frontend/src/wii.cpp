@@ -1,5 +1,6 @@
 #include "wii.h"
 
+#include "prefs.h"
 #include "storage.h"
 
 #include <cstdint>
@@ -8,6 +9,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
+#include <iterator>
 #include <map>
 #include <mutex>
 #include <set>
@@ -143,6 +145,51 @@ unsigned padDevice(const std::string& code) {
     if (c.find('c') != std::string::npos) return kClassicController;
     if (c.find('g') != std::string::npos) return kGameCubePad;
     return 0;
+}
+
+// By its four letters, so a code read off the file (eight hex digits, when
+// RomM had none) is the same answer as RomM's sixteen.
+bool isMiiChannel(const std::string& titleId) {
+    return codeFromTitleId(titleId) == codeFromTitleId(kMiiChannelTitleId);
+}
+
+// SYSCONF (WiiBrew, "/shared2/sys/SYSCONF"): "SCv0", a big-endian count, then
+// count + 1 offsets; each entry is a byte holding its type (top three bits) and
+// name length less one, the name, then its data. `BT.MOT` is a byte (type 3).
+int readMotor(const std::string& sysconfPath) {
+    std::ifstream in(sysconfPath, std::ios::binary);
+    std::string b((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    auto u8 = [&](size_t at) { return static_cast<unsigned char>(b[at]); };
+    if (b.size() < 6 || b.compare(0, 4, "SCv0") != 0) return -1;
+    const size_t count = (size_t(u8(4)) << 8) | u8(5);
+    for (size_t i = 0; i < count && 8 + 2 * i <= b.size(); ++i) {
+        const size_t at = (size_t(u8(6 + 2 * i)) << 8) | u8(7 + 2 * i);
+        if (at >= b.size()) continue;
+        const unsigned type = u8(at) >> 5;
+        const size_t nameLen = (u8(at) & 0x1f) + 1;
+        if (at + 1 + nameLen >= b.size()) continue;
+        if (type == 3 && b.compare(at + 1, nameLen, "BT.MOT") == 0 && nameLen == 6)
+            return u8(at + 1 + nameLen) ? 1 : 0;
+    }
+    return -1;
+}
+
+std::string rumbleOption() {
+    return prefs::get("wii_rumble", "on") == "off" ? "disabled" : "enabled";
+}
+
+void keepRumbleFrom(const std::string& sysconfPath) {
+    const int motor = readMotor(sysconfPath);
+    if (motor < 0) {
+        std::fprintf(stderr, "[wii] no BT.MOT in %s; rumble stays %s\n", sysconfPath.c_str(),
+                     rumbleOption().c_str());
+        return;
+    }
+    const std::string was = prefs::get("wii_rumble", "on");
+    const std::string now = motor ? "on" : "off";
+    if (now != was) prefs::set("wii_rumble", now);
+    std::fprintf(stderr, "[wii] rumble %s in the game's HOME Menu settings (was %s)\n",
+                 now.c_str(), was.c_str());
 }
 
 }  // namespace wii

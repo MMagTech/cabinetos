@@ -730,25 +730,35 @@ std::map<std::string, std::string> optionOverrides(const std::string& core) {
     return {};
 }
 
-const char* directorySaveRoot(const char* core, const std::string& platformSlug) {
+const char* directorySaveRoot(const char* core, const std::string& platformSlug,
+                              const std::string& titleId) {
     if (!core) return nullptr;
     if (manifestName(core) == "ppsspp") return "PSP/SAVEDATA";
-    if (manifestName(core) == "dolphin" && platformSlug == "wii") return "User/Wii/title";
+    if (manifestName(core) == "dolphin" && platformSlug == "wii")
+        return wii::isMiiChannel(titleId) ? "User/Wii" : "User/Wii/title";
     return nullptr;
 }
 
 bool inDirectorySave(const char* core, const std::string& platformSlug,
-                     const std::string& relPath) {
+                     const std::string& titleId, const std::string& relPath) {
     if (!core || manifestName(core) != "dolphin" || platformSlug != "wii") return true;
+    // The Mii Channel's root is `User/Wii`: its Mii list, and under `title/`
+    // the same rule as every other game.
+    std::string rel = relPath;
+    if (wii::isMiiChannel(titleId)) {
+        if (rel == wii::kMiiDatabase) return true;
+        if (rel.compare(0, 6, "title/") != 0) return false;
+        rel.erase(0, 6);
+    }
     // `<8 hex>/<8 hex>/data/...`, and not the system's own titles.
     auto hex8 = [&](size_t at) {
-        if (relPath.size() < at + 9 || relPath[at + 8] != '/') return false;
+        if (rel.size() < at + 9 || rel[at + 8] != '/') return false;
         for (size_t i = at; i < at + 8; ++i)
-            if (!std::isxdigit(static_cast<unsigned char>(relPath[i]))) return false;
+            if (!std::isxdigit(static_cast<unsigned char>(rel[i]))) return false;
         return true;
     };
-    return hex8(0) && hex8(9) && relPath.compare(0, 9, "00000001/") != 0 &&
-           relPath.compare(18, 5, "data/") == 0;
+    return hex8(0) && hex8(9) && rel.compare(0, 9, "00000001/") != 0 &&
+           rel.compare(18, 5, "data/") == 0;
 }
 
 bool needsBios(const std::string& slug) {
