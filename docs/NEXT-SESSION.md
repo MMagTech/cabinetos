@@ -12,10 +12,10 @@ specification is `docs/PROJECT.md`; the order is `docs/ROADMAP.md`.
 ## Where things stand
 
 2026-10-07: #275 (Mii Channel, Miis in every Wii game, Miis on Remotes) and
-#274 (rumble kept across Wii games) are built and were judged on the TV in the
-loop: all passed (docs/PROJECT.md question 35, "Miis and rumble"). PR #282;
-its testing image (run 37570726422, 9m28s) is built but **not yet installed
-on the A9**: MMagTech installs it from Settings, System, Update.
+#274 (rumble kept across Wii games) merged as PR #282; image 2026.10.07.3 is
+promoted and on the A9. A second-account check is #283 (a TV check, no code
+expected). RomM's Mii Channel still has IGDB's "Check Mii Out Channel" cover
+and summary; MMagTech's to unmatch in RomM.
 
 The A9 sits at the LG C1, on Wi-Fi at **192.168.1.109**: run
 `tools/ui-loop.sh` with `CABINETOS_A9=cabinet@192.168.1.109`.
@@ -24,13 +24,7 @@ The A9 sits at the LG C1, on Wi-Fi at **192.168.1.109**: run
 
 Milestone 7, Ready to ship (docs/ROADMAP.md). Lessons file: image-and-ci.md.
 
-1. **Finish PR #282:** once MMagTech has installed the testing image, verify
-   it from the A9 (version, no drop-ins, the new strings in the frontend and
-   the bridge), list the possible checks (all judged in the loop), merge on
-   his word, then ask his go to delete `wii-speaker` and `mii-channel`,
-   locally and on GitHub. RomM's Mii Channel still has IGDB's "Check Mii Out
-   Channel" cover and summary; his to unmatch in RomM.
-2. **The installer:** Bazzite branding out (#105), the media check that fails
+1. **The installer:** Bazzite branding out (#105), the media check that fails
    good media (#106), Anaconda's disk and user screens replaced (#107), its
    own quiet splash and Wi-Fi during setup (#136). Agreed 2026-10-07 (#136's
    comment): no firmware in the installer; prove the install needs no network
@@ -42,10 +36,12 @@ Milestone 7, Ready to ship (docs/ROADMAP.md). Lessons file: image-and-ci.md.
    uses `:latest`), and build the ISO once per release, not per update.
    MMagTech, 2026-10-07: do the milestone as planned; anything that turns
    out too hard (the installer's own splash and artwork most likely) is
-   skipped, not forced.
-3. **A shipping image without the development shell (#134).**
-4. **Signed images (#135).**
-5. **Licences checked and the full texts shipped (#120).**
+   skipped, not forced. MMagTech sees the work as it goes: a picture of
+   every installer screen from the VM sent to him (or the VM's screen
+   opened live), and the final look judged on the TV.
+2. **A shipping image without the development shell (#134).**
+3. **Signed images (#135).**
+4. **Licences checked and the full texts shipped (#120).**
 
 Also in the milestone: booting with the TV off (#268), whether Nintendo DS
 stays (#248), a diagnostic report (#195), a showcase page and README (#190).
