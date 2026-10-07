@@ -42,7 +42,7 @@
 #
 #                                      `/system` AND NOT /usr/share/cabinetos
 #                                      ITSELF. That directory also holds a
-#                                      DEVELOPMENT-IMAGE marker and two package
+#                                      DEVELOPMENT-IMAGE marker (until 2026-10-07) and two package
 #                                      inventories, and an earlier version of
 #                                      the link step put all three where a core
 #                                      goes looking for its fonts.

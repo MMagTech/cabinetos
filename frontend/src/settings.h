@@ -52,6 +52,10 @@ struct SettingsRow {
     // The value shown is choices[choice]; `value` is ignored.
     std::vector<std::string> choices;
     int choice = 0;
+    // Info rows only: focus can land on it and pressing it hands back `id`,
+    // with no chevron, because it opens nothing. About's Version, which
+    // shows Developer access when pressed seven times.
+    bool pressable = false;
 };
 
 struct SettingsCategory {

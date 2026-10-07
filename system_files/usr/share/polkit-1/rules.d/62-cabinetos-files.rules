@@ -1,5 +1,5 @@
-// Let the console turn its own File access on and off, and make a new
-// password for it. Nothing else.
+// Let the console turn its own File access and Developer access on and off,
+// and make a new password for them. Nothing else.
 //
 // The session runs as `cabinet`; opening port 22, building the folder view
 // and setting the account's password need root. So the root half is
@@ -22,6 +22,11 @@ polkit.addRule(function(action, subject) {
     var verb = action.lookup("verb");
     if (unit == "cabinetos-files.service" &&
         (verb == "start" || verb == "stop" || verb == "reload")) {
+        return polkit.Result.YES;
+    }
+    // Developer access (port 2222, the full command line), on and off.
+    // docs/SETTINGS.md, System; issue #134.
+    if (unit == "cabinetos-developer.service" && (verb == "start" || verb == "stop")) {
         return polkit.Result.YES;
     }
     if (unit == "cabinetos-files-password.service" && verb == "start") {

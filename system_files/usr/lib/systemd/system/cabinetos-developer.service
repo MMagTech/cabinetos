@@ -1,0 +1,32 @@
+# Developer access: the full command line over SSH, port 2222, while it is
+# switched on in Settings, System. docs/SETTINGS.md, System; issue #134.
+#
+# NOT ENABLED, AND NO [Install]: off by default on every console, and off
+# means nothing listens. The session starts and stops it by name
+# (62-cabinetos-files.rules) when the switch is turned on or off, and again
+# at boot when it was left on. Stopping it ends every session it started:
+# KillMode is control-group, systemd's default, so "off" also logs out.
+#
+# THE PASSWORD IS FILE ACCESS'S (MMagTech, 2026-10-07: one password, shown in
+# one place), applied to `cabinet` before sshd starts. Keys work too. Port
+# 2222's rules are in /etc/ssh/sshd_config.d/30-cabinetos.conf.
+#
+# Replaces cabinetos-dev-ssh.service (always on, development images only).
+# A console that had that one enabled keeps a link to a unit that no longer
+# exists, which systemd ignores, so nothing opens 2222 by itself.
+[Unit]
+Description=CabinetOS Developer access (SSH on port 2222)
+Documentation=https://github.com/MMagTech/cabinetos/blob/main/docs/SETTINGS.md
+Wants=sshd-keygen.target
+After=network.target sshd-keygen.target
+
+[Service]
+ExecStartPre=/usr/libexec/cabinetos-files password
+# SELinux allows sshd only port 22. Labelled here, at start, rather than in
+# the image: a label in the image would not reach a console with any local
+# SELinux change.
+ExecStartPre=/bin/sh -c 'semanage port -l | grep -qE "^ssh_port_t.*[ ,]2222(,|$$)" || semanage port -a -t ssh_port_t -p tcp 2222'
+ExecStart=/usr/sbin/sshd -D -p 2222 -o PidFile=none
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5

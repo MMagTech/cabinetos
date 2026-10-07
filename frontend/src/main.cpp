@@ -33,6 +33,7 @@
 #include <ctime>
 
 #include <atomic>
+#include <chrono>
 #include <csignal>
 #include <condition_variable>
 #include <deque>
@@ -103,6 +104,7 @@
 #include "server.h"
 #include "update.h"
 #include "files.h"
+#include "unit.h"
 #include "drives.h"
 #include "players.h"
 #include "powerprofile.h"
@@ -8576,6 +8578,33 @@ int main(int argc, char** argv) {
         pinThen = std::move(then);
         pinScreen.open(screens::PinScreen::Mode::Choose, title, detail);
     };
+    // DEVELOPER ACCESS NEEDS A PIN TO EXIST (MMagTech, 2026-10-07). It hands
+    // over the whole machine, so turning it on is the one place a console
+    // with no PIN asks for one: the PIN is what a Linux install's admin
+    // password would be. It only lets somebody at the television turn it on
+    // and see the password; the network still needs the password. NOT File
+    // access: the PIN is one lock for the whole console, and requiring it
+    // there would put every family that only copies saves behind PIN prompts
+    // for Wi-Fi, accounts and updates too. Only the owner can set a PIN, so
+    // another account on a console without one is told who can.
+    auto askPinToOpen = [&](const std::string& detail, std::function<void()> then) {
+        if (accounts::pinIsSet()) {
+            askPin("Enter the PIN", detail, std::move(then));
+            return;
+        }
+        if (accounts::activeId() != accounts::ownerId()) {
+            const std::vector<accounts::Account> list = accounts::all();
+            const accounts::Account* owner = accounts::find(list, accounts::ownerId());
+            menuNotice.say("Needs a PIN from " + (owner ? owner->name : std::string("the owner")),
+                           Tone::Problem);
+            sound::play(sound::Cue::Edge);
+            return;
+        }
+        choosePin("Choose a PIN", detail, [&, then = std::move(then)]() {
+            pinUnlocked = true;
+            then();
+        });
+    };
     auto pinOutcome = [&](screens::PinScreen::Outcome o) {
         using O = screens::PinScreen::Outcome;
         if (o == O::None) return;
@@ -8697,7 +8726,7 @@ int main(int argc, char** argv) {
                      SetAddController, SetShortcuts, SetShortcutButton, SetAppearance,
                      SetDarkHours, SetColour, SetRumble, SetPictureQuality,
                      SetWiiRemotes, SetSteam, SetSteamShow, SetRetroAchievements,
-                     SetAchievementSound };
+                     SetAchievementSound, SetDeveloper, SetVersion };
     // One Eject row per USB drive: this plus the drive's index in
     // storage::locations() when the rows were built.
     constexpr int kSetEject = 100;
@@ -8893,6 +8922,38 @@ int main(int argc, char** argv) {
         std::string why;
         if (files::turnOn(&why)) filesSaidAt = std::time(nullptr);
         else std::fprintf(stderr, "[files] could not turn on at start: %s\n", why.c_str());
+    }
+    // ---- Developer access (docs/SETTINGS.md, System; issue #134) -----------
+    //
+    // The full command line over SSH on port 2222, off by default, and off
+    // means cabinetos-developer.service is not running (MMagTech,
+    // 2026-10-07: "when they turn it on, they now are a developer. Same
+    // install."). There is no status file: systemd's own state for the unit
+    // is the answer, read only while Settings is open or a change is waiting,
+    // so a console that never turns it on asks nothing. The password is File
+    // access's, one password shown in one place. On is remembered in
+    // settings.json, as File access is, and started again at boot.
+    constexpr const char* kDevUnit = "cabinetos-developer.service";
+    std::string devState = unit::state(kDevUnit);
+    int64_t devSaidAt = 0;
+    bool devPanelWhenOn = false;
+    int64_t devNewPassAt = 0;   // the panel comes back once a new password is made
+    std::string devFailed;      // a refusal or a start that failed, said in the row
+    bool devWant = prefs::get("developer_access", "off") == "on";
+    // HIDDEN UNTIL UNLOCKED (MMagTech, 2026-10-07): the row is under About's
+    // Version, and only once Version has been pressed seven times, the way
+    // Android hides its developer options; seven more hide it again, and
+    // hiding turns it off, so nothing can be listening behind a switch
+    // nobody can see. A console with it on always shows it. Families never
+    // see it, and on a console with no PIN a child on the owner's account
+    // cannot find it to choose one. The PIN is still what protects it.
+    bool devShown = devWant || prefs::get("developer_shown", "off") == "on";
+    int versionPresses = 0;
+    std::chrono::steady_clock::time_point versionPressAt{};
+    if (devWant && devState != "active") {
+        std::string why;
+        if (unit::start(kDevUnit, &why)) devSaidAt = std::time(nullptr);
+        else std::fprintf(stderr, "[developer] could not turn on at start: %s\n", why.c_str());
     }
 
     // AFTERWARDS: the first start after a restart compares the version the
@@ -9860,10 +9921,23 @@ int main(int argc, char** argv) {
             if (ch == "testing") version += " \xC2\xB7 Testing";
             else if (!ch.empty() && ch != "latest") version += " \xC2\xB7 " + ch;
             const std::string base = update::baseVersion();
-            cats.push_back({"About", {
-                {K::Info, 0, "Version", base.empty() ? "" : "Bazzite " + base, version},
-                {K::Action, SetCredits, "Credits and licenses", "", ""},
-            }});
+            std::vector<screens::SettingsRow> about;
+            screens::SettingsRow v{K::Info, SetVersion, "Version",
+                                   base.empty() ? "" : "Bazzite " + base, version};
+            v.pressable = true;
+            about.push_back(v);
+            // DEVELOPER ACCESS: one row, as File access; everything a computer
+            // needs is in the panel it opens. Port 2222, the full command
+            // line. Under Version, where pressing seven times shows it.
+            if (devShown) {
+                std::string value = devState == "active" ? "On" : "Off";
+                std::string detail = "SSH";
+                if (devSaidAt != 0) value = devWant ? "Turning on\xE2\x80\xA6" : "Turning off\xE2\x80\xA6";
+                else if (!devFailed.empty()) detail = devFailed;
+                about.push_back({K::Toggle, SetDeveloper, "Developer access", detail, value});
+            }
+            about.push_back({K::Action, SetCredits, "Credits and licenses", "", ""});
+            cats.push_back({"About", std::move(about)});
         }
 
 
@@ -10042,6 +10116,62 @@ int main(int argc, char** argv) {
                                             }
                                             filesPanelWhenOn = true;
                                             filesSaidAt = std::time(nullptr);
+                                        });
+                          });
+                      }
+                  });
+    };
+    // Developer access on or off, as File access: a refusal said in the row,
+    // otherwise "Turning on…" until systemd answers.
+    auto setDeveloper = [&](bool on) {
+        std::string why;
+        const bool ok = on ? unit::start(kDevUnit, &why) : unit::stop(kDevUnit, &why);
+        if (!ok) {
+            devFailed = why.find("not found") != std::string::npos ? "Not in this image" : why;
+            if (devFailed.size() > 60) devFailed.resize(60);
+            devSaidAt = 0;
+            devPanelWhenOn = false;
+        } else {
+            devFailed.clear();
+            devSaidAt = std::time(nullptr);
+        }
+        devWant = on;
+        prefs::set("developer_access", on ? "on" : "off");
+        buildSettings();
+    };
+    // THE PANEL: File access's, with the port. Same password, same New
+    // password (it changes File access's too, which is the point of one).
+    std::function<void()> openDevPanel;
+    openDevPanel = [&]() {
+        std::string ip;
+        {
+            std::lock_guard<std::mutex> lk(settingsNet.m);
+            if (settingsNet.have && !settingsNet.st.ipv4.empty())
+                ip = settingsNet.st.ipv4.substr(0, settingsNet.st.ipv4.find('/'));
+        }
+        char host[256] = {0};
+        ::gethostname(host, sizeof host - 1);
+        std::string where = ip;
+        if (host[0]) where += (where.empty() ? "" : " \xC2\xB7 ") + std::string(host) + ".local";
+        const std::string pass = files::password();
+        askChoice("Developer access",
+                  where + "\nPort  2222\nUser name  cabinet\nPassword  " +
+                      (pass.empty() ? "\xE2\x80\xA6" : pass),
+                  {"Done", "New password", "Turn off"}, 0, [&](int k) {
+                      if (k == 2) {
+                          setDeveloper(false);
+                      } else if (k == 1) {
+                          askPin("Enter the PIN", "To make a new password", [&]() {
+                              askChoice("New password?", "", {"New password", "Cancel"}, 1,
+                                        [&](int c) {
+                                            if (c != 0) { openDevPanel(); return; }
+                                            std::string why;
+                                            if (!files::newPassword(&why)) {
+                                                menuNotice.say("Couldn't make a new password",
+                                                               Tone::Problem);
+                                                return;
+                                            }
+                                            devNewPassAt = std::time(nullptr);
                                         });
                           });
                       }
@@ -10865,7 +10995,9 @@ int main(int argc, char** argv) {
                     if (filesSaidAt != 0) {
                         sound::play(sound::Cue::Edge);
                     } else if (filesState.on) {
-                        openFilesPanel();
+                        // The password is in the panel: the PIN first, when
+                        // one is set (MMagTech, 2026-10-07).
+                        askPin("Enter the PIN", "To see file access", [&]() { openFilesPanel(); });
                         sound::play(sound::Cue::Activate);
                     } else {
                         // On behind the PIN, then the panel opens by itself
@@ -10873,6 +11005,36 @@ int main(int argc, char** argv) {
                         askPin("Enter the PIN", "To turn on file access", [&]() {
                             filesPanelWhenOn = true;
                             setFiles(true);
+                        });
+                        sound::play(sound::Cue::Activate);
+                    }
+                } else if (res.value == SetVersion) {
+                    // Seven presses, each within two seconds of the last,
+                    // show Developer access, or hide it (and turn it off).
+                    // Silent until the seventh: the row appearing or going
+                    // is the answer.
+                    const auto now = std::chrono::steady_clock::now();
+                    if (now - versionPressAt > std::chrono::seconds(2)) versionPresses = 0;
+                    versionPressAt = now;
+                    if (++versionPresses >= 7) {
+                        versionPresses = 0;
+                        devShown = !devShown;
+                        prefs::set("developer_shown", devShown ? "on" : "off");
+                        if (!devShown && (devWant || devState == "active")) setDeveloper(false);
+                        std::fprintf(stderr, "[developer] %s\n", devShown ? "shown" : "hidden");
+                        buildSettings();
+                        sound::play(sound::Cue::Activate);
+                    }
+                } else if (res.value == SetDeveloper) {
+                    if (devSaidAt != 0) {
+                        sound::play(sound::Cue::Edge);
+                    } else if (devState == "active") {
+                        askPin("Enter the PIN", "To see developer access", [&]() { openDevPanel(); });
+                        sound::play(sound::Cue::Activate);
+                    } else {
+                        askPinToOpen("To turn on developer access", [&]() {
+                            devPanelWhenOn = true;
+                            setDeveloper(true);
                         });
                         sound::play(sound::Cue::Activate);
                     }
@@ -14869,6 +15031,35 @@ int main(int argc, char** argv) {
                             !pinScreen.isOpen())
                             openFilesPanel();
                     }
+                }
+            }
+            if (devSaidAt != 0 || devNewPassAt != 0 || here() == Screen::Settings) {
+                // Developer access: systemd's answer. A change said on screen
+                // waits until the unit has settled the way it was asked to
+                // (or failed); ten seconds without that and it shows what
+                // systemd says, with the failure in the row.
+                const std::string d = unit::state(kDevUnit);
+                const int64_t now = std::time(nullptr);
+                const bool settled = d == "active" || d == "inactive" || d == "failed";
+                const bool answered = devSaidAt == 0 || now - devSaidAt > 10 ||
+                                      (settled && (d == "failed" || (d == "active") == devWant));
+                if (answered && (d != devState || devSaidAt != 0)) {
+                    if (devSaidAt != 0 && devWant && d != "active") devFailed = "Couldn't start SSH";
+                    devState = d;
+                    devSaidAt = 0;
+                    std::fprintf(stderr, "[developer] %s\n", d.c_str());
+                    if (here() == Screen::Settings) buildSettings();
+                    if (devPanelWhenOn) {
+                        devPanelWhenOn = false;
+                        if (d == "active" && here() == Screen::Settings && !choiceScreen.isOpen() &&
+                            !pinScreen.isOpen())
+                            openDevPanel();
+                    }
+                }
+                if (devNewPassAt != 0 && now - devNewPassAt >= 1) {
+                    devNewPassAt = 0;
+                    if (here() == Screen::Settings && !choiceScreen.isOpen() && !pinScreen.isOpen())
+                        openDevPanel();
                 }
             }
             const update::Status s = update::read();

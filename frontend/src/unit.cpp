@@ -3,6 +3,7 @@
 #include <systemd/sd-bus.h>
 
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 
 namespace unit {
@@ -37,5 +38,29 @@ bool call(const char* method, const char* name, std::string* why) {
 bool start(const char* name, std::string* why) { return call("StartUnit", name, why); }
 bool stop(const char* name, std::string* why) { return call("StopUnit", name, why); }
 bool reload(const char* name, std::string* why) { return call("ReloadUnit", name, why); }
+
+std::string state(const char* name) {
+    sd_bus* bus = nullptr;
+    if (sd_bus_open_system(&bus) < 0) return "";
+    // The unit's object path from its name; systemd loads the unit on the
+    // first read, so a unit nobody has started since boot answers too.
+    char* path = nullptr;
+    std::string out;
+    if (sd_bus_path_encode("/org/freedesktop/systemd1/unit", name, &path) >= 0) {
+        sd_bus_error err = SD_BUS_ERROR_NULL;
+        char* v = nullptr;
+        if (sd_bus_get_property_string(bus, "org.freedesktop.systemd1", path,
+                                       "org.freedesktop.systemd1.Unit", "ActiveState", &err,
+                                       &v) >= 0 &&
+            v) {
+            out = v;
+        }
+        std::free(v);
+        sd_bus_error_free(&err);
+        std::free(path);
+    }
+    sd_bus_unref(bus);
+    return out;
+}
 
 }  // namespace unit

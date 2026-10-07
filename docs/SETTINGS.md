@@ -72,6 +72,7 @@ status here to Built.
   - Sign out and Change server address
   - Adding an account, and removing one
   - File access (turning it on, making a new password)
+  - Developer access (turning it on, making a new password)
 
   Open to everyone: sounds, system update. **Picture quality**, with a PIN
   set, is seen only by the owner, in Settings and the pause menu, and
@@ -410,7 +411,9 @@ Decided with MMagTech 2026-09-26, from the things people will actually do.
     XXXX-XXXX", then **Done** (focused), **New password**, **Turn off**.
     Judged readable from the sofa as it is.
   - Turning it on asks for the PIN when one is set, then the panel opens by
-    itself once it is on. **Turning it off never asks**: closing a door
+    itself once it is on. **Opening the panel again, while on, asks for the
+    PIN too** when one is set (once per visit): the password is in it
+    (MMagTech, 2026-10-07). **Turning it off never asks**: closing a door
     needs no key. **New password** asks the PIN, then "New password?" with
     focus on Cancel (every computer that saved the old one breaks), then
     the panel comes back with the new one. A failure shows in the row:
@@ -436,8 +439,10 @@ Decided with MMagTech 2026-09-26, from the things people will actually do.
     9's mDNS half is answered by the base.
   - **Ports, MMagTech 2026-09-25:** port 22 is File access (password, SFTP,
     chrooted, listening only while on); **the development shell moved to
-    port 2222**, key only, on development images only
-    (`cabinetos-dev-ssh.service`). sshd cannot tell a key login from a
+    port 2222**, then key only and always on, on development images only
+    (`cabinetos-dev-ssh.service`). **Since 2026-10-07 port 2222 is Developer
+    access** (System, below): off until switched on, the same password or a
+    key. sshd cannot tell a key login from a
     password login in a Match block, so the port is the line between the
     two uses of one account. SELinux allows sshd only port 22, so 2222 is
     labelled at boot by the unit itself (a label in the image would not
@@ -679,6 +684,46 @@ Decided with MMagTech 2026-09-26, from the things people will actually do.
   first screen (#223): pressing it (PIN if set) puts "Switch to Steam" back in
   the Start menu and the row goes. Odd company for System update, and the
   least odd place (MMagTech, 2026-10-03). **Built on `steam-handoff`.**
+
+- **Developer access** (#134; decided with MMagTech 2026-10-07, built on
+  `developer-access`): **one row**, "Developer access", "SSH" under it, On
+  or Off, **in About, under Version, and hidden until Version is pressed
+  seven times** (each within two seconds of the last), the way Android hides
+  its developer options. Seven more hide it again, **and hiding turns it
+  off**: nothing listens behind a switch nobody can see. A console with it on
+  always shows it. Why hidden: families never see it, and on a console with
+  no PIN a child on the owner's account cannot find it to choose one; the
+  PIN and the password are still what protect it (MMagTech, 2026-10-07: "if
+  you can show it you should also be able to hide it again"). Why About: the
+  row appears where it was unlocked, and About is the least visited screen. The full command line over SSH, port
+  2222, user `cabinet`: "when they turn it on, they now are a developer.
+  Same install." **One image for everyone**: there is no development image
+  any more, and nothing listens on 2222 until this is turned on.
+  - **Off by default, and off means `cabinetos-developer.service` is not
+    running**: the port is closed, not filtered. Turning it off also ends
+    every session it started. On is remembered through restarts, as File
+    access is, until it is turned off.
+  - **The password is File access's** (one password, shown in one place;
+    MMagTech: the people using this are technical, and turn each off when
+    done). A key works too. The panel opens by itself once it is on: the
+    address and `<hostname>.local`, "Port 2222", "User name cabinet",
+    "Password XXXX-XXXX", then **Done**, **New password**, **Turn off**.
+    **New password** changes File access's too. Opening the panel again asks
+    for the PIN, once per visit.
+  - **IT NEEDS A PIN TO EXIST** (MMagTech, 2026-10-07). On a console with no
+    PIN, turning it on first asks the owner to choose one; another account
+    is told "Needs a PIN from <owner>". The PIN is what a Linux install's
+    admin password would be: it lets somebody at the TV turn it on and see
+    the password, and never leaves the console; the network still needs the
+    password. **Not File access**, which keeps "the PIN when one is set": the
+    PIN is one lock for the whole console, and requiring it there would put a
+    family that only copies saves behind PIN prompts for Wi-Fi, accounts and
+    updates too.
+  - **After a fresh install** a console has no key on it: turn this on and
+    copy a key over once with the password,
+    `ssh-copy-id -p 2222 cabinet@<hostname>.local`.
+  - `cabinet` is in `wheel`, so the password is also sudo's: full access is
+    what this switch is for.
 
 ## About
 

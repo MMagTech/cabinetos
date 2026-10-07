@@ -422,7 +422,7 @@ std::string imageAssetsDir() {
     // sit in the system directory where the core build put them.
     //
     // `/system` AND NOT `/usr/share/cabinetos` ITSELF. That directory already
-    // holds things that have nothing to do with a core — a DEVELOPMENT-IMAGE
+    // held things that have nothing to do with a core — a DEVELOPMENT-IMAGE
     // marker and two package inventories — and the first version of this linked
     // all three into the console's system directory, where a core would go
     // looking for its fonts. Found by running it; the directory listing is what

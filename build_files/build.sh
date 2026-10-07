@@ -64,7 +64,7 @@ for expected in \
     /usr/libexec/cabinetos-files \
     /usr/lib/systemd/system/cabinetos-files.service \
     /usr/lib/systemd/system/cabinetos-files-password.service \
-    /usr/lib/systemd/system/cabinetos-dev-ssh.service \
+    /usr/lib/systemd/system/cabinetos-developer.service \
     /usr/lib/systemd/system-preset/40-cabinetos.preset \
     /usr/share/polkit-1/rules.d/62-cabinetos-files.rules \
     /usr/libexec/cabinetos-wii-search \
@@ -381,21 +381,25 @@ fi
 # more legible.
 check_present "kernel modules directory" /usr/lib/modules || failed=1
 
-# SSH, since 2026-09-25 two things (enable-ssh.sh): the development shell on
-# 2222 must be enabled, because this project is developed over it, and port
-# 22 must NOT be, because it is File access and File access starts off.
-if systemctl is-enabled cabinetos-dev-ssh.service >/dev/null 2>&1; then
-    log "  ok: cabinetos-dev-ssh.service is enabled (port 2222)"
-else
-    log "  MISSING: cabinetos-dev-ssh.service is not enabled: no way in to develop"
-    failed=1
-fi
-for unit in sshd.service sshd.socket; do
-    if systemctl is-enabled "${unit}" >/dev/null 2>&1; then
-        log "  WRONG: ${unit} is enabled; port 22 would be open with File access off"
+# SSH, since 2026-10-07 (enable-ssh.sh; issue #134): NOTHING listens at boot.
+# Port 22 is File access and port 2222 is Developer access; both start off,
+# and each is started only by its switch in Settings. The always-on
+# development shell (cabinetos-dev-ssh.service) is gone and must stay gone.
+# The word, not the exit status: `is-enabled` also exits 0 for "static", which
+# is what cabinetos-developer.service is (no [Install]: nothing can enable it),
+# and that failed the first build of this check (2026-10-07).
+for unit in sshd.service sshd.socket cabinetos-developer.service; do
+    if [[ "$(systemctl is-enabled "${unit}" 2>/dev/null)" == enabled* ]]; then
+        log "  WRONG: ${unit} is enabled; a port would be open with its switch off"
         failed=1
     fi
 done
+if [[ -e /usr/lib/systemd/system/cabinetos-dev-ssh.service ||
+      -e /usr/share/cabinetos/DEVELOPMENT-IMAGE ]]; then
+    log "  WRONG: the always-on development shell is back (cabinetos-dev-ssh.service or its marker)"
+    failed=1
+fi
+log "  ok: no SSH port open at boot"
 check_present "File access's sshd rules" /etc/ssh/sshd_config.d/30-cabinetos.conf || failed=1
 
 # The session must be enabled, or the machine boots to a console — which is
