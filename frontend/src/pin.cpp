@@ -104,7 +104,7 @@ PinScreen::Outcome PinScreen::add(char digit) {
     }
     if (typed_ != first_) {
         first_.clear();
-        reject("Those did not match. Choose a PIN again");
+        reject("Those didn't match");
         sound::play(sound::Cue::Edge);
         return Outcome::None;
     }

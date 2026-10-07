@@ -11,24 +11,32 @@ specification is `docs/PROJECT.md`; the order is `docs/ROADMAP.md`.
 
 ## Where things stand
 
-2026-10-06: RetroAchievements (#74, milestone 5) and the Search fixes (#277)
-are on `retroachievements`, PR #278, judged on the TV that evening and pushed
-to `testing`. **Merge only on MMagTech's word**, after the testing image is
-verified from the A9 and he has picked its checks. The decisions are
-docs/PROJECT.md open question 38.
+2026-10-07: milestone 6 is done. The wording pass and notice length (#110)
+and sound kept on through tuned (#228) are merged (PR #280); the tested image
+2026.10.07 is promoted. #132 (sleep) moved to After first release.
 
 The A9 sits at the LG C1, on Wi-Fi at **192.168.1.109**: run
 `tools/ui-loop.sh` with `CABINETOS_A9=cabinet@192.168.1.109`.
 
 ## Next
 
-Milestone 6, UI polish (docs/ROADMAP.md), in this order:
+Milestone 7, Ready to ship (docs/ROADMAP.md), in this order. Lessons file:
+image-and-ci.md (the installer).
 
-1. **Wording pass over every screen, and notification length (#110).**
-   Lessons file: frontend.md (words on screen).
-2. **Sound that dies until a restart (#228):** the TV's HDMI audio chip
-   failing to power down.
-3. **Offer the sleep this machine can really do (#132).**
+1. **No sound from the Wii Remote's speaker (#276).** MMagTech, 2026-10-07:
+   a release blocker unless it proves impossible; at least a real attempt.
+   Lessons file: emulators.md. Read every comment on the issue first.
+2. **The Wii Menu and Miis (#275): a discussion session with MMagTech
+   first**, nothing built before it. He has the WAD files on RomM.
+3. **The installer:** Bazzite branding out (#105), the media check that fails
+   good media (#106), Anaconda's disk and user screens replaced (#107), its
+   own quiet splash and Wi-Fi during setup (#136).
+4. **A shipping image without the development shell (#134).**
+5. **Signed images (#135).**
+6. **Licences checked and the full texts shipped (#120).**
+
+Also in the milestone: booting with the TV off (#268), whether Nintendo DS
+stays (#248), a diagnostic report (#195), a showcase page and README (#190).
 
 Never run a headless frontend on the A9 while MMagTech is at the TV: it reads
 the same controllers (docs/lessons/testing.md). After a testing image installs,

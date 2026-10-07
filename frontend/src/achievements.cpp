@@ -448,11 +448,11 @@ std::string sayWhy(int result, const char* message) {
         case RC_ACCESS_DENIED:
             return "Wrong username or password";
         case RC_NO_RESPONSE:
-            return "RetroAchievements did not answer";
+            return "Couldn't reach RetroAchievements";
         default:
             break;
     }
-    return (message && *message) ? message : "Sign-in failed";
+    return (message && *message) ? message : "Couldn't sign in";
 }
 
 void RC_CCONV onLogin(int result, const char* message, rc_client_t* client, void* userdata) {
@@ -929,7 +929,7 @@ void useSample() {
 void signIn(const std::string& user, const std::string& password,
             std::function<void(bool ok, const std::string& why)> done) {
     if (!gClient || gAccount <= 0) {
-        if (done) done(false, "Sign-in failed");
+        if (done) done(false, "Couldn't sign in");
         return;
     }
     gUser = user;

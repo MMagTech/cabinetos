@@ -12,6 +12,17 @@ Read before touching `build_files/`, `system_files/`, `ci/`, the workflows, the 
   `system_files/usr/lib/tmpfiles.d/cabinetos.conf` rather than by a `mkdir`.
   **Everything the image installs goes in `/usr`.**
 
+- **A SYSFS SETTING A UDEV RULE MAKES CAN BE UNDONE BY TUNED AND BY THE
+  DRIVER, AND TRIGGERING THE RULE BY HAND WILL NOT SHOW IT.** #228's rule set
+  `power/control=on` on the sound controllers; triggered on a running console
+  it worked, and after a real reboot it was gone: the driver turns runtime PM
+  back on after its probe, and tuned's audio plugin sets
+  `power_save_controller=Y` on every profile load. Before writing a rule for a
+  device, read which tuned plugins touch it (`/usr/lib/python3*/site-packages/
+  tuned/plugins/`), and **prove it across a real reboot**. tuned's own way in
+  without copying Bazzite's profiles is the post-loaded profile
+  (`/etc/tuned/post_loaded_profile`), laid over whatever profile is active.
+
 - **Without that directory the console writes to `/`.** `storage::root()` tries
   `/var/lib/cabinetos`, and the session user cannot create it, so it falls back
   to the working directory — which for a systemd service is the root of the

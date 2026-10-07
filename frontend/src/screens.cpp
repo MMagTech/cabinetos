@@ -1892,7 +1892,7 @@ void AccountScreen::draw(Ctx& c) {
                         dy + (discD - c.text.lineHeight(rowStyle, c.sc)) * 0.5f +
                             c.text.ascent(rowStyle, c.sc),
                         rowStyle, ui::Color::white(0.8f * (addEnabled_ ? 1.0f : 0.4f) * a), c.sc);
-            c.text.draw(c.r, "Add user", dx + discD + 14.0f,
+            c.text.draw(c.r, "Add an account", dx + discD + 14.0f,
                         y + (rowH - c.text.lineHeight(rowStyle, c.sc)) * 0.5f +
                             c.text.ascent(rowStyle, c.sc),
                         rowStyle,
@@ -2004,7 +2004,7 @@ void AddAccountScreen::draw(Ctx& c) {
 
     // --- the left column: what is happening and why --------------------------
     float y = kTitleTop;
-    c.text.draw(c.r, "Add a user", kInset,
+    c.text.draw(c.r, "Add an account", kInset,
                 y + c.text.ascent(ui::TextStyle::LargeTitle, c.sc),
                 ui::TextStyle::LargeTitle, ui::Color::white(0.96f * a), c.sc);
     y += c.text.lineHeight(ui::TextStyle::LargeTitle, c.sc) + 28.0f;
@@ -2020,11 +2020,10 @@ void AddAccountScreen::draw(Ctx& c) {
     // truncated tile caption already bought once.
     const char* lines[3] = {nullptr, nullptr, nullptr};
     if (busy_) {
-        lines[0] = "Asking the server for a code.";
+        lines[0] = "Getting a code\xE2\x80\xA6";
     } else {
-        lines[0] = "Scan the code with a phone.";
-        lines[1] = "Sign in as the person you are adding,";
-        lines[2] = "not as yourself.";
+        lines[0] = "Sign in as the person you are adding,";
+        lines[1] = "not as yourself.";
     }
     for (const char* line : lines) {
         if (!line) continue;

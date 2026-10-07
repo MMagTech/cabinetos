@@ -344,7 +344,7 @@ bool pair(const std::string& address, std::string* err, int timeoutSeconds,
         for (char& ch : oneLine) if (ch == '\n') ch = ' ';
         std::fprintf(stderr, "[bluetooth] pairing %s failed: %s\n", address.c_str(),
                      p.timedOut ? "no answer" : oneLine.c_str());
-        if (err) *err = "Couldn't pair. Put it back into pairing mode and try again";
+        if (err) *err = "Couldn't pair";
         return false;
     }
 
@@ -354,8 +354,7 @@ bool pair(const std::string& address, std::string* err, int timeoutSeconds,
     // "it keeps disconnecting" and has nothing to do with pairing.
     if (!proc::run({"bluetoothctl", "trust", address}, 15, cancel).ok()) {
         if (err)
-            *err = "paired, but this console could not mark the controller "
-                   "trusted, so it may not reconnect on its own";
+            *err = "Paired, but it may not reconnect on its own";
         return false;
     }
 
@@ -364,8 +363,7 @@ bool pair(const std::string& address, std::string* err, int timeoutSeconds,
     const proc::Result c = proc::run({"bluetoothctl", "connect", address}, timeoutSeconds, cancel);
     if (!c.ok()) {
         if (err)
-            *err = "paired and trusted, but it is not connected yet. Press a "
-                   "button on the controller to wake it";
+            *err = "Paired. Press a button on it";
         // Deliberately NOT a failure. The lasting state — paired and trusted —
         // is correct, and a pad that is merely asleep is the commonest reason
         // this last step does not take.

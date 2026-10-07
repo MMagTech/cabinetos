@@ -379,10 +379,10 @@ private:
 
 const char* Flow::title() const {
     switch (machine_.step()) {
-        case firstrun::Step::Network:    return "Connect to Network";
-        case firstrun::Step::Server:     return "RomM Server";
+        case firstrun::Step::Network:    return "Connect to a network";
+        case firstrun::Step::Server:     return "RomM server";
         case firstrun::Step::Pair:       return "Pair with RomM";
-        case firstrun::Step::Controller: return "Pair a Controller";
+        case firstrun::Step::Controller: return "Pair a controller";
         case firstrun::Step::Done:       return "Ready";   // see prose(): what
                                                           // "ready" means
                                                           // depends on whether
@@ -432,10 +432,8 @@ std::string Flow::prose() const {
             // done later, but then on the last screen said the keyboard could
             // be unplugged and wasn't needed anymore."*
             if (facts_.gamepadCount > 0)
-                return "You can unplug the keyboard. You will not need it "
-                       "again.";
-            return "No controller is paired, so keep the keyboard plugged in. "
-                   "Add one in Settings and you can put it away.";
+                return "You can unplug the keyboard.";
+            return "No controller is paired. Keep the keyboard plugged in.";
     }
     return {};
 }
@@ -562,7 +560,7 @@ void Flow::rebuild() {
             }
             if (networks_.empty()) {
                 Row r;
-                r.title = scanFailed_ ? "Could not scan" : "Nothing on the air";
+                r.title = scanFailed_ ? "Couldn't scan" : "No networks found";
                 r.detail = scanFailed_ ? "" : "looking again…";
                 r.enabled = false;
                 rows_.push_back(std::move(r));
@@ -618,7 +616,7 @@ void Flow::rebuild() {
                 r.title = pairing_.userCode;
                 r.detail = "waiting";
             } else {
-                r.title = "Could not start pairing";
+                r.title = "Couldn't start pairing";
             }
             rows_.push_back(std::move(r));
             break;
