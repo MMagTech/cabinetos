@@ -46,6 +46,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <array>
 #include <cerrno>
 #include <chrono>
@@ -125,10 +126,10 @@ struct Remote {
     // The Remote's last status report (0x20), answered from while it is off.
     std::vector<uint8_t> lastStatus;
     // EVERY OTHER SETUP COMMAND THE GAME SENT, in order: the camera (0x13, 0x1a,
-    // registers 0xB0..), the speaker (0x14, 0x19, 0xA2..), the extension and
-    // MotionPlus (0xA4.., 0xA6..). A Remote switched off forgets all of it;
-    // reattach sends it again. The encryption the bridge answers itself never
-    // reached the Remote and is not here.
+    // registers 0xB0..), the extension and MotionPlus (0xA4.., 0xA6..). A
+    // Remote switched off forgets all of it; reattach sends it again. The
+    // encryption the bridge answers itself never reached the Remote and is not
+    // here. Nor is the speaker: see isSetup.
     std::vector<std::vector<uint8_t>> setup;
 };
 
@@ -148,23 +149,39 @@ void sentOurs(Remote& r, const uint8_t* d, size_t n) {
     r.swallowUntil = std::chrono::steady_clock::now() + std::chrono::seconds(1);
 }
 
+// NOT THE SPEAKER (0x14, 0x19, registers 0xA2..). A game sets the speaker up
+// again before every sound, so there is nothing to put back. Remembered, its
+// writes filled the whole list: Wii Sports sends a dozen per sound, each with
+// different leftover bytes after the data, so none matched an earlier one, and
+// the camera and Nunchuk setup was pushed out. A Remote that came back then
+// had its motion half set up, and the player swung on his own (A9 2026-10-06,
+// #276). Dolphin passes these with its speaker setting off too; only the sound
+// itself (0x18) is turned into rumble.
 bool isSetup(const uint8_t* d, size_t n) {
     if (n < 2) return false;
     switch (d[0]) {
-        case 0x13: case 0x14: case 0x19: case 0x1a: return true;
+        case 0x13: case 0x1a: return true;
         case 0x16: {
             if (n < 7 || !(d[1] & 0x04)) return false;
             const uint8_t space = d[2];
-            return space == 0xa2 || space == 0xa4 || space == 0xa6 || space == 0xb0;
+            return space == 0xa4 || space == 0xa6 || space == 0xb0;
         }
         default: return false;
     }
 }
 
+// The bytes that mean something: a memory write's are its header and its
+// data, not the leftovers in the rest of its 16-byte field.
+size_t meaningful(const std::vector<uint8_t>& c) {
+    if (c.size() >= 6 && c[0] == 0x16) return std::min(c.size(), size_t{6} + c[5]);
+    return c.size();
+}
+
 void remember(Remote& r, const uint8_t* d, size_t n) {
     std::vector<uint8_t> cmd(d, d + n);
+    const size_t m = meaningful(cmd);
     for (auto it = r.setup.begin(); it != r.setup.end(); ++it)
-        if (*it == cmd) {
+        if (meaningful(*it) == m && std::equal(it->begin(), it->begin() + m, cmd.begin())) {
             r.setup.erase(it);   // the same command again: keep only its latest place
             break;
         }

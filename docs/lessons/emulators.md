@@ -365,6 +365,19 @@ Read before working on a core, an emulator, input, saves or states.
   launch. Read every option's default from the source, not only the ones
   that sound like picture settings.
 
+- **A COPY'S SPEAKER CAN WORK AND STILL NOT WORK IN GAMES.** The TechKen
+  Remotes played test tones set up as WiiBrew documents, and froze within two
+  seconds of the setup Wii games actually send (#276). Test with the game's own
+  bytes, read off `btmon`, not with the documented ones. And Dolphin's
+  `WiimoteEnableSpeaker` is off by default, so no Remote speaker gets sound in
+  RetroArch or Batocera either: before chasing a missing sound, read which
+  setting turns it into something else (`WiimoteReal.cpp` makes it rumble).
+
+- **A LIST KEPT FOR REPLAY MUST HOLD ONLY WHAT NEEDS REPLAYING.** The bridge
+  kept the speaker's per-sound commands as Remote setup, they filled its list,
+  and the motion setup fell off the end. Nothing failed until a Remote dropped
+  in a game.
+
 ## Wii U (Cemu)
 
 - **CEMU PLAYS NO SOUND WHEN ITS OUTPUT DEVICE IS EMPTY, AND SAYS NOTHING.**
