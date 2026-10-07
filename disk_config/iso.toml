@@ -33,7 +33,7 @@ chvt 8
 # The installer has no `clear`. Its only console font is 8x16, which is tiny
 # on a television, so it is drawn at double size on any screen 1600 wide or
 # more (the fb size is "width,height").
-cls() { printf '\033[2J\033[H\n\n'; }
+cls() { printf '\\033[2J\\033[H\\n\\n'; }
 width=$(cut -d, -f1 /sys/class/graphics/fb0/virtual_size 2>/dev/null)
 [ "${width:-0}" -ge 1600 ] && setfont -d -C "$tty" Lat2-Terminus16 2>/dev/null
 cls
@@ -135,6 +135,12 @@ passwd --lock cabinet
 bootc switch --mutate-in-place --transport registry ghcr.io/mmagtech/cabinetos:latest
 %end
 """
+
+# The stick's name, which a computer shows when it is plugged in, and which the
+# installer finds itself by. bootc-image-builder's default is
+# "Container-Installer-x86_64". Letters, digits, "-" and "_" only.
+[customizations.iso]
+volume_id = "CabinetOS"
 
 # The installer's screens. bootc-image-builder always enables Users, Services,
 # Security, Network, Payloads, Runtime and Storage, and a module in `disable`
