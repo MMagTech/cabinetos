@@ -6477,6 +6477,22 @@ someone else. The tracked obligations are:
 
 `build_files/enable-ssh.sh` carries the same warning next to the code.
 
+**PAID 2026-10-07 (#134): Developer access, a switch, and one image for
+everyone.** The plan above, a toggle that closes SSH by default, had drifted
+into "a shipping image without the development shell" and a separate
+development image. MMagTech put it back: *"one install for everyone... file
+access and SSH were off by default. And if someone wanted to help with
+development, they could... turn that setting on... when they turn it on,
+they now are a developer. Same install."* So: Settings, System, **Developer
+access**, off by default, and off means nothing listens on 2222
+(`cabinetos-developer.service`, started and stopped by the switch, enabled
+nowhere; `build.sh` fails an image that enables it or brings back
+`cabinetos-dev-ssh.service` or the DEVELOPMENT-IMAGE marker). On gives the
+full command line, with File access's password or a key. docs/SETTINGS.md,
+System. **What forced it now:** a console installed fresh from the new
+installer (open question 5) had no key, so the reference console, once
+reinstalled, could not have been reached at all.
+
 ### 9. How a person reaches their own files, and how it authenticates
 **Raised: Phase 1 as "how is developer mode revealed". ANSWERED 2026-09-19 by
 MMagTech, and the answer made the question smaller.**

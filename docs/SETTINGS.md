@@ -72,6 +72,7 @@ status here to Built.
   - Sign out and Change server address
   - Adding an account, and removing one
   - File access (turning it on, making a new password)
+  - Developer access (turning it on, making a new password)
 
   Open to everyone: sounds, system update. **Picture quality**, with a PIN
   set, is seen only by the owner, in Settings and the pause menu, and
@@ -436,8 +437,10 @@ Decided with MMagTech 2026-09-26, from the things people will actually do.
     9's mDNS half is answered by the base.
   - **Ports, MMagTech 2026-09-25:** port 22 is File access (password, SFTP,
     chrooted, listening only while on); **the development shell moved to
-    port 2222**, key only, on development images only
-    (`cabinetos-dev-ssh.service`). sshd cannot tell a key login from a
+    port 2222**, then key only and always on, on development images only
+    (`cabinetos-dev-ssh.service`). **Since 2026-10-07 port 2222 is Developer
+    access** (System, below): off until switched on, the same password or a
+    key. sshd cannot tell a key login from a
     password login in a Match block, so the port is the line between the
     two uses of one account. SELinux allows sshd only port 22, so 2222 is
     labelled at boot by the unit itself (a label in the image would not
@@ -679,6 +682,28 @@ Decided with MMagTech 2026-09-26, from the things people will actually do.
   first screen (#223): pressing it (PIN if set) puts "Switch to Steam" back in
   the Start menu and the row goes. Odd company for System update, and the
   least odd place (MMagTech, 2026-10-03). **Built on `steam-handoff`.**
+
+- **Developer access** (#134; decided with MMagTech 2026-10-07, built on
+  `developer-access`): **one row**, "Developer access", "SSH" under it, On
+  or Off, after Check for updates. The full command line over SSH, port
+  2222, user `cabinet`: "when they turn it on, they now are a developer.
+  Same install." **One image for everyone**: there is no development image
+  any more, and nothing listens on 2222 until this is turned on.
+  - **Off by default, and off means `cabinetos-developer.service` is not
+    running**: the port is closed, not filtered. Turning it off also ends
+    every session it started. On is remembered through restarts, as File
+    access is, until it is turned off.
+  - **The password is File access's** (one password, shown in one place;
+    MMagTech: the people using this are technical, and turn each off when
+    done). A key works too. Turning it on asks for the PIN; the panel opens
+    by itself: the address and `<hostname>.local`, "Port 2222", "User name
+    cabinet", "Password XXXX-XXXX", then **Done**, **New password**,
+    **Turn off**. **New password** changes File access's too.
+  - **After a fresh install** a console has no key on it: turn this on and
+    copy a key over once with the password,
+    `ssh-copy-id -p 2222 cabinet@<hostname>.local`.
+  - `cabinet` is in `wheel`, so the password is also sudo's: full access is
+    what this switch is for.
 
 ## About
 

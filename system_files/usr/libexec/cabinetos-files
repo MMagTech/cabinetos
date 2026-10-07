@@ -4,13 +4,19 @@
 #
 #   cabinetos-files on        the password, the folder view, port 22 open
 #   cabinetos-files off       port 22 closed, the view taken down
-#   cabinetos-files newpass   a new password (and applied, if on)
+#   cabinetos-files newpass   a new password (and applied, if either is on)
 #   cabinetos-files refresh   the drive folders rebuilt, after a drive came
 #                             or went (ExecReload; the session asks, if on)
+#   cabinetos-files password  the password made if need be, and applied:
+#                             Developer access's start (port 2222)
 #
-# Run only by cabinetos-files.service (on as ExecStart, off as ExecStop) and
-# cabinetos-files-password.service, which the session starts and stops
-# through 62-cabinetos-files.rules.
+# Run only by cabinetos-files.service (on as ExecStart, off as ExecStop),
+# cabinetos-files-password.service and cabinetos-developer.service, which
+# the session starts and stops through 62-cabinetos-files.rules.
+#
+# ONE PASSWORD FOR BOTH (MMagTech, 2026-10-07). Developer access, the full
+# command line on port 2222, takes the same password, shown in the same
+# place; the state file below is File access's alone.
 #
 # WHAT A COMPUTER SEES is /run/cabinetos-files, the chroot the port 22 rules
 # in /etc/ssh/sshd_config.d/30-cabinetos.conf lock `cabinet` into: the
@@ -212,15 +218,25 @@ case "${OP}" in
     newpass)
         rm -f "${PASS}"
         ensure_password || fail "Couldn't make a password"
-        # The account's password only changes while File access is on; off,
-        # the new one is applied the next time it is turned on.
+        # The account's password only changes while File access or Developer
+        # access is on; both off, the new one is applied the next time either
+        # is turned on.
         if systemctl is-active -q cabinetos-files.service; then
             apply_password || fail "Couldn't set the password"
             say state=on
+        elif systemctl is-active -q cabinetos-developer.service; then
+            apply_password || exit 1
         fi
         ;;
+    password)
+        # Developer access's ExecStartPre. A failure stops that unit from
+        # starting (which the session shows); File access's state is not
+        # touched, so this never says anything about port 22.
+        ensure_password || exit 1
+        apply_password || exit 1
+        ;;
     *)
-        echo "usage: cabinetos-files on|off|newpass|refresh" >&2
+        echo "usage: cabinetos-files on|off|newpass|refresh|password" >&2
         exit 2
         ;;
 esac

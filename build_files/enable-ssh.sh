@@ -1,44 +1,30 @@
 #!/usr/bin/env bash
 #
 # ===========================================================================
-#  SSH IS ENABLED BY DEFAULT IN THIS IMAGE. THAT IS DELIBERATE, AND TEMPORARY.
+#  SSH IS INSTALLED, AND NOTHING LISTENS UNTIL SOMEONE AT THE TV SAYS SO.
 # ===========================================================================
 #
-# Phases 2 through 5 consist of booting images and finding out why they did not
-# behave as expected. Doing that without a shell is a different and much worse
-# project. Contribution has the same requirement. So `sshd` is on from Phase 1.
+# ONE IMAGE FOR EVERYONE (MMagTech, 2026-10-07; issue #134). There is no
+# separate development image any more. Two switches, both off by default, and
+# off means the program that would answer is not running:
 #
-# This is correct for a development artifact and WRONG for a console handed to
-# somebody else.
+#   File access        Settings, Storage. Port 22: SFTP to the saves and
+#                      games folders only, a password shown on the TV.
+#   Developer access   Settings, System. Port 2222: the full command line,
+#                      the same password (or a key). "When they turn it on,
+#                      they now are a developer. Same install."
 #
-# WHAT PHASE 6 DOES ABOUT IT CHANGED ON 2026-09-19, and this list is shorter
-# than the one it replaces. MMagTech's call, and the reasoning is his:
-# **most people will never use this, and most of them would not want it on.**
-# So the console ships closed and the people who want it turn it on.
+# Until 2026-10-07 every image was a development image: the shell on 2222 was
+# always on, key only, and a DEVELOPMENT-IMAGE marker said so. That is gone.
+# Why it changed: a console installed fresh from the new installer (#107) has
+# no key, so it could not be reached at all; and a console handed to anyone
+# else must listen to nothing until its owner turns something on.
 #
-# PHASE 6 MUST:
-#   1. Flip the default to off. A console ships listening to nothing.
-#   2. Put it behind an ORDINARY, VISIBLE row in Settings — not the hidden
-#      developer-mode toggle this file used to call for. Reaching your own
-#      saves is a feature, not a developer act; hiding it only stops the
-#      people who need it from finding it.
-#   3. Turn it on and the screen shows the address, the user name and a
-#      password THIS MACHINE generated for itself. Different on every console,
-#      and nothing published contains it. Turn it off and sshd stops.
-#   4. The switch gives FILE ACCESS, not a shell. "Copy my saves off" and
-#      "give me a root shell" are different asks with very different risk, and
-#      only the first is something a console should offer in Settings.
-#
-# A SHELL STAYS ON THE DEVELOPMENT IMAGE, which is this script and the marker
-# it writes. That distinction already exists in the build; Phase 6 uses it
-# rather than inventing a second one.
-#
-# Until then, do not install CabinetOS on a machine exposed to an untrusted
-# network. See docs/PROJECT.md, open questions 8 and 9, which are ANSWERED.
+# See docs/PROJECT.md, open questions 8 and 9, and docs/SETTINGS.md.
 
 source /ctx/lib.sh
 
-group_start "Enabling SSH for development"
+group_start "SSH: installed, off until switched on"
 
 # openssh-server should already be present on the Fedora Atomic base. Installed
 # explicitly anyway, so that this does not silently become a no-op if a future
@@ -50,27 +36,20 @@ else
     dnf5 -y install openssh-server
 fi
 
-# TWO SSHDS, ONE PER PORT, as of 2026-09-25 (File access, docs/SETTINGS.md,
-# Storage; the rules are /etc/ssh/sshd_config.d/30-cabinetos.conf).
+# TWO SSHDS, ONE PER PORT, both off at boot:
 #
-#   cabinetos-dev-ssh.service   port 2222, key only, a shell. Enabled here,
-#                               and it only runs on an image carrying the
-#                               DEVELOPMENT-IMAGE marker written below.
 #   sshd.service                port 22, File access: SFTP only, a password.
-#                               NOT enabled. /usr/libexec/cabinetos-files
-#                               starts it when File access is turned on in
-#                               Settings and stops it when it is turned off.
-#
-# THE DEVELOPMENT SHELL MOVED FROM 22 TO 2222 HERE. Anything that reached a
-# console with `ssh cabinet@<address>` now needs `-p 2222`, or a Host entry
-# with `Port 2222`. Port 22 answers only while File access is on, and then
-# with SFTP and nothing else.
+#                               /usr/libexec/cabinetos-files starts it when
+#                               File access is turned on, stops it when off.
+#   cabinetos-developer.service port 2222, Developer access: a shell, the
+#                               same password or a key. The session starts
+#                               and stops it by name.
 #
 # sshd.socket is disabled too: socket activation would open 22 on its own,
-# which is the one thing File access being off promises it is not.
-systemctl disable sshd.service sshd.socket >/dev/null 2>&1 || true
-systemctl enable cabinetos-dev-ssh.service
-log "sshd.service off until File access; cabinetos-dev-ssh.service on (port 2222)"
+# which is the one thing File access being off promises it is not. Nothing
+# is enabled here; build.sh fails the image if any of the three is.
+systemctl disable sshd.service sshd.socket cabinetos-developer.service >/dev/null 2>&1 || true
+log "sshd.service off until File access; cabinetos-developer.service off until Developer access"
 
 # SFTP, so a frontend build can be pushed to a running console without
 # reflashing it. Fedora's sshd_config enables the sftp subsystem by default;
@@ -82,22 +61,5 @@ else
     log "ERROR: no sftp Subsystem line found in the sshd configuration"
     exit 1
 fi
-
-# A marker file, so a running machine can be checked for this without reading
-# the image's build log. Phase 6 removes both the marker and this script.
-mkdir -p /usr/share/cabinetos
-cat > /usr/share/cabinetos/DEVELOPMENT-IMAGE <<'MARKER'
-This CabinetOS image has SSH enabled by default, with a shell.
-
-That is deliberate for Phases 1-5, which are developed by booting images and
-inspecting them. It is NOT the shipping configuration.
-
-A shipping console starts with this switched off and offers it as an ordinary
-row in Settings: file access over SFTP, no shell, and a password the machine
-generates for itself and shows on screen. A shell is a development thing and
-stays on images carrying this file.
-
-Do not install this image on a machine exposed to an untrusted network.
-MARKER
 
 group_end
