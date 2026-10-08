@@ -59,8 +59,9 @@ session picks up is `docs/NEXT-SESSION.md`.
    across Wii games (#274), the installer down to one question (#105 to #107,
    #136; what the ISO builder cannot change is #284, after first release) and
    Developer access, one image for everyone (#134). The Nintendo DS stays
-   (#248). Next: Remote Play (#286, MMagTech 2026-10-07: before the first
-   release; a feasibility test on the A9 first), signed images (#135),
+   (#248). Remote Play, at home and away through Tailscale (#286, pull
+   request #292). Next: the controller battery on Home (#293, MMagTech
+   2026-10-08: a feature, so before the release), signed images (#135),
    CabinetOS named in the system's version info (#137), licences checked and
    shipped (#120).
 8. **Testing at the TV.** The release gate: covers and art on the TV (#112), a
