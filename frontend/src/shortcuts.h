@@ -30,6 +30,8 @@ void setEnabled(bool on);
 
 // Whether this pad's shortcut button is down now.
 bool held(SDL_Gamepad* gp);
+// Whether `b` is that pad's shortcut button, as SDL names it.
+bool isShortcut(SDL_Gamepad* gp, SDL_GamepadButton b);
 
 // What the button is called, for the Settings row: "Home", "Select",
 // "L3", or "Button 3" for one the mapping does not name.

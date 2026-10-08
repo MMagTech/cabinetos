@@ -16228,6 +16228,20 @@ DISCONNECTED", and the console, reading the old log when Streaming came back
 on, believed a device was streaming and set the TV's controllers aside with
 nobody playing. A newly started Sunshine now starts from "nobody streaming".
 
+**Pausing from a phone.** Holding Select did not open the menu in a PS3
+game. Recorded on the A9: Sunshine lets go of Select and presses Home in the
+same instant, and the path for emulators that run as programs of their own
+read Select's release with Home already down, then counted Home's own press
+as a second button (a shortcut, not a tap). Built-in games read the buttons
+per frame and never saw it. Fixed for every pad: the shortcut button's own
+press is not a second button. And with in-game shortcuts off (the default)
+Home opens nothing anywhere, which left a phone on touch controls no way to
+pause; **a streaming device's Home now always opens the menu**, every system
+(MMagTech, 2026-10-08). **Sunshine's priority:** it keeps its capabilities on
+one or two threads and drops them elsewhere, so the sound and video threads'
+requests for priority were refused on every stream; `LimitNICE=-15` in the
+unit lets any of its threads go that far.
+
 **Found on the way.** The pause menu closed itself when a pad came back
 (it left with Home held, being switched off); fixed for every pad. Steam's
 session picks 4K 120 Hz HDR on the LG C1 and the TV stays black: #290.

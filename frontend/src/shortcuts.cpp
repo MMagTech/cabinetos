@@ -90,6 +90,12 @@ bool held(SDL_Gamepad* gp) {
     return SDL_GetGamepadButton(gp, SDL_GAMEPAD_BUTTON_GUIDE);
 }
 
+bool isShortcut(SDL_Gamepad* gp, SDL_GamepadButton b) {
+    if (!gp) return false;
+    const int raw = chosen(gp);
+    return raw >= 0 ? mappedTo(gp, raw) == b : b == SDL_GAMEPAD_BUTTON_GUIDE;
+}
+
 std::string label(SDL_Gamepad* gp) {
     if (!gp) return "";
     const int raw = chosen(gp);

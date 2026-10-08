@@ -27,6 +27,13 @@ Environment=HOME=/var/lib/cabinetos/remoteplay
 Environment=XDG_RUNTIME_DIR=/run/user/1000
 Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus
 AmbientCapabilities=CAP_SYS_ADMIN CAP_SYS_NICE
+# AND A NICE LIMIT, because the capability is not enough: Sunshine keeps its
+# capabilities on the one or two threads that need them and drops them on the
+# rest, and the threads that raise their priority for sound and video are
+# among the rest ("setpriority failed for nice -15: Permission denied" on
+# every stream, under this unit, A9 2026-10-08). With the limit any of its
+# threads may go as far as -15, the most it asks for.
+LimitNICE=-15
 ExecStartPre=/usr/libexec/cabinetos-remoteplay prepare
 ExecStart=/usr/bin/sunshine /var/lib/cabinetos/remoteplay/.config/sunshine/sunshine.conf
 # Switched off mid-stream, Sunshine never runs the entry's "undo", so the

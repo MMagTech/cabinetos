@@ -13785,11 +13785,22 @@ int main(int argc, char** argv) {
                         }
                         SDL_Gamepad* gp = players::gamepad(p);
                         const bool shortcut = gp && shortcuts::held(gp);
-                        if (p >= 0 && p < cab::vpad::kMaxPlayers && shortcuts::enabled()) {
+                        // A streaming device's Home always opens the menu, as
+                        // in the built-in path (players::streaming()).
+                        if (p >= 0 && p < cab::vpad::kMaxPlayers &&
+                            (shortcuts::enabled() || players::streaming())) {
                             auto& sh = standaloneShortcut[p];
                             if (sh.down && sh.pad != e.gbutton.which) sh = {};
+                            // THE SHORTCUT BUTTON'S OWN PRESS IS NOT A
+                            // SECOND BUTTON. Sunshine's hold-Select-for-Home
+                            // lets go of Select and presses Home in the same
+                            // instant, so the hold began on Select's release
+                            // (Home already down) and Home's own press then
+                            // counted as a combination: no menu (MMagTech's
+                            // phone in a PS3 game, 2026-10-08).
                             if (shortcut && !sh.down) sh = {true, false, e.gbutton.which};
-                            else if (shortcut && down) sh.used = true;
+                            else if (shortcut && down && !shortcuts::isShortcut(gp, b))
+                                sh.used = true;
                             if (!shortcut && sh.down) {
                                 const bool tap = !sh.used;
                                 sh = {};
@@ -14680,7 +14691,16 @@ int main(int argc, char** argv) {
                 // back until let go, the way the menu's buttons are (#103).
                 // A tap opens the pause menu, or closes it. Shortcuts do
                 // nothing while the menu is up, but still count as a hold.
-                if (SDL_Gamepad* gp = players::gamepad(p); gp && shortcuts::enabled()) {
+                // WHILE A DEVICE STREAMS, ITS HOME ALWAYS OPENS THE MENU,
+                // switch or not: a phone's touch controls cannot click both
+                // sticks, and holding Select is Home there (Sunshine's
+                // back_button_timeout), so it is the one way to pause from any
+                // app (MMagTech, 2026-10-08). The shortcuts themselves stay
+                // the switch's. The pads seated during a stream are only the
+                // stream's, so nothing changes at the TV.
+                const bool combos = shortcuts::enabled();
+                if (SDL_Gamepad* gp = players::gamepad(p);
+                    gp && (combos || players::streaming())) {
                     ShortcutHold& h = shortcutHold[p];
                     const SDL_JoystickID who = SDL_GetGamepadID(gp);
                     if (h.down && h.pad != who) h = {};
@@ -14689,11 +14709,11 @@ int main(int argc, char** argv) {
                     // not a tap that opens the menu on its release.
                     if (down && !h.down) h = {true, stateHoldJustEnded, st.buttons, who};
                     if (h.down) {
-                        if (down && (st.buttons & bit(cab::R2)) && !overlayOpen && !stateHold &&
-                            !stateHoldWaiting)
+                        if (combos && down && (st.buttons & bit(cab::R2)) && !overlayOpen &&
+                            !stateHold && !stateHoldWaiting)
                             fastForward = true;
-                        if (down && (st.buttons & bit(cab::L2)) && !overlayOpen && !stateHold &&
-                            !stateHoldWaiting)
+                        if (combos && down && (st.buttons & bit(cab::L2)) && !overlayOpen &&
+                            !stateHold && !stateHoldWaiting)
                             rewinding = true;
                         const uint32_t fresh = st.buttons & ~h.before;
                         h.before = st.buttons;
@@ -14701,12 +14721,12 @@ int main(int argc, char** argv) {
                             h.used = true;
                             // The screenshot shortcut works in the pause menu too,
                             // on the paused frame. Nothing else does there.
-                            if (overlayOpen && !powerMenu && (fresh & bit(cab::Y))) {
+                            if (combos && overlayOpen && !powerMenu && (fresh & bit(cab::Y))) {
                                 std::fprintf(stderr,
                                              "[shortcuts] player %d: screenshot, paused\n", p + 1);
                                 screenshotNow(session, uploader, menuNotice);
                             }
-                            if (!overlayOpen && !stateHold && !stateHoldWaiting) {
+                            if (combos && !overlayOpen && !stateHold && !stateHoldWaiting) {
                                 const bool save = fresh & bit(cab::R);
                                 const bool load = !save && (fresh & bit(cab::L));
                                 if (!save && !load && (fresh & bit(cab::Y))) {

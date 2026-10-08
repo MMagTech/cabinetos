@@ -353,6 +353,12 @@ in a testing image.
 - **Set by us, never shown:** VA-API encoding, hold Select for Home (for a
   client with no Home button), sound to the device streaming, the one entry
   "CabinetOS" with its own tile, gamescope composing while a session is open.
+- **Home from a streaming device always opens the pause menu**, whether
+  in-game shortcuts are on or off (MMagTech, 2026-10-08): a phone's touch
+  controls cannot click both sticks, and holding Select is Home there, so it
+  is the one way to pause from any app. Every system, built-in or a program
+  of its own. The shortcuts themselves stay the switch's; at the TV nothing
+  changes.
 - **The handover** (MMagTech, 2026-10-07). A device connecting takes the
   players, its controllers 1, 2... in the order they came; the console's own
   are set aside, menus included. When it leaves, or drops, the console's
