@@ -16051,10 +16051,22 @@ int main(int argc, char** argv) {
                 // output size: read here, before `dh` means the picture.
                 const float physPerPoint =
                     dh > 0 ? static_cast<float>(dh) / ui::kCanvasHeight : 1.0f;
-                const float dh = shownRows * scale;
-                const float dw = dh * shownAspect;
-                const float px = (ui::kCanvasWidth - dw) * 0.5f;
-                const float py = (ui::kCanvasHeight - dh) * 0.5f;
+                // ON WHOLE SCREEN PIXELS, edges and size. A screen look is
+                // drawn at a whole number of pixels and put on screen nearest
+                // texel to pixel; a rectangle a fraction wider or off by half
+                // a pixel repeated one column to make up the difference. On
+                // the TV that is invisible, but it moved a CRT mask by one
+                // pixel from there on, and Remote Play's shrink of the 4K
+                // picture turned the shift into a green left half and a
+                // purple right one, split at column 1924 (Double Dragon,
+                // crt-easymode, 2026-10-07, #286).
+                auto snap = [physPerPoint](float v) {
+                    return std::round(v * physPerPoint) / physPerPoint;
+                };
+                const float dh = snap(shownRows * scale);
+                const float dw = snap(shownRows * scale * shownAspect);
+                const float px = snap((ui::kCanvasWidth - dw) * 0.5f);
+                const float py = snap((ui::kCanvasHeight - dh) * 0.5f);
                 // Where the picture actually sits in that texture. A
                 // software core answers "all of it, the right way up"; a
                 // hardware core answers a corner of a larger target with its
