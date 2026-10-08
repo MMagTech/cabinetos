@@ -177,7 +177,10 @@ grep -q '^u cabinet ' /usr/lib/sysusers.d/cabinetos.conf || {
 # cannot complete first run at all (open question 15b's one hard gate), and one
 # that cannot pair a controller finishes setup owning a games console nobody can
 # play from a sofa.
-for needed in /usr/bin/nmcli /usr/bin/pkcheck /usr/bin/bluetoothctl; do
+# tailscale and tailscaled: Remote Play away from home (#286) runs the
+# command and starts the daemon. Bazzite's, like the three above.
+for needed in /usr/bin/nmcli /usr/bin/pkcheck /usr/bin/bluetoothctl /usr/bin/tailscale \
+              /usr/sbin/tailscaled; do
     if [[ -x "${needed}" ]]; then
         log "present: ${needed} ($(rpm -qf "${needed}" 2>/dev/null || echo 'unowned'))"
     else

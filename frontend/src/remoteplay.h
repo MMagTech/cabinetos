@@ -44,7 +44,15 @@ struct Request {
 };
 
 // Start or stop asking Sunshine. While on, a thread asks every two seconds.
-void watch(bool on);
+//
+// `fresh` when Sunshine has only just been started (the switch turned on):
+// nothing is streaming yet, and the log already there is the last Sunshine's.
+// Read as current, a stream switched off mid-way (no "CLIENT DISCONNECTED"
+// written) looked like a device still streaming, and the console set its own
+// controllers aside with nobody playing (A9, 2026-10-08). Without it (the
+// console starting under a running Sunshine, back from Steam), the log is read
+// from its start, which is how a stream already open is found.
+void watch(bool on, bool fresh = false);
 
 // WHETHER A DEVICE IS STREAMING NOW: Sunshine's own "CLIENT CONNECTED" and
 // "CLIENT DISCONNECTED" lines, read from its log as they are written. Sunshine

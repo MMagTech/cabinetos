@@ -462,12 +462,20 @@ public:
     // Before the server has answered, and again if it never does.
     void setBusy(bool on);
     void setError(const std::string& err);
+    // THE SAME SCREEN SIGNS THE CONSOLE IN TO TAILSCALE (#286): a link to
+    // approve on a phone, as adding an account is. Its own title and line;
+    // adding an account keeps the ones below.
+    void setText(std::string title, std::vector<std::string> lines, std::string busy);
 
     void tick(float dt);
     Result key(Nav n);
     void draw(Ctx& c);
 
 private:
+    std::string title_ = "Add an account";
+    std::vector<std::string> lines_ = {"Sign in as the person you are adding,",
+                                       "not as yourself."};
+    std::string busyLine_ = "Getting a code\xE2\x80\xA6";
     std::string url_;
     std::string code_;
     std::string error_;

@@ -1,4 +1,5 @@
-// Let the console turn its own Remote Play on and off. Nothing else.
+// Let the console turn its own Remote Play, and its Tailscale, on and off.
+// Nothing else.
 //
 // Sunshine runs as cabinetos-remoteplay.service, a system unit so it can be
 // given the capability to read the display (see the unit). The session runs
@@ -13,7 +14,10 @@ polkit.addRule(function(action, subject) {
         subject.user != "cabinet" || !subject.local) {
         return polkit.Result.NOT_HANDLED;
     }
-    if (action.lookup("unit") == "cabinetos-remoteplay.service" &&
+    // Tailscale, for playing away from home, goes with it: on only while
+    // Streaming is on (tailscaled.service.d/50-cabinetos.conf).
+    var unit = action.lookup("unit");
+    if ((unit == "cabinetos-remoteplay.service" || unit == "tailscaled.service") &&
         (action.lookup("verb") == "start" || action.lookup("verb") == "stop")) {
         return polkit.Result.YES;
     }

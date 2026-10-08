@@ -98,6 +98,7 @@
 #include "look.h"
 #include "prefs.h"
 #include "remoteplay.h"
+#include "tailscale.h"
 #include "optcheck.h"
 #include "quality.h"
 #include "screenfx.h"
@@ -7100,7 +7101,7 @@ int main(int argc, char** argv) {
     // over whatever was behind it, and the player is a cover over that — which
     // is what makes quitting a game return to the launch screen and backing out
     // again return to the browsing.
-    enum class Screen { Home, Library, Grid, Detail, Search, AddAccount, Settings };
+    enum class Screen { Home, Library, Grid, Detail, Search, AddAccount, TailscaleSignIn, Settings };
     std::vector<Screen> stack{Screen::Home};
     // Which screen last set the room, so a change of screen can be told apart
     // from focus moving within one. See the backdrop block in the frame loop.
@@ -7119,6 +7120,13 @@ int main(int argc, char** argv) {
     screens::SearchScreen searchScreen;
     screens::AccountScreen accountScreen;
     screens::AddAccountScreen addAccountScreen;
+    // Signing the console in to Tailscale (#286): the same screen, a link to
+    // approve on a phone. The one line is the constraint that matters: the
+    // account has to be the one the phone uses, or the two never meet.
+    screens::AddAccountScreen tsSignInScreen;
+    tsSignInScreen.setText("Sign in to Tailscale",
+                           {"Use the Tailscale account", "your phone is signed in to."},
+                           "Getting a link\xE2\x80\xA6");
     screens::SettingsScreen settingsScreen;
     // What the docked keyboard held last frame, so the query is re-run when it
     // changes and not sixty times a second when it does not.
@@ -8792,7 +8800,7 @@ int main(int argc, char** argv) {
                      SetDarkHours, SetColour, SetRumble, SetPictureQuality,
                      SetWiiRemotes, SetSteam, SetSteamShow, SetRetroAchievements,
                      SetAchievementSound, SetDeveloper, SetVersion, SetRemotePlay,
-                     SetPairedDevices };
+                     SetPairedDevices, SetTailscale };
     // One Eject row per USB drive: this plus the drive's index in
     // storage::locations() when the rows were built.
     constexpr int kSetEject = 100;
@@ -9047,6 +9055,26 @@ int main(int argc, char** argv) {
         else std::fprintf(stderr, "[remoteplay] could not turn on at start: %s\n", why.c_str());
     }
     remoteplay::watch(rpWant);
+    // TAILSCALE, for Remote Play away from home (tailscale.h says why it is
+    // the one way in from outside). tailscaled.service runs only while
+    // Streaming AND Tailscale are on; turning Streaming off stops it too, and
+    // turning Streaming on starts it again when Tailscale was on. Signed in
+    // or not is remembered as well, so a console turned off can still say
+    // "Disconnected" (signed in, not running) rather than "Off" (never).
+    constexpr const char* kTsUnit = "tailscaled.service";
+    bool tsWant = prefs::get("tailscale", "off") == "on";
+    bool tsSignedIn = prefs::get("tailscale_signed_in", "no") == "yes";
+    int tsSeen = -1;            // tailscale::generation() the rows were built from
+    bool tsSigningIn = false;   // the sign-in screen is up, `tailscale up` running
+    bool tsShownLink = false;   // its link is on the screen
+    bool tsLoggingOut = false;  // `tailscale logout` running on its worker
+    std::thread tsWorker;
+    std::atomic<bool> tsWorkerDone{false};
+    if (rpWant && tsWant && unit::state(kTsUnit) != "active") {
+        std::string why;
+        if (!unit::start(kTsUnit, &why))
+            std::fprintf(stderr, "[tailscale] could not turn on at start: %s\n", why.c_str());
+    }
     // A REMOTE PLAY SESSION ALREADY OPEN when the console starts (it was
     // restarted under one: back from Steam, a crash) needs gamescope composing
     // again, or the next device to connect streams a black picture: the
@@ -9650,6 +9678,67 @@ int main(int argc, char** argv) {
         return out;
     };
 
+    // THE TAILSCALE ROW (#286), under Streaming and greyed while it is off.
+    // Its value is the address to give Moonlight; its second line is the
+    // console's name there and when its sign-in ends. MMagTech, 2026-10-08.
+    // "Sign in again" is offered for the last two weeks only.
+    constexpr int64_t kTsWarnDays = 14;
+    auto tsEndsSoon = [&](const tailscale::Status& st) {
+        return st.expires != 0 && st.expires - std::time(nullptr) < kTsWarnDays * 86400;
+    };
+    auto tailscaleRow = [&](bool streaming, bool inUse) {
+        using K = screens::SettingsRow::Kind;
+        const tailscale::Status st = tailscale::last();
+        tsSeen = tailscale::generation();
+        const int64_t ended = std::atoll(prefs::get("tailscale_expires", "0").c_str());
+        std::string detail, value;
+        auto dayOf = [](int64_t when) {
+            char day[32] = "";
+            const std::time_t t = static_cast<std::time_t>(when);
+            std::tm tm{};
+            localtime_r(&t, &tm);
+            std::strftime(day, sizeof day, "%d %b %Y", &tm);
+            return std::string(day[0] == '0' ? day + 1 : day);
+        };
+        if (!streaming) {
+            value = "Off";
+        } else if (tsLoggingOut) {
+            value = "Logging out\xE2\x80\xA6";
+        } else if (!tsWant) {
+            // Signed in but not running: Connect brings it back, no sign-in.
+            value = tsSignedIn ? "Disconnected" : "Off";
+        } else if (unit::state(kTsUnit) == "failed") {
+            value = "Couldn't start";
+        } else if (st.state == "Running") {
+            detail = st.name;
+            value = st.address;
+            // THE SIGN-IN ENDS (180 days by default), and the date is shown
+            // from the moment it is signed in: somebody turns Remote Play on
+            // once and rarely comes back, so that is when to see it, and set
+            // a reminder (MMagTech, 2026-10-08). None when the owner turned
+            // expiry off in Tailscale.
+            if (st.expires != 0)
+                detail += std::string(detail.empty() ? "" : " \xC2\xB7 ") + "Sign-in ends " +
+                          dayOf(st.expires);
+        } else if (st.state == "NeedsLogin" || st.state == "Stopped") {
+            // SIGNED OUT, AND WHY when it is the date passing: the one the
+            // row showed all along (kept in settings.json, since a console
+            // signed out has none to read). Otherwise it was removed some
+            // other way, Tailscale's own page, and "ended" would be wrong.
+            // The value says what pressing does (MMagTech, 2026-10-08).
+            detail = ended != 0 && ended <= std::time(nullptr) ? "Sign-in ended " + dayOf(ended)
+                                                               : "Signed out";
+            value = "Sign in again";
+        } else if (st.state == "NeedsMachineAuth") {
+            // The owner's Tailscale approves new devices by hand.
+            value = "Waiting for approval";
+        } else {
+            value = "Turning on\xE2\x80\xA6";
+        }
+        return screens::SettingsRow{streaming && !inUse ? K::Action : K::Disabled, SetTailscale,
+                                    "Tailscale", detail, value};
+    };
+
     auto buildSettings = [&]() {
         using Row = screens::SettingsRow;
         using K = Row::Kind;
@@ -9816,11 +9905,22 @@ int main(int argc, char** argv) {
             else if (!rpFailed.empty()) detail = rpFailed;
             const size_t n = remoteplay::paired().size();
             rpSeen = remoteplay::generation();
+            // WHILE A DEVICE STREAMS, THE WHOLE SECTION IS GREYED: its
+            // controller drives the console, and one press on Streaming cut
+            // the stream it was playing on (MMagTech, from his phone,
+            // 2026-10-08); Remove could do the same to the device playing.
+            // The console's own controllers are set aside during a stream, so
+            // nobody at the TV loses anything.
+            const bool streamingNow = players::streaming();
+            // "In use": a grey switch still reading On looks like a fault
+            // when the reason is on another device (MMagTech, 2026-10-08).
+            if (streamingNow) detail = "In use";
             cats.push_back({"Remote Play", {
-                {K::Toggle, SetRemotePlay, "Streaming", detail, value},
-                {on && n > 0 ? K::Action : K::Disabled, SetPairedDevices, "Paired devices", "",
+                {streamingNow ? K::Disabled : K::Toggle, SetRemotePlay, "Streaming", detail, value},
+                {on && n > 0 && !streamingNow ? K::Action : K::Disabled, SetPairedDevices,
+                 "Paired devices", "",
                  n == 0 ? "None" : std::to_string(n) + " paired"},
-                {K::Unbuilt, 0, "Tailscale", "", ""},
+                tailscaleRow(on, streamingNow),
             }});
         }
 
@@ -10282,8 +10382,58 @@ int main(int argc, char** argv) {
         }
         rpWant = on;
         prefs::set("remote_play", on ? "on" : "off");
-        remoteplay::watch(on);
+        remoteplay::watch(on, /*fresh=*/true);
         if (!on) rpAsked.clear();
+        // TAILSCALE GOES WITH IT: never running while Streaming is off, and
+        // back with Streaming when it was on.
+        if (ok && tsWant) {
+            std::string tsWhy;
+            if (!(on ? unit::start(kTsUnit, &tsWhy) : unit::stop(kTsUnit, &tsWhy)))
+                std::fprintf(stderr, "[tailscale] %s with Streaming: %s\n",
+                             on ? "could not start" : "could not stop", tsWhy.c_str());
+        }
+        buildSettings();
+    };
+    // TAILSCALE ON OR OFF: the unit, and the choice remembered. Off keeps the
+    // sign-in (Disconnected); Log out is what removes it.
+    auto setTailscale = [&](bool on) {
+        std::string why;
+        const bool ok = on ? unit::start(kTsUnit, &why) : unit::stop(kTsUnit, &why);
+        if (!ok) std::fprintf(stderr, "[tailscale] could not turn %s: %s\n", on ? "on" : "off",
+                              why.c_str());
+        tsWant = on;
+        prefs::set("tailscale", on ? "on" : "off");
+        buildSettings();
+    };
+    // SIGNING IN: the link as a QR code, approved on a phone. Leaving the
+    // screen before it is approved turns Tailscale off again (the frame loop).
+    auto openTsSignIn = [&](bool again) {
+        if (!tsWant) setTailscale(true);
+        tsSigningIn = true;
+        tsShownLink = false;
+        tsSignInScreen.open();
+        stack.push_back(Screen::TailscaleSignIn);
+        tailscale::startLogin(again);
+    };
+    // LOGGING OUT, on a worker: `tailscale logout` needs tailscaled running,
+    // so a console that is Disconnected starts it for the moment. The frame
+    // loop picks up the end and turns it off.
+    auto tsLogout = [&]() {
+        if (tsWorker.joinable()) return;
+        tsLoggingOut = true;
+        tsWorkerDone = false;
+        const bool wasRunning = tsWant;
+        tsWorker = std::thread([&, wasRunning]() {
+            std::string why;
+            if (!wasRunning) {
+                unit::start(kTsUnit, &why);
+                for (int i = 0; i < 20 && !tailscale::answers(); ++i)
+                    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            }
+            if (!tailscale::logout(&why))
+                std::fprintf(stderr, "[tailscale] log out: %s\n", why.c_str());
+            tsWorkerDone = true;
+        });
         buildSettings();
     };
     // NAMING A DEVICE: the keyboard, the current name in the field. Right after
@@ -11244,8 +11394,9 @@ int main(int argc, char** argv) {
                     }
                 } else if (res.value == SetRemotePlay) {
                     // On behind the PIN when one is set; off at once, since
-                    // off only closes things.
-                    if (rpSaidAt != 0) {
+                    // off only closes things. Never during a stream (the
+                    // row is greyed; this is for a press before it was).
+                    if (rpSaidAt != 0 || players::streaming()) {
                         sound::play(sound::Cue::Edge);
                     } else if (rpState == "active") {
                         setRemotePlay(false);
@@ -11255,9 +11406,66 @@ int main(int argc, char** argv) {
                                [&]() { setRemotePlay(true); });
                         sound::play(sound::Cue::Activate);
                     }
+                } else if (res.value == SetTailscale) {
+                    // Off: the PIN (when set), then sign in. On: Disconnect
+                    // and Log out (the PIN), and Sign in again in the last
+                    // two weeks. Disconnected: Connect and Log out.
+                    const tailscale::Status st = tailscale::last();
+                    auto confirmLogout = [&]() {
+                        askChoice("Log out of Tailscale?", "", {"Log out", "Cancel"}, 1,
+                                  [&](int k) {
+                                      if (k != 0) return;
+                                      askPin("Enter the PIN", "To log out of Tailscale",
+                                             [&]() { tsLogout(); });
+                                  });
+                    };
+                    if (tsLoggingOut || tsSigningIn || players::streaming()) {
+                        sound::play(sound::Cue::Edge);
+                    } else if (!tsWant && !tsSignedIn) {
+                        askPin("Enter the PIN", "To turn on Tailscale",
+                               [&]() { openTsSignIn(false); });
+                        sound::play(sound::Cue::Activate);
+                    } else if (!tsWant) {
+                        askChoice("Tailscale", "", {"Connect", "Log out", "Cancel"}, 0,
+                                  [&, confirmLogout](int c) {
+                                      if (c == 0)
+                                          askPin("Enter the PIN", "To turn on Tailscale",
+                                                 [&]() { setTailscale(true); });
+                                      else if (c == 1) confirmLogout();
+                                  });
+                        sound::play(sound::Cue::Activate);
+                    } else if (st.state == "Running") {
+                        std::vector<std::string> opts;
+                        const bool soon = tsEndsSoon(st);
+                        if (soon) opts.push_back("Sign in again");
+                        opts.insert(opts.end(), {"Disconnect", "Log out", "Cancel"});
+                        askChoice("Tailscale", "", opts, 0, [&, soon, confirmLogout](int c) {
+                            if (soon && c == 0) {
+                                askPin("Enter the PIN", "To sign in to Tailscale again",
+                                       [&]() { openTsSignIn(true); });
+                                return;
+                            }
+                            if (soon) --c;
+                            if (c == 0) setTailscale(false);
+                            else if (c == 1) confirmLogout();
+                        });
+                        sound::play(sound::Cue::Activate);
+                    } else if (st.answered && (st.state == "NeedsLogin" || st.state == "Stopped")) {
+                        // Signed out: its sign-in ended, or it was removed in
+                        // Tailscale's own page. The same QR code again.
+                        askPin("Enter the PIN", "To sign in to Tailscale",
+                               [&]() { openTsSignIn(false); });
+                        sound::play(sound::Cue::Activate);
+                    } else {
+                        sound::play(sound::Cue::Edge);
+                    }
                 } else if (res.value == SetPairedDevices) {
-                    openPairedPanel(0);
-                    sound::play(sound::Cue::Activate);
+                    if (players::streaming()) {
+                        sound::play(sound::Cue::Edge);
+                    } else {
+                        openPairedPanel(0);
+                        sound::play(sound::Cue::Activate);
+                    }
                 } else if (res.value == SetSteam) {
                     // Grow it, or remove Steam: the PIN when set, once per
                     // visit, as Downloads (it gives or takes space for the
@@ -11945,6 +12153,7 @@ int main(int argc, char** argv) {
             case Screen::Detail: apply(detailScreen.key(n)); return true;
             case Screen::Search: apply(searchScreen.key(n)); return true;
             case Screen::AddAccount: apply(addAccountScreen.key(n)); return true;
+            case Screen::TailscaleSignIn: apply(tsSignInScreen.key(n)); return true;
             case Screen::Settings: apply(settingsScreen.key(n)); return true;
         }
         return false;
@@ -13434,6 +13643,13 @@ int main(int argc, char** argv) {
         const bool on = rpWant && remoteplay::streaming();
         if (on == players::streaming()) return;
         players::setStreaming(on);
+        // Remote Play's section greys out for the stream, and back after. A
+        // panel already open from it (Paired devices, Tailscale's menu)
+        // closes, so nothing in it can be pressed from the stream either.
+        if (here() == Screen::Settings) {
+            if (on && choiceScreen.isOpen()) choiceScreen.close();
+            buildSettings();
+        }
         if (playing && !overlayOpen) toggleOverlay();
         else if (standaloneRun.active()) openStandaloneMenu();
         // A Remote game's pause menu already open loses or gets back its
@@ -15327,6 +15543,64 @@ int main(int argc, char** argv) {
                 }
             }
             remotePlayHandover();
+            // TAILSCALE (#286): asked only while somebody can see the answer,
+            // the row in Settings or the sign-in screen.
+            {
+                const bool look = rpWant && (tsWant || tsLoggingOut) &&
+                                  (here() == Screen::Settings || here() == Screen::TailscaleSignIn);
+                tailscale::watch(look);
+                const tailscale::Status st = tailscale::last();
+                if (look && st.state == "Running" && !tsSignedIn) {
+                    tsSignedIn = true;
+                    prefs::set("tailscale_signed_in", "yes");
+                }
+                // When the sign-in ends, kept for the row to say after it has.
+                if (look && st.state == "Running" &&
+                    prefs::get("tailscale_expires", "") != std::to_string(st.expires))
+                    prefs::set("tailscale_expires", std::to_string(st.expires));
+                if (tsSigningIn && here() != Screen::TailscaleSignIn) {
+                    // LEFT BEFORE IT WAS APPROVED: nothing half done is kept.
+                    // A console that was never signed in is off again.
+                    tsSigningIn = false;
+                    tailscale::cancelLogin();
+                    if (tailscale::last().state != "Running") setTailscale(false);
+                    std::fprintf(stderr, "[tailscale] sign-in left\n");
+                } else if (tsSigningIn) {
+                    std::string why;
+                    // Signed in: after its link was approved, or at once
+                    // when it was signed in already (no link at all).
+                    if (st.state == "Running" && st.authUrl.empty() &&
+                        (tsShownLink || !tailscale::loginRunning())) {
+                        tsSigningIn = false;
+                        tailscale::cancelLogin();
+                        tsSignedIn = true;
+                        prefs::set("tailscale_signed_in", "yes");
+                        stack.pop_back();
+                        buildSettings();
+                        std::fprintf(stderr, "[tailscale] signed in as %s, %s\n",
+                                     st.name.c_str(), st.address.c_str());
+                    } else if (!st.authUrl.empty() && !tsShownLink) {
+                        tsShownLink = true;
+                        // The link is both halves the screen shows: the QR,
+                        // and the address under the title. There is no
+                        // separate code.
+                        tsSignInScreen.setPairing(st.authUrl, st.authUrl);
+                        std::fprintf(stderr, "[tailscale] sign in at %s\n", st.authUrl.c_str());
+                    } else if (tailscale::loginFailed(&why)) {
+                        tsSignInScreen.setError(why);
+                    }
+                }
+                if (tsWorkerDone) {
+                    // Logged out: off, and no longer signed in.
+                    tsWorker.join();
+                    tsWorkerDone = false;
+                    tsLoggingOut = false;
+                    tsSignedIn = false;
+                    prefs::set("tailscale_signed_in", "no");
+                    setTailscale(false);
+                }
+                if (here() == Screen::Settings && tailscale::generation() != tsSeen) buildSettings();
+            }
             if (rpSaidAt != 0 || rpWant || here() == Screen::Settings) {
                 // Remote Play: systemd's answer, as Developer access's.
                 const std::string d = unit::state(kRpUnit);
@@ -15656,6 +15930,7 @@ int main(int argc, char** argv) {
             libraryScreen.tick(dt);
             accountScreen.tick(dt);
             addAccountScreen.tick(dt);
+            tsSignInScreen.tick(dt);
             settingsScreen.setHasFocus(!barFocused && !accountsOpen);
             settingsScreen.tick(dt);
             pinScreen.tick(dt);
@@ -16157,7 +16432,7 @@ int main(int argc, char** argv) {
                                                         : cards[ci].coverLarge;
                 else if (!lastLitArt.empty())
                     want = lastLitArt;
-            } else if (here() == Screen::AddAccount) {
+            } else if (here() == Screen::AddAccount || here() == Screen::TailscaleSignIn) {
                 // **A TEXT SCREEN GETS THE PLAIN GRADIENT.** MMagTech,
                 // 2026-09-22: *"i preferred the purple background that went
                 // with the first run setup better. The current background
@@ -16525,6 +16800,7 @@ int main(int argc, char** argv) {
                 case Screen::Detail: detailScreen.draw(ctx); break;
                 case Screen::Search: searchScreen.draw(ctx); break;
                 case Screen::AddAccount: addAccountScreen.draw(ctx); break;
+                case Screen::TailscaleSignIn: tsSignInScreen.draw(ctx); break;
                 case Screen::Settings: settingsScreen.draw(ctx); break;
                 case Screen::Home: break;   // unreachable, and the compiler asks
             }
@@ -16852,6 +17128,7 @@ int main(int argc, char** argv) {
                 // The QR draws its own white card; there is nothing behind it
                 // on this screen for glass to blur.
                 case Screen::AddAccount: break;
+                case Screen::TailscaleSignIn: break;
                 case Screen::Settings: settingsScreen.drawGlass(ctx); break;
                 case Screen::Home: break;
             }
@@ -17693,6 +17970,12 @@ int main(int argc, char** argv) {
     if (uploader.pending() > 0)
         std::fprintf(stderr, "[sync] finishing %d upload(s)\n", uploader.pending());
     uploader.shutdown();
+    // THE WATCHING THREADS JOINED BEFORE THEY ARE DESTROYED: a std::thread
+    // still running at exit ends the process with abort().
+    remoteplay::watch(false);
+    tailscale::watch(false);
+    tailscale::cancelLogin();
+    if (tsWorker.joinable()) tsWorker.join();
 
     ra::shutdown();
     images.shutdown();

@@ -74,7 +74,16 @@ void readLog() {
         gStreaming = false;
         return;
     }
-    if (st.st_ino != gTail.inode || st.st_size < gTail.at) gTail = {st.st_ino, 0};
+    if (st.st_ino != gTail.inode || st.st_size < gTail.at) {
+        // A NEW FILE IS A NEW SUNSHINE, and a new Sunshine has nobody
+        // streaming: the last one may have been stopped mid-stream, without
+        // writing "CLIENT DISCONNECTED".
+        if (gTail.inode != 0 && gStreaming) {
+            gStreaming = false;
+            std::fprintf(stderr, "[remoteplay] the stream ended (Sunshine started again)\n");
+        }
+        gTail = {st.st_ino, 0};
+    }
     if (st.st_size == gTail.at) return;
     std::ifstream f(kLogFile);
     f.seekg(gTail.at);
@@ -217,7 +226,7 @@ void loop() {
 
 }  // namespace
 
-void watch(bool on) {
+void watch(bool on, bool fresh) {
     {
         std::lock_guard<std::mutex> lk(gRunM);
         if (gWatching == on) return;
@@ -225,6 +234,14 @@ void watch(bool on) {
     }
     gRunCv.notify_all();
     if (on) {
+        // Fresh: what the log holds now was written before this Sunshine
+        // could have taken a device, so it is skipped, whichever Sunshine's
+        // file it is; a newer file is read from its start (readLog).
+        if (fresh) {
+            struct stat st{};
+            gTail = ::stat(kLogFile, &st) == 0 ? Tail{st.st_ino, st.st_size} : Tail{};
+            gStreaming = false;
+        }
         gThread = std::thread(loop);
         return;
     }

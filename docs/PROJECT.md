@@ -16158,6 +16158,76 @@ running stays paused with no Resume until the stream ends (MMagTech agreed
 after the case was walked through; the cost of not doing it was only a game
 the phone could start and not control).
 
+**Tailscale, for playing away from home (2026-10-08).** Checked on the A9
+first: Tailscale 1.102.4 is in the base (Bazzite's), runs under the image
+unchanged, and the console's own user can drive it once the unit names it
+operator. A full stream ran through it (every Sunshine port, about 8 Mbps).
+**Tailscale and only Tailscale** (MMagTech: one way in from outside, or the
+OS's intent is lost under options), and it is in the image at all because
+the person without a VPN otherwise follows a guide that forwards Sunshine's
+ports to the internet. It works behind any router with nothing forwarded,
+including the shared addresses of 5G home internet and some fibre, which is
+how PlayStation Remote Play feels (a company account introduces the devices,
+as Sony's does). **Named and dropped:** the console as its own WireGuard
+server (no account, but a forwarded port and an address of your own, which
+many homes no longer have); NetBird (fully open, self-hostable, but a second
+VPN program to ship); Headscale (replaces Tailscale's sign-in server, not its
+app, and a field nobody needs for the first release); ZeroTier (its
+self-hosted server is not open source); Moonlight's own internet streaming
+(the console on the open internet). Somebody with their own way home leaves
+the row off: MMagTech's own iPhone streamed over 5G through his Tailscale
+subnet router with nothing on the console.
+
+*Under Streaming, never alone:* it runs only while Streaming and Tailscale
+are both on, so "off means nothing runs" holds for both. *Locked down by the
+image,* not by Settings: operator `cabinet`, no DNS and no routes from the
+network, no exit node, no logs to Tailscale (`TS_NO_LOGS_NO_SUPPORT`; their
+support cannot look into a problem). *The firewall:* without a zone of its
+own, `tailscale0` fell into FedoraWorkstation, which opens every port above
+1024 (File access and Developer access with them); `cabinetos-tailscale`
+lets in Sunshine's ports only. *NetworkManager* ran its internet check
+through `tailscale0` every few minutes (port 80 to fedoraproject.org, dropped
+by Tailscale as addressed to no device) and would have put it back in its
+own zone; it is told to leave the interface alone. *Driven by the `tailscale`
+command,* which Tailscale documents and keeps stable, not its local API; `up`,
+not `login` (which adds a second account to a signed-in console), and `up`
+must name every non-default setting or it refuses.
+
+*The sign-in expires* after 180 days unless the owner turns that off. The
+date is fixed at sign-in, does not pause while off, and is shown from the
+moment it is signed in (MMagTech: it is turned on once and rarely visited,
+so that is when to see it and set a reminder). Once passed, the row says
+"Sign-in ended" and "Sign in again", which brings the QR code back; tested:
+signing in afresh kept the console's name and address, so Moonlight's entry
+survives. *No exit node from the console:* proposed for iPhones (below) and
+dropped, because Tailscale has no "deny" for an advertised exit node, only
+an approval left unticked, and an owner whose Tailscale approves
+automatically would get one without being asked.
+
+**Moonlight for iPhone on mobile data does not stream over Tailscale**, and
+the cause is Moonlight's. On an IPv6-only network (MMagTech's carrier) iOS
+rewrites an IPv4 address into a NAT64 one for Moonlight's own connection,
+which then leaves outside a VPN that carries only some addresses: the app
+list and the launch go through Tailscale, the stream setup to the internet,
+and it times out ("RTSP handshake failed, error 60"). Seen in captures on
+the A9; moonlight-stream/moonlight-ios#669; fixed in moonlight-common-c
+`0975a86` (2025-07-15), taken into the iPhone app's source on 2026-09-26, not
+in the App Store's 9.0.2 (2024-02-26). An exit node on the phone makes the
+VPN carry everything and it streams (tested, VPN-USA); VoidLink, an
+open-source iPhone fork (its source read: no tracking, talks only to the
+console), has the fix and streamed. Not fixable on the console: Sunshine on
+IPv6 (`address_family = both`) was tried and Moonlight went back to the IPv4
+address it had saved. The docs carry the exit-node line until Moonlight
+ships.
+
+**While a device streams, the section is greyed** and Streaming reads "In
+use". Found when MMagTech's first press from his phone, on a console left on
+Settings, switched Streaming off and cut the stream it came through. **And a
+bug that exposed:** Sunshine stopped mid-stream writes no "CLIENT
+DISCONNECTED", and the console, reading the old log when Streaming came back
+on, believed a device was streaming and set the TV's controllers aside with
+nobody playing. A newly started Sunshine now starts from "nobody streaming".
+
 **Found on the way.** The pause menu closed itself when a pad came back
 (it left with Home held, being switched off); fixed for every pad. Steam's
 session picks 4K 120 Hz HDR on the LG C1 and the TV stays black: #290.
