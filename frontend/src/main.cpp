@@ -97,6 +97,7 @@
 #include "power.h"
 #include "look.h"
 #include "prefs.h"
+#include "remoteplay.h"
 #include "optcheck.h"
 #include "quality.h"
 #include "screenfx.h"
@@ -8573,6 +8574,11 @@ int main(int argc, char** argv) {
     // Format, so erasing a drive is never one press too many. Not the PIN;
     // no lockout, because a wrong code costs nothing.
     std::string pinExpect;
+    // A CODE ANOTHER DEVICE SHOWS, typed on the same pad and handed back
+    // unchecked: Moonlight's four digits when a device pairs for Remote Play.
+    // Whether they are right is the device's to say, not the console's.
+    std::function<void(const std::string&)> pinCode;
+    std::function<void()> pinCodeCancel;
     auto askPin = [&](const std::string& title, const std::string& detail,
                       std::function<void()> then, bool always = false) {
         pinExpect.clear();
@@ -8624,6 +8630,21 @@ int main(int argc, char** argv) {
     auto pinOutcome = [&](screens::PinScreen::Outcome o) {
         using O = screens::PinScreen::Outcome;
         if (o == O::None) return;
+        if (pinCode) {
+            auto took = std::move(pinCode);
+            auto left = std::move(pinCodeCancel);
+            pinCode = nullptr;
+            pinCodeCancel = nullptr;
+            const std::string digits = pinScreen.pin();
+            pinScreen.close();
+            if (o == O::Cancelled) {
+                if (left) left();
+            } else {
+                sound::play(sound::Cue::Activate);
+                took(digits);
+            }
+            return;
+        }
         if (o == O::Cancelled) {
             pinScreen.close();
             pinThen = nullptr;
@@ -8742,7 +8763,8 @@ int main(int argc, char** argv) {
                      SetAddController, SetShortcuts, SetShortcutButton, SetAppearance,
                      SetDarkHours, SetColour, SetRumble, SetPictureQuality,
                      SetWiiRemotes, SetSteam, SetSteamShow, SetRetroAchievements,
-                     SetAchievementSound, SetDeveloper, SetVersion };
+                     SetAchievementSound, SetDeveloper, SetVersion, SetRemotePlay,
+                     SetPairedDevices };
     // One Eject row per USB drive: this plus the drive's index in
     // storage::locations() when the rows were built.
     constexpr int kSetEject = 100;
@@ -8971,6 +8993,32 @@ int main(int argc, char** argv) {
         if (unit::start(kDevUnit, &why)) devSaidAt = std::time(nullptr);
         else std::fprintf(stderr, "[developer] could not turn on at start: %s\n", why.c_str());
     }
+
+    // ---- Remote Play (docs/SETTINGS.md, Remote Play; issue #286) ----------
+    //
+    // Sunshine, so Moonlight on a phone, tablet or computer can play the
+    // console. Off by default, and off means cabinetos-remoteplay.service is
+    // not running and remoteplay.h asks it nothing. On is remembered in
+    // settings.json and started again at boot, as Developer access is.
+    // Pairing is on the television: a device asking to pair brings up the
+    // PIN pad for the four digits Moonlight shows.
+    constexpr const char* kRpUnit = "cabinetos-remoteplay.service";
+    std::string rpState = unit::state(kRpUnit);
+    int64_t rpSaidAt = 0;
+    std::string rpFailed;   // a refusal or a start that failed, said in the row
+    bool rpWant = prefs::get("remote_play", "off") == "on";
+    int rpSeen = -1;        // remoteplay::generation() the rows were built from
+    std::set<std::string> rpAsked;   // requests already put to the TV
+    std::string rpAsking;            // the request the PIN pad is open for
+    // Digits handed over: the name given to Sunshine, when, and the devices
+    // paired before, so the new one is the one not among them.
+    struct { std::string name; int64_t at = 0; std::set<std::string> before; } rpPairing;
+    if (rpWant && rpState != "active") {
+        std::string why;
+        if (unit::start(kRpUnit, &why)) rpSaidAt = std::time(nullptr);
+        else std::fprintf(stderr, "[remoteplay] could not turn on at start: %s\n", why.c_str());
+    }
+    remoteplay::watch(rpWant);
 
     // AFTERWARDS: the first start after a restart compares the version the
     // machine booted with the one that was staged. Said once Home is up.
@@ -9712,6 +9760,31 @@ int main(int argc, char** argv) {
                      !radioOn ? "Off" : (onWifi.empty() ? "Not connected" : onWifi)});
         }
 
+        // REMOTE PLAY (#286): its own section, a highlight (MMagTech,
+        // 2026-10-07). Three rows: the switch ("Streaming": "Remote Play"
+        // twice, as section and row, read oddly), with the app to use and the
+        // name to pick in it; the paired devices, one row however many there
+        // are, opening a list; and Tailscale, for playing away from home.
+        // Sunshine's own name is never on screen.
+        {
+            const bool on = rpState == "active";
+            std::string value = on ? "On" : "Off";
+            // "app", so it reads as something to get on the phone, not a mode;
+            // and the name Moonlight lists it under, CabinetOS, the name the
+            // start-up script gives Sunshine (MMagTech, 2026-10-07).
+            std::string detail = on ? "Moonlight app \xC2\xB7 CabinetOS" : "Moonlight app";
+            if (rpSaidAt != 0) value = rpWant ? "Turning on\xE2\x80\xA6" : "Turning off\xE2\x80\xA6";
+            else if (!rpFailed.empty()) detail = rpFailed;
+            const size_t n = remoteplay::paired().size();
+            rpSeen = remoteplay::generation();
+            cats.push_back({"Remote Play", {
+                {K::Toggle, SetRemotePlay, "Streaming", detail, value},
+                {on && n > 0 ? K::Action : K::Disabled, SetPairedDevices, "Paired devices", "",
+                 n == 0 ? "None" : std::to_string(n) + " paired"},
+                {K::Unbuilt, 0, "Tailscale", "", ""},
+            }});
+        }
+
         // PICTURE QUALITY IS THE OWNER'S WHEN A PIN IS SET (MMagTech,
         // 2026-10-02, #63): nobody else sees the row at all, and the owner is
         // never asked for the PIN. With no PIN, everyone sees it, as with
@@ -10155,6 +10228,82 @@ int main(int argc, char** argv) {
         prefs::set("developer_access", on ? "on" : "off");
         buildSettings();
     };
+    // Remote Play on or off, as Developer access: a refusal said in the row,
+    // otherwise "Turning on…" until systemd answers.
+    auto setRemotePlay = [&](bool on) {
+        std::string why;
+        const bool ok = on ? unit::start(kRpUnit, &why) : unit::stop(kRpUnit, &why);
+        if (!ok) {
+            rpFailed = why.find("not found") != std::string::npos ? "Not in this image" : why;
+            if (rpFailed.size() > 60) rpFailed.resize(60);
+            rpSaidAt = 0;
+        } else {
+            rpFailed.clear();
+            rpSaidAt = std::time(nullptr);
+        }
+        rpWant = on;
+        prefs::set("remote_play", on ? "on" : "off");
+        remoteplay::watch(on);
+        if (!on) rpAsked.clear();
+        buildSettings();
+    };
+    // NAMING A DEVICE: the keyboard, the current name in the field. Right after
+    // pairing it says so; an empty name keeps the one it had.
+    std::function<void(int)> openPairedPanel;
+    auto askDeviceName = [&](const std::string& id, const std::string& current, bool justPaired) {
+        ui::Keyboard::Config cfg;
+        cfg.title = justPaired ? "Paired. Name this device" : "Rename " + current;
+        cfg.initial = current;
+        cfg.placeholder = "Name";
+        keyboard.open(cfg);
+        keyboardThen = [&, id, current, justPaired](ui::KeyboardResult r) {
+            std::string name = r == ui::KeyboardResult::Committed ? keyboard.value() : "";
+            while (!name.empty() && name.back() == ' ') name.pop_back();
+            if (name.empty()) name = current;
+            remoteplay::rename(id, name);
+            if (justPaired) menuNotice.say("Paired with " + name, Tone::Done);
+            buildSettings();
+        };
+    };
+    // THE PAIRED DEVICES: a list, however long, each one pressed for Remove
+    // (the PIN when set). One row on the page, so a household with many
+    // devices does not push Tailscale off it (MMagTech, 2026-10-07).
+    std::vector<remoteplay::Device> rpRowsShown;
+    openPairedPanel = [&](int focus) {
+        rpRowsShown = remoteplay::paired();
+        if (rpRowsShown.empty()) {
+            choiceScreen.close();
+            buildSettings();
+            return;
+        }
+        std::vector<std::string> names;
+        for (const remoteplay::Device& d : rpRowsShown) names.push_back(d.name);
+        const int last = static_cast<int>(names.size()) - 1;
+        askChoice("Paired devices", "", names, std::clamp(focus, 0, last), [&](int i) {
+            if (i < 0 || i >= static_cast<int>(rpRowsShown.size())) return;
+            const remoteplay::Device d = rpRowsShown[static_cast<size_t>(i)];
+            askChoice(d.name, "", {"Rename", "Remove", "Cancel"}, 0, [&, d, i](int c) {
+                if (c == 0) {
+                    choiceScreen.close();
+                    askDeviceName(d.id, d.name, false);
+                    return;
+                }
+                if (c != 1) { openPairedPanel(i); return; }
+                askChoice("Remove " + d.name + "?", "", {"Remove", "Cancel"}, 1, [&, d, i](int k) {
+                    if (k != 0) { openPairedPanel(i); return; }
+                    askPin("Enter the PIN", "To remove " + d.name, [&, d, i]() {
+                        std::string why;
+                        if (!remoteplay::remove(d.id, &why))
+                            menuNotice.say("Couldn't remove " + d.name, Tone::Problem);
+                        buildSettings();
+                        openPairedPanel(i);
+                    });
+                });
+            });
+        });
+        choiceScreen.setStaysOpen(true);
+    };
+
     // THE PANEL: File access's, with the port. Same password, same New
     // password (it changes File access's too, which is the point of one).
     std::function<void()> openDevPanel;
@@ -11054,6 +11203,22 @@ int main(int argc, char** argv) {
                         });
                         sound::play(sound::Cue::Activate);
                     }
+                } else if (res.value == SetRemotePlay) {
+                    // On behind the PIN when one is set; off at once, since
+                    // off only closes things.
+                    if (rpSaidAt != 0) {
+                        sound::play(sound::Cue::Edge);
+                    } else if (rpState == "active") {
+                        setRemotePlay(false);
+                        sound::play(sound::Cue::Activate);
+                    } else {
+                        askPin("Enter the PIN", "To turn on Remote Play",
+                               [&]() { setRemotePlay(true); });
+                        sound::play(sound::Cue::Activate);
+                    }
+                } else if (res.value == SetPairedDevices) {
+                    openPairedPanel(0);
+                    sound::play(sound::Cue::Activate);
                 } else if (res.value == SetSteam) {
                     // Grow it, or remove Steam: the PIN when set, once per
                     // visit, as Downloads (it gives or takes space for the
@@ -15079,6 +15244,105 @@ int main(int argc, char** argv) {
                     devNewPassAt = 0;
                     if (here() == Screen::Settings && !choiceScreen.isOpen() && !pinScreen.isOpen())
                         openDevPanel();
+                }
+            }
+            if (rpSaidAt != 0 || rpWant || here() == Screen::Settings) {
+                // Remote Play: systemd's answer, as Developer access's.
+                const std::string d = unit::state(kRpUnit);
+                const int64_t now = std::time(nullptr);
+                const bool settled = d == "active" || d == "inactive" || d == "failed";
+                const bool answered = rpSaidAt == 0 || now - rpSaidAt > 10 ||
+                                      (settled && (d == "failed" || (d == "active") == rpWant));
+                if (answered && (d != rpState || rpSaidAt != 0)) {
+                    if (rpSaidAt != 0 && rpWant && d != "active") rpFailed = "Couldn't start";
+                    rpState = d;
+                    rpSaidAt = 0;
+                    std::fprintf(stderr, "[remoteplay] %s\n", d.c_str());
+                    if (here() == Screen::Settings) buildSettings();
+                }
+                if (here() == Screen::Settings && remoteplay::generation() != rpSeen) {
+                    buildSettings();
+                    if (choiceScreen.isOpen() && choiceScreen.title() == "Paired devices")
+                        openPairedPanel(0);
+                }
+                // A DEVICE ASKING TO PAIR brings up the PIN pad, wherever the
+                // console is except in a game, over nothing else that is
+                // open. The request lasts five minutes on Sunshine's side; one
+                // put to the TV and turned down is not put again.
+                const std::vector<remoteplay::Request> asking = remoteplay::waiting();
+                auto stillAsking = [&](const std::string& id) {
+                    for (const remoteplay::Request& r : asking)
+                        if (r.id == id) return true;
+                    return false;
+                };
+                if (!rpAsking.empty() && !stillAsking(rpAsking)) {
+                    // Moonlight gave up, or the digits went through.
+                    if (pinScreen.isOpen() && pinCode) {
+                        pinCode = nullptr;
+                        pinCodeCancel = nullptr;
+                        pinScreen.close();
+                    }
+                    rpAsking.clear();
+                }
+                if (rpAsking.empty() && !playing && !standaloneRun.active() &&
+                    !pinScreen.isOpen() && !choiceScreen.isOpen() && !keyboard.isOpen()) {
+                    for (const remoteplay::Request& r : asking) {
+                        if (rpAsked.count(r.id)) continue;
+                        rpAsked.insert(r.id);
+                        rpAsking = r.id;
+                        const std::string id = r.id;
+                        std::fprintf(stderr, "[remoteplay] a device asks to pair\n");
+                        pinCode = [&, id](const std::string& digits) {
+                            const std::string name = remoteplay::nextName();
+                            std::set<std::string> before;
+                            for (const remoteplay::Device& dv : remoteplay::paired())
+                                before.insert(dv.id);
+                            std::string why;
+                            if (remoteplay::pair(id, digits, name, &why))
+                                rpPairing = {name, std::time(nullptr), before};
+                            else
+                                menuNotice.say("Couldn't pair", Tone::Problem);
+                        };
+                        pinCodeCancel = [id]() { remoteplay::decline(id); };
+                        pinScreen.open(screens::PinScreen::Mode::Check, "Pair a device",
+                                       "Enter the code from Moonlight");
+                        sound::play(sound::Cue::Activate);
+                        break;
+                    }
+                }
+                // THE ANSWER IS THE DEVICE'S: a wrong code is only known to
+                // Moonlight. Paired once it is in the list; not, if it is
+                // still missing when the request has gone.
+                if (rpPairing.at != 0) {
+                    std::string fresh;
+                    for (const remoteplay::Device& dv : remoteplay::paired())
+                        if (!rpPairing.before.count(dv.id)) fresh = dv.id;
+                    if (!fresh.empty() && !keyboard.isOpen() && !pinScreen.isOpen()) {
+                        // A DEVICE PAIRING AGAIN (its certificate already
+                        // paired) replaces its old entry and keeps its name:
+                        // two entries with one certificate lock it out
+                        // (remoteplay.h, samePairedDevice).
+                        std::string kept;
+                        for (const std::string& old : remoteplay::samePairedDevice(fresh)) {
+                            for (const remoteplay::Device& dv : remoteplay::paired())
+                                if (dv.id == old) kept = dv.name;
+                            std::string why;
+                            remoteplay::remove(old, &why);
+                        }
+                        if (!kept.empty()) {
+                            remoteplay::rename(fresh, kept);
+                            menuNotice.say("Paired with " + kept, Tone::Done);
+                            buildSettings();
+                        } else {
+                            // PAIRED: name it, with the next free "Device N"
+                            // in the field, so Done alone is enough.
+                            askDeviceName(fresh, rpPairing.name, true);
+                        }
+                        rpPairing = {};
+                    } else if (fresh.empty() && now - rpPairing.at > 10) {
+                        menuNotice.say("Couldn't pair", Tone::Problem);
+                        rpPairing = {};
+                    }
                 }
             }
             const update::Status s = update::read();
