@@ -1,0 +1,43 @@
+# Remote Play: Sunshine, so Moonlight on a phone, tablet or computer can play
+# the console. docs/SETTINGS.md, Remote Play; issue #286.
+#
+# NOT ENABLED, AND NO [Install]: off by default on every console, and off
+# means nothing listens. The session starts and stops it by name
+# (67-cabinetos-remoteplay.rules) when the switch is turned on or off, and
+# again at boot when it was left on.
+#
+# IT RUNS AS `cabinet`, the session's own user, because it streams the
+# session's picture and sound and gives it controllers. The picture is read
+# straight from the display (KMS), which needs CAP_SYS_ADMIN; Bazzite gives
+# it to the binary with setcap, and here the unit gives it instead, so the
+# image carries no privileged file. CAP_SYS_NICE lets it raise its own
+# priority for sound and video.
+#
+# Everything it keeps (its settings, its key, the paired devices) lives in
+# /var/lib/cabinetos/remoteplay, which /usr/libexec/cabinetos-remoteplay
+# writes before it starts.
+[Unit]
+Description=CabinetOS Remote Play (Sunshine)
+Documentation=https://github.com/MMagTech/cabinetos/blob/main/docs/SETTINGS.md
+After=network.target cabinetos-session.service
+
+[Service]
+User=cabinet
+Environment=HOME=/var/lib/cabinetos/remoteplay
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus
+AmbientCapabilities=CAP_SYS_ADMIN CAP_SYS_NICE
+# AND A NICE LIMIT, because the capability is not enough: Sunshine keeps its
+# capabilities on the one or two threads that need them and drops them on the
+# rest, and the threads that raise their priority for sound and video are
+# among the rest ("setpriority failed for nice -15: Permission denied" on
+# every stream, under this unit, A9 2026-10-08). With the limit any of its
+# threads may go as far as -15, the most it asks for.
+LimitNICE=-15
+ExecStartPre=/usr/libexec/cabinetos-remoteplay prepare
+ExecStart=/usr/bin/sunshine /var/lib/cabinetos/remoteplay/.config/sunshine/sunshine.conf
+# Switched off mid-stream, Sunshine never runs the entry's "undo", so the
+# stop does: gamescope back to its own layers.
+ExecStopPost=/usr/libexec/cabinetos-remoteplay ended
+Restart=on-failure
+RestartSec=5

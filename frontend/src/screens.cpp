@@ -1964,6 +1964,13 @@ void AddAccountScreen::setPairing(const std::string& url, const std::string& cod
     else error_ = err;   // the address and the code below are still usable
 }
 
+void AddAccountScreen::setText(std::string title, std::vector<std::string> lines,
+                               std::string busy) {
+    title_ = std::move(title);
+    lines_ = std::move(lines);
+    busyLine_ = std::move(busy);
+}
+
 void AddAccountScreen::setBusy(bool on) { busy_ = on; }
 void AddAccountScreen::setError(const std::string& err) { error_ = err; busy_ = false; }
 
@@ -2004,7 +2011,7 @@ void AddAccountScreen::draw(Ctx& c) {
 
     // --- the left column: what is happening and why --------------------------
     float y = kTitleTop;
-    c.text.draw(c.r, "Add an account", kInset,
+    c.text.draw(c.r, title_, kInset,
                 y + c.text.ascent(ui::TextStyle::LargeTitle, c.sc),
                 ui::TextStyle::LargeTitle, ui::Color::white(0.96f * a), c.sc);
     y += c.text.lineHeight(ui::TextStyle::LargeTitle, c.sc) + 28.0f;
@@ -2018,15 +2025,9 @@ void AddAccountScreen::draw(Ctx& c) {
     // are fixed, they are mine, and they are well inside a 760pt column at
     // 29pt. **If a line here ever grows, measure it** — that is the rule a
     // truncated tile caption already bought once.
-    const char* lines[3] = {nullptr, nullptr, nullptr};
-    if (busy_) {
-        lines[0] = "Getting a code\xE2\x80\xA6";
-    } else {
-        lines[0] = "Sign in as the person you are adding,";
-        lines[1] = "not as yourself.";
-    }
-    for (const char* line : lines) {
-        if (!line) continue;
+    const std::vector<std::string> lines =
+        busy_ ? std::vector<std::string>{busyLine_} : lines_;
+    for (const std::string& line : lines) {
         c.text.draw(c.r, line, kInset, y + c.text.ascent(ui::TextStyle::Body, c.sc),
                     ui::TextStyle::Body, ui::Color::white(0.72f * a), c.sc);
         y += c.text.lineHeight(ui::TextStyle::Body, c.sc);

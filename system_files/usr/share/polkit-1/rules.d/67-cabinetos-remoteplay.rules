@@ -1,0 +1,25 @@
+// Let the console turn its own Remote Play, and its Tailscale, on and off.
+// Nothing else.
+//
+// Sunshine runs as cabinetos-remoteplay.service, a system unit so it can be
+// given the capability to read the display (see the unit). The session runs
+// as `cabinet` and starts and stops it by name when the switch in Settings,
+// Remote Play, is turned on or off. docs/SETTINGS.md, Remote Play; #286.
+//
+// `subject.local`, as in 60-cabinetos-network.rules: the console on its own
+// seat, not an SSH session.
+
+polkit.addRule(function(action, subject) {
+    if (action.id != "org.freedesktop.systemd1.manage-units" ||
+        subject.user != "cabinet" || !subject.local) {
+        return polkit.Result.NOT_HANDLED;
+    }
+    // Tailscale, for playing away from home, goes with it: on only while
+    // Streaming is on (tailscaled.service.d/50-cabinetos.conf).
+    var unit = action.lookup("unit");
+    if ((unit == "cabinetos-remoteplay.service" || unit == "tailscaled.service") &&
+        (action.lookup("verb") == "start" || action.lookup("verb") == "stop")) {
+        return polkit.Result.YES;
+    }
+    return polkit.Result.NOT_HANDLED;
+});

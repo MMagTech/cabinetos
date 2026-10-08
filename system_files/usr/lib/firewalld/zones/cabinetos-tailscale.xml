@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Tailscale reaches Sunshine and nothing else (#286; docs/SETTINGS.md, Remote
+  Play). Without this zone tailscale0 falls into the default one, which lets
+  in every port above 1024: File access, Developer access, anything else
+  listening.
+
+  Sunshine's ports, as LizardByte documents them and as a stream on the A9
+  used them (2026-10-08, a capture through Tailscale): TCP 47984 and 47989
+  (pairing and the app list), 48010 (the stream's setup); UDP 47998 to 48000
+  (video, control, sound), 48002 and 48010. Not 47990, Sunshine's web page,
+  which answers the console alone anyway.
+
+  NetworkManager is told to leave tailscale0 alone
+  (NetworkManager/conf.d/50-cabinetos-tailscale.conf), so it never moves the
+  interface back into its own zone.
+-->
+<zone target="default">
+  <short>CabinetOS Tailscale</short>
+  <description>Remote Play over Tailscale: Sunshine's ports only.</description>
+  <interface name="tailscale0"/>
+  <port protocol="tcp" port="47984"/>
+  <port protocol="tcp" port="47989"/>
+  <port protocol="tcp" port="48010"/>
+  <port protocol="udp" port="47998-48000"/>
+  <port protocol="udp" port="48002"/>
+  <port protocol="udp" port="48010"/>
+</zone>

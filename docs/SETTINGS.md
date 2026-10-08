@@ -30,8 +30,9 @@ status here to Built.
   right, both on screen. Moving through the list changes the right side at
   once. Settings is the one screen allowed to differ from Cabinet's shape.
   **Built.**
-- **Seven categories:** Accounts, Controllers, Network, Display and Sound,
-  Storage, System, About. **Built.**
+- **Eight categories:** Accounts, Controllers, Network, Remote Play,
+  Display and Sound, Storage, System, About. **Built.** Remote Play was
+  added as its own section, a highlight (MMagTech, 2026-10-07, #286).
 - **Plain purple background, no game art**, because it is a screen of text.
   **Built.**
 - **Rows not built yet are dimmed, say "Not built yet", and focus skips
@@ -286,6 +287,106 @@ Decided with MMagTech 2026-09-26, from the things people will actually do.
   you see with the logo."* Measured on the A9: 0.14 to 0.24 s between the
   last frame and the next.
 - **One server at a time.** A friend's server is sign out, then sign in.
+
+## Remote Play
+
+Sunshine on the console, Moonlight on a phone, tablet or computer to play
+from (#286). Decided with MMagTech on the A9, 2026-10-07, and Tailscale
+2026-10-08; **built on `remote-play`**, judged on the TV in the loop, not yet
+in a testing image.
+
+- **Three rows.**
+  - **Streaming**: On or Off, "Moonlight app" under it, and "Moonlight app ·
+    CabinetOS" when on: the app to get, and the name it lists the console
+    under. Not "Remote Play" again (the section's name twice read oddly).
+    Turning it on asks for the PIN when one is set; off at once. **Off means
+    nothing runs or listens**: `cabinetos-remoteplay.service` stopped, no
+    port open, not announced on the network, no virtual devices (checked on
+    the A9). On is remembered through restarts.
+  - **Paired devices**: "None" or "2 paired", greyed while Streaming is off
+    or nobody is paired. One row however many there are; it opens a list.
+    Pressing a device offers **Rename** and **Remove** (Remove behind the
+    PIN when set).
+  - **Tailscale**, for playing away from home (MMagTech, 2026-10-08). Off
+    by default, greyed while Streaming is off, and never running then:
+    turning Streaming off stops it, turning Streaming on brings it back when
+    it was on. Its states:
+    - **Off**: pressing it asks for the PIN when one is set, then **Sign in
+      to Tailscale**, the Add an account screen's shape: "Use the Tailscale
+      account your phone is signed in to.", the link in cyan, its QR code on
+      the right. Approved on a phone, the screen goes back to Settings by
+      itself; B leaves it, and Tailscale is off again.
+    - **Connected**: the address to give Moonlight on the right
+      ("100.67.82.30"), and under it the console's name and when its sign-in
+      ends, from the moment it is signed in ("cabinetos · Sign-in ends 6 Apr
+      2027"): somebody turns Remote Play on once and rarely comes back, so
+      that is when to see the date. No date when the owner turned expiry off
+      in Tailscale. Pressing it: **Disconnect**, **Log out** (asked again,
+      then the PIN), and **Sign in again** in the last 14 days, which starts
+      the 180 days again and keeps the name and address.
+    - **Disconnected**: signed in, not running. **Connect** (the PIN) and
+      **Log out**.
+    - **Sign in again**, with "Sign-in ended 6 Apr 2027" under it once the
+      date has passed, or "Signed out" when it was removed some other way
+      (Tailscale's own page). Pressing it: the PIN, then the QR code. Tailscale
+      knows the console again: same name, same address.
+    - **Waiting for approval**, when the owner's Tailscale approves new
+      devices by hand; **Logging out…**, **Turning on…**, **Couldn't start**.
+  - **While a device is streaming, the whole section is greyed**, and
+    Streaming's line reads **"In use"**. The device's controller drives the
+    console, and one press on Streaming cut the stream it was playing on
+    (MMagTech, from his iPhone, 2026-10-08); Remove could do the same. A
+    panel open from the section closes when a stream starts. The console's
+    own controllers are set aside during a stream, so nobody loses anything.
+- **No quality setting.** Moonlight has its own on each device, and the right
+  value depends on that device's connection, which the console cannot know.
+  Codec, resolution and frame rate are the client's.
+- **Pairing is on the television, never on Sunshine's web page** (which
+  answers the console alone). Moonlight asks, the PIN pad comes up by itself
+  ("Pair a device", "Enter the code from Moonlight"), wherever the console is
+  except in a game; B turns the request down. Then the keyboard, "Paired.
+  Name this device", with the next free "Device 1" filled in.
+- **The names are the console's.** Every Moonlight sends the same word,
+  "roth", hard-coded in its iOS, PC and Android source, and Sunshine cannot
+  rename a device, so the console keeps its own names and "roth" is never
+  shown. A device pairing again replaces its old entry and keeps its name.
+- **Set by us, never shown:** VA-API encoding, hold Select for Home (for a
+  client with no Home button), sound to the device streaming, the one entry
+  "CabinetOS" with its own tile, gamescope composing while a session is open.
+- **Home from a streaming device always opens the pause menu**, whether
+  in-game shortcuts are on or off (MMagTech, 2026-10-08): a phone's touch
+  controls cannot click both sticks, and holding Select is Home there, so it
+  is the one way to pause from any app. Every system, built-in or a program
+  of its own. The shortcuts themselves stay the switch's; at the TV nothing
+  changes.
+- **The handover** (MMagTech, 2026-10-07). A device connecting takes the
+  players, its controllers 1, 2... in the order they came; the console's own
+  are set aside, menus included. When it leaves, or drops, the console's
+  have their numbers back. **A running game pauses at each handover**, and
+  whoever takes over presses Resume. Every system.
+- **Wii Remote games during a stream**: greyed, "Needs a Wii Remote" (the
+  paired Remote is by the TV, the person streaming is not); one already
+  running stays paused, its menu without Resume, until the stream ends.
+- **Tailscale, set by the image and never shown**
+  (`tailscaled.service.d/50-cabinetos.conf`): the console's user drives it,
+  it takes no DNS and no routes from the owner's Tailscale, it is no exit
+  node, and it sends Tailscale no logs (`TS_NO_LOGS_NO_SUPPORT`). The
+  firewall lets it reach Sunshine's ports and nothing else (zone
+  `cabinetos-tailscale`), and NetworkManager leaves its interface alone.
+- **An iPhone on mobile data needs an exit node** in the Tailscale app (any:
+  the owner's own, or one Tailscale offers) until Moonlight for iPhone is
+  updated. On an IPv6-only network iOS sends Moonlight's stream around a VPN
+  that carries only some addresses (moonlight-stream/moonlight-ios#669, fixed
+  in Moonlight's code in 2025, not in the App Store's 9.0.2 of February
+  2024). An exit node makes Tailscale carry everything. Wi-Fi away from home,
+  Android, computers and Apple TV are not affected. VoidLink, an open-source
+  iPhone fork of Moonlight, has the fix.
+- **Somebody with their own way home** (WireGuard, a Tailscale subnet router)
+  leaves the row off and loses nothing; a device already paired plays the
+  same through either.
+- **The TV during a stream** shows the same picture; switching it off by
+  hand does not stop play. No "Remote Play in progress" screen (whatever the
+  TV shows is what the stream carries), no CEC adapter, no dummy plug.
 
 ## Display and Sound
 

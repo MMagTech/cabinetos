@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+#
+# Remote Play, before Sunshine starts. docs/SETTINGS.md, Remote Play; #286.
+#
+#   cabinetos-remoteplay prepare   Sunshine's settings written, and the
+#                                  console's own login for Sunshine's API
+#                                  made the first time
+#   cabinetos-remoteplay started   the CabinetOS session opens: gamescope
+#                                  composes every frame into one picture
+#   cabinetos-remoteplay ended     the session was quit: back to normal
+#
+# prepare is run by cabinetos-remoteplay.service (ExecStartPre), started and
+# ended by Sunshine itself (the CabinetOS entry's prep-cmd), all as `cabinet`.
+#
+# WHY gamescope MUST COMPOSE WHILE STREAMING: it normally shows the frontend
+# on a display layer of its own over a black base layer, and Sunshine reads
+# one layer, so the stream was black (#286, 2026-10-07). composite_force puts
+# everything in one picture. It costs a little (Burnout 3: 58.4 fps normally,
+# 55.4 composed, measured), so it is on only while the session is open.
+#
+# IT MATTERS WHEN A STREAM STARTS, NOT AFTER: Sunshine picks its layer then,
+# and switching it mid-stream changes nothing (tried on the A9, 2026-10-07).
+# A phone that drops and comes back joins the same session, so it stays on
+# from "started" to "ended", and the session is marked open in
+# $XDG_RUNTIME_DIR/cabinetos-remoteplay-session for the console: a gamescope
+# restarted under an open session (back from Steam, a crash) starts with it
+# off, and the console turns it on again when it starts (main.cpp).
+#
+# THE SETTINGS ARE OURS, written on every start, so a console always runs the
+# ones this image carries; nothing in Settings changes them. Measured on the
+# A9 (#286, 2026-10-07):
+#   capture = kms              gamescope offers Sunshine no other way in
+#   encoder = vaapi            Sunshine 2026.914 otherwise picks RADV's
+#                              experimental Vulkan encoder, which can break
+#                              HEVC on AMD (LizardByte/Sunshine#5841)
+#   back_button_timeout = 1000 holding Select is Home, for a client with no
+#                              Home button (Moonlight's on-screen controls)
+#   origin_web_ui_allowed = pc Sunshine's web page answers the console only:
+#                              pairing and removing are done on the TV
+#
+# THE LOGIN is for the console alone: the frontend reads it from `web` here
+# to call Sunshine's API on localhost (pairing, the paired devices). Made
+# once, never shown.
+
+set -euo pipefail
+
+DIR=/var/lib/cabinetos/remoteplay
+CONF="$DIR/.config/sunshine"
+
+case "${1:-}" in
+    prepare)
+        umask 077
+        mkdir -p "$CONF"
+        if [ ! -s "$DIR/web" ]; then
+            head -c 18 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' > "$DIR/web.new"
+            mv "$DIR/web.new" "$DIR/web"
+            /usr/bin/sunshine "$CONF/sunshine.conf" --creds cabinetos "$(cat "$DIR/web")"
+        fi
+        cat > "$CONF/sunshine.conf" <<EOF
+sunshine_name = CabinetOS
+capture = kms
+encoder = vaapi
+back_button_timeout = 1000
+origin_web_ui_allowed = pc
+system_tray = disabled
+notify_pre_releases = disabled
+EOF
+        # One thing to start: the console as it is. No Desktop, no Steam. Its
+        # tile is the cabinet from the boot logo (tools/make-remoteplay-tile.py).
+        cat > "$CONF/apps.json" <<'EOF'
+{
+  "env": {},
+  "apps": [
+    {
+      "name": "CabinetOS",
+      "image-path": "/usr/share/cabinetos/remoteplay/cabinetos.png",
+      "prep-cmd": [
+        { "do": "/usr/libexec/cabinetos-remoteplay started",
+          "undo": "/usr/libexec/cabinetos-remoteplay ended" }
+      ]
+    }
+  ]
+}
+EOF
+        ;;
+    started|ended)
+        # The newest gamescope socket is the session's: a restart leaves the
+        # old one behind (docs/lessons/testing.md).
+        sock=""
+        for s in "$XDG_RUNTIME_DIR"/gamescope-*; do
+            [[ -S "$s" && ${s##*/} =~ ^gamescope-[0-9]+$ ]] || continue
+            if [ -z "$sock" ] || [ "$s" -nt "$XDG_RUNTIME_DIR/$sock" ]; then sock=${s##*/}; fi
+        done
+        [ -n "$sock" ] || exit 0
+        on=0; [ "$1" = started ] && on=1
+        if [ "$on" = 1 ]; then : > "$XDG_RUNTIME_DIR/cabinetos-remoteplay-session"
+        else rm -f "$XDG_RUNTIME_DIR/cabinetos-remoteplay-session"; fi
+        GAMESCOPE_WAYLAND_DISPLAY="$sock" gamescopectl composite_force "$on" >/dev/null 2>&1 || true
+        ;;
+    *)
+        echo "usage: $0 prepare | started | ended" >&2
+        exit 2
+        ;;
+esac

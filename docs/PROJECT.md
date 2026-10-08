@@ -16069,3 +16069,182 @@ for testing. **Tested on the A9, 2026-10-06:** offline, Super Mario Land
 loaded from the kept set, "Weaponized Balls" unlocked and was queued; back
 online, it was sent at sign-in and accepted. (An earlier flower that same
 evening did not count; the cause was not found, and the next one did.)
+
+### 39. Remote Play (Sunshine), issue #286
+
+**Decided with MMagTech on the A9 and his iPhone, 2026-10-07; built on
+`remote-play`.** SETTINGS.md, Remote Play, has what the screen does; this is
+why, and what was tried and dropped. The measurements and logs are on #286.
+
+**Sunshine's own Fedora package, in the image, pinned.** Bazzite installs
+Sunshine on demand as a Flatpak (`ujust setup-sunshine`); the Flatpak cannot
+read this console's screen ("AppImage and Flatpak do not support KMS
+capture", Sunshine's own words), its portal route needs KDE's, and gamescope
+offers no wlr screencopy. Sunshine's RPM, given CAP_SYS_ADMIN, reads the
+screen through KMS. A package only enters this read-only system when the
+image is built, and a downloaded program allowed to read the screen is what
+the image exists to avoid, so it is in the image (8 MB download, 29 MB
+installed), pinned by checksum like the emulators, with its file capability
+taken off (the unit gives it, to the Sunshine it starts) and its own
+service and launchers removed. `build_files/install-sunshine.sh` lists what
+the console relies on in Sunshine, to check before the pin moves.
+**Dropped:** Bazzite's virtual monitor (KWin's `krfb-virtualmonitor`; there
+is no KWin here), gamescope's own PipeWire stream (Sunshine reaches PipeWire
+only through a portal), KDE as the session (it would replace gamescope, or
+restart the console under every stream and close the game).
+
+**Gamescope composes while a session is open.** It shows the frontend on its
+own display layer over a black base layer, and Sunshine reads one layer, so
+the stream was black. `composite_force` fixes it, at a cost measured in
+Burnout 3 racing: 58.4 fps and 92 slow frames normally, 55.4 and 303 composed,
+57.4 and 151 streaming. So it is on only while Sunshine's CabinetOS session
+is open: Sunshine picks its layer when a stream starts, and switching it
+mid-stream changes nothing (tried), and a phone that drops rejoins the same
+session. A console restarted under an open session turns it on again.
+
+**VA-API, not Vulkan.** Sunshine 2026.914 turns on RADV's experimental
+Vulkan encode and picks it first; on AMD it can break HEVC
+(LizardByte/Sunshine#5841, fixed upstream by staying on VA-API). Encoding is
+on the video engine either way: Sunshine used about 4% of one core.
+
+**The green and purple seam was ours.** With a CRT effect the phone showed a
+straight seam, green left, purple right; the TV looked clean. Not the
+encoder, not Sunshine's shader precision (both tried and wrong, and said so on
+#286 at the time): the frontend drew a screen effect at a whole number of
+pixels into a rectangle a fraction wider, nearest pixel to pixel, so one
+column (x=1924) was drawn twice and the CRT mask shifted a pixel from there
+on. Sunshine's shrink then picked red and green on one side and blue and red
+on the other. The picture now sits on whole pixels; the chosen effect stays
+on while streaming. The "Sharp while streaming" rule this first produced is
+dropped.
+
+**The TV.** It shows the same picture during a stream; switched off by hand,
+play goes on (the A9 keeps the output up). A "Remote Play in progress"
+screen cannot exist, since the TV's picture is what Sunshine copies; putting
+the TV to sleep needs HDMI-CEC, and MMagTech will not ask anyone to buy a CEC
+adapter for it. **This sits against the recorded "HDMI-CEC is a hard
+requirement" (CEC section, above): MMagTech, 2026-10-07, "I'm not buying a
+CEC adapter ... I would be expecting other people to buy it as well". Not
+reopened here; noted so it is not missed.**
+
+**Pairing and names.** Sunshine's API (GET and POST `/api/pin`, which needs
+the request's `pairing_id` in this version, `/api/clients/list`, `/unpair`),
+on localhost with a login the console made; its web page answers the console
+only. Every Moonlight sends "roth" as its name (hard-coded in its iOS, PC and
+Android source), and Sunshine cannot rename, so the console names devices
+itself. Moonlight keeps one certificate per install, so a phone pairing again
+became a second record, and Sunshine refuses a certificate that matches two
+("Client certificate identity is not enabled"): the console removes the
+older record. Sunshine fixed this itself in a pre-release
+(LizardByte/Sunshine#5696); the stopgap goes when the pin passes it.
+
+**The handover.** Sunshine's controller names itself "Sunshine
+(libvirtualhid) X-Box Series Controller"; SDL calls it an Xbox Series X
+Controller like a real one, so the device's name is read. A stream's
+controllers have seats of their own: while a device streams the game hears
+them, and the console's are set aside (dropped by an SDL event filter, menus
+included); when it ends the console's are back as they were. Sunshine keeps
+a phone's controllers after a dropped connection, and has no hook or API for
+a drop, so "streaming" is read from its own "CLIENT CONNECTED" and "CLIENT
+DISCONNECTED" log lines. A running game pauses at every handover. Tested on
+the A9: Gunstar Heroes, Burnout 3 (PS2) and Angel at Dusk (Switch). PS3 did
+not hand over until its menu opened (the loop an emulator of its own runs
+under skipped the check); fixed and seen working on Switch, which runs the
+same way; PS3 itself not seen again yet.
+
+**Wii Remote games.** A paired Remote means the person playing holds it;
+during a stream they do not, so Remote games are greyed, and one already
+running stays paused with no Resume until the stream ends (MMagTech agreed
+after the case was walked through; the cost of not doing it was only a game
+the phone could start and not control).
+
+**Tailscale, for playing away from home (2026-10-08).** Checked on the A9
+first: Tailscale 1.102.4 is in the base (Bazzite's), runs under the image
+unchanged, and the console's own user can drive it once the unit names it
+operator. A full stream ran through it (every Sunshine port, about 8 Mbps).
+**Tailscale and only Tailscale** (MMagTech: one way in from outside, or the
+OS's intent is lost under options), and it is in the image at all because
+the person without a VPN otherwise follows a guide that forwards Sunshine's
+ports to the internet. It works behind any router with nothing forwarded,
+including the shared addresses of 5G home internet and some fibre, which is
+how PlayStation Remote Play feels (a company account introduces the devices,
+as Sony's does). **Named and dropped:** the console as its own WireGuard
+server (no account, but a forwarded port and an address of your own, which
+many homes no longer have); NetBird (fully open, self-hostable, but a second
+VPN program to ship); Headscale (replaces Tailscale's sign-in server, not its
+app, and a field nobody needs for the first release); ZeroTier (its
+self-hosted server is not open source); Moonlight's own internet streaming
+(the console on the open internet). Somebody with their own way home leaves
+the row off: MMagTech's own iPhone streamed over 5G through his Tailscale
+subnet router with nothing on the console.
+
+*Under Streaming, never alone:* it runs only while Streaming and Tailscale
+are both on, so "off means nothing runs" holds for both. *Locked down by the
+image,* not by Settings: operator `cabinet`, no DNS and no routes from the
+network, no exit node, no logs to Tailscale (`TS_NO_LOGS_NO_SUPPORT`; their
+support cannot look into a problem). *The firewall:* without a zone of its
+own, `tailscale0` fell into FedoraWorkstation, which opens every port above
+1024 (File access and Developer access with them); `cabinetos-tailscale`
+lets in Sunshine's ports only. *NetworkManager* ran its internet check
+through `tailscale0` every few minutes (port 80 to fedoraproject.org, dropped
+by Tailscale as addressed to no device) and would have put it back in its
+own zone; it is told to leave the interface alone. *Driven by the `tailscale`
+command,* which Tailscale documents and keeps stable, not its local API; `up`,
+not `login` (which adds a second account to a signed-in console), and `up`
+must name every non-default setting or it refuses.
+
+*The sign-in expires* after 180 days unless the owner turns that off. The
+date is fixed at sign-in, does not pause while off, and is shown from the
+moment it is signed in (MMagTech: it is turned on once and rarely visited,
+so that is when to see it and set a reminder). Once passed, the row says
+"Sign-in ended" and "Sign in again", which brings the QR code back; tested:
+signing in afresh kept the console's name and address, so Moonlight's entry
+survives. *No exit node from the console:* proposed for iPhones (below) and
+dropped, because Tailscale has no "deny" for an advertised exit node, only
+an approval left unticked, and an owner whose Tailscale approves
+automatically would get one without being asked.
+
+**Moonlight for iPhone on mobile data does not stream over Tailscale**, and
+the cause is Moonlight's. On an IPv6-only network (MMagTech's carrier) iOS
+rewrites an IPv4 address into a NAT64 one for Moonlight's own connection,
+which then leaves outside a VPN that carries only some addresses: the app
+list and the launch go through Tailscale, the stream setup to the internet,
+and it times out ("RTSP handshake failed, error 60"). Seen in captures on
+the A9; moonlight-stream/moonlight-ios#669; fixed in moonlight-common-c
+`0975a86` (2025-07-15), taken into the iPhone app's source on 2026-09-26, not
+in the App Store's 9.0.2 (2024-02-26). An exit node on the phone makes the
+VPN carry everything and it streams (tested, VPN-USA); VoidLink, an
+open-source iPhone fork (its source read: no tracking, talks only to the
+console), has the fix and streamed. Not fixable on the console: Sunshine on
+IPv6 (`address_family = both`) was tried and Moonlight went back to the IPv4
+address it had saved. The docs carry the exit-node line until Moonlight
+ships.
+
+**While a device streams, the section is greyed** and Streaming reads "In
+use". Found when MMagTech's first press from his phone, on a console left on
+Settings, switched Streaming off and cut the stream it came through. **And a
+bug that exposed:** Sunshine stopped mid-stream writes no "CLIENT
+DISCONNECTED", and the console, reading the old log when Streaming came back
+on, believed a device was streaming and set the TV's controllers aside with
+nobody playing. A newly started Sunshine now starts from "nobody streaming".
+
+**Pausing from a phone.** Holding Select did not open the menu in a PS3
+game. Recorded on the A9: Sunshine lets go of Select and presses Home in the
+same instant, and the path for emulators that run as programs of their own
+read Select's release with Home already down, then counted Home's own press
+as a second button (a shortcut, not a tap). Built-in games read the buttons
+per frame and never saw it. Fixed for every pad: the shortcut button's own
+press is not a second button. And with in-game shortcuts off (the default)
+Home opens nothing anywhere, which left a phone on touch controls no way to
+pause; **a streaming device's Home now always opens the menu**, every system
+(MMagTech, 2026-10-08). **Sunshine's priority:** it keeps its capabilities on
+one or two threads and drops them elsewhere, so the sound and video threads'
+requests for priority were refused on every stream; `LimitNICE=-15` in the
+unit lets any of its threads go that far.
+
+**Found on the way.** The pause menu closed itself when a pad came back
+(it left with Home held, being switched off); fixed for every pad. Steam's
+session picks 4K 120 Hz HDR on the LG C1 and the TV stays black: #290.
+#289 (a pad back mid-game ignored by PS2) did not reproduce; its one
+unrepeated condition, the phone's pad as player 2, cannot arise now that a
+stream's pads are seated apart.

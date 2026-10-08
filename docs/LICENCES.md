@@ -141,6 +141,11 @@ here. See `frontend/src/catalog.cpp`.
 | **The libraries Xenia Edge's build carries** (GTK 3, GLib, cairo, SDL 3, X11 libraries and others, in its `usr/lib`) | bundled by Edge's own AppImage build, unchanged | each under its own licence, as Edge ships them (GTK, GLib and cairo LGPL, SDL zlib, the X11 libraries MIT) |
 | **Cemu**, in `/usr/lib/cabinetos/cemu` | built from source by `cores/build-cemu.sh`, unmodified, `cemu-project/Cemu` at commit `4e3c824faa00f6b85782db019f20f29f063f3a2a`, with Cemu's own game profiles and resources from the same commit | MPL 2.0 |
 | **The libraries compiled into Cemu** (wxWidgets, Boost, fmt, SDL 3, OpenSSL, curl, glslang, pugixml, libzip, zstd and others) | built by Cemu's own vcpkg recipe at the versions its pinned commit names, linked statically, unchanged | each under its own licence (wxWidgets licence, Boost licence, fmt MIT, SDL zlib, OpenSSL Apache 2.0, curl MIT-style, glslang BSD-style, pugixml MIT, libzip BSD 3-Clause, zstd BSD) |
+| **Sunshine** (Remote Play), `/usr/bin/sunshine` and `/usr/share/sunshine` | LizardByte's official Fedora 44 package, release `v2026.914.233613` (`Sunshine-2026.914.233613-1.fc44.x86_64.rpm`), unmodified, pinned by checksum in `build_files/install-sunshine.sh`, which removes only the file capability it sets and its own service and launchers; source is `LizardByte/Sunshine` at tag `v2026.914.233613` | GPL v3 |
+| **The libraries compiled into Sunshine** (FFmpeg, and x264 for its CPU encoder, which the console does not use) | linked statically by LizardByte's build, unchanged | each under its own licence (FFmpeg LGPL 2.1 or later / GPL, x264 GPL v2 or later) |
+| **Tailscale** (Remote Play away from home), `/usr/bin/tailscale` and `/usr/sbin/tailscaled` | already in the Bazzite base (1.102.4); nothing is bundled, only its service given CabinetOS's settings | BSD 3-Clause |
+| **miniupnpc**, Sunshine's one library the base lacks | Fedora 44's package, installed as Sunshine's dependency | BSD 3-Clause |
+| **The Remote Play tile**, `/usr/share/cabinetos/remoteplay/cabinetos.png` | drawn by this project's `tools/make-remoteplay-tile.py` (the boot logo's cabinet, redrawn), the name set in Noto Sans | MIT, as CabinetOS; Noto Sans is OFL 1.1, which places no condition on a picture drawn with it |
 
 PSP is the only platform whose "firmware" ships with the emulator rather than
 coming from RomM. Every other system's BIOS is fetched at runtime from the
@@ -170,6 +175,11 @@ source be available, and it is, at that commit. The console reads a `.wua`'s
 table of contents itself (`frontend/src/wiiu.cpp`) to find a game's product
 code; that is this project's own code, written from the format's description
 in Exzap/ZArchive (MIT No Attribution). No game, firmware or key is involved.
+**REMOTE PLAY IS A WHOLE PROGRAM TOO**, Sunshine, shipped as LizardByte
+publishes it for Fedora; nothing in the program is patched. GPL v3 asks that
+its source be available, and it is, at the pinned tag. The settings and the
+one entry the console writes for it (`/usr/libexec/cabinetos-remoteplay`)
+are configuration, not code of Sunshine's.
 Switch (Eden) and Xbox (xemu) are not in the image at all: each console
 installs them from Flathub, which distributes them (open question 21). Only
 xemu's blank drive and the EEPROM are in the image, in the table above; the

@@ -184,3 +184,12 @@ Read before working on a screen, the network, Bluetooth, pairing or first run.
 
 - **A field added to the middle of a positional struct re-assigns the rest of
   the row.** `catalog.cpp`'s table is positional.
+
+- **A picture drawn nearest-pixel must sit on whole screen pixels.** The
+  game's rectangle was a fraction of a pixel wider than the screen effect
+  drawn into it, so one column was drawn twice (x=1924 on a 4K TV) and a CRT
+  mask shifted a pixel from there on. Invisible on the TV; Remote Play's
+  shrink turned it into a green half and a purple half (#286). Found by
+  reading the mask's phase column by column in a 4K capture, after two wrong
+  explanations; when a fault splits a picture down a line, look for the
+  column where the pattern breaks.

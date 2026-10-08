@@ -97,6 +97,8 @@
 #include "power.h"
 #include "look.h"
 #include "prefs.h"
+#include "remoteplay.h"
+#include "tailscale.h"
 #include "optcheck.h"
 #include "quality.h"
 #include "screenfx.h"
@@ -5579,6 +5581,27 @@ int main(int argc, char** argv) {
         return 1;
     }
     players::loadMappings();
+    // A SET-ASIDE PAD IS NOT HEARD AT ALL (players.h, Remote Play): the
+    // console's own pads while a stream plays, a stream's pads when it has
+    // ended. Dropped as SDL queues them, so no screen, menu or game sees them.
+    SDL_SetEventFilter(
+        [](void*, SDL_Event* e) -> bool {
+            switch (e->type) {
+                case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+                case SDL_EVENT_GAMEPAD_BUTTON_UP: return !players::setAside(e->gbutton.which);
+                case SDL_EVENT_GAMEPAD_AXIS_MOTION: return !players::setAside(e->gaxis.which);
+                case SDL_EVENT_GAMEPAD_TOUCHPAD_DOWN:
+                case SDL_EVENT_GAMEPAD_TOUCHPAD_MOTION:
+                case SDL_EVENT_GAMEPAD_TOUCHPAD_UP: return !players::setAside(e->gtouchpad.which);
+                case SDL_EVENT_GAMEPAD_SENSOR_UPDATE: return !players::setAside(e->gsensor.which);
+                case SDL_EVENT_JOYSTICK_BUTTON_DOWN:
+                case SDL_EVENT_JOYSTICK_BUTTON_UP: return !players::setAside(e->jbutton.which);
+                case SDL_EVENT_JOYSTICK_AXIS_MOTION: return !players::setAside(e->jaxis.which);
+                case SDL_EVENT_JOYSTICK_HAT_MOTION: return !players::setAside(e->jhat.which);
+                default: return true;
+            }
+        },
+        nullptr);
     // Real Wii Remotes (#200): whether one is paired, before the library is
     // drawn, and the thread that sets each up as it connects.
     wiiremote::start();
@@ -7078,7 +7101,7 @@ int main(int argc, char** argv) {
     // over whatever was behind it, and the player is a cover over that — which
     // is what makes quitting a game return to the launch screen and backing out
     // again return to the browsing.
-    enum class Screen { Home, Library, Grid, Detail, Search, AddAccount, Settings };
+    enum class Screen { Home, Library, Grid, Detail, Search, AddAccount, TailscaleSignIn, Settings };
     std::vector<Screen> stack{Screen::Home};
     // Which screen last set the room, so a change of screen can be told apart
     // from focus moving within one. See the backdrop block in the frame loop.
@@ -7097,6 +7120,13 @@ int main(int argc, char** argv) {
     screens::SearchScreen searchScreen;
     screens::AccountScreen accountScreen;
     screens::AddAccountScreen addAccountScreen;
+    // Signing the console in to Tailscale (#286): the same screen, a link to
+    // approve on a phone. The one line is the constraint that matters: the
+    // account has to be the one the phone uses, or the two never meet.
+    screens::AddAccountScreen tsSignInScreen;
+    tsSignInScreen.setText("Sign in to Tailscale",
+                           {"Use the Tailscale account", "your phone is signed in to."},
+                           "Getting a link\xE2\x80\xA6");
     screens::SettingsScreen settingsScreen;
     // What the docked keyboard held last frame, so the query is re-run when it
     // changes and not sixty times a second when it does not.
@@ -7459,8 +7489,12 @@ int main(int argc, char** argv) {
     // (2026-09-28, Metroid Prime 4 loading behind its own launch page).
     int standaloneClearFrames = 0;
     // The shortcut button's tap, per player, as the in-process path reads it:
-    // down, and whether anything else was pressed while it was.
-    struct { bool down = false, used = false; } standaloneShortcut[cab::vpad::kMaxPlayers];
+    // down, and whether anything else was pressed while it was, and by which
+    // pad: a hold whose pad left is dropped, not released (ShortcutHold).
+    struct {
+        bool down = false, used = false;
+        SDL_JoystickID pad = 0;
+    } standaloneShortcut[cab::vpad::kMaxPlayers];
     // Back and Start as the emulator has them, per player: passed down, or
     // held back because the other was already down (Emulator::blocksBackStart).
     struct { bool passed[2] = {false, false}, held[2] = {false, false}; }
@@ -7568,6 +7602,13 @@ int main(int argc, char** argv) {
     // is what makes this simple and is the direct payoff of hosting cores in
     // process rather than launching them.
     bool overlayOpen = false;
+    // A Wii game made for the Wii Remote is running (the launch sets it):
+    // while a stream plays it, nobody holding the stream's controllers can
+    // play it, so its pause menu has no Resume (#286, below).
+    bool sessionNeedsRemote = false;
+    auto remoteOnlyHere = [&]() {
+        return playing && sessionNeedsRemote && players::streaming();
+    };
     // THE BUTTONS THE MENU WAS CLOSED WITH, per player, kept from the game
     // until they are let go (#103). The menu acts when a button goes DOWN and
     // the game reads what is held every frame, so B to go back, A on Resume,
@@ -7585,7 +7626,19 @@ int main(int argc, char** argv) {
     // `before` is what was already held when it went down, so only buttons
     // pressed DURING the hold count; `used` is whether one was, which is what
     // tells a tap (the pause menu) from a hold (a shortcut) on release.
-    struct ShortcutHold { bool down = false, used = false; uint32_t before = 0; };
+    //
+    // A HOLD BELONGS TO THE PAD THAT PRESSED IT. A pad is switched off by
+    // holding its Home button, so it leaves with its shortcut button down and
+    // never sends the release. The hold used to stay with the player, and the
+    // next pad to be that player (the same one, switched back on) read as
+    // letting go: a tap, which closed the pause menu the pad's going off had
+    // opened (2026-10-07, every reconnect on Genesis). `pad` is whose hold it
+    // is; another pad in the seat drops it unread.
+    struct ShortcutHold {
+        bool down = false, used = false;
+        uint32_t before = 0;
+        SDL_JoystickID pad = 0;
+    };
     ShortcutHold shortcutHold[players::kMax];
     // FAST FORWARD (#77): the shortcut button and ZR, held. Fast while held,
     // normal on release, the sound discarded meanwhile. About 4x, a fixed top
@@ -8557,6 +8610,11 @@ int main(int argc, char** argv) {
     // Format, so erasing a drive is never one press too many. Not the PIN;
     // no lockout, because a wrong code costs nothing.
     std::string pinExpect;
+    // A CODE ANOTHER DEVICE SHOWS, typed on the same pad and handed back
+    // unchecked: Moonlight's four digits when a device pairs for Remote Play.
+    // Whether they are right is the device's to say, not the console's.
+    std::function<void(const std::string&)> pinCode;
+    std::function<void()> pinCodeCancel;
     auto askPin = [&](const std::string& title, const std::string& detail,
                       std::function<void()> then, bool always = false) {
         pinExpect.clear();
@@ -8608,6 +8666,21 @@ int main(int argc, char** argv) {
     auto pinOutcome = [&](screens::PinScreen::Outcome o) {
         using O = screens::PinScreen::Outcome;
         if (o == O::None) return;
+        if (pinCode) {
+            auto took = std::move(pinCode);
+            auto left = std::move(pinCodeCancel);
+            pinCode = nullptr;
+            pinCodeCancel = nullptr;
+            const std::string digits = pinScreen.pin();
+            pinScreen.close();
+            if (o == O::Cancelled) {
+                if (left) left();
+            } else {
+                sound::play(sound::Cue::Activate);
+                took(digits);
+            }
+            return;
+        }
         if (o == O::Cancelled) {
             pinScreen.close();
             pinThen = nullptr;
@@ -8726,7 +8799,8 @@ int main(int argc, char** argv) {
                      SetAddController, SetShortcuts, SetShortcutButton, SetAppearance,
                      SetDarkHours, SetColour, SetRumble, SetPictureQuality,
                      SetWiiRemotes, SetSteam, SetSteamShow, SetRetroAchievements,
-                     SetAchievementSound, SetDeveloper, SetVersion };
+                     SetAchievementSound, SetDeveloper, SetVersion, SetRemotePlay,
+                     SetPairedDevices, SetTailscale };
     // One Eject row per USB drive: this plus the drive's index in
     // storage::locations() when the rows were built.
     constexpr int kSetEject = 100;
@@ -8954,6 +9028,63 @@ int main(int argc, char** argv) {
         std::string why;
         if (unit::start(kDevUnit, &why)) devSaidAt = std::time(nullptr);
         else std::fprintf(stderr, "[developer] could not turn on at start: %s\n", why.c_str());
+    }
+
+    // ---- Remote Play (docs/SETTINGS.md, Remote Play; issue #286) ----------
+    //
+    // Sunshine, so Moonlight on a phone, tablet or computer can play the
+    // console. Off by default, and off means cabinetos-remoteplay.service is
+    // not running and remoteplay.h asks it nothing. On is remembered in
+    // settings.json and started again at boot, as Developer access is.
+    // Pairing is on the television: a device asking to pair brings up the
+    // PIN pad for the four digits Moonlight shows.
+    constexpr const char* kRpUnit = "cabinetos-remoteplay.service";
+    std::string rpState = unit::state(kRpUnit);
+    int64_t rpSaidAt = 0;
+    std::string rpFailed;   // a refusal or a start that failed, said in the row
+    bool rpWant = prefs::get("remote_play", "off") == "on";
+    int rpSeen = -1;        // remoteplay::generation() the rows were built from
+    std::set<std::string> rpAsked;   // requests already put to the TV
+    std::string rpAsking;            // the request the PIN pad is open for
+    // Digits handed over: the name given to Sunshine, when, and the devices
+    // paired before, so the new one is the one not among them.
+    struct { std::string name; int64_t at = 0; std::set<std::string> before; } rpPairing;
+    if (rpWant && rpState != "active") {
+        std::string why;
+        if (unit::start(kRpUnit, &why)) rpSaidAt = std::time(nullptr);
+        else std::fprintf(stderr, "[remoteplay] could not turn on at start: %s\n", why.c_str());
+    }
+    remoteplay::watch(rpWant);
+    // TAILSCALE, for Remote Play away from home (tailscale.h says why it is
+    // the one way in from outside). tailscaled.service runs only while
+    // Streaming AND Tailscale are on; turning Streaming off stops it too, and
+    // turning Streaming on starts it again when Tailscale was on. Signed in
+    // or not is remembered as well, so a console turned off can still say
+    // "Disconnected" (signed in, not running) rather than "Off" (never).
+    constexpr const char* kTsUnit = "tailscaled.service";
+    bool tsWant = prefs::get("tailscale", "off") == "on";
+    bool tsSignedIn = prefs::get("tailscale_signed_in", "no") == "yes";
+    int tsSeen = -1;            // tailscale::generation() the rows were built from
+    bool tsSigningIn = false;   // the sign-in screen is up, `tailscale up` running
+    bool tsShownLink = false;   // its link is on the screen
+    bool tsLoggingOut = false;  // `tailscale logout` running on its worker
+    std::thread tsWorker;
+    std::atomic<bool> tsWorkerDone{false};
+    if (rpWant && tsWant && unit::state(kTsUnit) != "active") {
+        std::string why;
+        if (!unit::start(kTsUnit, &why))
+            std::fprintf(stderr, "[tailscale] could not turn on at start: %s\n", why.c_str());
+    }
+    // A REMOTE PLAY SESSION ALREADY OPEN when the console starts (it was
+    // restarted under one: back from Steam, a crash) needs gamescope composing
+    // again, or the next device to connect streams a black picture: the
+    // gamescope this console runs in is new, and starts with it off.
+    // /usr/libexec/cabinetos-remoteplay says why, and marks the session.
+    if (const char* run = std::getenv("XDG_RUNTIME_DIR");
+        rpWant && run && ::access((std::string(run) + "/cabinetos-remoteplay-session").c_str(), F_OK) == 0) {
+        const proc::Result r = proc::run({"gamescopectl", "composite_force", "1"}, 5);
+        std::fprintf(stderr, "[remoteplay] session open at start: composing%s\n",
+                     r.ok() ? "" : " (gamescopectl failed)");
     }
 
     // AFTERWARDS: the first start after a restart compares the version the
@@ -9547,6 +9678,67 @@ int main(int argc, char** argv) {
         return out;
     };
 
+    // THE TAILSCALE ROW (#286), under Streaming and greyed while it is off.
+    // Its value is the address to give Moonlight; its second line is the
+    // console's name there and when its sign-in ends. MMagTech, 2026-10-08.
+    // "Sign in again" is offered for the last two weeks only.
+    constexpr int64_t kTsWarnDays = 14;
+    auto tsEndsSoon = [&](const tailscale::Status& st) {
+        return st.expires != 0 && st.expires - std::time(nullptr) < kTsWarnDays * 86400;
+    };
+    auto tailscaleRow = [&](bool streaming, bool inUse) {
+        using K = screens::SettingsRow::Kind;
+        const tailscale::Status st = tailscale::last();
+        tsSeen = tailscale::generation();
+        const int64_t ended = std::atoll(prefs::get("tailscale_expires", "0").c_str());
+        std::string detail, value;
+        auto dayOf = [](int64_t when) {
+            char day[32] = "";
+            const std::time_t t = static_cast<std::time_t>(when);
+            std::tm tm{};
+            localtime_r(&t, &tm);
+            std::strftime(day, sizeof day, "%d %b %Y", &tm);
+            return std::string(day[0] == '0' ? day + 1 : day);
+        };
+        if (!streaming) {
+            value = "Off";
+        } else if (tsLoggingOut) {
+            value = "Logging out\xE2\x80\xA6";
+        } else if (!tsWant) {
+            // Signed in but not running: Connect brings it back, no sign-in.
+            value = tsSignedIn ? "Disconnected" : "Off";
+        } else if (unit::state(kTsUnit) == "failed") {
+            value = "Couldn't start";
+        } else if (st.state == "Running") {
+            detail = st.name;
+            value = st.address;
+            // THE SIGN-IN ENDS (180 days by default), and the date is shown
+            // from the moment it is signed in: somebody turns Remote Play on
+            // once and rarely comes back, so that is when to see it, and set
+            // a reminder (MMagTech, 2026-10-08). None when the owner turned
+            // expiry off in Tailscale.
+            if (st.expires != 0)
+                detail += std::string(detail.empty() ? "" : " \xC2\xB7 ") + "Sign-in ends " +
+                          dayOf(st.expires);
+        } else if (st.state == "NeedsLogin" || st.state == "Stopped") {
+            // SIGNED OUT, AND WHY when it is the date passing: the one the
+            // row showed all along (kept in settings.json, since a console
+            // signed out has none to read). Otherwise it was removed some
+            // other way, Tailscale's own page, and "ended" would be wrong.
+            // The value says what pressing does (MMagTech, 2026-10-08).
+            detail = ended != 0 && ended <= std::time(nullptr) ? "Sign-in ended " + dayOf(ended)
+                                                               : "Signed out";
+            value = "Sign in again";
+        } else if (st.state == "NeedsMachineAuth") {
+            // The owner's Tailscale approves new devices by hand.
+            value = "Waiting for approval";
+        } else {
+            value = "Turning on\xE2\x80\xA6";
+        }
+        return screens::SettingsRow{streaming && !inUse ? K::Action : K::Disabled, SetTailscale,
+                                    "Tailscale", detail, value};
+    };
+
     auto buildSettings = [&]() {
         using Row = screens::SettingsRow;
         using K = Row::Kind;
@@ -9694,6 +9886,42 @@ int main(int argc, char** argv) {
                 cats.back().rows.push_back(
                     {K::Action, SetWifi, "Wi-Fi", "",
                      !radioOn ? "Off" : (onWifi.empty() ? "Not connected" : onWifi)});
+        }
+
+        // REMOTE PLAY (#286): its own section, a highlight (MMagTech,
+        // 2026-10-07). Three rows: the switch ("Streaming": "Remote Play"
+        // twice, as section and row, read oddly), with the app to use and the
+        // name to pick in it; the paired devices, one row however many there
+        // are, opening a list; and Tailscale, for playing away from home.
+        // Sunshine's own name is never on screen.
+        {
+            const bool on = rpState == "active";
+            std::string value = on ? "On" : "Off";
+            // "app", so it reads as something to get on the phone, not a mode;
+            // and the name Moonlight lists it under, CabinetOS, the name the
+            // start-up script gives Sunshine (MMagTech, 2026-10-07).
+            std::string detail = on ? "Moonlight app \xC2\xB7 CabinetOS" : "Moonlight app";
+            if (rpSaidAt != 0) value = rpWant ? "Turning on\xE2\x80\xA6" : "Turning off\xE2\x80\xA6";
+            else if (!rpFailed.empty()) detail = rpFailed;
+            const size_t n = remoteplay::paired().size();
+            rpSeen = remoteplay::generation();
+            // WHILE A DEVICE STREAMS, THE WHOLE SECTION IS GREYED: its
+            // controller drives the console, and one press on Streaming cut
+            // the stream it was playing on (MMagTech, from his phone,
+            // 2026-10-08); Remove could do the same to the device playing.
+            // The console's own controllers are set aside during a stream, so
+            // nobody at the TV loses anything.
+            const bool streamingNow = players::streaming();
+            // "In use": a grey switch still reading On looks like a fault
+            // when the reason is on another device (MMagTech, 2026-10-08).
+            if (streamingNow) detail = "In use";
+            cats.push_back({"Remote Play", {
+                {streamingNow ? K::Disabled : K::Toggle, SetRemotePlay, "Streaming", detail, value},
+                {on && n > 0 && !streamingNow ? K::Action : K::Disabled, SetPairedDevices,
+                 "Paired devices", "",
+                 n == 0 ? "None" : std::to_string(n) + " paired"},
+                tailscaleRow(on, streamingNow),
+            }});
         }
 
         // PICTURE QUALITY IS THE OWNER'S WHEN A PIN IS SET (MMagTech,
@@ -10139,6 +10367,132 @@ int main(int argc, char** argv) {
         prefs::set("developer_access", on ? "on" : "off");
         buildSettings();
     };
+    // Remote Play on or off, as Developer access: a refusal said in the row,
+    // otherwise "Turning on…" until systemd answers.
+    auto setRemotePlay = [&](bool on) {
+        std::string why;
+        const bool ok = on ? unit::start(kRpUnit, &why) : unit::stop(kRpUnit, &why);
+        if (!ok) {
+            rpFailed = why.find("not found") != std::string::npos ? "Not in this image" : why;
+            if (rpFailed.size() > 60) rpFailed.resize(60);
+            rpSaidAt = 0;
+        } else {
+            rpFailed.clear();
+            rpSaidAt = std::time(nullptr);
+        }
+        rpWant = on;
+        prefs::set("remote_play", on ? "on" : "off");
+        remoteplay::watch(on, /*fresh=*/true);
+        if (!on) rpAsked.clear();
+        // TAILSCALE GOES WITH IT: never running while Streaming is off, and
+        // back with Streaming when it was on.
+        if (ok && tsWant) {
+            std::string tsWhy;
+            if (!(on ? unit::start(kTsUnit, &tsWhy) : unit::stop(kTsUnit, &tsWhy)))
+                std::fprintf(stderr, "[tailscale] %s with Streaming: %s\n",
+                             on ? "could not start" : "could not stop", tsWhy.c_str());
+        }
+        buildSettings();
+    };
+    // TAILSCALE ON OR OFF: the unit, and the choice remembered. Off keeps the
+    // sign-in (Disconnected); Log out is what removes it.
+    auto setTailscale = [&](bool on) {
+        std::string why;
+        const bool ok = on ? unit::start(kTsUnit, &why) : unit::stop(kTsUnit, &why);
+        if (!ok) std::fprintf(stderr, "[tailscale] could not turn %s: %s\n", on ? "on" : "off",
+                              why.c_str());
+        tsWant = on;
+        prefs::set("tailscale", on ? "on" : "off");
+        buildSettings();
+    };
+    // SIGNING IN: the link as a QR code, approved on a phone. Leaving the
+    // screen before it is approved turns Tailscale off again (the frame loop).
+    auto openTsSignIn = [&](bool again) {
+        if (!tsWant) setTailscale(true);
+        tsSigningIn = true;
+        tsShownLink = false;
+        tsSignInScreen.open();
+        stack.push_back(Screen::TailscaleSignIn);
+        tailscale::startLogin(again);
+    };
+    // LOGGING OUT, on a worker: `tailscale logout` needs tailscaled running,
+    // so a console that is Disconnected starts it for the moment. The frame
+    // loop picks up the end and turns it off.
+    auto tsLogout = [&]() {
+        if (tsWorker.joinable()) return;
+        tsLoggingOut = true;
+        tsWorkerDone = false;
+        const bool wasRunning = tsWant;
+        tsWorker = std::thread([&, wasRunning]() {
+            std::string why;
+            if (!wasRunning) {
+                unit::start(kTsUnit, &why);
+                for (int i = 0; i < 20 && !tailscale::answers(); ++i)
+                    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            }
+            if (!tailscale::logout(&why))
+                std::fprintf(stderr, "[tailscale] log out: %s\n", why.c_str());
+            tsWorkerDone = true;
+        });
+        buildSettings();
+    };
+    // NAMING A DEVICE: the keyboard, the current name in the field. Right after
+    // pairing it says so; an empty name keeps the one it had.
+    std::function<void(int)> openPairedPanel;
+    auto askDeviceName = [&](const std::string& id, const std::string& current, bool justPaired) {
+        ui::Keyboard::Config cfg;
+        cfg.title = justPaired ? "Paired. Name this device" : "Rename " + current;
+        cfg.initial = current;
+        cfg.placeholder = "Name";
+        keyboard.open(cfg);
+        keyboardThen = [&, id, current, justPaired](ui::KeyboardResult r) {
+            std::string name = r == ui::KeyboardResult::Committed ? keyboard.value() : "";
+            while (!name.empty() && name.back() == ' ') name.pop_back();
+            if (name.empty()) name = current;
+            remoteplay::rename(id, name);
+            if (justPaired) menuNotice.say("Paired with " + name, Tone::Done);
+            buildSettings();
+        };
+    };
+    // THE PAIRED DEVICES: a list, however long, each one pressed for Remove
+    // (the PIN when set). One row on the page, so a household with many
+    // devices does not push Tailscale off it (MMagTech, 2026-10-07).
+    std::vector<remoteplay::Device> rpRowsShown;
+    openPairedPanel = [&](int focus) {
+        rpRowsShown = remoteplay::paired();
+        if (rpRowsShown.empty()) {
+            choiceScreen.close();
+            buildSettings();
+            return;
+        }
+        std::vector<std::string> names;
+        for (const remoteplay::Device& d : rpRowsShown) names.push_back(d.name);
+        const int last = static_cast<int>(names.size()) - 1;
+        askChoice("Paired devices", "", names, std::clamp(focus, 0, last), [&](int i) {
+            if (i < 0 || i >= static_cast<int>(rpRowsShown.size())) return;
+            const remoteplay::Device d = rpRowsShown[static_cast<size_t>(i)];
+            askChoice(d.name, "", {"Rename", "Remove", "Cancel"}, 0, [&, d, i](int c) {
+                if (c == 0) {
+                    choiceScreen.close();
+                    askDeviceName(d.id, d.name, false);
+                    return;
+                }
+                if (c != 1) { openPairedPanel(i); return; }
+                askChoice("Remove " + d.name + "?", "", {"Remove", "Cancel"}, 1, [&, d, i](int k) {
+                    if (k != 0) { openPairedPanel(i); return; }
+                    askPin("Enter the PIN", "To remove " + d.name, [&, d, i]() {
+                        std::string why;
+                        if (!remoteplay::remove(d.id, &why))
+                            menuNotice.say("Couldn't remove " + d.name, Tone::Problem);
+                        buildSettings();
+                        openPairedPanel(i);
+                    });
+                });
+            });
+        });
+        choiceScreen.setStaysOpen(true);
+    };
+
     // THE PANEL: File access's, with the port. Same password, same New
     // password (it changes File access's too, which is the point of one).
     std::function<void()> openDevPanel;
@@ -11038,6 +11392,80 @@ int main(int argc, char** argv) {
                         });
                         sound::play(sound::Cue::Activate);
                     }
+                } else if (res.value == SetRemotePlay) {
+                    // On behind the PIN when one is set; off at once, since
+                    // off only closes things. Never during a stream (the
+                    // row is greyed; this is for a press before it was).
+                    if (rpSaidAt != 0 || players::streaming()) {
+                        sound::play(sound::Cue::Edge);
+                    } else if (rpState == "active") {
+                        setRemotePlay(false);
+                        sound::play(sound::Cue::Activate);
+                    } else {
+                        askPin("Enter the PIN", "To turn on Remote Play",
+                               [&]() { setRemotePlay(true); });
+                        sound::play(sound::Cue::Activate);
+                    }
+                } else if (res.value == SetTailscale) {
+                    // Off: the PIN (when set), then sign in. On: Disconnect
+                    // and Log out (the PIN), and Sign in again in the last
+                    // two weeks. Disconnected: Connect and Log out.
+                    const tailscale::Status st = tailscale::last();
+                    auto confirmLogout = [&]() {
+                        askChoice("Log out of Tailscale?", "", {"Log out", "Cancel"}, 1,
+                                  [&](int k) {
+                                      if (k != 0) return;
+                                      askPin("Enter the PIN", "To log out of Tailscale",
+                                             [&]() { tsLogout(); });
+                                  });
+                    };
+                    if (tsLoggingOut || tsSigningIn || players::streaming()) {
+                        sound::play(sound::Cue::Edge);
+                    } else if (!tsWant && !tsSignedIn) {
+                        askPin("Enter the PIN", "To turn on Tailscale",
+                               [&]() { openTsSignIn(false); });
+                        sound::play(sound::Cue::Activate);
+                    } else if (!tsWant) {
+                        askChoice("Tailscale", "", {"Connect", "Log out", "Cancel"}, 0,
+                                  [&, confirmLogout](int c) {
+                                      if (c == 0)
+                                          askPin("Enter the PIN", "To turn on Tailscale",
+                                                 [&]() { setTailscale(true); });
+                                      else if (c == 1) confirmLogout();
+                                  });
+                        sound::play(sound::Cue::Activate);
+                    } else if (st.state == "Running") {
+                        std::vector<std::string> opts;
+                        const bool soon = tsEndsSoon(st);
+                        if (soon) opts.push_back("Sign in again");
+                        opts.insert(opts.end(), {"Disconnect", "Log out", "Cancel"});
+                        askChoice("Tailscale", "", opts, 0, [&, soon, confirmLogout](int c) {
+                            if (soon && c == 0) {
+                                askPin("Enter the PIN", "To sign in to Tailscale again",
+                                       [&]() { openTsSignIn(true); });
+                                return;
+                            }
+                            if (soon) --c;
+                            if (c == 0) setTailscale(false);
+                            else if (c == 1) confirmLogout();
+                        });
+                        sound::play(sound::Cue::Activate);
+                    } else if (st.answered && (st.state == "NeedsLogin" || st.state == "Stopped")) {
+                        // Signed out: its sign-in ended, or it was removed in
+                        // Tailscale's own page. The same QR code again.
+                        askPin("Enter the PIN", "To sign in to Tailscale",
+                               [&]() { openTsSignIn(false); });
+                        sound::play(sound::Cue::Activate);
+                    } else {
+                        sound::play(sound::Cue::Edge);
+                    }
+                } else if (res.value == SetPairedDevices) {
+                    if (players::streaming()) {
+                        sound::play(sound::Cue::Edge);
+                    } else {
+                        openPairedPanel(0);
+                        sound::play(sound::Cue::Activate);
+                    }
                 } else if (res.value == SetSteam) {
                     // Grow it, or remove Steam: the PIN when set, once per
                     // visit, as Downloads (it gives or takes space for the
@@ -11725,6 +12153,7 @@ int main(int argc, char** argv) {
             case Screen::Detail: apply(detailScreen.key(n)); return true;
             case Screen::Search: apply(searchScreen.key(n)); return true;
             case Screen::AddAccount: apply(addAccountScreen.key(n)); return true;
+            case Screen::TailscaleSignIn: apply(tsSignInScreen.key(n)); return true;
             case Screen::Settings: apply(settingsScreen.key(n)); return true;
         }
         return false;
@@ -12392,8 +12821,10 @@ int main(int argc, char** argv) {
         // Remote in every port after them (#200). A game that takes neither
         // pad gets Remotes only: pads have no player in it, and it is greyed
         // out while no Remote is paired (coverageFor).
+        sessionNeedsRemote = false;
         if (launchJob.platformSlug == "wii") {
             const unsigned device = wii::padDevice(wii::codeFromTitleId(launchJob.titleId));
+            sessionNeedsRemote = device == 0;
             core.setPadDevice(device);
             if (wiiremote::anyPaired())
                 core.setRealRemotesFrom(device == 0 ? 0 : static_cast<int>(players::connected().size()));
@@ -12948,7 +13379,22 @@ int main(int argc, char** argv) {
         }
     };
 
+    // A STREAM STARTING OR ENDING HANDS THE PLAYERS OVER (players.h) AND
+    // PAUSES A RUNNING GAME, so nobody's car crashes in the second it takes to
+    // pick up the other controller; whoever takes over presses Resume
+    // (MMagTech, 2026-10-07). Every system: the built-in ones and the
+    // emulators of their own. Asked from both loops (the one an emulator of
+    // its own runs under skips the rest), and only a flag is read.
+    std::function<void()> remotePlayHandover;
+    // A WII REMOTE GAME DURING A STREAM STAYS PAUSED (MMagTech, 2026-10-07):
+    // the person streaming has no Remote, so Back does not resume it either.
+    // Exit to Home, and saving where there are states, still work; when the
+    // stream ends, Resume is back for whoever has the Remote.
     auto closeOverlay = [&]() {
+        if (remoteOnlyHere() && !powerMenu) {
+            sound::play(sound::Cue::Edge);
+            return;
+        }
         overlayOpen = false;
         overlayFade.retarget(0.0f, overlayFadeSeconds);
     };
@@ -13094,12 +13540,17 @@ int main(int argc, char** argv) {
 
     auto toggleOverlay = [&]() {
         if (!playing && !standalonePaused) return;
+        if (overlayOpen && remoteOnlyHere() && !powerMenu) {
+            sound::play(sound::Cue::Edge);
+            return;
+        }
         overlayOpen = !overlayOpen;
         // Only on the way IN: the list must not change under a panel that is
         // still fading out.
         if (overlayOpen) {
             powerMenu = false;
-            pauseItems = {OvResume};
+            pauseItems.clear();
+            if (!remoteOnlyHere()) pauseItems.push_back(OvResume);
             if (session.snapshots) {
                 pauseItems.push_back(OvSaveState);
                 pauseItems.push_back(OvLoadState);
@@ -13187,6 +13638,28 @@ int main(int argc, char** argv) {
         for (auto& bs : backStart) bs = {};
         toggleOverlay();
         std::fprintf(stderr, "[standalone] paused\n");
+    };
+    remotePlayHandover = [&]() {
+        const bool on = rpWant && remoteplay::streaming();
+        if (on == players::streaming()) return;
+        players::setStreaming(on);
+        // Remote Play's section greys out for the stream, and back after. A
+        // panel already open from it (Paired devices, Tailscale's menu)
+        // closes, so nothing in it can be pressed from the stream either.
+        if (here() == Screen::Settings) {
+            if (on && choiceScreen.isOpen()) choiceScreen.close();
+            buildSettings();
+        }
+        if (playing && !overlayOpen) toggleOverlay();
+        else if (standaloneRun.active()) openStandaloneMenu();
+        // A Remote game's pause menu already open loses or gets back its
+        // Resume with the handover.
+        if (playing && overlayOpen && !powerMenu) {
+            const bool has = !pauseItems.empty() && pauseItems.front() == OvResume;
+            if (remoteOnlyHere() && has) pauseItems.erase(pauseItems.begin());
+            else if (!remoteOnlyHere() && !has) pauseItems.insert(pauseItems.begin(), OvResume);
+            overlaySlot = 0;
+        }
     };
 
     // Pressed while it is already open, it closes, like Resume.
@@ -13312,10 +13785,22 @@ int main(int argc, char** argv) {
                         }
                         SDL_Gamepad* gp = players::gamepad(p);
                         const bool shortcut = gp && shortcuts::held(gp);
-                        if (p >= 0 && p < cab::vpad::kMaxPlayers && shortcuts::enabled()) {
+                        // A streaming device's Home always opens the menu, as
+                        // in the built-in path (players::streaming()).
+                        if (p >= 0 && p < cab::vpad::kMaxPlayers &&
+                            (shortcuts::enabled() || players::streaming())) {
                             auto& sh = standaloneShortcut[p];
-                            if (shortcut && !sh.down) sh = {true, false};
-                            else if (shortcut && down) sh.used = true;
+                            if (sh.down && sh.pad != e.gbutton.which) sh = {};
+                            // THE SHORTCUT BUTTON'S OWN PRESS IS NOT A
+                            // SECOND BUTTON. Sunshine's hold-Select-for-Home
+                            // lets go of Select and presses Home in the same
+                            // instant, so the hold began on Select's release
+                            // (Home already down) and Home's own press then
+                            // counted as a combination: no menu (MMagTech's
+                            // phone in a PS3 game, 2026-10-08).
+                            if (shortcut && !sh.down) sh = {true, false, e.gbutton.which};
+                            else if (shortcut && down && !shortcuts::isShortcut(gp, b))
+                                sh.used = true;
                             if (!shortcut && sh.down) {
                                 const bool tap = !sh.used;
                                 sh = {};
@@ -14043,6 +14528,10 @@ int main(int argc, char** argv) {
             cab::vpad::pump(static_cast<int64_t>(SDL_GetTicks()));
             rumble::update(!standaloneRun.frozen());
             if (!standaloneRun.poll()) finishStandalone();
+            // This loop skips everything below, so the handover is asked here
+            // too: a PS3 game did not hand over until its menu was opened
+            // (2026-10-07).
+            remotePlayHandover();
             // Until the next press or a sixtieth of a second, whichever is
             // first: presses pass straight on, and a watcher costs nothing.
             SDL_WaitEventTimeout(nullptr, 16);
@@ -14202,18 +14691,29 @@ int main(int argc, char** argv) {
                 // back until let go, the way the menu's buttons are (#103).
                 // A tap opens the pause menu, or closes it. Shortcuts do
                 // nothing while the menu is up, but still count as a hold.
-                if (SDL_Gamepad* gp = players::gamepad(p); gp && shortcuts::enabled()) {
+                // WHILE A DEVICE STREAMS, ITS HOME ALWAYS OPENS THE MENU,
+                // switch or not: a phone's touch controls cannot click both
+                // sticks, and holding Select is Home there (Sunshine's
+                // back_button_timeout), so it is the one way to pause from any
+                // app (MMagTech, 2026-10-08). The shortcuts themselves stay
+                // the switch's. The pads seated during a stream are only the
+                // stream's, so nothing changes at the TV.
+                const bool combos = shortcuts::enabled();
+                if (SDL_Gamepad* gp = players::gamepad(p);
+                    gp && (combos || players::streaming())) {
                     ShortcutHold& h = shortcutHold[p];
+                    const SDL_JoystickID who = SDL_GetGamepadID(gp);
+                    if (h.down && h.pad != who) h = {};
                     const bool down = shortcuts::held(gp);
                     // The shortcut button pressed to end a wait is that press,
                     // not a tap that opens the menu on its release.
-                    if (down && !h.down) h = {true, stateHoldJustEnded, st.buttons};
+                    if (down && !h.down) h = {true, stateHoldJustEnded, st.buttons, who};
                     if (h.down) {
-                        if (down && (st.buttons & bit(cab::R2)) && !overlayOpen && !stateHold &&
-                            !stateHoldWaiting)
+                        if (combos && down && (st.buttons & bit(cab::R2)) && !overlayOpen &&
+                            !stateHold && !stateHoldWaiting)
                             fastForward = true;
-                        if (down && (st.buttons & bit(cab::L2)) && !overlayOpen && !stateHold &&
-                            !stateHoldWaiting)
+                        if (combos && down && (st.buttons & bit(cab::L2)) && !overlayOpen &&
+                            !stateHold && !stateHoldWaiting)
                             rewinding = true;
                         const uint32_t fresh = st.buttons & ~h.before;
                         h.before = st.buttons;
@@ -14221,12 +14721,12 @@ int main(int argc, char** argv) {
                             h.used = true;
                             // The screenshot shortcut works in the pause menu too,
                             // on the paused frame. Nothing else does there.
-                            if (overlayOpen && !powerMenu && (fresh & bit(cab::Y))) {
+                            if (combos && overlayOpen && !powerMenu && (fresh & bit(cab::Y))) {
                                 std::fprintf(stderr,
                                              "[shortcuts] player %d: screenshot, paused\n", p + 1);
                                 screenshotNow(session, uploader, menuNotice);
                             }
-                            if (!overlayOpen && !stateHold && !stateHoldWaiting) {
+                            if (combos && !overlayOpen && !stateHold && !stateHoldWaiting) {
                                 const bool save = fresh & bit(cab::R);
                                 const bool load = !save && (fresh & bit(cab::L));
                                 if (!save && !load && (fresh & bit(cab::Y))) {
@@ -15062,6 +15562,164 @@ int main(int argc, char** argv) {
                         openDevPanel();
                 }
             }
+            remotePlayHandover();
+            // TAILSCALE (#286): asked only while somebody can see the answer,
+            // the row in Settings or the sign-in screen.
+            {
+                const bool look = rpWant && (tsWant || tsLoggingOut) &&
+                                  (here() == Screen::Settings || here() == Screen::TailscaleSignIn);
+                tailscale::watch(look);
+                const tailscale::Status st = tailscale::last();
+                if (look && st.state == "Running" && !tsSignedIn) {
+                    tsSignedIn = true;
+                    prefs::set("tailscale_signed_in", "yes");
+                }
+                // When the sign-in ends, kept for the row to say after it has.
+                if (look && st.state == "Running" &&
+                    prefs::get("tailscale_expires", "") != std::to_string(st.expires))
+                    prefs::set("tailscale_expires", std::to_string(st.expires));
+                if (tsSigningIn && here() != Screen::TailscaleSignIn) {
+                    // LEFT BEFORE IT WAS APPROVED: nothing half done is kept.
+                    // A console that was never signed in is off again.
+                    tsSigningIn = false;
+                    tailscale::cancelLogin();
+                    if (tailscale::last().state != "Running") setTailscale(false);
+                    std::fprintf(stderr, "[tailscale] sign-in left\n");
+                } else if (tsSigningIn) {
+                    std::string why;
+                    // Signed in: after its link was approved, or at once
+                    // when it was signed in already (no link at all).
+                    if (st.state == "Running" && st.authUrl.empty() &&
+                        (tsShownLink || !tailscale::loginRunning())) {
+                        tsSigningIn = false;
+                        tailscale::cancelLogin();
+                        tsSignedIn = true;
+                        prefs::set("tailscale_signed_in", "yes");
+                        stack.pop_back();
+                        buildSettings();
+                        std::fprintf(stderr, "[tailscale] signed in as %s, %s\n",
+                                     st.name.c_str(), st.address.c_str());
+                    } else if (!st.authUrl.empty() && !tsShownLink) {
+                        tsShownLink = true;
+                        // The link is both halves the screen shows: the QR,
+                        // and the address under the title. There is no
+                        // separate code.
+                        tsSignInScreen.setPairing(st.authUrl, st.authUrl);
+                        std::fprintf(stderr, "[tailscale] sign in at %s\n", st.authUrl.c_str());
+                    } else if (tailscale::loginFailed(&why)) {
+                        tsSignInScreen.setError(why);
+                    }
+                }
+                if (tsWorkerDone) {
+                    // Logged out: off, and no longer signed in.
+                    tsWorker.join();
+                    tsWorkerDone = false;
+                    tsLoggingOut = false;
+                    tsSignedIn = false;
+                    prefs::set("tailscale_signed_in", "no");
+                    setTailscale(false);
+                }
+                if (here() == Screen::Settings && tailscale::generation() != tsSeen) buildSettings();
+            }
+            if (rpSaidAt != 0 || rpWant || here() == Screen::Settings) {
+                // Remote Play: systemd's answer, as Developer access's.
+                const std::string d = unit::state(kRpUnit);
+                const int64_t now = std::time(nullptr);
+                const bool settled = d == "active" || d == "inactive" || d == "failed";
+                const bool answered = rpSaidAt == 0 || now - rpSaidAt > 10 ||
+                                      (settled && (d == "failed" || (d == "active") == rpWant));
+                if (answered && (d != rpState || rpSaidAt != 0)) {
+                    if (rpSaidAt != 0 && rpWant && d != "active") rpFailed = "Couldn't start";
+                    rpState = d;
+                    rpSaidAt = 0;
+                    std::fprintf(stderr, "[remoteplay] %s\n", d.c_str());
+                    if (here() == Screen::Settings) buildSettings();
+                }
+                if (here() == Screen::Settings && remoteplay::generation() != rpSeen) {
+                    buildSettings();
+                    if (choiceScreen.isOpen() && choiceScreen.title() == "Paired devices")
+                        openPairedPanel(0);
+                }
+                // A DEVICE ASKING TO PAIR brings up the PIN pad, wherever the
+                // console is except in a game, over nothing else that is
+                // open. The request lasts five minutes on Sunshine's side; one
+                // put to the TV and turned down is not put again.
+                const std::vector<remoteplay::Request> asking = remoteplay::waiting();
+                auto stillAsking = [&](const std::string& id) {
+                    for (const remoteplay::Request& r : asking)
+                        if (r.id == id) return true;
+                    return false;
+                };
+                if (!rpAsking.empty() && !stillAsking(rpAsking)) {
+                    // Moonlight gave up, or the digits went through.
+                    if (pinScreen.isOpen() && pinCode) {
+                        pinCode = nullptr;
+                        pinCodeCancel = nullptr;
+                        pinScreen.close();
+                    }
+                    rpAsking.clear();
+                }
+                if (rpAsking.empty() && !playing && !standaloneRun.active() &&
+                    !pinScreen.isOpen() && !choiceScreen.isOpen() && !keyboard.isOpen()) {
+                    for (const remoteplay::Request& r : asking) {
+                        if (rpAsked.count(r.id)) continue;
+                        rpAsked.insert(r.id);
+                        rpAsking = r.id;
+                        const std::string id = r.id;
+                        std::fprintf(stderr, "[remoteplay] a device asks to pair\n");
+                        pinCode = [&, id](const std::string& digits) {
+                            const std::string name = remoteplay::nextName();
+                            std::set<std::string> before;
+                            for (const remoteplay::Device& dv : remoteplay::paired())
+                                before.insert(dv.id);
+                            std::string why;
+                            if (remoteplay::pair(id, digits, name, &why))
+                                rpPairing = {name, std::time(nullptr), before};
+                            else
+                                menuNotice.say("Couldn't pair", Tone::Problem);
+                        };
+                        pinCodeCancel = [id]() { remoteplay::decline(id); };
+                        pinScreen.open(screens::PinScreen::Mode::Check, "Pair a device",
+                                       "Enter the code from Moonlight");
+                        sound::play(sound::Cue::Activate);
+                        break;
+                    }
+                }
+                // THE ANSWER IS THE DEVICE'S: a wrong code is only known to
+                // Moonlight. Paired once it is in the list; not, if it is
+                // still missing when the request has gone.
+                if (rpPairing.at != 0) {
+                    std::string fresh;
+                    for (const remoteplay::Device& dv : remoteplay::paired())
+                        if (!rpPairing.before.count(dv.id)) fresh = dv.id;
+                    if (!fresh.empty() && !keyboard.isOpen() && !pinScreen.isOpen()) {
+                        // A DEVICE PAIRING AGAIN (its certificate already
+                        // paired) replaces its old entry and keeps its name:
+                        // two entries with one certificate lock it out
+                        // (remoteplay.h, samePairedDevice).
+                        std::string kept;
+                        for (const std::string& old : remoteplay::samePairedDevice(fresh)) {
+                            for (const remoteplay::Device& dv : remoteplay::paired())
+                                if (dv.id == old) kept = dv.name;
+                            std::string why;
+                            remoteplay::remove(old, &why);
+                        }
+                        if (!kept.empty()) {
+                            remoteplay::rename(fresh, kept);
+                            menuNotice.say("Paired with " + kept, Tone::Done);
+                            buildSettings();
+                        } else {
+                            // PAIRED: name it, with the next free "Device N"
+                            // in the field, so Done alone is enough.
+                            askDeviceName(fresh, rpPairing.name, true);
+                        }
+                        rpPairing = {};
+                    } else if (fresh.empty() && now - rpPairing.at > 10) {
+                        menuNotice.say("Couldn't pair", Tone::Problem);
+                        rpPairing = {};
+                    }
+                }
+            }
             const update::Status s = update::read();
             const bool mine = updSaidAt == 0 || s.at >= updSaidAt;
             const bool changed = s.state != upd.state || s.at != upd.at || s.done != upd.done ||
@@ -15292,6 +15950,7 @@ int main(int argc, char** argv) {
             libraryScreen.tick(dt);
             accountScreen.tick(dt);
             addAccountScreen.tick(dt);
+            tsSignInScreen.tick(dt);
             settingsScreen.setHasFocus(!barFocused && !accountsOpen);
             settingsScreen.tick(dt);
             pinScreen.tick(dt);
@@ -15793,7 +16452,7 @@ int main(int argc, char** argv) {
                                                         : cards[ci].coverLarge;
                 else if (!lastLitArt.empty())
                     want = lastLitArt;
-            } else if (here() == Screen::AddAccount) {
+            } else if (here() == Screen::AddAccount || here() == Screen::TailscaleSignIn) {
                 // **A TEXT SCREEN GETS THE PLAIN GRADIENT.** MMagTech,
                 // 2026-09-22: *"i preferred the purple background that went
                 // with the first run setup better. The current background
@@ -16032,10 +16691,22 @@ int main(int argc, char** argv) {
                 // output size: read here, before `dh` means the picture.
                 const float physPerPoint =
                     dh > 0 ? static_cast<float>(dh) / ui::kCanvasHeight : 1.0f;
-                const float dh = shownRows * scale;
-                const float dw = dh * shownAspect;
-                const float px = (ui::kCanvasWidth - dw) * 0.5f;
-                const float py = (ui::kCanvasHeight - dh) * 0.5f;
+                // ON WHOLE SCREEN PIXELS, edges and size. A screen look is
+                // drawn at a whole number of pixels and put on screen nearest
+                // texel to pixel; a rectangle a fraction wider or off by half
+                // a pixel repeated one column to make up the difference. On
+                // the TV that is invisible, but it moved a CRT mask by one
+                // pixel from there on, and Remote Play's shrink of the 4K
+                // picture turned the shift into a green left half and a
+                // purple right one, split at column 1924 (Double Dragon,
+                // crt-easymode, 2026-10-07, #286).
+                auto snap = [physPerPoint](float v) {
+                    return std::round(v * physPerPoint) / physPerPoint;
+                };
+                const float dh = snap(shownRows * scale);
+                const float dw = snap(shownRows * scale * shownAspect);
+                const float px = snap((ui::kCanvasWidth - dw) * 0.5f);
+                const float py = snap((ui::kCanvasHeight - dh) * 0.5f);
                 // Where the picture actually sits in that texture. A
                 // software core answers "all of it, the right way up"; a
                 // hardware core answers a corner of a larger target with its
@@ -16149,6 +16820,7 @@ int main(int argc, char** argv) {
                 case Screen::Detail: detailScreen.draw(ctx); break;
                 case Screen::Search: searchScreen.draw(ctx); break;
                 case Screen::AddAccount: addAccountScreen.draw(ctx); break;
+                case Screen::TailscaleSignIn: tsSignInScreen.draw(ctx); break;
                 case Screen::Settings: settingsScreen.draw(ctx); break;
                 case Screen::Home: break;   // unreachable, and the compiler asks
             }
@@ -16476,6 +17148,7 @@ int main(int argc, char** argv) {
                 // The QR draws its own white card; there is nothing behind it
                 // on this screen for glass to blur.
                 case Screen::AddAccount: break;
+                case Screen::TailscaleSignIn: break;
                 case Screen::Settings: settingsScreen.drawGlass(ctx); break;
                 case Screen::Home: break;
             }
@@ -17317,6 +17990,12 @@ int main(int argc, char** argv) {
     if (uploader.pending() > 0)
         std::fprintf(stderr, "[sync] finishing %d upload(s)\n", uploader.pending());
     uploader.shutdown();
+    // THE WATCHING THREADS JOINED BEFORE THEY ARE DESTROYED: a std::thread
+    // still running at exit ends the process with abort().
+    remoteplay::watch(false);
+    tailscale::watch(false);
+    tailscale::cancelLogin();
+    if (tsWorker.joinable()) tsWorker.join();
 
     ra::shutdown();
     images.shutdown();
