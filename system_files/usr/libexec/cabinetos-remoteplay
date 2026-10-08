@@ -5,9 +5,9 @@
 #   cabinetos-remoteplay prepare   Sunshine's settings written, and the
 #                                  console's own login for Sunshine's API
 #                                  made the first time
-#   cabinetos-remoteplay started   a stream is starting: gamescope composes
-#                                  every frame into one picture
-#   cabinetos-remoteplay ended     the stream was quit: back to normal
+#   cabinetos-remoteplay started   the CabinetOS session opens: gamescope
+#                                  composes every frame into one picture
+#   cabinetos-remoteplay ended     the session was quit: back to normal
 #
 # prepare is run by cabinetos-remoteplay.service (ExecStartPre), started and
 # ended by Sunshine itself (the CabinetOS entry's prep-cmd), all as `cabinet`.
@@ -16,7 +16,15 @@
 # on a display layer of its own over a black base layer, and Sunshine reads
 # one layer, so the stream was black (#286, 2026-10-07). composite_force puts
 # everything in one picture. It costs a little (Burnout 3: 58.4 fps normally,
-# 55.4 composed, measured), so it is on only while a stream is.
+# 55.4 composed, measured), so it is on only while the session is open.
+#
+# IT MATTERS WHEN A STREAM STARTS, NOT AFTER: Sunshine picks its layer then,
+# and switching it mid-stream changes nothing (tried on the A9, 2026-10-07).
+# A phone that drops and comes back joins the same session, so it stays on
+# from "started" to "ended", and the session is marked open in
+# $XDG_RUNTIME_DIR/cabinetos-remoteplay-session for the console: a gamescope
+# restarted under an open session (back from Steam, a crash) starts with it
+# off, and the console turns it on again when it starts (main.cpp).
 #
 # THE SETTINGS ARE OURS, written on every start, so a console always runs the
 # ones this image carries; nothing in Settings changes them. Measured on the
@@ -81,6 +89,8 @@ EOF
         sock=$(ls -t "$XDG_RUNTIME_DIR" 2>/dev/null | grep -E '^gamescope-[0-9]+$' | head -1)
         [ -n "$sock" ] || exit 0
         on=0; [ "$1" = started ] && on=1
+        if [ "$on" = 1 ]; then : > "$XDG_RUNTIME_DIR/cabinetos-remoteplay-session"
+        else rm -f "$XDG_RUNTIME_DIR/cabinetos-remoteplay-session"; fi
         GAMESCOPE_WAYLAND_DISPLAY="$sock" gamescopectl composite_force "$on" >/dev/null 2>&1 || true
         ;;
     *)

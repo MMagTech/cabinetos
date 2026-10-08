@@ -18,6 +18,22 @@
 # its version and the package's sha256 here, try it on the A9, say why in the
 # commit. Never patched. Its licence is GPL-3.0; see docs/LICENCES.md.
 #
+# WHAT THE CONSOLE RELIES ON, to check on the A9 before moving the pin
+# (MMagTech, 2026-10-07: an update must not break it unseen):
+#   1. its virtual controller's device name contains "Sunshine" or
+#      "libvirtualhid" (players.cpp, isRemote): the handover finds the
+#      phone's controllers by it;
+#   2. its log says "CLIENT CONNECTED" and "CLIENT DISCONNECTED"
+#      (remoteplay.cpp, readLog): how a dropped phone is known;
+#   3. an app's prep-cmd "do" runs before the stream's capture starts and
+#      "undo" when the app is quit (cabinetos-remoteplay started/ended);
+#   4. GET and POST /api/pin with pairing_id, /api/clients/list and
+#      /unpair, and root.named_devices[].cert in sunshine_state.json
+#      (remoteplay.cpp): pairing on the TV and a phone pairing again;
+#   5. its OpenGL shaders still under /usr/share/sunshine (checked below).
+# Then pair a phone, stream, hand over in a built-in and a standalone game,
+# drop the phone, and switch Remote Play off and check nothing listens.
+#
 # WHAT RUNS IT: cabinetos-remoteplay.service, off by default, started by the
 # switch. It gives Sunshine the capability to read the display itself, so the
 # binary carries none. THE PACKAGE SETS ONE (cap_sys_admin,cap_sys_nice=p, in

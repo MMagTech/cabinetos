@@ -9047,6 +9047,17 @@ int main(int argc, char** argv) {
         else std::fprintf(stderr, "[remoteplay] could not turn on at start: %s\n", why.c_str());
     }
     remoteplay::watch(rpWant);
+    // A REMOTE PLAY SESSION ALREADY OPEN when the console starts (it was
+    // restarted under one: back from Steam, a crash) needs gamescope composing
+    // again, or the next device to connect streams a black picture: the
+    // gamescope this console runs in is new, and starts with it off.
+    // /usr/libexec/cabinetos-remoteplay says why, and marks the session.
+    if (const char* run = std::getenv("XDG_RUNTIME_DIR");
+        rpWant && run && ::access((std::string(run) + "/cabinetos-remoteplay-session").c_str(), F_OK) == 0) {
+        const proc::Result r = proc::run({"gamescopectl", "composite_force", "1"}, 5);
+        std::fprintf(stderr, "[remoteplay] session open at start: composing%s\n",
+                     r.ok() ? "" : " (gamescopectl failed)");
+    }
 
     // AFTERWARDS: the first start after a restart compares the version the
     // machine booted with the one that was staged. Said once Home is up.
@@ -13159,6 +13170,13 @@ int main(int argc, char** argv) {
         }
     };
 
+    // A STREAM STARTING OR ENDING HANDS THE PLAYERS OVER (players.h) AND
+    // PAUSES A RUNNING GAME, so nobody's car crashes in the second it takes to
+    // pick up the other controller; whoever takes over presses Resume
+    // (MMagTech, 2026-10-07). Every system: the built-in ones and the
+    // emulators of their own. Asked from both loops (the one an emulator of
+    // its own runs under skips the rest), and only a flag is read.
+    std::function<void()> remotePlayHandover;
     // A WII REMOTE GAME DURING A STREAM STAYS PAUSED (MMagTech, 2026-10-07):
     // the person streaming has no Remote, so Back does not resume it either.
     // Exit to Home, and saving where there are states, still work; when the
@@ -13411,6 +13429,21 @@ int main(int argc, char** argv) {
         for (auto& bs : backStart) bs = {};
         toggleOverlay();
         std::fprintf(stderr, "[standalone] paused\n");
+    };
+    remotePlayHandover = [&]() {
+        const bool on = rpWant && remoteplay::streaming();
+        if (on == players::streaming()) return;
+        players::setStreaming(on);
+        if (playing && !overlayOpen) toggleOverlay();
+        else if (standaloneRun.active()) openStandaloneMenu();
+        // A Remote game's pause menu already open loses or gets back its
+        // Resume with the handover.
+        if (playing && overlayOpen && !powerMenu) {
+            const bool has = !pauseItems.empty() && pauseItems.front() == OvResume;
+            if (remoteOnlyHere() && has) pauseItems.erase(pauseItems.begin());
+            else if (!remoteOnlyHere() && !has) pauseItems.insert(pauseItems.begin(), OvResume);
+            overlaySlot = 0;
+        }
     };
 
     // Pressed while it is already open, it closes, like Resume.
@@ -14268,6 +14301,10 @@ int main(int argc, char** argv) {
             cab::vpad::pump(static_cast<int64_t>(SDL_GetTicks()));
             rumble::update(!standaloneRun.frozen());
             if (!standaloneRun.poll()) finishStandalone();
+            // This loop skips everything below, so the handover is asked here
+            // too: a PS3 game did not hand over until its menu was opened
+            // (2026-10-07).
+            remotePlayHandover();
             // Until the next press or a sixtieth of a second, whichever is
             // first: presses pass straight on, and a watcher costs nothing.
             SDL_WaitEventTimeout(nullptr, 16);
@@ -15289,24 +15326,7 @@ int main(int argc, char** argv) {
                         openDevPanel();
                 }
             }
-            // A STREAM STARTING OR ENDING HANDS THE PLAYERS OVER (players.h)
-            // AND PAUSES A RUNNING GAME, so nobody's car crashes in the
-            // second it takes to pick up the other controller; whoever takes
-            // over presses Resume (MMagTech, 2026-10-07). Every system: the
-            // built-in ones and the emulators of their own.
-            if (const bool s = rpWant && remoteplay::streaming(); s != players::streaming()) {
-                players::setStreaming(s);
-                if (playing && !overlayOpen) toggleOverlay();
-                else if (standaloneRun.active()) openStandaloneMenu();
-                // A Remote game's pause menu already open loses or gets back
-                // its Resume with the handover.
-                if (playing && overlayOpen && !powerMenu) {
-                    const bool has = !pauseItems.empty() && pauseItems.front() == OvResume;
-                    if (remoteOnlyHere() && has) pauseItems.erase(pauseItems.begin());
-                    else if (!remoteOnlyHere() && !has) pauseItems.insert(pauseItems.begin(), OvResume);
-                    overlaySlot = 0;
-                }
-            }
+            remotePlayHandover();
             if (rpSaidAt != 0 || rpWant || here() == Screen::Settings) {
                 // Remote Play: systemd's answer, as Developer access's.
                 const std::string d = unit::state(kRpUnit);
