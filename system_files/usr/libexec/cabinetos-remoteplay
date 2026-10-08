@@ -86,7 +86,11 @@ EOF
     started|ended)
         # The newest gamescope socket is the session's: a restart leaves the
         # old one behind (docs/lessons/testing.md).
-        sock=$(ls -t "$XDG_RUNTIME_DIR" 2>/dev/null | grep -E '^gamescope-[0-9]+$' | head -1)
+        sock=""
+        for s in "$XDG_RUNTIME_DIR"/gamescope-*; do
+            [[ -S "$s" && ${s##*/} =~ ^gamescope-[0-9]+$ ]] || continue
+            if [ -z "$sock" ] || [ "$s" -nt "$XDG_RUNTIME_DIR/$sock" ]; then sock=${s##*/}; fi
+        done
         [ -n "$sock" ] || exit 0
         on=0; [ "$1" = started ] && on=1
         if [ "$on" = 1 ]; then : > "$XDG_RUNTIME_DIR/cabinetos-remoteplay-session"
