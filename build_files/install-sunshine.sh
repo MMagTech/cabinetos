@@ -61,14 +61,24 @@ fi
 # repositories, without weak ones.
 dnf5 -y install --setopt=install_weak_deps=False "${work}/${SUNSHINE_RPM}"
 
-# The unit gives the capability, to the Sunshine it starts and no other.
-setcap -r /usr/bin/sunshine
+# BY THE PACKAGE'S OWN FILE LIST, not by names or places, so a version that
+# renames or moves its service or launchers is covered the same way
+# (MMagTech, 2026-10-07: "what if they move them").
+mapfile -t files < <(rpm -ql Sunshine)
 
-# Nothing but the switch starts it. By pattern, not by name, so a version
-# that renames its service or launchers is still covered (checked below).
-rm -f /usr/lib/systemd/user/*[Ss]unshine*.service \
-      /usr/lib/systemd/system/*[Ss]unshine*.service \
-      /usr/share/applications/*[Ss]unshine*.desktop
+# The unit gives the capability, to the Sunshine it starts and no other: off
+# every file the package installed.
+for f in "${files[@]}"; do
+    [[ -f "${f}" && -n "$(getcap "${f}" 2>/dev/null)" ]] && setcap -r "${f}"
+done
+
+# Nothing but the switch starts it: every service, socket, timer, autostart
+# entry and launcher the package installed, wherever it put them.
+for f in "${files[@]}"; do
+    if [[ "${f}" =~ \.(service|socket|timer|path|desktop)$ || "${f}" == */autostart/* ]]; then
+        rm -f "${f}"
+    fi
+done
 
 # CHECKED, NOT ASSUMED: the program, the shaders its VA-API path reads at
 # start (without them it falls back to another encoder, measured on the A9),
@@ -76,10 +86,16 @@ rm -f /usr/lib/systemd/user/*[Ss]unshine*.service \
 [[ -x /usr/bin/sunshine ]] || { log "ERROR: no /usr/bin/sunshine"; exit 1; }
 [[ -s /usr/share/sunshine/shaders/opengl/ConvertY.frag ]] ||
     { log "ERROR: Sunshine's shaders are missing"; exit 1; }
-if [[ -n "$(getcap /usr/bin/sunshine 2>/dev/null)" ]]; then
-    log "ERROR: /usr/bin/sunshine carries a file capability; the unit gives it"
-    exit 1
-fi
+for f in "${files[@]}"; do
+    if [[ -f "${f}" && -n "$(getcap "${f}" 2>/dev/null)" ]]; then
+        log "ERROR: ${f} carries a file capability; the unit gives it"
+        exit 1
+    fi
+    if [[ -e "${f}" && ( "${f}" =~ \.(service|socket|timer|path|desktop)$ || "${f}" == */autostart/* ) ]]; then
+        log "ERROR: ${f} can start Sunshine outside the switch"
+        exit 1
+    fi
+done
 if missing="$(ldd /usr/bin/sunshine | grep 'not found')" && [[ -n "${missing}" ]]; then
     log "ERROR: Sunshine is missing libraries:"
     log "${missing}"
