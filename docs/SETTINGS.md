@@ -30,8 +30,9 @@ status here to Built.
   right, both on screen. Moving through the list changes the right side at
   once. Settings is the one screen allowed to differ from Cabinet's shape.
   **Built.**
-- **Seven categories:** Accounts, Controllers, Network, Display and Sound,
-  Storage, System, About. **Built.**
+- **Eight categories:** Accounts, Controllers, Network, Remote Play,
+  Display and Sound, Storage, System, About. **Built.** Remote Play was
+  added as its own section, a highlight (MMagTech, 2026-10-07, #286).
 - **Plain purple background, no game art**, because it is a screen of text.
   **Built.**
 - **Rows not built yet are dimmed, say "Not built yet", and focus skips
@@ -286,6 +287,52 @@ Decided with MMagTech 2026-09-26, from the things people will actually do.
   you see with the logo."* Measured on the A9: 0.14 to 0.24 s between the
   last frame and the next.
 - **One server at a time.** A friend's server is sign out, then sign in.
+
+## Remote Play
+
+Sunshine on the console, Moonlight on a phone, tablet or computer to play
+from (#286). Decided with MMagTech on the A9, 2026-10-07; **built on
+`remote-play`**, judged on the TV in the loop, not yet in a testing image.
+
+- **Three rows.**
+  - **Streaming**: On or Off, "Moonlight app" under it, and "Moonlight app ·
+    CabinetOS" when on: the app to get, and the name it lists the console
+    under. Not "Remote Play" again (the section's name twice read oddly).
+    Turning it on asks for the PIN when one is set; off at once. **Off means
+    nothing runs or listens**: `cabinetos-remoteplay.service` stopped, no
+    port open, not announced on the network, no virtual devices (checked on
+    the A9). On is remembered through restarts.
+  - **Paired devices**: "None" or "2 paired", greyed while Streaming is off
+    or nobody is paired. One row however many there are; it opens a list.
+    Pressing a device offers **Rename** and **Remove** (Remove behind the
+    PIN when set).
+  - **Tailscale**: not built yet; next (#286).
+- **No quality setting.** Moonlight has its own on each device, and the right
+  value depends on that device's connection, which the console cannot know.
+  Codec, resolution and frame rate are the client's.
+- **Pairing is on the television, never on Sunshine's web page** (which
+  answers the console alone). Moonlight asks, the PIN pad comes up by itself
+  ("Pair a device", "Enter the code from Moonlight"), wherever the console is
+  except in a game; B turns the request down. Then the keyboard, "Paired.
+  Name this device", with the next free "Device 1" filled in.
+- **The names are the console's.** Every Moonlight sends the same word,
+  "roth", hard-coded in its iOS, PC and Android source, and Sunshine cannot
+  rename a device, so the console keeps its own names and "roth" is never
+  shown. A device pairing again replaces its old entry and keeps its name.
+- **Set by us, never shown:** VA-API encoding, hold Select for Home (for a
+  client with no Home button), sound to the device streaming, the one entry
+  "CabinetOS" with its own tile, gamescope composing while a session is open.
+- **The handover** (MMagTech, 2026-10-07). A device connecting takes the
+  players, its controllers 1, 2... in the order they came; the console's own
+  are set aside, menus included. When it leaves, or drops, the console's
+  have their numbers back. **A running game pauses at each handover**, and
+  whoever takes over presses Resume. Every system.
+- **Wii Remote games during a stream**: greyed, "Needs a Wii Remote" (the
+  paired Remote is by the TV, the person streaming is not); one already
+  running stays paused, its menu without Resume, until the stream ends.
+- **The TV during a stream** shows the same picture; switching it off by
+  hand does not stop play. No "Remote Play in progress" screen (whatever the
+  TV shows is what the stream carries), no CEC adapter, no dummy plug.
 
 ## Display and Sound
 

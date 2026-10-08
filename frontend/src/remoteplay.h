@@ -76,6 +76,11 @@ bool remove(const std::string& deviceId, std::string* why);
 // outright ("Client certificate identity is not enabled": it must match
 // exactly one entry). Read from Sunshine's state file, since its API does
 // not show certificates. Found 2026-10-07, MMagTech's iPhone paired twice.
+// A STOPGAP: Sunshine fixed it itself in v2026.1007.173111, a pre-release
+// (a completed pairing replaces every record with the same certificate,
+// LizardByte/Sunshine#5696). When the pin moves to a stable release with
+// that fix, delete this and its use in main.cpp. Until then a phone pairing
+// again can fail once, if Moonlight checks before the console has tidied.
 std::vector<std::string> samePairedDevice(const std::string& deviceId);
 // Give a paired device another name. The console's alone (see Device).
 void rename(const std::string& deviceId, const std::string& name);
