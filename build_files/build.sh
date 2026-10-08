@@ -235,6 +235,10 @@ log "base image has $(wc -l < /usr/share/cabinetos/packages-before-strip.txt) pa
 # which removes cardwire: the session would launch Steam through it.
 /ctx/install-steam-session.sh
 
+# Sunshine, for Remote Play (#286): Sunshine's own Fedora package, pinned and
+# checksummed. After the strip, so nothing it pulls in is taken out again.
+/ctx/install-sunshine.sh
+
 # ---------------------------------------------------------------------------
 # Enable SSH.
 # ---------------------------------------------------------------------------

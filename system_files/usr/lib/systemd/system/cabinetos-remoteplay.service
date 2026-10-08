@@ -29,5 +29,8 @@ Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus
 AmbientCapabilities=CAP_SYS_ADMIN CAP_SYS_NICE
 ExecStartPre=/usr/libexec/cabinetos-remoteplay prepare
 ExecStart=/usr/bin/sunshine /var/lib/cabinetos/remoteplay/.config/sunshine/sunshine.conf
+# Switched off mid-stream, Sunshine never runs the entry's "undo", so the
+# stop does: gamescope back to its own layers.
+ExecStopPost=/usr/libexec/cabinetos-remoteplay ended
 Restart=on-failure
 RestartSec=5
