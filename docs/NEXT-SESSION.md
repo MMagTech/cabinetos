@@ -11,37 +11,43 @@ specification is `docs/PROJECT.md`; the order is `docs/ROADMAP.md`.
 
 ## Where things stand
 
-2026-10-07: the installer (#105 to #107, #136) and Developer access (#134)
-merged as PR #287; image 2026.10.07.5 is promoted and on the A9. The
-installer asks one question and needs no network (proved in a VM); the real
-install is the last step before release (#111, on the release stick). There
-is no development image any more: the command line on port 2222 is
-**Developer access**, off by default, in Settings, About, hidden until
-Version is pressed seven times. It is on on the A9 and on the Unraid VM, so
-the key works as before.
+2026-10-07: Remote Play (#286) is built on branch `remote-play` (pushed, no
+pull request yet) and judged piece by piece on the TV with MMagTech: the
+Remote Play section in Settings (Streaming, Paired devices, Tailscale not
+built), pairing on the TV, the CabinetOS tile, off means nothing listens,
+the handover between TV and phone with a pause each way, Wii Remote games
+greyed while streaming. Sunshine is in the image, pinned
+(`build_files/install-sunshine.sh`). Why each choice: PROJECT.md question 39;
+the screen: SETTINGS.md, Remote Play.
 
 The A9 sits at the LG C1, on Wi-Fi at **192.168.1.109**: run
-`tools/ui-loop.sh` with `CABINETOS_A9=cabinet@192.168.1.109`.
+`tools/ui-loop.sh` with `CABINETOS_A9=cabinet@192.168.1.109`. It runs the
+loop's build of `remote-play`, and **a test stand-in for Remote Play that is
+not in git**: `/etc/systemd/system/cabinetos-remoteplay.service` (shadows the
+image's unit), `/etc/polkit-1/rules.d/67-cabinetos-remoteplay.rules`,
+`/usr/local/bin/cabinetos-remoteplay*`, and Sunshine unpacked in
+`~/sunshine-test` (shown at /usr/share/sunshine by a private mount).
+**Remove all of it before a testing image with Sunshine is judged.**
 
 ## Next
 
 Milestone 7, Ready to ship (docs/ROADMAP.md). Lessons file: image-and-ci.md.
 
-1. **Remote Play (#286).** Sunshine on the console, Moonlight to play from,
-   off by default. MMagTech wants it before the first release. **First a
-   feasibility test on the A9**, as #202 was: can Sunshine capture the
-   running console under gamescope on the 890M, at what cost, and what happens
-   to the TV. Bazzite installs Sunshine on demand (`ujust setup-sunshine`,
-   Flatpak or Homebrew) and has a `virtual-monitor` option: try that first.
-   If the display question turns out very large, decide again with MMagTech
-   before building. Whether Sunshine is in the image or downloaded on first
-   use is decided when it is built.
+1. **Remote Play (#286): Tailscale**, with MMagTech first: what the row does
+   (#286 has the intent: sign-in link as a QR code on the TV, then the
+   machine's name and address; Disconnect, a separate log-out; off with
+   Remote Play). Then a testing image of `remote-play`, the A9 stand-in
+   removed, and these checked from the image: pairing, the handover in a
+   built-in and a standalone game (PS3 not yet seen after its fix), a phone
+   dropping, off means nothing listens. Then the pull request, which closes
+   #286 and #289.
 2. **Signed images (#135).**
 3. **CabinetOS in the system's version info (#137).**
 4. **Licences checked and the full texts shipped (#120).**
 
 Also in the milestone: booting with the TV off (#268), a diagnostic report
-(#195), a showcase page and README (#190).
+(#195), a showcase page and README (#190), Steam black at 120 Hz on the C1
+(#290).
 
 **After a console is installed fresh** it has no key: About, press Version
 seven times, Developer access, PIN; then from the Mac, with the password on

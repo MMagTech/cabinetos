@@ -239,3 +239,11 @@ Read before touching `build_files/`, `system_files/`, `ci/`, the workflows, the 
   shared library is never executed directly. **Check that a payload file
   exists, then set its mode in the image**, as `install-cemu.sh` now does.
 
+
+- **A package can set a file capability with no script at all.** Sunshine's
+  RPM marks `/usr/bin/sunshine` `cap_sys_admin,cap_sys_nice=p` in its file
+  list; `rpm -qp --scripts` showed nothing of it. The dry run in the base
+  image caught it only because the install script checked `getcap`. Check
+  the installed result, not the package's description, and act on the
+  package's own file list (`rpm -ql`), so a version that moves a file is
+  still covered.

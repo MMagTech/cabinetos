@@ -332,3 +332,17 @@ opened once and reused needs a test of two different games in one run.**
   other.** `:Z` relabels the whole mounted tree for one container's SELinux
   category. Cost one PPSSPP build. **Do not start a second container over a
   parent of a running one.**
+
+- **A loop deploy restarts gamescope, and every `gamescopectl` setting goes
+  with it.** 2026-10-07: `composite_force` was on for a Remote Play stream;
+  `tools/ui-loop.sh` restarted the session, the setting was gone, and the
+  phone's stream went black while the phone stayed "connected". Anything set
+  by hand on the running gamescope is gone after a deploy; set it again, or
+  make the thing that needs it set it.
+
+- **Read a person's one-word answer against the question, not the hope.**
+  "nope" to "is the seam still there?" was read as "gone", a fix was
+  declared, and a comment saying so went on #286 before "no the issue is
+  still there" corrected it. When a yes/no question can be read both ways,
+  ask it as "yes or no: is X still there?", and verify on the machine before
+  writing it down.
