@@ -7459,8 +7459,12 @@ int main(int argc, char** argv) {
     // (2026-09-28, Metroid Prime 4 loading behind its own launch page).
     int standaloneClearFrames = 0;
     // The shortcut button's tap, per player, as the in-process path reads it:
-    // down, and whether anything else was pressed while it was.
-    struct { bool down = false, used = false; } standaloneShortcut[cab::vpad::kMaxPlayers];
+    // down, and whether anything else was pressed while it was, and by which
+    // pad: a hold whose pad left is dropped, not released (ShortcutHold).
+    struct {
+        bool down = false, used = false;
+        SDL_JoystickID pad = 0;
+    } standaloneShortcut[cab::vpad::kMaxPlayers];
     // Back and Start as the emulator has them, per player: passed down, or
     // held back because the other was already down (Emulator::blocksBackStart).
     struct { bool passed[2] = {false, false}, held[2] = {false, false}; }
@@ -7585,7 +7589,19 @@ int main(int argc, char** argv) {
     // `before` is what was already held when it went down, so only buttons
     // pressed DURING the hold count; `used` is whether one was, which is what
     // tells a tap (the pause menu) from a hold (a shortcut) on release.
-    struct ShortcutHold { bool down = false, used = false; uint32_t before = 0; };
+    //
+    // A HOLD BELONGS TO THE PAD THAT PRESSED IT. A pad is switched off by
+    // holding its Home button, so it leaves with its shortcut button down and
+    // never sends the release. The hold used to stay with the player, and the
+    // next pad to be that player (the same one, switched back on) read as
+    // letting go: a tap, which closed the pause menu the pad's going off had
+    // opened (2026-10-07, every reconnect on Genesis). `pad` is whose hold it
+    // is; another pad in the seat drops it unread.
+    struct ShortcutHold {
+        bool down = false, used = false;
+        uint32_t before = 0;
+        SDL_JoystickID pad = 0;
+    };
     ShortcutHold shortcutHold[players::kMax];
     // FAST FORWARD (#77): the shortcut button and ZR, held. Fast while held,
     // normal on release, the sound discarded meanwhile. About 4x, a fixed top
@@ -13314,7 +13330,8 @@ int main(int argc, char** argv) {
                         const bool shortcut = gp && shortcuts::held(gp);
                         if (p >= 0 && p < cab::vpad::kMaxPlayers && shortcuts::enabled()) {
                             auto& sh = standaloneShortcut[p];
-                            if (shortcut && !sh.down) sh = {true, false};
+                            if (sh.down && sh.pad != e.gbutton.which) sh = {};
+                            if (shortcut && !sh.down) sh = {true, false, e.gbutton.which};
                             else if (shortcut && down) sh.used = true;
                             if (!shortcut && sh.down) {
                                 const bool tap = !sh.used;
@@ -14204,10 +14221,12 @@ int main(int argc, char** argv) {
                 // nothing while the menu is up, but still count as a hold.
                 if (SDL_Gamepad* gp = players::gamepad(p); gp && shortcuts::enabled()) {
                     ShortcutHold& h = shortcutHold[p];
+                    const SDL_JoystickID who = SDL_GetGamepadID(gp);
+                    if (h.down && h.pad != who) h = {};
                     const bool down = shortcuts::held(gp);
                     // The shortcut button pressed to end a wait is that press,
                     // not a tap that opens the menu on its release.
-                    if (down && !h.down) h = {true, stateHoldJustEnded, st.buttons};
+                    if (down && !h.down) h = {true, stateHoldJustEnded, st.buttons, who};
                     if (h.down) {
                         if (down && (st.buttons & bit(cab::R2)) && !overlayOpen && !stateHold &&
                             !stateHoldWaiting)
