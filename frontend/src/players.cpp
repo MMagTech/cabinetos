@@ -86,8 +86,14 @@ bool Seats::swap(int a, int b) {
 
 namespace {
 
-Seats gSeats;
+Seats gSeats;     // the console's own pads
+Seats gRemote;    // pads that came through a stream (setStreaming)
+bool gStreaming = false;
+std::map<SDL_JoystickID, bool> gIsRemote;
 std::map<SDL_JoystickID, SDL_Gamepad*> gOpen;
+
+// The seats a game hears now.
+Seats& active() { return gStreaming ? gRemote : gSeats; }
 int gGeneration = 0;
 
 // WHAT A PAD IS, ACROSS A RECONNECT. The joystick id is new every time a pad
@@ -150,6 +156,23 @@ std::string addressOf(SDL_Gamepad* gp) {
     return asAddress(uniq);
 }
 
+// A PAD THAT CAME THROUGH A STREAM: Sunshine's virtual controller, whose
+// device is named "Sunshine (libvirtualhid) X-Box Series Controller" (read on
+// the A9, 2026-10-07). SDL names it "Xbox Series X Controller", like a real
+// one, so the device's own name is read.
+bool isRemote(SDL_Gamepad* gp) {
+    const char* p = SDL_GetGamepadPath(gp);
+    if (!p) return false;
+    const std::string path = p;
+    std::string name;
+    if (path.rfind("/dev/input/", 0) == 0)
+        name = firstLine("/sys/class/input/" + path.substr(11) + "/device/name");
+    else if (path.rfind("/dev/hidraw", 0) == 0)
+        name = firstLine("/sys/class/hidraw/" + path.substr(5) + "/device/uevent", "HID_NAME=");
+    return name.find("Sunshine") != std::string::npos ||
+           name.find("libvirtualhid") != std::string::npos;
+}
+
 // The name the pad gives. A pad in its Switch mode says it is a Switch Pro
 // Controller, and that is what is shown: an attempt to name such a pad after
 // its maker (from its Bluetooth address) was built and taken back out the
@@ -163,7 +186,7 @@ std::string nameOf(SDL_Gamepad* gp) {
 // dots, a DualSense's bar) show the number the console gave it.
 void light() {
     for (const auto& [id, gp] : gOpen) {
-        const int p = gSeats.playerOf(id);
+        const int p = active().playerOf(id);
         SDL_SetGamepadPlayerIndex(gp, p >= 0 ? p : -1);
     }
 }
@@ -171,9 +194,9 @@ void light() {
 void changed(const char* what, SDL_JoystickID id) {
     ++gGeneration;
     light();
-    std::string order;
-    for (size_t i = 0; i < gSeats.seats().size(); ++i) {
-        const Seat& s = gSeats.seats()[i];
+    std::string order = gStreaming ? "streaming: " : "";
+    for (size_t i = 0; i < active().seats().size(); ++i) {
+        const Seat& s = active().seats()[i];
         char buf[48];
         std::snprintf(buf, sizeof buf, "%s%zu=%s", i ? " " : "", i + 1,
                       s.id ? std::to_string(s.id).c_str() : "held");
@@ -209,10 +232,12 @@ void added(SDL_JoystickID id) {
         return;
     }
     gOpen[id] = gp;
-    gSeats.add(id, keyOf(gp));
-    std::fprintf(stderr, "[players] pad %u is %s%s%s\n", static_cast<unsigned>(id),
+    const bool remote = isRemote(gp);
+    gIsRemote[id] = remote;
+    (remote ? gRemote : gSeats).add(id, keyOf(gp));
+    std::fprintf(stderr, "[players] pad %u is %s%s%s%s\n", static_cast<unsigned>(id),
                  nameOf(gp).c_str(), addressOf(gp).empty() ? "" : " over Bluetooth ",
-                 addressOf(gp).c_str());
+                 addressOf(gp).c_str(), remote ? ", through a stream" : "");
     changed("connected", id);
 }
 
@@ -222,36 +247,52 @@ void removed(SDL_JoystickID id) {
     SDL_CloseGamepad(it->second);
     gOpen.erase(it);
     gSeats.remove(id);
+    gRemote.remove(id);
+    gIsRemote.erase(id);
     changed("disconnected", id);
 }
 
 void setInGame(bool on) {
     if (gSeats.inGame() == on) return;
     gSeats.setInGame(on);
+    gRemote.setInGame(on);
     changed(on ? "game started" : "game ended", 0);
 }
 
 bool swap(int a, int b) {
-    if (!gSeats.swap(a, b)) return false;
+    if (!active().swap(a, b)) return false;
     changed("swapped", 0);
     return true;
 }
 
+void setStreaming(bool on) {
+    if (gStreaming == on) return;
+    gStreaming = on;
+    changed(on ? "stream started" : "stream ended", 0);
+}
+
+bool streaming() { return gStreaming; }
+
+bool setAside(SDL_JoystickID id) {
+    auto it = gIsRemote.find(id);
+    return it != gIsRemote.end() && it->second != gStreaming;
+}
+
 SDL_Gamepad* gamepad(int player) {
-    const uint32_t id = gSeats.idOf(player);
+    const uint32_t id = active().idOf(player);
     if (!id) return nullptr;
     auto it = gOpen.find(id);
     return it == gOpen.end() ? nullptr : it->second;
 }
 
-int playerOf(SDL_JoystickID id) { return gSeats.playerOf(id); }
+int playerOf(SDL_JoystickID id) { return active().playerOf(id); }
 
-int count() { return static_cast<int>(gSeats.seats().size()); }
+int count() { return static_cast<int>(active().seats().size()); }
 
 std::vector<Pad> connected() {
     std::vector<Pad> out;
-    for (size_t i = 0; i < gSeats.seats().size(); ++i) {
-        const uint32_t id = gSeats.seats()[i].id;
+    for (size_t i = 0; i < active().seats().size(); ++i) {
+        const uint32_t id = active().seats()[i].id;
         auto it = id ? gOpen.find(id) : gOpen.end();
         if (it == gOpen.end()) continue;
         Pad p;

@@ -46,6 +46,14 @@ struct Request {
 // Start or stop asking Sunshine. While on, a thread asks every two seconds.
 void watch(bool on);
 
+// WHETHER A DEVICE IS STREAMING NOW: Sunshine's own "CLIENT CONNECTED" and
+// "CLIENT DISCONNECTED" lines, read from its log as they are written. Sunshine
+// has no hook or API call for a connection that drops (a phone locked, out of
+// range), and keeps that device's controllers afterwards, so this is the one
+// place the console can learn it. The lines are those of the pinned version
+// (build_files/install-sunshine.sh); moving the pin means checking them.
+bool streaming();
+
 // The last answers. `generation()` changes when either list does, so the app
 // rebuilds its rows only then.
 std::vector<Device> paired();

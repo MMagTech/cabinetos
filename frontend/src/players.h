@@ -83,6 +83,19 @@ void removed(SDL_JoystickID id);
 void setInGame(bool on);
 bool swap(int a, int b);
 
+// REMOTE PLAY'S CONTROLLERS (issue #286, decided with MMagTech 2026-10-07).
+// A pad that arrives through a stream (Sunshine's virtual controller, known
+// by the name Sunshine gives it) is seated apart from the console's own. While
+// a stream is on, a game hears the stream's pads, players 1, 2... in the order
+// they came, and the console's own pads are set aside; when it ends, the
+// console's pads have their numbers back exactly as they were, and the
+// stream's are set aside (Sunshine keeps them after a dropped connection, so
+// they cannot be waited on to leave). A set-aside pad is ignored everywhere,
+// menus included (setAside, read by the app's event filter).
+void setStreaming(bool on);
+bool streaming();
+bool setAside(SDL_JoystickID id);
+
 // The pad a game hears as `player`, or null.
 SDL_Gamepad* gamepad(int player);
 int playerOf(SDL_JoystickID id);

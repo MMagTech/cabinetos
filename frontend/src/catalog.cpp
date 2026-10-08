@@ -1,4 +1,5 @@
 #include "catalog.h"
+#include "players.h"
 
 #include "gpu.h"
 #include "standalone.h"
@@ -462,9 +463,11 @@ Coverage coverageFor(const romm::Game& g) {
     // A Wii game that takes neither a Classic Controller nor a GameCube pad
     // needs a real Wii Remote, and plays while any Wii Remote is paired, as
     // on a Wii (#200, PROJECT.md question 35). Remove every Remote and they
-    // grey out again.
+    // grey out again. AND NOT WHILE A STREAM PLAYS (#286): the paired Remote
+    // is by the TV, and the person streaming is not.
     if (c.support == Support::Playable && g.platformSlug == "wii" &&
-        wii::padDevice(wii::codeFromTitleId(g.titleId)) == 0 && !wiiremote::anyPaired()) {
+        wii::padDevice(wii::codeFromTitleId(g.titleId)) == 0 &&
+        (!wiiremote::anyPaired() || players::streaming())) {
         c.support = Support::NeedsController;
         c.reason = "Needs a Wii Remote";
     }

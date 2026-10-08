@@ -5580,6 +5580,27 @@ int main(int argc, char** argv) {
         return 1;
     }
     players::loadMappings();
+    // A SET-ASIDE PAD IS NOT HEARD AT ALL (players.h, Remote Play): the
+    // console's own pads while a stream plays, a stream's pads when it has
+    // ended. Dropped as SDL queues them, so no screen, menu or game sees them.
+    SDL_SetEventFilter(
+        [](void*, SDL_Event* e) -> bool {
+            switch (e->type) {
+                case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+                case SDL_EVENT_GAMEPAD_BUTTON_UP: return !players::setAside(e->gbutton.which);
+                case SDL_EVENT_GAMEPAD_AXIS_MOTION: return !players::setAside(e->gaxis.which);
+                case SDL_EVENT_GAMEPAD_TOUCHPAD_DOWN:
+                case SDL_EVENT_GAMEPAD_TOUCHPAD_MOTION:
+                case SDL_EVENT_GAMEPAD_TOUCHPAD_UP: return !players::setAside(e->gtouchpad.which);
+                case SDL_EVENT_GAMEPAD_SENSOR_UPDATE: return !players::setAside(e->gsensor.which);
+                case SDL_EVENT_JOYSTICK_BUTTON_DOWN:
+                case SDL_EVENT_JOYSTICK_BUTTON_UP: return !players::setAside(e->jbutton.which);
+                case SDL_EVENT_JOYSTICK_AXIS_MOTION: return !players::setAside(e->jaxis.which);
+                case SDL_EVENT_JOYSTICK_HAT_MOTION: return !players::setAside(e->jhat.which);
+                default: return true;
+            }
+        },
+        nullptr);
     // Real Wii Remotes (#200): whether one is paired, before the library is
     // drawn, and the thread that sets each up as it connects.
     wiiremote::start();
@@ -7573,6 +7594,13 @@ int main(int argc, char** argv) {
     // is what makes this simple and is the direct payoff of hosting cores in
     // process rather than launching them.
     bool overlayOpen = false;
+    // A Wii game made for the Wii Remote is running (the launch sets it):
+    // while a stream plays it, nobody holding the stream's controllers can
+    // play it, so its pause menu has no Resume (#286, below).
+    bool sessionNeedsRemote = false;
+    auto remoteOnlyHere = [&]() {
+        return playing && sessionNeedsRemote && players::streaming();
+    };
     // THE BUTTONS THE MENU WAS CLOSED WITH, per player, kept from the game
     // until they are let go (#103). The menu acts when a button goes DOWN and
     // the game reads what is held every frame, so B to go back, A on Resume,
@@ -12573,8 +12601,10 @@ int main(int argc, char** argv) {
         // Remote in every port after them (#200). A game that takes neither
         // pad gets Remotes only: pads have no player in it, and it is greyed
         // out while no Remote is paired (coverageFor).
+        sessionNeedsRemote = false;
         if (launchJob.platformSlug == "wii") {
             const unsigned device = wii::padDevice(wii::codeFromTitleId(launchJob.titleId));
+            sessionNeedsRemote = device == 0;
             core.setPadDevice(device);
             if (wiiremote::anyPaired())
                 core.setRealRemotesFrom(device == 0 ? 0 : static_cast<int>(players::connected().size()));
@@ -13129,7 +13159,15 @@ int main(int argc, char** argv) {
         }
     };
 
+    // A WII REMOTE GAME DURING A STREAM STAYS PAUSED (MMagTech, 2026-10-07):
+    // the person streaming has no Remote, so Back does not resume it either.
+    // Exit to Home, and saving where there are states, still work; when the
+    // stream ends, Resume is back for whoever has the Remote.
     auto closeOverlay = [&]() {
+        if (remoteOnlyHere() && !powerMenu) {
+            sound::play(sound::Cue::Edge);
+            return;
+        }
         overlayOpen = false;
         overlayFade.retarget(0.0f, overlayFadeSeconds);
     };
@@ -13275,12 +13313,17 @@ int main(int argc, char** argv) {
 
     auto toggleOverlay = [&]() {
         if (!playing && !standalonePaused) return;
+        if (overlayOpen && remoteOnlyHere() && !powerMenu) {
+            sound::play(sound::Cue::Edge);
+            return;
+        }
         overlayOpen = !overlayOpen;
         // Only on the way IN: the list must not change under a panel that is
         // still fading out.
         if (overlayOpen) {
             powerMenu = false;
-            pauseItems = {OvResume};
+            pauseItems.clear();
+            if (!remoteOnlyHere()) pauseItems.push_back(OvResume);
             if (session.snapshots) {
                 pauseItems.push_back(OvSaveState);
                 pauseItems.push_back(OvLoadState);
@@ -15244,6 +15287,24 @@ int main(int argc, char** argv) {
                     devNewPassAt = 0;
                     if (here() == Screen::Settings && !choiceScreen.isOpen() && !pinScreen.isOpen())
                         openDevPanel();
+                }
+            }
+            // A STREAM STARTING OR ENDING HANDS THE PLAYERS OVER (players.h)
+            // AND PAUSES A RUNNING GAME, so nobody's car crashes in the
+            // second it takes to pick up the other controller; whoever takes
+            // over presses Resume (MMagTech, 2026-10-07). Every system: the
+            // built-in ones and the emulators of their own.
+            if (const bool s = rpWant && remoteplay::streaming(); s != players::streaming()) {
+                players::setStreaming(s);
+                if (playing && !overlayOpen) toggleOverlay();
+                else if (standaloneRun.active()) openStandaloneMenu();
+                // A Remote game's pause menu already open loses or gets back
+                // its Resume with the handover.
+                if (playing && overlayOpen && !powerMenu) {
+                    const bool has = !pauseItems.empty() && pauseItems.front() == OvResume;
+                    if (remoteOnlyHere() && has) pauseItems.erase(pauseItems.begin());
+                    else if (!remoteOnlyHere() && !has) pauseItems.insert(pauseItems.begin(), OvResume);
+                    overlaySlot = 0;
                 }
             }
             if (rpSaidAt != 0 || rpWant || here() == Screen::Settings) {

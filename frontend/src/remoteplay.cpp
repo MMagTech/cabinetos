@@ -3,6 +3,8 @@
 #include <curl/curl.h>
 #include <json-c/json.h>
 
+#include <sys/stat.h>
+
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
@@ -22,6 +24,7 @@ constexpr const char* kApi = "https://localhost:47990";
 constexpr const char* kUser = "cabinetos";
 constexpr const char* kLoginFile = "/var/lib/cabinetos/remoteplay/web";
 constexpr const char* kNamesFile = "/var/lib/cabinetos/remoteplay/names.json";
+constexpr const char* kLogFile = "/var/lib/cabinetos/remoteplay/.config/sunshine/sunshine.log";
 constexpr const char* kStateFile =
     "/var/lib/cabinetos/remoteplay/.config/sunshine/sunshine_state.json";
 
@@ -53,6 +56,40 @@ void writeNames() {
     if (json_object_to_file_ext(tmp.c_str(), o, JSON_C_TO_STRING_PRETTY) == 0)
         std::rename(tmp.c_str(), kNamesFile);
     json_object_put(o);
+}
+
+std::atomic<bool> gStreaming{false};
+
+// THE LOG AS IT GROWS. Sunshine starts a new file each time it starts (the
+// old one becomes sunshine.log.1), so a file that is a different one, or
+// shorter than what was read, is read from its start.
+struct Tail {
+    ino_t inode = 0;
+    off_t at = 0;
+} gTail;
+
+void readLog() {
+    struct stat st{};
+    if (::stat(kLogFile, &st) != 0) {
+        gStreaming = false;
+        return;
+    }
+    if (st.st_ino != gTail.inode || st.st_size < gTail.at) gTail = {st.st_ino, 0};
+    if (st.st_size == gTail.at) return;
+    std::ifstream f(kLogFile);
+    f.seekg(gTail.at);
+    std::string line;
+    bool any = false, on = gStreaming;
+    while (std::getline(f, line)) {
+        if (f.eof()) break;   // a line still being written is read next time
+        gTail.at += static_cast<off_t>(line.size()) + 1;
+        if (line.find("CLIENT CONNECTED") != std::string::npos) on = any = true;
+        else if (line.find("CLIENT DISCONNECTED") != std::string::npos) on = false, any = true;
+    }
+    if (any && on != gStreaming) {
+        gStreaming = on;
+        std::fprintf(stderr, "[remoteplay] %s\n", on ? "a device is streaming" : "the stream ended");
+    }
 }
 
 std::mutex gRunM;
@@ -166,13 +203,15 @@ void refresh() {
     ++gGeneration;
 }
 
+// The log every half second, so a handoff is quick; the API every two.
 void loop() {
     std::unique_lock<std::mutex> lk(gRunM);
-    while (gWatching) {
+    for (int tick = 0; gWatching; ++tick) {
         lk.unlock();
-        refresh();
+        readLog();
+        if (tick % 4 == 0) refresh();
         lk.lock();
-        gRunCv.wait_for(lk, std::chrono::seconds(2), [] { return !gWatching; });
+        gRunCv.wait_for(lk, std::chrono::milliseconds(500), [] { return !gWatching; });
     }
 }
 
@@ -190,11 +229,15 @@ void watch(bool on) {
         return;
     }
     if (gThread.joinable()) gThread.join();
+    gStreaming = false;
+    gTail = {};
     std::lock_guard<std::mutex> lk(gM);
     gPaired.clear();
     gWaiting.clear();
     ++gGeneration;
 }
+
+bool streaming() { return gStreaming; }
 
 std::vector<Device> paired() {
     std::lock_guard<std::mutex> lk(gM);
