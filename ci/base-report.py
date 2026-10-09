@@ -202,9 +202,15 @@ def note_for(area):
     for name, old, new in area.updated:
         groups.setdefault(shown(old, new), []).append(name)
     for (old, new), names in groups.items():
-        lead = min(names, key=len)
-        others = [n for n in names if not n.startswith(lead)]
-        more = f" and {len(others)} more" if others else ""
+        # mesa-libGL, mesa-dri-drivers... are "mesa"; linux-firmware and
+        # amd-gpu-firmware share no name, so the shortest leads.
+        common = os.path.commonprefix([n.split("-") for n in names])
+        if len(names) > 1 and common:
+            lead, more = "-".join(common), ""
+        else:
+            lead = min(names, key=len)
+            others = [n for n in names if not n.startswith(lead)]
+            more = f" and {len(others)} more" if others else ""
         bits.append(f"{lead}{more} {old} → {new}")
     moved = {}
     for old_name, old_v, _, new_v in area.replaced:
@@ -299,7 +305,9 @@ def ogc_patches(tag, upstream, token):
             subject = c["commit"]["message"].split("\n", 1)[0].strip()
             if subject == f"Linux {upstream}":
                 return subjects
-            if len(c.get("parents", [])) == 1:
+            # Merges, and a patch carried twice, are one change or none.
+            if (len(c.get("parents", [])) == 1 and not subject.startswith("Merge ")
+                    and subject not in subjects):
                 subjects.append(subject)
     raise RuntimeError(f"no 'Linux {upstream}' commit within 1000 of {tag}")
 
@@ -340,8 +348,12 @@ def kernel_report(old_full, new_full, parts, skips, token):
         try:
             now = ogc_patches(new_tag, dotted(new), token)
             before = ogc_patches(old_tag, dotted(old), token) if old_tag else []
-            ogc_new = [s for s in now if s not in set(before)]
-            ogc_gone = [s for s in before if s not in set(now)]
+            # Compared without OGC's tag: a patch re-tagged [FROM-ML] is
+            # the same patch.
+            bare = lambda s: re.sub(r"^\[[A-Z-]+\]\s*", "", s)
+            had, has = {bare(s) for s in before}, {bare(s) for s in now}
+            ogc_new = [s for s in now if bare(s) not in had]
+            ogc_gone = [s for s in before if bare(s) not in has]
         except (urllib.error.URLError, OSError, RuntimeError, ValueError, KeyError) as e:
             problems.append(f"Could not read the OGC kernel's patches for {new_tag} ({e}); "
                             "see https://github.com/OpenGamingCollective/linux/tags.")
@@ -371,8 +383,7 @@ def kernel_report(old_full, new_full, parts, skips, token):
             out.append("")
         others = (len(ogc_new) - len(ours_new)) + (len(ogc_gone) - len(ours_gone))
         if others:
-            out.append(f"{others} other OGC patch changes are for hardware the console "
-                       "does not use (handhelds, other vendors).\n")
+            out.append(f"{others} other OGC patch changes touch none of these parts.\n")
         if ours_new:
             counts["the OGC kernel's own patches"] = len(ours_new)
 
