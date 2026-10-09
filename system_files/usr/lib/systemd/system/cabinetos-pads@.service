@@ -1,0 +1,7 @@
+[Unit]
+Description=CabinetOS: the TV's controllers during a stream into Steam (%i)
+Documentation=https://github.com/MMagTech/cabinetos/issues/296
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/cabinetos-pads %i

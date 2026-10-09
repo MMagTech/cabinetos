@@ -73,6 +73,9 @@ for expected in \
     /usr/libexec/cabinetos-steam \
     /usr/lib/systemd/system/cabinetos-steam@.service \
     /usr/share/polkit-1/rules.d/66-cabinetos-steam.rules \
+    /usr/libexec/cabinetos-pads \
+    /usr/lib/systemd/system/cabinetos-pads@.service \
+    /usr/share/polkit-1/rules.d/67-cabinetos-pads.rules \
     /usr/libexec/os-session-select \
     /usr/libexec/cabinetos-system-disk \
     /usr/libexec/cabinetos-steam-download \

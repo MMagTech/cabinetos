@@ -369,6 +369,10 @@ in a testing image.
     (MMagTech, from his iPhone, 2026-10-08); Remove could do the same. A
     panel open from the section closes when a stream starts. The console's
     own controllers are set aside during a stream, so nobody loses anything.
+  - **Into Steam the same (#296).** A stream started in Steam, or Steam
+    opened during one, shows Steam's games on the device, and the TV's
+    controllers are set aside while it streams (disconnected from Steam, the
+    Bluetooth link kept), back when it ends. **Built on `steam-moonlight`.**
 - **No quality setting.** Moonlight has its own on each device, and the right
   value depends on that device's connection, which the console cannot know.
   Codec, resolution and frame rate are the client's.

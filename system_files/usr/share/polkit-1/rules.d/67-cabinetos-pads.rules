@@ -1,0 +1,17 @@
+// The TV's controllers set aside while a device streams into Steam, and back
+// when it stops. Issue #296; /usr/libexec/cabinetos-pads.
+//
+// `subject.local`, as in 66-cabinetos-steam.rules: the session script around
+// Steam on its own seat, not an SSH session.
+polkit.addRule(function(action, subject) {
+    if (action.id != "org.freedesktop.systemd1.manage-units" ||
+        subject.user != "cabinet" || !subject.local) {
+        return polkit.Result.NOT_HANDLED;
+    }
+    var unit = action.lookup("unit");
+    if (action.lookup("verb") == "start" && unit &&
+        /^cabinetos-pads@(aside|back)\.service$/.test(unit)) {
+        return polkit.Result.YES;
+    }
+    return polkit.Result.NOT_HANDLED;
+});

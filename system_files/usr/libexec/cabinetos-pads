@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+#
+# The TV's controllers set aside while a device streams into Steam, and back
+# when it stops. Issue #296; docs/PROJECT.md, "Remote Play into Steam".
+#
+#   cabinetos-pads list    the controllers that would be set aside, one per
+#                          line (no root needed; what the session checks)
+#   cabinetos-pads aside   each of them taken from its driver
+#   cabinetos-pads back    each one set aside given its driver again
+#
+# aside and back are run only by cabinetos-pads@.service, which the session
+# starts through 67-cabinetos-pads.rules, around Steam (cabinetos-session,
+# steam_step; cabinetos-remoteplay steam).
+#
+# WHY: the console sets its own controllers aside during a stream inside the
+# app (players.cpp), so the phone's controller is player 1. In Steam's session
+# the app is not running, Steam sees every controller at once, and a game
+# takes the first one connected as player 1: the TV's 8BitDo, with the phone's
+# pad ignored (A9, 2026-10-08, Boltgun and another game). Steam has no way to
+# be told to ignore a controller; Reorder Controllers is by hand.
+#
+# HOW: the controller is taken from its driver (unbind), so its input device
+# and hidraw node go away and Steam sees it disconnect. The Bluetooth link
+# stays up, so nobody has to press anything to bring it back: `back` asks the
+# bus to find it a driver again (drivers_probe), and Steam sees it connect.
+# Turning the pads off over Bluetooth would need a button press on each to
+# come back; a grab (EVIOCGRAB) stops evdev readers but not hidraw, which is
+# how Steam reads many pads, and leaves a dead player 1 in the game.
+#
+# WHICH: every joystick (udev's ID_INPUT_JOYSTICK) whose device has a HID or
+# USB driver, except Sunshine's own (its name says "Sunshine" or
+# "libvirtualhid", the console's rule in players.cpp, isRemote). Steam's own
+# stand-in pads are uinput devices with no driver, so they are never touched.
+# A Bluetooth pad is a uhid device under /sys/devices/virtual, like Sunshine's,
+# so the name is what tells them apart, not the path. Wii Remotes are left
+# alone (hid-wiimote): the Wii bridge owns them, and Steam does not use them.
+#
+# The record of what was set aside is /run/cabinetos-pads.aside, one
+# "<bus> <device>" per line; `back` reads it and removes it. /run is cleared
+# by a restart, and a restart binds every pad anyway.
+
+set -uo pipefail
+
+RECORD=/run/cabinetos-pads.aside
+
+# "<bus> <device>" for each controller to set aside, once each (a pad with a
+# motion sensor or a touchpad has several input devices on one driver).
+controllers() {
+    local i name path d bus drv
+    for i in /sys/class/input/input*; do
+        [[ -e "${i}/name" ]] || continue
+        name=$(<"${i}/name")
+        [[ "${name}" == *Sunshine* || "${name}" == *libvirtualhid* ]] && continue
+        path=$(readlink -f "${i}")
+        udevadm info -q property -p "${path}" 2>/dev/null | grep -qx 'ID_INPUT_JOYSTICK=1' || continue
+        # The nearest device above it with a driver: the HID device for a
+        # Bluetooth or USB HID pad, the USB interface for an xpad one.
+        d="${path}"
+        while [[ "${d}" != /sys && "${d}" != / ]]; do
+            d=$(dirname "${d}")
+            [[ -L "${d}/driver" ]] || continue
+            bus=$(basename "$(readlink -f "${d}/subsystem")")
+            drv=$(basename "$(readlink -f "${d}/driver")")
+            if [[ ( "${bus}" == hid || "${bus}" == usb ) && "${drv}" != wiimote ]]; then
+                echo "${bus} $(basename "${d}")"
+            fi
+            break
+        done
+    done | sort -u
+}
+
+case "${1:-}" in
+    list)
+        controllers
+        ;;
+    aside)
+        controllers | while read -r bus dev; do
+            if echo "${dev}" > "/sys/bus/${bus}/devices/${dev}/driver/unbind" 2>/dev/null; then
+                echo "${bus} ${dev}" >> "${RECORD}"
+                echo "cabinetos-pads: set aside ${dev}"
+            else
+                echo "cabinetos-pads: could not set aside ${dev}" >&2
+            fi
+        done
+        [[ -e "${RECORD}" ]] && chmod 0644 "${RECORD}"
+        ;;
+    back)
+        [[ -r "${RECORD}" ]] || exit 0
+        sort -u "${RECORD}" | while read -r bus dev; do
+            # Gone meanwhile (switched off, out of range): nothing to give back.
+            [[ -e "/sys/bus/${bus}/devices/${dev}" ]] || continue
+            [[ -L "/sys/bus/${bus}/devices/${dev}/driver" ]] && continue
+            if echo "${dev}" > "/sys/bus/${bus}/drivers_probe" 2>/dev/null; then
+                echo "cabinetos-pads: back ${dev}"
+            else
+                echo "cabinetos-pads: could not bring back ${dev}" >&2
+            fi
+        done
+        rm -f "${RECORD}"
+        ;;
+    *)
+        echo "usage: $0 list | aside | back" >&2
+        exit 2
+        ;;
+esac

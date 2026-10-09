@@ -340,6 +340,15 @@ opened once and reused needs a test of two different games in one run.**
   by hand on the running gamescope is gone after a deploy; set it again, or
   make the thing that needs it set it.
 
+- **A black stream with sound: capture gamescope before blaming the
+  stream.** 2026-10-08, a game in Steam: a `gamescopectl screenshot` showed
+  the game drawn normally while the phone was black, which put the fault in
+  Sunshine's capture, not the game or the TV; Sunshine's own line said which
+  ("Mapped 'HDMI-A-1' to kmsgrab monitor index 1": it numbers planes, and 1 is
+  the overlay). A guess carried from the previous day (Steam's gamescope never
+  composed) was half wrong: Steam's menus streamed without it. And ask what
+  the TV shows too: one black TV that evening was a second, separate fault.
+
 - **Read a person's one-word answer against the question, not the hope.**
   "nope" to "is the seam still there?" was read as "gone", a fix was
   declared, and a comment saying so went on #286 before "no the issue is
