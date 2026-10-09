@@ -1,0 +1,33 @@
+# The wiki's pages, in reading order. The layout builds the side list and the
+# previous and next links from this, so a new page is one line here.
+- section: Start here
+  pages:
+    - { file: README.md, title: Wiki home }
+    - { file: install.md, title: Install }
+    - { file: first-run.md, title: First run }
+    - { file: romm.md, title: Your RomM server }
+- section: Setup
+  pages:
+    - { file: controllers.md, title: Controllers and Bluetooth }
+    - { file: network.md, title: Wi-Fi and network }
+    - { file: drives.md, title: Drives and storage }
+- section: Playing
+  pages:
+    - { file: library.md, title: The library }
+    - { file: pause-menu.md, title: The pause menu }
+    - { file: saves.md, title: Saves, states and sync }
+    - { file: players.md, title: Players and accounts }
+    - { file: screenshots.md, title: Screenshots }
+    - { file: achievements.md, title: Achievements }
+- section: Settings
+  pages:
+    - { file: picture.md, title: Picture and colours }
+    - { file: remote-play.md, title: Remote Play }
+    - { file: steam.md, title: Steam }
+    - { file: updates.md, title: Updates }
+    - { file: file-access.md, title: File access }
+- section: Reference
+  pages:
+    - { file: navigation.md, title: Buttons and shortcuts }
+    - { file: systems.md, title: Systems, formats and BIOS }
+    - { file: troubleshooting.md, title: When something is wrong }
