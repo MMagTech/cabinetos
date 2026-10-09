@@ -11,37 +11,38 @@ specification is `docs/PROJECT.md`; the order is `docs/ROADMAP.md`.
 
 ## Where things stand
 
-2026-10-09: a stream started while the screen is asleep (#294) is merged
-(#299); the A9 runs image 2026.10.09.3 with nothing by hand. The A9 sits at
-the LG C1 on Wi-Fi at **192.168.1.109** (`CABINETOS_A9=cabinet@192.168.1.109` for
-`tools/ui-loop.sh`), signed in to MMagTech's Tailscale as `cabinetos`.
+2026-10-09: the Bazzite base 44.20261006.1 is merged (#302), with base-update
+pull requests listing their own checks (#301) and the controller list
+(#266). The A9 runs image 2026.10.09.4 with nothing by hand: all 19 log
+checks (`tools/base-checks.sh`) and all seven TV checks passed. The A9 sits
+at the LG C1 on Wi-Fi at **192.168.1.109** (`CABINETOS_A9=cabinet@192.168.1.109`
+for `tools/ui-loop.sh` and `tools/base-checks.sh`), signed in to MMagTech's
+Tailscale as `cabinetos`. It takes updates only from its own System update
+screen (the PIN is his to enter); never sudo over SSH.
 
 ## Next
 
 Milestone 7, Ready to ship (docs/ROADMAP.md), in this order (MMagTech,
 2026-10-09). Lessons file: image-and-ci.md, then frontend.md.
 
-1. **The base-update pull request writes its own checks** (branch
-   `base-update-checks`). Each area of `ci/base-watch.txt` has its log and
-   TV checks; only changed areas appear; the kernel's fixes are filtered to
-   the parts the console uses; the notes double as public update notes.
-   `tools/base-checks.sh <branch>` runs the log half on the A9. PROJECT.md,
-   *Staying current with Bazzite*.
-2. **The controller list, PR #266.** Close #180 as replaced.
-3. **The newest Bazzite base, 44.20261006.1.** Run `base-update.yml` by
-   hand from the branch above, close #265 and #179 as replaced (#42 stays
-   open), test only what changed, then the pull request.
-4. **Signed images (#135).** First of the rest because a mistake breaks
-   every console's updates, so it needs several image updates on the A9 to
-   prove itself.
-5. **A diagnostic report (#195).** Everything decided so far is on the issue
+1. **A stream into Steam goes black on the way back to Home (#304).** Found
+   in the base-update test, there since #298. The test it must pass is on
+   the issue: restart, no controller, stream straight in, Home, Steam, back
+   to Home, picture on the phone throughout. Upstream first (Sunshine), our
+   fallback recorded there. Also the pads helper's false failure, same issue.
+2. **Signed images (#135).** First of the rest because a mistake breaks every
+   console's updates, so it needs several image updates on the A9 to prove
+   itself.
+3. **A diagnostic report (#195).** Everything decided so far is on the issue
    (the QR code is a download link; what goes in, what is stripped).
-6. **Licences checked and the full texts shipped (#120).**
+4. **Licences checked and the full texts shipped (#120).**
 
-Also in the milestone: booting with the TV off (#268), a showcase page and
-README (#190), Steam black at 120 Hz on the C1 and "no signal" at every
-switch to Steam (#290). CabinetOS in the version info (#137) was done in
-#252.
+Also in the milestone: booting with the TV off (#268); the showcase page,
+wiki and README (#190), hosted on GitHub (MMagTech, 2026-10-09), its place in
+the order still to settle with him (proposed: the writing right after #135,
+the pictures last). Moved to After first release on 2026-10-09: Steam at
+120 Hz on the C1 (#290), Miis with a second account (#283). Wii Remote
+pairing assumes `hci0` (#303) is After first release too.
 
 **After a console is installed fresh** it has no key: About, press Version
 seven times, Developer access, PIN; then from the Mac, with the password on
