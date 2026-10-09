@@ -1,0 +1,15 @@
+# The build environment for Sunshine, Remote Play's streaming host (#304).
+#
+# Fedora 44 because the package it makes goes into an image built from
+# Bazzite 44, and LizardByte's own Fedora 44 package is built on the same.
+# Only what rpmbuild itself needs is here: the rest of Sunshine's build
+# dependencies are read from its own spec at the pin, by `dnf builddep` in
+# cores/build-sunshine.sh, so a new version that needs a new library brings
+# it with it.
+FROM registry.fedoraproject.org/fedora:44
+
+RUN dnf install -y --setopt=install_weak_deps=False \
+        rpm-build dnf-plugins-core git tar gzip patch rpmlint \
+    && dnf clean all
+
+WORKDIR /src

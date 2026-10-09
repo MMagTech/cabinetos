@@ -173,7 +173,7 @@ EOF
         # so the two things it does during a stream are done here:
         #
         # 1. COMPOSED WHILE A STREAM IS OPEN, the same rule as the console
-        #    (above, and main.cpp at start). Steam's gamescope is a new one
+        #    (above, and cabinetos-session at start). Steam's gamescope is a new one
         #    and starts with it off. In Steam's menus that still streamed,
         #    but a game makes gamescope use two planes, and Sunshine 2026.914
         #    reads only the last plane on the screen (kmsgrab.cpp numbers
@@ -184,11 +184,40 @@ EOF
         #    gets it from `started` as before. Take this out when Sunshine
         #    reads the whole screen.
         #
+        #    AND KEPT ON (#304). Steam has its own composing switch, the X
+        #    root property GAMESCOPE_COMPOSITE_FORCE, which gamescope obeys
+        #    whenever it changes, and Steam sets it to 0 about 2.6 s into its
+        #    start (A9, 2026-10-09, 09:32:37, after this had composed at
+        #    09:32:34): Steam's screen went back to two planes, and the next
+        #    game streamed black. So each of Steam's X displays is watched
+        #    (xprop -spy, which reports every change at once), and while a
+        #    stream is open a 0 is answered with a 1. Sunshine, patched,
+        #    picks again if it looked in the moment between
+        #    (cores/sunshine-patches).
+        #
         # 2. THE TV'S CONTROLLERS SET ASIDE WHILE A DEVICE STREAMS, back when
         #    it stops, as the console does (cabinetos-pads). Checked every
         #    second; one connected during the stream is set aside too.
+        hold_composed() {
+            DISPLAY="$1" xprop -spy -root GAMESCOPE_COMPOSITE_FORCE 2>/dev/null | while read -r line; do
+                [ -e "$XDG_RUNTIME_DIR/cabinetos-remoteplay-session" ] || continue
+                [[ "$line" == *"= 1" ]] && continue
+                DISPLAY="$1" xprop -root -f GAMESCOPE_COMPOSITE_FORCE 32c -set GAMESCOPE_COMPOSITE_FORCE 1 \
+                    && echo "cabinetos-remoteplay: Steam switched composing off on $1 during a stream: on again"
+            done
+        }
         composed=""
+        held=" "
         while :; do
+            # Steam's X displays: the sockets its gamescope made. Each watch
+            # ends by itself when its display goes, with Steam.
+            for x in /tmp/.X11-unix/X*; do
+                [[ -S "$x" && "$x" -nt "$XDG_RUNTIME_DIR/cabinetos-steam-started" ]] || continue
+                d=":${x##*/X}"
+                [[ "$held" == *" $d "* ]] && continue
+                hold_composed "$d" &
+                held+="$d "
+            done
             sock=$(newest_socket)
             if [ -n "$sock" ] && [ -e "$XDG_RUNTIME_DIR/cabinetos-remoteplay-session" ]; then
                 id="$sock $(stat -c %Y "$XDG_RUNTIME_DIR/$sock" 2>/dev/null || true)"

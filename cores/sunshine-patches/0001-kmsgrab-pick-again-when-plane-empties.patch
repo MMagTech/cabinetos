@@ -1,0 +1,45 @@
+diff --git a/src/platform/linux/kmsgrab.cpp b/src/platform/linux/kmsgrab.cpp
+index 8a08576..43299dc 100644
+--- a/src/platform/linux/kmsgrab.cpp
++++ b/src/platform/linux/kmsgrab.cpp
+@@ -1538,10 +1538,26 @@ namespace platf {
+ 
+         auto fb = card.fb(plane.get());
+         if (!fb) {
++          // The plane no longer scans out a framebuffer: the compositor moved the
++          // picture to another plane, or is restarting. Waiting on this plane would
++          // stream black until the client reconnects, so once it has stayed empty
++          // for a moment, pick a plane again.
++          if (!plane->fb_id) {
++            const auto now = std::chrono::steady_clock::now();
++            if (!plane_empty_since) {
++              plane_empty_since = now;
++            } else if (now - *plane_empty_since >= EMPTY_PLANE_REINIT_DELAY) {
++              BOOST_LOG(info) << "Reinitializing capture: plane ["sv << plane_id << "] has had no framebuffer for "sv
++                              << std::chrono::duration_cast<std::chrono::milliseconds>(now - *plane_empty_since).count() << "ms"sv;
++              return capture_e::reinit;
++            }
++          }
++
+           // This can happen if the display is being reconfigured while streaming
+           BOOST_LOG(warning) << "Couldn't get drm fb for plane ["sv << plane->fb_id << "]: "sv << strerror(errno);
+           return capture_e::timeout;
+         }
++        plane_empty_since.reset();
+ 
+         if (!fb->handles[0]) {
+           BOOST_LOG(error) << "Couldn't get handle for DRM Framebuffer ["sv << plane->fb_id << "]: Probably not permitted"sv;
+@@ -1596,6 +1612,13 @@ namespace platf {
+       int img_offset_x;  ///< Img offset x.
+       int img_offset_y;  ///< Img offset y.
+ 
++      /**
++       * @brief How long the captured plane may have no framebuffer before capture is reinitialized.
++       */
++      static constexpr auto EMPTY_PLANE_REINIT_DELAY = 250ms;
++
++      std::optional<std::chrono::steady_clock::time_point> plane_empty_since;  ///< When the captured plane last lost its framebuffer.
++
+       int plane_id;  ///< Plane ID.
+       int crtc_id;  ///< Crtc ID.
+       int crtc_index;  ///< Crtc index.
