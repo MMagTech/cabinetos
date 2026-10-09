@@ -11,10 +11,9 @@ specification is `docs/PROJECT.md`; the order is `docs/ROADMAP.md`.
 
 ## Where things stand
 
-2026-10-09: a stream started while the screen is asleep (#294) is built on
-branch `asleep-stream`, tested with MMagTech streaming, pull request open,
-testing image on the A9. **Merge only on MMagTech's go**, then delete the
-branch on his go. The A9 sits at the LG C1 on Wi-Fi at **192.168.1.109** (`CABINETOS_A9=cabinet@192.168.1.109` for
+2026-10-09: a stream started while the screen is asleep (#294) is merged
+(#299); the A9 runs image 2026.10.09.3 with nothing by hand. The A9 sits at
+the LG C1 on Wi-Fi at **192.168.1.109** (`CABINETOS_A9=cabinet@192.168.1.109` for
 `tools/ui-loop.sh`), signed in to MMagTech's Tailscale as `cabinetos`.
 
 ## Next
