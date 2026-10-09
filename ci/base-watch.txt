@@ -84,7 +84,9 @@ changelog: Bluetooth :: ^Bluetooth: (?!(btintel|btrtl|btbcm|btqca|hci_qca|btnxpu
 changelog: Controllers :: ^HID: ((core|input|hidraw|uhid|usbhid|generic|playstation|sony|nintendo|microsoft|steam|wiimote|8bitdo|google)\b|hid-(core|input|playstation|sony|nintendo|microsoft|steam|wiimote|generic)\b|(?![\w-]+: ))|^Input: (xpad|joydev|uinput|evdev|ff-core|ff-memless)\b
 changelog: Sound :: ^ALSA: (hda|pcm|core|control|timer)\b
 changelog: USB :: ^(usb|USB): (xhci|core|hub)\b|^xhci\b|^usb: storage: uas\b|^thunderbolt:
-changelog: Sleep and power :: ^(platform/x86(/amd|: amd)|cpufreq: amd-pstate|cpufreq/amd-pstate)
+changelog: Processor, sleep and power :: ^(platform/x86(/amd|: amd)|cpufreq: amd-pstate|cpufreq/amd-pstate|iommu/amd|x86/(cpu/)?amd)\b
+# Every game runs through it, and OGC carries its own scheduler patches.
+changelog: Scheduler :: ^sched/
 # Radeon: GPU families and blocks that are not the 890M's (gfx11.5, display
 # DCN 3.5, SMU 14). Its own may be named; another one named is not news.
 changelog-skip: ^(drm/)?amd.*\b(gfx([6-9]|10|12)|gfx_v([6-9]|10|12)|vega\d*|smu ?(7|11|13)|SMU ?(7|11|13)|powerplay|dce\d*|DCE|si|cik|uvd|vce|xgmi|XGMI|dGPUs?|MST|multi-XCC|MI\d{3}|dcn(?!3[56])\d+)\b
@@ -248,17 +250,23 @@ google-noto-fonts-common
 # Read off `ldd` against the real binaries rather than guessed at. libX11 and
 # libXext are PPSSPP's, which nothing had noticed until the control run.
 #
-# libcurl is also every download from RomM, and libarchive unpacks them.
-area: Libraries the emulators use
+# Split in two on 2026-10-09: libcurl is also every download from RomM and
+# libarchive unpacks them, while libX11 is PPSSPP's alone, and a rebuild of
+# libX11 was asking for a download test.
+area: Downloads from RomM
 log: Home started :: journalctl -b -t cabinetos-session -o cat | grep -q 'Home is up'
 log: Nothing crashed this boot :: out=$(coredumpctl list --since "$(uptime -s)" --no-legend 2>/dev/null); [ -z "$out" ] || { echo "$out"; exit 1; }
 tv: A download: a game not on the console yet downloads from RomM and starts
 libcurl
 libcurl-minimal
-json-c
 libarchive
 zlib-ng-compat
 libzip
+area: Libraries the emulators use
+log: Home started :: journalctl -b -t cabinetos-session -o cat | grep -q 'Home is up'
+log: Nothing crashed this boot :: out=$(coredumpctl list --since "$(uptime -s)" --no-legend 2>/dev/null); [ -z "$out" ] || { echo "$out"; exit 1; }
+tv: A PSP game starts and plays (PPSSPP is the core that uses X11)
+json-c
 libX11
 libXext
 libxkbcommon*
