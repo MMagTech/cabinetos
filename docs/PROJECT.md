@@ -16152,6 +16152,42 @@ not hand over until its menu opened (the loop an emulator of its own runs
 under skipped the check); fixed and seen working on Switch, which runs the
 same way; PS3 itself not seen again yet.
 
+**Into Steam (#296, MMagTech on the A9 and his iPhone, 2026-10-08).** He
+wants Steam to behave as the console does: playing on the TV, pick up the
+phone, carry on with the phone as player 1 and the TV's pads set aside; stop
+streaming and the TV's pads are back. The console app does that for itself
+and is not running in Steam's session, so `cabinetos-remoteplay steam` runs
+beside Steam (started by `steam_step`, only while Remote Play is on) and does
+the two things the app does:
+
+- *Composed while a session is open,* the same rule as the console. Steam's
+  menus streamed without it, but a game makes gamescope use two planes, and
+  Sunshine 2026.914 maps the screen to the LAST plane on it (kmsgrab.cpp
+  numbers planes, not screens; "Mapped 'HDMI-A-1' to kmsgrab monitor index
+  1"), the empty one: black with sound. Measured: black in two games, and
+  composite set before a fresh stream showed the game with no capture errors.
+  Not 120 Hz and not HDR; the TV black at 120 Hz is #290 (Linux 7.2 keeps
+  HDMI 2.1 FRL off by default). Upstream: LizardByte/Sunshine#5839, open, no
+  fix in the 2026.1008 pre-releases; the draft LizardByte/Sunshine#5532
+  counts screens instead. **Take ours out when Sunshine reads the whole
+  screen.** *Named and dropped:* patching Sunshine (a build from source to
+  keep, against "never patched" in install-sunshine.sh; the small patch would
+  drop what Steam draws over a game, its Home menu); Sunshine's
+  `output_name = 0` (the same loss); Steam's own Remote Play instead (SDR
+  only, open freeze bugs, ValveSoftware/gamescope#2286).
+- *The TV's controllers set aside while a device streams* (`cabinetos-pads`,
+  root, through `cabinetos-pads@.service`): each joystick with a HID or USB
+  driver, except Sunshine's, is unbound from its driver, so Steam sees it
+  disconnect and the phone's pad is the only one; the Bluetooth link stays up,
+  and `back` asks the bus for a driver again. Measured first: in Steam the
+  game took the 8BitDo (connected first) as player 1 and ignored the phone's
+  pad. A stream open at the handover sets them aside before Steam starts.
+  *Named and dropped:* turning the pads off over Bluetooth (a button press on
+  each to come back), a grab (EVIOCGRAB: Steam reads many pads through hidraw,
+  which a grab does not stop, and it leaves a dead player 1), Steam's Reorder
+  Controllers (by hand). Sunshine's "ControllerNumber already allocated" is a
+  repeated arrival packet; it reuses the pad (input.cpp), harmless.
+
 **Wii Remote games.** A paired Remote means the person playing holds it;
 during a stream they do not, so Remote games are greyed, and one already
 running stays paused with no Resume until the stream ends (MMagTech agreed

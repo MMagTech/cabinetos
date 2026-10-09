@@ -11,12 +11,12 @@ specification is `docs/PROJECT.md`; the order is `docs/ROADMAP.md`.
 
 ## Where things stand
 
-2026-10-08: the controller battery (#293) is finished on branch
-`controller-battery`, pull request #295, judged on the TV through the loop;
-its testing image is the one to check. **Merge only on MMagTech's go**, then
-delete the branch on his go. The A9 sits at the LG C1 on Wi-Fi at
-**192.168.1.109** (`CABINETOS_A9=cabinet@192.168.1.109` for
-`tools/ui-loop.sh`), signed in to MMagTech's Tailscale as `cabinetos`.
+2026-10-08 late: the controller battery (#293, pull request #295) is merged
+and its branch deleted; the A9 runs image 2026.10.09 from `testing` with
+nothing by hand. Steam over Moonlight (#296) is on branch `steam-moonlight`.
+The A9 sits at the LG C1 on Wi-Fi at **192.168.1.109**
+(`CABINETOS_A9=cabinet@192.168.1.109` for `tools/ui-loop.sh`), signed in to
+MMagTech's Tailscale as `cabinetos`.
 
 ## Next
 

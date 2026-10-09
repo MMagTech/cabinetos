@@ -415,6 +415,25 @@ steam_step() {
     # to be enabled" in a window gamescope never shows: a black screen. Found
     # on the A9's first handover, 2026-10-03; reproduced and fixed there with
     # exactly this. gamescope keeps its own cap_sys_nice from its file.
+    #
+    # A STREAM INTO STEAM WORKS AS IT DOES INTO THE CONSOLE (#296): composed
+    # while a stream is open, and the TV's controllers set aside while a
+    # device streams, back when it stops. The console app does both for
+    # itself; in Steam's session `cabinetos-remoteplay steam` does them,
+    # beside Steam. Only when Remote Play is on: off, nothing extra runs.
+    # A stream already open at the handover has the TV's controllers set
+    # aside BEFORE Steam starts, so Steam never takes one as player 1.
+    local rp_watch=""
+    if systemctl is-active --quiet cabinetos-remoteplay.service; then
+        : > "$(runtime_dir)/cabinetos-steam-started"
+        if /usr/libexec/cabinetos-remoteplay streaming; then
+            systemctl --no-ask-password start cabinetos-pads@aside.service \
+                && echo "cabinetos-session: a device is streaming: the TV's controllers set aside for Steam"
+        fi
+        /usr/libexec/cabinetos-remoteplay steam &
+        rp_watch=$!
+    fi
+
     ADAPTIVE_SYNC=1 \
     SRT_LOG_TO_JOURNAL=1 \
         setpriv --inh-caps=-all --ambient-caps=-all -- \
@@ -422,7 +441,18 @@ steam_step() {
     echo "cabinetos-session: Steam's session ended (status $?)"
 
     systemctl --user unset-environment XDG_DESKTOP_PORTAL_DIR 2>/dev/null
+    if [[ -n "${rp_watch}" ]]; then
+        kill "${rp_watch}" 2>/dev/null
+        wait "${rp_watch}" 2>/dev/null
+    fi
     stop_leftovers
+
+    # The console sets its own controllers aside during a stream, inside the
+    # app; it gets them all back first.
+    if [[ -e /run/cabinetos-pads.aside ]]; then
+        systemctl --no-ask-password start cabinetos-pads@back.service \
+            && echo "cabinetos-session: the TV's controllers are back for the console"
+    fi
 
     if ! systemctl --no-ask-password start cabinetos-steam@unmount.service; then
         echo "cabinetos-session: Steam's slice could not be detached"
@@ -467,6 +497,13 @@ rm -f "${REQUEST_FILE}"
 if mountpoint -q "${HOME}/.local/share/Steam" 2>/dev/null; then
     systemctl --no-ask-password start cabinetos-steam@unmount.service \
         && echo "cabinetos-session: Steam's slice was left attached; detached"
+fi
+
+# NOR ARE THE TV'S CONTROLLERS LEFT SET ASIDE, by a session that ended inside
+# Steam during a stream (#296).
+if [[ -e /run/cabinetos-pads.aside ]]; then
+    systemctl --no-ask-password start cabinetos-pads@back.service \
+        && echo "cabinetos-session: the TV's controllers were left set aside; back"
 fi
 
 if ls /dev/dri/card* >/dev/null 2>&1; then

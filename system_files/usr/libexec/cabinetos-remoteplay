@@ -8,9 +8,13 @@
 #   cabinetos-remoteplay started   the CabinetOS session opens: gamescope
 #                                  composes every frame into one picture
 #   cabinetos-remoteplay ended     the session was quit: back to normal
+#   cabinetos-remoteplay streaming exit 0 when a device is streaming now
+#   cabinetos-remoteplay steam     beside Steam's session: what the console
+#                                  does during a stream, done for Steam
 #
 # prepare is run by cabinetos-remoteplay.service (ExecStartPre), started and
-# ended by Sunshine itself (the CabinetOS entry's prep-cmd), all as `cabinet`.
+# ended by Sunshine itself (the CabinetOS entry's prep-cmd), streaming and
+# steam by the session script around Steam (steam_step), all as `cabinet`.
 #
 # WHY gamescope MUST COMPOSE WHILE STREAMING: it normally shows the frontend
 # on a display layer of its own over a black base layer, and Sunshine reads
@@ -43,9 +47,33 @@
 # once, never shown.
 
 set -euo pipefail
+: "${XDG_RUNTIME_DIR:=/run/user/$(id -u)}"
 
 DIR=/var/lib/cabinetos/remoteplay
 CONF="$DIR/.config/sunshine"
+LOG="$CONF/sunshine.log"
+
+# The newest gamescope socket is the session's: a restart leaves the old one
+# behind (docs/lessons/testing.md). Steam's own gamescope makes one too.
+newest_socket() {
+    local s sock=""
+    for s in "$XDG_RUNTIME_DIR"/gamescope-*; do
+        [[ -S "$s" && ${s##*/} =~ ^gamescope-[0-9]+$ ]] || continue
+        if [ -z "$sock" ] || [ "$s" -nt "$XDG_RUNTIME_DIR/$sock" ]; then sock=${s##*/}; fi
+    done
+    echo "$sock"
+}
+
+# WHETHER A DEVICE IS STREAMING NOW, read as the console reads it
+# (remoteplay.cpp, readLog): Sunshine running, and the last of its "CLIENT
+# CONNECTED" and "CLIENT DISCONNECTED" lines the first. A dropped phone is
+# written as disconnected; a new Sunshine starts a new log, so a Sunshine
+# stopped mid-stream leaves no stale "connected" behind it.
+is_streaming() {
+    systemctl is-active --quiet cabinetos-remoteplay.service || return 1
+    [ -r "$LOG" ] || return 1
+    [[ "$(grep -a -o -E 'CLIENT (DIS)?CONNECTED' "$LOG" | tail -n 1)" == "CLIENT CONNECTED" ]]
+}
 
 case "${1:-}" in
     prepare)
@@ -84,21 +112,64 @@ EOF
 EOF
         ;;
     started|ended)
-        # The newest gamescope socket is the session's: a restart leaves the
-        # old one behind (docs/lessons/testing.md).
-        sock=""
-        for s in "$XDG_RUNTIME_DIR"/gamescope-*; do
-            [[ -S "$s" && ${s##*/} =~ ^gamescope-[0-9]+$ ]] || continue
-            if [ -z "$sock" ] || [ "$s" -nt "$XDG_RUNTIME_DIR/$sock" ]; then sock=${s##*/}; fi
-        done
+        sock=$(newest_socket)
         [ -n "$sock" ] || exit 0
         on=0; [ "$1" = started ] && on=1
         if [ "$on" = 1 ]; then : > "$XDG_RUNTIME_DIR/cabinetos-remoteplay-session"
         else rm -f "$XDG_RUNTIME_DIR/cabinetos-remoteplay-session"; fi
         GAMESCOPE_WAYLAND_DISPLAY="$sock" gamescopectl composite_force "$on" >/dev/null 2>&1 || true
         ;;
+    streaming)
+        is_streaming
+        ;;
+    steam)
+        # BESIDE STEAM'S SESSION (#296), started by steam_step before Steam
+        # and stopped when Steam ends. The console app is not running there,
+        # so the two things it does during a stream are done here:
+        #
+        # 1. COMPOSED WHILE A STREAM IS OPEN, the same rule as the console
+        #    (above, and main.cpp at start). Steam's gamescope is a new one
+        #    and starts with it off. In Steam's menus that still streamed,
+        #    but a game makes gamescope use two planes, and Sunshine 2026.914
+        #    reads only the last plane on the screen (kmsgrab.cpp numbers
+        #    planes, not screens), the empty one: black with sound, until the
+        #    phone left and joined again (A9, 2026-10-08; LizardByte/Sunshine
+        #    #5839, open). So it is turned on as soon as Steam's gamescope is
+        #    up, while the session is open; a stream started inside Steam
+        #    gets it from `started` as before. Take this out when Sunshine
+        #    reads the whole screen.
+        #
+        # 2. THE TV'S CONTROLLERS SET ASIDE WHILE A DEVICE STREAMS, back when
+        #    it stops, as the console does (cabinetos-pads). Checked every
+        #    second; one connected during the stream is set aside too.
+        composed=""
+        while :; do
+            sock=$(newest_socket)
+            if [ -n "$sock" ] && [ -e "$XDG_RUNTIME_DIR/cabinetos-remoteplay-session" ]; then
+                id="$sock $(stat -c %Y "$XDG_RUNTIME_DIR/$sock" 2>/dev/null || true)"
+                if [ "$composed" != "$id" ] && [ "$XDG_RUNTIME_DIR/$sock" -nt "$XDG_RUNTIME_DIR/cabinetos-steam-started" ]; then
+                    if GAMESCOPE_WAYLAND_DISPLAY="$sock" gamescopectl composite_force 1 >/dev/null 2>&1; then
+                        composed="$id"
+                        echo "cabinetos-remoteplay: a stream is open: Steam's screen composed"
+                    fi
+                fi
+            fi
+            if is_streaming; then
+                if [ -n "$(/usr/libexec/cabinetos-pads list)" ]; then
+                    systemctl --no-ask-password start cabinetos-pads@aside.service \
+                        && echo "cabinetos-remoteplay: a device is streaming: the TV's controllers set aside"
+                fi
+            elif [ -e /run/cabinetos-pads.aside ]; then
+                systemctl --no-ask-password start cabinetos-pads@back.service \
+                    && echo "cabinetos-remoteplay: the stream ended: the TV's controllers are back"
+            fi
+            # Quicker until Steam's screen is composed: Sunshine looks again
+            # when Steam's gamescope turns HDR on, a few seconds in.
+            if [ -n "$composed" ] || [ ! -e "$XDG_RUNTIME_DIR/cabinetos-remoteplay-session" ]; then sleep 1; else sleep 0.2; fi
+        done
+        ;;
     *)
-        echo "usage: $0 prepare | started | ended" >&2
+        echo "usage: $0 prepare | started | ended | streaming | steam" >&2
         exit 2
         ;;
 esac
