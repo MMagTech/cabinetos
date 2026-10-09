@@ -63,7 +63,9 @@ fi
 # --- the source, fresh every time ----------------------------------------
 # Fresh, because the tarball is the whole tree: nothing a previous run left
 # (a build folder, a half-applied patch) may go into the package.
-rm -rf "$SRC" "$WORK"
+# Through `podman unshare`: rpmbuild unpacks the tarball as the container's
+# root, so a previous run's files belong to a user mapped from it, not to us.
+podman unshare rm -rf "$SRC" "$WORK"
 mkdir -p "$SRC_ROOT" "$WORK"
 git clone --quiet --depth 1 --branch "v$VERSION" "$REPO" "$SRC"
 HEAD=$(git -C "$SRC" rev-parse HEAD)
@@ -72,7 +74,12 @@ if [ "$HEAD" != "$COMMIT" ]; then
     exit 1
 fi
 git -C "$SRC" submodule update --quiet --init --recursive --depth 1
-echo "sunshine v$VERSION @ $COMMIT"
+# build-deps' tags, which a shallow submodule lacks: its tag names the
+# prebuilt FFmpeg this version links with (see the build, below).
+git -C "$SRC/third-party/build-deps" fetch --quiet --tags --depth=1
+FFMPEG_TAG=$(git -C "$SRC/third-party/build-deps" tag --points-at HEAD | head -1)
+[ -n "$FFMPEG_TAG" ] || { echo "Sunshine's build-deps submodule is at no tag" >&2; exit 1; }
+echo "sunshine v$VERSION @ $COMMIT, FFmpeg from build-deps $FFMPEG_TAG"
 
 # --- our patches -----------------------------------------------------------
 # Each must apply as it is. One that applies in reverse is in Sunshine
@@ -118,14 +125,29 @@ tar -czf "$WORK/tarball.tar.gz" -C "$SRC" .
 
 # --- the build, in the container ----------------------------------------
 # --nogpgcheck nowhere: builddep reads Fedora's own signed repositories.
-podman run --rm -v "$WORK":/work:Z -w /work "$BUILDER" bash -c '
+#
+# GIT MUST TRUST THE TREE (safe.directory), as in build-cemu.sh. Sunshine's
+# CMake asks git which build-deps tag its submodule is at, and downloads
+# that tag's prebuilt FFmpeg. rpmbuild unpacks the tree owned by another
+# user than the container's root, git then refuses to answer, and Sunshine
+# falls back to build-deps' NEWEST FFmpeg, which does not link with this
+# version (undefined swr_* in libavcodec; A9, 2026-10-09). Checked below.
+podman run --rm -v "$WORK":/work:Z -w /work \
+    -e GIT_CONFIG_COUNT=1 \
+    -e GIT_CONFIG_KEY_0=safe.directory \
+    -e GIT_CONFIG_VALUE_0='*' \
+    "$BUILDER" bash -c '
     set -euo pipefail
     dnf builddep -y --setopt=install_weak_deps=False /work/Sunshine.spec >/dev/null
     HOME=/work/home rpmbuild -bb \
         --define "_topdir /work/rpmbuild" \
         --define "_sourcedir /work" \
-        /work/Sunshine.spec
+        /work/Sunshine.spec 2>&1 | tee /work/rpmbuild.log
 '
+if ! grep -qxF -- "-- Using FFmpeg from build-deps tag: $FFMPEG_TAG" "$WORK/rpmbuild.log"; then
+    echo "Sunshine's build did not use FFmpeg from build-deps $FFMPEG_TAG, the tag its submodule is at" >&2
+    exit 1
+fi
 
 # --- what goes into the image ----------------------------------------------
 rpm=$(find "$WORK/rpmbuild/RPMS" -name "Sunshine-$VERSION-1.fc44.x86_64.rpm" | head -1)

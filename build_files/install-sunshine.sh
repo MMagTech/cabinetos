@@ -114,5 +114,5 @@ if left="$(grep -rlis 'bin/sunshine' /usr/lib/systemd/user /usr/lib/systemd/syst
     exit 1
 fi
 
-log "Sunshine ${SUNSHINE_VERSION} installed"
+log "Sunshine $(head -1 "${SRC}/VERSION" | cut -d" " -f1) installed, with our patches"
 group_end
