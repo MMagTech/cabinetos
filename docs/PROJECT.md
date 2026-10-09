@@ -16233,6 +16233,34 @@ the two things the app does:
   Controllers (by hand). Sunshine's "ControllerNumber already allocated" is a
   repeated arrival packet; it reuses the pad (input.cpp), harmless.
 
+**Sunshine patched after all (#304, MMagTech, 2026-10-09).** "Never patched"
+above is reversed, with his go after naming the options. Composing from
+outside kept leaving new ways into the same black stream: back from Steam,
+Home's new gamescope was on two planes for its first second and Sunshine
+picked then; and Steam itself sets its composing switch (the
+`GAMESCOPE_COMPOSITE_FORCE` X property) to 0 about 2.6 s into its start, so
+#296's watcher, composing once, never held (a game streamed black again).
+Every case ends the same way: Sunshine sits on a plane with no framebuffer
+for ever. So:
+
+- *Sunshine picks again* once its plane has been empty for 250 ms
+  (`cores/sunshine-patches/`, offered upstream with unit tests). Built by us
+  from LizardByte's own Fedora recipe at the same pinned tag
+  (`cores/build-sunshine.sh`, `build-sunshine.yml`); the image installs that
+  package. Drop it, and go back to LizardByte's package, when a release has
+  it. It does not choose a better plane; it makes a wrong choice last a
+  quarter of a second instead of until the phone reconnects.
+- *Composing still matters*, so Sunshine's one plane is the whole picture:
+  Home's gamescope starts composed when a session is open
+  (`cabinetos-session`), and in Steam each change of Steam's switch is
+  answered with a 1 at once (`cabinetos-remoteplay steam`, `xprop -spy`).
+- *Colours in Steam:* Steam runs the TV in HDR, and composed, the picture is
+  HDR. With Moonlight's HDR setting on, the stream is HDR10 and matches the
+  TV (judged by MMagTech against the TV). With it off, it streams washed out;
+  fixing that needs Sunshine to convert HDR to SDR itself. Not ours.
+- *Named and not chosen:* waiting for upstream (no date); holding composing
+  on from outside alone (a gap remains between Steam's switch and ours).
+
 **The screen asleep (#294, MMagTech streaming from his iPhone, 2026-10-09).**
 Sunshine sets up its capture when a stream starts, when a device rejoins,
 and when the TV's picture changes mid-stream (its HDR metadata check). With
