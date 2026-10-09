@@ -11,27 +11,27 @@ specification is `docs/PROJECT.md`; the order is `docs/ROADMAP.md`.
 
 ## Where things stand
 
-2026-10-08: Remote Play (#286) is finished on branch `remote-play`, pull
-request #292, judged on the TV and verified from testing image 2026.10.08.2
-on the A9. **Merge only on MMagTech's go**, then delete the branch on his go.
-The A9 runs that testing image with nothing by hand: the stand-in is gone.
-It sits at the LG C1 on Wi-Fi at **192.168.1.109**
-(`CABINETOS_A9=cabinet@192.168.1.109` for `tools/ui-loop.sh`), signed in to
-MMagTech's Tailscale as `cabinetos`, 100.67.82.30.
+2026-10-08: the controller battery (#293) is finished on branch
+`controller-battery`, pull request #295, judged on the TV through the loop;
+its testing image is the one to check. **Merge only on MMagTech's go**, then
+delete the branch on his go. The A9 sits at the LG C1 on Wi-Fi at
+**192.168.1.109** (`CABINETOS_A9=cabinet@192.168.1.109` for
+`tools/ui-loop.sh`), signed in to MMagTech's Tailscale as `cabinetos`.
 
 ## Next
 
-Milestone 7, Ready to ship (docs/ROADMAP.md). Lessons file: frontend.md.
+Milestone 7, Ready to ship (docs/ROADMAP.md). Lessons file: testing.md, then
+frontend.md.
 
-1. **The controller battery on Home, and a one-time low-battery notice
-   (#293).** MMagTech's proposal and what checking it against the console
-   found are on the issue: SDL already reports each pad's battery (no sysfs
-   walk), the console's one notice style, the Wii Remote bridge's battery
-   byte. Walk the scenarios with him first, then build it in the loop and
-   judge it on the TV.
-2. **Signed images (#135).**
-3. **CabinetOS in the system's version info (#137).**
-4. **Licences checked and the full texts shipped (#120).**
+1. **Steam over Moonlight: black picture, sound plays (#296).** MMagTech calls
+   it a key feature. Nothing about it is recorded yet; the leading guess on
+   the issue (Steam's own gamescope never gets composite_force) is unchecked.
+   Measure on the A9 with him streaming before changing anything.
+2. **A stream started while the screen is asleep stays black (#294).** Same
+   area; the open question (what idle does during a stream) is on the issue.
+3. **Signed images (#135).**
+4. **CabinetOS in the system's version info (#137).**
+5. **Licences checked and the full texts shipped (#120).**
 
 Also in the milestone: booting with the TV off (#268), a diagnostic report
 (#195), a showcase page and README (#190), Steam black at 120 Hz on the C1

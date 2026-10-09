@@ -109,6 +109,7 @@
 #include "unit.h"
 #include "drives.h"
 #include "players.h"
+#include "battery.h"
 #include "powerprofile.h"
 #include "steam.h"
 #include "playtime.h"
@@ -4816,6 +4817,7 @@ int main(int argc, char** argv) {
     const char* serverCheckAddress = nullptr;
     bool accountsTestMode = false;
     bool playersTestMode = false;
+    bool batteryTestMode = false;
     bool playtimeTestMode = false;
     int removeAccountId = 0;     // --remove-account N (#194)
     bool removeAnyway = false;   // --remove-anyway
@@ -5124,6 +5126,8 @@ int main(int argc, char** argv) {
             accountsTestMode = true;
         } else if (SDL_strcmp(argv[i], "--players-test") == 0) {
             playersTestMode = true;
+        } else if (SDL_strcmp(argv[i], "--battery-test") == 0) {
+            batteryTestMode = true;
         } else if (SDL_strcmp(argv[i], "--playtime-test") == 0) {
             playtimeTestMode = true;
         } else if (SDL_strcmp(argv[i], "--remove-account") == 0 && i + 1 < argc) {
@@ -5274,6 +5278,7 @@ int main(int argc, char** argv) {
     // not cost a console a directory it did not have.
     if (accountsTestMode) return accountsTest();
     if (playersTestMode) return players::test();
+    if (batteryTestMode) return battery::test();
     if (playtimeTestMode) return playtime::test();
     // REMOVE A PERSON WITHOUT THE SCREENS (#194): exactly what Settings'
     // Remove runs, for a test on a console whose PIN the tester does not
@@ -5605,6 +5610,8 @@ int main(int argc, char** argv) {
     // Real Wii Remotes (#200): whether one is paired, before the library is
     // drawn, and the thread that sets each up as it connects.
     wiiremote::start();
+    // Each controller's battery, from the kernel, for Home's row (#293).
+    battery::start();
 
     // The interface's own sounds. Opened here rather than lazily, because the
     // first click a person hears should not be the second one they asked for —
@@ -7595,6 +7602,31 @@ int main(int argc, char** argv) {
     float owedClock = 0.0f;   // seconds since the last try at what is owed
     StateLoad stateLoad;
     MenuNotice menuNotice;
+    // THE PADS WHOSE LOW-BATTERY NOTICE HAS BEEN SHOWN (#293), by the pad and
+    // not its number: numbers change with a stream or a pad coming back, and a
+    // pad warned before a stream must not be warned again after it. Cleared
+    // for a pad once it is back above the last segment.
+    std::set<std::string> batteryWarned;
+    // THE BATTERY ROW'S ENTRIES AS THEY MOVE (#293, MMagTech 2026-10-08): a
+    // pad switching on fades in where it goes while the others slide aside to
+    // make room; one switching off fades out first, then the rest close up.
+    // Each is the pad itself (its key) or the Remote (its address), so a number
+    // closing up (P3 becoming P2) slides rather than swaps. The bar coming
+    // back (from a game, a game's page) lays it out at once: nothing slides
+    // that was not seen to change.
+    struct BatteryEntry {
+        std::string id;   // "pad:<key>" or "wii:<address>"
+        std::string label;
+        battery::Reading r;
+    };
+    struct BatterySlot {
+        BatteryEntry e;
+        Animated offset;   // its left edge, leftward from the row's right end
+        Animated alpha;
+        bool leaving = false;
+    };
+    std::vector<BatterySlot> batterySlots;
+    Uint64 batteryRowAt = 0;   // when the bar last drew it (SDL ticks, ms)
     AchievementToast raToast;
 
     // The in-game overlay: a scrim, a panel and buttons drawn over the game
@@ -15803,6 +15835,50 @@ int main(int argc, char** argv) {
             updReadyPanel = false;
             askUpdateReady();
         }
+        // THE LOW-BATTERY NOTICE (#293, MMagTech 2026-10-08): "P2 battery low"
+        // in the console's one notice, only where the top bar and its
+        // batteries are not: in a game and on a game's page. A pad that goes
+        // low on a bar screen shows red there and the notice waits for the
+        // game. Once per pad as it reaches the last segment and is not
+        // charging; again only after it has been back above it. Never for a
+        // stream's pad (its battery is not the pad's), never for a pad set
+        // aside by a stream (the streamer is not holding it; it says so when
+        // the stream ends, if still low), and a Wii Remote on its own low
+        // flag, which is what a Wii warns on.
+        // Not while an emulator of its own has the screen: nothing is drawn
+        // then, so it waits for the pause menu or the game's end.
+        {
+            static float batteryTick = 0.0f;
+            batteryTick -= dt;
+            const bool canSay = !(standaloneRun.active() && !standalonePaused) &&
+                                 (playing || standalonePaused || here() == Screen::Detail);
+            if (batteryTick <= 0.0f) {
+                batteryTick = 0.5f;
+                auto warn = [&](const std::string& key, const std::string& label, bool low,
+                                bool cleared) {
+                    if (cleared) {
+                        batteryWarned.erase(key);
+                        return;
+                    }
+                    if (!low || batteryWarned.count(key) || !canSay || menuNotice.alpha() > 0.0f)
+                        return;
+                    batteryWarned.insert(key);
+                    menuNotice.say(label + " battery low", Tone::Problem);
+                    std::fprintf(stderr, "[battery] %s battery low\n", label.c_str());
+                };
+                for (const players::Held& h : players::held()) {
+                    if (h.stream || h.key.empty()) continue;
+                    battery::Reading r = battery::kernel(h.dir);
+                    if (r.segments == 0) r = battery::sdl(h.gp);
+                    warn(h.key, "P" + std::to_string(h.player + 1), r.low() && !r.charging,
+                         r.segments >= 2);
+                }
+                if (!players::streaming())
+                    for (const wiiremote::Battery& b : wiiremote::batteries())
+                        if (b.byte >= 0)
+                            warn("wii:" + b.address, "W" + std::to_string(b.light), b.low, !b.low);
+            }
+        }
         if (!updStartNotice.empty() && !playing && here() == Screen::Home &&
             curtain.value() < 0.01f) {
             menuNotice.say(updStartNotice, updStartTone);
@@ -17410,6 +17486,119 @@ int main(int argc, char** argv) {
             // switching is its own topic and nothing here is focusable yet.
             const storage::User me = storage::currentUser();
             const std::string who = me.valid() ? me.name : std::string("Not signed in");
+            // CONTROLLER BATTERIES (#293, MMagTech 2026-10-08): wherever this
+            // bar is (Home, Library, Search, Settings), so the bar keeps its
+            // shape as you move along it; never in a game or on a game's page,
+            // where the notice speaks instead. Whenever a pad is on, left of
+            // the name, so a longer name pushes the row along and the name
+            // never moves. P1-P4 in player order, then the Wii Remotes as
+            // W1-W4, the light lit on each (out of a game their numbers are
+            // their own, so a P would make two P1s). Each is its label and a
+            // battery of four segments, a bolt while charging. A pad with no
+            // reading, and every stream pad, is its label alone. While someone
+            // streams the Remotes leave the row with the console's own pads.
+            std::vector<BatteryEntry> row;
+            for (const players::Held& h : players::held()) {
+                battery::Reading r;
+                if (!h.stream) {
+                    r = battery::kernel(h.dir);
+                    if (r.segments == 0) r = battery::sdl(h.gp);
+                }
+                row.push_back({"pad:" + (h.key.empty() ? std::to_string(h.player) : h.key),
+                               "P" + std::to_string(h.player + 1), r});
+            }
+            if (!players::streaming())
+                for (const wiiremote::Battery& b : wiiremote::batteries()) {
+                    battery::Reading r;
+                    if (b.byte >= 0)
+                        r.segments = battery::segmentsOfWii(static_cast<uint8_t>(b.byte));
+                    row.push_back({"wii:" + b.address, "W" + std::to_string(b.light), r});
+                }
+            // THE NAME'S SIZE, AND A BATTERY AS HEAVY AS ITS LETTERS. A step
+            // down (Caption1, a 34x18 outline of 2) was tried first and
+            // MMagTech, on the TV: it "just doesn't look right" beside the
+            // name and the destinations (2026-10-08).
+            const ui::TextStyle ls = ui::TextStyle::Callout;
+            constexpr float kToName = 36.0f, kBetween = 36.0f, kLabelGap = 12.0f;
+            constexpr float kBodyW = 44.0f, kBodyH = 23.0f, kNubW = 4.0f, kNubH = 9.0f;
+            constexpr float kInset = 5.0f, kSegGap = 2.5f;
+            constexpr float kBoltGap = 7.0f, kBoltW = 13.0f, kBoltH = 23.0f;
+            auto widthOf = [&](const BatteryEntry& e) {
+                float w = text.measure(e.label, ls, sc);
+                if (e.r.segments > 0) w += kLabelGap + kBodyW + 1.0f + kNubW;
+                if (e.r.segments > 0 && e.r.charging) w += kBoltGap + kBoltW;
+                return w;
+            };
+            constexpr float kFade = 0.2f, kSlide = 0.25f;
+            {
+                // Fresh: the bar was not on screen a moment ago (a game or a
+                // game's page); moving along the bar is not a change.
+                const Uint64 nowMs = SDL_GetTicks();
+                const bool fresh = nowMs - batteryRowAt > 200;
+                if (fresh) {
+                    batterySlots.clear();
+                    for (const BatteryEntry& e : row) {
+                        BatterySlot sl;
+                        sl.e = e;
+                        sl.alpha.settle(1.0f);
+                        batterySlots.push_back(std::move(sl));
+                    }
+                } else {
+                    auto inRow = [&](const std::string& id) -> const BatteryEntry* {
+                        for (const BatteryEntry& e : row)
+                            if (e.id == id) return &e;
+                        return nullptr;
+                    };
+                    for (BatterySlot& sl : batterySlots) {
+                        if (const BatteryEntry* e = inRow(sl.e.id)) {
+                            sl.e = *e;
+                            if (sl.leaving) {   // back before it had gone
+                                sl.leaving = false;
+                                sl.alpha.retarget(1.0f, kFade);
+                            }
+                        } else if (!sl.leaving) {
+                            sl.leaving = true;
+                            sl.alpha.retarget(0.0f, kFade);
+                        }
+                    }
+                    // New ones go right after the entry before them in the row.
+                    for (size_t i = 0; i < row.size(); ++i) {
+                        bool have = false;
+                        for (const BatterySlot& sl : batterySlots) have = have || sl.e.id == row[i].id;
+                        if (have) continue;
+                        size_t at = 0;
+                        if (i > 0)
+                            for (size_t k = 0; k < batterySlots.size(); ++k)
+                                if (batterySlots[k].e.id == row[i - 1].id) at = k + 1;
+                        BatterySlot sl;
+                        sl.e = row[i];
+                        sl.offset.settle(-1.0f);   // placed below, where it belongs
+                        sl.alpha.settle(0.0f);
+                        sl.alpha.retarget(1.0f, kFade);
+                        batterySlots.insert(batterySlots.begin() + static_cast<long>(at), std::move(sl));
+                    }
+                    // Gone once faded; the rest close up after that.
+                    std::erase_if(batterySlots, [](const BatterySlot& sl) {
+                        return sl.leaving && sl.alpha.elapsed >= sl.alpha.duration;
+                    });
+                }
+                // Where each one belongs, from the right end leftward. A leaving
+                // one keeps its space until it has faded.
+                float from = 0.0f;
+                for (auto it = batterySlots.rbegin(); it != batterySlots.rend(); ++it) {
+                    from += widthOf(it->e);
+                    if (fresh || it->offset.to < 0.0f) it->offset.settle(from);
+                    else it->offset.retarget(from, kSlide);
+                    from += kBetween;
+                }
+                for (BatterySlot& sl : batterySlots) {
+                    sl.offset.tick(dt);
+                    sl.alpha.tick(dt);
+                }
+                batteryRowAt = nowMs;
+            }
+            float rowW = 0.0f;
+            for (const BatterySlot& sl : batterySlots) rowW = std::max(rowW, sl.offset.value());
             // A STEP DOWN THE RAMP FROM THE DESTINATIONS, and that is the
             // whole of the sizing rule. MMagTech, looking at the first
             // capture: *"chip seems a bit too big."* It was, and the reason
@@ -17435,7 +17624,28 @@ int main(int argc, char** argv) {
             const float discD = barHeight - 30.0f;
             const float discX = rightEdge - discD;
             const float discY = barTop + (barHeight - discD) * 0.5f;
-            const float nameW = text.measure(who, chipStyle, sc);
+            // THE NAME GIVES WAY, shortened with an ellipsis, when everything
+            // left of it would otherwise run into Settings (#293, MMagTech
+            // 2026-10-08): the batteries, Offline and the download ring are
+            // the information. Room is what is left between the bar's last
+            // destination (its pill included) and the disc. Only a long name
+            // with most of a family's controllers on ever meets it; eight
+            // controllers, Offline and a download at once still overlap, and
+            // that was judged not worth more.
+            const bool ringUp = launchJob.busy() && launchJob.busyFor >= kProgressDelay;
+            const bool offlineUp = romm::serverAway();
+            const float barEnd = bx - 60.0f + 22.0f + 24.0f;
+            const float leftOfName =
+                (batterySlots.empty() ? 0.0f : kToName + rowW + 10.0f) +
+                (offlineUp ? 12.0f + text.measure("Offline", ui::TextStyle::Caption1, sc) + 32.0f + 12.0f : 0.0f) +
+                (ringUp ? 24.0f + discD : 0.0f);
+            const float nameRoom = discX - 10.0f - 22.0f - leftOfName - barEnd;
+            std::string name = text.measure(who, chipStyle, sc) <= nameRoom
+                                   ? who
+                                   : text.truncate(who, chipStyle, sc, std::max(nameRoom, 0.0f));
+            // Nothing left but the ellipsis: the picture alone says who it is.
+            if (name != who && name.size() <= 3) name.clear();
+            const float nameW = text.measure(name, chipStyle, sc);
             // THE PERSON'S OWN PICTURE, when RomM has one — new 2026-09-21.
             // MMagTech: *"i also noticed my user login isnt showing its image
             // from romm."* It never did: the comment below promised a lettered
@@ -17494,7 +17704,7 @@ int main(int argc, char** argv) {
                 text.ascent(chipStyle, sc);
             // Brighter when focused, because it just got smaller and a focus
             // target you cannot find is worse than one that is too loud.
-            text.draw(renderer, who, discX - 10.0f - nameW, chipBaseline,
+            text.draw(renderer, name, discX - 10.0f - nameW, chipBaseline,
                       chipStyle, ui::Color::white(chipOn ? 1.0f : 0.62f), sc);
 
             // OFFLINE (#88): a small capsule left of the account chip while
@@ -17504,7 +17714,60 @@ int main(int argc, char** argv) {
             // Everything left of the chip moves left past it (the download
             // ring), so the chip itself never moves.
             float leftOfChip = discX - 10.0f - nameW - 22.0f;
-            if (romm::serverAway()) {
+
+            if (!batterySlots.empty()) {
+                // TRAFFIC LIGHTS ON THE FILL ONLY (MMagTech, 2026-10-08: "a
+                // little color would be beneficial"): green at three and
+                // four, amber at two, red at the last, the warning. The
+                // outline, the bolt and the label stay grey, so the row
+                // stays quiet and only the fill says how full.
+                constexpr ui::Color kBatteryGreen = ui::Color::rgb(0x5FD068);
+                constexpr ui::Color kBatteryAmber = ui::palette::kMarqueeAmber;
+                constexpr ui::Color kBatteryRed = ui::Color::rgb(0xFF5A4E);
+                const float rowRight = leftOfChip - kToName;
+                const float rowLeft = rowRight - rowW;
+                const float cy = barTop + barHeight * 0.5f;
+                const float base = barTop + (barHeight - text.lineHeight(ls, sc)) * 0.5f +
+                                   text.ascent(ls, sc);
+                for (const BatterySlot& sl : batterySlots) {
+                    const BatteryEntry& e = sl.e;
+                    const float a = sl.alpha.value();
+                    if (a <= 0.001f) continue;
+                    const float x = rowRight - sl.offset.value();
+                    auto faded = [a](ui::Color c) {
+                        c.a *= a;
+                        return c;
+                    };
+                    const ui::Color grey = faded(ui::Color::white(0.62f));
+                    text.draw(renderer, e.label, x, base, ls, grey, sc);
+                    if (e.r.segments > 0) {
+                        const float gx = x + text.measure(e.label, ls, sc) + kLabelGap;
+                        ui::Rect body{gx, cy - kBodyH * 0.5f, kBodyW, kBodyH, 5.0f,
+                                      ui::Color::white(0.0f)};
+                        body.border = 2.5f;
+                        body.borderColor = grey;
+                        renderer.draw(body);
+                        renderer.draw(ui::Rect{gx + kBodyW + 1.0f, cy - kNubH * 0.5f, kNubW,
+                                               kNubH, 1.5f, grey});
+                        const ui::Color fill = faded(e.r.segments >= 3   ? kBatteryGreen
+                                                     : e.r.segments == 2 ? kBatteryAmber
+                                                                         : kBatteryRed);
+                        const float sw = (kBodyW - kInset * 2.0f - kSegGap * 3.0f) / 4.0f;
+                        for (int i = 0; i < std::min(e.r.segments, 4); ++i)
+                            renderer.draw(ui::Rect{gx + kInset + static_cast<float>(i) * (sw + kSegGap),
+                                                   cy - kBodyH * 0.5f + kInset, sw,
+                                                   kBodyH - kInset * 2.0f, 1.0f, fill});
+                        if (e.r.charging) {
+                            ui::Rect bolt{gx + kBodyW + 1.0f + kNubW + kBoltGap,
+                                          cy - kBoltH * 0.5f, kBoltW, kBoltH, 0.0f, grey};
+                            bolt.shape = ui::Rect::Shape::Bolt;
+                            renderer.draw(bolt);
+                        }
+                    }
+                }
+                leftOfChip = rowLeft - 10.0f;
+            }
+            if (offlineUp) {
                 const char* kOffline = "Offline";
                 const ui::TextStyle os = ui::TextStyle::Caption1;
                 const float ow = text.measure(kOffline, os, sc);
@@ -17534,7 +17797,7 @@ int main(int argc, char** argv) {
             // as the font's glyph, and MMagTech found it horrible: the ring
             // alone says it. Unpacking has no fraction to show, so a quarter of the
             // ring turns instead. A readout, not a control: nothing reaches it.
-            if (launchJob.busy() && launchJob.busyFor >= kProgressDelay) {
+            if (ringUp) {
                 const int64_t got = launchJob.got.load();
                 const int64_t total = launchJob.total.load();
                 // Installing has no fraction either (RPCS3 says nothing while

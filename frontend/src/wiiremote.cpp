@@ -19,6 +19,7 @@
 #include <sys/time.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <cctype>
 #include <cerrno>
 #include <chrono>
@@ -289,7 +290,18 @@ struct Remote {
     Clock::time_point lastReport{};
     Clock::time_point lastActive{};   // the last button change
     bool switchedOff = false;
+    // ITS BATTERY (#293), from its status report: the byte the Wii reads
+    // (WiiBrew, "Wiimote", 0x20: byte 6) and the Remote's own low flag (byte 3,
+    // bit 0), which is what a Wii warns on. -1 until it has answered.
+    int battery = -1;
+    bool lowFlag = false;
+    Clock::time_point lastAsk{};
 };
+
+// A Remote reports its battery only when asked. Once a minute, out of a game
+// and only while it is on: one tiny request, its answer carries the buttons
+// too, and it does not count as the Remote being used (lastActive).
+constexpr auto kBatteryAsk = std::chrono::minutes(1);
 
 constexpr auto kQuiet = std::chrono::milliseconds(1500);
 // A WII'S OWN IDLE TIME: a Remote untouched this long out of a game is switched
@@ -438,6 +450,7 @@ void rescan() {
                      node.c_str(), standIn ? " (through the bridge)" : "", r.slot + 1);
         r.lastActive = Clock::now();
         r.lastReport = Clock::now();
+        r.lastAsk = Clock::now();   // setUp asks
         // While a game runs Dolphin sets it up, with its own light.
         if (!gGame) setUp(r);
         gRemotes.push_back(std::move(r));
@@ -475,6 +488,10 @@ void readReports(Remote& r) {
         }
         r.lastReport = Clock::now();
         const uint8_t id = buf[0];
+        if (id == 0x20 && n >= 7) {
+            r.battery = buf[6];
+            r.lowFlag = (buf[3] & 0x01) != 0;
+        }
         // A status report stops a Remote's reports until the mode is set
         // again: an extension went in or out, or it answered our request.
         if (id == 0x20 && !gGame) send(r.fd, {0x12, 0x04, 0x30});
@@ -507,6 +524,10 @@ void run() {
         std::lock_guard<std::mutex> lk(gLock);
         for (Remote& r : gRemotes) {
             readReports(r);
+            if (!gGame && isOn(r) && Clock::now() - r.lastAsk >= kBatteryAsk) {
+                r.lastAsk = Clock::now();
+                send(r.fd, {0x15, 0x00});
+            }
             // HOME HELD, while a game runs: the console's own menu. A press is
             // the game's HOME menu, which Dolphin passes on as a Wii would.
             if ((r.buttons & kHome) && !r.homeFired && gGame &&
@@ -714,6 +735,24 @@ void setGameRunning(bool running) {
 }
 
 bool takeHomeHold() { return gHomeHold.exchange(false); }
+
+std::vector<Battery> batteries() {
+    std::vector<Battery> out;
+    if (gGame) return out;
+    std::lock_guard<std::mutex> lk(gLock);
+    for (const Remote& r : gRemotes) {
+        if (!isOn(r)) continue;
+        Battery b;
+        b.light = r.slot + 1;
+        b.address = r.address;
+        b.byte = r.battery;
+        b.low = r.lowFlag;
+        out.push_back(std::move(b));
+    }
+    std::sort(out.begin(), out.end(),
+              [](const Battery& a, const Battery& b) { return a.light < b.light; });
+    return out;
+}
 
 bool sensorBarAbove() { return prefs::get("wii_sensor_bar", "below") == "above"; }
 

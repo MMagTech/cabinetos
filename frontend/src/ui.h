@@ -97,7 +97,7 @@ struct Rect {
     // drawn by the same shader so fill, rim and shadow work the same.
     // The shape fits inside the rectangle, centred; `radius` softens its
     // corners. Box is every shape that existed before this.
-    enum class Shape { Box, Heart, Trophy };
+    enum class Shape { Box, Heart, Trophy, Bolt };
     Shape shape = Shape::Box;
 };
 

@@ -87,6 +87,18 @@ void setGameRunning(bool running);
 // runs. A press of HOME is the game's own HOME menu, as on a Wii.
 bool takeHomeHold();
 
+// EACH REMOTE THAT IS ON, out of a game, for the battery row on Home (#293):
+// its light (W1-W4), its battery byte (-1 until it has answered; the Wii's own
+// scale, battery::segmentsOfWii) and its own low flag. In a game Dolphin has
+// the Remotes and this is empty. Cheap.
+struct Battery {
+    int light = 0;
+    std::string address;
+    int byte = -1;
+    bool low = false;
+};
+std::vector<Battery> batteries();
+
 // --- The sensor bar -----------------------------------------------------------
 
 // Where the sensor bar sits, as a Wii's own settings ask it: above the TV or

@@ -328,6 +328,23 @@ bool pair(const std::string& address, std::string* err, int timeoutSeconds,
         for (int i = 0; i < 15 && !(cancel && cancel->load()); ++i) usleep(100000);
         p = proc::run({"bluetoothctl", "pair", address}, timeoutSeconds, cancel);
     }
+    // KNOWN TO THE CONSOLE, FORGOTTEN BY THE PAD: bluez refuses to pair a
+    // device it already holds keys for (org.bluez.Error.AlreadyExists). A pad
+    // in this list is in pairing mode, so whatever keys the console holds, the
+    // pad has let go of them: paired to a phone in between, or reset. Forget
+    // it, find it again and pair it properly, as for a pad paired without
+    // keys above. MMagTech paired his 8BitDo to his phone and back, 2026-10-08,
+    // and got "Couldn't pair" three times with no way out on screen (Forget is
+    // only on a pad that is connected).
+    if (!p.ok() && !p.timedOut && !(cancel && cancel->load()) &&
+        (p.out + p.err).find("AlreadyExists") != std::string::npos) {
+        std::fprintf(stderr, "[bluetooth] %s is known here but not to the pad; pairing it again\n",
+                     address.c_str());
+        proc::run({"bluetoothctl", "remove", address}, 15);
+        proc::run({"bluetoothctl", "--timeout", "6", "scan", "on"}, 20, cancel);
+        if (!(cancel && cancel->load()))
+            p = proc::run({"bluetoothctl", "pair", address}, timeoutSeconds, cancel);
+    }
     proc::run({"bluetoothctl", "pairable", "off"}, 10);
     // ALREADY PAIRED IS A SUCCESS, NOT A FAILURE. A pad that was set up before
     // and has been picked out of the list again must not be reported as broken,

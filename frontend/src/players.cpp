@@ -1,5 +1,7 @@
 #include "players.h"
 
+#include "battery.h"
+
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
@@ -91,6 +93,7 @@ Seats gRemote;    // pads that came through a stream (setStreaming)
 bool gStreaming = false;
 std::map<SDL_JoystickID, bool> gIsRemote;
 std::map<SDL_JoystickID, SDL_Gamepad*> gOpen;
+std::map<SDL_JoystickID, std::string> gDir;   // its HID device, for its battery
 
 // The seats a game hears now.
 Seats& active() { return gStreaming ? gRemote : gSeats; }
@@ -234,6 +237,7 @@ void added(SDL_JoystickID id) {
     gOpen[id] = gp;
     const bool remote = isRemote(gp);
     gIsRemote[id] = remote;
+    gDir[id] = battery::deviceDir(SDL_GetGamepadPath(gp));
     (remote ? gRemote : gSeats).add(id, keyOf(gp));
     std::fprintf(stderr, "[players] pad %u is %s%s%s%s\n", static_cast<unsigned>(id),
                  nameOf(gp).c_str(), addressOf(gp).empty() ? "" : " over Bluetooth ",
@@ -249,6 +253,7 @@ void removed(SDL_JoystickID id) {
     gSeats.remove(id);
     gRemote.remove(id);
     gIsRemote.erase(id);
+    gDir.erase(id);
     changed("disconnected", id);
 }
 
@@ -302,6 +307,23 @@ std::vector<Pad> connected() {
         p.address = addressOf(it->second);
         p.bluetooth = !p.address.empty();
         out.push_back(std::move(p));
+    }
+    return out;
+}
+
+std::vector<Held> held() {
+    std::vector<Held> out;
+    for (size_t i = 0; i < active().seats().size(); ++i) {
+        const Seat& s = active().seats()[i];
+        auto it = s.id ? gOpen.find(s.id) : gOpen.end();
+        if (it == gOpen.end()) continue;
+        Held h;
+        h.player = static_cast<int>(i);
+        h.key = s.key;
+        h.dir = gDir[s.id];
+        h.gp = it->second;
+        h.stream = gIsRemote[s.id];
+        out.push_back(std::move(h));
     }
     return out;
 }

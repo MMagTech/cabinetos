@@ -45,7 +45,7 @@ uniform vec4 uBorderColor;
 uniform vec2 uShadowParams;  // blur, offsetY
 uniform vec4 uShadowColor;
 uniform vec4 uEdgeLight;     // alpha 0 = off
-uniform int uShape;          // 0 box, 1 heart, 2 trophy (ui::Rect::Shape)
+uniform int uShape;          // 0 box, 1 heart, 2 trophy, 3 bolt (ui::Rect::Shape)
 out vec4 fragColor;
 
 float roundedBoxSDF(vec2 p, vec2 halfSize, float r) {
@@ -82,9 +82,34 @@ float trophySDF(vec2 p) {
     return min(min(bowl, handle), min(stem, foot));
 }
 
+// A charging bolt (#293), y pointing down: six corners, 0.56 wide and 1 tall,
+// centred. Inigo Quilez's exact polygon distance (iquilezles.org,
+// distfunctions2d, sdPolygon).
+float boltSDF(vec2 p) {
+    vec2 v[6] = vec2[6](vec2(0.12, -0.5), vec2(-0.28, 0.06), vec2(-0.02, 0.06),
+                        vec2(-0.12, 0.5), vec2(0.28, -0.08), vec2(0.02, -0.08));
+    float d = dot(p - v[0], p - v[0]);
+    float s = 1.0;
+    int j = 5;
+    for (int i = 0; i < 6; i++) {
+        vec2 e = v[j] - v[i];
+        vec2 w = p - v[i];
+        vec2 b = w - e * clamp(dot(w, e) / dot(e, e), 0.0, 1.0);
+        d = min(d, dot(b, b));
+        bvec3 c = bvec3(p.y >= v[i].y, p.y < v[j].y, e.x * w.y > e.y * w.x);
+        if (all(c) || all(not(c))) s *= -1.0;
+        j = i;
+    }
+    return s * sqrt(d);
+}
+
 // The distance to whichever shape this is, in design points, from the centre.
 // The heart and the cup fit their rectangle's shorter side, centred.
 float shapeSDF(vec2 p, vec2 halfSize, float r) {
+    if (uShape == 3) {
+        float k = min(2.0 * halfSize.y, 2.0 * halfSize.x / 0.56);
+        return boltSDF(p / k) * k - r;
+    }
     if (uShape == 2) {
         float k = 2.0 * min(halfSize.x, halfSize.y) / 1.45;
         return trophySDF(p / k) * k - r;
