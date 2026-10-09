@@ -11,11 +11,9 @@ specification is `docs/PROJECT.md`; the order is `docs/ROADMAP.md`.
 
 ## Where things stand
 
-2026-10-08 late: Steam over Moonlight (#296) is finished on branch
-`steam-moonlight`, pull request open; its testing image 2026.10.09.2 is on
-the A9 and MMagTech ran the three stream tests with it. **Merge only on
-MMagTech's go**, then delete the branch on his go. The A9 sits at the LG C1
-on Wi-Fi at **192.168.1.109** (`CABINETOS_A9=cabinet@192.168.1.109` for
+2026-10-08 late: Steam over Moonlight (#296) is merged (#298) and its
+branch deleted; the A9 runs image 2026.10.09.2 with nothing by hand. The A9
+sits at the LG C1 on Wi-Fi at **192.168.1.109** (`CABINETOS_A9=cabinet@192.168.1.109` for
 `tools/ui-loop.sh`), signed in to MMagTech's Tailscale as `cabinetos`.
 
 ## Next
