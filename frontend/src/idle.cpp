@@ -3,8 +3,10 @@
 #include "proc.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstdio>
+#include <mutex>
 #include <thread>
 
 namespace idle {
@@ -70,8 +72,25 @@ Level Watch::update(double now, bool playing) {
     return level_;
 }
 
-void setDisplayAsleep(bool asleep, bool wait) {
-    std::thread worker([asleep] {
+namespace {
+// Every request numbered; one worker at a time talks to gamescope, and only
+// the latest request is applied (idle.h). Before `first` existed a sleep
+// took milliseconds and the race was academic; ending a stream through
+// Sunshine's API can take seconds.
+std::atomic<unsigned> gAsked{0};
+std::mutex gApply;
+}  // namespace
+
+void setDisplayAsleep(bool asleep, bool wait, std::function<void()> first) {
+    const unsigned mine = ++gAsked;
+    std::thread worker([asleep, mine, first = std::move(first)] {
+        if (first) first();
+        std::lock_guard<std::mutex> lk(gApply);
+        if (mine != gAsked) {
+            std::fprintf(stderr, "[idle] display %s: a later request came first, not applied\n",
+                         asleep ? "asleep" : "awake");
+            return;
+        }
         const proc::Result r = proc::run(
             {"gamescopectl", "drm_sleep_external_screen", asleep ? "1" : "0"}, 5);
         // Say what was APPLIED, not what was asked for. A setting that did not

@@ -16188,6 +16188,53 @@ the two things the app does:
   Controllers (by hand). Sunshine's "ControllerNumber already allocated" is a
   repeated arrival packet; it reuses the pad (input.cpp), harmless.
 
+**The screen asleep (#294, MMagTech streaming from his iPhone, 2026-10-09).**
+Sunshine sets up its capture when a stream starts, when a device rejoins,
+and when the TV's picture changes mid-stream (its HDR metadata check). With
+the picture off (idle, `drm_sleep_external_screen 1`) the HDMI output has no
+screen on it: "Couldn't map 'Unknown-...'", a capture of a plane belonging to
+nothing, and black on the phone **for good**, the screen waking or not;
+that setup has no connector, so the check that would notice the wake is
+skipped. Measured in every case: a stream started with the picture off, the
+picture going off mid-stream (by the console's own 10 minutes, 06:19, and by
+hand), a rejoin with it off. Only leaving and rejoining with it on recovers.
+A rejoin runs no prep-cmd (`nvhttp::resume`), and Sunshine never closes an
+abandoned session itself (the entry has no command, so it is a placebo that
+always runs). Known upstream and not built: LizardByte discussion #439,
+"wake host display(s) on connect", open since May 2024.
+
+So **no session is ever open over a sleeping screen**:
+- `started` wakes the screen before composing, and waits for the output to
+  be on (sysfs `enabled`, about 20 ms on the A9).
+- **The console ends the session before its screen goes out** (Sunshine's
+  `POST /api/apps/close`, the console's own login), connected or not. A
+  session ended that way logs "Process terminated" and no "CLIENT
+  DISCONNECTED", so both count as the stream ending (seen on the A9: missed,
+  the phone joining again was no change, and it streamed the console's
+  black layer).
+- A device arriving counts as somebody there: the idle timer only, no press.
+
+What a person sees: the TV lights when a stream starts; a stream nobody
+touches dims at 5 minutes on both screens and ends at "Turn off screen after"
+(10, 15 or 30 minutes); joining again starts it fresh. A game in play never
+goes out, so is never cut off. Sunshine stays the stock release. Tested with
+MMagTech streaming, idle timers at a tenth: started dark, ended by the timer,
+rejoined, left without quitting and rejoined after the screen went out.
+
+*Named and dropped:* **dimming without end while a device is connected**
+(his first proposal): Moonlight on iOS turns the phone's auto-lock off while
+streaming, so a phone set down keeps an OLED lit at 40% all night, and it
+does nothing for a phone that left without quitting. **Never off while a
+session is open** (what desktop setups do, `systemd-inhibit` in the
+prep-cmd): the same, for every phone swiped away. **Waking the screen when a
+device knocks** (watching Sunshine's log, `conntrack`, or `knockd` on port
+47989, as others do): too late for the capture a rejoin sets up at once, and
+Moonlight asks the console whenever its list is open, so the TV would light
+for nothing. **Patching Sunshine** to look again after a wake: a build to
+keep, against the pin. **HDMI-CEC** to put the TV itself to sleep while the
+output stays on: the A9 has no CEC (no `/dev/cec*`), and no adapter will be
+bought (above).
+
 **Wii Remote games.** A paired Remote means the person playing holds it;
 during a stream they do not, so Remote games are greyed, and one already
 running stays paused with no Resume until the stream ends (MMagTech agreed

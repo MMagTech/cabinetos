@@ -323,8 +323,7 @@ Decided with MMagTech 2026-09-26, from the things people will actually do.
 
 Sunshine on the console, Moonlight on a phone, tablet or computer to play
 from (#286). Decided with MMagTech on the A9, 2026-10-07, and Tailscale
-2026-10-08; **built on `remote-play`**, judged on the TV in the loop, not yet
-in a testing image.
+2026-10-08; **merged (#292)**.
 
 - **Three rows.**
   - **Streaming**: On or Off, "Moonlight app" under it, and "Moonlight app ·
@@ -372,7 +371,16 @@ in a testing image.
   - **Into Steam the same (#296).** A stream started in Steam, or Steam
     opened during one, shows Steam's games on the device, and the TV's
     controllers are set aside while it streams (disconnected from Steam, the
-    Bluetooth link kept), back when it ends. **Built on `steam-moonlight`.**
+    Bluetooth link kept), back when it ends. **Merged (#298).**
+  - **The screen during a stream (#294).** A stream started while the TV is
+    dark lights it, and counts as somebody arriving: the dim lifts and the
+    timer starts again. Nothing else changes while a device streams: the
+    screen dims at 5 minutes without a press (on the device too) and goes
+    off at "Turn off screen after". **When it goes off, the stream ends
+    first**, as Quit in Moonlight would end it, whether a device is still
+    connected or left without quitting; joining again starts a new stream
+    and lights the TV. A game in play never goes off, so it is never cut
+    off. MMagTech, 2026-10-09. **Built on `asleep-stream`.**
 - **No quality setting.** Moonlight has its own on each device, and the right
   value depends on that device's connection, which the console cannot know.
   Codec, resolution and frame rate are the client's.
@@ -459,6 +467,8 @@ in a testing image.
   2026-09-24, on the TV, which also **dropped Never and 1 hour** (on an OLED
   a lit menu is burn-in; half an hour is long enough) and **the dim at a
   third of the choice** (odd times like 3 min 20 s; 5 minutes is one rule).
+  A Remote Play stream nobody touches ends when the screen goes off
+  (Remote Play, above, #294).
 - **HDMI-CEC: dropped.** No adapter will be bought to test with, and standby
   already covers what it was for. This reverses the earlier "CEC is a
   requirement".

@@ -55,12 +55,26 @@ struct Request {
 void watch(bool on, bool fresh = false);
 
 // WHETHER A DEVICE IS STREAMING NOW: Sunshine's own "CLIENT CONNECTED" and
-// "CLIENT DISCONNECTED" lines, read from its log as they are written. Sunshine
-// has no hook or API call for a connection that drops (a phone locked, out of
+// "CLIENT DISCONNECTED" lines, and "Process terminated" (a session closed
+// under a device still connected), read from its log as they are written.
+// Sunshine has no hook or API call for a connection that drops (a phone locked, out of
 // range), and keeps that device's controllers afterwards, so this is the one
 // place the console can learn it. The lines are those of the pinned version
 // (build_files/install-sunshine.sh); moving the pin means checking them.
 bool streaming();
+
+// WHETHER A SESSION IS OPEN: the CabinetOS entry started in Moonlight and not
+// quit, whether or not a device is connected to it now. Marked in
+// $XDG_RUNTIME_DIR by /usr/libexec/cabinetos-remoteplay, from `started` to
+// `ended` (which also runs when Sunshine stops).
+bool sessionOpen();
+
+// END THE SESSION, as Quit in Moonlight does (Sunshine's POST
+// /api/apps/close): a device still connected is told the stream ended, and
+// Sunshine runs `ended`. For the screen going out (#294, main.cpp idleFrame):
+// a session left open over a sleeping screen streams black to whoever joins
+// it next. Blocks for the call, up to four seconds: call it on a worker.
+bool endSession();
 
 // The last answers. `generation()` changes when either list does, so the app
 // rebuilds its rows only then.

@@ -5868,8 +5868,27 @@ int main(int argc, char** argv) {
         if (lvl != idleShown) {
             std::fprintf(stderr, "[idle] %s -> %s after %.0fs without input\n",
                          idle::name(idleShown), idle::name(lvl), idleWatch.idleFor(t));
-            if (lvl == idle::Level::Blank) idle::setDisplayAsleep(true);
-            else if (idleShown == idle::Level::Blank) idle::setDisplayAsleep(false);
+            // A REMOTE PLAY SESSION ENDS BEFORE THE SCREEN GOES OUT (#294).
+            // Sunshine set up against a sleeping screen streams black and
+            // never looks again: going out mid-stream breaks the stream at
+            // once, and a phone that left without quitting would rejoin
+            // black, since a rejoin runs nothing that could wake it. So the
+            // session is closed first, connected or not, as Quit in
+            // Moonlight closes it; joining again starts a new one, and its
+            // start step lights the screen. MMagTech chose this over
+            // dimming without end while a device is connected: Moonlight
+            // keeps a phone awake, so a phone left on a table would hold an
+            // OLED lit all night. The timer is the setting's, so a stream
+            // nobody touches ends at 10, 15 or 30 minutes; a game in play
+            // never blanks, so is never cut off.
+            if (lvl == idle::Level::Blank) {
+                if (remoteplay::sessionOpen())
+                    idle::setDisplayAsleep(true, false, [] { remoteplay::endSession(); });
+                else
+                    idle::setDisplayAsleep(true);
+            } else if (idleShown == idle::Level::Blank) {
+                idle::setDisplayAsleep(false);
+            }
             const float depth = lvl == idle::Level::Awake ? 0.0f
                                 : lvl == idle::Level::Dim ? idle::kDimDepth
                                                           : 1.0f;
@@ -9112,8 +9131,7 @@ int main(int argc, char** argv) {
     // again, or the next device to connect streams a black picture: the
     // gamescope this console runs in is new, and starts with it off.
     // /usr/libexec/cabinetos-remoteplay says why, and marks the session.
-    if (const char* run = std::getenv("XDG_RUNTIME_DIR");
-        rpWant && run && ::access((std::string(run) + "/cabinetos-remoteplay-session").c_str(), F_OK) == 0) {
+    if (rpWant && remoteplay::sessionOpen()) {
         const proc::Result r = proc::run({"gamescopectl", "composite_force", "1"}, 5);
         std::fprintf(stderr, "[remoteplay] session open at start: composing%s\n",
                      r.ok() ? "" : " (gamescopectl failed)");
@@ -13675,6 +13693,13 @@ int main(int argc, char** argv) {
         const bool on = rpWant && remoteplay::streaming();
         if (on == players::streaming()) return;
         players::setStreaming(on);
+        // A DEVICE ARRIVING COUNTS AS SOMEBODY THERE (#294): the idle timer
+        // starts again and a dim or dark screen lifts, so the phone sees
+        // the console, not the black layer, and its first press is not
+        // spent waking it. Only the timer: no press reaches the menus. The
+        // screen itself was already woken by the start step, before Sunshine
+        // looked (cabinetos-remoteplay).
+        if (on) idleWatch.input(clockSeconds());
         // Remote Play's section greys out for the stream, and back after. A
         // panel already open from it (Paired devices, Tailscale's menu)
         // closes, so nothing in it can be pressed from the stream either.
