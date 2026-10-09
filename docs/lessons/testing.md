@@ -365,3 +365,14 @@ opened once and reused needs a test of two different games in one run.**
   still there" corrected it. When a yes/no question can be read both ways,
   ask it as "yes or no: is X still there?", and verify on the machine before
   writing it down.
+
+- **"The colours look washed out" on a stream: read the stream's colour, not
+  the program's version.** #304, 2026-10-09: a freshly built Sunshine was
+  blamed. Sunshine logs the colour of every stream ("Color coding: SDR
+  (Rec. 601)" or "HDR (Rec. 2020 + SMPTE 2084 PQ)"), and the TV's HDR state
+  is the connector's HDR_OUTPUT_METADATA (eotf 2 is HDR10). Steam runs the TV
+  in HDR; composed, the copied picture is HDR, so an SDR stream (Moonlight's
+  HDR setting off) looks washed out, and with it on the stream matches the
+  TV. The richer-looking picture was the wrong one. Ask which way the phone
+  was set before changing anything, and when two pictures are compared,
+  have the person compare each against the TV, not against each other.
