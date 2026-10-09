@@ -30,7 +30,7 @@
 # from "started" to "ended", and the session is marked open in
 # $XDG_RUNTIME_DIR/cabinetos-remoteplay-session for the console: a gamescope
 # restarted under an open session (back from Steam, a crash) starts with it
-# off, and the console turns it on again when it starts (main.cpp).
+# off, so the session script starts it composed (cabinetos-session, #304).
 #
 # THE SCREEN MUST BE ON WHEN A STREAM STARTS (#294). Sunshine sets up its
 # capture when a stream starts, when a device rejoins, and when the TV's

@@ -349,6 +349,16 @@ opened once and reused needs a test of two different games in one run.**
   composed) was half wrong: Steam's menus streamed without it. And ask what
   the TV shows too: one black TV that evening was a second, separate fault.
 
+- **Sunshine picks its plane only at certain moments, so time those against
+  gamescope, not just the end state.** #304, 2026-10-09: back from Steam the
+  stream went black although the console composed every frame. Sunshine had
+  picked 0.35 s after the new gamescope came up, 0.7 s before it composed,
+  while Home was still on two planes. The proof took a 5 ms plane sampler
+  (libdrm through python ctypes, as `cabinet`, no root) run across a session
+  restart: it shows which planes carry a picture from gamescope's first
+  frame. Line Sunshine's "Reinitializing capture" and "Mapped ... index N"
+  up with the session's "is up" and the moment composing starts.
+
 - **Read a person's one-word answer against the question, not the hope.**
   "nope" to "is the seam still there?" was read as "gone", a fix was
   declared, and a comment saying so went on #286 before "no the issue is
