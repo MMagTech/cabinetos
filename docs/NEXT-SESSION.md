@@ -11,28 +11,26 @@ specification is `docs/PROJECT.md`; the order is `docs/ROADMAP.md`.
 
 ## Where things stand
 
-2026-10-08 late: Steam over Moonlight (#296) is finished on branch
-`steam-moonlight`, pull request open; its testing image 2026.10.09.2 is on
-the A9 and MMagTech ran the three stream tests with it. **Merge only on
-MMagTech's go**, then delete the branch on his go. The A9 sits at the LG C1
-on Wi-Fi at **192.168.1.109** (`CABINETOS_A9=cabinet@192.168.1.109` for
+2026-10-09: a stream started while the screen is asleep (#294) is merged
+(#299); the A9 runs image 2026.10.09.3 with nothing by hand. The A9 sits at
+the LG C1 on Wi-Fi at **192.168.1.109** (`CABINETOS_A9=cabinet@192.168.1.109` for
 `tools/ui-loop.sh`), signed in to MMagTech's Tailscale as `cabinetos`.
 
 ## Next
 
-Milestone 7, Ready to ship (docs/ROADMAP.md). Lessons file: testing.md, then
-frontend.md.
+Milestone 7, Ready to ship (docs/ROADMAP.md), in this order (MMagTech,
+2026-10-09). Lessons file: image-and-ci.md, then frontend.md.
 
-1. **A stream started while the screen is asleep stays black (#294).** Same
-   start step as #296 (`cabinetos-remoteplay started`); the open question
-   (what idle does during a stream) is on the issue, to settle with him.
-2. **Signed images (#135).**
-3. **CabinetOS in the system's version info (#137).**
-4. **Licences checked and the full texts shipped (#120).**
+1. **Signed images (#135).** First because a mistake breaks every console's
+   updates, so it needs several image updates on the A9 to prove itself.
+2. **A diagnostic report (#195).** Everything decided so far is on the issue
+   (the QR code is a download link; what goes in, what is stripped).
+3. **Licences checked and the full texts shipped (#120).**
 
-Also in the milestone: booting with the TV off (#268), a diagnostic report
-(#195), a showcase page and README (#190), Steam black at 120 Hz on the C1
-and "no signal" at every switch to Steam (#290).
+Also in the milestone: booting with the TV off (#268), a showcase page and
+README (#190), Steam black at 120 Hz on the C1 and "no signal" at every
+switch to Steam (#290). CabinetOS in the version info (#137) was done in
+#252.
 
 **After a console is installed fresh** it has no key: About, press Version
 seven times, Developer access, PIN; then from the Mac, with the password on

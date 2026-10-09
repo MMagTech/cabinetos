@@ -4,12 +4,13 @@
 #include <json-c/json.h>
 
 #include <sys/stat.h>
+#include <unistd.h>
 
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
 #include <cstdio>
-#include <cstdio>
+#include <cstdlib>
 #include <fstream>
 #include <map>
 #include <mutex>
@@ -92,8 +93,16 @@ void readLog() {
     while (std::getline(f, line)) {
         if (f.eof()) break;   // a line still being written is read next time
         gTail.at += static_cast<off_t>(line.size()) + 1;
+        // A SESSION CLOSED AT SUNSHINE'S END (the console's screen going
+        // out, #294: POST /api/apps/close) ends every stream with "Process
+        // terminated" and no "CLIENT DISCONNECTED". Missed, the console
+        // still counted the phone as there, so the phone joining again was
+        // no change: no press counted, and it streamed the console's black
+        // layer (A9, 2026-10-09 06:31).
         if (line.find("CLIENT CONNECTED") != std::string::npos) on = any = true;
-        else if (line.find("CLIENT DISCONNECTED") != std::string::npos) on = false, any = true;
+        else if (line.find("CLIENT DISCONNECTED") != std::string::npos ||
+                 line.find("Process terminated") != std::string::npos)
+            on = false, any = true;
     }
     if (any && on != gStreaming) {
         gStreaming = on;
@@ -255,6 +264,21 @@ void watch(bool on, bool fresh) {
 }
 
 bool streaming() { return gStreaming; }
+
+bool sessionOpen() {
+    const char* run = std::getenv("XDG_RUNTIME_DIR");
+    return run && ::access((std::string(run) + "/cabinetos-remoteplay-session").c_str(), F_OK) == 0;
+}
+
+bool endSession() {
+    // "{}" because call() takes an empty body for a GET; Sunshine reads none.
+    json_object* o = call("/api/apps/close", "{}");
+    const bool done = ok(o);
+    if (o) json_object_put(o);
+    std::fprintf(stderr, "[remoteplay] session ended: %s\n",
+                 done ? "Sunshine took it" : "Sunshine did not answer");
+    return done;
+}
 
 std::vector<Device> paired() {
     std::lock_guard<std::mutex> lk(gM);

@@ -5,8 +5,10 @@
 #   cabinetos-remoteplay prepare   Sunshine's settings written, and the
 #                                  console's own login for Sunshine's API
 #                                  made the first time
-#   cabinetos-remoteplay started   the CabinetOS session opens: gamescope
-#                                  composes every frame into one picture
+#   cabinetos-remoteplay started   the CabinetOS session opens: the screen
+#                                  woken if idle put it to sleep, and
+#                                  gamescope composes every frame into one
+#                                  picture
 #   cabinetos-remoteplay ended     the session was quit: back to normal
 #   cabinetos-remoteplay streaming exit 0 when a device is streaming now
 #   cabinetos-remoteplay steam     beside Steam's session: what the console
@@ -29,6 +31,19 @@
 # $XDG_RUNTIME_DIR/cabinetos-remoteplay-session for the console: a gamescope
 # restarted under an open session (back from Steam, a crash) starts with it
 # off, and the console turns it on again when it starts (main.cpp).
+#
+# THE SCREEN MUST BE ON WHEN A STREAM STARTS (#294). Sunshine sets up its
+# capture when a stream starts, when a device rejoins, and when the TV's
+# picture changes mid-stream. With the picture off (idle, `gamescopectl
+# drm_sleep_external_screen 1`) the HDMI output has no screen on it: Sunshine
+# logs "Couldn't map 'Unknown-...'", captures a plane belonging to nothing,
+# and never looks again, even after the screen wakes (A9, 2026-10-09, every
+# case). So `started` wakes it first, and waits for the output to be on
+# (sysfs `enabled`, about 20 ms after the wake on the A9) before Sunshine
+# goes on to capture. A rejoin runs no prep-cmd at all (Sunshine's
+# nvhttp::resume), so the console ends the session before its screen goes
+# out instead (main.cpp, idleFrame): no session is ever open over a sleeping
+# screen.
 #
 # THE SETTINGS ARE OURS, written on every start, so a console always runs the
 # ones this image carries; nothing in Settings changes them. Measured on the
@@ -64,15 +79,34 @@ newest_socket() {
     echo "$sock"
 }
 
+# WHETHER A SCREEN IS LIT: a connected output with something on it. sysfs
+# `enabled` reads "disabled" while gamescope has the output asleep.
+connected_screen() {
+    local c
+    for c in /sys/class/drm/card*-*; do
+        [ "$(cat "$c/status" 2>/dev/null)" = connected ] && return 0
+    done
+    return 1
+}
+screen_lit() {
+    local c
+    for c in /sys/class/drm/card*-*; do
+        [ "$(cat "$c/status" 2>/dev/null)" = connected ] &&
+            [ "$(cat "$c/enabled" 2>/dev/null)" = enabled ] && return 0
+    done
+    return 1
+}
+
 # WHETHER A DEVICE IS STREAMING NOW, read as the console reads it
 # (remoteplay.cpp, readLog): Sunshine running, and the last of its "CLIENT
-# CONNECTED" and "CLIENT DISCONNECTED" lines the first. A dropped phone is
-# written as disconnected; a new Sunshine starts a new log, so a Sunshine
+# CONNECTED", "CLIENT DISCONNECTED" and "Process terminated" lines the first
+# ("Process terminated" alone ends a session closed at Sunshine's end). A
+# dropped phone is written as disconnected; a new Sunshine starts a new log, so a Sunshine
 # stopped mid-stream leaves no stale "connected" behind it.
 is_streaming() {
     systemctl is-active --quiet cabinetos-remoteplay.service || return 1
     [ -r "$LOG" ] || return 1
-    [[ "$(grep -a -o -E 'CLIENT (DIS)?CONNECTED' "$LOG" | tail -n 1)" == "CLIENT CONNECTED" ]]
+    [[ "$(grep -a -o -E 'CLIENT (DIS)?CONNECTED|Process terminated' "$LOG" | tail -n 1)" == "CLIENT CONNECTED" ]]
 }
 
 case "${1:-}" in
@@ -117,6 +151,17 @@ EOF
         on=0; [ "$1" = started ] && on=1
         if [ "$on" = 1 ]; then : > "$XDG_RUNTIME_DIR/cabinetos-remoteplay-session"
         else rm -f "$XDG_RUNTIME_DIR/cabinetos-remoteplay-session"; fi
+        # Woken before composing, and only when asleep (above). No
+        # screen connected at all is left alone: there is nothing to wake.
+        if [ "$on" = 1 ] && connected_screen && ! screen_lit; then
+            GAMESCOPE_WAYLAND_DISPLAY="$sock" gamescopectl drm_sleep_external_screen 0 >/dev/null 2>&1 || true
+            for _ in $(seq 100); do screen_lit && break; sleep 0.02; done
+            # To the journal (journalctl -t cabinetos-remoteplay): Sunshine
+            # sends a prep-cmd's output nowhere unless the entry names a
+            # file (process.cpp, `output`).
+            if screen_lit; then logger -t cabinetos-remoteplay "the screen was asleep: woken for the stream"
+            else logger -t cabinetos-remoteplay "the screen was asleep and did not wake in 2 s"; fi
+        fi
         GAMESCOPE_WAYLAND_DISPLAY="$sock" gamescopectl composite_force "$on" >/dev/null 2>&1 || true
         ;;
     streaming)

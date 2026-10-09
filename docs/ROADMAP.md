@@ -60,10 +60,14 @@ session picks up is `docs/NEXT-SESSION.md`.
    #136; what the ISO builder cannot change is #284, after first release) and
    Developer access, one image for everyone (#134). The Nintendo DS stays
    (#248). Remote Play, at home and away through Tailscale (#286, pull
-   request #292). Next: the controller battery on Home (#293, MMagTech
-   2026-10-08: a feature, so before the release), signed images (#135),
-   CabinetOS named in the system's version info (#137), licences checked and
-   shipped (#120).
+   request #292), into Steam (#296, #298). The controller battery on Home
+   (#293). CabinetOS named in the system's version info (#137, #252). A
+   stream started while the screen is asleep (#294), built on
+   `asleep-stream`. Next, in this order (MMagTech, 2026-10-09): signed
+   images (#135), first because a mistake there breaks every console's
+   updates and it needs several image updates to prove itself; the
+   diagnostic report (#195), a feature everyone installing can use to
+   report bugs; licences checked and shipped (#120).
 8. **Testing at the TV.** The release gate: covers and art on the TV (#112), a
    PS2 save reaching the server (#113), Cabinet on Apple TV loading our states
    (#114), players 3 and 4 (#115), the owed hardware tests (#140), and last,

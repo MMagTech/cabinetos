@@ -27,6 +27,8 @@
 
 #pragma once
 
+#include <functional>
+
 namespace idle {
 
 // --- Pixel shift -------------------------------------------------------------
@@ -117,7 +119,11 @@ private:
 // harmlessly, and the black layer the dim already draws is the blank instead.
 // `wait` blocks until gamescope has answered, for the one caller that cannot
 // leave it to a worker: the program exiting with the screen still asleep.
-void setDisplayAsleep(bool asleep, bool wait = false);
+// `first` runs on the same worker before gamescope is asked: a Remote Play
+// session ended before the screen goes out (#294). THE LAST REQUEST WINS: a
+// press while `first` runs asks for a wake, and the sleep queued behind it
+// then does nothing.
+void setDisplayAsleep(bool asleep, bool wait = false, std::function<void()> first = nullptr);
 
 // A stick at rest is not somebody being there. Pads drift, and a drifting
 // stick counted as input would hold the console awake for ever — the same
