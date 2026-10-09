@@ -16248,3 +16248,72 @@ session picks 4K 120 Hz HDR on the LG C1 and the TV stays black: #290.
 #289 (a pad back mid-game ignored by PS2) did not reproduce; its one
 unrepeated condition, the phone's pad as player 2, cannot arise now that a
 stream's pads are seated apart.
+
+### 40. Controller battery on the top bar, issue #293
+
+**Decided with MMagTech, 2026-10-08, from his proposal on #293 ("nothing in
+here is set in stone") and measurements on the A9; judged on the TV through
+the loop.** SETTINGS.md, Controllers, has what the screen does; this is why,
+and what changed from the proposal.
+
+**Measured first, every paired pad (journal and sysfs, A9, 2026-10-08):**
+
+| Pad | Kernel (power_supply) | SDL 3.4.16 |
+|---|---|---|
+| Xbox One S, Bluetooth | 52%, Discharging | unknown for 20 minutes (its own HIDAPI driver, 10/40/70/100 steps, charging only on USB) |
+| 8BitDo Lite 2, Switch mode | level (Normal, then High), Charging on a charger within 5 s | unknown (hid-nintendo has it; SDL steps aside) |
+| 8BitDo Lite 2, its own mode (2dc8:5112) | nothing (hid-generic) | nothing (not in SDL's 8BitDo driver) |
+| Wii Remotes, through the bridge | nothing (the bridge hides them) | not SDL's |
+| Sunshine's stand-in pad | 100%, Discharging, always (the real pad's light was amber) | |
+
+So **the kernel first, as the proposal said**; SDL only for a pad the kernel
+has nothing for (my note on the issue had it the other way round, from
+reading SDL's API rather than its Linux source, which has no battery code
+for pads the kernel drives). **Read on a worker thread, woken by the
+kernel's own uevents, not polled** (reading a HID battery's capacity can ask
+the pad over the air). **A stream's pad is always label only.** **Wii
+Remotes: the console app reads them itself on Home** (wiiremote.cpp already
+asked each for its status on connect); it asks again once a minute while
+one is on and out of a game. No bridge change: in a game Dolphin has them.
+
+**Four segments, one rule per kind of reading.** A percentage: above 75, 50,
+25; sticky 3% at each line so 50-51% does not flicker. A level: Full 4, High
+3, Normal 2, Low and Critical 1. A Wii Remote's byte on the Wii's own scale
+(RVL SDK `__a1_20_status_report`, from the Super Mario Galaxy decompilation):
+0x55 4, 0x44 3, 0x33 2, else 1. The alkalines in his Remotes read 112, full
+on a Wii. **The warning is the last segment for every pad**, not "10%":
+some pads step 100/75/50/25/0 and never report 10 (MMagTech caught it).
+Amber as a warning stage was dropped for that reason; then **colour came
+back on the fill only** ("a little color would be beneficial"): green 3-4,
+amber 2, red 1, outline and labels grey.
+
+**Changed from the proposal, with MMagTech:**
+- **On every screen with the top bar, not Home only** (Home, Library,
+  Search, Settings): the bar keeps its shape as you move along it. Never in
+  a game or on a game's page.
+- **The notice only where the bar is not**: in a game and on a game's page.
+  The console's one notice style ("P2 battery low", the problem dot), not
+  the RetroAchievements card (it has existed since #74, 2026-10-06; my note
+  said otherwise): both were shown over Tetris, and the card needed a second
+  line and covered the game's NEXT box.
+- **Wii Remotes as W1-W4**, the light on the Remote: out of a game their
+  numbers are their own, so a P would have made two P1s. Their notice would
+  only ever have fired out of a game, so they warn in the row only.
+- **A battery outline, not rising bars** (bars read as phone signal), at the
+  name's size: a step down was tried and did not look right beside the name.
+- **Fade and slide** when pads come and go; laid out at once when the bar
+  comes back from a game, and an account switch happens under the curtain.
+- **The name gives way** (shortened) rather than the row running into
+  Settings. Eight controllers, Offline and a download at once still overlap;
+  judged not worth more.
+- **Streaming:** the row follows the console's player list, so a stream
+  shows its own pads (label only) and the TV's pads and Remotes leave it. For
+  about half a second after a stream starts the TV's row still shows, until
+  Sunshine's log says a client connected; left as is (MMagTech: not worth
+  custom scripting).
+- **No wiki page**: the console's docs are in the repository (SETTINGS.md).
+
+**Also fixed:** re-pairing a pad the console knows but that was paired to
+something else since (bluez: AlreadyExists) failed with "Couldn't pair" and
+no way out on screen; it now forgets the old pairing and pairs again. **Found
+on the way:** a stream started while the screen is asleep stays black, #294.

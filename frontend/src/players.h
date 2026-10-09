@@ -112,6 +112,18 @@ struct Pad {
 // The seated pads that are on, player one first.
 std::vector<Pad> connected();
 
+// THE SEATED PADS THAT ARE ON, for the battery row on Home (#293): no sysfs
+// read, so it can be asked every frame. `dir` is the pad's HID device
+// (battery::deviceDir), found once as it connected.
+struct Held {
+    int player = -1;
+    std::string key;    // the pad, across a reconnect (its address or serial)
+    std::string dir;
+    SDL_Gamepad* gp = nullptr;
+    bool stream = false;   // a stream's pad: its battery entry is Sunshine's, not the pad's
+};
+std::vector<Held> held();
+
 // Bumped on every change, so a screen showing the list knows to redraw it.
 int generation();
 

@@ -164,6 +164,10 @@ Decided with MMagTech 2026-09-26, from the things people will actually do.
     **"Paired successfully"**, the line "Press a button on it", and the new
     pad's first press closes the window with "<name> is player N". Failure:
     "Couldn't pair. Try again".
+  - **A pad the console knows but that was paired to something else since**
+    (a phone, then back) pairs like a new one: the console forgets its old
+    pairing and pairs again by itself. It used to say "Couldn't pair" with
+    no way out on screen (#293, 2026-10-08).
   - B closes it at once, stopping a scan or pairing in flight.
   - A wired pad needs none of it: plugged in, it is the next player (and
     its first press closes the window if it is open).
@@ -174,6 +178,33 @@ Decided with MMagTech 2026-09-26, from the things people will actually do.
   a pad reported missing is added to it. **Personal remapping is parked**:
   every system already plays with RetroArch's default layout by button
   position, and a remap has no clean owner with four players.
+- **Each pad's battery, on the top bar** (#293, decided with MMagTech
+  2026-10-08; why in PROJECT.md question 40). Not a setting, nothing to turn
+  on. Left of the account name on every screen with the top bar (Home,
+  Library, Search, Settings), never in a game or on a game's page: "P1"
+  and a battery of four segments for each pad that is on, then the Wii
+  Remotes as "W1" to "W4", the light lit on each. Green at three and four,
+  amber at two, red at the last; a bolt while charging. A pad switching on
+  fades in as the others slide aside; one switching off fades out, then
+  the rest close up. A long name gives way (shortened with "…") rather
+  than the row running into Settings.
+  - **Which pads show one:** any whose Linux driver reports its battery,
+    which covers Xbox, Switch-type (an 8BitDo in Switch mode included),
+    PlayStation and Steam pads; Wii Remotes, read by the console itself;
+    and a few more through SDL. **Which do not:** a pad whose driver says
+    nothing (an 8BitDo Lite 2 in its own mode, most wired pads and clones)
+    and every pad from Remote Play, whose stand-in reports a battery that
+    is not the real pad's. They show their label alone, so you still see
+    they are connected.
+  - **"P2 battery low"**, the console's one notice, in a game or on a
+    game's page, once per pad as it reaches its last segment and is not
+    charging; again only after it has charged back above it. A pad that
+    goes low on a top-bar screen shows red there and the notice waits for
+    the game. Wii Remotes warn only in the row (in a game Dolphin has them).
+    In a game whose emulator is its own program (PS3, Switch, Xbox, Wii
+    U) it waits for the pause menu or the game's end, because the console
+    draws nothing over those while they play. Not during a Steam game
+    (the console app is not running then).
 - **A playing pad dropping out opens the pause menu**, as on Switch and
   Apple TV (MMagTech: yes). Any pad can resume.
 - **Rumble: Off / On, on by default** (#149, decided with MMagTech
