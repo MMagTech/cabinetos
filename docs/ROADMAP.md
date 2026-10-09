@@ -63,7 +63,9 @@ session picks up is `docs/NEXT-SESSION.md`.
    request #292), into Steam (#296, #298). The controller battery on Home
    (#293). CabinetOS named in the system's version info (#137, #252). A
    stream started while the screen is asleep (#294), built on
-   `asleep-stream`. Next, in this order (MMagTech, 2026-10-09): signed
+   `asleep-stream`. Next, in this order (MMagTech, 2026-10-09): the
+   base-update pull request writing its own checks, the controller list
+   (#266) and the newest Bazzite base (44.20261006.1); then signed
    images (#135), first because a mistake there breaks every console's
    updates and it needs several image updates to prove itself; the
    diagnostic report (#195), a feature everyone installing can use to

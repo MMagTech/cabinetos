@@ -21,11 +21,22 @@ the LG C1 on Wi-Fi at **192.168.1.109** (`CABINETOS_A9=cabinet@192.168.1.109` fo
 Milestone 7, Ready to ship (docs/ROADMAP.md), in this order (MMagTech,
 2026-10-09). Lessons file: image-and-ci.md, then frontend.md.
 
-1. **Signed images (#135).** First because a mistake breaks every console's
-   updates, so it needs several image updates on the A9 to prove itself.
-2. **A diagnostic report (#195).** Everything decided so far is on the issue
+1. **The base-update pull request writes its own checks** (branch
+   `base-update-checks`). Each area of `ci/base-watch.txt` has its log and
+   TV checks; only changed areas appear; the kernel's fixes are filtered to
+   the parts the console uses; the notes double as public update notes.
+   `tools/base-checks.sh <branch>` runs the log half on the A9. PROJECT.md,
+   *Staying current with Bazzite*.
+2. **The controller list, PR #266.** Close #180 as replaced.
+3. **The newest Bazzite base, 44.20261006.1.** Run `base-update.yml` by
+   hand from the branch above, close #265 and #179 as replaced (#42 stays
+   open), test only what changed, then the pull request.
+4. **Signed images (#135).** First of the rest because a mistake breaks
+   every console's updates, so it needs several image updates on the A9 to
+   prove itself.
+5. **A diagnostic report (#195).** Everything decided so far is on the issue
    (the QR code is a download link; what goes in, what is stripped).
-3. **Licences checked and the full texts shipped (#120).**
+6. **Licences checked and the full texts shipped (#120).**
 
 Also in the milestone: booting with the TV off (#268), a showcase page and
 README (#190), Steam black at 120 Hz on the C1 and "no signal" at every

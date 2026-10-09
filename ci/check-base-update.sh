@@ -11,7 +11,11 @@
 #      at the last bump, so the PR says what actually changed rather than just
 #      "digest moved".
 #   2. Classifies that change against ci/base-watch.txt — the packages CabinetOS
-#      relies on — and labels the result RELEVANT or ROUTINE.
+#      relies on, in areas — and labels the result RELEVANT or ROUTINE. Since
+#      2026-10-09 ci/base-report.py does this part, and writes what a person
+#      reads: update notes that also serve as the public ones, the checks for
+#      the changed areas only (the A9's log, and the TV), and the kernel's
+#      fixes for the parts the console uses.
 #   3. Flags strip-list drift: removal targets in build_files/ that no longer
 #      exist in the base, which means a strip script has silently become a
 #      no-op and a desktop application may be creeping back in.
@@ -22,6 +26,7 @@
 # Writes to the working directory:
 #   base-manifest.txt   the new base's package list (committed with the bump)
 #   /tmp/pr-body.md     the pull request body
+#   /tmp/base-notes.md  the update notes alone (the bump's commit message)
 #
 # Sets these outputs when running under GitHub Actions:
 #   changed, relevant, old_version, new_version, new_digest, summary
@@ -34,7 +39,6 @@ export LC_ALL=C
 BASE_REPO="${BASE_REPO:-ghcr.io/ublue-os/bazzite}"
 BASE_CHANNEL="${BASE_CHANNEL:-stable}"
 MANIFEST="base-manifest.txt"
-WATCHLIST="ci/base-watch.txt"
 PR_BODY="/tmp/pr-body.md"
 
 say() { echo "[base-update] $*" >&2; }
@@ -170,55 +174,21 @@ say "added=$(count /tmp/added.txt) removed=$(count /tmp/removed.txt) updated=$(c
 # 4. Does any of it matter to us?
 # ---------------------------------------------------------------------------
 
-# Load the watchlist once. It is consulted a few thousand times below, and
-# re-reading the file for each package is the difference between seconds and
-# minutes.
-WATCH_PATTERNS=()
-while read -r pattern; do
-    [[ -z "${pattern}" || "${pattern}" == \#* ]] && continue
-    WATCH_PATTERNS+=("${pattern}")
-done < "${WATCHLIST}"
-say "watching ${#WATCH_PATTERNS[@]} package patterns"
-
-# matches_watchlist <package-name>
-matches_watchlist() {
-    local name="$1" pattern
-    for pattern in "${WATCH_PATTERNS[@]}"; do
-        # shellcheck disable=SC2053  # glob match is the point
-        [[ "${name}" == ${pattern} ]] && return 0
-    done
-    return 1
-}
-
-: > /tmp/relevant-added.txt
-: > /tmp/relevant-removed.txt
-: > /tmp/relevant-changed.txt
-
-# Written as `if` rather than `A && B || true`. The latter is not if-then-else —
-# the `|| true` also fires when the echo fails — and under `set -e` the bare
-# `A && B` form would exit the script the first time a package does not match,
-# which is most of them.
-while read -r name; do
-    if [[ -n "${name}" ]] && matches_watchlist "${name}"; then
-        echo "${name}" >> /tmp/relevant-added.txt
-    fi
-done < /tmp/added.txt
-
-while read -r name; do
-    if [[ -n "${name}" ]] && matches_watchlist "${name}"; then
-        echo "${name}" >> /tmp/relevant-removed.txt
-    fi
-done < /tmp/removed.txt
-
-while read -r name rest; do
-    if [[ -n "${name}" ]] && matches_watchlist "${name}"; then
-        echo "${name} ${rest}" >> /tmp/relevant-changed.txt
-    fi
-done < /tmp/changed.txt
-
-relevant_count=$(( $(count /tmp/relevant-added.txt) \
-                 + $(count /tmp/relevant-removed.txt) \
-                 + $(count /tmp/relevant-changed.txt) ))
+# ci/base-report.py sorts every watched change into its area, writes the
+# notes, the checks and the kernel's fixes, and counts what is relevant. The
+# watch list is no longer one glob per line (it carries each area's checks),
+# so nothing here reads it any more.
+: > /tmp/base-report.md
+: > /tmp/base-notes.md
+echo '{"relevant_count": 0, "areas": []}' > /tmp/base-report.json
+if [[ "${first_run}" != true ]]; then
+    python3 ci/base-report.py report /tmp/old-manifest.txt /tmp/new-manifest.txt \
+        --md /tmp/base-report.md --json /tmp/base-report.json \
+        --notes /tmp/base-notes.md \
+        --old-version "${old_tag}" --new-version "${new_version}"
+fi
+relevant_count=$(jq -r '.relevant_count' /tmp/base-report.json)
+areas=$(jq -r '.areas | join(", ")' /tmp/base-report.json)
 
 # ---------------------------------------------------------------------------
 # 5. Strip-list drift.
@@ -266,7 +236,7 @@ elif [[ "${gamescope_check}" == missing ]]; then
     summary="gamescope no longer takes a flag the session passes; the console would lose 4K and VRR."
 elif (( relevant_count > 0 )); then
     verdict="RELEVANT"
-    summary="${relevant_count} change(s) to packages CabinetOS depends on."
+    summary="${relevant_count} change(s) to packages CabinetOS depends on, in: ${areas}."
 else
     verdict="ROUTINE"
     summary="No changes to packages CabinetOS depends on."
@@ -318,24 +288,7 @@ emit summary "${summary}"
         echo
     fi
 
-    if (( relevant_count > 0 )); then
-        echo "### Changes CabinetOS depends on"
-        echo
-        echo "Matched against \`ci/base-watch.txt\`. **Read these before merging.**"
-        echo
-        if [[ -s /tmp/relevant-changed.txt ]]; then
-            echo "<details open><summary>Updated ($(count /tmp/relevant-changed.txt))</summary>"
-            echo; echo '```'; cat /tmp/relevant-changed.txt; echo '```'; echo "</details>"; echo
-        fi
-        if [[ -s /tmp/relevant-added.txt ]]; then
-            echo "<details open><summary>Added</summary>"
-            echo; echo '```'; cat /tmp/relevant-added.txt; echo '```'; echo "</details>"; echo
-        fi
-        if [[ -s /tmp/relevant-removed.txt ]]; then
-            echo "<details open><summary>Removed — check nothing we rely on has gone</summary>"
-            echo; echo '```'; cat /tmp/relevant-removed.txt; echo '```'; echo "</details>"; echo
-        fi
-    fi
+    cat /tmp/base-report.md
 
     if (( drift_count > 0 )); then
         echo "### ⚠️ Strip-list drift"
@@ -367,9 +320,9 @@ emit summary "${summary}"
     echo "---"
     echo
     echo "**Do not merge on a green build alone.** A CabinetOS image that builds"
-    echo "is not the same as one that boots. Build a qcow2 from this branch"
-    echo "(Actions → Build disk images) and boot it before merging, per"
-    echo "\`docs/PROJECT.md\` constraint 2."
+    echo "is not the same as one that boots. Push this branch to \`testing\`, put"
+    echo "that image on the A9, run \`tools/base-checks.sh base-update/${new_version}\`"
+    echo "and do the TV checks above, per \`docs/PROJECT.md\` constraint 2."
 } > "${PR_BODY}"
 
 # ---------------------------------------------------------------------------

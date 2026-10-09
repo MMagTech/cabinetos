@@ -8,7 +8,9 @@
 # So this workflow does the work a bot cannot: it diffs the new base's package
 # manifest against the one committed at the last bump, classifies the result
 # against ci/base-watch.txt, and labels the pull request RELEVANT or ROUTINE.
-# The reasoning lives in ci/check-base-update.sh.
+# The pull request also lists its own checks, for the areas that changed
+# only, and carries update notes people can read (2026-10-09). The reasoning
+# lives in ci/check-base-update.sh and ci/base-report.py.
 #
 # It never merges anything. Per docs/PROJECT.md constraint 2, the base moves
 # deliberately, and an image that builds is not the same as an image that boots.
@@ -62,6 +64,9 @@ jobs:
         id: check
         env:
           BASE_CHANNEL: ${{ inputs.channel || 'stable' }}
+          # Read-only, for the OGC kernel's tags on GitHub (the kernel's
+          # own patches go in the pull request).
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: ./ci/check-base-update.sh
 
       - name: Open a pull request
@@ -88,7 +93,11 @@ jobs:
 
           git checkout -b "${BRANCH}"
           git add Containerfile base-manifest.txt
-          git commit -m "Bump Bazzite base to ${NEW_VERSION}" -m "${SUMMARY}"
+          # The update notes are the commit's body, so `git log` reads as the
+          # update's notes too.
+          { echo "Bump Bazzite base to ${NEW_VERSION}"; echo; echo "${SUMMARY}"; echo
+            cat /tmp/base-notes.md; } > /tmp/commit-msg.txt
+          git commit -F /tmp/commit-msg.txt
           git push origin "${BRANCH}"
 
           LABEL="routine"
