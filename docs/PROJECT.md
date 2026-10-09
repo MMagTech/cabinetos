@@ -2526,8 +2526,53 @@ session depends on; Phase 5 adds the emulators. A package CabinetOS relies on
 that is not on that list can break in an update that looked routine.
 
 **Nothing is merged automatically, ever.** An image that builds is not an image
-that boots. Build a qcow2 from the branch and boot it first — constraint 2 above
-is the rule this automation serves, not one it replaces.
+that boots. Push the branch to `testing`, put the image on the A9 and check it
+first — constraint 2 above is the rule this automation serves, not one it
+replaces.
+
+#### The pull request lists its own checks (2026-10-09)
+
+MMagTech, 2026-10-09: *"each time we do a base update, I can't sit here and
+troubleshoot the whole OS."* So the check is decided by what changed, and the
+pull request says it, rather than somebody working it out each week.
+
+1. **Areas.** `ci/base-watch.txt` is grouped into areas (Kernel and startup,
+   Firmware, Graphics, Controllers, the two library groups, Sound, Power,
+   Network, Developer access, Steam, the apps CabinetOS removes). Each area
+   carries its own checks: `log:` lines, which the A9 answers and the
+   assistant runs (`tools/base-checks.sh <branch>`, read-only, safe while he
+   is at the TV), and `tv:` lines, which need his eyes or hands. Only the
+   areas an update changed get checks, and a check several areas ask for is
+   listed once.
+2. **A kernel or Mesa change touches nearly everything**, so those areas'
+   checks are the short broad ones (boot, picture, sound, network, a
+   Bluetooth pad, one heavy game), not the whole OS. Power and Network have
+   no TV check at all: what they could break, the log shows.
+3. **The kernel's fixes, only for the parts the console uses.** kernel.org's
+   stable changelogs for every release between the two kernels, and the OGC
+   kernel's own patches (the tags on OpenGamingCollective/linux; Bazzite's
+   kernel is OGC's), filtered by `changelog:` lines to the drivers the A9
+   loads: Radeon graphics, HDMI, its MT7925 Wi-Fi and Bluetooth (the first
+   notes said MT7921; `lspci -k` says MT7925), the wired network, controllers,
+   sound, USB, sleep and power. `changelog-skip:` lines drop other chips in
+   the same drivers and clean-ups that fix nothing. On 44.20260916 →
+   44.20260929 that is 105 of 3,111 changelog lines (measured).
+4. **Update notes.** One plain line per changed area, written so it also
+   serves as the public notes for the update; it is the bump commit's body as
+   well, so `git log` reads as the notes.
+5. **Proof before checks.** `tools/base-checks.sh` first confirms every
+   package the update brings to a watched area is installed on the A9 at its
+   new version. Without that, a passing log check might be the old base
+   answering.
+
+Two watch-list faults went with it. **`kmod-*` matched DisplayLink, a capture
+card, motherboard sensors, steering wheels and Looking Glass**, which Bazzite
+rebuilds most weeks, so every update was RELEVANT for drivers the console
+never loads; the controller ones (`kmod-xone`, `kmod-gcadapter_oc`) are named
+instead. **Terra's build of a package did not match its pattern**, so when
+Terra's WirePlumber replaced Fedora's (44.20260929) the pull request said
+"WirePlumber removed" and never showed the new one; `terra-<name>` now matches
+`<name>`'s pattern, and a swap is reported as one.
 
 **Known limitation:** pull requests created with the default `GITHUB_TOKEN` do
 not trigger other workflows, so the image build will not run on them by itself.

@@ -1,15 +1,49 @@
-# Packages CabinetOS actually cares about in the Bazzite base.
+# Packages CabinetOS actually cares about in the Bazzite base, in AREAS, and
+# what to check on the A9 when an area changes.
 #
-# Used by ci/check-base-update.sh to decide whether a Bazzite update is
-# RELEVANT (a human should look at it before merging) or ROUTINE (it is almost
-# certainly fine and can be merged on the strength of a green build).
+# Used by ci/check-base-update.sh (through ci/base-report.py) to decide whether
+# a Bazzite update is RELEVANT (a human should look at it before merging) or
+# ROUTINE (it is almost certainly fine and can be merged on the strength of a
+# green build), and to write the pull request's update notes and its checks.
 #
 # Bazzite rebuilds daily. Most of those rebuilds move packages CabinetOS has no
 # opinion about — desktop applications, fonts, translations, Windows
 # compatibility. Without this filter, base bumps become a stream of noise and
 # stop being read, which is worse than not having them at all.
 #
-# One shell glob per line. Matched against the package NAME only.
+# THE LINES (2026-10-09):
+#
+#   area: <name>      starts an area; the patterns below it belong to it. The
+#                     name is what the update notes and the checks say, so it
+#                     is written for a player, not for us.
+#   <glob>            a package: one shell glob per line, matched against the
+#                     package NAME only. A package's Terra build (terra-<name>)
+#                     matches its name's pattern too: Terra's WirePlumber
+#                     replaced Fedora's in 44.20260929, and the old list called
+#                     that "WirePlumber removed" and never showed the new one.
+#   log: <check> :: <command>
+#                     a check the A9's log answers, once it runs the testing
+#                     image. tools/base-checks.sh runs the command there in
+#                     bash as `cabinet`, no sudo; exit 0 is a pass, and what
+#                     it prints is shown on a fail.
+#   tv: <check>       a check that needs MMagTech's eyes or hands.
+#   changelog: <part> :: <regex>
+#                     which kernel changelog lines (kernel.org's, and the OGC
+#                     kernel's own patches) are about a part the console uses.
+#                     Python regex, matched against each commit's subject.
+#   changelog-skip: <regex>
+#                     a changelog line that matched a part but is not news for
+#                     this console: another chip in the same driver, or a
+#                     clean-up that fixes nothing. Any one matching drops it.
+#   kind: stripped    the area's packages are ones CabinetOS removes, so a new
+#                     version of one is not news; only a name appearing or
+#                     going is.
+#
+# Only the areas an update changed get checks, and a check several of them
+# ask for is listed once (MMagTech, 2026-10-09: "each time we do a base
+# update, I can't sit here and troubleshoot the whole OS"). So write the same
+# check with the same words wherever it appears. Keep the tv: lines few: a
+# kernel or Mesa change gets a short broad check, not the whole OS.
 #
 # ---------------------------------------------------------------------------
 # ADD TO THIS FILE AS THE PROJECT GROWS.
@@ -21,8 +55,58 @@
 
 # --- Kernel and boot -------------------------------------------------------
 # A kernel change can take out controller drivers or graphics. Always look.
+#
+# Its checks are the short broad ones: a kernel touches nearly everything,
+# so boot, picture, sound, network, a Bluetooth pad and one heavy game.
+area: Kernel and startup
+log: The A9 booted the image's own kernel :: [ "$(uname -r)" = "$(rpm -q --qf '%{VERSION}-%{RELEASE}.%{ARCH}' kernel-core)" ]
+log: No service failed to start :: out=$(systemctl --failed --no-legend --plain); [ -z "$out" ] || { echo "$out"; exit 1; }
+log: No kernel error this boot that the boot before did not have :: e() { journalctl -b "$1" -k -p err -o cat | sed -E 's/[0-9]+/N/g' | sort -u; }; new=$(comm -13 <(e -1) <(e 0)); [ -z "$new" ] || { echo "$new"; exit 1; }
+log: The console came up on the GPU, not software drawing :: journalctl -b -t cabinetos-session -o cat | grep -q 'gamescope (drm) is up'
+log: Wi-Fi or the cable is connected :: nmcli -t -f TYPE,STATE dev | grep -qE '^(wifi|ethernet):connected'
+log: Bluetooth is on :: bluetoothctl show | grep -q 'Powered: yes'
+log: The sound devices are there :: wpctl status | sed -n '/^Audio/,/^Video/p' | grep -q '\[alsa\]'
+tv: Picture: after the restart Home comes up on the TV, sharp
+tv: Sound: Home's sounds play from the TV
+tv: A Bluetooth pad: turn on a paired pad; it connects and moves around Home
+tv: One heavy game: a PS2 or GameCube game plays smoothly for a minute, with sound
+#
+# Kernel fixes worth reading, by part (agreed 2026-10-09). The parts are the
+# drivers the A9 loads (lspci -k, lsmod): its Wi-Fi is an MT7925, not the
+# MT7921 the first notes said, and its Bluetooth is that card's (btmtk over
+# btusb). Other machines' parts are not listed: the notes say what was fixed
+# for the hardware this console is tested on, and other machines report.
+changelog: Radeon graphics :: ^(drm/)?amd(gpu)?([/:])
+changelog: Display over HDMI :: ^drm/(edid|display)\b|^drm: (?![\w-]+: )
+changelog: Wi-Fi :: ^wifi: (mt76: (mt7925|mt792x|connac|mt76_connac)\b|mt76: (?!mt7\d{2,3}[a-z]?\b)|mac80211:|cfg80211:)
+changelog: Wired network :: ^(net: )?r8169:
+changelog: Bluetooth :: ^Bluetooth: (?!(btintel|btrtl|btbcm|btqca|hci_qca|btnxpuart|hci_bcm|hci_bcm4377|btmrvl|hci_h5|hci_ll|hci_intel|btsdio|hci_vhci|virtio_bt|btmtksdio|btmtkuart|hci_uart|hci_ldisc)\b)
+changelog: Controllers :: ^HID: ((core|input|hidraw|uhid|usbhid|generic|playstation|sony|nintendo|microsoft|steam|wiimote|8bitdo|google)\b|hid-(core|input|playstation|sony|nintendo|microsoft|steam|wiimote|generic)\b|(?![\w-]+: ))|^Input: (xpad|joydev|uinput|evdev|ff-core|ff-memless)\b
+changelog: Sound :: ^ALSA: (hda|pcm|core|control|timer)\b
+changelog: USB :: ^(usb|USB): (xhci|core|hub)\b|^xhci\b|^usb: storage: uas\b|^thunderbolt:
+changelog: Processor, sleep and power :: ^(platform/x86(/amd|: amd)|cpufreq: amd-pstate|cpufreq/amd-pstate|iommu/amd|x86/(cpu/)?amd)\b
+# Every game runs through it, and OGC carries its own scheduler patches.
+changelog: Scheduler :: ^sched/
+# Radeon: GPU families and blocks that are not the 890M's (gfx11.5, display
+# DCN 3.5, SMU 14). Its own may be named; another one named is not news.
+changelog-skip: ^(drm/)?amd.*\b(gfx([6-9]|10|12)|gfx_v([6-9]|10|12)|vega\d*|smu ?(7|11|13)|SMU ?(7|11|13)|powerplay|dce\d*|DCE|si|cik|uvd|vce|xgmi|XGMI|dGPUs?|MST|multi-XCC|MI\d{3}|dcn(?!3[56])\d+)\b
+# Wi-Fi: mt76's other chips and its router-only paths (WED, RRO), and the
+# USB and SDIO cards; the A9's is an MT7925 on PCIe.
+changelog-skip: ^wifi: mt76: .*\b(WED|RRO|SDIO|USB|mt76x\d+|mt7915|mt7996|MT7991A?|mt7615|mt7603|mt7921u)\b|^wifi: mt76: mt76x\d
+# Bluetooth: other vendors' parts of btusb, and other MediaTek chips (one that
+# names the MT7925 as well stays).
+changelog-skip: ^Bluetooth: (btintel\w*|btqcomsmd|hci_mrvl|btmtksdio)\b|^Bluetooth: btusb: .*(\bQCA|\bIntel|\bRealtek|\bBroadcom|wcn\d+)|^(?!.*MT7925)Bluetooth: btmtk: .*\bMT79(20|21|22|61)\b
+# Sound, USB, power: other machines' parts.
+changelog-skip: ^ALSA: hda/.*\b(cix|ipbloq|tegra|intel|cs35l\d+|tas\d+)\b|^ALSA: hda: (cix|tegra)\b|^usb: storage: (?!uas)|hsmp|amd-pstate-ut
+# A laptop's own quirk is not this console's; one naming GEEKOM would be.
+changelog-skip: ^(?!.*GEEKOM).*\b([Qq]uirks? for|[Ff]ixup for|[Aa]dd (a )?quirk|[Aa]dd (new )?(VID|PID|ID)s?)\b
+# Clean-ups and build fixes: nothing changes on a running console.
+changelog-skip: \b([Rr]emove unused|unused-but-set|duplicate .*include|[Ss]ilence|[Ww]arnings?|32-?bit compile|[Aa]void build|[Cc]lean ?up|[Rr]ename some|kernel-doc|[Tt]ypo|annotations)\b|use guard\(\)
 kernel
 kernel-*
+# Loads the kernel's modules. It matched the old kmod-* glob by accident.
+kmod
+kmod-libs
 bootc
 ostree
 rpm-ostree
@@ -48,6 +132,14 @@ plymouth*
 #
 # Kernel modules were already watched through kmod-*; firmware is a different
 # kind of thing and matched none of the patterns here.
+area: Firmware
+log: No firmware failed to load :: out=$(journalctl -b -k -o cat | grep -aiE 'direct firmware load .*failed|failed to load .*firmware|firmware .*(load|request).*fail'); [ -z "$out" ] || { echo "$out"; exit 1; }
+log: The GPU started :: journalctl -b -k -o cat | grep -qE '\[drm\] Initialized (amdgpu|i915|xe|nouveau|nvidia-drm|radeon) '
+log: Wi-Fi or the cable is connected :: nmcli -t -f TYPE,STATE dev | grep -qE '^(wifi|ethernet):connected'
+log: Bluetooth is on :: bluetoothctl show | grep -q 'Powered: yes'
+log: The sound devices are there :: wpctl status | sed -n '/^Audio/,/^Video/p' | grep -q '\[alsa\]'
+tv: Picture: after the restart Home comes up on the TV, sharp
+tv: Sound: Home's sounds play from the TV
 linux-firmware
 linux-firmware-*
 amd-gpu-firmware
@@ -67,6 +159,15 @@ nvidia-gpu-firmware
 # driver takes those two systems out while every other core keeps working, so
 # it is the quiet kind of breakage. build_files/build.sh asserts both, because
 # a dlopen is invisible to `ldd` and therefore to require-frontend-libs.sh.
+#
+# Mesa also encodes Remote Play's stream (VA-API), and draws Steam's games.
+area: Graphics
+log: The console came up on the GPU, not software drawing :: journalctl -b -t cabinetos-session -o cat | grep -q 'gamescope (drm) is up'
+log: gamescope draws with the GPU's Vulkan driver, not software :: journalctl -b -t cabinetos-session -o cat | grep 'selecting physical device' | grep -vq llvmpipe
+tv: Picture: after the restart Home comes up on the TV, sharp
+tv: One heavy game: a PS2 or GameCube game plays smoothly for a minute, with sound
+tv: Remote Play: a stream to a phone shows the picture and plays the sound
+tv: Steam: its tile opens Big Picture, a game starts, and leaving Steam returns to Home
 gamescope
 terra-gamescope*
 mesa-*
@@ -80,8 +181,21 @@ libglvnd*
 
 # --- Controllers -----------------------------------------------------------
 # The primary input device. Anything here changing deserves a look.
-kmod-*
-akmod-*
+#
+# `kmod-*` WAS HERE UNTIL 2026-10-09, and it matched DisplayLink, a capture
+# card, motherboard sensors, steering wheels and Looking Glass, which Bazzite
+# rebuilds most weeks: every update came out RELEVANT for drivers the console
+# never loads. The controller ones are named instead; the module loader went
+# to Kernel and startup, and Broadcom Wi-Fi to Network. A new controller
+# driver in Bazzite will not show here until it is added by name.
+area: Controllers
+log: Bluetooth is on :: bluetoothctl show | grep -q 'Powered: yes'
+tv: A Bluetooth pad: turn on a paired pad; it connects and moves around Home
+tv: Rumble: a game that rumbles still rumbles on that pad
+tv: A Wii Remote: it connects, and a Wii game takes it
+# Xbox's wireless dongle, and the GameCube adapter.
+kmod-xone
+kmod-gcadapter_oc
 steam-devices*
 libevdev
 inputplumber
@@ -96,6 +210,14 @@ libratbag
 # in the base is a security fix in the frontend. Every one of them was already
 # present in Bazzite, which is why the frontend adds nothing to the image — and
 # exactly why a base bump that drops one would be silent and fatal.
+#
+# The image build's library check (require-frontend-libs.sh) has already
+# passed by the time anybody tests; these checks are for a library that is
+# there and behaves differently.
+area: Libraries the console's screens use
+log: Home started :: journalctl -b -t cabinetos-session -o cat | grep -q 'Home is up'
+log: Nothing crashed this boot :: out=$(coredumpctl list --since "$(uptime -s)" --no-legend 2>/dev/null); [ -z "$out" ] || { echo "$out"; exit 1; }
+tv: Home: cover art and names draw as before, Japanese names included
 SDL3
 SDL3-*
 freetype
@@ -127,23 +249,44 @@ google-noto-fonts-common
 #
 # Read off `ldd` against the real binaries rather than guessed at. libX11 and
 # libXext are PPSSPP's, which nothing had noticed until the control run.
+#
+# Split in two on 2026-10-09: libcurl is also every download from RomM and
+# libarchive unpacks them, while libX11 is PPSSPP's alone, and a rebuild of
+# libX11 was asking for a download test.
+area: Downloads from RomM
+log: Home started :: journalctl -b -t cabinetos-session -o cat | grep -q 'Home is up'
+log: Nothing crashed this boot :: out=$(coredumpctl list --since "$(uptime -s)" --no-legend 2>/dev/null); [ -z "$out" ] || { echo "$out"; exit 1; }
+tv: A download: a game not on the console yet downloads from RomM and starts
 libcurl
 libcurl-minimal
-json-c
 libarchive
 zlib-ng-compat
 libzip
+area: Libraries the emulators use
+log: Home started :: journalctl -b -t cabinetos-session -o cat | grep -q 'Home is up'
+log: Nothing crashed this boot :: out=$(coredumpctl list --since "$(uptime -s)" --no-legend 2>/dev/null); [ -z "$out" ] || { echo "$out"; exit 1; }
+tv: A PSP game starts and plays (PPSSPP is the core that uses X11)
+json-c
 libX11
 libXext
 libxkbcommon*
 libudev*
 
 # --- Audio -----------------------------------------------------------------
+area: Sound
+log: PipeWire and WirePlumber are running :: systemctl --user is-active -q pipewire wireplumber
+log: The sound devices are there :: wpctl status | sed -n '/^Audio/,/^Video/p' | grep -q '\[alsa\]'
+tv: Sound: Home's sounds play from the TV
+tv: Remote Play: a stream to a phone shows the picture and plays the sound
 pipewire*
 wireplumber*
 alsa-*
 
 # --- Power and thermal -----------------------------------------------------
+# No TV check: what these could break, the log shows.
+area: Power
+log: tuned runs, with the console's sound profile laid over it :: tuned-adm active | grep -q 'post-loaded profile: cabinetos-audio'
+log: No service failed to start :: out=$(systemctl --failed --no-legend --plain); [ -z "$out" ] || { echo "$out"; exit 1; }
 tuned
 tuned-*
 power-profiles-daemon
@@ -151,13 +294,23 @@ upower
 thermald
 
 # --- Network ---------------------------------------------------------------
+area: Network
+log: Wi-Fi or the cable is connected :: nmcli -t -f TYPE,STATE dev | grep -qE '^(wifi|ethernet):connected'
+log: Avahi runs, so phones find the console for Remote Play :: systemctl is-active -q avahi-daemon
 NetworkManager
 NetworkManager-*
 wpa_supplicant
 avahi
 avahi-*
+# Broadcom Wi-Fi, for machines that have it (added to Bazzite 44.20260929).
+kmod-wl
+broadcom-wl
 
 # --- Developer access (see PROJECT.md open question 8) ---------------------
+# Password logins are MMagTech's to type, never the assistant's.
+area: Developer access
+log: SSH answers on port 2222 :: systemctl is-active -q sshd && ss -ltn | grep -q ':2222 '
+tv: File access, from the Mac (only if you use it): an SFTP login with the password on the TV still works
 openssh
 openssh-server
 openssh-clients
@@ -166,6 +319,9 @@ openssh-clients
 # Kept for the one Steam tile, and its Big Picture session (terra). A change to
 # any of these can stop the tile reaching Steam or coming back from it. The
 # 32-bit Mesa and Vulkan libraries are already watched under Graphics.
+area: Steam
+log: Steam and its session are in the image :: command -v steam >/dev/null && [ -e /usr/share/gamescope-session-plus/sessions.d/steam ]
+tv: Steam: its tile opens Big Picture, a game starts, and leaving Steam returns to Home
 steam
 gamescope-session
 gamescope-session-steam
@@ -175,6 +331,9 @@ gamescope-session-steam
 # shows up as relevant. A strip list that has silently become a no-op is a
 # desktop application quietly returning to the image.
 # cardwire since #223: Steam's session would launch Steam through it.
+area: Apps CabinetOS removes
+kind: stripped
+log: None of the removed apps is back :: out=$(rpm -q cardwire lutris sddm firefox konsole dolphin waydroid uupd bazzite-portal 2>/dev/null | grep -v 'is not installed'); [ -z "$out" ] || { echo "$out"; exit 1; }
 cardwire
 cardwire-gui
 lutris
