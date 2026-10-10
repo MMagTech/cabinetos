@@ -35,7 +35,7 @@ from a blank PC to playing.
 
 - [Buttons and shortcuts](navigation.md): every screen, and the in-game shortcuts.
 - [Systems, formats and BIOS](systems.md): what plays, which files, which BIOS.
-- [When something is wrong](troubleshooting.md)
+- [When something is wrong](troubleshooting.md): messages, and making a diagnostic report.
 
 ## In one paragraph
 
