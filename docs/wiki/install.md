@@ -28,14 +28,8 @@ GameCube need Vulkan, and every system starts on the lowest picture level.
 (about 6.7 GB). No account needed; it is always the newest release. What
 changed in it: the [release notes](https://github.com/MMagTech/cabinetos/releases/latest).
 
-To check the download is whole, compare its SHA-256 with
-[this one](https://download.mmagtech.com/cabinetos.iso.sha256):
-
-```bash
-shasum -a 256 cabinetos.iso
-```
-
-(On Windows: `certutil -hashfile cabinetos.iso SHA256`.)
+Optional: check it is whole against [its SHA-256](https://download.mmagtech.com/cabinetos.iso.sha256)
+(`shasum -a 256 cabinetos.iso`; on Windows `certutil -hashfile cabinetos.iso SHA256`).
 
 The installer only has to be new enough to install. Once installed, the
 console updates itself (see [Updates](updates.md)).
@@ -46,7 +40,7 @@ Any image writer works: Fedora Media Writer, balenaEtcher, Rufus (in DD mode),
 or `dd` on Linux:
 
 ```bash
-sudo dd if=install.iso of=/dev/sdX bs=4M status=progress oflag=sync
+sudo dd if=cabinetos.iso of=/dev/sdX bs=4M status=progress oflag=sync
 ```
 
 `/dev/sdX` is the whole stick, not a partition. Everything on it is erased.
