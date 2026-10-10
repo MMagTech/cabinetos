@@ -32,7 +32,12 @@ from your whole library.
 - **Play from your phone** with Moonlight, at home or away over Tailscale.
 - **Your Steam games too.** One press hands the TV to Steam's Big Picture, and
   quitting Steam brings you back to Home. Remote Play streams it to your phone.
-- **Updates in one press**, as a single image.
+- **Take it with you.** Away from your server it plays every game you
+  downloaded and the ones you played recently; saves wait and go up when you
+  are back.
+- **Install once.** From then on it updates itself in one press, the whole
+  system at once, checked against CabinetOS's signature, with the version
+  before kept on the console.
 
 | | | |
 |---|---|---|
