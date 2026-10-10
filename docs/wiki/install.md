@@ -24,12 +24,12 @@ GameCube need Vulkan, and every system starts on the lowest picture level.
 
 ## Get the installer
 
-Download **`cabinetos.iso`** (about 6.7 GB) from the
-[latest release](https://github.com/MMagTech/cabinetos/releases/latest). No
-account needed.
+**[Download cabinetos.iso](https://download.mmagtech.com/cabinetos.iso)**
+(about 6.7 GB). No account needed; it is always the newest release. What
+changed in it: the [release notes](https://github.com/MMagTech/cabinetos/releases/latest).
 
-To check the download is whole, compare its SHA-256 with the one on the
-release page:
+To check the download is whole, compare its SHA-256 with
+[this one](https://download.mmagtech.com/cabinetos.iso.sha256):
 
 ```bash
 shasum -a 256 cabinetos.iso
