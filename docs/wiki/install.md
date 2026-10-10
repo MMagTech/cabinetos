@@ -6,7 +6,7 @@ operating system, not an app.
 ## What you need
 
 - **A PC for under the TV.** x86-64, with an AMD Radeon graphics chip. The
-  only machine CabinetOS has been tested on is the **GEEKOM A9 Pro** (Ryzen AI 9
+  only machine CabinetOS has been tested on is the **GEEKOM A9 Max** (Ryzen AI 9
   HX 370, Radeon 890M). Other AMD machines may work; reports are welcome, with
   the machine named.
 - **A USB stick** of 8 GB or more, for the installer.
@@ -48,7 +48,7 @@ sudo dd if=install.iso of=/dev/sdX bs=4M status=progress oflag=sync
 
 ## Firmware settings
 
-Before installing, open the PC's firmware setup (on the A9 Pro: **Delete**
+Before installing, open the PC's firmware setup (on the A9 Max: **Delete**
 during the logo) and change two things:
 
 - **Restore on AC power loss: Power On.** The console comes back by itself
@@ -58,7 +58,7 @@ during the logo) and change two things:
 ## Install
 
 1. Plug in the stick and the keyboard. Start the PC and open its boot menu (on
-   the A9 Pro: **F7** during the logo). Pick the USB stick, then
+   the A9 Max: **F7** during the logo). Pick the USB stick, then
    **Install CabinetOS**.
 2. The installer lists the internal drives (USB drives are never offered). With
    more than one, type the number of the one to use.

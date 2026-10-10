@@ -66,7 +66,7 @@ These days it's my kids on that couch. Same feeling.
 ## What you need
 
 - **A small PC** with AMD Radeon graphics. CabinetOS is built and tested on the
-  **GEEKOM A9 Pro**, the only machine it has been tested on so far.
+  **GEEKOM A9 Max**, the only machine it has been tested on so far.
 - **A RomM server**, 5.1 or newer, with your games, BIOS and firmware.
 - **A controller**, Bluetooth or USB, and a USB keyboard for the first run.
 - **A TV.**
