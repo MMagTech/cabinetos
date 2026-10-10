@@ -109,10 +109,16 @@ drive_kind() {
 }
 SYSDEV=/sys/devices
 
-CORE="roms cache bios users"
+# reports: the diagnostic reports (#195, /usr/libexec/cabinetos-report), for
+# anybody who would rather copy one off than scan its code.
+CORE="roms cache bios users reports"
 
 view_up() {
     install -d -m 0755 -o root -g root "${VIEW}" || return 1
+    # MADE HERE TOO, not only by the frontend: File access can come up at boot
+    # before the frontend has made it, and a folder missing then stays
+    # missing until File access is turned off and on.
+    [[ -d "${ROOT}/reports" ]] || install -d -m 0755 -o "${USER_NAME}" -g "${USER_NAME}" "${ROOT}/reports"
     local d
     for d in ${CORE}; do
         [[ -d "${ROOT}/${d}" ]] || continue

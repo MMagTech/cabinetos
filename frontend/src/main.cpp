@@ -98,6 +98,7 @@
 #include "look.h"
 #include "prefs.h"
 #include "remoteplay.h"
+#include "report.h"
 #include "tailscale.h"
 #include "optcheck.h"
 #include "quality.h"
@@ -7127,7 +7128,8 @@ int main(int argc, char** argv) {
     // over whatever was behind it, and the player is a cover over that — which
     // is what makes quitting a game return to the launch screen and backing out
     // again return to the browsing.
-    enum class Screen { Home, Library, Grid, Detail, Search, AddAccount, TailscaleSignIn, Settings };
+    enum class Screen { Home, Library, Grid, Detail, Search, AddAccount, TailscaleSignIn, Report,
+                        Settings };
     std::vector<Screen> stack{Screen::Home};
     // Which screen last set the room, so a change of screen can be told apart
     // from focus moving within one. See the backdrop block in the frame loop.
@@ -7153,6 +7155,9 @@ int main(int argc, char** argv) {
     tsSignInScreen.setText("Sign in to Tailscale",
                            {"Use the Tailscale account", "your phone is signed in to."},
                            "Getting a link\xE2\x80\xA6");
+    // THE DIAGNOSTIC REPORT (#195): the same screen again, the link this time
+    // a download of the report. Its lines are set when it is made.
+    screens::AddAccountScreen reportScreen;
     screens::SettingsScreen settingsScreen;
     // What the docked keyboard held last frame, so the query is re-run when it
     // changes and not sixty times a second when it does not.
@@ -8851,7 +8856,7 @@ int main(int argc, char** argv) {
                      SetDarkHours, SetColour, SetRumble, SetPictureQuality,
                      SetWiiRemotes, SetSteam, SetSteamShow, SetRetroAchievements,
                      SetAchievementSound, SetDeveloper, SetVersion, SetRemotePlay,
-                     SetPairedDevices, SetTailscale };
+                     SetPairedDevices, SetTailscale, SetReport };
     // One Eject row per USB drive: this plus the drive's index in
     // storage::locations() when the rows were built.
     constexpr int kSetEject = 100;
@@ -9121,6 +9126,12 @@ int main(int argc, char** argv) {
     bool tsLoggingOut = false;  // `tailscale logout` running on its worker
     std::thread tsWorker;
     std::atomic<bool> tsWorkerDone{false};
+    // THE DIAGNOSTIC REPORT, made on a worker (about three seconds), with the
+    // console's address on the home network asked there too.
+    std::thread reportWorker;
+    std::atomic<bool> reportWorkerDone{false};
+    report::Made reportMade;
+    std::string reportAddress;
     if (rpWant && tsWant && unit::state(kTsUnit) != "active") {
         std::string why;
         if (!unit::start(kTsUnit, &why))
@@ -10179,6 +10190,9 @@ int main(int argc, char** argv) {
         // to bring the tile back. Somebody who never hid it never sees it.
         if (steam::available() && steam::hidden())
             sys.push_back({K::Action, SetSteamShow, "Steam", "", "Hidden"});
+        // THE DIAGNOSTIC REPORT (#195): one row, the screen it opens says the
+        // rest. No PIN: it changes nothing, and nothing private is in it.
+        sys.push_back({K::Action, SetReport, "Diagnostic report", "", ""});
         cats.push_back({"System", std::move(sys)});
 
         // VERSION: the date version, with Bazzite's under it. A console that
@@ -11559,6 +11573,23 @@ int main(int argc, char** argv) {
                         downloadsPanel.open(std::move(dl));
                     });
                     sound::play(sound::Cue::Activate);
+                } else if (res.value == SetReport) {
+                    if (reportWorker.joinable()) {
+                        sound::play(sound::Cue::Edge);
+                    } else {
+                        report::stop();
+                        reportScreen.setText("Diagnostic report", {}, "Creating\xE2\x80\xA6");
+                        reportScreen.open();
+                        stack.push_back(Screen::Report);
+                        reportWorkerDone = false;
+                        reportWorker = std::thread([&]() {
+                            reportMade = report::make(storage::root());
+                            std::string ip = net::status().ipv4;
+                            reportAddress = ip.substr(0, ip.find('/'));
+                            reportWorkerDone = true;
+                        });
+                        sound::play(sound::Cue::Activate);
+                    }
                 } else if (res.value == SetCredits) {
                     // A list, one line per project: what it does, and its
                     // licence. Nothing to choose; A or B closes it.
@@ -12197,6 +12228,7 @@ int main(int argc, char** argv) {
             case Screen::Search: apply(searchScreen.key(n)); return true;
             case Screen::AddAccount: apply(addAccountScreen.key(n)); return true;
             case Screen::TailscaleSignIn: apply(tsSignInScreen.key(n)); return true;
+            case Screen::Report: apply(reportScreen.key(n)); return true;
             case Screen::Settings: apply(settingsScreen.key(n)); return true;
         }
         return false;
@@ -15613,6 +15645,32 @@ int main(int argc, char** argv) {
                 }
             }
             remotePlayHandover();
+            // THE DIAGNOSTIC REPORT: made, then served while its screen is up.
+            // Leaving the screen stops the link; a report finished after the
+            // screen was left is kept in File access and served to nobody.
+            if (reportWorkerDone) {
+                reportWorker.join();
+                reportWorkerDone = false;
+                if (here() == Screen::Report) {
+                    std::string url, why;
+                    if (!reportMade.ok) {
+                        reportScreen.setError("Couldn't create the report.");
+                    } else if (reportAddress.empty()) {
+                        reportScreen.setText("Diagnostic report", {"In File access, under reports."}, "");
+                        reportScreen.setError("No network, so it can't be downloaded.");
+                    } else if (!report::serve(reportMade.path, reportAddress, &url, &why)) {
+                        std::fprintf(stderr, "[report] could not serve: %s\n", why.c_str());
+                        reportScreen.setText("Diagnostic report", {"In File access, under reports."}, "");
+                        reportScreen.setError("Couldn't offer it for download.");
+                    } else {
+                        reportScreen.setText("Diagnostic report",
+                                             {"Your phone has to be on this network.",
+                                              "Also in File access, under reports."}, "");
+                        reportScreen.setPairing(url, url);
+                    }
+                }
+            }
+            if (report::serving() && here() != Screen::Report) report::stop();
             // TAILSCALE (#286): asked only while somebody can see the answer,
             // the row in Settings or the sign-in screen.
             {
@@ -16045,6 +16103,7 @@ int main(int argc, char** argv) {
             accountScreen.tick(dt);
             addAccountScreen.tick(dt);
             tsSignInScreen.tick(dt);
+            reportScreen.tick(dt);
             settingsScreen.setHasFocus(!barFocused && !accountsOpen);
             settingsScreen.tick(dt);
             pinScreen.tick(dt);
@@ -16545,7 +16604,8 @@ int main(int argc, char** argv) {
                                                         : cards[ci].coverLarge;
                 else if (!lastLitArt.empty())
                     want = lastLitArt;
-            } else if (here() == Screen::AddAccount || here() == Screen::TailscaleSignIn) {
+            } else if (here() == Screen::AddAccount || here() == Screen::TailscaleSignIn ||
+                       here() == Screen::Report) {
                 // **A TEXT SCREEN GETS THE PLAIN GRADIENT.** MMagTech,
                 // 2026-09-22: *"i preferred the purple background that went
                 // with the first run setup better. The current background
@@ -16914,6 +16974,7 @@ int main(int argc, char** argv) {
                 case Screen::Search: searchScreen.draw(ctx); break;
                 case Screen::AddAccount: addAccountScreen.draw(ctx); break;
                 case Screen::TailscaleSignIn: tsSignInScreen.draw(ctx); break;
+                case Screen::Report: reportScreen.draw(ctx); break;
                 case Screen::Settings: settingsScreen.draw(ctx); break;
                 case Screen::Home: break;   // unreachable, and the compiler asks
             }
@@ -17242,6 +17303,7 @@ int main(int argc, char** argv) {
                 // on this screen for glass to blur.
                 case Screen::AddAccount: break;
                 case Screen::TailscaleSignIn: break;
+                case Screen::Report: break;
                 case Screen::Settings: settingsScreen.drawGlass(ctx); break;
                 case Screen::Home: break;
             }
@@ -18276,6 +18338,8 @@ int main(int argc, char** argv) {
     tailscale::watch(false);
     tailscale::cancelLogin();
     if (tsWorker.joinable()) tsWorker.join();
+    if (reportWorker.joinable()) reportWorker.join();
+    report::stop();
 
     ra::shutdown();
     images.shutdown();

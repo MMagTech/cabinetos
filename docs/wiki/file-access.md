@@ -31,6 +31,7 @@ with the console's own address. You see these folders:
 | `bios` | The BIOS, firmware and keys the console has fetched |
 | `roms` | Downloaded games |
 | `cache` | Games fetched by Play |
+| `reports` | Diagnostic reports, the last five |
 | `External` and others | The `CabinetOS` folder on each extra drive |
 
 Only these folders are reachable, and only by file transfer, not a shell.

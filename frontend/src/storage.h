@@ -179,6 +179,9 @@ std::string biosDir();
 
 std::string configDir();
 std::string logsDir();
+// The diagnostic reports, the last five (#195, /usr/libexec/cabinetos-report).
+// File access shows it, so a report can be copied off as well as scanned.
+std::string reportsDir();
 
 // An emulator that is a whole application keeps ALL of its own state here, one
 // folder each: `emulators/eden/user/` is Eden's keys, system memory, saves,

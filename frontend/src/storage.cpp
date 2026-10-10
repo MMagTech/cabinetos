@@ -291,6 +291,7 @@ bool ensureTree(std::string* err) {
     makeDirs(biosDir());
     makeDirs(configDir());
     makeDirs(logsDir());
+    makeDirs(reportsDir());
     makeDirs(r + "/users");
     linkImageAssets();
     return true;
@@ -413,6 +414,7 @@ std::string cacheDir(const std::string& location) { return location + "/cache"; 
 std::string biosDir() { return root() + "/bios"; }
 std::string configDir() { return root() + "/config"; }
 std::string logsDir() { return root() + "/logs"; }
+std::string reportsDir() { return root() + "/reports"; }
 std::string emulatorsDir() { return root() + "/emulators"; }
 std::string gamesDir() { return root() + "/games"; }
 

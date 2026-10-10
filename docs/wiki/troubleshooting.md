@@ -54,7 +54,21 @@ The system's name in a message is RomM's name for the platform.
 
 ## Reporting a problem
 
-[Open an issue](https://github.com/MMagTech/cabinetos/issues) and say which PC
-it is (make and model, and its graphics chip), the console version from
-Settings, About, and the game and system. CabinetOS is tested on the GEEKOM A9
-Pro only, so reports from other machines are how it gets better on them.
+1. Settings, **System**, **Diagnostic report**. Scan the code with a
+   phone on the same network to download the report, or type the address
+   shown under it into a computer. It is also in
+   [File access](file-access.md), under `reports`.
+2. [Open an issue](https://github.com/MMagTech/cabinetos/issues/new/choose)
+   and attach the report. Say what you saw and when.
+
+The report says which machine it is, every version, the settings and the
+console's logs. Your server's address, names, Wi-Fi networks, network
+addresses, serial numbers and passwords are replaced before it is written, so
+it is safe to post. Game titles stay in.
+
+If the console does not get as far as Settings, a report from the next boot
+still has the boot that failed. With Developer access, `cabinetos-report`
+makes the same file.
+
+CabinetOS is tested on the GEEKOM A9 Max only, so reports from other machines
+are how it gets better on them.
