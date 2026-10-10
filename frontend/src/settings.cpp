@@ -1,4 +1,6 @@
 #include "settings.h"
+#include "setup.h"
+#include "wikiqr.h"
 
 #include "sound.h"
 
@@ -426,27 +428,55 @@ void SettingsScreen::drawGlass(Ctx& c) {
         y += rh + gap;
     }
     };
-    // A CATEGORY THAT IS A QR CODE: the code at the top of the pane, its
-    // quiet zone drawn by the texture, and the address under it.
-    auto drawQr = [&](const std::string& url, float alpha) {
-        if (qrFor_ != url) {
+    // A CATEGORY WITH A QR CODE (How to's Wiki): its rows as any other
+    // category's (the address is a row's value), then the code centred under
+    // them, a clear gap below the last row, as large as reaches the bottom of
+    // the category's own item in the list. The card above anchors it and the
+    // list's item ends level with it. Alone, at the pane's edge or centred,
+    // it floated (MMagTech on the TV, 2026-10-10).
+    auto drawQr = [&](const SettingsCategory& cat, float alpha) {
+        // THE WIKI'S CODE IS MADE ONCE, with the cabinet in it
+        // (tools/make-wiki-qr.py, level H): its address never changes.
+        const bool wiki = cat.qr == wikiqr::kUrl;
+        if (qrFor_ != cat.qr) {
             std::string err;
-            const qr::Code code = qr::encode(url, &err);
-            qr_.set(code);
-            qrFor_ = url;
+            if (wiki) {
+                qr::Code code;
+                code.size = wikiqr::kSize;
+                for (int y = 0; y < wikiqr::kSize; ++y)
+                    for (int x = 0; x < wikiqr::kSize; ++x)
+                        code.modules.push_back(wikiqr::kRows[y][x] == '#' ? 1 : 0);
+                qr_.set(code);
+            } else {
+                qr_.set(qr::encode(cat.qr, &err));
+            }
+            qrFor_ = cat.qr;
         }
+        float below = 0.0f;
+        for (const SettingsRow& r : cat.rows) below += rowHeight(c, r) + gap;
         c.r.setContentAlpha(a * alpha);
-        const float side = 420.0f;
-        if (qr_.valid()) qr_.draw(c.r, px, top, side);
-        std::string shown = url;
-        if (shown.rfind("https://", 0) == 0) shown = shown.substr(8);
-        if (!shown.empty() && shown.back() == '/') shown.pop_back();
-        c.text.draw(c.r, shown, px, top + side + 30.0f + c.text.ascent(ui::TextStyle::Body, c.sc),
-                    ui::TextStyle::Body, ui::palette::kScreenCyan, c.sc);
+        const float qy = top + below + 28.0f;
+        const float itemBottom = top + cat_ * (itemH + design::kSettingsListGap) + itemH;
+        const float side = std::clamp(itemBottom - qy, 360.0f, std::min(pw, 640.0f));
+        const float qx = px + (pw - side) * 0.5f;
+        if (qr_.valid()) qr_.draw(c.r, qx, qy, side);
+        if (wiki && qr_.valid()) {
+            // The patch, as the tool drew it in the preview it checked: white,
+            // the startup screen's purple, then the cabinet.
+            const float m = side / static_cast<float>(wikiqr::kSize + 8);   // 4 quiet each side
+            const float X = qx + (4 + wikiqr::kPatchX) * m, Y = qy + (4 + wikiqr::kPatchY) * m;
+            const float W = wikiqr::kPatchW * m, H = wikiqr::kPatchH * m, t = wikiqr::kTileInset * m;
+            c.r.draw(ui::Rect{X, Y, W, H, wikiqr::kWhiteRadius * m, ui::Color::white(1.0f)});
+            c.r.draw(ui::Rect{X + t, Y + t, W - 2 * t, H - 2 * t, wikiqr::kTileRadius * m,
+                              ui::palette::kBackdropTop});
+            const float ch = (wikiqr::kPatchH - wikiqr::kCabinetShort) * m;
+            setup::drawCabinetIcon(c.r, X + (W - ch * 527.0f / 720.0f) * 0.5f,
+                                   Y + wikiqr::kCabinetTop * m, ch, alpha);
+        }
     };
     auto drawPane = [&](int ci, float alpha, int focusRow, float scrollY) {
-        if (!cats_[ci].qr.empty()) drawQr(cats_[ci].qr, alpha);
-        else drawRows(cats_[ci].rows, alpha, focusRow, scrollY);
+        drawRows(cats_[ci].rows, alpha, focusRow, scrollY);
+        if (!cats_[ci].qr.empty()) drawQr(cats_[ci], alpha);
     };
     const float pa = paneChange_.value();
     if (pa < 1.0f && prevCat_ >= 0 && prevCat_ < static_cast<int>(cats_.size()) &&

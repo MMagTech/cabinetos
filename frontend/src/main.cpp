@@ -99,6 +99,7 @@
 #include "prefs.h"
 #include "remoteplay.h"
 #include "report.h"
+#include "wikiqr.h"
 #include "tailscale.h"
 #include "optcheck.h"
 #include "quality.h"
@@ -8816,7 +8817,7 @@ int main(int argc, char** argv) {
     // on and the rest are greyed; both sticks in opens the pause menu either
     // way. The button named is the one set for the pad in hand.
     std::function<void()> openHowTo;
-    constexpr const char* kWikiUrl = "https://mmagtech.github.io/cabinetos/wiki/";
+    constexpr const char* kWikiUrl = wikiqr::kUrl;
     // Settings > Display and Sound > Dark hours: From and Until, and the hours
     // of each. Set where it is opened; it reopens itself after an hour is set.
     std::function<void(int)> darkHoursPanel;
@@ -8930,7 +8931,12 @@ int main(int argc, char** argv) {
                         {line("Pair a controller", "Settings, Controllers, Add a controller"),
                          line("Pair a Wii Remote", "The red sync button, under the battery cover")}});
         cats.push_back({"Drives", {line("Unplug", "Eject it first, in Settings, Storage")}});
-        cats.push_back({"Wiki", {}, kWikiUrl});
+        {
+            std::string shown = kWikiUrl;
+            shown = shown.substr(shown.find("//") + 2);
+            if (!shown.empty() && shown.back() == '/') shown.pop_back();
+            cats.push_back({"Wiki", {line("Address", shown)}, kWikiUrl});
+        }
         howToScreen.setCategories(std::move(cats));
         howToScreen.enter();
         stack.push_back(Screen::HowTo);
