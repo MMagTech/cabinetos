@@ -4,7 +4,7 @@
 # find the cause of a fault, and that is safe to attach to a public GitHub
 # issue.
 #
-# WHO RUNS IT. The console, from Settings > System > Create diagnostic report
+# WHO RUNS IT. The console, from Settings > System > Diagnostic report
 # (the frontend runs this, then serves the file to a phone while the screen is
 # open); and anybody with Developer access, as `cabinetos-report`, for a
 # console whose screen does not come up properly. Same file either way.

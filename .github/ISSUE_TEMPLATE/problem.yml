@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Make a diagnostic report first: Settings, System, **Create diagnostic report**, then scan the code with your phone (or copy it from File access, `reports`). Private details are already replaced in it.
+        Make a diagnostic report first: Settings, System, **Diagnostic report**, then scan the code with your phone (or copy it from File access, `reports`). Private details are already replaced in it.
   - type: textarea
     id: report
     attributes:

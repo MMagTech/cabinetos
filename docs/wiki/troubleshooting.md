@@ -54,7 +54,7 @@ The system's name in a message is RomM's name for the platform.
 
 ## Reporting a problem
 
-1. Settings, **System**, **Create diagnostic report**. Scan the code with a
+1. Settings, **System**, **Diagnostic report**. Scan the code with a
    phone on the same network to download the report, or type the address
    shown under it into a computer. It is also in
    [File access](file-access.md), under `reports`.

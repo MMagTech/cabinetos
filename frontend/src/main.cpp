@@ -10192,7 +10192,7 @@ int main(int argc, char** argv) {
             sys.push_back({K::Action, SetSteamShow, "Steam", "", "Hidden"});
         // THE DIAGNOSTIC REPORT (#195): one row, the screen it opens says the
         // rest. No PIN: it changes nothing, and nothing private is in it.
-        sys.push_back({K::Action, SetReport, "Create diagnostic report", "", ""});
+        sys.push_back({K::Action, SetReport, "Diagnostic report", "", ""});
         cats.push_back({"System", std::move(sys)});
 
         // VERSION: the date version, with Bazzite's under it. A console that
