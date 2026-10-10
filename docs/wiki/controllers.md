@@ -14,7 +14,7 @@ Wii Remotes have their own pairing, below.
 
 ## Pair a Bluetooth controller
 
-1. Settings, Controllers, **Add a controller**.
+1. Settings, Controllers, **Controllers**, **Add a controller**.
 2. Put the controller into pairing mode (see its manual).
 3. Its name appears in the list. Press **A** on it. *Paired successfully. Press
    a button on it.*
@@ -28,7 +28,8 @@ Up to **four players**. Each controller takes the next free number as it
 connects. In a game, a controller that switches off keeps its place (and the
 game pauses until any pad resumes it).
 
-Press a controller's row in Settings, Controllers for:
+Settings, Controllers, **Controllers** lists each controller with its player.
+Press one for:
 
 - **Make player N**: swap numbers (not during a game).
 - **Forget**: unpair a Bluetooth controller.

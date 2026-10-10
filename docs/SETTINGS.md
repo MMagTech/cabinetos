@@ -132,10 +132,16 @@ Decided with MMagTech 2026-09-26, from the things people will actually do.
   is still on, and gets it back when it returns (known by its serial, the
   Bluetooth address). **If every pad goes off, the first one back is player
   1.** Leaving the game closes up any number still held.
-- **One row per controller: its name, with "Player 1" as the value**, the
+- **One row, "Controllers", "3 connected" (or "None"), opening a panel**,
+  as Wii Remotes does (MMagTech on the TV, 2026-10-10: three pads, a row
+  each, filled the page and a fourth pushed Rumble and the shortcuts off
+  it). The panel: **a row per controller, its name with "Player 1" as the
+  value**, then **Add a controller**. It follows pads connecting, going and
+  swapping while open, and every question in it goes back to it. The rows,
+  as when they were on the page: the
   shape of every other setting. (Built first as "Player 1" over the name;
   MMagTech: nothing said the number could be changed.) **The pad last
-  pressed has a steady dot before its "Player N"**: that is how two
+  pressed has a dot before its "Player N"**: that is how two
   identical pads are told apart. (A flash on every press was tried first; it
   strobed while navigating and read as a bug.) Pads with player lights show
   their number on the pad.
@@ -143,10 +149,10 @@ Decided with MMagTech 2026-09-26, from the things people will actually do.
   "Nintendo Switch Pro Controller", and that is right: it is in Switch mode.
   (Naming pads after their maker, from the Bluetooth address, was built and
   taken back out the same day; MMagTech preferred what the pad says.)
-- **Pressing a row: "Make player N"** for each other pad (the two swap; a
+- **Pressing a pad in the panel: "Make player N"** for each other pad (the two swap; a
   preferred pad keeps its number while both stay on) **and Forget** for a
   Bluetooth pad, with "Forget <name>?" and Cancel focused. No PIN. A lone
-  wired pad has nothing to press, so its row only shows.
+  wired pad has nothing to press.
 - **Add a controller** (#65): **a window over Settings, like Wi-Fi's**, no
   PIN. (First run's full pairing screen was built for it first and
   compared: it felt like leaving Settings. First run keeps that screen.)
@@ -889,6 +895,21 @@ from (#286). Decided with MMagTech on the A9, 2026-10-07, and Tailscale
   not a control. Read without root: the version file, Bazzite's
   `/usr/share/ublue-os/image-info.json`, and the booted deployment's
   `.origin`. **Built, #72.** MMagTech, 2026-09-25.
+- **How to** (#314, built 2026-10-10, judged on the TV): the controls, in
+  Settings' own shape, a section per row on the left and its lines as rows
+  on the right, nothing to press. In a game (pause menu by both sticks, a
+  Wii Remote's HOME, Remote Play's Select; leaving; the Power menu),
+  Shortcuts (always shown; off, the first line says where to turn them on
+  and the rest are greyed; the button named is the one set for the pad in
+  hand), Menus, Steam (Switch to Steam; back by Steam's Switch to Desktop),
+  Controllers (Add a controller; a Wii Remote's red sync button), Drives
+  (Eject before unplugging), Wiki (the address as a row, and under it a QR
+  code with the cabinet in its middle, made once by tools/make-wiki-qr.py).
+  A one-page version was built first and read as a wall of text. **Every
+  change to the controls changes this and docs/wiki/navigation.md
+  together.** Not on it, on purpose: favourites and save states (found by
+  using them), plugging in a drive and formatting (the console says it on
+  the drive's row), the keyboard and mouse.
 - **Credits and licences: ONE row, not two.** A Credits list and a
   Licences list would name the same projects twice, so it is one list, one
   line per project: its name, what it does, its licence ("Snes9x · SNES ·
