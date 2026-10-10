@@ -99,14 +99,16 @@ screen_lit() {
 
 # WHETHER A DEVICE IS STREAMING NOW, read as the console reads it
 # (remoteplay.cpp, readLog): Sunshine running, and the last of its "CLIENT
-# CONNECTED", "CLIENT DISCONNECTED" and "Process terminated" lines the first
-# ("Process terminated" alone ends a session closed at Sunshine's end). A
-# dropped phone is written as disconnected; a new Sunshine starts a new log, so a Sunshine
+# CONNECTED", "CLIENT DISCONNECTED", "Process terminated" and "Executing Undo
+# Cmd" lines the first. The last two end a session closed at Sunshine's end;
+# the Undo line is the session's end step, written however it ends (the
+# console's idle closed one with only that line, #304). A dropped phone is
+# written as disconnected; a new Sunshine starts a new log, so a Sunshine
 # stopped mid-stream leaves no stale "connected" behind it.
 is_streaming() {
     systemctl is-active --quiet cabinetos-remoteplay.service || return 1
     [ -r "$LOG" ] || return 1
-    [[ "$(grep -a -o -E 'CLIENT (DIS)?CONNECTED|Process terminated' "$LOG" | tail -n 1)" == "CLIENT CONNECTED" ]]
+    [[ "$(grep -a -o -E 'CLIENT (DIS)?CONNECTED|Process terminated|Executing Undo Cmd' "$LOG" | tail -n 1)" == "CLIENT CONNECTED" ]]
 }
 
 case "${1:-}" in

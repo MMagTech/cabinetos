@@ -99,9 +99,15 @@ void readLog() {
         // still counted the phone as there, so the phone joining again was
         // no change: no press counted, and it streamed the console's black
         // layer (A9, 2026-10-09 06:31).
+        // AND "Executing Undo Cmd", the session's end step, which Sunshine
+        // runs however a session ends. The console's idle closed one at
+        // 19:38:57 the same day, Sunshine wrote the Undo line and neither of
+        // the other two, and the console counted a phone for an hour after
+        // it had gone: the TV's controllers stayed set aside (#304).
         if (line.find("CLIENT CONNECTED") != std::string::npos) on = any = true;
         else if (line.find("CLIENT DISCONNECTED") != std::string::npos ||
-                 line.find("Process terminated") != std::string::npos)
+                 line.find("Process terminated") != std::string::npos ||
+                 line.find("Executing Undo Cmd") != std::string::npos)
             on = false, any = true;
     }
     if (any && on != gStreaming) {
