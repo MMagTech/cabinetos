@@ -23,8 +23,10 @@ release yet: keep our patch until a release has it (#304).
 Milestone 7, Ready to ship (docs/ROADMAP.md), in this order.
 
 1. **A diagnostic report (#195).**
-2. **Licences checked and the full texts shipped (#120).**
-3. **At the first release (#308):** the installer on a GitHub Release, and the
+2. **About: a How to page (#314),** a mini manual for the controls; the
+   sections in the issue are a starting point for MMagTech to adjust.
+3. **Licences checked and the full texts shipped (#120).**
+4. **At the first release (#308):** the installer on a GitHub Release, and the
    page, wiki and README pointing at it. Try the installer's
    `--enforce-container-sigpolicy` in `tools/installer-vm.sh` before that ISO.
 
