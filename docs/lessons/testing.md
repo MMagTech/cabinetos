@@ -295,6 +295,15 @@ minute and guessing at it for twenty.
   `covers/<that address>` to `covers/192.168.1.10_6005` for the test and
   remove the link after.
 
+- **A server layout nobody has is tested through `tools/romm-readonly-relay.py`,
+  never by changing RomM.** It forwards reads only (any write gets 403 and is
+  logged) and can show a platform under another folder name:
+  `romm-readonly-relay.py 16006 45=arcade:Arcade`, then
+  `CABINETOS_ROMM=127.0.0.1:16006` headless with a scratch `--storage-root`
+  (copy `config/*.json`, and write `[]` to its `drives.json`, or downloads go
+  to the real games drive). #310 was tested this way, 2026-10-10: a launch
+  tried to upload Paperboy's NVRAM and the relay refused it.
+
 - **Reading a game with `GET /api/roms/<id>` makes RomM create that person's
   empty `rom_user` row**, which moves its `updated_at`. Harmless, but do not
   read it as something the console sent.
