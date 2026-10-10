@@ -13,7 +13,8 @@ and keys. CabinetOS ships none of them.
   Search and in collections.
 - **A tile whose emulator is still being set up is greyed**, with *Emulator not
   installed*. Eden (Switch) and xemu (Xbox) come from Flathub on the first boot
-  with a network, so they can take a few minutes to appear.
+  with internet, so they can take a few minutes to appear. RomM on your own
+  network is not enough for these two.
 
 ## How BIOS, firmware and keys reach the console
 

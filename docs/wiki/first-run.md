@@ -63,6 +63,9 @@ already paired, completes the step by itself.
 
 *You can unplug the keyboard.* Press **Start playing** and you are on Home.
 
+Switch and Xbox games show greyed, *Emulator not installed*, for a few
+minutes: the console downloads those two emulators once it has internet.
+
 If the console was set up before and signed out (Settings, Network, RomM
 server, Sign out), it starts again at the server step.
 
