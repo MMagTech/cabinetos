@@ -13,33 +13,36 @@ specification is `docs/PROJECT.md`; the order is `docs/ROADMAP.md`.
 
 **2026-10-10: CabinetOS 2026.10.10 is released**, the first release
 (https://github.com/MMagTech/cabinetos/releases/latest). The installer is one
-file at **https://download.mmagtech.com/cabinetos.iso** (Cloudflare R2,
-MMagTech's account; GitHub takes at most 2 GB per release file and the ISO is
-6.66 GB). **Build disk images** with *publish* ticked builds the ISO and
-replaces that file, with its SHA-256 beside it; the release page links it.
-The site and wiki are at **https://cabinetos.mmagtech.com** (GitHub Pages,
-custom domain; the old github.io addresses redirect). Shipped today: the
-diagnostic report (#195), How to (#314), Controllers as one row, licences
-checked and the full texts in the image (#120). The A9 (Wi-Fi,
+file at **https://download.mmagtech.com/cabinetos.iso** (Cloudflare R2). The
+site and wiki are at **https://cabinetos.mmagtech.com**. The A9 (Wi-Fi,
 **192.168.1.109**, `CABINETOS_A9=cabinet@192.168.1.109`) runs `testing`
-2026.10.10.9, the released image, signed.
+2026.10.10.10, the testing image of #328, signed.
 
 ## Next
 
-1. **#318, one controller seated twice: the two-minute test first**, with
-   MMagTech at the TV (lessons: testing.md). Only the Xbox pad on. Start a
-   SNES game, read `[players]` in the journal for a second pad with the same
-   Bluetooth address, quit; then the same with a PS2 game. Only PS2: the fix
-   is in the PS2 start path. Both: SDL's Xbox HIDAPI driver at game start;
-   talk through what a setting change touches before choosing. Neither: keep
-   the workaround (on the troubleshooting page). **No guard that touches every
-   controller** without his go: he was wary of it.
-2. **#268, booting with the TV off.** Ready to ship, left over.
+1. **#328, waiting for MMagTech's merge go** (closes #318). Controller
+   drivers load at boot; Bluetooth LE pads (Series X|S) pair; the base
+   report lists a new kernel series' controller-driver changes. Checked on
+   the A9 from the log (on the PR). He has not said whether he wants TV
+   checks. After the merge: take the #318 line out of the release page's
+   Known issues, and delete the branch on his go.
+2. **#268, booting with no display answering: built, not tested.** Branch
+   `wait-for-display` (pushed, no PR, not on `testing`): the session waits
+   for a display's answer instead of guessing 1920x1080. Measured: a
+   running console survives TV off, on and a 31 s unplug; the C1 in standby
+   still answers; only a start with nothing answering is stuck at 1080p
+   (no cage any more). **Agreed with MMagTech: test first without an image**
+   (lessons: testing.md): he unplugs the HDMI; a transient drop-in in
+   `/run/systemd/system/cabinetos-session.service.d/` points `ExecStart` at
+   `~/cabinetos-session-dev` (already copied to the A9); restart the session;
+   expect "no display answers yet; waiting for one"; he plugs in; expect
+   "a display answered" and "output 3840x2160 (from the display)"; remove
+   the drop-in and restart. Tell him every step first and wait for "go".
+   Then a PR and a testing image, the same test with a full restart.
 
-Then MMagTech picks from After first release. Ideas he raised, not filed:
-Switch gyro (only if enough games use motion: count them first) and 3DS (only
-if a stable libretro core exists; check Azahar). **Wii stays Wii Remotes
-only** (MMagTech, 2026-10-10).
+Filed, waiting its turn: #329, release notes for every update (open for
+discussion; QR code on the update prompt suggested). Eden stays on Flathub:
+the project never distributes a Switch emulator (PROJECT.md, 21).
 
 **After a console is installed fresh** it has no key: About, press Version
 seven times, Developer access, PIN; then from the Mac, with the password on
