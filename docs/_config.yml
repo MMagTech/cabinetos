@@ -10,8 +10,10 @@
 
 title: CabinetOS
 description: A games console for your TV, with your library on your own RomM server.
-url: https://mmagtech.github.io
-baseurl: /cabinetos
+# Served at MMagTech's own domain since 2026-10-10 (docs/CNAME), at its top
+# level: no base path. mmagtech.github.io/cabinetos redirects here.
+url: https://cabinetos.mmagtech.com
+baseurl: ""
 repository: MMagTech/cabinetos
 
 markdown: kramdown
