@@ -11,33 +11,22 @@ specification is `docs/PROJECT.md`; the order is `docs/ROADMAP.md`.
 
 ## Where things stand
 
-2026-10-10: images are signed. `testing` is 2026.10.10.3, the first signed
-build, from `signed-images` (#311, open; measurements on #135). The A9 (Wi-Fi,
-**192.168.1.109**, `CABINETOS_A9=cabinet@192.168.1.109`) still runs
-2026.10.09.5, unsigned and unchecked. #310 is built on `arcade-folders` (#312,
-open, NOT on `testing`). LizardByte/Sunshine#5885 is approved by a maintainer
-with no comments; its one red check (Homebrew on Ubuntu) fails on Sunshine's
-master too.
+2026-10-10: updates are signed and checked (#311 merged, #135). The A9 (Wi-Fi,
+**192.168.1.109**, `CABINETOS_A9=cabinet@192.168.1.109`) is switched to
+`ostree-image-signed` and took 2026.10.10.4 through the check from System
+update. LizardByte/Sunshine#5885 is merged upstream (`3411311a`) but in no
+release yet: keep our patch until a release has it (#304).
+Arcade folders (#310) is #312: if it is still open, finish it first (its TV
+checks are on the pull request).
 
 ## Next
 
-Milestone 7, Ready to ship (docs/ROADMAP.md), in this order. Lessons file:
-image-and-ci.md.
+Milestone 7, Ready to ship (docs/ROADMAP.md), in this order.
 
-1. **Signed images (#311).** MMagTech: System update to 2026.10.10.3 (PIN),
-   restart, then once `sudo bootc switch --enforce-container-sigpolicy
-   ghcr.io/mmagtech/cabinetos:testing` and reboot. `rpm-ostree status` must
-   show `ostree-image-signed:docker://...`. Then a couple of updates from
-   System update, then he merges #311.
-2. **Arcade folders (#312).** After #311 is merged: rebase on main, push to
-   `testing` (plain fast-forward). `cores/arcade-sets.sh` runs in CI for the
-   first time there (a pull request run builds no cores); check the core job
-   logs "8310 sets" and "5275 sets" and the image build logs both lists.
-   Then his TV checks, listed on #312.
-3. **A diagnostic report (#195).**
-4. **Licences checked and the full texts shipped (#120).**
-5. **At the first release (#308):** the installer on a GitHub Release, and the
-   page, wiki and README pointing at it. Try the installer's new
+1. **A diagnostic report (#195).**
+2. **Licences checked and the full texts shipped (#120).**
+3. **At the first release (#308):** the installer on a GitHub Release, and the
+   page, wiki and README pointing at it. Try the installer's
    `--enforce-container-sigpolicy` in `tools/installer-vm.sh` before that ISO.
 
 Also in the milestone: booting with the TV off (#268). After first release:
