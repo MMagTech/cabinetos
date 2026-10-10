@@ -27,9 +27,19 @@ is his to enter; never sudo over SSH).
 Milestone 7, Ready to ship (docs/ROADMAP.md), in this order. Lessons file:
 image-and-ci.md.
 
-1. **Signed images (#135).** First because a mistake breaks every console's
-   updates, so it needs several image updates on the A9 to prove itself.
-   Signing comes before any release ISO (MMagTech, 2026-10-09).
+1. **Signed images (#135), started 2026-10-09 on branch `signed-images`**
+   (pushed, NOT yet on `testing`). Done: MMagTech made the key pair; the
+   secret half is the `SIGNING_SECRET` repository secret (set 23:16) and his
+   password manager; the public half is in the branch at
+   `system_files/etc/pki/containers/cabinetos.pub`. The branch adds the
+   policy.json rule (`build_files/require-signed-updates.sh`, dry-run on the
+   A9 passed), registries.d, `--enforce-container-sigpolicy` in the
+   installer, and "Not signed by CabinetOS" as an update failure reason. He
+   is the only user: no migration code, his A9 switches once by a command he
+   types (sudo is his). Next: push to `testing` (the first signed build),
+   check the policy with skopeo in a container (signed tag accepted, an old
+   unsigned digest refused), then he updates and runs the one switch, then a
+   few updates to prove it. Signing comes before any release ISO.
 2. **Arcade games in any RomM arcade folder (#310).** Today only folders
    named exactly `FBNEO` or `MAME2003` show. His own setup (`FBNEO` named
    "Arcade", `MAME2003` named "Lightgun" in RomM) must keep working.
