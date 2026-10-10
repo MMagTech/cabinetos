@@ -107,6 +107,10 @@ void showWaiting(const Deps& d, const char* title, const char* detail);
 // it comes back on.
 // `hint`, if given, is a second line under it, brighter: something a person
 // can do ("Press (A) to change the server address").
+// The CabinetOS cabinet, the startup screen's icon, with its top-left at x,y
+// and `h` tall (its width is h * 527 / 720). How to's wiki code carries it.
+void drawCabinetIcon(ui::Renderer& r, float x, float y, float h, float a);
+
 void drawStartup(ui::Renderer& r, ui::TextRenderer& t, const char* detail, float alpha,
                  const char* hint = nullptr);
 

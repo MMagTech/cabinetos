@@ -2027,6 +2027,12 @@ static void drawCabinet(ui::Renderer& r, float ox, float oy, float s, float a) {
     R(303, 795, 419, 55, 14, panel);
 }
 
+void drawCabinetIcon(ui::Renderer& r, float x, float y, float h, float a) {
+    // The cabinet spans x 248..775 and y 130..850 of its own 1024 space.
+    const float s = h / 720.0f;
+    drawCabinet(r, x - 248.0f * s, y - 130.0f * s, s, a);
+}
+
 void drawStartup(ui::Renderer& r, ui::TextRenderer& t, const char* detail, float alpha,
                  const char* hint) {
     const float sc = r.scale();

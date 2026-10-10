@@ -16558,3 +16558,34 @@ which the console's own Format makes, is unreadable on Windows and Mac).
 small drive, and keeps 15% free); the A9's was 1.4 GB after three weeks and
 about ninety boots. Emulator logs are one file each, replaced every run
 (260 KB in all); reports keep five.
+
+### 42. How to, in About, issue #314
+
+**Decided with MMagTech on the TV, 2026-10-10.** SETTINGS.md, About, has
+what it shows; this is why.
+
+- **What is on it** is what somebody at the TV gets stuck on with a pad in
+  hand: leaving a game, the pause menu (three ways), shortcuts, menus,
+  switching person, Steam (it is only in the Power menu, and the way back is
+  Steam's own "Switch to Desktop"), pairing (a Bluetooth pad, a Wii Remote's
+  red sync button), ejecting a drive. Left off: what the console says where
+  it matters (a drive it cannot use, Format's ext4), and what is found by
+  using it (favourites, save states).
+- **Shortcuts are always shown**, greyed while off with where to turn them
+  on: hidden, nobody learns they exist (MMagTech).
+- **Settings' shape, not a page.** One page of headings and lines was built
+  first: "it kind of looks hideous". The sections as Settings' categories
+  look like the rest of the console.
+- **The wiki's code carries the cabinet.** The address never changes, so the
+  code is made once by `tools/make-wiki-qr.py` (segno, level H) and stored
+  as data; the console's own encoder, used for pairing, Tailscale and the
+  diagnostic report, is untouched. The tile is 14% of the code: grown in
+  steps and decoded by OpenCV's two readers at TV-photo sizes, 7, 10 and 14%
+  read as well as a plain level-H code, 19% lost a reader at two sizes, 24%
+  read at none. A plain level-H code is denser than level M's (37 modules
+  against 29) and both fail under about 140 px in the photo; the code is
+  half the screen's height on any TV, so that is a 32-inch screen from
+  across a room. The address is a row above it, to type instead.
+- **With it: Controllers became one row** opening a panel (three pads filled
+  the page), and **Developer access moved last in About** (the everyday rows
+  never move when it shows; it still appears in view).

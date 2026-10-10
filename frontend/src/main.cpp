@@ -99,6 +99,7 @@
 #include "prefs.h"
 #include "remoteplay.h"
 #include "report.h"
+#include "wikiqr.h"
 #include "tailscale.h"
 #include "optcheck.h"
 #include "quality.h"
@@ -7129,7 +7130,7 @@ int main(int argc, char** argv) {
     // is what makes quitting a game return to the launch screen and backing out
     // again return to the browsing.
     enum class Screen { Home, Library, Grid, Detail, Search, AddAccount, TailscaleSignIn, Report,
-                        Settings };
+                        HowTo, Settings };
     std::vector<Screen> stack{Screen::Home};
     // Which screen last set the room, so a change of screen can be told apart
     // from focus moving within one. See the backdrop block in the frame loop.
@@ -7158,6 +7159,11 @@ int main(int argc, char** argv) {
     // THE DIAGNOSTIC REPORT (#195): the same screen again, the link this time
     // a download of the report. Its lines are set when it is made.
     screens::AddAccountScreen reportScreen;
+    // ABOUT, HOW TO (#314): the controls, in Settings' own shape (a section
+    // per row on the left, its lines on the right), so it looks like the
+    // console rather than a page of text (MMagTech on the TV, 2026-10-10).
+    // Its Wiki is a QR code in the pane, shown on landing.
+    screens::SettingsScreen howToScreen;
     screens::SettingsScreen settingsScreen;
     // What the docked keyboard held last frame, so the query is re-run when it
     // changes and not sixty times a second when it does not.
@@ -8804,6 +8810,14 @@ int main(int argc, char** argv) {
         choiceBack = nullptr;
         choiceScreen.open(title, detail, std::move(options), focus);
     };
+    // ABOUT, HOW TO (#314). The words live here, next to the controls they
+    // describe; docs/wiki/navigation.md says the same and changes with them.
+    // THE SHORTCUTS ARE ALWAYS SHOWN: hidden while off, nobody would learn
+    // they exist. Off (the default), the first line says where to turn them
+    // on and the rest are greyed; both sticks in opens the pause menu either
+    // way. The button named is the one set for the pad in hand.
+    std::function<void()> openHowTo;
+    constexpr const char* kWikiUrl = wikiqr::kUrl;
     // Settings > Display and Sound > Dark hours: From and Until, and the hours
     // of each. Set where it is opened; it reopens itself after an hour is set.
     std::function<void(int)> darkHoursPanel;
@@ -8856,7 +8870,7 @@ int main(int argc, char** argv) {
                      SetDarkHours, SetColour, SetRumble, SetPictureQuality,
                      SetWiiRemotes, SetSteam, SetSteamShow, SetRetroAchievements,
                      SetAchievementSound, SetDeveloper, SetVersion, SetRemotePlay,
-                     SetPairedDevices, SetTailscale, SetReport };
+                     SetPairedDevices, SetTailscale, SetReport, SetHowTo, SetPads };
     // One Eject row per USB drive: this plus the drive's index in
     // storage::locations() when the rows were built.
     constexpr int kSetEject = 100;
@@ -8873,6 +8887,60 @@ int main(int argc, char** argv) {
     // The pad last pressed in Settings, whose row has the dot. Kept as the
     // pad, not its row: a swap moves it to another row.
     SDL_JoystickID settingsLastPad = 0;
+    openHowTo = [&]() {
+        using K = screens::SettingsRow::Kind;
+        std::string button = "Home";
+        if (SDL_Gamepad* gp = settingsLastPad ? SDL_GetGamepadFromID(settingsLastPad) : nullptr) {
+            const std::string l = shortcuts::label(gp);
+            if (!l.empty() && l != "Not set") button = l;
+        }
+        const bool on = shortcuts::enabled();
+        auto line = [](const char* what, std::string how, K k = K::Info) {
+            return screens::SettingsRow{k, 0, what, "", std::move(how)};
+        };
+        std::vector<screens::SettingsCategory> cats;
+        cats.push_back({"In a game",
+                        {line("Pause menu", "Both sticks in (L3 + R3)"),
+                         line("Pause menu, Wii Remote", "Hold HOME"),
+                         line("Pause menu, Remote Play", "Hold Select"),
+                         line("Leave a game", "Pause menu, Exit to Home"),
+                         line("Power menu", "The PC's power button")}});
+        {
+            std::vector<screens::SettingsRow> rows;
+            if (!on) rows.push_back(line("Turn on", "Settings, Controllers, In-game shortcuts"));
+            const K k = on ? K::Info : K::Disabled;
+            rows.push_back(line("Pause menu", "Tap " + button, k));
+            rows.push_back(line("Save state", button + " + R1", k));
+            rows.push_back(line("Load state", button + " + L1", k));
+            rows.push_back(line("Fast forward", button + " + R2", k));
+            rows.push_back(line("Rewind", button + " + L2", k));
+            rows.push_back(line("Screenshot", button + " + X", k));
+            cats.push_back({"Shortcuts", std::move(rows)});
+        }
+        cats.push_back({"Menus",
+                        {line("Select", "A"),
+                         line("Back", "B"),
+                         line("Change screen", "L1 / R1"),
+                         line("Jump a letter", "L2 / R2"),
+                         line("Power menu", "Start, on Home"),
+                         line("Switch person", "Up to the top bar, A on your name")}});
+        cats.push_back({"Steam",
+                        {line("Open", "Power menu, Switch to Steam"),
+                         line("Come back", "Steam's Power menu, Switch to Desktop")}});
+        cats.push_back({"Controllers",
+                        {line("Pair a controller", "Settings, Controllers, Add a controller"),
+                         line("Pair a Wii Remote", "The red sync button, under the battery cover")}});
+        cats.push_back({"Drives", {line("Unplug", "Eject it first, in Settings, Storage")}});
+        {
+            std::string shown = kWikiUrl;
+            shown = shown.substr(shown.find("//") + 2);
+            if (!shown.empty() && shown.back() == '/') shown.pop_back();
+            cats.push_back({"Wiki", {line("Address", shown)}, kWikiUrl});
+        }
+        howToScreen.setCategories(std::move(cats));
+        howToScreen.enter();
+        stack.push_back(Screen::HowTo);
+    };
     // THE SHORTCUT BUTTON ROW IS LISTENING for this pad's next press, 0 when
     // not (shortcuts.h). And the press it took, so the gamepad event SDL sends
     // for that same press (same timestamp) goes no further: a B that cancels
@@ -9217,6 +9285,9 @@ int main(int argc, char** argv) {
     };
     PadWindow padWin;
     bool padWindowOpen = false;
+    // Opened from the Controllers panel: closing it goes back there, as Pair
+    // a Wii Remote goes back to the Wii Remotes panel.
+    bool padWindowFromPanel = false;
     std::vector<SDL_JoystickID> padWindowBefore;   // pads here when it opened
     std::vector<bt::Device> padShown;              // the rows, in order
     std::string padPairingName;                    // "" when not pairing
@@ -9498,6 +9569,99 @@ int main(int argc, char** argv) {
         wiiValuesShown = values;
     };
     auto openWiiPanel = [&]() { openWiiPanelAt(0); };
+
+    // ---- The Controllers panel ----------------------------------------------
+    //
+    // A ROW PER PAD, its name and its player ("• Player 1" on the pad last
+    // pressed, which is how two identical pads are told apart), then Add a
+    // controller. Pressing a pad gives it another number (the two swap) or
+    // forgets a Bluetooth pad; a lone wired pad has neither. After either,
+    // back to this panel, on the same pad.
+    std::vector<players::Pad> padsShown;
+    bool padsPanelSeenOpen = false;
+    int padsPanelGen = -1;
+    SDL_JoystickID padsPanelHand = 0;
+    auto padsPanelRows = [&](std::vector<std::string>* names, std::vector<std::string>* values) {
+        padsShown = players::connected();
+        for (const players::Pad& p : padsShown) {
+            names->push_back(p.name);
+            values->push_back(std::string(p.id == settingsLastPad ? "\xE2\x80\xA2 " : "") +
+                              "Player " + std::to_string(p.player + 1));
+        }
+        names->push_back("Add a controller");
+        values->push_back("");
+        padsPanelGen = players::generation();
+        padsPanelHand = settingsLastPad;
+    };
+    std::function<void(int)> openPadsPanelAt;
+    openPadsPanelAt = [&](int focus) {
+        std::vector<std::string> names, values;
+        padsPanelRows(&names, &values);
+        const int addAt = static_cast<int>(padsShown.size());
+        askChoice("Controllers", "", names, std::clamp(focus, 0, addAt), [&](int i) {
+            const int add = static_cast<int>(padsShown.size());
+            if (i == add) {
+                choiceScreen.close();
+                padsPanelSeenOpen = false;
+                openPadWindow();
+                padWindowFromPanel = true;
+                return;
+            }
+            if (i < 0 || i >= add) return;
+            const players::Pad pad = padsShown[static_cast<size_t>(i)];
+            const int me = pad.player;
+            std::vector<std::string> opts;
+            std::vector<int> numbers;
+            for (const players::Pad& o : padsShown)
+                if (o.player != me) {
+                    opts.push_back("Make player " + std::to_string(o.player + 1));
+                    numbers.push_back(o.player);
+                }
+            const bool canForget = !pad.address.empty();
+            if (numbers.empty() && !canForget) {   // a lone wired pad
+                sound::play(sound::Cue::Edge);
+                return;
+            }
+            if (canForget) opts.push_back("Forget");
+            opts.push_back("Cancel");
+            sound::play(sound::Cue::Activate);
+            askChoice(pad.name, "Player " + std::to_string(me + 1), opts, 0,
+                      [&, me, numbers, canForget, pad, i](int k) {
+                if (k >= 0 && k < static_cast<int>(numbers.size())) {
+                    players::swap(me, numbers[k]);
+                    if (rebuildSettingsRows) rebuildSettingsRows();
+                    openPadsPanelAt(i);
+                    return;
+                }
+                if (!canForget || k != static_cast<int>(numbers.size())) {
+                    openPadsPanelAt(i);
+                    return;
+                }
+                // Back from a question goes back to the panel, as its own
+                // Cancel does.
+                askChoice("Forget " + pad.name + "?", "", {"Forget", "Cancel"}, 1,
+                          [&, pad, i](int j) {
+                    if (j == 0) {
+                        std::string err;
+                        if (bt::forget(pad.address, &err))
+                            std::fprintf(stderr, "[players] forgot %s\n", pad.address.c_str());
+                        else {
+                            std::fprintf(stderr, "[players] could not forget %s: %s\n",
+                                         pad.address.c_str(), err.c_str());
+                            menuNotice.say("Couldn't forget " + pad.name, Tone::Problem);
+                        }
+                        if (rebuildSettingsRows) rebuildSettingsRows();
+                    }
+                    openPadsPanelAt(i);
+                });
+                choiceBack = [&, i]() { openPadsPanelAt(i); };
+            });
+            choiceBack = [&, i]() { openPadsPanelAt(i); };
+        });
+        choiceScreen.setValues(values);
+        choiceScreen.setStaysOpen(true);
+        padsPanelSeenOpen = true;
+    };
 
     auto askWifi = [&settingsWifi]() {
         if (settingsWifi.running.load()) return;
@@ -9835,25 +9999,18 @@ int main(int argc, char** argv) {
                             ra::signedIn() ? ra::username() : "Sign in"});
         }
 
-        // ONE ROW PER CONTROLLER: its name, and its player as the value, the
-        // shape of every other setting, so it reads as something that can be
-        // changed. It was "Player 1" over the name for one build, and
-        // MMagTech: nothing said the number could change. A button pressed on
-        // a pad lights its row, which is how two identical pads are told
-        // apart. Pressing a row gives that pad another number (the two swap)
-        // or forgets a Bluetooth pad; a lone wired pad has neither, so its
-        // row only shows. players.h, issue #64.
+        // THE CONTROLLERS: ONE ROW, opening a panel of its own, as Wii
+        // Remotes do (MMagTech on the TV, 2026-10-10: three pads, one row
+        // each, filled the page and a fourth would push Rumble and the
+        // shortcuts off it; one screen per section, as for the Remotes). The
+        // panel has a row per pad, its player as the value, and Add a
+        // controller. openPadsPanelAt. players.h, issue #64.
         {
             std::vector<Row> rows;
             const std::vector<players::Pad> pads = players::connected();
             settingsPadsSeen = players::generation();
-            if (pads.empty()) rows.push_back({K::Info, 0, "No controllers", "", ""});
-            for (const players::Pad& p : pads) {
-                const bool canAct = pads.size() > 1 || !p.address.empty();
-                rows.push_back({canAct ? K::Action : K::Info, kSetPad + p.player, p.name, "",
-                                "Player " + std::to_string(p.player + 1)});
-            }
-            rows.push_back({K::Action, SetAddController, "Add a controller", "", ""});
+            rows.push_back({K::Action, SetPads, "Controllers", "",
+                            pads.empty() ? "None" : std::to_string(pads.size()) + " connected"});
             // REAL WII REMOTES (#200, PROJECT.md question 35): pair one once,
             // as on a Wii, and the Wii games made for it play. ONE ROW, opening
             // a panel of its own (the paired Remotes, Pair a Wii Remote, the
@@ -10211,9 +10368,13 @@ int main(int argc, char** argv) {
                                    base.empty() ? "" : "Bazzite " + base, version};
             v.pressable = true;
             about.push_back(v);
+            about.push_back({K::Action, SetHowTo, "How to", "", ""});
+            about.push_back({K::Action, SetCredits, "Credits and licenses", "", ""});
             // DEVELOPER ACCESS: one row, as File access; everything a computer
             // needs is in the panel it opens. Port 2222, the full command
-            // line. Under Version, where pressing seven times shows it.
+            // line. LAST, under Credits (MMagTech, 2026-10-10): About is short
+            // enough that it still appears in view on the seventh press of
+            // Version, and the everyday rows never move when it shows.
             if (devShown) {
                 std::string value = devState == "active" ? "On" : "Off";
                 std::string detail = "SSH";
@@ -10221,7 +10382,6 @@ int main(int argc, char** argv) {
                 else if (!devFailed.empty()) detail = devFailed;
                 about.push_back({K::Toggle, SetDeveloper, "Developer access", detail, value});
             }
-            about.push_back({K::Action, SetCredits, "Credits and licenses", "", ""});
             cats.push_back({"About", std::move(about)});
         }
 
@@ -11170,45 +11330,8 @@ int main(int argc, char** argv) {
                 sound::play(sound::Cue::Activate);
                 break;
             case screens::Action::Setting:
-                if (res.value >= kSetPad && res.value < kSetPad + players::kMax) {
-                    const int me = res.value - kSetPad;
-                    const std::vector<players::Pad> pads = players::connected();
-                    auto mine = std::find_if(pads.begin(), pads.end(),
-                                             [&](const players::Pad& p) { return p.player == me; });
-                    if (mine == pads.end()) break;
-                    const players::Pad pad = *mine;
-                    std::vector<std::string> opts;
-                    std::vector<int> numbers;
-                    for (const players::Pad& o : pads)
-                        if (o.player != me) {
-                            opts.push_back("Make player " + std::to_string(o.player + 1));
-                            numbers.push_back(o.player);
-                        }
-                    const bool canForget = !pad.address.empty();
-                    if (canForget) opts.push_back("Forget");
-                    opts.push_back("Cancel");
-                    askChoice(pad.name, "Player " + std::to_string(me + 1), opts, 0,
-                              [&, me, numbers, canForget, pad](int k) {
-                        if (k >= 0 && k < static_cast<int>(numbers.size())) {
-                            players::swap(me, numbers[k]);
-                            buildSettings();
-                            return;
-                        }
-                        if (!canForget || k != static_cast<int>(numbers.size())) return;
-                        askChoice("Forget " + pad.name + "?", "", {"Forget", "Cancel"}, 1,
-                                  [&, pad](int j) {
-                            if (j != 0) return;
-                            std::string err;
-                            if (bt::forget(pad.address, &err))
-                                std::fprintf(stderr, "[players] forgot %s\n", pad.address.c_str());
-                            else {
-                                std::fprintf(stderr, "[players] could not forget %s: %s\n",
-                                             pad.address.c_str(), err.c_str());
-                                menuNotice.say("Couldn't forget " + pad.name, Tone::Problem);
-                            }
-                            buildSettings();
-                        });
-                    });
+                if (res.value == SetPads) {
+                    openPadsPanelAt(0);
                     sound::play(sound::Cue::Activate);
                 } else if (res.value >= kSetFormat) {
                     const size_t i = static_cast<size_t>(res.value - kSetFormat);
@@ -11590,6 +11713,10 @@ int main(int argc, char** argv) {
                         });
                         sound::play(sound::Cue::Activate);
                     }
+                } else if (res.value == SetHowTo) {
+                    openHowTo();
+                    sound::play(sound::Cue::Activate);
+
                 } else if (res.value == SetCredits) {
                     // A list, one line per project: what it does, and its
                     // licence. Nothing to choose; A or B closes it.
@@ -11803,7 +11930,7 @@ int main(int argc, char** argv) {
                 // rather than a silent change of where you would go.
                 barSlot = (here() == Screen::Library || here() == Screen::Grid) ? BarLibrary
                         : here() == Screen::Search                               ? BarSearch
-                        : here() == Screen::Settings                             ? BarSettings
+                        : (here() == Screen::Settings || here() == Screen::HowTo) ? BarSettings
                                                                                  : BarHome;
                 barFocused = true;
                 sound::play(sound::Cue::Move);
@@ -12229,6 +12356,7 @@ int main(int argc, char** argv) {
             case Screen::AddAccount: apply(addAccountScreen.key(n)); return true;
             case Screen::TailscaleSignIn: apply(tsSignInScreen.key(n)); return true;
             case Screen::Report: apply(reportScreen.key(n)); return true;
+            case Screen::HowTo: apply(howToScreen.key(n)); return true;
             case Screen::Settings: apply(settingsScreen.key(n)); return true;
         }
         return false;
@@ -12279,6 +12407,10 @@ int main(int argc, char** argv) {
             // frame count.
             waitForPairCode = true;
         }
+    } else if (initialScreen && SDL_strcmp(initialScreen, "howto") == 0) {
+        // `--screen howto`: About's How to page over Home, for a capture or
+        // the TV loop; Back goes Home.
+        openHowTo();
     } else if (initialScreen && SDL_strcmp(initialScreen, "settings") == 0) {
         // `--screen settings --tile N` opens on category N; `--focus-row 1`
         // puts focus in its rows. The network is waited for here, because a
@@ -16104,6 +16236,8 @@ int main(int argc, char** argv) {
             addAccountScreen.tick(dt);
             tsSignInScreen.tick(dt);
             reportScreen.tick(dt);
+            howToScreen.setHasFocus(!barFocused && !accountsOpen);
+            howToScreen.tick(dt);
             settingsScreen.setHasFocus(!barFocused && !accountsOpen);
             settingsScreen.tick(dt);
             pinScreen.tick(dt);
@@ -16181,6 +16315,15 @@ int main(int argc, char** argv) {
                     }
                 }
             }
+            // THE CONTROLLERS PANEL FOLLOWS THE PADS while it is open: one
+            // connecting or going, a swap, and the dot on the pad last pressed.
+            if (choiceScreen.isOpen() && choiceScreen.title() == "Controllers" && padsPanelSeenOpen &&
+                here() == Screen::Settings &&
+                (players::generation() != padsPanelGen || settingsLastPad != padsPanelHand)) {
+                std::vector<std::string> names, values;
+                padsPanelRows(&names, &values);
+                choiceScreen.replace(names, values, "");
+            }
             if (wiiPairOpen) {
                 // Pair a Wii Remote: closed by Back, or paired. EITHER WAY BACK
                 // TO THE WII REMOTES PANEL it was opened from, one step, as Back
@@ -16235,6 +16378,9 @@ int main(int argc, char** argv) {
                 if (!choiceScreen.isOpen() || here() != Screen::Settings) {
                     choiceScreen.close();
                     closePadWindow();
+                    if (padWindowFromPanel && here() == Screen::Settings)
+                        openPadsPanelAt(static_cast<int>(players::connected().size()));
+                    padWindowFromPanel = false;
                 } else {
                     bool fresh = false, done = false, ok = false;
                     std::string err;
@@ -16605,7 +16751,7 @@ int main(int argc, char** argv) {
                 else if (!lastLitArt.empty())
                     want = lastLitArt;
             } else if (here() == Screen::AddAccount || here() == Screen::TailscaleSignIn ||
-                       here() == Screen::Report) {
+                       here() == Screen::Report || here() == Screen::HowTo) {
                 // **A TEXT SCREEN GETS THE PLAIN GRADIENT.** MMagTech,
                 // 2026-09-22: *"i preferred the purple background that went
                 // with the first run setup better. The current background
@@ -16975,6 +17121,7 @@ int main(int argc, char** argv) {
                 case Screen::AddAccount: addAccountScreen.draw(ctx); break;
                 case Screen::TailscaleSignIn: tsSignInScreen.draw(ctx); break;
                 case Screen::Report: reportScreen.draw(ctx); break;
+                case Screen::HowTo: howToScreen.draw(ctx); break;
                 case Screen::Settings: settingsScreen.draw(ctx); break;
                 case Screen::Home: break;   // unreachable, and the compiler asks
             }
@@ -17304,6 +17451,7 @@ int main(int argc, char** argv) {
                 case Screen::AddAccount: break;
                 case Screen::TailscaleSignIn: break;
                 case Screen::Report: break;
+                case Screen::HowTo: howToScreen.drawGlass(ctx); break;
                 case Screen::Settings: settingsScreen.drawGlass(ctx); break;
                 case Screen::Home: break;
             }
@@ -17500,8 +17648,9 @@ int main(int argc, char** argv) {
                                  : (here() == Screen::Library || here() == Screen::Grid)
                                      ? BarLibrary
                                      : here() == Screen::Search   ? BarSearch
-                                     : here() == Screen::Settings ? BarSettings
-                                                                  : -1;
+                                     : (here() == Screen::Settings || here() == Screen::HowTo)
+                                         ? BarSettings
+                                         : -1;
             const float barX = kContentInset;
             const float barW = ui::kCanvasWidth - kContentInset * 2.0f;
             const float barBaseline =
@@ -17660,6 +17809,33 @@ int main(int argc, char** argv) {
                     std::erase_if(batterySlots, [](const BatterySlot& sl) {
                         return sl.leaving && sl.alpha.elapsed >= sl.alpha.duration;
                     });
+                    // ALWAYS IN THE ROW'S ORDER, P1 to P4. A slot is kept by
+                    // its pad, so a swap (Make player N) relabelled two slots
+                    // and left them where they were: P2 then P1 (MMagTech on
+                    // the TV, 2026-10-10). Sorted by the row, they slide to
+                    // their places; one leaving stays after the one it
+                    // followed until it has faded.
+                    {
+                        std::vector<std::pair<float, size_t>> order;
+                        float last = -1.0f;
+                        for (size_t k = 0; k < batterySlots.size(); ++k) {
+                            float rank = last + 0.5f;
+                            if (!batterySlots[k].leaving)
+                                for (size_t i = 0; i < row.size(); ++i)
+                                    if (row[i].id == batterySlots[k].e.id) rank = last = static_cast<float>(i);
+                            order.push_back({rank, k});
+                        }
+                        std::stable_sort(order.begin(), order.end(),
+                                         [](const auto& x, const auto& y) { return x.first < y.first; });
+                        bool moved = false;
+                        for (size_t k = 0; k < order.size(); ++k) moved = moved || order[k].second != k;
+                        if (moved) {
+                            std::vector<BatterySlot> sorted;
+                            sorted.reserve(batterySlots.size());
+                            for (const auto& o : order) sorted.push_back(std::move(batterySlots[o.second]));
+                            batterySlots = std::move(sorted);
+                        }
+                    }
                 }
                 // Where each one belongs, from the right end leftward. A leaving
                 // one keeps its space until it has faded.

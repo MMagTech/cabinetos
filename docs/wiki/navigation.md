@@ -1,5 +1,7 @@
 # Buttons and shortcuts
 
+The essentials are on the console too: Settings, About, **How to**.
+
 Buttons are named by position, Xbox style: **A** is the bottom face button
 (Cross on PlayStation, B on Nintendo), **B** the right one, **X** the left one,
 **Y** the top one.
