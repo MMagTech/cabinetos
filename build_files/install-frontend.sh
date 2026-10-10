@@ -113,6 +113,17 @@ if [[ "${cores}" -ne 22 ]]; then
     exit 1
 fi
 
+# The arcade cores' set lists (#310): which games in a generic arcade folder
+# each core runs. Read by catalog.cpp from beside the cores.
+for sets in fbneo_libretro.sets mame2003_plus_libretro.sets; do
+    if [[ ! -s "${PAYLOAD}/cores/${sets}" ]]; then
+        log "ERROR: ${sets} is not in the payload"
+        exit 1
+    fi
+    install -m 0644 "${PAYLOAD}/cores/${sets}" /usr/lib/cabinetos/cores/
+    log "  ${sets}: $(grep -vc '^#' "/usr/lib/cabinetos/cores/${sets}") sets"
+done
+
 # --- PlayStation 2 ---------------------------------------------------------
 #
 # Named individually, because each absence is silent in a different way and

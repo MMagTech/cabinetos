@@ -9,10 +9,13 @@
 
 #include <sys/stat.h>
 
+#include <fstream>
 #include <map>
+#include <unordered_set>
 #include <vector>
 
 #include <cctype>
+#include <cstdio>
 #include <cstring>
 #include <string>
 
@@ -52,7 +55,11 @@ struct Entry {
 const Entry kTable[] = {
     {"3do",                  nullptr,     Support::Playable, "opera",           nullptr},
     // One slug, two platforms, two different cores. This is the case the
-    // "never key on slug alone" rule exists for.
+    // "never key on slug alone" rule exists for. The fsSlug here is the
+    // folder's name with capitals, spaces, dashes, underscores, dots and "+"
+    // ignored, and other spellings of the same emulator count too (#310;
+    // arcadeFolder below). A generic arcade folder matches neither row and
+    // picks one of them per game.
     {"arcade",               "FBNEO",     Support::Playable, "fbneo_libretro",  nullptr,
      false, "FinalBurn Neo"},
     {"arcade",               "MAME2003",  Support::Playable, "mame2003_plus",   nullptr,
@@ -120,21 +127,61 @@ namespace {
 
 // Returns the table row, not a Coverage, because the row carries one thing the
 // caller needs that the answer does not: whether the core is hardware-rendered.
+// A folder name with capitals, spaces, dashes, underscores, dots and "+"
+// ignored, so `MAME 2003-Plus`, `mame_2003_plus` and `Mame2003+` are one name.
+std::string folderKey(const std::string& s) {
+    std::string k;
+    for (const char ch : s) {
+        if (ch == ' ' || ch == '-' || ch == '_' || ch == '.' || ch == '+') continue;
+        k += static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+    }
+    return k;
+}
+
+// THE ARCADE FOLDER THAT NAMES ITS EMULATOR (#310), as the table's fsSlug for
+// that emulator's row, or empty for a folder that names none. Matching
+// "FBNEO" exactly and case-sensitively was Cabinet's rule, and it hid every
+// arcade game from a person who named the folder the way RomM's own guide
+// says (`arcade`, or `fbneo` in lower case).
+std::string arcadeFolder(const std::string& fsSlug) {
+    const std::string k = folderKey(fsSlug);
+    for (const char* n : {"fbneo", "fba", "fbalpha", "finalburnneo", "finalburnalpha"})
+        if (k == n) return "FBNEO";
+    for (const char* n : {"mame2003", "mame2003plus", "mame2003p"})
+        if (k == n) return "MAME2003";
+    return {};
+}
+
+// A folder RomM files as arcade that names no emulator: `arcade`, `mame`,
+// `cps`. The core is picked per game; see coverageFor(Game).
+bool genericArcade(const std::string& slug, const std::string& fsSlug) {
+    return slug == "arcade" && arcadeFolder(fsSlug).empty();
+}
+
 const Entry* lookup(const std::string& slug, const std::string& fsSlug) {
+    // An arcade folder is matched on the emulator its name spells, not on
+    // the name as typed.
+    const std::string folder = slug == "arcade" ? arcadeFolder(fsSlug) : fsSlug;
     const Entry* slugOnly = nullptr;
     for (const Entry& e : kTable) {
         if (!eq(e.slug, slug)) continue;
         if (e.fsSlug) {
-            if (eq(e.fsSlug, fsSlug)) return &e;
+            if (eq(e.fsSlug, folder)) return &e;
             continue;   // right slug, wrong core — keep looking
         }
         slugOnly = &e;
     }
     // A slug that matches an entry needing an fsSlug, but whose fsSlug matched
-    // none of them, falls through to nullptr — correctly. An unrecognised
-    // arcade set is not playable just because it says "arcade", since we would
-    // not know which core to hand it to.
+    // none of them, falls through to nullptr. For arcade that is the generic
+    // folder, which coverageFor answers per game before it gets here.
     return slugOnly;
+}
+
+// The arcade row for one of the two arcade cores, by manifest name.
+const Entry* arcadeRow(const char* core) {
+    for (const Entry& e : kTable)
+        if (eq(e.slug, "arcade") && std::strcmp(e.core, core) == 0) return &e;
+    return nullptr;
 }
 
 // The manifest's name for a core, given either that name or the file it was
@@ -451,15 +498,60 @@ Coverage answer(const Entry* e) {
     // re-assigns; see the struct.
     return c;
 }
+
+// The sets one arcade core runs, read once from `<core file>.sets` beside the
+// cores (cores/arcade-sets.sh makes it from the core's own DAT at the pinned
+// commit). A missing list is said once in the log and reads as empty, so the
+// games are greyed rather than handed to a core with no driver for them.
+const std::unordered_set<std::string>& setsOf(const char* core) {
+    auto load = [](const char* name) {
+        std::unordered_set<std::string> sets;
+        std::string file = coreFileName(name);
+        file.replace(file.size() - 3, 3, ".sets");   // fbneo_libretro.so
+        const std::string path = gCoreDir + "/" + file;
+        std::ifstream in(path);
+        if (!in) {
+            std::fprintf(stderr, "[catalog] no arcade set list at %s\n", path.c_str());
+            return sets;
+        }
+        for (std::string line; std::getline(in, line);)
+            if (!line.empty() && line[0] != '#') sets.insert(line);
+        return sets;
+    };
+    static const std::unordered_set<std::string> fbneo = load("fbneo_libretro");
+    static const std::unordered_set<std::string> mame = load("mame2003_plus");
+    return std::strcmp(core, "fbneo_libretro") == 0 ? fbneo : mame;
+}
+
+// A game in a generic arcade folder: FinalBurn Neo if its list has the set,
+// else MAME 2003-Plus if its list does (#310). The set is the file's name, as
+// the core is handed it (main.cpp keeps an arcade file's own name).
+Coverage arcadeGame(const romm::Game& g) {
+    std::string set = g.fsName;
+    if (const size_t dot = set.find_last_of('.'); dot != std::string::npos) set.erase(dot);
+    for (char& ch : set) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+    for (const char* core : {"fbneo_libretro", "mame2003_plus"})
+        if (setsOf(core).count(set)) return answer(arcadeRow(core));
+    return {Support::UnsupportedGame, nullptr, "Not supported on this console"};
+}
 }  // namespace
 
 void setCoreDirectory(const char* dir) { if (dir) gCoreDir = dir; }
 
 Coverage coverageFor(const romm::Platform& p) {
+    // A generic arcade folder is enterable when either arcade core is here;
+    // which one a game needs is answered per game.
+    if (genericArcade(p.slug, p.fsSlug)) {
+        const Coverage fbneo = answer(arcadeRow("fbneo_libretro"));
+        if (fbneo.support == Support::Playable) return fbneo;
+        const Coverage mame = answer(arcadeRow("mame2003_plus"));
+        return mame.support == Support::Playable ? mame : fbneo;
+    }
     return answer(lookup(p.slug, p.fsSlug));
 }
 Coverage coverageFor(const romm::Game& g) {
-    Coverage c = answer(lookup(g.platformSlug, g.platformFsSlug));
+    Coverage c = genericArcade(g.platformSlug, g.platformFsSlug)
+        ? arcadeGame(g) : answer(lookup(g.platformSlug, g.platformFsSlug));
     // A Wii game that takes neither a Classic Controller nor a GameCube pad
     // needs a real Wii Remote, and plays while any Wii Remote is paired, as
     // on a Wii (#200, PROJECT.md question 35). Remove every Remote and they
@@ -812,7 +904,7 @@ FirmwareAliases firmwareAliases(const std::string& slug, const std::string& fsSl
     return {};
 }
 
-std::vector<SaveFile> saveFiles(const std::string& slug, const std::string& fsSlug,
+std::vector<SaveFile> saveFiles(const std::string& slug, const std::string& core,
                                 const std::string& stem) {
     // Straight out of the audit's per-platform table, and each row was read
     // off the core that writes it rather than guessed. docs/PROJECT.md, *The
@@ -891,10 +983,15 @@ std::vector<SaveFile> saveFiles(const std::string& slug, const std::string& fsSl
     // thing. The stem is the set name — `lethalen`, `smashtv` — because that
     // is what the core was handed; see the note in main.cpp about why an
     // arcade entry keeps the server's own file name.
+    //
+    // BY THE CORE THE GAME RUNS IN, not by the folder (#310): a generic
+    // arcade folder holds games for both, so its name says nothing about
+    // which file a game writes. A folder named for one emulator runs every
+    // game in it, so for those this is the same answer the folder gave.
     if (slug == "arcade") {
         SaveFile f;
         f.untouched = Untouched::Uniform;
-        if (fsSlug == "MAME2003") {
+        if (core == "mame2003_plus") {
             f.coreRowName = "mame2003Plus";
             // ONE DIRECTORY DEEPER THAN THE REFERENCE IMPLEMENTATION SAYS, and
             // this was measured rather than carried across. Cabinet writes
@@ -914,7 +1011,7 @@ std::vector<SaveFile> saveFiles(const std::string& slug, const std::string& fsSl
             f.path = "mame2003-plus/nvram/" + stem + ".nv";
             return {f};
         }
-        if (fsSlug == "FBNEO") {
+        if (core == "fbneo_libretro") {
             f.coreRowName = "fbneo";
             f.path = "fbneo/" + stem + ".fs";
             return {f};
@@ -1002,8 +1099,13 @@ const char* shortReason(Support s) {
         // name. Both cores tested asked for GLES 3.0 and got it.
         case Support::NeedsHardwareRender: return "Needs a 3D core";
         case Support::NeedsController: return "Needs a Wii Remote";
+        case Support::UnsupportedGame: return "Not supported here";
     }
     return "Not playable here";
+}
+
+bool shownGreyed(Support s) {
+    return s == Support::NeedsController || s == Support::UnsupportedGame;
 }
 
 const char* shortReason(const Coverage& c) {
@@ -1017,10 +1119,13 @@ std::string displayQualifier(const romm::Platform& p) {
     // Only the ambiguous rows carry a system name, so everything else comes
     // back empty. Qualifying a platform nobody can confuse would be noise.
     if (e && e->system) return e->system;
-    // An arcade set this table does not recognise is still ambiguous to a
-    // person — two tiles saying "Arcade" — so fall back to the one field that
-    // actually distinguishes them on the server.
-    if (!p.fsSlug.empty() && p.slug == "arcade") return p.fsSlug;
+    // A generic arcade folder (#310) is still ambiguous to a person when
+    // there are two, two tiles saying "Arcade", so fall back to the one field
+    // that actually distinguishes them on the server: the folder's name. Not
+    // when it is only the tile's own name again (`arcade` under "Arcade").
+    if (!p.fsSlug.empty() && p.slug == "arcade" &&
+        folderKey(p.fsSlug) != folderKey(p.name))
+        return p.fsSlug;
     return {};
 }
 
