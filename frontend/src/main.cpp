@@ -7129,7 +7129,7 @@ int main(int argc, char** argv) {
     // is what makes quitting a game return to the launch screen and backing out
     // again return to the browsing.
     enum class Screen { Home, Library, Grid, Detail, Search, AddAccount, TailscaleSignIn, Report,
-                        HowTo, Settings };
+                        HowTo, Wiki, Settings };
     std::vector<Screen> stack{Screen::Home};
     // Which screen last set the room, so a change of screen can be told apart
     // from focus moving within one. See the backdrop block in the frame loop.
@@ -7158,8 +7158,13 @@ int main(int argc, char** argv) {
     // THE DIAGNOSTIC REPORT (#195): the same screen again, the link this time
     // a download of the report. Its lines are set when it is made.
     screens::AddAccountScreen reportScreen;
-    // ABOUT, HOW TO (#314): the controls on one page.
-    screens::HowToScreen howToScreen;
+    // ABOUT, HOW TO (#314): the controls, in Settings' own shape (a section
+    // per row on the left, its lines on the right), so it looks like the
+    // console rather than a page of text (MMagTech on the TV, 2026-10-10).
+    // The wiki is a QR code on a screen of its own.
+    screens::SettingsScreen howToScreen;
+    screens::AddAccountScreen wikiScreen;
+    wikiScreen.setText("CabinetOS wiki", {}, "");
     screens::SettingsScreen settingsScreen;
     // What the docked keyboard held last frame, so the query is re-run when it
     // changes and not sixty times a second when it does not.
@@ -8813,6 +8818,7 @@ int main(int argc, char** argv) {
     // on and the rest are greyed; both sticks in opens the pause menu either
     // way. The button named is the one set for the pad in hand.
     std::function<void()> openHowTo;
+    constexpr const char* kWikiUrl = "https://mmagtech.github.io/cabinetos/wiki/";
     // Settings > Display and Sound > Dark hours: From and Until, and the hours
     // of each. Set where it is opened; it reopens itself after an hour is set.
     std::function<void(int)> darkHoursPanel;
@@ -8865,7 +8871,8 @@ int main(int argc, char** argv) {
                      SetDarkHours, SetColour, SetRumble, SetPictureQuality,
                      SetWiiRemotes, SetSteam, SetSteamShow, SetRetroAchievements,
                      SetAchievementSound, SetDeveloper, SetVersion, SetRemotePlay,
-                     SetPairedDevices, SetTailscale, SetReport, SetHowTo, SetPads };
+                     SetPairedDevices, SetTailscale, SetReport, SetHowTo, SetPads,
+                     SetHowToWiki };
     // One Eject row per USB drive: this plus the drive's index in
     // storage::locations() when the rows were built.
     constexpr int kSetEject = 100;
@@ -8883,43 +8890,52 @@ int main(int argc, char** argv) {
     // pad, not its row: a swap moves it to another row.
     SDL_JoystickID settingsLastPad = 0;
     openHowTo = [&]() {
-        using L = screens::HowToScreen::Line;
-        using S = screens::HowToScreen::Section;
+        using K = screens::SettingsRow::Kind;
         std::string button = "Home";
         if (SDL_Gamepad* gp = settingsLastPad ? SDL_GetGamepadFromID(settingsLastPad) : nullptr) {
             const std::string l = shortcuts::label(gp);
             if (!l.empty() && l != "Not set") button = l;
         }
         const bool on = shortcuts::enabled();
-        S game{"In a game",
-               {{"Pause menu", "Both sticks in (L3 + R3)"},
-                {"Wii Remote", "Hold HOME"},
-                {"Remote Play", "Hold Select"},
-                {"Leave a game", "Pause menu, Exit to Home"},
-                {"Power menu", "The PC's power button"}}};
-        S keys{"Shortcuts", {}};
-        if (!on) keys.lines.push_back({"Turn on", "Settings, Controllers, In-game shortcuts"});
-        for (const L& l : std::vector<L>{{"Pause menu", "Tap " + button},
-                                         {"Save state", button + " + R1"},
-                                         {"Load state", button + " + L1"},
-                                         {"Fast forward", button + " + R2"},
-                                         {"Rewind", button + " + L2"},
-                                         {"Screenshot", button + " + X"}})
-            keys.lines.push_back({l.what, l.how, !on});
-        S menus{"Menus",
-                {{"Select", "A"},
-                 {"Back", "B"},
-                 {"Change screen", "L1 / R1"},
-                 {"Jump a letter", "L2 / R2"},
-                 {"Power menu", "Start, on Home"},
-                 {"Switch person", "Up to the top bar, A on the name"}}};
-        S steamSection{"Steam",
-                       {{"Open", "Power menu, Switch to Steam"},
-                        {"Come back", "Steam's Power menu, Switch to Desktop"}}};
-        S wiiSection{"Wii Remotes", {{"Pair", "The red sync button, under the battery cover"}}};
-        S drivesSection{"Drives", {{"Unplug", "Eject it first, in Settings, Storage"}}};
-        howToScreen.open({{game, keys}, {menus, steamSection, wiiSection, drivesSection}},
-                         "https://mmagtech.github.io/cabinetos/wiki/");
+        auto line = [](const char* what, std::string how, K k = K::Info) {
+            return screens::SettingsRow{k, 0, what, "", std::move(how)};
+        };
+        std::vector<screens::SettingsCategory> cats;
+        cats.push_back({"In a game",
+                        {line("Pause menu", "Both sticks in (L3 + R3)"),
+                         line("Pause menu, Wii Remote", "Hold HOME"),
+                         line("Pause menu, Remote Play", "Hold Select"),
+                         line("Leave a game", "Pause menu, Exit to Home"),
+                         line("Power menu", "The PC's power button")}});
+        {
+            std::vector<screens::SettingsRow> rows;
+            if (!on) rows.push_back(line("Turn on", "Settings, Controllers, In-game shortcuts"));
+            const K k = on ? K::Info : K::Disabled;
+            rows.push_back(line("Pause menu", "Tap " + button, k));
+            rows.push_back(line("Save state", button + " + R1", k));
+            rows.push_back(line("Load state", button + " + L1", k));
+            rows.push_back(line("Fast forward", button + " + R2", k));
+            rows.push_back(line("Rewind", button + " + L2", k));
+            rows.push_back(line("Screenshot", button + " + X", k));
+            cats.push_back({"Shortcuts", std::move(rows)});
+        }
+        cats.push_back({"Menus",
+                        {line("Select", "A"),
+                         line("Back", "B"),
+                         line("Change screen", "L1 / R1"),
+                         line("Jump a letter", "L2 / R2"),
+                         line("Power menu", "Start, on Home"),
+                         line("Switch person", "Up to the top bar, A on your name")}});
+        cats.push_back({"Steam",
+                        {line("Open", "Power menu, Switch to Steam"),
+                         line("Come back", "Steam's Power menu, Switch to Desktop")}});
+        cats.push_back({"Wii Remotes",
+                        {line("Pair", "The red sync button, under the battery cover")}});
+        cats.push_back({"Drives", {line("Unplug", "Eject it first, in Settings, Storage")}});
+        cats.push_back({"Everything else",
+                        {screens::SettingsRow{K::Action, SetHowToWiki, "The wiki", "", ""}}});
+        howToScreen.setCategories(std::move(cats));
+        howToScreen.enter();
         stack.push_back(Screen::HowTo);
     };
     // THE SHORTCUT BUTTON ROW IS LISTENING for this pad's next press, 0 when
@@ -11695,6 +11711,11 @@ int main(int argc, char** argv) {
                 } else if (res.value == SetHowTo) {
                     openHowTo();
                     sound::play(sound::Cue::Activate);
+                } else if (res.value == SetHowToWiki) {
+                    wikiScreen.open();
+                    wikiScreen.setPairing(kWikiUrl, kWikiUrl);
+                    stack.push_back(Screen::Wiki);
+                    sound::play(sound::Cue::Activate);
                 } else if (res.value == SetCredits) {
                     // A list, one line per project: what it does, and its
                     // licence. Nothing to choose; A or B closes it.
@@ -11908,7 +11929,7 @@ int main(int argc, char** argv) {
                 // rather than a silent change of where you would go.
                 barSlot = (here() == Screen::Library || here() == Screen::Grid) ? BarLibrary
                         : here() == Screen::Search                               ? BarSearch
-                        : here() == Screen::Settings                             ? BarSettings
+                        : (here() == Screen::Settings || here() == Screen::HowTo) ? BarSettings
                                                                                  : BarHome;
                 barFocused = true;
                 sound::play(sound::Cue::Move);
@@ -12335,6 +12356,7 @@ int main(int argc, char** argv) {
             case Screen::TailscaleSignIn: apply(tsSignInScreen.key(n)); return true;
             case Screen::Report: apply(reportScreen.key(n)); return true;
             case Screen::HowTo: apply(howToScreen.key(n)); return true;
+            case Screen::Wiki: apply(wikiScreen.key(n)); return true;
             case Screen::Settings: apply(settingsScreen.key(n)); return true;
         }
         return false;
@@ -16214,7 +16236,9 @@ int main(int argc, char** argv) {
             addAccountScreen.tick(dt);
             tsSignInScreen.tick(dt);
             reportScreen.tick(dt);
+            howToScreen.setHasFocus(!barFocused && !accountsOpen);
             howToScreen.tick(dt);
+            wikiScreen.tick(dt);
             settingsScreen.setHasFocus(!barFocused && !accountsOpen);
             settingsScreen.tick(dt);
             pinScreen.tick(dt);
@@ -16728,7 +16752,8 @@ int main(int argc, char** argv) {
                 else if (!lastLitArt.empty())
                     want = lastLitArt;
             } else if (here() == Screen::AddAccount || here() == Screen::TailscaleSignIn ||
-                       here() == Screen::Report || here() == Screen::HowTo) {
+                       here() == Screen::Report || here() == Screen::HowTo ||
+                       here() == Screen::Wiki) {
                 // **A TEXT SCREEN GETS THE PLAIN GRADIENT.** MMagTech,
                 // 2026-09-22: *"i preferred the purple background that went
                 // with the first run setup better. The current background
@@ -17099,6 +17124,7 @@ int main(int argc, char** argv) {
                 case Screen::TailscaleSignIn: tsSignInScreen.draw(ctx); break;
                 case Screen::Report: reportScreen.draw(ctx); break;
                 case Screen::HowTo: howToScreen.draw(ctx); break;
+                case Screen::Wiki: wikiScreen.draw(ctx); break;
                 case Screen::Settings: settingsScreen.draw(ctx); break;
                 case Screen::Home: break;   // unreachable, and the compiler asks
             }
@@ -17428,7 +17454,8 @@ int main(int argc, char** argv) {
                 case Screen::AddAccount: break;
                 case Screen::TailscaleSignIn: break;
                 case Screen::Report: break;
-                case Screen::HowTo: break;
+                case Screen::HowTo: howToScreen.drawGlass(ctx); break;
+                case Screen::Wiki: break;
                 case Screen::Settings: settingsScreen.drawGlass(ctx); break;
                 case Screen::Home: break;
             }
@@ -17625,8 +17652,10 @@ int main(int argc, char** argv) {
                                  : (here() == Screen::Library || here() == Screen::Grid)
                                      ? BarLibrary
                                      : here() == Screen::Search   ? BarSearch
-                                     : here() == Screen::Settings ? BarSettings
-                                                                  : -1;
+                                     : (here() == Screen::Settings || here() == Screen::HowTo ||
+                                        here() == Screen::Wiki)
+                                         ? BarSettings
+                                         : -1;
             const float barX = kContentInset;
             const float barW = ui::kCanvasWidth - kContentInset * 2.0f;
             const float barBaseline =
