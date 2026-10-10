@@ -84,14 +84,23 @@ downloads anything new into the console's shared BIOS folder.
 
 ## Arcade
 
-- RomM's arcade platform is split by folder. The console plays an arcade
-  folder named exactly **`FBNEO`** with FinalBurn Neo, and one named exactly
-  **`MAME2003`** with MAME 2003-Plus (names are case sensitive). Map both to
-  RomM's arcade platform. Any other arcade folder name gets no tile.
+- **One arcade folder just works.** Name it `arcade`, or anything else RomM
+  maps to its arcade platform (`mame`, `fbneo`, `cps`). Each game runs in
+  FinalBurn Neo if FinalBurn Neo has its set, otherwise in MAME 2003-Plus if
+  that has it. A game neither has shows greyed: *Not supported on this
+  console*.
+- **Two folders let you choose the emulator yourself.** A folder named after
+  an emulator runs every game in it with that emulator: `FBNEO`, `fbneo`,
+  `fba` or `FinalBurn Neo` for FinalBurn Neo; `MAME2003`, `mame2003plus` or
+  `MAME 2003-Plus` for MAME 2003-Plus. Capitals, spaces, dashes, underscores,
+  dots and `+` do not matter. Map the folder to RomM's arcade platform if RomM
+  does not do it by itself. Each folder is its own tile.
 - **FinalBurn Neo:** non-merged sets for FinalBurn Neo 1.0.0.03, with any BIOS
   inside each game's zip.
 - **MAME 2003-Plus:** MAME 0.78 sets.
-- The zip must keep its set name, for example `sf2.zip`.
+- The zip must keep its set name, for example `sf2.zip`. The set name is
+  what picks the emulator in an `arcade` folder.
+- Saves belong to the emulator the game ran in.
 
 ## Wii and Wii U
 

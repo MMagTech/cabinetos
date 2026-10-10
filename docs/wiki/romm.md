@@ -15,9 +15,10 @@ your library. Three things matter to CabinetOS:
 1. **Platform folders.** The console finds a system by RomM's platform slug.
    The slugs it plays are listed in [Systems, formats and BIOS](systems.md).
    Anything RomM recognises with the right slug appears as a Library tile.
-2. **Arcade.** Name your arcade folders exactly `FBNEO` (FinalBurn Neo sets)
-   and `MAME2003` (MAME 2003-Plus sets), and map both to RomM's arcade platform.
-   See [Arcade](systems.md#arcade).
+2. **Arcade.** One `arcade` folder just works: the console picks FinalBurn Neo
+   or MAME 2003-Plus for each game. To choose the emulator yourself, use two
+   folders named after them (`FBNEO` and `MAME2003`, say), each mapped to
+   RomM's arcade platform. See [Arcade](systems.md#arcade).
 3. **Firmware.** Put BIOS files, firmware and keys in RomM as firmware for the
    platform they belong to. The console downloads them when you first play that
    system. The exact files are in [Systems, formats and BIOS](systems.md).

@@ -3027,7 +3027,7 @@ static int appendGame(Library& lib, const romm::Game& g) {
     c.platform = g.platformName;
     c.art = colorForTitle(c.title);
     if (const catalog::Coverage cov = catalog::coverageFor(g);
-        cov.support == catalog::Support::NeedsController)
+        catalog::shownGreyed(cov.support))
         c.unavailable = cov.reason;
     const int idx = static_cast<int>(lib.cards.size());
     lib.cards.push_back(std::move(c));
@@ -3087,9 +3087,9 @@ static bool loadTileGames(romm::Client& client, Library& lib, screens::Tile& til
         // EXCEPT A GAME THAT NEEDS A CONTROLLER NOBODY HAS PAIRED, which its
         // own platform's grid shows, greyed and saying why: the system plays
         // here, so a shorter list would read as games gone missing. MMagTech,
-        // 2026-09-30, for the Wii games that need a Wii Remote.
-        if (!catalog::playable(g) &&
-            catalog::coverageFor(g).support != catalog::Support::NeedsController) {
+        // 2026-09-30, for the Wii games that need a Wii Remote. And an arcade
+        // set no emulator here runs (#310), for the same reason.
+        if (!catalog::playable(g) && !catalog::shownGreyed(catalog::coverageFor(g).support)) {
             ++unplayable;
             continue;
         }
@@ -12846,7 +12846,7 @@ int main(int argc, char** argv) {
             if (const size_t dot = stem.find_last_of('.'); dot != std::string::npos)
                 stem.erase(dot);
             saveSpecs = catalog::saveFiles(launchJob.platformSlug,
-                                           launchJob.platformFsSlug, stem);
+                                           launchJob.coreName, stem);
         }
         // Before the restore, because the restore puts the card at the path
         // this names and the core reads both on startup.
@@ -16354,8 +16354,7 @@ int main(int argc, char** argv) {
                             if (x.id == gridFill.tileId) { t = &x; break; }
                     for (const auto& g : got) {
                         if (!catalog::playable(g) &&
-                            catalog::coverageFor(g).support !=
-                                catalog::Support::NeedsController)
+                            !catalog::shownGreyed(catalog::coverageFor(g).support))
                             continue;
                         const int i = appendGame(lib, g);
                         added.push_back(i);

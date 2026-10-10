@@ -89,11 +89,20 @@ enum class Support {
     // nor a GameCube pad needs a real Wii Remote (wii.h; docs/PROJECT.md open
     // question 35). Wii U: one that takes neither a Pro nor a Classic
     // Controller needs a Wii Remote or the GamePad (wiiu.h; open question 36).
-    // The only answer that is about one game
+    // An answer about one game
     // rather than its whole platform, so a platform's grid shows it, greyed
     // and saying why, rather than leaving it out.
     NeedsController,
+    // The console runs this system, and no emulator here runs THIS GAME: an
+    // arcade set in a generic arcade folder that neither FinalBurn Neo's nor
+    // MAME 2003-Plus's set list has (#310). Also about one game, so also
+    // shown greyed.
+    UnsupportedGame,
 };
+
+// Whether a platform's grid shows this game greyed, saying why, rather than
+// leaving it out: the answers about one game, not its whole platform.
+bool shownGreyed(Support s);
 
 struct Coverage {
     Support support = Support::NoCore;
@@ -419,12 +428,25 @@ FirmwareAliases firmwareAliases(const std::string& slug, const std::string& fsSl
 // own table is the source; `stem` is the basename of the file the core was
 // handed, without its extension, which is what these cores name the save
 // after.
-std::vector<SaveFile> saveFiles(const std::string& slug, const std::string& fsSlug,
+//
+// EXCEPT ARCADE, which is keyed on `core`, the manifest name of the core the
+// game is actually running in (#310): one arcade folder can hold games for
+// both arcade cores, so the folder no longer says which file is written.
+std::vector<SaveFile> saveFiles(const std::string& slug, const std::string& core,
                                 const std::string& stem);
 
 // The same question asked of a game. A ROM payload carries its own platform
 // slug and fs_slug, so Home can decide whether the most recently played game is
 // one this console can resume without fetching the platform list first.
+//
+// AND IN A GENERIC ARCADE FOLDER IT PICKS THE CORE (#310). A folder whose name
+// is an arcade emulator's (`FBNEO`, `fb-neo`, `MAME 2003-Plus`, ...: capitals,
+// spaces, dashes, underscores, dots and `+` ignored) runs every game in that
+// emulator, as before. Any other folder RomM files as arcade (`arcade`,
+// `mame`, `cps`) picks per game, by the set name the zip is called: FinalBurn
+// Neo if its set list has it, else MAME 2003-Plus if its list does, else
+// UnsupportedGame. The lists are `<core>.sets` beside the cores, made from each
+// core's own DAT at its pinned commit (cores/arcade-sets.sh).
 Coverage coverageFor(const romm::Game& g);
 
 inline bool playable(const romm::Platform& p) {
