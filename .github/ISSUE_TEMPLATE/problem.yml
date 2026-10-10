@@ -1,0 +1,34 @@
+name: Something is wrong
+description: A game, the console or a feature does not work as it should.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Make a diagnostic report first: Settings, System, **Create diagnostic report**, then scan the code with your phone (or copy it from File access, `reports`). Private details are already replaced in it.
+  - type: textarea
+    id: report
+    attributes:
+      label: Diagnostic report
+      description: Drag the report file here. Without one, say the machine (make and model) and the version from Settings, About.
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, what you saw instead. The game and system, if it is about a game.
+    validations:
+      required: true
+  - type: input
+    id: when
+    attributes:
+      label: When
+      description: Roughly when it happened, and whether the console restarted since.
+    validations:
+      required: true
+  - type: textarea
+    id: screen
+    attributes:
+      label: What the screen showed
+      description: A photo of the TV, if it showed a message or something looked wrong. The report cannot see the screen. For Remote Play, Moonlight's own log from the device helps too.

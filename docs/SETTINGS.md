@@ -871,6 +871,14 @@ from (#286). Decided with MMagTech on the A9, 2026-10-07, and Tailscale
   - `cabinet` is in `wheel`, so the password is also sudo's: full access is
     what this switch is for.
 
+- **Create diagnostic report** (#195, built 2026-10-10; docs/PROJECT.md,
+  open question 41). One row, no PIN. Pressing it opens a screen, "Creating…"
+  for a few seconds, then the QR code (a download link to the report, home
+  network only, while the screen is open), the same link as text, and two
+  lines: "Your phone has to be on this network." / "Also in File access,
+  under reports." With no network: "No network, so it can't be downloaded."
+  The same report comes from `cabinetos-report` over Developer access.
+
 ## About
 
 - **Version:** the date version (see System), with Bazzite's underneath,

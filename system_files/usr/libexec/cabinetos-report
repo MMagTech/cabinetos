@@ -1,0 +1,1003 @@
+#!/usr/bin/python3
+#
+# THE DIAGNOSTIC REPORT (#195): one text file that is enough, on its own, to
+# find the cause of a fault, and that is safe to attach to a public GitHub
+# issue.
+#
+# WHO RUNS IT. The console, from Settings > System > Create diagnostic report
+# (the frontend runs this, then serves the file to a phone while the screen is
+# open); and anybody with Developer access, as `cabinetos-report`, for a
+# console whose screen does not come up properly. Same file either way.
+#
+# WHAT IS IN IT, BY PART OF THE SYSTEM rather than by chosen facts, so the next
+# kind of fault is covered too (the Remote Play faults #294 and #296 would have
+# been missed by a list of facts with nothing of Sunshine in it):
+#   - a summary: versions, the machine, the features that are on
+#   - every setting
+#   - a section per part with its current state: the machine, graphics, the
+#     screen, drives and space, controllers and Bluetooth, network and
+#     Tailscale, Remote Play, Steam, updates, the server, File access and
+#     Developer access, services
+#   - the games played in the two boots, and the emulators' own logs
+#   - the whole system log of this boot and the one before, so a crash that
+#     forced a restart is in it. Routine audit lines and SSH logins are left
+#     out (SELinux refusals and SSH failures are kept), and a boot longer than
+#     the cap keeps its start and its end and says what was cut.
+#
+# PRIVATE DETAILS ARE REPLACED BEFORE ANYTHING IS WRITTEN. Two layers:
+#   1. Every private value the console knows is collected first (the server's
+#      address, profile and account names, tokens, Wi-Fi and connection names,
+#      Tailscale names and addresses, Remote Play device names, the names of
+#      Bluetooth devices that are not controllers, serial numbers, a changed
+#      hostname, Steam account names) and replaced everywhere.
+#   2. A safety net by pattern for what no list knows: email addresses,
+#      network addresses, MAC and Bluetooth addresses (the maker's half is
+#      kept, it says what the device is), serial numbers, Tailscale names,
+#      Steam IDs, tokens and passwords in key=value form.
+# Each distinct value gets its own stable placeholder (<profile 1>, <wifi 2>,
+# <lan ip 3>), so the log still reads. Measured on the A9, 2026-10-10, before
+# this existed: Tailscale writes the account's email into the log in plain
+# text, which no list of known values would have caught. Game titles stay:
+# they are what a fault is usually about, and they are not private.
+#
+# AND IT FAILS CLOSED. After replacing, every known value is searched for
+# again; if one survived, nothing is written and the run fails.
+#
+# Usage:
+#   cabinetos-report                 write the report, print its path
+#   cabinetos-report --stdout        print it instead (nothing written)
+#   cabinetos-report --root DIR      the storage root (default /var/lib/cabinetos)
+#   cabinetos-report --out DIR       where to write (default <root>/reports)
+#
+# The last five reports are kept, named by date. Exit 0 and the path on the
+# last line of stdout; exit 1 and the reason on stderr.
+
+import datetime
+import glob
+import ipaddress
+import json
+import os
+import pwd
+import re
+import subprocess
+import sys
+import urllib.request
+
+KEEP = 5
+BOOT_CAP = 5 * 1024 * 1024        # bytes of log per boot
+BOOT_HEAD = 1 * 1024 * 1024       # of which, from the start of the boot
+EMU_LOG_CAP = 256 * 1024          # the end of each emulator log
+DEFAULT_HOSTNAME = "cabinetos"
+# A Bluetooth name that is a controller's model, kept.
+CONTROLLER_NAME = re.compile(r"RVL-CNT|RVL-WBC|Controller|Gamepad|Joy-Con|8BitDo|DualSense|"
+                             r"DualShock|Wireless Controller|Pro Controller|Remote|Arcade Stick")
+# Names that are the project's and public, never a person's.
+PUBLIC = ["ghcr.io/mmagtech/cabinetos", "github.com/MMagTech/cabinetos", "MMagTech/cabinetos",
+          "CabinetOS"]
+ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+
+
+def user_home():
+    try:
+        return pwd.getpwnam("cabinet").pw_dir
+    except KeyError:
+        return os.path.expanduser("~")
+
+
+HOME = user_home()
+
+
+def run(args, timeout=15):
+    """A command's output, or a line saying why there is none."""
+    try:
+        p = subprocess.run(args, capture_output=True, text=True, errors="replace",
+                           timeout=timeout, stdin=subprocess.DEVNULL)
+    except FileNotFoundError:
+        return "(%s is not on this console)\n" % args[0]
+    except subprocess.TimeoutExpired:
+        return "(%s did not answer in %d s)\n" % (" ".join(args), timeout)
+    out = p.stdout
+    if p.returncode != 0:
+        out += p.stderr
+        out += "(exit %d)\n" % p.returncode
+    return out
+
+
+def read(path, limit=None):
+    try:
+        with open(path, "rb") as f:
+            if limit is not None:
+                f.seek(0, os.SEEK_END)
+                size = f.tell()
+                f.seek(max(0, size - limit))
+            data = f.read()
+        return data.decode("utf-8", "replace")
+    except OSError:
+        return None
+
+
+def read_json(path):
+    body = read(path)
+    if body is None:
+        return None
+    try:
+        return json.loads(body)
+    except ValueError:
+        return None
+
+
+def first_line(s):
+    return (s or "").strip().split("\n")[0].strip()
+
+
+def du(path):
+    """Bytes under a folder, or None. Does not cross into other drives."""
+    if not os.path.isdir(path):
+        return None
+    out = run(["du", "-sbx", path], timeout=60)
+    m = re.match(r"(\d+)\s", out)
+    return int(m.group(1)) if m else None
+
+
+def size_text(n):
+    if n is None:
+        return "not there"
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if n < 1024 or unit == "TB":
+            return ("%d %s" % (n, unit)) if unit == "B" else ("%.1f %s" % (n, unit))
+        n /= 1024.0
+    return str(n)
+
+
+# --- What the console knows is private -------------------------------------
+
+class Secrets:
+    """Known private values, each with the placeholder it is replaced by."""
+
+    def __init__(self):
+        self.values = {}      # value -> placeholder
+        self.counts = {}      # kind -> how many so far
+        self.fold = set()     # values also replaced whatever their case
+
+    def add(self, value, kind, numbered=True, fold=False):
+        if value is None:
+            return
+        value = str(value).strip()
+        if len(value) < 2 or value in self.values:
+            return
+        # A secret short enough to be an everyday number or word would be
+        # replaced where it is not the secret, and its context would give it
+        # away. Real tokens and passwords are longer.
+        if kind in ("token", "secret") and len(value) < 8:
+            return
+        if numbered:
+            self.counts[kind] = self.counts.get(kind, 0) + 1
+            self.values[value] = "<%s %d>" % (kind, self.counts[kind])
+        else:
+            self.values[value] = "<%s>" % kind
+        if fold and len(value) >= 4:
+            self.fold.add(value)
+
+
+def collect_secrets(root):
+    s = Secrets()
+
+    # The server: as written, and the host alone.
+    server = read_json(os.path.join(root, "config", "server.json")) or {}
+    address = str(server.get("address", "")).strip()
+    if address:
+        bare = re.sub(r"^[a-z]+://", "", address).rstrip("/")
+        s.add(bare, "server", numbered=False)
+        host = bare.rsplit(":", 1)[0] if bare.count(":") == 1 else bare
+        s.add(host, "server", numbered=False)
+
+    # Profiles, in account order, so <profile 1> is the first account.
+    accounts = read_json(os.path.join(root, "config", "accounts.json")) or {}
+    for a in accounts.get("accounts", []) or []:
+        s.add(a.get("name"), "profile", fold=True)
+    user = read_json(os.path.join(root, "config", "user.json")) or {}
+    s.add(user.get("username"), "profile", fold=True)
+    for d in glob.glob(os.path.join(root, "users", "*")):
+        name = os.path.basename(d)
+        m = re.match(r"\d+ - (.+)$", name)
+        if m:
+            s.add(m.group(1), "profile", fold=True)
+
+    # Tokens and RetroAchievements names.
+    adir = os.path.join(HOME, ".config", "cabinetos", "accounts")
+    for path in sorted(glob.glob(os.path.join(adir, "*.json"))):
+        j = read_json(path) or {}
+        for k, v in j.items():
+            if isinstance(v, str) and ("token" in k.lower() or "key" in k.lower()):
+                s.add(v, "token", numbered=False)
+            elif isinstance(v, str) and "user" in k.lower():
+                s.add(v, "achievements user", fold=True)
+    # NOT THE PIN. Nothing logs it, and four digits replaced everywhere would
+    # point at it: "<pin> bytes" says what the PIN is.
+
+    # Wi-Fi and connection names. The default names NetworkManager makes up
+    # say nothing about anybody and stay.
+    for line in run(["nmcli", "-t", "-f", "NAME,TYPE", "connection", "show"]).splitlines():
+        parts = re.split(r"(?<!\\):", line)
+        if len(parts) < 2:
+            continue
+        name = parts[0].replace("\\:", ":")
+        if re.match(r"^(Wired connection \d+|lo|tailscale0|docker0|virbr\d+)$", name):
+            continue
+        s.add(name, "wifi" if "wireless" in parts[1] else "network")
+        if "wireless" in parts[1]:
+            ssid = first_line(run(["nmcli", "-g", "802-11-wireless.ssid", "connection", "show", name]))
+            if ssid and not ssid.startswith("("):
+                s.add(ssid, "wifi")
+    for line in run(["nmcli", "-t", "-f", "SSID", "device", "wifi", "list", "--rescan", "no"]).splitlines():
+        ssid = line.replace("\\:", ":").strip()
+        if ssid and ssid != "--":
+            s.add(ssid, "wifi")
+
+    # Tailscale: this console's names and addresses, its tailnet, every peer.
+    ts = run(["tailscale", "status", "--json"], timeout=8)
+    try:
+        tj = json.loads(ts)
+    except ValueError:
+        tj = {}
+    if isinstance(tj, dict):
+        tailnet = (tj.get("CurrentTailnet") or {}).get("Name")
+        s.add(tailnet, "tailnet", numbered=False)
+        s.add((tj.get("CurrentTailnet") or {}).get("MagicDNSSuffix"), "tailnet dns", numbered=False)
+        s.add(tj.get("MagicDNSSuffix"), "tailnet dns", numbered=False)
+        for u in (tj.get("User") or {}).values():
+            s.add(u.get("LoginName"), "tailscale user", fold=True)
+            s.add(u.get("DisplayName"), "tailscale user", fold=True)
+        nodes = [tj.get("Self") or {}] + list((tj.get("Peer") or {}).values())
+        for n in nodes:
+            # This console's own name is the default unless somebody changed
+            # it, and is in every other line of the report.
+            if (n.get("HostName") or "").lower() not in (DEFAULT_HOSTNAME, "localhost"):
+                s.add(n.get("HostName"), "tailscale device", fold=True)
+            dns = (n.get("DNSName") or "").rstrip(".")
+            s.add(dns, "tailscale device")
+            for ip in n.get("TailscaleIPs") or []:
+                s.add(ip, "tailscale ip")
+
+    # Remote Play: the names people gave their devices.
+    names = read_json(os.path.join(root, "remoteplay", "names.json"))
+    # "Device 1" is the name the console gives one nobody named, and says
+    # nothing about anybody.
+    rp = []
+    if isinstance(names, dict):
+        rp += [v if isinstance(v, str) else (v or {}).get("name") for v in names.values()]
+    state = read_json(os.path.join(root, "remoteplay", ".config", "sunshine", "sunshine_state.json")) or {}
+    rp += [d.get("name") for d in (state.get("root") or {}).get("named_devices") or []]
+    for name in rp:
+        if name and not re.match(r"^Device \d+$", name):
+            s.add(name, "remote play device", fold=True)
+    s.add(state.get("username"), "remote play login", numbered=False)
+    s.add(state.get("password"), "secret", numbered=False)
+    s.add(state.get("salt"), "secret", numbered=False)
+    web = read(os.path.join(root, "remoteplay", "web"))
+    for tok in (web or "").split():
+        s.add(tok, "secret", numbered=False)
+
+    # Bluetooth: a controller's name is its model and stays; anything else
+    # (a phone, headphones) is named by a person and does not.
+    bt_lines = run(["bluetoothctl", "devices"], timeout=8).splitlines() if bluetooth_up() else []
+    for line in bt_lines:
+        m = re.match(r"Device (\S+) (.+)$", line)
+        if not m:
+            continue
+        info = run(["bluetoothctl", "info", m.group(1)], timeout=8)
+        icon = re.search(r"Icon: (\S+)", info)
+        if icon and icon.group(1) in ("input-gaming", "input-mouse", "input-keyboard"):
+            continue
+        # Wii Remotes give no icon; their name is the model.
+        if CONTROLLER_NAME.search(m.group(2)):
+            continue
+        s.add(m.group(2), "bluetooth device", fold=True)
+        alias = re.search(r"Alias: (.+)", info)
+        if alias:
+            s.add(alias.group(1), "bluetooth device", fold=True)
+    adapter = re.search(r"Alias: (.+)", run(["bluetoothctl", "show"], timeout=8)) if bt_lines else None
+    if adapter and adapter.group(1).strip().lower() != DEFAULT_HOSTNAME:
+        s.add(adapter.group(1), "bluetooth name")
+
+    # The hostname, if somebody changed it.
+    host = first_line(read("/etc/hostname")) or first_line(run(["hostname"]))
+    if host and host.lower() != DEFAULT_HOSTNAME and host.lower() != "localhost":
+        s.add(host, "hostname", numbered=False, fold=True)
+
+    # Serial numbers: drives, USB devices, the screen.
+    lb = run(["lsblk", "-J", "-d", "-o", "NAME,SERIAL,WWN"])
+    try:
+        for d in json.loads(lb).get("blockdevices", []):
+            for k in ("serial", "wwn"):
+                v = (d.get(k) or "").strip()
+                if len(v) >= 4:
+                    s.add(v, "serial")
+    except ValueError:
+        pass
+    for path in glob.glob("/sys/block/*/device/serial") + glob.glob("/sys/bus/usb/devices/*/serial"):
+        v = first_line(read(path))
+        if len(v) >= 4 and not re.match(r"^0+$", v) and not re.match(r"^[0-9a-f]{4}:[0-9a-f]{2}:", v):
+            s.add(v, "serial")
+    for path in glob.glob("/sys/class/drm/card*-*/edid"):
+        dec = run(["edid-decode", "--skip-hex-dump", path], timeout=8)
+        for m in re.finditer(r"Serial Number: '?([^'\n]+?)'?\s*$", dec, re.M):
+            v = m.group(1).strip()
+            if len(v) >= 4:
+                s.add(v, "serial")
+
+    # Steam, if it has been signed in to.
+    for vdf in [os.path.join(HOME, ".local/share/Steam/config/loginusers.vdf"),
+                os.path.join(HOME, ".steam/steam/config/loginusers.vdf")]:
+        body = read(vdf) or ""
+        for m in re.finditer(r'"(AccountName|PersonaName)"\s+"([^"]+)"', body):
+            s.add(m.group(2), "steam user", fold=True)
+        for m in re.finditer(r'"(\d{17})"', body):
+            s.add(m.group(1), "steam id")
+    return s
+
+
+# --- Replacing them ---------------------------------------------------------
+
+class Scrubber:
+    def __init__(self, secrets):
+        self.s = secrets
+        self.found = {}   # pattern-found value -> placeholder
+        self.counts = {}
+        # ONE PASS OVER THE TEXT, every known value in one pattern, longest
+        # first so a value inside another goes with the longer one. Two passes
+        # replaced inside the first pass's placeholders: a Remote Play device
+        # called "Device 1" turned "<tailscale device 1>" into
+        # "<tailscale <remote play device 1>>".
+        #
+        # Names and words are replaced as whole words only. Names also in any
+        # case (paths lower-case them), each in its own (?i:) group.
+        #
+        # THE PROJECT'S OWN PUBLIC NAMES are in the pattern too, mapped to
+        # themselves, so a profile that shares a name with the project (the
+        # image is ghcr.io/mmagtech/cabinetos) does not hide which image ran.
+        def edge(v):
+            esc = re.escape(v)
+            if v in secrets.fold:
+                esc = "(?i:" + esc + ")"
+            pre = r"(?<![A-Za-z0-9])" if re.match(r"[A-Za-z0-9]", v) else ""
+            post = r"(?![A-Za-z0-9])" if re.search(r"[A-Za-z0-9]$", v) else ""
+            return pre + esc + post
+        self.lookup = {}
+        for v, ph in secrets.values.items():
+            self.lookup[v] = ph
+            if v in secrets.fold:
+                self.lookup.setdefault(v.lower(), ph)
+        alts = [(v, edge(v)) for v in secrets.values]
+        alts += [(p, "(?i:" + re.escape(p) + ")") for p in PUBLIC]
+        alts.sort(key=lambda a: len(a[0]), reverse=True)
+        self.known = re.compile("|".join(a for _, a in alts)) if alts else None
+        self.public = {p.lower() for p in PUBLIC}
+
+    def _known(self, m):
+        text = m.group(0)
+        if text.lower() in self.public:
+            return text
+        return self.lookup.get(text) or self.lookup.get(text.lower()) or "<private>"
+
+    def placeholder(self, value, kind):
+        key = (kind, value)
+        if key not in self.found:
+            self.counts[kind] = self.counts.get(kind, 0) + 1
+            self.found[key] = "<%s %d>" % (kind, self.counts[kind])
+        return self.found[key]
+
+    def _ip4(self, m):
+        text = m.group(0)
+        try:
+            ip = ipaddress.IPv4Address(text)
+        except ValueError:
+            return text
+        if ip.is_loopback or ip.is_unspecified or ip.is_multicast or text.startswith("255.") \
+                or text.startswith("0."):
+            return text
+        if ip in ipaddress.IPv4Network("100.64.0.0/10"):
+            kind = "tailscale ip"
+        elif ip.is_private or ip.is_link_local:
+            kind = "lan ip"
+        else:
+            kind = "public ip"
+        return self.placeholder(text, kind)
+
+    def _ip6(self, m):
+        text = m.group(0)
+        try:
+            ip = ipaddress.IPv6Address(text.split("%")[0])
+        except ValueError:
+            return text
+        if ip.is_loopback or ip.is_unspecified or ip.is_multicast:
+            return text
+        return self.placeholder(text.lower(), "ipv6")
+
+    def _mac(self, m):
+        text = m.group(0)
+        sep = text[2]
+        parts = text.upper().split(sep)
+        maker = ":".join(parts[:3])
+        return self.placeholder(":".join(parts), "mac")[:-1] + " of " + maker + ">"
+
+    def __call__(self, text):
+        if self.known:
+            text = self.known.sub(self._known, text)
+        # Secrets in key=value form, and bearer tokens.
+        text = re.sub(r"(?i)\b(password|passwd|passphrase|psk|token|secret|api[_-]?key|authorization)"
+                      r"(\s*[=:]\s*)(bearer\s+)?(?!<)['\"]?[^\s'\",;&]{6,}",
+                      lambda m: m.group(1) + m.group(2) + "<secret>", text)
+        text = re.sub(r"(?i)\b(bearer)\s+[A-Za-z0-9._~+/=-]{8,}", r"\1 <secret>", text)
+        # Serial numbers in the forms logs print them.
+        text = re.sub(r"(?i)\b(serial ?number|serialnumber|serial|s/n|iserial)(\s*[:=]\s*)"
+                      r"(?!<)'?([A-Za-z0-9._-]{4,})'?",
+                      lambda m: m.group(1) + m.group(2) + "<serial>", text)
+        text = re.sub(r"\bUniq=(\S+)", "Uniq=<serial>", text)
+        # Email addresses.
+        text = re.sub(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}",
+                      lambda m: self.placeholder(m.group(0).lower(), "email"), text)
+        # Tailscale names.
+        text = re.sub(r"\b[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.ts\.net\b",
+                      lambda m: self.placeholder(m.group(0).lower(), "tailscale name"), text)
+        # Steam IDs.
+        text = re.sub(r"\b7656119\d{10}\b", lambda m: self.placeholder(m.group(0), "steam id"), text)
+        # MAC and Bluetooth addresses, with :, - or _ between the bytes.
+        # Not part of a longer run of hex: BlueZ's "dev_AA_BB_.." is caught,
+        # a longer colon-separated hex string is not a MAC.
+        text = re.sub(r"(?<![0-9A-Fa-f])(?<![0-9A-Fa-f][:_-])"
+                      r"[0-9A-Fa-f]{2}([:_-])[0-9A-Fa-f]{2}(?:\1[0-9A-Fa-f]{2}){4}"
+                      r"(?![0-9A-Fa-f])(?![:_-][0-9A-Fa-f])", self._mac, text)
+        # IPv6: compressed (with ::) or all eight groups.
+        text = re.sub(r"(?<![\w:.])(?=[0-9A-Fa-f:]*\d)(?:(?:[0-9A-Fa-f]{1,4}:){7}[0-9A-Fa-f]{1,4}|"
+                      r"(?:[0-9A-Fa-f]{1,4}:){1,6}:(?:[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4}){0,5})?)"
+                      r"(?:%[\w.-]+)?(?![\w:])", self._ip6, text)
+        # IPv4, not part of a longer dotted number such as a version.
+        text = re.sub(r"(?<![\d.])(?:\d{1,3}\.){3}\d{1,3}(?!\.?\d)", self._ip4, text)
+        return text
+
+    def survivors(self, text):
+        """The known values still in the text, which must be none. Checked
+        with the same whole-word rule that replaced them, on the text with the
+        placeholders taken out (a Wi-Fi network called "wifi" is inside
+        "<wifi 1>")."""
+        bare = re.sub(r"<[a-z][a-z0-9 ]*(?: of [0-9A-F:]+)?>", " ", text)
+        found = set()
+        if self.known:
+            found.update(m.group(0).lower() for m in self.known.finditer(bare)
+                         if m.group(0).lower() not in self.public)
+        return found
+
+
+# --- The sections -----------------------------------------------------------
+
+def kv(pairs):
+    width = max((len(k) for k, _ in pairs), default=0)
+    return "".join("%s  %s\n" % (k.ljust(width), v) for k, v in pairs)
+
+
+def journal_lines(boot, since_text=None):
+    """One boot's log as (text, kept, dropped) lines, formatted and filtered."""
+    args = ["journalctl", "-b", str(boot), "-o", "json", "--no-pager",
+            "--output-fields=MESSAGE,SYSLOG_IDENTIFIER,_COMM,_TRANSPORT,PRIORITY,__REALTIME_TIMESTAMP"]
+    # READ AS IT COMES, a line at a time: a boot that ran for weeks is
+    # hundreds of MB of JSON, and holding all of it cost 400 MB on the A9
+    # for a boot of 72 minutes.
+    try:
+        p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                             stdin=subprocess.DEVNULL)
+    except OSError as e:
+        return None, "(could not read the log: %s)" % e
+    out = []
+    dropped = 0
+    for raw in p.stdout:
+        try:
+            j = json.loads(raw)
+        except ValueError:
+            continue
+        msg = j.get("MESSAGE", "")
+        if isinstance(msg, list):
+            msg = bytes(b & 0xFF for b in msg if isinstance(b, int)).decode("utf-8", "replace")
+        msg = ANSI.sub("", str(msg or ""))
+        ident = j.get("SYSLOG_IDENTIFIER") or j.get("_COMM") or "?"
+        transport = j.get("_TRANSPORT", "")
+        # ROUTINE AUDIT LINES are a third of a boot and say nothing a fault
+        # needs; an SELinux refusal can be the cause and is kept.
+        if transport == "audit" or ident == "audit":
+            if not ("avc:" in msg and "denied" in msg):
+                dropped += 1
+                continue
+        # SSH LOGINS: Developer access and File access log every one. The
+        # failures are kept.
+        if ident in ("sshd", "sshd-session", "sftp-server") and \
+                not re.search(r"(?i)error|fail|invalid|refused|denied|fatal", msg):
+            dropped += 1
+            continue
+        if ident == "systemd-logind" and re.match(r"(New session|Removed session|Session \d+ logged out)", msg):
+            dropped += 1
+            continue
+        try:
+            ts = int(j.get("__REALTIME_TIMESTAMP", "0")) / 1e6
+            when = datetime.datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+        except (ValueError, OverflowError, OSError):
+            when = "?"
+        prio = j.get("PRIORITY", "")
+        mark = {"0": "!", "1": "!", "2": "!", "3": "E", "4": "W"}.get(str(prio), " ")
+        for i, line in enumerate(msg.split("\n")):
+            out.append("%s %s %s: %s" % (when, mark, ident, line) if i == 0 else "    " + line)
+    err = p.stderr.read().decode("utf-8", "replace")
+    p.wait()
+    if not out and p.returncode != 0:
+        return None, first_line(err) or "(no such boot)"
+    return out, dropped
+
+
+def capped(lines, cap, head):
+    total = sum(len(l) + 1 for l in lines)
+    if total <= cap:
+        return "\n".join(lines) + "\n", 0
+    first, size = [], 0
+    for l in lines:
+        if size + len(l) + 1 > head:
+            break
+        first.append(l)
+        size += len(l) + 1
+    last, size = [], 0
+    for l in reversed(lines[len(first):]):
+        if size + len(l) + 1 > cap - head:
+            break
+        last.append(l)
+        size += len(l) + 1
+    last.reverse()
+    cut = len(lines) - len(first) - len(last)
+    return ("\n".join(first) + "\n\n... %d lines from the middle of this boot left out (cap %s) ...\n\n"
+            % (cut, size_text(cap)) + "\n".join(last) + "\n"), cut
+
+
+def section_summary(root, settings, frontend_lines):
+    version = first_line(read("/usr/share/cabinetos/version")) or "unknown"
+    info = read_json("/usr/share/ublue-os/image-info.json") or {}
+    status = run(["rpm-ostree", "status", "--booted"])
+    booted_ref = re.search(r"●\s*(\S+)", status)
+    digest = re.search(r"Digest: (\S+)", status)
+    vendor = first_line(read("/sys/class/dmi/id/sys_vendor"))
+    product = first_line(read("/sys/class/dmi/id/product_name"))
+    cpu = re.search(r"Model name:\s*(.+)", run(["lscpu"]))
+    mem = re.search(r"MemTotal:\s*(\d+)", read("/proc/meminfo") or "")
+    gpu = [l for l in frontend_lines if l.startswith("[frontend] GL_RENDERER")]
+    machine = [l for l in frontend_lines if l.startswith("[quality] this machine")]
+    screen = [l for l in frontend_lines if "cabinetos-session: output" in l]
+    feats = []
+    for key, name in (("remote_play", "Remote Play"), ("tailscale", "Tailscale"),
+                      ("file_access", "File access"), ("developer_access", "Developer access"),
+                      ("in_game_shortcuts", "In-game shortcuts")):
+        feats.append("%s %s" % (name, settings.get(key, "off")))
+    if settings.get("steam_installed"):
+        feats.append("Steam set up (%s)" % settings.get("steam", "shown"))
+    else:
+        feats.append("Steam not set up")
+    first_run = read_json(os.path.join(root, "config", "first-run.json")) or {}
+    pairs = [
+        ("CabinetOS", version),
+        ("Image", (booted_ref.group(1) if booted_ref else "unknown")),
+        ("Digest", digest.group(1) if digest else "unknown"),
+        ("Bazzite", "%s %s" % (info.get("image-name", ""), info.get("version", info.get("image-tag", "")))),
+        ("Kernel", first_line(run(["uname", "-r"]))),
+        ("Machine", ("%s %s" % (vendor, product)).strip() or "unknown"),
+        ("Processor", cpu.group(1).strip() if cpu else "unknown"),
+        ("Memory", size_text(int(mem.group(1)) * 1024) if mem else "unknown"),
+        ("Graphics", gpu[-1].split("GL_RENDERER", 1)[1].strip() if gpu else "not in the log"),
+        ("Machine class", machine[-1].split(":", 1)[1].strip() if machine else "not in the log"),
+        ("Screen", screen[-1].split("output", 1)[1].strip() if screen else "not in the log"),
+        ("Up since", first_line(run(["uptime", "-s"]))),
+        ("First run", "%s (%s)" % (first_run.get("completed", "not completed"), first_run.get("how", ""))),
+        ("Features", ", ".join(feats)),
+    ]
+    return kv(pairs)
+
+
+def section_settings(root):
+    out = []
+    for name in ("settings.json", "first-run.json", "drives.json", "picture-quality.json",
+                 "accounts.json", "server.json"):
+        body = read(os.path.join(root, "config", name))
+        out.append("--- %s\n%s\n" % (name, (body or "(none)").strip()))
+    return "\n".join(out)
+
+
+def section_machine():
+    dmi = {}
+    for k in ("sys_vendor", "product_name", "product_version", "product_family", "board_vendor",
+              "board_name", "board_version", "bios_vendor", "bios_version", "bios_date", "chassis_type"):
+        dmi[k] = first_line(read("/sys/class/dmi/id/" + k))
+    cpu = run(["lscpu"])
+    flags = re.search(r"Flags:\s*(.+)", cpu)
+    flagset = set((flags.group(1) if flags else "").split())
+    keep = [l for l in cpu.splitlines() if not l.startswith("Flags:") and not l.startswith("Vulnerability")]
+    out = kv(sorted(dmi.items()))
+    out += "\nAVX2 %s, AVX-512 %s\n\n" % ("yes" if "avx2" in flagset else "no",
+                                          "yes" if "avx512f" in flagset else "no")
+    out += "\n".join(keep) + "\n\n"
+    mem = read("/proc/meminfo") or ""
+    out += "".join(l + "\n" for l in mem.splitlines() if l.split(":")[0] in ("MemTotal", "MemAvailable", "SwapTotal", "SwapFree"))
+    out += "\n--- PCI devices and drivers\n" + run(["lspci", "-nnk"])
+    out += "\n--- USB devices\n" + run(["lsusb"])
+    out += "\n--- rfkill\n" + run(["rfkill", "list"])
+    out += "\n--- firmware the kernel asked for (this boot)\n"
+    fw = run(["journalctl", "-k", "-b", "0", "-o", "cat", "--no-pager", "--grep", "(?i)firmware|microcode"], timeout=30)
+    out += fw if fw.strip() else "(nothing)\n"
+    return out
+
+
+def section_graphics(frontend_lines):
+    out = "".join(l + "\n" for l in frontend_lines
+                  if l.startswith("[frontend] GL_") or l.startswith("[quality] this machine")
+                  or l.startswith("[gpu]") or l.startswith("[cpus]"))
+    out += "\n--- vulkaninfo --summary\n" + ANSI.sub("", run(["vulkaninfo", "--summary"], timeout=20))
+    return out
+
+
+def section_screen(frontend_lines):
+    out = "".join(l + "\n" for l in frontend_lines if l.startswith("cabinetos-session:"))
+    for conn in sorted(glob.glob("/sys/class/drm/card*-*")):
+        status = first_line(read(os.path.join(conn, "status")))
+        if status != "connected":
+            continue
+        name = os.path.basename(conn)
+        modes = (read(os.path.join(conn, "modes")) or "").split()
+        seen = []
+        for m in modes:
+            if m not in seen:
+                seen.append(m)
+        out += "\n--- %s: %s, enabled %s\nmodes: %s\n" % (name, status, first_line(read(os.path.join(conn, "enabled"))),
+                                                       " ".join(seen))
+        # NO HEX DUMP: the raw bytes carry the screen's serial number, which
+        # the decoded text names and the scrub replaces.
+        out += run(["edid-decode", "--skip-hex-dump", "--skip-sha", os.path.join(conn, "edid")], timeout=10)
+    return out
+
+
+def section_drives(root):
+    out = run(["lsblk", "-o", "NAME,TYPE,SIZE,FSTYPE,FSVER,LABEL,MODEL,TRAN,RM,RO,MOUNTPOINTS"])
+    out += "\n" + run(["df", "-h", "-x", "tmpfs", "-x", "devtmpfs", "-x", "efivarfs", "-x", "overlay"])
+    locs = read_json(os.path.join(root, "config", "drives.json")) or []
+    out += "\nGame drives in use: %s\n" % (", ".join(locs) if locs else "the console's own drive only")
+    mesa = os.path.join(HOME, ".cache", "mesa_shader_cache")
+    cap = os.environ.get("MESA_SHADER_CACHE_MAX_SIZE", "") or "1G (Mesa's default)"
+    out += "\n--- Space nothing on the console cleans up\n"
+    out += kv([
+        ("users (everyone's saves)", size_text(du(os.path.join(root, "users")))),
+        ("emulators", size_text(du(os.path.join(root, "emulators")))),
+        ("bios", size_text(du(os.path.join(root, "bios")))),
+        ("Mesa shader cache", "%s, cap %s" % (size_text(du(mesa)), cap)),
+        ("logs", size_text(du(os.path.join(root, "logs")))),
+        ("reports", size_text(du(os.path.join(root, "reports")))),
+    ])
+    out += "\n--- Space the console manages\n"
+    rows = []
+    for loc in [root] + list(locs):
+        rows.append(("cache in %s" % loc, size_text(du(os.path.join(loc, "cache")))))
+        rows.append(("roms in %s" % loc, size_text(du(os.path.join(loc, "roms")))))
+    slice_path = "/var/lib/cabinetos-steam/steam.img"
+    if os.path.exists(slice_path):
+        st = os.stat(slice_path)
+        rows.append(("Steam's share", "%s, %s used on the drive" % (size_text(st.st_size),
+                                                                   size_text(st.st_blocks * 512))))
+    out += kv(rows)
+    out += "\n" + run(["journalctl", "--disk-usage"])
+    return out
+
+
+def bluetooth_up():
+    # bluetoothctl WAITS FOR EVER for a bluetoothd that is not running.
+    return first_line(run(["systemctl", "is-active", "bluetooth.service"])) == "active"
+
+
+def section_controllers(frontend_lines):
+    if not bluetooth_up():
+        return "--- Bluetooth: the service is not running\n\n--- Input devices\n" + input_devices(frontend_lines)
+    out = "--- Bluetooth adapter\n" + run(["bluetoothctl", "show"], timeout=8)
+    out += "\n--- Bluetooth devices this console knows\n"
+    for line in run(["bluetoothctl", "devices"], timeout=8).splitlines():
+        m = re.match(r"Device (\S+) (.+)$", line)
+        if not m:
+            continue
+        info = run(["bluetoothctl", "info", m.group(1)], timeout=8)
+        keep = [l.strip() for l in info.splitlines()
+                if re.match(r"\s*(Device|Name|Alias|Icon|Paired|Bonded|Trusted|Blocked|Connected|Modalias|Battery)", l)]
+        out += "\n".join(keep) + "\n\n"
+    out += "--- Input devices\n"
+    return out + input_devices(frontend_lines)
+
+
+def input_devices(frontend_lines):
+    out = ""
+    dev = read("/proc/bus/input/devices") or ""
+    for block in dev.split("\n\n"):
+        if re.search(r"H: Handlers=.*\bjs\d", block) or "Controller" in block or "Gamepad" in block \
+                or "Wii" in block or "Joy-Con" in block:
+            out += "\n".join(l for l in block.splitlines() if l[:2] in ("I:", "N:", "U:", "H:", "P:")) + "\n\n"
+    out += "--- What the frontend said about controllers (last 60 lines)\n"
+    lines = [l for l in frontend_lines if re.match(r"\[(players|input|wiiremote|wii|wiibridge|shortcuts|vpad|rumble)\]", l)]
+    out += "".join(l + "\n" for l in lines[-60:])
+    return out
+
+
+def section_network():
+    out = run(["nmcli", "general", "status"])
+    out += "\n" + run(["nmcli", "device", "status"])
+    out += "\n" + run(["nmcli", "-f", "NAME,TYPE,DEVICE,AUTOCONNECT,ACTIVE", "connection", "show"])
+    out += "\n--- Wi-Fi in use\n" + run(["nmcli", "-f", "IN-USE,SSID,CHAN,FREQ,RATE,SIGNAL,SECURITY",
+                                        "device", "wifi", "list", "--rescan", "no"])
+    out += "\n" + run(["ip", "-br", "address"])
+    out += "\n" + run(["ip", "route"])
+    out += "\n" + run(["resolvectl", "status"], timeout=8)
+    out += "\n--- Tailscale\n" + first_line(run(["tailscale", "version"])) + "\n"
+    ts = run(["tailscale", "status", "--json"], timeout=8)
+    try:
+        tj = json.loads(ts)
+        self_node = tj.get("Self") or {}
+        out += kv([
+            ("State", tj.get("BackendState", "")),
+            ("Online", str(self_node.get("Online", ""))),
+            ("Devices in the tailnet", str(len(tj.get("Peer") or {}))),
+            ("Online now", str(sum(1 for p in (tj.get("Peer") or {}).values() if p.get("Online")))),
+            ("Health", "; ".join(tj.get("Health") or []) or "nothing reported"),
+            ("Key expires", str(self_node.get("KeyExpiry", ""))),
+        ])
+    except ValueError:
+        out += ts
+    if first_line(run(["systemctl", "is-active", "tailscaled.service"])) == "active":
+        # NOT THE NEAREST RELAY OR THE LIST OF THEM BY DELAY: together they
+        # say roughly where the house is.
+        nc = run(["tailscale", "netcheck"], timeout=15)
+        keep = [l for l in nc.splitlines()
+                if re.match(r"\s*\* (UDP|IPv4|IPv6|MappingVariesByDestIP|PortMapping|CaptivePortal)", l)]
+        out += "\n--- tailscale netcheck\n" + "\n".join(keep) + "\n"
+    return out
+
+
+def sunshine_version(lines):
+    # FROM ITS OWN START-UP LINE, not by running it: `sunshine` with
+    # arguments it does not know may start a second server.
+    for l in reversed(lines):
+        m = re.search(r"Sunshine version: (.+)$", l)
+        if m:
+            return m.group(1).strip()
+    return "not in the log (Remote Play has not started in these two boots)"
+
+
+def section_remoteplay(root, frontend_lines):
+    out = kv([
+        ("Service", first_line(run(["systemctl", "is-active", "cabinetos-remoteplay.service"]))),
+        ("Sunshine", sunshine_version(frontend_lines)),
+        ("Paired devices", str(len(((read_json(os.path.join(root, "remoteplay", ".config", "sunshine",
+                                                           "sunshine_state.json")) or {}).get("root") or {})
+                                   .get("named_devices") or []))),
+        ("Session open", "yes" if glob.glob("/run/user/*/cabinetos-remoteplay-session") else "no"),
+    ])
+    conf = read(os.path.join(root, "remoteplay", ".config", "sunshine", "sunshine.conf"))
+    out += "\n--- sunshine.conf\n" + (conf or "(none)\n")
+    out += "\n--- What the frontend said about Remote Play\n"
+    out += "".join(l + "\n" for l in frontend_lines if l.startswith("[remoteplay]"))
+    return out
+
+
+def section_steam(frontend_lines):
+    out = kv([
+        ("State", (read("/run/cabinetos-steam.state") or "no state file").strip().replace("\n", "; ")),
+        ("Share", "%s, %s used on the drive" % (
+            size_text(os.stat("/var/lib/cabinetos-steam/steam.img").st_size),
+            size_text(os.stat("/var/lib/cabinetos-steam/steam.img").st_blocks * 512))
+         if os.path.exists("/var/lib/cabinetos-steam/steam.img") else "none"),
+    ])
+    out += "".join(l + "\n" for l in frontend_lines if l.startswith("[steam]"))
+    return out
+
+
+def section_updates():
+    out = run(["rpm-ostree", "status"])
+    status = read("/run/cabinetos-update/status")
+    out += "\n--- /run/cabinetos-update/status\n" + (status or "(none)\n")
+    out += "\n--- Signature policy for the image\n"
+    policy = read("/etc/containers/policy.json") or ""
+    out += policy if len(policy) < 4000 else policy[:4000] + "\n...\n"
+    return out
+
+
+def section_server(root):
+    server = read_json(os.path.join(root, "config", "server.json")) or {}
+    address = str(server.get("address", "")).strip()
+    out = ""
+    if not address:
+        out += "No server set.\n"
+    else:
+        url = address if re.match(r"^[a-z]+://", address) else "http://" + address
+        try:
+            with urllib.request.urlopen(url.rstrip("/") + "/api/heartbeat", timeout=5) as r:
+                hb = json.loads(r.read().decode("utf-8", "replace"))
+            ver = (hb.get("SYSTEM") or {}).get("VERSION") or hb.get("VERSION") or "?"
+            out += "Server answered: RomM %s\n" % ver
+        except Exception as e:  # noqa: BLE001 - any failure is the answer
+            out += "Server did not answer: %s\n" % e
+    accounts = read_json(os.path.join(root, "config", "accounts.json")) or {}
+    out += "\nProfiles: %d, active %s\n" % (len(accounts.get("accounts") or []), accounts.get("active"))
+    for a in accounts.get("accounts") or []:
+        ra = os.path.exists(os.path.join(HOME, ".config", "cabinetos", "accounts",
+                                         "%s.retroachievements.json" % a.get("id")))
+        out += "  %s: RetroAchievements %s\n" % (a.get("name"), "signed in" if ra else "not signed in")
+    return out
+
+
+def section_access():
+    return kv([
+        ("File access", first_line(run(["systemctl", "is-active", "cabinetos-files.service"]))),
+        ("File access state", (read("/run/cabinetos-files.state") or "none").strip().replace("\n", "; ")),
+        ("Developer access", first_line(run(["systemctl", "is-active", "cabinetos-developer.service"]))),
+    ])
+
+
+def section_services():
+    out = "--- Failed units\n" + (run(["systemctl", "--failed", "--no-legend", "--no-pager"]) or "(none)\n")
+    out += "\n--- CabinetOS units\n" + run(["systemctl", "list-units", "--all", "--no-legend", "--no-pager",
+                                             "cabinetos*", "sunshine*", "tailscaled*", "bluetooth*",
+                                             "NetworkManager*"])
+    return out
+
+
+def section_games(frontend_lines):
+    pat = re.compile(r"^\[(launch|quality|standalone|overlay|pace|offline|save|core|state|ra|playtime|"
+                     r"resume|rewind|firmware|downloads|ps2|wii|wiiu|xbox|sync|upload)\]|ended after")
+    lines = [l for l in frontend_lines if pat.search(l)]
+    return "".join(l + "\n" for l in lines[-400:]) or "(no game played in these two boots)\n"
+
+
+def section_emulator_logs(root):
+    files = glob.glob(os.path.join(root, "logs", "*.log"))
+    files += glob.glob(os.path.join(root, "emulators", "**", "*.log"), recursive=True)
+    files += glob.glob(os.path.join(HOME, ".config", "rpcs3", "RPCS3.log"))
+    out = []
+    for path in sorted(set(files), key=lambda p: os.path.getmtime(p) if os.path.exists(p) else 0,
+                       reverse=True):
+        try:
+            mtime = os.path.getmtime(path)
+            size = os.path.getsize(path)
+        except OSError:
+            continue
+        when = datetime.datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M:%S")
+        body = ANSI.sub("", read(path, EMU_LOG_CAP) or "")
+        cut = "" if size <= EMU_LOG_CAP else " (the last %s of %s)" % (size_text(EMU_LOG_CAP), size_text(size))
+        out.append("--- %s, written %s%s\n%s\n" % (path, when, cut, body.rstrip()))
+    return "\n".join(out) or "(no emulator has written a log on this console)\n"
+
+
+# --- Putting it together ----------------------------------------------------
+
+def build(root, how):
+    settings = read_json(os.path.join(root, "config", "settings.json")) or {}
+    now = datetime.datetime.now().astimezone()
+
+    boots = []
+    for b in (0, -1):
+        lines, extra = journal_lines(b)
+        boots.append((b, lines, extra))
+    # What the frontend and the session said, both boots, oldest first: the
+    # parts' sections read their state lines from here.
+    frontend = []
+    for b, lines, _ in reversed(boots):
+        for l in lines or []:
+            m = re.match(r"\S+ \S+ . (cabinetos-session|cabinetos-frontend[\w-]*|kernel|sunshine): (.*)$", l)
+            if m:
+                frontend.append(m.group(2))
+
+    parts = []
+    parts.append(("Summary", section_summary(root, settings, frontend)))
+    parts.append(("Settings", section_settings(root)))
+    parts.append(("The machine", section_machine()))
+    parts.append(("Graphics", section_graphics(frontend)))
+    parts.append(("The screen", section_screen(frontend)))
+    parts.append(("Drives and space", section_drives(root)))
+    parts.append(("Controllers and Bluetooth", section_controllers(frontend)))
+    parts.append(("Network and Tailscale", section_network()))
+    parts.append(("Remote Play", section_remoteplay(root, frontend)))
+    parts.append(("Steam", section_steam(frontend)))
+    parts.append(("Updates", section_updates()))
+    parts.append(("The server and profiles", section_server(root)))
+    parts.append(("File access and Developer access", section_access()))
+    parts.append(("Services", section_services()))
+    parts.append(("Games in these two boots", section_games(frontend)))
+    # EVERY EMULATOR'S LAST LOG, whenever it ran: each is one file,
+    # replaced by the next run, so together they are small, and a fault two
+    # restarts ago is still in its own log.
+    parts.append(("Emulator logs (each one's last run)", section_emulator_logs(root)))
+    for b, lines, extra in boots:
+        title = "System log, this boot" if b == 0 else "System log, the boot before"
+        if lines is None:
+            parts.append((title, extra + "\n"))
+            continue
+        body, cut = capped(lines, BOOT_CAP, BOOT_HEAD)
+        note = "%d lines; %d routine audit and SSH login lines left out%s.\n\n" % (
+            len(lines), extra, ", %d cut from the middle" % cut if cut else "")
+        parts.append((title, note + body))
+
+    head = ("CabinetOS diagnostic report\n"
+            "Created %s, %s.\n"
+            "Private details are replaced: <server>, <profile 1>, <wifi 1>, <lan ip 1>,\n"
+            "<mac 1 of 00:11:22> (the maker's half is kept) and so on. The same value has\n"
+            "the same placeholder everywhere in this file.\n" % (now.strftime("%Y-%m-%d %H:%M:%S %Z"), how))
+    text = head
+    for title, body in parts:
+        text += "\n\n==== %s %s\n\n%s" % (title, "=" * max(4, 72 - len(title)), body)
+    return text
+
+
+def main(argv):
+    root = "/var/lib/cabinetos"
+    out_dir = None
+    to_stdout = False
+    how = "from a command"
+    i = 1
+    while i < len(argv):
+        a = argv[i]
+        if a == "--root" and i + 1 < len(argv):
+            root = argv[i + 1]; i += 1
+        elif a == "--out" and i + 1 < len(argv):
+            out_dir = argv[i + 1]; i += 1
+        elif a == "--stdout":
+            to_stdout = True
+        elif a == "--from-settings":
+            how = "from Settings"
+        else:
+            sys.stderr.write("cabinetos-report: unknown argument %s\n" % a)
+            return 2
+        i += 1
+    out_dir = out_dir or os.path.join(root, "reports")
+
+    secrets = collect_secrets(root)
+    scrub = Scrubber(secrets)
+    text = scrub(build(root, how))
+    left = scrub.survivors(text)
+    if left:
+        # FAIL CLOSED. Never say which value: this goes to the log.
+        sys.stderr.write("cabinetos-report: %d private value(s) survived the scrub; nothing written\n"
+                         % len(left))
+        return 1
+
+    if to_stdout:
+        sys.stdout.write(text)
+        return 0
+
+    os.makedirs(out_dir, exist_ok=True)
+    name = "cabinetos-report-%s.txt" % datetime.datetime.now().strftime("%Y-%m-%d-%H%M%S")
+    path = os.path.join(out_dir, name)
+    tmp = path + ".part"
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write(text)
+    os.chmod(tmp, 0o644)
+    os.replace(tmp, path)
+    # Made by root over Developer access: the console's user owns it, as it
+    # owns the folder.
+    try:
+        st = os.stat(out_dir)
+        if os.geteuid() == 0:
+            os.chown(path, st.st_uid, st.st_gid)
+    except OSError:
+        pass
+    reports = sorted(glob.glob(os.path.join(out_dir, "cabinetos-report-*.txt")))
+    for old in reports[:-KEEP]:
+        try:
+            os.unlink(old)
+        except OSError:
+            pass
+    for part in glob.glob(os.path.join(out_dir, "*.part")):
+        if part != tmp:
+            try:
+                os.unlink(part)
+            except OSError:
+                pass
+    sys.stdout.write(path + "\n")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

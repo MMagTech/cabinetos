@@ -16473,3 +16473,88 @@ amber 2, red 1, outline and labels grey.
 something else since (bluez: AlreadyExists) failed with "Couldn't pair" and
 no way out on screen; it now forgets the old pairing and pairs again. **Found
 on the way:** a stream started while the screen is asleep stays black, #294.
+
+### 41. The diagnostic report, issue #195
+
+**Decided with MMagTech, 2026-09-30 to 2026-10-10, on #195; built on the
+`diagnostic-report` branch.** The goal, his words: a report a person can
+share on GitHub, that contains nothing sensitive once shared, and that is
+enough on its own to troubleshoot the issue from. He forwards community
+reports to the assistant, so what goes in is the assistant's call; his checks
+are the screen and privacy.
+
+**One tool, two ways in.** `/usr/libexec/cabinetos-report` (Python; also
+`cabinetos-report` on the path) gathers and scrubs; the frontend only runs
+it. So Developer access makes the same file, and a console whose frontend
+will not start can still make one. About 3 seconds and 1 to 1.5 MB on the A9.
+
+**By part of the system, not by chosen facts**, so the next kind of fault is
+covered: a summary, every setting, then the machine (firmware names, BIOS,
+processor and AVX, PCI and USB devices with drivers, firmware loads),
+graphics, the screen (EDID decoded, modes), drives and space (including what
+nothing cleans up, and Mesa's shader cache against its 1 GB cap), controllers
+and Bluetooth, network and Tailscale, Remote Play, Steam, updates, the server,
+File access and Developer access, services, the games of the two boots,
+every emulator's last log, and **the system log of this boot and the one
+before** (routine audit lines and SSH logins left out, SELinux refusals and
+SSH failures kept; a boot over 5 MB keeps its first 1 MB and last 4 MB and
+says so). The Remote Play faults #294 and #296 are why: a list of facts had
+nothing of Sunshine in it.
+
+**Private details are replaced before anything is written, in two layers.**
+First every value the console knows (server address, profile and
+RetroAchievements names, tokens, Wi-Fi and connection names, Tailscale names
+and addresses, Remote Play device names, Bluetooth names that are not
+controllers, serial numbers of drives, USB devices and the screen, a changed
+hostname, Steam names), then patterns for what no list knows (email, IPv4 and
+IPv6 addresses, MAC and Bluetooth addresses keeping the maker's half, serial
+numbers, `ts.net` names, Steam IDs, secrets in key=value form). One pass over
+the text, so a placeholder is never replaced inside another; each value keeps
+one placeholder throughout. **It fails closed**: a known value found after the
+scrub means nothing is written. Measured on the A9 before it existed:
+Tailscale writes the account email into the log, and save paths carry
+profile names. **Game titles stay.** Left out on purpose: the PIN (four digits
+replaced everywhere would point at it), the EDID hex dump (raw serial bytes),
+and Tailscale's nearest relays (together they say roughly where the house is).
+The project's own public names (`ghcr.io/mmagtech/cabinetos`) are never
+replaced, even when a profile shares the name.
+
+**How it leaves the console: the QR code is a download link** (MMagTech,
+2026-09-30). While the screen is open the console serves that one file at
+`http://<home network address>:<port>/<8 random characters>`, bound to the
+home network address only (not Tailscale), on a port the firewall's home zone
+already allows; closing the screen stops it. Sent as an attachment, because
+an iPhone shows plain text in the browser instead of saving it. The file is
+also in File access, `reports/`, the last five kept. No PIN on the row: it
+changes nothing and nothing private is in the file.
+
+**Checked against real faults of this project, 2026-10-10** (would the
+report alone have pointed at the cause?):
+
+| Fault | What in the report shows it |
+|---|---|
+| A stream started while the screen is asleep stays black (#294) | Sunshine's lines and the frontend's `[idle]` and `[remoteplay]` lines in the system log |
+| Steam over Moonlight: black picture, sound plays (#296) | Steam's state, the handover and Sunshine's lines in the log |
+| The boot on software rendering | `GL_RENDERER` (llvmpipe) in the summary, the session's gamescope attempts, the kernel's firmware lines |
+| A PS2 save that did not reach the server | `[save]` and `[sync]` lines, and whether the server answered |
+| A pad that pairs once and never reconnects | `Trusted: no` in its Bluetooth entry |
+| A game that draws nothing, a black screen with sound | the `[core]` and `[launch]` lines of the game |
+| An emulator that closes (RPCS3, Xenia, Eden) | `[standalone] ... ended after` and the emulator's own last log |
+| No Wi-Fi or GPU on a new machine | PCI devices with no driver in use, and the firmware the kernel asked for |
+| A drive that is not used | its filesystem in the drive list and the `[drives]` reason |
+| An update that failed | `rpm-ostree status`, the update status file, and bootc's lines |
+
+Not reachable from a report: what only the screen shows, the phone's side of
+Remote Play, and when it happened. The issue template asks for those. The
+installer is a different system (no report there).
+
+**Not built, #315 (after first release):** a report from a console with no
+network. That console is almost always a new machine stuck at first run's
+network step, which has no skip, so the report would have to be offered
+there and written to a drive a PC can read (FAT32 for the report only; ext4,
+which the console's own Format makes, is unreadable on Windows and Mac).
+
+**Logs do not fill the drive:** journald caps itself at 4 GB (less on a
+small drive, and keeps 15% free); the A9's was 1.4 GB after three weeks and
+about ninety boots. Emulator logs are one file each, replaced every run
+(260 KB in all); reports keep five.
