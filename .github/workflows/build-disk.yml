@@ -33,6 +33,11 @@ on:
         default: "anaconda-iso"
         type: choice
         options: ["anaconda-iso", "qcow2", "both"]
+      publish:
+        description: "Publish the ISO as the download (R2, replaces the current one)"
+        required: true
+        default: false
+        type: boolean
 
 env:
   IMAGE_NAME: ${{ github.event.repository.name }}  # must match build.yml
@@ -122,3 +127,40 @@ jobs:
           retention-days: 90
           compression-level: 0
           overwrite: true
+
+      # THE DOWNLOAD (#308). One file people can get without an account:
+      # GitHub takes at most 2 GB per release file and the ISO is about
+      # 6.7 GB, so it lives in Cloudflare R2, which charges nothing for
+      # downloads (MMagTech, 2026-10-10). ONE NAME, REPLACED EACH RELEASE:
+      # the link never changes, and the bucket only ever holds one ISO,
+      # inside R2's free storage. Its SHA-256 beside it, for the release
+      # page. The keys are repository secrets, MMagTech's; nothing here
+      # prints them.
+      - name: Publish the ISO
+        if: inputs.publish && matrix.disk-type == 'anaconda-iso'
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          # Newer AWS CLIs add checksums R2 does not take; only when required.
+          AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+          AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+          ENDPOINT: https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
+          OUT: ${{ steps.build.outputs.output-directory }}
+        run: |
+          set -euo pipefail
+          iso=$(find "${OUT}" -name '*.iso' -type f | head -n1)
+          [[ -n "${iso}" ]] || { echo "no ISO in ${OUT}"; exit 1; }
+          echo "ISO: ${iso} ($(du -h "${iso}" | cut -f1))"
+          (cd "$(dirname "${iso}")" && sha256sum "$(basename "${iso}")" | sed 's/ .*$/  cabinetos.iso/') > cabinetos.iso.sha256
+          cat cabinetos.iso.sha256
+          aws s3 cp "${iso}" s3://cabinetos/cabinetos.iso --endpoint-url "${ENDPOINT}" \
+            --content-type application/x-iso9660-image --no-progress
+          aws s3 cp cabinetos.iso.sha256 s3://cabinetos/cabinetos.iso.sha256 --endpoint-url "${ENDPOINT}" \
+            --content-type text/plain --no-progress
+          # Read back what is there, so a green run means the download is
+          # the file just built.
+          aws s3api head-object --bucket cabinetos --key cabinetos.iso --endpoint-url "${ENDPOINT}" \
+            --query ContentLength --output text > remote-size
+          [[ "$(cat remote-size)" == "$(stat -c %s "${iso}")" ]] || { echo "size on R2 differs"; exit 1; }
+          echo "Published cabinetos.iso, $(cat remote-size) bytes, and its SHA-256"

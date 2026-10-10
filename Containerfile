@@ -20,6 +20,10 @@ COPY system_files /system_files
 # repository.
 COPY LICENSE /licences/LICENSE
 COPY docs/LICENCES.md /licences/LICENCES.md
+# And the full licence text of everything the image carries (#120), fetched at
+# each pinned revision by tools/fetch-licences.py. Outside docs/ on purpose:
+# docs/ does not start a build.
+COPY licences /licences/texts
 # The controller list (SDL_GameControllerDB). Installed with the frontend, in
 # the small last layer, NOT from system_files/: there it rode in the OS layer,
 # and its first update shipped 60 MB to the console instead of one file.

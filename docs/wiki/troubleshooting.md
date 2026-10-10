@@ -22,7 +22,8 @@ The system's name in a message is RomM's name for the platform.
   [list](systems.md#every-system). Arcade folders must be named `FBNEO` or
   `MAME2003` exactly.
 - **A tile says *Emulator not installed*.** Switch and Xbox emulators install
-  from Flathub on the first boot with a network, and try again every six hours.
+  from Flathub on the first boot with internet (RomM alone is not enough), and
+  try again every six hours.
   Leave the console on and connected.
 - **A Wii or Wii U game is greyed.** It needs a Wii Remote (pair one) or the Wii
   U GamePad (not supported).
@@ -35,6 +36,9 @@ The system's name in a message is RomM's name for the platform.
   controller in pairing mode again, and keep it close.
 - **A Wii Remote will not pair.** Press the red sync button inside the battery
   cover, not the 1 and 2 buttons.
+- **The pause menu opens and closes at once, or a choice in it does nothing.**
+  One controller is being read twice (#318). Switch it off (hold its button
+  about six seconds) and on again, or use another controller.
 - **No pause menu with the keyboard.** In PS2 and in Switch, PS3, Xbox, Xbox 360
   and Wii U games, use a pad: both sticks pressed together.
 

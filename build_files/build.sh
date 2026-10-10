@@ -114,6 +114,18 @@ log "installing licences"
 mkdir -p /usr/share/licenses/cabinetos
 cp /ctx/licences/LICENSE      /usr/share/licenses/cabinetos/LICENSE
 cp /ctx/licences/LICENCES.md  /usr/share/licenses/cabinetos/LICENCES.md
+# THE FULL TEXTS (#120), one file each, as fetched at the revision the image is
+# built from. Not shown on the TV (MMagTech, 2026-09-25); here, where Fedora
+# keeps every package's, and where GPL wants them: with the binaries.
+mkdir -p /usr/share/licenses/cabinetos/texts
+cp /ctx/licences/texts/*.txt /ctx/licences/texts/SOURCES /usr/share/licenses/cabinetos/texts/
+listed=$(grep -cv '^[[:space:]]*\(#\|$\)' /ctx/licences/texts/SOURCES)
+shipped=$(find /usr/share/licenses/cabinetos/texts -name '*.txt' -size +100c | wc -l)
+if [[ "${listed}" -ne "${shipped}" ]]; then
+    log "  ERROR: licences/SOURCES lists ${listed} texts, ${shipped} were installed"
+    exit 1
+fi
+log "  installed ${shipped} licence texts"
 
 # Asserted rather than assumed, for the reason the system_files overlay above
 # has the same check: a copy that silently does nothing leaves a green build.
