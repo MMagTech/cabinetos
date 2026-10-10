@@ -33,8 +33,8 @@ testing.md, then image-and-ci.md.
    grep "has had no framebuffer for"`). His test: stream straight in, Home,
    Steam, a game, back to Home, picture on the phone throughout, no unit
    failed. Then merge only on his go, close #304, delete the branch with his
-   go. Then the Sunshine pull request: the text is in the PR #306 thread's
-   history; Sunshine's AGENTS.md forbids AI agents opening PRs at
+   go. Then the Sunshine pull request: the draft is on #304
+   (issuecomment-6091812495); Sunshine's AGENTS.md forbids AI agents opening PRs at
    LizardByte, so it goes on his fork and he opens it (ask about the fork).
 2. **Review #307** with him: the showcase page, README and wiki (#190). Two
    stills show his Wi-Fi name and LAN addresses; Pages needs switching on.
