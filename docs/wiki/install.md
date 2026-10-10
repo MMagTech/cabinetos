@@ -24,13 +24,18 @@ GameCube need Vulkan, and every system starts on the lowest picture level.
 
 ## Get the installer
 
-There is no download page yet. The installer is built by this repository's
-**Build disk images** workflow:
+Download **`cabinetos.iso`** (about 6.7 GB) from the
+[latest release](https://github.com/MMagTech/cabinetos/releases/latest). No
+account needed.
 
-1. Open [Actions, Build disk images](https://github.com/MMagTech/cabinetos/actions/workflows/build-disk.yml).
-2. Open the newest successful run.
-3. Download the `cabinetos-anaconda-iso` artifact (GitHub asks you to sign in
-   to download Actions files) and unzip it. The ISO is inside.
+To check the download is whole, compare its SHA-256 with the one on the
+release page:
+
+```bash
+shasum -a 256 cabinetos.iso
+```
+
+(On Windows: `certutil -hashfile cabinetos.iso SHA256`.)
 
 The installer only has to be new enough to install. Once installed, the
 console updates itself (see [Updates](updates.md)).
