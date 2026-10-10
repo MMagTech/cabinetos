@@ -61,6 +61,9 @@ struct SettingsRow {
 struct SettingsCategory {
     std::string name;
     std::vector<SettingsRow> rows;
+    // A QR CODE IN PLACE OF ROWS, with the address under it: How to's Wiki
+    // (#314). Landing on the category shows it; nothing to press.
+    std::string qr;
 };
 
 class SettingsScreen {
@@ -122,6 +125,8 @@ private:
     design::Animated paneChange_;
     int marked_ = 0, markedBefore_ = 0;
     design::Animated markMove_;
+    ui::QrTexture qr_;
+    std::string qrFor_;
 };
 
 }  // namespace screens

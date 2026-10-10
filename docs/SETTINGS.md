@@ -833,7 +833,8 @@ from (#286). Decided with MMagTech on the A9, 2026-10-07, and Tailscale
 
 - **Developer access** (#134; decided with MMagTech 2026-10-07, built on
   `developer-access`): **one row**, "Developer access", "SSH" under it, On
-  or Off, **in About, under Version, and hidden until Version is pressed
+  or Off, **in About, last (under Credits since 2026-10-10, so the
+  everyday rows never move), and hidden until Version is pressed
   seven times** (each within two seconds of the last), the way Android hides
   its developer options. Seven more hide it again, **and hiding turns it
   off**: nothing listens behind a switch nobody can see. A console with it on

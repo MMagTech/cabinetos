@@ -426,11 +426,33 @@ void SettingsScreen::drawGlass(Ctx& c) {
         y += rh + gap;
     }
     };
+    // A CATEGORY THAT IS A QR CODE: the code at the top of the pane, its
+    // quiet zone drawn by the texture, and the address under it.
+    auto drawQr = [&](const std::string& url, float alpha) {
+        if (qrFor_ != url) {
+            std::string err;
+            const qr::Code code = qr::encode(url, &err);
+            qr_.set(code);
+            qrFor_ = url;
+        }
+        c.r.setContentAlpha(a * alpha);
+        const float side = 420.0f;
+        if (qr_.valid()) qr_.draw(c.r, px, top, side);
+        std::string shown = url;
+        if (shown.rfind("https://", 0) == 0) shown = shown.substr(8);
+        if (!shown.empty() && shown.back() == '/') shown.pop_back();
+        c.text.draw(c.r, shown, px, top + side + 30.0f + c.text.ascent(ui::TextStyle::Body, c.sc),
+                    ui::TextStyle::Body, ui::palette::kScreenCyan, c.sc);
+    };
+    auto drawPane = [&](int ci, float alpha, int focusRow, float scrollY) {
+        if (!cats_[ci].qr.empty()) drawQr(cats_[ci].qr, alpha);
+        else drawRows(cats_[ci].rows, alpha, focusRow, scrollY);
+    };
     const float pa = paneChange_.value();
     if (pa < 1.0f && prevCat_ >= 0 && prevCat_ < static_cast<int>(cats_.size()) &&
         prevCat_ != cat_)
-        drawRows(cats_[prevCat_].rows, 1.0f - pa, -1, 0.0f);
-    drawRows(rows, pa, row_, scroll_.value());
+        drawPane(prevCat_, 1.0f - pa, -1, 0.0f);
+    drawPane(cat_, pa, row_, scroll_.value());
 }
 
 }  // namespace screens

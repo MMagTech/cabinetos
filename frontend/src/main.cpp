@@ -7129,7 +7129,7 @@ int main(int argc, char** argv) {
     // is what makes quitting a game return to the launch screen and backing out
     // again return to the browsing.
     enum class Screen { Home, Library, Grid, Detail, Search, AddAccount, TailscaleSignIn, Report,
-                        HowTo, Wiki, Settings };
+                        HowTo, Settings };
     std::vector<Screen> stack{Screen::Home};
     // Which screen last set the room, so a change of screen can be told apart
     // from focus moving within one. See the backdrop block in the frame loop.
@@ -7161,10 +7161,8 @@ int main(int argc, char** argv) {
     // ABOUT, HOW TO (#314): the controls, in Settings' own shape (a section
     // per row on the left, its lines on the right), so it looks like the
     // console rather than a page of text (MMagTech on the TV, 2026-10-10).
-    // The wiki is a QR code on a screen of its own.
+    // Its Wiki is a QR code in the pane, shown on landing.
     screens::SettingsScreen howToScreen;
-    screens::AddAccountScreen wikiScreen;
-    wikiScreen.setText("CabinetOS wiki", {}, "");
     screens::SettingsScreen settingsScreen;
     // What the docked keyboard held last frame, so the query is re-run when it
     // changes and not sixty times a second when it does not.
@@ -8871,8 +8869,7 @@ int main(int argc, char** argv) {
                      SetDarkHours, SetColour, SetRumble, SetPictureQuality,
                      SetWiiRemotes, SetSteam, SetSteamShow, SetRetroAchievements,
                      SetAchievementSound, SetDeveloper, SetVersion, SetRemotePlay,
-                     SetPairedDevices, SetTailscale, SetReport, SetHowTo, SetPads,
-                     SetHowToWiki };
+                     SetPairedDevices, SetTailscale, SetReport, SetHowTo, SetPads };
     // One Eject row per USB drive: this plus the drive's index in
     // storage::locations() when the rows were built.
     constexpr int kSetEject = 100;
@@ -8929,11 +8926,11 @@ int main(int argc, char** argv) {
         cats.push_back({"Steam",
                         {line("Open", "Power menu, Switch to Steam"),
                          line("Come back", "Steam's Power menu, Switch to Desktop")}});
-        cats.push_back({"Wii Remotes",
-                        {line("Pair", "The red sync button, under the battery cover")}});
+        cats.push_back({"Controllers",
+                        {line("Pair a controller", "Settings, Controllers, Add a controller"),
+                         line("Pair a Wii Remote", "The red sync button, under the battery cover")}});
         cats.push_back({"Drives", {line("Unplug", "Eject it first, in Settings, Storage")}});
-        cats.push_back({"Everything else",
-                        {screens::SettingsRow{K::Action, SetHowToWiki, "The wiki", "", ""}}});
+        cats.push_back({"Wiki", {}, kWikiUrl});
         howToScreen.setCategories(std::move(cats));
         howToScreen.enter();
         stack.push_back(Screen::HowTo);
@@ -10365,9 +10362,13 @@ int main(int argc, char** argv) {
                                    base.empty() ? "" : "Bazzite " + base, version};
             v.pressable = true;
             about.push_back(v);
+            about.push_back({K::Action, SetHowTo, "How to", "", ""});
+            about.push_back({K::Action, SetCredits, "Credits and licenses", "", ""});
             // DEVELOPER ACCESS: one row, as File access; everything a computer
             // needs is in the panel it opens. Port 2222, the full command
-            // line. Under Version, where pressing seven times shows it.
+            // line. LAST, under Credits (MMagTech, 2026-10-10): About is short
+            // enough that it still appears in view on the seventh press of
+            // Version, and the everyday rows never move when it shows.
             if (devShown) {
                 std::string value = devState == "active" ? "On" : "Off";
                 std::string detail = "SSH";
@@ -10375,8 +10376,6 @@ int main(int argc, char** argv) {
                 else if (!devFailed.empty()) detail = devFailed;
                 about.push_back({K::Toggle, SetDeveloper, "Developer access", detail, value});
             }
-            about.push_back({K::Action, SetHowTo, "How to", "", ""});
-            about.push_back({K::Action, SetCredits, "Credits and licenses", "", ""});
             cats.push_back({"About", std::move(about)});
         }
 
@@ -11711,11 +11710,7 @@ int main(int argc, char** argv) {
                 } else if (res.value == SetHowTo) {
                     openHowTo();
                     sound::play(sound::Cue::Activate);
-                } else if (res.value == SetHowToWiki) {
-                    wikiScreen.open();
-                    wikiScreen.setPairing(kWikiUrl, kWikiUrl);
-                    stack.push_back(Screen::Wiki);
-                    sound::play(sound::Cue::Activate);
+
                 } else if (res.value == SetCredits) {
                     // A list, one line per project: what it does, and its
                     // licence. Nothing to choose; A or B closes it.
@@ -12356,7 +12351,6 @@ int main(int argc, char** argv) {
             case Screen::TailscaleSignIn: apply(tsSignInScreen.key(n)); return true;
             case Screen::Report: apply(reportScreen.key(n)); return true;
             case Screen::HowTo: apply(howToScreen.key(n)); return true;
-            case Screen::Wiki: apply(wikiScreen.key(n)); return true;
             case Screen::Settings: apply(settingsScreen.key(n)); return true;
         }
         return false;
@@ -16238,7 +16232,6 @@ int main(int argc, char** argv) {
             reportScreen.tick(dt);
             howToScreen.setHasFocus(!barFocused && !accountsOpen);
             howToScreen.tick(dt);
-            wikiScreen.tick(dt);
             settingsScreen.setHasFocus(!barFocused && !accountsOpen);
             settingsScreen.tick(dt);
             pinScreen.tick(dt);
@@ -16752,8 +16745,7 @@ int main(int argc, char** argv) {
                 else if (!lastLitArt.empty())
                     want = lastLitArt;
             } else if (here() == Screen::AddAccount || here() == Screen::TailscaleSignIn ||
-                       here() == Screen::Report || here() == Screen::HowTo ||
-                       here() == Screen::Wiki) {
+                       here() == Screen::Report || here() == Screen::HowTo) {
                 // **A TEXT SCREEN GETS THE PLAIN GRADIENT.** MMagTech,
                 // 2026-09-22: *"i preferred the purple background that went
                 // with the first run setup better. The current background
@@ -17124,7 +17116,6 @@ int main(int argc, char** argv) {
                 case Screen::TailscaleSignIn: tsSignInScreen.draw(ctx); break;
                 case Screen::Report: reportScreen.draw(ctx); break;
                 case Screen::HowTo: howToScreen.draw(ctx); break;
-                case Screen::Wiki: wikiScreen.draw(ctx); break;
                 case Screen::Settings: settingsScreen.draw(ctx); break;
                 case Screen::Home: break;   // unreachable, and the compiler asks
             }
@@ -17455,7 +17446,6 @@ int main(int argc, char** argv) {
                 case Screen::TailscaleSignIn: break;
                 case Screen::Report: break;
                 case Screen::HowTo: howToScreen.drawGlass(ctx); break;
-                case Screen::Wiki: break;
                 case Screen::Settings: settingsScreen.drawGlass(ctx); break;
                 case Screen::Home: break;
             }
@@ -17652,8 +17642,7 @@ int main(int argc, char** argv) {
                                  : (here() == Screen::Library || here() == Screen::Grid)
                                      ? BarLibrary
                                      : here() == Screen::Search   ? BarSearch
-                                     : (here() == Screen::Settings || here() == Screen::HowTo ||
-                                        here() == Screen::Wiki)
+                                     : (here() == Screen::Settings || here() == Screen::HowTo)
                                          ? BarSettings
                                          : -1;
             const float barX = kContentInset;
