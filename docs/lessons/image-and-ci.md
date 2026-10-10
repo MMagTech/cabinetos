@@ -269,3 +269,26 @@ Read before touching `build_files/`, `system_files/`, `ci/`, the workflows, the 
   image on the A9, its last line named a variable that no longer existed and
   the image build would have failed at the very end. Five minutes, against a
   wasted image build.
+
+## The release download (learned 2026-10-10, the first release)
+
+- **A GitHub Release takes at most 2 GB per file, and the ISO is about 6.7 GB.**
+  Nobody checked the size when the release was planned; it surfaced on
+  release day. The installer lives in Cloudflare R2 (`download.mmagtech.com`,
+  MMagTech's account), uploaded by **Build disk images** with `publish`.
+  `docs/PROJECT.md` and the release-hosting memory have why not the
+  alternatives.
+- **A new DNS name is "not found" for a while on any machine that asked
+  before it existed.** The Mac and the A9 both cached the miss for
+  `download.mmagtech.com`; public resolvers had it at once. Check with
+  `dig @1.1.1.1` and `curl --resolve` before concluding a domain is broken.
+- **The A9 has no IPv6 route** but resolves AAAA records first, so `curl`
+  there fails on a dual-stack host: use `curl -4`. Browsers fall back by
+  themselves.
+- **GitHub Pages tells browsers to keep pages for about 10 minutes.** Right
+  after a site change, MMagTech's browser showed the old page; a private
+  window showed the new one. Check the live page with `curl` before
+  assuming a change did not land.
+- **A custom domain on Pages means no base path.** `_config.yml`'s
+  `baseurl: /cabinetos` made every stylesheet miss at
+  `cabinetos.mmagtech.com`, and the site loaded unstyled.
