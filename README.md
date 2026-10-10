@@ -83,8 +83,9 @@ The [wiki](https://cabinetos.mmagtech.com/wiki/) goes from a blank PC to
 playing: [install](docs/wiki/install.md), [first run](docs/wiki/first-run.md),
 [your RomM server](docs/wiki/romm.md), then everything else.
 
-**[Download the installer](https://github.com/MMagTech/cabinetos/releases/latest)**:
-one file, `cabinetos.iso`, from the latest release.
+**[Download the installer](https://download.mmagtech.com/cabinetos.iso)**:
+one file, `cabinetos.iso`, always the newest release
+([release notes](https://github.com/MMagTech/cabinetos/releases/latest)).
 
 ## Credits and licence
 
