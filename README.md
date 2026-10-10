@@ -7,13 +7,13 @@
 <a href="https://github.com/rommapp/romm">RomM</a> server, up to four players at once.</p>
 
 <p align="center">
-<a href="https://mmagtech.github.io/cabinetos/"><b>See it in action</b></a> ·
-<a href="https://mmagtech.github.io/cabinetos/wiki/">Wiki</a> ·
+<a href="https://cabinetos.mmagtech.com/"><b>See it in action</b></a> ·
+<a href="https://cabinetos.mmagtech.com/wiki/">Wiki</a> ·
 <a href="docs/wiki/install.md">Install</a> ·
 <a href="docs/wiki/systems.md">Systems and BIOS</a>
 </p>
 
-[![CabinetOS Home on the TV](docs/media/home.webp)](https://mmagtech.github.io/cabinetos/)
+[![CabinetOS Home on the TV](docs/media/home.webp)](https://cabinetos.mmagtech.com/)
 
 CabinetOS turns a small PC into a games console. It starts straight into its
 own menus, and from there a controller does everything. Games, covers, BIOS and
@@ -40,7 +40,7 @@ from your whole library.
 | ![Zero Gunner 2 on Dreamcast](docs/media/play-dreamcast.webp) | ![Deathsmiles in the arcade, CRT look](docs/media/play-arcade.webp) | ![Six of the sixteen colours](docs/media/colours-grid.webp) |
 
 Every picture here was captured from a running console. The
-[showcase page](https://mmagtech.github.io/cabinetos/) has the videos.
+[showcase page](https://cabinetos.mmagtech.com/) has the videos.
 
 ## Why CabinetOS exists
 
@@ -74,11 +74,12 @@ These days it's my kids on that couch. Same feeling.
 
 ## Get started
 
-The [wiki](https://mmagtech.github.io/cabinetos/wiki/) goes from a blank PC to
+The [wiki](https://cabinetos.mmagtech.com/wiki/) goes from a blank PC to
 playing: [install](docs/wiki/install.md), [first run](docs/wiki/first-run.md),
-[your RomM server](docs/wiki/romm.md), then everything else. There is no
-release download yet; the [install page](docs/wiki/install.md#get-the-installer)
-says where the installer comes from today.
+[your RomM server](docs/wiki/romm.md), then everything else.
+
+**[Download the installer](https://github.com/MMagTech/cabinetos/releases/latest)**:
+one file, `cabinetos.iso`, from the latest release.
 
 ## Credits and licence
 
