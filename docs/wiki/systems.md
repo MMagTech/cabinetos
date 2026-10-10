@@ -88,9 +88,7 @@ downloads anything new into the console's shared BIOS folder.
   maps to its arcade platform (`mame`, `fbneo`, `cps`). Each game runs in
   FinalBurn Neo if FinalBurn Neo has its set, otherwise in MAME 2003-Plus if
   that has it. A game neither has shows greyed: *Not supported on this
-  console*. A game both have runs in FinalBurn Neo, so in this folder use the
-  FinalBurn Neo set for it; keep MAME 0.78 sets of such games in a
-  MAME-named folder.
+  console*.
 - **Two folders let you choose the emulator yourself.** A folder named after
   an emulator runs every game in it with that emulator: `FBNEO`, `fbneo`,
   `fba` or `FinalBurn Neo` for FinalBurn Neo; `MAME2003`, `mame2003plus` or
