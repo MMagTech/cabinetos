@@ -26,12 +26,20 @@ checked and the full texts in the image (#120). The A9 (Wi-Fi,
 
 ## Next
 
-MMagTech decides what comes after the release. Open, to put to him:
+1. **#318, one controller seated twice: the two-minute test first**, with
+   MMagTech at the TV (lessons: testing.md). Only the Xbox pad on. Start a
+   SNES game, read `[players]` in the journal for a second pad with the same
+   Bluetooth address, quit; then the same with a PS2 game. Only PS2: the fix
+   is in the PS2 start path. Both: SDL's Xbox HIDAPI driver at game start;
+   talk through what a setting change touches before choosing. Neither: keep
+   the workaround (on the troubleshooting page). **No guard that touches every
+   controller** without his go: he was wary of it.
+2. **#268, booting with the TV off.** Ready to ship, left over.
 
-- **Ready to ship, left over:** booting with the TV off (#268), and one
-  controller seated twice (#318: find the cause with its two-minute test
-  first; the guard touches every controller).
-- **After first release:** the rest, in that milestone.
+Then MMagTech picks from After first release. Ideas he raised, not filed:
+Switch gyro (only if enough games use motion: count them first) and 3DS (only
+if a stable libretro core exists; check Azahar). **Wii stays Wii Remotes
+only** (MMagTech, 2026-10-10).
 
 **After a console is installed fresh** it has no key: About, press Version
 seven times, Developer access, PIN; then from the Mac, with the password on
