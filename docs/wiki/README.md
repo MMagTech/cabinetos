@@ -1,7 +1,7 @@
 # CabinetOS wiki
 
 How to set up CabinetOS and use every part of it. Start at the top and you go
-from a blank PC to playing.
+from a blank PC to playing. [Why it exists](why.md), in a few lines.
 
 ![Home on the TV](../media/home.webp)
 

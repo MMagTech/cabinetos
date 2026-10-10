@@ -3,6 +3,7 @@
 - section: Start here
   pages:
     - { file: README.md, title: Wiki home }
+    - { file: why.md, title: Why CabinetOS exists }
     - { file: install.md, title: Install }
     - { file: first-run.md, title: First run }
     - { file: romm.md, title: Your RomM server }
