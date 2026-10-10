@@ -8865,7 +8865,7 @@ int main(int argc, char** argv) {
                      SetDarkHours, SetColour, SetRumble, SetPictureQuality,
                      SetWiiRemotes, SetSteam, SetSteamShow, SetRetroAchievements,
                      SetAchievementSound, SetDeveloper, SetVersion, SetRemotePlay,
-                     SetPairedDevices, SetTailscale, SetReport, SetHowTo };
+                     SetPairedDevices, SetTailscale, SetReport, SetHowTo, SetPads };
     // One Eject row per USB drive: this plus the drive's index in
     // storage::locations() when the rows were built.
     constexpr int kSetEject = 100;
@@ -9266,6 +9266,9 @@ int main(int argc, char** argv) {
     };
     PadWindow padWin;
     bool padWindowOpen = false;
+    // Opened from the Controllers panel: closing it goes back there, as Pair
+    // a Wii Remote goes back to the Wii Remotes panel.
+    bool padWindowFromPanel = false;
     std::vector<SDL_JoystickID> padWindowBefore;   // pads here when it opened
     std::vector<bt::Device> padShown;              // the rows, in order
     std::string padPairingName;                    // "" when not pairing
@@ -9547,6 +9550,99 @@ int main(int argc, char** argv) {
         wiiValuesShown = values;
     };
     auto openWiiPanel = [&]() { openWiiPanelAt(0); };
+
+    // ---- The Controllers panel ----------------------------------------------
+    //
+    // A ROW PER PAD, its name and its player ("• Player 1" on the pad last
+    // pressed, which is how two identical pads are told apart), then Add a
+    // controller. Pressing a pad gives it another number (the two swap) or
+    // forgets a Bluetooth pad; a lone wired pad has neither. After either,
+    // back to this panel, on the same pad.
+    std::vector<players::Pad> padsShown;
+    bool padsPanelSeenOpen = false;
+    int padsPanelGen = -1;
+    SDL_JoystickID padsPanelHand = 0;
+    auto padsPanelRows = [&](std::vector<std::string>* names, std::vector<std::string>* values) {
+        padsShown = players::connected();
+        for (const players::Pad& p : padsShown) {
+            names->push_back(p.name);
+            values->push_back(std::string(p.id == settingsLastPad ? "\xE2\x80\xA2 " : "") +
+                              "Player " + std::to_string(p.player + 1));
+        }
+        names->push_back("Add a controller");
+        values->push_back("");
+        padsPanelGen = players::generation();
+        padsPanelHand = settingsLastPad;
+    };
+    std::function<void(int)> openPadsPanelAt;
+    openPadsPanelAt = [&](int focus) {
+        std::vector<std::string> names, values;
+        padsPanelRows(&names, &values);
+        const int addAt = static_cast<int>(padsShown.size());
+        askChoice("Controllers", "", names, std::clamp(focus, 0, addAt), [&](int i) {
+            const int add = static_cast<int>(padsShown.size());
+            if (i == add) {
+                choiceScreen.close();
+                padsPanelSeenOpen = false;
+                openPadWindow();
+                padWindowFromPanel = true;
+                return;
+            }
+            if (i < 0 || i >= add) return;
+            const players::Pad pad = padsShown[static_cast<size_t>(i)];
+            const int me = pad.player;
+            std::vector<std::string> opts;
+            std::vector<int> numbers;
+            for (const players::Pad& o : padsShown)
+                if (o.player != me) {
+                    opts.push_back("Make player " + std::to_string(o.player + 1));
+                    numbers.push_back(o.player);
+                }
+            const bool canForget = !pad.address.empty();
+            if (numbers.empty() && !canForget) {   // a lone wired pad
+                sound::play(sound::Cue::Edge);
+                return;
+            }
+            if (canForget) opts.push_back("Forget");
+            opts.push_back("Cancel");
+            sound::play(sound::Cue::Activate);
+            askChoice(pad.name, "Player " + std::to_string(me + 1), opts, 0,
+                      [&, me, numbers, canForget, pad, i](int k) {
+                if (k >= 0 && k < static_cast<int>(numbers.size())) {
+                    players::swap(me, numbers[k]);
+                    if (rebuildSettingsRows) rebuildSettingsRows();
+                    openPadsPanelAt(i);
+                    return;
+                }
+                if (!canForget || k != static_cast<int>(numbers.size())) {
+                    openPadsPanelAt(i);
+                    return;
+                }
+                // Back from a question goes back to the panel, as its own
+                // Cancel does.
+                askChoice("Forget " + pad.name + "?", "", {"Forget", "Cancel"}, 1,
+                          [&, pad, i](int j) {
+                    if (j == 0) {
+                        std::string err;
+                        if (bt::forget(pad.address, &err))
+                            std::fprintf(stderr, "[players] forgot %s\n", pad.address.c_str());
+                        else {
+                            std::fprintf(stderr, "[players] could not forget %s: %s\n",
+                                         pad.address.c_str(), err.c_str());
+                            menuNotice.say("Couldn't forget " + pad.name, Tone::Problem);
+                        }
+                        if (rebuildSettingsRows) rebuildSettingsRows();
+                    }
+                    openPadsPanelAt(i);
+                });
+                choiceBack = [&, i]() { openPadsPanelAt(i); };
+            });
+            choiceBack = [&, i]() { openPadsPanelAt(i); };
+        });
+        choiceScreen.setValues(values);
+        choiceScreen.setStaysOpen(true);
+        padsPanelSeenOpen = true;
+    };
 
     auto askWifi = [&settingsWifi]() {
         if (settingsWifi.running.load()) return;
@@ -9884,25 +9980,18 @@ int main(int argc, char** argv) {
                             ra::signedIn() ? ra::username() : "Sign in"});
         }
 
-        // ONE ROW PER CONTROLLER: its name, and its player as the value, the
-        // shape of every other setting, so it reads as something that can be
-        // changed. It was "Player 1" over the name for one build, and
-        // MMagTech: nothing said the number could change. A button pressed on
-        // a pad lights its row, which is how two identical pads are told
-        // apart. Pressing a row gives that pad another number (the two swap)
-        // or forgets a Bluetooth pad; a lone wired pad has neither, so its
-        // row only shows. players.h, issue #64.
+        // THE CONTROLLERS: ONE ROW, opening a panel of its own, as Wii
+        // Remotes do (MMagTech on the TV, 2026-10-10: three pads, one row
+        // each, filled the page and a fourth would push Rumble and the
+        // shortcuts off it; one screen per section, as for the Remotes). The
+        // panel has a row per pad, its player as the value, and Add a
+        // controller. openPadsPanelAt. players.h, issue #64.
         {
             std::vector<Row> rows;
             const std::vector<players::Pad> pads = players::connected();
             settingsPadsSeen = players::generation();
-            if (pads.empty()) rows.push_back({K::Info, 0, "No controllers", "", ""});
-            for (const players::Pad& p : pads) {
-                const bool canAct = pads.size() > 1 || !p.address.empty();
-                rows.push_back({canAct ? K::Action : K::Info, kSetPad + p.player, p.name, "",
-                                "Player " + std::to_string(p.player + 1)});
-            }
-            rows.push_back({K::Action, SetAddController, "Add a controller", "", ""});
+            rows.push_back({K::Action, SetPads, "Controllers", "",
+                            pads.empty() ? "None" : std::to_string(pads.size()) + " connected"});
             // REAL WII REMOTES (#200, PROJECT.md question 35): pair one once,
             // as on a Wii, and the Wii games made for it play. ONE ROW, opening
             // a panel of its own (the paired Remotes, Pair a Wii Remote, the
@@ -11220,45 +11309,8 @@ int main(int argc, char** argv) {
                 sound::play(sound::Cue::Activate);
                 break;
             case screens::Action::Setting:
-                if (res.value >= kSetPad && res.value < kSetPad + players::kMax) {
-                    const int me = res.value - kSetPad;
-                    const std::vector<players::Pad> pads = players::connected();
-                    auto mine = std::find_if(pads.begin(), pads.end(),
-                                             [&](const players::Pad& p) { return p.player == me; });
-                    if (mine == pads.end()) break;
-                    const players::Pad pad = *mine;
-                    std::vector<std::string> opts;
-                    std::vector<int> numbers;
-                    for (const players::Pad& o : pads)
-                        if (o.player != me) {
-                            opts.push_back("Make player " + std::to_string(o.player + 1));
-                            numbers.push_back(o.player);
-                        }
-                    const bool canForget = !pad.address.empty();
-                    if (canForget) opts.push_back("Forget");
-                    opts.push_back("Cancel");
-                    askChoice(pad.name, "Player " + std::to_string(me + 1), opts, 0,
-                              [&, me, numbers, canForget, pad](int k) {
-                        if (k >= 0 && k < static_cast<int>(numbers.size())) {
-                            players::swap(me, numbers[k]);
-                            buildSettings();
-                            return;
-                        }
-                        if (!canForget || k != static_cast<int>(numbers.size())) return;
-                        askChoice("Forget " + pad.name + "?", "", {"Forget", "Cancel"}, 1,
-                                  [&, pad](int j) {
-                            if (j != 0) return;
-                            std::string err;
-                            if (bt::forget(pad.address, &err))
-                                std::fprintf(stderr, "[players] forgot %s\n", pad.address.c_str());
-                            else {
-                                std::fprintf(stderr, "[players] could not forget %s: %s\n",
-                                             pad.address.c_str(), err.c_str());
-                                menuNotice.say("Couldn't forget " + pad.name, Tone::Problem);
-                            }
-                            buildSettings();
-                        });
-                    });
+                if (res.value == SetPads) {
+                    openPadsPanelAt(0);
                     sound::play(sound::Cue::Activate);
                 } else if (res.value >= kSetFormat) {
                     const size_t i = static_cast<size_t>(res.value - kSetFormat);
@@ -16240,6 +16292,15 @@ int main(int argc, char** argv) {
                     }
                 }
             }
+            // THE CONTROLLERS PANEL FOLLOWS THE PADS while it is open: one
+            // connecting or going, a swap, and the dot on the pad last pressed.
+            if (choiceScreen.isOpen() && choiceScreen.title() == "Controllers" && padsPanelSeenOpen &&
+                here() == Screen::Settings &&
+                (players::generation() != padsPanelGen || settingsLastPad != padsPanelHand)) {
+                std::vector<std::string> names, values;
+                padsPanelRows(&names, &values);
+                choiceScreen.replace(names, values, "");
+            }
             if (wiiPairOpen) {
                 // Pair a Wii Remote: closed by Back, or paired. EITHER WAY BACK
                 // TO THE WII REMOTES PANEL it was opened from, one step, as Back
@@ -16294,6 +16355,9 @@ int main(int argc, char** argv) {
                 if (!choiceScreen.isOpen() || here() != Screen::Settings) {
                     choiceScreen.close();
                     closePadWindow();
+                    if (padWindowFromPanel && here() == Screen::Settings)
+                        openPadsPanelAt(static_cast<int>(players::connected().size()));
+                    padWindowFromPanel = false;
                 } else {
                     bool fresh = false, done = false, ok = false;
                     std::string err;
