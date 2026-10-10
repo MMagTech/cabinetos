@@ -922,6 +922,7 @@ def build(root, how):
 
     head = ("CabinetOS diagnostic report\n"
             "Created %s, %s.\n"
+            "Attach this file to an issue: https://github.com/MMagTech/cabinetos/issues/new/choose\n"
             "Private details are replaced: <server>, <profile 1>, <wifi 1>, <lan ip 1>,\n"
             "<mac 1 of 00:11:22> (the maker's half is kept) and so on. The same value has\n"
             "the same placeholder everywhere in this file.\n" % (now.strftime("%Y-%m-%d %H:%M:%S %Z"), how))
