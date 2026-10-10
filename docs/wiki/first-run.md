@@ -23,7 +23,7 @@ greyed until it is online.
 ## 2. RomM server
 
 Type the address you open RomM at in a browser, without `http://`, for
-example `192.168.1.10:6005` or `romm.local:8080`. The keyboard has `.local`
+example `192.168.0.20:8080` or `romm.local:8080`. The keyboard has `.local`
 and `:8080` keys to save typing.
 
 - Type the port if your server uses one. None is added for you.
