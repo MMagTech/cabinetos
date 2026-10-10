@@ -82,6 +82,11 @@ reason_of() {
     if grep -qi 'no space left' "${log}"; then
         echo "Not enough space"; return
     fi
+    # An image without CabinetOS's signature, or with somebody else's (#135):
+    # containers/image says "Source image rejected" and names the signature.
+    if grep -qiE 'source image rejected|signature' "${log}"; then
+        echo "Not signed by CabinetOS"; return
+    fi
     line=$(grep -i 'error' "${log}" | tail -1)
     [[ -n "${line}" ]] || line=$(tail -1 "${log}")
     line="${line##*: }"
