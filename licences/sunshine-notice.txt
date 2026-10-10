@@ -1,0 +1,5 @@
+sunshine-notice: NOTICE from github.com/LizardByte/Sunshine at 63d35f702ee9e362e43263742981836ec0710384
+
+©2018 Valve Corporation. Steam and the Steam logo are trademarks and/or
+registered trademarks of Valve Corporation in the U.S. and/or other countries. All
+rights reserved.

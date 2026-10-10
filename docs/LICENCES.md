@@ -9,14 +9,19 @@ commits below are **CabinetOS's**, not Cabinet's — eleven cores are pinned to 
 different revision than Cabinet's iOS build ships, and the pins here are the
 ones `cores/build-core.sh` asserts at build time.
 
-**CabinetOS ships no games and no BIOS files.** Both come from the person's own
-RomM server at runtime and neither is redistributed here.
+**CabinetOS ships no games and no BIOS files, with one exception: the Vectrex
+system ROM** (its built-in game, Mine Storm, included), which the vecx core has
+compiled into it and cannot load from anywhere else. Smith Engineering, which
+owns the Vectrex's software, allowed it to be shared freely for non-commercial
+use in 1992; the same non-commercial constraint as the six cores below covers
+it. Everything else comes from the person's own RomM server at runtime and is
+not redistributed here.
 
 ---
 
 ## The constraint this project is under, said plainly
 
-**Six of the twenty-one cores are free for non-commercial use only.** Not GPL —
+**Six of the twenty-two cores are free for non-commercial use only.** Not GPL —
 a different thing, and a stricter one. They cover Arcade, SNES, Genesis, Sega
 CD, Master System, Game Gear, 32X and 3DO, which is a large slice of the
 library.
@@ -97,23 +102,23 @@ of the finished `.so` and fails the build if it does not match.
 | Snes9x | SNES | **Non-commercial** | [libretro/snes9x](https://github.com/libretro/snes9x) | `890b5d445538` |
 | Genesis Plus GX | Genesis, Sega CD, Master System, Game Gear | **Non-commercial** | [libretro/Genesis-Plus-GX](https://github.com/libretro/Genesis-Plus-GX) | `a7985a9c4278` |
 | PicoDrive | Sega 32X | **Non-commercial** | [libretro/picodrive](https://github.com/libretro/picodrive) | `733c711a477a` |
-| Opera | 3DO | **Modified LGPL, non-commercial** (FreeDO terms) | [libretro/opera-libretro](https://github.com/libretro/opera-libretro) | `a501a278d057` |
+| Opera | 3DO | **Modified LGPL, non-commercial** (FreeDO terms; the LGPL's version is not stated, and the terms are only in the source headers) | [libretro/opera-libretro](https://github.com/libretro/opera-libretro) | `a501a278d057` |
 | Flycast | Dreamcast, Naomi | GPL v2 | [flyinghead/flycast](https://github.com/flyinghead/flycast) | `a172e0001351` |
 | PPSSPP | PSP | GPL v2 or later | [hrydgard/ppsspp](https://github.com/hrydgard/ppsspp) | `c989c2553e10` |
 | Dolphin | GameCube (and Wii, from the same core) | GPL v2 or later | [libretro/dolphin](https://github.com/libretro/dolphin) | `1a0f97270b70` |
 | mupen64plus-libretro-nx (bundles GLideN64) | Nintendo 64 | GPL v2 | [libretro/mupen64plus-libretro-nx](https://github.com/libretro/mupen64plus-libretro-nx) | `f275caf4b2bf` |
-| PCSX ReARMed | PlayStation | GPL v2 | [libretro/pcsx_rearmed](https://github.com/libretro/pcsx_rearmed) | `ba61a4fdee1f` |
-| Beetle Saturn | Saturn | GPL v2 | [libretro/beetle-saturn-libretro](https://github.com/libretro/beetle-saturn-libretro) | `ed549bdac0e1` |
-| Beetle PCE Fast | TurboGrafx-16, TurboGrafx-CD | GPL v2 | [libretro/beetle-pce-fast-libretro](https://github.com/libretro/beetle-pce-fast-libretro) | `2f623abd0332` |
-| Beetle NeoPop | Neo Geo Pocket Color | GPL v2 | [libretro/beetle-ngp-libretro](https://github.com/libretro/beetle-ngp-libretro) | `a50d5ac288a8` |
-| Beetle VB | Virtual Boy | GPL v2 | [libretro/beetle-vb-libretro](https://github.com/libretro/beetle-vb-libretro) | `83ed42608601` |
-| FCEUmm | NES | GPL v2 | [libretro/libretro-fceumm](https://github.com/libretro/libretro-fceumm) | `236ccdfc911e` |
+| PCSX ReARMed | PlayStation | GPL v2 or later | [libretro/pcsx_rearmed](https://github.com/libretro/pcsx_rearmed) | `ba61a4fdee1f` |
+| Beetle Saturn | Saturn | GPL v2 or later | [libretro/beetle-saturn-libretro](https://github.com/libretro/beetle-saturn-libretro) | `ed549bdac0e1` |
+| Beetle PCE Fast | TurboGrafx-16, TurboGrafx-CD | GPL v2 or later | [libretro/beetle-pce-fast-libretro](https://github.com/libretro/beetle-pce-fast-libretro) | `2f623abd0332` |
+| Beetle NeoPop | Neo Geo Pocket Color | GPL v2 or later | [libretro/beetle-ngp-libretro](https://github.com/libretro/beetle-ngp-libretro) | `a50d5ac288a8` |
+| Beetle VB | Virtual Boy | GPL v2 or later | [libretro/beetle-vb-libretro](https://github.com/libretro/beetle-vb-libretro) | `83ed42608601` |
+| FCEUmm | NES | GPL v2 or later | [libretro/libretro-fceumm](https://github.com/libretro/libretro-fceumm) | `236ccdfc911e` |
 | Gambatte | Game Boy, Game Boy Color | GPL v2 | [libretro/gambatte-libretro](https://github.com/libretro/gambatte-libretro) | `d9d6cd06382d` |
-| ProSystem | Atari 7800 | GPL v2 | [libretro/prosystem-libretro](https://github.com/libretro/prosystem-libretro) | `8a88014287c7` |
+| ProSystem | Atari 7800 | GPL v2 or later | [libretro/prosystem-libretro](https://github.com/libretro/prosystem-libretro) | `8a88014287c7` |
 | Stella 2014 | Atari 2600 | GPL v2 | [libretro/stella2014-libretro](https://github.com/libretro/stella2014-libretro) | `4a7da82595d2` |
-| melonDS | Nintendo DS | GPL v3 | [libretro/melonDS](https://github.com/libretro/melonDS) | `66b5d2634cd0` |
+| melonDS | Nintendo DS | GPL v3 or later | [libretro/melonDS](https://github.com/libretro/melonDS) | `66b5d2634cd0` |
 | DraStic FreeBIOS | DS BIOS replacement inside melonDS | BSD 2-clause | bundled in the fork above | `66b5d2634cd0` |
-| vecx | Vectrex | GPL v3 | [libretro/libretro-vecx](https://github.com/libretro/libretro-vecx) | `8f671cc9d737` |
+| vecx | Vectrex | GPL v3; **the Vectrex system ROM inside it**, Smith Engineering's non-commercial permission (above) | [libretro/libretro-vecx](https://github.com/libretro/libretro-vecx) | `8f671cc9d737` |
 | mGBA | Game Boy Advance | MPL 2.0 | [libretro/mgba](https://github.com/libretro/mgba) | `e31759b24e7a` |
 
 **Not carried from Cabinet:** `gw-libretro` (Game & Watch) and `vemulator`
@@ -124,22 +129,23 @@ here. See `frontend/src/catalog.cpp`.
 
 | What | Where it comes from | Licence |
 |---|---|---|
-| **The screen looks** (#122), `/usr/share/cabinetos/shaders/` | RetroArch's GLSL shaders from [libretro/glsl-shaders](https://github.com/libretro/glsl-shaders) at `435612fe4f10`, unmodified, read at run time and never compiled into the frontend; `frontend/data/shaders/`, fetched by `tools/fetch-shaders.py` | Each file's own: **public domain** for crt-lottes (Timothy Lottes), lcd3x (Gigaherz) and sharp-bilinear-simple; **GPL** for crt-easymode and its halation version (EasyMode), crt-geom (cgwg, Themaister, DOLLS), zfast-crt and zfast-lcd (Greg Hogan), crt-aperture (EasyMode), crt-guest-dr-venom (guest.r) and the Game Boy dot-matrix (Harlequin). lcd-grid-v2 (cgwg) and some helper passes of halation and guest carry no header; cgwg distributes his shaders under the GPL (his note in crt-geom), and the helpers are parts of GPL works, so they are treated as GPL |
-| **PPSSPP system files** — fonts, VFPU tables, `compat.ini`, the atlases | PPSSPP's own `assets/`, installed by `cores/build-core.sh` | GPL v2 or later, as PPSSPP |
+| **The screen looks** (#122), `/usr/share/cabinetos/shaders/` | RetroArch's GLSL shaders from [libretro/glsl-shaders](https://github.com/libretro/glsl-shaders) at `435612fe4f10`, unmodified, read at run time and never compiled into the frontend; `frontend/data/shaders/`, fetched by `tools/fetch-shaders.py` | Each file's own: **public domain** for crt-lottes (Timothy Lottes), lcd3x (Gigaherz) and sharp-bilinear-simple; **GPL** for crt-easymode and its halation version (EasyMode), crt-geom (cgwg, Themaister, DOLLS), zfast-crt and zfast-lcd (Greg Hogan), crt-aperture (EasyMode), crt-guest-dr-venom (guest.r), the Game Boy dot-matrix (Harlequin) and its colour version (LuigiRa, GPL v3 or later); crt-guest-dr-venom's colour tables (LUTs) are torridgristle's, with no licence stated. lcd-grid-v2 (cgwg) and some helper passes of halation and guest carry no header; cgwg distributes his shaders under the GPL (his note in crt-geom), and the helpers are parts of GPL works, so they are treated as GPL |
+| **PPSSPP system files** — fonts, VFPU tables, `compat.ini`, the atlases | PPSSPP's own `assets/`, installed by `cores/build-core.sh` | GPL v2 or later, as PPSSPP (the PSP fonts carry no licence of their own; the Japanese and Latin ones were replaced in 2020 by a PPSSPP contributor's) |
 | **FFmpeg**, statically linked inside PPSSPP | the prebuilt `ffmpeg/linux/x86_64` in PPSSPP's own tree | LGPL v2.1 or later |
 | **Noto Sans** and Noto Sans CJK, the interface type | already in the Bazzite base; nothing is bundled | SIL Open Font License 1.1 |
 | **The Wii bridge**, `/usr/libexec/cabinetos-wii-bridge` | this repository's `wiibridge/`, a program of its own that the console app only starts; it carries Dolphin's extension encryption (`encryption.cpp`/`.h`) from `libretro/dolphin` at `1a0f97270b70`, credited in each file | GPL v2 or later, as Dolphin |
 | **PCSX2**, linked into `cabinetos-ps2.so` | upstream `PCSX2/pcsx2` at v2.8.2, built by `cores/build-pcsx2.sh` | GPL v3 or later |
-| **PCSX2's resources** — `GameIndex.yaml`, the Redump database, fonts, GS shaders | PCSX2's own `bin/resources` | GPL v3 or later, as PCSX2 |
+| **PCSX2's resources** — `GameIndex.yaml`, the Redump database, fonts, GS shaders | PCSX2's own `bin/resources` | GPL v3 or later, as PCSX2, except its fonts and flags: Roboto (Apache 2.0), Twemoji (Apache 2.0 code, CC BY 4.0 artwork, credited in its licence file), promptfont (OFL 1.1), the flag icons (MIT); `fa-solid-900.ttf` (Font Awesome) carries no licence file at that version |
+| **PCSX2's game patches**, `patches.zip` | built by `cores/build-pcsx2.sh` from `PCSX2/pcsx2_patches` at `9f82a4d2b8a2`, as PCSX2's own releases carry it | none stated: the repository has no licence file. Community-written patches, distributed by PCSX2 with every release |
 | **rapidyaml** and **c4core**, carried beside the emulator | Fedora's packages, copied because the Bazzite base lacks them | MIT |
 | **RPCS3**, in `/usr/lib/cabinetos/rpcs3` | the RPCS3 team's official Linux build `0.0.42-20076-1707d7fc` (release `build-1707d7fc…` of `RPCS3/rpcs3-binaries-linux`), unmodified, pinned by checksum in `build_files/install-rpcs3.sh`; source is `RPCS3/rpcs3` at commit `1707d7fc883ef48ff21bdcbb0141a3211ae09cb2` | GPL v2 |
 | **The libraries RPCS3's build carries** (Qt 6, FFmpeg, SDL 3, OpenCV, OpenAL and others, in its `usr/lib`) | bundled by the RPCS3 team in the same build, unchanged | each under its own licence, as RPCS3 ships them (Qt LGPL v3, FFmpeg LGPL v2.1 or later, SDL zlib) |
 | **xemu's blank Xbox hard drive**, `/usr/share/cabinetos/xemu/xbox_hdd.qcow2` | `xbox_hdd.qcow2` from `xemu-project/xemu-dashboard` release `v20260516-0955`, unmodified, pinned by checksum in `build_files/install-xemu-drive.sh`. It holds the open-source xemu-dashboard and nothing of Microsoft's | MIT, with the libraries the dashboard is built from (nxdk and others) under their own licences, as xemu-dashboard ships them |
-| **Dolphin's `Sys` folder** — per-game settings, the Wii's `shared2` files, shaders, the cheat code handler | Dolphin's own `Data/Sys` at the core's pinned commit, installed by `cores/build-core.sh` | GPL v2 or later, as Dolphin |
+| **Dolphin's `Sys` folder** — per-game settings, the Wii's `shared2` files, shaders, the cheat code handler | Dolphin's own `Data/Sys` at the core's pinned commit, installed by `cores/build-core.sh` | GPL v2 or later, as Dolphin, except the GameCube fonts (Droid Sans, Apache 2.0, `GC/font-licenses.txt`) |
 | **The Xbox EEPROM**, `/usr/share/cabinetos/xemu/eeprom.bin` | made once by this project's `tools/xbox-eeprom.py`, the way xemu makes one | MIT, as CabinetOS |
 | **Xenia Edge**, in `/usr/lib/cabinetos/xenia` | its developer's official Linux build, release `a7c39fa` of `has207/xenia-edge` (`xenia_edge_linux.AppImage`), unmodified, pinned by checksum in `build_files/install-xenia.sh`; source is `has207/xenia-edge` at commit `a7c39fa7d9c54d83022e431da62c1c65bf3e6196` | BSD 3-Clause |
 | **The libraries Xenia Edge's build carries** (GTK 3, GLib, cairo, SDL 3, X11 libraries and others, in its `usr/lib`) | bundled by Edge's own AppImage build, unchanged | each under its own licence, as Edge ships them (GTK, GLib and cairo LGPL, SDL zlib, the X11 libraries MIT) |
-| **Cemu**, in `/usr/lib/cabinetos/cemu` | built from source by `cores/build-cemu.sh`, unmodified, `cemu-project/Cemu` at commit `4e3c824faa00f6b85782db019f20f29f063f3a2a`, with Cemu's own game profiles and resources from the same commit | MPL 2.0 |
+| **Cemu**, in `/usr/lib/cabinetos/cemu` | built from source by `cores/build-cemu.sh`, unmodified, `cemu-project/Cemu` at commit `4e3c824faa00f6b85782db019f20f29f063f3a2a`, with Cemu's own game profiles and resources from the same commit | MPL 2.0, except its shared fonts (Noto Sans CJK, OFL 1.1) |
 | **The libraries compiled into Cemu** (wxWidgets, Boost, fmt, SDL 3, OpenSSL, curl, glslang, pugixml, libzip, zstd and others) | built by Cemu's own vcpkg recipe at the versions its pinned commit names, linked statically, unchanged | each under its own licence (wxWidgets licence, Boost licence, fmt MIT, SDL zlib, OpenSSL Apache 2.0, curl MIT-style, glslang BSD-style, pugixml MIT, libzip BSD 3-Clause, zstd BSD) |
 | **Sunshine** (Remote Play), `/usr/bin/sunshine` and `/usr/share/sunshine` | built from source by `cores/build-sunshine.sh` with LizardByte's own Fedora 44 recipe, `LizardByte/Sunshine` at tag `v2026.914.233613`, **modified**: our patches in `cores/sunshine-patches/` (#304); `build_files/install-sunshine.sh` removes only the file capability the package sets and its own service and launchers | GPL v3 |
 | **The libraries compiled into Sunshine** (FFmpeg, and x264 for its CPU encoder, which the console does not use) | linked statically by LizardByte's build recipe, unchanged | each under its own licence (FFmpeg LGPL 2.1 or later / GPL, x264 GPL v2 or later) |
@@ -254,16 +260,25 @@ CabinetOS does not bundle them and they are RomM's attribution to make.
 ## Where this lives on a running machine
 
 **`/usr/share/licenses/cabinetos/`**, installed by `build_files/build.sh` and
-asserted there rather than assumed. The person most likely to redistribute this
+asserted there rather than assumed: this page, CabinetOS's own licence, and
+**`texts/`, the full licence text of everything above with a pinned source**,
+one file each, fetched at the exact revision the image is built from by
+`tools/fetch-licences.py` (the list, with each file's path, is
+`licences/SOURCES`). The base image's packages keep theirs where Fedora puts
+them, in the same folder. **Not on the television** (MMagTech, 2026-09-25):
+Settings, About, Credits and licenses names each project and its licence in
+one line. The person most likely to redistribute this
 image is the one who pulls it and never sees this repository, so the terms
 travel with the binaries instead of sitting beside them.
 
-## What this document still owes
+## Checked
 
-- **The full licence text of each core**, readable on the console itself.
-  Cabinet puts them under Settings → Licenses; `docs/PROJECT.md` already says
-  credits belong in Settings → About. Neither screen exists yet.
-- **Verification of each licence line above against the source tree it came
-  from.** The licences are taken from Cabinet's own list, which was compiled
-  from the upstream repositories — but this project's standing rule is that a
-  fact carried across from another document is a fact nobody has checked here.
+**Every line above was checked against the source tree it names, at the
+pinned revision, on 2026-10-10 (#120)**: each licence file read, not taken
+from Cabinet's list or the repository's GitHub label. What that changed: seven
+"GPL v2" cores and melonDS are "or later" (their headers say so), the Vectrex
+system ROM inside vecx, the fonts inside PCSX2, Dolphin and Cemu that have
+their own licences, PCSX2's game patches, and two shader credits. The
+libraries bundled inside RPCS3's, Xenia Edge's and Sunshine's own builds, and
+Cemu's vcpkg libraries, are credited as those builds ship them and were not
+checked one by one.

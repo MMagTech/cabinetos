@@ -1,0 +1,57 @@
+# The full licence texts the image ships, fetched by tools/fetch-licences.py
+# at the exact revision the image is built from. Checked one by one against
+# each source tree, 2026-10-10 (#120; docs/LICENCES.md says what each covers).
+#
+# name                 repository                          revision                                  path[#Lfirst-last]
+#
+# --- the non-commercial cores ---
+fbneo                  libretro/FBNeo                      2444fbe3ddab193b6c0e6f2d39b6dde041fbee4c  src/license.txt
+mame2003-plus          libretro/mame2003-plus-libretro     21256d24120b04916c5197d95b757635ca880fd9  LICENSE.md
+snes9x                 libretro/snes9x                     890b5d445538fe790aa3add3d5702c80f551e0ae  LICENSE
+genesis-plus-gx        libretro/Genesis-Plus-GX            a7985a9c4278ac352f8ca7bb4d3cc6b36e9e3e7d  LICENSE.txt
+picodrive              libretro/picodrive                  733c711a477a642fd2006d5a7a581b2790ec36b4  COPYING
+picodrive-authors      libretro/picodrive                  733c711a477a642fd2006d5a7a581b2790ec36b4  AUTHORS
+# Opera has no licence file; its terms are this header, in every FreeDO file.
+opera                  libretro/opera-libretro             a501a278d057b952d1ad6165549c59ab178ca497  libopera/opera_arm.c#L1-29
+# --- the other cores ---
+flycast                flyinghead/flycast                  a172e0001351dfbc49b86860a13d5390b1c493fe  LICENSE
+ppsspp                 hrydgard/ppsspp                     c989c2553e1099730736d965c221823fe974fa55  LICENSE.TXT
+ppsspp-ffmpeg          hrydgard/ppsspp-ffmpeg              b87f7c6d522d1edba77cfc4fac96ce48a236f806  LICENSE.md
+ppsspp-ffmpeg-lgpl     hrydgard/ppsspp-ffmpeg              b87f7c6d522d1edba77cfc4fac96ce48a236f806  COPYING.LGPLv2.1
+dolphin                libretro/dolphin                    1a0f97270b703c71625c87dee178d778348e540b  COPYING
+dolphin-gpl2-or-later  libretro/dolphin                    1a0f97270b703c71625c87dee178d778348e540b  LICENSES/GPL-2.0-or-later.txt
+dolphin-gc-fonts       libretro/dolphin                    1a0f97270b703c71625c87dee178d778348e540b  Data/Sys/GC/font-licenses.txt
+mupen64plus-nx         libretro/mupen64plus-libretro-nx    f275caf4b2bfa1e6d1c51636746ea793f3d80320  LICENSE
+gliden64               libretro/mupen64plus-libretro-nx    f275caf4b2bfa1e6d1c51636746ea793f3d80320  GLideN64/LICENSE
+mupen64plus-core       libretro/mupen64plus-libretro-nx    f275caf4b2bfa1e6d1c51636746ea793f3d80320  mupen64plus-core/LICENSES
+pcsx-rearmed           libretro/pcsx_rearmed               ba61a4fdee1f789e8012f205f1b63826667644fa  COPYING
+beetle-saturn          libretro/beetle-saturn-libretro     ed549bdac0e1a830bb794fa720e45c225a45355c  COPYING
+beetle-pce-fast        libretro/beetle-pce-fast-libretro   2f623abd033257b969370b73d9da982dcb0c3fdd  COPYING
+beetle-ngp             libretro/beetle-ngp-libretro        a50d5ac288a81f2104ddf43195a4efdd15c72227  COPYING
+beetle-vb              libretro/beetle-vb-libretro         83ed42608601fb7b01d41e4f8fb2007a37b8c84e  COPYING
+fceumm                 libretro/libretro-fceumm            236ccdfc911e84c60fea6b9d0699c2d440a8de14  Copying
+gambatte               libretro/gambatte-libretro          d9d6cd06382d1ced30de34d56d3609452323dab1  COPYING
+prosystem              libretro/prosystem-libretro         8a88014287c7a01cd568067e5a557d0a2b2a051f  License.txt
+prosystem-bupboop      libretro/prosystem-libretro         8a88014287c7a01cd568067e5a557d0a2b2a051f  bupboop/License.txt
+stella2014             libretro/stella2014-libretro        4a7da82595d27b8df7af1ecb467a64b642a41bc9  stella/license.txt
+melonds                libretro/melonDS                    66b5d2634cd0a79030562811e6e05f5532f800ba  LICENSE
+drastic-freebios       libretro/melonDS                    66b5d2634cd0a79030562811e6e05f5532f800ba  freebios/drastic_bios_readme.txt#L1-24
+vecx                   libretro/libretro-vecx              8f671cc9d737f2890c3ce19e177e2984dcae121f  LICENSE.md
+mgba                   libretro/mgba                       e31759b24e7a4e3899285ff720d7b573ac328ae7  LICENSE
+# --- the whole programs and what they carry ---
+pcsx2                  PCSX2/pcsx2                         fd9d310ccbb6b8b62c976da8886a3c8fd3a10ff3  COPYING.GPLv3
+pcsx2-roboto           PCSX2/pcsx2                         fd9d310ccbb6b8b62c976da8886a3c8fd3a10ff3  bin/resources/fonts/Roboto-Regular-copyright
+pcsx2-twemoji          PCSX2/pcsx2                         fd9d310ccbb6b8b62c976da8886a3c8fd3a10ff3  bin/resources/fonts/Twemoji.Mozilla-license
+pcsx2-promptfont       PCSX2/pcsx2                         fd9d310ccbb6b8b62c976da8886a3c8fd3a10ff3  bin/resources/fonts/promptfont-license
+pcsx2-flags            PCSX2/pcsx2                         fd9d310ccbb6b8b62c976da8886a3c8fd3a10ff3  bin/resources/icons/flags/LICENSE
+rpcs3                  RPCS3/rpcs3                         1707d7fc883ef48ff21bdcbb0141a3211ae09cb2  LICENSE
+xenia-edge             has207/xenia-edge                   a7c39fa7d9c54d83022e431da62c1c65bf3e6196  LICENSE
+cemu                   cemu-project/Cemu                   4e3c824faa00f6b85782db019f20f29f063f3a2a  LICENSE.txt
+# Cemu's shared fonts are Noto Sans CJK, under the OFL.
+noto-cjk-ofl           notofonts/noto-cjk                  f8d157532fbfaeda587e826d4cd5b21a49186f7c  Sans/LICENSE
+xemu-dashboard         xemu-project/xemu-dashboard         8cb5e525a8d2c980a4daa6b2c2106b53661b5b20  LICENSE
+sunshine               LizardByte/Sunshine                 63d35f702ee9e362e43263742981836ec0710384  LICENSE
+sunshine-notice        LizardByte/Sunshine                 63d35f702ee9e362e43263742981836ec0710384  NOTICE
+# --- compiled into the console app, or carried as data ---
+rcheevos               RetroAchievements/rcheevos          1433173220a7eaede6a9ed7a18e94117be1821e0  LICENSE
+sdl-gamecontrollerdb   mdqinc/SDL_GameControllerDB         c6d6e7ecca57ff106ef63350da3cc03728d88a5f  LICENSE
