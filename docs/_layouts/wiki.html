@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% if page.title %}{{ page.title }} · {% endif %}CabinetOS wiki</title>
+<meta name="description" content="How to set up and use CabinetOS, a games console for your TV.">
+<link rel="icon" href="{{ '/assets/mark.svg' | relative_url }}" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ '/assets/site.css' | relative_url }}">
+</head>
+<body>
+<header class="topbar">
+  <div class="wrap">
+    <a class="brand" href="{{ '/' | relative_url }}"><img src="{{ '/assets/mark.svg' | relative_url }}" alt="" width="26" height="32">CabinetOS</a>
+    <nav class="topnav">
+      <a href="{{ '/' | relative_url }}" class="hide-sm">Showcase</a>
+      <a href="{{ '/wiki/' | relative_url }}">Wiki</a>
+      <a href="https://github.com/MMagTech/cabinetos">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+{%- assign prev = nil -%}
+{%- assign next = nil -%}
+{%- assign found = false -%}
+{%- assign last = nil -%}
+{%- for s in site.data.wiki -%}
+  {%- for p in s.pages -%}
+    {%- if found and next == nil -%}{%- assign next = p -%}{%- endif -%}
+    {%- assign here = 'wiki/' | append: p.file -%}
+    {%- if here == page.path -%}{%- assign found = true -%}{%- assign prev = last -%}{%- endif -%}
+    {%- assign last = p -%}
+  {%- endfor -%}
+{%- endfor -%}
+
+{%- capture sidelist -%}
+  {%- for s in site.data.wiki -%}
+    <h5>{{ s.section }}</h5>
+    {%- for p in s.pages -%}
+      {%- assign here = 'wiki/' | append: p.file -%}
+      {%- if p.file == 'README.md' -%}{%- assign href = '/wiki/' -%}{%- else -%}{%- assign href = '/wiki/' | append: p.file | replace: '.md', '.html' -%}{%- endif -%}
+      <a href="{{ href | relative_url }}"{% if here == page.path %} class="on"{% endif %}>{{ p.title }}</a>
+    {%- endfor -%}
+  {%- endfor -%}
+{%- endcapture -%}
+
+<div class="wrap wiki">
+  <aside class="side">
+    <div class="list">{{ sidelist }}</div>
+    <details><summary>All wiki pages</summary>{{ sidelist }}</details>
+  </aside>
+  <main class="doc">
+    {{ content }}
+    <nav class="pager">
+      {%- if prev -%}
+        {%- if prev.file == 'README.md' -%}{%- assign href = '/wiki/' -%}{%- else -%}{%- assign href = '/wiki/' | append: prev.file | replace: '.md', '.html' -%}{%- endif -%}
+        <a class="prev" href="{{ href | relative_url }}"><span>Previous</span>{{ prev.title }}</a>
+      {%- endif -%}
+      {%- if next -%}
+        {%- assign href = '/wiki/' | append: next.file | replace: '.md', '.html' -%}
+        <a class="next" href="{{ href | relative_url }}"><span>Next</span>{{ next.title }}</a>
+      {%- endif -%}
+    </nav>
+    <p class="edit">Something wrong or missing here? <a href="https://github.com/MMagTech/cabinetos/blob/main/docs/{{ page.path }}">See this page on GitHub</a> or <a href="https://github.com/MMagTech/cabinetos/issues">open an issue</a>.</p>
+  </main>
+</div>
+
+<footer class="foot">
+  <div class="wrap">
+    <span>CabinetOS is free and open source. It ships no games, BIOS or keys.</span>
+    <span><a href="https://github.com/MMagTech/cabinetos">Source on GitHub</a></span>
+  </div>
+</footer>
+</body>
+</html>

@@ -1,0 +1,54 @@
+# The CabinetOS site: GitHub Pages, deployed from main's docs/ folder (#190).
+#
+# docs/index.html is the showcase page, docs/wiki/ is the user wiki, and
+# docs/media/ holds the screenshots and clips taken on the A9. Everything else
+# in docs/ is the project's own working notes, which stay readable on GitHub
+# but are not part of the site, so they are excluded here.
+#
+# Everything under docs/ is outside the image's path filter
+# (.github/workflows/build.yml), so changing the site never builds an image.
+
+title: CabinetOS
+description: A games console for your TV, with your library on your own RomM server.
+url: https://mmagtech.github.io
+baseurl: /cabinetos
+repository: MMagTech/cabinetos
+
+markdown: kramdown
+kramdown:
+  input: GFM
+  hard_wrap: false
+  auto_ids: true
+
+plugins:
+  - jekyll-relative-links
+  - jekyll-readme-index
+  - jekyll-optional-front-matter
+  - jekyll-titles-from-headings
+
+relative_links:
+  enabled: true
+  collections: false
+
+titles_from_headings:
+  enabled: true
+  strip_title: false
+
+defaults:
+  - scope:
+      path: "wiki"
+    values:
+      layout: wiki
+
+exclude:
+  - CABINET.md
+  - CORE-OPTIONS-AUDIT.md
+  - LICENCES.md
+  - NEXT-SESSION.md
+  - PCSX2-HOST-SURFACE.md
+  - PROJECT.md
+  - ROADMAP.md
+  - SETTINGS-INVENTORY.md
+  - SETTINGS.md
+  - WORKING.md
+  - lessons/
