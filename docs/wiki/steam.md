@@ -3,6 +3,8 @@
 CabinetOS can hand the TV over to Steam's Big Picture for your PC games, and
 take it back when Steam closes.
 
+![Steam's Big Picture on the console](../media/steam-bigpicture.webp)
+
 ## Set it up
 
 1. Press **Start** on Home (or the power button) for the Power menu, then

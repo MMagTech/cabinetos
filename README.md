@@ -30,7 +30,8 @@ from your whole library.
   saves, favourites, play time, achievements and colour. A PIN guards the rest.
 - **Four players, real Wii Remotes**, and your Miis in every Wii game.
 - **Play from your phone** with Moonlight, at home or away over Tailscale.
-- **Steam, too.** Hand the TV to Steam's Big Picture and come back.
+- **Your Steam games too.** One press hands the TV to Steam's Big Picture, and
+  quitting Steam brings you back to Home. Remote Play streams it to your phone.
 - **Updates in one press**, as a single image.
 
 | | | |
