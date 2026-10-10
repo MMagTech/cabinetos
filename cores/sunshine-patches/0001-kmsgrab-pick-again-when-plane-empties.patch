@@ -1,0 +1,158 @@
+diff --git a/src/platform/linux/kms_plane.h b/src/platform/linux/kms_plane.h
+new file mode 100644
+index 0000000..de1d2f8
+--- /dev/null
++++ b/src/platform/linux/kms_plane.h
+@@ -0,0 +1,63 @@
++/**
++ * @file src/platform/linux/kms_plane.h
++ * @brief Declarations for tracking the DRM plane captured by KMS capture.
++ */
++#pragma once
++
++// standard includes
++#include <chrono>
++#include <optional>
++
++namespace platf::kms {
++  /**
++   * @brief Decides when a captured plane that has lost its framebuffer should be picked again.
++   *
++   * A compositor may move its picture to another plane while a stream is running, or restart.
++   * The plane being captured then has no framebuffer, and capturing it again only repeats the
++   * last frame. Once it has stayed empty for the given delay, capture should be reinitialized so
++   * a plane is chosen again.
++   */
++  class empty_plane_timer_t {
++  public:
++    /**
++     * @brief Construct a timer.
++     *
++     * @param delay How long the plane may have no framebuffer before a reinit is due.
++     */
++    explicit empty_plane_timer_t(std::chrono::steady_clock::duration delay):
++        delay_ {delay} {
++    }
++
++    /**
++     * @brief Record whether the plane has a framebuffer now.
++     *
++     * @param has_fb True when the plane currently scans out a framebuffer.
++     * @param now The current time.
++     * @return True once the plane has had no framebuffer for at least the delay.
++     */
++    bool update(bool has_fb, std::chrono::steady_clock::time_point now) {
++      if (has_fb) {
++        empty_since_.reset();
++        return false;
++      }
++      if (!empty_since_) {
++        empty_since_ = now;
++      }
++      return now - *empty_since_ >= delay_;
++    }
++
++    /**
++     * @brief How long the plane has had no framebuffer.
++     *
++     * @param now The current time.
++     * @return The time since the plane lost its framebuffer, or zero when it has one.
++     */
++    std::chrono::steady_clock::duration empty_for(std::chrono::steady_clock::time_point now) const {
++      return empty_since_ ? now - *empty_since_ : std::chrono::steady_clock::duration::zero();
++    }
++
++  private:
++    std::chrono::steady_clock::duration delay_;  ///< How long an empty plane is tolerated.
++    std::optional<std::chrono::steady_clock::time_point> empty_since_;  ///< When the plane lost its framebuffer.
++  };
++}  // namespace platf::kms
+diff --git a/src/platform/linux/kmsgrab.cpp b/src/platform/linux/kmsgrab.cpp
+index 8a08576..2206cea 100644
+--- a/src/platform/linux/kmsgrab.cpp
++++ b/src/platform/linux/kmsgrab.cpp
+@@ -23,6 +23,7 @@
+ // local includes
+ #include "cuda.h"
+ #include "graphics.h"
++#include "kms_plane.h"
+ #include "src/config.h"
+ #include "src/logging.h"
+ #include "src/platform/common.h"
+@@ -1536,6 +1537,14 @@ namespace platf {
+         plane_t plane = drmModeGetPlane(card.fd.el, plane_id);
+         frame_timestamp = std::chrono::steady_clock::now();
+ 
++        // A plane that stays without a framebuffer will not get the picture back by itself:
++        // the compositor has moved it to another plane, or restarted. Pick a plane again.
++        if (const auto now = std::chrono::steady_clock::now(); empty_plane_timer.update(plane->fb_id != 0, now)) {
++          BOOST_LOG(info) << "Reinitializing capture: plane ["sv << plane_id << "] has had no framebuffer for "sv
++                          << std::chrono::duration_cast<std::chrono::milliseconds>(empty_plane_timer.empty_for(now)).count() << "ms"sv;
++          return capture_e::reinit;
++        }
++
+         auto fb = card.fb(plane.get());
+         if (!fb) {
+           // This can happen if the display is being reconfigured while streaming
+@@ -1596,6 +1605,8 @@ namespace platf {
+       int img_offset_x;  ///< Img offset x.
+       int img_offset_y;  ///< Img offset y.
+ 
++      kms::empty_plane_timer_t empty_plane_timer {250ms};  ///< Reinitializes capture once the captured plane stays empty.
++
+       int plane_id;  ///< Plane ID.
+       int crtc_id;  ///< Crtc ID.
+       int crtc_index;  ///< Crtc index.
+diff --git a/tests/unit/platform/linux/test_kms_plane.cpp b/tests/unit/platform/linux/test_kms_plane.cpp
+new file mode 100644
+index 0000000..bbd1dfc
+--- /dev/null
++++ b/tests/unit/platform/linux/test_kms_plane.cpp
+@@ -0,0 +1,47 @@
++/**
++ * @file tests/unit/platform/linux/test_kms_plane.cpp
++ * @brief Tests for tracking the DRM plane captured by KMS capture.
++ */
++
++#ifdef __linux__
++
++  // standard includes
++  #include <chrono>
++
++  // lib includes
++  #include <gtest/gtest.h>
++
++  // local includes
++  #include "src/platform/linux/kms_plane.h"
++
++using namespace std::literals;
++
++namespace {
++  const auto start = std::chrono::steady_clock::time_point {} + 1h;  ///< An arbitrary starting time.
++}  // namespace
++
++TEST(KmsEmptyPlaneTimerTest, NeverDueWhilePlaneHasFramebuffer) {
++  platf::kms::empty_plane_timer_t timer {250ms};
++  EXPECT_FALSE(timer.update(true, start));
++  EXPECT_FALSE(timer.update(true, start + 10s));
++  EXPECT_EQ(timer.empty_for(start + 10s), 0ms);
++}
++
++TEST(KmsEmptyPlaneTimerTest, DueOnceEmptyForTheDelay) {
++  platf::kms::empty_plane_timer_t timer {250ms};
++  EXPECT_FALSE(timer.update(false, start));
++  EXPECT_FALSE(timer.update(false, start + 249ms));
++  EXPECT_TRUE(timer.update(false, start + 250ms));
++  EXPECT_EQ(timer.empty_for(start + 300ms), 300ms);
++}
++
++TEST(KmsEmptyPlaneTimerTest, FramebufferReturningResetsTheDelay) {
++  platf::kms::empty_plane_timer_t timer {250ms};
++  EXPECT_FALSE(timer.update(false, start));
++  EXPECT_FALSE(timer.update(true, start + 200ms));
++  EXPECT_FALSE(timer.update(false, start + 300ms));
++  EXPECT_FALSE(timer.update(false, start + 500ms));
++  EXPECT_TRUE(timer.update(false, start + 550ms));
++}
++
++#endif

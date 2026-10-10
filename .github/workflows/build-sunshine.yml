@@ -1,0 +1,112 @@
+# Build Sunshine, Remote Play's streaming host, as a Fedora 44 package with
+# our patch on it (#304), on a machine nobody owns.
+#
+# WHY A WORKFLOW OF ITS OWN, as Wii U has: a whole program with a whole
+# program's build (LizardByte's own Fedora recipe, its web page, CUDA for
+# NVIDIA encoding), built once per pin and cached. cores/build-sunshine.sh
+# says why we build it at all and how.
+#
+# What it asserts: the source is at the pinned tag's commit, each patch
+# applies (and is not upstream already), and Sunshine's own tests pass. What
+# it cannot: that a stream shows a picture. That is judged on the A9.
+
+name: Build Sunshine
+
+# CALLED BY build.yml, like build-cemu.yml, and on pull requests aimed at
+# anything but main for the same reason that file gives.
+on:
+  workflow_call:
+  pull_request:
+    branches-ignore:
+      - main
+    paths:
+      - 'cores/build-sunshine.sh'
+      - 'cores/sunshine-builder/**'
+      - 'cores/sunshine-patches/**'
+      - '.github/workflows/build-sunshine.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Sunshine
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+
+      # CUDA, Boost and the web page's packages take a few GB.
+      - name: Maximize build space
+        uses: ublue-os/remove-unwanted-software@695eb75bc387dbcd9685a8e72d23439d8686cba6
+        with:
+          remove-codeql: true
+
+      # NOTHING CHANGES UNLESS ONE OF THESE DOES: the script holds the pin,
+      # the patches are ours, the Containerfile is the toolchain.
+      - name: Restore the build, if this exact one has been built before
+        id: sunshinecache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: cores/build/sunshine
+          key: sunshine-${{ hashFiles('cores/build-sunshine.sh', 'cores/sunshine-builder/Containerfile', 'cores/sunshine-patches/**') }}
+
+      - name: Build it
+        if: steps.sunshinecache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          cores/build-sunshine.sh 2>&1 | tee /tmp/sunshine.log
+
+      # A CACHE HIT STILL HAS TO PROVE WHAT IT RESTORED, as Wii U's does.
+      - name: Check what it has
+        run: |
+          set -euo pipefail
+          out=cores/build/sunshine
+          pinned=$(sed -n 's/^VERSION=//p' cores/build-sunshine.sh)
+          ls "$out/Sunshine-$pinned-1.fc44.x86_64.rpm"
+          built=$(head -1 "$out/VERSION" | cut -d' ' -f1)
+          if [ "$pinned" != "$built" ]; then
+            echo "the build is of $built, the pin is $pinned" >&2
+            exit 1
+          fi
+          for p in cores/sunshine-patches/*.patch; do
+            grep -q "^$(basename "$p") $(sha256sum "$p" | cut -c1-12)$" "$out/VERSION" || {
+              echo "$(basename "$p") is not the one this package was built with" >&2
+              exit 1
+            }
+          done
+          cat "$out/VERSION"
+
+      # THE SAME SHAPE AS EVERY OTHER PAYLOAD ARTIFACT: one top folder,
+      # sunshine/.
+      - name: Stage it
+        run: |
+          set -euo pipefail
+          mkdir -p artifact
+          cp -R cores/build/sunshine artifact/sunshine
+          find artifact -maxdepth 2 | sort
+
+      - name: Upload it
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          # The `-linux-x86_64` suffix is what build.yml's download matches.
+          name: sunshine-linux-x86_64
+          path: artifact/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Sunshine, patched — Fedora 44 x86-64"
+            echo
+            if [[ -f /tmp/sunshine.log ]]; then
+              echo '```'
+              tail -30 /tmp/sunshine.log
+              echo '```'
+            else
+              echo "Restored from cache; see the check step above."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

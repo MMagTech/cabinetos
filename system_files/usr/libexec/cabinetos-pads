@@ -82,7 +82,9 @@ case "${1:-}" in
                 echo "cabinetos-pads: could not set aside ${dev}" >&2
             fi
         done
-        [[ -e "${RECORD}" ]] && chmod 0644 "${RECORD}"
+        # An `if`: with no controller on, nothing was set aside, and a false
+        # test as the last line failed the unit (#304).
+        if [[ -e "${RECORD}" ]]; then chmod 0644 "${RECORD}"; fi
         ;;
     back)
         [[ -r "${RECORD}" ]] || exit 0

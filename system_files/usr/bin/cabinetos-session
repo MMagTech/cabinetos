@@ -128,8 +128,28 @@ run_gamescope() {
         --output-width "${OUT_W}" \
         --output-height "${OUT_H}" \
         ${vrr[@]+"${vrr[@]}"} \
+        ${COMPOSED[@]+"${COMPOSED[@]}"} \
         -- ${APP}
 }
+
+# A STREAM ALREADY OPEN WHEN GAMESCOPE STARTS (#304): composed from its first
+# frame, not from when the console gets round to it. Sunshine reads one
+# display plane, and picks it again whenever the TV's HDR setting changes,
+# which a gamescope starting does. It picks the last plane in use. Not yet
+# composed, Home is on two (80, the base, and 105, the console over it; A9,
+# 2026-10-09), so Sunshine picked 105; composing then emptied 105, and it read
+# an empty plane from then on ("Couldn't get drm fb for plane [0]", 60 a
+# second), the phone black. Back from Steam, it picked 0.35 s after this
+# gamescope came up, before the console had composed it. Composed from the
+# start, only plane 80 is ever in use, so whatever Sunshine picks is the
+# picture. --force-composition is gamescope's composite_force, so `ended`
+# (cabinetos-remoteplay) turns it off as before. Take this out when Sunshine
+# picks a plane again once its own goes empty (asked upstream, #304).
+COMPOSED=()
+if [[ -e "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/cabinetos-remoteplay-session" ]]; then
+    COMPOSED=(--force-composition)
+    echo "cabinetos-session: a stream is open: gamescope starts composed"
+fi
 
 # An explicit choice always wins.
 if [[ -n "${CABINETOS_BACKEND:-}" ]]; then
@@ -515,7 +535,7 @@ if ls /dev/dri/card* >/dev/null 2>&1; then
     # forced, and the testing image of 2026-10-02 started without it.
     try_compositor "gamescope (drm)" \
         gamescope --backend drm --output-width "${OUT_W}" --output-height "${OUT_H}" \
-                  --adaptive-sync --ready-fd 3 -- ${APP}
+                  --adaptive-sync ${COMPOSED[@]+"${COMPOSED[@]}"} --ready-fd 3 -- ${APP}
 
     # Degraded, and loudly so. A console that works without VRR beats a black
     # screen, but this should never be the state on real hardware — if it is,

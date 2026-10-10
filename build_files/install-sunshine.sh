@@ -12,11 +12,15 @@
 # screen is what the image exists to avoid. An 8 MB download, 29 MB
 # installed (measured in the base image); idle until Remote Play is on.
 #
-# PINNED, AS THE EMULATORS ARE: LizardByte's release package for Fedora 44,
-# one exact version, checked against the sha256 GitHub publishes for it, so
-# the build fails rather than ship another. To move it: pick a release, put
-# its version and the package's sha256 here, try it on the A9, say why in the
-# commit. Never patched. Its licence is GPL-3.0; see docs/LICENCES.md.
+# PINNED, AND SINCE #304 BUILT BY US: LizardByte's release for Fedora 44 at
+# one exact tag, built by its own recipe with our patch on it
+# (cores/build-sunshine.sh, cores/sunshine-patches/), in its own workflow
+# (build-sunshine.yml); here it arrives in the payload. Until 2026-10-09 this
+# installed LizardByte's own package, never patched. MMagTech reopened that:
+# Sunshine stuck black on an emptied display plane, and every workaround from
+# outside left another way into it. The patch is offered upstream; back to
+# LizardByte's package when a release has it. To move the pin: see
+# cores/build-sunshine.sh. Its licence is GPL-3.0; see docs/LICENCES.md.
 #
 # WHAT THE CONSOLE RELIES ON, to check on the A9 before moving the pin
 # (MMagTech, 2026-10-07: an update must not break it unseen):
@@ -30,7 +34,9 @@
 #   4. GET and POST /api/pin with pairing_id, /api/clients/list and
 #      /unpair, and root.named_devices[].cert in sunshine_state.json
 #      (remoteplay.cpp): pairing on the TV and a phone pairing again;
-#   5. its OpenGL shaders still under /usr/share/sunshine (checked below).
+#   5. its OpenGL shaders still under /usr/share/sunshine (checked below);
+#   6. our patches still apply, or are upstream now (cores/build-sunshine.sh
+#      checks both and stops).
 # Then pair a phone, stream, hand over in a built-in and a standalone game,
 # drop the phone, and switch Remote Play off and check nothing listens.
 #
@@ -47,35 +53,19 @@
 set -euo pipefail
 source /ctx/lib.sh
 
-readonly SUNSHINE_VERSION="2026.914.233613"
-readonly SUNSHINE_RPM="Sunshine-${SUNSHINE_VERSION}-1.fc44.x86_64.rpm"
-readonly SUNSHINE_URL="https://github.com/LizardByte/Sunshine/releases/download/v${SUNSHINE_VERSION}/${SUNSHINE_RPM}"
-readonly SUNSHINE_SHA256="2abb16033ecde677f5c45322b39b6d6ae4cf297ac3e36707aa90bd3911d0e00f"
+readonly SRC=/ctx/payload/sunshine
 
-group_start "Installing Sunshine ${SUNSHINE_VERSION} (#286)"
-work="$(mktemp -d)"
-trap 'rm -rf "${work}"' EXIT
-
-# A retry, because GitHub's release CDN occasionally drops a connection
-# mid-file and a build that fails for that has nothing wrong with it.
-for attempt in 1 2 3; do
-    if curl -fsSL --retry 3 -o "${work}/${SUNSHINE_RPM}" "${SUNSHINE_URL}"; then
-        break
-    fi
-    log "  download attempt ${attempt} failed"
-    [[ ${attempt} -eq 3 ]] && { log "ERROR: could not download Sunshine"; exit 1; }
-    sleep 5
-done
-
-got="$(sha256sum "${work}/${SUNSHINE_RPM}" | cut -d' ' -f1)"
-if [[ "${got}" != "${SUNSHINE_SHA256}" ]]; then
-    log "ERROR: Sunshine's checksum is ${got}, expected ${SUNSHINE_SHA256}"
-    exit 1
-fi
+shopt -s nullglob
+rpms=("${SRC}"/Sunshine-*.x86_64.rpm)
+shopt -u nullglob
+[[ ${#rpms[@]} -eq 1 ]] || { log "ERROR: expected one Sunshine package in ${SRC}"; exit 1; }
+group_start "Installing Sunshine $(head -1 "${SRC}/VERSION" | cut -d' ' -f1), patched (#286, #304)"
+while read -r line; do log "  ${line}"; done < "${SRC}/VERSION"
 
 # Its dependencies (miniupnpc is the one the base lacks) from Fedora's own
-# repositories, without weak ones.
-dnf5 -y install --setopt=install_weak_deps=False "${work}/${SUNSHINE_RPM}"
+# repositories, without weak ones. Not signed: it is ours, built in this
+# repository's own workflow from a pinned tag.
+dnf5 -y install --setopt=install_weak_deps=False "${rpms[0]}"
 
 # BY THE PACKAGE'S OWN FILE LIST, not by names or places, so a version that
 # renames or moves its service or launchers is covered the same way
@@ -124,5 +114,5 @@ if left="$(grep -rlis 'bin/sunshine' /usr/lib/systemd/user /usr/lib/systemd/syst
     exit 1
 fi
 
-log "Sunshine ${SUNSHINE_VERSION} installed"
+log "Sunshine $(head -1 "${SRC}/VERSION" | cut -d" " -f1) installed, with our patches"
 group_end

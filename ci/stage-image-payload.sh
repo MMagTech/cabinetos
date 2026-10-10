@@ -39,6 +39,7 @@
 #   system/PPSSPP/...             PPSSPP's fonts and lookup tables
 #   system/dolphin-emu/Sys/...    Dolphin's game settings and Wii files
 #   cemu/{bin,share/Cemu}/...     Wii U's emulator, its game profiles and resources
+#   sunshine/Sunshine-*.rpm       Remote Play's streaming host, with our patch (#304)
 #
 # image_payload/ is gitignored, which also keeps `git status -s` clean — the
 # Justfile reads that to decide whether to stamp the image with a revision, so
@@ -57,12 +58,14 @@ if [ $# -ge 1 ]; then
     CORES="$SRC/cores"
     SYSTEM="$SRC/system"
     CEMUSRC="$SRC/cemu"
+    SUNSHINESRC="$SRC/sunshine"
 else
     FRONTEND="$ROOT/frontend/build/cabinetos-frontend"
     BRIDGE="$ROOT/wiibridge/cabinetos-wii-bridge"
     CORES="$ROOT/cores/build"
     SYSTEM="$ROOT/cores/system"
     CEMUSRC="$ROOT/cores/build/cemu"
+    SUNSHINESRC="$ROOT/cores/build/sunshine"
 fi
 
 # The cores this console is supposed to have, read off the script that builds
@@ -250,6 +253,21 @@ done
 rm -rf "$OUT/cemu"
 cp -R "$CEMUSRC" "$OUT/cemu"
 
+# --- Remote Play ------------------------------------------------------------
+# Sunshine, built by cores/build-sunshine.sh at its pin with our patch (#304).
+# REQUIRED: build_files/install-sunshine.sh installs this package and nothing
+# else, so an image without it would have no Remote Play.
+shopt -s nullglob
+sunshine_rpms=("$SUNSHINESRC"/Sunshine-*.x86_64.rpm)
+shopt -u nullglob
+if [ "${#sunshine_rpms[@]}" -ne 1 ] || [ ! -s "$SUNSHINESRC/VERSION" ]; then
+    echo "Sunshine's package is not in $SUNSHINESRC (one .rpm and VERSION)" >&2
+    echo "— the image would lose Remote Play. Build it with cores/build-sunshine.sh." >&2
+    exit 1
+fi
+rm -rf "$OUT/sunshine"
+cp -R "$SUNSHINESRC" "$OUT/sunshine"
+
 # --- What went in ----------------------------------------------------------
 
 echo "staged $OUT"
@@ -263,6 +281,7 @@ printf '  ps2       %s emulator, %s libraries, %s resources\n' \
        "$(wc -l < "$OUT/cores/cabinetos-ps2.bundled" | tr -d ' ')" \
        "$(du -sh "$OUT/system/pcsx2/resources" | cut -f1)"
 printf '  wii u     Cemu %s, %s\n' "$(cut -c1-10 "$OUT/cemu/VERSION")" "$(du -sh "$OUT/cemu" | cut -f1)"
+printf '  sunshine  %s, %s\n' "$(head -1 "$OUT/sunshine/VERSION" | cut -d' ' -f1)" "$(du -sh "$OUT/sunshine" | cut -f1)"
 printf '  system    %s, %s entries\n' "$(du -sh "$OUT/system" | cut -f1)" \
        "$(find "$OUT/system" -mindepth 2 -maxdepth 2 | wc -l | tr -d ' ')"
 printf '  total     %s\n' "$(du -sh "$OUT" | cut -f1)"

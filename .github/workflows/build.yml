@@ -212,9 +212,18 @@ jobs:
     if: ${{ !cancelled() && !failure() && needs.promote.outputs.promoted != 'true' && github.event_name != 'pull_request' }}
     uses: ./.github/workflows/build-cemu.yml
 
+  # REMOTE PLAY, Sunshine built at its pin with our patch (build-sunshine.yml,
+  # #304), with the same refusal: ci/stage-image-payload.sh will not build an
+  # image without it.
+  sunshine:
+    name: Sunshine
+    needs: [lint, promote]
+    if: ${{ !cancelled() && !failure() && needs.promote.outputs.promoted != 'true' && github.event_name != 'pull_request' }}
+    uses: ./.github/workflows/build-sunshine.yml
+
   build_push:
     name: Build and push image
-    needs: [lint, promote, frontend, cores, playstation2, wiiu]
+    needs: [lint, promote, frontend, cores, playstation2, wiiu, sunshine]
     if: ${{ !cancelled() && !failure() && needs.promote.outputs.promoted != 'true' && github.event_name != 'pull_request' }}
     runs-on: ubuntu-24.04
 

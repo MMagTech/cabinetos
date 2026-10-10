@@ -247,3 +247,25 @@ Read before touching `build_files/`, `system_files/`, `ci/`, the workflows, the 
   the installed result, not the package's description, and act on the
   package's own file list (`rpm -ql`), so a version that moves a file is
   still covered.
+
+- **Building Sunshine ourselves (#304): three traps, each found on the A9.**
+  1. *Git must trust the build tree.* Sunshine's CMake asks git which
+     build-deps tag its submodule is at and downloads that tag's prebuilt
+     FFmpeg. rpmbuild unpacks the tree as another user than the container's
+     root, git refuses to answer ("dubious ownership", silently), and
+     Sunshine falls back to build-deps' NEWEST FFmpeg: the link then fails
+     with undefined `swr_*` in libavcodec. `safe.directory` fixes it, and
+     `cores/build-sunshine.sh` checks the log names the right tag.
+  2. *A run's files belong to a mapped user.* Remove them with
+     `podman unshare rm -rf`, or the next run cannot start.
+  3. *The spec fetches tools unpinned* (nvm from master, the newest Node.js).
+     Pinned by edits that check their anchors.
+  Built and checked like this, LizardByte's package and ours differ only in
+  the compiler's point release and our lines: every other string in the two
+  binaries, FFmpeg's included, is identical.
+
+- **A dry run catches what reading does not.** The new
+  `install-sunshine.sh` read fine and passed `bash -n`; run in the testing
+  image on the A9, its last line named a variable that no longer existed and
+  the image build would have failed at the very end. Five minutes, against a
+  wasted image build.

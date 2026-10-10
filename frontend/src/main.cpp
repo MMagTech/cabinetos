@@ -9126,16 +9126,9 @@ int main(int argc, char** argv) {
         if (!unit::start(kTsUnit, &why))
             std::fprintf(stderr, "[tailscale] could not turn on at start: %s\n", why.c_str());
     }
-    // A REMOTE PLAY SESSION ALREADY OPEN when the console starts (it was
-    // restarted under one: back from Steam, a crash) needs gamescope composing
-    // again, or the next device to connect streams a black picture: the
-    // gamescope this console runs in is new, and starts with it off.
-    // /usr/libexec/cabinetos-remoteplay says why, and marks the session.
-    if (rpWant && remoteplay::sessionOpen()) {
-        const proc::Result r = proc::run({"gamescopectl", "composite_force", "1"}, 5);
-        std::fprintf(stderr, "[remoteplay] session open at start: composing%s\n",
-                     r.ok() ? "" : " (gamescopectl failed)");
-    }
+    // A Remote Play session already open when the console starts (back from
+    // Steam, a crash) needs gamescope composing: the session script starts it
+    // so (cabinetos-session, #304), before the console draws a frame.
 
     // AFTERWARDS: the first start after a restart compares the version the
     // machine booted with the one that was staged. Said once Home is up.
