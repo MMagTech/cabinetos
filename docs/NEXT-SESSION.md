@@ -13,11 +13,10 @@ specification is `docs/PROJECT.md`; the order is `docs/ROADMAP.md`.
 
 2026-10-10: updates are signed and checked (#311 merged, #135). The A9 (Wi-Fi,
 **192.168.1.109**, `CABINETOS_A9=cabinet@192.168.1.109`) is switched to
-`ostree-image-signed` and took 2026.10.10.4 through the check from System
-update. LizardByte/Sunshine#5885 is merged upstream (`3411311a`) but in no
+`ostree-image-signed` and took two signed updates through the check. Arcade
+games show in any RomM arcade folder (#310, #312). `latest` is 2026.10.10.5,
+signed. LizardByte/Sunshine#5885 is merged upstream (`3411311a`) but in no
 release yet: keep our patch until a release has it (#304).
-Arcade folders (#310) is #312: if it is still open, finish it first (its TV
-checks are on the pull request).
 
 ## Next
 
