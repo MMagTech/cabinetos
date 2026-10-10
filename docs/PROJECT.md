@@ -1626,6 +1626,23 @@ simple and take the complexity away alot of emulators add."* Decided:
   SDL_GameControllerDB (`players::loadMappings`) and a weekly pull request
   keeps it current; a pad that is still missing is added to the list. The
   person never maps anything, which is the rule this section began with.
+- **Officially supported controllers: Xbox, PlayStation and Switch**
+  (MMagTech, 2026-10-10, #318): *"the most likely controller someone would
+  have laying around home."* Their kernel drivers (`hid_microsoft`,
+  `hid_playstation`, `hid_nintendo`) and the Steam one (`hid_steam`) load at
+  boot (`/usr/lib/modules-load.d/cabinetos-controllers.conf`): the kernel
+  makes only PS4 and PS5 pads wait for their own driver, so an Xbox pad's
+  first connection after boot went through `hid-generic` and was seated
+  twice once PCSX2 made SDL look again. Other pads wait for reports, and
+  PCSX2's own controller code starting despite `InputSources/SDL` false is
+  left alone unless one shows it. A new kernel series' changes to those
+  drivers are listed in the base update's notes (`series:` in
+  `ci/base-watch.txt`); the 2026 Steam Controller arrives with Linux 7.3.
+- **A Bluetooth LE pad pairs with no question asked**, but only while an
+  agent exists: `bluetoothctl pair` registers none, and bluetoothd refused a
+  Series X|S pad ("No agent available for request type 2"). Pairing now
+  registers a default agent for its length (`bluetooth.cpp`, PairAgent), and
+  a dropped LE link gets the one retry a dropped classic link already had.
 - **The in-game shortcuts (#76 to #80) are NOT drift, in this shape**
   (MMagTech's argument, accepted: off by default, unknown to anyone who
   never turns them on): one Settings row, In-game shortcuts Off/On, **fixed
