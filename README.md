@@ -4,7 +4,7 @@
 
 <p align="center"><b>Your whole game library, on the TV, as a console.</b><br>
 33 systems, from the Atari 2600 to the Switch, played from your own
-<a href="https://github.com/rommapp/romm">RomM</a> server with one controller.</p>
+<a href="https://github.com/rommapp/romm">RomM</a> server, up to four players at once.</p>
 
 <p align="center">
 <a href="https://mmagtech.github.io/cabinetos/"><b>See it in action</b></a> ·
