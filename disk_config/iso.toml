@@ -138,8 +138,11 @@ passwd --lock cabinet
 #
 # IMPORTANT: this must be lowercase and must match the published package. If the
 # GHCR package is private, the installed machine cannot pull updates.
+#
+# --enforce-container-sigpolicy: the machine only accepts updates signed with
+# CabinetOS's key (#135; the rule is build_files/require-signed-updates.sh).
 %post
-bootc switch --mutate-in-place --transport registry ghcr.io/mmagtech/cabinetos:latest
+bootc switch --mutate-in-place --enforce-container-sigpolicy --transport registry ghcr.io/mmagtech/cabinetos:latest
 %end
 """
 

@@ -1,0 +1,7 @@
+# Where CabinetOS images keep their signatures (#135): beside the image in the
+# same GHCR repository, as cosign writes them (build.yml, "Sign image"). The
+# rule that requires them is in /etc/containers/policy.json, added by
+# build_files/require-signed-updates.sh.
+docker:
+  ghcr.io/mmagtech/cabinetos:
+    use-sigstore-attachments: true
