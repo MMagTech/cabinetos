@@ -441,6 +441,35 @@ private:
     design::Animated appear_;
 };
 
+// --- How to (#314) -----------------------------------------------------------
+
+// A MINI MANUAL FOR THE CONTROLS, in About: what somebody needs with a
+// controller in their hand, at the TV, with no phone or computer. One page
+// read at a glance, not a list to scroll: a few sections per column, each a
+// heading and lines of "what" and "which buttons", and a QR code to the wiki
+// for everything else. Nothing to press but Back, so nothing has focus.
+//
+// THE WORDS ARE THE APP'S (main.cpp, howToPage), so a section can depend on a
+// setting (the shortcuts only show while they are on). Every change to the
+// controls must change them and docs/wiki/navigation.md together.
+class HowToScreen {
+public:
+    // `off`: drawn greyed (the shortcuts while they are off).
+    struct Line { std::string what, how; bool off = false; };
+    struct Section { std::string heading; std::vector<Line> lines; };
+
+    void open(std::vector<std::vector<Section>> columns, const std::string& wikiUrl);
+    void tick(float dt);
+    Result key(Nav n);
+    void draw(Ctx& c);
+
+private:
+    std::vector<std::vector<Section>> columns_;
+    std::string url_;
+    ui::QrTexture qr_;
+    design::Animated appear_;
+};
+
 // --- Adding an account ------------------------------------------------------
 
 // PAIRING SOMEBODY NEW, AND IT IS A SCREEN RATHER THAN PART OF THE PANEL.

@@ -7129,7 +7129,7 @@ int main(int argc, char** argv) {
     // is what makes quitting a game return to the launch screen and backing out
     // again return to the browsing.
     enum class Screen { Home, Library, Grid, Detail, Search, AddAccount, TailscaleSignIn, Report,
-                        Settings };
+                        HowTo, Settings };
     std::vector<Screen> stack{Screen::Home};
     // Which screen last set the room, so a change of screen can be told apart
     // from focus moving within one. See the backdrop block in the frame loop.
@@ -7158,6 +7158,8 @@ int main(int argc, char** argv) {
     // THE DIAGNOSTIC REPORT (#195): the same screen again, the link this time
     // a download of the report. Its lines are set when it is made.
     screens::AddAccountScreen reportScreen;
+    // ABOUT, HOW TO (#314): the controls on one page.
+    screens::HowToScreen howToScreen;
     screens::SettingsScreen settingsScreen;
     // What the docked keyboard held last frame, so the query is re-run when it
     // changes and not sixty times a second when it does not.
@@ -8804,6 +8806,13 @@ int main(int argc, char** argv) {
         choiceBack = nullptr;
         choiceScreen.open(title, detail, std::move(options), focus);
     };
+    // ABOUT, HOW TO (#314). The words live here, next to the controls they
+    // describe; docs/wiki/navigation.md says the same and changes with them.
+    // THE SHORTCUTS ARE ALWAYS SHOWN: hidden while off, nobody would learn
+    // they exist. Off (the default), the first line says where to turn them
+    // on and the rest are greyed; both sticks in opens the pause menu either
+    // way. The button named is the one set for the pad in hand.
+    std::function<void()> openHowTo;
     // Settings > Display and Sound > Dark hours: From and Until, and the hours
     // of each. Set where it is opened; it reopens itself after an hour is set.
     std::function<void(int)> darkHoursPanel;
@@ -8856,7 +8865,7 @@ int main(int argc, char** argv) {
                      SetDarkHours, SetColour, SetRumble, SetPictureQuality,
                      SetWiiRemotes, SetSteam, SetSteamShow, SetRetroAchievements,
                      SetAchievementSound, SetDeveloper, SetVersion, SetRemotePlay,
-                     SetPairedDevices, SetTailscale, SetReport };
+                     SetPairedDevices, SetTailscale, SetReport, SetHowTo };
     // One Eject row per USB drive: this plus the drive's index in
     // storage::locations() when the rows were built.
     constexpr int kSetEject = 100;
@@ -8873,6 +8882,46 @@ int main(int argc, char** argv) {
     // The pad last pressed in Settings, whose row has the dot. Kept as the
     // pad, not its row: a swap moves it to another row.
     SDL_JoystickID settingsLastPad = 0;
+    openHowTo = [&]() {
+        using L = screens::HowToScreen::Line;
+        using S = screens::HowToScreen::Section;
+        std::string button = "Home";
+        if (SDL_Gamepad* gp = settingsLastPad ? SDL_GetGamepadFromID(settingsLastPad) : nullptr) {
+            const std::string l = shortcuts::label(gp);
+            if (!l.empty() && l != "Not set") button = l;
+        }
+        const bool on = shortcuts::enabled();
+        S game{"In a game",
+               {{"Pause menu", "Both sticks in (L3 + R3)"},
+                {"Wii Remote", "Hold HOME"},
+                {"Remote Play", "Hold Select"},
+                {"Leave a game", "Pause menu, Exit to Home"},
+                {"Power menu", "The PC's power button"}}};
+        S keys{"Shortcuts", {}};
+        if (!on) keys.lines.push_back({"Turn on", "Settings, Controllers, In-game shortcuts"});
+        for (const L& l : std::vector<L>{{"Pause menu", "Tap " + button},
+                                         {"Save state", button + " + R1"},
+                                         {"Load state", button + " + L1"},
+                                         {"Fast forward", button + " + R2"},
+                                         {"Rewind", button + " + L2"},
+                                         {"Screenshot", button + " + X"}})
+            keys.lines.push_back({l.what, l.how, !on});
+        S menus{"Menus",
+                {{"Select", "A"},
+                 {"Back", "B"},
+                 {"Change screen", "L1 / R1"},
+                 {"Jump a letter", "L2 / R2"},
+                 {"Power menu", "Start, on Home"},
+                 {"Switch person", "Up to the top bar, A on the name"}}};
+        S steamSection{"Steam",
+                       {{"Open", "Power menu, Switch to Steam"},
+                        {"Come back", "Steam's Power menu, Switch to Desktop"}}};
+        S wiiSection{"Wii Remotes", {{"Pair", "The red sync button, under the battery cover"}}};
+        S drivesSection{"Drives", {{"Unplug", "Eject it first, in Settings, Storage"}}};
+        howToScreen.open({{game, keys}, {menus, steamSection, wiiSection, drivesSection}},
+                         "https://mmagtech.github.io/cabinetos/wiki/");
+        stack.push_back(Screen::HowTo);
+    };
     // THE SHORTCUT BUTTON ROW IS LISTENING for this pad's next press, 0 when
     // not (shortcuts.h). And the press it took, so the gamepad event SDL sends
     // for that same press (same timestamp) goes no further: a B that cancels
@@ -10221,6 +10270,7 @@ int main(int argc, char** argv) {
                 else if (!devFailed.empty()) detail = devFailed;
                 about.push_back({K::Toggle, SetDeveloper, "Developer access", detail, value});
             }
+            about.push_back({K::Action, SetHowTo, "How to", "", ""});
             about.push_back({K::Action, SetCredits, "Credits and licenses", "", ""});
             cats.push_back({"About", std::move(about)});
         }
@@ -11590,6 +11640,9 @@ int main(int argc, char** argv) {
                         });
                         sound::play(sound::Cue::Activate);
                     }
+                } else if (res.value == SetHowTo) {
+                    openHowTo();
+                    sound::play(sound::Cue::Activate);
                 } else if (res.value == SetCredits) {
                     // A list, one line per project: what it does, and its
                     // licence. Nothing to choose; A or B closes it.
@@ -12229,6 +12282,7 @@ int main(int argc, char** argv) {
             case Screen::AddAccount: apply(addAccountScreen.key(n)); return true;
             case Screen::TailscaleSignIn: apply(tsSignInScreen.key(n)); return true;
             case Screen::Report: apply(reportScreen.key(n)); return true;
+            case Screen::HowTo: apply(howToScreen.key(n)); return true;
             case Screen::Settings: apply(settingsScreen.key(n)); return true;
         }
         return false;
@@ -12279,6 +12333,10 @@ int main(int argc, char** argv) {
             // frame count.
             waitForPairCode = true;
         }
+    } else if (initialScreen && SDL_strcmp(initialScreen, "howto") == 0) {
+        // `--screen howto`: About's How to page over Home, for a capture or
+        // the TV loop; Back goes Home.
+        openHowTo();
     } else if (initialScreen && SDL_strcmp(initialScreen, "settings") == 0) {
         // `--screen settings --tile N` opens on category N; `--focus-row 1`
         // puts focus in its rows. The network is waited for here, because a
@@ -16104,6 +16162,7 @@ int main(int argc, char** argv) {
             addAccountScreen.tick(dt);
             tsSignInScreen.tick(dt);
             reportScreen.tick(dt);
+            howToScreen.tick(dt);
             settingsScreen.setHasFocus(!barFocused && !accountsOpen);
             settingsScreen.tick(dt);
             pinScreen.tick(dt);
@@ -16605,7 +16664,7 @@ int main(int argc, char** argv) {
                 else if (!lastLitArt.empty())
                     want = lastLitArt;
             } else if (here() == Screen::AddAccount || here() == Screen::TailscaleSignIn ||
-                       here() == Screen::Report) {
+                       here() == Screen::Report || here() == Screen::HowTo) {
                 // **A TEXT SCREEN GETS THE PLAIN GRADIENT.** MMagTech,
                 // 2026-09-22: *"i preferred the purple background that went
                 // with the first run setup better. The current background
@@ -16975,6 +17034,7 @@ int main(int argc, char** argv) {
                 case Screen::AddAccount: addAccountScreen.draw(ctx); break;
                 case Screen::TailscaleSignIn: tsSignInScreen.draw(ctx); break;
                 case Screen::Report: reportScreen.draw(ctx); break;
+                case Screen::HowTo: howToScreen.draw(ctx); break;
                 case Screen::Settings: settingsScreen.draw(ctx); break;
                 case Screen::Home: break;   // unreachable, and the compiler asks
             }
@@ -17304,6 +17364,7 @@ int main(int argc, char** argv) {
                 case Screen::AddAccount: break;
                 case Screen::TailscaleSignIn: break;
                 case Screen::Report: break;
+                case Screen::HowTo: break;
                 case Screen::Settings: settingsScreen.drawGlass(ctx); break;
                 case Screen::Home: break;
             }
@@ -17660,6 +17721,33 @@ int main(int argc, char** argv) {
                     std::erase_if(batterySlots, [](const BatterySlot& sl) {
                         return sl.leaving && sl.alpha.elapsed >= sl.alpha.duration;
                     });
+                    // ALWAYS IN THE ROW'S ORDER, P1 to P4. A slot is kept by
+                    // its pad, so a swap (Make player N) relabelled two slots
+                    // and left them where they were: P2 then P1 (MMagTech on
+                    // the TV, 2026-10-10). Sorted by the row, they slide to
+                    // their places; one leaving stays after the one it
+                    // followed until it has faded.
+                    {
+                        std::vector<std::pair<float, size_t>> order;
+                        float last = -1.0f;
+                        for (size_t k = 0; k < batterySlots.size(); ++k) {
+                            float rank = last + 0.5f;
+                            if (!batterySlots[k].leaving)
+                                for (size_t i = 0; i < row.size(); ++i)
+                                    if (row[i].id == batterySlots[k].e.id) rank = last = static_cast<float>(i);
+                            order.push_back({rank, k});
+                        }
+                        std::stable_sort(order.begin(), order.end(),
+                                         [](const auto& x, const auto& y) { return x.first < y.first; });
+                        bool moved = false;
+                        for (size_t k = 0; k < order.size(); ++k) moved = moved || order[k].second != k;
+                        if (moved) {
+                            std::vector<BatterySlot> sorted;
+                            sorted.reserve(batterySlots.size());
+                            for (const auto& o : order) sorted.push_back(std::move(batterySlots[o.second]));
+                            batterySlots = std::move(sorted);
+                        }
+                    }
                 }
                 // Where each one belongs, from the right end leftward. A leaving
                 // one keeps its space until it has faded.
