@@ -255,6 +255,14 @@ log "base image has $(wc -l < /usr/share/cabinetos/packages-before-strip.txt) pa
 /ctx/enable-ssh.sh
 
 # ---------------------------------------------------------------------------
+# Updates must be signed by CabinetOS (#135).
+# ---------------------------------------------------------------------------
+#
+# After the overlay, which put the public key and registries.d/cabinetos.yaml
+# in place; the script adds the rule to policy.json and checks it.
+/ctx/require-signed-updates.sh
+
+# ---------------------------------------------------------------------------
 # Repair repository definitions.
 # ---------------------------------------------------------------------------
 #
