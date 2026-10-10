@@ -11,40 +11,38 @@ specification is `docs/PROJECT.md`; the order is `docs/ROADMAP.md`.
 
 ## Where things stand
 
-2026-10-09 evening: #304 is on PR #306 (branch `stream-steam-return`), with
-testing image **2026.10.09.6** building from abb93e4. It carries our own
-Sunshine build (one patch: pick again when its plane empties), Home starting
-composed during a stream, Steam's composing held on, the pads helper fix, and
-tonight's fix (a session ended by the idle no longer leaves the TV's
-controllers set aside). The loop test passed with MMagTech this morning. The
-A9 (Wi-Fi, **192.168.1.109**, `CABINETOS_A9=cabinet@192.168.1.109`) runs
-2026.10.09.4, restarted at 20:47; it takes updates only from its own System
-update screen (the PIN is his to enter); never sudo over SSH.
+2026-10-09: #304 is merged (#306): a stream into Steam keeps its picture.
+CabinetOS now builds Sunshine itself with one patch (`cores/build-sunshine.sh`,
+`cores/sunshine-patches/`), offered upstream as LizardByte/Sunshine#5885 (sent
+by MMagTech from his fork; watch it, draft replies for him to post). The site
+is live at https://mmagtech.github.io/cabinetos/ (showcase page, wiki, README;
+#307, #309). The A9 (Wi-Fi, **192.168.1.109**,
+`CABINETOS_A9=cabinet@192.168.1.109`) runs testing image 2026.10.09.5; main has
+since built the image with the fix for an idle-ended stream leaving the TV's
+controllers set aside, for MMagTech to update to from System update (the PIN
+is his to enter; never sudo over SSH).
 
 ## Next
 
 Milestone 7, Ready to ship (docs/ROADMAP.md), in this order. Lessons file:
-testing.md, then image-and-ci.md.
+image-and-ci.md.
 
-1. **Finish #304.** Check run `gh run list --branch testing` built
-   2026.10.09.6. MMagTech updates from System update; that restart is the
-   test's restart, so the controller stays off afterwards. Confirm from the
-   A9 log the new version and our Sunshine run (`strings /usr/bin/sunshine |
-   grep "has had no framebuffer for"`). His test: stream straight in, Home,
-   Steam, a game, back to Home, picture on the phone throughout, no unit
-   failed. Then merge only on his go, close #304, delete the branch with his
-   go. Then the Sunshine pull request: the draft is on #304
-   (issuecomment-6091812495); Sunshine's AGENTS.md forbids AI agents opening PRs at
-   LizardByte, so it goes on his fork and he opens it (ask about the fork).
-2. **Review #307** with him: the showcase page, README and wiki (#190). Two
-   stills show his Wi-Fi name and LAN addresses; Pages needs switching on.
-3. **Signed images (#135).**
-4. **A diagnostic report (#195).**
-5. **Licences checked and the full texts shipped (#120).**
+1. **Signed images (#135).** First because a mistake breaks every console's
+   updates, so it needs several image updates on the A9 to prove itself.
+   Signing comes before any release ISO (MMagTech, 2026-10-09).
+2. **Arcade games in any RomM arcade folder (#310).** Today only folders
+   named exactly `FBNEO` or `MAME2003` show. His own setup (`FBNEO` named
+   "Arcade", `MAME2003` named "Lightgun" in RomM) must keep working.
+3. **A diagnostic report (#195).**
+4. **Licences checked and the full texts shipped (#120).**
+5. **At the first release (#308):** the installer on a GitHub Release, and the
+   page, wiki and README pointing at it.
 
 Also in the milestone: booting with the TV off (#268). After first release:
-#290, #283, #303, and #305 (opening Steam sometimes takes 25 s; he said not
-to spend time on it).
+#290, #283, #303, #305 (opening Steam sometimes takes 25 s; not worth time
+now). Raised and not filed: the console reads RomM's library only at start,
+on switching person and on coming back online, so a renamed platform or new
+games show only after a restart; he may want it filed.
 
 **After a console is installed fresh** it has no key: About, press Version
 seven times, Developer access, PIN; then from the Mac, with the password on
