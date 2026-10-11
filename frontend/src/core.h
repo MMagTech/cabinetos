@@ -407,6 +407,25 @@ public:
     bool memoryRegion(unsigned id, std::vector<uint8_t>& out) const;
     bool loadMemoryRegion(unsigned id, const std::vector<uint8_t>& data);
 
+    // --- Discs (#162) ----------------------------------------------------------
+    //
+    // The core's disc drive, for a game on several discs handed over as a
+    // list (disc.h). Index is the LIST's, from 0; the app maps it to the
+    // disc's real number. All on the thread that drives runFor.
+    bool hasDiscControl() const;
+    int discCount() const;          // 0 when the core has no drive to ask
+    int discIndex() const;          // -1 when not known
+    bool discEjected() const;
+    bool setDiscEjected(bool ejected);
+    // Beetle Saturn takes an index only while the lid is open.
+    bool setDiscIndex(int index);
+    // The path the core built for a list entry, or empty.
+    std::string discPath(int index) const;
+    // BEFORE loadGame: start on this list entry, where the core can
+    // (pcsx_rearmed, Flycast). `path` must be the exact string the core
+    // builds from the list.
+    void setInitialDisc(int index, const std::string& path);
+
     // --- RetroAchievements (#74) ---------------------------------------------
     //
     // The emulated machine's memory, LIVE rather than copied: rcheevos reads it

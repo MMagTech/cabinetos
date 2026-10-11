@@ -668,6 +668,8 @@ bool Client::fetchGame(int romId, Game* out, std::string* err) {
     return ok;
 }
 
+static bool parseRomFiles(json_object* root, std::vector<RomFile>* out);
+
 bool Client::fetchFacts(int romId, Facts* out, std::string* err) {
     *out = Facts{};
     std::string body;
@@ -695,6 +697,7 @@ bool Client::fetchFacts(int romId, Facts* out, std::string* err) {
         }
         out->players = jstr(meta, "player_count");
     }
+    parseRomFiles(root, &out->files);
     json_object_put(root);
     return true;
 }
@@ -1113,18 +1116,13 @@ bool Client::fetchFirmware(int platformId, std::vector<Firmware>* out, std::stri
     return true;
 }
 
-bool Client::fetchRomFiles(int romId, std::vector<RomFile>* out, std::string* err) {
-    out->clear();
-    std::string body;
-    if (!get("/api/roms/" + std::to_string(romId), &body, err)) return false;
-    json_object* root = json_tokener_parse(body.c_str());
+// A game's `files`, from the one rom payload both fetchRomFiles and
+// fetchFacts read. False when the payload has no files array.
+static bool parseRomFiles(json_object* root, std::vector<RomFile>* out) {
     json_object* files = nullptr;
     if (!root || !json_object_object_get_ex(root, "files", &files) ||
-        json_object_get_type(files) != json_type_array) {
-        if (root) json_object_put(root);
-        if (err) *err = "the game had no files array";
+        json_object_get_type(files) != json_type_array)
         return false;
-    }
     const size_t n = json_object_array_length(files);
     for (size_t i = 0; i < n; ++i) {
         json_object* o = json_object_array_get_idx(files, i);
@@ -1132,9 +1130,27 @@ bool Client::fetchRomFiles(int romId, std::vector<RomFile>* out, std::string* er
         f.id = static_cast<int>(jint(o, "id"));
         f.fileName = jstr(o, "file_name");
         f.sizeBytes = jint(o, "file_size_bytes");
+        f.category = jstr(o, "category");
+        json_object* top = nullptr;
+        if (json_object_object_get_ex(o, "is_top_level", &top) &&
+            json_object_get_type(top) == json_type_boolean)
+            f.topLevel = json_object_get_boolean(top);
         if (f.id != 0 && !f.fileName.empty()) out->push_back(std::move(f));
     }
-    json_object_put(root);
+    return true;
+}
+
+bool Client::fetchRomFiles(int romId, std::vector<RomFile>* out, std::string* err) {
+    out->clear();
+    std::string body;
+    if (!get("/api/roms/" + std::to_string(romId), &body, err)) return false;
+    json_object* root = json_tokener_parse(body.c_str());
+    const bool listed = parseRomFiles(root, out);
+    if (root) json_object_put(root);
+    if (!listed) {
+        if (err) *err = "the game had no files array";
+        return false;
+    }
     if (out->empty() && err) *err = "the game lists no files";
     return !out->empty();
 }

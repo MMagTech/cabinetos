@@ -121,6 +121,19 @@ constexpr unsigned kRealWiiRemote = (6u << 8) | RETRO_DEVICE_NONE;
 // the note in loadGame about telling a core what is plugged in.
 unsigned gCorePorts = 0;
 
+// THE CORE'S DISC DRIVE (#162): eject, put a disc in, close, and the start-
+// on-disc call, as a core hands them over. Version 0 cores (Genesis Plus GX)
+// give the first seven only; the rest stay null. Saturn and Dolphin register
+// theirs from inside retro_load_game, so this is read after the load as
+// well as before it. Cleared with the core, never with the game.
+retro_disk_control_ext_callback gDisk{};
+bool gDiskSet = false;
+unsigned gDiskVersion = 0;
+// Asked for before the load: the list's index and the exact path the core
+// will build for it (RetroArch hands back what get_image_path said).
+int gInitialDisc = -1;
+std::string gInitialDiscPath;
+
 unsigned gPixelFormat = RETRO_PIXEL_FORMAT_0RGB1555;
 std::string gSystemDir, gSaveDir;
 
@@ -937,6 +950,36 @@ bool environment(unsigned cmd, void* data) {
             keepMemoryMap(static_cast<const retro_memory_map*>(data));
             return true;
 
+        // THE DISC DRIVE (#162). Version 1: the extended interface, with the
+        // start-on-disc call and each disc's path. Answering nothing here is
+        // what left every core on its first disc until 2026-10-11.
+        case RETRO_ENVIRONMENT_GET_DISK_CONTROL_INTERFACE_VERSION:
+            *static_cast<unsigned*>(data) = 1;
+            return true;
+        case RETRO_ENVIRONMENT_SET_DISK_CONTROL_INTERFACE: {
+            const auto* cb = static_cast<const retro_disk_control_callback*>(data);
+            if (!cb) return false;
+            gDisk = {};
+            gDisk.set_eject_state = cb->set_eject_state;
+            gDisk.get_eject_state = cb->get_eject_state;
+            gDisk.get_image_index = cb->get_image_index;
+            gDisk.set_image_index = cb->set_image_index;
+            gDisk.get_num_images = cb->get_num_images;
+            gDisk.replace_image_index = cb->replace_image_index;
+            gDisk.add_image_index = cb->add_image_index;
+            gDiskSet = true;
+            gDiskVersion = 0;
+            return true;
+        }
+        case RETRO_ENVIRONMENT_SET_DISK_CONTROL_EXT_INTERFACE: {
+            const auto* cb = static_cast<const retro_disk_control_ext_callback*>(data);
+            if (!cb) return false;
+            gDisk = *cb;
+            gDiskSet = true;
+            gDiskVersion = 1;
+            return true;
+        }
+
         case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY:
         case RETRO_ENVIRONMENT_SET_SUPPORT_ACHIEVEMENTS:
         case RETRO_ENVIRONMENT_SET_SERIALIZATION_QUIRKS:
@@ -1184,6 +1227,11 @@ bool Core::load(const std::string& soPath) {
     }
     gIsPs2 = false;
     // Whatever the last core asked for is not this one's business either.
+    gDisk = {};
+    gDiskSet = false;
+    gDiskVersion = 0;
+    gInitialDisc = -1;
+    gInitialDiscPath.clear();
     gHW = {};
     gHWWanted = false;
     gHWVulkan = false;
@@ -1389,6 +1437,9 @@ void Core::unload() {
     dlclose(handle_);
     handle_ = nullptr;
     g = {};
+    gDisk = {};
+    gDiskSet = false;
+    gInitialDisc = -1;
     if (texture_) {
         glDeleteTextures(1, &texture_);
         texture_ = 0;
@@ -1516,6 +1567,18 @@ bool Core::loadGame(const std::string& romPath, const std::string& systemDir,
 
     // A map left from the last game would point into freed memory.
     keepMemoryMap(nullptr);
+    // START ON DISC N (#162), where the core takes it: the list's index and
+    // the exact path it will build from the list, as RetroArch does. A core
+    // that answers no, or registers its drive too late to be asked, starts
+    // on the list's first disc and says so; the app checks discIndex().
+    if (gInitialDisc >= 0) {
+        const bool asked = gDiskSet && gDisk.set_initial_image &&
+                           gDisk.set_initial_image(static_cast<unsigned>(gInitialDisc),
+                                                   gInitialDiscPath.c_str());
+        std::fprintf(stderr, "[disc] start on index %d: %s\n", gInitialDisc,
+                     asked ? "asked of the core" : "the core takes no start disc");
+        gInitialDisc = -1;
+    }
     if (!g.load_game(&info)) {
         // Deliberately does not claim the core is wrong, because nothing here
         // knows that: a refusal looks identical for a missing BIOS, an
@@ -2313,6 +2376,40 @@ bool Core::snapshot(std::vector<uint8_t>& rgba, unsigned& width, unsigned& heigh
     width = ow;
     height = oh;
     return true;
+}
+
+bool Core::hasDiscControl() const {
+    return !gIsPs2 && gDiskSet && gDisk.get_num_images && gDisk.set_image_index &&
+           gDisk.set_eject_state;
+}
+int Core::discCount() const {
+    return hasDiscControl() && gameLoaded_ ? static_cast<int>(gDisk.get_num_images()) : 0;
+}
+int Core::discIndex() const {
+    return gDiskSet && gDisk.get_image_index && gameLoaded_
+               ? static_cast<int>(gDisk.get_image_index())
+               : -1;
+}
+bool Core::discEjected() const {
+    return gDiskSet && gDisk.get_eject_state && gameLoaded_ && gDisk.get_eject_state();
+}
+bool Core::setDiscEjected(bool ejected) {
+    if (!hasDiscControl() || !gameLoaded_) return false;
+    return gDisk.set_eject_state(ejected);
+}
+bool Core::setDiscIndex(int index) {
+    if (!hasDiscControl() || !gameLoaded_ || index < 0) return false;
+    return gDisk.set_image_index(static_cast<unsigned>(index));
+}
+std::string Core::discPath(int index) const {
+    if (!gDiskSet || !gDisk.get_image_path || index < 0) return {};
+    char buf[4096] = {};
+    if (!gDisk.get_image_path(static_cast<unsigned>(index), buf, sizeof buf)) return {};
+    return buf;
+}
+void Core::setInitialDisc(int index, const std::string& path) {
+    gInitialDisc = index;
+    gInitialDiscPath = path;
 }
 
 uint64_t Core::framesRun() const { return gFramesRun; }

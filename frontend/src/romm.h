@@ -143,6 +143,11 @@ struct RomFile {
     int id = 0;
     std::string fileName;
     int64_t sizeBytes = 0;
+    // RomM's `category` ("game", "manual", "dlc", ...; empty for a file at
+    // the top of the folder on older servers) and `is_top_level`. A game on
+    // several discs fetches only its own files (disc.h).
+    std::string category;
+    bool topLevel = true;
 };
 
 // A save or a save state held by RomM.
@@ -293,6 +298,9 @@ public:
         int year = 0;
         std::string maker;
         std::string players;   // as RomM gives it: "1", "1-2", "2"
+        // The game's files, from the same payload: how the game page knows
+        // a game is on several discs (disc.h).
+        std::vector<RomFile> files;
     };
     bool fetchFacts(int romId, Facts* out, std::string* err);
 

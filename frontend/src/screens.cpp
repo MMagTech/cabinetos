@@ -1189,7 +1189,8 @@ void DetailScreen::detailsArrived() { detailsIn_ = true; }
 std::string DetailScreen::factsLine(ui::TextRenderer& text, float sc, float width) const {
     auto join = [&](const std::string& maker) {
         std::string m;
-        for (const std::string* p : {&facts_.year, &maker, &facts_.players, &facts_.played})
+        for (const std::string* p :
+             {&facts_.year, &maker, &facts_.players, &facts_.played, &facts_.disc})
             if (!p->empty()) m += (m.empty() ? "" : "  \xC2\xB7  ") + *p;
         return m;
     };

@@ -3,6 +3,7 @@
 #include <dirent.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <strings.h>
 #include <sys/statvfs.h>
 #include <unistd.h>
 
@@ -175,17 +176,24 @@ bool holdsPayloadOfSize(const std::string& entryPath, int64_t expectedBytes) {
     DIR* d = ::opendir(entryPath.c_str());
     if (!d) return false;
     bool found = false;
+    // A GAME ON SEVERAL DISCS (#162) is its discs together: RomM's size is
+    // the folder's, and no one file is that size. The console's own list
+    // is not counted; RomM never had it.
+    int64_t together = 0;
     while (struct dirent* e = ::readdir(d)) {
         if (e->d_name[0] == '.') continue;
         struct stat f;
-        if (::stat((entryPath + "/" + e->d_name).c_str(), &f) == 0 && S_ISREG(f.st_mode) &&
-            f.st_size == expectedBytes) {
-            found = true;
-            break;
+        if (::stat((entryPath + "/" + e->d_name).c_str(), &f) == 0 && S_ISREG(f.st_mode)) {
+            if (f.st_size == expectedBytes) {
+                found = true;
+                break;
+            }
+            const size_t len = std::strlen(e->d_name);
+            if (len < 4 || strcasecmp(e->d_name + len - 4, ".m3u") != 0) together += f.st_size;
         }
     }
     ::closedir(d);
-    return found;
+    return found || together == expectedBytes;
 }
 
 }  // namespace
