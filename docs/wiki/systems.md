@@ -46,6 +46,7 @@ downloads anything new into the console's shared BIOS folder.
   `Game (Disc 1).chd`, `Game (Disc 2).chd`. The console fetches them all, keeps
   one save for the game, and changes discs from the pause menu. Discs are
   ordered by the `(Disc N)` in their names. Loose discs are separate games.
+  See [Games on several discs](discs.md).
   PlayStation, Saturn, Dreamcast, Sega CD, 3DO and GameCube.
 
 ## Every system

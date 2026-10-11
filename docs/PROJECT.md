@@ -16615,12 +16615,23 @@ was decided while building it, from the disc rig's measurements on the A9
 holds the rules.
 
 - **Only multi-disc games show anything:** one pause-menu row, *Change disc:
-  Disc 1 of 4*, and *Disc N of M* on the game page. Everything else is the
+  Disc 1 of 4*, after Screenshot and beside Look (the one-press rows stay
+  together, the two *Name: value* rows sit side by side; MMagTech on the TV,
+  2026-10-11), and *Disc N of M* on the game page. Everything else is the
   question panel: every disc, the one in the drive marked *In the drive*,
-  focus on the next; then *Insert it* / *Start over on it*. The panel
+  focus on the next; then **Insert** / **Insert and restart**. The panel
   replaces the pause menu while it is up (the menu's words showed through its
-  glass). One thing to do is said, not focused: *Press (A) to start over on
-  it* (3DO, and the disc already in).
+  glass). One thing to do is said, not focused: *Press (A) to insert and
+  restart* (3DO, and the disc already in).
+- **The words are what a person does with a real console** (MMagTech,
+  2026-10-11): swap the disc, or swap it and press Reset. The first wording,
+  *Insert it* / *Start over on it*, never said the disc goes in, so the Soviet
+  disc of Red Alert read as an Insert. A panel row acts on its disc's own
+  number, not its place in the list.
+- **Saturn keeps both choices** (MMagTech, 2026-10-11). Its lid always resets
+  to the BIOS, so the two converge (Insert passes through the CD player
+  screen, Insert and restart skips it); one action was considered and set
+  aside because no survey can rule out a Saturn game that swaps mid-play.
 - **Disc numbers are the names' own** when every name numbers its disc from 1,
   so a disc missing on RomM leaves its gap (*Disc 1 of 4 · Disc 2 missing*,
   the panel lists 1, 3, 4); otherwise the place in the order.
@@ -16647,8 +16658,10 @@ holds the rules.
   across games and `read_m3u` reads nothing unless it is 0, so after a change
   to disc 2 every later Dreamcast launch was refused until the app restarted.
   A fallback on our side; the upstream report waits on MMagTech's go.
-- **OPEN, for MMagTech: achievements are not yet told about a disc change**
-  (the plan's item 10). rcheevos' `rc_client_begin_change_media` takes the
+- **DECIDED (c), 2026-10-11: achievements are not told about a disc change**
+  (the plan's item 10). Softcore only on this console; hardcore stays off for
+  what it costs to maintain under RetroAchievements' rules. If hardcore is
+  ever wanted, (a) is the work. The question as it was: rcheevos' `rc_client_begin_change_media` takes the
   new disc's hash; it only re-checks that the disc belongs to the game and, in
   hardcore (off on this console), turns hardcore off for an unknown one.
   RomM gives one hash per game and the console reads no disc. The options:
@@ -16658,8 +16671,26 @@ holds the rules.
   softcore.
 - **States carry their disc in their name,** `Game (Disc 2) [time].state`, so a
   state from any device brings its disc; the disc goes in before the state
-  loads. Only pcsx_rearmed restores it by itself.
+  loads. Only pcsx_rearmed restores it by itself. Measured on PS1, Saturn,
+  Sega CD and Dreamcast (a Skies of Arcadia disc 2 state loaded with disc 1 in
+  comes back on disc 2). **3DO refuses another disc's state** (*That state is
+  on Disc 3*): Opera has no drive, so nothing could put that disc in; a state
+  picked on the game page starts the game on its disc. GameCube has no states.
+- **Flycast sometimes will not save a state** (it refused at frame 4000 of a
+  boot and saved at 5200, on either disc), and the console then says *No save
+  states for this system*, which is wrong for that moment. Not a disc issue.
 - **Known, not fixed:** a disc the game is not asking for can crash PS1's core
   (Lightrec) and with it the app; on hardware the game would hang. Insert at
-  the game's own prompt is not yet measured on PS1 and Dreamcast (needs saves
-  at the end of disc 1).
+  the game's own prompt passes on PS1, Saturn, Dreamcast and Sega CD (on the
+  TV, 2026-10-11, with downloaded saves; #162). The wiki says to insert only
+  when the game asks.
+- **Upstream and the cores' own habits** (#162, 2026-10-11): Flycast's
+  `disk_index` is reported (flyinghead/flycast#2541) and our drive-back-to-
+  disc-1 before unload stays until a fixed Flycast is pinned; the lid must be
+  closed again there, because Flycast also keeps the lid (a lid left open
+  started the next game open). Genesis Plus GX never closes the `.m3u` it
+  reads, and PCSX ReARMed keeps the last game's disc open until the next PS1
+  game: a few files held until the app restarts. Dolphin's disk-control list
+  grows by each launch's discs, but it boots and auto-changes from that
+  launch's own `.m3u`, so the next GameCube game is unaffected (measured: RE4
+  twice, then Ikaruga).

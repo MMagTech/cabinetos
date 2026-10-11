@@ -18,6 +18,7 @@ from a blank PC to playing.
 
 - [The library](library.md): Home, the Library, Search and a game's page.
 - [The pause menu](pause-menu.md)
+- [Games on several discs](discs.md): one folder in RomM, Insert or Insert and restart.
 - [Saves, states and sync](saves.md)
 - [Players and accounts](players.md): everyone their own, and the PIN.
 - [Screenshots](screenshots.md)
