@@ -96,40 +96,15 @@ detect_output() {
     return 1
 }
 
-# WAIT FOR THE DISPLAY'S OWN ANSWER (#268). With no display connected at
-# start, the size used to fall back to the 1920x1080 below, and gamescope kept
-# it when the TV appeared: right by luck on a 1080p set, soft on a 4K one, and
-# the console stayed so until a restart (measured on the A9, 2026-10-10:
-# "selecting mode 1920x1080@120Hz" on the 3840x2160 LG C1). A TV in standby
-# usually still answers (the C1 did); one with no power, or a receiver or HDMI
-# switch that is off, does not, and this machine has no CEC to wake it. So no
-# size of ours: wait, once a second, for a display to answer, and start on its
-# answer. Nothing is lost meanwhile; with no display there is nothing to draw
-# on, and Remote Play captures the display too.
-#
-# THE ANSWER MUST HOLD FOR TWO SECONDS. A TV switching on drops its connection
-# for about a second, twice, five seconds apart (measured on the C1); starting
-# inside the gap would read no mode. A drop after the start does no harm: the
-# running gamescope picks the display up again (measured, a 31 s unplug).
-if [[ -z "${CABINETOS_OUTPUT:-}" ]] && ls /dev/dri/card* >/dev/null 2>&1 \
-        && ! detect_output >/dev/null; then
-    echo "cabinetos-session: no display answers yet; waiting for one"
-    held=0
-    while (( held < 2 )); do
-        if detect_output >/dev/null; then held=$((held + 1)); else held=0; fi
-        sleep 1
-    done
-    echo "cabinetos-session: a display answered"
-fi
-
 OUTPUT="${CABINETOS_OUTPUT:-$(detect_output || true)}"
 if [[ "${OUTPUT}" =~ ^([0-9]+)x([0-9]+)$ ]]; then
     OUT_W="${BASH_REMATCH[1]}"
     OUT_H="${BASH_REMATCH[2]}"
     echo "cabinetos-session: output ${OUT_W}x${OUT_H} (from ${CABINETOS_OUTPUT:+CABINETOS_OUTPUT}${CABINETOS_OUTPUT:-the display})"
 else
-    # No display, and no GPU to wait for one on (the wait above runs only
-    # with a drm device): 1080p is a safe thing to ask the other rungs for.
+    # No connected connector yet — a television that is off, or an input not
+    # selected. 1080p is a safe thing to ask any display for, and the session
+    # restarts on its own if it dies, so the next attempt may find the panel.
     OUT_W=1920
     OUT_H=1080
     echo "cabinetos-session: no display reported a mode; asking for ${OUT_W}x${OUT_H}"
