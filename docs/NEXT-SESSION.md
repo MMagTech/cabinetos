@@ -28,8 +28,10 @@ The A9 (Wi-Fi, **192.168.1.109**, `CABINETOS_A9=cabinet@192.168.1.109`) runs `te
    then the open questions on #162: achievements on a disc change (PROJECT.md 43,
    options a/b/c), an upstream report to Flycast (disk_index kept across games) on
    his go, a replacement for Night Trap (bad dump; Redump-checked list on #162).
-   Insert at a game's own prompt still needs saves: Metal Gear Solid (GameFAQs, his
-   download) and a Dreamcast VMU save at the end of disc 1.
+   Insert at the game's own prompt is measured (PS1, Dreamcast pass; GameCube plays a
+   disc 2 save with no prompt, Dolphin's log not yet read): #162, 2026-10-11. The converted
+   saves sit on the A9's scratch root only; uploading them to RomM for the TV test needs
+   his go (`tools/disc-rig/savecards.py`).
 2. **#333, letter column:** waiting on MMagTech's final look (Arcade through the C's, no
    stray T; one collection), then his merge go. The A9 still runs its image.
 3. **#268 (PR #332, on hold):** the display wait works, but the app starts Developer
