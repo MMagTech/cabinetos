@@ -28,6 +28,7 @@ Remote Play stream starts or ends.
 | **Save state** | Saves this exact moment, with a picture, to the console and to RomM. |
 | **Load latest state** | Goes back to your newest save state for this game. The game waits on *Press (A) to continue*. |
 | **Screenshot** | Saves a picture of the game (without the menu) to your RomM gallery. |
+| **Change disc** | Lists the game's discs, the one in the drive marked. **Insert it** puts that disc in and the game carries on; **Start over on it** starts the game again on that disc. Play then carries on from the last disc you used. |
 | **Picture** | This game's picture level: **Console** (the console's setting), Performance, Balanced or Quality. Takes effect from the next start. |
 | **Look** | The screen look for this system: CRT, LCD, sharp or plain. Changes behind the menu straight away. |
 | **Screen** / **Colors** | Virtual Boy's screen colours and 3D glasses, Game Boy's colour palettes. |
@@ -40,6 +41,9 @@ Rows appear only where they apply:
 - **Picture**: only on systems with picture levels, and only for the owner
   when a PIN is set.
 - **Look**: only on systems that have looks. See [Picture and colours](picture.md).
+- **Change disc**: only on a game with several discs. Not on GameCube, which
+  changes discs by itself; 3DO has Start over only. On Saturn a disc change
+  goes through the console's CD player screen: press Start there.
 
 ## The Power menu
 

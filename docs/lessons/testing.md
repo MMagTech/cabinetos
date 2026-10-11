@@ -313,6 +313,27 @@ minute and guessing at it for twenty.
   empty `rom_user` row**, which moves its `updated_at`. Harmless, but do not
   read it as something the console sent.
 
+- **THE DISC RIG (`tools/disc-rig/`, #162) DRIVES A GAME BY SCRIPT**:
+  `--disc-script "wait 600; insert 2; wait 300; shot a; state; startover 1;
+  load; resume; check; quit"`, through the same calls the pause menu makes,
+  headless, through the read-only relay. It found two core bugs in a night
+  that a single launch never shows. Its `shot` reads the game's own frame
+  (works for Flycast's Vulkan picture); `ui` is the whole screen and is black
+  where a Vulkan game is. After Load latest state the game waits on *Press (A)
+  to continue*, so a script needs `resume`, or every `wait` after it hangs.
+  `wait` counts the game's frames, which stop while a menu is open: use
+  `sleep` there.
+
+- **`pkill -f`/`grep` ON A WORD THE SSH COMMAND ITSELF CONTAINS KILLS THE SSH
+  SESSION,** including a word only further along the same command line
+  (`grep "[r]elay2.py 1600[78]"` matched `relay2.py 16008` later in the same
+  `bash -c`). Start and stop helpers from a script file with a pid file.
+
+- **A SCRATCH ROOT STILL SEES THE GAMES DRIVE.** `drives.json` `[]` keeps
+  downloads off it, but the frontend found `/run/media/cabinet/Games` and its
+  folder time moved (nothing was written). Check the real drive after a rig
+  run that keeps or removes games.
+
 ### TWO GAMES AT DIFFERENT SOUND RATES, WITHOUT A RESTART — learned 2026-09-27
 
 The audio stream was opened once, at the first game's sample rate, and kept

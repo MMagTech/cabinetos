@@ -41,7 +41,9 @@ listed last.
 
 ![A game's page](../media/game.webp)
 
-- The year, maker, number of players and how long you have played it.
+- The year, maker, number of players and how long you have played it. A game
+  on several discs also says which disc Play starts on (*Disc 2 of 4*), and
+  *Disc 3 missing* when RomM's folder lacks one.
 - **Play**, with when the game was last saved.
 - **Download** or **Remove download**. See [Drives and storage](drives.md).
 - The **heart** (press Up from Play) adds it to Favorites.

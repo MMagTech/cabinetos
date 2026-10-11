@@ -56,7 +56,10 @@ inline bool handles(const std::string& platformSlug) {
 }
 
 struct Disc {
-    int number = 0;      // 1-based: the console's own count, whatever the list order
+    // THE DISC'S OWN NUMBER, whatever the list order: the one its name gives
+    // when every name numbers its disc from 1 ("(Disc 1)", "(Disc 3)" with
+    // disc 2 missing are 1 and 3), else its place in the order, from 1.
+    int number = 0;
     std::string file;    // the file's name in the game's folder
     std::string label;   // "Disc 2 (Soviet)"
 };
@@ -67,6 +70,11 @@ struct Disc {
 // in brackets after it ("(Allies)").
 std::vector<Disc> fromNames(const std::vector<std::string>& names,
                             const std::vector<std::string>& listed = {});
+
+// DISCS THE NAMES SAY ARE MISSING: every disc has a numbered marker, and a
+// number below the highest is not there ("(Disc 1)", "(Disc 3)": 2). Said on
+// the game page (#162); empty when the names do not number every disc.
+std::vector<int> missing(const std::vector<std::string>& names);
 
 // WHICH OF A GAME'S FILES ON ROMM TO FETCH, AND WHICH ARE ITS DISCS. Only
 // the game's own files (top level, category "game"): no manuals, soundtracks
@@ -115,6 +123,10 @@ int discInStateName(const std::string& name);
 
 // "Disc 2 of 4".
 std::string ofText(int disc, int count);
+
+// The disc numbered `n`, or nullptr; and the highest number, the "of M".
+const Disc* byNumber(const std::vector<Disc>& discs, int n);
+int highest(const std::vector<Disc>& discs);
 
 // The rules above, checked with no core and no server: --disc-test.
 int test();

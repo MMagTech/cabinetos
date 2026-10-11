@@ -836,8 +836,7 @@ static void syncDiscFromCore(GameSession& sess) {
     const int idx = cab::Core::shared().discIndex();
     if (idx >= 0 && idx < static_cast<int>(sess.discOrder.size()))
         sess.disc = sess.discOrder[static_cast<size_t>(idx)];
-    disc::remember(storage::currentUser(), sess.romId, sess.disc,
-                   static_cast<int>(sess.discs.size()));
+    disc::remember(storage::currentUser(), sess.romId, sess.disc, disc::highest(sess.discs));
 }
 
 // A DISC PUT IN AT ONCE, with no time for the game to see the lid open:
@@ -8286,11 +8285,29 @@ int main(int argc, char** argv) {
                 // server, the count the last launch here saw.
                 if (disc::handles(slug) &&
                     disc::systemFor(slug).change != disc::Change::Automatic) {
-                    const int count = fresh ? static_cast<int>(disc::plan(f.files).discNames.size())
+                    // By the discs' own numbers (disc.h), so a disc missing on
+                    // RomM reads "Disc 1 of 4  ·  Disc 2 missing".
+                    const std::vector<disc::Disc> ds =
+                        fresh ? disc::fromNames(disc::plan(f.files).discNames)
+                              : std::vector<disc::Disc>{};
+                    const int count = fresh ? (ds.size() >= 2 ? disc::highest(ds) : 0)
                                             : disc::knownCount(who, romId);
                     int n = disc::lastDisc(who, romId);
-                    if (n < 1 || n > count) n = 1;
+                    if (fresh ? !disc::byNumber(ds, n) : (n < 1 || n > count))
+                        n = ds.empty() ? 1 : ds.front().number;
                     if (count >= 2) facts.disc = disc::ofText(n, count);
+                    // A DISC THE NAMES NUMBER AND RomM DOES NOT HAVE, said:
+                    // "Disc 2 missing". Only when RomM answered.
+                    if (fresh && count >= 1) {
+                        const std::vector<int> gone = disc::missing(disc::plan(f.files).discNames);
+                        if (!gone.empty()) {
+                            std::string m = gone.size() == 1 ? "Disc " : "Discs ";
+                            for (size_t k = 0; k < gone.size(); ++k)
+                                m += (k ? ", " : "") + std::to_string(gone[k]);
+                            m += " missing";
+                            facts.disc += (facts.disc.empty() ? "" : "  \xC2\xB7  ") + m;
+                        }
+                    }
                 }
             }
             // TIME PLAYED (#128): RomM's total plus what this console has not
@@ -13278,16 +13295,16 @@ int main(int argc, char** argv) {
         std::vector<int> discOrder;
         if (!launchJob.discs.empty()) {
             const std::vector<disc::Disc>& discs = launchJob.discs;
-            const int count = static_cast<int>(discs.size());
+            const int count = disc::highest(discs);
             startDisc = gNextStartDisc > 0 ? gNextStartDisc : disc::lastDisc(user, launchJob.romId);
             gNextStartDisc = 0;
-            if (startDisc < 1 || startDisc > count) startDisc = 1;
+            if (!disc::byNumber(discs, startDisc)) startDisc = discs.front().number;
             // GAMECUBE ALWAYS STARTS AT THE TOP OF THE LIST: the game asks for
             // the disc it needs and Dolphin puts it in; which one was in last
             // time is not known (syncDiscFromCore).
-            if (discSys.change == disc::Change::Automatic) startDisc = 1;
+            if (discSys.change == disc::Change::Automatic) startDisc = discs.front().number;
             const std::string dir = launchJob.entryPath;
-            const std::string first = dir + "/" + discs[static_cast<size_t>(startDisc - 1)].file;
+            const std::string first = dir + "/" + disc::byNumber(discs, startDisc)->file;
             auto writeList = [&](int top) {
                 const std::string t = disc::listText(discs, top);
                 if (!cab::writeBytes(launchJob.romPath, std::vector<uint8_t>(t.begin(), t.end())))
@@ -13440,8 +13457,7 @@ int main(int argc, char** argv) {
             } else if (core.hasDiscControl()) {
                 syncDiscFromCore(session);
             } else {
-                disc::remember(user, session.romId, session.disc,
-                               static_cast<int>(session.discs.size()));
+                disc::remember(user, session.romId, session.disc, disc::highest(session.discs));
             }
         }
         if (const char* tag = catalog::emulatorTag(launchJob.coreName.c_str())) {
@@ -13852,10 +13868,20 @@ int main(int argc, char** argv) {
         // The disc in the drive, kept for this person's next Play (#162);
         // GameCube changes its own discs, so the core is asked.
         if (!session.discs.empty()) {
+            // LEFT DURING INSERT'S WAIT: the disc goes in and the lid closes
+            // before anything else, as it would have a moment later.
+            if (session.discInserting) {
+                cab::Core& c = cab::Core::shared();
+                c.setDiscIndex(discIndexOf(session, session.discInserting));
+                c.setDiscEjected(false);
+                std::fprintf(stderr, "[disc] left during the change: disc %d in, lid closed\n",
+                             session.discInserting);
+                session.discInserting = 0;
+            }
             syncDiscFromCore(session);
             if (session.discChange != disc::Change::Automatic)
-                std::fprintf(stderr, "[disc] left on disc %d of %zu\n", session.disc,
-                             session.discs.size());
+                std::fprintf(stderr, "[disc] left on disc %d of %d\n", session.disc,
+                             disc::highest(session.discs));
             // THE DRIVE BACK ON THE LIST'S FIRST ENTRY BEFORE THE UNLOAD, for
             // every core with a drive. Flycast (a172e00) keeps its disc index
             // across games: retro_unload_game never resets it, and read_m3u
@@ -14129,15 +14155,13 @@ int main(int argc, char** argv) {
     auto startOverOnDisc = [&](int n) {
         if (session.discs.empty()) return;
         std::fprintf(stderr, "[disc] start over on disc %d\n", n);
-        disc::remember(storage::currentUser(), session.romId, n,
-                       static_cast<int>(session.discs.size()));
+        disc::remember(storage::currentUser(), session.romId, n, disc::highest(session.discs));
         gNextStartDisc = n;
         relaunchRomId = session.romId;
         if (choiceScreen.isOpen()) choiceScreen.close();
         exitToHome();
         // The exit just remembered the disc that was in; this one wins.
-        disc::remember(storage::currentUser(), relaunchRomId, n,
-                       static_cast<int>(session.discs.size()));
+        disc::remember(storage::currentUser(), relaunchRomId, n, disc::highest(session.discs));
     };
     // THE DISC RIG'S STATE (#162, --disc-script). A test instrument: empty,
     // and nothing here runs.
@@ -14175,7 +14199,8 @@ int main(int argc, char** argv) {
             options.push_back("Insert it");
             options.push_back("Start over on it");
         }
-        askChoice(session.discs[static_cast<size_t>(n - 1)].label, "", options, 0,
+        const disc::Disc* picked = disc::byNumber(session.discs, n);
+        askChoice(picked ? picked->label : "Disc " + std::to_string(n), "", options, 0,
                   [&, n, canInsert](int answer) {
                       if (canInsert && answer == 0) {
                           closeOverlay();
@@ -14193,8 +14218,12 @@ int main(int argc, char** argv) {
             names.push_back(d.label);
             values.push_back(d.number == session.disc ? "In the drive" : "");
         }
+        // Focus on the next disc in the drive's order, or the last.
         const int count = static_cast<int>(session.discs.size());
-        const int focus = session.disc < count ? session.disc : count - 1;
+        int at = 0;
+        for (int k = 0; k < count; ++k)
+            if (session.discs[static_cast<size_t>(k)].number == session.disc) at = k;
+        const int focus = at + 1 < count ? at + 1 : count - 1;
         askChoice("Change disc", "", names, focus, [&](int k) { pickDisc(k + 1); });
         choiceScreen.setValues(values);
     };
@@ -15720,7 +15749,10 @@ int main(int argc, char** argv) {
                 // apart. Taken here, compressed on rewind's worker.
                 const uint64_t every = static_cast<uint64_t>(
                     std::max(1.0, std::round(core.avInfo().fps * 0.5)));
-                if (rewindAvailable == 1 && core.framesRun() >= rewindLastFrame + every) {
+                // Not while a disc change has the lid open (#162): the
+                // history is dropped when it closes anyway.
+                if (rewindAvailable == 1 && !session.discInserting &&
+                    core.framesRun() >= rewindLastFrame + every) {
                     rewindLastFrame = core.framesRun();
                     const uint64_t t0 = SDL_GetTicksNS();
                     if (core.saveState(rewindRaw) && !rewindRaw.empty()) {
@@ -16259,7 +16291,7 @@ int main(int argc, char** argv) {
                 say("");
             } else if (verb == "check") {
                 say("disc " + std::to_string(session.disc) + " of " +
-                    std::to_string(session.discs.size()) + ", core index " +
+                    std::to_string(disc::highest(session.discs)) + ", core index " +
                     std::to_string(core.discIndex()) + " of " + std::to_string(core.discCount()) +
                     (core.discEjected() ? ", lid OPEN" : ", lid closed") + ", last disc " +
                     std::to_string(disc::lastDisc(storage::currentUser(), session.romId)));
@@ -18267,7 +18299,7 @@ int main(int argc, char** argv) {
                 std::string discLine;
                 if (!powerMenu && pauseItems[i] == OvDisc) {
                     discLine = std::string(label) + ": " +
-                               disc::ofText(session.disc, static_cast<int>(session.discs.size()));
+                               disc::ofText(session.disc, disc::highest(session.discs));
                     label = discLine.c_str();
                 }
                 // A CHOICE ROW, CENTRED LIKE EVERY OTHER BUTTON: "Picture

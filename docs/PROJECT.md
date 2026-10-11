@@ -16606,3 +16606,60 @@ what it shows; this is why.
 - **With it: Controllers became one row** opening a panel (three pads filled
   the page), and **Developer access moved last in About** (the everyday rows
   never move when it shows; it still appears in view).
+
+### 43. Games on several discs, issue #162
+
+**The plan is on #162 (agreed with MMagTech 2026-10-10/11); this records what
+was decided while building it, from the disc rig's measurements on the A9
+(2026-10-11, branch `multi-disc`, comments on #162).** `frontend/src/disc.h`
+holds the rules.
+
+- **Only multi-disc games show anything:** one pause-menu row, *Change disc:
+  Disc 1 of 4*, and *Disc N of M* on the game page. Everything else is the
+  question panel: every disc, the one in the drive marked *In the drive*,
+  focus on the next; then *Insert it* / *Start over on it*. The panel
+  replaces the pause menu while it is up (the menu's words showed through its
+  glass). One thing to do is said, not focused: *Press (A) to start over on
+  it* (3DO, and the disc already in).
+- **Disc numbers are the names' own** when every name numbers its disc from 1,
+  so a disc missing on RomM leaves its gap (*Disc 1 of 4 · Disc 2 missing*,
+  the panel lists 1, 3, 4); otherwise the place in the order.
+- **Start over, per system, measured:** PS1 and Dreamcast take the core's own
+  start disc (`set_initial_image`), now stated on every launch, disc 1
+  included, because Flycast keeps the last one it was told. Saturn: both ways
+  were tried with Panzer Dragoon Saga (disc N put in before the first frame,
+  and the list written with disc N first); both boot disc N's title, and
+  states loaded across both list orders. **Kept: before the first frame**, so
+  Beetle Saturn's disc 0 is always disc 1. Sega CD and GameCube: the list
+  with disc N first. 3DO: the disc's own file.
+- **Saturn's lid reset is real and needs a press:** Insert drops the game to
+  the BIOS CD player, which waits on *Start Application*; Start boots the new
+  disc. Panzer Dragoon Saga asks for exactly this ("Press the CD Door Button
+  to enter the Saturn Bios Screen"), and its save continues on disc 2.
+- **GameCube: no menu, no remembered disc, no Disc N of M.** Dolphin's
+  libretro port (1a0f972) never moves its disc index for its own
+  AutoDiscChange and never clears its disc list, so nothing outside Dolphin
+  can know which disc is in. The list always starts at disc 1; the game asks
+  for the disc it needs. `AutoDiscChange = True` is in the Dolphin.ini the
+  console writes.
+- **Before any game unloads, the drive goes back to the list's first entry**
+  (lid open, index 0, lid closed). Flycast (a172e00) keeps its disc index
+  across games and `read_m3u` reads nothing unless it is 0, so after a change
+  to disc 2 every later Dreamcast launch was refused until the app restarted.
+  A fallback on our side; the upstream report waits on MMagTech's go.
+- **OPEN, for MMagTech: achievements are not yet told about a disc change**
+  (the plan's item 10). rcheevos' `rc_client_begin_change_media` takes the
+  new disc's hash; it only re-checks that the disc belongs to the game and, in
+  hardcore (off on this console), turns hardcore off for an unknown one.
+  RomM gives one hash per game and the console reads no disc. The options:
+  (a) hash each disc on the console (rcheevos' own disc hashing, which needs
+  a CHD reader built in); (b) pass the game's hash again, which tells
+  rcheevos nothing; (c) leave it, since unlocks do not depend on it in
+  softcore.
+- **States carry their disc in their name,** `Game (Disc 2) [time].state`, so a
+  state from any device brings its disc; the disc goes in before the state
+  loads. Only pcsx_rearmed restores it by itself.
+- **Known, not fixed:** a disc the game is not asking for can crash PS1's core
+  (Lightrec) and with it the app; on hardware the game would hang. Insert at
+  the game's own prompt is not yet measured on PS1 and Dreamcast (needs saves
+  at the end of disc 1).

@@ -94,6 +94,7 @@ bool naturalLess(const std::string& a, const std::string& b) {
 // a title can hold a word like "Part" of its own.
 struct Marker {
     bool found = false;
+    bool letter = false;
     int value = 0;       // the number, or a letter's place (A = 1)
     size_t at = 0, end = 0;
 };
@@ -125,6 +126,7 @@ Marker lastMarker(const std::string& stem) {
             } else if (!bare && std::isalpha(static_cast<unsigned char>(s[q])) &&
                        (q + 1 >= s.size() || !isAlnum(s[q + 1]))) {
                 m.value = s[q] - 'a' + 1;
+                m.letter = true;
                 m.end = q + 1;
             } else {
                 continue;
@@ -221,6 +223,16 @@ std::vector<Disc> fromNames(const std::vector<std::string>& names,
         });
     }
 
+    // THE NUMBERS: the names' own, when every name numbers its disc from 1
+    // and no two say the same (a disc missing on RomM leaves its gap); else
+    // the place in the order.
+    bool ownNumbers = !names.empty();
+    for (size_t i = 0; i < names.size() && ownNumbers; ++i) {
+        if (!markers[i].found || markers[i].letter || markers[i].value < 1) ownNumbers = false;
+        for (size_t j = 0; j < i && ownNumbers; ++j)
+            if (markers[j].value == markers[i].value) ownNumbers = false;
+    }
+
     // THE NAMES: "Disc N", and the bracketed parts only this disc's name has.
     std::vector<std::vector<std::pair<size_t, std::string>>> gs;
     for (const std::string& n : names) gs.push_back(groups(stemOf(n)));
@@ -228,7 +240,7 @@ std::vector<Disc> fromNames(const std::vector<std::string>& names,
     for (size_t k = 0; k < order.size(); ++k) {
         const size_t i = order[k];
         Disc d;
-        d.number = static_cast<int>(k) + 1;
+        d.number = ownNumbers ? markers[i].value : static_cast<int>(k) + 1;
         d.file = names[i];
         d.label = "Disc " + std::to_string(d.number);
         for (const auto& [at, g] : gs[i]) {
@@ -250,6 +262,24 @@ std::vector<Disc> fromNames(const std::vector<std::string>& names,
         }
         out.push_back(std::move(d));
     }
+    return out;
+}
+
+std::vector<int> missing(const std::vector<std::string>& names) {
+    std::vector<int> seen;
+    for (const std::string& n : names) {
+        const Marker m = lastMarker(stemOf(n));
+        if (!m.found || m.letter) return {};
+        for (int v : seen)
+            if (v == m.value) return {};
+        seen.push_back(m.value);
+    }
+    if (seen.empty()) return {};
+    const int lo = *std::min_element(seen.begin(), seen.end());
+    const int hi = *std::max_element(seen.begin(), seen.end());
+    std::vector<int> out;
+    for (int v = std::min(lo, 1); v <= hi; ++v)
+        if (std::find(seen.begin(), seen.end(), v) == seen.end()) out.push_back(v);
     return out;
 }
 
@@ -302,7 +332,7 @@ std::string listFileName(const std::string& fsName) {
 
 std::vector<int> listOrder(const std::vector<Disc>& discs, int first) {
     std::vector<int> o;
-    if (first >= 1 && first <= static_cast<int>(discs.size())) o.push_back(first);
+    if (byNumber(discs, first)) o.push_back(first);
     for (const Disc& d : discs)
         if (d.number != first) o.push_back(d.number);
     return o;
@@ -310,8 +340,21 @@ std::vector<int> listOrder(const std::vector<Disc>& discs, int first) {
 
 std::string listText(const std::vector<Disc>& discs, int first) {
     std::string t;
-    for (int n : listOrder(discs, first)) t += discs[static_cast<size_t>(n - 1)].file + "\n";
+    for (int n : listOrder(discs, first))
+        if (const Disc* d = byNumber(discs, n)) t += d->file + "\n";
     return t;
+}
+
+const Disc* byNumber(const std::vector<Disc>& discs, int n) {
+    for (const Disc& d : discs)
+        if (d.number == n) return &d;
+    return nullptr;
+}
+
+int highest(const std::vector<Disc>& discs) {
+    int h = 0;
+    for (const Disc& d : discs) h = std::max(h, d.number);
+    return h;
 }
 
 bool writeRecord(const std::string& entryDir, const std::vector<Disc>& discs) {
@@ -521,6 +564,23 @@ int test() {
         const std::vector<int> o = listOrder(d, 3);
         check(o == std::vector<int>({3, 1, 2}), "core index to disc number");
         check(listFileName("Panzer Dragoon") == "Panzer Dragoon.m3u", "named after the game");
+    }
+    {   // A disc missing on RomM keeps the others' numbers.
+        const auto d = fromNames({"G (Disc 4).chd", "G (Disc 1).chd", "G (Disc 3).chd"});
+        check(labels(d) == "Disc 1 | Disc 3 | Disc 4", "the names' own numbers: " + labels(d));
+        check(highest(d) == 4 && byNumber(d, 2) == nullptr, "of 4, no disc 2");
+        check(listText(d, 3) == "G (Disc 3).chd\nG (Disc 1).chd\nG (Disc 4).chd\n",
+              "disc 3 first, by number");
+    }
+    {   // A disc missing on RomM.
+        check(missing({"G (Disc 1).chd", "G (Disc 3).chd"}) == std::vector<int>({2}),
+              "disc 2 missing");
+        check(missing({"G (Disc 2).chd", "G (Disc 3).chd"}) == std::vector<int>({1}),
+              "disc 1 missing");
+        check(missing({"G (Disc 0).cue", "G (Disc 1).cue"}).empty(), "a disc 0 is not a gap");
+        check(missing({"G (Disc 1).chd", "G (Disc 2).chd"}).empty(), "none missing");
+        check(missing({"G - Side A.chd", "G - Side C.chd"}).empty(), "letters say nothing");
+        check(missing({"a.chd", "b.chd"}).empty(), "no markers say nothing");
     }
     {   // States.
         check(discInStateName("Panzer Dragoon (Disc 2) [2026-10-11 03-12-45-120].state") == 2,
