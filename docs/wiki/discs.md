@@ -29,6 +29,9 @@ none of this.
 - **One save for the whole game.** Every disc reads and writes the same memory
   card, so a save made on disc 1 is there on disc 2.
 - **Remove** deletes every disc. Your saves stay.
+  On PlayStation and Sega CD the emulator can keep a disc file open after
+  you leave the game, so a removed game's space may only come back after the
+  console restarts.
 
 ## Changing discs
 
