@@ -14108,7 +14108,7 @@ int main(int argc, char** argv) {
     // ONE ROW IN THE PAUSE MENU, ONLY ON A GAME WITH SEVERAL DISCS, and
     // everything else inside the question panel: every disc listed, earlier
     // ones too, the one in the drive marked, focus on the next. Picking one
-    // asks Insert it (the game keeps running) or Start over on it.
+    // asks Insert (the game keeps running) or Start over.
     //
     // INSERT IS EJECT, LET THE GAME RUN, SET THE DISC, CLOSE: RetroArch
     // waits 100 frames, and a Dreamcast game needs the tray seen open
@@ -14196,8 +14196,8 @@ int main(int argc, char** argv) {
         // onto does not read as selected.
         std::vector<std::string> options;
         if (canInsert) {
-            options.push_back("Insert it");
-            options.push_back("Start over on it");
+            options.push_back("Insert");
+            options.push_back("Start over");
         }
         const disc::Disc* picked = disc::byNumber(session.discs, n);
         askChoice(picked ? picked->label : "Disc " + std::to_string(n), "", options, 0,
@@ -14209,7 +14209,7 @@ int main(int argc, char** argv) {
                           startOverOnDisc(n);
                       }
                   });
-        if (!canInsert) choiceScreen.setPrompt("Press", "A", "to start over on it");
+        if (!canInsert) choiceScreen.setPrompt("Press", "A", "to start over");
         choiceBack = [&]() { openDiscPanel(); };
     };
     openDiscPanel = [&]() {
