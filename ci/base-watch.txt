@@ -31,6 +31,11 @@
 #                     which kernel changelog lines (kernel.org's, and the OGC
 #                     kernel's own patches) are about a part the console uses.
 #                     Python regex, matched against each commit's subject.
+#   series: <part> :: <path> ...
+#                     on a jump to a new kernel series (7.2 to 7.3), list
+#                     every change the series made to these files, from
+#                     torvalds/linux. The stable changelogs carry fixes only,
+#                     and new hardware (a new controller) arrives in a series.
 #   changelog-skip: <regex>
 #                     a changelog line that matched a part but is not news for
 #                     this console: another chip in the same driver, or a
@@ -81,7 +86,12 @@ changelog: Display over HDMI :: ^drm/(edid|display)\b|^drm: (?![\w-]+: )
 changelog: Wi-Fi :: ^wifi: (mt76: (mt7925|mt792x|connac|mt76_connac)\b|mt76: (?!mt7\d{2,3}[a-z]?\b)|mac80211:|cfg80211:)
 changelog: Wired network :: ^(net: )?r8169:
 changelog: Bluetooth :: ^Bluetooth: (?!(btintel|btrtl|btbcm|btqca|hci_qca|btnxpuart|hci_bcm|hci_bcm4377|btmrvl|hci_h5|hci_ll|hci_intel|btsdio|hci_vhci|virtio_bt|btmtksdio|btmtkuart|hci_uart|hci_ldisc)\b)
-changelog: Controllers :: ^HID: ((core|input|hidraw|uhid|usbhid|generic|playstation|sony|nintendo|microsoft|steam|wiimote|8bitdo|google)\b|hid-(core|input|playstation|sony|nintendo|microsoft|steam|wiimote|generic)\b|(?![\w-]+: ))|^Input: (xpad|joydev|uinput|evdev|ff-core|ff-memless)\b
+changelog: Controllers :: ^HID: ((core|input|hidraw|uhid|usbhid|generic|quirks|playstation|sony|nintendo|microsoft|steam|wiimote|8bitdo|google)\b|hid-(core|input|quirks|playstation|sony|nintendo|microsoft|steam|wiimote|generic)\b|(?![\w-]+: ))|^Input: (xpad|joydev|uinput|evdev|ff-core|ff-memless)\b
+# The drivers system_files/usr/lib/modules-load.d/cabinetos-controllers.conf
+# loads at boot, and the kernel's list of pads that wait for their own driver
+# (hid-quirks.c, hid_have_special_driver). When that list covers Xbox, Switch
+# and Steam pads, the file is no longer needed (#318).
+series: Controllers :: drivers/hid/hid-microsoft.c drivers/hid/hid-playstation.c drivers/hid/hid-nintendo.c drivers/hid/hid-steam.c drivers/hid/hid-quirks.c
 changelog: Sound :: ^ALSA: (hda|pcm|core|control|timer)\b
 changelog: USB :: ^(usb|USB): (xhci|core|hub)\b|^xhci\b|^usb: storage: uas\b|^thunderbolt:
 changelog: Processor, sleep and power :: ^(platform/x86(/amd|: amd)|cpufreq: amd-pstate|cpufreq/amd-pstate|iommu/amd|x86/(cpu/)?amd)\b

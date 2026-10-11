@@ -126,6 +126,21 @@ Read before working on a screen, the network, Bluetooth, pairing or first run.
   pairs perfectly once and then never reconnects. It reads as "it keeps
   disconnecting" and has nothing to do with pairing.
 
+- **A BLUETOOTH LE PAD CANNOT PAIR WHILE NO AGENT EXISTS, EVEN FOR "JUST
+  WORKS".** `bluetoothctl pair` as a command registers none. Classic pads
+  never ask, so every pad paired until a Series X|S pad (2026-10-10): "No
+  agent available for request type 2", AuthenticationFailed, "Couldn't pair"
+  four times. bluetoothd accepts a just-works pairing it was asked for BY
+  ITSELF, but only after `new_auth` finds an agent (src/device.c,
+  `device_confirm_passkey`), so a default agent that is merely there fixed
+  it and was never called. Do not look for a "yes" line in the log as proof;
+  look for the "No agent" line being gone. And an LE link that drops says
+  "Reason.Timeout" and AuthenticationCanceled, not ConnectionAttemptFailed:
+  the same flake in other words, which the retry must know.
+
+- **A PAD TO TEST PAIRING WITH MUST BE ONE THE CONSOLE NEVER SAW.** A pad
+  already bonded skips every step that fails.
+
 ## Pairing and QR codes
 
 - **A QR CODE CANNOT BE CHECKED BY LOOKING AT IT** — a wrong one looks exactly
