@@ -18134,7 +18134,9 @@ int main(int argc, char** argv) {
         // Drawn after presentScene because the panel is glass, and it reads the
         // game's own picture through itself.
         const float ovl = overlayFade.value();
-        if (ovl > 0.001f) {
+        // NOT UNDER A QUESTION ASKED FROM IT (Change disc, #162): the panel
+        // takes its place, and the menu's words showed through the glass.
+        if (ovl > 0.001f && !(playing && choiceScreen.isOpen())) {
             // The 64 is the padding above and below the buttons. There used to
             // be 44 more, reserved for the line the menu answered with; that
             // answer is the notification pill now, so the panel is just its
