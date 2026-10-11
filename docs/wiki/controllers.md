@@ -4,9 +4,15 @@
 
 ## Which controllers work
 
-Any pad in the [SDL controller list](https://github.com/mdqinc/SDL_GameControllerDB)
-works with no setup, over Bluetooth or USB; the list holds over two thousand
-pads. The list arrives with each update. There is no
+**Officially supported: Xbox, PlayStation (PS4 and PS5) and Switch
+controllers**, over Bluetooth or USB. These are the ones CabinetOS is built and
+tested around.
+
+Other pads in the [SDL controller list](https://github.com/mdqinc/SDL_GameControllerDB)
+usually work too, with no setup; the list holds over two thousand pads and
+arrives with each update. The original Steam Controller is expected to work; the
+2026 Steam Controller needs a system update that has not arrived yet. If a pad
+misbehaves, [report it](troubleshooting.md). There is no
 button-mapping screen; buttons are matched by position, so the bottom face
 button is always **A** (Cross on PlayStation, B on Nintendo).
 

@@ -40,7 +40,7 @@ import urllib.error
 import urllib.request
 
 WATCH = "ci/base-watch.txt"
-KEYS = ("area", "log", "tv", "changelog", "changelog-skip", "kind")
+KEYS = ("area", "log", "tv", "changelog", "changelog-skip", "series", "kind")
 
 
 # --- The watch list -----------------------------------------------------------
@@ -67,8 +67,8 @@ class Area:
 
 
 def read_watch(path=WATCH):
-    """(areas, parts, skips)."""
-    areas, parts, skips = [], [], []
+    """(areas, parts, skips, series)."""
+    areas, parts, skips, series = [], [], [], []
     area = None
     with open(path, encoding="utf-8") as f:
         for n, raw in enumerate(f, 1):
@@ -98,6 +98,11 @@ def read_watch(path=WATCH):
                     parts.append((part.strip(), re.compile(rx.strip())))
                 elif key == "changelog-skip":
                     skips.append(re.compile(value))
+                elif key == "series":
+                    part, sep2, paths = value.partition(" :: ")
+                    if not sep2 or not paths.split():
+                        sys.exit(f"{path}:{n}: series: needs '<part> :: <path> ...'")
+                    series.append((part.strip(), paths.split()))
                 elif key == "kind":
                     if value != "stripped":
                         sys.exit(f"{path}:{n}: unknown kind '{value}'")
@@ -106,7 +111,7 @@ def read_watch(path=WATCH):
             if area is None:
                 sys.exit(f"{path}:{n}: package pattern before any 'area:'")
             area.patterns.append(line)
-    return areas, parts, skips
+    return areas, parts, skips, series
 
 
 def area_of(name, areas):
@@ -312,7 +317,22 @@ def ogc_patches(tag, upstream, token):
     raise RuntimeError(f"no 'Linux {upstream}' commit within 1000 of {tag}")
 
 
-def kernel_report(old_full, new_full, parts, skips, token):
+def series_commits(path, old_series, new_series, token):
+    """The subjects of the commits to PATH that Linux NEW_SERIES has and
+    OLD_SERIES does not (torvalds/linux on GitHub, merges left out). Each
+    tag's latest hundred for the file: far more than one series adds to one
+    driver."""
+    def history(tag):
+        url = (f"https://api.github.com/repos/torvalds/linux/commits"
+               f"?sha={tag}&path={path}&per_page=100")
+        return [(c["sha"], c["commit"]["message"].split("\n", 1)[0].strip())
+                for c in json.loads(fetch(url, token))]
+    had = {sha for sha, _ in history(f"v{old_series}")}
+    return [s for sha, s in history(f"v{new_series}")
+            if sha not in had and not s.startswith("Merge ")]
+
+
+def kernel_report(old_full, new_full, parts, skips, series, token):
     """Markdown for the kernel's fixes, and counts by part for the notes."""
     old, old_tag = kernel_version(old_full)
     new, new_tag = kernel_version(new_full)
@@ -328,7 +348,30 @@ def kernel_report(old_full, new_full, parts, skips, token):
         if new[:2] != old[:2]:
             out.append(f"**A new kernel series, {new[0]}.{new[1]}.** Its new features are "
                        f"summarised at https://kernelnewbies.org/Linux_{new[0]}.{new[1]}; "
-                       "below are only its stable fixes.")
+                       "below are its stable fixes, and the whole series' changes only "
+                       "for the files the `series:` lines name.")
+            # NEW HARDWARE ARRIVES IN A SERIES, NOT IN ITS FIXES. Support for
+            # the 2026 Steam Controller went into Linux on 2026-08-14 as
+            # "HID: steam: Initial 2026 Steam Controller support", and would
+            # have reached the console in a series jump with no line in these
+            # notes: the stable changelogs carry fixes only (#318).
+            os_, ns = f"{old[0]}.{old[1]}", f"{new[0]}.{new[1]}"
+            for part, paths in series:
+                lines = []
+                for p in paths:
+                    try:
+                        subs = series_commits(p, os_, ns, token)
+                    except (urllib.error.URLError, OSError, ValueError, KeyError) as e:
+                        problems.append(f"Could not read {p}'s changes in {ns} ({e}); see "
+                                        f"https://github.com/torvalds/linux/commits/v{ns}/{p}.")
+                        continue
+                    lines.extend(s for s in subs if s not in lines)
+                if lines:
+                    name = f"{part}, new in {ns}"
+                    counts[name] = len(lines)
+                    out.append(f"<details open><summary>{name} ({len(lines)})</summary>\n")
+                    out.extend(f"- {line}" for line in lines)
+                    out.append("\n</details>\n")
         for rel in stable_releases(old, new):
             v = dotted(rel)
             url = f"https://cdn.kernel.org/pub/linux/kernel/v{rel[0]}.x/ChangeLog-{v}"
@@ -411,7 +454,7 @@ def checks(changed):
 # --- Commands -----------------------------------------------------------------
 
 def cmd_checks(old_path, new_path):
-    areas, _, _ = read_watch()
+    areas, *_ = read_watch()
     changed = classify(read_manifest(old_path), read_manifest(new_path), areas)
     log, tv = checks(changed)
     for area in changed:
@@ -423,7 +466,7 @@ def cmd_checks(old_path, new_path):
 
 
 def cmd_expect(old_path, new_path):
-    areas, _, _ = read_watch()
+    areas, *_ = read_watch()
     for area in classify(read_manifest(old_path), read_manifest(new_path), areas):
         if area.stripped:
             continue
@@ -436,7 +479,7 @@ def cmd_expect(old_path, new_path):
 
 
 def cmd_report(old_path, new_path, md_path, json_path, notes_path, versions):
-    areas, parts, skips = read_watch()
+    areas, parts, skips, series = read_watch()
     old, new = read_manifest(old_path), read_manifest(new_path)
     changed = classify(old, new, areas)
     token = os.environ.get("GH_TOKEN")
@@ -445,7 +488,7 @@ def cmd_report(old_path, new_path, md_path, json_path, notes_path, versions):
     kernel_md, kernel_counts = "", {}
     ko, kn = old.get("kernel"), new.get("kernel")
     if ko and kn and ko != kn:
-        kernel_md, kernel_counts = kernel_report(ko, kn, parts, skips, token)
+        kernel_md, kernel_counts = kernel_report(ko, kn, parts, skips, series, token)
 
     # The update notes: plain, one line per area, readable by anyone.
     notes = [f"CabinetOS moves to Bazzite {new_version} (from {old_version}).", ""]

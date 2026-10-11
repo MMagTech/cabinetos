@@ -65,6 +65,21 @@ Read before working on a core, an emulator, input, saves or states.
   `[input] port 0 does nothing in this game: ...`, which is the half that
   answers the question somebody actually asks.
 
+- **ONE PAD SEATED TWICE NEEDED THE FIRST CONNECTION AFTER A BOOT (#318).**
+  The kernel's `hid_have_special_driver` list makes only PS4 and PS5 pads
+  wait for their own driver. An Xbox pad over Bluetooth meets `hid-generic`
+  first, `hid_microsoft` loads and takes it over 50 to 80 ms later, and SDL
+  seats it in that window through the plain joystick ("Xbox One Controller"
+  in `[players]`, two kernel `input:` lines). When anything makes SDL look
+  again, its Xbox HIDAPI driver seats the same pad as "Xbox One S
+  Controller", and every press counts twice. PCSX2 is what made it look (its
+  `SDLInputSource` starts although `InputSources/SDL` is false). Every later
+  connection in the boot is fine, because the driver is loaded by then, so
+  **a test from a console that has seen the pad once this boot proves
+  nothing**: restart, check the driver is not in `lsmod`, then connect. A
+  Remote Play pad loads `hid_microsoft` too. The fix loads the drivers at
+  boot (`modules-load.d`).
+
 - **Telling a core about SOME of its ports is the same as telling it about
   none.** Flycast returns early from `retro_set_controller_port_device` while
   any of its four ports is unset.
