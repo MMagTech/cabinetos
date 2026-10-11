@@ -74,7 +74,7 @@ public:
     // the answers (open it with none). A focused Cancel under a run of A
     // presses gets pressed by the next one (Steam's install, #223; the
     // unearned-focus rule). Back answers Cancelled, as for any panel. A
-    // prompt that names A ("Press (A) to start over on it") is answered by A,
+    // prompt that names A ("Press (A) to insert and restart") is answered by A,
     // as Chosen with chosen() 0. open() clears it.
     void setPrompt(std::string before, std::string button, std::string after) {
         promptBefore_ = std::move(before);
