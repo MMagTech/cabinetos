@@ -14295,16 +14295,18 @@ int main(int argc, char** argv) {
                 pauseItems.push_back(OvSaveState);
                 pauseItems.push_back(OvLoadState);
             }
-            // CHANGE DISC (#162), only on a game with several discs and only
-            // where the console changes them (not GameCube: Dolphin does).
-            if (session.discs.size() >= 2 &&
-                (session.discChange == disc::Change::Insert ||
-                 session.discChange == disc::Change::StartOver))
-                pauseItems.push_back(OvDisc);
             // In every game, as the shortcut is (MMagTech: screenshots go
             // wherever the shortcut button is recognised). PS2 reads PCSX2's
             // frame since #130; GameCube is a libretro core like the rest.
             pauseItems.push_back(OvScreenshot);
+            // CHANGE DISC (#162), only on a game with several discs and only
+            // where the console changes them (not GameCube: Dolphin does).
+            // After the three one-press rows and beside Look, the other
+            // "Name: value" row (MMagTech on the TV, 2026-10-11).
+            if (session.discs.size() >= 2 &&
+                (session.discChange == disc::Change::Insert ||
+                 session.discChange == disc::Change::StartOver))
+                pauseItems.push_back(OvDisc);
             // PICTURE QUALITY, on the nine systems where a level changes
             // something, and with a PIN set only for the owner, as in
             // Settings (MMagTech, 2026-10-02).
