@@ -861,15 +861,36 @@ static void discSwapNow(GameSession& sess, int n, const char* why) {
 // A SAVE STATE GOES IN ON ITS OWN DISC (#162 item 9). The disc is in the
 // state's name ("(Disc 2)"), so a state from any device carries it; it is
 // put in before the state, because only PS1's core restores it by itself.
+//
+// A CORE WITH NO DRIVE (3DO) CANNOT TAKE ANOTHER DISC'S STATE: the state is
+// the machine without its disc, and nothing can put that disc in, so it
+// would run on in the wrong disc's data. It is refused and the notice names
+// its disc; Insert and restart on that disc, then Load latest state.
+static int gStateOnDisc = 0;   // set when a state was refused for its disc
 static bool loadStateOnItsDisc(GameSession& sess, const std::string& name,
                                const std::vector<uint8_t>& bytes) {
+    gStateOnDisc = 0;
     if (!sess.discs.empty() && sess.discChange == disc::Change::Insert) {
         const int want = disc::discInStateName(name);
         if (want > 0 && want != sess.disc) discSwapNow(sess, want, "for the state");
     }
+    if (!sess.discs.empty() && sess.discChange == disc::Change::StartOver) {
+        const int want = disc::discInStateName(name);
+        if (want > 0 && want != sess.disc) {
+            std::fprintf(stderr, "[disc] the state is on disc %d, disc %d is in: not loaded\n",
+                         want, sess.disc);
+            gStateOnDisc = want;
+            return false;
+        }
+    }
     const bool ok = cab::Core::shared().loadState(bytes);
     if (ok && !sess.discs.empty()) syncDiscFromCore(sess);
     return ok;
+}
+
+static std::string stateRefusedText() {
+    return gStateOnDisc > 0 ? "That state is on Disc " + std::to_string(gStateOnDisc)
+                            : std::string("Couldn't load that state");
 }
 
 static std::string sanitisedStem(const std::string& title) {
@@ -1801,6 +1822,7 @@ constexpr GalleryNotice kNoticeGallery[] = {
     {"No saved state for this game", Tone::Info},
     {"Couldn't reach RomM", Tone::Problem},
     {"Couldn't load that state", Tone::Problem},
+    {"That state is on Disc 3", Tone::Problem},
     {"Download removed", Tone::Done},
     {"Freeing space\xE2\x80\xA6", Tone::Busy},
     {"Couldn't set up Steam", Tone::Problem},
@@ -2034,8 +2056,7 @@ static void beginLoadLatestState(StateLoad& load, GameSession& sess,
         const bool ok = loadStateOnItsDisc(sess, local, bytes);
         std::fprintf(stderr, "[state] local-only %s -> %s\n", local.c_str(),
                      ok ? "restored" : "REFUSED");
-        notice.say(ok ? "State loaded" : "Couldn't load that state",
-                   ok ? Tone::Done : Tone::Problem);
+        notice.say(ok ? "State loaded" : stateRefusedText(), ok ? Tone::Done : Tone::Problem);
         load.loaded = ok;
         return;
     }
@@ -2145,7 +2166,7 @@ static void pumpStateLoad(StateLoad& load, GameSession& sess,
                     const bool ok = loadStateOnItsDisc(sess, local, bytes);
                     std::fprintf(stderr, "[state] fell back to local %s -> %s\n",
                                  local.c_str(), ok ? "restored" : "REFUSED");
-                    notice.say(ok ? "State loaded" : "Couldn't load that state",
+                    notice.say(ok ? "State loaded" : stateRefusedText(),
                                ok ? Tone::Done : Tone::Problem);
                     load.loaded = ok;
                     return;
@@ -2168,8 +2189,7 @@ static void pumpStateLoad(StateLoad& load, GameSession& sess,
     // found and the core would not take them, which is a different problem from
     // there being none — and silently carrying on with the game running from
     // where it was is indistinguishable from nothing having happened.
-    notice.say(ok ? "State loaded" : "Couldn't load that state",
-               ok ? Tone::Done : Tone::Problem);
+    notice.say(ok ? "State loaded" : stateRefusedText(), ok ? Tone::Done : Tone::Problem);
     load.loaded = ok;
     load.data.clear();
 }
@@ -12234,7 +12254,13 @@ int main(int argc, char** argv) {
                 if (res.value < 0 &&
                     static_cast<size_t>(-res.value) <= detailLocalStates.size()) {
                     pendingStatePath = detailLocalStates[static_cast<size_t>(-res.value) - 1];
-                    if (!launchById(detailScreen.game().romId)) pendingStatePath.clear();
+                    // ON THE STATE'S OWN DISC (#162): no swap to wait on,
+                    // and the only way in for a core with no drive (3DO).
+                    gNextStartDisc = disc::discInStateName(pendingStatePath);
+                    if (!launchById(detailScreen.game().romId)) {
+                        pendingStatePath.clear();
+                        gNextStartDisc = 0;
+                    }
                     break;
                 }
                 pendingStateId = res.value;
@@ -13293,11 +13319,13 @@ int main(int argc, char** argv) {
             discBoot = static_cast<disc::Boot>(gDiscBootOverride);
         int startDisc = 0;
         std::vector<int> discOrder;
+        // Taken whatever this game is, so a single-disc launch never leaves it set.
+        const int askedDisc = gNextStartDisc;
+        gNextStartDisc = 0;
         if (!launchJob.discs.empty()) {
             const std::vector<disc::Disc>& discs = launchJob.discs;
             const int count = disc::highest(discs);
-            startDisc = gNextStartDisc > 0 ? gNextStartDisc : disc::lastDisc(user, launchJob.romId);
-            gNextStartDisc = 0;
+            startDisc = askedDisc > 0 ? askedDisc : disc::lastDisc(user, launchJob.romId);
             if (!disc::byNumber(discs, startDisc)) startDisc = discs.front().number;
             // GAMECUBE ALWAYS STARTS AT THE TOP OF THE LIST: the game asks for
             // the disc it needs and Dolphin puts it in; which one was in last
@@ -13890,6 +13918,9 @@ int main(int argc, char** argv) {
             // .m3u itself as a disc ("Unknown disk format"), refusing every
             // Dreamcast game until the app restarted. Measured 2026-10-11
             // (#162). RetroArch does not do this; it has the same exposure.
+            // Reported upstream: flyinghead/flycast#2541. THE LID IS CLOSED
+            // AGAIN: Flycast keeps the lid too, and a lid left open started
+            // the next Dreamcast game with it open (measured 2026-10-11).
             cab::Core& core = cab::Core::shared();
             if (core.hasDiscControl() && core.discIndex() > 0) {
                 const bool opened = core.setDiscEjected(true);
@@ -16105,7 +16136,7 @@ int main(int argc, char** argv) {
             const bool ok = !bytes.empty() && loadStateOnItsDisc(session, pendingStatePath, bytes);
             std::fprintf(stderr, "[state] picked on the game's page: %s -> %s\n",
                          pendingStatePath.c_str(), ok ? "restored" : "REFUSED");
-            menuNotice.say(ok ? "State loaded" : "Couldn't load that state",
+            menuNotice.say(ok ? "State loaded" : stateRefusedText(),
                            ok ? Tone::Done : Tone::Problem);
             stateLoad.loaded = ok;   // and it waits on that frame, as any load does
             pendingStatePath.clear();
