@@ -14224,7 +14224,12 @@ int main(int argc, char** argv) {
         for (int k = 0; k < count; ++k)
             if (session.discs[static_cast<size_t>(k)].number == session.disc) at = k;
         const int focus = at + 1 < count ? at + 1 : count - 1;
-        askChoice("Change disc", "", names, focus, [&](int k) { pickDisc(k + 1); });
+        // A row is a disc by its own number, not its place: with disc 2
+        // missing on RomM the second row is disc 3.
+        askChoice("Change disc", "", names, focus, [&](int k) {
+            if (k >= 0 && k < static_cast<int>(session.discs.size()))
+                pickDisc(session.discs[static_cast<size_t>(k)].number);
+        });
         choiceScreen.setValues(values);
     };
 
