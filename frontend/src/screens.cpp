@@ -582,7 +582,12 @@ void GridScreen::open(std::string title, std::vector<int> cards,
         // in an alphabet of their own, and a second A to Z down the side
         // would send a jump to the wrong one.
         if (!all[static_cast<size_t>(idx)].unavailable.empty()) continue;
-        const std::string& n = all[static_cast<size_t>(idx)].title;
+        // THE SORT KEY'S LETTER, NOT THE NAME'S. The list is in RomM's order,
+        // which drops a leading "The" or "A" and can file a game under another
+        // name; read off the title, "The Combatribes" put a T among the C's
+        // and a jump landed there (A9, 2026-10-10).
+        const design::Card& card = all[static_cast<size_t>(idx)];
+        const std::string& n = card.sortKey.empty() ? card.title : card.sortKey;
         char c = n.empty() ? '#' : static_cast<char>(std::toupper(
             static_cast<unsigned char>(n[0])));
         if (c < 'A' || c > 'Z') c = '#';
@@ -624,7 +629,12 @@ void GridScreen::append(const std::vector<int>& more,
         while (at < cards_.size() && all[static_cast<size_t>(cards_[at])].unavailable.empty()) ++at;
         cards_.insert(cards_.begin() + static_cast<long>(at), idx);
         if (at < cards_.size() - 1 && slot_ >= static_cast<int>(at)) ++slot_;
-        const std::string& n = all[static_cast<size_t>(idx)].title;
+        // THE SORT KEY'S LETTER, NOT THE NAME'S. The list is in RomM's order,
+        // which drops a leading "The" or "A" and can file a game under another
+        // name; read off the title, "The Combatribes" put a T among the C's
+        // and a jump landed there (A9, 2026-10-10).
+        const design::Card& card = all[static_cast<size_t>(idx)];
+        const std::string& n = card.sortKey.empty() ? card.title : card.sortKey;
         char c = n.empty() ? '#' : static_cast<char>(std::toupper(
             static_cast<unsigned char>(n[0])));
         if (c < 'A' || c > 'Z') c = '#';

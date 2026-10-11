@@ -750,6 +750,8 @@ struct Card {
     int id = 0;
     ui::Color art;        // shown until the cover arrives, and if it never does
     std::string title;
+    // RomM's sort key, empty when the server did not give one. See romm.h.
+    std::string sortKey;
     // A local path in the sample library, a RomM cover path with live data.
     // Empty means there is no art, which is a normal state and not a failure:
     // arcade sets often have none, and Game & Watch has none at all.

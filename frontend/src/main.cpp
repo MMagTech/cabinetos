@@ -2196,6 +2196,7 @@ static std::string gameRecordJson(const romm::Game& g) {
     json_object_object_add(o, "platform_name", json_object_new_string(g.platformName.c_str()));
     json_object_object_add(o, "name", json_object_new_string(g.name.c_str()));
     json_object_object_add(o, "fs_name", json_object_new_string(g.fsName.c_str()));
+    json_object_object_add(o, "name_sort_key", json_object_new_string(g.sortKey.c_str()));
     json_object_object_add(o, "path_cover_small", json_object_new_string(g.coverPath.c_str()));
     json_object_object_add(o, "path_cover_large", json_object_new_string(g.coverLargePath.c_str()));
     json_object_object_add(o, "title_id", json_object_new_string(g.titleId.c_str()));
@@ -3033,6 +3034,7 @@ static int appendGame(Library& lib, const romm::Game& g) {
     Card c;
     c.id = g.id;
     c.title = g.name.empty() ? g.fsName : g.name;
+    c.sortKey = g.sortKey;
     c.cover = g.coverPath;
     c.coverLarge = g.coverLargePath;
     c.platform = g.platformName;
@@ -3632,10 +3634,15 @@ static Library offlineLibrary() {
             tile.art = colorForTitle(tile.title);
         }
         tile.enterable = true;
-        // Title order, as RomM returns a grid, so the letter-jump works.
+        // RomM's order, by its sort key where the record has one, so the
+        // offline grid matches the online one and the letter index agrees.
+        auto orderOf = [&](int i) -> const std::string& {
+            const Card& c = lib.cards[static_cast<size_t>(i)];
+            return c.sortKey.empty() ? c.title : c.sortKey;
+        };
         std::sort(idxs.begin(), idxs.end(), [&](int a, int b) {
-            const std::string& x = lib.cards[static_cast<size_t>(a)].title;
-            const std::string& y = lib.cards[static_cast<size_t>(b)].title;
+            const std::string& x = orderOf(a);
+            const std::string& y = orderOf(b);
             return std::lexicographical_compare(
                 x.begin(), x.end(), y.begin(), y.end(), [](unsigned char p, unsigned char q) {
                     return std::tolower(p) < std::tolower(q);

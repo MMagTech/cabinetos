@@ -136,6 +136,7 @@ bool parseGame(json_object* o, Game* g) {
     if (g->platformName.empty()) g->platformName = jstr(o, "platform_name");
     g->name = jstr(o, "name");
     g->fsName = jstr(o, "fs_name");
+    g->sortKey = jstr(o, "name_sort_key");
     g->sizeBytes = jint(o, "fs_size_bytes");
     g->titleId = jstr(o, "title_id");
     g->raHash = jstr(o, "ra_hash");
