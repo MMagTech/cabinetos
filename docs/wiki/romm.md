@@ -10,7 +10,7 @@ time go back to it. CabinetOS ships none of them.
 ## Setting RomM up for the console
 
 Follow [RomM's own documentation](https://docs.romm.app) to install it and add
-your library. Three things matter to CabinetOS:
+your library. Four things matter to CabinetOS:
 
 1. **Platform folders.** The console finds a system by RomM's platform slug.
    The slugs it plays are listed in [Systems, formats and BIOS](systems.md).
@@ -22,6 +22,8 @@ your library. Three things matter to CabinetOS:
 3. **Firmware.** Put BIOS files, firmware and keys in RomM as firmware for the
    platform they belong to. The console downloads them when you first play that
    system. The exact files are in [Systems, formats and BIOS](systems.md).
+4. **Games on several discs.** Every disc of a game in one folder, so RomM
+   lists them as one game. See [Games on several discs](discs.md).
 
 Covers come from RomM too. A game with no cover shows a coloured tile.
 
