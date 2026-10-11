@@ -33,7 +33,9 @@ enum class Change {
     None,        // not part of this work: the game is played as one file
     Insert,      // disk control: Insert and Start over, from the pause menu
     StartOver,   // no disk control in the core (3DO): Start over only
-    Automatic,   // the game asks for its disc by name (GameCube): no menu
+    Automatic,   // the game asks for its disc by name (GameCube): no menu,
+                 // no remembered disc, no "Disc N of M" (Dolphin's port never
+                 // says which disc it put in)
 };
 
 // HOW "START OVER ON DISC N" BOOTS DISC N.

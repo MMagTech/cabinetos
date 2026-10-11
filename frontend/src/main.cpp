@@ -830,7 +830,9 @@ static int discIndexOf(const GameSession& sess, int n) {
 // after a state (PS1's core puts the state's disc in itself) and at the
 // end of the game (GameCube changes its own discs).
 static void syncDiscFromCore(GameSession& sess) {
-    if (sess.discs.empty()) return;
+    // NOT GAMECUBE: Dolphin changes its own discs and its libretro port's
+    // index never follows (Boot.cpp, 1a0f972), so nothing here can know.
+    if (sess.discs.empty() || sess.discChange == disc::Change::Automatic) return;
     const int idx = cab::Core::shared().discIndex();
     if (idx >= 0 && idx < static_cast<int>(sess.discOrder.size()))
         sess.disc = sess.discOrder[static_cast<size_t>(idx)];
@@ -8282,7 +8284,8 @@ int main(int argc, char** argv) {
                 // DISC N OF M (#162), only on a game with several discs: the
                 // disc Play starts on. RomM's files say how many; with no
                 // server, the count the last launch here saw.
-                if (disc::handles(slug)) {
+                if (disc::handles(slug) &&
+                    disc::systemFor(slug).change != disc::Change::Automatic) {
                     const int count = fresh ? static_cast<int>(disc::plan(f.files).discNames.size())
                                             : disc::knownCount(who, romId);
                     int n = disc::lastDisc(who, romId);
@@ -13279,6 +13282,10 @@ int main(int argc, char** argv) {
             startDisc = gNextStartDisc > 0 ? gNextStartDisc : disc::lastDisc(user, launchJob.romId);
             gNextStartDisc = 0;
             if (startDisc < 1 || startDisc > count) startDisc = 1;
+            // GAMECUBE ALWAYS STARTS AT THE TOP OF THE LIST: the game asks for
+            // the disc it needs and Dolphin puts it in; which one was in last
+            // time is not known (syncDiscFromCore).
+            if (discSys.change == disc::Change::Automatic) startDisc = 1;
             const std::string dir = launchJob.entryPath;
             const std::string first = dir + "/" + discs[static_cast<size_t>(startDisc - 1)].file;
             auto writeList = [&](int top) {
@@ -13423,7 +13430,9 @@ int main(int argc, char** argv) {
             const int idx = core.discIndex();
             std::fprintf(stderr, "[disc] the core has %d disc(s), index %d (%s)\n",
                          core.discCount(), idx, core.discPath(idx).c_str());
-            if (discSys.change == disc::Change::Insert && core.hasDiscControl() && idx != want) {
+            if (discSys.change == disc::Change::Automatic) {
+                // Nothing to check or remember: see syncDiscFromCore.
+            } else if (discSys.change == disc::Change::Insert && core.hasDiscControl() && idx != want) {
                 if (discBoot == disc::Boot::InitialImage)
                     std::fprintf(stderr, "[disc] the core started on index %d, not %d\n", idx,
                                  want);
@@ -13844,8 +13853,9 @@ int main(int argc, char** argv) {
         // GameCube changes its own discs, so the core is asked.
         if (!session.discs.empty()) {
             syncDiscFromCore(session);
-            std::fprintf(stderr, "[disc] left on disc %d of %zu\n", session.disc,
-                         session.discs.size());
+            if (session.discChange != disc::Change::Automatic)
+                std::fprintf(stderr, "[disc] left on disc %d of %zu\n", session.disc,
+                             session.discs.size());
             // THE DRIVE BACK ON THE LIST'S FIRST ENTRY BEFORE THE UNLOAD, for
             // every core with a drive. Flycast (a172e00) keeps its disc index
             // across games: retro_unload_game never resets it, and read_m3u
@@ -14158,9 +14168,13 @@ int main(int argc, char** argv) {
         // already in it.
         const bool canInsert =
             session.discChange == disc::Change::Insert && n != session.disc;
+        // ONE THING TO DO IS SAID, NOT FOCUSED: a lone button nobody moved
+        // onto does not read as selected.
         std::vector<std::string> options;
-        if (canInsert) options.push_back("Insert it");
-        options.push_back("Start over on it");
+        if (canInsert) {
+            options.push_back("Insert it");
+            options.push_back("Start over on it");
+        }
         askChoice(session.discs[static_cast<size_t>(n - 1)].label, "", options, 0,
                   [&, n, canInsert](int answer) {
                       if (canInsert && answer == 0) {
@@ -14170,6 +14184,7 @@ int main(int argc, char** argv) {
                           startOverOnDisc(n);
                       }
                   });
+        if (!canInsert) choiceScreen.setPrompt("Press", "A", "to start over on it");
         choiceBack = [&]() { openDiscPanel(); };
     };
     openDiscPanel = [&]() {
