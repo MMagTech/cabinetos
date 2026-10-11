@@ -26,19 +26,19 @@ site and wiki are at **https://cabinetos.mmagtech.com**. The A9 (Wi-Fi,
    the A9 from the log (on the PR). He has not said whether he wants TV
    checks. After the merge: take the #318 line out of the release page's
    Known issues, and delete the branch on his go.
-2. **#268, booting with no display answering: built, not tested.** Branch
-   `wait-for-display` (pushed, no PR, not on `testing`): the session waits
-   for a display's answer instead of guessing 1920x1080. Measured: a
-   running console survives TV off, on and a 31 s unplug; the C1 in standby
-   still answers; only a start with nothing answering is stuck at 1080p
-   (no cage any more). **Agreed with MMagTech: test first without an image**
-   (lessons: testing.md): he unplugs the HDMI; a transient drop-in in
-   `/run/systemd/system/cabinetos-session.service.d/` points `ExecStart` at
-   `~/cabinetos-session-dev` (already copied to the A9); restart the session;
-   expect "no display answers yet; waiting for one"; he plugs in; expect
-   "a display answered" and "output 3840x2160 (from the display)"; remove
-   the drop-in and restart. Tell him every step first and wait for "go".
-   Then a PR and a testing image, the same test with a full restart.
+2. **#331 first: the console app freezes on a black screen when the TV's
+   sound output is missing** (found 2026-10-10 testing #268, with a new sound
+   bar on the TV over eARC). WirePlumber left the HDMI card `off` (only
+   "Dummy Output"), and the frontend never got past opening sound, on the
+   image's own script too. A console must reach Home with no sound output.
+3. **#268, booting with no display answering: the display part works.**
+   Branch `wait-for-display` (pushed, no PR). Tested once without an image
+   (drop-in `ExecStart=/usr/bin/bash /var/home/cabinet/cabinetos-session-dev`;
+   SELinux refuses a home file as ExecStart directly): waited with the cable
+   out, then came up at 3840x2160 when it went in. The black screen after it
+   was #331. Retest with the sound bar settled, then a PR and a testing image,
+   the same test with a full restart. Tell MMagTech every step first and
+   wait for "go".
 
 Filed, waiting its turn: #329, release notes for every update (open for
 discussion; QR code on the update prompt suggested). Eden stays on Flathub:
