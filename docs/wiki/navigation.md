@@ -14,7 +14,7 @@ Buttons are named by position, Xbox style: **A** is the bottom face button
 | **A** | Select |
 | **B** | Back |
 | **L1** / **R1** | Previous / next of Home, Library, Search, Settings |
-| **L2** / **R2** | In a system's games: previous / next letter |
+| **L2** / **R2** | In a system's games: previous / next letter; hold to keep going |
 | **Start** | The Power menu (Sleep, Restart, Power off, Switch to Steam) |
 | Up from the top row | The top bar |
 

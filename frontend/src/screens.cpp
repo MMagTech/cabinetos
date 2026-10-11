@@ -593,6 +593,7 @@ void GridScreen::open(std::string title, std::vector<int> cards,
     }
     index_.from = index_.to = 0.0f;
     index_.elapsed = index_.duration;
+    wave_.settle(0.0f);
     appear_.from = appear_.to = 0.0f;
     appear_.elapsed = 0.0f;
     appear_.retarget(1.0f, 0.280f);
@@ -657,9 +658,12 @@ int GridScreen::letterOf(int slot) const {
     return at;
 }
 
-void GridScreen::jumpLetter(int dir) {
-    if (letters_.empty()) { sound::play(sound::Cue::Edge); return; }
+bool GridScreen::jumpLetter(int dir) {
+    if (letters_.empty()) { sound::play(sound::Cue::Edge); return false; }
     const int at = letterOf(slot_);
+    // An index coming up from nothing starts its swell where focus already
+    // is, rather than gliding in from wherever it was last time.
+    if (index_.value() <= 0.01f) wave_.settle(static_cast<float>(std::max(at, 0)));
     // GOING BACK FROM THE MIDDLE OF A LETTER GOES TO ITS OWN START FIRST, the
     // way a track-skip button does: pressing back inside the M's should reach
     // the first M, not jump past every one of them into the L's.
@@ -676,18 +680,21 @@ void GridScreen::jumpLetter(int dir) {
         // and the index is what makes it a legible one.
         index_.retarget(1.0f, 0.150f);
         indexHold_ = 1.600f;
-        return;
+        return false;
     }
     slot_ = letterFirst_[static_cast<size_t>(want)];
     sound::play(sound::Cue::Move);
     index_.retarget(1.0f, 0.150f);
     indexHold_ = 1.600f;
+    wave_.retarget(static_cast<float>(want), design::kFocusDuration);
+    return true;
 }
 
 void GridScreen::tick(float dt, Ctx& c) {
     appear_.tick(dt);
     scroll_.tick(dt);
     index_.tick(dt);
+    wave_.tick(dt);
     // It stays up while it is being used and goes when it is not.
     if (indexHold_ > 0.0f) {
         indexHold_ -= dt;
@@ -825,6 +832,11 @@ void GridScreen::draw(Ctx& c) {
 
 void GridScreen::drawGlass(Ctx& c) {
     c.r.setContentAlpha(appear_.value());
+    // FIRST, AND ON ITS OWN. It was drawn at the end of this function, after
+    // the heading's `return` for a heading scrolled off the top, so it showed
+    // only near the top of a list: MMagTech saw it once in Arcade and never
+    // again, while the jumps kept working (2026-10-10).
+    drawIndex(c);
     c.r.setScissor(0, design::kScrollClipTop, ui::kCanvasWidth,
                    ui::kCanvasHeight - design::kScrollClipTop);
     // THE TITLE IS TEXT, NOT A CHIP — changed 2026-09-21, and this is a
@@ -898,35 +910,105 @@ void GridScreen::drawGlass(Ctx& c) {
         }
     }
 
-    // --- The letter index, down the right ---------------------------------
-    //
-    // OUTSIDE THE SCROLL WINDOW, because it is not part of the list: it is a
-    // readout of where you are in it. It is also the one thing on this screen
-    // that may sit beside the bar rather than under it.
-    const float a = index_.value();
-    if (a <= 0.01f || letters_.empty()) return;
+}
+
+// --- The letter index, down the right ---------------------------------------
+//
+// OUTSIDE THE SCROLL WINDOW, because it is not part of the list: it is a
+// readout of where you are in it, and it may sit beside the bar.
+//
+// A SHORT COLUMN OF SEVEN LETTERS, MADE OF THE CONSOLE'S OWN PARTS (MMagTech,
+// 2026-10-10): the one focus is in, in the middle, and three either side. "If
+// I scrolled past M, I still don't need to see A." And: "we put so much effort
+// into the UI of this and consistency ... it just doesn't even look like it
+// fits in it." So nothing here is new:
+//   * the panel is the browsing screens' regular glass (the game page's rows,
+//     kRegularMaterialBlur) with the panels' lift shadow and hairline edge.
+//     Glass takes its colour from the backdrop behind it, which is the
+//     signed-in person's colour, so it matches every colour without a branch;
+//   * the current letter is marked the way the top bar marks focus: the thin
+//     glass capsule behind it and full white, the others at the bar's 45%;
+//   * the type is Title 3, the bar's and the Settings rows', one size for all;
+//   * a jump slides the column one slot over the focus duration, the way focus
+//     moves between covers.
+//
+// TRIED AND REJECTED THE SAME EVENING, so they are not tried again: the whole
+// alphabet small on a black pill ("really bad"); the whole alphabet with a
+// Dock-style swell ("super tiny", then "crammed ... overflowing"); a window of
+// swelling letters on a panel that resized ("this heart beating ... hideous").
+void GridScreen::drawIndex(Ctx& c) {
+    const float fade = index_.value();
+    if (fade <= 0.01f || letters_.empty()) return;
     c.r.clearScissor();
-    const int here = letterOf(slot_);
-    const float lineH = c.text.lineHeight(ui::TextStyle::Callout, c.sc);
-    const float colH = lineH * static_cast<float>(letters_.size());
-    const float top = (ui::kCanvasHeight - colH) * 0.5f;
-    const float cx = ui::kCanvasWidth - design::kLibraryInset -
-                     design::kLetterIndexWidth * 0.5f;
-    // A soft plate behind it, so letters stay legible over pale artwork.
-    c.r.draw(ui::Rect{cx - design::kLetterIndexWidth * 0.5f, top - 20.0f,
-                      design::kLetterIndexWidth, colH + 40.0f,
-                      design::kLetterIndexWidth * 0.5f,
-                      ui::Color::black(0.45f * a)});
-    for (size_t i = 0; i < letters_.size(); ++i) {
-        const bool on = (static_cast<int>(i) == here);
-        const std::string ch(1, letters_[i]);
-        const float lw = c.text.measure(ch, ui::TextStyle::Callout, c.sc);
-        c.text.draw(c.r, ch, cx - lw * 0.5f,
-                    top + lineH * static_cast<float>(i) +
-                        c.text.ascent(ui::TextStyle::Callout, c.sc),
-                    ui::TextStyle::Callout,
-                    ui::Color::white((on ? 1.0f : 0.40f) * a), c.sc);
+    // ONE FADE FOR THE WHOLE COLUMN, through the renderer's content alpha.
+    // Faded colour by colour, the tint, letters and capsule went smoothly but
+    // the glass's blur does not read a colour's alpha, only this, so it stayed
+    // fully frosted to the last frame and then vanished: "not fading out as a
+    // smooth element ... like it's in two phases" (MMagTech, 2026-10-10).
+    const float before = c.r.contentAlpha();
+    c.r.setContentAlpha(before * fade);
+    constexpr float a = 1.0f;
+
+    constexpr ui::TextStyle kStyle = ui::TextStyle::Title3;
+    constexpr int kSide = 3;                 // letters either side of the current
+    constexpr float kRestText = 0.45f;       // the bar's unselected tab
+    constexpr float kFarther = 0.12f;        // and a little less per step away
+
+    const float lineH = c.text.lineHeight(kStyle, c.sc);
+    const float capH = lineH + design::kPillPadY * 2.0f;   // the bar's capsule
+    const float pitch = capH + 6.0f;
+    const float panelW = design::kLetterIndexWidth;
+    const float panelH = pitch * static_cast<float>(2 * kSide) + capH + 2.0f * 18.0f;
+    const float cx = ui::kCanvasWidth - design::kLibraryInset - panelW * 0.5f;
+    const float midY = ui::kCanvasHeight * 0.5f;
+    const float px = cx - panelW * 0.5f, py = midY - panelH * 0.5f;
+
+    // The lift under the glass, as the game page's panel has.
+    {
+        ui::Rect lift{px, py, panelW, panelH, panelW * 0.5f, ui::Color::white(0)};
+        lift.shadowBlur = design::kOverlayPanelShadowBlur;
+        lift.shadowOffsetY = design::kOverlayPanelShadowY;
+        lift.shadowColor = ui::Color::black(design::kOverlayPanelShadowAlpha * 0.6f * a);
+        c.r.draw(lift);
     }
+    c.r.drawGlass(ui::Rect{px, py, panelW, panelH, panelW * 0.5f, ui::Color::white(0)},
+                  design::kRegularMaterialBlur, ui::Color::white(0.14f * a));
+    {
+        ui::Rect edge{px, py, panelW, panelH, panelW * 0.5f, ui::Color::white(0)};
+        edge.border = design::kOverlayPanelBorder;
+        edge.borderColor = ui::Color::white(design::kOverlayPanelBorderAlpha * a);
+        edge.edgeLight = ui::Color::white(design::kOverlayPanelEdgeLight * 0.6f * a);
+        c.r.draw(edge);
+    }
+
+    // The focus capsule stays in the middle; the letters move under it.
+    const float capW = panelW - 2.0f * 14.0f;
+    c.r.drawGlass(ui::Rect{cx - capW * 0.5f, midY - capH * 0.5f, capW, capH, capH * 0.5f,
+                           ui::Color::white(0)},
+                  design::kThinMaterialBlur, ui::Color::white(design::kFocusedTint * a));
+
+    const float wave = wave_.value();
+    const int n = static_cast<int>(letters_.size());
+    const float limit = static_cast<float>(kSide) + 0.5f;
+    for (int i = 0; i < n; ++i) {
+        const float d = static_cast<float>(i) - wave;
+        if (std::fabs(d) > limit + 0.5f) continue;
+        const float ad = std::fabs(d);
+        // Full white in the capsule, the bar's 45% one slot out, a little
+        // less each slot after; and the last half slot fades to nothing so a
+        // letter turning in or out of the column never pops.
+        const float near = std::clamp(1.0f - ad, 0.0f, 1.0f);
+        float bright = kRestText - kFarther * std::max(0.0f, ad - 1.0f);
+        bright = bright + (1.0f - bright) * near;
+        bright *= std::clamp(limit + 0.5f - ad, 0.0f, 1.0f);
+        const std::string ch(1, letters_[static_cast<size_t>(i)]);
+        const float w = c.text.measure(ch, kStyle, c.sc);
+        const float y = midY + d * pitch;
+        const float baseline = y - lineH * 0.5f + c.text.ascent(kStyle, c.sc);
+        c.text.draw(c.r, ch, cx - w * 0.5f, baseline, kStyle,
+                    ui::Color::white(bright * a), c.sc);
+    }
+    c.r.setContentAlpha(before);
 }
 
 // ---------------------------------------------------------------------------
