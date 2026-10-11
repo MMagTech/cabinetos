@@ -116,6 +116,10 @@ constexpr float kRepeatDelay = 0.420f;    // before the second move
 constexpr float kRepeatStart = 0.120f;    // and between the ones after it
 constexpr float kRepeatFast = 0.045f;     // once it has been held a while
 constexpr float kRepeatRamp = 1.200f;     // seconds from Start to Fast
+// A held trigger, between letters. 0.16 was "a little too fast ... the
+// letters are zooming by" (MMagTech, 2026-10-10): each letter has to settle
+// in the capsule long enough to be read before the next one arrives.
+constexpr float kLetterRepeat = 0.280f;
 constexpr float kPressDuration = 0.120f;
 
 // SELECTION IS NOT FOCUS, and both are visible at once. A selected switcher
@@ -476,10 +480,9 @@ constexpr float kGridCoverRadius = 12.0f;
 // one at a time. If that turns out not to be enough, this is the number to put
 // back to 2 — and then the covers have to shrink to about 183 to pay for it.
 constexpr int kGridCaptionLines = 0;
-// The letter index down the right of a grid. Wide enough for one character
-// and the plate around it, and no wider: it is a readout, not a control, and
-// nothing in this product is reached by pointing at it.
-constexpr float kLetterIndexWidth = 56.0f;
+// The letter index down the right of a grid: the width of its glass column,
+// room for the bar's focus capsule round one Title 3 letter and a margin.
+constexpr float kLetterIndexWidth = 96.0f;
 constexpr float kScreenChipPadX = 24.0f;
 constexpr float kScreenChipPadY = 10.0f;
 
@@ -747,6 +750,8 @@ struct Card {
     int id = 0;
     ui::Color art;        // shown until the cover arrives, and if it never does
     std::string title;
+    // RomM's sort key, empty when the server did not give one. See romm.h.
+    std::string sortKey;
     // A local path in the sample library, a RomM cover path with live data.
     // Empty means there is no art, which is a normal state and not a failure:
     // arcade sets often have none, and Game & Watch has none at all.

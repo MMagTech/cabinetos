@@ -2312,6 +2312,7 @@ static std::string gameRecordJson(const romm::Game& g) {
     json_object_object_add(o, "platform_name", json_object_new_string(g.platformName.c_str()));
     json_object_object_add(o, "name", json_object_new_string(g.name.c_str()));
     json_object_object_add(o, "fs_name", json_object_new_string(g.fsName.c_str()));
+    json_object_object_add(o, "name_sort_key", json_object_new_string(g.sortKey.c_str()));
     json_object_object_add(o, "path_cover_small", json_object_new_string(g.coverPath.c_str()));
     json_object_object_add(o, "path_cover_large", json_object_new_string(g.coverLargePath.c_str()));
     json_object_object_add(o, "title_id", json_object_new_string(g.titleId.c_str()));
@@ -3275,6 +3276,7 @@ static int appendGame(Library& lib, const romm::Game& g) {
     Card c;
     c.id = g.id;
     c.title = g.name.empty() ? g.fsName : g.name;
+    c.sortKey = g.sortKey;
     c.cover = g.coverPath;
     c.coverLarge = g.coverLargePath;
     c.platform = g.platformName;
@@ -3874,10 +3876,15 @@ static Library offlineLibrary() {
             tile.art = colorForTitle(tile.title);
         }
         tile.enterable = true;
-        // Title order, as RomM returns a grid, so the letter-jump works.
+        // RomM's order, by its sort key where the record has one, so the
+        // offline grid matches the online one and the letter index agrees.
+        auto orderOf = [&](int i) -> const std::string& {
+            const Card& c = lib.cards[static_cast<size_t>(i)];
+            return c.sortKey.empty() ? c.title : c.sortKey;
+        };
         std::sort(idxs.begin(), idxs.end(), [&](int a, int b) {
-            const std::string& x = lib.cards[static_cast<size_t>(a)].title;
-            const std::string& y = lib.cards[static_cast<size_t>(b)].title;
+            const std::string& x = orderOf(a);
+            const std::string& y = orderOf(b);
             return std::lexicographical_compare(
                 x.begin(), x.end(), y.begin(), y.end(), [](unsigned char p, unsigned char q) {
                     return std::tolower(p) < std::tolower(q);
@@ -8864,6 +8871,12 @@ int main(int argc, char** argv) {
     int barSlot = 0;
     // Trigger edge state. See the axis handler.
     bool l2Held = false, r2Held = false;
+    // A HELD TRIGGER KEEPS JUMPING (MMagTech, 2026-10-10: "holding them should
+    // just continuously jump to the next letter"). The d-pad's reason for one
+    // meaning per hold does not apply: a held trigger meant nothing. -1, +1,
+    // or 0 for neither; the frame loop repeats it.
+    int letterHeld = 0;
+    float letterHeldFor = 0.0f, letterNext = 0.0f;
     // HELD-DIRECTION REPEAT. One direction at a time, which is what a d-pad is:
     // pressing a second direction takes over rather than queueing, so a person
     // rolling their thumb around the pad never ends up with two repeats
@@ -15137,17 +15150,26 @@ int main(int argc, char** argv) {
                 // read zero, and a single threshold turns that into a jump
                 // every time the pad is picked up.
                 case SDL_EVENT_GAMEPAD_AXIS_MOTION: {
-                    if (owner != InputOwner::UI) break;
                     const bool left = e.gaxis.axis == SDL_GAMEPAD_AXIS_LEFT_TRIGGER;
                     const bool right = e.gaxis.axis == SDL_GAMEPAD_AXIS_RIGHT_TRIGGER;
                     if (!left && !right) break;
                     bool& held = left ? l2Held : r2Held;
+                    const int dir = left ? -1 : +1;
                     const int v = e.gaxis.value;
-                    if (!held && v > 20000) {
-                        held = true;
-                        if (here() == Screen::Grid) gridScreen.jumpLetter(left ? -1 : +1);
-                    } else if (held && v < 8000) {
+                    // A RELEASE COUNTS WHOEVER OWNS INPUT. A trigger let go
+                    // during a game used to stay "held", and the next pull
+                    // back on the grid did nothing.
+                    if (held && v < 8000) {
                         held = false;
+                        if (letterHeld == dir) letterHeld = 0;
+                    } else if (!held && v > 20000 && owner == InputOwner::UI) {
+                        held = true;
+                        if (here() == Screen::Grid) {
+                            gridScreen.jumpLetter(dir);
+                            letterHeld = dir;
+                            letterHeldFor = 0.0f;
+                            letterNext = kRepeatDelay;
+                        }
                     }
                     break;
                 }
@@ -15382,6 +15404,18 @@ int main(int argc, char** argv) {
             }
         } else {
             navHeld = false;
+        }
+        // The held trigger, a letter at a time at a steady pace: each jump
+        // can cross dozens of games, so it does not speed up the way a held
+        // direction does.
+        if (letterHeld != 0 && inputOwner() == InputOwner::UI && here() == Screen::Grid) {
+            letterHeldFor += dt;
+            if (letterHeldFor >= letterNext) {
+                if (gridScreen.jumpLetter(letterHeld)) letterNext = letterHeldFor + kLetterRepeat;
+                else letterHeld = 0;
+            }
+        } else {
+            letterHeld = 0;
         }
 
         if (evictTest && frame == 5) {

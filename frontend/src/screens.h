@@ -233,7 +233,9 @@ public:
     //
     // `dir` is -1 or +1. Moves focus to the first game of the previous or next
     // letter, and shows the index for as long as somebody is using it.
-    void jumpLetter(int dir);
+    // False at either end of the alphabet, which also ends a held trigger's
+    // repeat rather than thudding against the wall every 160 ms.
+    bool jumpLetter(int dir);
 
     // The letters this list actually contains, for the index on the right, and
     // which of them focus is inside. Empty when there is nothing to show.
@@ -255,6 +257,9 @@ private:
     float coverWidth() const;
 
     int letterOf(int slot) const;
+    // The letter index, drawn on its own: it is not part of the heading and
+    // must not go when the heading scrolls away (see drawGlass).
+    void drawIndex(Ctx& c);
 
     std::string title_;
     std::vector<int> cards_;
@@ -273,6 +278,10 @@ private:
     // Separate from the animation so a run of jumps holds it steady instead of
     // restarting a fade that has not begun.
     float indexHold_ = 0.0f;
+    // WHERE THE WAVE IS, as a position along the letters (2.0 is the third),
+    // gliding from one letter to the next rather than snapping, so a held
+    // trigger reads as a swell rolling down the alphabet.
+    design::Animated wave_;
 };
 
 // --- Search -----------------------------------------------------------------
