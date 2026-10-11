@@ -115,6 +115,14 @@ ChoiceScreen::Outcome ChoiceScreen::key(Nav n) {
             sound::play(sound::Cue::Edge);
             return Outcome::None;
         case Nav::Activate:
+            // A PROMPT THAT NAMES (A) IS ANSWERED BY A: a question with one
+            // thing to do says it rather than focusing a lone button nobody
+            // moved onto ("Press (A) to insert and restart", #162).
+            if (options_.empty() && promptButton_ == "A") {
+                slot_ = 0;
+                sound::play(sound::Cue::Activate);
+                return Outcome::Chosen;
+            }
             if (options_.empty() || isDisabled(slot_)) {
                 sound::play(sound::Cue::Edge);
                 return Outcome::None;

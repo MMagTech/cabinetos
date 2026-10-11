@@ -44,8 +44,6 @@ The system's name in a message is RomM's name for the platform.
 - **The TV is black.** The console turned the screen off after the time in
   Settings, Display and Sound. Press any button; that first press only wakes
   it.
-- **A multi-disc game stops at the disc change.** Changing discs is not built
-  yet.
 
 ## Remote Play
 

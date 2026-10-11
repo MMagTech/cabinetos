@@ -68,6 +68,7 @@
 #include "wiiremote.h"
 #include "covercache.h"
 #include "dirsave.h"
+#include "disc.h"
 #include "filesave.h"
 #include "firstrun.h"
 #include "gpu.h"
@@ -791,7 +792,106 @@ struct GameSession {
     // lives, and each entry carries what was in the file once the restore had
     // run and before the game had a chance to write. See filesave.h.
     std::vector<cab::FileSaveState> fileSaves;
+
+    // --- A game on several discs (#162) -----------------------------------
+    //
+    // Empty for a game on one disc, which then shows none of it. `discOrder`
+    // is the list the core was handed: its index i holds disc discOrder[i],
+    // so the console counts discs by their real number whatever order the
+    // list was written in (Start over writes disc N first on some systems).
+    std::vector<disc::Disc> discs;
+    std::vector<int> discOrder;
+    int disc = 0;                     // the disc in the drive, by number
+    disc::Change discChange = disc::Change::None;
+    // INSERT IN PROGRESS: the lid is open and the game runs until the frame
+    // it closes on. No save state is made or loaded meanwhile (RetroArch
+    // #5094: a state taken with the tray open does not come back right).
+    int discInserting = 0;
+    uint64_t discCloseAt = 0;
 };
+
+// THE NEXT LAUNCH'S DISC, set by Start over on disc N and taken by the
+// launch that follows it (#162). Zero: the disc this person was last on.
+static int gNextStartDisc = 0;
+// THE DISC RIG'S TWO KNOBS (#162), for measuring and nothing else:
+// --disc-wait, how long Insert keeps the lid open; --disc-boot, Start
+// over's method for a system whose right one is being measured (Saturn).
+static float gDiscWaitSeconds = 2.0f;
+static int gDiscBootOverride = -1;
+
+// The core's list index that holds disc `n`, or -1.
+static int discIndexOf(const GameSession& sess, int n) {
+    for (size_t i = 0; i < sess.discOrder.size(); ++i)
+        if (sess.discOrder[i] == n) return static_cast<int>(i);
+    return -1;
+}
+
+// WHICH DISC IS IN, as the core says, kept and remembered for this person:
+// after a state (PS1's core puts the state's disc in itself) and at the
+// end of the game (GameCube changes its own discs).
+static void syncDiscFromCore(GameSession& sess) {
+    // NOT GAMECUBE: Dolphin changes its own discs and its libretro port's
+    // index never follows (Boot.cpp, 1a0f972), so nothing here can know.
+    if (sess.discs.empty() || sess.discChange == disc::Change::Automatic) return;
+    const int idx = cab::Core::shared().discIndex();
+    if (idx >= 0 && idx < static_cast<int>(sess.discOrder.size()))
+        sess.disc = sess.discOrder[static_cast<size_t>(idx)];
+    disc::remember(storage::currentUser(), sess.romId, sess.disc, disc::highest(sess.discs));
+}
+
+// A DISC PUT IN AT ONCE, with no time for the game to see the lid open:
+// before the first frame (Start over), and before a save state, which
+// replaces the whole machine anyway. Insert during play is the frame
+// loop's, with the lid open for a while (beginInsert).
+static void discSwapNow(GameSession& sess, int n, const char* why) {
+    cab::Core& core = cab::Core::shared();
+    const int idx = discIndexOf(sess, n);
+    if (idx < 0) return;
+    const bool opened = core.setDiscEjected(true);
+    const bool set = core.setDiscIndex(idx);
+    const bool closed = core.setDiscEjected(false);
+    std::fprintf(stderr,
+                 "[disc] disc %d in at once, %s: open %s, index %d %s, close %s; the core "
+                 "says index %d\n",
+                 n, why, opened ? "yes" : "no (already open?)", idx, set ? "set" : "REFUSED",
+                 closed ? "yes" : "no", core.discIndex());
+    syncDiscFromCore(sess);
+}
+
+// A SAVE STATE GOES IN ON ITS OWN DISC (#162 item 9). The disc is in the
+// state's name ("(Disc 2)"), so a state from any device carries it; it is
+// put in before the state, because only PS1's core restores it by itself.
+//
+// A CORE WITH NO DRIVE (3DO) CANNOT TAKE ANOTHER DISC'S STATE: the state is
+// the machine without its disc, and nothing can put that disc in, so it
+// would run on in the wrong disc's data. It is refused and the notice names
+// its disc; Insert and restart on that disc, then Load latest state.
+static int gStateOnDisc = 0;   // set when a state was refused for its disc
+static bool loadStateOnItsDisc(GameSession& sess, const std::string& name,
+                               const std::vector<uint8_t>& bytes) {
+    gStateOnDisc = 0;
+    if (!sess.discs.empty() && sess.discChange == disc::Change::Insert) {
+        const int want = disc::discInStateName(name);
+        if (want > 0 && want != sess.disc) discSwapNow(sess, want, "for the state");
+    }
+    if (!sess.discs.empty() && sess.discChange == disc::Change::StartOver) {
+        const int want = disc::discInStateName(name);
+        if (want > 0 && want != sess.disc) {
+            std::fprintf(stderr, "[disc] the state is on disc %d, disc %d is in: not loaded\n",
+                         want, sess.disc);
+            gStateOnDisc = want;
+            return false;
+        }
+    }
+    const bool ok = cab::Core::shared().loadState(bytes);
+    if (ok && !sess.discs.empty()) syncDiscFromCore(sess);
+    return ok;
+}
+
+static std::string stateRefusedText() {
+    return gStateOnDisc > 0 ? "That state is on Disc " + std::to_string(gStateOnDisc)
+                            : std::string("Couldn't load that state");
+}
 
 static std::string sanitisedStem(const std::string& title) {
     std::string out;
@@ -1293,6 +1393,9 @@ static void writeDolphinConfig(const std::string& saveDir) {
     ini += "SlotB = 255\n";
     ini += "MemcardAPath = " + saveDir + "/card.raw\n";
     ini += "MemoryCardSize = 2\n";
+    // A GAME ON SEVERAL DISCS ASKS FOR THE NEXT ONE BY NAME, and Dolphin puts
+    // it in from the list the console hands over (#162): no menu for it.
+    ini += "AutoDiscChange = True\n";
     if (!cab::writeBytes(path, std::vector<uint8_t>(ini.begin(), ini.end()))) {
         // NOT fatal, and said out loud. The game still runs; it writes its
         // save somewhere this console does not sync, which is exactly the kind
@@ -1719,6 +1822,7 @@ constexpr GalleryNotice kNoticeGallery[] = {
     {"No saved state for this game", Tone::Info},
     {"Couldn't reach RomM", Tone::Problem},
     {"Couldn't load that state", Tone::Problem},
+    {"That state is on Disc 3", Tone::Problem},
     {"Download removed", Tone::Done},
     {"Freeing space\xE2\x80\xA6", Tone::Busy},
     {"Couldn't set up Steam", Tone::Problem},
@@ -1763,6 +1867,10 @@ static std::string driveSize(int64_t b) {
 
 static void saveStateNow(GameSession& sess, Uploader& up, MenuNotice& notice) {
     cab::Core& core = cab::Core::shared();
+    if (sess.discInserting) {
+        notice.say("Not while the disc is changing", Tone::Info);
+        return;
+    }
     std::vector<uint8_t> st;
     if (!core.saveState(st) || st.empty()) {
         std::fprintf(stderr, "[state] this core cannot serialize\n");
@@ -1788,6 +1896,9 @@ static void saveStateNow(GameSession& sess, Uploader& up, MenuNotice& notice) {
     std::snprintf(stamp + n, sizeof stamp - n, "-%03ld", ts.tv_nsec / 1000000L);
     std::string base = sess.fsStem.empty() ? sanitisedStem(sess.title) : sess.fsStem;
     std::replace(base.begin(), base.end(), '/', '_');
+    // AND ITS DISC, on a game with several (#162): "Panzer Dragoon (Disc 2)
+    // [...]". It travels with the state, so loading it puts that disc in.
+    if (!sess.discs.empty()) base += disc::stateNamePart(sess.disc);
     const std::string stem = base + " [" + stamp + "]";
     const std::string name = stem + ".state";
 
@@ -1922,6 +2033,10 @@ static void beginLoadLatestState(StateLoad& load, GameSession& sess,
                                  romm::Client& client, MenuNotice& notice, int wantId = 0,
                                  bool quiet = false) {
     if (load.running.load()) return;
+    if (sess.discInserting) {
+        if (!quiet) notice.say("Not while the disc is changing", Tone::Info);
+        return;
+    }
 
     load.quiet = quiet;
     if (!quiet) notice.say("Loading\xE2\x80\xA6", Tone::Busy);
@@ -1938,11 +2053,10 @@ static void beginLoadLatestState(StateLoad& load, GameSession& sess,
             if (!quiet) notice.say("No saved state for this game", Tone::Info);
             return;
         }
-        const bool ok = cab::Core::shared().loadState(bytes);
+        const bool ok = loadStateOnItsDisc(sess, local, bytes);
         std::fprintf(stderr, "[state] local-only %s -> %s\n", local.c_str(),
                      ok ? "restored" : "REFUSED");
-        notice.say(ok ? "State loaded" : "Couldn't load that state",
-                   ok ? Tone::Done : Tone::Problem);
+        notice.say(ok ? "State loaded" : stateRefusedText(), ok ? Tone::Done : Tone::Problem);
         load.loaded = ok;
         return;
     }
@@ -2034,7 +2148,7 @@ static std::string newestLocalState(const GameSession& sess) {
     return best;
 }
 
-static void pumpStateLoad(StateLoad& load, const GameSession& sess,
+static void pumpStateLoad(StateLoad& load, GameSession& sess,
                           MenuNotice& notice) {
     if (!load.ready.load()) return;
     load.ready = false;
@@ -2049,10 +2163,10 @@ static void pumpStateLoad(StateLoad& load, const GameSession& sess,
             if (const std::string local = newestLocalState(sess); !local.empty()) {
                 const std::vector<uint8_t> bytes = cab::readBytes(local);
                 if (!bytes.empty()) {
-                    const bool ok = cab::Core::shared().loadState(bytes);
+                    const bool ok = loadStateOnItsDisc(sess, local, bytes);
                     std::fprintf(stderr, "[state] fell back to local %s -> %s\n",
                                  local.c_str(), ok ? "restored" : "REFUSED");
-                    notice.say(ok ? "State loaded" : "Couldn't load that state",
+                    notice.say(ok ? "State loaded" : stateRefusedText(),
                                ok ? Tone::Done : Tone::Problem);
                     load.loaded = ok;
                     return;
@@ -2068,15 +2182,14 @@ static void pumpStateLoad(StateLoad& load, const GameSession& sess,
                        load.serverFailed ? Tone::Problem : Tone::Info);
         return;
     }
-    const bool ok = cab::Core::shared().loadState(load.data);
+    const bool ok = loadStateOnItsDisc(sess, load.note, load.data);
     std::fprintf(stderr, "[state] %s (%zu bytes) -> %s\n", load.note.c_str(),
                  load.data.size(), ok ? "restored" : "REFUSED");
     // A REFUSED state is the one that matters most. It means the bytes were
     // found and the core would not take them, which is a different problem from
     // there being none — and silently carrying on with the game running from
     // where it was is indistinguishable from nothing having happened.
-    notice.say(ok ? "State loaded" : "Couldn't load that state",
-               ok ? Tone::Done : Tone::Problem);
+    notice.say(ok ? "State loaded" : stateRefusedText(), ok ? Tone::Done : Tone::Problem);
     load.loaded = ok;
     load.data.clear();
 }
@@ -2132,6 +2245,9 @@ struct LaunchJob {
     // thread only after it observes one of those. The atomic stage is the
     // handover.
     std::string romPath;
+    // A GAME ON SEVERAL DISCS (#162): its discs in order, and `romPath` is
+    // the console's list in the game's folder. Empty for one disc.
+    std::vector<disc::Disc> discs;
     std::string coreName;
     // Carried through so the session can be built when the game loads: which
     // game it is, which platform it belongs to, and where its files are.
@@ -2390,6 +2506,7 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
     // pressed Play. See catalog::coreFileName.
     job.corePath = coreDir + "/" + catalog::coreFileName(cov.core);
     job.romPath.clear();
+    job.discs.clear();
     job.message.clear();
     job.playWhenReady = playWhenReady;
     job.keepWhenReady = keepWhenReady;
@@ -2689,6 +2806,131 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
             }
             job.got = 0;
             job.total = 0;
+        }
+
+        // A GAME ON SEVERAL DISCS (#162): every disc fetched by its file id,
+        // not as the zip RomM makes of the folder (which carries manuals,
+        // soundtracks and DLC, and a list that may name them), into the
+        // game's one folder, with one list the console writes. Only on the
+        // systems disc.h takes, and only when the folder holds two discs or
+        // more: one disc and its tracks is the ordinary path below.
+        if (!emu && disc::handles(slug)) {
+            std::vector<romm::RomFile> files;
+            std::string lerr;
+            if (romm::serverAway()) lerr = "the server is away";
+            const bool listed =
+                !romm::serverAway() && client.fetchRomFiles(id, &files, &lerr);
+            std::vector<disc::Disc> discs;
+            std::vector<std::pair<romm::RomFile, std::string>> fetch;
+            int64_t fetchBytes = 0;
+            if (listed) {
+                const disc::Plan plan = disc::plan(files);
+                if (plan.discNames.size() >= 2) {
+                    std::vector<std::string> names, listedNames;
+                    for (const std::string& n : plan.discNames)
+                        names.push_back(storage::safeSegment(n));
+                    // THE LIBRARY'S OWN LIST, read for the order and nothing
+                    // else: it is never handed to a core.
+                    if (plan.listFileId) {
+                        romm::RomFile lf;
+                        lf.id = plan.listFileId;
+                        lf.fileName = plan.listFileName;
+                        const std::vector<uint8_t> b =
+                            client.fetchBytes(romm::Client::romFilePath(id, lf));
+                        for (std::string l : disc::readList(std::string(b.begin(), b.end()))) {
+                            if (const size_t sl = l.find_last_of("/\\"); sl != std::string::npos)
+                                l.erase(0, sl + 1);
+                            listedNames.push_back(storage::safeSegment(l));
+                        }
+                    }
+                    discs = disc::fromNames(names, listedNames);
+                    // EVERY DISC THERE AT ITS SIZE, each checked on its own,
+                    // so one missing or cut short is the only one fetched.
+                    for (const romm::RomFile& f : plan.fetch) {
+                        const std::string d = entryPath + "/" + storage::safeSegment(f.fileName);
+                        struct stat st;
+                        if (::stat(d.c_str(), &st) == 0 && st.st_size == f.sizeBytes) continue;
+                        fetch.emplace_back(f, d);
+                        fetchBytes += f.sizeBytes;
+                    }
+                }
+            } else {
+                // NO SERVER: the discs as this console last wrote them, and
+                // every one of them must be here.
+                discs = disc::readRecord(entryPath);
+                if (discs.size() < 2) discs.clear();
+                for (const disc::Disc& d : discs) {
+                    if (storage::exists(entryPath + "/" + d.file)) continue;
+                    std::fprintf(stderr, "[disc] %s is not here and the server cannot be asked: %s\n",
+                                 d.file.c_str(), lerr.c_str());
+                    job.message = "Couldn't download this game";
+                    job.stage = LaunchJob::Stage::Failed;
+                    return;
+                }
+                if (!discs.empty())
+                    std::fprintf(stderr, "[disc] no server (%s): the %zu discs as last written\n",
+                                 lerr.c_str(), discs.size());
+            }
+            if (!discs.empty()) {
+                // ONE FOLDER. A one-file entry left by a download from before
+                // this (the folder as RomM's zip) goes; the folder replaces it.
+                struct stat est;
+                if (::lstat(entryPath.c_str(), &est) == 0 && !S_ISDIR(est.st_mode))
+                    storage::removeEntry(entryPath);
+                storage::makeDirs(entryPath);
+                const int64_t need =
+                    fetchBytes +
+                    static_cast<int64_t>(static_cast<double>(fetchBytes) * cache::kOverheadFraction);
+                if (need > 0 && cache::freeBytes(location) < need) {
+                    cache::evictUntilFree(location, need, id);
+                    if (cache::freeBytes(location) < need) {
+                        job.message = "Not enough space";
+                        job.stage = LaunchJob::Stage::Failed;
+                        return;
+                    }
+                }
+                job.stage = LaunchJob::Stage::Downloading;
+                int64_t done = 0;
+                for (const auto& [f, d] : fetch) {
+                    std::string derr;
+                    const int64_t before = done;
+                    if (!client.fetchToFile(romm::Client::romFilePath(id, f), d,
+                            [&job, before, fetchBytes](int64_t got, int64_t) {
+                                job.got = before + got;
+                                job.total = fetchBytes;
+                                return !job.cancel.load();
+                            }, &derr)) {
+                        std::fprintf(stderr, "[launch] download %s: %s\n", f.fileName.c_str(),
+                                     derr.c_str());
+                        job.message = "Couldn't download this game";
+                        job.stage = LaunchJob::Stage::Failed;
+                        return;
+                    }
+                    done += f.sizeBytes;
+                    std::fprintf(stderr, "[disc] fetched %s (%lld bytes)\n", f.fileName.c_str(),
+                                 static_cast<long long>(f.sizeBytes));
+                }
+                if (fetch.empty())
+                    std::fprintf(stderr, "[launch] already downloaded, %zu discs\n", discs.size());
+                const std::string list = entryPath + "/" + disc::listFileName(fsName);
+                const std::string text = disc::listText(discs);
+                if (!disc::writeRecord(entryPath, discs) ||
+                    !cab::writeBytes(list, std::vector<uint8_t>(text.begin(), text.end()))) {
+                    std::fprintf(stderr, "[disc] could not write the list in %s\n",
+                                 entryPath.c_str());
+                    job.message = "Couldn't download this game";
+                    job.stage = LaunchJob::Stage::Failed;
+                    return;
+                }
+                for (const disc::Disc& d : discs)
+                    std::fprintf(stderr, "[disc] %s: %s\n", d.label.c_str(), d.file.c_str());
+                job.discs = discs;
+                job.romPath = list;
+                job.got = 0;
+                job.total = 0;
+                job.stage = LaunchJob::Stage::Ready;
+                return;
+            }
         }
 
         // A GAME THAT IS INSTALLED BEFORE IT RUNS (a PS3 PKG; the row's
@@ -4897,6 +5139,12 @@ int main(int argc, char** argv) {
     // back exactly. Nothing is written to disk or sent anywhere; it asks only
     // "does a state this console makes load on this console".
     int stateCheckAfter = 0;
+    // THE DISC RIG (#162): --disc-script "<step>; <step>; ...", run against a
+    // game started with --launch, through the same calls the pause menu
+    // makes. See the runner in the frame loop for the steps. --disc-test
+    // checks disc.h's rules with no core and no server.
+    std::string discScriptText;
+    bool discTestMode = false;
     // Opens the overlay and takes Exit to Home, so the whole leave-a-game path
     // can be proved on a machine with nothing attached.
     bool overlayExitDemo = false;
@@ -5077,6 +5325,18 @@ int main(int argc, char** argv) {
             if (i + 1 < argc && argv[i + 1][0] != '-') overlayDemoAfter = SDL_atoi(argv[++i]);
         } else if (SDL_strcmp(argv[i], "--state-check") == 0 && i + 1 < argc) {
             stateCheckAfter = SDL_atoi(argv[++i]);
+        } else if (SDL_strcmp(argv[i], "--disc-script") == 0 && i + 1 < argc) {
+            discScriptText = argv[++i];
+        } else if (SDL_strcmp(argv[i], "--disc-wait") == 0 && i + 1 < argc) {
+            gDiscWaitSeconds = static_cast<float>(SDL_atof(argv[++i]));
+        } else if (SDL_strcmp(argv[i], "--disc-boot") == 0 && i + 1 < argc) {
+            const std::string b = argv[++i];
+            gDiscBootOverride = b == "list"      ? static_cast<int>(disc::Boot::ListFirst)
+                                : b == "swap"    ? static_cast<int>(disc::Boot::SwapFirst)
+                                : b == "initial" ? static_cast<int>(disc::Boot::InitialImage)
+                                                 : -1;
+        } else if (SDL_strcmp(argv[i], "--disc-test") == 0) {
+            discTestMode = true;
         } else if (SDL_strcmp(argv[i], "--load-state") == 0 && i + 1 < argc) {
             loadStateAfter = SDL_atoi(argv[++i]);
         } else if (SDL_strcmp(argv[i], "--sync-test") == 0) {
@@ -5298,6 +5558,7 @@ int main(int argc, char** argv) {
     if (playersTestMode) return players::test();
     if (batteryTestMode) return battery::test();
     if (playtimeTestMode) return playtime::test();
+    if (discTestMode) return disc::test();
     // REMOVE A PERSON WITHOUT THE SCREENS (#194): exactly what Settings'
     // Remove runs, for a test on a console whose PIN the tester does not
     // have. When something is still owed it says what Remove would ask and
@@ -7747,9 +8008,10 @@ int main(int argc, char** argv) {
     overlayFade.smooth = true;    // 350 ms ease-in-out, per the design system
     Animated overlayFocus;
     enum OverlayItem { OvResume = 0, OvSaveState, OvLoadState, OvScreenshot, OvChoice, OvExit,
-                       OvCount };
+                       OvDisc, OvCount };
     const char* kOverlayLabels[OvCount] = {
         "Resume", "Save state", "Load latest state", "Screenshot", "", "Exit to Home",
+        "Change disc",
     };
     // CHOICE ROWS in a list of buttons: "Picture: Console" (#63) and a
     // system's own options, "3D glasses: Off" (#73). Built when the menu
@@ -8003,7 +8265,7 @@ int main(int argc, char** argv) {
         std::string saveWhen;
         screens::DetailScreen::Facts facts;
         int wantRom = 0;
-        std::string wantTag, wantSaveTag, wantStateDir;
+        std::string wantTag, wantSaveTag, wantStateDir, wantSlug;
         // The console's own states in `list` (#88): a StateChoice id of -(i+1)
         // is localPaths[i]. Offline, they are the states; online, only the
         // ones still waiting to upload are added to RomM's.
@@ -8023,10 +8285,11 @@ int main(int argc, char** argv) {
         const std::string tag = detailStates.wantTag;
         const std::string saveTag = detailStates.wantSaveTag;
         const std::string stateDir = detailStates.wantStateDir;
+        const std::string slug = detailStates.wantSlug;
         detailStates.wantRom = 0;
         detailStates.busy = true;
         const storage::User who = storage::currentUser();
-        detailStates.worker = std::thread([romId, tag, saveTag, stateDir, who]() {
+        detailStates.worker = std::thread([romId, tag, saveTag, stateDir, slug, who]() {
             std::vector<romm::Asset> all;
             std::vector<screens::StateChoice> out;
             std::string err, saveWhen;
@@ -8043,6 +8306,35 @@ int main(int argc, char** argv) {
                     facts.maker = f.maker;
                     if (!f.players.empty())
                         facts.players = f.players + (f.players == "1" ? " player" : " players");
+                }
+                // DISC N OF M (#162), only on a game with several discs: the
+                // disc Play starts on. RomM's files say how many; with no
+                // server, the count the last launch here saw.
+                if (disc::handles(slug) &&
+                    disc::systemFor(slug).change != disc::Change::Automatic) {
+                    // By the discs' own numbers (disc.h), so a disc missing on
+                    // RomM reads "Disc 1 of 4  ·  Disc 2 missing".
+                    const std::vector<disc::Disc> ds =
+                        fresh ? disc::fromNames(disc::plan(f.files).discNames)
+                              : std::vector<disc::Disc>{};
+                    const int count = fresh ? (ds.size() >= 2 ? disc::highest(ds) : 0)
+                                            : disc::knownCount(who, romId);
+                    int n = disc::lastDisc(who, romId);
+                    if (fresh ? !disc::byNumber(ds, n) : (n < 1 || n > count))
+                        n = ds.empty() ? 1 : ds.front().number;
+                    if (count >= 2) facts.disc = disc::ofText(n, count);
+                    // A DISC THE NAMES NUMBER AND RomM DOES NOT HAVE, said:
+                    // "Disc 2 missing". Only when RomM answered.
+                    if (fresh && count >= 1) {
+                        const std::vector<int> gone = disc::missing(disc::plan(f.files).discNames);
+                        if (!gone.empty()) {
+                            std::string m = gone.size() == 1 ? "Disc " : "Discs ";
+                            for (size_t k = 0; k < gone.size(); ++k)
+                                m += (k ? ", " : "") + std::to_string(gone[k]);
+                            m += " missing";
+                            facts.disc += (facts.disc.empty() ? "" : "  \xC2\xB7  ") + m;
+                        }
+                    }
                 }
             }
             // TIME PLAYED (#128): RomM's total plus what this console has not
@@ -8154,6 +8446,7 @@ int main(int argc, char** argv) {
             detailStates.wantRom = romId;
             detailStates.wantTag = tag ? tag : "";
             detailStates.wantSaveTag = saveTag ? saveTag : "";
+            detailStates.wantSlug = g.platformSlug;
             detailStates.wantStateDir =
                 cov.core && catalog::snapshotsAllowed(cov.core)
                     ? storage::statesDir(storage::currentUser(), g.platformFsSlug, romId, cov.core)
@@ -11974,7 +12267,13 @@ int main(int argc, char** argv) {
                 if (res.value < 0 &&
                     static_cast<size_t>(-res.value) <= detailLocalStates.size()) {
                     pendingStatePath = detailLocalStates[static_cast<size_t>(-res.value) - 1];
-                    if (!launchById(detailScreen.game().romId)) pendingStatePath.clear();
+                    // ON THE STATE'S OWN DISC (#162): no swap to wait on,
+                    // and the only way in for a core with no drive (3DO).
+                    gNextStartDisc = disc::discInStateName(pendingStatePath);
+                    if (!launchById(detailScreen.game().romId)) {
+                        pendingStatePath.clear();
+                        gNextStartDisc = 0;
+                    }
                     break;
                 }
                 pendingStateId = res.value;
@@ -13024,6 +13323,62 @@ int main(int argc, char** argv) {
         // The stem is the basename of what the core is handed, without its
         // extension, because that is what these cores name the save after —
         // `lethalen.nv`, `Lunar - The Silver Star.brm`.
+        // A GAME ON SEVERAL DISCS (#162): the disc it starts on, the last one
+        // this person was on (disc 1 the first time) or the one Start over
+        // asked for, and how that disc is put first on this system.
+        const disc::System discSys = disc::systemFor(launchJob.platformSlug);
+        disc::Boot discBoot = discSys.boot;
+        if (gDiscBootOverride >= 0 && discSys.change == disc::Change::Insert)
+            discBoot = static_cast<disc::Boot>(gDiscBootOverride);
+        int startDisc = 0;
+        std::vector<int> discOrder;
+        // Taken whatever this game is, so a single-disc launch never leaves it set.
+        const int askedDisc = gNextStartDisc;
+        gNextStartDisc = 0;
+        if (!launchJob.discs.empty()) {
+            const std::vector<disc::Disc>& discs = launchJob.discs;
+            const int count = disc::highest(discs);
+            startDisc = askedDisc > 0 ? askedDisc : disc::lastDisc(user, launchJob.romId);
+            if (!disc::byNumber(discs, startDisc)) startDisc = discs.front().number;
+            // GAMECUBE ALWAYS STARTS AT THE TOP OF THE LIST: the game asks for
+            // the disc it needs and Dolphin puts it in; which one was in last
+            // time is not known (syncDiscFromCore).
+            if (discSys.change == disc::Change::Automatic) startDisc = discs.front().number;
+            const std::string dir = launchJob.entryPath;
+            const std::string first = dir + "/" + disc::byNumber(discs, startDisc)->file;
+            auto writeList = [&](int top) {
+                const std::string t = disc::listText(discs, top);
+                if (!cab::writeBytes(launchJob.romPath, std::vector<uint8_t>(t.begin(), t.end())))
+                    std::fprintf(stderr, "[disc] could not write %s\n", launchJob.romPath.c_str());
+                discOrder = disc::listOrder(discs, top);
+            };
+            const char* how = "";
+            switch (discBoot) {
+                case disc::Boot::File:
+                    // No list for this core: the disc's own file.
+                    launchJob.romPath = first;
+                    discOrder = {startDisc};
+                    how = "its own file";
+                    break;
+                case disc::Boot::ListFirst:
+                    writeList(startDisc);
+                    how = "first in the list";
+                    break;
+                case disc::Boot::InitialImage:
+                    writeList(0);
+                    // Disc 1 as well: Flycast keeps the last start disc it
+                    // was told across games, and would start on it.
+                    core.setInitialDisc(startDisc - 1, first);
+                    how = "the core's start disc";
+                    break;
+                case disc::Boot::SwapFirst:
+                    writeList(0);
+                    how = "put in before the first frame";
+                    break;
+            }
+            std::fprintf(stderr, "[disc] starts on disc %d of %d (%s)\n", startDisc, count, how);
+        }
+
         std::vector<catalog::SaveFile> saveSpecs;
         {
             std::string stem = launchJob.romPath;
@@ -13121,6 +13476,31 @@ int main(int argc, char** argv) {
         session.snapshots = catalog::snapshotsAllowed(launchJob.coreName.c_str());
         if (!session.snapshots)
             std::fprintf(stderr, "[state] no save states on this system, true to the console\n");
+        // THE DISCS, and the start disc checked against what the core says:
+        // a core that took no start disc, or one put in before the first
+        // frame by design (Saturn), gets it now, before any frame has run.
+        if (!launchJob.discs.empty()) {
+            session.discs = launchJob.discs;
+            session.discOrder = discOrder;
+            session.discChange = discSys.change;
+            session.disc = startDisc;
+            const int want = discIndexOf(session, startDisc);
+            const int idx = core.discIndex();
+            std::fprintf(stderr, "[disc] the core has %d disc(s), index %d (%s)\n",
+                         core.discCount(), idx, core.discPath(idx).c_str());
+            if (discSys.change == disc::Change::Automatic) {
+                // Nothing to check or remember: see syncDiscFromCore.
+            } else if (discSys.change == disc::Change::Insert && core.hasDiscControl() && idx != want) {
+                if (discBoot == disc::Boot::InitialImage)
+                    std::fprintf(stderr, "[disc] the core started on index %d, not %d\n", idx,
+                                 want);
+                discSwapNow(session, startDisc, "before the first frame");
+            } else if (core.hasDiscControl()) {
+                syncDiscFromCore(session);
+            } else {
+                disc::remember(user, session.romId, session.disc, disc::highest(session.discs));
+            }
+        }
         if (const char* tag = catalog::emulatorTag(launchJob.coreName.c_str())) {
             session.stateTag = tag;
         } else {
@@ -13526,6 +13906,44 @@ int main(int argc, char** argv) {
             playedJustNow(session.romId);
         }
         syncSave(session, uploader);
+        // The disc in the drive, kept for this person's next Play (#162);
+        // GameCube changes its own discs, so the core is asked.
+        if (!session.discs.empty()) {
+            // LEFT DURING INSERT'S WAIT: the disc goes in and the lid closes
+            // before anything else, as it would have a moment later.
+            if (session.discInserting) {
+                cab::Core& c = cab::Core::shared();
+                c.setDiscIndex(discIndexOf(session, session.discInserting));
+                c.setDiscEjected(false);
+                std::fprintf(stderr, "[disc] left during the change: disc %d in, lid closed\n",
+                             session.discInserting);
+                session.discInserting = 0;
+            }
+            syncDiscFromCore(session);
+            if (session.discChange != disc::Change::Automatic)
+                std::fprintf(stderr, "[disc] left on disc %d of %d\n", session.disc,
+                             disc::highest(session.discs));
+            // THE DRIVE BACK ON THE LIST'S FIRST ENTRY BEFORE THE UNLOAD, for
+            // every core with a drive. Flycast (a172e00) keeps its disc index
+            // across games: retro_unload_game never resets it, and read_m3u
+            // reads no line unless it is 0, so after a change to disc 2 the
+            // NEXT Dreamcast game's list read as empty and Flycast tried the
+            // .m3u itself as a disc ("Unknown disk format"), refusing every
+            // Dreamcast game until the app restarted. Measured 2026-10-11
+            // (#162). RetroArch does not do this; it has the same exposure.
+            // Reported upstream: flyinghead/flycast#2541. THE LID IS CLOSED
+            // AGAIN: Flycast keeps the lid too, and a lid left open started
+            // the next Dreamcast game with it open (measured 2026-10-11).
+            cab::Core& core = cab::Core::shared();
+            if (core.hasDiscControl() && core.discIndex() > 0) {
+                const bool opened = core.setDiscEjected(true);
+                const bool set = core.setDiscIndex(0);
+                const bool closed = core.setDiscEjected(false);
+                std::fprintf(stderr, "[disc] the drive put back on the first entry before the "
+                                     "unload: open %s, set %s, close %s\n",
+                             opened ? "yes" : "no", set ? "yes" : "no", closed ? "yes" : "no");
+            }
+        }
         // Before the unload: rcheevos reads the core's memory until told not to.
         ra::endGame();
         // And the same curtain on the way out — `unloadGame` blocks too, and a
@@ -13626,6 +14044,7 @@ int main(int argc, char** argv) {
         }
         overlayOpen = false;
         overlayFade.retarget(0.0f, overlayFadeSeconds);
+        if (playing && choiceScreen.isOpen()) choiceScreen.close();
     };
 
     auto powerActivate = [&](PowerItem item) {
@@ -13728,6 +14147,136 @@ int main(int argc, char** argv) {
         sound::play(sound::Cue::Move);
     };
 
+    // ---- Change disc (#162) ----------------------------------------------
+    //
+    // ONE ROW IN THE PAUSE MENU, ONLY ON A GAME WITH SEVERAL DISCS, and
+    // everything else inside the question panel: every disc listed, earlier
+    // ones too, the one in the drive marked, focus on the next. Picking one
+    // asks Insert (the game keeps running) or Insert and restart.
+    //
+    // INSERT IS EJECT, LET THE GAME RUN, SET THE DISC, CLOSE: RetroArch
+    // waits 100 frames, and a Dreamcast game needs the tray seen open
+    // (flycast#1914). The menu closes at once so the wait runs in the game;
+    // a core that is paused never sees the lid (beetle-psx#694).
+    auto beginInsert = [&](int n) {
+        if (session.discs.empty() || session.discInserting) return;
+        cab::Core& core = cab::Core::shared();
+        const bool opened = core.setDiscEjected(true);
+        const double fps = core.avInfo().fps > 0 ? core.avInfo().fps : 60.0;
+        session.discInserting = n;
+        session.discCloseAt =
+            core.framesRun() + static_cast<uint64_t>(std::max(1.0, fps * gDiscWaitSeconds));
+        std::fprintf(stderr, "[disc] insert disc %d: lid open %s, closing in %.1fs of play\n", n,
+                     opened ? "yes" : "no (already open?)", gDiscWaitSeconds);
+        menuNotice.say("Changing disc\xE2\x80\xA6", Tone::Busy);
+    };
+    auto pumpInsert = [&]() {
+        if (!playing || !session.discInserting) return;
+        cab::Core& core = cab::Core::shared();
+        if (core.framesRun() < session.discCloseAt) return;
+        const int n = session.discInserting;
+        const int idx = discIndexOf(session, n);
+        const bool set = core.setDiscIndex(idx);
+        const bool closed = core.setDiscEjected(false);
+        session.discInserting = 0;
+        syncDiscFromCore(session);
+        // A REWIND across a disc change would put the machine back on a disc
+        // that is no longer in it.
+        rewindKeep.reset();
+        rewindLastFrame = core.framesRun();
+        std::fprintf(stderr, "[disc] disc %d in: index %d %s, lid closed %s, the core says "
+                             "index %d\n",
+                     n, idx, set ? "set" : "REFUSED", closed ? "yes" : "no", core.discIndex());
+        if (set && session.disc == n)
+            menuNotice.say("Disc " + std::to_string(n) + " in", Tone::Done);
+        else
+            menuNotice.say("Couldn't change the disc", Tone::Problem);
+    };
+    // START OVER ON DISC N: the game is left as any exit leaves it, saves
+    // and all, and started again on that disc. Play carries on from it too,
+    // which is the way back to disc 1 for a postgame (#162).
+    int relaunchRomId = 0;
+    auto startOverOnDisc = [&](int n) {
+        if (session.discs.empty()) return;
+        std::fprintf(stderr, "[disc] start over on disc %d\n", n);
+        disc::remember(storage::currentUser(), session.romId, n, disc::highest(session.discs));
+        gNextStartDisc = n;
+        relaunchRomId = session.romId;
+        if (choiceScreen.isOpen()) choiceScreen.close();
+        exitToHome();
+        // The exit just remembered the disc that was in; this one wins.
+        disc::remember(storage::currentUser(), relaunchRomId, n, disc::highest(session.discs));
+    };
+    // THE DISC RIG'S STATE (#162, --disc-script). A test instrument: empty,
+    // and nothing here runs.
+    struct DiscScript {
+        std::vector<std::string> steps;
+        size_t at = 0;
+        bool started = false;
+        uint64_t from = 0;        // the game frame the step began on
+        uint64_t wallFrom = 0;    // and the wall clock, for `sleep`
+        uint32_t pad = 0;         // buttons held for the game
+        uint64_t padUntil = 0;    // until this game frame
+        std::string captureTo;    // the next frame capture goes here
+        bool said = false;
+    } discScript;
+    {
+        std::string step;
+        for (char ch : discScriptText + ";") {
+            if (ch != ';') { step += ch; continue; }
+            while (!step.empty() && step.front() == ' ') step.erase(step.begin());
+            while (!step.empty() && step.back() == ' ') step.pop_back();
+            if (!step.empty()) discScript.steps.push_back(step);
+            step.clear();
+        }
+    }
+    std::function<void()> openDiscPanel;
+    auto pickDisc = [&](int n) {
+        // INSERT ONLY WHERE THE CORE HAS A DRIVE, and not for the disc
+        // already in it.
+        const bool canInsert =
+            session.discChange == disc::Change::Insert && n != session.disc;
+        // ONE THING TO DO IS SAID, NOT FOCUSED: a lone button nobody moved
+        // onto does not read as selected.
+        std::vector<std::string> options;
+        if (canInsert) {
+            options.push_back("Insert");
+            options.push_back("Insert and restart");
+        }
+        const disc::Disc* picked = disc::byNumber(session.discs, n);
+        askChoice(picked ? picked->label : "Disc " + std::to_string(n), "", options, 0,
+                  [&, n, canInsert](int answer) {
+                      if (canInsert && answer == 0) {
+                          closeOverlay();
+                          beginInsert(n);
+                      } else {
+                          startOverOnDisc(n);
+                      }
+                  });
+        if (!canInsert) choiceScreen.setPrompt("Press", "A", "to insert and restart");
+        choiceBack = [&]() { openDiscPanel(); };
+    };
+    openDiscPanel = [&]() {
+        std::vector<std::string> names, values;
+        for (const disc::Disc& d : session.discs) {
+            names.push_back(d.label);
+            values.push_back(d.number == session.disc ? "In the drive" : "");
+        }
+        // Focus on the next disc in the drive's order, or the last.
+        const int count = static_cast<int>(session.discs.size());
+        int at = 0;
+        for (int k = 0; k < count; ++k)
+            if (session.discs[static_cast<size_t>(k)].number == session.disc) at = k;
+        const int focus = at + 1 < count ? at + 1 : count - 1;
+        // A row is a disc by its own number, not its place: with disc 2
+        // missing on RomM the second row is disc 3.
+        askChoice("Change disc", "", names, focus, [&](int k) {
+            if (k >= 0 && k < static_cast<int>(session.discs.size()))
+                pickDisc(session.discs[static_cast<size_t>(k)].number);
+        });
+        choiceScreen.setValues(values);
+    };
+
     auto overlayActivate = [&]() {
         if (powerMenu) {
             if (overlaySlot >= 0 && overlaySlot < static_cast<int>(powerItems.size()))
@@ -13751,6 +14300,10 @@ int main(int argc, char** argv) {
                 else screenshotNow(session, uploader, menuNotice);
                 break;
             case OvChoice: stepChoice(overlaySlot, +1, /*wrap=*/true); break;
+            case OvDisc:
+                if (session.discInserting) menuNotice.say("Not while the disc is changing", Tone::Info);
+                else openDiscPanel();
+                break;
             case OvExit:
                 // An emulator of its own is asked to close (thawed first) and
                 // the menu goes; finishStandalone takes the rest of the way
@@ -13774,6 +14327,8 @@ int main(int argc, char** argv) {
             return;
         }
         overlayOpen = !overlayOpen;
+        // A question asked over the menu goes with it (Change disc).
+        if (!overlayOpen && playing && choiceScreen.isOpen()) choiceScreen.close();
         // Only on the way IN: the list must not change under a panel that is
         // still fading out.
         if (overlayOpen) {
@@ -13788,6 +14343,14 @@ int main(int argc, char** argv) {
             // wherever the shortcut button is recognised). PS2 reads PCSX2's
             // frame since #130; GameCube is a libretro core like the rest.
             pauseItems.push_back(OvScreenshot);
+            // CHANGE DISC (#162), only on a game with several discs and only
+            // where the console changes them (not GameCube: Dolphin does).
+            // After the three one-press rows and beside Look, the other
+            // "Name: value" row (MMagTech on the TV, 2026-10-11).
+            if (session.discs.size() >= 2 &&
+                (session.discChange == disc::Change::Insert ||
+                 session.discChange == disc::Change::StartOver))
+                pauseItems.push_back(OvDisc);
             // PICTURE QUALITY, on the nine systems where a level changes
             // something, and with a PIN set only for the owner, as in
             // Settings (MMagTech, 2026-10-02).
@@ -14284,6 +14847,10 @@ int main(int argc, char** argv) {
                         // In a game, Escape is the overlay — not a quit. A
                         // download is the one thing it should interrupt.
                         if (launchJob.busy()) launchJob.cancel = true;
+                        // A question over the pause menu (Change disc) goes
+                        // back first, as B does.
+                        else if (playing && overlayOpen && choiceScreen.isOpen())
+                            navigate(screens::Nav::Back);
                         else if (playing) toggleOverlay();
                         // Back, while there is anywhere to go back to. Quitting
                         // from the middle of the Library would throw away the
@@ -14310,6 +14877,18 @@ int main(int argc, char** argv) {
                             if (e.key.key == SDLK_COMMA) gridScreen.jumpLetter(-1);
                             if (e.key.key == SDLK_PERIOD) gridScreen.jumpLetter(+1);
                         }
+                    }
+                    if (owner == InputOwner::Overlay && choiceScreen.isOpen()) {
+                        switch (e.key.key) {
+                            case SDLK_UP: navigate(screens::Nav::Up); break;
+                            case SDLK_DOWN: navigate(screens::Nav::Down); break;
+                            case SDLK_LEFT: navigate(screens::Nav::Left); break;
+                            case SDLK_RIGHT: navigate(screens::Nav::Right); break;
+                            case SDLK_RETURN:
+                            case SDLK_SPACE: navigate(screens::Nav::Activate); break;
+                            default: break;
+                        }
+                        break;
                     }
                     if (owner == InputOwner::Overlay) {
                         if (e.key.key == SDLK_UP || e.key.key == SDLK_DOWN) {
@@ -14457,6 +15036,18 @@ int main(int argc, char** argv) {
                     if (l3Down && r3Down && (playing || overlayOpen)) {
                         l3Down = r3Down = false;   // one toggle per pair, not per frame
                         toggleOverlay();
+                        break;
+                    }
+                    if (owner == InputOwner::Overlay && choiceScreen.isOpen()) {
+                        switch (e.gbutton.button) {
+                            case SDL_GAMEPAD_BUTTON_DPAD_UP: navigate(screens::Nav::Up); break;
+                            case SDL_GAMEPAD_BUTTON_DPAD_DOWN: navigate(screens::Nav::Down); break;
+                            case SDL_GAMEPAD_BUTTON_DPAD_LEFT: navigate(screens::Nav::Left); break;
+                            case SDL_GAMEPAD_BUTTON_DPAD_RIGHT: navigate(screens::Nav::Right); break;
+                            case SDL_GAMEPAD_BUTTON_SOUTH: navigate(screens::Nav::Activate); break;
+                            case SDL_GAMEPAD_BUTTON_EAST: navigate(screens::Nav::Back); break;
+                            default: break;
+                        }
                         break;
                     }
                     if (owner == InputOwner::Overlay) {
@@ -14859,6 +15450,9 @@ int main(int argc, char** argv) {
             if (held(SDL_SCANCODE_Z)) pad.buttons |= bit(cab::B);
             if (held(SDL_SCANCODE_RETURN)) pad.buttons |= bit(cab::Start);
             if (held(SDL_SCANCODE_RSHIFT)) pad.buttons |= bit(cab::Select);
+            // The disc rig's presses (#162, --disc-script `press`).
+            if (discScript.pad && core.framesRun() < discScript.padUntil)
+                pad.buttons |= discScript.pad;
 
             // A real pad, mapped by SDL's own gamepad abstraction so the
             // hundreds of controllers in its database all arrive the same way.
@@ -15227,7 +15821,10 @@ int main(int argc, char** argv) {
                 // apart. Taken here, compressed on rewind's worker.
                 const uint64_t every = static_cast<uint64_t>(
                     std::max(1.0, std::round(core.avInfo().fps * 0.5)));
-                if (rewindAvailable == 1 && core.framesRun() >= rewindLastFrame + every) {
+                // Not while a disc change has the lid open (#162): the
+                // history is dropped when it closes anyway.
+                if (rewindAvailable == 1 && !session.discInserting &&
+                    core.framesRun() >= rewindLastFrame + every) {
                     rewindLastFrame = core.framesRun();
                     const uint64_t t0 = SDL_GetTicksNS();
                     if (core.saveState(rewindRaw) && !rewindRaw.empty()) {
@@ -15570,10 +16167,10 @@ int main(int argc, char** argv) {
         if (!pendingStatePath.empty() && playing && cab::Core::shared().running() &&
             cab::Core::shared().framesRun() >= 1 && !stateLoad.running.load()) {
             const std::vector<uint8_t> bytes = cab::readBytes(pendingStatePath);
-            const bool ok = !bytes.empty() && cab::Core::shared().loadState(bytes);
+            const bool ok = !bytes.empty() && loadStateOnItsDisc(session, pendingStatePath, bytes);
             std::fprintf(stderr, "[state] picked on the game's page: %s -> %s\n",
                          pendingStatePath.c_str(), ok ? "restored" : "REFUSED");
-            menuNotice.say(ok ? "State loaded" : "Couldn't load that state",
+            menuNotice.say(ok ? "State loaded" : stateRefusedText(),
                            ok ? Tone::Done : Tone::Problem);
             stateLoad.loaded = ok;   // and it waits on that frame, as any load does
             pendingStatePath.clear();
@@ -15629,6 +16226,182 @@ int main(int argc, char** argv) {
                 overlaySlot = static_cast<int>(pauseItems.size()) - 1;   // Exit to Home
             }
             if (t == overlayExitAfter + 60) { overlayExitDemo = false; overlayActivate(); }
+        }
+
+        // CHANGE DISC (#162): Insert's lid closes once the game has run with
+        // it open; Start over starts the game again once it has gone.
+        pumpInsert();
+        if (relaunchRomId && !playing && !exitPending && !launchJob.busy()) {
+            const int id = relaunchRomId;
+            relaunchRomId = 0;
+            if (!launchById(id)) gNextStartDisc = 0;
+        }
+
+        // THE DISC RIG (#162, --disc-script). One step at a time, each when
+        // the last is done; `wait` counts the game's own frames, so a step
+        // means the same on any machine. Every step calls what the pause menu
+        // calls.
+        if (discScript.at < discScript.steps.size() && playing &&
+            cab::Core::shared().running()) {
+            cab::Core& core = cab::Core::shared();
+            const uint64_t now = core.framesRun();
+            // A Start over begins the game again, and its frames from zero.
+            if (!discScript.started || now < discScript.from) {
+                discScript.started = true;
+                discScript.from = now;
+                discScript.wallFrom = SDL_GetTicksNS();
+            }
+            const std::string& stepText = discScript.steps[discScript.at];
+            std::istringstream in(stepText);
+            std::string verb;
+            in >> verb;
+            bool done = true;
+            auto say = [&](const std::string& what) {
+                std::fprintf(stderr, "[disc-script] frame %llu: %s%s%s\n",
+                             static_cast<unsigned long long>(now), stepText.c_str(),
+                             what.empty() ? "" : " -> ", what.c_str());
+            };
+            if (verb == "wait") {
+                uint64_t n = 0;
+                in >> n;
+                done = now >= discScript.from + n;
+            } else if (verb == "sleep") {
+                double sec = 0;
+                in >> sec;
+                done = (SDL_GetTicksNS() - discScript.wallFrom) / 1e9 >= sec;
+            } else if (verb == "insert") {
+                int n = 0;
+                in >> n;
+                beginInsert(n);
+                say("");
+            } else if (verb == "startover") {
+                int n = 0;
+                in >> n;
+                say("");
+                ++discScript.at;
+                discScript.started = false;
+                done = false;
+                startOverOnDisc(n);
+            } else if (verb == "state") {
+                saveStateNow(session, uploader, menuNotice);
+                say(menuNotice.text);
+            } else if (verb == "load") {
+                beginLoadLatestState(stateLoad, session, liveClient, menuNotice);
+                say("");
+            } else if (verb == "resume") {
+                // What A does once a state has loaded and the game waits: the
+                // step waits for that hold (a load is fetched on a worker),
+                // then ends it. Ten seconds with no hold and it moves on.
+                if (stateHold) {
+                    stateHold = false;
+                    stateHoldJustEnded = true;
+                    say("continuing");
+                } else {
+                    done = (SDL_GetTicksNS() - discScript.wallFrom) / 1e9 >= 10.0;
+                    if (done) say("no state was holding the game");
+                }
+            } else if (verb == "press") {
+                // press <button> <frames>: held for the game, then let go.
+                std::string b;
+                int frames = 6;
+                in >> b >> frames;
+                using cab::bit;
+                const uint32_t m = b == "a" ? bit(cab::A) : b == "b" ? bit(cab::B)
+                                 : b == "x" ? bit(cab::X) : b == "y" ? bit(cab::Y)
+                                 : b == "start" ? bit(cab::Start) : b == "select" ? bit(cab::Select)
+                                 : b == "up" ? bit(cab::Up) : b == "down" ? bit(cab::Down)
+                                 : b == "left" ? bit(cab::Left) : b == "right" ? bit(cab::Right)
+                                 : b == "l" ? bit(cab::L) : b == "r" ? bit(cab::R)
+                                 : b == "l2" ? bit(cab::L2) : b == "r2" ? bit(cab::R2) : 0u;
+                discScript.pad = m;
+                discScript.padUntil = now + static_cast<uint64_t>(std::max(1, frames));
+                say("");
+            } else if (verb == "shot") {
+                // The game's own frame, the menu never in it, as a PNG.
+                std::string name;
+                in >> name;
+                std::vector<uint8_t> rgba, png;
+                unsigned w = 0, h = 0;
+                const std::string path = "/tmp/disc-" + name + ".png";
+                const bool ok = core.snapshot(rgba, w, h) && ui::encodePNG(rgba, w, h, png) &&
+                                cab::writeBytes(path, png);
+                say(ok ? path : std::string("NO PICTURE"));
+            } else if (verb == "ui") {
+                // The whole screen, menus and all, as the capture signal does.
+                std::string name;
+                in >> name;
+                discScript.captureTo = "/tmp/disc-" + name + ".bmp";
+                gCaptureRequested = 1;
+                say(discScript.captureTo);
+            } else if (verb == "menu") {
+                if (!overlayOpen) toggleOverlay();
+                for (size_t k = 0; k < pauseItems.size(); ++k)
+                    if (pauseItems[k] == OvDisc) overlaySlot = static_cast<int>(k);
+                say(std::string("Change disc row ") +
+                    (std::find(pauseItems.begin(), pauseItems.end(), OvDisc) != pauseItems.end()
+                         ? "shown" : "NOT SHOWN"));
+            } else if (verb == "activate") {
+                overlayActivate();
+                say("");
+            } else if (verb == "nav") {
+                // nav up|down|left|right|a|b, into whatever has the press.
+                std::string k;
+                in >> k;
+                const screens::Nav n = k == "up" ? screens::Nav::Up : k == "down" ? screens::Nav::Down
+                                     : k == "left" ? screens::Nav::Left
+                                     : k == "right" ? screens::Nav::Right
+                                     : k == "b" ? screens::Nav::Back : screens::Nav::Activate;
+                if (choiceScreen.isOpen()) navigate(n);
+                else if (n == screens::Nav::Up) ovStep(-1);
+                else if (n == screens::Nav::Down) ovStep(+1);
+                else if (n == screens::Nav::Activate) overlayActivate();
+                else if (n == screens::Nav::Back) closeOverlay();
+                say(choiceScreen.isOpen() ? "panel: " + choiceScreen.title() : "");
+            } else if (verb == "close") {
+                if (choiceScreen.isOpen()) choiceScreen.close();
+                if (overlayOpen) closeOverlay();
+                say("");
+            } else if (verb == "check") {
+                say("disc " + std::to_string(session.disc) + " of " +
+                    std::to_string(disc::highest(session.discs)) + ", core index " +
+                    std::to_string(core.discIndex()) + " of " + std::to_string(core.discCount()) +
+                    (core.discEjected() ? ", lid OPEN" : ", lid closed") + ", last disc " +
+                    std::to_string(disc::lastDisc(storage::currentUser(), session.romId)));
+            } else if (verb == "play") {
+                // play <romId>: leave this game and start another in the same
+                // run, the way Home's Play would.
+                int id = 0;
+                in >> id;
+                say("");
+                ++discScript.at;
+                discScript.started = false;
+                done = false;
+                exitToHome();
+                // As --launch does: fetched by id if the library lacks it.
+                autoLaunchId = id;
+                autoLaunchAfter = 1.0f;
+            } else if (verb == "quit") {
+                say("");
+                ++discScript.at;
+                discScript.started = false;
+                done = false;
+                exitToHome();
+                if (discScript.at == discScript.steps.size())
+                    std::fprintf(stderr, "[disc-script] done\n");
+            } else {
+                say("UNKNOWN STEP");
+            }
+            if (done) {
+                ++discScript.at;
+                discScript.started = false;
+                if (discScript.at == discScript.steps.size())
+                    std::fprintf(stderr, "[disc-script] done\n");
+            }
+        }
+        if (!discScript.steps.empty() && discScript.at == discScript.steps.size() &&
+            !playing && !discScript.said) {
+            discScript.said = true;
+            std::fprintf(stderr, "[disc-script] back on Home\n");
         }
 
         if (stateCheckAfter > 0 && playing) {
@@ -17512,7 +18285,9 @@ int main(int argc, char** argv) {
         // Drawn after presentScene because the panel is glass, and it reads the
         // game's own picture through itself.
         const float ovl = overlayFade.value();
-        if (ovl > 0.001f) {
+        // NOT UNDER A QUESTION ASKED FROM IT (Change disc, #162): the panel
+        // takes its place, and the menu's words showed through the glass.
+        if (ovl > 0.001f && !(playing && choiceScreen.isOpen())) {
             // The 64 is the padding above and below the buttons. There used to
             // be 44 more, reserved for the line the menu answered with; that
             // answer is the notification pill now, so the panel is just its
@@ -17590,6 +18365,15 @@ int main(int argc, char** argv) {
                 renderer.draw(btn);
 
                 const char* label = ovLabel(i);
+                // CHANGE DISC WITH ITS VALUE, written as a choice row is
+                // ("Change disc: Disc 2 of 4") with no arrows: A opens the
+                // question panel, Left and Right do nothing on it.
+                std::string discLine;
+                if (!powerMenu && pauseItems[i] == OvDisc) {
+                    discLine = std::string(label) + ": " +
+                               disc::ofText(session.disc, disc::highest(session.discs));
+                    label = discLine.c_str();
+                }
                 // A CHOICE ROW, CENTRED LIKE EVERY OTHER BUTTON: "Picture
                 // quality: Balanced" on one line, and under focus an arrow at
                 // each edge of the button, bright where left or right still
@@ -18290,7 +19074,7 @@ int main(int argc, char** argv) {
         }
         // The PIN pad over all of it, the panel included: it can be opened
         // from the panel, and it covers the screen.
-        if (choiceScreen.isOpen() && !playing) {
+        if (choiceScreen.isOpen() && (!playing || overlayOpen)) {
             screens::Ctx cctx{renderer, text, images, sc, &cards};
             choiceScreen.draw(cctx);
             renderer.setContentAlpha(1.0f);
@@ -18402,7 +19186,10 @@ int main(int argc, char** argv) {
         }
         if (gCaptureRequested) {
             gCaptureRequested = 0;
-            renderer.saveFrame("/tmp/cabinetos-frame.bmp", dw, dh);
+            renderer.saveFrame(discScript.captureTo.empty() ? "/tmp/cabinetos-frame.bmp"
+                                                            : discScript.captureTo.c_str(),
+                               dw, dh);
+            discScript.captureTo.clear();
         }
 
         // A top-bar switch asked for: this frame still shows the old screen, so

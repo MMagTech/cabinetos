@@ -544,8 +544,9 @@ public:
     // the Play row's value, because that save is what Play starts from.
     void setSaveWhen(std::string when);
     // What RomM knows of the game, for the line under the title: "1997",
-    // "Cave", "1-2 players". Any may be empty.
-    struct Facts { std::string year, maker, players, played; };
+    // "Cave", "1-2 players". Any may be empty. `disc` is "Disc 2 of 4", on a
+    // game with several discs only (#162).
+    struct Facts { std::string year, maker, players, played, disc; };
     void setFacts(Facts f);
     // RomM HAS ANSWERED: the facts, the save and Continue from fade in
     // together now, rather than each popping in as it arrived.

@@ -6,22 +6,38 @@
 #       romm-readonly-relay.py 16006 45=arcade:Arcade 22=FB%20Neo
 #     rewrites fs_slug (and display_name, when given) in /api/platforms and
 #     platform_fs_slug / platform_display_name in every ROM payload.
+#   * A game's files can be shown under other names, or not at all (#162,
+#     the disc rig): file:<fileId>=<name> renames one in every `files` list,
+#     hide:<fileId> leaves it out. RomM still serves a file by its id.
 import json, sys, urllib.parse, urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 UP = "http://192.168.1.10:6005"
 PORT = int(sys.argv[1])
 MAP = {}
+# file:<fileId>=<name> shows a game's file under another name (#162, odd names).
+FILES = {}
 for a in sys.argv[2:]:
+    if a.startswith("hide:"):
+        FILES[int(a[5:])] = None
+        continue
+    if a.startswith("file:"):
+        fid, name = a[5:].split("=", 1)
+        FILES[int(fid)] = urllib.parse.unquote(name)
+        continue
     pid, val = a.split("=", 1)
     fs, _, name = urllib.parse.unquote(val).partition(":")
     MAP[int(pid)] = (fs, name)
 
 def rewrite(obj):
     if isinstance(obj, list):
-        return [rewrite(x) for x in obj]
+        return [rewrite(x) for x in obj
+                if not (isinstance(x, dict) and "file_size_bytes" in x and x.get("id") in FILES
+                        and FILES[x["id"]] is None)]
     if isinstance(obj, dict):
         obj = {k: rewrite(v) for k, v in obj.items()}
+        if "file_name" in obj and obj.get("id") in FILES and "file_size_bytes" in obj:
+            obj["file_name"] = FILES[obj["id"]]
         if "fs_slug" in obj and obj.get("id") in MAP and "rom_count" in obj:
             fs, name = MAP[obj["id"]]
             obj["fs_slug"] = fs
@@ -53,7 +69,7 @@ class H(BaseHTTPRequestHandler):
             r = e
         body = r.read() if not head else b""
         ctype = r.headers.get("Content-Type", "")
-        if MAP and "json" in ctype and body:
+        if (MAP or FILES) and "json" in ctype and body:
             try: body = json.dumps(rewrite(json.loads(body))).encode()
             except Exception: pass
         self.send_response(r.status if hasattr(r, "status") else r.code)

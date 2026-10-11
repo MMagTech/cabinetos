@@ -42,8 +42,12 @@ downloads anything new into the console's shared BIOS folder.
   for Dreamcast and Saturn, RVZ or ISO for GameCube and Wii.
 - **CD systems: prefer CHD.** A zipped cue/bin set works when the `.cue` comes
   first in the archive.
-- **Multi-disc games play their first disc.** Changing discs in a game is not
-  built yet.
+- **A game on several discs is one folder in RomM**, every disc in it:
+  `Game (Disc 1).chd`, `Game (Disc 2).chd`. The console fetches them all, keeps
+  one save for the game, and changes discs from the pause menu. Discs are
+  ordered by the `(Disc N)` in their names. Loose discs are separate games.
+  See [Games on several discs](discs.md).
+  PlayStation, Saturn, Dreamcast, Sega CD, 3DO and GameCube.
 
 ## Every system
 

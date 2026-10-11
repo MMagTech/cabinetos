@@ -152,6 +152,45 @@ Read before working on a core, an emulator, input, saves or states.
   name already ending in `_libretro` does not get a second one. Getting it
   wrong cost every arcade game on this console for a day.
 
+## Games on several discs (#162)
+
+- **A CORE THE CONSOLE "UNLOADS" CAN STAY IN MEMORY, AND ITS STATIC STATE
+  WITH IT.** Flycast's code was still mapped with the console on Home, and its
+  static `disk_index` survived into the next game: `retro_unload_game` never
+  resets it and `read_m3u` reads no line unless it is 0, so after Insert disc
+  2 every later Dreamcast launch in that run was refused ("[BOOT] Unknown disk
+  format": Flycast opened the `.m3u` itself as a disc). It also keeps the
+  last start disc it was told. Found only because the rig played a second
+  game in the same run (rule 3). The console now puts the drive back on the
+  list's first entry before every unload, and states the start disc on every
+  launch. Dolphin's port does the same kind of thing: its disc list grows by
+  every game loaded and is never cleared (4 discs reported for a 2-disc
+  game on the second launch).
+
+- **Read the core's source before believing its disc index.** Dolphin's
+  `retro_get_image_index` only moves when the frontend sets it; Dolphin's own
+  AutoDiscChange never touches it, so the console cannot know which GameCube
+  disc is in, and does not pretend to.
+
+- **A DISC THE GAME IS NOT ASKING FOR CAN KILL THE WHOLE APP ON PS1.** Metal
+  Gear Solid read disc 2 as if it were disc 1 (once mid-load, once when its
+  attract demo started) and Lightrec segfaulted inside its own translation
+  cache: the PC was in recompiled code, nothing of ours on the stack. On
+  hardware the game would only hang. Swap at the game's own prompt, and test
+  a swap at a quiet moment before believing a crash is ours.
+
+- **"It drops to the BIOS" is the hardware, not a bug.** Opening the lid on
+  Saturn or Dreamcast during a game that is not asking for a disc goes to the
+  console's own menu, as the real console does; Saturn then waits on *Start
+  Application* (Start boots the new disc; RetroPad A is Saturn's B, which
+  does nothing there). Panzer Dragoon Saga asks for exactly this.
+
+- **A dump can be the fault.** RomM's Night Trap boots to the Sega CD's CD
+  player even from one file, and its sizes match no Redump Night Trap; RomM
+  could not hash it either (no `ra_hash`). A single-disc game (Mad Dog
+  McCree) booted the same way was the control. Check Redump before blaming
+  the feature.
+
 ## PS2 and GameCube
 
 - **`dolphin_renderer` IS NOT AN API SELECTOR.** It takes "Hardware" and
