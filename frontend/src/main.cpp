@@ -13301,7 +13301,9 @@ int main(int argc, char** argv) {
                     break;
                 case disc::Boot::InitialImage:
                     writeList(0);
-                    if (startDisc > 1) core.setInitialDisc(startDisc - 1, first);
+                    // Disc 1 as well: Flycast keeps the last start disc it
+                    // was told across games, and would start on it.
+                    core.setInitialDisc(startDisc - 1, first);
                     how = "the core's start disc";
                     break;
                 case disc::Boot::SwapFirst:
@@ -13844,6 +13846,23 @@ int main(int argc, char** argv) {
             syncDiscFromCore(session);
             std::fprintf(stderr, "[disc] left on disc %d of %zu\n", session.disc,
                          session.discs.size());
+            // THE DRIVE BACK ON THE LIST'S FIRST ENTRY BEFORE THE UNLOAD, for
+            // every core with a drive. Flycast (a172e00) keeps its disc index
+            // across games: retro_unload_game never resets it, and read_m3u
+            // reads no line unless it is 0, so after a change to disc 2 the
+            // NEXT Dreamcast game's list read as empty and Flycast tried the
+            // .m3u itself as a disc ("Unknown disk format"), refusing every
+            // Dreamcast game until the app restarted. Measured 2026-10-11
+            // (#162). RetroArch does not do this; it has the same exposure.
+            cab::Core& core = cab::Core::shared();
+            if (core.hasDiscControl() && core.discIndex() > 0) {
+                const bool opened = core.setDiscEjected(true);
+                const bool set = core.setDiscIndex(0);
+                const bool closed = core.setDiscEjected(false);
+                std::fprintf(stderr, "[disc] the drive put back on the first entry before the "
+                                     "unload: open %s, set %s, close %s\n",
+                             opened ? "yes" : "no", set ? "yes" : "no", closed ? "yes" : "no");
+            }
         }
         // Before the unload: rcheevos reads the core's memory until told not to.
         ra::endGame();
@@ -16229,6 +16248,19 @@ int main(int argc, char** argv) {
                     std::to_string(core.discIndex()) + " of " + std::to_string(core.discCount()) +
                     (core.discEjected() ? ", lid OPEN" : ", lid closed") + ", last disc " +
                     std::to_string(disc::lastDisc(storage::currentUser(), session.romId)));
+            } else if (verb == "play") {
+                // play <romId>: leave this game and start another in the same
+                // run, the way Home's Play would.
+                int id = 0;
+                in >> id;
+                say("");
+                ++discScript.at;
+                discScript.started = false;
+                done = false;
+                exitToHome();
+                // As --launch does: fetched by id if the library lacks it.
+                autoLaunchId = id;
+                autoLaunchAfter = 1.0f;
             } else if (verb == "quit") {
                 say("");
                 ++discScript.at;
