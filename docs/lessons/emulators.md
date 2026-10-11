@@ -44,6 +44,11 @@ Read before working on a core, an emulator, input, saves or states.
 
 ## Input
 
+- **A GAME FACT FROM MEMORY IS A GUESS: CHECK REDUMP.** "Snatcher, two discs"
+  sent MMagTech after a single-disc game (2026-10-10). libretro-database's
+  `metadat/redump/*.dat` lists every disc of every set; grep it before
+  suggesting a game, a disc count or a region.
+
 - **`RETRO_DEVICE_INDEX_ANALOG_BUTTON` IS NOT A STICK.** It is libretro's third
   analogue index and its `id` is a joypad button id — L2 is 12, R2 is 13. Any
   code that tests for the LEFT index and treats "everything else" as the right
