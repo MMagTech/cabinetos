@@ -179,6 +179,11 @@ then `YDOTOOL_SOCKET=/tmp/ydotool.sock ydotool key 108:1 108:0` (Down; Up
   `GAMESCOPE_WAYLAND_DISPLAY` set to the NEWEST `gamescope-N` there; a
   session restart leaves the old socket behind and gamescopectl fails on it.
 
+- **NEVER SEND A "WAKE" PRESS WITHOUT A CAPTURE FIRST.** Right after a restart
+  the screen is already awake, so a Return meant to wake it pressed Resume on
+  Home and started Burnout 3 (2026-10-10). Capture, read where focus is, then
+  press; and the keyboard cannot leave a PS2 game, so MMagTech had to exit it.
+
 - **After five idle minutes the first press only wakes the screen,** and
   every later press lands one step off. That opened the Wi-Fi panel instead
   of Sign out once. Capture before any press that destroys something.
