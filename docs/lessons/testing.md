@@ -218,6 +218,17 @@ then `YDOTOOL_SOCKET=/tmp/ydotool.sock ydotool key 108:1 108:0` (Down; Up
   console on Home first (`tools/ui-loop.sh --no-build`): PS2 and the cores
   are loaded only when a game starts. `coredumpctl list` shows it.
 
+- **A SESSION SCRIPT UNDER TEST RUNS THROUGH BASH, NEVER AS `ExecStart` OF A
+  HOME FILE.** SELinux refuses to exec `user_home_t` from init (`203/EXEC`),
+  the service retries every 2 s, and with no session on the seat logind takes
+  the sound devices away. WirePlumber logs `Permission denied` on `hw:0` at
+  every retry, never takes the cards back, and the next frontend freezes
+  opening sound: a black screen that looks like the change under test
+  (#268, #331, 2026-10-10). Use a `/run` drop-in with
+  `ExecStart=/usr/bin/bash /var/home/cabinet/<copy>`, and check `wpctl
+  status` shows the HDMI sink before and after. If it is already broken,
+  `systemctl --user restart wireplumber` brings the sink back.
+
 - **gamescope crashes on its way out when the app is stopped**
   (`wl_display_destroy`, SIGSEGV or SIGABRT). It is every session stop, not
   the thing being tested; look at what stopped the app.

@@ -84,6 +84,10 @@ struct Game {
     std::string platformName;    // "Dreamcast" — for the hero's band
     std::string name;
     std::string fsName;
+    // RomM's own sort key ("The Bouncer" is "bouncer", digits padded): the
+    // order the server returns a platform in, so the letter index has to
+    // read its letters from this and not from the name.
+    std::string sortKey;
     // Path on the server, not a URL: the cover fetch goes through the same
     // authenticated client, so callers hand this straight to ImageCache.
     //

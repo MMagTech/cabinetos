@@ -182,6 +182,21 @@ Read before working on a screen, the network, Bluetooth, pairing or first run.
 
 ## Code
 
+- **GLASS FADES ONLY WITH THE RENDERER'S CONTENT ALPHA, NOT A COLOUR'S.**
+  `drawGlass` reads `contentAlpha_` for its blur and the tint's alpha only
+  for the tint. Fade a glass element by multiplying its colours and the tint
+  goes smoothly while the frosted blur stays at full strength to the last
+  frame, then vanishes: "not fading out as a smooth element ... like it's in
+  two phases" (the grid's letter index, 2026-10-10). Fade anything with glass
+  in it through `setContentAlpha`, and put the old value back after.
+
+- **A NEW PIECE OF UI IS BUILT FROM THE PARTS ALREADY ON SCREEN.** The letter
+  index went through four looks in one evening ("hideous", "it just doesn't
+  even look like it fits in it") because each was tuned as a new object. The
+  one he accepted took every part from what exists: the browsing screens'
+  regular glass, the top bar's focus capsule and dimming, Title 3, the focus
+  duration. Read design.h's surfaces and the bar before drawing anything new.
+
 - **A `void` FUNCTION THAT ENDS A SESSION TELLS NOBODY IT DID.**
   `Keyboard::pressKey` handled its own "done" and "cancel" keys internally, so
   driving the on-screen keyboard with a CONTROLLER and pressing A on "done"
