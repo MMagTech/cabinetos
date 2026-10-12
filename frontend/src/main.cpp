@@ -3313,6 +3313,12 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
                 job.stage = LaunchJob::Stage::Failed;
                 return;
             }
+            // SAID, so a game downloaded again at every launch shows in the
+            // log and the diagnostic report as a line, not as a missing one.
+            struct stat dst;
+            std::fprintf(stderr, "[launch] downloaded %lld bytes\n",
+                         ::stat(dest.c_str(), &dst) == 0 ? static_cast<long long>(dst.st_size)
+                                                         : -1LL);
         } else {
             std::fprintf(stderr, "[launch] already downloaded, %lld bytes\n",
                          static_cast<long long>(expectedSize));
