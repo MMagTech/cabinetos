@@ -113,6 +113,7 @@
 #include "drives.h"
 #include "players.h"
 #include "battery.h"
+#include "volume.h"
 #include "powerprofile.h"
 #include "steam.h"
 #include "playtime.h"
@@ -5083,6 +5084,7 @@ int main(int argc, char** argv) {
     bool accountsTestMode = false;
     bool playersTestMode = false;
     bool batteryTestMode = false;
+    bool volumeTestMode = false;
     bool playtimeTestMode = false;
     int removeAccountId = 0;     // --remove-account N (#194)
     bool removeAnyway = false;   // --remove-anyway
@@ -5411,6 +5413,8 @@ int main(int argc, char** argv) {
             playersTestMode = true;
         } else if (SDL_strcmp(argv[i], "--battery-test") == 0) {
             batteryTestMode = true;
+        } else if (SDL_strcmp(argv[i], "--volume-test") == 0) {
+            volumeTestMode = true;
         } else if (SDL_strcmp(argv[i], "--playtime-test") == 0) {
             playtimeTestMode = true;
         } else if (SDL_strcmp(argv[i], "--remove-account") == 0 && i + 1 < argc) {
@@ -5562,6 +5566,7 @@ int main(int argc, char** argv) {
     if (accountsTestMode) return accountsTest();
     if (playersTestMode) return players::test();
     if (batteryTestMode) return battery::test();
+    if (volumeTestMode) return volume::test();
     if (playtimeTestMode) return playtime::test();
     if (discTestMode) return disc::test();
     // REMOVE A PERSON WITHOUT THE SCREENS (#194): exactly what Settings'
@@ -5896,6 +5901,12 @@ int main(int argc, char** argv) {
     wiiremote::start();
     // Each controller's battery, from the kernel, for Home's row (#293).
     battery::start();
+    // The volume keys, from the kernel, and full volume at start on a TV
+    // (#351). Never offscreen: a headless copy would answer every key again
+    // and reset the television's volume.
+    if (const char* vd = SDL_GetCurrentVideoDriver();
+        vd && std::strcmp(vd, "offscreen") != 0 && std::strcmp(vd, "dummy") != 0)
+        volume::start();
 
     // The interface's own sounds. Opened here rather than lazily, because the
     // first click a person hears should not be the second one they asked for —

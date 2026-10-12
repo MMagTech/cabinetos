@@ -1,0 +1,7 @@
+# The volume keys (#351): the console reads every key device itself
+# (frontend/src/volume.cpp), so the keys work while a separate emulator has
+# the screen. Keyboards are the input group's alone by default; this gives the
+# seat's user read access, as systemd does for pads. After 60-input-id.rules,
+# which sets ID_INPUT_KEY, and 70-uaccess.rules; before 73-seat-late.rules,
+# which turns the tag into the grant.
+SUBSYSTEM=="input", KERNEL=="event*", ENV{ID_INPUT_KEY}=="1", TAG+="uaccess"

@@ -16711,3 +16711,43 @@ holds the rules.
   grows by each launch's discs, but it boots and auto-changes from that
   launch's own `.m3u`, so the next GameCube game is unaffected (measured: RE4
   twice, then Ikaruga).
+
+### 44. Volume keys, issue #351
+
+**Decided with MMagTech, 2026-10-11, on #351; built and tested on the A9 the
+same night.** Reported from a Steam Deck: the rocker did nothing, and the
+console had no volume control at all. A TV console's volume is the
+television's, which is why there was none; the rocker sends the standard keys
+(`KEY_VOLUMEUP`/`KEY_VOLUMEDOWN`, 115/114, from the Deck's built-in "AT
+Translated Set 2 keyboard") and nothing listened.
+
+**The rules (`frontend/src/volume.{h,cpp}`, walked by `--volume-test`):**
+- **Volume keys from any keyboard step the system volume** (the default sound
+  output, `wpctl`, 5% a press, never above 100%), **silently**: no bar, as
+  with the television's own volume.
+- **Read from the kernel's key devices, not the window**, so they work while
+  a separate emulator (PS2, PS3, Switch, Xbox, Xbox 360, Wii U) has the
+  screen. Read only, never grabbed. Keyboards are the `input` group's alone
+  by default (the console's user could read only its pads), so
+  `71-cabinetos-key-devices.rules` gives the seat's user read access to
+  every key device, as systemd does for pads. Only a device whose sysfs key
+  list has a volume key is opened.
+- **At every start the volume goes back to full, unless the machine has a
+  built-in screen** (a DRM connector of type eDP, DSI or LVDS, Linux's
+  internal panels). A keyboard can never leave a TV console quiet with no way
+  back for a controller; a handheld keeps its level. **Measured:** a session
+  start remakes the TV's sound output (node 65, then 70, then 55 within a
+  second), and the last comes back at WirePlumber's saved level; once, after
+  a PS2 game, that finished after the console's reset and left 0.95. So for
+  30 s after start a level that is not full is set again, unless a volume key
+  has been used.
+- **The diagnostic report lists every keyboard**, whether it has the volume
+  keys, its named special keys and every key code, plus the volume now and
+  whether there is a built-in screen. A handheld's report answers this in one
+  line.
+
+**Tested on the A9 by injected keys (ydotool), reading the sink back:** Home,
+Snes9x (in the console), PS2 (Burnout 3), PS3 (RPCS3, its own process) and
+Switch (Eden, a Flatpak): each press 5% in each, nothing drawn. Full at each
+start. Whether a given handheld's buttons send these keys is its owner's to
+confirm; the Deck's do, by its kernel log and an owner's evtest.
