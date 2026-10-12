@@ -973,8 +973,16 @@ static std::vector<uint8_t> saveBytesFor(romm::Client& client, int romId,
 // A DIRECTORY SAVE COMES DOWN before the game starts: the newest zip RomM
 // holds under `tag` for this game, unpacked into `root`. PSP's memory stick
 // and a Switch game's save folder both travel this way.
+//
+// GAMECUBE'S CARDS FROM BEFORE (#344): `oldCard` is where Dolphin reads a raw
+// card into its `.gci` folder when the folder is missing (writeDolphinConfig).
+// When RomM's newest save for the game is still such a card, it is put there
+// and Dolphin does the rest at boot. Only when the folder does not exist yet,
+// and never over a card already on this console: that one is at least as new,
+// and Dolphin reads it in itself.
 static void restoreDirSave(romm::Client& client, int romId, const char* tag,
-                           const std::string& root, const std::string& title) {
+                           const std::string& root, const std::string& title,
+                           const std::string& oldCard = std::string()) {
     // NOT OVER A SAVE THIS CONSOLE HAS NOT SENT YET. The zip syncDirSave made
     // is newer than anything the server holds until its upload lands, and
     // unpacking the server's older one would write over it. Found 2026-09-29:
@@ -1010,6 +1018,23 @@ static void restoreDirSave(romm::Client& client, int romId, const char* tag,
         } else {
             std::fprintf(stderr, "[save] %s would not unpack: %s\n",
                          newest->fileName.c_str(), uerr.c_str());
+        }
+    } else if (!oldCard.empty() && !data.empty()) {
+        if (storage::exists(root)) {
+            std::fprintf(stderr, "[save] %s is a card from before; %s already holds this game's "
+                         "saves, so it is left alone\n", newest->fileName.c_str(), root.c_str());
+        } else if (storage::exists(oldCard)) {
+            std::fprintf(stderr, "[save] %s is a card from before; this console's own %s is read "
+                         "in instead\n", newest->fileName.c_str(), oldCard.c_str());
+        } else if (!cab::holdsASave(data, catalog::Untouched::GameCubeDirectory)) {
+            std::fprintf(stderr, "[save] %s is a card with no saves on it; left alone\n",
+                         newest->fileName.c_str());
+        } else if (cab::writeBytes(oldCard, data)) {
+            std::fprintf(stderr, "[save] %s (%zu bytes) placed at %s; Dolphin reads it into "
+                         "%s at boot\n", newest->fileName.c_str(), data.size(),
+                         oldCard.c_str(), root.c_str());
+        } else {
+            std::fprintf(stderr, "[save] could not write %s\n", oldCard.c_str());
         }
     } else if (!data.empty()) {
         std::fprintf(stderr, "[save] %s is not a zip (%02x %02x %02x %02x) — left alone\n",
@@ -1219,19 +1244,12 @@ static std::string saveRowName(const std::string& fsStem, const std::string& cor
 
 // The same thing, spelled the way Cabinet for Mac spells it.
 //
-// `cabinet-604.ps2`, `cabinet-937.USA.raw`. Only PlayStation 2 and GameCube
-// use this, and only because a save for those two ALREADY EXISTS on the
-// server written by the Mac — RomM matches a row for overwrite by filename
-// alone, so a console that invented its own name would leave the person with
-// two cards per game and restore neither. See catalog::SaveFile::macRowName.
-static std::string macSaveRowName(int romId, const std::string& region,
-                                  const std::string& writtenName) {
-    // WHAT DOLPHIN ACTUALLY WROTE, where it wrote something. It stamps the
-    // region into the name, and the card SIZE too when the card is not the
-    // default — `cabinet-934.USA.251.raw` on the reference server. Neither is
-    // predictable from here, so the file on disk is the authority and this is
-    // only the fallback for a row that does not exist yet.
-    if (!writtenName.empty()) return writtenName;
+// `cabinet-604.ps2`. Only PlayStation 2 uses this, and only because its saves
+// ALREADY EXISTED on the server written by the Mac: RomM matches a row for
+// overwrite by filename alone, so a console that invented its own name would
+// leave the person with two cards per game and restore neither. See
+// catalog::SaveFile::macRowName.
+static std::string macSaveRowName(int romId, const std::string& region) {
     return "cabinet-" + std::to_string(romId) + "." + region;
 }
 
@@ -1247,10 +1265,10 @@ static std::string regionOfRow(const std::string& fileName) {
     };
     if (endsWith(".cart")) return "cart";
     if (endsWith(".rtc")) return "rtc";
-    // PlayStation 2 and GameCube, whose rows are named the Mac's way —
-    // `cabinet-604.ps2`, `cabinet-937.USA.raw`. Without these two lines every
-    // such row reads as "srm" and the restore looks straight past the card the
-    // person actually made. See catalog::SaveFile::macRowName.
+    // PlayStation 2's card, named the Mac's way (`cabinet-604.ps2`), and a
+    // GameCube raw card from before #344. Without these lines either reads as
+    // "srm": the PS2 restore would look straight past the card, and the
+    // battery restore could take a 16 MB card for a battery.
     if (endsWith(".ps2")) return "ps2";
     if (endsWith(".raw")) return "raw";
     return "srm";
@@ -1364,23 +1382,24 @@ static std::string dolphinReadablePath(const std::string& romPath, int romId) {
 
 // Dolphin's own configuration, written before the core boots.
 //
-// WHY A FILE RATHER THAN A CORE OPTION: the libretro core does not expose the
-// slot A device or the memory card path at all, and left alone Dolphin uses
-// its default — a GCI FOLDER of loose files, one per save. Cabinet for Mac
-// sets MAIN_SLOT_A and MAIN_MEMCARD_A_PATH directly and so produces a
-// whole-card `.raw`. Those are two different save formats for one platform
-// across two halves of the same product, which is not a thing to leave to
-// chance. The core reads this file on startup, so writing it is how this side
-// makes the same two choices.
+// SLOT A IS DOLPHIN'S OWN DEFAULT, A FOLDER OF `.gci` FILES (#344), at its own
+// default place, `User/GC/<region>/Card A/` in this person's save directory
+// for the game. That is what every other Dolphin keeps and what RomM's save
+// channels carry (#346), so it is said here only so that nothing can change
+// it. Until 2026-10-11 slot A was one whole raw card at `<saveDir>/card.raw`,
+// because Cabinet for Mac kept one; Dolphin stamped the region into that name
+// (`card.USA.raw`), so a card restored from RomM never reached the game.
 //
-// MemoryCardSize IS PINNED, and that is the subtle one. Dolphin puts the
-// card's size in the FILENAME as well as its region — one of the cards on the
-// reference server is `cabinet-934.USA.251.raw`, a 2 MB card, beside two 16 MB
-// ones. RomM matches a save row by filename alone, so leaving the size to
-// Dolphin means the row's identity depends on a setting nobody controls: the
-// day it changes, the card lands under a new name, the old row is orphaned and
-// the save silently does not come back. Cabinet for Mac leaves it at -1 and
-// has the same latent fault.
+// MemcardAPath STAYS, FOR ONE THING: when the folder does not exist yet,
+// Dolphin reads every save off the raw card at that path, region stamped
+// (`card.USA.raw`), into the folder (MigrateFromMemcardFile). That is how a
+// card made here before, or one still on RomM, becomes `.gci` files: Dolphin's
+// own code, not ours. restoreDirSave puts RomM's card there when there is
+// nothing newer.
+//
+// MemoryCardSize is not written: Dolphin refuses it from Dolphin.ini
+// (ConfigLoaders/BaseConfigLoader.cpp, s_setting_disallowed), so the 2 once
+// written here never did anything; every card was the default 2043 blocks.
 static void writeDolphinConfig(const std::string& saveDir) {
     const std::string dir = saveDir + "/User/Config";
     const std::string path = dir + "/Dolphin.ini";
@@ -1388,21 +1407,18 @@ static void writeDolphinConfig(const std::string& saveDir) {
     ini += "# Written by CabinetOS before every GameCube launch. See\n";
     ini += "# writeDolphinConfig in frontend/src/main.cpp.\n";
     ini += "[Core]\n";
-    // ExpansionInterface::EXIDeviceType::MemoryCard, and None for slot B.
-    ini += "SlotA = 1\n";
+    // ExpansionInterface::EXIDeviceType::MemoryCardFolder, and None for slot B.
+    ini += "SlotA = 8\n";
     ini += "SlotB = 255\n";
     ini += "MemcardAPath = " + saveDir + "/card.raw\n";
-    ini += "MemoryCardSize = 2\n";
     // A GAME ON SEVERAL DISCS ASKS FOR THE NEXT ONE BY NAME, and Dolphin puts
     // it in from the list the console hands over (#162): no menu for it.
     ini += "AutoDiscChange = True\n";
     if (!cab::writeBytes(path, std::vector<uint8_t>(ini.begin(), ini.end()))) {
-        // NOT fatal, and said out loud. The game still runs; it writes its
-        // save somewhere this console does not sync, which is exactly the kind
-        // of failure that looks like the save feature simply not working.
-        std::fprintf(stderr,
-                     "[save] could not write %s - GameCube will write loose GCI "
-                     "files and nothing will sync\n", path.c_str());
+        // Said out loud. Dolphin's defaults are the same folder, so saves
+        // still sync; only a card from before would not be read in.
+        std::fprintf(stderr, "[save] could not write %s - an old GameCube card will not be "
+                     "read into the save folder\n", path.c_str());
     }
 }
 
@@ -1426,7 +1442,7 @@ static std::vector<cab::FileSaveState> restoreFileSaves(
         f.spec = spec;
         f.path = (spec.inSystemDir ? storage::biosDir() : saveDir) + "/" + spec.path;
         const std::string name =
-            spec.macRowName ? macSaveRowName(romId, spec.region, std::string())
+            spec.macRowName ? macSaveRowName(romId, spec.region)
                             : saveRowName(fsStem, spec.coreRowName, spec.region);
 
         // WHERE THIS PERSON'S COPY LIVES. For every platform but Dreamcast it
@@ -1582,20 +1598,9 @@ static void syncFileSaves(GameSession& sess, Uploader& up) {
         // guarantee holds for free. Dreamcast's card has to be copied across
         // out of the system directory, and that copy happens before a single
         // byte is offered to the network.
-        // THE NAME DOLPHIN CHOSE, not the one that was asked for. `written`
-        // is what the capture actually found on disk — `card.USA.raw`, or
-        // `card.USA.251.raw` for a card that is not the default size — and for
-        // the platforms that follow the Mac's naming that spelling IS the row
-        // identity on the server. Uploading under the requested name instead
-        // would make a second row every time the size or region moved.
-        std::string writtenName = written;
-        if (const size_t slash = writtenName.find_last_of('/');
-            slash != std::string::npos)
-            writtenName.erase(0, slash + 1);
-        (void)writtenName;
         const std::string name =
             f.spec.macRowName
-                ? macSaveRowName(sess.romId, f.spec.region, std::string())
+                ? macSaveRowName(sess.romId, f.spec.region)
                 : saveRowName(sess.fsStem, f.spec.coreRowName, f.spec.region);
         const std::string local = sess.saveDir + "/" + name;
         if (f.spec.inSystemDir && !writeLocal(local, data)) {
@@ -13310,9 +13315,19 @@ int main(int argc, char** argv) {
                                                         launchJob.platformSlug,
                                                         launchJob.titleId);
         const char* launchTag = catalog::saveTag(launchJob.coreName.c_str());
+        // GameCube's raw card from before, which Dolphin reads into the folder
+        // (writeDolphinConfig): `card.raw` with the region Dolphin stamps in.
+        std::string oldGameCubeCard;
+        if (launchJob.platformSlug == "ngc") {
+            if (const char* region = catalog::gameCubeRegion(launchJob.titleId))
+                oldGameCubeCard = saveDir + "/card." + region + ".raw";
+            else
+                std::fprintf(stderr, "[save] RomM has no game code for this GameCube game, so its "
+                             "region and save folder are unknown; saves stay on this console\n");
+        }
         if (dirSub && launchTag && liveClient.haveToken())
             restoreDirSave(liveClient, launchJob.romId, launchTag, saveDir + "/" + dirSub,
-                           launchJob.title);
+                           launchJob.title, oldGameCubeCard);
 
         // AND THE SAVES THE CORE WRITES AS A FILE, which is most of the ones
         // on a real server and none of the ones this console used to handle.
@@ -13389,8 +13404,7 @@ int main(int argc, char** argv) {
             saveSpecs = catalog::saveFiles(launchJob.platformSlug,
                                            launchJob.coreName, stem);
         }
-        // Before the restore, because the restore puts the card at the path
-        // this names and the core reads both on startup.
+        // Before the core loads: it reads Dolphin.ini on startup.
         if (launchJob.platformSlug == "ngc") writeDolphinConfig(saveDir);
         // This person's Miis into every Wii game but the Mii Channel, whose
         // own are the master copy (#275).
@@ -13546,6 +13560,11 @@ int main(int argc, char** argv) {
                     const romm::Asset* newest = nullptr;
                     for (const auto& a : saves) {
                         if (a.emulator != session.saveTag) continue;
+                        // THE BATTERY ROW ONLY. Cabinet files a Game Boy
+                        // clock as its own 8-byte `.rtc` row under the same
+                        // tag; taken as the newest, its bytes went over the
+                        // start of the save (#346, found in the audit).
+                        if (regionOfRow(a.fileName) != "srm") continue;
                         if (!newest || a.updatedAt > newest->updatedAt) newest = &a;
                     }
                     if (newest) {

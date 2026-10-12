@@ -22,7 +22,8 @@ from RomM. When you leave the game, it sends the save back if it changed.
 - **Which copy wins:** a save on the console that has not reached the server
   yet; otherwise the newest one on the server. A blank memory card never
   replaces one with saves on it.
-- PS2 uses one memory card per game.
+- PS2 uses one memory card per game. GameCube keeps each save as its own
+  `.gci` file, as Dolphin does.
 - Your Miis are copied into every Wii game.
 
 ## Save states
@@ -59,7 +60,9 @@ up when the server is back.
 
 Saves use the same names and formats as
 [Cabinet](https://github.com/MMagTech/cabinet), so a save made in one carries on
-in the other. Saves made in RomM's web player or other apps are not read.
+in the other, except GameCube: Cabinet for Mac keeps a whole memory card, and
+the console keeps Dolphin's single `.gci` files. Saves made in RomM's web player
+or other apps are not read.
 
 ## Each person's own
 

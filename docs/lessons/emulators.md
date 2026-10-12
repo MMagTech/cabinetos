@@ -220,10 +220,20 @@ Read before working on a core, an emulator, input, saves or states.
   emulator tag — and three of them were wrong. See open question 12b.
 
 - **DOLPHIN PUTS THE REGION *AND THE CARD SIZE* IN THE FILENAME.** Ask for
-  `cabinet-937.raw` and get `cabinet-937.USA.raw`, or `cabinet-937.USA.251.raw`
-  for a 2 MB card. With the name goes the row's identity on the server, so
-  `MemoryCardSize` is pinned here. **Cabinet for Mac leaves it at -1** and has
-  the same latent fault — see the Cabinet-side debts.
+  `card.raw` and it opens `card.USA.raw`, or `card.USA.251.raw` for a 2 MB
+  card. For three weeks the console restored GameCube cards to `card.raw`,
+  which Dolphin never opened, and the capture, which tried the predicted name
+  first, then read that same restored copy back after every game (#344).
+  Nothing was lost only because no new save had been made since a restore.
+  **A restore must write the name the emulator opens, and a capture must read
+  the file the emulator wrote, never the one we put down.** GameCube now uses
+  Dolphin's default `.gci` folder, which has no such name.
+
+- **DOLPHIN REFUSES `MemoryCardSize` FROM `Dolphin.ini`**
+  (`ConfigLoaders/BaseConfigLoader.cpp`, `s_setting_disallowed`, since
+  2022). The `MemoryCardSize = 2` written there for weeks did nothing; every
+  card was 2043 blocks. **A setting written is not a setting applied: read
+  the emulator's loader before trusting a key.**
 
 - **A FRESHNESS RULE IS NOT OPTIONAL FOR A PLATFORM WHOSE CORE CREATES ITS OWN
   CARD.** Six of the seven PS2 and GameCube rows on the reference server held

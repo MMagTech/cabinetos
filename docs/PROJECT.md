@@ -7490,6 +7490,23 @@ rather than by reading:**
   `User/Config/Dolphin.ini` and the slot device can be written before launch,
   but it is a decision rather than a detail.
 
+> **DECIDED THE OTHER WAY, 2026-10-11 (#344): GameCube uses Dolphin's
+> GCI folder.**
+> - **What was built in between:** the whole card, at `<saveDir>/card.raw`,
+>   to match the Mac. Dolphin stamped the region into that name, so a card
+>   restored from RomM never reached the game.
+> - **Why the folder now:**
+>   - It is Dolphin's own default, on every platform and inside RetroArch.
+>   - It is what RomM's coming save channels carry (#346).
+>   - A save is a few kilobytes, not a 16 MB card.
+>   - Cabinet on Apple platforms is no longer a constraint (MMagTech, the same
+>     day).
+> - **How it travels:** a flat zip of the game's `.gci` files, tag `dolphin`,
+>   as Wii and PSP folders do (`catalog::directorySaveRoot`).
+> - **How old cards come across:** Dolphin reads a card from before into the
+>   folder by its own code, the first time the folder is missing
+>   (`writeDolphinConfig`).
+
 **And one trap already visible in the options:** `pcsx2_analog_mode1` defaults
 to **disabled**, which is the DualShock's analog mode off — the sticks do
 nothing. Exactly the class of silent fault *An unanswered core option is not
