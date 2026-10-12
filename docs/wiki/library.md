@@ -56,8 +56,8 @@ listed last.
 - **Continue from** (press Down): your three newest save states, each with a
   picture and when it was made. Press one to play from that moment.
 - A small **book** on the cover: the game has a manual. **R1** opens it, one
-  page at a time, fitted to the TV; **L1** or **B** comes back. The manual is
-  kept with the game, so a game on the drive has its manual offline too.
+  page at a time, fitted to the TV; **L1** or **B** comes back. The manual
+  comes with the game and is kept beside it, so it can be read offline.
 
 ## Search
 

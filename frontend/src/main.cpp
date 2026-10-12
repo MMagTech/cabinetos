@@ -3764,19 +3764,13 @@ static void backfillDrive(const std::string& address) {
             running = false;
             return;
         }
-        int records = 0, covers = 0, missing = 0, saves = 0, manuals = 0;
+        int records = 0, covers = 0, missing = 0, saves = 0;
         std::map<int, std::string> saveTagOf;   // rom id -> the tag a launch restores
         for (const cache::OnDrive& d : cache::onDrive()) {
             const std::string note =
                 storage::gamesDir() + "/" + std::to_string(d.romId) + ".json";
             romm::Game g;
-            // A RECORD FROM BEFORE MANUALS (#364) does not say whether the
-            // game has one, so it is asked for again, once: the new record
-            // carries `path_manual`, empty or not.
-            const bool noManualField =
-                ::access(note.c_str(), F_OK) == 0 &&
-                cache::gameRecord(d.romId).find("\"path_manual\"") == std::string::npos;
-            if (::access(note.c_str(), F_OK) != 0 || noManualField) {
+            if (::access(note.c_str(), F_OK) != 0) {
                 if (c.fetchGame(d.romId, &g, &err)) {
                     cache::rememberGame(g.id, gameRecordJson(g));
                     ++records;
@@ -3793,22 +3787,6 @@ static void backfillDrive(const std::string& address) {
                 if (bytes.empty()) continue;
                 covercache::write(key, bytes);
                 ++covers;
-            }
-            // ITS MANUAL, BESIDE IT (#364), so a game downloaded before
-            // manuals has one offline too. Once: a manual on the drive is
-            // never fetched again.
-            if (!g.manualPath.empty() && cache::findManual(d.romId).empty()) {
-                const cache::Placement placed = cache::find(d.romId);
-                const std::string title = g.name.empty() ? g.fsName : g.name;
-                std::string merr;
-                if (placed.present &&
-                    fetchManualFile(c, g.manualPath,
-                                    cache::manualPathFor(placed.entryPath, d.romId, title),
-                                    [] { return true; }, &merr))
-                    ++manuals;
-                else if (placed.present)
-                    std::fprintf(stderr, "[offline] manual of %d not fetched: %s\n", d.romId,
-                                 merr.c_str());
             }
             if (const catalog::Coverage cov = catalog::coverageFor(g); cov.core)
                 if (const char* tag = catalog::saveTag(cov.core)) saveTagOf[g.id] = tag;
@@ -3848,8 +3826,8 @@ static void backfillDrive(const std::string& address) {
         } else if (!ids.empty()) {
             std::fprintf(stderr, "[offline] saves not fetched: %s\n", err.c_str());
         }
-        std::fprintf(stderr, "[offline] ready for offline: %d record(s), %d cover(s), %d "
-                             "manual(s) and %d save(s) fetched%s\n", records, covers, manuals, saves,
+        std::fprintf(stderr, "[offline] ready for offline: %d record(s), %d cover(s) and %d "
+                             "save(s) fetched%s\n", records, covers, saves,
                      missing ? (", " + std::to_string(missing) +
                                 " game(s) the server would not describe").c_str() : "");
         running = false;
