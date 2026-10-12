@@ -30,14 +30,7 @@ readonly DEST=/usr/share/cabinetos/xemu
 
 log "xemu's blank drive, xemu-dashboard ${DRIVE_RELEASE}"
 mkdir -p "${DEST}"
-for attempt in 1 2 3; do
-    if curl -fsSL --retry 3 -o "${DEST}/xbox_hdd.qcow2" "${DRIVE_URL}"; then
-        break
-    fi
-    log "  download attempt ${attempt} failed"
-    [[ ${attempt} -eq 3 ]] && { log "ERROR: could not download xemu's drive"; exit 1; }
-    sleep 5
-done
+fetch_pinned "${DRIVE_URL}" "${DRIVE_SHA256}" "${DEST}/xbox_hdd.qcow2" "xemu's drive"
 got="$(sha256sum "${DEST}/xbox_hdd.qcow2" | cut -d' ' -f1)"
 if [[ "${got}" != "${DRIVE_SHA256}" ]]; then
     log "ERROR: xemu's drive has checksum ${got}, expected ${DRIVE_SHA256}"

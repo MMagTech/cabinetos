@@ -85,3 +85,32 @@ disable_units() {
         systemctl mask "${unit}" 2>/dev/null || true
     done
 }
+
+# fetch_pinned <url> <sha256> <dest> <what>
+#
+# A file an install script pins by URL and sha256 (RPCS3, Xenia Edge, xemu's
+# drive). CI fetches each one before the image build and keeps it in its
+# Actions cache (ci/fetch-pinned.sh), staged at /ctx/payload/downloads/<sha256>,
+# so a GitHub release that answers 500 (RPCS3's, 2026-10-12) no longer fails a
+# build. Without that copy (an A9 dry run, a build by hand) it downloads, with
+# a retry, as before. Either way the caller checks the sha256 afterwards.
+fetch_pinned() {
+    local url="$1" sha="$2" dest="$3" what="$4"
+    local staged="/ctx/payload/downloads/${sha}"
+    if [[ -f "${staged}" ]]; then
+        cp "${staged}" "${dest}"
+        log "  ${what}: from the build's download cache"
+        return 0
+    fi
+    local attempt
+    for attempt in 1 2 3; do
+        if curl -fsSL --retry 3 -o "${dest}" "${url}"; then
+            log "  ${what}: downloaded"
+            return 0
+        fi
+        log "  download attempt ${attempt} failed"
+        sleep 5
+    done
+    log "ERROR: could not download ${what}"
+    exit 1
+}
