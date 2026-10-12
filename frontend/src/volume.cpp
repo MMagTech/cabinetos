@@ -205,6 +205,7 @@ void readKeys() {
             ++i;
         }
         int steps = 0;
+        bool lost = false;
         for (size_t k = 0; i < fds.size(); ++i, ++k) {
             if (!fds[i].revents) continue;
             const std::string& node = nodes[k];
@@ -220,8 +221,12 @@ void readKeys() {
                              node.c_str());
                 ::close(open[node].fd);
                 open.erase(node);
+                lost = true;
             }
         }
+        // Its node name may already belong to the next device, whose arrival
+        // was skipped while the old one still held the name.
+        if (lost) scan(false);
         // Everything that arrived together is one change, so a held key
         // costs one wpctl per wake, not one per repeat.
         if (steps) {
