@@ -23,9 +23,9 @@
 set -euo pipefail
 source /ctx/lib.sh
 
-readonly DRIVE_RELEASE="v20260516-0955"
+readonly DRIVE_RELEASE="v20260513-1924"
 readonly DRIVE_URL="https://github.com/xemu-project/xemu-dashboard/releases/download/${DRIVE_RELEASE}/xbox_hdd.qcow2"
-readonly DRIVE_SHA256="00d7df7a2bc235f8801764f00b7f40e194d1e392f7a9619d6b2396c89770f6dd"
+readonly DRIVE_SHA256="f79ec92bc54c331c2c120234c0d14ec37bbddb1cfe2a07dc6d9644b871f807ae"
 readonly DEST=/usr/share/cabinetos/xemu
 
 log "xemu's blank drive, xemu-dashboard ${DRIVE_RELEASE}"
