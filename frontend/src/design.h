@@ -388,6 +388,13 @@ constexpr float kTileMinWidth = 380.0f;   // adaptive: as many columns as fit
 constexpr float kTileHeight = 200.0f;
 constexpr float kTileSpacing = 36.0f;     // both axes
 constexpr float kTileRadius = 18.0f;
+// A GROUP'S HEADING in the Collections tab ("From MMagTech", #352): other
+// people's shared collections, under the owner's name. A heading must be
+// nearer the thing it names than the thing it does not (kBarGapBelow): 36 + 24
+// above it, and below it only the tiles' focus growth (200 x 0.10 / 2) and the
+// shelves' breathing room.
+constexpr float kTileGroupGapAbove = 24.0f;
+constexpr float kTileGroupGapBelow = 10.0f + 18.0f;
 constexpr float kTilePadding = 24.0f;     // inside a tile, around its label
 // The thumbnail on the right of a tile. Deliberately shorter than the tile:
 // a cover spanning the full height left the name too little room to be read,

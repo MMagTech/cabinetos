@@ -118,6 +118,10 @@ struct Tile {
     std::string cover;        // a cover path for the tile's artwork
     ui::Color art;            // shown until that arrives, and if it never does
     bool enterable = true;
+    // The heading the tile sits under, empty for none. Collections only: a
+    // person's own come first with none, then each other person's shared ones
+    // under "From <their name>" (#352). A group starts a new row.
+    std::string group;
     std::vector<int> cards;   // indices into Ctx::cards
     design::Animated focus;
 };
@@ -148,6 +152,14 @@ public:
     // than of these screens, and the split is the same one Home already makes
     // for the hero's band.
     void drawGlass(Ctx& c);
+
+    // THE TRIGGERS JUMP PERSON TO PERSON in Collections, as they jump letter
+    // to letter in a game grid (MMagTech, 2026-10-12, #352): `dir` -1 or +1,
+    // to the first tile of the previous or next group. Back from inside a
+    // group goes to its own start first, as jumpLetter does. False, with the
+    // edge sound, when there is no group that way (and on Platforms, which
+    // has none).
+    bool jumpGroup(int dir);
 
     // Which tab is showing, so the app can resolve an OpenTile.
     const std::vector<Tile>& visible() const {
@@ -180,8 +192,18 @@ public:
     std::string focusedCover() const;
 
 private:
+    // Where every tile of the visible tab sits, rows and headings. Rows are
+    // the grid's own; a group starts a new one. `y` is from the grid's top.
+    struct Layout {
+        std::vector<int> rowOf, colOf;           // per tile
+        std::vector<int> rowFirst, rowCount;     // per row
+        std::vector<float> rowY;                 // per row
+        std::vector<bool> rowHeaded;             // a heading sits above it
+        std::vector<std::pair<float, std::string>> headings;   // y, text
+        float bottom = 0.0f;                     // under the last row
+    };
+    Layout layout(float headingH) const;
     int columns() const;
-    int tileRows() const;
     float tileWidth() const;
     void moveFocus(int dx, int dy);
 

@@ -14,7 +14,7 @@ Buttons are named by position, Xbox style: **A** is the bottom face button
 | **A** | Select |
 | **B** | Back |
 | **L1** / **R1** | Previous / next of Home, Library, Search, Settings |
-| **L2** / **R2** | In a system's games: previous / next letter; hold to keep going |
+| **L2** / **R2** | In a system's games: previous / next letter; hold to keep going. In Collections: previous / next person |
 | **Start** | The Power menu (Sleep, Restart, Power off, Switch to Steam) |
 | Up from the top row | The top bar |
 
@@ -29,7 +29,7 @@ the name at the right opens the list of people. Down goes back into the screen.
 first game resumes it; **A** on any other opens its page.
 
 **Library.** **A** on **Platforms** or **Collections** switches tab; **A** on a
-tile opens it.
+tile opens it. In Collections, **L2** and **R2** jump between people.
 
 **A game's page.** **A** on **Play** or **Download**. Up reaches the heart, then
 Right the trophy. Down reaches **Continue from**; Left and Right pick a state.
@@ -96,7 +96,7 @@ keyboard types into the same field.
 | Backspace | **B** |
 | Escape | Back; the Power menu at the top; the pause menu in a game (built-in emulators except PS2); cancels a download in progress |
 | `[` and `]` | **L1** and **R1** (not in Search, where they are typed) |
-| `,` and `.` | **L2** and **R2** (letter jump) |
+| `,` and `.` | **L2** and **R2** (letter or person jump) |
 | In a game: Z, X, Return, Right Shift | The bottom and right face buttons, Start and Select (built-in emulators except PS2) |
 
 A mouse works too: point and click.

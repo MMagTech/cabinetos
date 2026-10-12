@@ -80,6 +80,7 @@ struct Collection {
     int id = 0;
     bool smart = false;
     int userId = 0;          // the owner; a public one may be somebody else's
+    std::string ownerName;   // their RomM username, for "From <name>"
     std::string name;
     int romCount = 0;
     std::vector<int> romIds;

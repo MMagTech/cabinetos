@@ -538,6 +538,7 @@ static bool parseCollections(const std::string& body, bool smart,
         c.id = static_cast<int>(jint(o, "id"));
         c.smart = smart;
         c.userId = static_cast<int>(jint(o, "user_id"));
+        c.ownerName = jstr(o, "owner_username");
         c.name = jstr(o, "name");
         c.romCount = static_cast<int>(jint(o, "rom_count"));
         json_object* fav = nullptr;
@@ -950,11 +951,14 @@ bool Client::setFavorite(int romId, bool on, bool* forbidden, std::string* err) 
     if (!id && !on) return true;  // no favourites at all: nothing to take out of
     if (!id) {
         // THEIR FIRST FAVOURITE ANYWHERE: the collection RomM's own web page
-        // would make, a form with its name, flagged by the query.
+        // would make, a form with its name, flagged by the query. RomM's own
+        // name, "Favorites" (useFavoriteToggle.ts), so every account's reads
+        // the same whichever side made it; this said "Favourites" until
+        // 2026-10-12.
         const std::string boundary = "CabinetOSBoundary7f3a91c4";
         const std::string form = "--" + boundary +
                                  "\r\nContent-Disposition: form-data; name=\"name\"\r\n\r\n"
-                                 "Favourites\r\n--" + boundary + "--\r\n";
+                                 "Favorites\r\n--" + boundary + "--\r\n";
         CURL* c = curl_easy_init();
         if (!c) { if (err) *err = "curl init failed"; return false; }
         curl_slist* hdrs = curl_slist_append(
