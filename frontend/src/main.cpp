@@ -8133,7 +8133,9 @@ int main(int argc, char** argv) {
         std::string label;
         std::vector<std::string> values;
         int current = 0;
-        // Says "From the next start" when changed: Picture does, a system
+        // Says "Exit and relaunch to apply" when changed (MMagTech,
+        // 2026-10-12, #368: "Exit" points at Exit to Home, the way to do it;
+        // it was "From the next start"): Picture and Widescreen do, a system
         // row changes in front of the game and needs no word.
         bool nextStart = false;
         std::function<void(int)> apply;
@@ -14440,7 +14442,7 @@ int main(int argc, char** argv) {
         }
         c->current = next;
         if (c->apply) c->apply(next);
-        if (c->nextStart) menuNotice.say("From the next start", Tone::Done);
+        if (c->nextStart) menuNotice.say("Exit and relaunch to apply", Tone::Done);
         sound::play(sound::Cue::Move);
     };
 

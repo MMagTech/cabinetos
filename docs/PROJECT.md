@@ -14736,6 +14736,12 @@ patch: none`, `on` or `off for this game` at every program boot.
   ON mid-game correctly (`VMManager::ApplySettings` reloads patches), but OFF
   did not give the 4:3 game back: the patch's writes stay in the game's
   memory. So the row stays "from the next start". MMagTech: a restart is fine.
+- **The notice, for Picture and Widescreen both, is "Exit and relaunch to
+  apply"** (MMagTech, judged on the TV): "From the next start" did not say
+  what to do, and "Restart" points at a button the pause menu does not have
+  and already means rebooting ("Restart to update"). "Exit" points at Exit to
+  Home. A Restart game item was considered and left out: more in every pause
+  menu for one notice.
 
 #### DECIDED, MMagTech 2026-10-02: the processor-side extras are fixed, not in the dial (#63)
 
