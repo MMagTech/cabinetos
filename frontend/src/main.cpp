@@ -3073,12 +3073,47 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
         // the folder (disc::plan): `update/`, `dlc/`, `manual/` and the rest
         // stay on the server (updates and DLC are #181).
         if (multiFile) {
-            storage::makeDirs(entryPath);
             std::vector<romm::RomFile> files;
             std::string lerr;
             if (romm::serverAway()) lerr = "the server is away";
             const bool listed =
                 !romm::serverAway() && client.fetchRomFiles(id, &files, &lerr);
+            // A GAME THAT WAS ONE FILE AND IS NOW A FOLDER: somebody added an
+            // `update/` beside it on the server after it was downloaded. Its
+            // entry here is still that one file. Offline it still plays as it
+            // is; online the file moves into the game's new folder under the
+            // name of the game file its size matches, rather than coming
+            // down again, and the folder takes the entry's name without the
+            // file's extension.
+            std::string entry = entryPath;
+            struct stat est;
+            if (::lstat(entry.c_str(), &est) == 0 && S_ISREG(est.st_mode)) {
+                if (!listed) {
+                    std::fprintf(stderr, "[launch] files of %d: %s; playing the one file "
+                                         "here\n", id, lerr.c_str());
+                    job.romPath = entry;
+                    job.stage = LaunchJob::Stage::Ready;
+                    return;
+                }
+                const size_t slash = entry.find_last_of('/');
+                const size_t dot = entry.find_last_of('.');
+                const std::string folder =
+                    dot != std::string::npos && (slash == std::string::npos || dot > slash)
+                        ? entry.substr(0, dot) : entry + ".folder";
+                std::string as;
+                for (const romm::RomFile& f : disc::plan(files).fetch)
+                    if (f.sizeBytes == est.st_size) { as = storage::safeSegment(f.fileName); break; }
+                storage::makeDirs(folder);
+                if (!as.empty() && ::rename(entry.c_str(), (folder + "/" + as).c_str()) == 0)
+                    std::fprintf(stderr, "[launch] %s is a folder on the server now; moved "
+                                         "into %s\n", entry.c_str(), folder.c_str());
+                else if (::unlink(entry.c_str()) == 0)
+                    std::fprintf(stderr, "[launch] %s is a folder on the server now and "
+                                         "matches none of its files; removed\n", entry.c_str());
+                entry = folder;
+                job.entryPath = folder;
+            }
+            storage::makeDirs(entry);
             std::vector<std::pair<std::string, int64_t>> mine;   // on the disk, size
             if (listed) {
                 const disc::Plan plan = disc::plan(files);
@@ -3087,7 +3122,7 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
                 for (const romm::RomFile& f : plan.fetch) {
                     const std::string name = storage::safeSegment(f.fileName);
                     mine.emplace_back(name, f.sizeBytes);
-                    const std::string d = entryPath + "/" + name;
+                    const std::string d = entry + "/" + name;
                     struct stat st;
                     if (::stat(d.c_str(), &st) == 0 && st.st_size == f.sizeBytes) continue;
                     fetch.emplace_back(&f, d);
@@ -3131,7 +3166,7 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
                                  fetch.size(), mine.size());
                 // THE ZIP THE OLD ROUTE KEPT, named after the folder, once
                 // every file it held is here on its own. Only a zip.
-                const std::string old = entryPath + "/" + storage::safeSegment(fsName);
+                const std::string old = entry + "/" + storage::safeSegment(fsName);
                 bool ours = false;
                 for (const auto& m : mine) ours = ours || m.first == storage::safeSegment(fsName);
                 if (!ours && romfile::sniffFile(old) == romfile::Kind::Zip &&
@@ -3141,13 +3176,13 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
             } else {
                 // OFFLINE, OR THE SERVER SAID NOTHING: the files already here.
                 std::fprintf(stderr, "[launch] files of %d: %s\n", id, lerr.c_str());
-                if (DIR* dir = ::opendir(entryPath.c_str())) {
+                if (DIR* dir = ::opendir(entry.c_str())) {
                     while (struct dirent* e = ::readdir(dir)) {
                         const std::string n = e->d_name;
                         if (n[0] == '.' || (n.size() > 5 && n.compare(n.size() - 5, 5, ".part") == 0))
                             continue;
                         struct stat st;
-                        const std::string d = entryPath + "/" + n;
+                        const std::string d = entry + "/" + n;
                         if (::stat(d.c_str(), &st) == 0 && S_ISREG(st.st_mode))
                             mine.emplace_back(n, st.st_size);
                     }
@@ -3169,7 +3204,7 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
                               : romfile::accepts(validExts, n)        ? 1
                                                                        : 0;
                 if (r > rank || (r == rank && size > bootSize)) {
-                    boot = entryPath + "/" + n;
+                    boot = entry + "/" + n;
                     rank = r;
                     bootSize = size;
                 }
@@ -3182,7 +3217,7 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
             std::string primary, err;
             romfile::Kind kind = romfile::Kind::Plain;
             job.stage = LaunchJob::Stage::Unpacking;
-            if (!romfile::prepareFile(boot, entryPath, validExts, blockExtract, &primary, &kind,
+            if (!romfile::prepareFile(boot, entry, validExts, blockExtract, &primary, &kind,
                                       &err)) {
                 std::fprintf(stderr, "[launch] file: %s\n", err.c_str());
                 job.message = "Couldn't open this game's file";
