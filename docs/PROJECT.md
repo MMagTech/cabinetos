@@ -3952,6 +3952,19 @@ across from Cabinet's list rather than checked here.
   It never runs unless picked, shows no screen or setting until then, and
   gets its own walled-off part of the disk. The console stays an emulation
   console; Steam is what makes it worth trying on a capable PC.
+- **Not a handheld OS.** MMagTech, 2026-10-12, after four Steam Deck reports
+  in two days (#351, #352, #361, #363). Bazzite keeps a separate image for
+  handhelds, `bazzite-deck`, with their controls and Steam's own session;
+  CabinetOS builds on Bazzite's desktop image on purpose (open question 3)
+  and does not take that one. One maintainer, one test machine, and no
+  handheld will ever be bought, so nothing handheld-specific is tested or
+  planned: no `inputplumber`, no Handheld Daemon, no deck image. The
+  console's screens and emulators use a classic controller layout only.
+  **The one exception is the Steam Deck inside Steam**, because the console
+  offers Steam and Steam reads the Deck's controls itself; reports are
+  welcome, but no fix is promised, nor that it keeps working after an
+  update. General fixes that also help a handheld (the volume keys, #351)
+  are still made when they can be tested on the A9. Forks are welcome.
 - Not a general purpose desktop.
 - No app store.
 - No browser.

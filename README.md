@@ -77,6 +77,12 @@ These days it's my kids on that couch. Same feeling.
 - **A controller**, Bluetooth or USB, and a USB keyboard for the first run.
 - **A TV.**
 
+**Handhelds are not supported.** Bazzite has a separate image for handhelds;
+CabinetOS builds on its desktop image and is a TV console, with a classic
+controller layout. It may run on a handheld, but nothing handheld-specific is
+tested or planned. The one exception is a Steam Deck inside Steam, which reads
+the Deck's controls itself; even there, no fix is promised. Forks are welcome.
+
 ## Get started
 
 The [wiki](https://cabinetos.mmagtech.com/wiki/) goes from a blank PC to
