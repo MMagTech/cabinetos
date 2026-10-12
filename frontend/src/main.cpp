@@ -3173,6 +3173,22 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
                     ::unlink(old.c_str()) == 0)
                     std::fprintf(stderr, "[launch] removed %s, the folder's zip from before\n",
                                  old.c_str());
+                // AND WHAT CAME OUT OF IT that is not the game: the zip route
+                // unpacked `update/`, `dlc/` and the rest flat into the
+                // folder. Each is removed by its name in RomM's own list,
+                // and only when no game file shares the name.
+                for (const romm::RomFile& f : files) {
+                    const std::string n = storage::safeSegment(f.fileName);
+                    bool game = false;
+                    for (const auto& m : mine) game = game || m.first == n;
+                    struct stat st;
+                    const std::string d = entry + "/" + n;
+                    if (!game && ::lstat(d.c_str(), &st) == 0 && S_ISREG(st.st_mode) &&
+                        ::unlink(d.c_str()) == 0)
+                        std::fprintf(stderr, "[launch] removed %s, unpacked from the folder's "
+                                             "zip before (%s)\n", d.c_str(),
+                                     f.category.empty() ? "not the game" : f.category.c_str());
+                }
             } else {
                 // OFFLINE, OR THE SERVER SAID NOTHING: the files already here.
                 std::fprintf(stderr, "[launch] files of %d: %s\n", id, lerr.c_str());
