@@ -2,6 +2,38 @@
 
 Read before judging anything, testing on the A9, or driving the TV.
 
+## THE SILENT DAY, 2026-10-12: check what a person notices, not what you changed
+
+The volume keys (#351) were tested in every kind of game by pressing a key
+and reading the volume back, and every reading was right. The console made
+**no sound at all** from the first test build onward, menus and games, and it
+was released that way. MMagTech found it at the TV: "I don't hear anything,
+period."
+
+- **The fault:** the volume work started just before the app opened its
+  sound. The app's stream stayed connected at full volume and was never fed
+  (pw-top: about 47 missed deliveries a second; the app's sound thread had
+  no CPU time). Starting the volume work after the sound is open fixed it
+  (#367). The exact mechanism was not pinned down.
+- **The console said so, and nobody read it.** The `[pace]` line in the very
+  first test game read `sound +0.00%, sound per game frame +0.00%` (silent),
+  in the same log the volume lines were being read from.
+- **The tests measured the change, not the console.** Anything that runs at
+  every start (a thread, a reset, a service) touches everything: check sound,
+  picture and a pad, not only the feature.
+- **"Judged in the loop, no checks needed" was wrong here,** because nothing
+  in the loop had listened. A change to start-up gets a smoke check on the
+  testing image: MMagTech hears a menu click and a game.
+- **Telling him it would not be a problem, from reasoning, is the other half
+  of the mistake.** Say what was measured.
+
+**Now built in:** `tools/ui-loop.sh` checks after every deploy that the app's
+sound stream is fed (pw-top's ERR column; more than 20 missed in 4 s prints
+SOUND IS NOT BEING FED). On the broken build it would have read about 190.
+To check by hand: `pw-top -b -n 2 | grep cabinetos-frontend` twice, a few
+seconds apart; ERR must not climb. A beep straight to the TV
+(`pw-play` of a short WAV) tells the TV's half from the app's.
+
 ## The thirty-second loop on the TV
 
 

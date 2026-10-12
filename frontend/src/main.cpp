@@ -5955,12 +5955,6 @@ int main(int argc, char** argv) {
     wiiremote::start();
     // Each controller's battery, from the kernel, for Home's row (#293).
     battery::start();
-    // The volume keys, from the kernel, and full volume at start on a TV
-    // (#351). Never offscreen: a headless copy would answer every key again
-    // and reset the television's volume.
-    if (const char* vd = SDL_GetCurrentVideoDriver();
-        vd && std::strcmp(vd, "offscreen") != 0 && std::strcmp(vd, "dummy") != 0)
-        volume::start();
 
     // The interface's own sounds. Opened here rather than lazily, because the
     // first click a person hears should not be the second one they asked for —
@@ -5989,6 +5983,14 @@ int main(int argc, char** argv) {
         sound::levelFromWord(prefs::get("achievement_sound", ""), &chime);
         sound::setChimeLevel(chime);
     }
+    // The volume keys, from the kernel, and full volume at start on a TV
+    // (#351). AFTER THE SOUND IS OPEN: started before sound::init, the app's
+    // sound thread never ran and every sound was silent (A9, 2026-10-12).
+    // Never offscreen: a headless copy would answer every key again and reset
+    // the television's volume.
+    if (const char* vd = SDL_GetCurrentVideoDriver();
+        vd && std::strcmp(vd, "offscreen") != 0 && std::strcmp(vd, "dummy") != 0)
+        volume::start();
 
     // GLES 3.0, which is what the libretro hardware-rendered cores ask for via
     // RETRO_ENVIRONMENT_SET_HW_RENDER. The UI and the cores share one context

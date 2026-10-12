@@ -262,6 +262,22 @@ print(\"captured\", im.size)
 OUT="${SHOT:-$ROOT/.ui-loop.png}"
 scp -q -i "$KEY" -P "$A9_PORT" "$A9:/tmp/ui-loop.png" "$OUT" && echo "wrote $OUT"
 
+# --- sound -----------------------------------------------------------------
+# IS THE APP'S SOUND ACTUALLY FED? 2026-10-12: the volume keys (#351) left the
+# console silent on every start for a day, menus and games, while every test
+# read the volume back as full. PipeWire counts each missed delivery on the
+# app's stream (pw-top's ERR); a fed stream adds none, a starved one about 47
+# a second. Checked after every deploy so nobody has to be listening.
+say "sound"
+"${A9SSH[@]}" "$A9" 'err() { timeout 3 pw-top -b -n 2 2>/dev/null | grep "cabinetos-frontend" | tail -1 | awk "{print \$9}"; }
+                   a=$(err); sleep 4; b=$(err)
+                   if [ -z "$a" ] || [ -z "$b" ]; then echo "SOUND: the app has no sound stream"; exit 0; fi
+                   if [ $((b - a)) -gt 20 ]; then
+                       echo "SOUND IS NOT BEING FED: $((b - a)) missed deliveries in 4 s. The console is silent."
+                   else
+                       echo "sound: fed ($((b - a)) missed in 4 s)"
+                   fi'
+
 say "it is on the television now — look at that rather than the PNG for anything
    involving colour, contrast or motion. The capture is for reading layout."
 
