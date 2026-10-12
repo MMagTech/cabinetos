@@ -1209,6 +1209,7 @@ static bool gIsPs2 = false;
 static std::string gPs2ResourcesDir;
 static float gPs2Upscale = 1.0f;
 static int gPs2Anisotropy = 0;
+static bool gPs2Widescreen = true;
 
 bool Core::load(const std::string& soPath) {
     unload();
@@ -1502,7 +1503,7 @@ bool Core::loadGame(const std::string& romPath, const std::string& systemDir,
         const std::string scratchDir = saveDir + "/pcsx2-scratch";
 
         if (!ps2::startGame(romPath, biosDir, saveDir, stem + ".ps2", scratchDir,
-                            gPs2ResourcesDir, gPs2Upscale, gPs2Anisotropy)) {
+                            gPs2ResourcesDir, gPs2Upscale, gPs2Anisotropy, gPs2Widescreen)) {
             error_ = ps2::error();
             return false;
         }
@@ -2023,10 +2024,12 @@ const std::vector<int16_t>& Core::drainAudio() {
     return gAudioDrain;
 }
 
-void Core::setPs2(const std::string& resourcesDir, float upscale, int anisotropy) {
+void Core::setPs2(const std::string& resourcesDir, float upscale, int anisotropy,
+                  bool widescreen) {
     gPs2ResourcesDir = resourcesDir;
     gPs2Upscale = upscale > 0.0f ? upscale : 1.0f;
     gPs2Anisotropy = anisotropy;
+    gPs2Widescreen = widescreen;
 }
 
 void Core::setPaused(bool paused) {

@@ -4,12 +4,15 @@
 #include "ps2.h"
 
 #include "rumble.h"
+#include "storage.h"
 
 #include <SDL3/SDL.h>
 
 #include <cstdio>
 #include <cstring>
 #include <dlfcn.h>
+
+#include <json-c/json.h>
 
 namespace {
 
@@ -43,6 +46,10 @@ struct Api {
     // no achievements rather than refusing to start.
     uint8_t* (*memory)(unsigned, size_t*) = nullptr;
     void     (*setFrameCallback)(void (*)(void*), void*) = nullptr;
+    // Optional: the per-game Widescreen row (#368). A library without them
+    // keeps every patched game widescreen and the row never shows.
+    void     (*setWidescreen)(int) = nullptr;
+    int      (*hasWidescreenPatch)() = nullptr;
 } gApi;
 
 bool gWindowed = false;
@@ -99,6 +106,10 @@ bool ps2::load(const std::string& soPath) {
     gApi.memory = reinterpret_cast<decltype(gApi.memory)>(dlsym(gHandle, "cps2_memory"));
     gApi.setFrameCallback = reinterpret_cast<decltype(gApi.setFrameCallback)>(
         dlsym(gHandle, "cps2_set_frame_callback"));
+    gApi.setWidescreen =
+        reinterpret_cast<decltype(gApi.setWidescreen)>(dlsym(gHandle, "cps2_set_widescreen"));
+    gApi.hasWidescreenPatch = reinterpret_cast<decltype(gApi.hasWidescreenPatch)>(
+        dlsym(gHandle, "cps2_has_widescreen_patch"));
 
     if (!ok) {
         dlclose(gHandle);
@@ -130,10 +141,11 @@ std::string ps2::version() {
 bool ps2::startGame(const std::string& discPath, const std::string& biosDir,
                     const std::string& memcardsDir, const std::string& memoryCard,
                     const std::string& scratchDir, const std::string& resourcesDir,
-                    float upscale, int anisotropy) {
+                    float upscale, int anisotropy, bool widescreen) {
     if (!gHandle) { gError = "no PlayStation 2 emulator is loaded"; return false; }
 
     gFrameSerial = 0;
+    if (gApi.setWidescreen) gApi.setWidescreen(widescreen ? 1 : 0);
     if (!gApi.start(discPath.c_str(), biosDir.c_str(), memcardsDir.c_str(), memoryCard.c_str(),
                     scratchDir.c_str(), resourcesDir.c_str(), upscale, anisotropy, 1)) {
         gError = gApi.error();
@@ -141,6 +153,48 @@ bool ps2::startGame(const std::string& discPath, const std::string& biosDir,
         return false;
     }
     return true;
+}
+
+bool ps2::hasWidescreenPatch() {
+    return gHandle && gApi.hasWidescreenPatch && gApi.hasWidescreenPatch() != 0;
+}
+
+namespace {
+
+std::string widescreenPath() { return storage::configDir() + "/ps2-widescreen.json"; }
+
+json_object* loadWidescreen() {
+    json_object* o = json_object_from_file(widescreenPath().c_str());
+    if (o && json_object_get_type(o) == json_type_object) return o;
+    if (o) json_object_put(o);
+    return json_object_new_object();
+}
+
+}  // namespace
+
+bool ps2::widescreenOn(int romId) {
+    json_object* o = loadWidescreen();
+    json_object* v = nullptr;
+    const bool off = json_object_object_get_ex(o, std::to_string(romId).c_str(), &v) &&
+                     json_object_get_type(v) == json_type_string &&
+                     std::strcmp(json_object_get_string(v), "off") == 0;
+    json_object_put(o);
+    return !off;
+}
+
+void ps2::setWidescreenOn(int romId, bool on) {
+    json_object* o = loadWidescreen();
+    const std::string key = std::to_string(romId);
+    if (on)
+        json_object_object_del(o, key.c_str());
+    else
+        json_object_object_add(o, key.c_str(), json_object_new_string("off"));
+    storage::makeDirs(storage::configDir());
+    const std::string tmp = widescreenPath() + ".part";
+    if (json_object_to_file_ext(tmp.c_str(), o, JSON_C_TO_STRING_PRETTY) != 0 ||
+        std::rename(tmp.c_str(), widescreenPath().c_str()) != 0)
+        std::fprintf(stderr, "[ps2] could not write %s\n", widescreenPath().c_str());
+    json_object_put(o);
 }
 
 bool ps2::setWindow(const std::string& display, unsigned long window, unsigned width,

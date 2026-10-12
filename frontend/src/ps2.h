@@ -57,7 +57,7 @@ std::string version();
 bool startGame(const std::string& discPath, const std::string& biosDir,
                const std::string& memcardsDir, const std::string& memoryCard,
                const std::string& scratchDir, const std::string& resourcesDir,
-               float upscale, int anisotropy);
+               float upscale, int anisotropy, bool widescreen);
 
 // Asks the game to stop and WAITS. Blocking is the point: PCSX2 flushes the
 // memory card during shutdown, so a card captured before this returns is the
@@ -66,6 +66,19 @@ void stopGame();
 
 // Whether the emulated machine is running, as opposed to still being built.
 bool running();
+
+// WIDESCREEN, PER GAME (#368). Every game whose PCSX2 patch file has a
+// "Widescreen 16:9" section plays widescreen (#217); the pause menu offers
+// "Widescreen: On / Off" on exactly those games, because some patches widen
+// the 3D view and leave the HUD stretched, and some players want 4:3 anyway.
+// Whether the running game has the patch: known once its program has booted.
+bool hasWidescreenPatch();
+// The choice, kept on this console in config/ps2-widescreen.json,
+// `{"<rom id>": "off"}`, the way the Picture row keeps its own; a game not in
+// it is on. Takes effect from the game's next start: PCSX2 applies the patch
+// when the game's program boots.
+bool widescreenOn(int romId);
+void setWidescreenOn(int romId, bool on);
 
 // Freezes the emulated machine, for the in-game overlay. Not optional the way
 // it is for a libretro core: those stop because the frame loop stops stepping

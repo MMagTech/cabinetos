@@ -30,6 +30,13 @@ A single game can have its own level: **Picture** in the
 [pause menu](pause-menu.md), from the next start. With a PIN set, only the owner
 sees either setting.
 
+## PS2 widescreen
+
+A PS2 game plays in 16:9 when PCSX2's widescreen patch exists for it. Some
+patches widen only the 3D view and leave the HUD and menus stretched. **Widescreen**
+in the [pause menu](pause-menu.md) turns it off for that game, from the next
+start; it shows only on games that have a patch.
+
 ## Screen looks
 
 ![The Look row in the pause menu](../media/pause-menu-snes.webp)

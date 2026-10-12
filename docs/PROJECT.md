@@ -14703,6 +14703,31 @@ PS2 meets it; GameCube, Dreamcast and N64 keep their widescreen hacks off.
 Judged on the TV with several PS2 games before it ships. Patches a person
 keeps in RomM are a separate idea, after the first release.
 
+#### DECIDED, MMagTech 2026-10-12: a Widescreen row for PS2 games with a patch (#368)
+
+A player found Armored Core 3 stretched: its "Widescreen 16:9" section is a
+thin hack (three code lines and `gsaspectratio=16:9`) that widens the 3D view
+and leaves the HUD, menus and videos stretched. Burnout 3's is thorough (112
+lines: FOV, HUD and FMVs). The patch set holds both under the same name and
+nothing in a file says which kind it is.
+
+- Widescreen stays **on by default** for every game whose patch file has the
+  section.
+- Those games, and only those, get **Widescreen: On / Off** in the pause menu,
+  for everyone (it is a look, like Look), remembered per game on this console
+  in `config/ps2-widescreen.json`, `{"<rom id>": "off"}`, the way Picture's
+  `picture-quality.json` is.
+- From the game's next start, said in the notice as Picture's row does.
+- No list of good and bad patches: that would be a per-game fix. Accepted
+  downside: a player sees the stretched HUD the first time, until they find
+  the row.
+
+How it knows: PCSX2 reports the running program's serial and CRC to the host
+(`Host::OnGameChanged`, on its CPU thread, once the program has booted), and
+the host asks `Patch::GetPatchInfo` for that file's sections, the same lookup
+`EnableWideScreenPatches` uses by name. The library logs `[ps2] widescreen
+patch: none`, `on` or `off for this game` at every program boot.
+
 #### DECIDED, MMagTech 2026-10-02: the processor-side extras are fixed, not in the dial (#63)
 
 From the phase 1 audit (2026-10-02). Four options sharpen the picture on the

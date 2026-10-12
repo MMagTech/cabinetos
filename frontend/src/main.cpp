@@ -2622,7 +2622,8 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
             const quality::Ps2 q = quality::ps2(quality::forGame(game.id));
             core.setPs2(storage::imageAssetsDir() + "/pcsx2/resources",
                         gPs2Upscale > 0.0f ? gPs2Upscale : q.upscale,
-                        gPs2Anisotropy >= 0 ? gPs2Anisotropy : q.anisotropy);
+                        gPs2Anisotropy >= 0 ? gPs2Anisotropy : q.anisotropy,
+                        ps2::widescreenOn(game.id));
         }
 
         if (!core.load(job.corePath)) {
@@ -14667,6 +14668,20 @@ int main(int argc, char** argv) {
                                                          : std::optional<quality::Level>(
                                                                static_cast<quality::Level>(i - 1)));
                 };
+                pauseChoices.push_back(std::move(c));
+            }
+            // WIDESCREEN (#368), for everyone, only on a PS2 game whose patch
+            // file has a "Widescreen 16:9" section: a row that does nothing
+            // is worse than none. Some patches leave the HUD stretched, and
+            // some players want 4:3. From the next start, as Picture is.
+            if (session.core == "pcsx2" && ps2::hasWidescreenPatch()) {
+                PauseChoice c;
+                c.label = "Widescreen";
+                c.values = {"On", "Off"};
+                c.current = ps2::widescreenOn(session.romId) ? 0 : 1;
+                c.nextStart = true;
+                const int romId = session.romId;
+                c.apply = [romId](int i) { ps2::setWidescreenOn(romId, i == 0); };
                 pauseChoices.push_back(std::move(c));
             }
             // THE SCREEN LOOK (#122), for everyone, on the systems this

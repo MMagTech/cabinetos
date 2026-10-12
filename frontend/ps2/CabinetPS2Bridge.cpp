@@ -35,6 +35,9 @@ namespace
 	std::string s_error;
 	std::atomic<bool> s_started{false};
 
+	// Widescreen for the next start, set by cps2_set_widescreen (#368).
+	std::atomic<bool> s_widescreen{true};
+
 	// The frame most recently handed over, kept so that `cps2_take_frame` can
 	// lend a pointer that stays valid until the NEXT call. The frontend
 	// uploads it to a texture immediately and never keeps it, which is the
@@ -85,6 +88,7 @@ int cps2_start(const char* disc, const char* bios_dir, const char* memcards_dir,
 	config.upscale = upscale > 0.0f ? upscale : 1.0f;
 	config.anisotropy = anisotropy;
 	config.fast_boot = fast_boot != 0;
+	config.widescreen = s_widescreen.load();
 	config.stop_after = 0;
 
 	s_error.clear();
@@ -180,6 +184,21 @@ int cps2_take_frame(const uint32_t** pixels, unsigned* width, unsigned* height, 
 void cps2_set_window(const char* display, unsigned long window, unsigned width, unsigned height)
 {
 	CabinetPS2::SetWindow(display, window, width, height);
+}
+
+// PCSX2's "Widescreen 16:9" patch on or off for the next cps2_start (#368);
+// on until told. Optional for the frontend, as cps2_set_window is: an older
+// library lacks it and every patched game stays widescreen.
+void cps2_set_widescreen(int on)
+{
+	s_widescreen.store(on != 0);
+}
+
+// 1 when the running game's patch file has a "Widescreen 16:9" section, known
+// once its program has booted; 0 before that and with no game.
+int cps2_has_widescreen_patch(void)
+{
+	return CabinetPS2::HasWidescreenPatch() ? 1 : 0;
 }
 
 // Reads the picture on screen back once, for a screenshot, and waits for it.
