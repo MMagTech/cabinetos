@@ -2332,6 +2332,30 @@ static std::string gameRecordJson(const romm::Game& g) {
     return out;
 }
 
+// A GAME'S MANUAL INTO `dest` (#364). RomM serves its resources under
+// /assets/romm/resources/, and `path_manual` is the part after it (checked:
+// application/pdf). An answer that is not a PDF (a login page, an error) is
+// thrown away rather than kept as somebody's manual. `keepGoing` is asked
+// during the transfer; false stops it.
+static bool fetchManualFile(const romm::Client& client, const std::string& manualPath,
+                            const std::string& dest, const std::function<bool()>& keepGoing,
+                            std::string* err) {
+    std::string from = manualPath;
+    if (from.rfind("/assets/", 0) != 0) {
+        while (!from.empty() && from[0] == '/') from.erase(0, 1);
+        from = "/assets/romm/resources/" + from;
+    }
+    storage::makeDirs(dest.substr(0, dest.find_last_of('/')));
+    if (!client.fetchToFile(from, dest, [&](int64_t, int64_t) { return keepGoing(); }, err))
+        return false;
+    if (!manual::looksLikePdf(dest)) {
+        ::unlink(dest.c_str());
+        if (err) *err = "the server's answer is not a PDF";
+        return false;
+    }
+    return true;
+}
+
 // How many things are in a directory. Used once, to decide whether a download
 // left anything behind it when the core turned out to read its own archive.
 static int countEntries(const std::string& dir) {
@@ -3740,13 +3764,19 @@ static void backfillDrive(const std::string& address) {
             running = false;
             return;
         }
-        int records = 0, covers = 0, missing = 0, saves = 0;
+        int records = 0, covers = 0, missing = 0, saves = 0, manuals = 0;
         std::map<int, std::string> saveTagOf;   // rom id -> the tag a launch restores
         for (const cache::OnDrive& d : cache::onDrive()) {
             const std::string note =
                 storage::gamesDir() + "/" + std::to_string(d.romId) + ".json";
             romm::Game g;
-            if (::access(note.c_str(), F_OK) != 0) {
+            // A RECORD FROM BEFORE MANUALS (#364) does not say whether the
+            // game has one, so it is asked for again, once: the new record
+            // carries `path_manual`, empty or not.
+            const bool noManualField =
+                ::access(note.c_str(), F_OK) == 0 &&
+                cache::gameRecord(d.romId).find("\"path_manual\"") == std::string::npos;
+            if (::access(note.c_str(), F_OK) != 0 || noManualField) {
                 if (c.fetchGame(d.romId, &g, &err)) {
                     cache::rememberGame(g.id, gameRecordJson(g));
                     ++records;
@@ -3763,6 +3793,22 @@ static void backfillDrive(const std::string& address) {
                 if (bytes.empty()) continue;
                 covercache::write(key, bytes);
                 ++covers;
+            }
+            // ITS MANUAL, BESIDE IT (#364), so a game downloaded before
+            // manuals has one offline too. Once: a manual on the drive is
+            // never fetched again.
+            if (!g.manualPath.empty() && cache::findManual(d.romId).empty()) {
+                const cache::Placement placed = cache::find(d.romId);
+                const std::string title = g.name.empty() ? g.fsName : g.name;
+                std::string merr;
+                if (placed.present &&
+                    fetchManualFile(c, g.manualPath,
+                                    cache::manualPathFor(placed.entryPath, d.romId, title),
+                                    [] { return true; }, &merr))
+                    ++manuals;
+                else if (placed.present)
+                    std::fprintf(stderr, "[offline] manual of %d not fetched: %s\n", d.romId,
+                                 merr.c_str());
             }
             if (const catalog::Coverage cov = catalog::coverageFor(g); cov.core)
                 if (const char* tag = catalog::saveTag(cov.core)) saveTagOf[g.id] = tag;
@@ -3802,8 +3848,8 @@ static void backfillDrive(const std::string& address) {
         } else if (!ids.empty()) {
             std::fprintf(stderr, "[offline] saves not fetched: %s\n", err.c_str());
         }
-        std::fprintf(stderr, "[offline] ready for offline: %d record(s), %d cover(s) and %d "
-                             "save(s) fetched%s\n", records, covers, saves,
+        std::fprintf(stderr, "[offline] ready for offline: %d record(s), %d cover(s), %d "
+                             "manual(s) and %d save(s) fetched%s\n", records, covers, manuals, saves,
                      missing ? (", " + std::to_string(missing) +
                                 " game(s) the server would not describe").c_str() : "");
         running = false;
@@ -8611,16 +8657,9 @@ int main(int argc, char** argv) {
     static const std::string kManualTemp = "/tmp/cabinetos-manual.pdf";
     auto fetchManual = [&](int romId, const std::string& manualPath, const std::string& to,
                            bool forViewer) {
-        // RomM serves its resources under /assets/romm/resources/, and
-        // `path_manual` is the part after it (checked: application/pdf).
-        std::string from = manualPath;
-        if (from.rfind("/assets/", 0) != 0) {
-            while (!from.empty() && from[0] == '/') from.erase(0, 1);
-            from = "/assets/romm/resources/" + from;
-        }
         {
             std::lock_guard<std::mutex> lk(manualFetch.m);
-            manualFetch.jobs.push_back({romId, from, to, forViewer});
+            manualFetch.jobs.push_back({romId, manualPath, to, forViewer});
         }
         manualFetch.cv.notify_all();
         if (manualFetch.th.joinable()) return;
@@ -8634,21 +8673,14 @@ int main(int argc, char** argv) {
                 lk.unlock();
                 bool ok = storage::exists(job.to) && manual::looksLikePdf(job.to);
                 if (!ok) {
-                    storage::makeDirs(job.to.substr(0, job.to.find_last_of('/')));
                     std::string err;
-                    ok = liveClient.fetchToFile(
-                        job.from, job.to,
-                        [](int64_t, int64_t) {
+                    ok = fetchManualFile(
+                        liveClient, job.from, job.to,
+                        [] {
                             std::lock_guard<std::mutex> g(manualFetch.m);
                             return !manualFetch.stop;
                         },
                         &err);
-                    // A server that answers with a web page is not a manual.
-                    if (ok && !manual::looksLikePdf(job.to)) {
-                        err = "the server's answer is not a PDF";
-                        ok = false;
-                        ::unlink(job.to.c_str());
-                    }
                     if (ok)
                         std::fprintf(stderr, "[manual] fetched %s\n", job.to.c_str());
                     else

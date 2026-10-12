@@ -1620,21 +1620,9 @@ void DetailScreen::draw(Ctx& c) {
     } else {
         c.r.draw(ui::Rect{coverX, coverY, coverW, coverH, design::kDetailRadius, game_.art});
     }
-    // A SMALL BOOK ON THE COVER WHEN THERE IS A MANUAL (#364): a quiet sign,
-    // not another button. In the cover's foot corner, on a dark disc so it
-    // reads on any art.
-    if (game_.hasManual) {
-        const float disc = design::kManualMarkDisc;
-        const float dx = coverX + coverW - design::kManualMarkInset - disc;
-        const float dy = coverY + coverH - design::kManualMarkInset - disc;
-        c.r.draw(ui::Rect{dx, dy, disc, disc, disc * 0.5f,
-                          ui::Color::black(design::kManualMarkDiscAlpha * a)});
-        const float m = disc * design::kManualMarkScale;
-        ui::Rect book{dx + (disc - m) * 0.5f, dy + (disc - m) * 0.5f + m * 0.03f, m, m,
-                      m * 0.04f, ui::Color::white(design::kManualMarkAlpha * a)};
-        book.shape = ui::Rect::Shape::Book;
-        c.r.draw(book);
-    }
+    // Where the small book goes, for the glass pass (#364).
+    bookX_ = coverX + coverW - design::kManualMarkInset - design::kManualMarkDisc;
+    bookY_ = coverY + coverH - design::kManualMarkInset - design::kManualMarkDisc;
 
     // The title, Large Title — the one place in the product that size is used
     // for a game rather than a settings page.
@@ -1774,6 +1762,26 @@ void DetailScreen::drawGlass(Ctx& c) {
                         ui::Color::white(0.60f * a * details_.value()), c.sc);
         }
         y += rowH + design::kDetailRowGap;
+    }
+
+    // A SMALL BOOK ON THE COVER WHEN THERE IS A MANUAL (#364): a quiet sign,
+    // not another button. In the cover's foot corner, on a disc of the rows'
+    // own frosted glass, darkened, with a hairline rim, so it reads as a
+    // badge on light art and dark art alike; the book white.
+    if (game_.hasManual) {
+        const float disc = design::kManualMarkDisc;
+        ui::Rect glass{bookX_, bookY_, disc, disc, disc * 0.5f, ui::Color::white(0)};
+        c.r.drawGlass(glass, design::kRegularMaterialBlur,
+                      ui::Color::black(design::kManualMarkDiscAlpha * a));
+        ui::Rect rim = glass;
+        rim.border = 1.5f;
+        rim.borderColor = ui::Color::white(design::kManualMarkRimAlpha * a);
+        c.r.draw(rim);
+        const float m = disc * design::kManualMarkScale;
+        ui::Rect book{bookX_ + (disc - m) * 0.5f, bookY_ + (disc - m) * 0.5f + m * 0.03f, m, m,
+                      m * 0.04f, ui::Color::white(design::kManualMarkAlpha * a)};
+        book.shape = ui::Rect::Shape::Book;
+        c.r.draw(book);
     }
 
     // THE FAVOURITE MARK (#267). Outlined until it is a favourite, then

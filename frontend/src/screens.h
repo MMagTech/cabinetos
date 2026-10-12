@@ -663,6 +663,8 @@ public:
 private:
     Progress progress_;
     float slideX_ = 0.0f;
+    // Where draw() put the small book, for the glass pass.
+    float bookX_ = 0, bookY_ = 0;
 
     struct Row {
         Action action = Action::None;
