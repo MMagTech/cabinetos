@@ -2327,6 +2327,7 @@ static std::string gameRecordJson(const romm::Game& g) {
     json_object_object_add(o, "ra_hash", json_object_new_string(g.raHash.c_str()));
     json_object_object_add(o, "path_manual", json_object_new_string(g.manualPath.c_str()));
     json_object_object_add(o, "fs_size_bytes", json_object_new_int64(g.sizeBytes));
+    json_object_object_add(o, "has_multiple_files", json_object_new_boolean(g.multiFile));
     const std::string out = json_object_to_json_string_ext(o, JSON_C_TO_STRING_PRETTY);
     json_object_put(o);
     return out;
@@ -2694,9 +2695,11 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
     const std::string fsSlug = game.platformFsSlug;
     const std::string fsName = game.fsName;
     const int64_t expectedSize = game.sizeBytes;
+    const bool multiFile = game.multiFile;
     const std::string entryPath = job.entryPath;
     job.worker = std::thread([&job, &client, id, platformId, slug, fsSlug, fsName, emu,
-                              entryPath, location, validExts, blockExtract, expectedSize]() {
+                              entryPath, location, validExts, blockExtract, expectedSize,
+                              multiFile]() {
         // FIRMWARE FIRST, and EVERY file the platform lists rather than
         // whichever one this game looks like it needs. A core looks BIOS up by
         // name in the system directory and ignores what it does not want, so
@@ -3052,6 +3055,140 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
                 return;
             }
             job.romPath = rom;
+            job.stage = LaunchJob::Stage::Ready;
+            return;
+        }
+
+        // A GAME KEPT AS A FOLDER OF SEVERAL FILES, FETCHED FILE BY FILE.
+        // RomM serves such a folder as a zip it makes, a little larger than
+        // the game's `fs_size_bytes` (Star Ocean: 7,832,230,048 against
+        // 7,832,229,235), so the size check below never matched and the whole
+        // game was fetched again at every launch: a player's Switch game with
+        // `update/` and `dlc/` folders, 2026-10-12. The zip was also kept
+        // beside what came out of it, and its subfolders flattened, so an
+        // update could be what booted. Now each of the game's own files is
+        // fetched by its id and checked by its own size, as games on several
+        // discs and PS3 games already are. Only the game's files, the top of
+        // the folder (disc::plan): `update/`, `dlc/`, `manual/` and the rest
+        // stay on the server (updates and DLC are #181).
+        if (multiFile) {
+            storage::makeDirs(entryPath);
+            std::vector<romm::RomFile> files;
+            std::string lerr;
+            if (romm::serverAway()) lerr = "the server is away";
+            const bool listed =
+                !romm::serverAway() && client.fetchRomFiles(id, &files, &lerr);
+            std::vector<std::pair<std::string, int64_t>> mine;   // on the disk, size
+            if (listed) {
+                const disc::Plan plan = disc::plan(files);
+                std::vector<std::pair<const romm::RomFile*, std::string>> fetch;
+                int64_t fetchBytes = 0;
+                for (const romm::RomFile& f : plan.fetch) {
+                    const std::string name = storage::safeSegment(f.fileName);
+                    mine.emplace_back(name, f.sizeBytes);
+                    const std::string d = entryPath + "/" + name;
+                    struct stat st;
+                    if (::stat(d.c_str(), &st) == 0 && st.st_size == f.sizeBytes) continue;
+                    fetch.emplace_back(&f, d);
+                    fetchBytes += f.sizeBytes;
+                }
+                const int64_t need =
+                    fetchBytes +
+                    static_cast<int64_t>(static_cast<double>(fetchBytes) * cache::kOverheadFraction);
+                if (need > 0 && cache::freeBytes(location) < need) {
+                    cache::evictUntilFree(location, need, id);
+                    if (cache::freeBytes(location) < need) {
+                        job.message = "Not enough space";
+                        job.stage = LaunchJob::Stage::Failed;
+                        return;
+                    }
+                }
+                int64_t done = 0;
+                for (const auto& [f, d] : fetch) {
+                    std::string derr;
+                    const int64_t before = done;
+                    if (!client.fetchToFile(romm::Client::romFilePath(id, *f), d,
+                            [&job, before, fetchBytes](int64_t got, int64_t) {
+                                job.got = before + got;
+                                job.total = fetchBytes;
+                                return !job.cancel.load();
+                            }, &derr)) {
+                        std::fprintf(stderr, "[launch] download %s: %s\n",
+                                     f->fileName.c_str(), derr.c_str());
+                        job.message = "Couldn't download this game";
+                        job.stage = LaunchJob::Stage::Failed;
+                        return;
+                    }
+                    done += f->sizeBytes;
+                }
+                job.got = 0;
+                job.total = 0;
+                if (fetch.empty())
+                    std::fprintf(stderr, "[launch] already downloaded, %zu files\n", mine.size());
+                else
+                    std::fprintf(stderr, "[launch] fetched %zu of the game's %zu files\n",
+                                 fetch.size(), mine.size());
+                // THE ZIP THE OLD ROUTE KEPT, named after the folder, once
+                // every file it held is here on its own. Only a zip.
+                const std::string old = entryPath + "/" + storage::safeSegment(fsName);
+                bool ours = false;
+                for (const auto& m : mine) ours = ours || m.first == storage::safeSegment(fsName);
+                if (!ours && romfile::sniffFile(old) == romfile::Kind::Zip &&
+                    ::unlink(old.c_str()) == 0)
+                    std::fprintf(stderr, "[launch] removed %s, the folder's zip from before\n",
+                                 old.c_str());
+            } else {
+                // OFFLINE, OR THE SERVER SAID NOTHING: the files already here.
+                std::fprintf(stderr, "[launch] files of %d: %s\n", id, lerr.c_str());
+                if (DIR* dir = ::opendir(entryPath.c_str())) {
+                    while (struct dirent* e = ::readdir(dir)) {
+                        const std::string n = e->d_name;
+                        if (n[0] == '.' || (n.size() > 5 && n.compare(n.size() - 5, 5, ".part") == 0))
+                            continue;
+                        struct stat st;
+                        const std::string d = entryPath + "/" + n;
+                        if (::stat(d.c_str(), &st) == 0 && S_ISREG(st.st_mode))
+                            mine.emplace_back(n, st.st_size);
+                    }
+                    ::closedir(dir);
+                }
+            }
+            // WHAT TO START: a disc's sheet (.cue, .gdi) over its tracks, then
+            // a file the emulator lists, then the largest.
+            std::string boot;
+            int rank = -1;
+            int64_t bootSize = -1;
+            for (const auto& [n, size] : mine) {
+                std::string ext = n.substr(n.find_last_of('.') == std::string::npos
+                                               ? n.size() : n.find_last_of('.') + 1);
+                for (char& c : ext) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+                const bool sheet = ext == "cue" || ext == "gdi" || ext == "ccd" ||
+                                   ext == "toc" || ext == "mds";
+                const int r = sheet && romfile::accepts(validExts, n) ? 2
+                              : romfile::accepts(validExts, n)        ? 1
+                                                                       : 0;
+                if (r > rank || (r == rank && size > bootSize)) {
+                    boot = entryPath + "/" + n;
+                    rank = r;
+                    bootSize = size;
+                }
+            }
+            if (boot.empty()) {
+                job.message = "Couldn't download this game";
+                job.stage = LaunchJob::Stage::Failed;
+                return;
+            }
+            std::string primary, err;
+            romfile::Kind kind = romfile::Kind::Plain;
+            job.stage = LaunchJob::Stage::Unpacking;
+            if (!romfile::prepareFile(boot, entryPath, validExts, blockExtract, &primary, &kind,
+                                      &err)) {
+                std::fprintf(stderr, "[launch] file: %s\n", err.c_str());
+                job.message = "Couldn't open this game's file";
+                job.stage = LaunchJob::Stage::Failed;
+                return;
+            }
+            job.romPath = primary;
             job.stage = LaunchJob::Stage::Ready;
             return;
         }

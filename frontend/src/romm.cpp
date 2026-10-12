@@ -138,6 +138,8 @@ bool parseGame(json_object* o, Game* g) {
     g->fsName = jstr(o, "fs_name");
     g->sortKey = jstr(o, "name_sort_key");
     g->sizeBytes = jint(o, "fs_size_bytes");
+    if (json_object* m = nullptr; json_object_object_get_ex(o, "has_multiple_files", &m) && m)
+        g->multiFile = json_object_get_boolean(m);
     g->titleId = jstr(o, "title_id");
     g->raHash = jstr(o, "ra_hash");
     // BOTH SIZES, because they are for different jobs. See romm.h: `small` is
