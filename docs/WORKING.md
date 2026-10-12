@@ -10,6 +10,9 @@ MMagTech wants it done. This changes rarely. What to work on next is
   the A9 and shows it on the TV in about 30 s (`--restore` puts the console
   back on the image). Anything in the image (cores, units, `tmpfiles.d`, the
   session script) needs an image build: push to `testing`.
+- **Anything that runs at every start gets a smoke check on the testing
+  image**, whatever was judged in the loop: a menu click is heard, a game
+  plays with sound, a pad moves (lessons/testing.md, "The silent day").
 - **A merge promotes the tested image; it does not build.** Push the branch's
   final commit to `testing`, have MMagTech judge it on the A9, merge on his
   explicit go. Anything committed after the testing push makes main build

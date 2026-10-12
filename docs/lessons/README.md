@@ -10,8 +10,11 @@ not a warning.
 1. **Judge anything visual on the A9 under gamescope, never on the VM or from
    an offscreen capture.** An offscreen capture has twice looked right while
    the TV showed nothing. ([testing](testing.md))
-2. **Build it, then run it.** A green build and a passing screenshot say
-   nothing about whether a game runs. ([emulators](emulators.md))
+2. **Build it, then run it, and check what a person would notice.** A green
+   build and a passing screenshot say nothing about whether a game runs, and
+   a correct reading of the thing you changed says nothing about the rest:
+   the volume keys read back perfectly for a day while the console made no
+   sound at all. ([emulators](emulators.md), [testing](testing.md))
 3. **Test two different games in one run.** Anything opened once and reused
    hides behind the app restart every deploy does. ([testing](testing.md))
 4. **Measure the case somebody is waiting on**, and measure rather than
