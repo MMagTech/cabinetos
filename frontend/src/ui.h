@@ -97,7 +97,7 @@ struct Rect {
     // drawn by the same shader so fill, rim and shadow work the same.
     // The shape fits inside the rectangle, centred; `radius` softens its
     // corners. Box is every shape that existed before this.
-    enum class Shape { Box, Heart, Trophy, Bolt };
+    enum class Shape { Box, Heart, Trophy, Bolt, Book };
     Shape shape = Shape::Box;
 };
 
@@ -175,6 +175,10 @@ public:
     // own presentation do not. Zero outside a switch.
     void setContentOffsetY(float dy) { offsetY_ = dy; }
     float contentOffsetY() const { return offsetY_; }
+    // AND ACROSS, for a game's page sliding aside for its manual (#364): the
+    // same movement, sideways. Zero outside that slide.
+    void setContentOffsetX(float dx) { offsetX_ = dx; }
+    float contentOffsetX() const { return offsetX_; }
 
     void setContentFade(float f) {
         contentFade_ = f < 0 ? 0 : (f > 1 ? 1 : f);
@@ -291,6 +295,7 @@ private:
     float contentRaw_ = 1.0f;
     float contentFade_ = 1.0f;
     float offsetY_ = 0.0f;
+    float offsetX_ = 0.0f;
     GLuint vao_ = 0;
     GLuint vbo_ = 0;
     GLuint targetFBO_ = 0;    // 0 is the window; an offscreen render redirects it

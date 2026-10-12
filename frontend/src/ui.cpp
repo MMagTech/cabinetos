@@ -45,7 +45,7 @@ uniform vec4 uBorderColor;
 uniform vec2 uShadowParams;  // blur, offsetY
 uniform vec4 uShadowColor;
 uniform vec4 uEdgeLight;     // alpha 0 = off
-uniform int uShape;          // 0 box, 1 heart, 2 trophy, 3 bolt (ui::Rect::Shape)
+uniform int uShape;          // 0 box, 1 heart, 2 trophy, 3 bolt, 4 book (ui::Rect::Shape)
 out vec4 fragColor;
 
 float roundedBoxSDF(vec2 p, vec2 halfSize, float r) {
@@ -103,9 +103,37 @@ float boltSDF(vec2 p) {
     return s * sqrt(d);
 }
 
+// An open book (#364), y pointing down: two pages meeting at the spine, each
+// a quadrilateral whose top and foot dip towards it. 1.4 wide and 0.92 tall
+// in its own units, centred, with a gap down the middle so it reads as two
+// pages at a small size. The right page, mirrored; Inigo Quilez's exact
+// polygon distance as the bolt's.
+float bookSDF(vec2 p) {
+    p.x = abs(p.x);
+    vec2 v[4] = vec2[4](vec2(0.06, -0.34), vec2(0.70, -0.46), vec2(0.70, 0.34),
+                        vec2(0.06, 0.46));
+    float d = dot(p - v[0], p - v[0]);
+    float s = 1.0;
+    int j = 3;
+    for (int i = 0; i < 4; i++) {
+        vec2 e = v[j] - v[i];
+        vec2 w = p - v[i];
+        vec2 b = w - e * clamp(dot(w, e) / dot(e, e), 0.0, 1.0);
+        d = min(d, dot(b, b));
+        bvec3 c = bvec3(p.y >= v[i].y, p.y < v[j].y, e.x * w.y > e.y * w.x);
+        if (all(c) || all(not(c))) s *= -1.0;
+        j = i;
+    }
+    return s * sqrt(d);
+}
+
 // The distance to whichever shape this is, in design points, from the centre.
 // The heart and the cup fit their rectangle's shorter side, centred.
 float shapeSDF(vec2 p, vec2 halfSize, float r) {
+    if (uShape == 4) {
+        float k = min(2.0 * halfSize.x / 1.4, 2.0 * halfSize.y / 0.92);
+        return bookSDF(p / k) * k - r;
+    }
     if (uShape == 3) {
         float k = min(2.0 * halfSize.y, 2.0 * halfSize.x / 0.56);
         return boltSDF(p / k) * k - r;
@@ -569,7 +597,11 @@ void Renderer::drawTextured(float x, float y, float w, float h, GLuint texture,
     glUseProgram(texturedProgram_);
     glUniform2f(tloc_.canvas, kCanvasWidth, kCanvasHeight);
     y += offsetY_;
-    if (clipW > 0) clipY += offsetY_;
+    x += offsetX_;
+    if (clipW > 0) {
+        clipY += offsetY_;
+        clipX += offsetX_;
+    }
     glUniform4f(tloc_.rect, x, y, w, h);
     glUniform4f(tloc_.uv, u0, v0, u1, v1);
     // The transition alpha, the same as Renderer::draw applies to a shape.
@@ -689,11 +721,12 @@ void Renderer::presentScene() {
     glDisable(GL_BLEND);
     // The finished scene goes back exactly where it was drawn: no switch's
     // rise. (Blending is off here, so the fade cannot touch it either.)
-    const float keepOffset = offsetY_;
-    offsetY_ = 0.0f;
+    const float keepOffset = offsetY_, keepOffsetX = offsetX_;
+    offsetY_ = offsetX_ = 0.0f;
     drawTextured(0, 0, kCanvasWidth, kCanvasHeight, sceneTex_, 0, 1, 1, 0,
                  Color{1, 1, 1, 1}, false);
     offsetY_ = keepOffset;
+    offsetX_ = keepOffsetX;
     glEnable(GL_BLEND);
     scenePresented_ = true;
 }
@@ -726,11 +759,12 @@ void Renderer::drawSnapshot(float alpha) {
     if (!snapTex_ || alpha <= 0.001f) return;
     // Opaque: the copy has no alpha of its own, and the tint's alpha is the
     // dissolve. Rows run bottom-up in a copied framebuffer, hence v 1 to 0.
-    const float keepOffset = offsetY_;
-    offsetY_ = 0.0f;
+    const float keepOffset = offsetY_, keepOffsetX = offsetX_;
+    offsetY_ = offsetX_ = 0.0f;
     drawTextured(0, 0, kCanvasWidth, kCanvasHeight, snapTex_, 0, 1, 1, 0,
                  Color{1, 1, 1, alpha}, false, 0.0f, 0, 0, 0, 0, 0, /*opaque=*/true);
     offsetY_ = keepOffset;
+    offsetX_ = keepOffsetX;
 }
 
 void Renderer::drawBiasGlow(float x, float y, float w, float h, float peak) {
@@ -776,7 +810,7 @@ void Renderer::drawGlass(const Rect& r, float blur, const Color& tint) {
     }
     glUseProgram(blurProgram_);
     glUniform2f(gloc_.canvas, kCanvasWidth, kCanvasHeight);
-    glUniform4f(gloc_.rect, r.x, r.y + offsetY_, r.w, r.h);
+    glUniform4f(gloc_.rect, r.x + offsetX_, r.y + offsetY_, r.w, r.h);
     glUniform1f(gloc_.radius, r.radius);
     glUniform4f(gloc_.tint, tint.r, tint.g, tint.b, tint.a);
     glUniform1f(gloc_.lod, blur);
@@ -869,7 +903,7 @@ void Renderer::drawBackdrop(const Gradient& g, float alpha) {
 void Renderer::draw(const Rect& r) {
     glUseProgram(program_);
     glUniform2f(loc_.canvas, kCanvasWidth, kCanvasHeight);
-    glUniform4f(loc_.rect, r.x, r.y + offsetY_, r.w, r.h);
+    glUniform4f(loc_.rect, r.x + offsetX_, r.y + offsetY_, r.w, r.h);
     glUniform1f(loc_.radius, r.radius);
     // THE SCREEN'S TRANSITION APPLIES TO SHAPES TOO. It used to reach only
     // pictures and text, so a screen arriving drew its panels at full strength

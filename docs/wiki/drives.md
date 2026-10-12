@@ -14,6 +14,8 @@
   and a ring on the top bar shows a download from any screen.
 - Zip, 7z, rar and gz files are unpacked on the console. CHD and RVZ play as
   they are.
+- A game's manual is kept beside it, in its system's `Manuals` folder, and is
+  cleared, kept or removed with the game.
 
 Saves, states, screenshots, BIOS and settings always stay on the console's own
 drive.

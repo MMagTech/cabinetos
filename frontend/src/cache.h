@@ -141,6 +141,31 @@ Placement dedupe(int romId, int64_t expectedBytes);
 std::string entryPathFor(const std::string& location, const std::string& platform,
                          int romId, const std::string& title, bool kept);
 
+// --- A game's manual (#364) -------------------------------------------------
+//
+// THE GAME'S ONE MANUAL FROM RomM, a PDF, kept in a `Manuals` folder beside
+// the games of its platform:
+//
+//   cache/<platform>/Manuals/<romId> - <title>.pdf    a game somebody played
+//   roms/<platform>/Manuals/<romId> - <title>.pdf     a game somebody keeps
+//
+// NOT BESIDE THE GAME AS `852 - name.pdf`: the console knows a game by the
+// number at the front of an entry, so that would read as a second copy of it.
+// `Manuals` has no number, so everything that walks the games passes it by.
+//
+// IT FOLLOWS ITS GAME, in this file, wherever the game moves or goes: cleared
+// from the cache with it, moved with it when it is kept or released, deleted
+// with it when its download is removed, and kept with the survivor when a
+// second copy is cleaned away. Nothing else has to remember it exists.
+
+// Where a game's manual goes, beside a game whose entry is `gameEntryPath`.
+std::string manualPathFor(const std::string& gameEntryPath, int romId,
+                          const std::string& title);
+
+// The manual on a drive that is here now, beside any copy of the game, or
+// empty. Read off the disk every time, like find().
+std::string findManual(int romId);
+
 // --- Eviction ----------------------------------------------------------------
 
 // One cached game, and when it was last used.

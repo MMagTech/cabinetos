@@ -34,6 +34,29 @@ To check by hand: `pw-top -b -n 2 | grep cabinetos-frontend` twice, a few
 seconds apart; ERR must not climb. A beep straight to the TV
 (`pw-play` of a short WAV) tells the TV's half from the app's.
 
+## A GAME OLDER THAN THE LOG WINDOW, 2026-10-12: ask "is a game running", not "was one started"
+
+Before a stretch of A9 builds, headless runs and a loop deploy (#364), the
+journal's last 30 minutes were searched for `[launch]` lines, none were
+found, and the console was called idle. MMagTech had started Burnout 3 41
+minutes earlier and was playing it. The builds made his sound stutter, and
+the loop deploy restarted the session and ended the game.
+
+- **A deploy over a running game loses its quit.** The card Burnout saved
+  in-game at 11:14 was on the console but never uploaded, because the upload
+  happens when a game is left. At the next start RomM's older card (two days
+  old) would have been put over it: the launch takes RomM's newest save
+  unless the console's is marked as still owed (`cache::isPending`). It was
+  saved by uploading the console's card to RomM on his go.
+- **Check for a game that is running now:** the newest `[pace]` or
+  `[ps2] .. fps` lines within the last minute, or the cores mapped into the
+  frontend (`grep _libretro.so\|cabinetos-ps2.so /proc/<pid>/maps`; a core
+  stays mapped after a game is left, so read the log as well). `pgrep -f`
+  with the name in the ssh command matches the command itself.
+- **Heavy work on the A9 is felt in a game:** a `-j24` build or a 4K headless
+  run stutters the sound of whatever is playing. Ask in chat first if there
+  is any doubt.
+
 ## The thirty-second loop on the TV
 
 

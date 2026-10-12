@@ -1552,6 +1552,7 @@ void DetailScreen::draw(Ctx& c) {
     // fades in RISING a little, the same arrival as a top-bar switch's.
     const float keepY = c.r.contentOffsetY();
     c.r.setContentOffsetY(keepY + (1.0f - a) * design::kDetailRise);
+    c.r.setContentOffsetX(slideX_);
 
     // ONE COLUMN ON THE LEFT, THE COVER ON THE RIGHT, the pair centred across
     // the screen. Everything read or chosen (title, Play, Download, Continue
@@ -1619,6 +1620,9 @@ void DetailScreen::draw(Ctx& c) {
     } else {
         c.r.draw(ui::Rect{coverX, coverY, coverW, coverH, design::kDetailRadius, game_.art});
     }
+    // Where the small book goes, for the glass pass (#364).
+    bookX_ = coverX + coverW - design::kManualMarkInset - design::kManualMarkDisc;
+    bookY_ = coverY + coverH - design::kManualMarkInset - design::kManualMarkDisc;
 
     // The title, Large Title — the one place in the product that size is used
     // for a game rather than a settings page.
@@ -1688,12 +1692,14 @@ void DetailScreen::draw(Ctx& c) {
                     ui::TextStyle::Title3, ui::Color::white(0.60f * a), c.sc);
     }
     c.r.setContentOffsetY(keepY);
+    c.r.setContentOffsetX(0.0f);
 }
 
 void DetailScreen::drawGlass(Ctx& c) {
     const float a = appear_.value();
     const float keepY = c.r.contentOffsetY();
     c.r.setContentOffsetY(keepY + (1.0f - a) * design::kDetailRise);
+    c.r.setContentOffsetX(slideX_);
     // Treatment 3, the row one: a surface that is always there. Blur untinted
     // at rest, white 22% focused, scale 1.03 — a full-width row growing a
     // cover's tenth would collide with its neighbours.
@@ -1756,6 +1762,26 @@ void DetailScreen::drawGlass(Ctx& c) {
                         ui::Color::white(0.60f * a * details_.value()), c.sc);
         }
         y += rowH + design::kDetailRowGap;
+    }
+
+    // A SMALL BOOK ON THE COVER WHEN THERE IS A MANUAL (#364): a quiet sign,
+    // not another button. In the cover's foot corner, on a disc of the rows'
+    // own frosted glass, darkened, with a hairline rim, so it reads as a
+    // badge on light art and dark art alike; the book white.
+    if (game_.hasManual) {
+        const float disc = design::kManualMarkDisc;
+        ui::Rect glass{bookX_, bookY_, disc, disc, disc * 0.5f, ui::Color::white(0)};
+        c.r.drawGlass(glass, design::kRegularMaterialBlur,
+                      ui::Color::black(design::kManualMarkDiscAlpha * a));
+        ui::Rect rim = glass;
+        rim.border = 1.5f;
+        rim.borderColor = ui::Color::white(design::kManualMarkRimAlpha * a);
+        c.r.draw(rim);
+        const float m = disc * design::kManualMarkScale;
+        ui::Rect book{bookX_ + (disc - m) * 0.5f, bookY_ + (disc - m) * 0.5f + m * 0.03f, m, m,
+                      m * 0.04f, ui::Color::white(design::kManualMarkAlpha * a)};
+        book.shape = ui::Rect::Shape::Book;
+        c.r.draw(book);
     }
 
     // THE FAVOURITE MARK (#267). Outlined until it is a favourite, then
@@ -1894,6 +1920,7 @@ void DetailScreen::drawGlass(Ctx& c) {
         }
     }
     c.r.setContentOffsetY(keepY);
+    c.r.setContentOffsetX(0.0f);
 }
 
 

@@ -553,6 +553,9 @@ struct GameDetail {
     // ONE OF THIS PERSON'S FAVOURITES (#267): the mark beside the title is
     // filled. It is theirs, so it follows the account, not the console.
     bool favorite = false;
+    // THE GAME HAS A MANUAL (#364): RomM has one, or one is on the drive.
+    // A small book on the cover says so; R1 opens it.
+    bool hasManual = false;
 };
 
 // One of the three states on the launch screen (docs/PROJECT.md, "The in-game
@@ -617,6 +620,12 @@ public:
         if (slot_ >= static_cast<int>(rows_.size())) slot_ = rows_.empty() ? 0 : static_cast<int>(rows_.size()) - 1;
     }
 
+    // THE PAGE SLIDING ASIDE FOR THE MANUAL (#364), in design points, 0 at
+    // rest and minus the canvas's width with the manual over it. Everything
+    // on the page moves; the game's art behind it stays, as the ground does
+    // in every other move between screens.
+    void setSlide(float dx) { slideX_ = dx; }
+
     // THE MARK BESIDE THE TITLE, filled or not, the moment it is pressed:
     // the console answers at once and the server hears about it after.
     void setFavorite(bool on) { game_.favorite = on; }
@@ -653,6 +662,9 @@ public:
 
 private:
     Progress progress_;
+    float slideX_ = 0.0f;
+    // Where draw() put the small book, for the glass pass.
+    float bookX_ = 0, bookY_ = 0;
 
     struct Row {
         Action action = Action::None;

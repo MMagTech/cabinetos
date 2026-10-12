@@ -89,6 +89,8 @@
 #include "accounts.h"
 #include "achievements.h"
 #include "achlist.h"
+#include "manual.h"
+#include "manualview.h"
 #include "storage.h"
 #include "text.h"
 #include "overlaywin.h"
@@ -2323,10 +2325,35 @@ static std::string gameRecordJson(const romm::Game& g) {
     json_object_object_add(o, "path_cover_large", json_object_new_string(g.coverLargePath.c_str()));
     json_object_object_add(o, "title_id", json_object_new_string(g.titleId.c_str()));
     json_object_object_add(o, "ra_hash", json_object_new_string(g.raHash.c_str()));
+    json_object_object_add(o, "path_manual", json_object_new_string(g.manualPath.c_str()));
     json_object_object_add(o, "fs_size_bytes", json_object_new_int64(g.sizeBytes));
     const std::string out = json_object_to_json_string_ext(o, JSON_C_TO_STRING_PRETTY);
     json_object_put(o);
     return out;
+}
+
+// A GAME'S MANUAL INTO `dest` (#364). RomM serves its resources under
+// /assets/romm/resources/, and `path_manual` is the part after it (checked:
+// application/pdf). An answer that is not a PDF (a login page, an error) is
+// thrown away rather than kept as somebody's manual. `keepGoing` is asked
+// during the transfer; false stops it.
+static bool fetchManualFile(const romm::Client& client, const std::string& manualPath,
+                            const std::string& dest, const std::function<bool()>& keepGoing,
+                            std::string* err) {
+    std::string from = manualPath;
+    if (from.rfind("/assets/", 0) != 0) {
+        while (!from.empty() && from[0] == '/') from.erase(0, 1);
+        from = "/assets/romm/resources/" + from;
+    }
+    storage::makeDirs(dest.substr(0, dest.find_last_of('/')));
+    if (!client.fetchToFile(from, dest, [&](int64_t, int64_t) { return keepGoing(); }, err))
+        return false;
+    if (!manual::looksLikePdf(dest)) {
+        ::unlink(dest.c_str());
+        if (err) *err = "the server's answer is not a PDF";
+        return false;
+    }
+    return true;
 }
 
 // How many things are in a directory. Used once, to decide whether a download
@@ -7495,6 +7522,16 @@ int main(int argc, char** argv) {
     screens::AchievementList raList;
     ra::GameList detailAch;
     int detailAchRom = 0;
+    // THE GAME'S MANUAL (#364), beside its page: R1 slides it in, L1 or B
+    // slides it back (manualview.h). `manualSlide` is 0 with the page in
+    // front and 1 with the manual; the viewer keeps its place while the page
+    // stays open. RomM's path for it, for the page that is open.
+    screens::ManualView manualView;
+    Animated manualSlide;
+    manualSlide.smooth = true;
+    bool manualShown = false;
+    std::string detailManualPath;
+    std::string detailManualTitle;
     screens::SearchScreen searchScreen;
     screens::AccountScreen accountScreen;
     screens::AddAccountScreen addAccountScreen;
@@ -8561,6 +8598,145 @@ int main(int argc, char** argv) {
     // never waits. The press that ends it is kept from the game.
     bool stateHold = false, stateHoldWaiting = false, stateHoldJustEnded = false;
 
+    // A GAME'S MANUAL, FETCHED (#364): into the `Manuals` folder beside the
+    // game when the game is on a drive (cache.h), so it is there offline and
+    // follows the game from then on; for a game that is not, into /tmp for as
+    // long as it is being read. One at a time, on a worker. A manual that
+    // will not come never stops anything: it is said in the log, and a game
+    // downloading or starting beside it carries on.
+    struct ManualFetch {
+        struct Job {
+            int romId = 0;
+            std::string from, to;
+            bool forViewer = false;
+        };
+        std::mutex m;
+        std::condition_variable cv;
+        std::deque<Job> jobs;
+        std::thread th;
+        bool stop = false;
+        // The viewer's answer: which game, where, and whether it came.
+        bool done = false;
+        int doneRom = 0;
+        std::string donePath;
+        bool doneOk = false;
+        ~ManualFetch() {
+            {
+                std::lock_guard<std::mutex> lk(m);
+                stop = true;
+            }
+            cv.notify_all();
+            if (th.joinable()) th.join();
+            // A manual fetched only to be read is not kept past the app.
+            ::unlink("/tmp/cabinetos-manual.pdf");
+        }
+    };
+    static ManualFetch manualFetch;
+    static const std::string kManualTemp = "/tmp/cabinetos-manual.pdf";
+    auto fetchManual = [&](int romId, const std::string& manualPath, const std::string& to,
+                           bool forViewer) {
+        {
+            std::lock_guard<std::mutex> lk(manualFetch.m);
+            manualFetch.jobs.push_back({romId, manualPath, to, forViewer});
+        }
+        manualFetch.cv.notify_all();
+        if (manualFetch.th.joinable()) return;
+        manualFetch.th = std::thread([]() {
+            std::unique_lock<std::mutex> lk(manualFetch.m);
+            for (;;) {
+                manualFetch.cv.wait(lk, [] { return manualFetch.stop || !manualFetch.jobs.empty(); });
+                if (manualFetch.stop) return;
+                const ManualFetch::Job job = manualFetch.jobs.front();
+                manualFetch.jobs.pop_front();
+                lk.unlock();
+                bool ok = storage::exists(job.to) && manual::looksLikePdf(job.to);
+                if (!ok) {
+                    std::string err;
+                    ok = fetchManualFile(
+                        liveClient, job.from, job.to,
+                        [] {
+                            std::lock_guard<std::mutex> g(manualFetch.m);
+                            return !manualFetch.stop;
+                        },
+                        &err);
+                    if (ok)
+                        std::fprintf(stderr, "[manual] fetched %s\n", job.to.c_str());
+                    else
+                        std::fprintf(stderr, "[manual] could not fetch the manual of %d: %s\n",
+                                     job.romId, err.c_str());
+                }
+                lk.lock();
+                if (job.forViewer) {
+                    manualFetch.done = true;
+                    manualFetch.doneRom = job.romId;
+                    manualFetch.donePath = job.to;
+                    manualFetch.doneOk = ok;
+                }
+            }
+        });
+    };
+    // A GAME THAT IS ON A DRIVE GETS ITS MANUAL BESIDE IT, when it lands and
+    // whenever it starts without one (a game downloaded before #364), so it
+    // can be read with no server. Only while the server is here.
+    auto manualBeside = [&](int romId, const std::string& entryPath) {
+        if (romm::serverAway() || entryPath.empty()) return;
+        for (const auto& g : games) {
+            if (g.id != romId) continue;
+            if (g.manualPath.empty() || !cache::findManual(romId).empty()) return;
+            const std::string title = g.name.empty() ? g.fsName : g.name;
+            fetchManual(romId, g.manualPath, cache::manualPathFor(entryPath, romId, title),
+                        false);
+            return;
+        }
+    };
+    // R1 ON A GAME'S PAGE ALWAYS MEANS THE MANUAL (MMagTech, #364): the page
+    // slides aside and the manual comes in, or the edge sound when the game
+    // has none. Opened again on the same page, it is where it was left.
+    // A starting value, to be judged on the television.
+    constexpr float kManualSlide = 0.35f;
+    auto openManual = [&]() {
+        const screens::GameDetail& g = detailScreen.game();
+        if (!g.hasManual) {
+            sound::play(sound::Cue::Edge);
+            return;
+        }
+        if (manualView.romId() != g.romId) {
+            manualView.open(g.romId, renderer.scale());
+            const std::string onDisk = cache::findManual(g.romId);
+            if (!onDisk.empty()) {
+                manualView.setFile(onDisk);
+            } else if (!detailManualPath.empty() && !romm::serverAway()) {
+                const cache::Placement placed = cache::find(g.romId);
+                fetchManual(g.romId, detailManualPath,
+                            placed.present ? cache::manualPathFor(placed.entryPath, g.romId,
+                                                                  detailManualTitle)
+                                           : kManualTemp,
+                            true);
+            } else {
+                manualView.setFailed();
+            }
+            std::fprintf(stderr, "[manual] opened for %d (%s)\n", g.romId,
+                         onDisk.empty() ? "fetching" : onDisk.c_str());
+        }
+        manualShown = true;
+        manualSlide.retarget(1.0f, kManualSlide);
+        sound::play(sound::Cue::Activate);
+    };
+    auto closeManual = [&]() {
+        manualShown = false;
+        manualSlide.retarget(0.0f, kManualSlide);
+        sound::play(sound::Cue::Back);
+    };
+    // The page was left, or a game started: the pages go, and a manual
+    // fetched only to be read goes with them.
+    auto forgetManual = [&]() {
+        manualView.close();
+        manualShown = false;
+        manualSlide.settle(0.0f);
+        detailScreen.setSlide(0.0f);
+        ::unlink(kManualTemp.c_str());
+    };
+
     auto openDetail = [&](int cardIndex) {
         if (cardIndex < 0 || cardIndex >= static_cast<int>(cards.size())) return;
         screens::GameDetail d;
@@ -8582,9 +8758,15 @@ int main(int argc, char** argv) {
             raReadable = !cov.core || ra::coreReadable(cov.core);
             d.playable = cov.support == catalog::Support::Playable;
             d.reason = cov.reason ? cov.reason : "not playable on this console";
+            detailManualPath = g.manualPath;
+            detailManualTitle = g.name.empty() ? g.fsName : g.name;
             break;
         }
         d.kept = cache::isKeptBy(storage::currentUser(), d.romId);
+        // A MANUAL (#364): RomM has one and can be asked, or one is on a
+        // drive beside the game.
+        d.hasManual = (!detailManualPath.empty() && !romm::serverAway()) ||
+                      !cache::findManual(d.romId).empty();
         // A favourite if Home has it, or the person's list does (a game this
         // console cannot play is on the list but not on Home), or a press not
         // yet sent says so.
@@ -9308,6 +9490,7 @@ int main(int argc, char** argv) {
                         {line("Select", "A"),
                          line("Back", "B"),
                          line("Change screen", "L1 / R1"),
+                         line("Game manual", "R1, on a game's page"),
                          line("Jump a letter", "L2 / R2"),
                          line("Power menu", "Start, on Home"),
                          line("Switch person", "Up to the top bar, A on your name")}});
@@ -12587,6 +12770,23 @@ int main(int argc, char** argv) {
         if (barFocused && barSlot != BarAccount) barSlot = want;
         sound::play(want > at ? sound::Cue::Activate : sound::Cue::Back);
     };
+    // ON A GAME'S PAGE THE SHOULDERS ARE THE MANUAL'S (#364): R1 slides it
+    // in, L1 slides it back, and the other way is the edge. Nothing while a
+    // question or a panel is over the page. False off a game's page.
+    auto shoulderOnPage = [&](int dir) -> bool {
+        if (here() != Screen::Detail) return false;
+        if (pinScreen.isOpen() || choiceScreen.isOpen() || raList.isOpen() ||
+            downloadsPanel.isOpen())
+            return true;
+        if (dir > 0) {
+            if (manualShown) sound::play(sound::Cue::Edge);
+            else openManual();
+        } else {
+            if (manualShown) closeManual();
+            else sound::play(sound::Cue::Edge);
+        }
+        return true;
+    };
 
     // THE BAR'S OWN KEYS. Offered every key first whenever it holds focus, from
     // whichever screen is underneath — which is the whole point of its cursor
@@ -12742,7 +12942,15 @@ int main(int argc, char** argv) {
             case Screen::Home: return homeKey ? homeKey(n) : false;
             case Screen::Library: apply(libraryScreen.key(n)); return true;
             case Screen::Grid: apply(gridScreen.key(n)); return true;
-            case Screen::Detail: apply(detailScreen.key(n)); return true;
+            case Screen::Detail:
+                // The manual over the page takes every press; B slides it back.
+                if (manualShown) {
+                    if (n == screens::Nav::Back) closeManual();
+                    else manualView.key(n);
+                    return true;
+                }
+                apply(detailScreen.key(n));
+                return true;
             case Screen::Search: apply(searchScreen.key(n)); return true;
             case Screen::AddAccount: apply(addAccountScreen.key(n)); return true;
             case Screen::TailscaleSignIn: apply(tsSignInScreen.key(n)); return true;
@@ -13302,6 +13510,10 @@ int main(int argc, char** argv) {
 
         launchJob.stop();
         launchJob.stage = LaunchJob::Stage::Idle;
+        // THE GAME'S MANUAL COMES WITH IT (#364), beside it on the drive, on
+        // a worker of its own: a manual that does not come never holds up the
+        // game.
+        manualBeside(launchJob.romId, launchJob.entryPath);
 
         // A download that was asked for rather than needed stops here. The game
         // is on the disk, prepared exactly as a launch would have prepared it,
@@ -14605,6 +14817,16 @@ int main(int argc, char** argv) {
             else if (word == "a") n = screens::Nav::Activate;
             else if (word == "b") n = screens::Nav::Back;
             else ok = false;
+            // The shoulders, for the manual on a game's page (#364).
+            if (!ok && (word == "r1" || word == "l1")) {
+                const int d = word == "r1" ? 1 : -1;
+                if (!shoulderOnPage(d)) switchDestination(d);
+                // A capture shows the slide finished.
+                if (shotMode) manualSlide.settle(manualShown ? 1.0f : 0.0f);
+                word.clear();
+                if (!*p) break;
+                continue;
+            }
             // A digit is a PIN pad key typed on a keyboard, so a whole PIN
             // can be walked headless: "down,a,4,8,2,1,4,8,2,1".
             if (!ok && word.size() == 1 && word[0] >= '0' && word[0] <= '9') {
@@ -14954,8 +15176,10 @@ int main(int argc, char** argv) {
                     // and `]` sit where L1 and R1 do on a controller and the
                     // capture tooling can drive them.
                     if (owner == InputOwner::UI) {
-                        if (e.key.key == SDLK_LEFTBRACKET) switchDestination(-1);
-                        if (e.key.key == SDLK_RIGHTBRACKET) switchDestination(+1);
+                        if (e.key.key == SDLK_LEFTBRACKET && !shoulderOnPage(-1))
+                            switchDestination(-1);
+                        if (e.key.key == SDLK_RIGHTBRACKET && !shoulderOnPage(+1))
+                            switchDestination(+1);
                         // The triggers' equivalent, where a pad is not attached.
                         if (here() == Screen::Grid) {
                             if (e.key.key == SDLK_COMMA) gridScreen.jumpLetter(-1);
@@ -15161,11 +15385,11 @@ int main(int argc, char** argv) {
                     // The shoulders first, because they are the one input that
                     // means the same thing on every screen that has them.
                     if (e.gbutton.button == SDL_GAMEPAD_BUTTON_LEFT_SHOULDER) {
-                        switchDestination(-1);
+                        if (!shoulderOnPage(-1)) switchDestination(-1);
                         break;
                     }
                     if (e.gbutton.button == SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER) {
-                        switchDestination(+1);
+                        if (!shoulderOnPage(+1)) switchDestination(+1);
                         break;
                     }
                     // ONE DIRECTION HANDLER FOR EVERY SCREEN — 2026-09-21.
@@ -17514,6 +17738,27 @@ int main(int argc, char** argv) {
                 searchScreen.setResultsBottom(keyboard.isOpen() ? keyboard.panelTop()
                                                                 : ui::kCanvasHeight);
             detailScreen.tick(dt);
+            // THE MANUAL (#364): gone with its page, or when a game starts;
+            // otherwise it slides, and its file arrives.
+            if (manualView.isOpen() &&
+                (playing || here() != Screen::Detail ||
+                 detailScreen.game().romId != manualView.romId()))
+                forgetManual();
+            {
+                std::lock_guard<std::mutex> lk(manualFetch.m);
+                if (manualFetch.done) {
+                    manualFetch.done = false;
+                    if (manualView.isOpen() && manualFetch.doneRom == manualView.romId()) {
+                        if (manualFetch.doneOk) manualView.setFile(manualFetch.donePath);
+                        else manualView.setFailed();
+                    } else if (manualFetch.donePath == kManualTemp) {
+                        ::unlink(kManualTemp.c_str());
+                    }
+                }
+            }
+            manualSlide.tick(dt);
+            manualView.tick(dt);
+            detailScreen.setSlide(-manualSlide.value() * ui::kCanvasWidth);
         }
         // THE PRESS IS THE COVER'S ONLY WHEN THE COVER HAS THE PRESS. With the
         // PIN pad, a question, Downloads or a menu over Home, A belongs to
@@ -18023,7 +18268,10 @@ int main(int argc, char** argv) {
             switch (here()) {
                 case Screen::Library: libraryScreen.draw(ctx); break;
                 case Screen::Grid: gridScreen.draw(ctx); break;
-                case Screen::Detail: detailScreen.draw(ctx); break;
+                case Screen::Detail:
+                    detailScreen.draw(ctx);
+                    manualView.draw(ctx, manualSlide.value());
+                    break;
                 case Screen::Search: searchScreen.draw(ctx); break;
                 case Screen::AddAccount: addAccountScreen.draw(ctx); break;
                 case Screen::TailscaleSignIn: tsSignInScreen.draw(ctx); break;
@@ -18349,7 +18597,10 @@ int main(int argc, char** argv) {
             switch (here()) {
                 case Screen::Library: libraryScreen.drawGlass(ctx); break;
                 case Screen::Grid: gridScreen.drawGlass(ctx); break;
-                case Screen::Detail: detailScreen.drawGlass(ctx); break;
+                case Screen::Detail:
+                    detailScreen.drawGlass(ctx);
+                    manualView.drawGlass(ctx, manualSlide.value());
+                    break;
                 // Search has no glass: the keyboard docked under it is the only
                 // material on the screen and the app draws that itself.
                 case Screen::Search: break;
@@ -19254,7 +19505,10 @@ int main(int argc, char** argv) {
         // Capture before the swap. After a swap the back buffer's contents are
         // undefined, so a readback taken there is whatever the driver left.
         if (shotMode && frame >= shotAfterFrames &&
-            (!waitForPairCode || shownPairCode)) {
+            (!waitForPairCode || shownPairCode) &&
+            // The manual's page on screen, or its refusal (#364), however
+            // long fetching and drawing take.
+            (!manualShown || manualView.settled())) {
             renderer.saveFrame(shotPath, dw, dh);
             // Whether the running core can produce a state AT THIS POINT, which
             // is a different question from whether the round trip is exact and
