@@ -11,36 +11,27 @@ specification is `docs/PROJECT.md`; the order is `docs/ROADMAP.md`.
 
 ## Where things stand
 
-**2026-10-12: GameCube saves use Dolphin's `.gci` folder (#344, PR #356),
-merged and promoted.** The A9 (Wi-Fi, **192.168.1.109**,
-`CABINETOS_A9=cabinet@192.168.1.109`) runs that image, `testing` 2026.10.12;
-Resident Evil 4's old card was read in on the TV and its zip reached RomM.
-**#346 is decided and waiting:** no import of our own; CabinetOS moves to
-RomM's save channels when they ship (rommapp/romm#5198), with the rules on
-#346 (newest wins, no screen; a save the console made downloads as stored,
-no conversion). Cabinet on Apple platforms is no longer a constraint; a
-CabinetOS change that leaves Cabinet behind gets a record issue on
-MMagTech/cabinet (first: MMagTech/cabinet#9).
+**2026-10-12: #351 (volume keys, PR #358) and #352 (smart collections, PR
+#359) are built, tested on the A9 through the loop, and on `testing`
+together** (#359 is stacked on #358). The A9 (Wi-Fi, **192.168.1.109**,
+`CABINETOS_A9=cabinet@192.168.1.109`) was on `testing` 2026.10.12 (#344).
+Cabinet on Apple platforms is no longer a constraint; a CabinetOS change that
+leaves Cabinet behind gets a record issue on MMagTech/cabinet.
 
 ## Next
 
-1. **#351, volume keys** (reported from a Steam Deck by Spinnich, with a
-   diagnostic report). **Decided, the plan is on the issue; build it:**
-   - Volume keys (`KEY_VOLUMEUP`/`KEY_VOLUMEDOWN`, 115/114) from any keyboard
-     change the system volume, silently, with no bar. Read them from the
-     kernel's keyboards, not the window, so they work while a separate
-     emulator (PS2, PS3, Switch, Xbox, Xbox 360, Wii U) has the screen.
-   - At every start the volume goes back to full, unless a DRM connector of
-     type eDP, DSI or LVDS exists (a built-in screen); then it keeps its level.
-   - The diagnostic report lists every keyboard and the keys it can send.
-   - Test on the A9 by injecting 115/114 (ydotool) on Home and in each kind of
-     game, reading the sink volume back. Then reply on #351 for Spinnich to
-     check a testing image on the Deck.
-2. **#352, RomM Smart Collections** (Spinnich, RomM 5.4.0): the console asks
-   only `/api/collections`; smart ones are `/api/collections/smart`, which the
-   reference RomM (5.3.1) also serves. Show them beside the regular ones.
-   MMagTech is making a few on the reference server to test with.
-3. **#268 (PR #332, on hold):** the display wait works, but the app starts
+1. **Finish #351 and #352** (MMagTech's checks, then his merge word):
+   - Prove the testing image from the A9 (version, no drop-ins,
+     `71-cabinetos-key-devices.rules` in `/usr/lib/udev/rules.d`,
+     `[volume] full at start` and `[library] ... of them smart` in the log),
+     then list what it holds and the checks he may want; he picks.
+   - Merge #358 first, then #359 (its diff is then its own commit). Close
+     both issues with a comment; reply on #351 asking Spinnich to check the
+     rocker on the Deck once it is in an image (draft it, post on his go).
+   - Delete the four `Test:` smart collections on RomM on his go (listed on
+     #352; `~/.config/cabinetos/romm-token-collections.json`), and the merged
+     branches.
+2. **#268 (PR #332, on hold):** the display wait works, but the app starts
    Developer access, Remote Play and Tailscale, so with no display none came
    up. Rework: start them at boot from their saved state, independent of the
    session; then retest with the HDMI unplugged (MMagTech at the TV). Branch
