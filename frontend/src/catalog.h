@@ -212,11 +212,27 @@ std::map<std::string, std::string> optionOverrides(const std::string& coreName);
 // Wii's Mii list, `shared2/menu/FaceLib/RFL_DB.dat`, which is outside
 // `title/`. Its zip holds `title/<kind>/<code>/data/...` and that one file.
 // No other game's zip changes. `titleId` is RomM's (wii::isMiiChannel).
+//
+// GAMECUBE TOO, from 2026-10-11 (#344): Dolphin's own default, one `.gci`
+// file per save in `User/GC/<region>/Card A/`, where every other Dolphin
+// keeps them and what RomM's coming save channels carry (#346). The zip is
+// those files, flat. Until then the console kept one whole 16 MB card at a
+// path of its own, because Cabinet for Mac did; Dolphin reads that card into
+// the folder by itself the first time the folder is missing (main.cpp,
+// restoreDirSave). The region comes from the game's code, so a game whose
+// code RomM does not know has no root and its saves stay on this console.
 const char* directorySaveRoot(const char* core, const std::string& platformSlug,
                               const std::string& titleId);
 
+// The folder name Dolphin gives a GameCube game's region, `USA`, `JAP` or
+// `EUR`, from the last of the four letters in RomM's `title_id`, with
+// Dolphin's own table (DiscIO/Enums.cpp, CountryCodeToRegion). Dolphin reads
+// the disc's region field rather than the letter; the two disagree only on a
+// few Korean discs labelled `E`. Nullptr when there is no code.
+const char* gameCubeRegion(const std::string& titleId);
+
 // Whether a file under that root is part of the save, by its path relative
-// to the root. Everything is, for PSP.
+// to the root. Everything is, for PSP. For GameCube, the `.gci` files only.
 bool inDirectorySave(const char* core, const std::string& platformSlug,
                      const std::string& titleId, const std::string& relPath);
 
@@ -287,6 +303,10 @@ enum class Untouched {
     // slot is free. Measured both ways on 2026-09-20 — the three cards on the
     // reference server had zero entries in use, and a card Ikaruga had saved
     // to carried `GIKE`/`70`/`ikaruga_save_data`.
+    //
+    // No SaveFile uses it since GameCube moved to a folder of `.gci` files
+    // (#344). It still judges a whole card that arrives from RomM, made
+    // before that, so an empty one is never handed to Dolphin to read in.
     GameCubeDirectory,
     // A VMU's own directory, and the one guard this project did not inherit.
     // MEASURED, 2026-09-19: three of the thirteen Dreamcast cards on the
@@ -352,15 +372,15 @@ struct SaveFile {
     // NAMED THE WAY THE MAC NAMES IT, rather than this console's own
     // `<game> (Cabinet).<region>`.
     //
-    // PlayStation 2 and GameCube are the only platforms where a save already
-    // exists on the server written by a DIFFERENT implementation of this same
-    // product, and RomM matches a row for overwrite by filename alone. Cabinet
+    // PlayStation 2 is the platform where a save already existed on the
+    // server written by a DIFFERENT implementation of this same product, and
+    // RomM matches a row for overwrite by filename alone. Cabinet
     // for Mac calls a PS2 card `cabinet-604.ps2`; this console would call it
     // `Burnout 3 Takedown (Cabinet).srm`. Same bytes, same emulator tag, two
     // rows — and a restore that never finds the card the person actually made.
     //
-    // So for these two the Mac's convention wins, because matching it is the
-    // entire point. It is a deliberate exception to the naming rule above and
+    // So there the Mac's convention wins, because matching it was the entire
+    // point. It is a deliberate exception to the naming rule above and
     // not a drift into one.
     bool macRowName = false;
 };

@@ -825,17 +825,47 @@ std::map<std::string, std::string> optionOverrides(const std::string& core) {
     return {};
 }
 
+const char* gameCubeRegion(const std::string& titleId) {
+    const std::string code = wii::codeFromTitleId(titleId);
+    if (code.size() != 4) return nullptr;
+    switch (code[3]) {
+        case 'E': case 'B': case 'N':
+            return "USA";
+        case 'J': case 'W': case 'K': case 'Q': case 'T':
+            return "JAP";
+        case 'D': case 'F': case 'H': case 'I': case 'L': case 'M': case 'P': case 'R':
+        case 'S': case 'U': case 'V': case 'X': case 'Y': case 'Z':
+            return "EUR";
+    }
+    return nullptr;
+}
+
 const char* directorySaveRoot(const char* core, const std::string& platformSlug,
                               const std::string& titleId) {
     if (!core) return nullptr;
     if (manifestName(core) == "ppsspp") return "PSP/SAVEDATA";
     if (manifestName(core) == "dolphin" && platformSlug == "wii")
         return wii::isMiiChannel(titleId) ? "User/Wii" : "User/Wii/title";
+    if (manifestName(core) == "dolphin" && platformSlug == "ngc") {
+        const char* region = gameCubeRegion(titleId);
+        if (!region) return nullptr;
+        if (std::strcmp(region, "USA") == 0) return "User/GC/USA/Card A";
+        if (std::strcmp(region, "JAP") == 0) return "User/GC/JAP/Card A";
+        return "User/GC/EUR/Card A";
+    }
     return nullptr;
 }
 
 bool inDirectorySave(const char* core, const std::string& platformSlug,
                      const std::string& titleId, const std::string& relPath) {
+    // GameCube: the saves Dolphin keeps in the folder, and only those. A save
+    // deleted in a game is renamed `.gci.deleted`, not removed
+    // (GCMemcardDirectory), and must not travel as if it were still there.
+    if (core && manifestName(core) == "dolphin" && platformSlug == "ngc") {
+        const std::string ext = ".gci";
+        return relPath.find('/') == std::string::npos && relPath.size() > ext.size() &&
+               relPath.compare(relPath.size() - ext.size(), ext.size(), ext) == 0;
+    }
     if (!core || manifestName(core) != "dolphin" || platformSlug != "wii") return true;
     // The Mii Channel's root is `User/Wii`: its Mii list, and under `title/`
     // the same rule as every other game.
@@ -1039,45 +1069,10 @@ std::vector<SaveFile> saveFiles(const std::string& slug, const std::string& core
         return {f};
     }
 
-    // GameCube. Dolphin writes whatever its slot A device says, and the
-    // libretro core sets neither the device nor the path — so left alone it
-    // produces a GCI FOLDER of loose files while Cabinet for Mac produces a
-    // whole-card `.raw`. The console writes Dolphin's own config before launch
-    // to make the two agree; see writeDolphinConfig in main.cpp.
+    // GameCube is not in this class any more (#344): Dolphin keeps one `.gci`
+    // file per save in its own folder, and they travel as a directory save.
+    // See directorySaveRoot.
     //
-    // THE NAME IS NOT PREDICTABLE FROM HERE and that is Dolphin's doing: ask
-    // for `card.raw` and it writes `card.USA.raw`, stamping the region in, and
-    // it stamps the SIZE in too when the card is not the default — one of the
-    // three cards on the reference server was `cabinet-934.USA.251.raw`. So
-    // the capture scans for the suffix rather than insisting on a name, the
-    // same as Dreamcast.
-    if (slug == "ngc") {
-        SaveFile f;
-        f.path = "card.raw";
-        f.captureSuffix = ".raw";
-        // The console's own clock and settings, which Dolphin keeps beside the
-        // card and which are not anybody's save.
-        f.captureExclude = "SRAM.raw";
-        f.region = "raw";
-        f.untouched = Untouched::GameCubeDirectory;
-        // THIS CONSOLE'S OWN NAMING, unlike PlayStation 2 above, and the
-        // reason is that there is nothing to be compatible with.
-        //
-        // All three GameCube rows on the reference server were EMPTY cards —
-        // measured 2026-09-20, 33 to 37 non-blank bytes in a 16 MB file, no
-        // directory entry in either copy — so there is no real save anywhere
-        // to match. And the Mac's spelling is not predictable from here:
-        // Dolphin stamps region and card size into the filename, so matching
-        // it means prefix-scanning the server's rows, which is logic with no
-        // test behind it.
-        //
-        // A guess with no test is how a save silently goes to the wrong row.
-        // When a real GameCube save exists on the Mac again, that is the
-        // moment to make the two agree — with something to check against.
-        f.macRowName = false;
-        return {f};
-    }
-
     // PSP is in this class too and is already built, as a tree rather than a
     // file. directorySaveRoot above is its entry.
     return {};
