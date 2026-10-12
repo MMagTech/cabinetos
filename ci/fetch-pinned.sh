@@ -37,12 +37,12 @@ pins() {
             url="" sha=""
             # The script's own names only: the runner's environment has
             # GITHUB_SERVER_URL and others that end in _URL too.
-            for v in $(sed -E 's/^readonly ([A-Z][A-Z0-9_]*)=.*/\1/' <<<"${lines}"); do
+            while read -r v; do
                 case "$v" in
                     *_URL) url="${!v}" ;;
                     *_SHA256) sha="${!v}" ;;
                 esac
-            done
+            done < <(sed -E 's/^readonly ([A-Z][A-Z0-9_]*)=.*/\1/' <<<"${lines}")
             if [[ -z "${url}" || ! "${sha}" =~ ^[0-9a-f]{64}$ ]]; then
                 echo "${s}: no readonly *_URL and *_SHA256 pin found" >&2
                 exit 1
