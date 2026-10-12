@@ -30,6 +30,7 @@ Remote Play stream starts or ends.
 | **Screenshot** | Saves a picture of the game (without the menu) to your RomM gallery. |
 | **Change disc** | Lists the game's discs, the one in the drive marked. **Insert** puts that disc in and the game carries on; **Insert and restart** starts the game again on that disc. Play then carries on from the last disc you used. See [Games on several discs](discs.md). |
 | **Picture** | This game's picture level: **Console** (the console's setting), Performance, Balanced or Quality. Takes effect from the next start. |
+| **Widescreen** | PS2: **On** plays the game in 16:9 with PCSX2's widescreen patch; **Off** plays it in 4:3 as made. Kept for this game. Takes effect from the next start. |
 | **Look** | The screen look for this system: CRT, LCD, sharp or plain. Changes behind the menu straight away. |
 | **Screen** / **Colors** | Virtual Boy's screen colours and 3D glasses, Game Boy's colour palettes. |
 | **Exit to Home** | Saves your game to RomM and goes back to its page. |
@@ -40,6 +41,7 @@ Rows appear only where they apply:
   Switch, PS3, Xbox, Xbox 360 or Wii U, which have no save states.
 - **Picture**: only on systems with picture levels, and only for the owner
   when a PIN is set.
+- **Widescreen**: only on PS2 games that have a widescreen patch.
 - **Look**: only on systems that have looks. See [Picture and colours](picture.md).
 - **Change disc**: only on a game with several discs. Not on GameCube, which
   changes discs by itself; 3DO has Insert and restart only. On Saturn Insert
