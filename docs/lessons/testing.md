@@ -233,6 +233,21 @@ then `YDOTOOL_SOCKET=/tmp/ydotool.sock ydotool key 108:1 108:0` (Down; Up
   (`wl_display_destroy`, SIGSEGV or SIGABRT). It is every session stop, not
   the thing being tested; look at what stopped the app.
 
+- **A SESSION START REMAKES THE TV'S SOUND OUTPUT.** Measured 2026-10-11
+  (#351): the HDMI sink was node 65, then 70, then 55 within a second of
+  gamescope coming up, and the last came back at WirePlumber's saved level.
+  Anything that sets the volume at start can be undone a second later; watch
+  `wpctl get-volume` and `wpctl inspect @DEFAULT_AUDIO_SINK@` across a
+  restart before trusting a log line that says it was set.
+
+- **A udev rule is tried in `/run/udev/rules.d`**, then `udevadm control
+  --reload` and `udevadm trigger --subsystem-match=<s> --action=change`: gone
+  at the next reboot, like the loop's drop-in. Keyboards on this image are
+  the `input` group's alone; only pads get the seat user's grant.
+
+- **ydotool's virtual keyboard has no key repeat**, so a held key sends one
+  press. A held volume or arrow key cannot be tested with it.
+
 - **frames.py CANNOT SEE A REPEATED GAME FRAME.** The console presents at
   every refresh whether the game made a new picture or not, so gamescope's
   frame times read a clean 16.67 ms over a game that repeats and skips

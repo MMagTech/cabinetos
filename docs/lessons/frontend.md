@@ -212,6 +212,13 @@ Read before working on a screen, the network, Bluetooth, pairing or first run.
 - **Every scripted edit must assert its anchor.** A patch that matches nothing
   leaves a green build with the fix absent.
 
+- **A RomM ID SAYS NOTHING WITHOUT ITS KIND.** Platforms, collections and
+  smart collections are counted separately, all from 1, and the Library
+  matched tiles by id alone: a collection's "4 of 12" could land on platform
+  2, and a grid's later pages fill the wrong tile (found 2026-10-12, #352,
+  when smart collection 2 joined collection 2). A tile is its query now
+  (`Tile::query`).
+
 - **A field added to the middle of a positional struct re-assigns the rest of
   the row.** `catalog.cpp`'s table is positional.
 

@@ -19,6 +19,16 @@ operating system, not an app.
   [Your RomM server](romm.md).
 - **A network.** Ethernet or Wi-Fi.
 
+**Handhelds are not supported.** Bazzite keeps a separate image for handhelds
+(`bazzite-deck`); CabinetOS builds on Bazzite's desktop image and is made for a
+TV, tested on one mini PC by a maintainer who will never own a handheld. It may
+run on one, but nothing handheld-specific is tested or planned: the console
+uses a classic controller layout only, and a handheld's extra buttons,
+trackpads and paddles do nothing on its screens. The one exception is a Steam
+Deck inside Steam, which reads the Deck's controls itself. Reports about that
+are welcome, but no fix is promised, nor that it keeps working after an update.
+Anyone wanting fuller handheld support is welcome to fork CabinetOS.
+
 A graphics chip without Vulkan still runs the console, but PlayStation 2 and
 GameCube need Vulkan, and every system starts on the lowest picture level.
 

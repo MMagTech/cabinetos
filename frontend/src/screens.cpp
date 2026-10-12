@@ -191,11 +191,11 @@ void LibraryScreen::build(std::vector<Tile> platforms, std::vector<Tile> collect
     collections_ = std::move(collections);
 }
 
-void LibraryScreen::learnedTile(int id, const std::string& detail,
+void LibraryScreen::learnedTile(const std::string& query, const std::string& detail,
                                 const std::string& cover) {
     for (auto* v : {&platforms_, &collections_}) {
         for (Tile& t : *v) {
-            if (t.id != id) continue;
+            if (t.query != query) continue;
             if (!detail.empty()) t.detail = detail;
             // A cover already on the tile is left alone: a collection carries
             // its own from the server and must not be overwritten by whichever
@@ -258,10 +258,33 @@ float LibraryScreen::tileWidth() const {
            static_cast<float>(n);
 }
 
-int LibraryScreen::tileRows() const {
-    const int n = static_cast<int>(visible().size());
-    if (n == 0) return 0;
-    return (n + columns() - 1) / columns();
+LibraryScreen::Layout LibraryScreen::layout(float headingH) const {
+    Layout L;
+    const auto& tiles = visible();
+    const int cols = columns();
+    const float pitch = design::kTileHeight + design::kTileSpacing;
+    float y = 0.0f;
+    for (size_t i = 0; i < tiles.size(); ++i) {
+        const bool newGroup = i > 0 && tiles[i].group != tiles[i - 1].group;
+        const bool newRow = i == 0 || newGroup || L.rowCount.back() == cols;
+        if (newRow) {
+            if (i > 0) y += pitch;
+            const bool headed = (i == 0 || newGroup) && !tiles[i].group.empty();
+            if (headed) {
+                if (i > 0) y += design::kTileGroupGapAbove;
+                L.headings.push_back({y, tiles[i].group});
+                y += headingH + design::kTileGroupGapBelow;
+            }
+            L.rowFirst.push_back(static_cast<int>(i));
+            L.rowCount.push_back(0);
+            L.rowY.push_back(y);
+            L.rowHeaded.push_back(headed);
+        }
+        L.rowOf.push_back(static_cast<int>(L.rowFirst.size()) - 1);
+        L.colOf.push_back(L.rowCount.back()++);
+    }
+    L.bottom = tiles.empty() ? 0.0f : y + pitch;
+    return L;
 }
 
 void LibraryScreen::tick(float dt) {
@@ -275,7 +298,6 @@ void LibraryScreen::tick(float dt) {
 
 void LibraryScreen::moveFocus(int dx, int dy) {
     auto& tiles = tab_ == 0 ? platforms_ : collections_;
-    const int cols = columns();
     const int count = static_cast<int>(tiles.size());
 
     auto leave = [&]() {
@@ -309,8 +331,11 @@ void LibraryScreen::moveFocus(int dx, int dy) {
         return;
     }
 
-    // In the grid.
-    if (dy < 0 && slot_ < cols) {
+    // In the grid, by its rows: a group starts a new one, so a row can be
+    // short and the one under it is not `cols` further on.
+    const Layout L = layout(0.0f);
+    const int r = L.rowOf[static_cast<size_t>(slot_)];
+    if (dy < 0 && r == 0) {
         // Off the top row and back to the switcher, which is where the person
         // came in. Remembered, so coming back down lands where they left.
         leave();
@@ -324,18 +349,48 @@ void LibraryScreen::moveFocus(int dx, int dy) {
         // Rows do not wrap. Running off the right of one row and appearing at
         // the left of the next is disorienting with a d-pad, and the reference
         // implementation's grids do not do it.
-        const int rowStart = (slot_ / cols) * cols;
-        const int rowEnd = std::min(rowStart + cols - 1, count - 1);
+        const int rowStart = L.rowFirst[static_cast<size_t>(r)];
+        const int rowEnd = rowStart + L.rowCount[static_cast<size_t>(r)] - 1;
         next = std::clamp(slot_ + dx, rowStart, rowEnd);
     } else if (dy != 0) {
-        next = slot_ + dy * cols;
-        if (next < 0 || next >= count) return;
+        const int r2 = r + dy;
+        if (r2 < 0 || r2 >= static_cast<int>(L.rowFirst.size())) return;
+        // The same column, or the last tile of a shorter row.
+        next = L.rowFirst[static_cast<size_t>(r2)] +
+               std::min(L.colOf[static_cast<size_t>(slot_)],
+                        L.rowCount[static_cast<size_t>(r2)] - 1);
     }
     if (next == slot_) return;
     leave();
     slot_ = next;
     rememberedTileSlot_ = slot_;
     arrive();
+}
+
+bool LibraryScreen::jumpGroup(int dir) {
+    auto& tiles = tab_ == 0 ? platforms_ : collections_;
+    std::vector<int> starts;
+    for (size_t i = 0; i < tiles.size(); ++i)
+        if (i == 0 || tiles[i].group != tiles[i - 1].group) starts.push_back(static_cast<int>(i));
+    // On the switcher, focus is before the first group.
+    int at = -1;
+    if (row_ > 0)
+        for (size_t g = 0; g < starts.size(); ++g)
+            if (starts[g] <= slot_) at = static_cast<int>(g);
+    int want = at + dir;
+    if (dir < 0 && at >= 0 && starts[static_cast<size_t>(at)] < slot_) want = at;
+    if (starts.size() < 2 || want < 0 || want >= static_cast<int>(starts.size())) {
+        sound::play(sound::Cue::Edge);
+        return false;
+    }
+    if (row_ == 0) pillFocus_[slot_].retarget(0.0f, design::kFocusDuration);
+    else tiles[static_cast<size_t>(slot_)].focus.retarget(0.0f, design::kFocusDuration);
+    row_ = 1;
+    slot_ = starts[static_cast<size_t>(want)];
+    rememberedTileSlot_ = slot_;
+    tiles[static_cast<size_t>(slot_)].focus.retarget(1.0f, design::kFocusDuration);
+    sound::play(sound::Cue::Move);
+    return true;
 }
 
 Result LibraryScreen::key(Nav n) {
@@ -386,23 +441,27 @@ void LibraryScreen::draw(Ctx& c) {
     c.r.setScissor(0, design::kScrollClipTop, ui::kCanvasWidth,
                    ui::kCanvasHeight - design::kScrollClipTop);
     const auto& tiles = visible();
-    const int cols = columns();
     const float tw = tileWidth();
     const float pillH = pillHeight(c.text, c.sc);
     const float gridTop = design::kSwitcherTop + pillH + design::kSwitcherGapBelow;
     const float rowPitch = design::kTileHeight + design::kTileSpacing;
+    const float headingH = c.text.lineHeight(ui::TextStyle::Title3, c.sc);
+    const Layout L = layout(headingH);
 
     // Scroll to keep the focused row on screen, and never past the end of the
     // content: pinning the last row to the top leaves half a screen of nothing
     // under it, which reads as the layout having broken.
-    const float contentH = gridTop + static_cast<float>(tileRows()) * rowPitch +
-                           design::kScreenBottomPad;
+    const float contentH = gridTop + L.bottom + design::kScreenBottomPad;
     const float maxScroll = std::max(0.0f, contentH - ui::kCanvasHeight);
     float want = 0.0f;
-    if (row_ > 0) {
-        const int r = slot_ / cols;
-        const float rowTop = gridTop + static_cast<float>(r) * rowPitch;
-        const float rowBottom = rowTop + design::kTileHeight;
+    if (row_ > 0 && slot_ < static_cast<int>(L.rowOf.size())) {
+        const int r = L.rowOf[static_cast<size_t>(slot_)];
+        // A row under a heading brings its heading on screen with it.
+        const float rowTop = gridTop + L.rowY[static_cast<size_t>(r)] -
+                             (L.rowHeaded[static_cast<size_t>(r)]
+                                  ? headingH + design::kTileGroupGapBelow
+                                  : 0.0f);
+        const float rowBottom = gridTop + L.rowY[static_cast<size_t>(r)] + design::kTileHeight;
         const float current = scroll_.to;
         if (rowBottom - current > ui::kCanvasHeight - design::kScreenBottomPad)
             want = rowBottom - (ui::kCanvasHeight - design::kScreenBottomPad);
@@ -427,6 +486,16 @@ void LibraryScreen::draw(Ctx& c) {
         return;
     }
 
+    // The groups' headings: Title 3 on the margin, as Home's shelves.
+    for (const auto& [hy, text] : L.headings) {
+        const float top = gridTop + hy - scroll;
+        if (top + headingH < 0.0f || top > ui::kCanvasHeight) continue;
+        c.text.draw(c.r, c.text.truncate(text, ui::TextStyle::Title3, c.sc,
+                                         ui::kCanvasWidth - design::kLibraryInset * 2.0f),
+                    design::kLibraryInset, top + c.text.ascent(ui::TextStyle::Title3, c.sc),
+                    ui::TextStyle::Title3, ui::Color::white(1.0f), c.sc);
+    }
+
     // Unfocused first, so a focused tile's shadow lands on top of its
     // neighbours rather than under them.
     for (int pass = 0; pass < 2; ++pass) {
@@ -434,11 +503,10 @@ void LibraryScreen::draw(Ctx& c) {
             const bool isFocused = (row_ > 0 && static_cast<int>(i) == slot_);
             if ((pass == 0) == isFocused) continue;
 
-            const int col = static_cast<int>(i) % cols;
-            const int r = static_cast<int>(i) / cols;
+            const int col = L.colOf[i];
             const float bx = design::kLibraryInset +
                              static_cast<float>(col) * (tw + design::kTileSpacing);
-            const float by = gridTop + static_cast<float>(r) * rowPitch - scroll;
+            const float by = gridTop + L.rowY[static_cast<size_t>(L.rowOf[i])] - scroll;
             // Cull to what is on screen. A grid is a window onto a list, not a
             // drawing of the list — and the cover cache must not be asked for
             // art that is nowhere near the screen.

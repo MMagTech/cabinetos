@@ -108,11 +108,20 @@ struct Result {
 // a playable one carries its count, and it cannot be entered.
 struct Tile {
     int id = 0;               // platform id, or collection id
+    // What lists its games, and so what the tile IS: "platform_ids=5",
+    // "collection_id=2", "smart_collection_id=2". The id alone is not: RomM
+    // counts platforms, collections and smart collections separately, so
+    // platform 2, collection 2 and smart collection 2 are three tiles (#352).
+    std::string query;
     std::string title;        // "Arcade (FinalBurn Neo)", "SHMUP"
     std::string detail;       // "141 games", or why it cannot be played
     std::string cover;        // a cover path for the tile's artwork
     ui::Color art;            // shown until that arrives, and if it never does
     bool enterable = true;
+    // The heading the tile sits under, empty for none. Collections only: a
+    // person's own come first with none, then each other person's shared ones
+    // under "From <their name>" (#352). A group starts a new row.
+    std::string group;
     std::vector<int> cards;   // indices into Ctx::cards
     design::Animated focus;
 };
@@ -144,6 +153,14 @@ public:
     // for the hero's band.
     void drawGlass(Ctx& c);
 
+    // THE TRIGGERS JUMP PERSON TO PERSON in Collections, as they jump letter
+    // to letter in a game grid (MMagTech, 2026-10-12, #352): `dir` -1 or +1,
+    // to the first tile of the previous or next group. Back from inside a
+    // group goes to its own start first, as jumpLetter does. False, with the
+    // edge sound, when there is no group that way (and on Platforms, which
+    // has none).
+    bool jumpGroup(int dir);
+
     // Which tab is showing, so the app can resolve an OpenTile.
     const std::vector<Tile>& visible() const {
         return tab_ == 0 ? platforms_ : collections_;
@@ -160,7 +177,9 @@ public:
     // screen. That is fine while a tile is fixed at boot and wrong the moment
     // a tile can learn something — open question 28, where a platform's games
     // are not fetched until it is opened.
-    void learnedTile(int id, const std::string& detail, const std::string& cover);
+    // `query` is the tile's own (Tile::query), never a bare id.
+    void learnedTile(const std::string& query, const std::string& detail,
+                     const std::string& cover);
 
     // The cover of whatever focus is on, so the app can keep lighting the room
     // with it. The backdrop follows focus on Home and it follows focus here for
@@ -173,8 +192,18 @@ public:
     std::string focusedCover() const;
 
 private:
+    // Where every tile of the visible tab sits, rows and headings. Rows are
+    // the grid's own; a group starts a new one. `y` is from the grid's top.
+    struct Layout {
+        std::vector<int> rowOf, colOf;           // per tile
+        std::vector<int> rowFirst, rowCount;     // per row
+        std::vector<float> rowY;                 // per row
+        std::vector<bool> rowHeaded;             // a heading sits above it
+        std::vector<std::pair<float, std::string>> headings;   // y, text
+        float bottom = 0.0f;                     // under the last row
+    };
+    Layout layout(float headingH) const;
     int columns() const;
-    int tileRows() const;
     float tileWidth() const;
     void moveFocus(int dx, int dy);
 

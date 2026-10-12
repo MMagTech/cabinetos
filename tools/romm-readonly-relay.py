@@ -9,6 +9,10 @@
 #   * A game's files can be shown under other names, or not at all (#162,
 #     the disc rig): file:<fileId>=<name> renames one in every `files` list,
 #     hide:<fileId> leaves it out. RomM still serves a file by its id.
+#   * `people` adds four made-up people with public collections (#352, the
+#     Collections tab's "From <name>" groups), so a household of five can be
+#     tried with two real accounts. Each one opens onto a real platform's
+#     games; Sam's public Favorites must never show.
 import json, sys, urllib.parse, urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -17,7 +21,25 @@ PORT = int(sys.argv[1])
 MAP = {}
 # file:<fileId>=<name> shows a game's file under another name (#162, odd names).
 FILES = {}
+PEOPLE = False
+# (owner id, owner name, collection id, name, smart, favourite, platform id)
+MOCK = [
+    (9101, "Alex", 9001, "Saturday co-op", False, False, 8),
+    (9101, "Alex", 9002, "Hard mode", True, False, 10),
+    (9101, "Alex", 9003, "Handhelds", False, False, 2),
+    (9102, "Jordan", 9004, "Puzzle corner", True, False, 1),
+    (9103, "Riley", 9005, "Arcade nights", False, False, 22),
+    (9103, "Riley", 9006, "Sega only", True, False, 11),
+    (9103, "Riley", 9007, "Dreamcast", True, False, 14),
+    (9103, "Riley", 9008, "PlayStation", False, False, 9),
+    (9103, "Riley", 9009, "Master System", False, False, 30),
+    (9104, "Sam", 9010, "Favorites", False, True, 1),
+    (9104, "Sam", 9011, "Game Boy Color", False, False, 3),
+]
 for a in sys.argv[2:]:
+    if a == "people":
+        PEOPLE = True
+        continue
     if a.startswith("hide:"):
         FILES[int(a[5:])] = None
         continue
@@ -49,6 +71,48 @@ def rewrite(obj):
         return obj
     return obj
 
+FIRST = {}   # platform id -> (rom ids, first cover), asked once with the caller's token
+
+def platform_sample(pid, hdrs):
+    if pid not in FIRST:
+        req = urllib.request.Request(UP + "/api/roms?platform_ids=%d&limit=500&with_filter_values=false"
+                                     "&with_rom_id_index=false&with_char_index=false" % pid, headers=hdrs)
+        items = json.loads(urllib.request.urlopen(req, timeout=60).read()).get("items", [])
+        FIRST[pid] = ([r["id"] for r in items],
+                      next((r.get("path_cover_small") for r in items if r.get("path_cover_small")), None))
+    return FIRST[pid]
+
+def mock_collections(smart, hdrs):
+    out = []
+    for uid, uname, cid, name, is_smart, fav, pid in MOCK:
+        if is_smart != smart:
+            continue
+        ids, cover = platform_sample(pid, hdrs)
+        c = {"id": cid, "name": name, "description": "made up by the relay (#352)",
+             "user_id": uid, "owner_username": uname, "is_public": True, "is_favorite": fav,
+             "is_smart": smart, "is_virtual": False, "rom_ids": ids, "rom_count": len(ids),
+             "path_cover_small": None, "path_covers_small": [cover] if cover else [],
+             "path_cover_large": None, "path_covers_large": [],
+             "created_at": "2026-10-12T00:00:00+00:00", "updated_at": "2026-10-12T00:00:00+00:00"}
+        if smart:
+            c["filter_criteria"] = {"platform_ids": [pid]}
+            c["filter_summary"] = ""
+        out.append(c)
+    return out
+
+def mock_path(path):
+    # A made-up collection opens onto its platform.
+    u = urllib.parse.urlsplit(path)
+    if u.path != "/api/roms":
+        return path
+    q = urllib.parse.parse_qsl(u.query, keep_blank_values=True)
+    for i, (k, v) in enumerate(q):
+        if k in ("collection_id", "smart_collection_id") and v.isdigit():
+            for m in MOCK:
+                if m[2] == int(v):
+                    q[i] = ("platform_ids", str(m[6]))
+    return urllib.parse.urlunsplit(u._replace(query=urllib.parse.urlencode(q)))
+
 class H(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
     def log_message(self, *a): pass
@@ -62,7 +126,8 @@ class H(BaseHTTPRequestHandler):
     def do_GET(self): self.fwd()
     def fwd(self, head=False):
         hdrs = {k: v for k, v in self.headers.items() if k.lower() not in ("host", "connection", "accept-encoding")}
-        req = urllib.request.Request(UP + self.path, headers=hdrs, method=self.command)
+        path = mock_path(self.path) if PEOPLE else self.path
+        req = urllib.request.Request(UP + path, headers=hdrs, method=self.command)
         try:
             r = urllib.request.urlopen(req, timeout=120)
         except urllib.error.HTTPError as e:
@@ -72,6 +137,12 @@ class H(BaseHTTPRequestHandler):
         if (MAP or FILES) and "json" in ctype and body:
             try: body = json.dumps(rewrite(json.loads(body))).encode()
             except Exception: pass
+        listing = urllib.parse.urlsplit(self.path).path
+        if PEOPLE and "json" in ctype and body and listing in ("/api/collections", "/api/collections/smart"):
+            try:
+                body = json.dumps(json.loads(body) + mock_collections(listing.endswith("smart"), hdrs)).encode()
+            except Exception as e:
+                sys.stderr.write(f"people: {e}\n")
         self.send_response(r.status if hasattr(r, "status") else r.code)
         for k, v in r.headers.items():
             if k.lower() in ("content-length", "transfer-encoding", "connection", "content-encoding"): continue
