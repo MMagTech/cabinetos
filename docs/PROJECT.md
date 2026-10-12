@@ -16820,9 +16820,11 @@ the console, which asked only `/api/collections`.
 
 **Tested on the A9 through the loop, 2026-10-12**, with test collections on
 MMagTech's account: signed in as the second account, only his public ones
-showed, under "From MMagTech", with the second account's own Favorites first
-and not his Favorites even while it was public; back on his account, all of
-his showed in one A to Z list, Favorites first. A favourite pressed on the
+showed, under "From MMagTech", with the second account's own Favorites
+first; back on his account, all of his showed in one A to Z list, Favorites
+first. Another account's public Favorites staying hidden was shown with the
+stand-in (Sam's), not with his own: his was private again by the time that
+rule was built. A favourite pressed on the
 second account while his Favorites was public reached RomM and left his 34
 games unchanged. SHMUP (collection 2) and `Test: Racing` (smart collection 2)
 each opened their own games and kept their own count lines.
