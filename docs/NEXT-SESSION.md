@@ -11,57 +11,45 @@ specification is `docs/PROJECT.md`; the order is `docs/ROADMAP.md`.
 
 ## Where things stand
 
-**2026-10-12: #351 (volume keys), #352 (smart collections, grouped by
-owner) and #365 (the report's Sound section, for #341) are merged and
-released**; Spinnich is asked to try the Deck's rocker, and the K1 user
-(#341) for a new report.
-Handhelds are now a non-goal (docs/PROJECT.md): classic controls only; the
-Steam Deck inside Steam is the one exception, with no promises. The A9
+**2026-10-12: #364 (game manuals) is merged**, judged on the TV: the game's
+RomM manual beside it on the drive, a small book on the cover (bottom right,
+on frosted glass), R1 to read it. The sound fix (#367) is released; the A9
 (Wi-Fi, **192.168.1.109**, `CABINETOS_A9=cabinet@192.168.1.109`) runs
-`testing` 2026.10.12.4, the released image. Cabinet on Apple platforms is no
-longer a constraint.
+`testing`, 2026.10.12.5 or the manuals image after it. Handhelds are a
+non-goal (docs/PROJECT.md); Cabinet on Apple platforms is no constraint.
 
 ## Next
 
-1. **#364, game manuals** (lessons: frontend.md). **The plan is decided on
-   #364; build it:** the game's one RomM manual (`path_manual`, PDF), never
-   extra documents; a small book on the game page's cover when there is one;
-   R1 slides to it and L1 or B slides back (on a game page R1 always means
-   the manual); one PDF page per screen, fitted, with a zoom step; pages
-   drawn with the base's `pdftoppm` (assert it in build.sh); the file in
-   `cache/<system>/Manuals/` or `roms/<system>/Manuals/`, following its game
-   on evict, keep and remove. The audit (175 of 704 manuals) is on #364.
+1. **#368, PS2 Widescreen row** (lessons: emulators.md). **Decided on #368,
+   build it:** widescreen stays on for every PS2 game whose patch file has a
+   `Widescreen 16:9` section; those games get a "Widescreen: On / Off" row
+   in the pause menu, remembered per game on this console like the Picture
+   row, from the next start of the game (test whether PCSX2 can switch it
+   live). A user's Armored Core 3 has a thin hack that stretches the HUD.
 2. **#268 (PR #332, on hold):** the display wait works, but the app starts
    Developer access, Remote Play and Tailscale, so with no display none came
    up. Rework: start them at boot from their saved state, independent of the
    session; then retest with the HDMI unplugged (MMagTech at the TV). Branch
-   `wait-for-display`. Decided against (#361, closed): restarting the picture
-   when a different screen is connected while running.
+   `wait-for-display`.
 3. **Fewer outside downloads in every image build (decided, MMagTech
-   2026-10-12: "if it brings benefit and won't break anything").** A GitHub
-   500 on RPCS3's release failed a build that day.
+   2026-10-12).** A GitHub 500 on RPCS3's release failed a build that day.
    - RPCS3, Xenia and xemu's drive: fetched in a CI step before the image
      build, kept in the Actions cache, staged into `image_payload/`; the
      install scripts use the staged file and fall back to downloading (the A9
      dry runs have no payload). **The cache key comes from the install
-     script's own pin** (URL and sha256), so moving a pin is the same one
-     edit as today and fetches the new file; the sha256 is checked on every
+     script's own pin** (URL and sha256); the sha256 is checked on every
      build, cached or not.
-   - The frontend's builder container: build-frontend.yml rebuilds it from
-     Fedora's registry and mirrors every time; reuse the ghcr builder image
-     build-core.yml already publishes and pulls, building only if the pull
-     fails.
+   - The frontend's builder container: reuse the ghcr builder image
+     build-core.yml already publishes, building only if the pull fails.
    - Prove it: build 1 downloads and saves, build 2 logs "from the cache",
      and a pin change on a throwaway branch (never pushed to testing)
-     fetches the new file. Cache today: 353 MB of 10 GB (51 entries, main
-     and testing each); this adds about 300 MB.
-   - Left out on purpose: the Bazzite base (several GB, GitHub's own
-     registry), Terra (already has the stored copy, #270), the frontend
-     compile (changes every build).
+     fetches the new file. Left out on purpose: the Bazzite base, Terra,
+     the frontend compile.
 
 Waiting, not for this session unless MMagTech raises them: #341 (no sound
 on a K1; asked for a report with the new Sound section), #363 (Deck
-controls inside Steam, waiting on Spinnich), #362 (to discuss: sharing a
+controls inside Steam: Spinnich has not tested in Steam yet, and suggested
+treating it as Steam Controller support; a reply was drafted 2026-10-12), #362 (to discuss: sharing a
 save), #360 (an update says "No connection" when only the router's DNS
 fails), #353, #354, #355
 (saves that never sync: Saturn cartridge, arcade high scores, cartridge

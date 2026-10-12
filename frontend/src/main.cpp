@@ -9512,6 +9512,7 @@ int main(int argc, char** argv) {
                         {line("Select", "A"),
                          line("Back", "B"),
                          line("Change screen", "L1 / R1"),
+                         line("Game manual", "R1, on a game's page"),
                          line("Jump a letter", "L2 / R2"),
                          line("Power menu", "Start, on Home"),
                          line("Switch person", "Up to the top bar, A on your name")}});

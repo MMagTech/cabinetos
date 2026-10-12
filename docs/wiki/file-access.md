@@ -29,8 +29,8 @@ with the console's own address. You see these folders:
 |---|---|
 | `users` | Each person's saves, states and screenshots |
 | `bios` | The BIOS, firmware and keys the console has fetched |
-| `roms` | Downloaded games |
-| `cache` | Games fetched by Play |
+| `roms` | Downloaded games, and their manuals in each system's `Manuals` folder |
+| `cache` | Games fetched by Play, and their manuals the same way |
 | `reports` | Diagnostic reports, the last five |
 | `External` and others | The `CabinetOS` folder on each extra drive |
 

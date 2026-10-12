@@ -24,6 +24,9 @@ your library. Four things matter to CabinetOS:
    system. The exact files are in [Systems, formats and BIOS](systems.md).
 4. **Games on several discs.** Every disc of a game in one folder, so RomM
    lists them as one game. See [Games on several discs](discs.md).
+5. **Manuals.** A game's manual in RomM, found by the ScreenScraper scraper or
+   uploaded on the game's page, shows as a book on the console. PDF only;
+   other files in a game's `manual` folder are not read.
 
 Covers come from RomM too. A game with no cover shows a coloured tile.
 
@@ -31,7 +34,7 @@ Covers come from RomM too. A game with no cover shows a coloured tile.
 
 | Reads | Writes |
 |---|---|
-| Your platforms, games, covers and collections | Saves, when you leave a game |
+| Your platforms, games, covers, manuals and collections | Saves, when you leave a game |
 | Firmware for the system you are playing | Save states, each with a picture |
 | Your saves and states | Screenshots, to your own RomM gallery |
 | Your favourites and play time | Play time |

@@ -33,6 +33,11 @@ tile opens it. In Collections, **L2** and **R2** jump between people.
 
 **A game's page.** **A** on **Play** or **Download**. Up reaches the heart, then
 Right the trophy. Down reaches **Continue from**; Left and Right pick a state.
+**R1** opens the game's manual, when its cover shows a small book.
+
+**A game's manual.** Left and Right turn the page. **A** zooms in; the d-pad
+then moves around the page, and Left or Right at its edge turns it. **A** again
+zooms out. **L1** or **B** goes back to the game's page.
 
 **Search.** Type on the keyboard. **Start** goes to the results, Down comes
 back to the keyboard, **B** goes to Home.
