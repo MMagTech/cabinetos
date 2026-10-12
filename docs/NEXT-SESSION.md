@@ -11,35 +11,34 @@ specification is `docs/PROJECT.md`; the order is `docs/ROADMAP.md`.
 
 ## Where things stand
 
-**2026-10-12: #351 (volume keys, PR #358) and #352 (smart collections, PR
-#359) are built, tested on the A9 through the loop, and on `testing`
-together** (#359 is stacked on #358). The A9 (Wi-Fi, **192.168.1.109**,
-`CABINETOS_A9=cabinet@192.168.1.109`) runs that image, `testing`
-2026.10.12.2, checked from its log; nothing on it by hand.
-Cabinet on Apple platforms is no longer a constraint; a CabinetOS change that
-leaves Cabinet behind gets a record issue on MMagTech/cabinet.
+**2026-10-12: #351 (volume keys) and #352 (smart collections, grouped by
+owner) are merged and released**; Spinnich is asked to try the Deck's rocker.
+Handhelds are now a non-goal (docs/PROJECT.md): classic controls only; the
+Steam Deck inside Steam is the one exception, with no promises. The A9
+(Wi-Fi, **192.168.1.109**, `CABINETOS_A9=cabinet@192.168.1.109`) runs
+`testing` 2026.10.12.3, the released image. Cabinet on Apple platforms is no
+longer a constraint.
 
 ## Next
 
-1. **Finish #351 and #352** (MMagTech's checks, then his merge word):
-   - The image is proven from the A9 (version, no drop-ins, the key rule
-     from `/usr`, `[volume] full at start`, `[library] 6 collection(s), 4
-     of them smart`, an injected press 1.00 to 0.95 and back). List what it
-     holds and the checks he may want; he picks.
-   - Merge #358 first, then #359 (its diff is then its own commit). Close
-     both issues with a comment; reply on #351 asking Spinnich to check the
-     rocker on the Deck once it is in an image (draft it, post on his go).
-   - Delete the four `Test:` smart collections on RomM on his go (listed on
-     #352; `~/.config/cabinetos/romm-token-collections.json`), and the merged
-     branches.
+1. **#341, the report's Sound section (PR from `report-sound`)**: built and
+   dry-run on the A9. Push to `testing`, prove the image from the A9, get
+   MMagTech's merge word, then ask the K1 user (deletableman) for a fresh
+   report after updating, drafted for MMagTech's go. Their report showed
+   WirePlumber failing to load `api.alsa.acp.device` on both boots, so no
+   outputs at all; the A9 does not.
 2. **#268 (PR #332, on hold):** the display wait works, but the app starts
    Developer access, Remote Play and Tailscale, so with no display none came
    up. Rework: start them at boot from their saved state, independent of the
    session; then retest with the HDMI unplugged (MMagTech at the TV). Branch
-   `wait-for-display`.
+   `wait-for-display`. Decided against (#361, closed): restarting the picture
+   when a different screen is connected while running; the LG drops HDMI
+   several times a day, and a TV user rarely changes screens.
 
-Waiting, not for this session unless MMagTech raises them: #360 (an
-update says "No connection" when only the router's DNS fails), #353, #354, #355
+Waiting, not for this session unless MMagTech raises them: #363 (Deck
+controls inside Steam, waiting on Spinnich), #362 (to discuss: sharing a
+save), #360 (an update says "No connection" when only the router's DNS
+fails), #353, #354, #355
 (saves that never sync: Saturn cartridge, arcade high scores, cartridge
 clocks; After first release), #347 (pads did not reconnect after an update
 reboot), #345 (PS1 DualShock), #349 (to discuss: rolling back an update).
