@@ -191,11 +191,11 @@ void LibraryScreen::build(std::vector<Tile> platforms, std::vector<Tile> collect
     collections_ = std::move(collections);
 }
 
-void LibraryScreen::learnedTile(int id, const std::string& detail,
+void LibraryScreen::learnedTile(const std::string& query, const std::string& detail,
                                 const std::string& cover) {
     for (auto* v : {&platforms_, &collections_}) {
         for (Tile& t : *v) {
-            if (t.id != id) continue;
+            if (t.query != query) continue;
             if (!detail.empty()) t.detail = detail;
             // A cover already on the tile is left alone: a collection carries
             // its own from the server and must not be overwritten by whichever

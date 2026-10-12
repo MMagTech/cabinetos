@@ -520,9 +520,9 @@ bool Client::fetchPlatforms(std::vector<Platform>* out, std::string* err) {
     return true;
 }
 
-bool Client::fetchCollections(std::vector<Collection>* out, std::string* err) {
-    std::string body;
-    if (!get("/api/collections", &body, err)) return false;
+// Both lists, regular and smart, are the same shape.
+static bool parseCollections(const std::string& body, bool smart,
+                             std::vector<Collection>* out, std::string* err) {
     json_object* root = json_tokener_parse(body.c_str());
     if (!root || json_object_get_type(root) != json_type_array) {
         if (root) json_object_put(root);
@@ -536,6 +536,8 @@ bool Client::fetchCollections(std::vector<Collection>* out, std::string* err) {
         json_object* o = json_object_array_get_idx(root, i);
         Collection c;
         c.id = static_cast<int>(jint(o, "id"));
+        c.smart = smart;
+        c.userId = static_cast<int>(jint(o, "user_id"));
         c.name = jstr(o, "name");
         c.romCount = static_cast<int>(jint(o, "rom_count"));
         json_object* fav = nullptr;
@@ -576,6 +578,24 @@ bool Client::fetchCollections(std::vector<Collection>* out, std::string* err) {
     }
     json_object_put(root);
     return true;
+}
+
+bool Client::fetchCollections(std::vector<Collection>* out, std::string* err) {
+    std::string body;
+    if (!get("/api/collections", &body, err)) return false;
+    return parseCollections(body, false, out, err);
+}
+
+bool Client::fetchSmartCollections(std::vector<Collection>* out, std::string* err) {
+    out->clear();
+    std::string body, why;
+    if (!get("/api/collections/smart", &body, &why)) {
+        // A server from before smart collections has no such route.
+        if (why.rfind("HTTP 404 ", 0) == 0) return true;
+        if (err) *err = why;
+        return false;
+    }
+    return parseCollections(body, true, out, err);
 }
 
 // THREE THINGS EVERY /api/roms RESPONSE CARRIES THAT THIS CLIENT NEVER READS.
@@ -913,9 +933,20 @@ bool Client::setFavorite(int romId, bool on, bool* forbidden, std::string* err) 
     *forbidden = false;
     std::vector<Collection> cols;
     if (!fetchCollections(&cols, err)) return false;
+    // THEIR OWN Favorites. The list carries everyone's public collections
+    // too (#352), so on a child's account a parent's public Favorites can
+    // come first; RomM lets only the owner add to a collection (5.3.1,
+    // add_collection_roms), so the child's favourite would be refused. Read
+    // from RomM's source, not met on a console.
     int id = 0;
-    for (const Collection& c : cols)
-        if (c.isFavorite) { id = c.id; break; }
+    bool any = false;
+    for (const Collection& c : cols) any = any || c.isFavorite;
+    if (any) {
+        User me;
+        if (!fetchCurrentUser(&me, err)) return false;
+        for (const Collection& c : cols)
+            if (c.isFavorite && c.userId == me.id) { id = c.id; break; }
+    }
     if (!id && !on) return true;  // no favourites at all: nothing to take out of
     if (!id) {
         // THEIR FIRST FAVOURITE ANYWHERE: the collection RomM's own web page

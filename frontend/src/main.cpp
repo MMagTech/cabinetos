@@ -3308,10 +3308,9 @@ static int appendGame(Library& lib, const romm::Game& g) {
 // nothing this console can play returns true with an empty membership, which
 // is a different thing and reads differently on the screen.
 static bool loadTileGames(romm::Client& client, Library& lib, screens::Tile& tile,
-                          bool isCollection, bool* more = nullptr) {
+                          bool* more = nullptr) {
     if (!tile.cards.empty()) return true;   // already walked into once
-    const std::string filter =
-        (isCollection ? "collection_id=" : "platform_ids=") + std::to_string(tile.id);
+    const std::string& filter = tile.query;
     std::vector<romm::Game> games;
     std::string err;
     // PAGED, AND CHECKED AGAINST `total`. This asked for ten thousand in one
@@ -3470,6 +3469,7 @@ static Library loadLibrary(romm::Client& client) {
         lib.platformNames[p.id] = catalog::displayName(p);
         screens::Tile tile;
         tile.id = p.id;
+        tile.query = "platform_ids=" + std::to_string(p.id);
         // THE NAME AND THE QUALIFIER ARE TWO FACTS ON A TILE, not one string.
         // Joined, "Arcade (FinalBurn Neo)" and "Arcade (MAME 2003-Plus)" both
         // came out as "Arcade" over "(FinalBurn ..." and "(MAME 200..." at this
@@ -3544,11 +3544,23 @@ static Library loadLibrary(romm::Client& client) {
     // was already in memory — "no second request", said the comment, and that
     // was true only because boot had paid for all of them. It is one request
     // now, made when the collection is opened, exactly like a platform.
+    //
+    // SMART COLLECTIONS AFTER THE REGULAR ONES (#352), each list in the
+    // server's order. Fetched in this same load, with this person's token,
+    // so an account switch shows the new person's own and everyone's public
+    // ones, as RomM decides (romm.h, Collection).
     std::vector<romm::Collection> collections;
+    std::vector<romm::Collection> smart;
+    std::string smartErr;
+    const bool smartOk = client.fetchSmartCollections(&smart, &smartErr);
+    if (!smartOk) std::fprintf(stderr, "[library] no smart collections: %s\n", smartErr.c_str());
     if (client.fetchCollections(&collections, &err)) {
+        collections.insert(collections.end(), smart.begin(), smart.end());
         for (const auto& col : collections) {
             screens::Tile tile;
             tile.id = col.id;
+            tile.query = (col.smart ? "smart_collection_id=" : "collection_id=") +
+                         std::to_string(col.id);
             tile.title = col.name;
             tile.cover = col.coverPath;
             tile.art = colorForTitle(tile.title);
@@ -3562,7 +3574,8 @@ static Library loadLibrary(romm::Client& client) {
             tile.enterable = col.romCount > 0;
             lib.collectionTiles.push_back(std::move(tile));
         }
-        std::fprintf(stderr, "[library] %zu collection(s)\n", lib.collectionTiles.size());
+        std::fprintf(stderr, "[library] %zu collection(s), %zu of them smart\n",
+                     lib.collectionTiles.size(), smart.size());
     } else {
         // Not fatal. A server that will not list collections still has a
         // library, and the switcher's Collections tab says it is empty.
@@ -3870,6 +3883,7 @@ static Library offlineLibrary() {
     for (auto& [pid, idxs] : byPlatform) {
         screens::Tile tile;
         tile.id = pid;
+        tile.query = "platform_ids=" + std::to_string(pid);
         tile.title = platformTitle[pid];
         std::string qualifier;
         if (auto k = known.find(pid); k != known.end()) {
@@ -7622,7 +7636,7 @@ int main(int argc, char** argv) {
                 // through learnedTile — so a remembered one that skipped it
                 // drew the colour and never the picture. Found by a warm boot
                 // requesting exactly one image, the avatar.
-                libraryScreen.learnedTile(t.id, "", was->second.cover);
+                libraryScreen.learnedTile(t.query, "", was->second.cover);
                 ++reused;
                 continue;
             }
@@ -7670,7 +7684,7 @@ int main(int argc, char** argv) {
         std::vector<romm::Game> arrived;
         std::atomic<bool> running{false};
         std::atomic<bool> quit{false};
-        int tileId = 0;
+        std::string tileQuery;   // the tile being filled (Tile::query)
         std::thread th;
         void stop() {
             quit.store(true);
@@ -11545,10 +11559,10 @@ int main(int argc, char** argv) {
                 // open. The second visit costs nothing: loadTileGames sees a
                 // membership it already filled and returns.
                 const bool isCollection = libraryScreen.tab() != 0;
-                const int tileId = tiles[res.value].id;
+                const std::string tileQuery = tiles[res.value].query;
                 auto& own = isCollection ? collectionTiles : platformTiles;
                 screens::Tile* t = nullptr;
-                for (auto& x : own) if (x.id == tileId) { t = &x; break; }
+                for (auto& x : own) if (x.query == tileQuery) { t = &x; break; }
                 if (!t) break;
                 bool more = false;
                 if (t->cards.empty()) {
@@ -11556,8 +11570,8 @@ int main(int argc, char** argv) {
                     // a system and is waiting for one request rather than for
                     // the whole platform — 0.19 s for 141 games here, and the
                     // same 0.19 s for a platform of thirty thousand.
-                    loadTileGames(liveClient, lib, *t, isCollection, &more);
-                    libraryScreen.learnedTile(tileId, t->detail, t->cover);
+                    loadTileGames(liveClient, lib, *t, &more);
+                    libraryScreen.learnedTile(tileQuery, t->detail, t->cover);
                 }
                 if (t->cards.empty()) {
                     // Nothing came back, or nothing in it can be played here.
@@ -11573,11 +11587,9 @@ int main(int argc, char** argv) {
                 // these would be appending into two different tiles at once.
                 gridFill.stop();
                 if (more) {
-                    gridFill.tileId = tileId;
+                    gridFill.tileQuery = tileQuery;
                     gridFill.running.store(true);
-                    const std::string filter =
-                        (isCollection ? "collection_id=" : "platform_ids=") +
-                        std::to_string(tileId);
+                    const std::string filter = tileQuery;
                     const size_t from = t->cards.size();
                     gridFill.th = std::thread([&gridFill, filter, from]() {
                         constexpr int kPage = 500;
@@ -17402,7 +17414,7 @@ int main(int argc, char** argv) {
                     screens::Tile* t = nullptr;
                     for (auto& v : {&platformTiles, &collectionTiles})
                         for (screens::Tile& x : *v)
-                            if (x.id == gridFill.tileId) { t = &x; break; }
+                            if (x.query == gridFill.tileQuery) { t = &x; break; }
                     for (const auto& g : got) {
                         if (!catalog::playable(g) &&
                             !catalog::shownGreyed(catalog::coverageFor(g).support))
@@ -17436,7 +17448,7 @@ int main(int argc, char** argv) {
                 for (const auto& [id, cover] : arrived) {
                     for (screens::Tile& t : platformTiles)
                         if (t.id == id && t.cover.empty()) { t.cover = cover; break; }
-                    libraryScreen.learnedTile(id, "", cover);
+                    libraryScreen.learnedTile("platform_ids=" + std::to_string(id), "", cover);
                     auto it = lib.tileCache.find(id);
                     if (it != lib.tileCache.end()) it->second.cover = cover;
                 }

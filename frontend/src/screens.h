@@ -108,6 +108,11 @@ struct Result {
 // a playable one carries its count, and it cannot be entered.
 struct Tile {
     int id = 0;               // platform id, or collection id
+    // What lists its games, and so what the tile IS: "platform_ids=5",
+    // "collection_id=2", "smart_collection_id=2". The id alone is not: RomM
+    // counts platforms, collections and smart collections separately, so
+    // platform 2, collection 2 and smart collection 2 are three tiles (#352).
+    std::string query;
     std::string title;        // "Arcade (FinalBurn Neo)", "SHMUP"
     std::string detail;       // "141 games", or why it cannot be played
     std::string cover;        // a cover path for the tile's artwork
@@ -160,7 +165,9 @@ public:
     // screen. That is fine while a tile is fixed at boot and wrong the moment
     // a tile can learn something — open question 28, where a platform's games
     // are not fetched until it is opened.
-    void learnedTile(int id, const std::string& detail, const std::string& cover);
+    // `query` is the tile's own (Tile::query), never a bare id.
+    void learnedTile(const std::string& query, const std::string& detail,
+                     const std::string& cover);
 
     // The cover of whatever focus is on, so the app can keep lighting the room
     // with it. The backdrop follows focus on Home and it follows focus here for
