@@ -2771,6 +2771,29 @@ development convenience, never the production path. Falling back to it on real
 hardware means something is wrong with the GPU, and the About screen should name
 the running compositor so that state is visible rather than mysterious.
 
+### A start with no display answering waits for one (#268) — 2026-10-12
+
+Measured on the A9 with the LG C1, 2026-10-10: a running console survives
+the TV going away (standby, a 31 s unplug, the drops a TV makes as it
+switches on); only a START with nothing answering went wrong. The session
+guessed 1920x1080 and gamescope kept it when the TV appeared, so a 4K set
+stayed at 1080p until a restart. The C1 in standby still answers; a TV with
+no standby power, a receiver or HDMI switch that is off, or a cable out does
+not, and the A9 has no CEC to wake one.
+
+- **The session waits** (`cabinetos-session`, polling the connectors once a
+  second) until a display has answered for two seconds, then starts at the
+  size it gives. No size of ours. A machine with no drm device, or a real GPU
+  fault, still goes down the ladder as before.
+- **The ways in start at boot, not with the app.** File access, Developer
+  access, Remote Play and Tailscale were started by the app, which now comes
+  up only once a display answers, so the first build of the wait left a
+  console with no TV unreachable over SSH (measured, 2026-10-10) and was
+  undone. `cabinetos-saved-services.service`, a oneshot at boot, reads
+  `settings.json` and starts whichever are on (Tailscale only with Remote
+  Play, as the app has it). The app still starts and stops them from
+  Settings; starting one already running does nothing.
+
 ### First boot shows Linux
 
 **And as of 2026-09-19 the boot after it shows the frontend**, which it did not
