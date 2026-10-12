@@ -14728,6 +14728,15 @@ the host asks `Patch::GetPatchInfo` for that file's sections, the same lookup
 `EnableWideScreenPatches` uses by name. The library logs `[ps2] widescreen
 patch: none`, `on` or `off for this game` at every program boot.
 
+**Measured on the A9 with MMagTech at the TV, 2026-10-12** (the loop build):
+- The row shows on Rumble Racing (SLUS-20174, 2F5354BE, a one-line hack plus
+  16:9, the Armored Core 3 kind) and not on Alien Hominid (SLUS-21090, no
+  patch). Off, then a new start: 4:3, with both starts in one run of the app.
+- **Live switching, tried with a temporary build:** PCSX2 switches the patch
+  ON mid-game correctly (`VMManager::ApplySettings` reloads patches), but OFF
+  did not give the 4:3 game back: the patch's writes stay in the game's
+  memory. So the row stays "from the next start". MMagTech: a restart is fine.
+
 #### DECIDED, MMagTech 2026-10-02: the processor-side extras are fixed, not in the dial (#63)
 
 From the phase 1 audit (2026-10-02). Four options sharpen the picture on the

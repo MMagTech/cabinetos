@@ -75,8 +75,10 @@ bool running();
 bool hasWidescreenPatch();
 // The choice, kept on this console in config/ps2-widescreen.json,
 // `{"<rom id>": "off"}`, the way the Picture row keeps its own; a game not in
-// it is on. Takes effect from the game's next start: PCSX2 applies the patch
-// when the game's program boots.
+// it is on. Takes effect from the game's next start. MEASURED ON THE A9,
+// 2026-10-12, Rumble Racing: PCSX2 switches the patch ON mid-game correctly
+// (VMManager::ApplySettings), but OFF does not give the 4:3 game back,
+// because the patch's writes stay in the game's memory.
 bool widescreenOn(int romId);
 void setWidescreenOn(int romId, bool on);
 
