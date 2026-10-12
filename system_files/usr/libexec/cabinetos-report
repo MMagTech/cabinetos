@@ -15,7 +15,7 @@
 #   - a summary: versions, the machine, the features that are on
 #   - every setting
 #   - a section per part with its current state: the machine, graphics, the
-#     screen, drives and space, controllers and Bluetooth, network and
+#     screen, drives and space, controllers and Bluetooth, sound, network and
 #     Tailscale, Remote Play, Steam, updates, the server, File access and
 #     Developer access, services
 #   - the games played in the two boots, and the emulators' own logs
@@ -760,14 +760,29 @@ def keyboards():
     return out or "(none)\n"
 
 
-def sound_volume():
+def section_sound(frontend_lines):
+    # #341: a machine with no sound sent a report that could not say why.
+    # The kernel's cards, what the sound server made of them (wpctl status,
+    # the outputs PipeWire has, and which one is the default), and the volume.
+    # The sound server's own log lines are in the system log below.
     sink = first_line(run(["wpctl", "get-volume", "@DEFAULT_AUDIO_SINK@"])).replace("Volume: ", "") \
         or "(no sound output)"
+    default = run(["wpctl", "inspect", "@DEFAULT_AUDIO_SINK@"])
+    name = re.search(r'node\.description = "([^"]*)"', default) or re.search(r'node\.name = "([^"]*)"', default)
     panels = [os.path.basename(c) for c in glob.glob("/sys/class/drm/card*-*")
               if re.match(r"card\d+-(eDP|DSI|LVDS)-", os.path.basename(c))]
-    return kv([("Volume now", sink),
-               ("Built-in screen", ", ".join(panels) + " (keeps its volume between starts)"
-                if panels else "none (volume back to full at each start)")])
+    out = kv([("Default output", name.group(1) if name else first_line(default) or "(none)"),
+              ("Volume now", sink),
+              ("Built-in screen", ", ".join(panels) + " (keeps its volume between starts)"
+               if panels else "none (volume back to full at each start)")])
+    out += "\n--- The kernel's sound cards\n" + (read("/proc/asound/cards") or "(none)\n")
+    status = run(["wpctl", "status"])
+    block = re.search(r"^Audio\n.*?(?=^Video\n|\Z)", status, re.M | re.S)
+    out += "\n--- What the sound server has (wpctl status)\n" + (block.group(0) if block else status)
+    lines = [l for l in frontend_lines if re.match(r"\[(sound|audio|volume)\]", l)]
+    out += "\n--- What the frontend said about sound (last 30 lines)\n"
+    out += "".join(l + "\n" for l in lines[-30:])
+    return out
 
 
 def input_devices(frontend_lines):
@@ -778,7 +793,6 @@ def input_devices(frontend_lines):
                 or "Wii" in block or "Joy-Con" in block:
             out += "\n".join(l for l in block.splitlines() if l[:2] in ("I:", "N:", "U:", "H:", "P:")) + "\n\n"
     out += "--- Keyboards\n" + keyboards()
-    out += "\n--- Sound\n" + sound_volume()
     out += "\n--- What the frontend said about controllers and keys (last 60 lines)\n"
     lines = [l for l in frontend_lines if re.match(r"\[(players|input|wiiremote|wii|wiibridge|shortcuts|vpad|rumble|volume)\]", l)]
     out += "".join(l + "\n" for l in lines[-60:])
@@ -960,6 +974,7 @@ def build(root, how):
     parts.append(("The screen", section_screen(frontend)))
     parts.append(("Drives and space", section_drives(root)))
     parts.append(("Controllers and Bluetooth", section_controllers(frontend)))
+    parts.append(("Sound", section_sound(frontend)))
     parts.append(("Network and Tailscale", section_network()))
     parts.append(("Remote Play", section_remoteplay(root, frontend)))
     parts.append(("Steam", section_steam(frontend)))
