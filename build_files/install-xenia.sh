@@ -40,16 +40,7 @@ log "Xenia Edge ${XENIA_VERSION}"
 work="$(mktemp -d)"
 trap 'rm -rf "${work}"' EXIT
 
-# A retry, because GitHub's release CDN occasionally drops a connection
-# mid-file and a build that fails for that has nothing wrong with it.
-for attempt in 1 2 3; do
-    if curl -fsSL --retry 3 -o "${work}/xenia.AppImage" "${XENIA_URL}"; then
-        break
-    fi
-    log "  download attempt ${attempt} failed"
-    [[ ${attempt} -eq 3 ]] && { log "ERROR: could not download Xenia Edge"; exit 1; }
-    sleep 5
-done
+fetch_pinned "${XENIA_URL}" "${XENIA_SHA256}" "${work}/xenia.AppImage" "Xenia Edge"
 
 got="$(sha256sum "${work}/xenia.AppImage" | cut -d' ' -f1)"
 if [[ "${got}" != "${XENIA_SHA256}" ]]; then

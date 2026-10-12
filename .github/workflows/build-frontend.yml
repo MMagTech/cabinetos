@@ -65,10 +65,24 @@ jobs:
 
       # The same container the cores are built in and the same one the test VM
       # uses, so CI and the development loop are not two different builds
-      # wearing one name.
-      - name: Build the builder container
+      # wearing one name. PULLED, NOT BUILT, when build-core.yml has published
+      # it: it is named after the Containerfile's hash, so a pulled one is the
+      # same container, and a build no longer installs Fedora's packages from
+      # outside each time (MMagTech, 2026-10-12). Public, so no sign-in. Built
+      # here when the pull fails: a Containerfile change whose builder is not
+      # published yet, or the registry away.
+      - name: Fetch the builder container
         run: |
-          podman build -t cabinetos-builder -f frontend/Containerfile frontend
+          set -euo pipefail
+          owner=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          image="ghcr.io/$owner/cabinetos-builder:$(sha256sum frontend/Containerfile | cut -c1-16)"
+          if podman pull "$image"; then
+            podman tag "$image" cabinetos-builder
+            echo "pulled $image"
+          else
+            echo "could not pull $image; building it here instead"
+            podman build -t cabinetos-builder -f frontend/Containerfile frontend
+          fi
 
       - name: Compile
         run: |

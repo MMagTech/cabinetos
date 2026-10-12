@@ -41,6 +41,10 @@ image_payload/
 # collecting them. Same reason as above: it must be ignored, not merely
 # untracked, or `git status -s` stops being empty.
 .artifacts/
+# The pinned outside downloads (ci/fetch-pinned.sh), kept by the Actions
+# cache. Ignored for the same reason as .artifacts/: an untracked directory
+# costs the image its labels.
+.downloads/
 
 # macOS
 .DS_Store
