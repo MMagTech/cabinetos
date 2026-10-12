@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+#
+# Starts, once at boot, the ways in that are switched on in Settings (#268):
+# File access (port 22), Developer access (port 2222), Remote Play, and
+# Tailscale with it. Run only by cabinetos-saved-services.service.
+#
+# WHY NOT THE APP. The app starts these from settings.json when it comes up,
+# and it comes up only once a display answers (cabinetos-session waits for
+# one rather than guess its size). A console booted with no TV answering
+# could then not be reached at all (measured on the A9, 2026-10-10: SSH only
+# from the moment the cable went in). So the saved state is applied here,
+# at boot, whatever the screen is doing. The app still starts and stops them
+# from Settings as before; starting one that is already running does nothing.
+#
+# The keys are the app's (frontend/src/main.cpp, prefs::get): "on" means on,
+# anything else or no file means off, as the app reads them. Tailscale runs
+# only while Remote Play is on too, as the app has it.
+
+set -uo pipefail
+
+SETTINGS=/var/lib/cabinetos/config/settings.json
+
+if [[ ! -s "${SETTINGS}" ]]; then
+    echo "cabinetos-saved-services: no settings yet; nothing is on"
+    exit 0
+fi
+
+on() {
+    [[ "$(jq -r --arg k "$1" '.[$k] // "off"' "${SETTINGS}" 2>/dev/null)" == "on" ]]
+}
+
+start() {
+    # --no-block: Remote Play is ordered after the session, which this must
+    # not wait for.
+    if systemctl start --no-block "$1"; then
+        echo "cabinetos-saved-services: $2 is on; started $1"
+    else
+        echo "cabinetos-saved-services: $2 is on; could not start $1"
+    fi
+}
+
+on file_access && start cabinetos-files.service "File access"
+on developer_access && start cabinetos-developer.service "Developer access"
+if on remote_play; then
+    start cabinetos-remoteplay.service "Remote Play"
+    on tailscale && start tailscaled.service "Tailscale"
+fi
+exit 0

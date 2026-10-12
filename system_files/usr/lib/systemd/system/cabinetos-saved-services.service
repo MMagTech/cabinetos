@@ -1,0 +1,13 @@
+# Starts the ways in switched on in Settings at boot, independent of the
+# screen (#268). See /usr/libexec/cabinetos-saved-services.
+[Unit]
+Description=CabinetOS saved services (File access, Developer access, Remote Play)
+Documentation=https://github.com/MMagTech/cabinetos/issues/268
+After=network.target local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/cabinetos-saved-services
+
+[Install]
+WantedBy=multi-user.target

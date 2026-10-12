@@ -15,6 +15,12 @@ group_start "Configuring the CabinetOS session"
 log "enabling cabinetos-session.service"
 systemctl enable cabinetos-session.service
 
+# File access, Developer access, Remote Play and Tailscale, started at boot
+# from Settings, so a console booted with no TV answering can still be
+# reached while the session waits for one (#268).
+log "enabling cabinetos-saved-services.service"
+systemctl enable cabinetos-saved-services.service
+
 group_end
 
 group_start "Closing the remaining routes to a desktop"
