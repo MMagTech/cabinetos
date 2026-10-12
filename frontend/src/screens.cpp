@@ -1552,6 +1552,7 @@ void DetailScreen::draw(Ctx& c) {
     // fades in RISING a little, the same arrival as a top-bar switch's.
     const float keepY = c.r.contentOffsetY();
     c.r.setContentOffsetY(keepY + (1.0f - a) * design::kDetailRise);
+    c.r.setContentOffsetX(slideX_);
 
     // ONE COLUMN ON THE LEFT, THE COVER ON THE RIGHT, the pair centred across
     // the screen. Everything read or chosen (title, Play, Download, Continue
@@ -1618,6 +1619,21 @@ void DetailScreen::draw(Ctx& c) {
                   design::kDetailRadius, /*f=*/1.0f, /*rim=*/false, /*large=*/true);
     } else {
         c.r.draw(ui::Rect{coverX, coverY, coverW, coverH, design::kDetailRadius, game_.art});
+    }
+    // A SMALL BOOK ON THE COVER WHEN THERE IS A MANUAL (#364): a quiet sign,
+    // not another button. In the cover's foot corner, on a dark disc so it
+    // reads on any art.
+    if (game_.hasManual) {
+        const float disc = design::kManualMarkDisc;
+        const float dx = coverX + coverW - design::kManualMarkInset - disc;
+        const float dy = coverY + coverH - design::kManualMarkInset - disc;
+        c.r.draw(ui::Rect{dx, dy, disc, disc, disc * 0.5f,
+                          ui::Color::black(design::kManualMarkDiscAlpha * a)});
+        const float m = disc * design::kManualMarkScale;
+        ui::Rect book{dx + (disc - m) * 0.5f, dy + (disc - m) * 0.5f + m * 0.03f, m, m,
+                      m * 0.04f, ui::Color::white(design::kManualMarkAlpha * a)};
+        book.shape = ui::Rect::Shape::Book;
+        c.r.draw(book);
     }
 
     // The title, Large Title — the one place in the product that size is used
@@ -1688,12 +1704,14 @@ void DetailScreen::draw(Ctx& c) {
                     ui::TextStyle::Title3, ui::Color::white(0.60f * a), c.sc);
     }
     c.r.setContentOffsetY(keepY);
+    c.r.setContentOffsetX(0.0f);
 }
 
 void DetailScreen::drawGlass(Ctx& c) {
     const float a = appear_.value();
     const float keepY = c.r.contentOffsetY();
     c.r.setContentOffsetY(keepY + (1.0f - a) * design::kDetailRise);
+    c.r.setContentOffsetX(slideX_);
     // Treatment 3, the row one: a surface that is always there. Blur untinted
     // at rest, white 22% focused, scale 1.03 — a full-width row growing a
     // cover's tenth would collide with its neighbours.
@@ -1894,6 +1912,7 @@ void DetailScreen::drawGlass(Ctx& c) {
         }
     }
     c.r.setContentOffsetY(keepY);
+    c.r.setContentOffsetX(0.0f);
 }
 
 

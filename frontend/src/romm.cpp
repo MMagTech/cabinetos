@@ -148,6 +148,7 @@ bool parseGame(json_object* o, Game* g) {
     g->coverLargePath = jstr(o, "path_cover_large");
     if (g->coverPath.empty()) g->coverPath = g->coverLargePath;
     if (g->coverLargePath.empty()) g->coverLargePath = g->coverPath;
+    g->manualPath = jstr(o, "path_manual");
     return true;
 }
 

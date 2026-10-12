@@ -512,6 +512,14 @@ constexpr float kDetailRowGap = 16.0f;
 // guesses, to be judged on the television.
 constexpr float kDetailCoverGap = 80.0f;
 constexpr float kDetailCoverMaxHeight = 760.0f;   // grown to the column, at most
+// THE SMALL BOOK ON THE COVER (#364), when the game has a manual: a dark disc
+// in the cover's foot corner with a white book on it. Starting values, to be
+// judged on the television.
+constexpr float kManualMarkDisc = 56.0f;
+constexpr float kManualMarkInset = 16.0f;
+constexpr float kManualMarkScale = 0.58f;   // the book's width, of the disc's
+constexpr float kManualMarkDiscAlpha = 0.45f;
+constexpr float kManualMarkAlpha = 0.85f;
 // The launch screen fades in whole, over this long, once everything behind it
 // has loaded, or once this long has passed without it all.
 constexpr float kDetailsFade = 0.40f;

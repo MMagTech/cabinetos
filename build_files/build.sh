@@ -197,8 +197,10 @@ grep -q '^u cabinet ' /usr/lib/sysusers.d/cabinetos.conf || {
 # tailscale and tailscaled: Remote Play away from home (#286) runs the
 # command and starts the daemon. Bazzite's, like the three above.
 # wpctl: the volume keys (#351, volume.cpp). WirePlumber's, in the base.
+# pdfinfo and pdftoppm: a game's manual (#364, manual.cpp) is measured and its
+# pages drawn by them. poppler-utils, in the base.
 for needed in /usr/bin/nmcli /usr/bin/pkcheck /usr/bin/bluetoothctl /usr/bin/tailscale \
-              /usr/sbin/tailscaled /usr/bin/wpctl; do
+              /usr/sbin/tailscaled /usr/bin/wpctl /usr/bin/pdfinfo /usr/bin/pdftoppm; do
     if [[ -x "${needed}" ]]; then
         log "present: ${needed} ($(rpm -qf "${needed}" 2>/dev/null || echo 'unowned'))"
     else

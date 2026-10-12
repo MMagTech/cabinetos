@@ -135,6 +135,11 @@ struct Game {
     // it is instead of reading the file itself, so a .chd disc needs no disc
     // reader here. Empty where RomM could not work one out.
     std::string raHash;
+    // THE GAME'S MANUAL (#364): RomM's `path_manual`, a PDF in its resources,
+    // `roms/1/2/manual/2.pdf`, served under /assets/romm/resources/. Filled
+    // by the scraper or uploaded on the game's page; empty for none. The
+    // extra documents in a game's own `manual` folder are never read.
+    std::string manualPath;
 };
 
 // One BIOS file a platform carries.

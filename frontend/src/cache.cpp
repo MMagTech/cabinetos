@@ -78,6 +78,64 @@ bool removeTree(const std::string& path) {
     return ::rmdir(path.c_str()) == 0;
 }
 
+// --- A game's manual (#364): the folder beside its game, found and moved ---
+
+// `<half>/<platform>/Manuals`, for a game whose entry is `gameEntryPath`.
+std::string manualsDirBeside(const std::string& gameEntryPath) {
+    const size_t slash = gameEntryPath.find_last_of('/');
+    return (slash == std::string::npos ? std::string(".") : gameEntryPath.substr(0, slash)) +
+           "/Manuals";
+}
+
+// The game's manual in one `Manuals` folder, or empty. By the number, as a
+// game is found: the words after it are for a person.
+std::string manualIn(const std::string& dir, int romId) {
+    std::string out;
+    DIR* d = ::opendir(dir.c_str());
+    if (!d) return out;
+    while (struct dirent* e = ::readdir(d)) {
+        const size_t len = std::strlen(e->d_name);
+        if (e->d_name[0] == '.' || len < 5 || strcasecmp(e->d_name + len - 4, ".pdf") != 0)
+            continue;
+        if (storage::romIdFromEntry(e->d_name) != romId) continue;
+        out = dir + "/" + e->d_name;
+        break;
+    }
+    ::closedir(d);
+    return out;
+}
+
+// The game went: its manual goes with it, and the folder when it is empty.
+void dropManual(const std::string& gameEntryPath, int romId) {
+    const std::string dir = manualsDirBeside(gameEntryPath);
+    const std::string pdf = manualIn(dir, romId);
+    if (pdf.empty()) return;
+    if (::unlink(pdf.c_str()) == 0)
+        std::fprintf(stderr, "[manual] removed with its game: %s\n", pdf.c_str());
+    ::rmdir(dir.c_str());   // only if it is empty
+}
+
+// The game moved from `fromEntry` to `toEntry`: its manual follows, unless
+// one is already there.
+void moveManual(const std::string& fromEntry, const std::string& toEntry, int romId) {
+    const std::string fromDir = manualsDirBeside(fromEntry);
+    const std::string pdf = manualIn(fromDir, romId);
+    if (pdf.empty()) return;
+    const std::string toDir = manualsDirBeside(toEntry);
+    if (toDir == fromDir) return;
+    if (!manualIn(toDir, romId).empty()) {
+        dropManual(fromEntry, romId);
+        return;
+    }
+    const std::string target = toDir + pdf.substr(pdf.find_last_of('/'));
+    const storage::MoveResult r = storage::moveEntry(pdf, target);
+    if (r.ok)
+        std::fprintf(stderr, "[manual] followed its game to %s\n", target.c_str());
+    else
+        std::fprintf(stderr, "[manual] could not follow its game: %s\n", r.error.c_str());
+    ::rmdir(fromDir.c_str());
+}
+
 // Moves a game between `roms/` and `cache/` on the location it already sits on.
 //
 // THIS IS WHY THE TWO DIRECTORIES REPEAT ON EVERY LOCATION. With one `cache/`
@@ -111,6 +169,7 @@ bool relocate(const Placement& p, bool toKept) {
     }
     std::fprintf(stderr, "[keep] %s %s\n", toKept ? "promoted" : "demoted to the cache",
                  target.c_str());
+    moveManual(p.entryPath, target, storage::romIdFromEntry(entryName));
     return true;
 }
 
@@ -234,6 +293,8 @@ Placement dedupe(int romId, int64_t expectedBytes) {
 
     for (const Placement& p : all) {
         if (&p == winner) continue;
+        // The manual stays with the copy that stays (#364).
+        moveManual(p.entryPath, winner->entryPath, romId);
         if (removeTree(p.entryPath)) {
             std::fprintf(stderr,
                          "[storage] rom %d was here twice; kept %s and removed %s\n",
@@ -248,6 +309,19 @@ std::string entryPathFor(const std::string& location, const std::string& platfor
     const std::string half = kept ? storage::romsDir(location) : storage::cacheDir(location);
     return half + "/" + storage::platformSegment(platform) + "/" +
            storage::entryName(romId, title);
+}
+
+std::string manualPathFor(const std::string& gameEntryPath, int romId,
+                          const std::string& title) {
+    return manualsDirBeside(gameEntryPath) + "/" + storage::entryName(romId, title) + ".pdf";
+}
+
+std::string findManual(int romId) {
+    for (const Placement& p : findAll(romId)) {
+        const std::string pdf = manualIn(manualsDirBeside(p.entryPath), romId);
+        if (!pdf.empty()) return pdf;
+    }
+    return {};
 }
 
 std::vector<Entry> candidates(const std::string& location) {
@@ -290,6 +364,7 @@ int64_t evictUntilFree(const std::string& location, int64_t needBytes,
         // eviction a person could actually notice.
         if (protectRomId != 0 && e.romId == protectRomId) continue;
         if (!removeTree(e.path)) continue;
+        dropManual(e.path, e.romId);
         freed += e.bytes;
         std::fprintf(stderr, "[cache] evicted %s (%lld bytes)\n", e.path.c_str(),
                      static_cast<long long>(e.bytes));
@@ -481,6 +556,7 @@ bool unkeep(const storage::User& u, int romId, bool keepTheBytes, Release* out) 
         r.what = Release::What::DeleteFailed;
         return true;
     }
+    dropManual(p.entryPath, romId);
     // WITHOUT THIS THE SPACE DOES NOT APPEAR TO COME BACK, which is the exact
     // complaint that changed this behaviour. btrfs unlinks immediately and
     // leaves statvfs reporting the old figure until a transaction commits, so a
@@ -520,6 +596,7 @@ bool unkeepForEveryone(int romId, bool keepTheBytes, Release* out) {
             r.what = Release::What::DeleteFailed;
             return true;
         }
+        dropManual(p.entryPath, romId);
         if (const int fd = ::open(p.location.c_str(), O_RDONLY | O_DIRECTORY); fd >= 0) {
             ::syncfs(fd);
             ::close(fd);
