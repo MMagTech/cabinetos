@@ -39,9 +39,12 @@ longer a constraint.
    when a different screen is connected while running.
 3. **The build keeps RPCS3, Xenia and xemu's drive** in the CI cache instead
    of downloading them in every image build (a GitHub 500 failed one,
-   2026-10-12). Agreed in principle; check the cache's total first.
+   2026-10-12). Proposed, NOT decided: MMagTech asked why it was never
+   cached and what could go wrong, and gave no yes. Ask him (yes/no); check
+   the cache's total first.
 
-Waiting, not for this session unless MMagTech raises them: #363 (Deck
+Waiting, not for this session unless MMagTech raises them: #341 (no sound
+on a K1; asked for a report with the new Sound section), #363 (Deck
 controls inside Steam, waiting on Spinnich), #362 (to discuss: sharing a
 save), #360 (an update says "No connection" when only the router's DNS
 fails), #353, #354, #355
