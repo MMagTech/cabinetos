@@ -2622,7 +2622,8 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
             const quality::Ps2 q = quality::ps2(quality::forGame(game.id));
             core.setPs2(storage::imageAssetsDir() + "/pcsx2/resources",
                         gPs2Upscale > 0.0f ? gPs2Upscale : q.upscale,
-                        gPs2Anisotropy >= 0 ? gPs2Anisotropy : q.anisotropy);
+                        gPs2Anisotropy >= 0 ? gPs2Anisotropy : q.anisotropy,
+                        ps2::widescreenOn(game.id));
         }
 
         if (!core.load(job.corePath)) {
@@ -8132,7 +8133,9 @@ int main(int argc, char** argv) {
         std::string label;
         std::vector<std::string> values;
         int current = 0;
-        // Says "From the next start" when changed: Picture does, a system
+        // Says "Exit and relaunch to apply" when changed (MMagTech,
+        // 2026-10-12, #368: "Exit" points at Exit to Home, the way to do it;
+        // it was "From the next start"): Picture and Widescreen do, a system
         // row changes in front of the game and needs no word.
         bool nextStart = false;
         std::function<void(int)> apply;
@@ -14439,7 +14442,7 @@ int main(int argc, char** argv) {
         }
         c->current = next;
         if (c->apply) c->apply(next);
-        if (c->nextStart) menuNotice.say("From the next start", Tone::Done);
+        if (c->nextStart) menuNotice.say("Exit and relaunch to apply", Tone::Done);
         sound::play(sound::Cue::Move);
     };
 
@@ -14667,6 +14670,20 @@ int main(int argc, char** argv) {
                                                          : std::optional<quality::Level>(
                                                                static_cast<quality::Level>(i - 1)));
                 };
+                pauseChoices.push_back(std::move(c));
+            }
+            // WIDESCREEN (#368), for everyone, only on a PS2 game whose patch
+            // file has a "Widescreen 16:9" section: a row that does nothing
+            // is worse than none. Some patches leave the HUD stretched, and
+            // some players want 4:3. From the next start, as Picture is.
+            if (session.core == "pcsx2" && ps2::hasWidescreenPatch()) {
+                PauseChoice c;
+                c.label = "Widescreen";
+                c.values = {"On", "Off"};
+                c.current = ps2::widescreenOn(session.romId) ? 0 : 1;
+                c.nextStart = true;
+                const int romId = session.romId;
+                c.apply = [romId](int i) { ps2::setWidescreenOn(romId, i == 0); };
                 pauseChoices.push_back(std::move(c));
             }
             // THE SCREEN LOOK (#122), for everyone, on the systems this

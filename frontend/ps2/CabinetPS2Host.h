@@ -106,6 +106,11 @@ namespace CabinetPS2
 		/// The GS upscale multiplier. 1.0 is the PS2's native resolution.
 		float upscale = 1.0f;
 
+		/// PCSX2's "Widescreen 16:9" patch, for a game whose patch file has
+		/// one (#217). On unless the player turned it off for this game in
+		/// the pause menu (#368).
+		bool widescreen = true;
+
 	};
 
 	/// The finished picture, as the GS produced it.
@@ -228,6 +233,12 @@ namespace CabinetPS2
 	void SetPaused(bool paused);
 
 	bool IsRunning();
+
+	/// Whether the running game's patch file has a "Widescreen 16:9" section,
+	/// the one EnableWideScreenPatches switches on by name (#368). Known once
+	/// the game's own program has booted, false before that and with no game.
+	/// Safe from any thread.
+	bool HasWidescreenPatch();
 
 	/// THE EMULATED MACHINE'S MEMORY, FOR RETROACHIEVEMENTS (#74). Region 0 is
 	/// the EE's main RAM, region 1 its 16 KB scratchpad; anything else, or no
