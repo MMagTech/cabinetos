@@ -14,17 +14,18 @@ specification is `docs/PROJECT.md`; the order is `docs/ROADMAP.md`.
 **2026-10-12: #351 (volume keys, PR #358) and #352 (smart collections, PR
 #359) are built, tested on the A9 through the loop, and on `testing`
 together** (#359 is stacked on #358). The A9 (Wi-Fi, **192.168.1.109**,
-`CABINETOS_A9=cabinet@192.168.1.109`) was on `testing` 2026.10.12 (#344).
+`CABINETOS_A9=cabinet@192.168.1.109`) runs that image, `testing`
+2026.10.12.2, checked from its log; nothing on it by hand.
 Cabinet on Apple platforms is no longer a constraint; a CabinetOS change that
 leaves Cabinet behind gets a record issue on MMagTech/cabinet.
 
 ## Next
 
 1. **Finish #351 and #352** (MMagTech's checks, then his merge word):
-   - Prove the testing image from the A9 (version, no drop-ins,
-     `71-cabinetos-key-devices.rules` in `/usr/lib/udev/rules.d`,
-     `[volume] full at start` and `[library] ... of them smart` in the log),
-     then list what it holds and the checks he may want; he picks.
+   - The image is proven from the A9 (version, no drop-ins, the key rule
+     from `/usr`, `[volume] full at start`, `[library] 6 collection(s), 4
+     of them smart`, an injected press 1.00 to 0.95 and back). List what it
+     holds and the checks he may want; he picks.
    - Merge #358 first, then #359 (its diff is then its own commit). Close
      both issues with a comment; reply on #351 asking Spinnich to check the
      rocker on the Deck once it is in an image (draft it, post on his go).
@@ -37,7 +38,8 @@ leaves Cabinet behind gets a record issue on MMagTech/cabinet.
    session; then retest with the HDMI unplugged (MMagTech at the TV). Branch
    `wait-for-display`.
 
-Waiting, not for this session unless MMagTech raises them: #353, #354, #355
+Waiting, not for this session unless MMagTech raises them: #360 (an
+update says "No connection" when only the router's DNS fails), #353, #354, #355
 (saves that never sync: Saturn cartridge, arcade high scores, cartridge
 clocks; After first release), #347 (pads did not reconnect after an update
 reboot), #345 (PS1 DualShock), #349 (to discuss: rolling back an update).
