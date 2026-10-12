@@ -47,9 +47,10 @@ non-goal (docs/PROJECT.md); Cabinet on Apple platforms is no constraint.
      the frontend compile.
 
 Waiting, not for this session unless MMagTech raises them: #341 (no sound
-on a K1; asked for a report with the new Sound section), #363 (Deck
-controls inside Steam: Spinnich has not tested in Steam yet, and suggested
-treating it as Steam Controller support; a reply was drafted 2026-10-12), #362 (to discuss: sharing a
+on a K1; asked for a report with the new Sound section), #363 (closed
+2026-10-12: Deck controls are Steam's; when Spinnich replies on whether
+they work in Steam, note it there, and reopen only if something needs
+doing), #362 (to discuss: sharing a
 save), #360 (an update says "No connection" when only the router's DNS
 fails), #353, #354, #355
 (saves that never sync: Saturn cartridge, arcade high scores, cartridge
