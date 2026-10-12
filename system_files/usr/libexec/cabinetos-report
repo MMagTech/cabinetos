@@ -710,6 +710,66 @@ def section_controllers(frontend_lines):
     return out + input_devices(frontend_lines)
 
 
+# THE KEYS A HANDHELD'S OWN BUTTONS ARRIVE AS (#351): named, so a report from
+# a machine nobody here has says in one line whether its volume buttons are
+# the standard keys. Every other key is in the code ranges.
+KEY_NAMES = {113: "mute", 114: "volume down", 115: "volume up", 116: "power",
+             142: "sleep", 143: "wakeup", 158: "back", 172: "home",
+             224: "brightness down", 225: "brightness up"}
+
+
+def key_codes(bitmap):
+    # /proc's "B: KEY=" is hex words, most significant first, each the width
+    # of a long (64 bits on every machine this runs on).
+    codes = []
+    for i, word in enumerate(reversed(bitmap.split())):
+        v = int(word, 16)
+        codes += [i * 64 + b for b in range(64) if v >> b & 1]
+    return codes
+
+
+def code_ranges(codes):
+    out, start = [], None
+    for i, c in enumerate(codes):
+        if start is None:
+            start = c
+        if i + 1 == len(codes) or codes[i + 1] != c + 1:
+            out.append(str(start) if start == c else "%d-%d" % (start, c))
+            start = None
+    return " ".join(out)
+
+
+def keyboards():
+    # Every device the kernel counts as a keyboard (its handlers include kbd):
+    # its name, its node, and the keys it can send.
+    out = ""
+    dev = read("/proc/bus/input/devices") or ""
+    for block in dev.split("\n\n"):
+        name = re.search(r'^N: Name="(.*)"$', block, re.M)
+        handlers = re.search(r"^H: Handlers=(.*)$", block, re.M)
+        keys = re.search(r"^B: KEY=(.*)$", block, re.M)
+        if not (name and handlers and keys) or "kbd" not in handlers.group(1).split():
+            continue
+        node = next((h for h in handlers.group(1).split() if h.startswith("event")), "?")
+        codes = [c for c in key_codes(keys.group(1)) if c < 0x100 or c >= 0x160]
+        named = [KEY_NAMES[c] for c in codes if c in KEY_NAMES]
+        vol = "yes" if 114 in codes and 115 in codes else ("partly" if 114 in codes or 115 in codes else "no")
+        out += "%s (%s): volume keys %s; %d keys%s\n    codes %s\n" % (
+            name.group(1), node, vol, len(codes),
+            ", among them " + ", ".join(named) if named else "", code_ranges(codes) or "none")
+    return out or "(none)\n"
+
+
+def sound_volume():
+    sink = first_line(run(["wpctl", "get-volume", "@DEFAULT_AUDIO_SINK@"])).replace("Volume: ", "") \
+        or "(no sound output)"
+    panels = [os.path.basename(c) for c in glob.glob("/sys/class/drm/card*-*")
+              if re.match(r"card\d+-(eDP|DSI|LVDS)-", os.path.basename(c))]
+    return kv([("Volume now", sink),
+               ("Built-in screen", ", ".join(panels) + " (keeps its volume between starts)"
+                if panels else "none (volume back to full at each start)")])
+
+
 def input_devices(frontend_lines):
     out = ""
     dev = read("/proc/bus/input/devices") or ""
@@ -717,8 +777,10 @@ def input_devices(frontend_lines):
         if re.search(r"H: Handlers=.*\bjs\d", block) or "Controller" in block or "Gamepad" in block \
                 or "Wii" in block or "Joy-Con" in block:
             out += "\n".join(l for l in block.splitlines() if l[:2] in ("I:", "N:", "U:", "H:", "P:")) + "\n\n"
-    out += "--- What the frontend said about controllers (last 60 lines)\n"
-    lines = [l for l in frontend_lines if re.match(r"\[(players|input|wiiremote|wii|wiibridge|shortcuts|vpad|rumble)\]", l)]
+    out += "--- Keyboards\n" + keyboards()
+    out += "\n--- Sound\n" + sound_volume()
+    out += "\n--- What the frontend said about controllers and keys (last 60 lines)\n"
+    lines = [l for l in frontend_lines if re.match(r"\[(players|input|wiiremote|wii|wiibridge|shortcuts|vpad|rumble|volume)\]", l)]
     out += "".join(l + "\n" for l in lines[-60:])
     return out
 
