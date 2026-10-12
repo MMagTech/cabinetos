@@ -1,11 +1,14 @@
-# CabinetOS roadmap
+**Released: CabinetOS 2026.10.10**, the first public release, on GitHub with
+the installer. Since then work comes from what MMagTech raises and what
+people report; `docs/NEXT-SESSION.md` holds what is being worked on now.
 
-**The goal is the first release.** The order below was set with MMagTech on
-2026-09-28, and it is the order work is done in. Each step is a numbered GitHub
-milestone holding every open issue for it; anything not needed for the first
-release is in **After first release**. A new issue goes into a milestone when
-it is filed. Anything found along the way that is not a release blocker goes
-into After first release rather than jumping the queue.
+Anything with no date is in the **Later** milestone, kept so it is not lost
+and worked on only when MMagTech raises it (named "After first release" until
+2026-10-12). The release-gate tests still owed at the TV are in **8. Testing at
+the TV**. A new issue goes into one of those when it is filed.
+
+**How the release was reached**, below: the order set with MMagTech on
+2026-09-28, one numbered milestone per step (closed 2026-10-12, all done).
 
 Milestones: https://github.com/MMagTech/cabinetos/milestones
 
@@ -77,7 +80,7 @@ session picks up is `docs/NEXT-SESSION.md`.
    **the last step, on the release stick, after Remote Play** (MMagTech,
    2026-10-07: the release image may need things added), wiping the A9.
 
-**After first release:** everything in that milestone on GitHub, including
+**Later** (was After first release): everything in that milestone on GitHub, including
 the Dreamcast crash (#151), the performance profile (#150), rewind's cost
 (#168), multi-disc swapping (#162), PCSX2's per-game fixes (#154), the RomM
 5.2/5.3 features (#158 to #161), the system tuning ideas (#163 to #167),

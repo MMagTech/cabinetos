@@ -282,6 +282,10 @@ bool prepareFile(const std::string& downloadedPath, const std::string& outDir,
     return true;
 }
 
+bool accepts(const std::string& validExtensions, const std::string& fileName) {
+    return coreAccepts(validExtensions, extensionOf(fileName));
+}
+
 bool prepare(const std::vector<uint8_t>& downloaded, const std::string& validExtensions,
              bool blockExtract, Prepared* out, std::string* err) {
     out->members.clear();
