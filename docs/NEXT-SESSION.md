@@ -37,11 +37,30 @@ longer a constraint.
    session; then retest with the HDMI unplugged (MMagTech at the TV). Branch
    `wait-for-display`. Decided against (#361, closed): restarting the picture
    when a different screen is connected while running.
-3. **The build keeps RPCS3, Xenia and xemu's drive** in the CI cache instead
-   of downloading them in every image build (a GitHub 500 failed one,
-   2026-10-12). Agreed in principle; check the cache's total first.
+3. **Fewer outside downloads in every image build (decided, MMagTech
+   2026-10-12: "if it brings benefit and won't break anything").** A GitHub
+   500 on RPCS3's release failed a build that day.
+   - RPCS3, Xenia and xemu's drive: fetched in a CI step before the image
+     build, kept in the Actions cache, staged into `image_payload/`; the
+     install scripts use the staged file and fall back to downloading (the A9
+     dry runs have no payload). **The cache key comes from the install
+     script's own pin** (URL and sha256), so moving a pin is the same one
+     edit as today and fetches the new file; the sha256 is checked on every
+     build, cached or not.
+   - The frontend's builder container: build-frontend.yml rebuilds it from
+     Fedora's registry and mirrors every time; reuse the ghcr builder image
+     build-core.yml already publishes and pulls, building only if the pull
+     fails.
+   - Prove it: build 1 downloads and saves, build 2 logs "from the cache",
+     and a pin change on a throwaway branch (never pushed to testing)
+     fetches the new file. Cache today: 353 MB of 10 GB (51 entries, main
+     and testing each); this adds about 300 MB.
+   - Left out on purpose: the Bazzite base (several GB, GitHub's own
+     registry), Terra (already has the stored copy, #270), the frontend
+     compile (changes every build).
 
-Waiting, not for this session unless MMagTech raises them: #363 (Deck
+Waiting, not for this session unless MMagTech raises them: #341 (no sound
+on a K1; asked for a report with the new Sound section), #363 (Deck
 controls inside Steam, waiting on Spinnich), #362 (to discuss: sharing a
 save), #360 (an update says "No connection" when only the router's DNS
 fails), #353, #354, #355
