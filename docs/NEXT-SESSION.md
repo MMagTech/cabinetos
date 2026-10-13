@@ -51,6 +51,16 @@ worked only when MMagTech raises it), except #341.
    (prefer the output on the screen in use; a Sound output row in Settings;
    or say so in the wiki), with what each does off the A9. Draft a reply to
    deletableman; MMagTech posts it.
+   **Also on #341: missing art.** deletableman: "half my art isn't
+   downloading" (GBA among them); he has not named games yet (asked
+   2026-10-12). His report of 2026-10-13 shows no cover errors, only
+   `[covers] 29 tile(s) remembered, 13 to ask about`. MMagTech sees one
+   Switch game without art: **Azure Striker Gunvolt: Striker Pack** (RomM id
+   857), which has no cover on RomM itself (`path_cover_small` empty,
+   checked 2026-10-13), so compare RomM's web page first: no cover there
+   means RomM's match, not the console. Then find whether any game that HAS
+   a cover on RomM shows none on the console (the A9's library against the
+   server's list), and ask deletableman for two or three titles.
 2. **#268, starting with no TV answering.** Built on `saved-services-at-boot`
    (the display wait put back, and `cabinetos-saved-services.service` starting
    File access, Developer access, Remote Play and Tailscale at boot from
