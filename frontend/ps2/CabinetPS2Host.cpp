@@ -55,6 +55,7 @@
 #include "pcsx2/Input/InputManager.h"
 #include "pcsx2/Memory.h"
 #include "pcsx2/MTGS.h"
+#include "pcsx2/Patch.h"
 #include "pcsx2/PerformanceMetrics.h"
 #include "pcsx2/SIO/Pad/Pad.h"
 #include "pcsx2/SIO/Pad/PadDualshock2.h"
@@ -132,6 +133,9 @@ namespace
 
 	std::atomic<bool> s_stop_requested{false};
 	std::atomic<bool> s_paused{false};
+	// Whether this game's patch file has a "Widescreen 16:9" section (#368),
+	// set on the CPU thread when the game's program boots.
+	std::atomic<bool> s_widescreen_patch{false};
 	std::atomic<uint64_t> s_frames{0};
 
 	// THE FRONTEND'S PER-FRAME HOOK, for RetroAchievements (#74). A mutex
@@ -501,6 +505,20 @@ void Host::OnGameChanged(const std::string& title, const std::string& elf_overri
 	// future question about a state travelling between the two will start from.
 	Console.WriteLn(fmt::format("[ps2] game: \"{}\" serial={} crc={:08X}",
 		title.empty() ? "(none)" : title, disc_serial.empty() ? "(none)" : disc_serial, disc_crc));
+
+	// WHETHER THE PAUSE MENU OFFERS "Widescreen" (#368): only when the patch
+	// file has the section EnableWideScreenPatches switches on by name
+	// (Patch.cpp, WS_PATCH_NAME). Asked with the running program's CRC, the
+	// way PCSX2 picks the file, so it is known once that program has booted;
+	// before then the CRC is 0 and there is no file. Here on the CPU thread,
+	// where PCSX2 reads patches.zip itself.
+	if (current_crc == 0 || disc_serial.empty())
+		return;
+	bool found = false;
+	for (const Patch::PatchInfo& p : Patch::GetPatchInfo(disc_serial, current_crc, false, false, nullptr))
+		found = found || p.name == "Widescreen 16:9";
+	Console.WriteLn(fmt::format("[ps2] widescreen patch: {}", !found ? "none" : s_config.widescreen ? "on" : "off for this game"));
+	s_widescreen_patch.store(found);
 }
 
 void Host::OnPerformanceMetricsUpdated()
@@ -907,6 +925,7 @@ static bool RunOnCPUThread(const CabinetPS2::Config& config, std::string* error)
 	// A game left from the pause menu was paused when it stopped; the next
 	// one must not start that way.
 	s_paused.store(false);
+	s_widescreen_patch.store(false);
 	s_frames.store(0);
 	s_dumped = 0;
 
@@ -974,7 +993,9 @@ static bool RunOnCPUThread(const CabinetPS2::Config& config, std::string* error)
 	// with none is left exactly as it was, and its picture changes shape only
 	// when its own patch asks (Patch.cpp), which the frame readback above then
 	// follows. The fixes games need to run are GameIndex.yaml's, not these.
-	s_settings.SetBoolValue("EmuCore", "EnableWideScreenPatches", true);
+	// The player can turn widescreen off for one game in the pause menu
+	// (#368): some patches widen the 3D view and leave the HUD stretched.
+	s_settings.SetBoolValue("EmuCore", "EnableWideScreenPatches", config.widescreen);
 	s_settings.SetBoolValue("EmuCore", "EnableNoInterlacingPatches", true);
 
 	// PCSX2's own input is off entirely, and stays off. Every pad on this
@@ -1329,6 +1350,11 @@ void CabinetPS2::SetPaused(bool paused)
 bool CabinetPS2::IsRunning()
 {
 	return s_running.load();
+}
+
+bool CabinetPS2::HasWidescreenPatch()
+{
+	return s_running.load() && s_widescreen_patch.load();
 }
 
 uint8_t* CabinetPS2::Memory(unsigned region, size_t* size)

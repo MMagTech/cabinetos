@@ -11719,7 +11719,7 @@ update installs under its disc ID, where RPCS3 looks in `/dev_hdd0/game`, which
 is this person's save folder, not the game's; linking the installed update into
 it before each start is the likely answer. RomM's `update/` and `dlc/`
 subfolders are the likely source. **After the first release** (MMagTech,
-2026-09-29: he has none to test with yet): #187.
+2026-09-29: he has none to test with yet): #181 (#187 merged into it).
 
 ### 20. Vulkan, and how the host should choose a graphics API
 **Raised by MMagTech 2026-09-17. BUILT 2026-09-20, and it is what made
@@ -14726,6 +14726,46 @@ PS2 meets it; GameCube, Dreamcast and N64 keep their widescreen hacks off.
 Judged on the TV with several PS2 games before it ships. Patches a person
 keeps in RomM are a separate idea, after the first release.
 
+#### DECIDED, MMagTech 2026-10-12: a Widescreen row for PS2 games with a patch (#368)
+
+A player found Armored Core 3 stretched: its "Widescreen 16:9" section is a
+thin hack (three code lines and `gsaspectratio=16:9`) that widens the 3D view
+and leaves the HUD, menus and videos stretched. Burnout 3's is thorough (112
+lines: FOV, HUD and FMVs). The patch set holds both under the same name and
+nothing in a file says which kind it is.
+
+- Widescreen stays **on by default** for every game whose patch file has the
+  section.
+- Those games, and only those, get **Widescreen: On / Off** in the pause menu,
+  for everyone (it is a look, like Look), remembered per game on this console
+  in `config/ps2-widescreen.json`, `{"<rom id>": "off"}`, the way Picture's
+  `picture-quality.json` is.
+- From the game's next start, said in the notice as Picture's row does.
+- No list of good and bad patches: that would be a per-game fix. Accepted
+  downside: a player sees the stretched HUD the first time, until they find
+  the row.
+
+How it knows: PCSX2 reports the running program's serial and CRC to the host
+(`Host::OnGameChanged`, on its CPU thread, once the program has booted), and
+the host asks `Patch::GetPatchInfo` for that file's sections, the same lookup
+`EnableWideScreenPatches` uses by name. The library logs `[ps2] widescreen
+patch: none`, `on` or `off for this game` at every program boot.
+
+**Measured on the A9 with MMagTech at the TV, 2026-10-12** (the loop build):
+- The row shows on Rumble Racing (SLUS-20174, 2F5354BE, a one-line hack plus
+  16:9, the Armored Core 3 kind) and not on Alien Hominid (SLUS-21090, no
+  patch). Off, then a new start: 4:3, with both starts in one run of the app.
+- **Live switching, tried with a temporary build:** PCSX2 switches the patch
+  ON mid-game correctly (`VMManager::ApplySettings` reloads patches), but OFF
+  did not give the 4:3 game back: the patch's writes stay in the game's
+  memory. So the row stays "from the next start". MMagTech: a restart is fine.
+- **The notice, for Picture and Widescreen both, is "Exit and relaunch to
+  apply"** (MMagTech, judged on the TV): "From the next start" did not say
+  what to do, and "Restart" points at a button the pause menu does not have
+  and already means rebooting ("Restart to update"). "Exit" points at Exit to
+  Home. A Restart game item was considered and left out: more in every pause
+  menu for one notice.
+
 #### DECIDED, MMagTech 2026-10-02: the processor-side extras are fixed, not in the dial (#63)
 
 From the phase 1 audit (2026-10-02). Four options sharpen the picture on the
@@ -15303,7 +15343,7 @@ Alt+F4, and handles no profile, title update or DLC.
 | Screen sleep | no inhibit of its own | the console's idle watch counts a running game as play; the sleep in the hand test was the frozen frontend |
 | Formats | first 4 bytes: `XEX2`, `CON `, `LIVE`, `PIRS`; ZAR by its last 4 bytes; else XDVDFS with `MICROSOFT*XBOX*MEDIA` at 0x10000, 0x1FB20, 0x30600, 0x2090000 (XGD3) or 0xFDA0000 (XGD2). GOD is a header file with a `.data/` folder beside it. zip, 7z, CCI, CSO, CHD refused | full disc dumps as they are, no trimming; a zip unpacked (`romfile.cpp` already sniffs `PK`) |
 | XBLA licences | `license_mask=1` is the full-version bit; -1 risks licences the game never shipped | 1, as Batocera |
-| Title updates and DLC | a package file dropped in `content/0000000000000000/<TID>/000B0000/` or `00000002/` works; the first update by name wins | with #187, after the first release |
+| Title updates and DLC | a package file dropped in `content/0000000000000000/<TID>/000B0000/` or `00000002/` works; the first update by name wins | with #181, after the first release |
 | Multi-disc | disc swap lists discs Edge's library knows, otherwise a desktop file picker | after the first release; known gap |
 | Other storage | shader cache under `cache_host`; `cache`, `cache0/1`, `scratch` are game scratch; `library/<TID>/game.toml` feeds the swap list. None hold progress | one storage root per console |
 
@@ -15318,7 +15358,7 @@ named `.iso`; Renegade Ops, Charlie Murder and The Dishwasher: Vampire Smile,
 |---|---|
 | Gamertag | each person's name as shown on Home (their RomM username), cut to the 360's 15 characters. The profile ID is the same for everyone, so saves travel whatever the name |
 | Removing and re-adding someone | nothing of the profile is kept per person, so there is nothing to clean up or rebuild. Only the current player's saves are ever in Xenia's content folder: put in before a game, copied off after. A save recovered after a power cut goes into its owner's folder at the next start, whoever is signed in, and its upload waits for them. A rename on RomM while removed strands owed uploads on every system: #194 |
-| Title updates and DLC | with #187, after the first release |
+| Title updates and DLC | with #181, after the first release |
 | Multi-disc games | after the first release; none on RomM |
 | XNA games | "Couldn't start" if they fail, like any game; launched on the A9 first, since Edge may now run them |
 

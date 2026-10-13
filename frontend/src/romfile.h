@@ -125,4 +125,7 @@ bool prepareFile(const std::string& downloadedPath, const std::string& outDir,
                  const std::string& validExtensions, bool blockExtract,
                  std::string* primaryPath, Kind* kindOut, std::string* err);
 
+// Whether `fileName`'s extension is one the core lists ("bin|cue|chd").
+bool accepts(const std::string& validExtensions, const std::string& fileName);
+
 }  // namespace romfile

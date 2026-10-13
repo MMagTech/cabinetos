@@ -44,16 +44,7 @@ log "RPCS3 ${RPCS3_VERSION}"
 work="$(mktemp -d)"
 trap 'rm -rf "${work}"' EXIT
 
-# A retry, because GitHub's release CDN occasionally drops a connection
-# mid-file and a build that fails for that has nothing wrong with it.
-for attempt in 1 2 3; do
-    if curl -fsSL --retry 3 -o "${work}/rpcs3.AppImage" "${RPCS3_URL}"; then
-        break
-    fi
-    log "  download attempt ${attempt} failed"
-    [[ ${attempt} -eq 3 ]] && { log "ERROR: could not download RPCS3"; exit 1; }
-    sleep 5
-done
+fetch_pinned "${RPCS3_URL}" "${RPCS3_SHA256}" "${work}/rpcs3.AppImage" "RPCS3"
 
 got="$(sha256sum "${work}/rpcs3.AppImage" | cut -d' ' -f1)"
 if [[ "${got}" != "${RPCS3_SHA256}" ]]; then

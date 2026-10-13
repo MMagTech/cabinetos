@@ -267,6 +267,25 @@ jobs:
       - name: Collect them into the image payload
         run: ci/stage-image-payload.sh .artifacts
 
+      # THE FILES THE IMAGE BUILD WOULD DOWNLOAD FROM OUTSIDE (RPCS3, Xenia
+      # Edge, xemu's drive), kept in the Actions cache so a release site that
+      # answers 500 cannot fail a build (RPCS3's, 2026-10-12). The key is the
+      # install scripts' own pins; the scripts check each sha256 again.
+      # ci/fetch-pinned.sh.
+      - name: Pinned downloads, the cache key
+        id: pins
+        run: echo "key=pinned-downloads-$(ci/fetch-pinned.sh key)" >> "${GITHUB_OUTPUT}"
+
+      - name: Pinned downloads, from the cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: .downloads
+          key: ${{ steps.pins.outputs.key }}
+          restore-keys: pinned-downloads-
+
+      - name: Pinned downloads, into the payload
+        run: ci/fetch-pinned.sh fetch .downloads image_payload/downloads
+
       - name: Install just
         uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3  # v4.0.0
 
@@ -328,10 +347,12 @@ jobs:
           ALIAS_TAGS: ${{ steps.gen-build-tags.outputs.alias_tags }}
         run: just tag-images "${IMAGE_NAME}" "${DEFAULT_TAG}" "${ALIAS_TAGS}"
 
-      # Everything below only runs on main. Pull requests stop here, having
-      # proved the image builds.
+      # Everything below only runs on main and testing. Pull requests stop
+      # here, having proved the image builds, and so does a manual run on any
+      # other branch: until 2026-10-12 one would have published that branch
+      # as `latest`, since every branch but testing takes that tag.
       - name: Login to GHCR
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/testing')
         uses: docker/login-action@abd2ef45e78c5afb21d64d4ca52ee8550d9572c7  # v4.5.1
         with:
           registry: ghcr.io
@@ -341,13 +362,13 @@ jobs:
       # Read BEFORE the push overwrites the tag, so the report below says what
       # a console on the previous image downloads to take this one.
       - name: Remember the previous image
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/testing')
         run: |
           skopeo inspect --raw "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}" \
             > /tmp/previous.json || rm -f /tmp/previous.json
 
       - name: Push to GHCR
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/testing')
         id: push-image
         env:
           ALIAS_TAGS: ${{ steps.gen-build-tags.outputs.alias_tags }}
@@ -379,7 +400,7 @@ jobs:
       # unsigned. Set the SIGNING_SECRET repository secret to turn it on.
       - name: Check for a signing key
         id: signing
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/testing')
         env:
           SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
         run: |

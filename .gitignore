@@ -11,7 +11,9 @@ _build-*/**
 
 # Build artefacts
 previous.manifest.json
-changelog.md
+# The image template's generated file at the top of the repo, not the
+# wiki's docs/wiki/changelog.md.
+/changelog.md
 output.env
 
 # Core builds. The source checkouts are clones of upstream at a pinned commit,
@@ -41,6 +43,10 @@ image_payload/
 # collecting them. Same reason as above: it must be ignored, not merely
 # untracked, or `git status -s` stops being empty.
 .artifacts/
+# The pinned outside downloads (ci/fetch-pinned.sh), kept by the Actions
+# cache. Ignored for the same reason as .artifacts/: an untracked directory
+# costs the image its labels.
+.downloads/
 
 # macOS
 .DS_Store

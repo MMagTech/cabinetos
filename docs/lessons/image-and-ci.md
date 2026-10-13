@@ -146,6 +146,23 @@ Read before touching `build_files/`, `system_files/`, `ci/`, the workflows, the 
 - **`core-manifest.json` IS on GitHub**, at `docs/core-manifest.json` in
   Cabinet, and has been since `37ca75d`.
 
+- **A MANUAL RUN ON A SIDE BRANCH WOULD HAVE PUBLISHED IT AS `latest`**
+  (found 2026-10-12, never happened). The push steps checked only "not a
+  pull request", and every branch but `testing` takes the `latest` tag. Now
+  only main and testing publish, so `gh workflow run build.yml --ref
+  <branch>` is the safe way to prove a CI change without touching `testing`.
+
+- **The outside downloads come from the Actions cache** (RPCS3, Xenia Edge,
+  xemu's drive; `ci/fetch-pinned.sh`, keyed on the install scripts' own
+  pins). Proved 2026-10-12 with three manual runs: no cache, downloaded and
+  saved; cached, nothing fetched; one pin moved, only that file fetched and
+  the old one dropped. **The cache is per branch**: a new branch reads only
+  its own and main's, so test a pin move on the branch that holds the cache.
+- **A core's start-up chatter is not an option.** PCSX ReARMed's stored
+  option list held its memory-map lines, which vary with the runner's
+  processor, and failed a build that changed no core; the check compares
+  only `name<TAB>default<TAB>values` lines now.
+
 ## Promotion, the testing channel and updates
 
 - **PROMOTION COMPARES THE FILES THE IMAGE IS BUILT FROM** (`ci/promote-tested.sh`).

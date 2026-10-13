@@ -56,7 +56,12 @@ now=$(podman run --rm -v "$ROOT":/repo:Z -v "$OUT":/out:Z -w /tmp "$BUILDER" \
     echo "$CORE: could not list its options" >&2
     exit 1
 }
-if ! diff -u "$list" <(printf '%s\n' "$now") > /tmp/options.diff; then
+# ONLY THE OPTION LINES, `name<TAB>default<TAB>values`. A core may print
+# chatter of its own while it loads, and PCSX ReARMed's depends on the
+# processor: "Using 32-bit LUT" was there on one CI runner and not on the next
+# (2026-10-12), which failed a build that changed no core.
+now=$(printf '%s\n' "$now" | grep -P '\t' || true)
+if ! diff -u <(grep -P '\t' "$list" || true) <(printf '%s\n' "$now") > /tmp/options.diff; then
     echo "$CORE: ITS OPTIONS ARE NOT THE ONES IN cores/options/$CORE.txt" >&2
     cat /tmp/options.diff >&2
     exit 1

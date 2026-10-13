@@ -1,64 +1,97 @@
 # Next session
 
 **Work only on what is listed under *Next*. Do not raise other work, cleanup
-or old findings with MMagTech; everything else is a GitHub issue in a
-milestone, and it waits its turn.** Replace this file at the end of every
-session; list only the current milestone's work, never housekeeping.
+or old findings with MMagTech; everything else is a GitHub issue, and it
+waits its turn.** Replace this file at the end of every session; list only
+what the next session works on, never housekeeping.
 
 Every session: `docs/lessons/README.md` (ten rules, one page), then the
 lessons file named on the item. New here? `docs/WORKING.md`. The
-specification is `docs/PROJECT.md`; the order is `docs/ROADMAP.md`.
+specification is `docs/PROJECT.md`.
 
 ## Where things stand
 
-**2026-10-12: #364 (game manuals) is merged**, judged on the TV: the game's
-RomM manual beside it on the drive, a small book on the cover (bottom right,
-on frosted glass), R1 to read it. The sound fix (#367) is released; the A9
-(Wi-Fi, **192.168.1.109**, `CABINETOS_A9=cabinet@192.168.1.109`) runs
-`testing`, 2026.10.12.5 or the manuals image after it. Handhelds are a
-non-goal (docs/PROJECT.md); Cabinet on Apple platforms is no constraint.
+**2026-10-13:** `latest` is 2026.10.13. Merged on 2026-10-12: the PS2
+Widescreen row (#368), a folder game downloading once (#372), the build's
+download cache (#373), and **What's new**, the player changelog
+(`docs/wiki/changelog.md`, live on the site). **Every pull request that
+changes what consoles get now adds its changelog entry, in player's words,
+under its testing image's version, or says `Changelog: none`** (WORKING.md;
+`changelog.yml` checks it). The A9 (Wi-Fi, **192.168.1.109**,
+`CABINETOS_A9=cabinet@192.168.1.109`) runs `testing`, 2026.10.13. The
+issue review ran on 2026-10-12: everything open is in **Later** (no date,
+worked only when MMagTech raises it), except #341.
 
 ## Next
 
-1. **#368, PS2 Widescreen row** (lessons: emulators.md). **Decided on #368,
-   build it:** widescreen stays on for every PS2 game whose patch file has a
-   `Widescreen 16:9` section; those games get a "Widescreen: On / Off" row
-   in the pause menu, remembered per game on this console like the Picture
-   row, from the next start of the game (test whether PCSX2 can switch it
-   live). A user's Armored Core 3 has a thin hack that stretches the HUD.
-2. **#268 (PR #332, on hold):** the display wait works, but the app starts
-   Developer access, Remote Play and Tailscale, so with no display none came
-   up. Rework: start them at boot from their saved state, independent of the
-   session; then retest with the HDMI unplugged (MMagTech at the TV). Branch
-   `wait-for-display`.
-3. **Fewer outside downloads in every image build (decided, MMagTech
-   2026-10-12).** A GitHub 500 on RPCS3's release failed a build that day.
-   - RPCS3, Xenia and xemu's drive: fetched in a CI step before the image
-     build, kept in the Actions cache, staged into `image_payload/`; the
-     install scripts use the staged file and fall back to downloading (the A9
-     dry runs have no payload). **The cache key comes from the install
-     script's own pin** (URL and sha256); the sha256 is checked on every
-     build, cached or not.
-   - The frontend's builder container: reuse the ghcr builder image
-     build-core.yml already publishes, building only if the pull fails.
-   - Prove it: build 1 downloads and saves, build 2 logs "from the cache",
-     and a pin change on a throwaway branch (never pushed to testing)
-     fetches the new file. Left out on purpose: the Bazzite base, Terra,
-     the frontend compile.
+1. **#341, no sound on deletableman's HC Technology HCAR5000-MI** (Ryzen 7
+   5800U; lessons: testing.md, "The silent day"). His report of 2026-10-13
+   (on the issue) after he found a fix: Steam's first start asked for a sound
+   output, he picked **Renoir/Cezanne HDMI/DP Audio Controller** over **Audio
+   Adapter (Unitek Y-247A)**, and from then on CabinetOS had sound in menus
+   and games, across reboots. The report now shows the HDMI output (DP 1, his
+   LG TV) as the default and the app's stream on it; a USB sound adapter
+   (C-Media, the Unitek) is also plugged in. **Guess, not verified:** the
+   sound server's default was the USB adapter, with nothing listening on it,
+   and the console never chooses an output, so it played into the adapter;
+   Steam set the system default, which is why the fix outlived Steam.
+   **First, research whether that adapter is plugged in or built in**
+   (MMagTech: built-in sound on machines like this is to be supported; a USB
+   sound stick somebody adds is not). The log shows C-Media `0d8c:0014` on
+   USB port `usb 3-3`, which Linux's USB list names "Audio Adapter (Unitek
+   Y-247A)", a plug-in stick; but some mini PCs wire a C-Media USB chip
+   inside for the headphone jack. Check the HCAR5000-MI's specs and
+   teardowns, and draft a question for deletableman. Either way the fault is
+   the console playing through whatever output the system picked; a fix that
+   plays through the TV the picture goes to would cover a built-in jack too,
+   without supporting USB sticks as such. Check
+   it against his first report (which showed WirePlumber failing to load its
+   ALSA plugin: a second fault, or the same?) and WirePlumber's priorities
+   (USB against HDMI). Then name the options to MMagTech before building
+   (prefer the output on the screen in use; a Sound output row in Settings;
+   or say so in the wiki), with what each does off the A9. Draft a reply to
+   deletableman; MMagTech posts it.
+   **Also on #341: missing art.** deletableman: "half my art isn't
+   downloading" (GBA among them); he has not named games yet (asked
+   2026-10-12). His report of 2026-10-13 shows no cover errors, only
+   `[covers] 29 tile(s) remembered, 13 to ask about`. MMagTech sees one
+   Switch game without art: **Azure Striker Gunvolt: Striker Pack** (RomM id
+   857), which has no cover on RomM itself (`path_cover_small` empty,
+   checked 2026-10-13), so compare RomM's web page first: no cover there
+   means RomM's match, not the console. Then find whether any game that HAS
+   a cover on RomM shows none on the console (the A9's library against the
+   server's list), and ask deletableman for two or three titles.
+2. **#268, starting with no TV answering.** Built on `saved-services-at-boot`
+   (the display wait put back, and `cabinetos-saved-services.service` starting
+   File access, Developer access, Remote Play and Tailscale at boot from
+   settings.json; dry-run on the A9). Merge `main` into it, add its
+   changelog entry, push to `testing`. **Tested remotely, no one at the TV
+   (agreed with MMagTech, 2026-10-13):** install the testing image the way
+   Settings does (`sudo systemctl start cabinetos-update-download.service`,
+   wait for `state=ready` in `/run/cabinetos-update/status`, `sudo systemctl
+   reboot`; check first that no game is running). Then (a) the boot: the log
+   shows `cabinetos-saved-services` starting each way in that is on, before
+   the app; (b) no display: as root, `echo off >
+   /sys/class/drm/card*-HDMI-A-1/status` and restart the session; the log
+   says it is waiting, SSH keeps answering, and Remote Play's behaviour is
+   noted; `echo detect >` the same file, and the console comes up at
+   `output 3840x2160 (from the display)`. The forced state resets at a
+   reboot, so (a) and (b) are proven separately; a real power-on with the
+   cable out waits until MMagTech is at the TV, if he wants it. **GitHub closed #268 on 2026-10-11
+   when the first try merged, and that try was undone**: ask MMagTech to
+   reopen it. Its changelog entry: a console started with the TV off or
+   unplugged now comes up at the TV's own size.
+3. **#329, release notes on the console:** MMagTech is asking his Discord
+   group whether a small QR code on the "Update available" screen, opening
+   What's new on a phone, is worth having. Nothing to build until he brings
+   the answer.
 
-Waiting, not for this session unless MMagTech raises them: #341 (no sound
-on a K1; asked for a report with the new Sound section), #363 (closed
-2026-10-12: Deck controls are Steam's; when Spinnich replies on whether
-they work in Steam, note it there, and reopen only if something needs
-doing), #362 (to discuss: sharing a
-save), #360 (an update says "No connection" when only the router's DNS
-fails), #353, #354, #355
-(saves that never sync: Saturn cartridge, arcade high scores, cartridge
-clocks; After first release), #347 (pads did not reconnect after an update
-reboot), #345 (PS1 DualShock), #349 (to discuss: rolling back an update).
-Upstream to watch: rommapp/romm#5175 and #5198 (save channels),
-rommapp/argosy-sigil#17 and #18 (our Xbox and Xbox 360 notes),
-flyinghead/flycast#2541, libretro/Genesis-Plus-GX#413.
+Waiting, not for this session unless MMagTech raises them: Spinnich's answer
+on the folder fix (a reply was drafted for MMagTech to post); the issue-review
+session's list of doc changes, if it left one; #181 (updates and DLC,
+Later, no date). Upstream to watch: rommapp/romm#5175 and #5198 (save
+channels), rommapp/argosy-sigil#17 and #18, flyinghead/flycast#2541,
+libretro/Genesis-Plus-GX#413.
 
 **After a console is installed fresh** it has no key: About, press Version
 seven times, Developer access, PIN; then from the Mac, with the password on

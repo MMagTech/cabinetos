@@ -1,0 +1,56 @@
+name: Changelog
+
+# EVERY CHANGE THAT REACHES CONSOLES IS IN docs/wiki/changelog.md (MMagTech,
+# 2026-10-12; docs/WORKING.md). A pull request that changes anything the image
+# is built from must change the changelog too, or say "Changelog: none" in its
+# body for a change no player can notice (CI, the build itself). The image's
+# files are build.yml's path filter: everything but `.md` files and docs/,
+# with docs/LICENCES.md in.
+
+on:
+  pull_request:
+    branches:
+      - main
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  changelog:
+    name: Changelog entry
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+        with:
+          fetch-depth: 0
+
+      - name: Check
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+          changed=$(git diff --name-only "${BASE}...${HEAD}")
+          image=$(printf '%s\n' "${changed}" | grep -vE '\.md$|^docs/' || true)
+          if printf '%s\n' "${changed}" | grep -qx 'docs/LICENCES.md'; then
+            image="${image}"$'\n'"docs/LICENCES.md"
+          fi
+          image=$(printf '%s\n' "${image}" | sed '/^$/d')
+          if [[ -z "${image}" ]]; then
+            echo "Documentation only: nothing reaches consoles."
+            exit 0
+          fi
+          if printf '%s\n' "${changed}" | grep -qx 'docs/wiki/changelog.md'; then
+            echo "The changelog is updated."
+            exit 0
+          fi
+          if printf '%s' "${BODY}" | grep -qiE '^Changelog: *none'; then
+            echo "The PR body says \"Changelog: none\": nothing a player can notice."
+            exit 0
+          fi
+          echo "::error::This changes what consoles get but not docs/wiki/changelog.md. Add an entry for players (docs/WORKING.md), or put \"Changelog: none\" on its own line in the PR body if no player can notice it."
+          printf 'Files the image is built from:\n%s\n' "${image}"
+          exit 1

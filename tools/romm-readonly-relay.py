@@ -9,6 +9,9 @@
 #   * A game's files can be shown under other names, or not at all (#162,
 #     the disc rig): file:<fileId>=<name> renames one in every `files` list,
 #     hide:<fileId> leaves it out. RomM still serves a file by its id.
+#   * folder:<romId> shows a one-file game as a folder game with an update
+#     beside it (has_multiple_files, and a made-up `update` file that RomM
+#     would refuse to serve), for the folder download fix (#181's notes).
 #   * `people` adds four made-up people with public collections (#352, the
 #     Collections tab's "From <name>" groups), so a household of five can be
 #     tried with two real accounts. Each one opens onto a real platform's
@@ -22,6 +25,7 @@ MAP = {}
 # file:<fileId>=<name> shows a game's file under another name (#162, odd names).
 FILES = {}
 PEOPLE = False
+FOLDERS = set()   # folder:<romId>
 # (owner id, owner name, collection id, name, smart, favourite, platform id)
 MOCK = [
     (9101, "Alex", 9001, "Saturday co-op", False, False, 8),
@@ -39,6 +43,9 @@ MOCK = [
 for a in sys.argv[2:]:
     if a == "people":
         PEOPLE = True
+        continue
+    if a.startswith("folder:"):
+        FOLDERS.add(int(a[7:]))
         continue
     if a.startswith("hide:"):
         FILES[int(a[5:])] = None
@@ -58,6 +65,14 @@ def rewrite(obj):
                         and FILES[x["id"]] is None)]
     if isinstance(obj, dict):
         obj = {k: rewrite(v) for k, v in obj.items()}
+        if obj.get("id") in FOLDERS and "fs_name" in obj and "platform_id" in obj:
+            obj["has_multiple_files"] = True
+            obj["has_nested_single_file"] = False
+            if isinstance(obj.get("files"), list) and obj["files"]:
+                fake = dict(obj["files"][0])
+                fake.update(id=990000 + obj["id"], file_name="Made-up update v9.nsp",
+                            file_size_bytes=1234, category="update", is_top_level=False)
+                obj["files"] = obj["files"] + [fake]
         if "file_name" in obj and obj.get("id") in FILES and "file_size_bytes" in obj:
             obj["file_name"] = FILES[obj["id"]]
         if "fs_slug" in obj and obj.get("id") in MAP and "rom_count" in obj:
@@ -134,7 +149,7 @@ class H(BaseHTTPRequestHandler):
             r = e
         body = r.read() if not head else b""
         ctype = r.headers.get("Content-Type", "")
-        if (MAP or FILES) and "json" in ctype and body:
+        if (MAP or FILES or FOLDERS) and "json" in ctype and body:
             try: body = json.dumps(rewrite(json.loads(body))).encode()
             except Exception: pass
         listing = urllib.parse.urlsplit(self.path).path
