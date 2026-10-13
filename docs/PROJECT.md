@@ -2829,14 +2829,22 @@ not, and the A9 has no CEC to wake one.
   Deck docked). gamescope takes the new screen, but the app keeps the size it
   started at (measured: started at 1280x720, stayed there when 4K arrived).
   That needs the app to change size while running; not researched.
-- **The ways in start at boot, not with the app.** File access, Developer
-  access, Remote Play and Tailscale were started by the app, which now comes
-  up only once a display answers, so the first build of the wait left a
-  console with no TV unreachable over SSH (measured, 2026-10-10) and was
-  undone. `cabinetos-saved-services.service`, a oneshot at boot, reads
-  `settings.json` and starts whichever are on (Tailscale only with Remote
-  Play, as the app has it). The app still starts and stops them from
-  Settings; starting one already running does nothing.
+- **The ways in start at boot, not with the app; Remote Play does not.**
+  File access, Developer access and Tailscale were started by the app,
+  which the first build of the wait held back until a display answered, so
+  that build left a console with no TV unreachable over SSH (measured,
+  2026-10-10) and was undone. `cabinetos-saved-services.service`, a oneshot
+  at boot, reads `settings.json` and starts whichever are on (Tailscale only
+  with Remote Play, as the app has it). The app still starts and stops them
+  from Settings; starting one already running does nothing.
+  **Remote Play was started here too, and that was wrong** (2026-10-13, on
+  the testing images 2026.10.13.3 and .4): at boot Sunshine ran before the
+  console's session had the screen ("Couldn't open /dev/dri/card1:
+  Permission denied"), failed, and refused every stream until restarted,
+  TV on or not. Moonlight was not tried after an ordinary reboot before
+  MMagTech found it. The app starts Remote Play when it is up, as before
+  #268, and with the memory above the app is up at boot even with no TV;
+  the wait for a screen covers that case.
 
 ### First boot shows Linux
 

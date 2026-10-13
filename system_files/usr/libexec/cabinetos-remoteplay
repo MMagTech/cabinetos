@@ -119,10 +119,10 @@ case "${1:-}" in
     # until it is restarted (A9, 2026-10-13: "Failed to gain CAP_SYS_ADMIN").
     # So it starts only once a connector is connected AND driven (`enabled`:
     # gamescope has taken it), which is also the moment there is something to
-    # stream. Both the boot service and the app start Remote Play, so the wait
-    # is here, in the unit. A TV in standby that stays connected passes at
-    # once. Streaming with no screen at all is #381; if that is ever done,
-    # this wait goes.
+    # stream. The app starts Remote Play when it comes up, and it now comes up
+    # with no TV answering, so the wait is here, in the unit. A TV in standby
+    # that stays connected passes at once. Streaming with no screen at all is
+    # #381; if that is ever done, this wait goes.
     wait-screen)
         said=0
         while :; do
