@@ -93,6 +93,23 @@ playing: [install](docs/wiki/install.md), [first run](docs/wiki/first-run.md),
 one file, `cabinetos.iso`, always the newest release
 ([what's new](https://cabinetos.mmagtech.com/wiki/changelog.html)).
 
+## Thanks
+
+CabinetOS stands on other people's work.
+
+- **[RomM](https://github.com/rommapp/romm)** keeps the library: every game,
+  cover, BIOS and save the console shows comes from it. Without RomM there is
+  no CabinetOS.
+- **[Bazzite](https://github.com/ublue-os/bazzite)** and
+  **[Universal Blue](https://universal-blue.org)** are the system underneath:
+  the kernel and drivers, gamescope, and the signed image updates CabinetOS is
+  built from.
+- **The emulator projects** (the libretro cores, PCSX2, Dolphin, PPSSPP, Cemu,
+  Xenia and the rest) play the games. Each one is listed with its licence in
+  [`docs/LICENCES.md`](docs/LICENCES.md).
+
+Thank you to everyone who works on them.
+
 ## Credits and licence
 
 CabinetOS's own source is MIT licensed. See [`LICENSE`](LICENSE).
@@ -106,10 +123,8 @@ this build, and it is deliberate.
 CabinetOS ships no games, no BIOS and no keys. All of them come from your own
 RomM server.
 
-CabinetOS is built on [Bazzite](https://github.com/ublue-os/bazzite) and
-[Universal Blue](https://universal-blue.org); its look comes from
-[Cabinet](https://github.com/MMagTech/cabinet), the Apple TV app. The
-`Containerfile`, `Justfile`, `disk_config/` and `.github/workflows/` are derived
+CabinetOS's look comes from [Cabinet](https://github.com/MMagTech/cabinet),
+the Apple TV app. The `Containerfile`, `Justfile`, `disk_config/` and `.github/workflows/` are derived
 from the [Universal Blue image template](https://github.com/ublue-os/image-template)
 (Apache-2.0).
 
