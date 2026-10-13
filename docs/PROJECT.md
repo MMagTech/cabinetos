@@ -2813,7 +2813,12 @@ not, and the A9 has no CEC to wake one.
   a TV that drops off when switched off), Sunshine refuses every stream
   ("Please check that a display is connected and powered on"): it copies the
   picture sent to a screen. A TV in standby that stays connected is fine.
-  Streaming with no screen is #381 (Later).
+  Streaming with no screen is #381 (Later). And Sunshine started with no
+  screen fails, gives up its right to read the screen, and refuses every
+  stream even after the TV returns, until restarted (seen at the TV the same
+  evening). So Remote Play waits, in its own unit, until a screen is
+  connected and gamescope is driving it (`cabinetos-remoteplay wait-screen`);
+  measured: Sunshine started 0.2 s after gamescope took the TV and found it.
 - **The session waits only when gamescope has no memory of a TV**: a
   console whose very first start is with no display answering. Without the
   wait it would start at 1280x720 and the app would stay there (measured).
