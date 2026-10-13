@@ -1,5 +1,6 @@
 #include "image.h"
 
+#include <SDL3_image/SDL_image.h>
 #include <jpeglib.h>
 #include <png.h>
 
@@ -8,6 +9,7 @@
 #include <csetjmp>
 #include <cstdio>
 #include <cstring>
+#include <mutex>
 
 #include "ui.h"
 
@@ -128,14 +130,51 @@ bool encodePNG(const std::vector<uint8_t>& rgba, unsigned width, unsigned height
     return true;
 }
 
+// EVERY FORMAT RomM TAKES FOR A COVER (MMagTech, 2026-10-13: "any image format
+// a cover can be according to RomM's standards"). RomM 5.4 accepts PNG, JPEG,
+// WebP, GIF, AVIF, BMP and TIFF (`ALLOWED_IMAGE_EXTENSIONS`), keeps an
+// uploaded cover in the format it came in, stores a large cover as the bytes
+// the metadata site sent, and writes an animated cover's small copy as WebP
+// even when it is named .png. Until now anything but PNG and JPEG decoded to
+// nothing and the tile stayed blank, silently (#341).
+//
+// PNG and JPEG keep their own decoders above. SDL3_image reads the rest: GIF
+// and BMP itself, WebP, AVIF and TIFF through libwebp, libavif and libtiff,
+// which it loads the first time one is needed. An animated picture shows its
+// first frame. One at a time: these are rare, and SDL3_image's first load of a
+// decoder library is not made for four workers arriving at once.
+static bool decodeOther(const std::vector<uint8_t>& in, std::vector<uint8_t>& out, int& w, int& h) {
+    static std::mutex m;
+    std::lock_guard<std::mutex> lock(m);
+    SDL_IOStream* io = SDL_IOFromConstMem(in.data(), in.size());
+    if (!io) return false;
+    SDL_Surface* src = IMG_Load_IO(io, true);
+    if (!src) return false;
+    SDL_Surface* rgba = SDL_ConvertSurface(src, SDL_PIXELFORMAT_RGBA32);
+    SDL_DestroySurface(src);
+    if (!rgba) return false;
+    bool ok = rgba->w > 0 && rgba->h > 0 && SDL_LockSurface(rgba);
+    if (ok) {
+        w = rgba->w;
+        h = rgba->h;
+        const size_t row = static_cast<size_t>(w) * 4;
+        out.resize(row * h);
+        const auto* px = static_cast<const uint8_t*>(rgba->pixels);
+        for (int y = 0; y < h; ++y)
+            std::memcpy(out.data() + row * y, px + static_cast<size_t>(rgba->pitch) * y, row);
+        SDL_UnlockSurface(rgba);
+    }
+    SDL_DestroySurface(rgba);
+    return ok;
+}
+
 bool decodeImage(const std::vector<uint8_t>& enc, std::vector<uint8_t>& rgba, int& w,
                  int& h) {
     if (enc.size() < 12) return false;
     static const uint8_t kPNG[8] = {0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A};
     if (std::memcmp(enc.data(), kPNG, 8) == 0) return decodePNG(enc, rgba, w, h);
     if (enc[0] == 0xFF && enc[1] == 0xD8) return decodeJPEG(enc, rgba, w, h);
-    // WebP is next when something needs it: libwebp is already in the image.
-    return false;
+    return decodeOther(enc, rgba, w, h);
 }
 
 std::vector<uint8_t> ImageCache::readFile(const std::string& path) {
