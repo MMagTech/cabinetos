@@ -847,7 +847,14 @@ void GridScreen::draw(Ctx& c) {
     const int count = static_cast<int>(cards_.size());
     const int rows = count == 0 ? 0 : (count + cols - 1) / cols;
     const float contentH = gridTop + static_cast<float>(rows) * rowPitch;
-    const float maxScroll = std::max(0.0f, contentH - ui::kCanvasHeight);
+    // WHOLE ROWS ONLY (MMagTech, 2026-10-13): every resting scroll is a
+    // multiple of the row pitch, so the top row sits exactly under the heading
+    // and the row above is out of sight (54 points of gap and spacing against
+    // the 28 under the heading). A scroll that stopped wherever the focused
+    // row first fitted left half a row of covers ending at the heading, which
+    // read as a hard line however it was faded.
+    const float maxScroll =
+        std::ceil(std::max(0.0f, contentH - ui::kCanvasHeight) / rowPitch) * rowPitch;
 
     const int focusedRow = count == 0 ? 0 : slot_ / cols;
     const float rowTop = gridTop + static_cast<float>(focusedRow) * rowPitch;
@@ -860,7 +867,8 @@ void GridScreen::draw(Ctx& c) {
     if (rowTop - want < gridTop) want = std::max(0.0f, rowTop - gridTop);
     const float rowBottom = rowTop + ch + design::kGridCaptionGap + captionH + lift;
     if (rowBottom - want > ui::kCanvasHeight - design::kScreenBottomPad)
-        want = rowBottom - (ui::kCanvasHeight - design::kScreenBottomPad);
+        want = std::ceil((rowBottom - (ui::kCanvasHeight - design::kScreenBottomPad)) /
+                         rowPitch) * rowPitch;
     want = std::clamp(want, 0.0f, maxScroll);
     if (std::fabs(want - scroll_.to) > 0.5f)
         scroll_.retarget(want, design::kFocusDuration);
@@ -893,10 +901,17 @@ void GridScreen::draw(Ctx& c) {
             const float x = bx - (w - cw) * 0.5f;
             const float y = by - (h - ch) * 0.5f;
 
-            // Fades over the last 40% of its height as it passes under the
-            // heading; whole everywhere else, the top row at rest included.
-            const float under = std::clamp((y + h - clipTop) / (h * 0.4f), 0.0f, 1.0f);
-            c.r.setContentAlpha(appear * under * under);
+            // WHILE THE LIST MOVES, a row sliding up under the heading fades by
+            // how much of it is still below the gap, so it dissolves rather than
+            // being cut. At rest no row is there (whole-row scrolling, above).
+            // The focused card is always whole.
+            float row = 1.0f;
+            if (y < gridTop && !isFocused) {
+                const float shown = std::clamp((y + h - gridTop) / h, 0.0f, 1.0f);
+                const float t = std::clamp((shown - 0.15f) / 0.7f, 0.0f, 1.0f);
+                row = t * t * (3.0f - 2.0f * t);
+            }
+            c.r.setContentAlpha(appear * row);
             drawCover(c, card, x, y, w, h, design::kGridCoverRadius * s, f, /*rim=*/true);
             c.r.setContentAlpha(appear);
 
