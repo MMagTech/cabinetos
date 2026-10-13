@@ -831,11 +831,18 @@ void GridScreen::draw(Ctx& c) {
                            static_cast<float>(design::kGridCaptionLines);
     const float rowPitch = ch + design::kGridCaptionGap + captionH + design::kGridRowSpacing;
 
-    // The screen's title is ordinary content at the top of its own scroll view,
-    // never system chrome: on tvOS the system version painted over the artwork.
+    // THE HEADING STAYS (2026-10-13). It carries the focused game's name (no
+    // captions under the covers, design::kGridCaptionLines), and when it
+    // scrolled away with the covers the name went with it: two rows down,
+    // nothing said which game was selected. Reported to MMagTech, who chose
+    // keeping it in place. So the covers scroll under it instead: clipped at
+    // its foot, and each one fading out as it slides beneath, rather than cut.
     const float chipH = c.text.lineHeight(ui::TextStyle::ScreenTitle, c.sc) +
                         design::kScreenChipPadY * 2.0f;
     const float gridTop = design::kSwitcherTop + chipH + design::kSwitcherGapBelow;
+    const float clipTop = design::kSwitcherTop + chipH;
+    c.r.setScissor(0, clipTop, ui::kCanvasWidth, ui::kCanvasHeight - clipTop);
+    const float appear = appear_.value();
 
     const int count = static_cast<int>(cards_.size());
     const int rows = count == 0 ? 0 : (count + cols - 1) / cols;
@@ -886,7 +893,12 @@ void GridScreen::draw(Ctx& c) {
             const float x = bx - (w - cw) * 0.5f;
             const float y = by - (h - ch) * 0.5f;
 
+            // Fades over the last 40% of its height as it passes under the
+            // heading; whole everywhere else, the top row at rest included.
+            const float under = std::clamp((y + h - clipTop) / (h * 0.4f), 0.0f, 1.0f);
+            c.r.setContentAlpha(appear * under * under);
             drawCover(c, card, x, y, w, h, design::kGridCoverRadius * s, f, /*rim=*/true);
+            c.r.setContentAlpha(appear);
 
             // NO CAPTION HERE. The focused card's title is drawn once, beside
             // the screen's heading — see drawGlass and design::kGridCaptionLines
@@ -933,12 +945,10 @@ void GridScreen::drawGlass(Ctx& c) {
     // 40 bold stays. It is the one hardcoded size in the whole reference UI and
     // it sits between Title 2 and Large Title deliberately: a grid title should
     // not shout as loudly as a game's own name does.
-    const float h = c.text.lineHeight(ui::TextStyle::ScreenTitle, c.sc) +
-                    design::kScreenChipPadY * 2.0f;
-    // Scrolls away with the covers, for the same reason the Library's switcher
-    // does: it is content at the top of a scroll view, not chrome over it.
-    const float y = design::kSwitcherTop - scroll_.value();
-    if (y + h < 0.0f) return;
+    // STAYS PUT (2026-10-13; it used to scroll away with the covers, as the
+    // Library's switcher does). It holds the focused game's name, which has to
+    // be readable whichever row is focused. See draw().
+    const float y = design::kSwitcherTop;
     const float baseline = y + design::kScreenChipPadY +
                            c.text.ascent(ui::TextStyle::ScreenTitle, c.sc);
     c.text.draw(c.r, title_, design::kLibraryInset, baseline,
