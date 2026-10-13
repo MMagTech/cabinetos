@@ -2771,6 +2771,81 @@ development convenience, never the production path. Falling back to it on real
 hardware means something is wrong with the GPU, and the About screen should name
 the running compositor so that state is visible rather than mysterious.
 
+### A start with no display answering (#268), 2026-10-12 and 2026-10-13
+
+Measured on the A9 with the LG C1, 2026-10-10: a running console survives
+the TV going away (standby, a 31 s unplug, the drops a TV makes as it
+switches on); only a START with nothing answering went wrong. The session
+guessed 1920x1080 and gamescope kept it when the TV appeared, so a 4K set
+stayed at 1080p until a restart. The C1 in standby still answers; a TV with
+no standby power, a receiver or HDMI switch that is off, or a cable out does
+not, and the A9 has no CEC to wake one.
+
+- **gamescope picks the size and remembers the last TV** (changed
+  2026-10-13; the first version below waited and then pinned the size). The
+  session used to read the display's size once and pin gamescope to it
+  (`--output-width/--output-height`, since 2026-09-19, because a test that
+  day had gamescope choose 1080p by itself). The pin was the fault: read with
+  no display, or while the kernel still showed its stopgap list of five small
+  sizes after the TV reappeared (seen for 2 s, and for 20 s), it held the
+  console at 1080p or 1024x768 until a restart. Bazzite's own game-mode
+  session (`gamescope-session-plus`) never pins: it gives gamescope no size
+  and switches on its memory of the last display (`GAMESCOPE_PATCHED_EDID_FILE`,
+  `GAMESCOPE_MODE_SAVE_FILE`). The console now does the same, with its own
+  memory in `~/.local/state/cabinetos/gamescope`, not Steam's
+  `~/.config/gamescope`, where Steam saves its own resolution and 120 Hz
+  picks (#256). Measured on the A9, 2026-10-13, display switched off in
+  software (`/sys/class/drm/card1-HDMI-A-1/status`): given no size,
+  gamescope picks the C1's 3840x2160@60 itself; started with no display it
+  comes up at once at 3840x2160 ("using preferred mode 3840x2160@60 of last
+  connected display"); when the display returns it stays there; and even
+  when the session read the stopgap 1024x768, gamescope checked the TV itself
+  and chose 3840x2160. `CABINETOS_OUTPUT` still pins, for testing. On the
+  testing image 2026.10.13.3, with the driver's real unplug and plug
+  (`trigger_hotplug`, not the sysfs switch, which gamescope never sees):
+  started with no TV it shows "Dummy Output" for sound, as there is nothing
+  to play to; when the TV arrives gamescope takes it at 3840x2160@60, the
+  ELD is valid and the app's sound moves to the TV.
+  Tested at the TV the same evening, HDMI cable out, a real reboot: up at
+  3840x2160 from memory, the ways in all answering; cable in, gamescope took
+  the TV at 3840x2160@60 with no restart and the sound moved to it.
+- **Remote Play needs a screen connected.** With none at all (cable out, or
+  a TV that drops off when switched off), Sunshine refuses every stream
+  ("Please check that a display is connected and powered on"): it copies the
+  picture sent to a screen. A TV in standby that stays connected is fine.
+  Streaming with no screen is #381 (Later). And Sunshine started with no
+  screen fails, gives up its right to read the screen, and refuses every
+  stream even after the TV returns, until restarted (seen at the TV the same
+  evening). So Remote Play waits, in its own unit, until a screen is
+  connected and gamescope is driving it (`cabinetos-remoteplay wait-screen`);
+  measured: Sunshine started 0.2 s after gamescope took the TV and found it.
+- **The session waits only when gamescope has no memory of a TV**: a
+  console whose very first start is with no display answering. Without the
+  wait it would start at 1280x720 and the app would stay there (measured).
+  It polls the connectors once a second until a display has answered for two
+  seconds. A machine with no drm device, or a real GPU fault, still goes down
+  the ladder as before.
+- **Not fixed by this: a screen connected while running** (#361, a Steam
+  Deck docked). gamescope takes the new screen, but the app keeps the size it
+  started at (measured: started at 1280x720, stayed there when 4K arrived).
+  That needs the app to change size while running; not researched.
+- **The ways in start at boot, not with the app; Remote Play does not.**
+  File access, Developer access and Tailscale were started by the app,
+  which the first build of the wait held back until a display answered, so
+  that build left a console with no TV unreachable over SSH (measured,
+  2026-10-10) and was undone. `cabinetos-saved-services.service`, a oneshot
+  at boot, reads `settings.json` and starts whichever are on (Tailscale only
+  with Remote Play, as the app has it). The app still starts and stops them
+  from Settings; starting one already running does nothing.
+  **Remote Play was started here too, and that was wrong** (2026-10-13, on
+  the testing images 2026.10.13.3 and .4): at boot Sunshine ran before the
+  console's session had the screen ("Couldn't open /dev/dri/card1:
+  Permission denied"), failed, and refused every stream until restarted,
+  TV on or not. Moonlight was not tried after an ordinary reboot before
+  MMagTech found it. The app starts Remote Play when it is up, as before
+  #268, and with the memory above the app is up at boot even with no TV;
+  the wait for a screen covers that case.
+
 ### First boot shows Linux
 
 **And as of 2026-09-19 the boot after it shows the frontend**, which it did not
