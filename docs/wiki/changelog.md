@@ -34,9 +34,11 @@ one you install, so you only ever install the newest.
 *12 October 2026*
 
 - **New:** read a game's manual on the TV. When your RomM server has a
-  manual for a game, a small book shows on its cover; press **R1** on the
-  game's page to read it, one page at a time. Manuals are kept with the game,
-  so they can be read offline too.
+  manual for a game, a small book shows on its cover. On the game's page,
+  **R1** opens it. **Left** and **Right** turn the page; **A** zooms in, the
+  d-pad then moves around the page, and **A** again zooms out. **L1** or **B**
+  goes back. Manuals are kept with the game, so they can be read offline too.
+  See [Buttons and shortcuts](navigation.md).
   ([#364](https://github.com/MMagTech/cabinetos/issues/364))
 
 ## 2026.10.12.5 {#v2026-10-12-5}
@@ -83,10 +85,12 @@ one you install, so you only ever install the newest.
 *11 October 2026*
 
 - **New:** games on several discs play as one game, with one save that
-  carries on from disc to disc. When the game asks for the next disc, use
-  **Change disc** in the pause menu. For PS1, Saturn, Dreamcast, Sega CD,
-  3DO and GameCube; put a game's discs in one folder on your RomM server.
-  See [Games on several discs](discs.md).
+  carries on from disc to disc. When the game asks for the next disc, open
+  the pause menu and choose **Change disc**: it lists the game's discs with
+  the one in the drive marked; pick one and choose **Insert**. The game page
+  shows which disc you're on. For PS1, Saturn, Dreamcast, Sega CD, 3DO and
+  GameCube; put a game's discs in one folder on your RomM server. See
+  [Games on several discs](discs.md).
   ([#162](https://github.com/MMagTech/cabinetos/issues/162))
 
 ## 2026.10.11.3 {#v2026-10-11-3}

@@ -8,7 +8,8 @@ from Flathub, at the versions the image names.) A small change downloads small.
 
 ## Update the console
 
-Settings, **System**, **System update**.
+Settings, **System**, **System update**. What each update changed:
+[What's new](changelog.md).
 
 1. The row checks and says *Up to date* or *Update available*, with the new
    version and its size.

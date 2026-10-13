@@ -32,7 +32,10 @@ MMagTech wants it done. This changes rarely. What to work on next is
   the date, newest first. **Write it for a player, not for us:** what they
   would have noticed, then what happens now, and the issue number; no
   internal names (`**Fixed:** GameCube saves kept on your server loaded as an
-  empty card on a new console. They load now.`). A pushed-again `testing`
+  empty card on a new console. They load now.`). **A New entry says how to
+  use it**, not only how to open it: the buttons, briefly, and a link to its
+  wiki page (MMagTech: the manuals entry said R1 and nothing about turning or
+  zooming). A pushed-again `testing`
   image moves the heading to the new version; it is a docs change, so it
   does not stop the promotion. A change a player cannot notice (CI, the
   build) says `Changelog: none` in its PR body instead. The pull request
