@@ -240,6 +240,37 @@ void ImageCache::workerLoop() {
         std::vector<uint8_t> encoded = loader_(key);
         if (!encoded.empty()) {
             out.ok = decodeImage(encoded, out.rgba, out.width, out.height);
+            // SAID, with the file's first bytes, which name its format (#376).
+            // A server path is shown up to its query; anything else is a file
+            // on the console or a fixed service, and only its kind is shown.
+            if (!out.ok) {
+                char head[3 * 12 + 1] = {0};
+                for (size_t i = 0; i < std::min<size_t>(12, encoded.size()); ++i)
+                    std::snprintf(head + 3 * i, 4, "%02x ", encoded[i]);
+                const std::string shown = key.rfind("/assets/", 0) == 0
+                                              ? key.substr(0, key.find('?'))
+                                              : std::string("a picture not from the server");
+                std::fprintf(stderr, "[image] could not read %s (%zu bytes, starting %s)\n",
+                             shown.c_str(), encoded.size(), head);
+            }
+        }
+        // THE LARGE COVER WHEN THE SMALL ONE WILL NOT DO (#376): missing on the
+        // server, or there but not a picture. RomM keeps both side by side
+        // (cover/small.<ext>, cover/big.<ext>) and its own pages draw the
+        // large one, so a small one can be broken while the large one is fine:
+        // blank on Home, a cover on the game's page. Same server, same folder.
+        if (!out.ok) {
+            const size_t at = key.find("/cover/small.");
+            if (at != std::string::npos) {
+                std::string big = key;
+                big.replace(at, std::string("/cover/small.").size(), "/cover/big.");
+                std::vector<uint8_t> large = loader_(big);
+                if (!large.empty() && decodeImage(large, out.rgba, out.width, out.height)) {
+                    out.ok = true;
+                    std::fprintf(stderr, "[covers] %s: the small cover would not do; the large one is used\n",
+                                 key.substr(0, key.find('?')).c_str());
+                }
+            }
         }
         {
             std::lock_guard<std::mutex> lock(mutex_);

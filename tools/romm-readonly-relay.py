@@ -21,6 +21,10 @@
 #     BMP, TIFF, or the PNG as it came. The name stays small.png, as RomM's
 #     own WebP small covers do. Each conversion is logged with its game id.
 #     Needs Pillow, and ffmpeg for AVIF.
+#   * `nosmall` answers 404 for the small cover of every third game (by id),
+#     as a server missing it would; the large one is still served (#376).
+#   * `junk` serves the small cover of every fifth game as bytes that are no
+#     picture at all, for the console's "could not read" line (#376).
 import json, sys, urllib.parse, urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -31,6 +35,8 @@ MAP = {}
 FILES = {}
 PEOPLE = False
 FORMATS = False   # `formats`
+NOSMALL = False   # `nosmall`
+JUNK = False      # `junk`
 FOLDERS = set()   # folder:<romId>
 # (owner id, owner name, collection id, name, smart, favourite, platform id)
 MOCK = [
@@ -52,6 +58,9 @@ for a in sys.argv[2:]:
         continue
     if a == "formats":
         FORMATS = True
+        continue
+    if a in ("nosmall", "junk"):
+        globals()[a.upper()] = True
         continue
     if a.startswith("folder:"):
         FOLDERS.add(int(a[7:]))
@@ -178,6 +187,19 @@ class H(BaseHTTPRequestHandler):
     def do_GET(self): self.fwd()
     def fwd(self, head=False):
         hdrs = {k: v for k, v in self.headers.items() if k.lower() not in ("host", "connection", "accept-encoding")}
+        import re as _re
+        small = _re.search(r"/roms/\d+/(\d+)/cover/small\.", self.path)
+        if small and NOSMALL and int(small.group(1)) % 3 == 0:
+            sys.stderr.write(f"nosmall: game {small.group(1)} small cover answered 404\n")
+            self.send_response(404); self.send_header("Content-Length", "0"); self.end_headers()
+            return
+        if small and JUNK and int(small.group(1)) % 5 == 0:
+            body = b"this is not a picture " * 3
+            sys.stderr.write(f"junk: game {small.group(1)} small cover sent as junk\n")
+            self.send_response(200); self.send_header("Content-Type", "image/png")
+            self.send_header("Content-Length", str(len(body))); self.end_headers()
+            if not head: self.wfile.write(body)
+            return
         path = mock_path(self.path) if PEOPLE else self.path
         req = urllib.request.Request(UP + path, headers=hdrs, method=self.command)
         try:
