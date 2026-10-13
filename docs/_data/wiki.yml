@@ -32,3 +32,4 @@
     - { file: navigation.md, title: Buttons and shortcuts }
     - { file: systems.md, title: Systems, formats and BIOS }
     - { file: troubleshooting.md, title: When something is wrong }
+    - { file: changelog.md, title: What's new }

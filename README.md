@@ -91,7 +91,7 @@ playing: [install](docs/wiki/install.md), [first run](docs/wiki/first-run.md),
 
 **[Download the installer](https://download.mmagtech.com/cabinetos.iso)**:
 one file, `cabinetos.iso`, always the newest release
-([release notes](https://github.com/MMagTech/cabinetos/releases/latest)).
+([what's new](https://cabinetos.mmagtech.com/wiki/changelog.html)).
 
 ## Credits and licence
 
