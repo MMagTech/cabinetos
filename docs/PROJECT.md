@@ -2771,7 +2771,7 @@ development convenience, never the production path. Falling back to it on real
 hardware means something is wrong with the GPU, and the About screen should name
 the running compositor so that state is visible rather than mysterious.
 
-### A start with no display answering waits for one (#268) — 2026-10-12
+### A start with no display answering (#268), 2026-10-12 and 2026-10-13
 
 Measured on the A9 with the LG C1, 2026-10-10: a running console survives
 the TV going away (standby, a 31 s unplug, the drops a TV makes as it
@@ -2781,10 +2781,36 @@ stayed at 1080p until a restart. The C1 in standby still answers; a TV with
 no standby power, a receiver or HDMI switch that is off, or a cable out does
 not, and the A9 has no CEC to wake one.
 
-- **The session waits** (`cabinetos-session`, polling the connectors once a
-  second) until a display has answered for two seconds, then starts at the
-  size it gives. No size of ours. A machine with no drm device, or a real GPU
-  fault, still goes down the ladder as before.
+- **gamescope picks the size and remembers the last TV** (changed
+  2026-10-13; the first version below waited and then pinned the size). The
+  session used to read the display's size once and pin gamescope to it
+  (`--output-width/--output-height`, since 2026-09-19, because a test that
+  day had gamescope choose 1080p by itself). The pin was the fault: read with
+  no display, or while the kernel still showed its stopgap list of five small
+  sizes after the TV reappeared (seen for 2 s, and for 20 s), it held the
+  console at 1080p or 1024x768 until a restart. Bazzite's own game-mode
+  session (`gamescope-session-plus`) never pins: it gives gamescope no size
+  and switches on its memory of the last display (`GAMESCOPE_PATCHED_EDID_FILE`,
+  `GAMESCOPE_MODE_SAVE_FILE`). The console now does the same, with its own
+  memory in `~/.local/state/cabinetos/gamescope`, not Steam's
+  `~/.config/gamescope`, where Steam saves its own resolution and 120 Hz
+  picks (#256). Measured on the A9, 2026-10-13, display switched off in
+  software (`/sys/class/drm/card1-HDMI-A-1/status`): given no size,
+  gamescope picks the C1's 3840x2160@60 itself; started with no display it
+  comes up at once at 3840x2160 ("using preferred mode 3840x2160@60 of last
+  connected display"); when the display returns it stays there; and even
+  when the session read the stopgap 1024x768, gamescope checked the TV itself
+  and chose 3840x2160. `CABINETOS_OUTPUT` still pins, for testing.
+- **The session waits only when gamescope has no memory of a TV**: a
+  console whose very first start is with no display answering. Without the
+  wait it would start at 1280x720 and the app would stay there (measured).
+  It polls the connectors once a second until a display has answered for two
+  seconds. A machine with no drm device, or a real GPU fault, still goes down
+  the ladder as before.
+- **Not fixed by this: a screen connected while running** (#361, a Steam
+  Deck docked). gamescope takes the new screen, but the app keeps the size it
+  started at (measured: started at 1280x720, stayed there when 4K arrived).
+  That needs the app to change size while running; not researched.
 - **The ways in start at boot, not with the app.** File access, Developer
   access, Remote Play and Tailscale were started by the app, which now comes
   up only once a display answers, so the first build of the wait left a

@@ -39,6 +39,27 @@ Read before touching `build_files/`, `system_files/`, `ci/`, the workflows, the 
   anyway** — `libglvnd-gles` provides it. Do not "fix" a missing package that
   is not missing.
 
+- **DO NOT PIN GAMESCOPE'S SIZE; LOOK AT HOW BAZZITE'S SESSION DOES IT
+  FIRST.** From 2026-09-19 to 2026-10-13 `cabinetos-session` read the
+  display's size once and passed it as `--output-width/--output-height`,
+  because gamescope once chose 1080p by itself. Each fault that followed was
+  patched around the pin (a 1080p guess, then a wait for the display, then a
+  proposed longer wait) until MMagTech asked how everything else handles a
+  TV that is off. Desktops and gamescope re-read the display on every change;
+  the pin stopped gamescope doing it. Bazzite's own
+  `/usr/share/gamescope-session-plus/gamescope-session-plus`, on our base,
+  gives no size and turns on gamescope's memory of the last display. Read the
+  base image's own way before writing one. (#268, PROJECT.md.)
+
+- **A DISPLAY SWITCHED OFF AND ON THROUGH SYSFS SHOWS A STOPGAP MODE LIST.**
+  After `echo detect > /sys/class/drm/card1-HDMI-A-1/status` the connector
+  lists five sizes topped by 1024x768, with the EDID already there, for 2 s
+  once and 20 s another time, until something asks the kernel to check again
+  (another `echo detect`, or a DRM client). Never seen without the software
+  switch. After a test, `echo detect` and wait for the full list (52 lines on
+  the C1) before restarting the session, or the console comes back at
+  1024x768.
+
 ## Workflows and checks
 
 - **An artifact's internal root is the least common ancestor of the files it
