@@ -34,6 +34,10 @@ AmbientCapabilities=CAP_SYS_ADMIN CAP_SYS_NICE
 # every stream, under this unit, A9 2026-10-08). With the limit any of its
 # threads may go as far as -15, the most it asks for.
 LimitNICE=-15
+# Waits for a screen first (#268, cabinetos-remoteplay says why), for as long
+# as it takes: there is nothing to stream before one.
+ExecStartPre=/usr/libexec/cabinetos-remoteplay wait-screen
+TimeoutStartSec=infinity
 ExecStartPre=/usr/libexec/cabinetos-remoteplay prepare
 ExecStart=/usr/bin/sunshine /var/lib/cabinetos/remoteplay/.config/sunshine/sunshine.conf
 # Switched off mid-stream, Sunshine never runs the entry's "undo", so the

@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+#
+# Starts, once at boot, the ways in that are switched on in Settings (#268):
+# File access (port 22), Developer access (port 2222), and Tailscale when
+# Remote Play is on. Run only by cabinetos-saved-services.service.
+#
+# WHY NOT THE APP. The app starts these from settings.json when it comes up,
+# and the first version of #268 held the app back until a display answered.
+# A console booted with no TV answering could then not be reached at all
+# (measured on the A9, 2026-10-10: SSH only from the moment the cable went
+# in). The app is up at boot again now (gamescope remembers the last TV), but
+# a console that has never seen a TV still waits for one, so the saved state
+# is applied here, at boot, whatever the screen is doing. The app still starts and stops them
+# from Settings as before; starting one that is already running does nothing.
+#
+# The keys are the app's (frontend/src/main.cpp, prefs::get): "on" means on,
+# anything else or no file means off, as the app reads them. Tailscale runs
+# only while Remote Play is on too, as the app has it.
+#
+# NOT REMOTE PLAY (2026-10-13). Started from here, Sunshine came up before the
+# console's session had the screen ("Couldn't open /dev/dri/card1: Permission
+# denied"), failed, and refused every stream until it was restarted, TV on or
+# not. The app starts it as soon as it is up, as it always did, and the app is
+# now up at boot even with no TV; cabinetos-remoteplay then waits for a screen.
+
+set -uo pipefail
+
+SETTINGS=/var/lib/cabinetos/config/settings.json
+
+if [[ ! -s "${SETTINGS}" ]]; then
+    echo "cabinetos-saved-services: no settings yet; nothing is on"
+    exit 0
+fi
+
+on() {
+    [[ "$(jq -r --arg k "$1" '.[$k] // "off"' "${SETTINGS}" 2>/dev/null)" == "on" ]]
+}
+
+start() {
+    # --no-block: nothing here waits on a unit's start.
+    if systemctl start --no-block "$1"; then
+        echo "cabinetos-saved-services: $2 is on; started $1"
+    else
+        echo "cabinetos-saved-services: $2 is on; could not start $1"
+    fi
+}
+
+on file_access && start cabinetos-files.service "File access"
+on developer_access && start cabinetos-developer.service "Developer access"
+if on remote_play && on tailscale; then
+    start tailscaled.service "Tailscale"
+fi
+exit 0

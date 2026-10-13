@@ -567,6 +567,10 @@ def section_summary(root, settings, frontend_lines):
     gpu = [l for l in frontend_lines if l.startswith("[frontend] GL_RENDERER")]
     machine = [l for l in frontend_lines if l.startswith("[quality] this machine")]
     screen = [l for l in frontend_lines if "cabinetos-session: output" in l]
+    # What gamescope chose, since it picks the size itself now (#268); the
+    # session's own line is only what the display answered when it started.
+    picked = [m.group(1) for m in (re.search(r"drm:\S*\s+(?:selecting mode|using (?:preferred|saved) mode) (\d+x\d+@\d+)", l)
+                                   for l in frontend_lines) if m]
     feats = []
     for key, name in (("remote_play", "Remote Play"), ("tailscale", "Tailscale"),
                       ("file_access", "File access"), ("developer_access", "Developer access"),
@@ -588,7 +592,8 @@ def section_summary(root, settings, frontend_lines):
         ("Memory", size_text(int(mem.group(1)) * 1024) if mem else "unknown"),
         ("Graphics", gpu[-1].split("GL_RENDERER", 1)[1].strip() if gpu else "not in the log"),
         ("Machine class", machine[-1].split(":", 1)[1].strip() if machine else "not in the log"),
-        ("Screen", screen[-1].split("output", 1)[1].strip() if screen else "not in the log"),
+        ("Screen", "%s (chosen by gamescope)" % picked[-1] if picked
+                   else screen[-1].split("output", 1)[1].strip() if screen else "not in the log"),
         ("Up since", first_line(run(["uptime", "-s"]))),
         ("First run", "%s (%s)" % (first_run.get("completed", "not completed"), first_run.get("how", ""))),
         ("Features", ", ".join(feats)),

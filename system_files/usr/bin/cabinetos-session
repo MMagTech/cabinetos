@@ -69,18 +69,37 @@ fi
 # design. Judging the look against that is judging the wrong picture, the same
 # mistake as tuning motion on llvmpipe.
 #
-# DROPPING THE FLAGS IS NOT THE FIX, AND THAT WAS MEASURED RATHER THAN
-# ASSUMED. Run with no --output-width/--output-height at all and gamescope
-# still chose 1920x1080@60Hz on a display offering 3840x2160. So the mode has
-# to be found and passed.
+# AND GAMESCOPE NOW PICKS IT ITSELF (#268, measured on the A9 2026-10-13).
+# From 2026-09-19 this script read the display's size once and pinned
+# gamescope to it (--output-width/--output-height), because a test that day
+# had gamescope pick 1920x1080 on its own. Today's gamescope, given no size,
+# picks the TV's preferred 3840x2160@60. The pin was the fault: read with no
+# display, or while the kernel still shows its stopgap list of five small
+# sizes after the TV reappears (seen for 2 s and for 20 s), it held the
+# console at 1080p or 1024x768 until a restart, and it is why a Steam Deck
+# docked while running kept its own screen's size (#361; that one also needs
+# the app to change size, which this does not do).
 #
-# The kernel lists a connector's modes preferred-first, so the first line of
-# `modes` on a connected connector is the display's own answer. A console
-# should take it: docs/PROJECT.md says most sets are 4K and plenty are not,
-# and that neither may be assumed.
+# So the console's gamescope runs as Bazzite's own game-mode session does:
+# no size given, and with its memory of the last TV switched on. Started with
+# no display answering, it comes up at that TV's preferred size (logged as
+# "using preferred mode ... of last connected display"), and takes the TV
+# when it answers. The memory is the console's own, not Steam's
+# ~/.config/gamescope: Steam saves its own resolution and refresh picks there
+# (#256), and those must not move the console off its own size and 60 Hz.
+# gamescope writes edid.bin (a copy of the TV's EDID) each time it takes a
+# display; modes.cfg stays empty, as nothing here saves a pick.
 #
-# CABINETOS_OUTPUT=WxH overrides, for the machine plugged into something that
-# lies about itself, and for testing a layout at a size nobody here owns.
+# The size is still read below: for the log and the diagnostic report, and
+# for the other rungs, which have no display of their own.
+#
+# CABINETOS_OUTPUT=WxH still pins it, for the machine plugged into something
+# that lies about itself, and for testing a layout at a size nobody here owns.
+GS_MEMORY="${HOME}/.local/state/cabinetos/gamescope"
+mkdir -p "${GS_MEMORY}" && touch "${GS_MEMORY}/edid.bin" "${GS_MEMORY}/modes.cfg"
+GS_ENV=(env "GAMESCOPE_PATCHED_EDID_FILE=${GS_MEMORY}/edid.bin"
+            "GAMESCOPE_MODE_SAVE_FILE=${GS_MEMORY}/modes.cfg")
+
 detect_output() {
     local c status
     for c in /sys/class/drm/card*-*/; do
@@ -96,19 +115,57 @@ detect_output() {
     return 1
 }
 
+# WAIT FOR THE DISPLAY'S OWN ANSWER (#268). With no display connected at
+# start, the size used to fall back to the 1920x1080 below, and gamescope kept
+# it when the TV appeared: right by luck on a 1080p set, soft on a 4K one, and
+# the console stayed so until a restart (measured on the A9, 2026-10-10:
+# "selecting mode 1920x1080@120Hz" on the 3840x2160 LG C1). A TV in standby
+# usually still answers (the C1 did); one with no power, or a receiver or HDMI
+# switch that is off, does not, and this machine has no CEC to wake it. So no
+# size of ours: wait, once a second, for a display to answer, and start on its
+# answer. Nothing is lost meanwhile; with no display there is nothing to draw
+# on, and Remote Play captures the display too.
+#
+# THE ANSWER MUST HOLD FOR TWO SECONDS. A TV switching on drops its connection
+# for about a second, twice, five seconds apart (measured on the C1); starting
+# inside the gap would read no mode. A drop after the start does no harm: the
+# running gamescope picks the display up again (measured, a 31 s unplug).
+#
+# ONLY WHEN GAMESCOPE HAS NO MEMORY OF A TV (2026-10-13): a console whose very
+# first start is with no display answering. Every later start comes up at once
+# on the last TV's size (above). With no memory and no wait, gamescope would
+# start at 1280x720 and the app would stay there (measured).
+if [[ -z "${CABINETOS_OUTPUT:-}" ]] && ls /dev/dri/card* >/dev/null 2>&1 \
+        && ! detect_output >/dev/null && [[ ! -s "${GS_MEMORY}/edid.bin" ]]; then
+    echo "cabinetos-session: no display answers yet; waiting for one"
+    held=0
+    while (( held < 2 )); do
+        if detect_output >/dev/null; then held=$((held + 1)); else held=0; fi
+        sleep 1
+    done
+    echo "cabinetos-session: a display answered"
+fi
+
 OUTPUT="${CABINETOS_OUTPUT:-$(detect_output || true)}"
 if [[ "${OUTPUT}" =~ ^([0-9]+)x([0-9]+)$ ]]; then
     OUT_W="${BASH_REMATCH[1]}"
     OUT_H="${BASH_REMATCH[2]}"
     echo "cabinetos-session: output ${OUT_W}x${OUT_H} (from ${CABINETOS_OUTPUT:+CABINETOS_OUTPUT}${CABINETOS_OUTPUT:-the display})"
 else
-    # No connected connector yet — a television that is off, or an input not
-    # selected. 1080p is a safe thing to ask any display for, and the session
-    # restarts on its own if it dies, so the next attempt may find the panel.
+    # No display yet: gamescope starts on the last TV's size (above). The
+    # other rungs, which have no display of their own, get 1080p.
     OUT_W=1920
     OUT_H=1080
-    echo "cabinetos-session: no display reported a mode; asking for ${OUT_W}x${OUT_H}"
+    if [[ -s "${GS_MEMORY}/edid.bin" ]]; then
+        echo "cabinetos-session: output the last TV's size (no display answers yet; gamescope takes it when it does)"
+    else
+        echo "cabinetos-session: no display reported a mode; asking for ${OUT_W}x${OUT_H}"
+    fi
 fi
+
+# Pinned only when asked for (CABINETOS_OUTPUT); otherwise gamescope picks.
+PINNED=()
+[[ -n "${CABINETOS_OUTPUT:-}" ]] && PINNED=(--output-width "${OUT_W}" --output-height "${OUT_H}")
 
 # VARIABLE REFRESH WHEN THE TELEVISION HAS IT (#209, MMagTech 2026-10-01).
 # `--adaptive-sync` turns VRR on only if the display reports it can, and does
@@ -533,8 +590,10 @@ if ls /dev/dri/card* >/dev/null 2>&1; then
     # run_gamescope. THIS is the line a console normally starts on; the first
     # version put the flag only in run_gamescope, which runs when a backend is
     # forced, and the testing image of 2026-10-02 started without it.
+    # No size given unless pinned, and gamescope's memory of the last TV on
+    # (#268, above): GS_ENV reaches this gamescope only, never Steam's.
     try_compositor "gamescope (drm)" \
-        gamescope --backend drm --output-width "${OUT_W}" --output-height "${OUT_H}" \
+        "${GS_ENV[@]}" gamescope --backend drm ${PINNED[@]+"${PINNED[@]}"} \
                   --adaptive-sync ${COMPOSED[@]+"${COMPOSED[@]}"} --ready-fd 3 -- ${APP}
 
     # Degraded, and loudly so. A console that works without VRR beats a black

@@ -65,6 +65,8 @@ for expected in \
     /usr/lib/systemd/system/cabinetos-files.service \
     /usr/lib/systemd/system/cabinetos-files-password.service \
     /usr/lib/systemd/system/cabinetos-developer.service \
+    /usr/libexec/cabinetos-saved-services \
+    /usr/lib/systemd/system/cabinetos-saved-services.service \
     /usr/lib/systemd/system-preset/40-cabinetos.preset \
     /usr/share/polkit-1/rules.d/62-cabinetos-files.rules \
     /usr/libexec/cabinetos-wii-search \
