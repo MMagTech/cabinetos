@@ -2806,6 +2806,14 @@ not, and the A9 has no CEC to wake one.
   started with no TV it shows "Dummy Output" for sound, as there is nothing
   to play to; when the TV arrives gamescope takes it at 3840x2160@60, the
   ELD is valid and the app's sound moves to the TV.
+  Tested at the TV the same evening, HDMI cable out, a real reboot: up at
+  3840x2160 from memory, the ways in all answering; cable in, gamescope took
+  the TV at 3840x2160@60 with no restart and the sound moved to it.
+- **Remote Play needs a screen connected.** With none at all (cable out, or
+  a TV that drops off when switched off), Sunshine refuses every stream
+  ("Please check that a display is connected and powered on"): it copies the
+  picture sent to a screen. A TV in standby that stays connected is fine.
+  Streaming with no screen is #381 (Later).
 - **The session waits only when gamescope has no memory of a TV**: a
   console whose very first start is with no display answering. Without the
   wait it would start at 1280x720 and the app would stay there (measured).
