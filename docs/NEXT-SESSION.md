@@ -34,7 +34,17 @@ worked only when MMagTech raises it), except #341.
    (C-Media, the Unitek) is also plugged in. **Guess, not verified:** the
    sound server's default was the USB adapter, with nothing listening on it,
    and the console never chooses an output, so it played into the adapter;
-   Steam set the system default, which is why the fix outlived Steam. Check
+   Steam set the system default, which is why the fix outlived Steam.
+   **First, research whether that adapter is plugged in or built in**
+   (MMagTech: built-in sound on machines like this is to be supported; a USB
+   sound stick somebody adds is not). The log shows C-Media `0d8c:0014` on
+   USB port `usb 3-3`, which Linux's USB list names "Audio Adapter (Unitek
+   Y-247A)", a plug-in stick; but some mini PCs wire a C-Media USB chip
+   inside for the headphone jack. Check the HCAR5000-MI's specs and
+   teardowns, and draft a question for deletableman. Either way the fault is
+   the console playing through whatever output the system picked; a fix that
+   plays through the TV the picture goes to would cover a built-in jack too,
+   without supporting USB sticks as such. Check
    it against his first report (which showed WirePlumber failing to load its
    ALSA plugin: a second fault, or the same?) and WirePlumber's priorities
    (USB against HDMI). Then name the options to MMagTech before building
