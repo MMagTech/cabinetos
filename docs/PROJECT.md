@@ -2800,7 +2800,12 @@ not, and the A9 has no CEC to wake one.
   comes up at once at 3840x2160 ("using preferred mode 3840x2160@60 of last
   connected display"); when the display returns it stays there; and even
   when the session read the stopgap 1024x768, gamescope checked the TV itself
-  and chose 3840x2160. `CABINETOS_OUTPUT` still pins, for testing.
+  and chose 3840x2160. `CABINETOS_OUTPUT` still pins, for testing. On the
+  testing image 2026.10.13.3, with the driver's real unplug and plug
+  (`trigger_hotplug`, not the sysfs switch, which gamescope never sees):
+  started with no TV it shows "Dummy Output" for sound, as there is nothing
+  to play to; when the TV arrives gamescope takes it at 3840x2160@60, the
+  ELD is valid and the app's sound moves to the TV.
 - **The session waits only when gamescope has no memory of a TV**: a
   console whose very first start is with no display answering. Without the
   wait it would start at 1280x720 and the app would stay there (measured).

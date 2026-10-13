@@ -4,6 +4,19 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
+## 2026.10.13.3 {#v2026-10-13-3}
+
+*13 October 2026*
+
+- **Fixed:** a console switched on while the TV was off, on another input or
+  unplugged could come up at a lower size and stay blurry on a 4K TV until it
+  was restarted. It now comes up at your TV's own size straight away, and
+  picks the TV up, picture and sound, as soon as it is on.
+  ([#268](https://github.com/MMagTech/cabinetos/issues/268))
+- **Changed:** File access, Developer access, Remote Play and Tailscale now
+  start when the console starts, if they are on in Settings, so the console
+  can be reached even before the TV is on.
+
 ## 2026.10.12.9 {#v2026-10-12-9}
 
 *12 October 2026*

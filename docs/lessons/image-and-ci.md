@@ -60,6 +60,17 @@ Read before touching `build_files/`, `system_files/`, `ci/`, the workflows, the 
   the C1) before restarting the session, or the console comes back at
   1024x768.
 
+- **AND THE SYSFS SWITCH IS NOT A TV COMING BACK; `trigger_hotplug` IS.**
+  With the display forced off and back, a running gamescope never logged
+  taking the TV and the HDMI sound stayed gone (ELD not valid, only "Dummy
+  Output"): a test that looked like a fault in #268 and was the test. The
+  driver's own switch, `echo 0 >` then `echo 1 >
+  /sys/kernel/debug/dri/1/HDMI-A-1/trigger_hotplug` (as root), goes through
+  the real detection: gamescope logs `selecting connector HDMI-A-1`, the ELD
+  is valid again and the app's sound moves to the TV (2026-10-13). Use it for
+  any "TV off, TV on" test with nobody at the TV, and check the sound output
+  (`wpctl status`, `/proc/asound/card0/eld#0.0`), not only the picture size.
+
 ## Workflows and checks
 
 - **An artifact's internal root is the least common ancestor of the files it
