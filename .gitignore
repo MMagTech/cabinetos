@@ -11,7 +11,9 @@ _build-*/**
 
 # Build artefacts
 previous.manifest.json
-changelog.md
+# The image template's generated file at the top of the repo, not the
+# wiki's docs/wiki/changelog.md.
+/changelog.md
 output.env
 
 # Core builds. The source checkouts are clones of upstream at a pinned commit,

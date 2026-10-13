@@ -25,6 +25,18 @@ MMagTech wants it done. This changes rarely. What to work on next is
   Actions. "No checks reported" can be a race, or an event that never fired.
 - **PR bodies** lead with what the change does and why, say "Closes #N", and
   each finished issue gets a closing comment.
+- **Every change that reaches consoles goes in the changelog**,
+  `docs/wiki/changelog.md` (on the site as *What's new*), in the same pull
+  request (MMagTech, 2026-10-12). Once its testing image is built, add a
+  heading with that image's version (`## 2026.10.12.9 {#v2026-10-12-9}`) and
+  the date, newest first. **Write it for a player, not for us:** what they
+  would have noticed, then what happens now, and the issue number; no
+  internal names (`**Fixed:** GameCube saves kept on your server loaded as an
+  empty card on a new console. They load now.`). A pushed-again `testing`
+  image moves the heading to the new version; it is a docs change, so it
+  does not stop the promotion. A change a player cannot notice (CI, the
+  build) says `Changelog: none` in its PR body instead. The pull request
+  check `changelog.yml` enforces it.
 - **The TV**: say every step and what success looks like, then wait for "go".
 - **Logs**: `sudo journalctl -o cat --since "-40 min" | grep -aE "\[launch\]|\[core\]"`;
   `-u cabinetos-session` shows almost nothing.
