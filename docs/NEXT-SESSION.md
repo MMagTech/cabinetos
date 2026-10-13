@@ -54,10 +54,20 @@ worked only when MMagTech raises it), except #341.
 2. **#268, starting with no TV answering.** Built on `saved-services-at-boot`
    (the display wait put back, and `cabinetos-saved-services.service` starting
    File access, Developer access, Remote Play and Tailscale at boot from
-   settings.json; dry-run on the A9). Merge `main` into it, push to
-   `testing`, then the test with MMagTech at the TV: HDMI out, restart, SSH
-   must answer while it waits (check what Remote Play does with no display),
-   HDMI in, the console comes up at 4K. **GitHub closed #268 on 2026-10-11
+   settings.json; dry-run on the A9). Merge `main` into it, add its
+   changelog entry, push to `testing`. **Tested remotely, no one at the TV
+   (agreed with MMagTech, 2026-10-13):** install the testing image the way
+   Settings does (`sudo systemctl start cabinetos-update-download.service`,
+   wait for `state=ready` in `/run/cabinetos-update/status`, `sudo systemctl
+   reboot`; check first that no game is running). Then (a) the boot: the log
+   shows `cabinetos-saved-services` starting each way in that is on, before
+   the app; (b) no display: as root, `echo off >
+   /sys/class/drm/card*-HDMI-A-1/status` and restart the session; the log
+   says it is waiting, SSH keeps answering, and Remote Play's behaviour is
+   noted; `echo detect >` the same file, and the console comes up at
+   `output 3840x2160 (from the display)`. The forced state resets at a
+   reboot, so (a) and (b) are proven separately; a real power-on with the
+   cable out waits until MMagTech is at the TV, if he wants it. **GitHub closed #268 on 2026-10-11
    when the first try merged, and that try was undone**: ask MMagTech to
    reopen it. Its changelog entry: a console started with the TV off or
    unplugged now comes up at the TV's own size.
