@@ -17091,3 +17091,11 @@ not reading a tag (in the file name, empty in the field) from the console
 showing it wrong (fields right, heading wrong) from a wrong match (two
 different files under one name, fixed in RomM). Gathered only when a report
 is made.
+
+**This is the first part of the report that lists games nobody played**
+(until now only the games played in the two boots and the emulators' logs
+named any). Kept with file names, because without them a tag RomM did not
+read cannot be told from one the console showed wrong (MMagTech, 2026-10-14:
+"if we think we need to include it to better help troubleshoot ... include
+it"). He tells his Discord users it is there; if they push back, it is
+discussed again.
