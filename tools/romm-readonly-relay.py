@@ -16,6 +16,15 @@
 #     Collections tab's "From <name>" groups), so a household of five can be
 #     tried with two real accounts. Each one opens onto a real platform's
 #     games; Sam's public Favorites must never show.
+#   * `formats` serves every cover in another of the formats RomM accepts
+#     (#341): by game id, WebP, AVIF, GIF (two frames, as an animated one),
+#     BMP, TIFF, or the PNG as it came. The name stays small.png, as RomM's
+#     own WebP small covers do. Each conversion is logged with its game id.
+#     Needs Pillow, and ffmpeg for AVIF.
+#   * `nosmall` answers 404 for the small cover of every third game (by id),
+#     as a server missing it would; the large one is still served (#376).
+#   * `junk` serves the small cover of every fifth game as bytes that are no
+#     picture at all, for the console's "could not read" line (#376).
 import json, sys, urllib.parse, urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -25,6 +34,9 @@ MAP = {}
 # file:<fileId>=<name> shows a game's file under another name (#162, odd names).
 FILES = {}
 PEOPLE = False
+FORMATS = False   # `formats`
+NOSMALL = False   # `nosmall`
+JUNK = False      # `junk`
 FOLDERS = set()   # folder:<romId>
 # (owner id, owner name, collection id, name, smart, favourite, platform id)
 MOCK = [
@@ -43,6 +55,12 @@ MOCK = [
 for a in sys.argv[2:]:
     if a == "people":
         PEOPLE = True
+        continue
+    if a == "formats":
+        FORMATS = True
+        continue
+    if a in ("nosmall", "junk"):
+        globals()[a.upper()] = True
         continue
     if a.startswith("folder:"):
         FOLDERS.add(int(a[7:]))
@@ -115,6 +133,34 @@ def mock_collections(smart, hdrs):
         out.append(c)
     return out
 
+FORMAT_CYCLE = ["webp", "avif", "gif", "bmp", "tiff", "png"]
+
+def convert_cover(path, body):
+    """A cover in the format its game id picks (`formats`), or as it came."""
+    import io, re, subprocess, tempfile
+    m = re.search(r"/roms/\d+/(\d+)/cover/", path)
+    if not m or not body: return body
+    fmt = FORMAT_CYCLE[int(m.group(1)) % len(FORMAT_CYCLE)]
+    if fmt == "png": return body
+    from PIL import Image
+    img = Image.open(io.BytesIO(body)).convert("RGB")
+    out = io.BytesIO()
+    if fmt == "avif":
+        with tempfile.TemporaryDirectory() as d:
+            img.save(d + "/in.png")
+            subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", d + "/in.png",
+                            "-c:v", "libaom-av1", "-still-picture", "1", d + "/out.avif"], check=True)
+            data = open(d + "/out.avif", "rb").read()
+    elif fmt == "gif":
+        flipped = img.transpose(Image.FLIP_LEFT_RIGHT)
+        img.save(out, "GIF", save_all=True, append_images=[flipped], duration=500, loop=0)
+        data = out.getvalue()
+    else:
+        img.save(out, {"webp": "WEBP", "bmp": "BMP", "tiff": "TIFF"}[fmt])
+        data = out.getvalue()
+    sys.stderr.write(f"formats: game {m.group(1)} cover as {fmt} ({len(data)} bytes) {path}\n")
+    return data
+
 def mock_path(path):
     # A made-up collection opens onto its platform.
     u = urllib.parse.urlsplit(path)
@@ -141,6 +187,19 @@ class H(BaseHTTPRequestHandler):
     def do_GET(self): self.fwd()
     def fwd(self, head=False):
         hdrs = {k: v for k, v in self.headers.items() if k.lower() not in ("host", "connection", "accept-encoding")}
+        import re as _re
+        small = _re.search(r"/roms/\d+/(\d+)/cover/small\.", self.path)
+        if small and NOSMALL and int(small.group(1)) % 3 == 0:
+            sys.stderr.write(f"nosmall: game {small.group(1)} small cover answered 404\n")
+            self.send_response(404); self.send_header("Content-Length", "0"); self.end_headers()
+            return
+        if small and JUNK and int(small.group(1)) % 5 == 0:
+            body = b"this is not a picture " * 3
+            sys.stderr.write(f"junk: game {small.group(1)} small cover sent as junk\n")
+            self.send_response(200); self.send_header("Content-Type", "image/png")
+            self.send_header("Content-Length", str(len(body))); self.end_headers()
+            if not head: self.wfile.write(body)
+            return
         path = mock_path(self.path) if PEOPLE else self.path
         req = urllib.request.Request(UP + path, headers=hdrs, method=self.command)
         try:
@@ -153,6 +212,9 @@ class H(BaseHTTPRequestHandler):
             try: body = json.dumps(rewrite(json.loads(body))).encode()
             except Exception: pass
         listing = urllib.parse.urlsplit(self.path).path
+        if FORMATS and "/cover/" in listing and body:
+            try: body = convert_cover(listing, body)
+            except Exception as e: sys.stderr.write(f"formats: {e}\n")
         if PEOPLE and "json" in ctype and body and listing in ("/api/collections", "/api/collections/smart"):
             try:
                 body = json.dumps(json.loads(body) + mock_collections(listing.endswith("smart"), hdrs)).encode()

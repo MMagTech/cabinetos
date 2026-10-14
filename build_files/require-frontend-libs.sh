@@ -44,13 +44,24 @@
 #                       and a bug in it looks like a library that is silently
 #                       missing games.
 #
+#   libSDL3_image.so.0  Reads every cover format RomM accepts beyond PNG and
+#   libwebp.so.7        JPEG (#341, 2026-10-13): GIF and BMP itself, WebP,
+#   libwebpdemux.so.2   AVIF and TIFF through these. SDL3_image LOADS THEM
+#   libavif.so.16       WHEN FIRST NEEDED rather than linking them, so `ldd`
+#   libtiff.so.6        on the frontend never names them, and losing one
+#                       would only show as blank covers. Hence named here. A
+#                       base update that moves one to a new version number
+#                       fails this too; check SDL3_image still finds it
+#                       (`strings` on libSDL3_image names the file it opens).
+#
 set -euo pipefail
 
 # shellcheck source=/dev/null
 source /ctx/lib.sh 2>/dev/null || true
 
 missing=0
-for lib in libcurl.so.4 libjson-c.so.5 libarchive.so.13; do
+for lib in libcurl.so.4 libjson-c.so.5 libarchive.so.13 \
+           libSDL3_image.so.0 libwebp.so.7 libwebpdemux.so.2 libavif.so.16 libtiff.so.6; do
     if [ -e "/usr/lib64/$lib" ]; then
         printf '  present  %s\n' "$lib"
     else
