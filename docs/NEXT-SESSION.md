@@ -17,11 +17,22 @@ of truth for anything on RomM's data; nothing beyond it is invented.
 
 ## Next
 
-1. **Same-name games show RomM's tags in the heading** (agreed): #383,
-   "Game versions, updates and DLC: one place to choose them", which also
-   parks the full design. Start by reading RomM's documentation and what
-   RomM returns for MMagTech's same-name games, and say what it can show
-   before building anything.
+1. **A design discussion, not a build: same-name games, regions and
+   versions** (#383, "Game versions, updates and DLC: one place to choose
+   them", which also parks the earlier thinking). MMagTech, 2026-10-14: settle
+   the design choices first, then build, in the session after or later in the
+   same one if there is room.
+   - **Facts first, read-only:** what RomM's documentation says it records
+     (regions, languages, revisions, tags) and what RomM actually returns for
+     MMagTech's own same-name games, as a short list with real examples from
+     his library. RomM's docs and behaviour are the line; nothing beyond them.
+   - **Then an open discussion, not yes/no lists:** he wants room to give his
+     opinions. Lay out the real options with my view and their downsides
+     (where versions show: the heading, the game's page, the long press on
+     Play kept for rare options; which version Play picks; updates and DLC),
+     then let him talk it through.
+   - **The outcome:** the decisions written onto #383 and into PROJECT.md,
+     ready to build.
 
 ## Waiting, not for the next session unless MMagTech raises them
 
