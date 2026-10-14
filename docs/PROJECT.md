@@ -17050,13 +17050,12 @@ misses all eleven Game & Watch pairs.
 
 **What RomM 5.3.1 sends, checked on his library 2026-10-14:** 30 groups
 (62 games) share a name on one system. RomM's fields tell most real versions
-apart: Game & Watch screen types ("Nintendo, Crystal Screen" against
-"Nintendo, New Wide Screen"), Jaguar alternates ("1996, a1") and betas
-("Beta, 1995"), regions and revisions (Metroid Prime Hunters "USA", Rev 1).
-They cannot tell apart: Helmet CN-07 and CN-17, and Mario's Cement Factory
-CM-72 and CM-72A (RomM parses "version" from the file name but does not send
-it; asking RomM to send it is MMagTech's call), a set kept both as a folder
-and as a zip (Area 51 / Maximum Force Duo), and a game RomM matched under
+apart: Jaguar alternates ("1996, a1") and betas ("Beta, 1995"), regions and
+revisions (Metroid Prime Hunters "USA", Rev 1). Game & Watch has the most
+pairs (screen types) but is excluded on this console, so none of it counts.
+They cannot tell apart: a set kept both as a folder and as a zip (Area 51 /
+Maximum Force Duo), Bust-A-Move Pocket and Puzzle Bobble Mini, and a game
+RomM matched under
 another game's name (Lilo & Stitch, Super Mario Advance, Metal Slug, Shock
 Troopers, Circus and Clowns, The Lost Vikings, a save state scanned as a
 game). Those are fixed in RomM, not on the console.
@@ -17079,6 +17078,10 @@ put the files there that the update reached the game and worked (MMagTech,
 game, not merely because RomM lists them. Where it shows is settled when
 #181 is built. RomM dates every file (`created_at` in each game's `files`).
 
+**RomM's `version` tag:** RomM reads a version from file names (`(v2.00)`)
+and stores it, but does not send it. Asked of RomM, rommapp/romm#5243; the
+heading adds it only if RomM ships it (nothing of our own meanwhile).
+
 **Each version keeps its own saves**, as RomM keys them, with nothing to
 explain since each is its own game.
 
@@ -17090,7 +17093,7 @@ received them, and the heading the console shows. One report then tells RomM
 not reading a tag (in the file name, empty in the field) from the console
 showing it wrong (fields right, heading wrong) from a wrong match (two
 different files under one name, fixed in RomM). Gathered only when a report
-is made.
+is made, and only for systems this console plays.
 
 **This is the first part of the report that lists games nobody played**
 (until now only the games played in the two boots and the emulators' logs

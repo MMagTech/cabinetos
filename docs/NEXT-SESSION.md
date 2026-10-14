@@ -17,20 +17,20 @@ of truth for anything on RomM's data; nothing beyond it is invented.
 
 ## Next
 
-1. **Build the same-name heading** (#383, "Game versions, updates and DLC:
-   one place to choose them"), decided 2026-10-14, PROJECT.md question 48.
+1. **Build the same-name heading** (#383, "Same-name games: show RomM's
+   tags in the heading"), decided 2026-10-14, PROJECT.md question 48.
    Every game keeps its own tile. When two games on one system share RomM's
    `name`, the grid heading and Home's shelf header show RomM's `regions`,
    `languages`, `revision` and `tags` for the selected game, dimmer, after
    its name; nothing when RomM sends none. No grouping, no picker, nothing
    written to the server. Lessons: `frontend.md`. Judge it on the TV in the
-   loop with his Game & Watch pairs, the Jaguar alternates, Pokémon Emerald,
+   loop with the Jaguar alternates, Pokémon Emerald,
    Metroid Prime Hunters and Urban Reign; a long tag line must fit the
    heading. **With it, in the same pull request, the diagnostic report gets a
    "Same-name games" list** (MMagTech, 2026-10-14: a player asked for this
    and he cannot test their library): per system, each shared name, and per
    copy the file name, RomM's fields as received and the heading shown.
-   Built only when a report is made. Check it in a report from the A9.
+   Built only when a report is made, playable systems only. Check it in a report from the A9.
    Then testing image, changelog entry, pull request.
 
 ## Waiting, not for the next session unless MMagTech raises them
