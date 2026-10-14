@@ -1,70 +1,46 @@
 # Next session
 
-**Finish what is open; start nothing new (MMagTech, 2026-10-13).** Work only on
-what is listed under *Next*, in order. Replace this file at the end of every
-session; list only what the next session works on.
-
 Every session: `docs/lessons/README.md` (ten rules), then the lessons file
 named on the item. New here? `docs/WORKING.md`. The specification is
 `docs/PROJECT.md`. Name every issue and pull request by its title as well as
-its number, every time.
+its number, every time. Replies to reporters are in MMagTech's voice ("I"),
+ask them to test, and never claim a fix nobody reproduced.
 
 ## Where things stand
 
-**2026-10-13:** `latest` is 2026.10.13. The A9 (Wi-Fi, **192.168.1.109**)
-runs `testing` **2026.10.13.5**: the TV-off-at-start fix, judged and passed.
-RomM's documentation together with RomM's behaviour is the source of truth
-for anything on RomM's data; nothing beyond it is invented.
+**2026-10-14:** everything from the last session is merged and released:
+covers in every format (#376), the grid heading, the sound rule (#341,
+PROJECT.md question 46), and interface sounds everywhere with a calmer set
+(#389, question 47). The A9 (Wi-Fi, **192.168.1.109**) runs the newest
+`testing`. RomM's documentation together with RomM's behaviour is the source
+of truth for anything on RomM's data; nothing beyond it is invented.
 
 ## Next
 
-1. **Merge the TV-off-at-start fix:** pull request #382, "Start sharp when
-   the TV was off at boot, and reach the console before the TV is on"
-   (closes #268). Tested in full on the A9 (boot with and without a TV, the
-   TV going and coming back, Remote Play and Moonlight, Steam, a game with
-   sound). Needs only MMagTech's go to merge; then check the What's new page
-   shows 2026.10.13.5, and delete the branch on his go.
-2. **Deletableman's missing art:** #376, "Not all art is downloading from my
-   RomM instance" (and the art half of #341, "No audio"). Built and tested
-   on branch `cover-formats`: every cover format RomM accepts (WebP, AVIF,
-   GIF, BMP, TIFF through SDL3_image), the large cover when the small one is
-   missing or unreadable, and every failure named in the log. Push to
-   `testing`, add its changelog entry, open the pull request, judge the
-   image (covers on Home and the grid), then draft a reply asking him to
-   update and send a new report. He has RomM's WebP task on.
-3. **The grid heading kept in place:** branch `grid-heading-pinned`, judged
-   on the TV ("perfect"): the platform, count and selected game's name stay
-   at the top, and the grid scrolls by whole rows. Testing image, changelog
-   entry, pull request, merge.
-4. **Deletableman's no sound:** #341, "No audio". Researched: his
-   HC Technology HCAR5000-MI (sold as AM06 Pro) has no analog codec ("no
-   codecs found" on 05:00.6); its jack is a built-in C-Media USB chip
-   (0d8c:0014) that cannot sense a plug, which WirePlumber ranks above HDMI
-   (analog 15 / port 99 against HDMI 9 / 59), so sound went to the empty
-   jack. **Decided by MMagTech, 2026-10-13:** the TV the picture is on comes
-   first; a headphone jack that senses the plug takes over while headphones
-   are in and hands back when they come out; nothing else takes the sound
-   from the TV for now (not a jack that cannot sense, not USB audio, which
-   is undecided, not Bluetooth, a separate future discussion); no setting.
-   It must not block adding Bluetooth audio later. Build it with
-   WirePlumber's own priority rules. **Success, proven by measurement:**
-   on his machine the TV keeps the sound; on the A9 (ALC269VC, which has a
-   "Headphone Jack" sensor) headphones in moves the sound to them, and
-   unplugging always brings it back to the TV. Start with the baseline:
-   MMagTech plugs in his 3.5 mm headphones on today's image while the jack
-   sensor and `wpctl` are read live; then build, and repeat several
-   plug/unplug cycles, once across TV standby, with a fake higher-ranked
-   output standing in for deletableman's chip, and a menu click and a game
-   each step. Then draft his reply.
+1. **Same-name games show RomM's tags in the heading** (agreed): #383,
+   "Game versions, updates and DLC: one place to choose them", which also
+   parks the full design. Start by reading RomM's documentation and what
+   RomM returns for MMagTech's same-name games, and say what it can show
+   before building anything.
 
-Only after those: **same-name games show RomM's tags in the heading**
-(agreed; #383, "Game versions, updates and DLC: one place to choose
-them", which also parks the full design).
+## Waiting, not for the next session unless MMagTech raises them
 
-Waiting, not for this session unless MMagTech raises them: #329, "release
-notes on the console" (his Discord group's answer about a QR code); #380,
-"The console follows any web address in RomM's data, with the RomM sign-in
-attached"; #381, "Remote Play: stream with no screen connected".
+- #329, "Release notes for every update, and a way to see them from the
+  console" (his Discord group's answer about a QR code).
+- #380, "The console follows any web address in RomM's data, with the RomM
+  sign-in attached"; #381, "Remote Play: stream with no screen connected";
+  the Bazzite base update #371.
+- #387, "A cover fixed on RomM shows only after the console restarts" (also
+  deleted games; must not conflict with offline or the caches).
+- #390, "Headphones don't take over after a Remote Play session (waiting on
+  Sunshine)": MMagTech writes the Sunshine report in his own words (their
+  rules ban AI-written issues); the facts are on the issue.
+- #391, "Headphones in at start get full volume": left as is, revisit with
+  Bluetooth headphones.
+- #393, "Power off and Restart cut the picture abruptly": a fade only; no
+  sound, ever.
+- deletableman (#341, #376): nothing new from him. A reply for #341 was
+  drafted and not posted; it is MMagTech's call.
 
 **After a console is installed fresh** it has no key: About, press Version
 seven times, Developer access, PIN; then from the Mac, with the password on
