@@ -17037,7 +17037,7 @@ the box says "Search…" instead of "Game name".
 (the label through the read-only relay's stand-ins, `name:` and `tags:`, on
 Home, the Xbox 360 grid and search; `cabinetos-frontend --same-names-test`
 checks the wording and every case that must show nothing; the report's list
-is `--same-names`, in `samenames.cpp`). Also **decided by MMagTech, 2026-10-14.** Every game keeps its own tile on its
+is `--same-names`, in `samenames.cpp`). Every game keeps its own tile on its
 system. No grouping of versions, no picker, no menu, nothing on covers and
 nothing on the game's page. **When the selected game shares RomM's `name`
 with another game of the same system (RomM's `platform_id`) in the same
