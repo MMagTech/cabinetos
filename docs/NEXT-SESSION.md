@@ -11,7 +11,7 @@ ask them to test, and never claim a fix nobody reproduced.
 **2026-10-14:** everything from the last session is merged and released:
 covers in every format (#376), the grid heading, the sound rule (#341,
 PROJECT.md question 46), and interface sounds everywhere with a calmer set
-(#389, question 47). The A9 (Wi-Fi, **192.168.1.109**) runs the newest
+(#389, question 47), `latest` 2026.10.14.4 once merged. The A9 (Wi-Fi, **192.168.1.109**) runs the newest
 `testing`. RomM's documentation together with RomM's behaviour is the source
 of truth for anything on RomM's data; nothing beyond it is invented.
 

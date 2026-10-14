@@ -4,6 +4,21 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
+## 2026.10.14.4 {#v2026-10-14-4}
+
+*14 October 2026*
+
+- **Changed:** the interface sounds are softer and lower, to suit the
+  console's quiet look.
+- **Fixed:** some places made no sound when you moved or chose something:
+  a game's page, opening a game, the Resume card, the power menu on Home,
+  the account switcher, the Library's tabs, the on-screen keyboard and first
+  setup. They now sound like everywhere else, at the level set in
+  Settings. The pause menu stays silent.
+  ([#389](https://github.com/MMagTech/cabinetos/issues/389))
+- **Changed:** Search no longer shows "Search" twice above the keyboard, and
+  its box says "Search…".
+
 ## 2026.10.14.3 {#v2026-10-14-3}
 
 *14 October 2026*
