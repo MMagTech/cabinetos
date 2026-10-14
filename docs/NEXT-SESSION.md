@@ -17,22 +17,16 @@ of truth for anything on RomM's data; nothing beyond it is invented.
 
 ## Next
 
-1. **A design discussion, not a build: same-name games, regions and
-   versions** (#383, "Game versions, updates and DLC: one place to choose
-   them", which also parks the earlier thinking). MMagTech, 2026-10-14: settle
-   the design choices first, then build, in the session after or later in the
-   same one if there is room.
-   - **Facts first, read-only:** what RomM's documentation says it records
-     (regions, languages, revisions, tags) and what RomM actually returns for
-     MMagTech's own same-name games, as a short list with real examples from
-     his library. RomM's docs and behaviour are the line; nothing beyond them.
-   - **Then an open discussion, not yes/no lists:** he wants room to give his
-     opinions. Lay out the real options with my view and their downsides
-     (where versions show: the heading, the game's page, the long press on
-     Play kept for rare options; which version Play picks; updates and DLC),
-     then let him talk it through.
-   - **The outcome:** the decisions written onto #383 and into PROJECT.md,
-     ready to build.
+1. **Build the same-name heading** (#383, "Game versions, updates and DLC:
+   one place to choose them"), decided 2026-10-14, PROJECT.md question 48.
+   Every game keeps its own tile. When two games on one system share RomM's
+   `name`, the grid heading and Home's shelf header show RomM's `regions`,
+   `languages`, `revision` and `tags` for the selected game, dimmer, after
+   its name; nothing when RomM sends none. No grouping, no picker, nothing
+   written to the server. Lessons: `frontend.md`. Judge it on the TV in the
+   loop with his Game & Watch pairs, the Jaguar alternates, Pokémon Emerald,
+   Metroid Prime Hunters and Urban Reign; a long tag line must fit the
+   heading. Then testing image, changelog entry, pull request.
 
 ## Waiting, not for the next session unless MMagTech raises them
 

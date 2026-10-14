@@ -17025,3 +17025,55 @@ switching".
 **Also, Search:** no heading over an empty search while the keys are up
 (the bar already says Search; it comes back if the keys are hidden), and
 the box says "Search…" instead of "Game name".
+
+### 48. Same-name games, regions and versions, issue #383
+
+**Decided by MMagTech, 2026-10-14.** Every game keeps its own tile on its
+system. No grouping of versions, no picker, no menu, nothing on covers and
+nothing on the game's page. When two games on one system share RomM's
+`name`, the heading (the grid heading and Home's shelf header) shows RomM's
+own fields for the selected game, dimmer, after its name: `regions`,
+`languages`, `revision`, `tags`. Nothing is added when RomM sends none, so of
+two copies the untagged one shows its name alone ("Urban Reign" beside
+"Urban Reign (USA)"). Nothing is written to the server.
+
+**Why not group them** (as RomM's own grouping and Argosy do): it would mean
+fewer tiles, but it rests on RomM's sibling grouping, which RomM does not
+document (its docs mention it only as the smart collections' `duplicate`
+filter, "Games with more than one version") and which a RomM update can
+change. MMagTech: "it's going to be a nightmare to maintain over time." On
+his library it is also wrong half the time, and its failure hides a game:
+Argosy's rule (first metadata ID per system) makes 20 groups there, 10 of
+them different games under one tile (Lilo & Stitch with its sequel, Metal
+Slug with Metal Slug X, Super Star Wars with The Empire Strikes Back), and
+misses all eleven Game & Watch pairs.
+
+**What RomM 5.3.1 sends, checked on his library 2026-10-14:** 30 groups
+(62 games) share a name on one system. RomM's fields tell most real versions
+apart: Game & Watch screen types ("Nintendo, Crystal Screen" against
+"Nintendo, New Wide Screen"), Jaguar alternates ("1996, a1") and betas
+("Beta, 1995"), regions and revisions (Metroid Prime Hunters "USA", Rev 1).
+They cannot tell apart: Helmet CN-07 and CN-17, and Mario's Cement Factory
+CM-72 and CM-72A (RomM parses "version" from the file name but does not send
+it; asking RomM to send it is MMagTech's call), a set kept both as a folder
+and as a zip (Area 51 / Maximum Force Duo), and a game RomM matched under
+another game's name (Lilo & Stitch, Super Mario Advance, Metal Slug, Shock
+Troopers, Circus and Clowns, The Lost Vikings, a save state scanned as a
+game). Those are fixed in RomM, not on the console.
+
+**Updates and DLC** (#181, when it is built): no choice at all. Every update
+and DLC file RomM holds for a game is used. MMagTech: "If you didn't want
+your game updated automatically, then you shouldn't have put them in
+there." Argosy instead offers a file picker at download with updates and DLC
+on by default; not copied.
+
+**But the player is told** (MMagTech, 2026-10-14): the owner put the files
+there, but someone else on the same server did not, so the console says the
+game has something new, once, in a few words such as "Updated" or "New
+content"; not what changed, as modern consoles list it. Where and when it
+shows, and whether it is per person, is settled when #181 is built. RomM
+dates every file (`created_at` in each game's `files`), which is enough to
+know something arrived since the person last played.
+
+**Each version keeps its own saves**, as RomM keys them, with nothing to
+explain since each is its own game.
