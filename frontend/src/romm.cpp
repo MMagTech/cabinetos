@@ -1372,7 +1372,17 @@ std::vector<uint8_t> Client::fetchBytes(const std::string& path) const {
     if (hdrs) curl_slist_free_all(hdrs);
     curl_easy_cleanup(c);
 
-    if (rc != CURLE_OK || status >= 400) data.clear();
+    if (rc != CURLE_OK || status >= 400) {
+        // SAID, so a report shows why a picture is missing instead of a blank
+        // tile and nothing in the log (#376). The path only, never the host or
+        // the query; RomM's paths carry game numbers, not names.
+        const std::string shown = path.substr(0, path.find('?'));
+        if (rc != CURLE_OK)
+            std::fprintf(stderr, "[covers] %s: %s\n", shown.c_str(), curl_easy_strerror(rc));
+        else
+            std::fprintf(stderr, "[covers] %s: the server answered %ld\n", shown.c_str(), status);
+        data.clear();
+    }
     return data;
 }
 
