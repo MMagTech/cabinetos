@@ -8,12 +8,12 @@ ask them to test, and never claim a fix nobody reproduced.
 
 ## Where things stand
 
-**2026-10-14:** everything from the last session is merged and released:
-covers in every format (#376), the grid heading, the sound rule (#341,
-PROJECT.md question 46), and interface sounds everywhere with a calmer set
-(#389, question 47), `latest` 2026.10.14.4 once merged. The A9 (Wi-Fi, **192.168.1.109**) runs the newest
-`testing`. RomM's documentation together with RomM's behaviour is the source
-of truth for anything on RomM's data; nothing beyond it is invented.
+**2026-10-14:** `latest` is **2026.10.14.5**: same-name games show RomM's
+tags in the heading, and the diagnostic report lists them (#383, PROJECT.md
+question 48). The A9 (Wi-Fi, **192.168.1.109**) runs it. RomM's
+documentation together with RomM's behaviour is the source of truth for
+anything on RomM's data; nothing beyond it is invented. RomM was asked to
+send its `version` tag (rommapp/romm#5243); nothing to do until it does.
 
 ## Next
 
@@ -23,7 +23,9 @@ few sessions so outside contributors (and forks) can find their way, and so
 features stop breaking each other. Performance is not the reason.
 
 1. **The audit, and only the audit** (#398, "Audit the code and restructure
-   it for contributors (main.cpp is 20,000 lines)"). No code changes. A
+   it for contributors (main.cpp is 20,000 lines)"), **run on Fable 5.1**
+   (MMagTech, 2026-10-14; the move sessions after it on Opus 5.5). No code
+   changes. A
    report on the issue covering the whole OS: per file, its size today, what
    is in it in plain words, the suggested split (new files, rough line
    counts, what the original comes down to), what it protects, and risk.

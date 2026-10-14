@@ -41,6 +41,9 @@ next letter, and the index on the right shows where you are. Games that need a
 controller nobody has paired (a Wii Remote, a Wii U GamePad) are greyed and
 listed last.
 
+Two games with the same name show the tags from their file names after the
+name, such as *(USA) (Rev 1)*; see [Your RomM server](romm.md).
+
 ## A game's page
 
 ![A game's page](../media/game.webp)
