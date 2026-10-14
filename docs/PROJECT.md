@@ -17031,13 +17031,16 @@ the box says "Search…" instead of "Game name".
 **Decided by MMagTech, 2026-10-14.** Every game keeps its own tile on its
 system. No grouping of versions, no picker, no menu, nothing on covers and
 nothing on the game's page. **When the selected game shares RomM's `name`
-with another game in the same list on screen**, the heading shows RomM's
+with another game of the same system (RomM's `platform_id`) in the same
+list on screen**, the heading shows RomM's
 own fields for it, dimmer, after its name: `regions`,
 `languages`, `revision`, `tags`. Nothing is added when RomM sends none, so of
 two copies the untagged one shows its name alone ("Urban Reign" beside
 "Urban Reign (USA)"). Nothing is written to the server.
 
-**"The same list on screen", everywhere** (MMagTech, 2026-10-14): a
+**"Same name, same system, same list", everywhere** (MMagTech,
+2026-10-14). Games of different systems never get a label: the system
+already tells them apart. A
 platform's grid is the whole system, so every twin there gets its label; a
 collection, search results, and Home's Recent and Favorites shelves label a
 game only when its twin is in that same list (on Home, in the shelf
@@ -17058,8 +17061,9 @@ them different games under one tile (Lilo & Stitch with its sequel, Metal
 Slug with Metal Slug X, Super Star Wars with The Empire Strikes Back), and
 misses all eleven Game & Watch pairs.
 
-**What RomM 5.3.1 sends, checked on his library 2026-10-14:** 30 groups
-(62 games) share a name on one system. RomM's fields tell most real versions
+**What RomM 5.3.1 sends, checked on his library 2026-10-14:** 29 groups
+(60 games) share a name on one platform (by `platform_id`; a first count by
+platform slug merged his two arcade platforms). RomM's fields tell most real versions
 apart: Jaguar alternates ("1996, a1") and betas ("Beta, 1995"), regions and
 revisions (Metroid Prime Hunters "USA", Rev 1). Game & Watch has the most
 pairs (screen types) but is excluded on this console, so none of it counts.

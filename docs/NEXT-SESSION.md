@@ -20,7 +20,8 @@ of truth for anything on RomM's data; nothing beyond it is invented.
 1. **Build the same-name heading** (#383, "Same-name games: show RomM's
    tags in the heading"), decided 2026-10-14, PROJECT.md question 48.
    Every game keeps its own tile. When the selected game shares RomM's
-   `name` with another game in the same list on screen (a platform's grid,
+   `name` with another game of the same system in the same list on screen
+   (a platform's grid,
    a collection, search, Home's Recent or Favorites shelf), the heading
    shows RomM's `regions`, `languages`, `revision` and `tags`, dimmer, after
    its name; nothing when RomM sends none. Home asks RomM nothing extra; the
