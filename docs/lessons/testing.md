@@ -295,6 +295,14 @@ then `YDOTOOL_SOCKET=/tmp/ydotool.sock ydotool key 108:1 108:0` (Down; Up
   `wpctl get-volume` and `wpctl inspect @DEFAULT_AUDIO_SINK@` across a
   restart before trusting a log line that says it was set.
 
+- **RESTARTING WIREPLUMBER UNDER A RUNNING APP LEAVES THE APP SILENT.**
+  2026-10-14, trying #341's settings as a user copy: `systemctl --user
+  restart wireplumber` came back with the TV as the output and the app
+  linked to it, and pw-top's ERR for `cabinetos-frontend` climbed about 47 a
+  second (the silent day's sign) until the console was restarted. Try
+  WirePlumber settings with a restart of the console (they load at start, as
+  the image's will), and read ERR after any sound change.
+
 - **A udev rule is tried in `/run/udev/rules.d`**, then `udevadm control
   --reload` and `udevadm trigger --subsystem-match=<s> --action=change`: gone
   at the next reboot, like the loop's drop-in. Keyboards on this image are
