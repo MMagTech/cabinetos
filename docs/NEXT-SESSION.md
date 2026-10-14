@@ -21,42 +21,52 @@ each other, and outside contributors must find their way.
 
 **The audit (#398, "Audit the code and restructure it for contributors
 (main.cpp is 20,000 lines)") is being done in parts, one per session, report
-only, no code changes.** Part 1 is posted on the issue (2026-10-14): the
-numbers, main.cpp lines 1 to 9147 with a split proposal, the RomM map with
-what 5.4.0 changes, the dead-code and duplicate candidates, "where to
-worry", the "same as before" checklist, a first order of moves, and the
-phasing of Parts 2 to 6.
+only, no code changes.** Parts 1 and 2 are posted on the issue (2026-10-14):
+every line of main.cpp is read, its plan is 61 files (Part 2, section 3.12),
+the plan for lines 1 to 9147 is refuted and corrected (section 14), and the
+dead-code list is settled (section 15). **Part 3 is next**; its prompt is
+`~/Documents/Development/cabinetos-audit/part3-prompt.md`: first the
+refutation of Part 2's five stretches, then the other frontend files in five
+groups.
 
-**Why parts (learned 2026-10-14):** one run over the whole OS was cut by
-the session's usage limit with 18 readers mid-read, and their work was lost.
-A session now runs three to five readers at a time, verifies what they
-found, posts its part on #398 before it ends, and stops.
+**Decisions MMagTech owes before the moves begin** (Part 2, section 17): the
+client's thread rule (one romm::Client shared by up to sixteen threads while
+the frame thread rewrites its token and address), the two PIN gates,
+protectRomId 0, folders for the 61 files, whether the 2,065 lines of test
+instruments stay in the product binary, and the dead-code pull request (38
+verified items). Decided 2026-10-14: #402 corrected; #404, #405 and #406
+opened.
 
-**MMagTech decides the size before Part 2 starts:** Part 2 only (main.cpp
-9148 to 20018 and verification of the main.cpp plan, then the moves begin;
-the other areas get read one file at a time as they are moved); or Parts 2
-and 3 (all of the frontend); or Parts 2 to 6 as listed in Part 1's third
-comment.
+**How a part runs (learned 2026-10-14):** three to five agents at a time,
+every output saved into `~/Documents/Development/cabinetos-audit/` as it
+lands, the part posted on #398 before the session ends. Readers on Fable,
+refuters that judge C++ on Opus, mechanical whole-repository checks on Sonnet
+with a spot-check; the cost of each wave read off the usage card first.
 
 **Where the material is:** `~/Documents/Development/cabinetos-audit/` on
-the Mac (outside the repository): `readers/` (the twelve finished reader
-outputs as JSON, and the lessons-to-code fragility map), `measurements/`
-(the main.cpp block and lambda map, the shared-state measurement, the A9
-linker list of unreferenced functions, the RomM 5.3.1 OpenAPI spec),
-`scripts/` (the scan scripts, the survey workflow, the verification
-workflow and its argument builder), and the three posted comments. A
-new session starts from these, not from re-reading.
+the Mac (outside the repository): `readers/` (seventeen reader outputs),
+`verifiers/` (fifteen refuter outputs), `verify-args/` (the posted sections,
+the raw claims, the dead-code batches and the grep baseline),
+`measurements/`, `scripts/`, and the posted comments as `part1-comment*.md`
+and `part2-comment*.md`. A new session starts from these, not from
+re-reading.
 
-**Then, after MMagTech's decision:** one area per session, moved, built and
+**Then, after MMagTech's decisions:** one area per session, moved, built and
 run on the A9, the checklist repeated, a testing image, a pull request he
 merges. Never two areas at once. The contributor guide comes last.
 
 ## Waiting, not for the next session unless MMagTech raises them
 
 - #401, "RomM 5.4.0: a game's page cannot read its time played without
-  devices.read or a device_id" and #402, "A game whose file name contains
-  #, & or ? is cut on the one-file download": found by the audit, report
-  only; his decisions are in Part 1's section 13.
+  devices.read or a device_id" and #402, "A one-file game whose file name
+  begins with # or ? fails to download (the name is cut before the server
+  sees it)": found by Part 1, report only; #402 corrected by Part 2.
+- #404, "The launch worker writes the job's entry path while the frame
+  thread reads it"; #405, "favorites.json is written from two threads through
+  the same temporary file with no lock"; #406, "Four background threads are
+  never stopped at exit (pairing, remove and sign out, reconnect, drive
+  backfill)": found by Part 2's refutation, report only; each is fixed as
+  its feature's file leaves main.cpp, or sooner on MMagTech's call.
 - #329, "Release notes for every update, and a way to see them from the
   console"; #380, "The console follows any web address in RomM's data, with
   the RomM sign-in attached"; #381, "Remote Play: stream with no screen
