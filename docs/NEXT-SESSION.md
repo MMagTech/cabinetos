@@ -26,7 +26,12 @@ of truth for anything on RomM's data; nothing beyond it is invented.
    written to the server. Lessons: `frontend.md`. Judge it on the TV in the
    loop with his Game & Watch pairs, the Jaguar alternates, Pokémon Emerald,
    Metroid Prime Hunters and Urban Reign; a long tag line must fit the
-   heading. Then testing image, changelog entry, pull request.
+   heading. **With it, in the same pull request, the diagnostic report gets a
+   "Same-name games" list** (MMagTech, 2026-10-14: a player asked for this
+   and he cannot test their library): per system, each shared name, and per
+   copy the file name, RomM's fields as received and the heading shown.
+   Built only when a report is made. Check it in a report from the A9.
+   Then testing image, changelog entry, pull request.
 
 ## Waiting, not for the next session unless MMagTech raises them
 

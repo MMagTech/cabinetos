@@ -17081,3 +17081,13 @@ game, not merely because RomM lists them. Where it shows is settled when
 
 **Each version keeps its own saves**, as RomM keys them, with nothing to
 explain since each is its own game.
+
+**The diagnostic report shows it** (MMagTech, 2026-10-14: a player asked for
+this and his own library cannot test theirs). A "Same-name games" list beside
+the server: per system, every name two or more games share, and per copy the
+file name, RomM's `regions`, `languages`, `revision` and `tags` as the console
+received them, and the heading the console shows. One report then tells RomM
+not reading a tag (in the file name, empty in the field) from the console
+showing it wrong (fields right, heading wrong) from a wrong match (two
+different files under one name, fixed in RomM). Gathered only when a report
+is made.
