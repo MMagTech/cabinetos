@@ -17035,8 +17035,10 @@ with another game of the same system (RomM's `platform_id`) in the same
 list on screen**, the heading shows RomM's
 own fields for it, dimmer, after its name: `regions`,
 `languages`, `revision`, `tags`. Nothing is added when RomM sends none, so of
-two copies the untagged one shows its name alone ("Urban Reign" beside
-"Urban Reign (USA)"). Nothing is written to the server.
+two copies the untagged one shows its name alone ("Pokémon Emerald Version"
+beside "Pokémon Emerald Version (USA, Europe)"). Nothing is written to the
+server. (His two Urban Reigns turned out to be one file added twice, same
+SHA-1; he deleted the untagged copy in RomM on 2026-10-14.)
 
 **"Same name, same system, same list", everywhere** (MMagTech,
 2026-10-14). Games of different systems never get a label: the system
