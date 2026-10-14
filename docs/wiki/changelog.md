@@ -4,6 +4,16 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
+## 2026.10.14.2 {#v2026-10-14-2}
+
+*14 October 2026*
+
+- **Changed:** in a platform's game grid, the heading (the platform, how
+  many games, and the name of the game you are on) now stays at the top
+  while the covers scroll underneath, so you can always see which game is
+  selected. The grid moves a whole row at a time, so no row is left half
+  cut off under the heading.
+
 ## 2026.10.14 {#v2026-10-14}
 
 *14 October 2026*
