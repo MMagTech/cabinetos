@@ -25,7 +25,7 @@ SDL_AudioStream* gStream = nullptr;
 struct Voice {
     std::vector<int16_t> pcm;
 };
-Voice gVoices[4];
+Voice gVoices[5];
 Voice gChime;
 
 // A cue is two sine partials under one exponential envelope, and that is the
@@ -124,22 +124,37 @@ bool init() {
 
     // THE SET, AND WHAT EACH ONE IS TRYING TO BE.
     //
+    // CALMER SINCE #389 (MMagTech, 2026-10-14): the first set (Move at 880 Hz
+    // over a 1320 Hz partial) read as "too jarring" against a quiet, minimal
+    // screen. He chose, by ear, a blend halfway between an octave lower and a
+    // marimba-like "wood": each voice's partial is 2.75 times its pitch, and
+    // pitch, partial level, length and bend sit halfway between the two. The
+    // first set's numbers, if it is ever wanted back: Move 880/1320 0.30
+    // 45 ms; Activate 520/780 0.35 110 ms +0.18; Back 620/930 0.30 90 ms
+    // -0.22; Edge 320/480 0.12 55 ms -0.10.
+    //
     // MOVE is the one that plays hundreds of times an evening, so it is the
-    // shortest and the highest: 45 ms, and gone before the focus animation it
-    // accompanies has finished. Anything longer turns a run along a shelf into
-    // a drum roll.
-    build(gVoices[0], 880.0f, 1320.0f, 0.30f, 0.045f, 0.0f);
+    // shortest and the highest: about 50 ms, and gone before the focus
+    // animation it accompanies has finished. Anything longer turns a run along
+    // a shelf into a drum roll.
+    build(gVoices[0], 482.0f, 1324.0f, 0.185f, 0.0525f, 0.0f);
     // ACTIVATE is lower, longer and rises. It is the sound of something opening
     // and it is allowed to be heard.
-    build(gVoices[1], 520.0f, 780.0f, 0.35f, 0.110f, 0.18f);
+    build(gVoices[1], 326.0f, 897.0f, 0.24f, 0.120f, 0.115f);
     // BACK is the same shape falling instead of rising, which is the whole
     // reason it reads as the opposite of Activate rather than as another noise.
-    build(gVoices[2], 620.0f, 930.0f, 0.30f, 0.090f, -0.22f);
+    build(gVoices[2], 375.0f, 1031.0f, 0.185f, 0.100f, -0.15f);
     // EDGE is focus hitting a wall — a duller, quieter thud with no partial to
     // speak of, so it reads as "nothing there" rather than as a move that
     // worked. Without it, a controller pressed against the end of a row is
     // silent, which feels like the console stopped listening.
-    build(gVoices[3], 320.0f, 480.0f, 0.12f, 0.055f, -0.10f);
+    build(gVoices[3], 211.0f, 580.0f, 0.08f, 0.0625f, -0.075f);
+    // TYPE is a key on the on-screen keyboard: Move's voice cut to 20 ms, a
+    // tick. An address or a Wi-Fi password is dozens of presses in a row, and
+    // anything longer gets tiring (MMagTech: "just like a really short tick").
+    // A keyboard with sounds of its own (a wood tap) was tried on the TV,
+    // 2026-10-14, and read as "too weird switching": it stays in the family.
+    build(gVoices[4], 482.0f, 1324.0f, 0.185f, 0.020f, 0.0f);
     buildChime(gChime);
 
     gReady = true;

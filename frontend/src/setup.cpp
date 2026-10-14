@@ -12,6 +12,7 @@
 
 #include "bluetooth.h"
 #include "design.h"
+#include "sound.h"
 #include "firstrun.h"
 #include "keyboard.h"
 #include "net.h"
@@ -252,7 +253,10 @@ private:
 
     int nextEnabledRow(int from, int dy) const;
     bool anyEnabledRow() const;
+    // FIRST RUN SOUNDS LIKE THE CONSOLE IT SETS UP (#389): these play the cue
+    // and the *Step versions move.
     void moveFocus(int dy);
+    void moveFocusStep(int dy);
     void moveAction(int dx);
     // A MOUSE MOVES FOCUS AND CLICKS THE FOCUSED THING, AND NOTHING ELSE.
     //
@@ -273,6 +277,7 @@ private:
     // been typed was thrown away in silence.
     void typingFinished(ui::KeyboardResult result, const std::string& value);
     void activate();
+    void activateStep();
     void goBack();
 
     void startWifiScan();
@@ -1275,6 +1280,14 @@ bool Flow::anyEnabledRow() const {
 }
 
 void Flow::moveFocus(int dy) {
+    const int wasRow = row_, wasButton = button_;
+    const bool wasFooter = onFooter_;
+    moveFocusStep(dy);
+    const bool same = onFooter_ == wasFooter && row_ == wasRow && button_ == wasButton;
+    sound::play(same ? sound::Cue::Edge : sound::Cue::Move);
+}
+
+void Flow::moveFocusStep(int dy) {
     moved_ = true;
     if (!onFooter_) {
         const int next = nextEnabledRow(row_ + dy, dy);
@@ -1321,6 +1334,8 @@ bool Flow::canvasPoint(float windowX, float windowY, float* cx, float* cy) const
 }
 
 void Flow::typingFinished(ui::KeyboardResult result, const std::string& value) {
+    if (result == ui::KeyboardResult::Committed) sound::play(sound::Cue::Activate);   // #389
+    if (result == ui::KeyboardResult::Cancelled) sound::play(sound::Cue::Back);
     if (result == ui::KeyboardResult::Committed) {
         if (typing_ == Typing::Address) startServerProbe(value);
         else if (typing_ == Typing::Passphrase) {
@@ -1367,20 +1382,37 @@ bool Flow::pointAt(float windowX, float windowY) {
 
 void Flow::moveAction(int dx) {
     moved_ = true;
-    if (!onFooter_) return;
+    if (!onFooter_) { sound::play(sound::Cue::Edge); return; }
     const int next = button_ + dx;
-    if (next < 0 || next >= static_cast<int>(buttons_.size())) return;
+    if (next < 0 || next >= static_cast<int>(buttons_.size())) {
+        sound::play(sound::Cue::Edge);
+        return;
+    }
     button_ = next;
+    sound::play(sound::Cue::Move);
 }
 
 void Flow::goBack() {
     if (machine_.back()) {
+        sound::play(sound::Cue::Back);
         observe();
         enterStep();
+    } else {
+        sound::play(sound::Cue::Edge);
     }
 }
 
 void Flow::activate() {
+    const bool nothing =
+        onFooter_ ? (buttons_.empty() ||
+                     !buttons_[static_cast<size_t>(button_)].enabled ||
+                     buttons_[static_cast<size_t>(button_)].act == Act::None)
+                  : (rows_.empty() || !rows_[static_cast<size_t>(row_)].enabled);
+    sound::play(nothing ? sound::Cue::Edge : sound::Cue::Activate);
+    activateStep();
+}
+
+void Flow::activateStep() {
     if (onFooter_) {
         if (buttons_.empty()) return;
         const Button& b = buttons_[static_cast<size_t>(button_)];
@@ -1448,7 +1480,7 @@ void Flow::activate() {
             // "Change the address".
             button_ = 0;
             onFooter_ = true;
-            activate();
+            activateStep();
             onFooter_ = false;
             break;
         case firstrun::Step::Controller:

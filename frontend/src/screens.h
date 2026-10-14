@@ -369,6 +369,8 @@ public:
     // keyboard. The covers are sized to the room that leaves rather than to a
     // constant, so the layout survives the keyboard changing height.
     void setResultsBottom(float y) { resultsBottom_ = y; }
+    // Whether the keyboard is up over this screen; the heading needs to know.
+    void setKeysUp(bool up) { keysUp_ = up; }
 
     // Whether focus is in the results rather than in the keyboard. The app owns
     // this because the app owns the keyboard.
@@ -397,6 +399,7 @@ private:
     int slot_ = 0;
     bool focused_ = false;
     float resultsBottom_ = ui::kCanvasHeight;
+    bool keysUp_ = true;
     design::Animated scroll_;
 };
 
@@ -661,6 +664,8 @@ public:
     void setProgress(const Progress& p) { progress_ = p; }
 
 private:
+    // key()'s moves, without the sound; key() says what happened (#389).
+    Result step(Nav n);
     Progress progress_;
     float slideX_ = 0.0f;
     // Where draw() put the small book, for the glass pass.

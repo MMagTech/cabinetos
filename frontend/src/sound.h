@@ -42,6 +42,7 @@ enum class Cue {
     Activate,  // something was chosen
     Back,      // a screen was left
     Edge,      // focus tried to move and there was nothing there
+    Type,      // a key typed on the on-screen keyboard (#389)
 };
 
 // Opens the device and builds the cues. Returns false when there is no audio

@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <tuple>
 
 namespace screens {
 namespace {
@@ -407,7 +408,8 @@ Result LibraryScreen::key(Nav n) {
         case Nav::Back:  return {Action::Back, 0};
         case Nav::Activate:
             if (row_ == 0) {
-                if (slot_ == tab_) return {};
+                if (slot_ == tab_) { sound::play(sound::Cue::Edge); return {}; }
+                sound::play(sound::Cue::Activate);   // #389
                 // Changing tab resets the grid position: the remembered slot
                 // belonged to a different list and pointing it at this one
                 // means nothing.
@@ -423,7 +425,7 @@ Result LibraryScreen::key(Nav n) {
                 // An unplayable platform is drawn and says why, and does not
                 // open. Offering a screen of games that cannot start is the
                 // promise this whole catalog exists to avoid breaking.
-                if (!tiles[slot_].enterable) return {};
+                if (!tiles[slot_].enterable) { sound::play(sound::Cue::Edge); return {}; }
                 return {Action::OpenTile, slot_};
             }
             break;
@@ -1230,8 +1232,13 @@ void SearchScreen::draw(Ctx& c) {
     // could not ASK would have said the library held nothing like it.
     char line[96];
     switch (state_) {
+        // NOTHING YET, NOTHING SAID WHILE THE KEYS ARE UP: the bar above
+        // already says Search and the keyboard fills the screen, so a heading
+        // of "Search" read the same word twice (MMagTech on the TV,
+        // 2026-10-14). Hidden with nothing typed, the page would be empty
+        // under the bar, so the heading comes back.
         case State::Empty:
-            std::snprintf(line, sizeof line, "Search");
+            std::snprintf(line, sizeof line, "%s", keysUp_ ? "" : "Search");
             break;
         case State::Waiting:
             std::snprintf(line, sizeof line, "Searching\xE2\x80\xA6");
@@ -1410,7 +1417,24 @@ void DetailScreen::tick(float dt) {
     waited_ += dt;
 }
 
+// THE PAGE SOUNDS LIKE EVERY OTHER SCREEN (#389). It moved in silence: the
+// focus here is five things (the rows, the heart, the cup, the states), so
+// the cue is decided from where focus is before and after a press rather than
+// in each branch. A direction that moved it is Move; one that did not is
+// Edge; A on something that does nothing is Edge. Back, and A on something
+// that does something, sound where the app acts on them.
 Result DetailScreen::key(Nav n) {
+    const auto where = [&] { return std::make_tuple(onFav_, onTrophy_, inStates_, slot_, stateSlot_); };
+    const auto before = where();
+    const Result r = step(n);
+    if (n == Nav::Up || n == Nav::Down || n == Nav::Left || n == Nav::Right)
+        sound::play(where() == before ? sound::Cue::Edge : sound::Cue::Move);
+    else if (n == Nav::Activate && r.action == Action::None)
+        sound::play(sound::Cue::Edge);
+    return r;
+}
+
+Result DetailScreen::step(Nav n) {
     if (n == Nav::Back) return {Action::Back, 0};
     auto refocus = [&]() {
         notice_.clear();
@@ -1988,12 +2012,16 @@ Result AccountScreen::key(Nav n) {
         int at = slot_;
         for (int tries = 0; tries < rowCount(); ++tries) {
             at += d;
-            if (at < 0 || at >= rowCount()) return {};
+            // Sounds as every list does (#389): the end of it is Edge.
+            if (at < 0 || at >= rowCount()) { sound::play(sound::Cue::Edge); return {}; }
             {
                 if (at != slot_) {
                     slot_ = at;
                     focus_.retarget(0.0f, 0.0f);
                     focus_.retarget(1.0f, design::kFocusDuration);
+                    sound::play(sound::Cue::Move);
+                } else {
+                    sound::play(sound::Cue::Edge);
                 }
                 return {};
             }
@@ -2008,7 +2036,7 @@ Result AccountScreen::key(Nav n) {
         case Nav::Activate:
             if (slot_ < 0 || slot_ >= rowCount()) return {};
             if (isAddRow(slot_)) {
-                if (!addEnabled_) return {};
+                if (!addEnabled_) { sound::play(sound::Cue::Edge); return {}; }
                 return {Action::AddAccount, 0};
             }
             // THE ID, NOT THE ROW. A list that changed underneath this screen
