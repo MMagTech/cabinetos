@@ -3635,30 +3635,32 @@ Within that:
 
 #### Home is resume-first
 
-Home is not a menu. Its structure is fixed:
+Home is not a menu. Its structure is fixed (as built; **there is no hero
+card**, which Home lost on 2026-09-21 in 5b2ad92, "Home loses its hero, the
+bar becomes chrome, and Search exists"):
 
-1. **The hero** — what you were playing. Focused on arrival.
-2. **Recent** — everything else recently played, as a horizontal shelf.
-3. **Favorites** — a second shelf, only if there are any.
+1. **Recent**: what this person played, newest first, as a horizontal shelf.
+   Its first card is the game you were playing, and Home focuses it on
+   arrival.
+2. **Favorites**: a second shelf, only if there are any.
 
-The hero carries **two** actions and the distinction is load-bearing:
+The focused card's name and system ride in the shelf header, not under the
+cover. **The first Recent card is the only one that goes straight into the
+game**: the header says "▶ Resume" over it and A starts it, with the previous
+choices already made and the newest state loaded, wherever that state was
+written. Resume means resume; stopping at a screen with a Play button on it is
+two actions, not one. Every other cover on Home opens the game's page, as a
+cover does anywhere else.
 
-- **Resume** (a pill in its top-right corner) goes *straight into the game*,
-  with the previous choices already made and the newest state loaded, wherever
-  that state was written. Resume means resume; stopping at a screen with a Play
-  button on it is two actions, not one.
-- **The artwork itself** opens the detail screen, which is where you go to pick a
-  different state, change the core, or export.
-
-When there is nothing to resume, Home says so in its own words and points at the
-Library — it does not show an empty shelf.
+When nothing has been played, Home says "Nothing played yet" and "Games you
+play or favorite show up here."; it does not show an empty shelf.
 
 ##### Resume on a game that is not downloaded — RAISED AND CLOSED, 2026-09-16
 
 **Recorded because it looks like a problem and is not, and somebody will raise
 it again.**
 
-Recent and the hero come from RomM's `last_played`, which is the household's
+Recent (then the hero) comes from RomM's `last_played`, which is the household's
 history across every device. So the game Home offers to resume may have been
 last played on a phone and never downloaded on this console, and pressing Resume
 then means fetching several gigabytes and a save state before anything starts.
@@ -3682,6 +3684,9 @@ optimisation, the way real consoles have it, and it is a performance idea rather
 than a correction to this design. Nothing about Home changes.
 
 #### The hero card, read from Cabinet's tvOS source
+
+> **Not built on CabinetOS.** Home lost its hero on 2026-09-21 (5b2ad92); this
+> is kept as the record of Cabinet's design, not as a description of Home.
 
 **Read 2026-09-14 from `RommApp/RommApp/Home/HomeView.swift`.** tvOS has shipped
 this and CabinetOS should inherit it rather than re-derive it. The numbers below
@@ -17028,7 +17033,11 @@ the box says "Search…" instead of "Game name".
 
 ### 48. Same-name games, regions and versions, issue #383
 
-**Decided by MMagTech, 2026-10-14.** Every game keeps its own tile on its
+**Decided by MMagTech, 2026-10-14; built and judged on the TV the same day**
+(the label through the read-only relay's stand-ins, `name:` and `tags:`, on
+Home, the Xbox 360 grid and search; `cabinetos-frontend --same-names-test`
+checks the wording and every case that must show nothing; the report's list
+is `--same-names`, in `samenames.cpp`). Also **decided by MMagTech, 2026-10-14.** Every game keeps its own tile on its
 system. No grouping of versions, no picker, no menu, nothing on covers and
 nothing on the game's page. **When the selected game shares RomM's `name`
 with another game of the same system (RomM's `platform_id`) in the same

@@ -6,9 +6,11 @@
 // rather than doing anything; the decisions about what an Action costs are all
 // here, which is why a screen can never start a download by accident.
 //
-//   Home       resume-first, and the one screen that is not a list. The hero is
-//              what you were playing; its artwork opens the launch screen and
-//              its Resume pill goes straight into the game.
+//   Home       resume-first: the Recent and Favorites shelves. The first Recent
+//              card is what you were playing, focused on arrival, and the one
+//              cover that goes straight into the game ("Resume" in the header);
+//              every other cover opens the launch screen. No hero since
+//              2026-09-21.
 //   Library    every system and every collection on the server, as a tile grid.
 //   Grid       one system's or one collection's games.
 //   Launch     a full-screen cover over whatever was behind it: play, or

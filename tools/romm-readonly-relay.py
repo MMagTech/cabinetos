@@ -230,7 +230,7 @@ class H(BaseHTTPRequestHandler):
             r = e
         body = r.read() if not head else b""
         ctype = r.headers.get("Content-Type", "")
-        if (MAP or FILES or FOLDERS) and "json" in ctype and body:
+        if (MAP or FILES or FOLDERS or NAMES or TAGS) and "json" in ctype and body:
             try: body = json.dumps(rewrite(json.loads(body))).encode()
             except Exception: pass
         listing = urllib.parse.urlsplit(self.path).path

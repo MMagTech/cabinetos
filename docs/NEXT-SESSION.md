@@ -38,10 +38,6 @@ of truth for anything on RomM's data; nothing beyond it is invented.
 
 ## Waiting, not for the next session unless MMagTech raises them
 
-- Stale descriptions of Home (found 2026-10-14): PROJECT.md's "Home is
-  resume-first" and `frontend/src/main.cpp`'s header comment still describe
-  a hero card, which Home lost in 5b2ad92 (2026-09-21); Home is Recent and
-  Favorites. Fix in the next pull request that touches either.
 - #329, "Release notes for every update, and a way to see them from the
   console" (his Discord group's answer about a QR code).
 - #380, "The console follows any web address in RomM's data, with the RomM
