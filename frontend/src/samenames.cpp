@@ -8,7 +8,6 @@
 #include "romm.h"
 
 #include <cstdio>
-#include <cstdlib>
 #include <map>
 #include <string>
 #include <utility>
@@ -34,11 +33,8 @@ int probe(const char* serverAddress) {
         std::printf("No server to ask%s%s\n", err.empty() ? "" : ": ", err.c_str());
         return 1;
     }
-    // The person signed in; the console's first login is the fallback, as
-    // everywhere a token is looked for.
-    const char* home = std::getenv("HOME");
-    if (!client.loadToken(accounts::tokenPath(accounts::activeId())) &&
-        !client.loadToken(std::string(home ? home : ".") + "/.config/cabinetos/romm.json")) {
+    // As the person signed in, the way every other request is made.
+    if (!accounts::loadActiveToken(client)) {
         std::printf("Nobody is signed in on this console\n");
         return 1;
     }
@@ -107,6 +103,18 @@ int test() {
     romm::Game t;
     t.tags = {"a1"};
     check(romm::tagLabel(t) == "(a1)", "tags alone");
+
+    // Read from RomM's JSON (and from a kept record, which has the same shape):
+    // a missing or null field is no field, never a crash.
+    romm::Game r;
+    check(romm::gameFromJson(R"({"id": 7, "name": "Hunters", "regions": ["USA"],
+        "languages": [], "revision": "1", "tags": ["Beta"]})", &r) &&
+              r.tagLabel == "(USA) (Rev 1) (Beta)",
+          "read from JSON: (USA) (Rev 1) (Beta)");
+    romm::Game bare;
+    check(romm::gameFromJson(R"({"id": 8, "name": "Old", "regions": null})", &bare) &&
+              bare.tagLabel.empty(),
+          "a record without the fields: no label");
 
     // When a twin counts: same name, same system, same list.
     std::vector<design::Card> pool(6);

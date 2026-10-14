@@ -2329,6 +2329,17 @@ static std::string gameRecordJson(const romm::Game& g) {
     json_object_object_add(o, "path_manual", json_object_new_string(g.manualPath.c_str()));
     json_object_object_add(o, "fs_size_bytes", json_object_new_int64(g.sizeBytes));
     json_object_object_add(o, "has_multiple_files", json_object_new_boolean(g.multiFile));
+    // RomM's tags (#383), so an offline heading can still tell two copies
+    // apart. A record kept before this has none until the game is next played.
+    auto strings = [&](const char* key, const std::vector<std::string>& v) {
+        json_object* a = json_object_new_array();
+        for (const std::string& x : v) json_object_array_add(a, json_object_new_string(x.c_str()));
+        json_object_object_add(o, key, a);
+    };
+    strings("regions", g.regions);
+    strings("languages", g.languages);
+    json_object_object_add(o, "revision", json_object_new_string(g.revision.c_str()));
+    strings("tags", g.tags);
     const std::string out = json_object_to_json_string_ext(o, JSON_C_TO_STRING_PRETTY);
     json_object_put(o);
     return out;
