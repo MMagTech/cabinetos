@@ -17070,10 +17070,14 @@ on by default; not copied.
 **But the player is told** (MMagTech, 2026-10-14): the owner put the files
 there, but someone else on the same server did not, so the console says the
 game has something new, once, in a few words such as "Updated" or "New
-content"; not what changed, as modern consoles list it. Where and when it
-shows, and whether it is per person, is settled when #181 is built. RomM
-dates every file (`created_at` in each game's `files`), which is enough to
-know something arrived since the person last played.
+content"; not what changed, as modern consoles list it. **Never on the first
+play:** a game played for the first time is simply the game as it is. Only
+an update or DLC that arrives after someone has played it brings the notice,
+for everyone alike, the owner included, since it also confirms to whoever
+put the files there that the update reached the game and worked (MMagTech,
+2026-10-14). So it shows once the new files are actually in place for the
+game, not merely because RomM lists them. Where it shows is settled when
+#181 is built. RomM dates every file (`created_at` in each game's `files`).
 
 **Each version keeps its own saves**, as RomM keys them, with nothing to
 explain since each is its own game.
