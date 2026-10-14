@@ -147,7 +147,14 @@ void answer(int fd, const std::string& path, const std::string& want) {
 
 Made make(const std::string& storageRoot) {
     Made m;
-    const proc::Result r = proc::run({tool(), "--from-settings", "--root", storageRoot}, 120);
+    // THIS PROGRAM, so the report's "Same-name games" (#383) is worked out by
+    // the code that draws the heading, also in a copy run by tools/ui-loop.sh.
+    char self[4096];
+    const ssize_t n = ::readlink("/proc/self/exe", self, sizeof self - 1);
+    const std::string exe = n > 0 ? std::string(self, static_cast<size_t>(n)) : "";
+    std::vector<std::string> args = {tool(), "--from-settings", "--root", storageRoot};
+    if (!exe.empty()) { args.push_back("--frontend"); args.push_back(exe); }
+    const proc::Result r = proc::run(args, 120);
     if (r.timedOut) {
         m.why = "took too long";
     } else if (!r.ok()) {

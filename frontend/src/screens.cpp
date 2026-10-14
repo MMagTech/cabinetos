@@ -997,17 +997,22 @@ void GridScreen::drawGlass(Ctx& c) {
     if (idx >= 0 && idx < static_cast<int>(c.cards->size())) {
         const design::Card& card = (*c.cards)[idx];
         float room = ui::kCanvasWidth - design::kLibraryInset - x - design::kLetterIndexWidth;
-        // A greyed game says why after its name, dimmer, and the reason is
-        // what survives when the two do not fit.
-        if (!card.unavailable.empty()) {
-            const float why = c.text.measure(card.unavailable, ui::TextStyle::Callout, c.sc);
+        // After the name, dimmer: RomM's tags when another copy of this game
+        // is in the grid (#383), and a greyed game's reason. Both survive
+        // when the line does not fit; the name is what gets shortened.
+        std::string after;
+        if (design::hasTwin(*c.cards, cards_, idx)) after = card.tagLabel;
+        if (!card.unavailable.empty())
+            after += (after.empty() ? "" : "   ") + card.unavailable;
+        if (!after.empty()) {
+            const float afterW = c.text.measure(after, ui::TextStyle::Callout, c.sc);
             const std::string name =
                 c.text.truncate(card.title, ui::TextStyle::Callout, c.sc,
-                                std::max(0.0f, room - why - 24.0f));
+                                std::max(0.0f, room - afterW - 24.0f));
             c.text.draw(c.r, name, x, baseline, ui::TextStyle::Callout,
                         ui::Color::white(0.95f), c.sc);
             const float wx = x + c.text.measure(name, ui::TextStyle::Callout, c.sc) + 24.0f;
-            c.text.draw(c.r, card.unavailable, wx, baseline, ui::TextStyle::Callout,
+            c.text.draw(c.r, after, wx, baseline, ui::TextStyle::Callout,
                         ui::Color::white(0.45f), c.sc);
         } else {
             c.text.draw(c.r, c.text.truncate(card.title, ui::TextStyle::Callout, c.sc, room), x,
@@ -1275,10 +1280,22 @@ void SearchScreen::draw(Ctx& c) {
         const float x = design::kContentInset +
                         c.text.measure(line, ui::TextStyle::Title3, c.sc) + 24.0f;
         const float roomW = ui::kCanvasWidth - design::kContentInset - x;
-        c.text.draw(c.r, c.text.truncate((*c.cards)[fi].title, ui::TextStyle::Callout,
-                                         c.sc, roomW),
-                    x, top + c.text.ascent(ui::TextStyle::Title3, c.sc),
-                    ui::TextStyle::Callout, ui::Color::white(0.60f), c.sc);
+        const float y = top + c.text.ascent(ui::TextStyle::Title3, c.sc);
+        const design::Card& card = (*c.cards)[fi];
+        // RomM's tags after the name, dimmer, when another copy of this game
+        // is among the results (#383). The name is what gets shortened.
+        if (design::hasTwin(*c.cards, results_, fi)) {
+            const float tagW = c.text.measure(card.tagLabel, ui::TextStyle::Callout, c.sc);
+            const std::string name = c.text.truncate(card.title, ui::TextStyle::Callout, c.sc,
+                                                     std::max(0.0f, roomW - tagW - 24.0f));
+            c.text.draw(c.r, name, x, y, ui::TextStyle::Callout, ui::Color::white(0.60f), c.sc);
+            c.text.draw(c.r, card.tagLabel,
+                        x + c.text.measure(name, ui::TextStyle::Callout, c.sc) + 24.0f, y,
+                        ui::TextStyle::Callout, ui::Color::white(0.45f), c.sc);
+        } else {
+            c.text.draw(c.r, c.text.truncate(card.title, ui::TextStyle::Callout, c.sc, roomW),
+                        x, y, ui::TextStyle::Callout, ui::Color::white(0.60f), c.sc);
+        }
     }
 
     if (results_.empty()) return;

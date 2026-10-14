@@ -6,9 +6,11 @@
 // rather than doing anything; the decisions about what an Action costs are all
 // here, which is why a screen can never start a download by accident.
 //
-//   Home       resume-first, and the one screen that is not a list. The hero is
-//              what you were playing; its artwork opens the launch screen and
-//              its Resume pill goes straight into the game.
+//   Home       resume-first: the Recent and Favorites shelves. The first Recent
+//              card is what you were playing, focused on arrival, and the one
+//              cover that goes straight into the game ("Resume" in the header);
+//              every other cover opens the launch screen. No hero since
+//              2026-09-21.
 //   Library    every system and every collection on the server, as a tile grid.
 //   Grid       one system's or one collection's games.
 //   Launch     a full-screen cover over whatever was behind it: play, or
@@ -87,6 +89,7 @@
 #include "xboxhdd.h"
 #include "setup.h"
 #include "accounts.h"
+#include "samenames.h"
 #include "achievements.h"
 #include "achlist.h"
 #include "manual.h"
@@ -2328,6 +2331,17 @@ static std::string gameRecordJson(const romm::Game& g) {
     json_object_object_add(o, "path_manual", json_object_new_string(g.manualPath.c_str()));
     json_object_object_add(o, "fs_size_bytes", json_object_new_int64(g.sizeBytes));
     json_object_object_add(o, "has_multiple_files", json_object_new_boolean(g.multiFile));
+    // RomM's tags (#383), so an offline heading can still tell two copies
+    // apart. A record kept before this has none until the game is next played.
+    auto strings = [&](const char* key, const std::vector<std::string>& v) {
+        json_object* a = json_object_new_array();
+        for (const std::string& x : v) json_object_array_add(a, json_object_new_string(x.c_str()));
+        json_object_object_add(o, key, a);
+    };
+    strings("regions", g.regions);
+    strings("languages", g.languages);
+    json_object_object_add(o, "revision", json_object_new_string(g.revision.c_str()));
+    strings("tags", g.tags);
     const std::string out = json_object_to_json_string_ext(o, JSON_C_TO_STRING_PRETTY);
     json_object_put(o);
     return out;
@@ -3508,6 +3522,8 @@ static int appendGame(Library& lib, const romm::Game& g) {
     c.cover = g.coverPath;
     c.coverLarge = g.coverLargePath;
     c.platform = g.platformName;
+    c.platformId = g.platformId;
+    c.tagLabel = g.tagLabel;
     c.art = colorForTitle(c.title);
     if (const catalog::Coverage cov = catalog::coverageFor(g);
         catalog::shownGreyed(cov.support))
@@ -5337,6 +5353,7 @@ int main(int argc, char** argv) {
     int initialTab = 0;
     int initialGame = 0;
     bool rommProbeMode = false;
+    bool sameNamesMode = false;   // --same-names, for the diagnostic report (#383)
     // --- The first-run mechanisms ------------------------------------------
     //
     // Each of the four things first run needs that is NOT a picture has a way
@@ -5712,6 +5729,10 @@ int main(int argc, char** argv) {
         } else if (SDL_strcmp(argv[i], "--first-run-check-server") == 0) {
             firstRunProbeMode = true;
             firstRunServerCheck = true;
+        } else if (SDL_strcmp(argv[i], "--same-names-test") == 0) {
+            return samenames::test();
+        } else if (SDL_strcmp(argv[i], "--same-names") == 0) {
+            sameNamesMode = true;
         } else if (SDL_strcmp(argv[i], "--romm-probe") == 0) {
             rommProbeMode = true;
         } else if (SDL_strcmp(argv[i], "--romm-pair") == 0) {
@@ -5839,6 +5860,13 @@ int main(int argc, char** argv) {
     // Neither of these needs a storage tree, a window, GL or a controller, so
     // they answer before anything is created on disk. --qr in particular should
     // not cost a console a directory it did not have.
+    // The report's same-name list (#383): it reads the server and the account
+    // only, so it answers before drives are mounted or a missing drive is
+    // reported (and forgotten), which a report must not do to a console.
+    if (sameNamesMode) {
+        catalog::setCoreDirectory(coreDir);
+        return samenames::probe(rommAddress);
+    }
     if (accountsTestMode) return accountsTest();
     if (playersTestMode) return players::test();
     if (batteryTestMode) return battery::test();
@@ -18647,14 +18675,35 @@ int main(int argc, char** argv) {
                     titleX += text.measure(kResume, ui::TextStyle::Callout, sc) + 20.0f;
                 }
                 const float room = ui::kCanvasWidth - kContentInset - titleX;
-                std::string line = fc.title;
                 // The platform after the name, which the hero's band used to
                 // carry and nothing has carried since. A library with a Game
                 // Boy and a Genesis "Altered Beast" in it needs this said.
-                if (!fc.platform.empty()) line += "   \xC2\xB7   " + fc.platform;
-                text.draw(renderer, text.truncate(line, ui::TextStyle::Callout, sc, room),
-                          titleX, headerBaseline, ui::TextStyle::Callout,
-                          ui::Color::white(0.60f), sc);
+                const std::string platform =
+                    fc.platform.empty() ? "" : "   \xC2\xB7   " + fc.platform;
+                // RomM's tags between the two, dimmer, when another copy of
+                // this game is on the same shelf (#383). Both survive; the
+                // name is what gets shortened.
+                if (design::hasTwin(cards, indices, static_cast<int>(at(slot)))) {
+                    const float tagW = text.measure(fc.tagLabel, ui::TextStyle::Callout, sc);
+                    const float platW = text.measure(platform, ui::TextStyle::Callout, sc);
+                    const std::string name =
+                        text.truncate(fc.title, ui::TextStyle::Callout, sc,
+                                      std::max(0.0f, room - tagW - platW - 24.0f));
+                    float lx = titleX;
+                    text.draw(renderer, name, lx, headerBaseline, ui::TextStyle::Callout,
+                              ui::Color::white(0.60f), sc);
+                    lx += text.measure(name, ui::TextStyle::Callout, sc) + 24.0f;
+                    text.draw(renderer, fc.tagLabel, lx, headerBaseline, ui::TextStyle::Callout,
+                              ui::Color::white(0.45f), sc);
+                    lx += tagW;
+                    text.draw(renderer, platform, lx, headerBaseline, ui::TextStyle::Callout,
+                              ui::Color::white(0.60f), sc);
+                } else {
+                    text.draw(renderer,
+                              text.truncate(fc.title + platform, ui::TextStyle::Callout, sc, room),
+                              titleX, headerBaseline, ui::TextStyle::Callout,
+                              ui::Color::white(0.60f), sc);
+                }
             }
 
             const float shelfTop =

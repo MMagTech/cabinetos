@@ -83,6 +83,20 @@ int64_t jint(json_object* o, const char* key) {
     return json_object_get_int64(v);
 }
 
+// A list of strings, empty when the field is missing, null or not a list.
+std::vector<std::string> jstrs(json_object* o, const char* key) {
+    std::vector<std::string> out;
+    json_object* v = nullptr;
+    if (!o || !json_object_object_get_ex(o, key, &v) || !v) return out;
+    if (json_object_get_type(v) != json_type_array) return out;
+    const size_t n = json_object_array_length(v);
+    for (size_t i = 0; i < n; ++i) {
+        const char* s = json_object_get_string(json_object_array_get_idx(v, i));
+        if (s && *s) out.emplace_back(s);
+    }
+    return out;
+}
+
 
 // RomM hands back cover paths with a cache-busting query appended:
 //
@@ -151,10 +165,34 @@ bool parseGame(json_object* o, Game* g) {
     if (g->coverPath.empty()) g->coverPath = g->coverLargePath;
     if (g->coverLargePath.empty()) g->coverLargePath = g->coverPath;
     g->manualPath = jstr(o, "path_manual");
+    g->regions = jstrs(o, "regions");
+    g->languages = jstrs(o, "languages");
+    g->revision = jstr(o, "revision");
+    g->tags = jstrs(o, "tags");
+    g->tagLabel = tagLabel(*g);
     return true;
 }
 
 }  // namespace
+
+std::string tagLabel(const Game& g) {
+    std::string out;
+    auto group = [&](const std::vector<std::string>& parts) {
+        if (parts.empty()) return;
+        if (!out.empty()) out += ' ';
+        out += '(';
+        for (size_t i = 0; i < parts.size(); ++i) {
+            if (i) out += ", ";
+            out += parts[i];
+        }
+        out += ')';
+    };
+    group(g.regions);
+    group(g.languages);
+    if (!g.revision.empty()) group({"Rev " + g.revision});
+    group(g.tags);
+    return out;
+}
 
 bool gameFromJson(const std::string& json, Game* out) {
     json_object* o = json_tokener_parse(json.c_str());

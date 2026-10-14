@@ -4,6 +4,19 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
+## 2026.10.14.5 {#v2026-10-14-5}
+
+*14 October 2026*
+
+- **Added:** when two games on one system have the same name, the heading
+  now shows what tells them apart, such as the region, language or revision
+  in brackets in their file names on your RomM server: "Metroid Prime
+  Hunters (USA) (Rev 1)". It shows in a system's games, collections, search,
+  and on Home when both copies are on the same shelf. Games with plain file
+  names show their name alone, as before.
+- **Added:** the diagnostic report lists the games that share a name, with
+  their file names, to help sort out a library where two games look the same.
+
 ## 2026.10.14.4 {#v2026-10-14-4}
 
 *14 October 2026*
