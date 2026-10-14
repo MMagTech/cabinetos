@@ -235,6 +235,11 @@ freetype-*
 libjpeg-turbo
 libpng
 libwebp
+# Covers in WebP, AVIF, TIFF, GIF and BMP (#341): SDL3_image and the
+# libraries it loads when first needed.
+SDL3_image
+libavif
+libtiff
 # The type ramp. The design system names Noto Sans, and Noto Sans CJK is not
 # optional: a ROM library is full of Japanese titles and Noto Sans has no
 # coverage for them, so losing the CJK package turns every one of them into a

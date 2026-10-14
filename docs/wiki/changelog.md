@@ -4,6 +4,28 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
+## 2026.10.14.2 {#v2026-10-14-2}
+
+*14 October 2026*
+
+- **Changed:** in a platform's game grid, the heading (the platform, how
+  many games, and the name of the game you are on) now stays at the top
+  while the covers scroll underneath, so you can always see which game is
+  selected. The grid moves a whole row at a time, so no row is left half
+  cut off under the heading.
+
+## 2026.10.14 {#v2026-10-14}
+
+*14 October 2026*
+
+- **Fixed:** some games showed a blank tile on Home, the shelves and the
+  grid, and some showed no cover even on their own page, although your RomM
+  server had one. Covers now show in every picture format RomM takes (WebP,
+  AVIF, GIF, BMP and TIFF as well as PNG and JPEG), and when a game's small
+  cover is missing or broken, its large one is used instead. If a cover
+  still does not show, a diagnostic report now says why.
+  ([#376](https://github.com/MMagTech/cabinetos/issues/376))
+
 ## 2026.10.13.5 {#v2026-10-13-5}
 
 *13 October 2026*
