@@ -6619,7 +6619,9 @@ int main(int argc, char** argv) {
                 if (!why.empty()) addrKeyboard.sayInField(why, /*problem=*/true, /*keep=*/true);
             };
             auto keyboardResult = [&](ui::KeyboardResult r) {
+                if (r == ui::KeyboardResult::Cancelled) sound::play(sound::Cue::Back);   // #389
                 if (r != ui::KeyboardResult::Committed) return;
+                sound::play(sound::Cue::Activate);
                 const std::string addr = trimmedAddress(addrKeyboard.value());
                 if (addr.empty()) return;
                 addrKeyboard.open(serverKeyboardConfig(addr));
@@ -6670,12 +6672,13 @@ int main(int argc, char** argv) {
                         case screens::Nav::Up: addrKeyboard.moveFocus(0, -1); break;
                         case screens::Nav::Down: addrKeyboard.moveFocus(0, +1); break;
                         case screens::Nav::Activate: keyboardResult(addrKeyboard.pressKey()); break;
-                        case screens::Nav::Back: addrKeyboard.cancel(); break;
+                        case screens::Nav::Back: keyboardResult(addrKeyboard.cancel()); break;
                     }
                     return;
                 }
                 if (n != screens::Nav::Activate) return;
                 if ((SDL_GetTicks() - start) / 1000.0 < kOfferAfter) return;
+                sound::play(sound::Cue::Activate);   // #389
                 if (accounts::pinIsSet())
                     pad.open(screens::PinScreen::Mode::Check, "Enter the PIN",
                              "To change the RomM server");
@@ -8383,6 +8386,9 @@ int main(int argc, char** argv) {
         const int n = ovCount();
         if (n <= 0) return;
         overlaySlot = ((overlaySlot + delta) % n + n) % n;
+        // The Power menu on Home moves with a sound; the pause menu does not
+        // (#389, and powerCue further down).
+        if (powerMenu && !playing) sound::play(sound::Cue::Move);
     };
     auto ovLabel = [&](int i) -> const char* {
         if (!powerMenu) return kOverlayLabels[pauseItems[i]];
@@ -12706,12 +12712,17 @@ int main(int argc, char** argv) {
                 // can go on; opening a game left them open over its page,
                 // taking every press until B (MMagTech on the TV, 2026-10-06).
                 if (here() == Screen::Search && keyboard.isOpen()) keyboard.cancel();
+                // Opening a game's page, Play and a state are choices like any
+                // other, and were silent (#389).
+                sound::play(sound::Cue::Activate);
                 openDetailSoon(res.value);
                 break;
             case screens::Action::Play:
+                sound::play(sound::Cue::Activate);
                 launchById(res.value);
                 break;
             case screens::Action::PlayState:
+                sound::play(sound::Cue::Activate);
                 std::fprintf(stderr, "[detail] play from state %d\n", res.value);
                 // Negative: one of this console's own states, by its file.
                 if (res.value < 0 &&
@@ -12730,6 +12741,7 @@ int main(int argc, char** argv) {
                 if (!launchById(detailScreen.game().romId)) pendingStateId = 0;
                 break;
             case screens::Action::Download:
+                sound::play(sound::Cue::Activate);
                 downloadById(res.value);
                 break;
             case screens::Action::ShowAchievements:
@@ -12823,6 +12835,7 @@ int main(int argc, char** argv) {
         //
         // Home promises one action from cold to playing, and this is it.
         if (haveResume() && focusRow == RowRecent && focusSlot == 0) {
+            sound::play(sound::Cue::Activate);   // #389
             pendingResume = launchById(cards[heroIndex].id);
             return;
         }
@@ -12830,7 +12843,11 @@ int main(int argc, char** argv) {
         // cover anywhere else.
         if (const Card* c = cardAt(focusRow, focusSlot)) {
             for (size_t i = 0; i < cards.size(); ++i) {
-                if (cards[i].id == c->id) { openDetailSoon(static_cast<int>(i)); return; }
+                if (cards[i].id == c->id) {
+                    sound::play(sound::Cue::Activate);   // #389
+                    openDetailSoon(static_cast<int>(i));
+                    return;
+                }
             }
         }
     };
@@ -12873,7 +12890,10 @@ int main(int argc, char** argv) {
             stack.push_back(Screen::Search);
             ui::Keyboard::Config cfg;
             cfg.title = "Search";
-            cfg.placeholder = "Game name";
+            // "Game name" spelled out what the box was for (MMagTech,
+            // 2026-10-14: "we can do better than that"); a search box says
+            // Search, and the dots make it read as a place to type.
+            cfg.placeholder = "Search\xE2\x80\xA6";
             cfg.dockedBottom = true;
             keyboard.open(cfg);
         } else if (d == 3) {
@@ -14355,6 +14375,11 @@ int main(int argc, char** argv) {
     // and cancel closing the keyboard while leaving an empty Search behind it
     // would be a dead end with no way out but the bar.
     auto keyboardResult = [&](ui::KeyboardResult res) {
+        // Done is a choice and Cancel a step back (#389); Search sounds its
+        // own Cancel below, where it goes Home.
+        if (res == ui::KeyboardResult::Committed) sound::play(sound::Cue::Activate);
+        if (res == ui::KeyboardResult::Cancelled && here() != Screen::Search)
+            sound::play(sound::Cue::Back);
         if (here() != Screen::Search) {
             if (res == ui::KeyboardResult::Typing || !keyboardThen) return;
             auto then = std::move(keyboardThen);
@@ -14530,11 +14555,19 @@ int main(int argc, char** argv) {
     // the person streaming has no Remote, so Back does not resume it either.
     // Exit to Home, and saving where there are states, still work; when the
     // stream ends, Resume is back for whoever has the Remote.
-    auto closeOverlay = [&]() {
+    // THE POWER MENU ON HOME SOUNDS LIKE EVERY OTHER MENU (#389): open is
+    // Activate, a move is Move, closing it is Back, and a choice in it is
+    // Activate. Over a game it stays silent, like the pause menu it shares a
+    // panel with (MMagTech: the pause menu may be the one exception).
+    auto powerCue = [&](sound::Cue c) {
+        if (powerMenu && !playing) sound::play(c);
+    };
+    auto closeOverlay = [&](bool cue = true) {
         if (remoteOnlyHere() && !powerMenu) {
             sound::play(sound::Cue::Edge);
             return;
         }
+        if (cue && overlayOpen) powerCue(sound::Cue::Back);
         overlayOpen = false;
         overlayFade.retarget(0.0f, overlayFadeSeconds);
         if (playing && choiceScreen.isOpen()) choiceScreen.close();
@@ -14546,7 +14579,8 @@ int main(int argc, char** argv) {
             return;
         }
         if (item == PwSteam) {
-            closeOverlay();
+            powerCue(sound::Cue::Activate);
+            closeOverlay(false);
             steamPressed();
             return;
         }
@@ -14555,8 +14589,11 @@ int main(int argc, char** argv) {
                                                       : power::Action::PowerOff;
         std::fprintf(stderr, "[power] %s chosen%s\n", power::name(act),
                      playing ? " from a game; leaving it first" : "");
+        // Restart and Power off are silent here: how the console sounds and
+        // looks on its way down is #393's. Sleep clicks like any choice.
+        if (act == power::Action::Rest) powerCue(sound::Cue::Activate);
         if (playing) finishExit();
-        closeOverlay();
+        closeOverlay(false);
         if (act == power::Action::Rest) {
             restPending = true;
             restWaitStart = SDL_GetTicksNS();
@@ -14996,6 +15033,7 @@ int main(int argc, char** argv) {
         overlayFocus.retarget(1.0f, kOverlayFocusDuration);
         overlayFocus.elapsed = kOverlayFocusDuration;
         std::fprintf(stderr, "[power] menu open%s\n", playing ? " over a game" : "");
+        powerCue(sound::Cue::Activate);
     };
 
     // The button is borrowed for the life of this process — power.h. Not for a
@@ -17945,9 +17983,11 @@ int main(int argc, char** argv) {
             // The results are sized to the room the keyboard leaves, and the
             // keyboard's height depends on its own layout — so it is asked
             // rather than assumed.
-            if (here() == Screen::Search)
+            if (here() == Screen::Search) {
+                searchScreen.setKeysUp(keyboard.isOpen());
                 searchScreen.setResultsBottom(keyboard.isOpen() ? keyboard.panelTop()
                                                                 : ui::kCanvasHeight);
+            }
             detailScreen.tick(dt);
             // THE MANUAL (#364): gone with its page, or when a game starts;
             // otherwise it slides, and its file arrives.

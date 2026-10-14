@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "sound.h"
 #include "text.h"
 #include "ui.h"
 
@@ -171,8 +172,13 @@ void Keyboard::clampFocus() {
     col_ = std::clamp(col_, 0, static_cast<int>(rows[row_].size()) - 1);
 }
 
+// THE KEYBOARD SOUNDS LIKE THE REST OF THE CONSOLE (#389): a move is Move, a
+// move into the edge is Edge, and a key typed, Shift or a letter taken off is
+// the short Type tick. Finishing or leaving it (Done, Cancel, Start, B) is the caller's to
+// sound, because what that means depends on what the typing was for.
 void Keyboard::moveFocus(int dx, int dy) {
     if (!open_) return;
+    const int wasRow = row_, wasCol = col_;
     const auto& rows = layout();
     if (dy != 0) {
         // Keep the horizontal POSITION across a row change, not the index.
@@ -217,6 +223,7 @@ void Keyboard::moveFocus(int dx, int dy) {
         col_ = (col_ + dx % n + n) % n;
     }
     clampFocus();
+    sound::play(row_ == wasRow && col_ == wasCol ? sound::Cue::Edge : sound::Cue::Move);
 }
 
 void Keyboard::restoreHeld() {
@@ -234,16 +241,21 @@ KeyboardResult Keyboard::pressKey() {
         case Key::Backspace: backspace(); return KeyboardResult::Typing;
         case Key::Shift: toggleShift(); return KeyboardResult::Typing;
         case Key::Space:
+            sound::play(sound::Cue::Type);
             restoreHeld();
             value_ += ' ';
             lastTyped_ = std::chrono::steady_clock::now();
             revealLast_ = true;
             return KeyboardResult::Typing;
-        case Key::Conceal: toggleConceal(); return KeyboardResult::Typing;
+        case Key::Conceal:
+            sound::play(sound::Cue::Type);
+            toggleConceal();
+            return KeyboardResult::Typing;
         case Key::Done: return commit();
         case Key::Cancel: return cancel();
         case Key::None: break;
     }
+    sound::play(sound::Cue::Type);
     restoreHeld();
     value_ += key.insert;
     lastTyped_ = std::chrono::steady_clock::now();
@@ -262,7 +274,8 @@ void Keyboard::backspace() {
     if (busy_) return;
     revealLast_ = false;
     restoreHeld();
-    if (value_.empty()) return;
+    if (value_.empty()) { sound::play(sound::Cue::Edge); return; }
+    sound::play(sound::Cue::Type);
     // Step back over a whole UTF-8 code point, not a byte. Deleting half of a
     // multi-byte character leaves an invalid string that will not render.
     size_t n = value_.size() - 1;
@@ -272,6 +285,7 @@ void Keyboard::backspace() {
 
 void Keyboard::toggleShift() {
     if (busy_) return;
+    sound::play(sound::Cue::Type);
     shifted_ = !shifted_;
     clampFocus();
 }

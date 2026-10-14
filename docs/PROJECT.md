@@ -4092,6 +4092,13 @@ invisible to anyone who has not deliberately turned it on.
    fact that cannot be known until after the merge — the pull request's own
    number, the merge commit — may be corrected straight on `main`, in one
    commit that changes nothing else.
+8. **Emulators favour stability over the newest version** (MMagTech,
+   2026-10-14). An emulator, core or pinned Flatpak is moved only when the
+   move brings something a player gets: a game that now plays, a real
+   gameplay fix, a fix for newer hardware, or a large performance gain.
+   New features that do not change how games play are not a reason. Every
+   proposed update starts with that question asked out loud, and the answer
+   is recorded on its issue or pull request.
 
 ---
 
@@ -16991,3 +16998,30 @@ returns the sound to the TV.
 
 **Open:** the volume goes back to full at every start (#351 above), on the
 default output. With headphones in at start, that is the headphones (#391, waiting, not built).
+
+### 47. Interface sounds everywhere, and a calmer set, issue #389
+
+**Decided by MMagTech at the TV, 2026-10-14.** The interface sounds are
+universal: every screen, panel and menu outside a game makes them (the
+game's page, opening a game, Resume, the power menu on Home, the account
+switcher, the Library's tabs, the on-screen keyboard, first run joined the
+rest). The pause menu, and anything over a game, stays silent. They follow
+the Interface sounds level like every other cue.
+
+**No start-up or shut-down sound, ever** (his rule from the project's
+start: "one thing I hated about old systems... Sega! It scared the shit out
+of me"). Choosing Restart or Power off is silent; #393 is only about a
+possible fade on the way down.
+
+**The set is calmer.** The first set (Move 880 Hz over 1320 Hz) read as too
+jarring for a quiet, minimal screen. He chose, from samples played in the
+chat, a blend halfway between an octave lower and a woody tone (each
+partial 2.75 times its pitch); `frontend/src/sound.cpp` keeps the first
+set's numbers. One unified set, not sounds per screen. The keyboard uses
+the menu Move to go between keys and a 20 ms cut of it to type; a keyboard
+with sounds of its own (a wood tap) was tried on the TV and was "too weird
+switching".
+
+**Also, Search:** no heading over an empty search while the keys are up
+(the bar already says Search; it comes back if the keys are hidden), and
+the box says "Search…" instead of "Game name".
