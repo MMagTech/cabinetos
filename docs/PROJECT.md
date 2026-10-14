@@ -17025,3 +17025,96 @@ switching".
 **Also, Search:** no heading over an empty search while the keys are up
 (the bar already says Search; it comes back if the keys are hidden), and
 the box says "Search…" instead of "Game name".
+
+### 48. Same-name games, regions and versions, issue #383
+
+**Decided by MMagTech, 2026-10-14.** Every game keeps its own tile on its
+system. No grouping of versions, no picker, no menu, nothing on covers and
+nothing on the game's page. **When the selected game shares RomM's `name`
+with another game of the same system (RomM's `platform_id`) in the same
+list on screen**, the heading shows RomM's
+own fields for it, dimmer, after its name: `regions`,
+`languages`, `revision`, `tags`. Nothing is added when RomM sends none, so of
+two copies the untagged one shows its name alone ("Pokémon Emerald Version"
+beside "Pokémon Emerald Version (USA, Europe)"). Nothing is written to the
+server. (His two Urban Reigns turned out to be one file added twice, same
+SHA-1; he deleted the untagged copy in RomM on 2026-10-14.)
+
+**"Same name, same system, same list", everywhere** (MMagTech,
+2026-10-14). Games of different systems never get a label: the system
+already tells them apart. A
+platform's grid is the whole system, so every twin there gets its label; a
+collection, search results, and Home's Recent and Favorites shelves label a
+game only when its twin is in that same list (on Home, in the shelf
+header). Home asks nothing extra of RomM: what is on it the person played
+or chose. **The game's page stays as it is**: each copy has its own saves
+(RomM keys them by game), so the wrong copy's page shows no "Saved…" and no
+Continue from, but the heading's label is what prevents picking it; not
+accounted for unless a player reports it, and the report's list would show it.
+
+**Why not group them** (as RomM's own grouping and Argosy do): it would mean
+fewer tiles, but it rests on RomM's sibling grouping, which RomM does not
+document (its docs mention it only as the smart collections' `duplicate`
+filter, "Games with more than one version") and which a RomM update can
+change. MMagTech: "it's going to be a nightmare to maintain over time." On
+his library it is also wrong half the time, and its failure hides a game:
+Argosy's rule (first metadata ID per system) makes 20 groups there, 10 of
+them different games under one tile (Lilo & Stitch with its sequel, Metal
+Slug with Metal Slug X, Super Star Wars with The Empire Strikes Back), and
+misses all eleven Game & Watch pairs.
+
+**What RomM 5.3.1 sends, checked on his library 2026-10-14:** 29 groups
+(60 games) share a name on one platform (by `platform_id`; a first count by
+platform slug merged his two arcade platforms). RomM's fields tell most real versions
+apart: Jaguar alternates ("1996, a1") and betas ("Beta, 1995"), regions and
+revisions (Metroid Prime Hunters "USA", Rev 1). Game & Watch has the most
+pairs (screen types) but is excluded on this console, so none of it counts.
+They cannot tell apart: a set kept both as a folder and as a zip (Area 51 /
+Maximum Force Duo), Bust-A-Move Pocket and Puzzle Bobble Mini, and a game
+RomM matched under
+another game's name (Lilo & Stitch, Super Mario Advance, Metal Slug, Shock
+Troopers, Circus and Clowns, The Lost Vikings, a save state scanned as a
+game). Those are fixed in RomM, not on the console.
+
+**Updates and DLC** (#181, when it is built): no choice at all. Every update
+and DLC file RomM holds for a game is used. MMagTech: "If you didn't want
+your game updated automatically, then you shouldn't have put them in
+there." Argosy instead offers a file picker at download with updates and DLC
+on by default; not copied.
+
+**But the player is told** (MMagTech, 2026-10-14): the owner put the files
+there, but someone else on the same server did not, so the console says the
+game has something new, once, in a few words such as "Updated" or "New
+content"; not what changed, as modern consoles list it. **Never on the first
+play:** a game played for the first time is simply the game as it is. Only
+an update or DLC that arrives after someone has played it brings the notice,
+for everyone alike, the owner included, since it also confirms to whoever
+put the files there that the update reached the game and worked (MMagTech,
+2026-10-14). So it shows once the new files are actually in place for the
+game, not merely because RomM lists them. Where it shows is settled when
+#181 is built. RomM dates every file (`created_at` in each game's `files`).
+
+**RomM's `version` tag:** RomM reads a version from file names (`(v2.00)`)
+and stores it, but does not send it. Asked of RomM, rommapp/romm#5243; the
+heading adds it only if RomM ships it (nothing of our own meanwhile).
+
+**Each version keeps its own saves**, as RomM keys them, with nothing to
+explain since each is its own game.
+
+**The diagnostic report shows it** (MMagTech, 2026-10-14: a player asked for
+this and his own library cannot test theirs). A "Same-name games" list beside
+the server: per system, every name two or more games share, and per copy the
+file name, RomM's `regions`, `languages`, `revision` and `tags` as the console
+received them, and the heading the console shows. One report then tells RomM
+not reading a tag (in the file name, empty in the field) from the console
+showing it wrong (fields right, heading wrong) from a wrong match (two
+different files under one name, fixed in RomM). Gathered only when a report
+is made, and only for systems this console plays.
+
+**This is the first part of the report that lists games nobody played**
+(until now only the games played in the two boots and the emulators' logs
+named any). Kept with file names, because without them a tag RomM did not
+read cannot be told from one the console showed wrong (MMagTech, 2026-10-14:
+"if we think we need to include it to better help troubleshoot ... include
+it"). He tells his Discord users it is there; if they push back, it is
+discussed again.

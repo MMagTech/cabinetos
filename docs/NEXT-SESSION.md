@@ -17,25 +17,31 @@ of truth for anything on RomM's data; nothing beyond it is invented.
 
 ## Next
 
-1. **A design discussion, not a build: same-name games, regions and
-   versions** (#383, "Game versions, updates and DLC: one place to choose
-   them", which also parks the earlier thinking). MMagTech, 2026-10-14: settle
-   the design choices first, then build, in the session after or later in the
-   same one if there is room.
-   - **Facts first, read-only:** what RomM's documentation says it records
-     (regions, languages, revisions, tags) and what RomM actually returns for
-     MMagTech's own same-name games, as a short list with real examples from
-     his library. RomM's docs and behaviour are the line; nothing beyond them.
-   - **Then an open discussion, not yes/no lists:** he wants room to give his
-     opinions. Lay out the real options with my view and their downsides
-     (where versions show: the heading, the game's page, the long press on
-     Play kept for rare options; which version Play picks; updates and DLC),
-     then let him talk it through.
-   - **The outcome:** the decisions written onto #383 and into PROJECT.md,
-     ready to build.
+1. **Build the same-name heading** (#383, "Same-name games: show RomM's
+   tags in the heading"), decided 2026-10-14, PROJECT.md question 48.
+   Every game keeps its own tile. When the selected game shares RomM's
+   `name` with another game of the same system in the same list on screen
+   (a platform's grid,
+   a collection, search, Home's Recent or Favorites shelf), the heading
+   shows RomM's `regions`, `languages`, `revision` and `tags`, dimmer, after
+   its name; nothing when RomM sends none. Home asks RomM nothing extra; the
+   game's page does not change. No grouping, no picker, nothing
+   written to the server. Lessons: `frontend.md`. Judge it on the TV in the
+   loop with the Jaguar alternates, Pokémon Emerald,
+   and Metroid Prime Hunters; a long tag line must fit the
+   heading. **With it, in the same pull request, the diagnostic report gets a
+   "Same-name games" list** (MMagTech, 2026-10-14: a player asked for this
+   and he cannot test their library): per system, each shared name, and per
+   copy the file name, RomM's fields as received and the heading shown.
+   Built only when a report is made, playable systems only. Check it in a report from the A9.
+   Then testing image, changelog entry, pull request.
 
 ## Waiting, not for the next session unless MMagTech raises them
 
+- Stale descriptions of Home (found 2026-10-14): PROJECT.md's "Home is
+  resume-first" and `frontend/src/main.cpp`'s header comment still describe
+  a hero card, which Home lost in 5b2ad92 (2026-09-21); Home is Recent and
+  Favorites. Fix in the next pull request that touches either.
 - #329, "Release notes for every update, and a way to see them from the
   console" (his Discord group's answer about a QR code).
 - #380, "The console follows any web address in RomM's data, with the RomM
