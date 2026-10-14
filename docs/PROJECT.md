@@ -17030,12 +17030,22 @@ the box says "Search…" instead of "Game name".
 
 **Decided by MMagTech, 2026-10-14.** Every game keeps its own tile on its
 system. No grouping of versions, no picker, no menu, nothing on covers and
-nothing on the game's page. When two games on one system share RomM's
-`name`, the heading (the grid heading and Home's shelf header) shows RomM's
-own fields for the selected game, dimmer, after its name: `regions`,
+nothing on the game's page. **When the selected game shares RomM's `name`
+with another game in the same list on screen**, the heading shows RomM's
+own fields for it, dimmer, after its name: `regions`,
 `languages`, `revision`, `tags`. Nothing is added when RomM sends none, so of
 two copies the untagged one shows its name alone ("Urban Reign" beside
 "Urban Reign (USA)"). Nothing is written to the server.
+
+**"The same list on screen", everywhere** (MMagTech, 2026-10-14): a
+platform's grid is the whole system, so every twin there gets its label; a
+collection, search results, and Home's Recent and Favorites shelves label a
+game only when its twin is in that same list (on Home, in the shelf
+header). Home asks nothing extra of RomM: what is on it the person played
+or chose. **The game's page stays as it is**: each copy has its own saves
+(RomM keys them by game), so the wrong copy's page shows no "Saved…" and no
+Continue from, but the heading's label is what prevents picking it; not
+accounted for unless a player reports it, and the report's list would show it.
 
 **Why not group them** (as RomM's own grouping and Argosy do): it would mean
 fewer tiles, but it rests on RomM's sibling grouping, which RomM does not

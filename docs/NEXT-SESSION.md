@@ -19,10 +19,12 @@ of truth for anything on RomM's data; nothing beyond it is invented.
 
 1. **Build the same-name heading** (#383, "Same-name games: show RomM's
    tags in the heading"), decided 2026-10-14, PROJECT.md question 48.
-   Every game keeps its own tile. When two games on one system share RomM's
-   `name`, the grid heading and Home's shelf header show RomM's `regions`,
-   `languages`, `revision` and `tags` for the selected game, dimmer, after
-   its name; nothing when RomM sends none. No grouping, no picker, nothing
+   Every game keeps its own tile. When the selected game shares RomM's
+   `name` with another game in the same list on screen (a platform's grid,
+   a collection, search, Home's Recent or Favorites shelf), the heading
+   shows RomM's `regions`, `languages`, `revision` and `tags`, dimmer, after
+   its name; nothing when RomM sends none. Home asks RomM nothing extra; the
+   game's page does not change. No grouping, no picker, nothing
    written to the server. Lessons: `frontend.md`. Judge it on the TV in the
    loop with the Jaguar alternates, Pokémon Emerald,
    Metroid Prime Hunters and Urban Reign; a long tag line must fit the
