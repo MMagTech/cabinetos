@@ -145,7 +145,24 @@ struct Game {
     // by the scraper or uploaded on the game's page; empty for none. The
     // extra documents in a game's own `manual` folder are never read.
     std::string manualPath;
+    // RomM'S OWN READING OF THE BRACKETS IN THE FILE NAME (#383, PROJECT.md
+    // question 48): `regions`, `languages`, `revision` and `tags`, as RomM
+    // sends them, nothing worked out here. RomM documents this on its folder
+    // structure page; whatever a library puts in brackets is what arrives.
+    // `tagLabel` is the four joined for the heading, "(USA, Europe) (Rev 1)",
+    // and empty when RomM sent none. RomM also reads a `version`, but does
+    // not send it (rommapp/romm#5243).
+    std::vector<std::string> regions;
+    std::vector<std::string> languages;
+    std::string revision;
+    std::vector<std::string> tags;
+    std::string tagLabel;
 };
+
+// RomM's four fields as one line, in RomM's order on its folder structure
+// page: regions, languages, revision, then the other tags. Each group in its
+// own brackets; empty when there are none.
+std::string tagLabel(const Game& g);
 
 // One BIOS file a platform carries.
 //

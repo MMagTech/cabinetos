@@ -25,6 +25,10 @@
 #     as a server missing it would; the large one is still served (#376).
 #   * `junk` serves the small cover of every fifth game as bytes that are no
 #     picture at all, for the console's "could not read" line (#376).
+#   * name:<romId>=<name> gives a game another name, and
+#     tags:<romId>=<regions>;<languages>;<revision>;<tags> (each a comma list,
+#     any part empty) gives it RomM's four fields, for the same-name heading
+#     (#383): twins on a Home shelf and long labels, without renaming files.
 import json, sys, urllib.parse, urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -38,6 +42,8 @@ FORMATS = False   # `formats`
 NOSMALL = False   # `nosmall`
 JUNK = False      # `junk`
 FOLDERS = set()   # folder:<romId>
+NAMES = {}        # name:<romId>=<name>
+TAGS = {}         # tags:<romId>=<regions>;<languages>;<revision>;<tags>
 # (owner id, owner name, collection id, name, smart, favourite, platform id)
 MOCK = [
     (9101, "Alex", 9001, "Saturday co-op", False, False, 8),
@@ -65,6 +71,17 @@ for a in sys.argv[2:]:
     if a.startswith("folder:"):
         FOLDERS.add(int(a[7:]))
         continue
+    if a.startswith("name:"):
+        rid, name = a[5:].split("=", 1)
+        NAMES[int(rid)] = urllib.parse.unquote(name)
+        continue
+    if a.startswith("tags:"):
+        rid, val = a[5:].split("=", 1)
+        parts = (urllib.parse.unquote(val).split(";") + ["", "", "", ""])[:4]
+        lst = lambda x: [t.strip() for t in x.split(",") if t.strip()]
+        TAGS[int(rid)] = {"regions": lst(parts[0]), "languages": lst(parts[1]),
+                          "revision": parts[2].strip(), "tags": lst(parts[3])}
+        continue
     if a.startswith("hide:"):
         FILES[int(a[5:])] = None
         continue
@@ -83,6 +100,11 @@ def rewrite(obj):
                         and FILES[x["id"]] is None)]
     if isinstance(obj, dict):
         obj = {k: rewrite(v) for k, v in obj.items()}
+        if "fs_name" in obj and "platform_id" in obj:
+            if obj.get("id") in NAMES:
+                obj["name"] = NAMES[obj["id"]]
+            if obj.get("id") in TAGS:
+                obj.update(TAGS[obj["id"]])
         if obj.get("id") in FOLDERS and "fs_name" in obj and "platform_id" in obj:
             obj["has_multiple_files"] = True
             obj["has_nested_single_file"] = False

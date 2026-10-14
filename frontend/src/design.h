@@ -26,6 +26,7 @@
 #include <cmath>
 #include <cstdint>
 #include <string>
+#include <vector>
 
 #include "look.h"
 #include "ui.h"
@@ -798,9 +799,33 @@ struct Card {
     // game. A grid shows such a card greyed, and its name says why; it opens
     // onto the game's screen, which says it again and offers no Play.
     std::string unavailable;
+    // RomM's platform id, and RomM's tags joined for the heading (romm.h,
+    // `tagLabel`); empty for a game RomM read no tags for.
+    int platformId = 0;
+    std::string tagLabel;
     Animated focus;
     Animated press;
 };
+
+// THE SAME GAME TWICE IN ONE LIST (#383, PROJECT.md question 48): another
+// card in `list` with this card's name on this card's system. Only then does
+// a heading show the card's tags after its name; two copies side by side are
+// the one case where the name alone does not say which is which. Games of
+// different systems never count: the system already tells them apart.
+//
+// A card with no tags returns at once, which is most of any library, so the
+// walk over the list is paid only for a card that has something to show.
+inline bool hasTwin(const std::vector<Card>& pool, const std::vector<int>& list, int idx) {
+    if (idx < 0 || idx >= static_cast<int>(pool.size())) return false;
+    const Card& me = pool[static_cast<size_t>(idx)];
+    if (me.tagLabel.empty() || me.platformId == 0) return false;
+    for (const int other : list) {
+        if (other == idx || other < 0 || other >= static_cast<int>(pool.size())) continue;
+        const Card& c = pool[static_cast<size_t>(other)];
+        if (c.platformId == me.platformId && c.title == me.title) return true;
+    }
+    return false;
+}
 
 // A stable colour for a card with no art, from its title. Better than one grey
 // for everything: a shelf of coverless games stays distinguishable, and the

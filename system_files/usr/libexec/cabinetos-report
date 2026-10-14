@@ -48,6 +48,9 @@
 #   cabinetos-report --stdout        print it instead (nothing written)
 #   cabinetos-report --root DIR      the storage root (default /var/lib/cabinetos)
 #   cabinetos-report --out DIR       where to write (default <root>/reports)
+#   cabinetos-report --frontend BIN  the frontend that lists same-name games
+#                                    (default /usr/bin/cabinetos-frontend; the
+#                                    console passes its own)
 #
 # The last five reports are kept, named by date. Exit 0 and the path on the
 # last line of stdout; exit 1 and the reason on stderr.
@@ -910,6 +913,17 @@ def section_server(root):
     return out
 
 
+def section_same_names(root, frontend_bin):
+    # #383 (PROJECT.md question 48): every name two or more games share on one
+    # system this console shows, with each copy's file name, RomM's regions,
+    # languages, revision and tags as received, and the heading shown. Worked
+    # out by the frontend's own code, asking the server as the person signed
+    # in, and only now that a report is being made. Game names stay, as
+    # everywhere in the report; this is the one part that names games nobody
+    # played.
+    return run([frontend_bin, "--storage-root", root, "--same-names"], timeout=60)
+
+
 def section_access():
     return kv([
         ("File access", first_line(run(["systemctl", "is-active", "cabinetos-files.service"]))),
@@ -954,7 +968,7 @@ def section_emulator_logs(root):
 
 # --- Putting it together ----------------------------------------------------
 
-def build(root, how):
+def build(root, how, frontend_bin):
     settings = read_json(os.path.join(root, "config", "settings.json")) or {}
     now = datetime.datetime.now().astimezone()
 
@@ -985,6 +999,7 @@ def build(root, how):
     parts.append(("Steam", section_steam(frontend)))
     parts.append(("Updates", section_updates()))
     parts.append(("The server and profiles", section_server(root)))
+    parts.append(("Same-name games", section_same_names(root, frontend_bin)))
     parts.append(("File access and Developer access", section_access()))
     parts.append(("Services", section_services()))
     parts.append(("Games in these two boots", section_games(frontend)))
@@ -1019,6 +1034,7 @@ def main(argv):
     out_dir = None
     to_stdout = False
     how = "from a command"
+    frontend_bin = "/usr/bin/cabinetos-frontend"
     i = 1
     while i < len(argv):
         a = argv[i]
@@ -1028,6 +1044,8 @@ def main(argv):
             out_dir = argv[i + 1]; i += 1
         elif a == "--stdout":
             to_stdout = True
+        elif a == "--frontend" and i + 1 < len(argv):
+            frontend_bin = argv[i + 1]; i += 1
         elif a == "--from-settings":
             how = "from Settings"
         else:
@@ -1038,7 +1056,7 @@ def main(argv):
 
     secrets = collect_secrets(root)
     scrub = Scrubber(secrets)
-    text = scrub(build(root, how))
+    text = scrub(build(root, how, frontend_bin))
     left = scrub.survivors(text)
     if left:
         # FAIL CLOSED. Never say which value: this goes to the log.
