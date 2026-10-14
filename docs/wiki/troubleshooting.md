@@ -61,9 +61,10 @@ The system's name in a message is RomM's name for the platform.
    and attach the report. Say what you saw and when.
 
 The report says which machine it is, every version, the settings and the
-console's logs. Your server's address, names, Wi-Fi networks, network
-addresses, serial numbers and passwords are replaced before it is written, so
-it is safe to post. Game titles stay in.
+console's logs, and lists the games that share a name with their file names.
+Your server's address, names, Wi-Fi networks, network addresses, serial
+numbers and passwords are replaced before it is written, so it is safe to
+post. Game titles and those file names stay in.
 
 If the console does not get as far as Settings, a report from the next boot
 still has the boot that failed. With Developer access, `cabinetos-report`

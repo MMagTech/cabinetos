@@ -10,7 +10,7 @@ time go back to it. CabinetOS ships none of them.
 ## Setting RomM up for the console
 
 Follow [RomM's own documentation](https://docs.romm.app) to install it and add
-your library. Four things matter to CabinetOS:
+your library. These things matter to CabinetOS:
 
 1. **Platform folders.** The console finds a system by RomM's platform slug.
    The slugs it plays are listed in [Systems, formats and BIOS](systems.md).
@@ -27,6 +27,10 @@ your library. Four things matter to CabinetOS:
 5. **Manuals.** A game's manual in RomM, found by the ScreenScraper scraper or
    uploaded on the game's page, shows as a book on the console. PDF only;
    other files in a game's `manual` folder are not read.
+6. **File names.** Tags in brackets, named as in
+   [RomM's folder structure](https://docs.romm.app/latest/getting-started/folder-structure/)
+   (`(USA)`, `(Rev 1)`, `(Beta)`), are what tell two games of the same name
+   apart on the console.
 
 Covers come from RomM too. A game with no cover shows a coloured tile.
 
