@@ -17,24 +17,25 @@ of truth for anything on RomM's data; nothing beyond it is invented.
 
 ## Next
 
-1. **Build the same-name heading** (#383, "Same-name games: show RomM's
-   tags in the heading"), decided 2026-10-14, PROJECT.md question 48.
-   Every game keeps its own tile. When the selected game shares RomM's
-   `name` with another game of the same system in the same list on screen
-   (a platform's grid,
-   a collection, search, Home's Recent or Favorites shelf), the heading
-   shows RomM's `regions`, `languages`, `revision` and `tags`, dimmer, after
-   its name; nothing when RomM sends none. Home asks RomM nothing extra; the
-   game's page does not change. No grouping, no picker, nothing
-   written to the server. Lessons: `frontend.md`. Judge it on the TV in the
-   loop with the Jaguar alternates, Pokémon Emerald,
-   and Metroid Prime Hunters; a long tag line must fit the
-   heading. **With it, in the same pull request, the diagnostic report gets a
-   "Same-name games" list** (MMagTech, 2026-10-14: a player asked for this
-   and he cannot test their library): per system, each shared name, and per
-   copy the file name, RomM's fields as received and the heading shown.
-   Built only when a report is made, playable systems only. Check it in a report from the A9.
-   Then testing image, changelog entry, pull request.
+**Features and bug fixes are paused for a restructure (MMagTech,
+2026-10-14).** He tells the community; the work is done surgically over a
+few sessions so outside contributors (and forks) can find their way, and so
+features stop breaking each other. Performance is not the reason.
+
+1. **The audit, and only the audit** (#398, "Audit the code and restructure
+   it for contributors (main.cpp is 20,000 lines)"). No code changes. A
+   report on the issue covering the whole OS: per file, its size today, what
+   is in it in plain words, the suggested split (new files, rough line
+   counts, what the original comes down to), what it protects, and risk.
+   One file, one job is the measure; line count is a pointer. Also flag
+   duplicated and dead code. End with the proposed order of moves, lowest
+   risk first, split into sessions, and a "same as before" checklist to
+   repeat after every move (start-up, Home, Library and a grid, search, a
+   game's page, a launch on several systems, a save and a state, Remote
+   Play, Settings and the report). MMagTech reads it and decides.
+2. Then one area per session: move it, build and run on the A9, repeat the
+   checklist, testing image, pull request. Never two areas at once. The
+   contributor guide comes last.
 
 ## Waiting, not for the next session unless MMagTech raises them
 
