@@ -4,6 +4,20 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
+## 2026.10.14.3 {#v2026-10-14-3}
+
+*14 October 2026*
+
+- **Fixed:** on some machines the console made no sound at all, because it
+  played into a headphone jack or USB sound device with nothing plugged in.
+  The sound now always plays on your TV. USB sound devices no longer take it
+  from the TV.
+  ([#341](https://github.com/MMagTech/cabinetos/issues/341))
+- **Changed:** on machines whose headphone jack can tell when headphones are
+  plugged in, plugging them in moves the sound to them, and unplugging brings
+  it back to the TV. After a Remote Play session this needs a restart of the
+  console first ([#390](https://github.com/MMagTech/cabinetos/issues/390)).
+
 ## 2026.10.14.2 {#v2026-10-14-2}
 
 *14 October 2026*

@@ -16943,3 +16943,51 @@ rule was built. A favourite pressed on the
 second account while his Favorites was public reached RomM and left his 34
 games unchanged. SHMUP (collection 2) and `Test: Racing` (smart collection 2)
 each opened their own games and kept their own count lines.
+
+### 46. Where the sound goes, issue #341
+
+**Decided by MMagTech, 2026-10-13; built and tested on the A9 2026-10-14.**
+deletableman's HCAR5000-MI (sold as AM06 Pro) played into an empty jack: its
+jack is a built-in C-Media USB chip that cannot sense a plug, and WirePlumber
+ranks an analog output above HDMI, so the chip won.
+
+**The rule:** the TV the picture is on first; a headphone jack that senses
+the plug takes over while headphones are in and hands back when they come
+out; nothing else takes the sound from the TV (not a jack that cannot sense,
+not USB sound, not Bluetooth for now); no setting. Bluetooth audio, if it
+comes, is one more kind of output in the "takes over" list.
+
+**Built with WirePlumber's own settings only**
+(`system_files/usr/share/wireplumber/wireplumber.conf.d/60-cabinetos-sound-output.conf`),
+as its documentation describes (*Node priorities*): USB sound outputs get
+`priority.session` 100, below any HDMI (696 on the A9), and
+`node.restore-default-targets` is off. A jack that senses the plug needs no
+rule: WirePlumber switches its card off while nothing is plugged in, so the
+output only exists while headphones are in, and its own rank (1009 on the
+A9) is above HDMI. A small WirePlumber script that ignores any output unable
+to sense a plug was considered and rejected: more than standard settings,
+for hardware the rule says not to account for.
+
+**Why the memory goes off.** A chosen output beats every priority, and
+WirePlumber kept the choice across restarts. On the A9 the TV was chosen, so
+headphones never took over (baseline, 2026-10-13: jack sensed, headphone
+output switched on, sound stayed on the TV in every step). The choice was
+Sunshine's: it sets the default by name at the end of every stream.
+
+**Measured on the A9, 2026-10-14** (`wpctl`, the jack's `Headphone Jack`
+control and the app's link, once a second): AirPods Max over USB-C ranked
+1109 by WirePlumber and 100 with the rule, and the TV kept the sound; the
+3.5 mm headphones took the sound within a second of going in, in Home, an
+arcade game and a PS3 game (RPCS3), and every unplug brought it back to the
+TV; TV standby and back, TV; a Remote Play stream carried the sound to the
+phone. Every separate emulator plays to the system default (Eden `auto`,
+RPCS3 and xemu their built-in default, Xenia SDL's, Cemu `default`), so the
+rule covers them without touching any.
+
+**Known gap, waiting on Sunshine (#390):** after a Remote Play session,
+headphones do not take over until the console restarts, because Sunshine's
+end-of-stream choice holds for the rest of the run. Unplugging still always
+returns the sound to the TV.
+
+**Open:** the volume goes back to full at every start (#351 above), on the
+default output. With headphones in at start, that is the headphones (#391, waiting, not built).
