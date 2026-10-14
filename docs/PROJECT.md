@@ -16990,4 +16990,4 @@ end-of-stream choice holds for the rest of the run. Unplugging still always
 returns the sound to the TV.
 
 **Open:** the volume goes back to full at every start (#351 above), on the
-default output. With headphones in at start, that is the headphones.
+default output. With headphones in at start, that is the headphones (#391, waiting, not built).
