@@ -14,6 +14,7 @@
 
 #include "disc.h"
 #include "romm.h"
+#include "standalone.h"
 
 // A launch in progress, off the frame thread.
 //
@@ -127,3 +128,12 @@ bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& game,
 // live in launch.cpp, the only place that reads them; see the comment there.
 void setPs2Upscale(float upscale);
 void setPs2Anisotropy(int anisotropy);
+
+// beginLaunch's worker, in launch_routes.cpp, run on job.worker and called by
+// nothing else. Its parameters are the thread's captures: job and client by
+// reference, the other twelve copies.
+void launchWorker(LaunchJob& job, romm::Client& client, int id, int platformId,
+                  std::string slug, std::string fsSlug, std::string fsName,
+                  const cab::standalone::Emulator* emu, std::string entryPath,
+                  std::string location, std::string validExts, bool blockExtract,
+                  int64_t expectedSize, bool multiFile);
