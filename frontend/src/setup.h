@@ -24,7 +24,7 @@
 //
 // A Wi-Fi scan is seconds, a Bluetooth scan is ten, and waiting for somebody to
 // pick up a phone and approve a pairing is minutes. Every one of those runs on
-// a worker and is polled once a frame, the same shape `LaunchJob` (main.cpp)
+// a worker and is polled once a frame, the same shape `LaunchJob` (launch.h)
 // and `StateLoad` (states.h) already use. A setup screen that freezes while it
 // looks for networks is indistinguishable from a console that has crashed —
 // and it would be the FIRST thing anybody ever saw it do.

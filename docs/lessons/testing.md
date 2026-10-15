@@ -153,6 +153,16 @@ the repository alone.
   to take longer than a second. **Use `--launch-after 0`.** Twenty minutes went
   on this, chasing a difference between two binaries that did not exist.
 
+- **A `--frames` CAPTURE OF A LAUNCH IS TAKEN BEFORE THE GAME HAS LOADED.**
+  `--frames` counts the UI's frames, thousands a second headless, and the
+  capture ends the run, so `--launch <id> --launch-after 0 --frames 600
+  --screenshot` photographs the curtain and kills the game before `[core]
+  loaded` (2026-10-15, move 2: a whole first run of launch tests proved
+  nothing). Take the game's frame with the disc rig and a time limit:
+  `--disc-script "wait 600; shot X; ui X"` under `timeout -s KILL 60`; `wait`
+  counts the game's own frames. A PS1 game is still black at 600 game frames
+  (the console's start); 3,000 shows its opening.
+
 - **The same capture command is worth running ON THE A9**, with
   `SDL_VIDEODRIVER=offscreen` and `--render-size 3840x2160`. It uses the real
   Radeon, needs no compositor, and does not disturb the running session — so a
@@ -233,6 +243,13 @@ then `YDOTOOL_SOCKET=/tmp/ydotool.sock ydotool key 108:1 108:0` (Down; Up
   screenshot` with `XDG_RUNTIME_DIR=/run/user/1000` and
   `GAMESCOPE_WAYLAND_DISPLAY` set to the NEWEST `gamescope-N` there; a
   session restart leaves the old socket behind and gamescopectl fails on it.
+
+- **CONNECTING MOONLIGHT CAN PRESS PLAY (#411).** 2026-10-15, 5:38 PM: two
+  seconds after the stream connected, as Sunshine set up its virtual pad
+  again ("ControllerNumber already allocated"), two presses reached Home 0.2 s
+  apart and started the focused game twice; the stream then dropped and the
+  game ran with nobody there. Before testing over Moonlight, know what Home
+  has focused, and read the journal for a `[launch]` nobody asked for.
 
 - **NEVER SEND A "WAKE" PRESS WITHOUT A CAPTURE FIRST.** Right after a restart
   the screen is already awake, so a Return meant to wake it pressed Resume on
@@ -397,6 +414,13 @@ minute and guessing at it for twenty.
   (copy `config/*.json`, and write `[]` to its `drives.json`, or downloads go
   to the real games drive). #310 was tested this way, 2026-10-10: a launch
   tried to upload Paperboy's NVRAM and the relay refused it.
+
+- **The folder route is tested through the same relay's `folder:<id>`**,
+  which shows a one-file game as a folder on the server, with a made-up
+  `update/` file beside it. Almost nothing on the reference server takes that
+  route with a core (only Star Ocean, 7.8 GB), so move 2 used
+  `folder:34 folder:584` (Super Mario Land fetched file by file; Teleroboxer's
+  one-file entry moved into a folder).
 
 - **Reading a game with `GET /api/roms/<id>` makes RomM create that person's
   empty `rom_user` row**, which moves its `updated_at`. Harmless, but do not
