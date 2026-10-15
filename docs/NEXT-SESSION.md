@@ -8,58 +8,80 @@ ask them to test, and never claim a fix nobody reproduced.
 
 ## Where things stand
 
-**2026-10-14:** `latest` is **2026.10.14.5**. The A9 (Wi-Fi,
-**192.168.1.109**) runs it. RomM's documentation together with RomM's
-behaviour is the source of truth for anything on RomM's data. RomM was asked
-to send its `version` tag (rommapp/romm#5243); nothing to do until it does.
+**2026-10-15:** `latest` is **2026.10.14.5** (built from 72c0c4b). The A9
+(Wi-Fi, **192.168.1.109**) runs it on the testing channel. RomM's
+documentation together with RomM's behaviour is the source of truth for
+anything on RomM's data. RomM was asked to send its `version` tag
+(rommapp/romm#5243); nothing to do until it does.
 
-**Features and bug fixes are paused for a restructure (MMagTech,
+**Features and bug fixes are paused for the restructure (MMagTech,
 2026-10-14).** Performance is not the reason: features must stop breaking
 each other, and outside contributors must find their way.
 
 ## Next
 
-**The audit (#398, "Audit the code and restructure it for contributors
-(main.cpp is 20,000 lines)") is being done in parts, one per session, report
-only, no code changes.** Parts 1, 2 and 3 are posted on the issue (2026-10-14):
-every line of main.cpp is read, its plan is 61 files (Part 2, section 3.12),
-the whole plan is refuted and corrected (Part 2 section 14, Part 3 section 19),
-the dead-code list is settled (section 15), and every other frontend file is
-read and refuted in five groups (Part 3, sections 20 and 21). **Part 4 is
-next**; its prompt is `~/Documents/Development/cabinetos-audit/part4-prompt.md`:
-the scripts, services, image build, cores, CI, workflows and tools, in Part 1's
-remaining areas, then their refutation. Part 5 is the docs and the RomM map's
-refutation; Part 6 the final order of moves and the checklist.
+**The audit's planning is complete (Part 6 posted 2026-10-14, 11:45 PM).** Parts 1, 2, 3 and 6 of #398, "Audit
+the code and restructure it for contributors (main.cpp is 20,000 lines)",
+are posted on the issue; Parts 4 (the scripts, services, image build, cores,
+CI, workflows and tools) and 5 (the docs and the RomM map's refutation) come
+after the moves, before the contributor guide (MMagTech, 2026-10-14).
 
-**Decisions MMagTech owes before the moves begin** (Part 2 section 17, Part 3
-section 23): the pace of the moves (one area per session as decided, or the
-batched plan of Part 3 section 22.5; he is thinking, not deciding), backup and
-revert before move 1, which of Part 3's 25 new faults get issues, protectRomId
-0, folders for the 61 files, whether the test instruments stay in the product
-binary, and the dead-code pull request. Decided 2026-10-14: the client's thread
-rule waits for the RomM folder move; the two PIN gates were decided 2026-10-07
-(in the code at main.cpp 9501 to 9509); #402 corrected; #404, #405 and #406
-opened.
+**The moves begin.** Part 6 sets the order in ten batches, (a) to (i), with a
+must-keep list and a check list per batch (`~/Documents/Development/
+cabinetos-audit/verifiers/batch-*.json`, and Part 6 section 28 on the issue).
+**Move 1 is batch (a)**: the dead-code removal, the probes and self-tests out
+of main.cpp, and the helpers above main(); its prompt is
+`~/Documents/Development/cabinetos-audit/move1-prompt.md`. It runs unattended
+to the testing image and the machine checks, then merges its pull request
+into `restructure` by itself (MMagTech's go, 10:58 PM and 11:20 PM on
+2026-10-14, for this batch alone because its TV list is empty); the update
+of the A9 and the smoke check are his. The Part 6 session set a timed
+kick-off for 3:35 AM Eastern on 2026-10-15 that starts the move-1 session
+by itself if the Mac stayed awake; if it did not fire, move 1 starts from
+the prompt file by hand. The move sessions'
+log is `~/Documents/Development/cabinetos-audit/moves-log.md`. Each later move
+takes its prompt from Part 6 section 28 and its batch file the same way.
 
-**How a part runs (learned 2026-10-14):** three to five agents at a time,
-every output saved into `~/Documents/Development/cabinetos-audit/` as it
-lands, the part posted on #398 before the session ends. Readers on Opus (Fable
-only for files where the lessons cluster), refuters on Opus, mechanical checks
-on Sonnet with a spot-check; the cost of each wave read off the usage card
-first; up to ten agents at once when each writes its own file. Give every time
-in MMagTech's clock (US Eastern), never UTC.
+**How every move session ends** (Part 6 section 27): the final commit pushed
+to testing as a plain fast-forward, the image built and proved from the A9,
+the self-tests passed, the journal read (the sound line, the launch and save
+lines the batch names, the `[pace]` line after any frame-loop move, a normal
+exit after Add an account after any accounts move), the captures compared,
+the pull request body with "Changelog: none" and the faults left as they
+were; then MMagTech judges what the batch's TV list names and merges into
+`restructure`. One exception (MMagTech, 2026-10-14, 11:20 PM): batch (a),
+whose TV list is empty, merges into the branch by itself when every machine
+check passed. Never two batches on one branch, never a fix inside a move,
+and the final merge to main is his.
+
+**Decided 2026-10-14 (11:14 PM): the merge strategy.** Every batch is a pull
+request into the long-lived `restructure` branch (on GitHub, cut from main at
+77d2188); `latest` stays at 2026.10.14.5 until one final pull request to
+main, judged with the full checklist on its testing image; then the branch
+is deleted and testing and latest work as before.
+
+**Decisions MMagTech owes before move 1 merges** (Part 6 section 29, each
+with a recommendation): which of Part 3's 50 faults get issues now (recommended: eleven,
+named there); protectRomId 0 (recommended: unchanged through the moves,
+decided after batch (b)); folders for the files (recommended: folders, with
+unique basenames); the test instruments (recommended: in the product, in
+their own files, revisited after batch (g)); the names (keyboardResult and
+the types declared inside main()). The backup step before move 1 is done in part: the tag 2026.10.14.5 is on
+72c0c4b and pushed; the revert commands (Part 6 section 26) go into
+docs/WORKING.md with move 1's pull request.
+
+**Settled and not to be reopened:** the client's thread rule is fixed in
+batch (i), after Part 5 (MMagTech, 2026-10-14); the two PIN gates (decided
+2026-10-07, in the code at main.cpp 9501 to 9509); #402 corrected; #404, #405
+and #406 opened, fixed as their files move or sooner on his call.
 
 **Where the material is:** `~/Documents/Development/cabinetos-audit/` on
 the Mac (outside the repository): `readers/` (twenty-eight reader outputs),
-`verifiers/` (twenty-five refuter outputs), `verify-args/` (the posted sections,
-the raw claims, the dead-code batches and the grep baseline),
-`measurements/`, `scripts/`, and the posted comments as `part1-comment*.md`,
-`part2-comment*.md` and `part3-comment*.md`; `part3-log.md` is the run log. A new session starts from these, not from
-re-reading.
-
-**Then, after MMagTech's decisions:** one area per session, moved, built and
-run on the A9, the checklist repeated, a testing image, a pull request he
-merges. Never two areas at once. The contributor guide comes last.
+`verifiers/` (twenty-five refuter outputs and the nine batch files),
+`verify-args/`, `measurements/`, `scripts/` (the briefs and the batch
+definitions in `part6-batches.md`), the posted comments as
+`part1-comment*.md` to `part6-comment*.md`, and the run logs `part3-log.md`
+and `part6-log.md`. A new session starts from these, not from re-reading.
 
 ## Waiting, not for the next session unless MMagTech raises them
 
