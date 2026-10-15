@@ -45,6 +45,7 @@
 #include <vector>
 
 #include "catalog.h"
+#include "fileio.h"
 
 namespace cab {
 
@@ -78,16 +79,5 @@ bool holdsASave(const std::vector<uint8_t>& data, catalog::Untouched rule);
 //
 // `dir` is the directory `path` sits in; the scan never leaves it.
 std::string writtenFile(const catalog::SaveFile& spec, const std::string& path);
-
-std::vector<uint8_t> readBytes(const std::string& path);
-
-// Writes through a temporary and renames, so a console losing power halfway
-// through placing a card leaves the old one rather than half of a new one.
-// Creates the parent directories.
-bool writeBytes(const std::string& path, const std::vector<uint8_t>& data);
-
-// Removes the file, and reports only whether it is gone afterwards. A file
-// that was never there is a success.
-bool removeFile(const std::string& path);
 
 }  // namespace cab

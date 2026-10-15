@@ -899,34 +899,6 @@ static std::string stateRefusedText() {
                             : std::string("Couldn't load that state");
 }
 
-static std::string sanitisedStem(const std::string& title) {
-    std::string out;
-    for (char c : title) {
-        const unsigned char u = static_cast<unsigned char>(c);
-        // Anything above ASCII is passed through untouched. This is a UTF-8
-        // string and those bytes are the tail of a multi-byte character: the
-        // first version tested ASCII-only and turned "Pokémon" into "Pok__mon",
-        // which is merely ugly — a Japanese title would have come out as
-        // nothing but underscores, and a ROM library is full of those.
-        if (u >= 0x80 || std::isalnum(u) || c == '-' || c == ' ' || c == '_' ||
-            c == '(' || c == ')' || c == '.' || c == ',' || c == '\'') {
-            out += c;
-        } else {
-            out += '_';
-        }
-    }
-    while (!out.empty() && (out.back() == ' ' || out.back() == '.')) out.pop_back();
-    return out.empty() ? "game" : out;
-}
-
-static bool writeLocal(const std::string& path, const std::vector<uint8_t>& data) {
-    FILE* f = std::fopen(path.c_str(), "wb");
-    if (!f) return false;
-    const bool ok = std::fwrite(data.data(), 1, data.size(), f) == data.size();
-    std::fclose(f);
-    return ok;
-}
-
 // A directory save, zipped and sent: PSP, Switch, PS3, Xbox and Xbox 360. See
 // dirsave.h for why the archive is a zip and where it is rooted.
 //

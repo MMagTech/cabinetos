@@ -23,15 +23,6 @@ std::string parentOf(const std::string& path) {
     return slash == std::string::npos ? std::string(".") : path.substr(0, slash);
 }
 
-bool makeParents(const std::string& path) {
-    for (size_t i = 1; i < path.size(); ++i) {
-        if (path[i] != '/') continue;
-        const std::string part = path.substr(0, i);
-        if (::mkdir(part.c_str(), 0755) != 0 && errno != EEXIST) return false;
-    }
-    return true;
-}
-
 // The VMU's own directory, blocks 253 down to 241, sixteen 32-byte entries to
 // a 512-byte block. An entry's first byte says what occupies the slot: 0x33 a
 // data file, 0xCC a game, 0x00 nothing.
@@ -151,45 +142,6 @@ std::string writtenFile(const catalog::SaveFile& spec, const std::string& path) 
     }
     ::closedir(d);
     return found;
-}
-
-std::vector<uint8_t> readBytes(const std::string& path) {
-    std::vector<uint8_t> out;
-    FILE* f = std::fopen(path.c_str(), "rb");
-    if (!f) return out;
-    std::fseek(f, 0, SEEK_END);
-    const long n = std::ftell(f);
-    std::fseek(f, 0, SEEK_SET);
-    if (n > 0) {
-        out.resize(static_cast<size_t>(n));
-        if (std::fread(out.data(), 1, out.size(), f) != out.size()) out.clear();
-    }
-    std::fclose(f);
-    return out;
-}
-
-bool writeBytes(const std::string& path, const std::vector<uint8_t>& data) {
-    if (!makeParents(path)) return false;
-    const std::string tmp = path + ".placing";
-    FILE* f = std::fopen(tmp.c_str(), "wb");
-    if (!f) return false;
-    const bool wrote = data.empty() ||
-                       std::fwrite(data.data(), 1, data.size(), f) == data.size();
-    const bool closed = std::fclose(f) == 0;
-    if (!wrote || !closed) {
-        ::unlink(tmp.c_str());
-        return false;
-    }
-    if (::rename(tmp.c_str(), path.c_str()) != 0) {
-        ::unlink(tmp.c_str());
-        return false;
-    }
-    return true;
-}
-
-bool removeFile(const std::string& path) {
-    if (::unlink(path.c_str()) == 0) return true;
-    return errno == ENOENT;
 }
 
 }  // namespace cab
