@@ -2120,3 +2120,21 @@ Outcome run(const Deps& d, const Options& o) {
 }
 
 }  // namespace setup
+
+// The keyboard for a server address, in Settings and on the startup screen:
+// first run's, without its hint, because the people here know what an
+// address is (docs/SETTINGS.md, Network).
+ui::Keyboard::Config serverKeyboardConfig(const std::string& initial) {
+    ui::Keyboard::Config cfg;
+    cfg.title = "RomM server";
+    cfg.initial = initial;
+    cfg.placeholder = "192.168.1.10:6005";
+    cfg.shortcuts = {".local", ":8080"};
+    return cfg;
+}
+
+std::string trimmedAddress(std::string a) {
+    while (!a.empty() && a.back() == ' ') a.pop_back();
+    while (!a.empty() && a.front() == ' ') a.erase(0, 1);
+    return a;
+}

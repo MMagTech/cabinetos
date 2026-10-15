@@ -33,6 +33,8 @@
 
 #include <string>
 
+#include "keyboard.h"
+
 struct SDL_Window;
 
 namespace ui {
@@ -125,3 +127,9 @@ enum class Outcome {
 Outcome run(const Deps& d, const Options& o);
 
 }  // namespace setup
+
+// The keyboard for a server address in Settings and on the startup screen's
+// server wait, and its trim: first run's own keyboard (Flow, Act::Edit)
+// without its hint. Moved out of main.cpp in the restructure (#398).
+ui::Keyboard::Config serverKeyboardConfig(const std::string& initial);
+std::string trimmedAddress(std::string a);

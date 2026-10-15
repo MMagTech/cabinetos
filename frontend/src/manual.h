@@ -18,6 +18,7 @@
 
 #include <atomic>
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -48,3 +49,11 @@ bool render(const std::string& pdf, int page, int width, Picture* out, std::stri
 bool looksLikePdf(const std::string& path);
 
 }  // namespace manual
+
+namespace romm { class Client; }
+
+// A game's manual downloaded off RomM into `dest`, on main.cpp's manual
+// worker. Moved out of main.cpp in the restructure (#398).
+bool fetchManualFile(const romm::Client& client, const std::string& manualPath,
+                     const std::string& dest, const std::function<bool()>& keepGoing,
+                     std::string* err);

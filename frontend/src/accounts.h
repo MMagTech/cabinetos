@@ -247,3 +247,9 @@ void clearRaLogin(int id);
 bool forgetEveryone();
 
 }  // namespace accounts
+
+// Who the console acts as, settled before anything writes a save: asked of
+// RomM online, read from accounts.json offline (#88). Outside the namespace,
+// as their callers name them. Moved out of main.cpp in the restructure (#398).
+bool adoptUser(romm::Client& client);
+bool adoptAccountOffline(int id);

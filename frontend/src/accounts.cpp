@@ -428,3 +428,38 @@ bool forgetEveryone() {
 }
 
 }  // namespace accounts
+
+// Who this console is acting as, settled before anything writes a save.
+//
+// Saves, states and the decision to keep a game all live under a person now, so
+// this is not a nicety: without an answer there is no directory to write into.
+// The answer comes from RomM's `/api/users/me` and is cached on disk, because a
+// console with no network still has to know whose saves it is holding.
+bool adoptUser(romm::Client& client) {
+    std::string err;
+    if (storage::resolveCurrentUser(client, &err)) {
+        std::fprintf(stderr, "[storage] user %s\n",
+                     storage::currentUser().dirName().c_str());
+        return true;
+    }
+    std::fprintf(stderr,
+                 "[storage] no RomM user (%s) — saves and keeps have nobody to "
+                 "belong to until this console is paired\n", err.c_str());
+    return false;
+}
+
+// WHO THE CONSOLE IS, WITH NO SERVER TO ASK (#88): the account's own id,
+// name and picture, from accounts.json. Switching people works offline
+// (MMagTech, 2026-10-05); /api/users/me is only how an online console checks.
+bool adoptAccountOffline(int id) {
+    const std::vector<accounts::Account> known = accounts::all();
+    const accounts::Account* a = accounts::find(known, id);
+    if (!a) return false;
+    storage::User u;
+    u.id = a->id;
+    u.name = a->name;
+    u.avatar = a->avatar;
+    storage::setCurrentUser(u);
+    std::fprintf(stderr, "[storage] user %s (offline)\n", u.dirName().c_str());
+    return true;
+}

@@ -142,6 +142,7 @@
 #include "offline_sync.h"
 #include "samplelibrary.h"
 #include "saves.h"
+#include "screenparts.h"
 #include "states.h"
 #include "timewords.h"
 #include "uploader.h"
@@ -299,30 +300,6 @@ struct LaunchJob {
     }
 };
 
-// A GAME'S MANUAL INTO `dest` (#364). RomM serves its resources under
-// /assets/romm/resources/, and `path_manual` is the part after it (checked:
-// application/pdf). An answer that is not a PDF (a login page, an error) is
-// thrown away rather than kept as somebody's manual. `keepGoing` is asked
-// during the transfer; false stops it.
-static bool fetchManualFile(const romm::Client& client, const std::string& manualPath,
-                            const std::string& dest, const std::function<bool()>& keepGoing,
-                            std::string* err) {
-    std::string from = manualPath;
-    if (from.rfind("/assets/", 0) != 0) {
-        while (!from.empty() && from[0] == '/') from.erase(0, 1);
-        from = "/assets/romm/resources/" + from;
-    }
-    storage::makeDirs(dest.substr(0, dest.find_last_of('/')));
-    if (!client.fetchToFile(from, dest, [&](int64_t, int64_t) { return keepGoing(); }, err))
-        return false;
-    if (!manual::looksLikePdf(dest)) {
-        ::unlink(dest.c_str());
-        if (err) *err = "the server's answer is not a PDF";
-        return false;
-    }
-    return true;
-}
-
 // How many things are in a directory. Used once, to decide whether a download
 // left anything behind it when the core turned out to read its own archive.
 static int countEntries(const std::string& dir) {
@@ -368,31 +345,6 @@ static int gPs2Anisotropy = -1;
 // --ps2-copy: PCSX2 without a window of its own, every frame copied back for
 // this window to draw, as before #226. For measuring the two side by side.
 static bool gPs2Copy = false;
-
-// "PRESS (A) TO ...", centred, with the A drawn as a button badge the way
-// consoles prompt: a white disc with a dark A, on the text's x-height. Home's
-// empty state says "Press (A) to open the Library" this way, and a game held
-// after a state loads says "Press (A) to continue".
-static void drawPressPrompt(ui::Renderer& r, ui::TextRenderer& text, float sc,
-                            const char* before, const char* after, float base,
-                            float alpha) {
-    const ui::TextStyle st = ui::TextStyle::Title3;
-    const float gap = 16.0f;
-    const float badge = text.lineHeight(st, sc) * 0.95f;
-    const float w1 = text.measure(before, st, sc);
-    const float w2 = text.measure(after, st, sc);
-    float x = (ui::kCanvasWidth - (w1 + gap + badge + gap + w2)) * 0.5f;
-    text.draw(r, before, x, base, st, ui::Color::white(0.92f * alpha), sc);
-    x += w1 + gap;
-    const float capMid = base - text.ascent(st, sc) * 0.36f;
-    r.draw(ui::Rect{x, capMid - badge * 0.5f, badge, badge, badge * 0.5f,
-                    ui::Color::white(0.95f * alpha)});
-    const float aw = text.measure("A", st, sc);
-    text.draw(r, "A", x + (badge - aw) * 0.5f, capMid + text.ascent(st, sc) * 0.36f, st,
-              ui::Color{0.07f, 0.05f, 0.12f, alpha}, sc);
-    x += badge + gap;
-    text.draw(r, after, x, base, st, ui::Color::white(0.92f * alpha), sc);
-}
 
 static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& game,
                         const std::string& coreDir, std::string* err,
@@ -1338,82 +1290,9 @@ static bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& 
 //
 // The token lives in ~/.config/cabinetos/romm.json at 0600. It is a credential:
 // it is never printed here, and it does not belong in the repository.
-// The keyboard for a server address, in Settings and on the startup screen:
-// first run's, without its hint, because the people here know what an
-// address is (docs/SETTINGS.md, Network).
-// TURN OFF SCREEN AFTER, docs/SETTINGS.md, System. Saved as the word in
-// config/settings.json; the frame loop hands the seconds to idle::Watch.
-// The starting value is 15 minutes, what the console did before there
-// was a choice. NO "NEVER" AND NO HOUR: both were built and dropped the
-// same day, on MMagTech's word, because on an OLED a lit menu is burn-in
-// and half an hour is long enough. A saved word this list does not know
-// is 15. At file scope because the startup screen's wait uses it too.
-struct ScreenOff { const char* name; const char* word; double seconds; };
-static constexpr ScreenOff kScreenOff[] = {
-    {"10 minutes", "10m", 10 * 60.0}, {"15 minutes", "15m", 15 * 60.0},
-    {"30 minutes", "30m", 30 * 60.0},
-};
-constexpr int kScreenOffCount = sizeof kScreenOff / sizeof kScreenOff[0];
-static int savedScreenOff() {
-    const std::string w = prefs::get("screen_off_after", "15m");
-    for (int i = 0; i < kScreenOffCount; ++i)
-        if (w == kScreenOff[i].word) return i;
-    return 1;
-}
-
-static ui::Keyboard::Config serverKeyboardConfig(const std::string& initial) {
-    ui::Keyboard::Config cfg;
-    cfg.title = "RomM server";
-    cfg.initial = initial;
-    cfg.placeholder = "192.168.1.10:6005";
-    cfg.shortcuts = {".local", ":8080"};
-    return cfg;
-}
-
-static std::string trimmedAddress(std::string a) {
-    while (!a.empty() && a.back() == ' ') a.pop_back();
-    while (!a.empty() && a.front() == ' ') a.erase(0, 1);
-    return a;
-}
-
 static std::string rommTokenPath() {
     const char* home = getenv("HOME");
     return std::string(home ? home : ".") + "/.config/cabinetos/romm.json";
-}
-
-// Who this console is acting as, settled before anything writes a save.
-//
-// Saves, states and the decision to keep a game all live under a person now, so
-// this is not a nicety: without an answer there is no directory to write into.
-// The answer comes from RomM's `/api/users/me` and is cached on disk, because a
-// console with no network still has to know whose saves it is holding.
-static bool adoptUser(romm::Client& client) {
-    std::string err;
-    if (storage::resolveCurrentUser(client, &err)) {
-        std::fprintf(stderr, "[storage] user %s\n",
-                     storage::currentUser().dirName().c_str());
-        return true;
-    }
-    std::fprintf(stderr,
-                 "[storage] no RomM user (%s) — saves and keeps have nobody to "
-                 "belong to until this console is paired\n", err.c_str());
-    return false;
-}
-
-// WHO THE CONSOLE IS, WITH NO SERVER TO ASK (#88): the account's own id,
-// name and picture, from accounts.json. Switching people works offline
-// (MMagTech, 2026-10-05); /api/users/me is only how an online console checks.
-static bool adoptAccountOffline(int id) {
-    const std::vector<accounts::Account> known = accounts::all();
-    const accounts::Account* a = accounts::find(known, id);
-    if (!a) return false;
-    storage::User u;
-    u.id = a->id;
-    u.name = a->name;
-    u.avatar = a->avatar;
-    storage::setCurrentUser(u);
-    std::fprintf(stderr, "[storage] user %s (offline)\n", u.dirName().c_str());
-    return true;
 }
 
 // Downloads one ROM and says what a core would actually be given.

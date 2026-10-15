@@ -1,11 +1,14 @@
 #include "manual.h"
 
 #include "proc.h"
+#include "romm.h"
+#include "storage.h"
 
 #include <cctype>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <unistd.h>
 
 namespace manual {
 
@@ -114,3 +117,27 @@ bool looksLikePdf(const std::string& path) {
 }
 
 }  // namespace manual
+
+// A GAME'S MANUAL INTO `dest` (#364). RomM serves its resources under
+// /assets/romm/resources/, and `path_manual` is the part after it (checked:
+// application/pdf). An answer that is not a PDF (a login page, an error) is
+// thrown away rather than kept as somebody's manual. `keepGoing` is asked
+// during the transfer; false stops it.
+bool fetchManualFile(const romm::Client& client, const std::string& manualPath,
+                     const std::string& dest, const std::function<bool()>& keepGoing,
+                     std::string* err) {
+    std::string from = manualPath;
+    if (from.rfind("/assets/", 0) != 0) {
+        while (!from.empty() && from[0] == '/') from.erase(0, 1);
+        from = "/assets/romm/resources/" + from;
+    }
+    storage::makeDirs(dest.substr(0, dest.find_last_of('/')));
+    if (!client.fetchToFile(from, dest, [&](int64_t, int64_t) { return keepGoing(); }, err))
+        return false;
+    if (!manual::looksLikePdf(dest)) {
+        ::unlink(dest.c_str());
+        if (err) *err = "the server's answer is not a PDF";
+        return false;
+    }
+    return true;
+}

@@ -1,5 +1,6 @@
 #include "idle.h"
 
+#include "prefs.h"
 #include "proc.h"
 
 #include <algorithm>
@@ -7,6 +8,7 @@
 #include <cmath>
 #include <cstdio>
 #include <mutex>
+#include <string>
 #include <thread>
 
 namespace idle {
@@ -104,3 +106,10 @@ void setDisplayAsleep(bool asleep, bool wait, std::function<void()> first) {
 }
 
 }  // namespace idle
+
+int savedScreenOff() {
+    const std::string w = prefs::get("screen_off_after", "15m");
+    for (int i = 0; i < kScreenOffCount; ++i)
+        if (w == kScreenOff[i].word) return i;
+    return 1;
+}
