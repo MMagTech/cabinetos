@@ -428,6 +428,8 @@ struct App {
     idle::Level idleShown = idle::Level::Awake;
     design::Animated dimLayer;
     idle::Offset shiftShown;
+    static double clockSeconds();
+    void idleFrame(float dt, bool playingNow, double blankAfter);
 
     setup::Deps waitDeps;
     bool startupShown = false;
@@ -535,6 +537,14 @@ struct App {
     const char* kBarLabels[BarCount] = { "Home", "Library", "Search", "Settings", "Account" };
     // How many of those draw as labelled capsules. The chip draws itself.
     static constexpr int kBarCapsules = BarAccount;
+    size_t shelfSlots();
+    bool haveResume();
+    bool haveFavorites();
+    void playedJustNow(int romId);
+    bool homeEmpty();
+    size_t rowSlots(int row);
+    bool rowExists(int row);
+    design::Card* cardAt(int row, int slot);
 
     // FOCUS BELONGS TO A PLACE ON A SHELF, NOT TO A GAME — #125, 2026-09-27.
     // It lived on the Card, and a game that is both recent and a favourite is
@@ -542,6 +552,7 @@ struct App {
     // on Favorites too. MMagTech: two covers looked focused at once. One lift
     // and one press per (row, slot), grown as a row is drawn.
     std::vector<design::Animated> slotFocus[2], slotPress[2];
+    design::Animated& slotAnim(std::vector<design::Animated>* v, int row, int slot);
 
     // RESUME-FIRST, and it is now one rule rather than a separate object:
     // Home opens on the first card of Recent, which is the most recently played
@@ -553,6 +564,7 @@ struct App {
     // hero alone is 420 of a 1080 canvas; Recent and Favorites do not both fit
     // under it.
     design::Animated scrollY;
+    void homeFromTheStart();
     // What is lighting the room, and what was lighting it before. Two cache
     // keys and a mix, because a cut between two covers is the one thing this
     // must not look like. `backdropWant` is what focus is asking for, which is
@@ -567,6 +579,7 @@ struct App {
     std::string lastLitArt;
     float backdropSettle = 0.0f;
     design::Animated backdropMix;
+    void settleFocus();
 
     // ---- Where we are -------------------------------------------------------
     //
@@ -583,6 +596,7 @@ struct App {
     // from focus moving within one. See the backdrop block in the frame loop.
     Screen backdropScreen = Screen::Home;
     bool backdropForScreen = false;
+    Screen here();
 
     screens::LibraryScreen libraryScreen;
     screens::GridScreen gridScreen;
@@ -635,6 +649,7 @@ struct App {
     // and the heading says how many matched, so a query that is too broad
     // says so rather than pretending the first forty are all of it.
     static constexpr int kSearchLimit = 40;
+    void runSearch(const std::string& q);
 
     // THE TILE COVERS, FETCHED BEHIND HOME RATHER THAN BEFORE IT.
     //
@@ -667,6 +682,7 @@ struct App {
         std::vector<std::thread> workers;
     };
     CoverFill coverFill;
+    void startCoverFill();
     // THE REST OF A BIG GRID, BEHIND THE FIRST PAGE.
     //
     // A grid is proportional to its own platform — about 1 ms a game — so the
@@ -756,6 +772,8 @@ struct App {
     SDL_Window* ps2Window = nullptr;
     bool ps2InputOurs = false;
     int ps2ClearFrames = 0;
+    void openPs2Window();
+    void closePs2Window();
 
     // A game in an emulator that is its own application (standalone.h). While
     // it is active the emulator has the television and this loop only watches
@@ -841,6 +859,7 @@ struct App {
     // while a stream plays it, nobody holding the stream's controllers can
     // play it, so its pause menu has no Resume (#286, below).
     bool sessionNeedsRemote = false;
+    bool remoteOnlyHere();
     // THE BUTTONS THE MENU WAS CLOSED WITH, per player, kept from the game
     // until they are let go (#103). The menu acts when a button goes DOWN and
     // the game reads what is held every frame, so B to go back, A on Resume,
@@ -931,6 +950,7 @@ struct App {
     // GameCube get Resume, Screenshot and Exit to Home, and nothing to press
     // that says no.
     std::vector<OverlayItem> pauseItems{OvResume, OvSaveState, OvLoadState, OvExit};
+    PauseChoice* choiceAt(int slot);
 
     // ---- The Power menu — docs/PROJECT.md, open question 10b ------------
     //
@@ -951,6 +971,13 @@ struct App {
     // mid-upload has sent nothing, and the save would sit owed until morning.
     bool restPending = false;
     uint64_t restWaitStart = 0;
+    int ovCount();
+    void ovStep(int delta);
+    const char* ovLabel(int i);
+    bool launchById(int romId);
+    static std::string gigabytes(int64_t b);
+    void downloadById(int romId);
+    void removeDownload(int romId);
 
     // Opening the launch screen for a card. Everything it shows is decided
     // here, so the screen holds no opinion about where any of it came from.
@@ -980,6 +1007,9 @@ struct App {
     DetailStates detailStates;
     // The open page's own states, by the negative ids its list carries.
     std::vector<std::string> detailLocalStates;
+    void startDetailStates();
+    void loadDetailStates(int romId);
+    void pumpDetailStates();
     // A state picked on the launch screen, loaded once the game is running.
     int pendingStateId = 0;
     // ...or one of this console's own (#88), by its file.
@@ -1032,11 +1062,18 @@ struct App {
     };
     const std::string kManualTemp = "/tmp/cabinetos-manual.pdf";
     ManualFetch manualFetch;
+    void fetchManual(int romId, const std::string& manualPath, const std::string& to,
+                     bool forViewer);
+    void manualBeside(int romId, const std::string& entryPath);
     // R1 ON A GAME'S PAGE ALWAYS MEANS THE MANUAL (MMagTech, #364): the page
     // slides aside and the manual comes in, or the edge sound when the game
     // has none. Opened again on the same page, it is where it was left.
     // A starting value, to be judged on the television.
     static constexpr float kManualSlide = 0.35f;
+    void openManual();
+    void closeManual();
+    void forgetManual();
+    void openDetail(int cardIndex);
 
     // OPENING A GAME'S PAGE, AND LEAVING IT, DISSOLVE like a top-bar switch:
     // asked for here, done at the end of the frame, after that frame has been
@@ -1047,9 +1084,16 @@ struct App {
     bool pendingDetailBack = false;
     // What that screen should say once it is open. See refuseLaunch.
     std::string pendingDetailNotice;
+    void openDetailSoon(int cardIndex);
+    void refreshKeeps();
     look::Appearance appearance{};
+    static int savedHour(const char* key, int fallback);
     int darkFrom = 0;
     int darkUntil = 0;
+    bool wantDark();
+    static look::Colour accountColour(int id);
+    void applyAccountColour(bool instant);
+    bool switchAccount(int id, std::string* why);
 
     // ADDING SOMEBODY, ON A CLIENT OF ITS OWN.
     //
@@ -1075,6 +1119,8 @@ struct App {
     bool shownPairCode = false;
     // Set by --screen add-account: hold the screenshot until there is a code.
     bool waitForPairCode = false;
+    void startAddAccount();
+    void refreshAccountRows();
 
     // WHERE THE BAR'S FOCUS LIVES. Not in Home's row model and not in any
     // screen's: the bar is drawn over all of them, so its cursor belongs to the
@@ -1157,13 +1203,15 @@ struct App {
     bool navHeld = false;
     screens::Nav heldNav = screens::Nav::Down;
     float heldFor = 0.0f, nextRepeat = 0.0f;
+    void holdNav(screens::Nav n);
+    void releaseNav(screens::Nav n);
 
-    std::function<bool(screens::Nav)> navigate;
+    bool navigate(screens::Nav n);
     // Home's own keys, as one function, so that everything — Home, the Library,
     // the grid — arrives through `navigate` and the bar can be offered the key
     // first in exactly one place. Assigned further down, once moveFocus and
     // moveRow exist.
-    std::function<bool(screens::Nav)> homeKey;
+    bool homeKey(screens::Nav n);
 
     // ---- The PIN ------------------------------------------------------------
     //
@@ -1198,6 +1246,14 @@ struct App {
     // Whether they are right is the device's to say, not the console's.
     std::function<void(const std::string&)> pinCode;
     std::function<void()> pinCodeCancel;
+    void askPin(const std::string& title, const std::string& detail,
+                std::function<void()> then, bool always = false);
+    void askCode(const std::string& code, const std::string& title,
+                 const std::string& detail, std::function<void()> then);
+    void choosePin(const std::string& title, const std::string& detail,
+                   std::function<void()> then);
+    void askPinToOpen(const std::string& detail, std::function<void()> then);
+    void pinOutcome(screens::PinScreen::Outcome o);
 
     // ---- A question with a few answers (choice.h) -------------------------
     //
@@ -1211,17 +1267,22 @@ struct App {
     // cleared by every askChoice; set after it.
     std::function<void(int)> choiceStep;
     std::function<void()> choiceBack;
+    void askChoice(const std::string& title, const std::string& detail,
+                   std::vector<std::string> options, int focus,
+                   std::function<void(int)> then);
     // ABOUT, HOW TO (#314). The words live here, next to the controls they
     // describe; docs/wiki/navigation.md says the same and changes with them.
     // THE SHORTCUTS ARE ALWAYS SHOWN: hidden while off, nobody would learn
     // they exist. Off (the default), the first line says where to turn them
     // on and the rest are greyed; both sticks in opens the pause menu either
     // way. The button named is the one set for the pad in hand.
-    std::function<void()> openHowTo;
+    void openHowTo();
     static constexpr const char* kWikiUrl = wikiqr::kUrl;
     // Settings > Display and Sound > Dark hours: From and Until, and the hours
     // of each. Set where it is opened; it reopens itself after an hour is set.
-    std::function<void(int)> darkHoursPanel;
+    void darkHoursPanel(int focus);
+    void choiceOutcome(screens::ChoiceScreen::Outcome o);
+    std::vector<accounts::Account> removableAccounts();
 
     // ---- Settings' rows -----------------------------------------------------
     //
@@ -1264,7 +1325,9 @@ struct App {
     // beside Eject.
     std::map<int, size_t> ejectFormats;
     // Format, from a drive's row. Set once buildSettings exists.
-    std::function<void(const drives::Drive&)> askFormat;
+    void askFormat(const drives::Drive& d);
+    std::map<std::string, std::string> locationNames(const std::vector<std::string>& locs,
+                                                     const std::vector<drives::Unusable>& unusable);
     int screenOffIndex = 0;
 
     // ---- System update ------------------------------------------------------
@@ -1290,6 +1353,12 @@ struct App {
     bool updReadyAfterGame = false;  // ...and it landed during a game
     std::string updStartNotice;      // "Updated to", once Home is up
     Tone updStartTone = Tone::Done;
+    static int64_t prefNum(const char* key);
+    static std::string updBytes(int64_t b);
+    static std::string updOf(int64_t done, int64_t total);
+    std::string updChecked();
+    bool updFoundNewer();
+    screens::SettingsRow updateRow();
     files::State filesState;
     int64_t filesSaidAt = 0;
     bool filesPanelWhenOn = false;   // open the panel once root says it is on
@@ -1421,9 +1490,13 @@ struct App {
     std::vector<bt::Device> padShown;              // the rows, in order
     std::string padPairingName;                    // "" when not pairing
     std::string padDetail;
+    void padWindowRows(std::vector<std::string>* names, std::vector<std::string>* values);
+    void padWindowRefresh();
+    void closePadWindow();
     // Wide enough for "Nintendo Switch Pro Controller" with "Pairing…"
     // beside it. A starting value, judged on the television.
     static constexpr float kPadWindowWidth = 760.0f;
+    void openPadWindow();
     // ---- Pair a Wii Remote (#200) ---------------------------------------------
     //
     // The Wii's own search, over and over, until a Remote answers or the
@@ -1448,13 +1521,18 @@ struct App {
     // THE SENSOR BAR IS ASKED WITH THE FIRST REMOTE ONLY: a second Remote does
     // not move the bar (MMagTech, 2026-10-03). The panel's row changes it later.
     bool wiiPairFirst = false;
+    void openWiiPairWindow();
+    void closeWiiPairWindow();
     // THE WII REMOTES PANEL: each paired Remote (its value its light while
     // connected; pressed, Remove), Pair a Wii Remote, and the sensor bar,
     // which a press flips in place. Removing the last Remote greys the
     // Remote games again.
-    std::function<void(int)> openWiiPanelAt;
-    std::function<void()> rebuildSettingsRows;   // buildSettings, set once it exists
+    void openWiiPanelAt(int focus);
+    void rebuildSettingsRows();
+    static std::vector<wiiremote::Paired> wiiPanelRemotes();
+    static std::vector<std::string> wiiPanelValues(const std::vector<wiiremote::Paired>& rows);
     std::vector<std::string> wiiValuesShown;
+    void openWiiPanel();
 
     // ---- The Controllers panel ----------------------------------------------
     //
@@ -1467,7 +1545,9 @@ struct App {
     bool padsPanelSeenOpen = false;
     int padsPanelGen = -1;
     SDL_JoystickID padsPanelHand = 0;
-    std::function<void(int)> openPadsPanelAt;
+    void padsPanelRows(std::vector<std::string>* names, std::vector<std::string>* values);
+    void openPadsPanelAt(int focus);
+    void askWifi();
     // JOINING BLOCKS FOR UP TO 45 SECONDS (net::join), so it is a job too. The
     // row being joined says so; the answer arrives in the notice pill.
     struct WifiJob {
@@ -1479,6 +1559,8 @@ struct App {
         ~WifiJob() { if (th.joinable()) th.join(); }
     };
     WifiJob wifiJob;
+    void startWifiJoin(const std::string& ssid, const std::string& pass,
+                       bool forgetFirst);
     // ---- Change server address (issue #60) -------------------------------
     //
     // IS IT THE SAME SERVER, off the frame thread: reaching an address that
@@ -1495,6 +1577,7 @@ struct App {
         ~ServerJob() { if (th.joinable()) th.join(); }
     };
     ServerJob serverJob;
+    void startServerCheck(const std::string& address);
 
     // The networks as the rows show them: one per name, strongest signal,
     // the one in use first, then saved ones, then the rest by signal.
@@ -1502,29 +1585,31 @@ struct App {
     // Whether the question panel on screen is the Wi-Fi list, so a scan that
     // lands while it is open can refresh it.
     bool wifiPanelOpen = false;
+    void sortWifi();
+    void wifiPanelRows(std::vector<std::string>* names, std::vector<std::string>* values);
     // THE KEYBOARD OUTSIDE SEARCH. Search owns its docked keyboard; anything
     // else that opens it (a Wi-Fi password) says here what to do with it.
     std::function<void(ui::KeyboardResult)> keyboardThen;
     // A Wi-Fi password on the on-screen keyboard, then the join on a worker.
     // `forgetFirst` is Change password; `why` is "Wrong password" when this
     // is the retry after one. Assigned once buildSettings exists.
-    std::function<void(const std::string& ssid, bool forgetFirst, const std::string& why)>
-        askWifiPassword;
+    void askWifiPassword(const std::string& ssid, bool forgetFirst, const std::string& why);
     // The network the keyboard is waiting on, while it says "Joining…".
     std::string wifiKeyboardFor;
     // RETROACHIEVEMENTS SIGN-IN (#74): the username, then the password, on the
     // same keyboard, the password the way Wi-Fi's is. `why` is the last
     // answer's reason, said in the field. Assigned once buildSettings exists.
-    std::function<void(const std::string& initial)> askRaUser;
-    std::function<void(const std::string& user, const std::string& why)> askRaPassword;
+    void askRaUser(const std::string& initial);
+    void askRaPassword(const std::string& user, const std::string& why);
     // True while the keyboard says "Signing in…" and waits on the answer.
     bool raKeyboardWaiting = false;
     // A server address on the keyboard; `why` is what went wrong with the
     // last one, said in the field with the address kept behind it. Assigned
     // once buildSettings exists.
-    std::function<void(const std::string& typed, const std::string& why)> askServerAddress;
+    void askServerAddress(const std::string& typed, const std::string& why);
     // The address the keyboard is waiting on, while it says "Checking…".
     std::string serverKeyboardFor;
+    void askNetwork();
     // ---- Downloads (downloads.h), #68 --------------------------------------
     //
     // Every downloaded game, for Settings' Downloads panel, named as the
@@ -1533,20 +1618,34 @@ struct App {
     // record is written before its first byte, so it would show half-sized.
     screens::DownloadsPanel downloadsPanel;
     // Assigned once buildSettings exists: a removal rebuilds Storage.
-    std::function<void(screens::DownloadsPanel::Outcome)> downloadsOutcome;
+    void downloadsOutcome(screens::DownloadsPanel::Outcome o);
+    std::vector<screens::DownloadItem> downloadItems();
 
     // THE TAILSCALE ROW (#286), under Streaming and greyed while it is off.
     // Its value is the address to give Moonlight; its second line is the
     // console's name there and when its sign-in ends. MMagTech, 2026-10-08.
     // "Sign in again" is offered for the last two weeks only.
     static constexpr int64_t kTsWarnDays = 14;
+    bool tsEndsSoon(const tailscale::Status& st);
+    screens::SettingsRow tailscaleRow(bool streaming, bool inUse);
+    void buildSettings();
+    void startUpdate(bool download, bool automatic);
+    void askUpdateDownload();
+    void askUpdateReady();
+    void setFiles(bool on);
     // THE PANEL: everything a computer needs, the password in plain text
     // (anyone at the television can already turn this on or make a new
     // one), then Done, New password, Turn off. Focus on Done.
-    std::function<void()> openFilesPanel;
+    void openFilesPanel();
+    void setDeveloper(bool on);
+    void setRemotePlay(bool on);
+    void setTailscale(bool on);
+    void openTsSignIn(bool again);
+    void tsLogout();
     // NAMING A DEVICE: the keyboard, the current name in the field. Right after
     // pairing it says so; an empty name keeps the one it had.
-    std::function<void(int)> openPairedPanel;
+    void openPairedPanel(int focus);
+    void askDeviceName(const std::string& id, const std::string& current, bool justPaired);
     // THE PAIRED DEVICES: a list, however long, each one pressed for Remove
     // (the PIN when set). One row on the page, so a household with many
     // devices does not push Tailscale off it (MMagTech, 2026-10-07).
@@ -1554,7 +1653,7 @@ struct App {
 
     // THE PANEL: File access's, with the port. Same password, same New
     // password (it changes File access's too, which is the point of one).
-    std::function<void()> openDevPanel;
+    void openDevPanel();
 
     // THE CURTAIN COMES DOWN ON THE STARTUP SCREEN, and pumpLeave does the
     // rest once it is down.
@@ -1574,6 +1673,10 @@ struct App {
         bool everyone = false;   // Sign out: every account's, then leave
     };
     std::shared_ptr<RemoveJob> removeJob = std::make_shared<RemoveJob>();
+    void finishRemove(const accounts::Account& who);
+    void startRemove(const accounts::Account& who);
+    void startSignOut();
+    void startLeaving(Leave what, const std::string& label);
 
     // ---- Steam (#223) ------------------------------------------------------
     //
@@ -1595,6 +1698,8 @@ struct App {
         SteamJob& j;
         ~SteamJobStop() { if (j.th.joinable()) j.th.join(); }
     } steamJobStop{steamJob};
+    bool runSteamJob(const std::string& busy, std::function<void()> work,
+                     std::function<void()> finish);
     // Steam's install in progress, for the panel's line (installSteam).
     struct SteamInstall {
         std::atomic<bool> cancel{false};
@@ -1603,6 +1708,7 @@ struct App {
         std::string why;
     };
     std::shared_ptr<SteamInstall> steamInstall;
+    void pollSteamJob();
 
     // What the first-pick screen and the size panel show, read off the frame
     // thread: what the main drive could give Steam without touching a kept
@@ -1616,18 +1722,17 @@ struct App {
         bool online = false;
     };
     SteamSizes steamSizes;
+    static void readSteamSizes(SteamSizes* out);
+    std::string steamGamesLine(int64_t size);
 
-    std::function<void()> showSteamSetup;
-    // The size panel: one row Left and Right change, 25 GB a press, with the
-    // console's side shown under the title (MMagTech's brief: both sides).
-    //
-    // INSTALLING, it is the second of the two install screens and goes both
-    // ways from 100 GB, since nothing exists yet; focus starts on Install, so
-    // (A) twice installs at the default and the size is there for anyone who
-    // looks (MMagTech on the TV, 2026-10-03: the first screen read as jargon).
-    // Back returns to the first screen. GROWING, from Storage, it only goes up
-    // (grow only, MMagTech 2026-10-03).
-    std::function<void(bool)> showSteamSize;
+    void showSteamSetup();
+    void installSteam(int64_t want);
+    void showSteamSize(bool growing);
+    void steamPressed();
+    void apply(const screens::Result& res);
+    void activateHome();
+    void goToDestination(int d);
+    int destinationHere();
 
     // SWITCHING TOP-BAR DESTINATIONS IS A DISSOLVE — 2026-09-24.
     //
@@ -1667,6 +1772,24 @@ struct App {
     bool snapTaken = false;
     int pendingDest = -1;
     design::Animated tabDissolve;
+    void transitionTo(int d);
+    int destinationGoing();
+    void switchDestination(int delta);
+    bool shoulderOnPage(int dir);
+    bool barKey(screens::Nav n);
+    void removeDownloads();
+    void pumpSwitch();
+    void pumpLeave();
+    void pumpArrive();
+    void refuseLaunch(const std::string& why);
+    void startStandalone(const cab::standalone::Emulator& emu);
+    static void dropPressesFromClosing();
+    void finishStandalone();
+    void pumpLaunch();
+    void leaveFocus();
+    void enterFocus();
+    void moveFocus(int delta);
+    void moveRow(int delta);
 
     // WHO OWNS THE INPUT, asked once per event rather than decided again at
     // every call site.
@@ -1682,6 +1805,9 @@ struct App {
     // focus on the Home screen behind it, so leaving the game landed somewhere
     // nobody chose. Found by someone actually playing it.
     enum class InputOwner { Keyboard, Overlay, Game, UI };
+    InputOwner inputOwner();
+    void keyboardUp();
+    void keyboardResult(ui::KeyboardResult res);
 
     // Leaving a game. The save goes up FIRST — this is the trigger that matters
     // most, because nobody should lose progress by quitting — and only then is
@@ -1702,6 +1828,9 @@ struct App {
     // quitting must not wait on a core that is never going to boot.
     bool exitPending = false;
     uint64_t exitWaitStart = 0;
+    void finishExit();
+    void exitToHome();
+    void pumpExit();
 
     // A STREAM STARTING OR ENDING HANDS THE PLAYERS OVER (players.h) AND
     // PAUSES A RUNNING GAME, so nobody's car crashes in the second it takes to
@@ -1709,11 +1838,20 @@ struct App {
     // (MMagTech, 2026-10-07). Every system: the built-in ones and the
     // emulators of their own. Asked from both loops (the one an emulator of
     // its own runs under skips the rest), and only a flag is read.
-    std::function<void()> remotePlayHandover;
+    void remotePlayHandover();
+    void powerCue(sound::Cue c);
+    void closeOverlay(bool cue = true);
+    void powerActivate(PowerItem item);
+    void standaloneScreenshot();
+    void pumpStandaloneShot();
+    void stepChoice(int slot, int delta, bool wrap);
+    void beginInsert(int n);
+    void pumpInsert();
     // START OVER ON DISC N: the game is left as any exit leaves it, saves
     // and all, and started again on that disc. Play carries on from it too,
     // which is the way back to disc 1 for a postgame (#162).
     int relaunchRomId = 0;
+    void startOverOnDisc(int n);
     // THE DISC RIG'S STATE (#162, --disc-script). A test instrument: empty,
     // and nothing here runs.
     struct DiscScript {
@@ -1727,7 +1865,12 @@ struct App {
         std::string captureTo;    // the next frame capture goes here
         bool said = false;
     } discScript;
-    std::function<void()> openDiscPanel;
+    void openDiscPanel();
+    void pickDisc(int n);
+    void overlayActivate();
+    void toggleOverlay();
+    void openStandaloneMenu();
+    void openPowerMenu();
     // Set while logind is waiting on us to leave a game before it proceeds.
     bool releasePending = false;
     uint64_t releaseWaitStart = 0;
