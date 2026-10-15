@@ -21,34 +21,40 @@ each other, and outside contributors must find their way.
 
 **The audit (#398, "Audit the code and restructure it for contributors
 (main.cpp is 20,000 lines)") is being done in parts, one per session, report
-only, no code changes.** Parts 1 and 2 are posted on the issue (2026-10-14):
+only, no code changes.** Parts 1, 2 and 3 are posted on the issue (2026-10-14):
 every line of main.cpp is read, its plan is 61 files (Part 2, section 3.12),
-the plan for lines 1 to 9147 is refuted and corrected (section 14), and the
-dead-code list is settled (section 15). **Part 3 is next**; its prompt is
-`~/Documents/Development/cabinetos-audit/part3-prompt.md`: first the
-refutation of Part 2's five stretches, then the other frontend files in five
-groups.
+the whole plan is refuted and corrected (Part 2 section 14, Part 3 section 19),
+the dead-code list is settled (section 15), and every other frontend file is
+read and refuted in five groups (Part 3, sections 20 and 21). **Part 4 is
+next**; its prompt is `~/Documents/Development/cabinetos-audit/part4-prompt.md`:
+the scripts, services, image build, cores, CI, workflows and tools, in Part 1's
+remaining areas, then their refutation. Part 5 is the docs and the RomM map's
+refutation; Part 6 the final order of moves and the checklist.
 
-**Decisions MMagTech owes before the moves begin** (Part 2, section 17): the
-client's thread rule (one romm::Client shared by up to sixteen threads while
-the frame thread rewrites its token and address), the two PIN gates,
-protectRomId 0, folders for the 61 files, whether the 2,065 lines of test
-instruments stay in the product binary, and the dead-code pull request (38
-verified items). Decided 2026-10-14: #402 corrected; #404, #405 and #406
+**Decisions MMagTech owes before the moves begin** (Part 2 section 17, Part 3
+section 23): the pace of the moves (one area per session as decided, or the
+batched plan of Part 3 section 22.5; he is thinking, not deciding), backup and
+revert before move 1, which of Part 3's 25 new faults get issues, protectRomId
+0, folders for the 61 files, whether the test instruments stay in the product
+binary, and the dead-code pull request. Decided 2026-10-14: the client's thread
+rule waits for the RomM folder move; the two PIN gates were decided 2026-10-07
+(in the code at main.cpp 9501 to 9509); #402 corrected; #404, #405 and #406
 opened.
 
 **How a part runs (learned 2026-10-14):** three to five agents at a time,
 every output saved into `~/Documents/Development/cabinetos-audit/` as it
-lands, the part posted on #398 before the session ends. Readers on Fable,
-refuters that judge C++ on Opus, mechanical whole-repository checks on Sonnet
-with a spot-check; the cost of each wave read off the usage card first.
+lands, the part posted on #398 before the session ends. Readers on Opus (Fable
+only for files where the lessons cluster), refuters on Opus, mechanical checks
+on Sonnet with a spot-check; the cost of each wave read off the usage card
+first; up to ten agents at once when each writes its own file. Give every time
+in MMagTech's clock (US Eastern), never UTC.
 
 **Where the material is:** `~/Documents/Development/cabinetos-audit/` on
-the Mac (outside the repository): `readers/` (seventeen reader outputs),
-`verifiers/` (fifteen refuter outputs), `verify-args/` (the posted sections,
+the Mac (outside the repository): `readers/` (twenty-eight reader outputs),
+`verifiers/` (twenty-five refuter outputs), `verify-args/` (the posted sections,
 the raw claims, the dead-code batches and the grep baseline),
-`measurements/`, `scripts/`, and the posted comments as `part1-comment*.md`
-and `part2-comment*.md`. A new session starts from these, not from
+`measurements/`, `scripts/`, and the posted comments as `part1-comment*.md`,
+`part2-comment*.md` and `part3-comment*.md`; `part3-log.md` is the run log. A new session starts from these, not from
 re-reading.
 
 **Then, after MMagTech's decisions:** one area per session, moved, built and
