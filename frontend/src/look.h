@@ -68,7 +68,6 @@ std::string hourName(int hour);
 void setColour(Colour c, bool instant = false);
 void setDark(bool dark, bool instant = false);
 Colour colour();
-bool dark();
 void tick(float dt);
 
 // The menus' background and panel colour, as they are this frame.

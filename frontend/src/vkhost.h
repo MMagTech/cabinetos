@@ -104,7 +104,6 @@ void setNegotiation(const retro_hw_render_context_negotiation_interface_vulkan* 
 // Returns false and fills `err` with a line that names what to change.
 bool createContext(std::string* err);
 void destroyContext();
-bool contextReady();
 
 // Handed to the core through RETRO_ENVIRONMENT_GET_HW_RENDER_INTERFACE. Null
 // until createContext has succeeded, which is the contract: the core may not
@@ -112,11 +111,6 @@ bool contextReady();
 const retro_hw_render_interface_vulkan* renderInterface();
 
 // --- Per frame -------------------------------------------------------------
-
-// Whether the core has handed over an image since the last call. The frame
-// loop uses this the way the GLES path uses "has the core produced a picture
-// yet": false means draw the last one again, not draw nothing.
-bool hasNewFrame();
 
 // Copies whatever the core last set into the exported image, so the GL
 // texture below holds it. Call on the GL thread, once a frame, after runFor.
@@ -134,7 +128,7 @@ GLuint texture();
 // see core.h — so the player needs no second code path.
 void frameUV(float& u0, float& v0, float& u1, float& v1);
 
-// The size of the last picture the core handed over, in pixels.
+// The size of the last picture the core handed over, in pixels, for frameUV.
 //
 // Set by the host from what the core passed to video_refresh, because
 // retro_vulkan_image carries no width or height — only a view and the info it
@@ -142,12 +136,6 @@ void frameUV(float& u0, float& v0, float& u1, float& v1);
 // ALLOCATION rather than its picture, and those differ the moment a core
 // upscales internally.
 void setFrameSize(unsigned width, unsigned height);
-unsigned frameWidth();
-unsigned frameHeight();
-
-// For the audit and the log: "AMD Radeon 890M Graphics (RADV STRIX1), Vulkan
-// 1.4", or empty when no context exists.
-const std::string& description();
 
 // How many pictures crossed from Vulkan into GL, and how long that took in
 // total. This is the honest cost of the bridge — the import is free, the blit

@@ -51,10 +51,8 @@ struct Platform {
 };
 
 // A collection: the person's own grouping of games, held by RomM so it is the
-// same on every device. It is not a platform in one way that decides the code
-// here — its membership is a LIST OF ROM IDS rather than a property of each
-// game, so a collection is resolved by looking its ids up in the library
-// rather than by asking the server for a filtered page.
+// same on every device. Its games are fetched when it is opened, exactly as a
+// platform's are (loadTileGames).
 //
 // RomM's own "Favorites" is a collection like any other, flagged `is_favorite`.
 // Home already has a Favorites shelf fed by the favourites endpoint, so the
@@ -83,7 +81,6 @@ struct Collection {
     std::string ownerName;   // their RomM username, for "From <name>"
     std::string name;
     int romCount = 0;
-    std::vector<int> romIds;
     // A cover for the tile. RomM keeps a mosaic of member covers for a
     // collection with no art of its own, and the first of them is a real cover
     // from a real game inside it, which is all a tile needs.
@@ -175,8 +172,6 @@ struct Firmware {
     int id = 0;
     std::string fileName;
     int64_t sizeBytes = 0;
-    std::string md5;
-    bool verified = false;
 };
 
 // One file of a game, as RomM lists it under `files`. A game RomM holds as a
@@ -272,15 +267,13 @@ public:
     const std::string& serverVersion() const { return serverVersion_; }
 
     bool haveToken() const { return !token_.empty(); }
-    void setToken(std::string token) { token_ = std::move(token); }
     // For `accounts::recordPairing`, which files this under the id the server
     // says it belongs to. A credential: it is never printed and never logged.
     const std::string& token() const { return token_; }
 
-    // Token persistence. The file is written 0600 and holds a credential, so
-    // it does not belong anywhere near the repository.
+    // A token read back from a file an account keeps (accounts.h). It is a
+    // credential, so it does not belong anywhere near the repository.
     bool loadToken(const std::string& path);
-    bool saveToken(const std::string& path) const;
 
     // Step one of pairing. Asks for read-only scopes only; anything that writes
     // is requested separately, when something actually needs to write.

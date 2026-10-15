@@ -170,7 +170,6 @@ void setDark(bool on, bool instant) {
 }
 
 Colour colour() { return gColour; }
-bool dark() { return gIsDark; }
 
 void tick(float dt) {
     gColourFade.tick(dt);

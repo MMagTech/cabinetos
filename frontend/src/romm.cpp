@@ -387,47 +387,6 @@ bool Client::loadToken(const std::string& path) {
     return true;
 }
 
-bool Client::saveToken(const std::string& path) const {
-    if (token_.empty()) return false;
-
-    // THE DIRECTORY HAS TO BE MADE, AND NOT MAKING IT COST A PAIRING ON THE
-    // FIRST CONSOLE EVER INSTALLED. `~/.config/cabinetos/` does not exist on a
-    // machine nobody has configured, which is precisely the machine that is
-    // pairing. The open below then fails with ENOENT, the pairing that the
-    // person has just approved in a browser is thrown away, and the console
-    // goes on showing the stand-in library. Found 2026-09-19, on the A9 Pro,
-    // ten minutes after it first booted; the test VM never showed it because
-    // that directory had been created there by hand weeks earlier.
-    //
-    // 0700, because what goes in it is a credential.
-    if (const size_t slash = path.rfind('/'); slash != std::string::npos && slash > 0) {
-        const std::string dir = path.substr(0, slash);
-        std::string built;
-        size_t at = 0;
-        while (at < dir.size()) {
-            const size_t next = dir.find('/', at + 1);
-            built = dir.substr(0, next == std::string::npos ? dir.size() : next);
-            if (!built.empty()) ::mkdir(built.c_str(), S_IRWXU);
-            if (next == std::string::npos) break;
-            at = next;
-        }
-    }
-
-    // 0600 from the moment it exists. Creating it readable and chmod-ing after
-    // leaves a window where the credential is world-readable.
-    int fd = open(path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
-    if (fd < 0) return false;
-    json_object* root = json_object_new_object();
-    json_object_object_add(root, "access_token", json_object_new_string(token_.c_str()));
-    json_object_object_add(root, "base_url", json_object_new_string(base_.c_str()));
-    const char* out = json_object_to_json_string(root);
-    const size_t len = strlen(out);
-    const bool ok = write(fd, out, len) == static_cast<ssize_t>(len);
-    json_object_put(root);
-    close(fd);
-    return ok;
-}
-
 bool Client::beginPairing(Pairing* out, std::string* err) {
     json_object* req = json_object_new_object();
     json_object_object_add(req, "client_device_identifier",
@@ -585,21 +544,6 @@ static bool parseCollections(const std::string& body, bool smart,
         json_object* fav = nullptr;
         if (json_object_object_get_ex(o, "is_favorite", &fav) && fav)
             c.isFavorite = json_object_get_boolean(fav);
-
-        // The membership. This is the whole reason a collection is cheap: the
-        // ids come down with the list, so opening one is a lookup rather than
-        // another request.
-        json_object* ids = nullptr;
-        if (json_object_object_get_ex(o, "rom_ids", &ids) &&
-            json_object_get_type(ids) == json_type_array) {
-            const size_t m = json_object_array_length(ids);
-            c.romIds.reserve(m);
-            for (size_t j = 0; j < m; ++j) {
-                const int id = static_cast<int>(
-                    json_object_get_int64(json_object_array_get_idx(ids, j)));
-                if (id != 0) c.romIds.push_back(id);
-            }
-        }
 
         // `path_cover_small` is null for a collection the person never gave
         // art to, which is the common case; `path_covers_small` is RomM's
@@ -1183,10 +1127,6 @@ bool Client::fetchFirmware(int platformId, std::vector<Firmware>* out, std::stri
         f.id = static_cast<int>(jint(o, "id"));
         f.fileName = jstr(o, "file_name");
         f.sizeBytes = jint(o, "file_size_bytes");
-        f.md5 = jstr(o, "md5_hash");
-        json_object* v = nullptr;
-        if (json_object_object_get_ex(o, "is_verified", &v))
-            f.verified = json_object_get_boolean(v);
         if (f.id != 0 && !f.fileName.empty()) out->push_back(std::move(f));
     }
     json_object_put(root);

@@ -590,7 +590,6 @@ std::string statesDir(const User& u, const std::string& platform, int romId,
 }
 
 std::string screenshotsDir(const User& u) { return userDir(u) + "/screenshots"; }
-std::string userConfigDir(const User& u) { return userDir(u) + "/config"; }
 std::string keepsDir(const User& u) { return userDir(u) + "/keeps"; }
 std::string pendingDir(const User& u) { return userDir(u) + "/pending"; }
 
@@ -624,31 +623,6 @@ std::vector<User> knownUsers() {
     ::closedir(d);
     std::sort(out.begin(), out.end(), [](const User& a, const User& b) { return a.id < b.id; });
     return out;
-}
-
-std::string locationFor(int romId) {
-    for (const std::string& loc : locations()) {
-        for (const std::string& half : {romsDir(loc), cacheDir(loc)}) {
-            DIR* d = ::opendir(half.c_str());
-            if (!d) continue;
-            bool found = false;
-            while (struct dirent* plat = ::readdir(d)) {
-                if (plat->d_name[0] == '.') continue;
-                const std::string pdir = half + "/" + plat->d_name;
-                DIR* pd = ::opendir(pdir.c_str());
-                if (!pd) continue;
-                while (struct dirent* entry = ::readdir(pd)) {
-                    if (entry->d_name[0] == '.') continue;
-                    if (romIdFromEntry(entry->d_name) == romId) { found = true; break; }
-                }
-                ::closedir(pd);
-                if (found) break;
-            }
-            ::closedir(d);
-            if (found) return loc;
-        }
-    }
-    return locations().front();
 }
 
 MoveResult moveEntry(const std::string& from, const std::string& to) {

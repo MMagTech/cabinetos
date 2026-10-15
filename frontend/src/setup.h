@@ -24,14 +24,16 @@
 //
 // A Wi-Fi scan is seconds, a Bluetooth scan is ten, and waiting for somebody to
 // pick up a phone and approve a pairing is minutes. Every one of those runs on
-// a worker and is polled once a frame, the same shape `LaunchJob` and
-// `StateLoad` already use in main.cpp. A setup screen that freezes while it
+// a worker and is polled once a frame, the same shape `LaunchJob` (main.cpp)
+// and `StateLoad` (states.h) already use. A setup screen that freezes while it
 // looks for networks is indistinguishable from a console that has crashed —
 // and it would be the FIRST thing anybody ever saw it do.
 
 #pragma once
 
 #include <string>
+
+#include "keyboard.h"
 
 struct SDL_Window;
 
@@ -99,7 +101,7 @@ struct Options {
 // It is one frame, not a loop: the work it covers is synchronous, so there is
 // nothing to animate against. A still sentence that says what is happening
 // beats a picture that has stopped changing for no stated reason.
-void showWaiting(const Deps& d, const char* title, const char* detail);
+void showWaiting(const Deps& d, const char* detail);
 
 // The same startup screen, drawn into a frame somebody else is building, at
 // `alpha`. For the main loop's curtain when the app is about to start again
@@ -125,3 +127,9 @@ enum class Outcome {
 Outcome run(const Deps& d, const Options& o);
 
 }  // namespace setup
+
+// The keyboard for a server address in Settings and on the startup screen's
+// server wait, and its trim: first run's own keyboard (Flow, Act::Edit)
+// without its hint. Moved out of main.cpp in the restructure (#398).
+ui::Keyboard::Config serverKeyboardConfig(const std::string& initial);
+std::string trimmedAddress(std::string a);

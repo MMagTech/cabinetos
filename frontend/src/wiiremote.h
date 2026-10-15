@@ -75,9 +75,6 @@ void refresh();
 // gamepad events from a pad id no real pad has). Idempotent.
 void start();
 
-// How many Remotes are connected now.
-int connected();
-
 // While a game runs Dolphin drives the Remotes: the console stops sending
 // them anything and reads only HOME, held, for its own menu. When the game
 // ends every Remote is set up again with its own light.

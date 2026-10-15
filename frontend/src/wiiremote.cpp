@@ -713,13 +713,6 @@ void start() {
     });
 }
 
-int connected() {
-    std::lock_guard<std::mutex> lk(gLock);
-    int n = 0;
-    for (const Remote& r : gRemotes) n += isOn(r) ? 1 : 0;
-    return n;
-}
-
 void setGameRunning(bool running) {
     if (gGame == running) return;
     gGame = running;

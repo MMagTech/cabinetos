@@ -55,10 +55,7 @@ constexpr Color kBackdropMid = Color::rgb(0x120C26);  // at 0.55, not the midpoi
 constexpr Color kBackdropBottom = Color::rgb(0x090614);
 constexpr Color kSurface = Color::rgb(0x241A3D);       // library tile panel
 constexpr Color kScreenCyan = Color::rgb(0x58E8F6);    // candidate accent
-constexpr Color kScreenBlue = Color::rgb(0x2484D6);
-constexpr Color kMarqueePink = Color::rgb(0xFF7AC7);
 constexpr Color kMarqueeAmber = Color::rgb(0xFFC457);
-constexpr Color kCabinetBody = Color::rgb(0xEEEAE2);
 constexpr Color kFocusRim = Color::white(0.85f);
 }  // namespace palette
 
@@ -223,7 +220,6 @@ public:
     //
     // docs/PROJECT.md, open question 24.
     void setTransparentBackground(bool on) { transparentBackground_ = on; }
-    bool transparentBackground() const { return transparentBackground_; }
 
     // --- Frosted glass -------------------------------------------------------
     //
@@ -297,7 +293,6 @@ private:
     float offsetY_ = 0.0f;
     float offsetX_ = 0.0f;
     GLuint vao_ = 0;
-    GLuint vbo_ = 0;
     GLuint targetFBO_ = 0;    // 0 is the window; an offscreen render redirects it
     GLuint offscreenFBO_ = 0;
     GLuint offscreenTex_ = 0;

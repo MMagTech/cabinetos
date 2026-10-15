@@ -51,7 +51,6 @@ struct VulkanCaps {
     // for one told a device by UUID (Cemu's `vkDevice`). Empty when unknown.
     std::string deviceUuid;
     uint32_t apiVersion = 0;     // VK_MAKE_API_VERSION packed
-    uint32_t driverVersion = 0;
     bool discrete = false;
     uint32_t vendorId = 0;       // PCI: 0x1002 AMD, 0x10de NVIDIA, 0x8086 Intel
 

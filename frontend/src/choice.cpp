@@ -12,7 +12,6 @@ namespace {
 
 // The PIN pad's panel sizes (pin.cpp); the look is design::menuPanel.
 constexpr float kPanelPad = 40.0f;
-constexpr float kPanelRadius = 32.0f;
 constexpr float kPanelMaxW = 1200.0f;
 constexpr float kButtonW = 600.0f;
 constexpr float kButtonH = 88.0f;
@@ -226,7 +225,7 @@ void ChoiceScreen::draw(Ctx& c) {
     if (prompt) {
         // "Press (B) to cancel": the words, and the button as a white disc
         // with its dark letter on the text's x-height, as Home's empty state
-        // draws "Press (A) to open the Library" (main.cpp, drawPressPrompt).
+        // draws "Press (A) to open the Library" (screenparts.cpp, drawPressPrompt).
         const TextStyle st = TextStyle::Title3;
         const float gap = 16.0f;
         const float badge = c.text.lineHeight(st, sc) * 0.95f;

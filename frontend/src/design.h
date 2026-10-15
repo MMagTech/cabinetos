@@ -377,7 +377,6 @@ constexpr float kShelfBreathing = 18.0f;
 constexpr float kShelfHeadroom =
     kShelfCoverHeight * (kFocusScale - 1.0f) * 0.5f + kShelfBreathing;
 constexpr float kCoverRadius = 10.0f;
-constexpr float kCaptionGap = 6.0f;
 
 // --- Library ----------------------------------------------------------------
 //
@@ -491,7 +490,6 @@ constexpr int kGridCaptionLines = 0;
 // The letter index down the right of a grid: the width of its glass column,
 // room for the bar's focus capsule round one Title 3 letter and a margin.
 constexpr float kLetterIndexWidth = 96.0f;
-constexpr float kScreenChipPadX = 24.0f;
 constexpr float kScreenChipPadY = 10.0f;
 
 // --- The launch screen ------------------------------------------------------

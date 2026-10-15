@@ -156,10 +156,6 @@ bool isExternal(const std::string& location);
 // The same question about a block device, before anything is mounted from it.
 bool isExternalDevice(dev_t device);
 
-// The location a game with this id is stored under, or the primary location
-// when it is not here yet.
-std::string locationFor(int romId);
-
 // --- The shared half --------------------------------------------------------
 
 std::string romsDir(const std::string& location);    // <loc>/roms
@@ -252,7 +248,6 @@ std::string savesDir(const User& u, const std::string& platform, int romId,
 std::string statesDir(const User& u, const std::string& platform, int romId,
                       const std::string& core);
 std::string screenshotsDir(const User& u);
-std::string userConfigDir(const User& u);
 std::string keepsDir(const User& u);
 std::string pendingDir(const User& u);
 

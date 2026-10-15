@@ -1367,7 +1367,7 @@ void DetailScreen::rebuildRows() {
     if (game_.playable) {
         // The primary action first, and reachable without travelling through
         // the secondary ones.
-        rows_.push_back({Action::Play, "Play", true, saveWhen_});
+        rows_.push_back({Action::Play, "Play", saveWhen_});
         // DOWNLOAD IS THE DELIBERATE ONE. The cache is invisible — pressing
         // Play fetches the game if it is not here and says nothing about it —
         // so this row is not "is it cached", it is "put this game on the
@@ -1378,9 +1378,9 @@ void DetailScreen::rebuildRows() {
         // only told it apart from Play's fetch into the cache, which nobody
         // sees. One family of words: Download, Remove download, Downloads.
         if (game_.kept)
-            rows_.push_back({Action::RemoveDownload, "Remove download", true, ""});
+            rows_.push_back({Action::RemoveDownload, "Remove download", ""});
         else
-            rows_.push_back({Action::Download, "Download", true, ""});
+            rows_.push_back({Action::Download, "Download", ""});
     }
     // A different save state, a different core and an export belong here too.
     // They are not built yet and a row that does nothing is worse than no row.
@@ -1532,7 +1532,7 @@ Result DetailScreen::step(Nav n) {
     // game counts as downloaded from the first byte, so the row under the
     // progress is Remove download, and what removing a half-written game
     // should do was never designed. It is answered when the download lands.
-    if (n == Nav::Activate && rows_[slot_].enabled && !rowBusy(slot_))
+    if (n == Nav::Activate && !rowBusy(slot_))
         return {rows_[slot_].action, game_.romId};
     return {};
 }

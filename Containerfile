@@ -57,9 +57,6 @@ COPY image_payload /payload
 # power-button infrastructure we may want in Phase 2.
 FROM ghcr.io/ublue-os/bazzite:44.20261006.1@sha256:2cdcb7ec7ab4b2d28474dd1f25de457025ac7cf95518d8f567362d5d5ee76248
 
-ARG IMAGE_NAME="${IMAGE_NAME:-cabinetos}"
-ARG IMAGE_VENDOR="${IMAGE_VENDOR:-mmagtech}"
-
 # ---------------------------------------------------------------------------
 # Build
 # ---------------------------------------------------------------------------

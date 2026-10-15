@@ -13,10 +13,8 @@
 // whatever it means. Nothing here touches the disk or the network.
 //
 // NEVER LET FOCUS LAND ON A ROW THAT DOES NOTHING, the rule first run paid for.
-// A row that only shows a value, and a row whose control is not built yet, are
-// both drawn and both skipped by focus. The unbuilt ones are drawn dimmed and
-// say so, because this version exists so the whole layout can be judged on the
-// television before every row behind it is built.
+// A row that only shows a value, and a row with nothing to do right now, are
+// both drawn and both skipped by focus; the second is drawn dimmed.
 
 #pragma once
 
@@ -34,7 +32,6 @@ struct SettingsRow {
         Action,    // opens or does something; has a chevron
         Toggle,    // On or Off, shown as the value; pressing flips it
         Choice,    // one of a few, shown as the value; left and right move it
-        Unbuilt,   // agreed, not built; drawn dimmed, cannot be focused
         Disabled,  // built, but nothing to do right now; dimmed, not focused,
                    // and no explanation (MMagTech: "just gray out the menu
                    // option")

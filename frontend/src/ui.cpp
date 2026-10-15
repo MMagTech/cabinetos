@@ -681,7 +681,6 @@ void Renderer::endOffscreen() {
 
 void Renderer::shutdown() {
     endOffscreen();
-    if (vbo_) glDeleteBuffers(1, &vbo_);
     if (vao_) glDeleteVertexArrays(1, &vao_);
     if (program_) glDeleteProgram(program_);
     if (backdropProgram_) glDeleteProgram(backdropProgram_);
@@ -691,7 +690,7 @@ void Renderer::shutdown() {
     if (sceneFBO_) glDeleteFramebuffers(1, &sceneFBO_);
     if (sceneTex_) glDeleteTextures(1, &sceneTex_);
     sceneFBO_ = sceneTex_ = 0;
-    vbo_ = vao_ = program_ = backdropProgram_ = texturedProgram_ = blurProgram_ = 0;
+    vao_ = program_ = backdropProgram_ = texturedProgram_ = blurProgram_ = 0;
 }
 
 void Renderer::presentScene() {

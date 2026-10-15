@@ -106,7 +106,6 @@ private:
                      int& unit);
 
     std::string path_;
-    std::string failed_;
     std::vector<Pass> passes_;
     std::vector<Lut> luts_;
     std::map<std::string, float> params_;

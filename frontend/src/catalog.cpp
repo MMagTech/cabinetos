@@ -777,7 +777,7 @@ std::map<std::string, std::string> optionOverrides(const std::string& core) {
     // * CHEAT IMPORT OFF. On, the core writes RetroArch `.cht` files beside
     //   the system directory, for a program this console does not have; the
     //   reference console had /var/lib/cabinetos/cheats/dolphin-emu/ from two
-    //   GameCube games. main.cpp clears what it already wrote.
+    //   GameCube games. dolphinprep.cpp clears what it already wrote.
     // * DOLPHIN'S OWN ON-SCREEN MESSAGES OFF, as Batocera ships them. The
     //   console says what needs saying itself.
     //

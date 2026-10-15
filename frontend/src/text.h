@@ -41,19 +41,16 @@ struct Color;
 // not on a monitor.
 enum class TextStyle {
     LargeTitle,  // 76 bold  — game detail title, settings page titles
-    Title1,      // 57
     Title2,      // 48 bold  — shelf headers
     Title3,      // 38 semibold — settings rows, tile titles, pills
-    Headline,    // 38 semibold — hero card title
     Callout,     // 31       — cover captions
     Body,        // 29
     Footnote,    // 29       — game counts
     Caption1,    // 25       — hero platform label
-    Caption2,    // 23
     ScreenTitle, // 40 bold  — the one hardcoded size in the reference app
 };
 
-enum class Weight { Regular, Medium, SemiBold, Bold };
+enum class Weight { Regular, SemiBold, Bold };
 
 float styleSize(TextStyle s);
 Weight styleWeight(TextStyle s);

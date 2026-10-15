@@ -5,7 +5,7 @@
 //
 // WHAT IT IS: per person, per game, the list of save rows RomM returned and
 // the bytes of the rows a launch would restore. Offline, a launch reads this
-// exactly as it reads the server online (savesFor, in main.cpp), so the one
+// exactly as it reads the server online (savesFor, in saves.cpp), so the one
 // rule stays the rule: the console's own copy wins only while its upload is
 // still owed (cache::isPending); otherwise the server's newest does.
 //

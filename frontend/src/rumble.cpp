@@ -3,7 +3,6 @@
 #include <SDL3/SDL.h>
 
 #include <atomic>
-#include <cstdio>
 
 #include "players.h"
 #include "prefs.h"

@@ -14,6 +14,7 @@
 #include "design.h"
 #include "sound.h"
 #include "firstrun.h"
+#include "job.h"
 #include "keyboard.h"
 #include "net.h"
 #include "players.h"
@@ -31,69 +32,7 @@ using design::Animated;
 using ui::Color;
 using ui::Rect;
 
-// --- Blocking work, moved off the frame ------------------------------------
-//
-// One worker, one result, polled once a frame. The same shape as LaunchJob and
-// StateLoad in main.cpp, generalised because first run needs five of them and
-// writing the thread handling five times is how one of them ends up subtly
-// different.
-template <class T>
-class Job {
-public:
-    ~Job() { join(); }
-    Job() = default;
-    Job(const Job&) = delete;
-    Job& operator=(const Job&) = delete;
-
-    bool busy() const { return running_.load(); }
-    bool ready() const { return done_.load(); }
-
-    // `fn` runs on the worker and must touch nothing else in this program.
-    void start(std::function<bool(T&, std::string&)> fn) {
-        join();
-        result_ = T{};
-        error_.clear();
-        ok_ = false;
-        done_.store(false);
-        running_.store(true);
-        worker_ = std::thread([this, fn = std::move(fn)] {
-            T r{};
-            std::string e;
-            const bool good = fn(r, e);
-            result_ = std::move(r);
-            error_ = std::move(e);
-            ok_ = good;
-            running_.store(false);
-            done_.store(true);
-        });
-    }
-
-    // Consumes a finished result. Returns false while the worker is still
-    // going, so a caller can poll this every frame and act on the one frame it
-    // becomes true.
-    bool take(T* out, std::string* err, bool* ok) {
-        if (!done_.load()) return false;
-        join();                      // the worker has finished; reap it
-        done_.store(false);
-        if (out) *out = std::move(result_);
-        if (err) *err = error_;
-        if (ok) *ok = ok_;
-        return true;
-    }
-
-    void cancel() { join(); done_.store(false); }
-
-private:
-    void join() {
-        if (worker_.joinable()) worker_.join();
-    }
-    std::thread worker_;
-    std::atomic<bool> running_{false};
-    std::atomic<bool> done_{false};
-    T result_{};
-    std::string error_;
-    bool ok_ = false;
-};
+using cab::Job;   // job.h
 
 // --- Words that fit --------------------------------------------------------
 //
@@ -2130,7 +2069,7 @@ void drawStartup(ui::Renderer& r, ui::TextRenderer& t, const char* detail, float
     }
 }
 
-void showWaiting(const Deps& d, const char* title, const char* detail) {
+void showWaiting(const Deps& d, const char* detail) {
     if (!d.window || !d.renderer || !d.text) return;
     ui::Renderer& r = *d.renderer;
     ui::TextRenderer& t = *d.text;
@@ -2160,7 +2099,6 @@ void showWaiting(const Deps& d, const char* title, const char* detail) {
     std::fprintf(stderr, "[waiting] drawable %dx%d\n", dw, dh);
     r.beginFrame(dw, dh);
     drawStartup(r, t, detail, 1.0f);
-    (void)title;
 
     // Without this the frame goes into the scene texture and never reaches the
     // window — see the note at the end of Flow::draw.
@@ -2177,8 +2115,26 @@ Outcome run(const Deps& d, const Options& o) {
     // ten seconds: on the A9, 2026-09-25, "Start playing" stayed pressed on a
     // frozen Ready screen for 17 s. Now the logo is up for that time instead,
     // and the startup's own lines follow it.
-    if (out == Outcome::Completed && !o.screenshotPath) showWaiting(d, "", nullptr);
+    if (out == Outcome::Completed && !o.screenshotPath) showWaiting(d, nullptr);
     return out;
 }
 
 }  // namespace setup
+
+// The keyboard for a server address, in Settings and on the startup screen:
+// first run's, without its hint, because the people here know what an
+// address is (docs/SETTINGS.md, Network).
+ui::Keyboard::Config serverKeyboardConfig(const std::string& initial) {
+    ui::Keyboard::Config cfg;
+    cfg.title = "RomM server";
+    cfg.initial = initial;
+    cfg.placeholder = "192.168.1.10:6005";
+    cfg.shortcuts = {".local", ":8080"};
+    return cfg;
+}
+
+std::string trimmedAddress(std::string a) {
+    while (!a.empty() && a.back() == ' ') a.pop_back();
+    while (!a.empty() && a.front() == ' ') a.erase(0, 1);
+    return a;
+}

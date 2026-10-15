@@ -136,10 +136,6 @@ bool canRemove(int id, std::string* err);
 // NOT re-point the client or reload anything — that is `activate`.
 bool setActive(int id, std::string* err);
 
-// Updates a name or avatar in place, for when /api/users/me answers after the
-// account was first written. Silent no-op for an unknown id.
-bool update(int id, const std::string& name, const std::string& avatar);
-
 // Their colour for the menus. Silent no-op for an unknown id.
 bool setColour(int id, const std::string& colour);
 
@@ -251,3 +247,9 @@ void clearRaLogin(int id);
 bool forgetEveryone();
 
 }  // namespace accounts
+
+// Who the console acts as, settled before anything writes a save: asked of
+// RomM online, read from accounts.json offline (#88). Outside the namespace,
+// as their callers name them. Moved out of main.cpp in the restructure (#398).
+bool adoptUser(romm::Client& client);
+bool adoptAccountOffline(int id);

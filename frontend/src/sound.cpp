@@ -162,12 +162,6 @@ bool init() {
     return true;
 }
 
-void shutdown() {
-    if (gStream) SDL_DestroyAudioStream(gStream);
-    gStream = nullptr;
-    gReady = false;
-}
-
 // THE LEVELS, as volumes. Medium is the 0.22 the console always had. The steps
 // are about 10 dB apart (0.07, 0.22, 0.65), because loudness is heard as a
 // ratio: equal steps in volume would make Quiet to Medium sound like a much
@@ -217,7 +211,6 @@ void playChime() {
 }
 
 void setEnabled(bool on) { gEnabled = on; }
-bool enabled() { return gEnabled; }
 void setVolume(float v) { gVolume = v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v); }
 
 void play(Cue c) {

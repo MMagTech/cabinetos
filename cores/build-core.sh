@@ -80,7 +80,6 @@ gambatte)
     # first core: it proves the pipeline without also testing the parity
     # question.
     MAKEARGS=()
-    SO=gambatte_libretro.so
     ;;
 genesis_plus_gx)
     REPO=https://github.com/libretro/Genesis-Plus-GX.git
@@ -100,7 +99,6 @@ genesis_plus_gx)
     # console has no optical drive and never will, so this turns off a feature
     # the hardware cannot use.
     MAKEARGS=(HAVE_CDROM=0)
-    SO=genesis_plus_gx_libretro.so
     ;;
 fceumm)
     REPO=https://github.com/libretro/libretro-fceumm.git

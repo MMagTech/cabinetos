@@ -218,7 +218,7 @@ std::map<std::string, std::string> optionOverrides(const std::string& coreName);
 // keeps them and what RomM's coming save channels carry (#346). The zip is
 // those files, flat. Until then the console kept one whole 16 MB card at a
 // path of its own, because Cabinet for Mac did; Dolphin reads that card into
-// the folder by itself the first time the folder is missing (main.cpp,
+// the folder by itself the first time the folder is missing (saves.cpp,
 // restoreDirSave). The region comes from the game's code, so a game whose
 // code RomM does not know has no root and its saves stay on this console.
 const char* directorySaveRoot(const char* core, const std::string& platformSlug,
@@ -358,7 +358,7 @@ struct SaveFile {
     // manifest names, and they were read off the rows already on the server
     // rather than guessed: `smashtv (Cabinet fbneo).srm` and `lethalen
     // (Cabinet mame2003Plus).srm`. Matching them is the point — see
-    // main.cpp's saveRowName.
+    // saves.cpp's saveRowName.
     std::string coreRowName;
     // DREAMCAST ONLY. Flycast keeps the VMU in the libretro SYSTEM directory —
     // `bios/dc/` here — because libretro gives a core exactly one of those and

@@ -402,6 +402,21 @@ minute and guessing at it for twenty.
   empty `rom_user` row**, which moves its `updated_at`. Harmless, but do not
   read it as something the console sent.
 
+- **`--sync-test` WRITES TO RomM AS THE ACTIVE ACCOUNT, scratch root or
+  not.** 2026-10-15, move 1 of #398: a headless `--sync-test` of Cannon
+  Spike (Dreamcast) uploaded its state to RomM as MMagTech under
+  flycast-native. Flycast has a state tag (GameSession's comment saying it
+  has none is stale), and the upload did two things nobody wanted: RomM set
+  the game's last played, so Cannon Spike jumped to the front of Recent on
+  every device, and the state counts toward the three kept per game, so his
+  own older state goes one save sooner. A scratch `--storage-root` keeps the
+  console's disk clean, not the server. **Run `--sync-test`, and any launch
+  test that may save, through `tools/romm-readonly-relay.py`**: the relay's
+  `REFUSED POST /api/states?rom_id=550&emulator=flycast-native` line is the
+  proof the upload was tried, and nothing reaches RomM. A test killed with
+  SIGKILL sends no file saves, and a play session under a minute is not
+  recorded, so those were already safe.
+
 - **THE DISC RIG (`tools/disc-rig/`, #162) DRIVES A GAME BY SCRIPT**:
   `--disc-script "wait 600; insert 2; wait 300; shot a; state; startover 1;
   load; resume; check; quit"`, through the same calls the pause menu makes,
