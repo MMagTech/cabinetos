@@ -29,7 +29,7 @@
 #   /tmp/base-notes.md  the update notes alone (the bump's commit message)
 #
 # Sets these outputs when running under GitHub Actions:
-#   changed, relevant, old_version, new_version, new_digest, summary
+#   changed, relevant, new_version, summary
 
 set -euo pipefail
 
@@ -92,9 +92,7 @@ if [[ "${new_digest}" == "${old_digest}" ]]; then
 fi
 
 emit changed true
-emit old_version "${old_tag}"
 emit new_version "${new_version}"
-emit new_digest "${new_digest}"
 
 # ---------------------------------------------------------------------------
 # 3. What changed inside it?

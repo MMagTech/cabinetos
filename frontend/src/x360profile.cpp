@@ -6,7 +6,6 @@
 #include <cstdint>
 #include <cstring>
 #include <fstream>
-#include <iterator>
 #include <sstream>
 #include <vector>
 
@@ -151,20 +150,6 @@ bool writeAccount(const std::string& path, const std::string& tag, std::string* 
         return false;
     }
     return true;
-}
-
-std::string readAccount(const std::string& path) {
-    std::ifstream in(path, std::ios::binary);
-    std::vector<uint8_t> d((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-    if (d.size() != kFile) return {};
-    const std::array<uint8_t, 20> key = hmac(d.data(), 0x10);
-    rc4(key.data(), d.data() + 0x10, kPlain);
-    if (std::memcmp(hmac(d.data() + 0x10, kPlain).data(), d.data(), 0x10) != 0) return {};
-    std::string tag;
-    const uint8_t* at = d.data() + 0x10 + 8 + kGamertagAt;
-    for (size_t i = 0; i < 16 && (at[i * 2] || at[i * 2 + 1]); ++i)
-        tag += at[i * 2] ? '?' : char(at[i * 2 + 1]);
-    return tag;
 }
 
 }  // namespace cab::x360profile

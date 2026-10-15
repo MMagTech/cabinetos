@@ -12,7 +12,6 @@ namespace {
 
 // The PIN pad's panel sizes (pin.cpp); the look is design::menuPanel.
 constexpr float kPanelPad = 40.0f;
-constexpr float kPanelRadius = 32.0f;
 constexpr float kPanelMaxW = 1200.0f;
 constexpr float kButtonW = 600.0f;
 constexpr float kButtonH = 88.0f;

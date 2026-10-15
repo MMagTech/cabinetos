@@ -32,7 +32,6 @@ namespace ps2 {
 // that reads as a broken game.
 bool load(const std::string& soPath);
 void unload();
-bool loaded();
 
 const std::string& error();
 
@@ -63,9 +62,6 @@ bool startGame(const std::string& discPath, const std::string& biosDir,
 // memory card during shutdown, so a card captured before this returns is the
 // card as it was when the game started.
 void stopGame();
-
-// Whether the emulated machine is running, as opposed to still being built.
-bool running();
 
 // WIDESCREEN, PER GAME (#368). Every game whose PCSX2 patch file has a
 // "Widescreen 16:9" section plays widescreen (#217); the pause menu offers
@@ -119,11 +115,6 @@ bool takeFrame(const uint32_t** pixels, unsigned& width, unsigned& height);
 // Drains sound as interleaved 16-bit stereo, appending to `out` — the same
 // contract as `Core::drainAudio`.
 void drainAudio(std::vector<int16_t>& out);
-unsigned sampleRate();
-
-// Live performance. `readbackUs` is what reading one finished frame out of the
-// GS costs, and the whole picture path rests on it staying small.
-void metrics(float& fps, float& speed, double& readbackUs);
 
 // RETROACHIEVEMENTS (#74). The emulated machine's memory, live: region 0 is
 // the EE's 32 MB of main RAM, region 1 its 16 KB scratchpad, in the order

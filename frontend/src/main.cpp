@@ -3715,10 +3715,6 @@ static Library loadLibrary(romm::Client& client) {
         // apart was the part being cut off. See catalog::displayQualifier.
         tile.title = p.name.empty() ? p.slug : p.name;
         const std::string qualifier = catalog::displayQualifier(p);
-        // The colour a coverless tile falls back to is keyed on the FULL name,
-        // so two platforms that differ only by qualifier do not come out the
-        // same colour.
-        tile.art = colorForTitle(catalog::displayName(p));
         tile.enterable = (cov.support == catalog::Support::Playable);
 
         if (!tile.enterable) {
@@ -3841,7 +3837,6 @@ static Library loadLibrary(romm::Client& client) {
                 tile.group = "From " + (col.ownerName.empty() ? std::string("another account")
                                                               : col.ownerName);
             tile.cover = col.coverPath;
-            tile.art = colorForTitle(tile.title);
             char count[48];
             std::snprintf(count, sizeof count, "%d game%s", col.romCount,
                           col.romCount == 1 ? "" : "s");
@@ -4169,9 +4164,6 @@ static Library offlineLibrary() {
             if (!k->second.name.empty()) tile.title = k->second.name;
             qualifier = catalog::displayQualifier(k->second);
             lib.platformNames[pid] = catalog::displayName(k->second);
-            tile.art = colorForTitle(catalog::displayName(k->second));
-        } else {
-            tile.art = colorForTitle(tile.title);
         }
         tile.enterable = true;
         // RomM's order, by its sort key where the record has one, so the
@@ -4867,7 +4859,6 @@ static int firstRunRules() {
 
         int guard = 0;
         for (; guard < 16 && !m.finished(); ++guard) {
-            const firstrun::Step at = m.step();
             const firstrun::Gate g = m.gate();
 
             // Every refusal explains itself. A setup screen that stops with no
@@ -4886,7 +4877,6 @@ static int firstRunRules() {
                 if (copy.skip()) fail("skip() got past a step that may not be skipped", f);
             }
 
-            (void)at;
             if (g == firstrun::Gate::Blocked) break;
             if (g == firstrun::Gate::Skippable) m.skip();
             else m.advance();
@@ -6311,10 +6301,9 @@ int main(int argc, char** argv) {
     if (overlayTest) renderer.setTransparentBackground(true);
 
     ui::TextRenderer text;
-    // Regular, Medium, SemiBold, Bold, then the CJK fallback. All five are
-    // already in the Bazzite base, so the type costs the image nothing.
+    // Regular, SemiBold, Bold, then the CJK fallback. All four are already
+    // in the Bazzite base, so the type costs the image nothing.
     if (!text.init({"/usr/share/fonts/google-noto/NotoSans-Regular.ttf",
-                    "/usr/share/fonts/google-noto/NotoSans-Medium.ttf",
                     "/usr/share/fonts/google-noto/NotoSans-SemiBold.ttf",
                     "/usr/share/fonts/google-noto/NotoSans-Bold.ttf",
                     "/usr/share/fonts/google-noto-sans-cjk-fonts/NotoSansCJK-Regular.ttc"})) {
@@ -6347,7 +6336,7 @@ int main(int argc, char** argv) {
             deps.window = window;
             deps.renderer = &renderer;
             deps.text = &text;
-            setup::showWaiting(deps, "", "Signing out");
+            setup::showWaiting(deps, "Signing out");
             server::finishSignOut();
             done = firstrun::completion();
         }
@@ -6531,7 +6520,7 @@ int main(int argc, char** argv) {
         // actually shows during a boot is a count that climbs, and a capture
         // of it saying nothing would be a picture of a state that lasts a
         // fraction of a second.
-        setup::showWaiting(waitDeps, "Starting up", "Loading your library. 640 games");
+        setup::showWaiting(waitDeps, "Loading your library. 640 games");
         renderer.saveFrame(shotPath ? shotPath : "/tmp/cabinetos-startup.bmp", dw, dh);
         renderer.shutdown();
         SDL_Quit();
@@ -6543,11 +6532,10 @@ int main(int argc, char** argv) {
         // Where the cores are, so the catalog can tell "the manifest has a core
         // for this" apart from "this console has it built".
         catalog::setCoreDirectory(coreDir);
-        setup::showWaiting(waitDeps, "Starting up",
-                           std::string("Looking for your server at ")
-                               .append(rommAddress)
-                               .append("…")
-                               .c_str());
+        setup::showWaiting(waitDeps, std::string("Looking for your server at ")
+                                         .append(rommAddress)
+                                         .append("…")
+                                         .c_str());
         // WAIT FOR THE NETWORK RATHER THAN GIVING UP ON IT.
         //
         // This used to try once and exit 1, and on a console that is a fault
@@ -6894,9 +6882,8 @@ int main(int argc, char** argv) {
             probe->stop = true;
             if (!probe->answered.load() && (!newAddress.empty() || signOutNow)) {
                 // Said while the old address's last try runs out.
-                setup::showWaiting(waitDeps, "",
-                                   signOutNow ? "Signing out"
-                                              : ("Connecting to " + newAddress).c_str());
+                setup::showWaiting(waitDeps, signOutNow ? "Signing out"
+                                                        : ("Connecting to " + newAddress).c_str());
             }
             // Offline does not wait for the last try: it finishes alone.
             if (goOffline && !probe->answered.load()) probeThread.detach();
@@ -6981,7 +6968,7 @@ int main(int argc, char** argv) {
         // existed to make a slow thing bearable; the slow thing was removed.
         // The server-wait countdown above survives untouched, because a router
         // coming back after a power cut is not something this can make faster.
-        setup::showWaiting(waitDeps, "Starting up", kLoadingLine);
+        setup::showWaiting(waitDeps, kLoadingLine);
         startupShown = true;
         lib = libFromDrive ? offlineLibrary() : loadLibrary(liveClient);
         // The references above name lib's own members, so there is nothing to
@@ -7292,13 +7279,6 @@ int main(int argc, char** argv) {
             std::fprintf(stderr, "[state] picture over 30 frames: %s\n",
                          vA == vB ? "STATIC - this test would prove nothing here"
                                   : "moving - a video comparison is meaningful");
-
-            // Control: the same stretch of game with NO state operation at
-            // all. Without this there is no way to tell "the restore changed
-            // something" from "saving changed something" from "the game simply
-            // sounds like this here".
-            std::vector<uint8_t> probe;
-            (void)probe;
 
             std::vector<uint8_t> state;
             const size_t stateBytes = core.stateSize();
@@ -9660,9 +9640,7 @@ int main(int argc, char** argv) {
     //
     // docs/PROJECT.md, open question 31. The screen is handed rows and hands
     // back an id; everything a row SHOWS is read here, fresh, each time
-    // Settings opens or a row changes. Rows marked Unbuilt are agreed and not
-    // built: they are there so the whole layout can be judged on the
-    // television, and focus never lands on them.
+    // Settings opens or a row changes.
     enum SettingId { SetAddAccount = 1, SetInterfaceSounds, SetPinSet, SetPinChange,
                      SetPinOff, SetRemoveAccount, SetScreenOff, SetWifi, SetServer,
                      SetUpdate, SetUpdateCheck, SetCredits, SetFiles, SetDownloads,

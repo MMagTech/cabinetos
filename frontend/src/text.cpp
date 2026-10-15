@@ -15,15 +15,12 @@ namespace ui {
 float styleSize(TextStyle s) {
     switch (s) {
         case TextStyle::LargeTitle: return 76;
-        case TextStyle::Title1: return 57;
         case TextStyle::Title2: return 48;
         case TextStyle::Title3: return 38;
-        case TextStyle::Headline: return 38;
         case TextStyle::Callout: return 31;
         case TextStyle::Body: return 29;
         case TextStyle::Footnote: return 29;
         case TextStyle::Caption1: return 25;
-        case TextStyle::Caption2: return 23;
         case TextStyle::ScreenTitle: return 40;
     }
     return 29;
@@ -34,8 +31,7 @@ Weight styleWeight(TextStyle s) {
         case TextStyle::LargeTitle:
         case TextStyle::Title2:
         case TextStyle::ScreenTitle: return Weight::Bold;
-        case TextStyle::Title3:
-        case TextStyle::Headline: return Weight::SemiBold;
+        case TextStyle::Title3: return Weight::SemiBold;
         default: return Weight::Regular;
     }
 }
@@ -85,8 +81,8 @@ bool TextRenderer::init(const std::vector<std::string>& paths) {
         return false;
     }
 
-    // The first four paths are Regular, Medium, SemiBold, Bold. Anything after
-    // them is a fallback tried in order for glyphs the weight faces lack —
+    // The first three paths are Regular, SemiBold, Bold. Anything after them
+    // is a fallback tried in order for glyphs the weight faces lack —
     // Noto Sans CJK, so a Japanese game title renders as its title rather than
     // as a row of boxes.
     for (size_t i = 0; i < paths.size(); ++i) {
@@ -96,7 +92,7 @@ bool TextRenderer::init(const std::vector<std::string>& paths) {
             if (i == 0) return false;  // no primary face is fatal; a gap is not
             continue;
         }
-        if (i < 4) {
+        if (i < 3) {
             faces_.push_back(face);
         } else {
             fallbackFaces_.push_back(face);

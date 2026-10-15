@@ -5,7 +5,6 @@
 #include <condition_variable>
 #include <cstdio>
 #include <mutex>
-#include <string>
 #include <thread>
 
 namespace powerprofile {

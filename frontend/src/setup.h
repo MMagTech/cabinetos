@@ -99,7 +99,7 @@ struct Options {
 // It is one frame, not a loop: the work it covers is synchronous, so there is
 // nothing to animate against. A still sentence that says what is happening
 // beats a picture that has stopped changing for no stated reason.
-void showWaiting(const Deps& d, const char* title, const char* detail);
+void showWaiting(const Deps& d, const char* detail);
 
 // The same startup screen, drawn into a frame somebody else is building, at
 // `alpha`. For the main loop's curtain when the app is about to start again

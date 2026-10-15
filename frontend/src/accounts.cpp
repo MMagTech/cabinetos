@@ -19,10 +19,15 @@ std::string homeDir() {
     return std::string(h && *h ? h : ".");
 }
 
-// 0700 the whole way down, because what goes in it is a credential. The same
-// trap `romm::Client::saveToken` records is live here: `~/.config/cabinetos/`
-// does not exist on a machine nobody has configured, which is exactly the
-// machine that is pairing.
+// 0700 the whole way down, because what goes in it is a credential. THE
+// DIRECTORY HAS TO BE MADE, AND NOT MAKING IT COST A PAIRING ON THE FIRST
+// CONSOLE EVER INSTALLED: `~/.config/cabinetos/` does not exist on a machine
+// nobody has configured, which is exactly the machine that is pairing. The
+// token writer before accounts opened the file without making the directory,
+// the pairing the person had just approved in a browser was thrown away, and
+// the console went on showing the stand-in library (found 2026-09-19, on the
+// A9 Pro, ten minutes after it first booted; the test VM never showed it
+// because that directory had been created there by hand weeks earlier).
 void makeDirs0700(const std::string& dir) {
     std::string built;
     size_t at = 0;
@@ -287,16 +292,6 @@ bool setActive(int id, std::string* err) {
     }
     b.active = id;
     return save(b, err);
-}
-
-bool update(int id, const std::string& name, const std::string& avatar) {
-    Book b = load();
-    Account* target = nullptr;
-    for (Account& a : b.list) if (a.id == id) { target = &a; break; }
-    if (!target) return false;
-    if (!name.empty()) target->name = name;
-    target->avatar = avatar;
-    return save(b, nullptr);
 }
 
 bool setColour(int id, const std::string& colour) {

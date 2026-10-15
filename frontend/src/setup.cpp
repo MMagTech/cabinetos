@@ -46,7 +46,6 @@ public:
     Job& operator=(const Job&) = delete;
 
     bool busy() const { return running_.load(); }
-    bool ready() const { return done_.load(); }
 
     // `fn` runs on the worker and must touch nothing else in this program.
     void start(std::function<bool(T&, std::string&)> fn) {
@@ -80,8 +79,6 @@ public:
         if (ok) *ok = ok_;
         return true;
     }
-
-    void cancel() { join(); done_.store(false); }
 
 private:
     void join() {
@@ -2130,7 +2127,7 @@ void drawStartup(ui::Renderer& r, ui::TextRenderer& t, const char* detail, float
     }
 }
 
-void showWaiting(const Deps& d, const char* title, const char* detail) {
+void showWaiting(const Deps& d, const char* detail) {
     if (!d.window || !d.renderer || !d.text) return;
     ui::Renderer& r = *d.renderer;
     ui::TextRenderer& t = *d.text;
@@ -2160,7 +2157,6 @@ void showWaiting(const Deps& d, const char* title, const char* detail) {
     std::fprintf(stderr, "[waiting] drawable %dx%d\n", dw, dh);
     r.beginFrame(dw, dh);
     drawStartup(r, t, detail, 1.0f);
-    (void)title;
 
     // Without this the frame goes into the scene texture and never reaches the
     // window — see the note at the end of Flow::draw.
@@ -2177,7 +2173,7 @@ Outcome run(const Deps& d, const Options& o) {
     // ten seconds: on the A9, 2026-09-25, "Start playing" stayed pressed on a
     // frozen Ready screen for 17 s. Now the logo is up for that time instead,
     // and the startup's own lines follow it.
-    if (out == Outcome::Completed && !o.screenshotPath) showWaiting(d, "", nullptr);
+    if (out == Outcome::Completed && !o.screenshotPath) showWaiting(d, nullptr);
     return out;
 }
 

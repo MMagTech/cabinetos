@@ -48,7 +48,6 @@ struct Api {
     PFN_vkGetPhysicalDeviceProperties getPhysicalDeviceProperties = nullptr;
     PFN_vkGetPhysicalDeviceQueueFamilyProperties getQueueFamilyProperties = nullptr;
     PFN_vkGetPhysicalDeviceMemoryProperties getMemoryProperties = nullptr;
-    PFN_vkGetPhysicalDeviceFormatProperties getFormatProperties = nullptr;
     PFN_vkCreateDevice createDevice = nullptr;
 
     PFN_vkDestroyDevice destroyDevice = nullptr;
@@ -132,7 +131,6 @@ std::mutex gQueueLock;
 std::mutex gImageLock;
 retro_vulkan_image gCoreImage{};
 bool gHaveCoreImage = false;
-bool gNewCoreImage = false;
 uint32_t gCoreSrcQueueFamily = VK_QUEUE_FAMILY_IGNORED;
 std::vector<VkSemaphore> gCoreSemaphores;
 
@@ -247,7 +245,6 @@ void RETRO_CALLCONV setImage(void* handle, const retro_vulkan_image* image,
         std::fprintf(stderr, "[vulkan] the core handed over its first picture\n");
     gCoreImage = *image;
     gHaveCoreImage = true;
-    gNewCoreImage = true;
     gCoreSrcQueueFamily = srcQueueFamily;
     gCoreSemaphores.assign(semaphores, semaphores + numSemaphores);
 }
@@ -860,10 +857,6 @@ void setNegotiation(const retro_hw_render_context_negotiation_interface_vulkan* 
                      n->interface_version);
 }
 
-bool contextReady() { return gDevice != VK_NULL_HANDLE; }
-
-const std::string& description() { return gDescription; }
-
 bool createContext(std::string* err) {
     if (gDevice != VK_NULL_HANDLE) return true;
     if (!available()) {
@@ -1006,7 +999,6 @@ bool createContext(std::string* err) {
     loadInstance(gApi.getPhysicalDeviceProperties, "vkGetPhysicalDeviceProperties");
     loadInstance(gApi.getQueueFamilyProperties, "vkGetPhysicalDeviceQueueFamilyProperties");
     loadInstance(gApi.getMemoryProperties, "vkGetPhysicalDeviceMemoryProperties");
-    loadInstance(gApi.getFormatProperties, "vkGetPhysicalDeviceFormatProperties");
     loadInstance(gApi.createDevice, "vkCreateDevice");
 
     if (!chooseGpu(err)) {
@@ -1133,7 +1125,7 @@ void destroyContext() {
     gGpu = VK_NULL_HANDLE;
     gQueue = VK_NULL_HANDLE;
     gDeviceFromCore = false;
-    gHaveCoreImage = gNewCoreImage = false;
+    gHaveCoreImage = false;
     gFrameWidth = gFrameHeight = 0;
     gDescription.clear();
     gInterface = {};
@@ -1142,14 +1134,6 @@ void destroyContext() {
 const retro_hw_render_interface_vulkan* renderInterface() {
     return gDevice == VK_NULL_HANDLE ? nullptr : &gInterface;
 }
-
-bool hasNewFrame() {
-    std::lock_guard<std::mutex> lock(gImageLock);
-    return gNewCoreImage;
-}
-
-unsigned frameWidth() { return gFrameWidth; }
-unsigned frameHeight() { return gFrameHeight; }
 
 bool present() {
     const auto started = std::chrono::steady_clock::now();
@@ -1173,7 +1157,6 @@ bool present() {
         image = gCoreImage;
         srcFamily = gCoreSrcQueueFamily;
         semaphores.swap(gCoreSemaphores);
-        gNewCoreImage = false;
     }
     if (gDevice == VK_NULL_HANDLE || image.image_view == VK_NULL_HANDLE) return false;
 

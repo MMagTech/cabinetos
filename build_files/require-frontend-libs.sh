@@ -56,9 +56,6 @@
 #
 set -euo pipefail
 
-# shellcheck source=/dev/null
-source /ctx/lib.sh 2>/dev/null || true
-
 missing=0
 for lib in libcurl.so.4 libjson-c.so.5 libarchive.so.13 \
            libSDL3_image.so.0 libwebp.so.7 libwebpdemux.so.2 libavif.so.16 libtiff.so.6; do

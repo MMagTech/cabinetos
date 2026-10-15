@@ -206,9 +206,8 @@ for _pass in 1 2 3 4 5; do
         added=$((added + 1))
     done < <(
         # Everything the emulator and what it already carries depend on, that
-        # is NOT in the console's own image. CABINETOS_IMAGE_LIBS is that
-        # image's library list; without it, fall back to bundling the two known
-        # names so a build outside CI still produces something that runs.
+        # is NOT in the console's own image: the two known names, so a build
+        # outside CI still produces something that runs.
         {
             objdump -p "$BUILD/cabinetos-ps2.so" 2>/dev/null | awk '/NEEDED/ {print $2}'
             for b in "$BUILD"/*.so.*; do

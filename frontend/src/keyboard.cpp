@@ -252,7 +252,6 @@ KeyboardResult Keyboard::pressKey() {
             toggleConceal();
             return KeyboardResult::Typing;
         case Key::Done: return commit();
-        case Key::Cancel: return cancel();
         case Key::None: break;
     }
     sound::play(sound::Cue::Type);

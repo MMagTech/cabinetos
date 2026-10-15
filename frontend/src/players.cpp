@@ -305,7 +305,6 @@ std::vector<Pad> connected() {
         p.id = id;
         p.name = nameOf(it->second);
         p.address = addressOf(it->second);
-        p.bluetooth = !p.address.empty();
         out.push_back(std::move(p));
     }
     return out;

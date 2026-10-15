@@ -49,13 +49,11 @@ enum class Cue {
 // device, which is not an error: a console with no sound card is still a
 // console, and every play() after that does nothing.
 bool init();
-void shutdown();
 
 // THE SWITCH SETTINGS WILL OWN. Off means silent, and nothing else about the
 // interface changes — there is no visual compensation for a muted console,
 // because a person who turns the sounds off has said what they want.
 void setEnabled(bool on);
-bool enabled();
 
 // 0..1. The default is deliberately low: this is punctuation under whatever
 // else is happening, and a navigation click that competes with a game's music

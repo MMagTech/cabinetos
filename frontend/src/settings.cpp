@@ -331,16 +331,14 @@ void SettingsScreen::drawGlass(Ctx& c) {
         const float rh = rowHeight(c, row);
         const bool on = (i == focusRow) && hasFocus_;
         const float rf = on ? f : 0.0f;
-        const bool unbuilt = row.kind == Kind::Unbuilt;
-        // Dimmed either way; only an unbuilt row says why.
-        const bool dimmed = unbuilt || row.kind == Kind::Disabled;
+        const bool dimmed = row.kind == Kind::Disabled;
         const float s = 1.0f + rf * (design::kRowFocusScale - 1.0f);
         const float w = pw * s, h = rh * s;
         const float x = px - (w - pw) * 0.5f;
         const float ry = y - (h - rh) * 0.5f;
 
         // Treatment 3, the row: a surface that is always there, brighter under
-        // focus. An unbuilt row keeps a fainter surface so the list still
+        // focus. A dimmed row keeps a fainter surface so the list still
         // reads as one list.
         c.r.drawGlass(ui::Rect{x, ry, w, h, design::kRowRadius, ui::Color::white(0)},
                       design::kRegularMaterialBlur,
@@ -354,8 +352,7 @@ void SettingsScreen::drawGlass(Ctx& c) {
         const int pick = choice ? std::clamp(row.choice, 0,
                                              static_cast<int>(row.choices.size()) - 1)
                                 : 0;
-        const std::string value = unbuilt ? "Not built yet"
-                                          : (choice ? row.choices[pick] : row.value);
+        const std::string value = choice ? row.choices[pick] : row.value;
         const float valueW = value.empty()
             ? 0.0f : c.text.measure(value, ui::TextStyle::Callout, c.sc);
         float right = x + w - design::kRowPadX;
@@ -385,7 +382,7 @@ void SettingsScreen::drawGlass(Ctx& c) {
         if (!value.empty()) {
             right -= valueW;
             c.text.draw(c.r, value, right, titleBase, ui::TextStyle::Callout,
-                        ui::Color::white(0.60f * (unbuilt ? 0.8f : 1.0f)), c.sc);
+                        ui::Color::white(0.60f), c.sc);
             // The dot before the value, on the controller last pressed.
             const float m = !row.id ? 0.0f
                             : row.id == marked_ ? markMove_.value()

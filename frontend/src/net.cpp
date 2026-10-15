@@ -53,15 +53,6 @@ bool haveNmcli() {
 
 }  // namespace
 
-std::string unescapeField(const std::string& s) {
-    std::string out;
-    for (size_t i = 0; i < s.size(); ++i) {
-        if (s[i] == '\\' && i + 1 < s.size()) out.push_back(s[++i]);
-        else out.push_back(s[i]);
-    }
-    return out;
-}
-
 bool available() {
     if (!haveNmcli()) return false;
     const proc::Result r = proc::run({"nmcli", "-t", "-f", "RUNNING", "general"}, 5);

@@ -59,7 +59,6 @@ struct {
     bool (*load_game)(const retro_game_info*) = nullptr;
     void (*unload_game)(void) = nullptr;
     void (*run)(void) = nullptr;
-    void (*reset)(void) = nullptr;
     size_t (*serialize_size)(void) = nullptr;
     bool (*serialize)(void*, size_t) = nullptr;
     bool (*unserialize)(const void*, size_t) = nullptr;
@@ -128,7 +127,6 @@ unsigned gCorePorts = 0;
 // well as before it. Cleared with the core, never with the game.
 retro_disk_control_ext_callback gDisk{};
 bool gDiskSet = false;
-unsigned gDiskVersion = 0;
 // Asked for before the load: the list's index and the exact path the core
 // will build for it (RetroArch hands back what get_image_path said).
 int gInitialDisc = -1;
@@ -655,7 +653,6 @@ void videoRefresh(const void* data, unsigned width, unsigned height, size_t pitc
     }
     if (!data) return;  // "same picture as last time"
     gHWFrame = false;
-    const size_t bpp = (gPixelFormat == RETRO_PIXEL_FORMAT_XRGB8888) ? 4 : 2;
     gFrame.resize(pitch * height);
     std::memcpy(gFrame.data(), data, pitch * height);
     gFrameW = width;
@@ -663,7 +660,6 @@ void videoRefresh(const void* data, unsigned width, unsigned height, size_t pitc
     gFramePitch = pitch;
     gFrameDirty = true;
     announceRotation(width, height);
-    (void)bpp;
 }
 
 void audioSample(int16_t left, int16_t right) {
@@ -968,7 +964,6 @@ bool environment(unsigned cmd, void* data) {
             gDisk.replace_image_index = cb->replace_image_index;
             gDisk.add_image_index = cb->add_image_index;
             gDiskSet = true;
-            gDiskVersion = 0;
             return true;
         }
         case RETRO_ENVIRONMENT_SET_DISK_CONTROL_EXT_INTERFACE: {
@@ -976,7 +971,6 @@ bool environment(unsigned cmd, void* data) {
             if (!cb) return false;
             gDisk = *cb;
             gDiskSet = true;
-            gDiskVersion = 1;
             return true;
         }
 
@@ -1015,7 +1009,6 @@ bool environment(unsigned cmd, void* data) {
                              "[core] refusing %s because --core-no-hw-render was "
                              "asked for; this is the control, not a fault\n",
                              gHWContextName.c_str());
-                gHWContextName += " (refused: the control)";
                 return false;
             }
             if (!canServe(*cb)) {
@@ -1029,7 +1022,6 @@ bool environment(unsigned cmd, void* data) {
                              "[core] asked for %s; this frontend holds an OpenGL "
                              "ES %u.%u context and will not pretend otherwise\n",
                              gHWContextName.c_str(), haveMajor, haveMinor);
-                gHWContextName += " (refused)";
                 return false;
             }
             gHWVulkan = cb->context_type == RETRO_HW_CONTEXT_VULKAN;
@@ -1230,7 +1222,6 @@ bool Core::load(const std::string& soPath) {
     // Whatever the last core asked for is not this one's business either.
     gDisk = {};
     gDiskSet = false;
-    gDiskVersion = 0;
     gInitialDisc = -1;
     gInitialDiscPath.clear();
     gHW = {};
@@ -1281,7 +1272,6 @@ bool Core::load(const std::string& soPath) {
     g.load_game = reinterpret_cast<bool (*)(const retro_game_info*)>(symbol("retro_load_game"));
     g.unload_game = reinterpret_cast<void (*)(void)>(symbol("retro_unload_game"));
     g.run = reinterpret_cast<void (*)(void)>(symbol("retro_run"));
-    g.reset = reinterpret_cast<void (*)(void)>(symbol("retro_reset"));
     g.serialize_size = reinterpret_cast<size_t (*)(void)>(symbol("retro_serialize_size"));
     g.serialize = reinterpret_cast<bool (*)(void*, size_t)>(symbol("retro_serialize"));
     g.unserialize =
@@ -2121,10 +2111,6 @@ bool Core::saveRAM(std::vector<uint8_t>& out) const {
     return memoryRegion(RETRO_MEMORY_SAVE_RAM, out);
 }
 
-bool Core::loadSaveRAM(const std::vector<uint8_t>& data) {
-    return loadMemoryRegion(RETRO_MEMORY_SAVE_RAM, data);
-}
-
 bool Core::memoryRegion(unsigned id, std::vector<uint8_t>& out) const {
     if (!gameLoaded_ || !g.get_memory_data || !g.get_memory_size) return false;
     const size_t n = g.get_memory_size(id);
@@ -2150,21 +2136,6 @@ uint8_t* Core::memoryPointer(unsigned id, size_t* size) const {
     return static_cast<uint8_t*>(p);
 }
 
-bool Core::loadMemoryRegion(unsigned id, const std::vector<uint8_t>& data) {
-    if (!gameLoaded_ || !g.get_memory_data || !g.get_memory_size) return false;
-    void* p = g.get_memory_data(id);
-    const size_t n = g.get_memory_size(id);
-    if (!p || n == 0) return false;
-    // Copy the SMALLER of the two rather than demanding they match. Two cores
-    // in this set genuinely report a different size at restore time than at
-    // capture time: Genesis Plus GX trims to the bytes actually written once
-    // the game is running, and mGBA reports the 128KB flash maximum until it
-    // has autodetected the real save type. RetroArch does the same thing when
-    // it reads an .srm back in.
-    std::memcpy(p, data.data(), std::min(n, data.size()));
-    return true;
-}
-
 GLuint Core::texture() const {
     if (gHWVulkan) return vk::texture();
     return gHWFrame ? gHWColor : texture_;
@@ -2188,8 +2159,6 @@ bool Core::hardwareRendered() const {
 }
 
 unsigned Core::rotation() const { return gRotation; }
-
-const std::string& Core::hardwareContext() const { return gHWContextName; }
 
 void Core::frameUV(float& u0, float& v0, float& u1, float& v1) const {
     u0 = 0;

@@ -116,7 +116,6 @@ struct Tile {
     std::string title;        // "Arcade (FinalBurn Neo)", "SHMUP"
     std::string detail;       // "141 games", or why it cannot be played
     std::string cover;        // a cover path for the tile's artwork
-    ui::Color art;            // shown until that arrives, and if it never does
     bool enterable = true;
     // The heading the tile sits under, empty for none. Collections only: a
     // person's own come first with none, then each other person's shared ones
@@ -266,10 +265,6 @@ public:
     // repeat rather than thudding against the wall every 160 ms.
     bool jumpLetter(int dir);
 
-    // The letters this list actually contains, for the index on the right, and
-    // which of them focus is inside. Empty when there is nothing to show.
-    const std::vector<char>& letters() const { return letters_; }
-
     // The Ctx::cards index focus is on, or -1. The app turns it into a cover
     // for the backdrop; this screen holds indices and no opinion about art.
     int focusedCard() const {
@@ -349,7 +344,6 @@ public:
     // What the person has typed. Recorded immediately so the screen can say
     // what it is doing; the results arrive separately and later.
     void setQuery(const std::string& q);
-    const std::string& query() const { return query_; }
 
     // The answer, once the server has given one. `total` is what the server
     // says matched, which is not the same as how many came back — a search
@@ -361,7 +355,6 @@ public:
     // server answered with nothing. A fourth — the server could not be asked —
     // is `failed`, and it is NOT the same as "no matches".
     enum class State { Empty, Waiting, Results, NoMatches, Failed };
-    State state() const { return state_; }
     void setWaiting();
     void setFailed(const std::string& why);
 
@@ -674,7 +667,6 @@ private:
     struct Row {
         Action action = Action::None;
         std::string label;
-        bool enabled = true;
         std::string value;   // on the right, as a Settings row's is
     };
     void rebuildRows();

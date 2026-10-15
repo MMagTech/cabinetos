@@ -131,7 +131,6 @@ void ps2::unload() {
     gHandle = gHandle;
 }
 
-bool ps2::loaded() { return gHandle != nullptr; }
 const std::string& ps2::error() { return gError; }
 
 std::string ps2::version() {
@@ -247,8 +246,6 @@ void ps2::stopGame() {
     gWindowed = false;
 }
 
-bool ps2::running() { return gHandle && gApi.running() != 0; }
-
 void ps2::setPaused(bool paused) {
     gPaused = paused;
     if (gHandle) gApi.setPaused(paused ? 1 : 0);
@@ -295,13 +292,6 @@ void ps2::drainAudio(std::vector<int16_t>& out) {
     out.resize(at + kMaxFrames * 2);
     const unsigned got = gApi.drainAudio(out.data() + at, kMaxFrames);
     out.resize(at + static_cast<size_t>(got) * 2);
-}
-
-unsigned ps2::sampleRate() { return gHandle ? gApi.sampleRate() : 0; }
-
-void ps2::metrics(float& fps, float& speed, double& readbackUs) {
-    fps = 0.0f; speed = 0.0f; readbackUs = 0.0;
-    if (gHandle) gApi.metrics(&fps, &speed, &readbackUs);
 }
 
 uint8_t* ps2::memory(unsigned region, size_t* size) {

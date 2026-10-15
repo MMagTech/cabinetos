@@ -101,7 +101,6 @@ public:
     // Returns the level, and changes it — the caller acts on the edges.
     Level update(double now, bool playing);
 
-    Level level() const { return level_; }
     double idleFor(double now) const { return now - last_; }
 
 private:

@@ -33,7 +33,7 @@
 //
 // The price is parsing, and it is paid in one place: `--terse` output is
 // colon-separated with `\` escapes, and an SSID may legally contain a colon.
-// Everything that reads nmcli goes through `unescapeField` for that reason.
+// Everything that reads nmcli goes through `splitFields` for that reason.
 //
 // --- NOTHING HERE GOES THROUGH A SHELL -------------------------------------
 //
@@ -189,10 +189,5 @@ bool available();
 // console can ask the question directly and answer it in one line, instead of
 // somebody spending a day on it.
 std::string polkitVerdict();
-
-// nmcli's `--terse` escaping, undone. Exposed for the tests that check it,
-// because an SSID containing a colon is the case that breaks a naive split and
-// it is a case any stranger can create.
-std::string unescapeField(const std::string& s);
 
 }  // namespace net
