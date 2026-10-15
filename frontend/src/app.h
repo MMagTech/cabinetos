@@ -95,6 +95,362 @@ struct App {
     // main()'s body (main.cpp).
     int run(int argc, char** argv);
 
+    bool shotMode = false;
+    const char* shotPath = "/tmp/cabinetos-frame.bmp";
+    int shotAfterFrames = 30;
+    int initialFocus = -1;
+    // Which row to start on, so each of Home's rows can be photographed without
+    // a controller. 0 Recent, 1 Favorites. The bar is not a row any more — see
+    // the Row enum — so a capture of it wants --focus-bar, not --row 0.
+    int initialRow = -1;
+    // What to type into Search for a capture. See the route below.
+    const char* searchQuery = nullptr;
+    // Integer scaling for a game's picture: OFF by default since 2026-09-21,
+    // so every system fills the height. See the draw site for what that trades.
+    bool integerScaling = false;
+    // THE SWITCH SETTINGS WILL OWN, as a flag until Settings exists. MMagTech:
+    // *"a navigation sound of some sort would be nice and later we have the
+    // option in settings to turn it off."* The off half is built now so that
+    // when the screen arrives it has something to set rather than something to
+    // implement.
+    // --ui-sound overrides the saved level for this run only, for tests.
+    bool uiSoundFlag = false;
+    const char* uiSoundLevels = nullptr;
+    bool uiSound = true;
+    float uiSoundVolume = 0.22f;
+    // HOME'S BACKDROP, TUNABLE WITHOUT A COMPILER.
+    //
+    // design.h is still where these live and still what ships — these start as
+    // its values and are only moved by a flag. The reason the flag exists is
+    // that the three of them can only be judged on a television, and the loop
+    // from "try 0.55" to "see 0.55 on the panel" is otherwise a rebuild, a
+    // deploy and a restarted session for one number. MMagTech on this session:
+    // *"its going to be all over the place i have alot to tweak on the ui."*
+    //
+    // Whatever wins goes back into design.h. A number that only exists on a
+    // command line is not a decision, it is a thing somebody once tried.
+    float backdropFill = design::kHomeBackdropFill;
+    float backdropScrim = design::kHomeBackdropScrim;
+    float backdropTexels = design::kHomeBackdropTexels;
+    // The two that decide how it MOVES rather than how it looks, and they are
+    // the pair most worth arguing with on a panel: how long it waits before it
+    // notices, and how long it takes to get there.
+    float backdropDelay = design::kHomeBackdropDelay;
+    float backdropFade = design::kHomeBackdropFade;
+    // And the bar's own three, for the same reason. Where the room above and
+    // below the top bar goes is a judgement about a television and nothing
+    // else — a capture cannot show whether two rows of text are crowding each
+    // other from a sofa, and this project has been wrong about the top edge of
+    // a screen before.
+    float barTop = design::kBarTop;
+    float barHeight = design::kBarHeight;
+    float barGapBelow = design::kBarGapBelow;
+    // Verify the layout at a panel size this machine does not have. Most sets
+    // are 4K; plenty are not; the design canvas scales to both and this is how
+    // that gets checked rather than assumed.
+    int renderW = 0, renderH = 0;
+    // Deliberately settable, so eviction can be exercised on a machine with
+    // plenty of memory. An unbounded texture cache on a 4 GB console is a real
+    // failure mode and it must be testable, not merely intended.
+    size_t imageBudget = 192u * 1024 * 1024;
+    // Loads covers that are then never drawn again, the way scrolling a shelf
+    // leaves the covers behind it. That is the only situation in which anything
+    // is evictable at all, so it is the only way to test that eviction works.
+    bool evictTest = false;
+    // Proves a restored state is genuinely identical, not merely accepted.
+    bool stateTest = false;
+    // What one emulated frame costs, run back to back with no clock (#147).
+    bool speedTest = false;
+    bool audioProbe = false;
+    // Opens the keyboard immediately, so it can be worked on without walking
+    // through a first-run flow that does not exist yet.
+    bool keyboardDemo = false;
+    bool safeGuides = false;
+    // Idle handling — idle.h. `--idle-scale 0.01` shrinks every idle timer a
+    // hundredfold so a dim can be looked at in seconds; `--shift-every 5`
+    // walks the pixel shift fast enough to watch; `--no-idle` turns the dim
+    // and the blank off, for a capture that has to stay lit.
+    double idleScale = 1.0;
+    double shiftEvery = idle::kShiftEverySeconds;
+    bool idleOff = false;
+    // Opens the Power menu at startup, so a capture can show it.
+    bool powerMenuDemo = false;
+    // --colour and --dark: a look for this run only, for judging each colour
+    // and dark on the television without writing anybody's setting.
+    const char* lookColour = nullptr;
+    bool lookDark = false;
+    // Walks the notification pill through every message it can show.
+    bool noticeGallery = false;
+    // --ra-sample: RetroAchievements as for somebody signed in, with a made-up
+    // set on every game's page and an unlock a few seconds into a game, so
+    // the page and the pop-up can be captured without an account (#74).
+    bool raSample = false;
+    // `--menu-fade 4` stretches the menus' fade so a person can watch it in
+    // slow motion and say what is wrong with it. Tuning only.
+    float overlayFadeSeconds = design::kOverlayFade;
+    // `--menu-rise 0` drops the slide the menus arrive with. Tuning only.
+    float overlayRise = 24.0f;
+    // Off / subtle / strong, the reference implementation's own three levels.
+    // Always Strong, with no setting (MMagTech, 2026-10-04).
+    float glowPeak = 0.04f;
+    // Running a core. Both are needed: a core without a ROM has nothing to do.
+    const char* corePath = nullptr;
+    const char* romPath = nullptr;
+    // Talks to a RomM server and prints what it found, without opening a
+    // window. The same reasoning as --state-test and --audio-probe: the
+    // network, the auth and the parsing are all things that can be wrong on
+    // their own, and finding that out through a UI is the slow way.
+    const char* rommAddress = nullptr;
+
+    // A console has no command line. Nothing is baked into the image — this
+    // repository is public and somebody's LAN address does not belong in it —
+    // so the address comes from the machine, and the session script is what
+    // puts it in the environment. The first-run screen writes the same file
+    // when it exists; see docs/PROJECT.md, open question 15.
+    //
+    // TWO PLACES, AND THE ENVIRONMENT WINS. /etc/cabinetos/session.env is
+    // root's and is how a console is set up by hand today; config/server.json
+    // is what the first-run screen writes, because the session user cannot
+    // write /etc and inventing a privileged helper for one string that is not a
+    // secret would be a mechanism for nothing. firstrun::serverAddress() holds
+    // that order in one place so nothing else has to know it.
+    std::string resolvedAddress;
+    bool rommPair = false;
+    // --romm alone runs the UI against the server. --romm-probe reports and
+    // exits without opening a window, which is what a headless machine and a
+    // CI job can do.
+    int autoDownloadId = 0;
+    int autoSwitchAccountId = 0;
+    int autoUnkeepId = 0;
+    bool storageReport = false;
+    bool coreOptionsAudit = false;
+    // The same audit with the prose and the value list, which is what turns
+    // "here are 78 keys" into something a person can decide from.
+    bool coreOptionsDetail = false;
+    // One core option, set from the command line, for finding out what a value
+    // actually does before writing it into catalog::optionOverrides.
+    //
+    // It exists because the alternative is a rebuild per value, and an option
+    // is exactly the kind of thing that has to be tried rather than reasoned
+    // about — `catalog::optionOverrides` already says so, and open question 7
+    // asks for Cabinet's whole per-platform table to be brought across "with a
+    // reason recorded beside each choice", which means somebody has to be able
+    // to see the difference each one makes. Two of the four overrides in that
+    // table today were found by a launch failing, not by reading.
+    //
+    // These are applied ON TOP of catalog::optionOverrides, so this can also be
+    // used to take a shipped override back off and see what it was buying.
+    std::map<std::string, std::string> cliOptionOverrides;
+    const char* initialScreen = nullptr;
+    int initialTile = 0;
+    const char* navScript = nullptr;
+    int initialTab = 0;
+    int initialGame = 0;
+    bool rommProbeMode = false;
+    bool sameNamesMode = false;   // --same-names, for the diagnostic report (#383)
+    // --- The first-run mechanisms ------------------------------------------
+    //
+    // Each of the four things first run needs that is NOT a picture has a way
+    // to be seen working from a shell: the state machine, the QR renderer, the
+    // NetworkManager plumbing, and knowing whether it is the first run at all.
+    // See the probes above.
+    bool networkProbeMode = false;
+    bool networkScan = false;
+    // What this machine's graphics hardware can do, before anything is created.
+    // See gpu.h: the A9 and the test VM differ here in the one way that decides
+    // whether PlayStation 2 and GameCube can be played at all.
+    bool gpuProbeMode = false;
+    bool firstRunProbeMode = false;
+    int keepersRomId = 0;
+    int focusBarSlot = -1;
+    bool startupShot = false;
+    bool accountsProbeMode = false;
+    // --server-check <address>: would this address be accepted as the same
+    // server by Change server address? Says which answer, and exits.
+    const char* serverCheckAddress = nullptr;
+    bool accountsTestMode = false;
+    bool playersTestMode = false;
+    bool batteryTestMode = false;
+    bool volumeTestMode = false;
+    bool playtimeTestMode = false;
+    int removeAccountId = 0;     // --remove-account N (#194)
+    bool removeAnyway = false;   // --remove-anyway
+    int padsSeconds = 0;
+    bool firstRunRulesMode = false;
+    bool firstRunWriteMode = false;
+    // Runs the setup flow even on a console that is already configured, so it
+    // can be looked at and photographed. It never writes anything — see
+    // setup::Options::dryRun — because the only machines anybody here can try
+    // it on are ones that are already set up.
+    bool forceSetup = false;
+    // The escape hatch: start the console without setup on a machine that
+    // cannot complete it. Not a product affordance, a development one.
+    bool noSetup = false;
+    const char* setupStep = nullptr;
+    bool firstRunServerCheck = false;
+    const char* firstRunStep = nullptr;
+    const char* qrText = nullptr;
+    const char* qrPbm = nullptr;
+    // Downloads one ROM and reports what came back and what a core would be
+    // handed. The formats people keep ROMs in are not uniform and this is how
+    // that gets checked against a real server rather than assumed.
+    int romProbeId = 0;
+    const char* romProbeExts = "gb|gbc|dmg";
+    // Where the built cores are. Where games and saves go is storage.h's
+    // answer, not a constant here — see --storage-root.
+    //
+    // Left null so the two defaults below can be TRIED rather than one of them
+    // assumed — see the resolution block after the argument loop. --core-dir
+    // still wins outright.
+    const char* coreDir = nullptr;
+    // Launch this RomM id without anybody pressing anything, after a delay, so
+    // the whole Home-to-game transition can be watched on a machine with no
+    // controller attached to it.
+    int autoLaunchId = 0;
+    // A SECOND GAME IN THE SAME RUN (--then <id>): started once --overlay-exit
+    // has taken the first back to Home. Several emulators have broken only
+    // when they were not the first game of the run (PS2 and Dreamcast, found
+    // on the TV 2026-09-27), and a single --launch never exercises that.
+    int thenLaunchId = 0;
+    // Runs the whole save/state round trip once the game is up: write a state,
+    // upload it, then fetch the newest one back and restore it. Headless, so
+    // the sync can be proved on a machine nobody is sitting at.
+    bool syncTest = false;
+    // See --overlay-test below. A test instrument for open question 24.
+    bool overlayTest = false;
+    // Opens the overlay once the game is up, so it can be looked at on a
+    // machine with nothing attached to it. See --overlay for the frame count,
+    // which is what makes the picture underneath it a GAME rather than black.
+    bool overlayDemo = false;
+    int overlayDemoAfter = 0;
+    // --load-state N: after N frames of play, what the pause menu's "Load
+    // latest state" does. The other half of --sync-test, which loads back the
+    // state it has just made; this loads whatever is newest on the server, so
+    // a state from an Apple TV can be tried here without a controller.
+    int loadStateAfter = 0;
+    // --state-check N: after N frames, save a state IN MEMORY, play on, load
+    // it, and save again at once. Equal bytes mean the load put the machine
+    // back exactly. Nothing is written to disk or sent anywhere; it asks only
+    // "does a state this console makes load on this console".
+    int stateCheckAfter = 0;
+    // THE DISC RIG (#162): --disc-script "<step>; <step>; ...", run against a
+    // game started with --launch, through the same calls the pause menu
+    // makes. See the runner in the frame loop for the steps. --disc-test
+    // checks disc.h's rules with no core and no server.
+    std::string discScriptText;
+    bool discTestMode = false;
+    // Opens the overlay and takes Exit to Home, so the whole leave-a-game path
+    // can be proved on a machine with nothing attached.
+    bool overlayExitDemo = false;
+    int overlayExitAfter = 120;   // frames of play before the overlay quits it
+    // --standalone-exit N: an emulator that is its own application is closed
+    // by the console after N seconds, as the pause menu's Exit will close it.
+    // The leave-a-game path for those, with nobody at the television.
+    float standaloneExitAfter = 0.0f;
+    // --standalone-freeze N: frozen N seconds in, as the pause menu freezes
+    // it, and left so. With --standalone-exit later, the exit-while-paused
+    // path.
+    float standaloneFreezeAfter = 0.0f;
+    float autoLaunchAfter = 0.0f;
+
+    // CREATED HIDDEN IN OVERLAY MODE, because gamescope classifies a window
+    // when it MAPS. Set the properties afterwards and they land on a window
+    // nothing re-examines, and the overlay never appears — which looks exactly
+    // like a compositor that refused. Hidden, marked, then shown.
+    // SEE-THROUGH CAPABLE, ALWAYS. While an emulator of its own has the screen
+    // (standalone.h) this window becomes its overlay and draws the pause menu
+    // over the frozen game, which needs an alpha channel the window cannot be
+    // given later. Everywhere else nothing changes: every frame starts from an
+    // opaque clear and the blending keeps it opaque (ui.cpp, presentScene).
+    SDL_WindowFlags windowFlags =
+        SDL_WINDOW_OPENGL | SDL_WINDOW_FULLSCREEN | SDL_WINDOW_TRANSPARENT;
+    SDL_Window* window = nullptr;
+    SDL_GLContext gl = nullptr;
+
+    ui::Renderer renderer;
+
+    ui::TextRenderer text;
+    // A key is not a path. Everything after '#' is stripped before reading, so
+    // one file can stand in for many distinct entries here — and so a real RomM
+    // URL with a query string is already the shape this expects.
+    // The client outlives the cache deliberately: ImageCache calls the loader
+    // from its worker threads, so whatever it captures must still be alive when
+    // a cover arrives. romm::Client is safe to call concurrently — each request
+    // builds its own CURL handle, and nothing else mutates after setup.
+    romm::Client liveClient;
+
+    // 192 MB of covers resident. A shelf holds a handful; a library grid holds
+    // a screenful; anything past that is re-decoded on the way back, which is
+    // cheap and bounded. Four workers, so a fast scroll keeps up without
+    // starving the frame thread on a four-core box.
+    ui::ImageCache images;
+    // THE STORE IS ONE OBJECT AND THE OLD NAMES ARE REFERENCES INTO IT.
+    //
+    // These were eight independent locals until open question 28, which was
+    // fine while the whole library arrived in a single call at boot and
+    // nothing ever grew afterwards. Grids, collections and search now each
+    // append to the store while the console is running, and `appendGame` has
+    // to be handed somewhere to append TO — so the pieces live together again.
+    //
+    // The names below are unchanged on purpose: several hundred lines of this
+    // file read `cards[i]` and `shelf`, and rewriting all of them to reach
+    // through `lib.` would be a large diff that changed nothing.
+    Library lib;
+    std::vector<design::Card>& cards = lib.cards;
+    int& heroIndex = lib.heroIndex;
+    std::string& heroPlatform = lib.heroPlatform;
+    // Which cards the Recent row shows. Empty means "everything", which is what
+    // the stand-in library wants — it has no play history to order by.
+    std::vector<int>& shelf = lib.shelf;
+    std::vector<int>& favorites = lib.favorites;
+    std::vector<romm::Game>& games = lib.games;
+    std::vector<screens::Tile>& platformTiles = lib.platformTiles;
+    std::vector<screens::Tile>& collectionTiles = lib.collectionTiles;
+
+    // WHAT THE SCREEN SAYS WHILE THE CONSOLE IS BUSY.
+    //
+    // Everything below blocks: reaching the server, adopting the user, and
+    // pulling a library that is sixteen hundred games on the reference machine.
+    // Until 2026-09-20 the screen showed nothing at all for those seconds — and
+    // for up to ninety of them when the server is not up yet — because the
+    // frame loop does not exist until after all of it.
+    //
+    // MMagTech noticed it as the pause after "Start playing" in first run, but
+    // it is not a first-run fault: it has happened on every boot this console
+    // has ever done. Nobody watches a console boot with a stopwatch.
+    // ---- Idle: pixel shift, dim, blank — idle.h, open question 10b -------
+    //
+    // UP HERE, BEFORE THE SERVER IS ASKED FOR, because the startup screen can
+    // now wait for it without end (below), and a bright logo left all night
+    // is the burn-in this exists to stop. One watch for both: a screen that
+    // went dark while waiting stays dark on Home, and the same press wakes it.
+    idle::Watch idleWatch;
+    idle::Level idleShown = idle::Level::Awake;
+    design::Animated dimLayer;
+    idle::Offset shiftShown;
+
+    setup::Deps waitDeps;
+    bool startupShown = false;
+    // HOME IS THE DRIVE'S GAMES (#88): the console started with no server, or
+    // the server went away while it was on, or a person was switched offline.
+    // The frame loop loads the library properly once the server answers.
+    bool libFromDrive = false;
+
+    ui::Keyboard keyboard;
+
+    // --- The core, if one was asked for --------------------------------------
+    bool playing = false;
+    SDL_AudioStream* audioStream = nullptr;
+    // LOCKED TO THE SCREEN (#221), RetroArch's way: one game frame per refresh
+    // (or per two on a 120 Hz screen), and the sound played that much faster
+    // or slower so it still keeps time. Set at each launch. 0 is paced by the
+    // clock, as every game was before: a game too far from the screen's rate
+    // (a 50 Hz game on a 60 Hz TV), or no rate known.
+    int paceEvery = 0;
+    double paceBaseRatio = 1.0;
+    int paceCount = 0;
+    double paceScreenHz = 0.0;   // as SDL reports it, for the [pace] line
+    float paceRatio = 1.0f;      // the sound's speed now, for the [pace] line
 
     // ---- Focus -------------------------------------------------------------
     //
@@ -158,6 +514,12 @@ struct App {
     // a shelf and a grid end up disagreeing about what focus looks like, which
     // is the same reason design.h exists.
     enum Row { RowRecent = 0, RowFavorites = 1 };
+    // HOW FAR EACH HOME ROW HAS SCROLLED, in points — 2026-09-23. There was
+    // none: every card was drawn at its fixed slot, so moving right past the
+    // edge of the screen put focus on a card nobody could see, and A launched
+    // it. MMagTech, on the A9: *"this should scroll until the last one."* One
+    // per row, and each row keeps its own when focus leaves it.
+    design::Animated shelfScroll[2];
     // THE CHIP IS A BAR SLOT NOW, and it is the only one that is not a
     // capsule: it is drawn as the avatar disc at the far right, so the label
     // loop below stops at BarSettings and the chip takes its own focus rim.
@@ -170,6 +532,41 @@ struct App {
     // switches the screen, so the lit item is always where you stand, and
     // Home is simply one of them. A bar slot is now its destination's number.
     enum BarItem { BarHome = 0, BarLibrary, BarSearch, BarSettings, BarAccount, BarCount };
+    const char* kBarLabels[BarCount] = { "Home", "Library", "Search", "Settings", "Account" };
+    // How many of those draw as labelled capsules. The chip draws itself.
+    static constexpr int kBarCapsules = BarAccount;
+
+    // FOCUS BELONGS TO A PLACE ON A SHELF, NOT TO A GAME — #125, 2026-09-27.
+    // It lived on the Card, and a game that is both recent and a favourite is
+    // one Card drawn on two shelves, so focusing it on Recent lifted its cover
+    // on Favorites too. MMagTech: two covers looked focused at once. One lift
+    // and one press per (row, slot), grown as a row is drawn.
+    std::vector<design::Animated> slotFocus[2], slotPress[2];
+
+    // RESUME-FIRST, and it is now one rule rather than a separate object:
+    // Home opens on the first card of Recent, which is the most recently played
+    // game this console can play.
+    int focusRow = RowRecent;
+    int focusSlot = 0;
+    // Home is taller than the screen once there are two shelves, so it scrolls
+    // to follow focus — the same as tvOS, which puts Home in a ScrollView. The
+    // hero alone is 420 of a 1080 canvas; Recent and Favorites do not both fit
+    // under it.
+    design::Animated scrollY;
+    // What is lighting the room, and what was lighting it before. Two cache
+    // keys and a mix, because a cut between two covers is the one thing this
+    // must not look like. `backdropWant` is what focus is asking for, which is
+    // not the same as what is on screen until it has stopped asking for long
+    // enough — see kHomeBackdropDelay.
+    std::string backdropKey, backdropPrevKey, backdropWant;
+    // The last game art a BROWSING screen lit the room with. The plain
+    // screens (Settings, adding an account) clear the room, and Search with
+    // nothing found yet goes back to this rather than staying plain: MMagTech,
+    // 2026-09-24, one screen switching between plain and blurred "doesn't feel
+    // right".
+    std::string lastLitArt;
+    float backdropSettle = 0.0f;
+    design::Animated backdropMix;
 
     // ---- Where we are -------------------------------------------------------
     //
@@ -181,6 +578,63 @@ struct App {
     // again return to the browsing.
     enum class Screen { Home, Library, Grid, Detail, Search, AddAccount, TailscaleSignIn, Report,
                         HowTo, Settings };
+    std::vector<Screen> stack{Screen::Home};
+    // Which screen last set the room, so a change of screen can be told apart
+    // from focus moving within one. See the backdrop block in the frame loop.
+    Screen backdropScreen = Screen::Home;
+    bool backdropForScreen = false;
+
+    screens::LibraryScreen libraryScreen;
+    screens::GridScreen gridScreen;
+    screens::DetailScreen detailScreen;
+    // RETROACHIEVEMENTS ON THE GAME'S PAGE (#74): the list behind its row,
+    // and the answer it shows, for the page that asked.
+    screens::AchievementList raList;
+    ra::GameList detailAch;
+    int detailAchRom = 0;
+    // THE GAME'S MANUAL (#364), beside its page: R1 slides it in, L1 or B
+    // slides it back (manualview.h). `manualSlide` is 0 with the page in
+    // front and 1 with the manual; the viewer keeps its place while the page
+    // stays open. RomM's path for it, for the page that is open.
+    screens::ManualView manualView;
+    design::Animated manualSlide;
+    bool manualShown = false;
+    std::string detailManualPath;
+    std::string detailManualTitle;
+    screens::SearchScreen searchScreen;
+    screens::AccountScreen accountScreen;
+    screens::AddAccountScreen addAccountScreen;
+    // Signing the console in to Tailscale (#286): the same screen, a link to
+    // approve on a phone. The one line is the constraint that matters: the
+    // account has to be the one the phone uses, or the two never meet.
+    screens::AddAccountScreen tsSignInScreen;
+    // THE DIAGNOSTIC REPORT (#195): the same screen again, the link this time
+    // a download of the report. Its lines are set when it is made.
+    screens::AddAccountScreen reportScreen;
+    // ABOUT, HOW TO (#314): the controls, in Settings' own shape (a section
+    // per row on the left, its lines on the right), so it looks like the
+    // console rather than a page of text (MMagTech on the TV, 2026-10-10).
+    // Its Wiki is a QR code in the pane, shown on landing.
+    screens::SettingsScreen howToScreen;
+    screens::SettingsScreen settingsScreen;
+    // What the docked keyboard held last frame, so the query is re-run when it
+    // changes and not sixty times a second when it does not.
+    std::string searchTyped;
+    // Typed but not yet asked, and how long until it is. SEARCH GOES TO THE
+    // SERVER NOW — open question 28 — so the one thing the old in-memory
+    // filter never needed is the one thing this cannot do without: somebody
+    // typing "castlevania" on a pad must not fire eleven requests.
+    std::string searchPending;
+    float searchDebounce = 0.0f;
+    // Long enough to swallow a run of keypresses, short enough that stopping
+    // to look feels like the screen answering rather than catching up. The
+    // request itself is 40-80 ms against the reference server.
+    static constexpr float kSearchDebounce = 0.25f;
+    // One page. A television search is somebody looking for a game they can
+    // name, not a person paging through four hundred results with a stick —
+    // and the heading says how many matched, so a query that is too broad
+    // says so rather than pretending the first forty are all of it.
+    static constexpr int kSearchLimit = 40;
 
     // THE TILE COVERS, FETCHED BEHIND HOME RATHER THAN BEFORE IT.
     //
@@ -212,6 +666,7 @@ struct App {
         std::atomic<bool> quit{false};
         std::vector<std::thread> workers;
     };
+    CoverFill coverFill;
     // THE REST OF A BIG GRID, BEHIND THE FIRST PAGE.
     //
     // A grid is proportional to its own platform — about 1 ms a game — so the
@@ -235,6 +690,109 @@ struct App {
             arrived.clear();
         }
     };
+    GridFill gridFill;
+    struct GridFillStop {
+        GridFill& f;
+        ~GridFillStop() { f.stop(); }
+    } gridFillStop{gridFill};
+
+    // THE SWEEP AND THE EVICTION, BEHIND EVERYTHING, ONCE PER BOOT.
+    //
+    // MMagTech's question, and the reason there is no TTL anywhere in this
+    // cache: what stops a deleted platform's art sitting on disk forever. A
+    // platform that is gone stops appearing in the platform list, so it is
+    // orphaned the FIRST time the console sees the server without it.
+    //
+    // IT IS GIVEN THE LIST THAT CAME BACK, and covercache::sweep refuses an
+    // empty one, because absence is not deletion when nothing answered — a
+    // sweep on a failed boot would wipe the cache that boot most wants.
+    std::thread coverTidy;
+    struct CoverTidyStop {
+        std::thread& t;
+        ~CoverTidyStop() { if (t.joinable()) t.join(); }
+    } coverTidyStop{coverTidy};
+
+    // Stops the workers before anything they write into goes out of scope. A
+    // thread outliving this frame would be writing into a dead mutex.
+    struct CoverFillStop {
+        CoverFill& f;
+        ~CoverFillStop() {
+            f.quit.store(true);
+            for (std::thread& t : f.workers) if (t.joinable()) t.join();
+        }
+    } coverFillStop{coverFill};
+
+    // Any pad that is already plugged in. Hotplug is handled in the event loop,
+    // so a controller connected later works without restarting anything.
+    int padCount = 0;
+
+    bool running = true;
+    // Set when something OUTSIDE the console asked it to stop — systemd on a
+    // shutdown or a restart, which SDL turns into SDL_EVENT_QUIT. Kept apart
+    // from `running` because a capture ending, or Start on Home, is not a
+    // shutdown and must not upload anything.
+    bool askedToStop = false;
+    uint64_t previous = 0;
+    int frame = 0;
+    bool pressing = false;
+
+
+    // Starting a game from the UI. Everything it needs was decided elsewhere:
+    // the catalog picks the core, the core decides whether its archive gets
+    // opened, and the worker puts what comes out where the core can open it.
+    LaunchJob launchJob;
+    GameSession session;
+    // PCSX2'S OWN WINDOW (#226). PS2 runs inside this process, as before, but
+    // presents its picture to a window of its own, which gamescope shows; this
+    // window becomes gamescope's overlay over it, as for the separate
+    // emulators, and draws only the pause menu and what else is over a game.
+    // Every frame used to be copied off the GPU for this window to draw, and
+    // that copy is what held Quality at 3x (quality.cpp). Everything else
+    // about a PS2 game (pads, sound, saves, the menu) is unchanged.
+    //
+    // ONLY UNDER GAMESCOPE ON X11, which is the console. Anywhere else (the
+    // VM's cage, an offscreen run) nothing could draw the menu over another
+    // window, so the copy stays; so does an older PS2 library.
+    SDL_Window* ps2Window = nullptr;
+    bool ps2InputOurs = false;
+    int ps2ClearFrames = 0;
+
+    // A game in an emulator that is its own application (standalone.h). While
+    // it is active the emulator has the television and this loop only watches
+    // it: nothing is drawn and nothing reaches the screens here.
+    cab::standalone::Run standaloneRun;
+    float standaloneRan = 0.0f;
+    // THE PAUSE MENU OVER IT. Paused, the emulator is frozen, this window has
+    // the controllers, and the ordinary loop runs and draws the ordinary menu
+    // over the frozen picture.
+    bool standalonePaused = false;
+    // Frames still to clear to nothing after this window becomes the overlay.
+    // ONE WAS NOT ENOUGH: gamescope kept showing the launch page on top of the
+    // game until the next frame this window drew, which was the pause menu
+    // (2026-09-28, Metroid Prime 4 loading behind its own launch page).
+    int standaloneClearFrames = 0;
+    // The shortcut button's tap, per player, as the in-process path reads it:
+    // down, and whether anything else was pressed while it was, and by which
+    // pad: a hold whose pad left is dropped, not released (ShortcutHold).
+    struct {
+        bool down = false, used = false;
+        SDL_JoystickID pad = 0;
+    } standaloneShortcut[cab::vpad::kMaxPlayers];
+    // Back and Start as the emulator has them, per player: passed down, or
+    // held back because the other was already down (Emulator::blocksBackStart).
+    struct { bool passed[2] = {false, false}, held[2] = {false, false}; }
+        backStart[cab::vpad::kMaxPlayers];
+    // A screenshot being written by gamescope, which takes about two seconds.
+    struct { std::string path, name; int romId = 0; int64_t size = -1; } standaloneShot;
+    // One worker for every upload. Started here and drained on the way out, so
+    // quitting does not discard a save someone has already made.
+    Uploader uploader;
+    // TIME PLAYED (#128). A session a power cut left open, for anybody who
+    // has played here, is owed now; it is sent when that person is.
+    playtime::Clock playClock;
+    float playCheckpointClock = 0.0f;
+    bool shownAway = false;
+    float onlineAgainClock = 5.0f;   // a failed reload waits before the next
     // The library being fetched for a console that started offline (#88).
     struct OnlineLoad {
         std::thread th;
@@ -243,6 +801,15 @@ struct App {
         Library lib;
         ~OnlineLoad() { if (th.joinable()) th.join(); }
     };
+    OnlineLoad onlineLoad;
+    float owedClock = 0.0f;   // seconds since the last try at what is owed
+    StateLoad stateLoad;
+    MenuNotice menuNotice;
+    // THE PADS WHOSE LOW-BATTERY NOTICE HAS BEEN SHOWN (#293), by the pad and
+    // not its number: numbers change with a stream or a pad coming back, and a
+    // pad warned before a stream must not be warned again after it. Cleared
+    // for a pad once it is back above the last segment.
+    std::set<std::string> batteryWarned;
     // THE BATTERY ROW'S ENTRIES AS THEY MOVE (#293, MMagTech 2026-10-08): a
     // pad switching on fades in where it goes while the others slide aside to
     // make room; one switching off fades out first, then the rest close up.
@@ -261,6 +828,32 @@ struct App {
         design::Animated alpha;
         bool leaving = false;
     };
+    std::vector<BatterySlot> batterySlots;
+    Uint64 batteryRowAt = 0;   // when the bar last drew it (SDL ticks, ms)
+    AchievementToast raToast;
+
+    // The in-game overlay: a scrim, a panel and buttons drawn over the game
+    // surface. No compositing trick — the frontend owns the frame loop, which
+    // is what makes this simple and is the direct payoff of hosting cores in
+    // process rather than launching them.
+    bool overlayOpen = false;
+    // A Wii game made for the Wii Remote is running (the launch sets it):
+    // while a stream plays it, nobody holding the stream's controllers can
+    // play it, so its pause menu has no Resume (#286, below).
+    bool sessionNeedsRemote = false;
+    // THE BUTTONS THE MENU WAS CLOSED WITH, per player, kept from the game
+    // until they are let go (#103). The menu acts when a button goes DOWN and
+    // the game reads what is held every frame, so B to go back, A on Resume,
+    // or the stick clicks that closed it all reached the game a frame later
+    // as a press. Filled while the menu is up; a bit clears when its button
+    // is released and never comes back, so a fresh press after that is the
+    // game's as usual.
+    uint32_t heldThroughMenu[players::kMax] = {};
+    // Whether the menu was up at the last read. The menu usually closes on
+    // an event handled earlier in the SAME frame as the read, so the button
+    // that closed it is only held from that frame on; the frame of the close
+    // has to be captured as well as the frames it was open.
+    bool menuUpAtLastRead = false;
     // THE SHORTCUT BUTTON, per player, while a game plays (shortcuts.h).
     // `before` is what was already held when it went down, so only buttons
     // pressed DURING the hold count; `used` is whether one was, which is what
@@ -278,8 +871,40 @@ struct App {
         uint32_t before = 0;
         SDL_JoystickID pad = 0;
     };
+    ShortcutHold shortcutHold[players::kMax];
+    // FAST FORWARD (#77): the shortcut button and ZR, held. Fast while held,
+    // normal on release, the sound discarded meanwhile. About 4x, a fixed top
+    // speed rather than a setting. ONLY WHERE STATES ARE (MMagTech,
+    // 2026-09-27: fast forward and rewind go with states, on the systems kept
+    // true to the console, now and later), and elsewhere it says so.
+    static constexpr double kFastForward = 4.0;
+    bool fastForwardSaid = false;
+    // REWIND (#78): the shortcut button and ZL, held (rewind.h). A snapshot
+    // every half second of play, the last 15 seconds kept in memory; held,
+    // it steps back one every kRewindStep and plays on from there on release.
+    // On every system with states and nowhere else (fast forward and rewind
+    // go with states). Dropped when a state loads or the game ends.
+    cab::Rewind rewindKeep;
+    int rewindAvailable = -1;          // -1 not yet decided for this game
+    uint64_t rewindLastFrame = 0;      // framesRun at the last snapshot
+    float rewindStepWait = 0.0f;
+    double rewindWorstMs = 0.0;        // the slowest snapshot, for the log
+    std::vector<uint8_t> rewindRaw;
+    static constexpr float kRewindStep = 0.20f;
+    bool rewindSaid = false;
+    // Both stick clicks together are the overlay hotkey — see where they are
+    // read. Held state rather than a chord test at press time, because SDL
+    // delivers the two presses as separate events.
+    bool l3Down = false, r3Down = false;
+    int overlaySlot = 0;
+    design::Animated overlayFade;
+    design::Animated overlayFocus;
     enum OverlayItem { OvResume = 0, OvSaveState, OvLoadState, OvScreenshot, OvChoice, OvExit,
                        OvDisc, OvCount };
+    const char* kOverlayLabels[OvCount] = {
+        "Resume", "Save state", "Load latest state", "Screenshot", "", "Exit to Home",
+        "Change disc",
+    };
     // CHOICE ROWS in a list of buttons: "Picture: Console" (#63) and a
     // system's own options, "3D glasses: Off" (#73). Built when the menu
     // opens, in the order they appear, between Screenshot and Exit to Home.
@@ -297,7 +922,35 @@ struct App {
         bool nextStart = false;
         std::function<void(int)> apply;
     };
+    std::vector<PauseChoice> pauseChoices;
+    // Frames to run while paused so a system row's change shows behind the
+    // menu (the frame loop, `redrew`).
+    int pauseRedrawFrames = 0;
+    // The pause menu's items for THIS game, built each time it opens: the two
+    // state items only where the system has snapshots. PlayStation 2 and
+    // GameCube get Resume, Screenshot and Exit to Home, and nothing to press
+    // that says no.
+    std::vector<OverlayItem> pauseItems{OvResume, OvSaveState, OvLoadState, OvExit};
+
+    // ---- The Power menu — docs/PROJECT.md, open question 10b ------------
+    //
+    // THE PAUSE MENU'S PANEL WITH A DIFFERENT LIST, not a second menu. The
+    // power button opens it everywhere, and Start opens it on Home. In a game
+    // the game is paused and Resume comes first and is focused, so a child
+    // pressing the button costs one press of A; on Home, Cancel does the same. Rest is listed only on a
+    // machine that can rest.
+    //
+    // Anything but Resume, from a game, leaves the game through finishExit
+    // first — the one way out of a game, which uploads every kind of save — so
+    // this is true for every emulator without any of them knowing.
+    bool powerMenu = false;
     enum PowerItem { PwResume, PwCancel, PwRest, PwRestart, PwPowerOff, PwSteam };
+    std::vector<PowerItem> powerItems;
+    bool restAvailable = false;
+    // Rest waits for the uploads finishExit queued: a machine that sleeps
+    // mid-upload has sent nothing, and the save would sit owed until morning.
+    bool restPending = false;
+    uint64_t restWaitStart = 0;
 
     // Opening the launch screen for a card. Everything it shows is decided
     // here, so the screen holds no opinion about where any of it came from.
@@ -324,6 +977,25 @@ struct App {
         bool stale = false;
         ~DetailStates() { if (worker.joinable()) worker.join(); }
     };
+    DetailStates detailStates;
+    // The open page's own states, by the negative ids its list carries.
+    std::vector<std::string> detailLocalStates;
+    // A state picked on the launch screen, loaded once the game is running.
+    int pendingStateId = 0;
+    // ...or one of this console's own (#88), by its file.
+    std::string pendingStatePath;
+    // HOME'S RESUME: the newest state, if there is one, loaded the same way;
+    // none, and the game simply starts (MMagTech, 2026-09-27). Only where the
+    // system has states.
+    bool pendingResume = false;
+    // AFTER A STATE LOADS, THE GAME WAITS ON THAT FRAME for a button
+    // (docs/PROJECT.md, decided 2026-09-27: "catches you off guard how quick
+    // it starts"). `stateHold` is the wait, with its "Press (A) to continue";
+    // `stateHoldWaiting` holds a game started from the launch screen still,
+    // with no prompt, while its state is fetched, so it does not boot and
+    // then jump. Only ever set by a state load, so a system without states
+    // never waits. The press that ends it is kept from the game.
+    bool stateHold = false, stateHoldWaiting = false, stateHoldJustEnded = false;
 
     // A GAME'S MANUAL, FETCHED (#364): into the `Manuals` folder beside the
     // game when the game is on a drive (cache.h), so it is there offline and
@@ -358,6 +1030,26 @@ struct App {
             ::unlink("/tmp/cabinetos-manual.pdf");
         }
     };
+    const std::string kManualTemp = "/tmp/cabinetos-manual.pdf";
+    ManualFetch manualFetch;
+    // R1 ON A GAME'S PAGE ALWAYS MEANS THE MANUAL (MMagTech, #364): the page
+    // slides aside and the manual comes in, or the edge sound when the game
+    // has none. Opened again on the same page, it is where it was left.
+    // A starting value, to be judged on the television.
+    static constexpr float kManualSlide = 0.35f;
+
+    // OPENING A GAME'S PAGE, AND LEAVING IT, DISSOLVE like a top-bar switch:
+    // asked for here, done at the end of the frame, after that frame has been
+    // copied to dissolve away over the new one. It was a cut, and MMagTech on
+    // the TV, 2026-09-27: "the switch still happens a bit fast and then
+    // everything is just thrown at you". A capture run opens it at once.
+    int pendingDetail = -1;
+    bool pendingDetailBack = false;
+    // What that screen should say once it is open. See refuseLaunch.
+    std::string pendingDetailNotice;
+    look::Appearance appearance{};
+    int darkFrom = 0;
+    int darkUntil = 0;
 
     // ADDING SOMEBODY, ON A CLIENT OF ITS OWN.
     //
@@ -378,10 +1070,158 @@ struct App {
         accounts::Paired who;
         std::string err;
     };
+    std::shared_ptr<AddJob> addJob = std::make_shared<AddJob>();
+    // The QR is encoded once, when the code first arrives, not per frame.
+    bool shownPairCode = false;
+    // Set by --screen add-account: hold the screenshot until there is a code.
+    bool waitForPairCode = false;
+
+    // WHERE THE BAR'S FOCUS LIVES. Not in Home's row model and not in any
+    // screen's: the bar is drawn over all of them, so its cursor belongs to the
+    // app. Every screen gets into it the same way (Action::FocusBar) and out of
+    // it the same way (Down, or Back).
+    // THE SWITCHER IS AN OVERLAY, NOT A DESTINATION, and that is the whole
+    // point of it being a panel. It was a stack screen for one build and the
+    // capture showed the fault immediately: pushing it made `here()` stop
+    // being Home, so Home stopped drawing and the panel hung over an empty
+    // purple field. A thing that "expands from the chip" has to have what it
+    // expanded over still behind it.
+    //
+    // So it lives beside `barFocused` rather than in the stack: the app owns
+    // it, every screen keeps drawing underneath it, and Back closes it and
+    // leaves you exactly where you were.
+    bool accountsOpen = false;
+    bool barFocused = false;
+    int barSlot = 0;
+    // Trigger edge state. See the axis handler.
+    bool l2Held = false, r2Held = false;
+    // A HELD TRIGGER KEEPS JUMPING (MMagTech, 2026-10-10: "holding them should
+    // just continuously jump to the next letter"). The d-pad's reason for one
+    // meaning per hold does not apply: a held trigger meant nothing. -1, +1,
+    // or 0 for neither; the frame loop repeats it.
+    int letterHeld = 0;
+    float letterHeldFor = 0.0f, letterNext = 0.0f;
+    // HELD-DIRECTION REPEAT. One direction at a time, which is what a d-pad is:
+    // pressing a second direction takes over rather than queueing, so a person
+    // rolling their thumb around the pad never ends up with two repeats
+    // fighting each other.
+    // THE CURTAIN. 0 is clear, 1 is black over everything. See design.h.
+    design::Animated curtain;
+    // An account switch waiting behind the curtain; see pumpSwitch.
+    int switchPendingId = 0;
     // LEAVING: Sign out, or a new server address saved. The curtain is the
     // startup screen with this line under the name, and once it is down (and
     // uploads are through) the app starts itself again; see pumpLeave.
     enum class Leave { None, SignOut, NewAddress, Steam };
+    Leave leaving = Leave::None;
+    std::string leaveLabel;
+    Uint64 leaveDownAt = 0;
+    bool restartSelf = false;
+    std::string switchLabel;
+    int switchCurtainFrames = 0;
+    Uint64 switchShownAt = 0;    // when the curtain was fully down
+    // THE NAME HAS ITS OWN FADE, inside the curtain's. It came in and went out
+    // with the curtain, so it sat over the old screen on the way down and over
+    // the new Home on the way up: MMagTech saw the two overlap. Now it only
+    // shows on a fully black screen: in after the curtain is down, out before
+    // it lifts.
+    design::Animated switchText;
+    // AN ACCOUNT SWITCH'S CURTAIN IS THE CONSOLE'S PURPLE, not black: the
+    // plain gradient boot and Settings stand on. Black is a game's curtain;
+    // behind "Switching to vivian" it looked like a screen nobody had
+    // designed. MMagTech, 2026-09-24. Set with the switch, cleared once the
+    // curtain is fully up again.
+    bool switchCurtain = false;
+    static constexpr float kSwitchTextFade = 0.200f;   // a starting value
+    bool switchDone = false;     // the switch has run; waiting out the hold
+    bool switchOk = false;
+    std::string switchWhy;
+    // ARRIVING: THE STARTUP SCREEN LIFTS OFF HOME, #109. It used to be
+    // replaced by Home between one frame and the next; MMagTech, on the A9:
+    // *"the transition is extremely harsh."* Now the curtain starts down as
+    // the startup screen, the frame already on the television, and lifts the
+    // way it does onto a game. Sign out and a new address come down onto the
+    // same screen, so leaving and coming back are one motion run both ways.
+    //
+    // A FIRST TRY FROZE THE TELEVISION ONCE, 2026-09-23 (1ac83e7, reverted).
+    // It ran its fade in a loop of its own before Home existed, redrawing the
+    // startup screen as fast as it could swap. This draws nothing of its own:
+    // it is the main loop's curtain, paced like every other frame.
+    //
+    // Never for a capture, whose first frame must be the screen itself.
+    bool arriving = false;
+    bool arriveLifting = false;
+    int arriveFrames = 0;
+    Uint64 arriveHeldAt = 0;
+
+    bool navHeld = false;
+    screens::Nav heldNav = screens::Nav::Down;
+    float heldFor = 0.0f, nextRepeat = 0.0f;
+
+    std::function<bool(screens::Nav)> navigate;
+    // Home's own keys, as one function, so that everything — Home, the Library,
+    // the grid — arrives through `navigate` and the bar can be offered the key
+    // first in exactly one place. Assigned further down, once moveFocus and
+    // moveRow exist.
+    std::function<bool(screens::Nav)> homeKey;
+
+    // ---- The PIN ------------------------------------------------------------
+    //
+    // docs/SETTINGS.md, Accounts, issue #57. The pad is a layer over whatever
+    // is showing (pin.h); these decide what an entered PIN means.
+    //
+    // `askPin` is the one door every protected action goes through: with no
+    // PIN set it simply goes ahead, which is the rule that with no PIN every
+    // account can do everything. Wi-Fi, Sign out, Change server address,
+    // Remove an account and File access call it when they are built.
+    screens::PinScreen pinScreen;
+    std::function<void()> pinThen;
+    // FIVE WRONG TRIES, THEN THIRTY SECONDS. Enough to forgive fumbling with
+    // a d-pad, and enough to make guessing ten thousand PINs not worth it for
+    // the sibling the PIN is for. Starting values. Counted per console run,
+    // not saved: a restart is slower than the wait.
+    static constexpr int kPinTries = 5;
+    static constexpr float kPinLockSeconds = 30.0f;
+    int pinFails = 0;
+    // ONCE PER VISIT TO SETTINGS. Entered once, the PIN is not asked again
+    // until Settings is left; the frame loop clears this. MMagTech on the TV,
+    // 2026-09-24: a wrong Wi-Fi password meant the PIN again, then the list,
+    // then the keyboard. Switching into the owner's account still always asks
+    // (it passes `always`), because that is not a Settings visit.
+    bool pinUnlocked = false;
+    // A CODE THE CONSOLE CHOSE, typed on the same pad: the last step before
+    // Format, so erasing a drive is never one press too many. Not the PIN;
+    // no lockout, because a wrong code costs nothing.
+    std::string pinExpect;
+    // A CODE ANOTHER DEVICE SHOWS, typed on the same pad and handed back
+    // unchecked: Moonlight's four digits when a device pairs for Remote Play.
+    // Whether they are right is the device's to say, not the console's.
+    std::function<void(const std::string&)> pinCode;
+    std::function<void()> pinCodeCancel;
+
+    // ---- A question with a few answers (choice.h) -------------------------
+    //
+    // Same shape as the PIN: the app opens it with what to do with the
+    // answer, and the answer is acted on after it closes, so an answer can
+    // open another question ("who?" then "are you sure?").
+    screens::ChoiceScreen choiceScreen;
+    std::function<void(int)> choiceThen;
+    // For a panel with a stepper row (Steam's size): Left or Right on it, and
+    // Back, which on a panel opened from another goes back to that one. Both
+    // cleared by every askChoice; set after it.
+    std::function<void(int)> choiceStep;
+    std::function<void()> choiceBack;
+    // ABOUT, HOW TO (#314). The words live here, next to the controls they
+    // describe; docs/wiki/navigation.md says the same and changes with them.
+    // THE SHORTCUTS ARE ALWAYS SHOWN: hidden while off, nobody would learn
+    // they exist. Off (the default), the first line says where to turn them
+    // on and the rest are greyed; both sticks in opens the pause menu either
+    // way. The button named is the one set for the pad in hand.
+    std::function<void()> openHowTo;
+    static constexpr const char* kWikiUrl = wikiqr::kUrl;
+    // Settings > Display and Sound > Dark hours: From and Until, and the hours
+    // of each. Set where it is opened; it reopens itself after an hour is set.
+    std::function<void(int)> darkHoursPanel;
 
     // ---- Settings' rows -----------------------------------------------------
     //
@@ -396,6 +1236,125 @@ struct App {
                      SetWiiRemotes, SetSteam, SetSteamShow, SetRetroAchievements,
                      SetAchievementSound, SetDeveloper, SetVersion, SetRemotePlay,
                      SetPairedDevices, SetTailscale, SetReport, SetHowTo, SetPads };
+    // One Eject row per USB drive: this plus the drive's index in
+    // storage::locations() when the rows were built.
+    static constexpr int kSetEject = 100;
+    // One Format row per drive whose row formats it: this plus its index in
+    // `formatable`, the drives as they were when the rows were built.
+    static constexpr int kSetFormat = 200;
+    // One row per connected controller: this plus its player, 0-based.
+    static constexpr int kSetPad = 300;
+    // The paired Wii Remotes as the Wii Remotes panel last listed them.
+    std::vector<wiiremote::Paired> wiiRowsShown;
+    // The controllers the Controllers rows were built from, to rebuild them
+    // when one connects or goes (players::generation).
+    int settingsPadsSeen = -1;
+    // The pad last pressed in Settings, whose row has the dot. Kept as the
+    // pad, not its row: a swap moves it to another row.
+    SDL_JoystickID settingsLastPad = 0;
+    // THE SHORTCUT BUTTON ROW IS LISTENING for this pad's next press, 0 when
+    // not (shortcuts.h). And the press it took, so the gamepad event SDL sends
+    // for that same press (same timestamp) goes no further: a B that cancels
+    // must not also leave Settings.
+    SDL_JoystickID shortcutListen = 0;
+    Uint64 shortcutTakenAt = 0;
+    std::vector<drives::Drive> formatable;
+    std::map<int, std::string> driveNames;   // a drive row's id -> its name
+    // An Eject row's id -> its drive in `formatable`, when Format is offered
+    // beside Eject.
+    std::map<int, size_t> ejectFormats;
+    // Format, from a drive's row. Set once buildSettings exists.
+    std::function<void(const drives::Drive&)> askFormat;
+    int screenOffIndex = 0;
+
+    // ---- System update ------------------------------------------------------
+    //
+    // docs/SETTINGS.md, System; issue #70. Root does the work and writes one
+    // status file (update.h); the frame loop reads it twice a second and this
+    // decides what it means on screen. What has to outlive a boot is kept in
+    // settings.json: Manual or Weekly, when the last check succeeded and what
+    // it found, the version already announced, and the version waiting for a
+    // restart with the boot it was staged in, which is how the first start
+    // after a restart knows whether it applied.
+    update::Status upd;   // the first poll reads it, so a status already there is acted on
+    // A state said on screen before root has written it: "Checking…" the
+    // moment the row is pressed, or why systemd refused. Root's next write
+    // (at >= updSaidAt) replaces it.
+    int64_t updSaidAt = 0;
+    float updPoll = 0.0f;
+    bool updWeekly = false;
+    bool updAuto = false;            // the check running is the weekly one
+    bool updAskAfterCheck = false;   // a check somebody pressed: offer the download
+    float updAutoWait = 0.0f;        // before the weekly check may try again
+    bool updReadyPanel = false;      // "Update ready" waits to be asked
+    bool updReadyAfterGame = false;  // ...and it landed during a game
+    std::string updStartNotice;      // "Updated to", once Home is up
+    Tone updStartTone = Tone::Done;
+    files::State filesState;
+    int64_t filesSaidAt = 0;
+    bool filesPanelWhenOn = false;   // open the panel once root says it is on
+    bool filesWant = false;
+    // ---- Developer access (docs/SETTINGS.md, System; issue #134) -----------
+    //
+    // The full command line over SSH on port 2222, off by default, and off
+    // means cabinetos-developer.service is not running (MMagTech,
+    // 2026-10-07: "when they turn it on, they now are a developer. Same
+    // install."). There is no status file: systemd's own state for the unit
+    // is the answer, read only while Settings is open or a change is waiting,
+    // so a console that never turns it on asks nothing. The password is File
+    // access's, one password shown in one place. On is remembered in
+    // settings.json, as File access is, and started again at boot.
+    static constexpr const char* kDevUnit = "cabinetos-developer.service";
+    std::string devState;
+    int64_t devSaidAt = 0;
+    bool devPanelWhenOn = false;
+    int64_t devNewPassAt = 0;   // the panel comes back once a new password is made
+    std::string devFailed;      // a refusal or a start that failed, said in the row
+    bool devWant = false;
+    bool devShown = false;
+    int versionPresses = 0;
+    std::chrono::steady_clock::time_point versionPressAt{};
+
+    // ---- Remote Play (docs/SETTINGS.md, Remote Play; issue #286) ----------
+    //
+    // Sunshine, so Moonlight on a phone, tablet or computer can play the
+    // console. Off by default, and off means cabinetos-remoteplay.service is
+    // not running and remoteplay.h asks it nothing. On is remembered in
+    // settings.json and started again at boot, as Developer access is.
+    // Pairing is on the television: a device asking to pair brings up the
+    // PIN pad for the four digits Moonlight shows.
+    static constexpr const char* kRpUnit = "cabinetos-remoteplay.service";
+    std::string rpState;
+    int64_t rpSaidAt = 0;
+    std::string rpFailed;   // a refusal or a start that failed, said in the row
+    bool rpWant = false;
+    int rpSeen = -1;        // remoteplay::generation() the rows were built from
+    std::set<std::string> rpAsked;   // requests already put to the TV
+    std::string rpAsking;            // the request the PIN pad is open for
+    // Digits handed over: the name given to Sunshine, when, and the devices
+    // paired before, so the new one is the one not among them.
+    struct { std::string name; int64_t at = 0; std::set<std::string> before; } rpPairing;
+    // TAILSCALE, for Remote Play away from home (tailscale.h says why it is
+    // the one way in from outside). tailscaled.service runs only while
+    // Streaming AND Tailscale are on; turning Streaming off stops it too, and
+    // turning Streaming on starts it again when Tailscale was on. Signed in
+    // or not is remembered as well, so a console turned off can still say
+    // "Disconnected" (signed in, not running) rather than "Off" (never).
+    static constexpr const char* kTsUnit = "tailscaled.service";
+    bool tsWant = false;
+    bool tsSignedIn = false;
+    int tsSeen = -1;            // tailscale::generation() the rows were built from
+    bool tsSigningIn = false;   // the sign-in screen is up, `tailscale up` running
+    bool tsShownLink = false;   // its link is on the screen
+    bool tsLoggingOut = false;  // `tailscale logout` running on its worker
+    std::thread tsWorker;
+    std::atomic<bool> tsWorkerDone{false};
+    // THE DIAGNOSTIC REPORT, made on a worker (about three seconds), with the
+    // console's address on the home network asked there too.
+    std::thread reportWorker;
+    std::atomic<bool> reportWorkerDone{false};
+    report::Made reportMade;
+    std::string reportAddress;
     // THE NETWORK IS ASKED OFF THE FRAME THREAD. net::status() is three or four
     // nmcli round trips, which is a visible hitch if the screen waits for it,
     // so the row says "Checking" until the answer lands.
@@ -407,6 +1366,7 @@ struct App {
         std::thread th;
         ~SettingsNet() { if (th.joinable()) th.join(); }
     };
+    SettingsNet settingsNet;
 
     // ---- Wi-Fi, in Settings > Network (issue #59) -------------------------
     //
@@ -422,6 +1382,7 @@ struct App {
         std::thread th;
         ~SettingsWifi() { if (th.joinable()) th.join(); }
     };
+    SettingsWifi settingsWifi;
 
     // ---- Add a controller, a window over Settings (issue #65) --------------
     //
@@ -451,6 +1412,18 @@ struct App {
         }
         ~PadWindow() { quit(); }
     };
+    PadWindow padWin;
+    bool padWindowOpen = false;
+    // Opened from the Controllers panel: closing it goes back there, as Pair
+    // a Wii Remote goes back to the Wii Remotes panel.
+    bool padWindowFromPanel = false;
+    std::vector<SDL_JoystickID> padWindowBefore;   // pads here when it opened
+    std::vector<bt::Device> padShown;              // the rows, in order
+    std::string padPairingName;                    // "" when not pairing
+    std::string padDetail;
+    // Wide enough for "Nintendo Switch Pro Controller" with "Pairing…"
+    // beside it. A starting value, judged on the television.
+    static constexpr float kPadWindowWidth = 760.0f;
     // ---- Pair a Wii Remote (#200) ---------------------------------------------
     //
     // The Wii's own search, over and over, until a Remote answers or the
@@ -470,6 +1443,31 @@ struct App {
         }
         ~WiiPairJob() { quit(); }
     };
+    WiiPairJob wiiPair;
+    bool wiiPairOpen = false;
+    // THE SENSOR BAR IS ASKED WITH THE FIRST REMOTE ONLY: a second Remote does
+    // not move the bar (MMagTech, 2026-10-03). The panel's row changes it later.
+    bool wiiPairFirst = false;
+    // THE WII REMOTES PANEL: each paired Remote (its value its light while
+    // connected; pressed, Remove), Pair a Wii Remote, and the sensor bar,
+    // which a press flips in place. Removing the last Remote greys the
+    // Remote games again.
+    std::function<void(int)> openWiiPanelAt;
+    std::function<void()> rebuildSettingsRows;   // buildSettings, set once it exists
+    std::vector<std::string> wiiValuesShown;
+
+    // ---- The Controllers panel ----------------------------------------------
+    //
+    // A ROW PER PAD, its name and its player ("• Player 1" on the pad last
+    // pressed, which is how two identical pads are told apart), then Add a
+    // controller. Pressing a pad gives it another number (the two swap) or
+    // forgets a Bluetooth pad; a lone wired pad has neither. After either,
+    // back to this panel, on the same pad.
+    std::vector<players::Pad> padsShown;
+    bool padsPanelSeenOpen = false;
+    int padsPanelGen = -1;
+    SDL_JoystickID padsPanelHand = 0;
+    std::function<void(int)> openPadsPanelAt;
     // JOINING BLOCKS FOR UP TO 45 SECONDS (net::join), so it is a job too. The
     // row being joined says so; the answer arrives in the notice pill.
     struct WifiJob {
@@ -480,6 +1478,7 @@ struct App {
         std::string ssid, err;
         ~WifiJob() { if (th.joinable()) th.join(); }
     };
+    WifiJob wifiJob;
     // ---- Change server address (issue #60) -------------------------------
     //
     // IS IT THE SAME SERVER, off the frame thread: reaching an address that
@@ -495,6 +1494,67 @@ struct App {
         Uint64 startedAt = 0;
         ~ServerJob() { if (th.joinable()) th.join(); }
     };
+    ServerJob serverJob;
+
+    // The networks as the rows show them: one per name, strongest signal,
+    // the one in use first, then saved ones, then the rest by signal.
+    std::vector<net::Network> wifiShown;
+    // Whether the question panel on screen is the Wi-Fi list, so a scan that
+    // lands while it is open can refresh it.
+    bool wifiPanelOpen = false;
+    // THE KEYBOARD OUTSIDE SEARCH. Search owns its docked keyboard; anything
+    // else that opens it (a Wi-Fi password) says here what to do with it.
+    std::function<void(ui::KeyboardResult)> keyboardThen;
+    // A Wi-Fi password on the on-screen keyboard, then the join on a worker.
+    // `forgetFirst` is Change password; `why` is "Wrong password" when this
+    // is the retry after one. Assigned once buildSettings exists.
+    std::function<void(const std::string& ssid, bool forgetFirst, const std::string& why)>
+        askWifiPassword;
+    // The network the keyboard is waiting on, while it says "Joining…".
+    std::string wifiKeyboardFor;
+    // RETROACHIEVEMENTS SIGN-IN (#74): the username, then the password, on the
+    // same keyboard, the password the way Wi-Fi's is. `why` is the last
+    // answer's reason, said in the field. Assigned once buildSettings exists.
+    std::function<void(const std::string& initial)> askRaUser;
+    std::function<void(const std::string& user, const std::string& why)> askRaPassword;
+    // True while the keyboard says "Signing in…" and waits on the answer.
+    bool raKeyboardWaiting = false;
+    // A server address on the keyboard; `why` is what went wrong with the
+    // last one, said in the field with the address kept behind it. Assigned
+    // once buildSettings exists.
+    std::function<void(const std::string& typed, const std::string& why)> askServerAddress;
+    // The address the keyboard is waiting on, while it says "Checking…".
+    std::string serverKeyboardFor;
+    // ---- Downloads (downloads.h), #68 --------------------------------------
+    //
+    // Every downloaded game, for Settings' Downloads panel, named as the
+    // Library names it where the library knows the game. A game still
+    // downloading is left out until it has arrived (MMagTech, 2026-09-26): its
+    // record is written before its first byte, so it would show half-sized.
+    screens::DownloadsPanel downloadsPanel;
+    // Assigned once buildSettings exists: a removal rebuilds Storage.
+    std::function<void(screens::DownloadsPanel::Outcome)> downloadsOutcome;
+
+    // THE TAILSCALE ROW (#286), under Streaming and greyed while it is off.
+    // Its value is the address to give Moonlight; its second line is the
+    // console's name there and when its sign-in ends. MMagTech, 2026-10-08.
+    // "Sign in again" is offered for the last two weeks only.
+    static constexpr int64_t kTsWarnDays = 14;
+    // THE PANEL: everything a computer needs, the password in plain text
+    // (anyone at the television can already turn this on or make a new
+    // one), then Done, New password, Turn off. Focus on Done.
+    std::function<void()> openFilesPanel;
+    // NAMING A DEVICE: the keyboard, the current name in the field. Right after
+    // pairing it says so; an empty name keeps the one it had.
+    std::function<void(int)> openPairedPanel;
+    // THE PAIRED DEVICES: a list, however long, each one pressed for Remove
+    // (the PIN when set). One row on the page, so a household with many
+    // devices does not push Tailscale off it (MMagTech, 2026-10-07).
+    std::vector<remoteplay::Device> rpRowsShown;
+
+    // THE PANEL: File access's, with the port. Same password, same New
+    // password (it changes File access's too, which is the point of one).
+    std::function<void()> openDevPanel;
 
     // THE CURTAIN COMES DOWN ON THE STARTUP SCREEN, and pumpLeave does the
     // rest once it is down.
@@ -513,6 +1573,7 @@ struct App {
         accounts::Account who;
         bool everyone = false;   // Sign out: every account's, then leave
     };
+    std::shared_ptr<RemoveJob> removeJob = std::make_shared<RemoveJob>();
 
     // ---- Steam (#223) ------------------------------------------------------
     //
@@ -529,6 +1590,11 @@ struct App {
         std::string busy;        // the pill while it runs, said again until done
         Uint64 saidAt = 0;
     };
+    SteamJob steamJob;
+    struct SteamJobStop {
+        SteamJob& j;
+        ~SteamJobStop() { if (j.th.joinable()) j.th.join(); }
+    } steamJobStop{steamJob};
     // Steam's install in progress, for the panel's line (installSteam).
     struct SteamInstall {
         std::atomic<bool> cancel{false};
@@ -536,6 +1602,7 @@ struct App {
         bool ok = false;
         std::string why;
     };
+    std::shared_ptr<SteamInstall> steamInstall;
 
     // What the first-pick screen and the size panel show, read off the frame
     // thread: what the main drive could give Steam without touching a kept
@@ -548,6 +1615,58 @@ struct App {
         int64_t current = 0;   // the slice now, 0 when not set up
         bool online = false;
     };
+    SteamSizes steamSizes;
+
+    std::function<void()> showSteamSetup;
+    // The size panel: one row Left and Right change, 25 GB a press, with the
+    // console's side shown under the title (MMagTech's brief: both sides).
+    //
+    // INSTALLING, it is the second of the two install screens and goes both
+    // ways from 100 GB, since nothing exists yet; focus starts on Install, so
+    // (A) twice installs at the default and the size is there for anyone who
+    // looks (MMagTech on the TV, 2026-10-03: the first screen read as jargon).
+    // Back returns to the first screen. GROWING, from Storage, it only goes up
+    // (grow only, MMagTech 2026-10-03).
+    std::function<void(bool)> showSteamSize;
+
+    // SWITCHING TOP-BAR DESTINATIONS IS A DISSOLVE — 2026-09-24.
+    //
+    // MMagTech: *"the switch between top tabs is too quick and visually
+    // snappy"*, most of all Search to Settings. It was a cut out and a fade in.
+    // Tried the same afternoon and dropped on the television: fading the old
+    // screen out and the new one in, with the background in between, then with
+    // the background alongside. What he asked for in the end was the new
+    // screen arriving see-through, with the old one showing through it.
+    //
+    // So the last frame of the old screen is copied at the moment of the
+    // switch and drawn over the new one, fading away (Renderer::
+    // captureSnapshot). Everything dissolves together: content, keyboard,
+    // background and the bar's highlight. A press mid-dissolve copies the
+    // frame as it is and starts again from there.
+    //
+    // THE OLD SCREEN GOES FIRST, THEN THE NEW ONE'S CONTENT ARRIVES. MMagTech,
+    // same afternoon: "can the search dissolve more before it goes to
+    // settings", because a solid keyboard dissolving straight into a page of
+    // text read as one busy frame. So the copy fades out quickly, and the new
+    // screen's content waits until it is mostly gone before fading in. The
+    // new background comes with the dissolve, under the copy.
+    //
+    // Starting values, to be judged on the television.
+    static constexpr float kTabDissolve = 0.300f;      // the old frame, away
+    static constexpr float kTabContentDelay = 0.200f;  // then the new content starts
+    static constexpr float kTabContentIn = 0.300f;     // and takes this long
+    static constexpr float kTabArrive = kTabDissolve;  // the new background's fade
+    float tabSince = -1.0f;      // seconds since the switch; negative when none
+    // THE NEW CONTENT RISES THIS FAR as it fades in, and SEARCH'S KEYBOARD
+    // SLIDES rather than dissolving: down and away as Search is left, up as it
+    // arrives. Opacity alone read as one picture turning into another; a
+    // little movement makes one screen leave and the next arrive.
+    static constexpr float kTabRise = 16.0f;
+    static constexpr float kKeyboardSlide = 0.300f;
+    design::Animated keyboardSlide;
+    bool snapTaken = false;
+    int pendingDest = -1;
+    design::Animated tabDissolve;
 
     // WHO OWNS THE INPUT, asked once per event rather than decided again at
     // every call site.
@@ -563,4 +1682,53 @@ struct App {
     // focus on the Home screen behind it, so leaving the game landed somewhere
     // nobody chose. Found by someone actually playing it.
     enum class InputOwner { Keyboard, Overlay, Game, UI };
+
+    // Leaving a game. The save goes up FIRST — this is the trigger that matters
+    // most, because nobody should lose progress by quitting — and only then is
+    // the core torn down.
+    // Quitting is DEFERRED while a core is still booting, and the waiting has
+    // to happen out here in the frame loop rather than inside unloadGame.
+    //
+    // The first attempt did it in unloadGame, spinning on retro_run until the
+    // core produced audio. It never did, and the reason is the useful part:
+    // PPSSPP's emulation thread only advances when the frontend COMPLETES a
+    // frame, not merely when retro_run is called. A tight loop with no present
+    // in it makes no progress at all — which is the same signature that makes
+    // --state-test unable to warm this core up, and now has one explanation
+    // rather than two mysteries.
+    //
+    // So the exit sets a flag, the ordinary loop keeps running and drawing, and
+    // the quit completes once the machine is up. Capped, because somebody
+    // quitting must not wait on a core that is never going to boot.
+    bool exitPending = false;
+    uint64_t exitWaitStart = 0;
+
+    // A STREAM STARTING OR ENDING HANDS THE PLAYERS OVER (players.h) AND
+    // PAUSES A RUNNING GAME, so nobody's car crashes in the second it takes to
+    // pick up the other controller; whoever takes over presses Resume
+    // (MMagTech, 2026-10-07). Every system: the built-in ones and the
+    // emulators of their own. Asked from both loops (the one an emulator of
+    // its own runs under skips the rest), and only a flag is read.
+    std::function<void()> remotePlayHandover;
+    // START OVER ON DISC N: the game is left as any exit leaves it, saves
+    // and all, and started again on that disc. Play carries on from it too,
+    // which is the way back to disc 1 for a postgame (#162).
+    int relaunchRomId = 0;
+    // THE DISC RIG'S STATE (#162, --disc-script). A test instrument: empty,
+    // and nothing here runs.
+    struct DiscScript {
+        std::vector<std::string> steps;
+        size_t at = 0;
+        bool started = false;
+        uint64_t from = 0;        // the game frame the step began on
+        uint64_t wallFrom = 0;    // and the wall clock, for `sleep`
+        uint32_t pad = 0;         // buttons held for the game
+        uint64_t padUntil = 0;    // until this game frame
+        std::string captureTo;    // the next frame capture goes here
+        bool said = false;
+    } discScript;
+    std::function<void()> openDiscPanel;
+    // Set while logind is waiting on us to leave a game before it proceeds.
+    bool releasePending = false;
+    uint64_t releaseWaitStart = 0;
 };
