@@ -116,3 +116,14 @@ struct LaunchJob {
                st == Stage::Installing;
     }
 };
+
+// Starts one; the comment above it in launch.cpp says what it decides. The
+// default arguments are here, on the declaration only.
+bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& game,
+                 const std::string& coreDir, std::string* err,
+                 bool playWhenReady = true, bool keepWhenReady = false);
+
+// --ps2-upscale and --ps2-aniso, from main()'s argument parser. The two values
+// live in launch.cpp, the only place that reads them; see the comment there.
+void setPs2Upscale(float upscale);
+void setPs2Anisotropy(int anisotropy);
