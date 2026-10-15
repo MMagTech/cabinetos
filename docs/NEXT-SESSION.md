@@ -9,10 +9,11 @@ ask them to test, and never claim a fix nobody reproduced.
 ## Where things stand
 
 **2026-10-15:** `latest` is **2026.10.14.5** (built from 72c0c4b, tagged in
-git). The A9 (Wi-Fi, **192.168.1.109**) is on the testing channel. RomM's
-documentation together with RomM's behaviour is the source of truth for
-anything on RomM's data. RomM was asked to send its `version` tag
-(rommapp/romm#5243); nothing to do until it does.
+git). The A9 (Wi-Fi, **192.168.1.109**; Tailscale cabinetos,
+100.67.82.30) is on the testing channel. RomM's documentation together with
+RomM's behaviour is the source of truth for anything on RomM's data. RomM
+was asked to send its `version` tag (rommapp/romm#5243); nothing to do
+until it does.
 
 **Features and bug fixes are paused for the restructure (#398, "Audit the
 code and restructure it for contributors (main.cpp is 20,000 lines)").**
@@ -20,36 +21,41 @@ Every batch is a pull request into the long-lived `restructure` branch;
 `latest` stays at 2026.10.14.5 until one final pull request to main, judged
 with the full checklist on its testing image (Part 6 section 26).
 
-**Move 1 is done:** batch (a), #409 ("Restructure move 1: dead code out, the
-probes, self-tests and helpers out of main.cpp (#398)"), testing image
-**2026.10.15** (d78f6bd), merged into `restructure` on 2026-10-15. 73 dead items removed; the probes, self-tests and every
-helper above `main()` moved into 38 new files; main.cpp is 15,540 lines.
-The record, the check results and the scripts are in
-`~/Documents/Development/cabinetos-audit/moves-log.md` and `scripts/move1/`.
+**Moves 1 and 2 are done.** Move 1, batch (a): #409 ("Restructure move 1:
+dead code out, the probes, self-tests and helpers out of main.cpp (#398)").
+Move 2, batch (b): #410 ("Restructure move 2: the launch code out of
+main.cpp into launch.h, launch.cpp and launch_routes.cpp (#398)"), testing
+image **2026.10.15.2** (88b5ed4), merged into `restructure` on
+2026-10-15. main.cpp is 14,460 lines. The record, the check results and
+the scripts are in `~/Documents/Development/cabinetos-audit/moves-log.md`,
+`scripts/move1/` and `scripts/move2/`.
 
 ## Next
 
-**Move 2 is batch (b):** launch.h, launch.cpp and launch_routes.cpp. Its
-prompt is `~/Documents/Development/cabinetos-audit/move2-prompt.md`. It gets
-the full TV checklist, so it is not unattended unless MMagTech says so: the
-merge waits for his judgement of the TV items. Each later move takes its
-prompt from Part 6 section 28 and its batch file the same way.
+**Move 3 is batch (c), the App struct, alone.** Its prompt is
+`~/Documents/Development/cabinetos-audit/move3-prompt.md`. It gets the full
+TV checklist, so it is not unattended unless MMagTech says so, and it
+measures the exit after Add an account first (Part 6 section 27, item 4b).
 
-**What move 1 taught the moves** (testing.md has the first in full):
+**The batches after it (decided 2026-10-15, MMagTech: "proceed as you see
+fit for the end goal"):** (d) with (e) in one TV round; (f) with (g) in one
+TV round, stopping for a separate judgement of (f) if its machine checks
+show anything odd; (h1) and (h2) in 2 or 3 sessions; (i) alone. Every half
+gets its own testing image, so a fault seen on the TV can be narrowed down
+by switching the A9 to the half-way image. About 6 to 8 sessions, against
+11 to 14 one batch at a time; the reason is fewer, more careful TV rounds,
+not time.
+
+**What the moves have taught** (testing.md has them in full):
 - Run every headless test through `tools/romm-readonly-relay.py`.
-  `--sync-test` uploads a state as the active account when the core has a
-  state tag, and RomM then moves the game to the front of Recent.
-- Cut by the audit's line numbers with every boundary asserted, check every
-  line before and after as a set, and commit in stages that each build
-  (`scripts/move1/moves.py`, `stages.sh`); compare the two binaries' test
-  outputs with `compare.py`; the five captures came out pixel-identical.
+- A `--frames` capture of a launch is taken before the game loads; use the
+  disc rig's `shot` and a time limit.
+- A core stays mapped after a game is left; `scripts/move2/idle.sh` reads
+  the journal for that case.
+- The testing push needs MMagTech's word in the session that pushes; a
+  relayed okay was refused by the permission check.
 
 **Owed by MMagTech:**
-- The test state move 1 left on RomM: Cannon Spike (rom 550), state id 128,
-  uploaded at 6:43 AM on 2026-10-15, which also set the game's last played,
-  so it leads Recent ahead of Raiden IV OverKill. Deleting the state and
-  putting last played back are writes to his server, on his go. Until then,
-  two more state saves on Cannon Spike rotate out his own state id 28.
 - Part 6 section 29 decisions 2 to 6: which faults get issues, protectRomId
   0, folders for the files, the test instruments, the names.
 - #408 ("Next session: Part 6 of the #398 audit is posted; the moves begin
@@ -83,6 +89,10 @@ the contributor guide.
 - #391, "Headphones in at start get full volume"; #393, "Power off and
   Restart cut the picture abruptly": a fade only; no sound, ever.
 - #181, "Updates and DLC as separate files in RomM (Switch, PS3, Xbox 360)".
+- #411, "Connecting Moonlight can start the game Home has focused" and
+  #412, "The log names the previous emulator when a PS2 game starts
+  ("running Beetle Saturn")": both found in move 2's checks, both older than
+  the moves, in the Later milestone.
 - deletableman (#341, #376): nothing new from him.
 
 **After a console is installed fresh** it has no key: About, press Version
