@@ -503,3 +503,7 @@ void App::readScreenOffAtStart() {
     screenOffIndex = savedScreenOff();
     std::fprintf(stderr, "[idle] screen off after %s\n", kScreenOff[screenOffIndex].name);
 }
+
+void App::closeDownloadsOffSettings() {
+    if (here() != Screen::Settings) downloadsPanel.close();
+}

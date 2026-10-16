@@ -125,3 +125,8 @@ void App::pinOutcome(screens::PinScreen::Outcome o) {
     sound::play(sound::Cue::Activate);
     if (then) then();
 }
+
+// Leaving Settings locks the PIN again.
+void App::lockPinOffSettings() {
+    if (here() != Screen::Settings && !pinScreen.isOpen()) pinUnlocked = false;
+}

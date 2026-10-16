@@ -1923,6 +1923,7 @@ struct App {
     void drawGround(bool gameUp, float dt);
     // settingsflow.cpp
     void readScreenOffAtStart();
+    void closeDownloadsOffSettings();
     // updateflow.cpp
     void readUpdateCheckAtStart();
     void tickUpdateTimer(float dt);
@@ -1943,4 +1944,25 @@ struct App {
     // reportflow.cpp
     void pollReport();
     void stopReport();
+    // controllers.cpp
+    bool interceptControllers(const SDL_Event& e);
+    void noticeLowBattery(float dt);
+    void followPads();
+    void pumpPadWindow();
+    // drivesflow.cpp
+    void followDrives();
+    // achievements_ui.cpp
+    void tickRaToast(float dt);
+    void drawRaToast(float sc);
+    // wifi.cpp
+    void takeNetworkAnswer();
+    void refreshWifiList();
+    void takeWifiJoin();
+    // pinflow.cpp
+    void lockPinOffSettings();
+    // wiipanel.cpp
+    void followWiiRemotes();
+    void pumpWiiPairing();
+    // serveraddressflow.cpp
+    void takeServerCheck();
 };
