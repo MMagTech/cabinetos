@@ -474,6 +474,23 @@ minute and guessing at it for twenty.
   (`grep "[r]elay2.py 1600[78]"` matched `relay2.py 16008` later in the same
   `bash -c`). Start and stop helpers from a script file with a pid file.
 
+- **A PAD LEFT ON CHANGES A SUITE'S OUTPUT.** 2026-10-15, move 3 of #398:
+  an Xbox pad still awake from a TV test was seated by the base binary's
+  first runs and switched itself off at 7:20 PM (battery 1 of 4), so a dozen
+  outputs differed by pad lines and a Dreamcast state taken during the pause
+  it caused. Read the console's journal for `[players]` lines across a suite
+  run before comparing two binaries, and rerun the same binary on the tests
+  that differ to show what timing alone changes.
+
+- **A RESTART NEVER REACHES THE END OF main().** On Power > Restart, Power
+  off or an update's restart, gamescope's reaper kills the frontend right
+  after `[power] released` (measured 2026-10-15 on 2026.10.15.2 and
+  2026.10.16), so nothing that runs when main() returns (the App's
+  destructors, #406's abort) runs then. The exits that do return are the
+  Steam handover and a quit by SIGTERM: test an exit headless with `timeout
+  --preserve-status -s TERM` (SDL makes it a quit, `[shutdown] asked to
+  stop`), and on the TV with Steam and back.
+
 - **A SCRATCH ROOT STILL SEES THE GAMES DRIVE.** `drives.json` `[]` keeps
   downloads off it, but the frontend found `/run/media/cabinet/Games` and its
   folder time moved (nothing was written). Check the real drive after a rig
