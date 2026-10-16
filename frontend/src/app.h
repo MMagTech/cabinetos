@@ -1869,7 +1869,7 @@ struct App {
     bool releasePending = false;
     uint64_t releaseWaitStart = 0;
 
-    // ---- Made in batches (d) and (e) (#398) ----------------------------------
+    // ---- Made in batches (d) to (f) (#398) -----------------------------------
     // Each is one stretch of main()'s old body or of apply()'s, called
     // where it ran; the file that holds it is named above its group.
     // cli.cpp
@@ -2004,6 +2004,13 @@ struct App {
     void pressSteam();
     // states.cpp
     void playFromState(const screens::Result& res);
+    void loadPendingStates();
+    void drawStateHold(float sc);
+    void sayStateUploaded();
     // favorites.cpp
     void toggleFavorite(const screens::Result& res);
+    // ps2window.cpp
+    bool frameOverPs2Window();
+    // discs.cpp
+    void pumpDiscChange();
 };

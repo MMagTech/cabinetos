@@ -1855,48 +1855,7 @@ int App::run(int argc, char** argv) {
         pumpExit();
         pumpStateLoad(stateLoad, session, menuNotice);
         pumpDetailStates();
-        // THE STATE PICKED ON THE LAUNCH SCREEN goes in once the core is
-        // running, the same way Load latest state does, by id.
-        if (pendingStateId && playing && cab::Core::shared().running() &&
-            cab::Core::shared().framesRun() >= 1 && !stateLoad.running.load()) {
-            beginLoadLatestState(stateLoad, session, liveClient, menuNotice, pendingStateId);
-            pendingStateId = 0;
-            if (stateLoad.running.load()) stateHoldWaiting = true;
-        }
-        // ONE OF THIS CONSOLE'S OWN STATES, picked on the game's page (#88):
-        // read off the disk, so there is nothing to wait for.
-        if (!pendingStatePath.empty() && playing && cab::Core::shared().running() &&
-            cab::Core::shared().framesRun() >= 1 && !stateLoad.running.load()) {
-            const std::vector<uint8_t> bytes = cab::readBytes(pendingStatePath);
-            const bool ok = !bytes.empty() && loadStateOnItsDisc(session, pendingStatePath, bytes);
-            std::fprintf(stderr, "[state] picked on the game's page: %s -> %s\n",
-                         pendingStatePath.c_str(), ok ? "restored" : "REFUSED");
-            menuNotice.say(ok ? "State loaded" : stateRefusedText(),
-                           ok ? Tone::Done : Tone::Problem);
-            stateLoad.loaded = ok;   // and it waits on that frame, as any load does
-            pendingStatePath.clear();
-        }
-        if (pendingResume && playing && cab::Core::shared().running() &&
-            cab::Core::shared().framesRun() >= 1 && !stateLoad.running.load()) {
-            pendingResume = false;
-            if (session.snapshots) {
-                std::fprintf(stderr, "[resume] loading the newest state, if there is one\n");
-                beginLoadLatestState(stateLoad, session, liveClient, menuNotice, 0, true);
-                if (stateLoad.running.load()) stateHoldWaiting = true;
-            }
-        }
-        if (stateLoad.loaded) {
-            stateLoad.loaded = false;
-            rewindKeep.reset();   // the history led somewhere else
-            ra::stateLoaded();    // and so did what each achievement was waiting for
-            rewindLastFrame = cab::Core::shared().framesRun();
-            closeOverlay();
-            stateHold = true;
-            stateHoldWaiting = false;
-        }
-        // A launch-screen state that did not load: the game just goes on.
-        if (stateHoldWaiting && !stateLoad.running.load() && !stateLoad.ready.load())
-            stateHoldWaiting = false;
+        loadPendingStates();
         if (overlayDemo && playing && !overlayOpen &&
             cab::Core::shared().framesRun() >= static_cast<uint64_t>(overlayDemoAfter)) {
             overlayDemo = false;
@@ -1929,14 +1888,7 @@ int App::run(int argc, char** argv) {
             if (t == overlayExitAfter + 60) { overlayExitDemo = false; overlayActivate(); }
         }
 
-        // CHANGE DISC (#162): Insert's lid closes once the game has run with
-        // it open; Start over starts the game again once it has gone.
-        pumpInsert();
-        if (relaunchRomId && !playing && !exitPending && !launchJob.busy()) {
-            const int id = relaunchRomId;
-            relaunchRomId = 0;
-            if (!launchById(id)) gNextStartDisc = 0;
-        }
+        pumpDiscChange();
 
         // THE DISC RIG (#162, --disc-script). One step at a time, each when
         // the last is done; `wait` counts the game's own frames, so a step
@@ -2348,10 +2300,7 @@ int App::run(int argc, char** argv) {
                 onlineLoad.lib = Library{};
             }
         }
-        if (const int outcome = uploader.stateOutcome.exchange(0); outcome != 0)
-            menuNotice.say(outcome == 1 ? "Saved to RomM"
-                                        : "Saved. Will upload when RomM is back",
-                           outcome == 1 ? Tone::Done : Tone::Info);
+        sayStateUploaded();
         // Reset the moment it stops, so the next launch starts its own clock
         // and a second press cannot inherit the first one's patience.
         launchJob.busyFor = launchJob.busy() ? launchJob.busyFor + dt : 0.0f;
@@ -2382,39 +2331,7 @@ int App::run(int argc, char** argv) {
         }
         retargetHomePress();
 
-        // OVER PCSX2'S OWN WINDOW (#226) this window draws only what is over
-        // the game: the pause menu, a notice, the curtain, the dim. With none
-        // of them showing it draws nothing at all, as over an emulator of its
-        // own, so gamescope shows PCSX2's picture straight and this loop does
-        // not render 4K for nobody; the game above (pads, sound) still runs
-        // every pass. The menu has the controllers while it is up, so a press
-        // meant for it never reaches the game.
-        if (ps2Window && playing) {
-            const bool over = overlayOpen || overlayFade.value() > 0.001f ||
-                              curtain.value() > 0.001f || menuNotice.alpha() > 0.001f ||
-                              raToast.alpha() > 0.001f || dimLayer.value() > 0.001f;
-            if (overlayOpen != ps2InputOurs) {
-                cab::overlaywin::mark(window, /*takeInput=*/overlayOpen);
-                ps2InputOurs = overlayOpen;
-            }
-            if (over) {
-                ps2ClearFrames = 30;
-            } else {
-                if (ps2ClearFrames > 0) {
-                    --ps2ClearFrames;
-                    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-                    glDisable(GL_SCISSOR_TEST);
-                    glClearColor(0, 0, 0, 0);
-                    glClear(GL_COLOR_BUFFER_BIT);
-                    SDL_GL_SwapWindow(window);
-                } else {
-                    // Until the next press or 4 ms: the pads are read again
-                    // that often, which is sooner than PCSX2 asks for them.
-                    SDL_WaitEventTimeout(nullptr, 4);
-                }
-                continue;
-            }
-        }
+        if (frameOverPs2Window()) continue;
 
         int dw = 0, dh = 0;
         SDL_GetWindowSizeInPixels(window, &dw, &dh);
@@ -2680,14 +2597,7 @@ int App::run(int argc, char** argv) {
             drawHome(dt, sc);
         }  // end of the shelf branch
 
-        // THE WAIT AFTER A STATE LOADS: the game's frozen picture, a little
-        // darker, and the prompt low on it. Not while the pause menu is up.
-        if (playing && stateHold && overlayFade.value() < 0.001f) {
-            renderer.draw(ui::Rect{0, 0, ui::kCanvasWidth, ui::kCanvasHeight, 0,
-                                   ui::Color::black(0.35f)});
-            drawPressPrompt(renderer, text, sc, "Press", "to continue",
-                            ui::kCanvasHeight * 0.82f, 1.0f);
-        }
+        drawStateHold(sc);
 
         // The overlay's scrim belongs to the WORLD, not to the overlay, so it
         // is drawn before the scene is presented. Put it after and the panel's
@@ -3097,52 +3007,6 @@ int App::run(int argc, char** argv) {
     std::fprintf(stderr, "[image] resident %.1f MB, %d still pending\n",
                  images.bytesResident() / (1024.0 * 1024.0), images.pendingCount());
     return shutDown(argv);
-}
-
-void App::openPs2Window() {
-    if (gPs2Copy || !std::getenv("GAMESCOPE_WAYLAND_DISPLAY")) return;
-    const char* driver = SDL_GetCurrentVideoDriver();
-    if (!driver || SDL_strcmp(driver, "x11") != 0) return;
-    int w = 0, h = 0;
-    SDL_GetWindowSizeInPixels(window, &w, &h);
-    ps2Window = SDL_CreateWindow("PlayStation 2", w, h, SDL_WINDOW_FULLSCREEN);
-    if (!ps2Window) {
-        std::fprintf(stderr, "[ps2] no window of its own (%s); copying frames\n",
-                     SDL_GetError());
-        return;
-    }
-    const auto xid = static_cast<unsigned long>(SDL_GetNumberProperty(
-        SDL_GetWindowProperties(ps2Window), SDL_PROP_WINDOW_X11_WINDOW_NUMBER, 0));
-    const char* display = std::getenv("DISPLAY");
-    SDL_GetWindowSizeInPixels(ps2Window, &w, &h);
-    if (!xid || !ps2::setWindow(display ? display : "", xid, static_cast<unsigned>(w),
-                                static_cast<unsigned>(h))) {
-        std::fprintf(stderr, "[ps2] this PS2 library cannot take a window; copying frames\n");
-        SDL_DestroyWindow(ps2Window);
-        ps2Window = nullptr;
-        return;
-    }
-    // This window steps over it, as for an emulator of its own: hidden,
-    // marked, shown, because gamescope classifies a window when it maps.
-    SDL_HideWindow(window);
-    cab::overlaywin::mark(window, /*takeInput=*/false);
-    SDL_ShowWindow(window);
-    ps2InputOurs = false;
-    renderer.setTransparentBackground(true);
-    ps2ClearFrames = 30;
-    std::fprintf(stderr, "[ps2] its own window 0x%lx, %dx%d\n", xid, w, h);
-}
-
-// After the game has stopped, which is when PCSX2 has let go of it.
-void App::closePs2Window() {
-    if (!ps2Window) return;
-    SDL_DestroyWindow(ps2Window);
-    ps2Window = nullptr;
-    SDL_HideWindow(window);
-    cab::overlaywin::unmark(window);
-    SDL_ShowWindow(window);
-    renderer.setTransparentBackground(false);
-    ps2InputOurs = false;
 }
 
 bool App::remoteOnlyHere() {
@@ -4221,61 +4085,6 @@ void App::powerActivate(PowerItem item) {
     }
 }
 
-// A SCREENSHOT OF A GAME THIS WINDOW DID NOT DRAW: gamescope's own, of the
-// game's plane only, which leaves the menu out (open question 24, and
-// measured: about two seconds for a 4K PNG, written by gamescope after
-// the command returns). The menu says so once the file is whole, and it
-// travels to RomM's gallery the way every other screenshot does.
-void App::standaloneScreenshot() {
-    if (!standaloneShot.path.empty()) return;   // one at a time
-    struct timespec ts{};
-    clock_gettime(CLOCK_REALTIME, &ts);
-    struct tm utc{};
-    gmtime_r(&ts.tv_sec, &utc);
-    char stamp[48];
-    const size_t n = std::strftime(stamp, sizeof stamp, "%Y-%m-%d %H-%M-%S", &utc);
-    std::snprintf(stamp + n, sizeof stamp - n, "-%03ld", ts.tv_nsec / 1000000L);
-    std::string base = session.fsStem.empty() ? sanitisedStem(session.title) : session.fsStem;
-    std::replace(base.begin(), base.end(), '/', '_');
-    const std::string dir = storage::screenshotsDir(storage::currentUser()) + "/" +
-                            std::to_string(session.romId);
-    storage::makeDirs(dir);
-    standaloneShot.name = base + " [" + stamp + "].png";
-    standaloneShot.path = dir + "/" + standaloneShot.name;
-    standaloneShot.romId = session.romId;
-    standaloneShot.size = -1;
-    const proc::Result r = proc::run({"gamescopectl", "screenshot", standaloneShot.path}, 5);
-    if (!r.ok()) {
-        std::fprintf(stderr, "[screenshot] gamescopectl: %s\n", proc::trimmed(r.err).c_str());
-        standaloneShot.path.clear();
-        menuNotice.say("Couldn't save the screenshot", Tone::Problem);
-    }
-}
-
-// Twice a second or so: the file is whole when its size stops changing.
-void App::pumpStandaloneShot() {
-    if (standaloneShot.path.empty()) return;
-    struct stat st;
-    if (::stat(standaloneShot.path.c_str(), &st) != 0 || st.st_size <= 0) return;
-    if (st.st_size != standaloneShot.size) {
-        standaloneShot.size = st.st_size;
-        return;
-    }
-    std::vector<uint8_t> png = cab::readBytes(standaloneShot.path);
-    std::fprintf(stderr, "[screenshot] %zu bytes, %s\n", png.size(),
-                 standaloneShot.name.c_str());
-    menuNotice.say("Screenshot saved", Tone::Done);
-    Uploader::Job job;
-    job.romId = standaloneShot.romId;
-    job.emulator = "screenshot";
-    job.fileName = standaloneShot.name;
-    job.data = std::move(png);
-    job.localPath = standaloneShot.path;
-    job.isScreenshot = true;
-    uploader.push(std::move(job));
-    standaloneShot.path.clear();
-}
-
 // AS A SETTINGS CHOICE ROW BEHAVES (settings.cpp): left and right stop at
 // the ends with the edge sound, and A walks forward and wraps, so the row
 // also works from A alone.
@@ -4293,112 +4102,6 @@ void App::stepChoice(int slot, int delta, bool wrap) {
     if (c->apply) c->apply(next);
     if (c->nextStart) menuNotice.say("Exit and relaunch to apply", Tone::Done);
     sound::play(sound::Cue::Move);
-}
-
-// ---- Change disc (#162) ----------------------------------------------
-//
-// ONE ROW IN THE PAUSE MENU, ONLY ON A GAME WITH SEVERAL DISCS, and
-// everything else inside the question panel: every disc listed, earlier
-// ones too, the one in the drive marked, focus on the next. Picking one
-// asks Insert (the game keeps running) or Insert and restart.
-//
-// INSERT IS EJECT, LET THE GAME RUN, SET THE DISC, CLOSE: RetroArch
-// waits 100 frames, and a Dreamcast game needs the tray seen open
-// (flycast#1914). The menu closes at once so the wait runs in the game;
-// a core that is paused never sees the lid (beetle-psx#694).
-void App::beginInsert(int n) {
-    if (session.discs.empty() || session.discInserting) return;
-    cab::Core& core = cab::Core::shared();
-    const bool opened = core.setDiscEjected(true);
-    const double fps = core.avInfo().fps > 0 ? core.avInfo().fps : 60.0;
-    session.discInserting = n;
-    session.discCloseAt =
-        core.framesRun() + static_cast<uint64_t>(std::max(1.0, fps * gDiscWaitSeconds));
-    std::fprintf(stderr, "[disc] insert disc %d: lid open %s, closing in %.1fs of play\n", n,
-                 opened ? "yes" : "no (already open?)", gDiscWaitSeconds);
-    menuNotice.say("Changing disc\xE2\x80\xA6", Tone::Busy);
-}
-
-void App::pumpInsert() {
-    if (!playing || !session.discInserting) return;
-    cab::Core& core = cab::Core::shared();
-    if (core.framesRun() < session.discCloseAt) return;
-    const int n = session.discInserting;
-    const int idx = discIndexOf(session, n);
-    const bool set = core.setDiscIndex(idx);
-    const bool closed = core.setDiscEjected(false);
-    session.discInserting = 0;
-    syncDiscFromCore(session);
-    // A REWIND across a disc change would put the machine back on a disc
-    // that is no longer in it.
-    rewindKeep.reset();
-    rewindLastFrame = core.framesRun();
-    std::fprintf(stderr, "[disc] disc %d in: index %d %s, lid closed %s, the core says "
-                         "index %d\n",
-                 n, idx, set ? "set" : "REFUSED", closed ? "yes" : "no", core.discIndex());
-    if (set && session.disc == n)
-        menuNotice.say("Disc " + std::to_string(n) + " in", Tone::Done);
-    else
-        menuNotice.say("Couldn't change the disc", Tone::Problem);
-}
-
-void App::startOverOnDisc(int n) {
-    if (session.discs.empty()) return;
-    std::fprintf(stderr, "[disc] start over on disc %d\n", n);
-    disc::remember(storage::currentUser(), session.romId, n, disc::highest(session.discs));
-    gNextStartDisc = n;
-    relaunchRomId = session.romId;
-    if (choiceScreen.isOpen()) choiceScreen.close();
-    exitToHome();
-    // The exit just remembered the disc that was in; this one wins.
-    disc::remember(storage::currentUser(), relaunchRomId, n, disc::highest(session.discs));
-}
-
-void App::pickDisc(int n) {
-    // INSERT ONLY WHERE THE CORE HAS A DRIVE, and not for the disc
-    // already in it.
-    const bool canInsert =
-        session.discChange == disc::Change::Insert && n != session.disc;
-    // ONE THING TO DO IS SAID, NOT FOCUSED: a lone button nobody moved
-    // onto does not read as selected.
-    std::vector<std::string> options;
-    if (canInsert) {
-        options.push_back("Insert");
-        options.push_back("Insert and restart");
-    }
-    const disc::Disc* picked = disc::byNumber(session.discs, n);
-    askChoice(picked ? picked->label : "Disc " + std::to_string(n), "", options, 0,
-              [&, n, canInsert](int answer) {
-                  if (canInsert && answer == 0) {
-                      closeOverlay();
-                      beginInsert(n);
-                  } else {
-                      startOverOnDisc(n);
-                  }
-              });
-    if (!canInsert) choiceScreen.setPrompt("Press", "A", "to insert and restart");
-    choiceBack = [&]() { openDiscPanel(); };
-}
-
-void App::openDiscPanel() {
-    std::vector<std::string> names, values;
-    for (const disc::Disc& d : session.discs) {
-        names.push_back(d.label);
-        values.push_back(d.number == session.disc ? "In the drive" : "");
-    }
-    // Focus on the next disc in the drive's order, or the last.
-    const int count = static_cast<int>(session.discs.size());
-    int at = 0;
-    for (int k = 0; k < count; ++k)
-        if (session.discs[static_cast<size_t>(k)].number == session.disc) at = k;
-    const int focus = at + 1 < count ? at + 1 : count - 1;
-    // A row is a disc by its own number, not its place: with disc 2
-    // missing on RomM the second row is disc 3.
-    askChoice("Change disc", "", names, focus, [&](int k) {
-        if (k >= 0 && k < static_cast<int>(session.discs.size()))
-            pickDisc(session.discs[static_cast<size_t>(k)].number);
-    });
-    choiceScreen.setValues(values);
 }
 
 void App::overlayActivate() {
