@@ -99,6 +99,9 @@ namespace cab {
 class Core;
 }
 
+// pumpLaunch's stages' shared locals (launch.cpp).
+struct LaunchContext;
+
 struct App {
     App() = default;
     App(const App&) = delete;
@@ -2038,4 +2041,14 @@ struct App {
     void reportAndUnloadCore();
     // pace.cpp
     void runGameFrame(cab::Core& core, float dt, bool rewinding);
+    // launch.cpp
+    bool takeFinishedJob();
+    void prepareSaveDirAndDiscs(LaunchContext& c);
+    void restoreBeforeLoad(LaunchContext& c);
+    bool loadLaunchedGame(LaunchContext& c);
+    void setUpLoadedGame(LaunchContext& c);
+    void reportLoadedOptions(cab::Core& core);
+    void openSoundAndPace(cab::Core& core);
+    void startPlaying(cab::Core& core);
+    void tickLaunchBusy(float dt);
 };
