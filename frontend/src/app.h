@@ -2021,4 +2021,8 @@ struct App {
     void tickPauseMenu(float dt);
     void drawPauseScrim();
     void drawPauseMenu(float sc);
+    // standalone_play.cpp
+    bool takeStandaloneEvent(const SDL_Event& e);
+    bool watchStandalone(float dt);
+    void closeStandaloneAtExit();
 };
