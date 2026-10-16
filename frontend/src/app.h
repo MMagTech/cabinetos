@@ -1923,4 +1923,24 @@ struct App {
     void drawGround(bool gameUp, float dt);
     // settingsflow.cpp
     void readScreenOffAtStart();
+    // updateflow.cpp
+    void readUpdateCheckAtStart();
+    void tickUpdateTimer(float dt);
+    void pollUpdate();
+    void askReadyWhenFree();
+    void sayUpdatedTo();
+    // access.cpp
+    void startAccessAtBoot();
+    void pollAccess();
+    // remoteplayflow.cpp
+    void startRemotePlayAtBoot();
+    void pollRemotePlay();
+    // tailscaleflow.cpp
+    void startTailscaleAtBoot();
+    void pollTailscale();
+    // accountsflow.cpp
+    void takeAccountResults();
+    // reportflow.cpp
+    void pollReport();
+    void stopReport();
 };

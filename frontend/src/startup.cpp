@@ -845,8 +845,7 @@ int App::shutDown(char** argv) {
     tailscale::watch(false);
     tailscale::cancelLogin();
     if (tsWorker.joinable()) tsWorker.join();
-    if (reportWorker.joinable()) reportWorker.join();
-    report::stop();
+    stopReport();
 
     ra::shutdown();
     images.shutdown();
