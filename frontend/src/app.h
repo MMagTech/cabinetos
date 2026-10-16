@@ -2075,4 +2075,6 @@ struct App {
     // input.cpp
     void handleEvent(const SDL_Event& e);
     void repeatHeld(float dt);
+    // frame.cpp
+    void runFrameLoop();
 };
