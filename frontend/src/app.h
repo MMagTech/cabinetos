@@ -32,6 +32,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <set>
 #include <string>
 #include <thread>
@@ -1874,4 +1875,11 @@ struct App {
     // Set while logind is waiting on us to leave a game before it proceeds.
     bool releasePending = false;
     uint64_t releaseWaitStart = 0;
+
+    // ---- Made from run()'s statements in batch (d) (#398) ------------------
+    // Each is one stretch of main()'s old body, called from run() at the
+    // point it ran; the file that holds it is named above its group.
+    // cli.cpp
+    std::optional<int> parseCommandLine(int argc, char** argv);
+    void resolveCoresAndServer();
 };
