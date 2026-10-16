@@ -2072,4 +2072,7 @@ struct App {
     // idle.cpp
     void drawDim();
     void wakeTvAtExit();
+    // input.cpp
+    void handleEvent(const SDL_Event& e);
+    void repeatHeld(float dt);
 };
