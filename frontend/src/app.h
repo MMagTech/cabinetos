@@ -1918,4 +1918,17 @@ struct App {
     // home.cpp
     void retargetHomePress();
     void drawHome(float dt, float sc);
+    // nav.cpp
+    void tickScreens(float dt, screens::Ctx& ctx);
+    void applyTabContentFade(bool gameUp);
+    void drawScreen(float sc);
+    void drawScreenGlass(bool gameUp, float sc);
+    void resetContentFade();
+    void drawKeyboardAndDissolve();
+    void takePendingSwitch();
+    // batteryrow.cpp
+    float settleBatteryRow(float sc, float dt);
+    void drawBatteryRow(float& leftOfChip, float rowW, float sc);
+    // bar.cpp
+    void drawBar(bool gameUp, float sc, float dt);
 };
