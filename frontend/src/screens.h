@@ -33,8 +33,10 @@
 #include <string>
 #include <vector>
 
+#include "card.h"
 #include "design.h"
 #include "image.h"
+#include "motion.h"
 #include "text.h"
 #include "ui.h"
 

@@ -62,6 +62,7 @@
 #include "look.h"
 #include "manualview.h"
 #include "net.h"
+#include "panels.h"
 #include "pin.h"
 #include "players.h"
 #include "playtime.h"

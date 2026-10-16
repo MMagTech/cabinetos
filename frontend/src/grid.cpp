@@ -8,6 +8,7 @@
 #include <cmath>
 #include <cstdio>
 
+#include "panels.h"
 #include "screenparts.h"
 #include "sound.h"
 

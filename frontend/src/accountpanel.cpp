@@ -4,6 +4,7 @@
 
 #include "accountpanel.h"
 
+#include "panels.h"
 #include "screenparts.h"
 #include "sound.h"
 

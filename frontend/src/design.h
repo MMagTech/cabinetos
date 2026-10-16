@@ -29,11 +29,7 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstdint>
-#include <string>
-#include <vector>
 
-#include "look.h"
 #include "ui.h"
 
 namespace design {
@@ -593,9 +589,3 @@ inline float captionSlide(float focusAmount, float coverHeight) {
 }
 
 }  // namespace design
-
-// Built on the numbers above, in files of their own since the restructure
-// (#398); included here until their users include them.
-#include "card.h"
-#include "motion.h"
-#include "panels.h"

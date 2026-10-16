@@ -12,6 +12,9 @@
 
 #include "bluetooth.h"
 #include "design.h"
+#include "motion.h"
+#include "panels.h"
+#include "qrtexture.h"
 #include "sound.h"
 #include "firstrun.h"
 #include "job.h"

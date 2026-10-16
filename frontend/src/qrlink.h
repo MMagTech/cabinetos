@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 
+#include "qrtexture.h"
 #include "screens.h"
 
 namespace screens {

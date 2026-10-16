@@ -3,8 +3,8 @@
 #include "samenames.h"
 
 #include "accounts.h"
+#include "card.h"
 #include "catalog.h"
-#include "design.h"
 #include "romm.h"
 
 #include <cstdio>

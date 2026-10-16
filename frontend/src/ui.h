@@ -15,7 +15,6 @@
 
 #include <GLES3/gl3.h>
 
-#include "qr.h"
 #include <cstdint>
 
 namespace ui {
@@ -330,7 +329,3 @@ private:
 };
 
 }  // namespace ui
-
-// In a file of its own since the restructure (#398); included here until its
-// owners include it.
-#include "qrtexture.h"
