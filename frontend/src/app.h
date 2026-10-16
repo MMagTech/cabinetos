@@ -86,6 +86,11 @@
 #include "states.h"
 #include "uploader.h"
 
+// The startup screen's last line, which Home lifts it off (#109, see
+// `arriving`). One string, so the frame the curtain starts on is the
+// frame that was already on the television.
+static constexpr const char* kLoadingLine = "Loading your library";
+
 struct App {
     App() = default;
     App(const App&) = delete;
@@ -1882,4 +1887,22 @@ struct App {
     // cli.cpp
     std::optional<int> parseCommandLine(int argc, char** argv);
     void resolveCoresAndServer();
+    // startup.cpp
+    std::optional<int> startStorage();
+    std::optional<int> startDisplay();
+    std::optional<int> runFirstRun();
+    std::optional<int> startStartupScreen();
+    std::optional<int> connectToServer(char** argv);
+    void openKeyboardDemo();
+    std::optional<int> startDeveloperLaunch();
+    void settleScreensAtStart();
+    void startBrowsing();
+    void startSync();
+    void recoverPowerCutSaves();
+    void applyStartColour();
+    void noticeAppliedUpdate();
+    void settleTabsAtStart();
+    int shutDown(char** argv);
+    // serverwait.cpp
+    std::optional<int> waitForServer(char** argv);
 };
