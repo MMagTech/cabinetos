@@ -1905,4 +1905,17 @@ struct App {
     int shutDown(char** argv);
     // serverwait.cpp
     std::optional<int> waitForServer(char** argv);
+    // search.cpp
+    void searchKeyboardResult(ui::KeyboardResult res);
+    void tickSearch(float dt, screens::Ctx& ctx);
+    void pumpSearch(float dt);
+    void sizeSearchResults();
+    // detail.cpp
+    void showDetailProgress();
+    void tickDetail(float dt);
+    // coverfill.cpp
+    void drainCovers();
+    // home.cpp
+    void retargetHomePress();
+    void drawHome(float dt, float sc);
 };
