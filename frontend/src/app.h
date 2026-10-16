@@ -3,10 +3,12 @@
 // main() was one function: its locals were the console's whole state and its
 // lambdas reached them through [&]. They are the members and member functions
 // of this struct now, in main()'s order and unchanged, so the next batches can
-// move one feature at a time into its own file. The bodies stay in main.cpp;
-// main.cpp's main() builds one App and calls run(), which is main()'s old
-// body: the start-up in today's order, the frame loop, the teardown, the
-// restart.
+// move one feature at a time into its own file. The bodies are in main.cpp
+// and, from batch (d) on, in the feature files (cli.cpp, startup.cpp,
+// home.cpp and the rest: `grep -n 'App::name(' frontend/src/*.cpp` finds
+// one); main.cpp's main() builds one App and calls run(), which is
+// main()'s old body: the start-up in today's order, the frame loop, the
+// teardown, the restart, each a call where its statements have moved.
 //
 // MEMBER ORDER IS DESTRUCTION ORDER, backwards. It is main()'s declaration
 // order with three moves: resolvedAddress beside rommAddress, which points
@@ -32,6 +34,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <set>
 #include <string>
 #include <thread>
@@ -83,7 +86,13 @@
 #include "library.h"
 #include "notice.h"
 #include "states.h"
+#include "settingsids.h"
 #include "uploader.h"
+
+// The startup screen's last line, which Home lifts it off (#109, see
+// `arriving`). One string, so the frame the curtain starts on is the
+// frame that was already on the television.
+static constexpr const char* kLoadingLine = "Loading your library";
 
 struct App {
     App() = default;
@@ -1289,22 +1298,7 @@ struct App {
     // docs/PROJECT.md, open question 31. The screen is handed rows and hands
     // back an id; everything a row SHOWS is read here, fresh, each time
     // Settings opens or a row changes.
-    enum SettingId { SetAddAccount = 1, SetInterfaceSounds, SetPinSet, SetPinChange,
-                     SetPinOff, SetRemoveAccount, SetScreenOff, SetWifi, SetServer,
-                     SetUpdate, SetUpdateCheck, SetCredits, SetFiles, SetDownloads,
-                     SetAddController, SetShortcuts, SetShortcutButton, SetAppearance,
-                     SetDarkHours, SetColour, SetRumble, SetPictureQuality,
-                     SetWiiRemotes, SetSteam, SetSteamShow, SetRetroAchievements,
-                     SetAchievementSound, SetDeveloper, SetVersion, SetRemotePlay,
-                     SetPairedDevices, SetTailscale, SetReport, SetHowTo, SetPads };
-    // One Eject row per USB drive: this plus the drive's index in
-    // storage::locations() when the rows were built.
-    static constexpr int kSetEject = 100;
-    // One Format row per drive whose row formats it: this plus its index in
-    // `formatable`, the drives as they were when the rows were built.
-    static constexpr int kSetFormat = 200;
-    // One row per connected controller: this plus its player, 0-based.
-    static constexpr int kSetPad = 300;
+    // The row ids are settingsids.h.
     // The paired Wii Remotes as the Wii Remotes panel last listed them.
     std::vector<wiiremote::Paired> wiiRowsShown;
     // The controllers the Controllers rows were built from, to rebuild them
@@ -1874,4 +1868,142 @@ struct App {
     // Set while logind is waiting on us to leave a game before it proceeds.
     bool releasePending = false;
     uint64_t releaseWaitStart = 0;
+
+    // ---- Made in batches (d) and (e) (#398) ----------------------------------
+    // Each is one stretch of main()'s old body or of apply()'s, called
+    // where it ran; the file that holds it is named above its group.
+    // cli.cpp
+    std::optional<int> parseCommandLine(int argc, char** argv);
+    void resolveCoresAndServer();
+    // startup.cpp
+    std::optional<int> startStorage();
+    std::optional<int> startDisplay();
+    std::optional<int> runFirstRun();
+    std::optional<int> startStartupScreen();
+    std::optional<int> connectToServer(char** argv);
+    void openKeyboardDemo();
+    std::optional<int> startDeveloperLaunch();
+    void settleScreensAtStart();
+    void startBrowsing();
+    void startSync();
+    void recoverPowerCutSaves();
+    void applyStartColour();
+    void noticeAppliedUpdate();
+    void settleTabsAtStart();
+    int shutDown(char** argv);
+    // serverwait.cpp
+    std::optional<int> waitForServer(char** argv);
+    // search.cpp
+    void searchKeyboardResult(ui::KeyboardResult res);
+    void tickSearch(float dt, screens::Ctx& ctx);
+    void pumpSearch(float dt);
+    void sizeSearchResults();
+    // detail.cpp
+    void showDetailProgress();
+    void tickDetail(float dt);
+    // coverfill.cpp
+    void drainCovers();
+    // home.cpp
+    void retargetHomePress();
+    void drawHome(float dt, float sc);
+    // nav.cpp
+    void tickScreens(float dt, screens::Ctx& ctx);
+    void applyTabContentFade(bool gameUp);
+    void drawScreen(float sc);
+    void drawScreenGlass(bool gameUp, float sc);
+    void resetContentFade();
+    void drawKeyboardAndDissolve();
+    void takePendingSwitch();
+    // batteryrow.cpp
+    float settleBatteryRow(float sc, float dt);
+    void drawBatteryRow(float& leftOfChip, float rowW, float sc);
+    // bar.cpp
+    void drawBar(bool gameUp, float sc, float dt);
+    // backdrop.cpp
+    void drawGround(bool gameUp, float dt);
+    // settingsflow.cpp
+    void readScreenOffAtStart();
+    void closeDownloadsOffSettings();
+    void applySetting(const screens::Result& res);
+    void applySettingChoice(const screens::Result& res);
+    // updateflow.cpp
+    void readUpdateCheckAtStart();
+    void tickUpdateTimer(float dt);
+    void pollUpdate();
+    void askReadyWhenFree();
+    void sayUpdatedTo();
+    void pressUpdate();
+    // access.cpp
+    void startAccessAtBoot();
+    void pollAccess();
+    void pressDeveloper();
+    void pressVersion();
+    void pressFiles();
+    // remoteplayflow.cpp
+    void startRemotePlayAtBoot();
+    void pollRemotePlay();
+    void pressPairedDevices();
+    void pressRemotePlay();
+    // tailscaleflow.cpp
+    void startTailscaleAtBoot();
+    void pollTailscale();
+    void pressTailscale();
+    // accountsflow.cpp
+    void takeAccountResults();
+    void pressRemoveAccount();
+    void pressAddAccountRow();
+    void pressSwitchAccount(const screens::Result& res);
+    void pressAddAccount();
+    // reportflow.cpp
+    void pollReport();
+    void stopReport();
+    void pressReport();
+    // controllers.cpp
+    bool interceptControllers(const SDL_Event& e);
+    void noticeLowBattery(float dt);
+    void followPads();
+    void pumpPadWindow();
+    // drivesflow.cpp
+    void followDrives();
+    void pressEject(const screens::Result& res);
+    void pressFormat(const screens::Result& res);
+    // achievements_ui.cpp
+    void tickRaToast(float dt);
+    void drawRaToast(float sc);
+    void pressRetroAchievements();
+    // wifi.cpp
+    void takeNetworkAnswer();
+    void refreshWifiList();
+    void takeWifiJoin();
+    void pressWifi();
+    // pinflow.cpp
+    void lockPinOffSettings();
+    void pressPinOff();
+    void pressPinChange();
+    void pressPinSet();
+    // wiipanel.cpp
+    void followWiiRemotes();
+    void pumpWiiPairing();
+    // serveraddressflow.cpp
+    void takeServerCheck();
+    void pressServer();
+    // curtain.cpp
+    void startCurtain();
+    void drawCurtain(float sc);
+    // gridfill.cpp
+    void drainGridPages();
+    void openTile(const screens::Result& res);
+    // about.cpp
+    void pressCredits();
+    void pressHowTo();
+    // downloadsflow.cpp
+    void pressDownloads();
+    void pressRemoveDownload(const screens::Result& res);
+    // steamflow.cpp
+    void pressSteamShow();
+    void pressSteam();
+    // states.cpp
+    void playFromState(const screens::Result& res);
+    // favorites.cpp
+    void toggleFavorite(const screens::Result& res);
 };

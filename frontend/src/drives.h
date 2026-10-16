@@ -148,3 +148,6 @@ void format(const std::string& driveId);
 bool formatting();
 
 }  // namespace drives
+
+// A drive's size as Storage says it: "2.02 TB", "125 GB" (drives.cpp).
+std::string driveSize(int64_t b);

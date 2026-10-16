@@ -128,6 +128,9 @@ bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& game,
 // live in launch.cpp, the only place that reads them; see the comment there.
 void setPs2Upscale(float upscale);
 void setPs2Anisotropy(int anisotropy);
+// --ps2-copy, defined in main.cpp beside the PS2 window and set by the
+// command line (cli.cpp).
+extern bool gPs2Copy;
 
 // beginLaunch's worker, in launch_routes.cpp, run on job.worker and called by
 // nothing else. Its parameters are the thread's captures: job and client by

@@ -8,12 +8,13 @@ ask them to test, and never claim a fix nobody reproduced.
 
 ## Where things stand
 
-**2026-10-15:** `latest` is **2026.10.14.5** (built from 72c0c4b, tagged in
+**2026-10-16:** `latest` is **2026.10.14.5** (built from 72c0c4b, tagged in
 git). The A9 (Wi-Fi, **192.168.1.109**; Tailscale cabinetos,
-100.67.82.30) is on the testing channel. RomM's documentation together with
-RomM's behaviour is the source of truth for anything on RomM's data. RomM
-was asked to send its `version` tag (rommapp/romm#5243); nothing to do
-until it does.
+100.67.82.30) is on the testing channel and runs **2026.10.16.3**, acting as
+claire after move 4's Restart test (switch back from the chip). RomM's
+documentation together with RomM's behaviour is the source of truth for
+anything on RomM's data. RomM was asked to send its `version` tag
+(rommapp/romm#5243); nothing to do until it does.
 
 **Features and bug fixes are paused for the restructure (#398, "Audit the
 code and restructure it for contributors (main.cpp is 20,000 lines)").**
@@ -21,48 +22,58 @@ Every batch is a pull request into the long-lived `restructure` branch;
 `latest` stays at 2026.10.14.5 until one final pull request to main, judged
 with the full checklist on its testing image (Part 6 section 26).
 
-**Moves 1 to 3 are done.** Move 1, batch (a): #409. Move 2, batch (b):
-#410. Move 3, batch (c): #413 ("Restructure move 3: main()'s state as one App struct (app.h),
-nothing moved to another file (#398)"), testing image
-**2026.10.16** (c650744), merged into `restructure` on 2026-10-15. main()'s
-state is `struct App` in `frontend/src/app.h` now; main.cpp's `main()` builds
-one App and calls `run()`, which is main()'s old body (start-up, frame loop,
-teardown, restart); the 164 member functions follow `run()` in main.cpp, in
-main()'s old order. The record, the check results and the scripts are in
+**Moves 1 to 4 are done.** Move 1, batch (a): #409. Move 2, batch (b):
+#410. Move 3, batch (c): #413. Move 4, batches (d) and (e): #414
+("Restructure move 4: batches (d) and (e), the start-up, browsing, Settings
+and its services out of main.cpp (#398)"), testing images **2026.10.16.2**
+(c33c65d, the (d) half) and **2026.10.16.3** (231ed5d, both halves), merged
+into `restructure` on 2026-10-16. main.cpp is 4,632 lines: main(), run()
+with the frame loop, and batches (f) and (g)'s code. The start-up is a list
+of calls in run() into startup.cpp and the feature files; thirty-two new
+files hold browsing, Settings and the services. The record, the check
+results and the scripts are in
 `~/Documents/Development/cabinetos-audit/moves-log.md` and `scripts/move1/`
-to `scripts/move3/`.
+to `scripts/move4/`.
 
 ## Next
 
-**Move 4 is batch (d) with batch (e), one TV round.** Its prompt is
-`~/Documents/Development/cabinetos-audit/move4-prompt.md`. Each half gets its
-own testing image, so a fault seen on the TV can be narrowed down by
-switching the A9 to the half-way image. It is not unattended unless MMagTech
-says so.
+**Move 5 is batch (f) with batch (g), one TV round** (decided 2026-10-15):
+stop and have MMagTech judge (f) alone first if the (f) half's machine checks
+show anything odd. Its prompt is
+`~/Documents/Development/cabinetos-audit/move5-prompt.md`. Each half gets its
+own testing image. It is not unattended unless MMagTech says so.
 
-**After the App struct, a batch's line ranges are found differently.** The
-audit's line numbers (7f4b5d5) point into main(); after move 3 a lambda is a
-member function after `run()` with its declaration in app.h, a local is an
-App member in app.h, and the start-up statements are in `run()` in their old
-order. Find each range by its text (the batch file's `checked` fields), and
-move a member function's definition and its app.h declaration together.
-
-**The batches after it (decided 2026-10-15):** (f) with (g) in one TV round,
-stopping for a separate judgement of (f) if its machine checks show anything
-odd; (h1) and (h2) in 2 or 3 sessions; (i) alone.
+**How move 4 cut, which (f) and (g) reuse** (`scripts/move4/gen4.py`): every
+stage is generated from `restructure`'s own files, cumulative, every cut found
+by its text with both ends asserted. A member function moves whole with its
+leading comment; its declaration stays in app.h where move 3 put it. A
+stretch of run() (or of a member function, as apply's branches were) becomes
+a member function in its file and a call at the same point; the new functions
+are declared in one block at the end of struct App, by file. Loop locals a
+stretch reads are passed in (dt, sc, gameUp, ctx, the event); a `continue`
+that ended an event becomes `return true` and the call `if (...) continue;`;
+a `break` out of apply's switch becomes `return`. Lines another batch owns
+stay in run() between the calls, so each line moves once.
 
 **What the moves have taught** (testing.md has them in full):
 - Run every headless test through `tools/romm-readonly-relay.py`.
 - A `--frames` capture of a launch is taken before the game loads; use the
   disc rig's `shot` and a time limit.
-- A core stays mapped after a game is left; `scripts/move3/idle.sh` reads
+- A core stays mapped after a game is left; `scripts/move4/idle.sh` reads
   the journal for that case.
 - The testing push needs MMagTech's word in the session that pushes; a
   relayed okay was refused by the permission check.
 - A pad left on during a suite run changes its output; note any pad in the
-  console's journal before comparing two runs.
+  console's journal before comparing two runs, and run the base binary twice
+  to show what timing alone changes.
+- A test game on the console ends inside a minute, by `--restore`, never by
+  a kill: move 4 put a one-minute play of Tetris & Dr. Mario on MMagTech's
+  RomM that way.
 
 **Owed by MMagTech:**
+- Whether to remove the one-minute Tetris & Dr. Mario play session move 4's
+  loop put on RomM (2026-10-15, 11:28 PM); it is harmless and goes down the
+  Recent shelf with his next game.
 - Part 6 section 29 decisions 2 to 6: which faults get issues, protectRomId
   0, folders for the files, the test instruments, the names.
 - #408 ("Next session: Part 6 of the #398 audit is posted; the moves begin

@@ -491,6 +491,21 @@ minute and guessing at it for twenty.
   --preserve-status -s TERM` (SDL makes it a quit, `[shutdown] asked to
   stop`), and on the TV with Steam and back.
 
+- **A TEST GAME ON THE CONSOLE ENDS INSIDE A MINUTE, BY `--restore`, NEVER
+  BY A KILL.** 2026-10-15, move 4 of #398: a loop launch (`tools/ui-loop.sh
+  --game 305`) kept running because the next step's idle check read the test
+  game's own `[pace]` lines and stopped the script. A `kill -9` of the
+  frontend then left its play session open; the session started the loop's
+  build again, which launches the game again, and that start recovered the
+  open session ("a session left open, 60 s, is owed now") and sent it to
+  RomM as MMagTech. Tetris & Dr. Mario went to the front of his Recent
+  shelf. Under a minute a session is not recorded, but a kill does not stop
+  the next start from recovering one. End a loop game with `--restore`
+  straight after its capture, and let an idle check after it wait for the
+  `[pace]` lines to age rather than stop. And a `grep` for the frontend's
+  arguments also matches gamescope, whose command line carries them: that
+  kill took gamescope with it.
+
 - **A SCRATCH ROOT STILL SEES THE GAMES DRIVE.** `drives.json` `[]` keeps
   downloads off it, but the frontend found `/run/media/cabinet/Games` and its
   folder time moved (nothing was written). Check the real drive after a rig

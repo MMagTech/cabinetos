@@ -1,6 +1,11 @@
 #include "look.h"
 
 #include <algorithm>
+#include <ctime>
+#include <string>
+
+#include "app.h"
+#include "prefs.h"
 
 namespace look {
 
@@ -203,3 +208,30 @@ float artScrim(float standard) { return std::min(1.0f, standard + kDarkArtScrim 
 float restDim(float standard) { return std::min(1.0f, standard + kDarkRestDim * darkness()); }
 
 }  // namespace look
+
+// ---- The App's colour and appearance (#398) -------------------------------
+// Who is signed in picks the menus' colour; Appearance and its hours pick
+// dark. Members of the App (app.h), moved out of main.cpp in batch (d).
+
+int App::savedHour(const char* key, int fallback) {
+    const int h = SDL_atoi(prefs::get(key, std::to_string(fallback)).c_str());
+    return (h >= 0 && h < 24) ? h : fallback;
+}
+
+bool App::wantDark() {
+    if (appearance == look::Appearance::Dark) return true;
+    if (appearance != look::Appearance::Scheduled) return false;
+    const std::time_t now = std::time(nullptr);
+    const std::tm* t = std::localtime(&now);
+    return t && look::scheduledDark(t->tm_hour, darkFrom, darkUntil);
+}
+
+look::Colour App::accountColour(int id) {
+    for (const accounts::Account& a : accounts::all())
+        if (a.id == id) return look::colourFromWord(a.colour);
+    return look::Colour::Purple;
+}
+
+void App::applyAccountColour(bool instant) {
+    look::setColour(accountColour(accounts::activeId()), instant);
+}
