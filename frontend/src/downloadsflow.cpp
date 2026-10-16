@@ -210,3 +210,33 @@ void App::downloadsOutcome(screens::DownloadsPanel::Outcome o) {
                   });
     }
 }
+
+void App::pressDownloads() {
+    // AN ADMIN SCREEN: the PIN to open it, once per Settings
+    // visit, so clearing several games is one PIN. MMagTech,
+    // 2026-09-25. Removing your own needs none, from the
+    // game's own screen.
+    askPin("Enter the PIN", "To open Downloads", [&]() {
+        std::vector<screens::DownloadItem> dl = downloadItems();
+        if (dl.empty()) { buildSettings(); return; }
+        downloadsPanel.open(std::move(dl));
+    });
+    sound::play(sound::Cue::Activate);
+}
+
+void App::pressRemoveDownload(const screens::Result& res) {
+    // ASKS FIRST (#188): a mis-press cost a re-download, 37 GB and
+    // a reinstall for a PS3 game. The same question, words and
+    // order as Settings' Downloads list, focus on Cancel.
+    const int romId = res.value;
+    int64_t bytes = 0;
+    for (const screens::DownloadItem& d : downloadItems())
+        if (d.romId == romId) bytes = d.bytes;
+    askChoice("Remove " + detailScreen.game().title + "?",
+              bytes > 0 ? screens::sizeText(bytes) : std::string(),
+              {"Cancel", "Remove"}, 0, [&, romId](int answer) {
+                  if (answer != 1) return;
+                  removeDownload(romId);
+                  refreshKeeps();
+              });
+}

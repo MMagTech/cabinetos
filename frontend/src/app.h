@@ -1924,26 +1924,40 @@ struct App {
     // settingsflow.cpp
     void readScreenOffAtStart();
     void closeDownloadsOffSettings();
+    void applySetting(const screens::Result& res);
+    void applySettingChoice(const screens::Result& res);
     // updateflow.cpp
     void readUpdateCheckAtStart();
     void tickUpdateTimer(float dt);
     void pollUpdate();
     void askReadyWhenFree();
     void sayUpdatedTo();
+    void pressUpdate();
     // access.cpp
     void startAccessAtBoot();
     void pollAccess();
+    void pressDeveloper();
+    void pressVersion();
+    void pressFiles();
     // remoteplayflow.cpp
     void startRemotePlayAtBoot();
     void pollRemotePlay();
+    void pressPairedDevices();
+    void pressRemotePlay();
     // tailscaleflow.cpp
     void startTailscaleAtBoot();
     void pollTailscale();
+    void pressTailscale();
     // accountsflow.cpp
     void takeAccountResults();
+    void pressRemoveAccount();
+    void pressAddAccountRow();
+    void pressSwitchAccount(const screens::Result& res);
+    void pressAddAccount();
     // reportflow.cpp
     void pollReport();
     void stopReport();
+    void pressReport();
     // controllers.cpp
     bool interceptControllers(const SDL_Event& e);
     void noticeLowBattery(float dt);
@@ -1951,18 +1965,45 @@ struct App {
     void pumpPadWindow();
     // drivesflow.cpp
     void followDrives();
+    void pressEject(const screens::Result& res);
+    void pressFormat(const screens::Result& res);
     // achievements_ui.cpp
     void tickRaToast(float dt);
     void drawRaToast(float sc);
+    void pressRetroAchievements();
     // wifi.cpp
     void takeNetworkAnswer();
     void refreshWifiList();
     void takeWifiJoin();
+    void pressWifi();
     // pinflow.cpp
     void lockPinOffSettings();
+    void pressPinOff();
+    void pressPinChange();
+    void pressPinSet();
     // wiipanel.cpp
     void followWiiRemotes();
     void pumpWiiPairing();
     // serveraddressflow.cpp
     void takeServerCheck();
+    void pressServer();
+    // curtain.cpp
+    void startCurtain();
+    void drawCurtain(float sc);
+    // gridfill.cpp
+    void drainGridPages();
+    void openTile(const screens::Result& res);
+    // about.cpp
+    void pressCredits();
+    void pressHowTo();
+    // downloadsflow.cpp
+    void pressDownloads();
+    void pressRemoveDownload(const screens::Result& res);
+    // steamflow.cpp
+    void pressSteamShow();
+    void pressSteam();
+    // states.cpp
+    void playFromState(const screens::Result& res);
+    // favorites.cpp
+    void toggleFavorite(const screens::Result& res);
 };

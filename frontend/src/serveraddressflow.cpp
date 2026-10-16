@@ -96,3 +96,35 @@ void App::takeServerCheck() {
         }
     }
 }
+
+void App::pressServer() {
+    // PIN FIRST, then what to do: the Wi-Fi row's shape.
+    // docs/SETTINGS.md, Network; issues #60 and #61.
+    askPin("Enter the PIN", "To change the RomM server", [&]() {
+        const std::string addr = rommAddress ? rommAddress : "";
+        askChoice(addr, "", {"Change address", "Sign out", "Cancel"}, 0,
+                  [&, addr](int i) {
+            if (i == 0) {
+                // Root's address outranks ours (firstrun.h).
+                // Only a console set up by hand has one.
+                if (!server::addressIsOurs()) {
+                    menuNotice.say("Set in /etc/cabinetos/session.env",
+                                   Tone::Problem);
+                    return;
+                }
+                askServerAddress(addr, "");
+            } else if (i == 1) {
+                // Focus on Cancel. Then everyone's unsent
+                // saves are sent, and only what could not be
+                // is said, not counted (MMagTech, 2026-09-25),
+                // as Remove does (#194).
+                askChoice("Sign out?",
+                          "Removes every game and account from this console.",
+                          {"Sign out", "Cancel"}, 1, [&](int k) {
+                              if (k == 0) startSignOut();
+                          });
+            }
+        });
+    });
+    sound::play(sound::Cue::Activate);
+}

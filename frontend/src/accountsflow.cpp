@@ -455,3 +455,97 @@ void App::takeAccountResults() {
         }
     }
 }
+
+void App::pressRemoveAccount() {
+    // PIN (if set), then who, then are you sure. With one
+    // person to remove, "who" is skipped.
+    askPin("Enter the PIN", "To remove an account", [&]() {
+        auto confirm = [&](accounts::Account who) {
+            // NO EXPLANATION. MMagTech, 2026-09-24: the people
+            // using this are technical, "we don't need to spoon
+            // feed them everything with an explanation".
+            askChoice("Remove " + who.name + "?", "",
+                      {"Remove", "Cancel"}, 1, [&, who](int i) {
+                          if (i == 0) startRemove(who);
+                      });
+        };
+        const std::vector<accounts::Account> people = removableAccounts();
+        if (people.empty()) return;
+        if (people.size() == 1) { confirm(people[0]); return; }
+        std::vector<std::string> names;
+        for (const auto& p : people) names.push_back(p.name);
+        names.push_back("Cancel");
+        askChoice("Remove an account", "", names, 0,
+                  [&, people, confirm](int i) {
+                      if (i >= 0 && i < static_cast<int>(people.size()))
+                          confirm(people[i]);
+                  });
+    });
+    sound::play(sound::Cue::Activate);
+}
+
+void App::pressAddAccountRow() {
+    // The same route as the chip's Add user, PIN included.
+    // Back from the pairing screen returns here, because it
+    // is pushed.
+    askPin("Enter the PIN", "To add an account", [&]() {
+        addAccountScreen.open();
+        stack.push_back(Screen::AddAccount);
+        startAddAccount();
+    });
+    sound::play(sound::Cue::Activate);
+}
+
+void App::pressSwitchAccount(const screens::Result& res) {
+    // THE REFUSALS BELONG TO THE APP AND SO DO THEIR WORDS. The
+    // screen does not know whether a game is running or a save is
+    // still going up; it asked to become somebody and this decides.
+    const int id = res.value;
+    // NOT SWITCHED HERE. The switch asks the server who this is and
+    // reloads the library, which blocks the frame loop; done here,
+    // the screen froze mid-panel for as long as that took (eleven
+    // seconds once, on the A9). It is handed to pumpSwitch, which
+    // brings the curtain down with the person's name on it first.
+    auto go = [&, id]() {
+        const std::vector<accounts::Account> list = accounts::all();
+        const accounts::Account* a = accounts::find(list, id);
+        switchPendingId = id;
+        switchCurtain = true;
+        switchLabel = "Switching to " + (a ? a->name : std::string("them"));
+        switchCurtainFrames = 0;
+        accountsOpen = false;
+        barFocused = false;
+        accountScreen.setNotice("");
+        curtain.retarget(1.0f, kCurtainDown);
+        sound::play(sound::Cue::Activate);
+    };
+    // THE SAME PIN STOPS ANYBODY SWITCHING INTO THE OWNER.
+    // docs/SETTINGS.md, Accounts. With no PIN, askPin just goes.
+    if (id == accounts::ownerId() && accounts::activeId() != id) {
+        const std::vector<accounts::Account> list = accounts::all();
+        const accounts::Account* a = accounts::find(list, id);
+        askPin("Enter the PIN",
+               "To switch to " + (a ? a->name : std::string("them")), go,
+               /*always=*/true);
+    } else {
+        go();
+    }
+}
+
+void App::pressAddAccount() {
+    // WITH A PIN SET, ADDING SOMEBODY ASKS FOR IT, from here and
+    // from Settings alike. MMagTech, 2026-09-24: without it,
+    // anyone holding the controller could add themselves; with no
+    // PIN, anyone can, which is the no-PIN rule everywhere.
+    askPin("Enter the PIN", "To add an account", [&]() {
+        // THE PANEL CLOSES AND A SCREEN OPENS. Leaving the panel
+        // up behind a pairing code would put the list somebody is
+        // about to change underneath the thing changing it.
+        accountsOpen = false;
+        barFocused = false;
+        addAccountScreen.open();
+        stack.push_back(Screen::AddAccount);
+        startAddAccount();
+    });
+    sound::play(sound::Cue::Activate);
+}

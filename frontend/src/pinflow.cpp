@@ -130,3 +130,30 @@ void App::pinOutcome(screens::PinScreen::Outcome o) {
 void App::lockPinOffSettings() {
     if (here() != Screen::Settings && !pinScreen.isOpen()) pinUnlocked = false;
 }
+
+void App::pressPinOff() {
+    askPin("Enter the PIN", "To turn it off", [&]() {
+        std::string err;
+        if (accounts::setPin("", &err))
+            std::fprintf(stderr, "[pin] turned off\n");
+        buildSettings();
+    }, true);
+    sound::play(sound::Cue::Activate);
+}
+
+void App::pressPinChange() {
+    // ALWAYS ASKS (#237), even after the PIN was entered once
+    // this visit: the once-per-visit rule is for Downloads, and
+    // changing or removing the PIN itself must prove you know it.
+    askPin("Enter your current PIN", "", [&]() {
+        choosePin("Choose a new PIN", "",
+                  [&]() { buildSettings(); });
+    }, true);
+    sound::play(sound::Cue::Activate);
+}
+
+void App::pressPinSet() {
+    choosePin("Choose a PIN", "",
+              [&]() { buildSettings(); });
+    sound::play(sound::Cue::Activate);
+}

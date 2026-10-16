@@ -215,3 +215,46 @@ void App::steamPressed() {
     if (pinFirst) askPin("Enter the PIN", "To use Steam", go, true);
     else go();
 }
+
+void App::pressSteamShow() {
+    askPin("Enter the PIN", "To show Steam", [&]() {
+        steam::setHidden(false);
+        std::fprintf(stderr, "[steam] shown\n");
+                buildSettings();
+    });
+    sound::play(sound::Cue::Activate);
+}
+
+void App::pressSteam() {
+    // Grow it, or remove Steam: the PIN when set, once per
+    // visit, as Downloads (it gives or takes space for the
+    // whole console).
+    askPin("Enter the PIN", "To change Steam", [&]() {
+        askChoice("Steam", driveSize(steam::sliceBytes()),
+                  {"Adjust storage", "Remove Steam"}, 0, [&](int a) {
+            if (a == 0) {
+                auto read = std::make_shared<SteamSizes>();
+                runSteamJob("", [read]() {
+                    readSteamSizes(read.get());
+                }, [&, read]() {
+                    steamSizes = *read;
+                    showSteamSize(true);
+                });
+                return;
+            }
+            askChoice("Remove Steam?", "", {"Remove", "Cancel"}, 1, [&](int b) {
+                if (b != 0) return;
+                auto ok = std::make_shared<bool>(false);
+                runSteamJob("Removing Steam\xE2\x80\xA6", [ok]() {
+                    std::string why;
+                    *ok = steam::remove(&why);
+                }, [&, ok]() {
+                    buildSettings();
+                                        menuNotice.say(*ok ? "Steam removed" : "Couldn't remove Steam",
+                                   *ok ? Tone::Done : Tone::Problem);
+                });
+            });
+        });
+    });
+    sound::play(sound::Cue::Activate);
+}

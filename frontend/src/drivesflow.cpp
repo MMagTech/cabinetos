@@ -5,6 +5,8 @@
 
 #include <cstdio>
 
+#include "storage.h"
+
 using namespace design;   // NOLINT, as main.cpp names them
 
 // FORMAT, from a drive's row. THREE STEPS, MMagTech 2026-09-25: the PIN
@@ -118,4 +120,59 @@ void App::followDrives() {
             files::refreshDrives(nullptr);
         if (here() == Screen::Settings) buildSettings();
     }
+}
+
+void App::pressEject(const screens::Result& res) {
+    const std::vector<std::string> locs = storage::locations();
+    const size_t i = static_cast<size_t>(res.value - kSetEject);
+    if (drives::ejecting() || i >= locs.size() || !storage::isExternal(locs[i])) {
+        sound::play(sound::Cue::Edge);
+        return;
+    }
+    // The drive's row was pressed: Eject is asked, with the
+    // drive named, and Cancel beside it.
+    const std::string loc = locs[i];
+    const std::string ejName =
+        driveNames.count(res.value) ? driveNames[res.value] : "External";
+    // FORMAT BESIDE EJECT when nothing of the console's is on
+    // the drive (#236). Eject stays first: it is what the row
+    // says.
+    std::optional<drives::Drive> fmt;
+    if (auto f = ejectFormats.find(res.value);
+        f != ejectFormats.end() && f->second < formatable.size() &&
+        !drives::formatting())
+        fmt = formatable[f->second];
+    std::vector<std::string> opts = {"Eject", "Cancel"};
+    if (fmt) opts = {"Eject", "Format", "Cancel"};
+    askChoice(ejName, "", opts, 0, [&, loc, fmt](int k) {
+    if (fmt && k == 1) {
+        askFormat(*fmt);
+        return;
+    }
+    if (k != 0) return;
+    // FINISHES OR STOPS ANYTHING WRITING TO IT. The only thing
+    // that writes to a drive is a download being kept there;
+    // it is stopped and waited for, so nothing holds a file
+    // open on the drive. Its stage is left as the worker set
+    // it, so the frame loop undoes the keep as for any failed
+    // download.
+    if (launchJob.busy() && launchJob.entryPath.rfind(loc + "/", 0) == 0) {
+        std::fprintf(stderr, "[drives] eject: stopping the download of %s\n",
+                     launchJob.title.c_str());
+        launchJob.stop();
+    }
+    drives::eject(loc);
+    buildSettings();
+    });
+    sound::play(sound::Cue::Activate);
+}
+
+void App::pressFormat(const screens::Result& res) {
+    const size_t i = static_cast<size_t>(res.value - kSetFormat);
+    if (drives::formatting() || i >= formatable.size()) {
+        sound::play(sound::Cue::Edge);
+        return;
+    }
+    askFormat(formatable[i]);
+    sound::play(sound::Cue::Activate);
 }

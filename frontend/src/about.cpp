@@ -5,6 +5,7 @@
 
 #include <utility>
 
+#include "credits.h"
 #include "shortcuts.h"
 
 using namespace design;   // NOLINT, as main.cpp names them
@@ -63,4 +64,22 @@ void App::openHowTo() {
     howToScreen.setCategories(std::move(cats));
     howToScreen.enter();
     stack.push_back(Screen::HowTo);
+}
+
+void App::pressCredits() {
+    // A list, one line per project: what it does, and its
+    // licence. Nothing to choose; A or B closes it.
+    std::vector<std::string> names, values;
+    for (const Credit& cr : kCredits) {
+        names.push_back(cr.name);
+        values.push_back(cr.what);
+    }
+    askChoice("Credits and licenses", "", names, 0, [](int) {});
+    choiceScreen.setValues(values);
+    sound::play(sound::Cue::Activate);
+}
+
+void App::pressHowTo() {
+    openHowTo();
+    sound::play(sound::Cue::Activate);
 }

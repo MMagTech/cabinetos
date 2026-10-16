@@ -210,3 +210,56 @@ void App::pollAccess() {
         }
     }
 }
+
+void App::pressDeveloper() {
+    if (devSaidAt != 0) {
+        sound::play(sound::Cue::Edge);
+    } else if (devState == "active") {
+        askPin("Enter the PIN", "To see developer access", [&]() { openDevPanel(); });
+        sound::play(sound::Cue::Activate);
+    } else {
+        askPinToOpen("To turn on developer access", [&]() {
+            devPanelWhenOn = true;
+            setDeveloper(true);
+        });
+        sound::play(sound::Cue::Activate);
+    }
+}
+
+void App::pressVersion() {
+    // Seven presses, each within two seconds of the last,
+    // show Developer access, or hide it (and turn it off).
+    // Silent until the seventh: the row appearing or going
+    // is the answer.
+    const auto now = std::chrono::steady_clock::now();
+    if (now - versionPressAt > std::chrono::seconds(2)) versionPresses = 0;
+    versionPressAt = now;
+    if (++versionPresses >= 7) {
+        versionPresses = 0;
+        devShown = !devShown;
+        prefs::set("developer_shown", devShown ? "on" : "off");
+        if (!devShown && (devWant || devState == "active")) setDeveloper(false);
+        std::fprintf(stderr, "[developer] %s\n", devShown ? "shown" : "hidden");
+        buildSettings();
+        sound::play(sound::Cue::Activate);
+    }
+}
+
+void App::pressFiles() {
+    if (filesSaidAt != 0) {
+        sound::play(sound::Cue::Edge);
+    } else if (filesState.on) {
+        // The password is in the panel: the PIN first, when
+        // one is set (MMagTech, 2026-10-07).
+        askPin("Enter the PIN", "To see file access", [&]() { openFilesPanel(); });
+        sound::play(sound::Cue::Activate);
+    } else {
+        // On behind the PIN, then the panel opens by itself
+        // once root says it is on.
+        askPin("Enter the PIN", "To turn on file access", [&]() {
+            filesPanelWhenOn = true;
+            setFiles(true);
+        });
+        sound::play(sound::Cue::Activate);
+    }
+}

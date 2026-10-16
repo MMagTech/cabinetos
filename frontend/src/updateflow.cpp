@@ -274,3 +274,30 @@ void App::sayUpdatedTo() {
         updStartNotice.clear();
     }
 }
+
+void App::pressUpdate() {
+    // ONE ROW, AND WHAT IT DOES IS WHAT IT SAYS: check, fetch
+    // (behind the PIN: an update can be gigabytes and replaces
+    // the system, so the owner decides when), restart, or
+    // retry. Busy, it does nothing. docs/SETTINGS.md, System.
+    const bool available = upd.state == update::State::Available ||
+                           (upd.state == update::State::None && updFoundNewer());
+    const bool retryDownload = upd.state == update::State::Failed && upd.download;
+    if (upd.busy()) {
+        sound::play(sound::Cue::Edge);
+    } else if (upd.state == update::State::Ready) {
+        askUpdateReady();
+        sound::play(sound::Cue::Activate);
+    } else if (available) {
+        askUpdateDownload();
+        sound::play(sound::Cue::Activate);
+    } else if (retryDownload) {
+        askPin("Enter the PIN", "To update",
+               [&]() { startUpdate(/*download=*/true, /*automatic=*/false); });
+        sound::play(sound::Cue::Activate);
+    } else {
+        updAskAfterCheck = true;
+        startUpdate(/*download=*/false, /*automatic=*/false);
+        sound::play(sound::Cue::Activate);
+    }
+}

@@ -154,3 +154,16 @@ void App::drawRaToast(float sc) {
         renderer.setContentAlpha(keepAlpha);
     }
 }
+
+void App::pressRetroAchievements() {
+    if (ra::signedIn()) {
+        askChoice("RetroAchievements", "Signed in as " + ra::username(),
+                  {"Sign out", "Cancel"}, 1, [&](int k) {
+                      if (k == 0) ra::signOut();
+                      buildSettings();
+                  });
+    } else {
+        askRaUser("");
+    }
+    sound::play(sound::Cue::Activate);
+}

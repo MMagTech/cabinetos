@@ -11,6 +11,7 @@
 #include "disc.h"
 #include "discs.h"
 #include "fileio.h"
+#include "app.h"
 #include "image.h"
 #include "storage.h"
 
@@ -348,4 +349,27 @@ void pumpStateLoad(StateLoad& load, GameSession& sess,
     notice.say(ok ? "State loaded" : stateRefusedText(), ok ? Tone::Done : Tone::Problem);
     load.loaded = ok;
     load.data.clear();
+}
+
+// ---- Play from a state, on a game's page ---------------------------------
+// A member of the App (app.h), moved out of apply in batch (e).
+
+void App::playFromState(const screens::Result& res) {
+    sound::play(sound::Cue::Activate);
+    std::fprintf(stderr, "[detail] play from state %d\n", res.value);
+    // Negative: one of this console's own states, by its file.
+    if (res.value < 0 &&
+        static_cast<size_t>(-res.value) <= detailLocalStates.size()) {
+        pendingStatePath = detailLocalStates[static_cast<size_t>(-res.value) - 1];
+        // ON THE STATE'S OWN DISC (#162): no swap to wait on,
+        // and the only way in for a core with no drive (3DO).
+        gNextStartDisc = disc::discInStateName(pendingStatePath);
+        if (!launchById(detailScreen.game().romId)) {
+            pendingStatePath.clear();
+            gNextStartDisc = 0;
+        }
+        return;
+    }
+    pendingStateId = res.value;
+    if (!launchById(detailScreen.game().romId)) pendingStateId = 0;
 }

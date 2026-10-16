@@ -183,3 +183,58 @@ void App::pollTailscale() {
         if (here() == Screen::Settings && tailscale::generation() != tsSeen) buildSettings();
     }
 }
+
+void App::pressTailscale() {
+    // Off: the PIN (when set), then sign in. On: Disconnect
+    // and Log out (the PIN), and Sign in again in the last
+    // two weeks. Disconnected: Connect and Log out.
+    const tailscale::Status st = tailscale::last();
+    auto confirmLogout = [&]() {
+        askChoice("Log out of Tailscale?", "", {"Log out", "Cancel"}, 1,
+                  [&](int k) {
+                      if (k != 0) return;
+                      askPin("Enter the PIN", "To log out of Tailscale",
+                             [&]() { tsLogout(); });
+                  });
+    };
+    if (tsLoggingOut || tsSigningIn || players::streaming()) {
+        sound::play(sound::Cue::Edge);
+    } else if (!tsWant && !tsSignedIn) {
+        askPin("Enter the PIN", "To turn on Tailscale",
+               [&]() { openTsSignIn(false); });
+        sound::play(sound::Cue::Activate);
+    } else if (!tsWant) {
+        askChoice("Tailscale", "", {"Connect", "Log out", "Cancel"}, 0,
+                  [&, confirmLogout](int c) {
+                      if (c == 0)
+                          askPin("Enter the PIN", "To turn on Tailscale",
+                                 [&]() { setTailscale(true); });
+                      else if (c == 1) confirmLogout();
+                  });
+        sound::play(sound::Cue::Activate);
+    } else if (st.state == "Running") {
+        std::vector<std::string> opts;
+        const bool soon = tsEndsSoon(st);
+        if (soon) opts.push_back("Sign in again");
+        opts.insert(opts.end(), {"Disconnect", "Log out", "Cancel"});
+        askChoice("Tailscale", "", opts, 0, [&, soon, confirmLogout](int c) {
+            if (soon && c == 0) {
+                askPin("Enter the PIN", "To sign in to Tailscale again",
+                       [&]() { openTsSignIn(true); });
+                return;
+            }
+            if (soon) --c;
+            if (c == 0) setTailscale(false);
+            else if (c == 1) confirmLogout();
+        });
+        sound::play(sound::Cue::Activate);
+    } else if (st.answered && (st.state == "NeedsLogin" || st.state == "Stopped")) {
+        // Signed out: its sign-in ended, or it was removed in
+        // Tailscale's own page. The same QR code again.
+        askPin("Enter the PIN", "To sign in to Tailscale",
+               [&]() { openTsSignIn(false); });
+        sound::play(sound::Cue::Activate);
+    } else {
+        sound::play(sound::Cue::Edge);
+    }
+}

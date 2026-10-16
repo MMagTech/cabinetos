@@ -203,3 +203,28 @@ void App::pollRemotePlay() {
         }
     }
 }
+
+void App::pressPairedDevices() {
+    if (players::streaming()) {
+        sound::play(sound::Cue::Edge);
+    } else {
+        openPairedPanel(0);
+        sound::play(sound::Cue::Activate);
+    }
+}
+
+void App::pressRemotePlay() {
+    // On behind the PIN when one is set; off at once, since
+    // off only closes things. Never during a stream (the
+    // row is greyed; this is for a press before it was).
+    if (rpSaidAt != 0 || players::streaming()) {
+        sound::play(sound::Cue::Edge);
+    } else if (rpState == "active") {
+        setRemotePlay(false);
+        sound::play(sound::Cue::Activate);
+    } else {
+        askPin("Enter the PIN", "To turn on Remote Play",
+               [&]() { setRemotePlay(true); });
+        sound::play(sound::Cue::Activate);
+    }
+}

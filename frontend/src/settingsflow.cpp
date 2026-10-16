@@ -507,3 +507,151 @@ void App::readScreenOffAtStart() {
 void App::closeDownloadsOffSettings() {
     if (here() != Screen::Settings) downloadsPanel.close();
 }
+
+void App::applySetting(const screens::Result& res) {
+    if (res.value == SetPads) {
+        openPadsPanelAt(0);
+        sound::play(sound::Cue::Activate);
+    } else if (res.value >= kSetFormat) {
+        pressFormat(res);
+    } else if (res.value >= kSetEject) {
+        pressEject(res);
+    } else if (res.value == SetAddController) {
+        sound::play(sound::Cue::Activate);
+        openPadWindow();
+    } else if (res.value == SetWiiRemotes) {
+        sound::play(sound::Cue::Activate);
+        openWiiPanel();
+    } else if (res.value == SetShortcutButton) {
+        // The pad that pressed A, which the row already names.
+        const std::vector<players::Pad> pads = players::connected();
+        shortcutListen = pads.empty() ? 0 : pads.front().id;
+        for (const players::Pad& p : pads)
+            if (p.id == settingsLastPad) shortcutListen = p.id;
+        sound::play(sound::Cue::Activate);
+        buildSettings();
+    } else if (res.value == SetAddAccount) {
+        pressAddAccountRow();
+    } else if (res.value == SetWifi) {
+        pressWifi();
+    } else if (res.value == SetDarkHours) {
+        // From and Until, then the hours of whichever was chosen,
+        // then back to From and Until with the new one showing.
+        darkHoursPanel(0);
+        sound::play(sound::Cue::Activate);
+    } else if (res.value == SetFiles) {
+        pressFiles();
+    } else if (res.value == SetVersion) {
+        pressVersion();
+    } else if (res.value == SetDeveloper) {
+        pressDeveloper();
+    } else if (res.value == SetRemotePlay) {
+        pressRemotePlay();
+    } else if (res.value == SetTailscale) {
+        pressTailscale();
+    } else if (res.value == SetPairedDevices) {
+        pressPairedDevices();
+    } else if (res.value == SetSteam) {
+        pressSteam();
+    } else if (res.value == SetSteamShow) {
+        pressSteamShow();
+    } else if (res.value == SetDownloads) {
+        pressDownloads();
+    } else if (res.value == SetReport) {
+        pressReport();
+    } else if (res.value == SetHowTo) {
+        pressHowTo();
+    } else if (res.value == SetCredits) {
+        pressCredits();
+    } else if (res.value == SetUpdate) {
+        pressUpdate();
+    } else if (res.value == SetServer) {
+        pressServer();
+    } else if (res.value == SetRemoveAccount) {
+        pressRemoveAccount();
+    } else if (res.value == SetPinSet) {
+        pressPinSet();
+    } else if (res.value == SetPinChange) {
+        pressPinChange();
+    } else if (res.value == SetRetroAchievements) {
+        pressRetroAchievements();
+    } else if (res.value == SetPinOff) {
+        pressPinOff();
+    }
+}
+
+void App::applySettingChoice(const screens::Result& res) {
+    if (res.value == SetUpdateCheck) {
+        updWeekly = settingsScreen.choiceOf(SetUpdateCheck) == 1;
+        prefs::set("update_check", updWeekly ? "weekly" : "manual");
+        sound::play(sound::Cue::Move);
+    }
+    if (res.value == SetRumble) {
+        rumble::setEnabled(settingsScreen.choiceOf(SetRumble) == 1);
+        sound::play(sound::Cue::Move);
+    }
+
+    if (res.value == SetShortcuts) {
+        shortcuts::setEnabled(settingsScreen.choiceOf(SetShortcuts) == 1);
+        sound::play(sound::Cue::Move);
+        buildSettings();   // the Shortcut button row comes and goes
+    }
+    if (res.value == SetAppearance) {
+        const int i = settingsScreen.choiceOf(SetAppearance);
+        if (i >= 0 && i < look::kAppearanceCount) {
+            appearance = static_cast<look::Appearance>(i);
+            prefs::set("appearance", look::appearanceWord(appearance));
+            look::setDark(wantDark());
+        }
+        sound::play(sound::Cue::Move);
+        buildSettings();   // the From and Until rows come and go
+    }
+    if (res.value == SetColour) {
+        const int i = settingsScreen.choiceOf(SetColour);
+        if (i >= 0 && i < look::kColourCount) {
+            const auto c = static_cast<look::Colour>(i);
+            accounts::setColour(accounts::activeId(), look::colourWord(c));
+            look::setColour(c);
+        }
+        sound::play(sound::Cue::Move);
+    }
+    if (res.value == SetScreenOff) {
+        const int i = settingsScreen.choiceOf(SetScreenOff);
+        if (i >= 0 && i < kScreenOffCount) {
+            screenOffIndex = i;
+            prefs::set("screen_off_after", kScreenOff[i].word);
+        }
+        sound::play(sound::Cue::Move);
+    }
+    if (res.value == SetPictureQuality) {
+        // From each game's next start (quality.h); nothing running
+        // changes.
+        const int i = settingsScreen.choiceOf(SetPictureQuality);
+        if (i >= 0 && i < quality::kLevelCount)
+            quality::setConsole(static_cast<quality::Level>(i));
+        sound::play(sound::Cue::Move);
+    }
+    if (res.value == SetAchievementSound) {
+        const int i = settingsScreen.choiceOf(SetAchievementSound);
+        if (i >= 0 && i < sound::kLevelCount) {
+            const auto lv = static_cast<sound::Level>(i);
+            sound::setChimeLevel(lv);
+            prefs::set("achievement_sound", sound::levelWord(lv));
+        }
+        // The chime itself, at the level just chosen, as the
+        // clicks row plays a click.
+        sound::playChime();
+    }
+    if (res.value == SetInterfaceSounds) {
+        const int i = settingsScreen.choiceOf(SetInterfaceSounds);
+        if (i >= 0 && i < sound::kLevelCount) {
+            const auto lv = static_cast<sound::Level>(i);
+            sound::setLevel(lv);
+            prefs::set("interface_sounds", sound::levelWord(lv));
+        }
+        // AFTER the change, so each step is heard at the level it
+        // just chose, which is how a person picks one. Off is
+        // silent, which says it too.
+        sound::play(sound::Cue::Move);
+    }
+}

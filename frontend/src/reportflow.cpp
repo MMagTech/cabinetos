@@ -5,6 +5,8 @@
 
 #include <cstdio>
 
+#include "storage.h"
+
 using namespace design;   // NOLINT, as main.cpp names them
 
 // THE DIAGNOSTIC REPORT: made, then served while its screen is up.
@@ -39,4 +41,23 @@ void App::pollReport() {
 void App::stopReport() {
     if (reportWorker.joinable()) reportWorker.join();
     report::stop();
+}
+
+void App::pressReport() {
+    if (reportWorker.joinable()) {
+        sound::play(sound::Cue::Edge);
+    } else {
+        report::stop();
+        reportScreen.setText("Diagnostic report", {}, "Creating\xE2\x80\xA6");
+        reportScreen.open();
+        stack.push_back(Screen::Report);
+        reportWorkerDone = false;
+        reportWorker = std::thread([&]() {
+            reportMade = report::make(storage::root());
+            std::string ip = net::status().ipv4;
+            reportAddress = ip.substr(0, ip.find('/'));
+            reportWorkerDone = true;
+        });
+        sound::play(sound::Cue::Activate);
+    }
 }

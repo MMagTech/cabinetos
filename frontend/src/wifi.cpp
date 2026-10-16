@@ -225,3 +225,99 @@ void App::takeWifiJoin() {
         if (here() == Screen::Settings) buildSettings();
     }
 }
+
+void App::pressWifi() {
+    // PIN FIRST, then either the radio on or the list of
+    // networks in the question panel, scrolling past six.
+    askPin("Enter the PIN", "To change Wi-Fi", [&]() {
+        bool radioOn = true;
+        {
+            std::lock_guard<std::mutex> lk(settingsNet.m);
+            if (settingsNet.have) radioOn = settingsNet.st.wifiEnabled;
+        }
+        if (!radioOn) {
+            std::string err;
+            if (!net::setRadio(true, &err))
+                menuNotice.say("Couldn't turn on Wi-Fi", Tone::Problem);
+            askNetwork();
+            askWifi();
+            buildSettings();
+            return;
+        }
+        // A password, typed on the on-screen keyboard, then the
+        // join on a worker. `forgetFirst` is Change password.
+        auto typeAndJoin = [&](const net::Network& net, bool forgetFirst) {
+            askWifiPassword(net.ssid, forgetFirst, "");
+        };
+        auto join = [&, typeAndJoin](const net::Network& net) {
+            if (net.secured && !net.known) { typeAndJoin(net, false); return; }
+            menuNotice.say("Joining " + net.ssid, Tone::Busy);
+            startWifiJoin(net.ssid, "", false);
+            buildSettings();
+        };
+        auto forget = [&](const net::Network& net) {
+            askChoice("Forget " + net.ssid + "?", "", {"Forget", "Cancel"}, 1,
+                      [&, net](int i) {
+                          if (i != 0) return;
+                          std::string err;
+                          if (net::forget(net.ssid, &err)) {
+                              menuNotice.say("Forgot " + net.ssid, Tone::Done);
+                              // AT ONCE, not when the next scan
+                              // lands: joining a stale "saved"
+                              // network sent no password.
+                              std::lock_guard<std::mutex> lk(settingsWifi.m);
+                              for (net::Network& w : settingsWifi.list)
+                                  if (w.ssid == net.ssid)
+                                      w.known = w.active = false;
+                          }
+                          else
+                              menuNotice.say("Couldn't forget " + net.ssid,
+                                             Tone::Problem);
+                          std::fprintf(stderr, "[wifi] forget %s: %s\n",
+                                       net.ssid.c_str(),
+                                       err.empty() ? "done" : err.c_str());
+                          askNetwork();
+                          askWifi();
+                          buildSettings();
+                      });
+        };
+        sortWifi();
+        std::vector<std::string> names, values;
+        wifiPanelRows(&names, &values);
+        askChoice("Wi-Fi",
+                  names.empty() ? "Looking for networks\xE2\x80\xA6" : "",
+                  names, 0, [&, typeAndJoin, join, forget](int i) {
+                      wifiPanelOpen = false;
+                      if (i < 0 || i >= static_cast<int>(wifiShown.size()))
+                          return;
+                      const net::Network n = wifiShown[i];
+                      if (wifiJob.running.load()) {
+                          sound::play(sound::Cue::Edge);
+                          return;
+                      }
+                      if (n.active) {
+                          askChoice(n.ssid, "",
+                                    {"Change password", "Forget", "Cancel"}, 0,
+                                    [&, n, typeAndJoin, forget](int k) {
+                                        if (k == 0) typeAndJoin(n, true);
+                                        else if (k == 1) forget(n);
+                                    });
+                      } else if (n.known) {
+                          askChoice(n.ssid, "",
+                                    {"Join", "Change password", "Forget",
+                                     "Cancel"},
+                                    0, [&, n, typeAndJoin, join, forget](int k) {
+                                        if (k == 0) join(n);
+                                        else if (k == 1) typeAndJoin(n, true);
+                                        else if (k == 2) forget(n);
+                                    });
+                      } else {
+                          join(n);
+                      }
+                  });
+        choiceScreen.setValues(values);
+        wifiPanelOpen = true;
+        askWifi();
+    });
+    sound::play(sound::Cue::Activate);
+}
