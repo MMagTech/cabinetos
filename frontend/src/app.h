@@ -2013,4 +2013,12 @@ struct App {
     bool frameOverPs2Window();
     // discs.cpp
     void pumpDiscChange();
+    // power_menu.cpp
+    void borrowPowerButton();
+    void pollPower();
+    void waitForUploadsToPowerDown();
+    // pausemenu.cpp
+    void tickPauseMenu(float dt);
+    void drawPauseScrim();
+    void drawPauseMenu(float sc);
 };
