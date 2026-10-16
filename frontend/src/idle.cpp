@@ -1,5 +1,6 @@
 #include "idle.h"
 
+#include "app.h"
 #include "prefs.h"
 #include "proc.h"
 
@@ -112,4 +113,29 @@ int savedScreenOff() {
     for (int i = 0; i < kScreenOffCount; ++i)
         if (w == kScreenOff[i].word) return i;
     return 1;
+}
+
+// ---- The dim over the screen, and the television woken at exit (#398) ----
+// Members of the App (app.h), moved out of main.cpp in batch (g).
+
+// ---- The dim, over absolutely everything --------------------------
+//
+// After the keyboard and the guides, because it is not part of the
+// interface; it is the television resting. At full depth it is also
+// the blank wherever gamescope cannot put the output to sleep.
+void App::drawDim() {
+    const float d = dimLayer.value();
+    if (d > 0.001f) {
+        const float keep = renderer.contentAlpha();
+        renderer.setContentAlpha(1.0f);
+        renderer.draw(ui::Rect{0, 0, ui::kCanvasWidth, ui::kCanvasHeight, 0,
+                               ui::Color::black(d)});
+        renderer.setContentAlpha(keep);
+    }
+}
+
+// Never leave the television asleep behind us: the next thing on it —
+// this program restarting, or a person at a console — must be seen.
+void App::wakeTvAtExit() {
+    if (idleShown == idle::Level::Blank) idle::setDisplayAsleep(false, /*wait=*/true);
 }

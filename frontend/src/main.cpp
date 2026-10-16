@@ -274,171 +274,16 @@ int App::run(int argc, char** argv) {
     // refresh triggered by the thing that changed it.
     refreshKeeps();
 
-    // Opening straight onto a screen, for a capture. This walks the SAME route
-    // a person would: the Library is entered, a tile is opened, the launch
-    // screen is opened from a card. A capture that built a screen some other
-    // way would be photographing something the product cannot reach.
-    // SEARCH IS ITS OWN ROUTE, because walking to it is not walking to the
-    // Library. `--screen search --query metal` types the query the way a person
-    // would type it and leaves focus in the results, which is the state worth
-    // photographing — an empty Search is a picture of a keyboard.
-    // THE SWITCHER IS REACHED THE WAY A PERSON REACHES IT: focus the bar, walk
-    // to the chip, press it. A capture that called open() directly would be
-    // photographing a panel the product might not be able to get to.
-    if (focusBarSlot >= 0) {
-        barFocused = true;
-        barSlot = std::clamp(focusBarSlot, 0, BarCount - 1);
-    }
-    if (initialScreen && (SDL_strcmp(initialScreen, "accounts") == 0 ||
-                          SDL_strcmp(initialScreen, "add-account") == 0)) {
-        barFocused = true;
-        barSlot = BarAccount;
-        barKey(screens::Nav::Activate);
-        if (SDL_strcmp(initialScreen, "add-account") == 0) {
-            // WALKS DOWN TO THE ADD ROW FIRST, and not doing so switched the
-            // console to somebody else. This pressed Activate straight away,
-            // which was right while the panel held only the Add row and wrong
-            // the moment a second account existed — row 0 became a person, so
-            // the capture route signed the console in as them.
-            //
-            // The lesson is the one this project keeps paying for: a route
-            // that walks the way a person walks has to keep walking when the
-            // screen gains a row. Down until the focus stops moving, then
-            // press, which is what a person does.
-            for (int guard = 0; guard < 16; ++guard)
-                accountScreen.key(screens::Nav::Down);
-            // Presses the Add row the way a person would. It starts a REAL
-            // pairing against the real server — a device code that expires in
-            // minutes and creates nothing unless somebody approves it.
-            apply(accountScreen.key(screens::Nav::Activate));
-            // AND THE CAPTURE HAS TO WAIT FOR THE SERVER. This loop is not
-            // paced, so on the A9 four hundred frames go by in well under a
-            // second and the shot comes out with no code on it — the same trap
-            // `--launch-after` fell into and the same one that cost the setup
-            // pairing capture. Gate the shot on the fact rather than on a
-            // frame count.
-            waitForPairCode = true;
-        }
-    } else if (initialScreen && SDL_strcmp(initialScreen, "howto") == 0) {
-        // `--screen howto`: About's How to page over Home, for a capture or
-        // the TV loop; Back goes Home.
-        openHowTo();
-    } else if (initialScreen && SDL_strcmp(initialScreen, "settings") == 0) {
-        // `--screen settings --tile N` opens on category N; `--focus-row 1`
-        // puts focus in its rows. The network is waited for here, because a
-        // capture has no wall clock and would otherwise always say Checking.
-        goToDestination(3);
-        if (settingsNet.th.joinable()) settingsNet.th.join();
-        if (settingsWifi.th.joinable()) settingsWifi.th.join();
-        buildSettings();
-        settingsScreen.focusCategory(initialTile, initialRow > 0);
-    } else if (initialScreen && SDL_strcmp(initialScreen, "search") == 0) {
-        goToDestination(2);
-        if (searchQuery) {
-            keyboard.typeText(searchQuery);
-            searchTyped = keyboard.value();
-            searchScreen.setQuery(searchTyped);
-            // Asked straight away rather than waiting out the debounce: a
-            // capture has no typing to wait for, and a screenshot of the
-            // Searching… state is not what anybody asked for.
-            runSearch(searchTyped);
-            if (searchScreen.resultCount() > 0) searchScreen.setFocused(true);
-        }
-    } else if (initialScreen) {
-        libraryScreen.enter();
-        stack.push_back(Screen::Library);
-        if (initialTab > 0) {
-            // Walks the switcher the way a person would, rather than setting a
-            // field: the tab change resets the grid position, and a capture
-            // that skipped that would be photographing a state the product
-            // cannot be in.
-            libraryScreen.key(screens::Nav::Right);
-            libraryScreen.key(screens::Nav::Activate);
-        }
-        if (SDL_strcmp(initialScreen, "library") == 0 && initialTile > 0)
-            libraryScreen.focusTile(initialTile);
-        if (SDL_strcmp(initialScreen, "grid") == 0 ||
-            SDL_strcmp(initialScreen, "detail") == 0) {
-            apply(screens::Result{screens::Action::OpenTile, initialTile});
-        }
-        if (SDL_strcmp(initialScreen, "detail") == 0) {
-            int card = -1;
-            for (size_t i = 0; i < cards.size(); ++i) {
-                if (initialGame > 0 ? cards[i].id == initialGame : false) {
-                    card = static_cast<int>(i);
-                    break;
-                }
-            }
-            // With no --game, the first game of the opened tile, which is what
-            // somebody checking the layout wants and needs no id to hand.
-            if (card < 0 && here() == Screen::Grid)
-                apply(gridScreen.key(screens::Nav::Activate));
-            else if (card >= 0)
-                openDetailSoon(card);
-        }
-    }
+    openScreenForCapture();
 
     // BACK FROM STEAM (#223): Home, where the console starts anyway; the
     // file is only taken so it is not read again.
     if (!initialScreen) steam::takeReturned();
-    {
-        std::string step;
-        for (char ch : discScriptText + ";") {
-            if (ch != ';') { step += ch; continue; }
-            while (!step.empty() && step.front() == ' ') step.erase(step.begin());
-            while (!step.empty() && step.back() == ' ') step.pop_back();
-            if (!step.empty()) discScript.steps.push_back(step);
-            step.clear();
-        }
-    }
+    parseDiscScript();
 
     borrowPowerButton();
 
-    // Here rather than with --screen, because Home's keys are only wired up
-    // just above; walking before that pressed nothing.
-    if (navScript) {
-        std::string word;
-        for (const char* p = navScript;; ++p) {
-            if (*p && *p != ',') { word += *p; continue; }
-            screens::Nav n;
-            bool ok = true;
-            if (word == "up") n = screens::Nav::Up;
-            else if (word == "down") n = screens::Nav::Down;
-            else if (word == "left") n = screens::Nav::Left;
-            else if (word == "right") n = screens::Nav::Right;
-            else if (word == "a") n = screens::Nav::Activate;
-            else if (word == "b") n = screens::Nav::Back;
-            else ok = false;
-            // The shoulders, for the manual on a game's page (#364).
-            if (!ok && (word == "r1" || word == "l1")) {
-                const int d = word == "r1" ? 1 : -1;
-                if (!shoulderOnPage(d)) switchDestination(d);
-                // A capture shows the slide finished.
-                if (shotMode) manualSlide.settle(manualShown ? 1.0f : 0.0f);
-                word.clear();
-                if (!*p) break;
-                continue;
-            }
-            // A digit is a PIN pad key typed on a keyboard, so a whole PIN
-            // can be walked headless: "down,a,4,8,2,1,4,8,2,1".
-            if (!ok && word.size() == 1 && word[0] >= '0' && word[0] <= '9') {
-                pinOutcome(pinScreen.typeDigit(word[0]));
-                word.clear();
-                if (!*p) break;
-                continue;
-            }
-            if (ok) navigate(n);
-            else if (!word.empty()) std::fprintf(stderr, "[nav] unknown press '%s'\n", word.c_str());
-            word.clear();
-            if (!*p) break;
-        }
-        std::fprintf(stderr, "[nav] after '%s': screen %d, bar %s slot %d%s\n", navScript,
-                     static_cast<int>(here()), barFocused ? "focused" : "not focused",
-                     barSlot, pinScreen.isOpen() ? ", PIN pad open" : "");
-        // A capture shows the pad at rest, not part-way through its fade.
-        if (pinScreen.isOpen()) pinScreen.settle();
-        if (choiceScreen.isOpen()) choiceScreen.settle();
-    }
+    walkNavScript();
 
 
     // The function statics in this loop stay function statics (#398, batch c):
@@ -998,13 +843,7 @@ int App::run(int argc, char** argv) {
             letterHeld = 0;
         }
 
-        if (evictTest && frame == 5) {
-            // Five covers requested once and never asked for again: the shelf
-            // has scrolled past them.
-            for (int i = 0; i < 5; ++i) {
-                images.get("covers/b-3x4.png#scrolled-past-" + std::to_string(i));
-            }
-        }
+        evictTestHook();
         followRemotesInGame();
         if (playing) {
             cab::Core& core = cab::Core::shared();
@@ -1012,79 +851,9 @@ int App::run(int argc, char** argv) {
             runGameFrame(core, dt, rewinding);
         }
 
-        // Launch on a timer when asked to. This exists so the Home-to-game
-        // transition can be watched on the test machine, which has no
-        // controller attached — not as a product behaviour.
-        // The same errand as the launch above, for the action a person takes on
-        // the launch screen. It goes through downloadById, so the floors are
-        // checked exactly as they would be for a press.
-        // Once Home is up, as a person's press would be: a download begun
-        // behind the startup screen takes the curtain from it (pumpArrive
-        // gives the curtain to any launch job) and the screen stays black.
-        if (autoDownloadId > 0 && !launchJob.busy() && !arriving) {
-            const int id = autoDownloadId;
-            autoDownloadId = 0;
-            // ASKED FOR BY ID, as --launch is (below): only Recent and
-            // Favorites are in the library at boot, so any other game was not
-            // found and the download never started, without a word. That is
-            // how the first capture of the download ring (#145) came out as an
-            // empty bar.
-            if (lib.byRomId.find(id) == lib.byRomId.end()) {
-                romm::Game g;
-                std::string err;
-                if (liveClient.fetchGame(id, &g, &err)) appendGame(lib, g);
-                else std::fprintf(stderr, "[download] could not fetch rom %d: %s\n", id,
-                                  err.c_str());
-            }
-            downloadById(id);
-        }
+        downloadHook();
         takeAccountResults();
-        if (autoSwitchAccountId > 0) {
-            const int id = autoSwitchAccountId;
-            autoSwitchAccountId = 0;
-            std::string why;
-            if (!switchAccount(id, &why))
-                std::fprintf(stderr, "[accounts] refused: %s\n", why.c_str());
-            ra::useAccount(accounts::activeId());
-        }
-        if (autoUnkeepId > 0) {
-            const int id = autoUnkeepId;
-            autoUnkeepId = 0;
-            removeDownload(id);
-        }
-        if (thenLaunchId > 0 && !overlayExitDemo && !playing && autoLaunchId == 0 &&
-            !launchJob.busy()) {
-            std::fprintf(stderr, "[launch] then: %d\n", thenLaunchId);
-            autoLaunchId = thenLaunchId;
-            thenLaunchId = 0;
-            autoLaunchAfter = 1.0f;
-        }
-        if (autoLaunchId > 0 && !playing) {
-            autoLaunchAfter -= dt;
-            if (autoLaunchAfter <= 0.0f) {
-                const int id = autoLaunchId;
-                autoLaunchId = 0;
-                // NOT ON HOME, SO NOT IN THE LIBRARY, since 2026-09-22: boot
-                // stopped fetching the whole catalogue, and `--launch` quietly
-                // lost every game that is not Recent or a Favorite. It said
-                // "no game with id" and idled, which is how the save work of
-                // 2026-09-23 found it. Asked for by id instead, the way a
-                // platform grid or Search would have fetched it.
-                if (lib.byRomId.find(id) == lib.byRomId.end()) {
-                    romm::Game g;
-                    std::string err;
-                    if (liveClient.fetchGame(id, &g, &err)) {
-                        appendGame(lib, g);
-                        std::fprintf(stderr, "[launch] fetched %s by id\n",
-                                     g.name.c_str());
-                    } else {
-                        std::fprintf(stderr, "[launch] could not fetch rom %d: %s\n",
-                                     id, err.c_str());
-                    }
-                }
-                launchById(id);
-            }
-        }
+        launchHooks(dt);
 
         pumpLaunch();
         pumpSwitch();
@@ -1095,281 +864,13 @@ int App::run(int argc, char** argv) {
         pumpStateLoad(stateLoad, session, menuNotice);
         pumpDetailStates();
         loadPendingStates();
-        if (overlayDemo && playing && !overlayOpen &&
-            cab::Core::shared().framesRun() >= static_cast<uint64_t>(overlayDemoAfter)) {
-            overlayDemo = false;
-            toggleOverlay();
-        }
-
-        // --overlay-test: hold the pause menu open over a game this console did
-        // not draw. `playing` is asserted so the whole world — backdrop, hero,
-        // shelves, screens — is skipped; there is no core, so no game picture is
-        // drawn either, and what reaches the screen is the scrim and the panel
-        // over transparency. That is the thing being looked at.
-        if (overlayTest) {
-            playing = true;
-            if (!overlayOpen) {
-                overlayOpen = true;
-                overlayFade.retarget(1.0f, overlayFadeSeconds);
-            }
-        }
-        if (overlayExitDemo && playing) {
-            static int t = 0;
-            // How long the game is left running before the overlay quits it.
-            // Was a fixed 120 frames, which is two seconds — long enough to
-            // watch the transition and far too short for anything else. A PSP
-            // game is still BOOTING at that point, and a save cannot be tested
-            // at all because the game has not had time to write one.
-            if (++t == overlayExitAfter) {
-                toggleOverlay();
-                overlaySlot = static_cast<int>(pauseItems.size()) - 1;   // Exit to Home
-            }
-            if (t == overlayExitAfter + 60) { overlayExitDemo = false; overlayActivate(); }
-        }
+        overlayHooks();
 
         pumpDiscChange();
 
-        // THE DISC RIG (#162, --disc-script). One step at a time, each when
-        // the last is done; `wait` counts the game's own frames, so a step
-        // means the same on any machine. Every step calls what the pause menu
-        // calls.
-        if (discScript.at < discScript.steps.size() && playing &&
-            cab::Core::shared().running()) {
-            cab::Core& core = cab::Core::shared();
-            const uint64_t now = core.framesRun();
-            // A Start over begins the game again, and its frames from zero.
-            if (!discScript.started || now < discScript.from) {
-                discScript.started = true;
-                discScript.from = now;
-                discScript.wallFrom = SDL_GetTicksNS();
-            }
-            const std::string& stepText = discScript.steps[discScript.at];
-            std::istringstream in(stepText);
-            std::string verb;
-            in >> verb;
-            bool done = true;
-            auto say = [&](const std::string& what) {
-                std::fprintf(stderr, "[disc-script] frame %llu: %s%s%s\n",
-                             static_cast<unsigned long long>(now), stepText.c_str(),
-                             what.empty() ? "" : " -> ", what.c_str());
-            };
-            if (verb == "wait") {
-                uint64_t n = 0;
-                in >> n;
-                done = now >= discScript.from + n;
-            } else if (verb == "sleep") {
-                double sec = 0;
-                in >> sec;
-                done = (SDL_GetTicksNS() - discScript.wallFrom) / 1e9 >= sec;
-            } else if (verb == "insert") {
-                int n = 0;
-                in >> n;
-                beginInsert(n);
-                say("");
-            } else if (verb == "startover") {
-                int n = 0;
-                in >> n;
-                say("");
-                ++discScript.at;
-                discScript.started = false;
-                done = false;
-                startOverOnDisc(n);
-            } else if (verb == "state") {
-                saveStateNow(session, uploader, menuNotice);
-                say(menuNotice.text);
-            } else if (verb == "load") {
-                beginLoadLatestState(stateLoad, session, liveClient, menuNotice);
-                say("");
-            } else if (verb == "resume") {
-                // What A does once a state has loaded and the game waits: the
-                // step waits for that hold (a load is fetched on a worker),
-                // then ends it. Ten seconds with no hold and it moves on.
-                if (stateHold) {
-                    stateHold = false;
-                    stateHoldJustEnded = true;
-                    say("continuing");
-                } else {
-                    done = (SDL_GetTicksNS() - discScript.wallFrom) / 1e9 >= 10.0;
-                    if (done) say("no state was holding the game");
-                }
-            } else if (verb == "press") {
-                // press <button> <frames>: held for the game, then let go.
-                std::string b;
-                int frames = 6;
-                in >> b >> frames;
-                using cab::bit;
-                const uint32_t m = b == "a" ? bit(cab::A) : b == "b" ? bit(cab::B)
-                                 : b == "x" ? bit(cab::X) : b == "y" ? bit(cab::Y)
-                                 : b == "start" ? bit(cab::Start) : b == "select" ? bit(cab::Select)
-                                 : b == "up" ? bit(cab::Up) : b == "down" ? bit(cab::Down)
-                                 : b == "left" ? bit(cab::Left) : b == "right" ? bit(cab::Right)
-                                 : b == "l" ? bit(cab::L) : b == "r" ? bit(cab::R)
-                                 : b == "l2" ? bit(cab::L2) : b == "r2" ? bit(cab::R2) : 0u;
-                discScript.pad = m;
-                discScript.padUntil = now + static_cast<uint64_t>(std::max(1, frames));
-                say("");
-            } else if (verb == "shot") {
-                // The game's own frame, the menu never in it, as a PNG.
-                std::string name;
-                in >> name;
-                std::vector<uint8_t> rgba, png;
-                unsigned w = 0, h = 0;
-                const std::string path = "/tmp/disc-" + name + ".png";
-                const bool ok = core.snapshot(rgba, w, h) && ui::encodePNG(rgba, w, h, png) &&
-                                cab::writeBytes(path, png);
-                say(ok ? path : std::string("NO PICTURE"));
-            } else if (verb == "ui") {
-                // The whole screen, menus and all, as the capture signal does.
-                std::string name;
-                in >> name;
-                discScript.captureTo = "/tmp/disc-" + name + ".bmp";
-                gCaptureRequested = 1;
-                say(discScript.captureTo);
-            } else if (verb == "menu") {
-                if (!overlayOpen) toggleOverlay();
-                for (size_t k = 0; k < pauseItems.size(); ++k)
-                    if (pauseItems[k] == OvDisc) overlaySlot = static_cast<int>(k);
-                say(std::string("Change disc row ") +
-                    (std::find(pauseItems.begin(), pauseItems.end(), OvDisc) != pauseItems.end()
-                         ? "shown" : "NOT SHOWN"));
-            } else if (verb == "activate") {
-                overlayActivate();
-                say("");
-            } else if (verb == "nav") {
-                // nav up|down|left|right|a|b, into whatever has the press.
-                std::string k;
-                in >> k;
-                const screens::Nav n = k == "up" ? screens::Nav::Up : k == "down" ? screens::Nav::Down
-                                     : k == "left" ? screens::Nav::Left
-                                     : k == "right" ? screens::Nav::Right
-                                     : k == "b" ? screens::Nav::Back : screens::Nav::Activate;
-                if (choiceScreen.isOpen()) navigate(n);
-                else if (n == screens::Nav::Up) ovStep(-1);
-                else if (n == screens::Nav::Down) ovStep(+1);
-                else if (n == screens::Nav::Activate) overlayActivate();
-                else if (n == screens::Nav::Back) closeOverlay();
-                say(choiceScreen.isOpen() ? "panel: " + choiceScreen.title() : "");
-            } else if (verb == "close") {
-                if (choiceScreen.isOpen()) choiceScreen.close();
-                if (overlayOpen) closeOverlay();
-                say("");
-            } else if (verb == "check") {
-                say("disc " + std::to_string(session.disc) + " of " +
-                    std::to_string(disc::highest(session.discs)) + ", core index " +
-                    std::to_string(core.discIndex()) + " of " + std::to_string(core.discCount()) +
-                    (core.discEjected() ? ", lid OPEN" : ", lid closed") + ", last disc " +
-                    std::to_string(disc::lastDisc(storage::currentUser(), session.romId)));
-            } else if (verb == "play") {
-                // play <romId>: leave this game and start another in the same
-                // run, the way Home's Play would.
-                int id = 0;
-                in >> id;
-                say("");
-                ++discScript.at;
-                discScript.started = false;
-                done = false;
-                exitToHome();
-                // As --launch does: fetched by id if the library lacks it.
-                autoLaunchId = id;
-                autoLaunchAfter = 1.0f;
-            } else if (verb == "quit") {
-                say("");
-                ++discScript.at;
-                discScript.started = false;
-                done = false;
-                exitToHome();
-                if (discScript.at == discScript.steps.size())
-                    std::fprintf(stderr, "[disc-script] done\n");
-            } else {
-                say("UNKNOWN STEP");
-            }
-            if (done) {
-                ++discScript.at;
-                discScript.started = false;
-                if (discScript.at == discScript.steps.size())
-                    std::fprintf(stderr, "[disc-script] done\n");
-            }
-        }
-        if (!discScript.steps.empty() && discScript.at == discScript.steps.size() &&
-            !playing && !discScript.said) {
-            discScript.said = true;
-            std::fprintf(stderr, "[disc-script] back on Home\n");
-        }
+        runDiscScript();
 
-        if (stateCheckAfter > 0 && playing) {
-            static std::vector<uint8_t> first;
-            static uint64_t savedAt = 0;
-            cab::Core& core = cab::Core::shared();
-            if (first.empty() && core.framesRun() >= static_cast<uint64_t>(stateCheckAfter)) {
-                if (!core.saveState(first) || first.empty()) {
-                    std::fprintf(stderr, "[state-check] %s cannot make a state\n",
-                                 launchJob.coreName.c_str());
-                    stateCheckAfter = 0;
-                } else {
-                    savedAt = core.framesRun();
-                }
-            } else if (!first.empty() && core.framesRun() >= savedAt + 120) {
-                const bool loaded = core.loadState(first);
-                std::vector<uint8_t> again;
-                core.saveState(again);
-                size_t same = 0;
-                for (size_t k = 0; k < std::min(first.size(), again.size()); ++k)
-                    if (first[k] == again[k]) ++same;
-                std::fprintf(stderr,
-                             "[state-check] %s: %zu bytes, load %s, re-save %s "
-                             "(%zu of %zu bytes equal)\n",
-                             launchJob.coreName.c_str(), first.size(),
-                             loaded ? "ACCEPTED" : "REFUSED",
-                             again == first ? "IDENTICAL" : "DIFFERS",
-                             same, first.size());
-                stateCheckAfter = 0;
-            }
-        }
-
-        if (loadStateAfter > 0 && playing &&
-            cab::Core::shared().framesRun() >= static_cast<uint64_t>(loadStateAfter)) {
-            loadStateAfter = 0;
-            std::fprintf(stderr, "[load-state] loading the newest state\n");
-            beginLoadLatestState(stateLoad, session, liveClient, menuNotice);
-        }
-
-        // The round trip, once, a couple of seconds into the game so there is
-        // something in memory worth snapshotting.
-        if (syncTest && playing) {
-            static int sinceStart = 0;
-            if (++sinceStart == 150) {
-                std::fprintf(stderr, "[sync-test] --- saving ---\n");
-                const uint64_t t0 = SDL_GetTicksNS();
-                saveStateNow(session, uploader, menuNotice);
-                // Forced: at a title screen with no input the battery has not
-                // changed, and "nothing to send" is the correct behaviour but
-                // proves nothing about whether sending works.
-                session.saveAtLaunch.clear();
-                syncSave(session, uploader);
-                // The same forcing for the saves the core writes as files, and
-                // it is the only way to see that half send anything: those are
-                // captured after the unload rather than here, and a headless
-                // run cannot press the buttons that would make a game save.
-                // So the baseline is dropped now and the quit-time capture
-                // treats whatever the core flushed as new. `hadOne` goes with
-                // it, because the freshness guard is the other thing under
-                // test and a forced run must not be stopped by it.
-                for (cab::FileSaveState& f : session.fileSaves) {
-                    f.atLaunch.clear();
-                    f.hadOne = true;
-                }
-                std::fprintf(stderr,
-                             "[sync-test] %zu file save(s) will be sent at the quit\n",
-                             session.fileSaves.size());
-                // What the game actually paid. Everything after this point is
-                // on the worker, so this is the whole cost to the picture.
-                std::fprintf(stderr, "[sync-test] frame thread blocked %.2f ms\n",
-                             (SDL_GetTicksNS() - t0) / 1e6);
-                std::fprintf(stderr, "[sync-test] --- loading back ---\n");
-                beginLoadLatestState(stateLoad, session, liveClient, menuNotice);
-                std::fprintf(stderr, "[sync-test] --- done ---\n");
-            }
-        }
+        stateHooks();
         images.pump(dt);
         look::tick(dt);
         // Scheduled turns dark at its hour, asked about once a minute.
@@ -1414,131 +915,9 @@ int App::run(int argc, char** argv) {
         askReadyWhenFree();
         noticeLowBattery(dt);
         sayUpdatedTo();
-        if (noticeGallery) {
-            // Each for as long as it really stays up, a second apart, the
-            // first after two so the screen has settled. A Busy one is held
-            // 3.8 s, since nothing will answer it.
-            static float galleryClock = -2.0f;
-            static int galleryNext = 0;
-            galleryClock += dt;
-            constexpr int kN = static_cast<int>(sizeof kNoticeGallery / sizeof kNoticeGallery[0]);
-            if (galleryClock >= 0.0f && galleryNext < kN * 100) {
-                const GalleryNotice& g = kNoticeGallery[galleryNext % kN];
-                std::fprintf(stderr, "[notice] gallery %d/%d: %s\n", galleryNext % kN + 1, kN,
-                             g.text);
-                menuNotice.say(g.text, g.tone);
-                if (g.tone == Tone::Busy) menuNotice.life = 3.8f;
-                ++galleryNext;
-                galleryClock = -(menuNotice.life + 1.0f);
-            }
-        }
-        // The other half of the sentence Save started. Cabinet's own words,
-        // because they are better than anything invented here: it either
-        // reached the server or it is waiting for signal.
-        // WHAT IS OWED IS TRIED AGAIN EVERY FIVE MINUTES while any of it is:
-        // the server coming back says nothing, so asking is the only way to
-        // find out. A starting value; one line.
-        owedClock = uploader.owing() ? owedClock + dt : 0.0f;
-        if (owedClock >= 300.0f) {
-            owedClock = 0.0f;
-            uploader.resendOwed();
-        }
-        // OFFLINE AND BACK (#88). One line going, one coming back. Back, what
-        // is owed goes at once rather than at the next five-minute try, and a
-        // console that started offline loads its library properly, on Home
-        // only and never during a game or a launch, so nothing is replaced
-        // under somebody's feet; the shelves come in as an account switch's do.
-        if (rommAddress) {
-            const bool away = romm::serverAway();
-            if (away != shownAway) {
-                shownAway = away;
-                if (away) {
-                    std::fprintf(stderr, "[offline] can't reach the server; trying in the "
-                                         "background\n");
-                } else {
-                    std::fprintf(stderr, "[offline] the server answered after %llds\n",
-                                 static_cast<long long>(std::time(nullptr)) -
-                                     romm::serverAwaySince());
-                    images.forgetFailed();
-                    if (!libFromDrive) {
-                        owedClock = 0.0f;
-                        uploader.resendOwed();
-                    }
-                }
-            }
-            onlineAgainClock += dt;
-            // THE SERVER WENT WHILE THE CONSOLE WAS ON: after a minute, so a
-            // blip changes nothing, Home and the Library become the games on
-            // the drive, as at an offline start (MMagTech, 2026-10-05: offline
-            // looks the same however you got there). On Home only, never under
-            // a game, a grid or a game's page; the same arrival as coming back.
-            if (away && !libFromDrive && !playing && here() == Screen::Home && !accountsOpen &&
-                !launchJob.busy() &&
-                static_cast<long long>(std::time(nullptr)) - romm::serverAwaySince() >= 60) {
-                lib = offlineLibrary();
-                libFromDrive = true;
-                libraryScreen.build(platformTiles, collectionTiles);
-                homeFromTheStart();
-                refreshKeeps();
-                tabSince = 0.0f;
-                std::fprintf(stderr, "[offline] the server has been away a minute; Home is the "
-                                     "games on the drive\n");
-            }
-            // THE LIBRARY IS FETCHED OFF THE FRAME THREAD, on a client of its
-            // own, and swapped in here once it is in hand: fetched in place,
-            // the picture froze for the length of the fetch and the fade below
-            // was spent during the freeze, so it read as a flash (MMagTech on
-            // the TV, 2026-10-05).
-            if (!away && libFromDrive && !onlineLoad.running.load() && !onlineLoad.ready &&
-                onlineAgainClock >= 5.0f) {
-                onlineAgainClock = 0.0f;
-                onlineLoad.running = true;
-                onlineLoad.forAccount = accounts::activeId();
-                if (onlineLoad.th.joinable()) onlineLoad.th.join();
-                const std::string address = rommAddress;
-                onlineLoad.th = std::thread([this, address]() {
-                    romm::Client c;
-                    std::string e;
-                    Library fresh;
-                    if (c.setAddress(address, &e) && accounts::loadActiveToken(c))
-                        fresh = loadLibrary(c);
-                    onlineLoad.lib = std::move(fresh);
-                    onlineLoad.ready = true;
-                    onlineLoad.running = false;
-                });
-            }
-            if (onlineLoad.ready.load() && !playing && here() == Screen::Home && !accountsOpen &&
-                !launchJob.busy() && uploader.pending() == 0) {
-                onlineLoad.ready = false;
-                if (onlineLoad.th.joinable()) onlineLoad.th.join();
-                std::string e;
-                if (onlineLoad.forAccount != accounts::activeId() ||
-                    onlineLoad.lib.platformTiles.empty()) {
-                    std::fprintf(stderr, "[offline] library not loaded; trying again\n");
-                } else if (!liveClient.setAddress(rommAddress, &e)) {
-                    std::fprintf(stderr, "[offline] the server went again: %s\n", e.c_str());
-                } else {
-                    adoptUser(liveClient);
-                    lib = std::move(onlineLoad.lib);
-                    libraryScreen.build(platformTiles, collectionTiles);
-                    startCoverFill();
-                    homeFromTheStart();
-                    refreshKeeps();
-                    libFromDrive = false;
-                    images.forgetFailed();
-                    // HOME ARRIVES AGAIN, as it does from the bar: the
-                    // shelves fade in and rise (#88's agreed sequence, "the
-                    // shelves fade in"). The change is the signal.
-                    tabSince = 0.0f;
-                    std::fprintf(stderr, "[offline] online again: %zu game(s) on Home\n",
-                                 cards.size());
-                    owedClock = 0.0f;
-                    uploader.resendOwed();
-                    backfillDrive(rommAddress);
-                }
-                onlineLoad.lib = Library{};
-            }
-        }
+        noticeGalleryHook(dt);
+        retryOwedUploads(dt);
+        followServer(dt);
         sayStateUploaded();
         tickLaunchBusy(dt);
         tickPauseMenu(dt);
@@ -1652,62 +1031,7 @@ int App::run(int argc, char** argv) {
             renderer.setContentAlpha(1.0f);
         }
 
-        // ---- The notification pill — see MenuNotice ------------------------
-        //
-        // Over the menus and over a game, under the curtain and the dim. Near
-        // the foot of the screen, inside the safe area, centred: where a
-        // console's confirmation is looked for, and clear of every menu's
-        // buttons. It rises a little as it arrives, like the panels do.
-        //
-        // After the top bar since 2026-09-26, so it sits over Settings'
-        // Downloads panel; the bar and the pill never meet, one at the top
-        // and one at the foot.
-        {
-            const float na = menuNotice.alpha();
-            const float keepAlpha = renderer.contentAlpha();
-            renderer.setContentAlpha(1.0f);   // not part of a screen's transition
-            if (na > 0.01f && !menuNotice.text.empty()) {
-                const ui::TextStyle st = ui::TextStyle::Callout;
-                const float tw = text.measure(menuNotice.text, st, sc);
-                constexpr float kPillH = 64.0f, kPad = 30.0f, kDot = 14.0f, kGap = 16.0f;
-                const float w = kPad + kDot + kGap + tw + kPad;
-                const float x = (ui::kCanvasWidth - w) * 0.5f;
-                const float y = ui::kCanvasHeight - ui::kSafeInset - kPillH - 24.0f +
-                                (1.0f - std::min(1.0f, menuNotice.age / 0.25f)) * 12.0f;
-                ui::Color fill = look::surface();
-                fill.a = 0.96f * na;
-                ui::Rect pill{x, y, w, kPillH, kPillH * 0.5f, fill};
-                pill.border = 1.5f;
-                pill.borderColor = ui::Color::white(0.14f * na);
-                pill.edgeLight = ui::Color::white(0.18f * na);
-                pill.shadowBlur = 26.0f;
-                pill.shadowOffsetY = 10.0f;
-                pill.shadowColor = ui::Color::black(0.45f * na);
-                renderer.draw(pill);
-
-                // The dot says which kind of answer it is before the words do.
-                ui::Color dot = ui::Color::white(0.70f);
-                switch (menuNotice.tone) {
-                    case Tone::Done: dot = ui::palette::kScreenCyan; break;
-                    case Tone::Busy: {
-                        dot = ui::palette::kScreenCyan;
-                        // A slow breath, so "working" never reads as "done".
-                        const float t = static_cast<float>(SDL_GetTicks()) / 1000.0f;
-                        dot.a = 0.35f + 0.65f * (0.5f + 0.5f * std::sin(t * 4.2f));
-                        break;
-                    }
-                    case Tone::Info: break;
-                    case Tone::Problem: dot = ui::palette::kMarqueeAmber; break;
-                }
-                dot.a *= na;
-                renderer.draw(ui::Rect{x + kPad, y + (kPillH - kDot) * 0.5f, kDot, kDot,
-                                       kDot * 0.5f, dot});
-                text.draw(renderer, menuNotice.text, x + kPad + kDot + kGap,
-                          y + (kPillH - text.lineHeight(st, sc)) * 0.5f + text.ascent(st, sc),
-                          st, ui::Color::white(0.94f * na), sc);
-            }
-            renderer.setContentAlpha(keepAlpha);
-        }
+        drawNotice(sc);
 
         drawRaToast(sc);
 
@@ -1742,57 +1066,10 @@ int App::run(int argc, char** argv) {
 
         drawKeyboardAndDissolve();
 
-        // ---- The dim, over absolutely everything --------------------------
-        //
-        // After the keyboard and the guides, because it is not part of the
-        // interface; it is the television resting. At full depth it is also
-        // the blank wherever gamescope cannot put the output to sleep.
-        {
-            const float d = dimLayer.value();
-            if (d > 0.001f) {
-                const float keep = renderer.contentAlpha();
-                renderer.setContentAlpha(1.0f);
-                renderer.draw(ui::Rect{0, 0, ui::kCanvasWidth, ui::kCanvasHeight, 0,
-                                       ui::Color::black(d)});
-                renderer.setContentAlpha(keep);
-            }
-        }
+        drawDim();
 
         ++frame;
-        // Capture before the swap. After a swap the back buffer's contents are
-        // undefined, so a readback taken there is whatever the driver left.
-        if (shotMode && frame >= shotAfterFrames &&
-            (!waitForPairCode || shownPairCode) &&
-            // The manual's page on screen, or its refusal (#364), however
-            // long fetching and drawing take.
-            (!manualShown || manualView.settled())) {
-            renderer.saveFrame(shotPath, dw, dh);
-            // Whether the running core can produce a state AT THIS POINT, which
-            // is a different question from whether the round trip is exact and
-            // is the only half of it a capture can answer.
-            //
-            // It is here because --state-test cannot answer it for every core.
-            // Its warm-up is a tight loop of retro_run with no wall clock in
-            // it, and a core that emulates on a thread of its own — PPSSPP is
-            // the only one — barely advances in that loop: no sound, a static
-            // picture and a zero-byte state after three thousand calls, while
-            // the same core reaches its attract demo on the ordinary launch
-            // path. A capture has a real frame loop under it, so the number
-            // here is about the core rather than about the instrument.
-            if (playing) {
-                cab::Core& c = cab::Core::shared();
-                std::fprintf(stderr, "[state] serialize size at capture: %zu bytes\n",
-                             c.stateSize());
-            }
-            running = false;
-        }
-        if (gCaptureRequested) {
-            gCaptureRequested = 0;
-            renderer.saveFrame(discScript.captureTo.empty() ? "/tmp/cabinetos-frame.bmp"
-                                                            : discScript.captureTo.c_str(),
-                               dw, dh);
-            discScript.captureTo.clear();
-        }
+        captureFrame(dw, dh);
 
         takePendingSwitch();
 
@@ -1808,9 +1085,7 @@ int App::run(int argc, char** argv) {
         if (idleShown == idle::Level::Blank && dimLayer.value() >= 0.999f) SDL_Delay(100);
     }
 
-    // Never leave the television asleep behind us: the next thing on it —
-    // this program restarting, or a person at a console — must be seen.
-    if (idleShown == idle::Level::Blank) idle::setDisplayAsleep(false, /*wait=*/true);
+    wakeTvAtExit();
 
     leaveGameAtExit();
 

@@ -1877,7 +1877,7 @@ struct App {
     bool releasePending = false;
     uint64_t releaseWaitStart = 0;
 
-    // ---- Made in batches (d) to (f) (#398) -----------------------------------
+    // ---- Made in batches (d) to (g) (#398) -----------------------------------
     // Each is one stretch of main()'s old body or of apply()'s, called
     // where it ran; the file that holds it is named above its group.
     // cli.cpp
@@ -2051,4 +2051,25 @@ struct App {
     void openSoundAndPace(cab::Core& core);
     void startPlaying(cab::Core& core);
     void tickLaunchBusy(float dt);
+    // testhooks.cpp
+    void openScreenForCapture();
+    void walkNavScript();
+    void evictTestHook();
+    void downloadHook();
+    void launchHooks(float dt);
+    void overlayHooks();
+    void stateHooks();
+    void noticeGalleryHook(float dt);
+    void captureFrame(int dw, int dh);
+    // discrig.cpp
+    void parseDiscScript();
+    void runDiscScript();
+    // offline_sync.cpp
+    void retryOwedUploads(float dt);
+    void followServer(float dt);
+    // notice.cpp
+    void drawNotice(float sc);
+    // idle.cpp
+    void drawDim();
+    void wakeTvAtExit();
 };
