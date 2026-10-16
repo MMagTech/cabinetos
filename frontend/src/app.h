@@ -86,6 +86,7 @@
 #include "library.h"
 #include "notice.h"
 #include "states.h"
+#include "settingsids.h"
 #include "uploader.h"
 
 // The startup screen's last line, which Home lifts it off (#109, see
@@ -1297,22 +1298,7 @@ struct App {
     // docs/PROJECT.md, open question 31. The screen is handed rows and hands
     // back an id; everything a row SHOWS is read here, fresh, each time
     // Settings opens or a row changes.
-    enum SettingId { SetAddAccount = 1, SetInterfaceSounds, SetPinSet, SetPinChange,
-                     SetPinOff, SetRemoveAccount, SetScreenOff, SetWifi, SetServer,
-                     SetUpdate, SetUpdateCheck, SetCredits, SetFiles, SetDownloads,
-                     SetAddController, SetShortcuts, SetShortcutButton, SetAppearance,
-                     SetDarkHours, SetColour, SetRumble, SetPictureQuality,
-                     SetWiiRemotes, SetSteam, SetSteamShow, SetRetroAchievements,
-                     SetAchievementSound, SetDeveloper, SetVersion, SetRemotePlay,
-                     SetPairedDevices, SetTailscale, SetReport, SetHowTo, SetPads };
-    // One Eject row per USB drive: this plus the drive's index in
-    // storage::locations() when the rows were built.
-    static constexpr int kSetEject = 100;
-    // One Format row per drive whose row formats it: this plus its index in
-    // `formatable`, the drives as they were when the rows were built.
-    static constexpr int kSetFormat = 200;
-    // One row per connected controller: this plus its player, 0-based.
-    static constexpr int kSetPad = 300;
+    // The row ids are settingsids.h.
     // The paired Wii Remotes as the Wii Remotes panel last listed them.
     std::vector<wiiremote::Paired> wiiRowsShown;
     // The controllers the Controllers rows were built from, to rebuild them
@@ -1883,9 +1869,9 @@ struct App {
     bool releasePending = false;
     uint64_t releaseWaitStart = 0;
 
-    // ---- Made from run()'s statements in batch (d) (#398) ------------------
-    // Each is one stretch of main()'s old body, called from run() at the
-    // point it ran; the file that holds it is named above its group.
+    // ---- Made in batches (d) and (e) (#398) ----------------------------------
+    // Each is one stretch of main()'s old body or of apply()'s, called
+    // where it ran; the file that holds it is named above its group.
     // cli.cpp
     std::optional<int> parseCommandLine(int argc, char** argv);
     void resolveCoresAndServer();
@@ -1935,4 +1921,6 @@ struct App {
     void drawBar(bool gameUp, float sc, float dt);
     // backdrop.cpp
     void drawGround(bool gameUp, float dt);
+    // settingsflow.cpp
+    void readScreenOffAtStart();
 };

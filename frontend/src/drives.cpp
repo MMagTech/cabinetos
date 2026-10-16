@@ -1138,3 +1138,17 @@ void format(const std::string& driveId) {
 bool formatting() { return gFormatting.load(); }
 
 }  // namespace drives
+
+// Moved out of main.cpp beside the drives (#398, restructure batch e).
+// A drive's size as Storage says it: "2.02 TB", "125 GB". TWO DECIMALS FROM
+// 1 TB UP: with one, a 2.05 TB drive with 23 GB used read "2.0 TB free of
+// 2.0 TB", which looked impossible (MMagTech, 2026-09-25). Decimal units, as
+// the drive's box, the Mac and the PS5 count; Windows calls the same drive
+// 1.86 TB because it counts in binary units and still says TB.
+std::string driveSize(int64_t b) {
+    char buf[32];
+    const double g = static_cast<double>(b) / 1e9;
+    if (g >= 1000.0) std::snprintf(buf, sizeof buf, "%.2f TB", g / 1000.0);
+    else std::snprintf(buf, sizeof buf, "%.0f GB", g);
+    return std::string(buf);
+}
