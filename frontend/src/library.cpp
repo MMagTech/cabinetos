@@ -7,6 +7,7 @@
 #include <cctype>
 #include <cstdio>
 
+#include "app.h"
 #include "cache.h"
 #include "catalog.h"
 #include "favorites.h"
@@ -614,4 +615,22 @@ std::string gameRecordJson(const romm::Game& g) {
     const std::string out = json_object_to_json_string_ext(o, JSON_C_TO_STRING_PRETTY);
     json_object_put(o);
     return out;
+}
+
+// ---- The kept badges on the store's cards (#398) --------------------------
+// A member of the App (app.h), moved out of main.cpp in batch (d).
+
+// WHICH GAMES ARE KEPT, ASKED ONCE AND NOT PER FRAME. `cache::keptRoms`
+// reads the keep directory; `cache::isKeptBy` is a stat() per game, and
+// twelve covers at sixty frames a second would be seven hundred stats a
+// second to draw a dot. So the answer is pushed onto the cards whenever it
+// can have changed: at startup, and after a download or a removal.
+void App::refreshKeeps() {
+    const storage::User me = storage::currentUser();
+    if (!me.valid()) return;
+    const std::vector<int> kept = cache::keptRoms(me);
+    for (Card& c : cards) c.kept = false;
+    for (int romId : kept)
+        for (Card& c : cards)
+            if (c.id == romId) { c.kept = true; break; }
 }

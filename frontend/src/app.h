@@ -3,10 +3,12 @@
 // main() was one function: its locals were the console's whole state and its
 // lambdas reached them through [&]. They are the members and member functions
 // of this struct now, in main()'s order and unchanged, so the next batches can
-// move one feature at a time into its own file. The bodies stay in main.cpp;
-// main.cpp's main() builds one App and calls run(), which is main()'s old
-// body: the start-up in today's order, the frame loop, the teardown, the
-// restart.
+// move one feature at a time into its own file. The bodies are in main.cpp
+// and, from batch (d) on, in the feature files (cli.cpp, startup.cpp,
+// home.cpp and the rest: `grep -n 'App::name(' frontend/src/*.cpp` finds
+// one); main.cpp's main() builds one App and calls run(), which is
+// main()'s old body: the start-up in today's order, the frame loop, the
+// teardown, the restart, each a call where its statements have moved.
 //
 // MEMBER ORDER IS DESTRUCTION ORDER, backwards. It is main()'s declaration
 // order with three moves: resolvedAddress beside rommAddress, which points
@@ -1931,4 +1933,6 @@ struct App {
     void drawBatteryRow(float& leftOfChip, float rowW, float sc);
     // bar.cpp
     void drawBar(bool gameUp, float sc, float dt);
+    // backdrop.cpp
+    void drawGround(bool gameUp, float dt);
 };
