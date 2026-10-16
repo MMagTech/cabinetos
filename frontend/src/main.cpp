@@ -5,9 +5,10 @@
 // and the teardown. The App owns everything a screen is not allowed to: the
 // RomM client, the core, the download worker, the upload worker, the cache,
 // and the navigation between them, each in the file named for it. The
-// screens themselves are in screens.cpp and return an Action rather than
-// doing anything; what an Action costs is decided in actions.cpp, which is
-// why a screen can never start a download by accident.
+// screens themselves are in their own files (what they share is screens.h)
+// and return an Action rather than doing anything; what an Action costs is
+// decided in actions.cpp, which is why a screen can never start a download by
+// accident.
 //
 //   Home       resume-first: the Recent and Favorites shelves. The first Recent
 //              card is what you were playing, focused on arrival, and the one

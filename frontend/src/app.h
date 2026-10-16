@@ -41,6 +41,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "accountpanel.h"
 #include "accounts.h"
 #include "achievements.h"
 #include "achlist.h"
@@ -64,6 +65,7 @@
 #include "pin.h"
 #include "players.h"
 #include "playtime.h"
+#include "qrlink.h"
 #include "remoteplay.h"
 #include "report.h"
 #include "rewind.h"
