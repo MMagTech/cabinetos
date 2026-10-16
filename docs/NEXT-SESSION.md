@@ -21,39 +21,46 @@ Every batch is a pull request into the long-lived `restructure` branch;
 `latest` stays at 2026.10.14.5 until one final pull request to main, judged
 with the full checklist on its testing image (Part 6 section 26).
 
-**Moves 1 and 2 are done.** Move 1, batch (a): #409 ("Restructure move 1:
-dead code out, the probes, self-tests and helpers out of main.cpp (#398)").
-Move 2, batch (b): #410 ("Restructure move 2: the launch code out of
-main.cpp into launch.h, launch.cpp and launch_routes.cpp (#398)"), testing
-image **2026.10.15.2** (88b5ed4), merged into `restructure` on
-2026-10-15. main.cpp is 14,460 lines. The record, the check results and
-the scripts are in `~/Documents/Development/cabinetos-audit/moves-log.md`,
-`scripts/move1/` and `scripts/move2/`.
+**Moves 1 to 3 are done.** Move 1, batch (a): #409. Move 2, batch (b):
+#410. Move 3, batch (c): #413 ("Restructure move 3: main()'s state as one App struct (app.h),
+nothing moved to another file (#398)"), testing image
+**2026.10.16** (c650744), merged into `restructure` on 2026-10-15. main()'s
+state is `struct App` in `frontend/src/app.h` now; main.cpp's `main()` builds
+one App and calls `run()`, which is main()'s old body (start-up, frame loop,
+teardown, restart); the 164 member functions follow `run()` in main.cpp, in
+main()'s old order. The record, the check results and the scripts are in
+`~/Documents/Development/cabinetos-audit/moves-log.md` and `scripts/move1/`
+to `scripts/move3/`.
 
 ## Next
 
-**Move 3 is batch (c), the App struct, alone.** Its prompt is
-`~/Documents/Development/cabinetos-audit/move3-prompt.md`. It gets the full
-TV checklist, so it is not unattended unless MMagTech says so, and it
-measures the exit after Add an account first (Part 6 section 27, item 4b).
+**Move 4 is batch (d) with batch (e), one TV round.** Its prompt is
+`~/Documents/Development/cabinetos-audit/move4-prompt.md`. Each half gets its
+own testing image, so a fault seen on the TV can be narrowed down by
+switching the A9 to the half-way image. It is not unattended unless MMagTech
+says so.
 
-**The batches after it (decided 2026-10-15, MMagTech: "proceed as you see
-fit for the end goal"):** (d) with (e) in one TV round; (f) with (g) in one
-TV round, stopping for a separate judgement of (f) if its machine checks
-show anything odd; (h1) and (h2) in 2 or 3 sessions; (i) alone. Every half
-gets its own testing image, so a fault seen on the TV can be narrowed down
-by switching the A9 to the half-way image. About 6 to 8 sessions, against
-11 to 14 one batch at a time; the reason is fewer, more careful TV rounds,
-not time.
+**After the App struct, a batch's line ranges are found differently.** The
+audit's line numbers (7f4b5d5) point into main(); after move 3 a lambda is a
+member function after `run()` with its declaration in app.h, a local is an
+App member in app.h, and the start-up statements are in `run()` in their old
+order. Find each range by its text (the batch file's `checked` fields), and
+move a member function's definition and its app.h declaration together.
+
+**The batches after it (decided 2026-10-15):** (f) with (g) in one TV round,
+stopping for a separate judgement of (f) if its machine checks show anything
+odd; (h1) and (h2) in 2 or 3 sessions; (i) alone.
 
 **What the moves have taught** (testing.md has them in full):
 - Run every headless test through `tools/romm-readonly-relay.py`.
 - A `--frames` capture of a launch is taken before the game loads; use the
   disc rig's `shot` and a time limit.
-- A core stays mapped after a game is left; `scripts/move2/idle.sh` reads
+- A core stays mapped after a game is left; `scripts/move3/idle.sh` reads
   the journal for that case.
 - The testing push needs MMagTech's word in the session that pushes; a
   relayed okay was refused by the permission check.
+- A pad left on during a suite run changes its output; note any pad in the
+  console's journal before comparing two runs.
 
 **Owed by MMagTech:**
 - Part 6 section 29 decisions 2 to 6: which faults get issues, protectRomId
