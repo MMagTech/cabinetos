@@ -45,10 +45,10 @@ void requestCapture(int) { gCaptureRequested = 1; }
 
 namespace {
 
-// The design system's numbers, the animation primitive and the card live in
-// design.h now, because the screens are separate translation units and two
-// copies of a focus scale is how a shelf and a grid end up disagreeing about
-// what focus looks like.
+// The design system's numbers live in design.h, the animation primitive in
+// motion.h and the card in card.h, because the screens are separate
+// translation units and two copies of a focus scale is how a shelf and a grid
+// end up disagreeing about what focus looks like.
 using namespace design;   // NOLINT — every name in it is a design-system value
 
 }  // namespace

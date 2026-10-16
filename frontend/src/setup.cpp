@@ -102,9 +102,9 @@ std::vector<std::string> hardWrap(ui::TextRenderer& text, const std::string& s,
     return out;
 }
 
-// The QR code texture now lives in ui.h as `ui::QrTexture`, because the
-// account switcher's Add-user screen needs the same one. Moved 2026-09-21; the
-// reasoning that was here went with it.
+// The QR code texture now lives in qrtexture.h as `ui::QrTexture`, because
+// the account switcher's Add-user screen needs the same one. Moved 2026-09-21;
+// the reasoning that was here went with it.
 
 // --- The layout -------------------------------------------------------------
 //
