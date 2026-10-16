@@ -545,6 +545,24 @@ opened once and reused needs a test of two different games in one run.**
   category. Cost one PPSSPP build. **Do not start a second container over a
   parent of a running one.**
 
+- **A COMMAND THAT FALLS THROUGH CAN HAND PODMAN THE HOME FOLDER.**
+  2026-10-16, move 5 of #398: a check over SSH ran `bash idle.sh && cd
+  ~/fb/m5/fe && ...; podman run -v "$PWD":/src:Z ...`. idle.sh said busy,
+  the `&&` chain stopped before the `cd`, the `;` ran podman anyway, and
+  `$PWD` was the home folder: `:Z` relabelled 30,276 files (`.config`,
+  `.cache`, part of `.local/share`) to the container's SELinux label before
+  it failed at Steam's folder. Nothing was refused only because the
+  console's processes run unconfined. Put back as `cabinet` with `find ~
+  -xdev -context '*c323,c693*' -print0 | xargs -0 restorecon -F` (the
+  categories podman chose). **Give podman an absolute folder, never `$PWD`,
+  and run a chain under `set -e` so nothing runs after a failed step.**
+
+- **THE LOOP'S RSYNC KEEPS FILES IT DOES NOT KNOW.** `tools/ui-loop.sh`
+  copies a tree's `frontend/src` onto the A9 without deleting, so after a
+  tree with new files, an older tree's build fails on the files it does not
+  have (move 4 and move 5 both). `rsync --delete` the older tree's sources
+  onto the A9 first.
+
 - **A loop deploy restarts gamescope, and every `gamescopectl` setting goes
   with it.** 2026-10-07: `composite_force` was on for a Remote Play stream;
   `tools/ui-loop.sh` restarted the session, the setting was gone, and the

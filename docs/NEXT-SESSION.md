@@ -10,8 +10,8 @@ ask them to test, and never claim a fix nobody reproduced.
 
 **2026-10-16:** `latest` is **2026.10.14.5** (built from 72c0c4b, tagged in
 git). The A9 (Wi-Fi, **192.168.1.109**; Tailscale cabinetos,
-100.67.82.30) is on the testing channel and runs **2026.10.16.3**, acting as
-claire after move 4's Restart test (switch back from the chip). RomM's
+100.67.82.30) is on the testing channel and runs **2026.10.16.5**, acting as
+claire after move 5's Restart test (switch back from the chip). RomM's
 documentation together with RomM's behaviour is the source of truth for
 anything on RomM's data. RomM was asked to send its `version` tag
 (rommapp/romm#5243); nothing to do until it does.
@@ -22,53 +22,49 @@ Every batch is a pull request into the long-lived `restructure` branch;
 `latest` stays at 2026.10.14.5 until one final pull request to main, judged
 with the full checklist on its testing image (Part 6 section 26).
 
-**Moves 1 to 4 are done.** Move 1, batch (a): #409. Move 2, batch (b):
-#410. Move 3, batch (c): #413. Move 4, batches (d) and (e): #414
-("Restructure move 4: batches (d) and (e), the start-up, browsing, Settings
-and its services out of main.cpp (#398)"), testing images **2026.10.16.2**
-(c33c65d, the (d) half) and **2026.10.16.3** (231ed5d, both halves), merged
-into `restructure` on 2026-10-16. main.cpp is 4,632 lines: main(), run()
-with the frame loop, and batches (f) and (g)'s code. The start-up is a list
-of calls in run() into startup.cpp and the feature files; thirty-two new
-files hold browsing, Settings and the services. The record, the check
-results and the scripts are in
+**Moves 1 to 5 are done: main.cpp is 192 lines**, main() and run() (the
+command line, the start-up, the frame loop, the teardown, as a list of
+calls). Move 1, batch (a): #409. Move 2, batch (b): #410. Move 3, batch (c):
+#413. Move 4, batches (d) and (e): #414. Move 5, batches (f) and (g): #415
+("Restructure move 5: batches (f) and (g), the game in play, the menus, input
+and the frame loop out of main.cpp (#398)"), testing images **2026.10.16.4**
+(b7a58d3, the (f) half) and **2026.10.16.5** (20edb58, both halves). The
+frame loop is frame.cpp, input is input.cpp, the game in play is play.cpp,
+pace.cpp and launch.cpp (pumpLaunch's stages over a LaunchContext). The
+record, the check results and the scripts are in
 `~/Documents/Development/cabinetos-audit/moves-log.md` and `scripts/move1/`
-to `scripts/move4/`.
+to `scripts/move5/`.
 
 ## Next
 
-**Move 5 is batch (f) with batch (g), one TV round** (decided 2026-10-15):
-stop and have MMagTech judge (f) alone first if the (f) half's machine checks
-show anything odd. Its prompt is
-`~/Documents/Development/cabinetos-audit/move5-prompt.md`. Each half gets its
-own testing image. It is not unattended unless MMagTech says so.
-
-**How move 4 cut, which (f) and (g) reuse** (`scripts/move4/gen4.py`): every
-stage is generated from `restructure`'s own files, cumulative, every cut found
-by its text with both ends asserted. A member function moves whole with its
-leading comment; its declaration stays in app.h where move 3 put it. A
-stretch of run() (or of a member function, as apply's branches were) becomes
-a member function in its file and a call at the same point; the new functions
-are declared in one block at the end of struct App, by file. Loop locals a
-stretch reads are passed in (dt, sc, gameUp, ctx, the event); a `continue`
-that ended an event becomes `return true` and the call `if (...) continue;`;
-a `break` out of apply's switch becomes `return`. Lines another batch owns
-stay in run() between the calls, so each line moves once.
+**Batches (h1) and (h2), in 2 or 3 sessions, then (i) alone** (decided
+2026-10-15). (h1): screens.cpp into seven files, screens.h into the protocol
+and six headers, the shaders out of ui.cpp, qrtexture.h, motion.h, overlay.h
+and card.h out of design.h, imagecodec out of image.cpp. (h2): core.cpp,
+vkhost.cpp, standalone.cpp, setup.cpp, achievements.cpp, storage, drives,
+catalog and the small splits, one big file per pull request. The lists, the
+must-keep items and the checks are in
+`~/Documents/Development/cabinetos-audit/verifiers/batch-h1.json` and
+`batch-h2.json`, and in `scripts/part6-batches.md`. No prompt is written for
+them yet. They touch no line of main.cpp's moves; the method (every cut
+found by its text, both ends asserted, a generator that reproduces each
+commit) carries over from `scripts/move5/gen5.py`.
 
 **What the moves have taught** (testing.md has them in full):
-- Run every headless test through `tools/romm-readonly-relay.py`.
-- A `--frames` capture of a launch is taken before the game loads; use the
-  disc rig's `shot` and a time limit.
-- A core stays mapped after a game is left; `scripts/move4/idle.sh` reads
-  the journal for that case.
-- The testing push needs MMagTech's word in the session that pushes; a
-  relayed okay was refused by the permission check.
-- A pad left on during a suite run changes its output; note any pad in the
-  console's journal before comparing two runs, and run the base binary twice
-  to show what timing alone changes.
+- Run every headless test through `tools/romm-readonly-relay.py`; a game
+  test that may save or play over a minute goes in a scratch storage root
+  with the relay, on the TV too (`tools/ui-loop.sh --env
+  CABINETOS_ROMM=127.0.0.1:16007 --args "--storage-root ..."`).
+- Run the base binary twice to show what timing alone changes, and when a
+  difference looks systematic, swap the scratch roots: in move 5 it followed
+  the root (an owed state with a picture), not the binary.
 - A test game on the console ends inside a minute, by `--restore`, never by
-  a kill: move 4 put a one-minute play of Tetris & Dr. Mario on MMagTech's
-  RomM that way.
+  a kill.
+- The loop's rsync keeps files it does not know: before deploying an older
+  tree after a newer one, `rsync --delete` its sources onto the A9.
+- Never chain a podman `:Z` run after a check with `;`, and give it an
+  absolute folder, never `$PWD`: move 5 relabelled part of the A9's home that
+  way (repaired with restorecon).
 
 **Owed by MMagTech:**
 - Whether to remove the one-minute Tetris & Dr. Mario play session move 4's
@@ -111,6 +107,9 @@ the contributor guide.
   #412, "The log names the previous emulator when a PS2 game starts
   ("running Beetle Saturn")": both found in move 2's checks, both older than
   the moves, in the Later milestone.
+- #417, "The diagnostic report stops downloading at about 2.5 MB (its ten
+  seconds are counted as 250 ms per wait)": found in move 5's TV round,
+  older than the moves, in the Later milestone.
 - deletableman (#341, #376): nothing new from him.
 
 **After a console is installed fresh** it has no key: About, press Version
