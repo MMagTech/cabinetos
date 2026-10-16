@@ -1,13 +1,29 @@
-// The parts more than one screen draws. Moved out of main.cpp in the
-// restructure (#398); batch (h1) brings the rest. choice.cpp keeps its own
-// near-copy of the prompt (another button letter, no fade), as it was.
+// The parts more than one screen draws: the press prompt, and the caption,
+// focus, kept-mark and cover helpers the screens' files share. Moved out of
+// main.cpp and screens.cpp in the restructure (#398). choice.cpp keeps its own
+// near-copy of the prompt (another button letter, no fade), as it was, and
+// Home (home.cpp) its own copy of the cover and the kept mark, which has
+// drifted from these (it scales the mark with focus and has no unavailable
+// dim), as it was.
 
 #pragma once
 
-namespace ui {
-class Renderer;
-class TextRenderer;
-}
+#include <string>
+#include <vector>
+
+#include "screens.h"
 
 void drawPressPrompt(ui::Renderer& r, ui::TextRenderer& text, float sc, const char* before,
                      const char* after, float base, float alpha);
+
+namespace screens {
+
+// Defined in screenparts.cpp, each with what it does and why.
+std::vector<std::string> wrapTwoLines(ui::TextRenderer& text, const std::string& s,
+                                      ui::TextStyle style, float sc, float width);
+void applyArtworkFocus(ui::Rect& rect, float f, bool rim);
+void drawKeptMark(Ctx& c, const design::Card& card, float x, float y, float w, float radius);
+void drawCover(Ctx& c, const design::Card& card, float x, float y, float w, float h,
+               float radius, float f, bool rim, bool large = false);
+
+}  // namespace screens

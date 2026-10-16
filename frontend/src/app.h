@@ -55,6 +55,7 @@
 #include "idle.h"
 #include "image.h"
 #include "keyboard.h"
+#include "libraryscreen.h"
 #include "look.h"
 #include "manualview.h"
 #include "net.h"
