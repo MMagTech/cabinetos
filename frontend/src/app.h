@@ -94,6 +94,11 @@
 // frame that was already on the television.
 static constexpr const char* kLoadingLine = "Loading your library";
 
+// Named by the game frame's functions (core.h).
+namespace cab {
+class Core;
+}
+
 struct App {
     App() = default;
     App(const App&) = delete;
@@ -2025,4 +2030,12 @@ struct App {
     bool takeStandaloneEvent(const SDL_Event& e);
     bool watchStandalone(float dt);
     void closeStandaloneAtExit();
+    // play.cpp
+    void followRemotesInGame();
+    bool readGameInput(cab::Core& core);
+    void drawGamePicture(cab::Core& core, int dh);
+    void leaveGameAtExit();
+    void reportAndUnloadCore();
+    // pace.cpp
+    void runGameFrame(cab::Core& core, float dt, bool rewinding);
 };
