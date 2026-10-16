@@ -94,6 +94,14 @@
 // frame that was already on the television.
 static constexpr const char* kLoadingLine = "Loading your library";
 
+// Named by the game frame's functions (core.h).
+namespace cab {
+class Core;
+}
+
+// pumpLaunch's stages' shared locals (launch.cpp).
+struct LaunchContext;
+
 struct App {
     App() = default;
     App(const App&) = delete;
@@ -1869,7 +1877,7 @@ struct App {
     bool releasePending = false;
     uint64_t releaseWaitStart = 0;
 
-    // ---- Made in batches (d) and (e) (#398) ----------------------------------
+    // ---- Made in batches (d) to (g) (#398) -----------------------------------
     // Each is one stretch of main()'s old body or of apply()'s, called
     // where it ran; the file that holds it is named above its group.
     // cli.cpp
@@ -2004,6 +2012,69 @@ struct App {
     void pressSteam();
     // states.cpp
     void playFromState(const screens::Result& res);
+    void loadPendingStates();
+    void drawStateHold(float sc);
+    void sayStateUploaded();
     // favorites.cpp
     void toggleFavorite(const screens::Result& res);
+    // ps2window.cpp
+    bool frameOverPs2Window();
+    // discs.cpp
+    void pumpDiscChange();
+    // power_menu.cpp
+    void borrowPowerButton();
+    void pollPower();
+    void waitForUploadsToPowerDown();
+    // pausemenu.cpp
+    void tickPauseMenu(float dt);
+    void drawPauseScrim();
+    void drawPauseMenu(float sc);
+    // standalone_play.cpp
+    bool takeStandaloneEvent(const SDL_Event& e);
+    bool watchStandalone(float dt);
+    void closeStandaloneAtExit();
+    // play.cpp
+    void followRemotesInGame();
+    bool readGameInput(cab::Core& core);
+    void drawGamePicture(cab::Core& core, int dh);
+    void leaveGameAtExit();
+    void reportAndUnloadCore();
+    // pace.cpp
+    void runGameFrame(cab::Core& core, float dt, bool rewinding);
+    // launch.cpp
+    bool takeFinishedJob();
+    void prepareSaveDirAndDiscs(LaunchContext& c);
+    void restoreBeforeLoad(LaunchContext& c);
+    bool loadLaunchedGame(LaunchContext& c);
+    void setUpLoadedGame(LaunchContext& c);
+    void reportLoadedOptions(cab::Core& core);
+    void openSoundAndPace(cab::Core& core);
+    void startPlaying(cab::Core& core);
+    void tickLaunchBusy(float dt);
+    // testhooks.cpp
+    void openScreenForCapture();
+    void walkNavScript();
+    void evictTestHook();
+    void downloadHook();
+    void launchHooks(float dt);
+    void overlayHooks();
+    void stateHooks();
+    void noticeGalleryHook(float dt);
+    void captureFrame(int dw, int dh);
+    // discrig.cpp
+    void parseDiscScript();
+    void runDiscScript();
+    // offline_sync.cpp
+    void retryOwedUploads(float dt);
+    void followServer(float dt);
+    // notice.cpp
+    void drawNotice(float sc);
+    // idle.cpp
+    void drawDim();
+    void wakeTvAtExit();
+    // input.cpp
+    void handleEvent(const SDL_Event& e);
+    void repeatHeld(float dt);
+    // frame.cpp
+    void runFrameLoop();
 };

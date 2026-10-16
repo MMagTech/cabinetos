@@ -534,3 +534,61 @@ void syncSave(GameSession& sess, Uploader& up) {
     job.localPath = path;
     up.push(std::move(job));
 }
+
+// THE BATTERY SAVE: RomM's newest, unless this console's own copy is
+// still owed, and this console's copy whenever RomM has none to give
+// (#259). Until 2026-10-05 the local `.srm` syncSave writes at every
+// quit was never read back, so a game started with the server away
+// began with an empty battery, and one started while its upload was
+// still owed got RomM's OLDER copy over the newer one. The same rule
+// restoreFileSaves and restoreDirSave keep (cache.h, isPending), and
+// what RetroArch does: the frontend loads the local `.srm`.
+// Stage 8 of a launch (launch.cpp), after the load and before the first frame.
+void restoreBatterySave(cab::Core& core, GameSession& session, const std::string& saveDir,
+                        const storage::User& user, romm::Client& client) {
+    if (core.saveRamSize() > 0) {
+        const std::string name = saveRowName(session.fsStem, std::string(), "srm");
+        const std::vector<uint8_t> local = cab::readBytes(saveDir + "/" + name);
+        const bool owed =
+            !session.saveTag.empty() && cache::isPending(user, session.romId, name);
+        bool fromServer = false;
+        if (owed) {
+            std::fprintf(stderr, "[save] %s has not reached the server yet - it wins\n",
+                         name.c_str());
+        } else if (!session.saveTag.empty()) {
+            std::vector<romm::Asset> saves;
+            std::string serr;
+            if (savesFor(client, session.romId, &saves, &serr)) {
+                const romm::Asset* newest = nullptr;
+                for (const auto& a : saves) {
+                    if (a.emulator != session.saveTag) continue;
+                    // THE BATTERY ROW ONLY. Cabinet files a Game Boy
+                    // clock as its own 8-byte `.rtc` row under the same
+                    // tag; taken as the newest, its bytes went over the
+                    // start of the save (#346, found in the audit).
+                    if (regionOfRow(a.fileName) != "srm") continue;
+                    if (!newest || a.updatedAt > newest->updatedAt) newest = &a;
+                }
+                if (newest) {
+                    std::vector<uint8_t> data =
+                        saveBytesFor(client, session.romId, *newest);
+                    if (!data.empty() && core.writeSaveRam(data)) {
+                        session.saveAtLaunch = data;
+                        fromServer = true;
+                        std::fprintf(stderr, "[save] restored %s (%zu bytes)\n",
+                                     newest->fileName.c_str(), data.size());
+                    }
+                }
+            } else {
+                std::fprintf(stderr, "[save] could not ask the server: %s\n", serr.c_str());
+            }
+        }
+        if (!fromServer && !local.empty() && core.writeSaveRam(local)) {
+            session.saveAtLaunch = local;
+            std::fprintf(stderr, "[save] restored this console's %s (%zu bytes)\n",
+                         name.c_str(), local.size());
+        }
+    }
+    if (session.saveAtLaunch.empty()) core.readSaveRam(session.saveAtLaunch);
+    std::fprintf(stderr, "[save] battery is %zu bytes\n", core.saveRamSize());
+}

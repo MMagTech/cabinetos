@@ -13,6 +13,8 @@
 #include "fileio.h"
 #include "app.h"
 #include "image.h"
+#include "proc.h"
+#include "screenparts.h"
 #include "storage.h"
 
 // A SAVE STATE GOES IN ON ITS OWN DISC (#162 item 9). The disc is in the
@@ -372,4 +374,130 @@ void App::playFromState(const screens::Result& res) {
     }
     pendingStateId = res.value;
     if (!launchById(detailScreen.game().romId)) pendingStateId = 0;
+}
+
+// ---- The states in play (#398) --------------------------------------------
+// A standalone emulator's screenshot, the states picked before a game, the
+// hold after a load and the upload's answer. Members of the App (app.h),
+// moved out of main.cpp in batch (f).
+
+// A SCREENSHOT OF A GAME THIS WINDOW DID NOT DRAW: gamescope's own, of the
+// game's plane only, which leaves the menu out (open question 24, and
+// measured: about two seconds for a 4K PNG, written by gamescope after
+// the command returns). The menu says so once the file is whole, and it
+// travels to RomM's gallery the way every other screenshot does.
+void App::standaloneScreenshot() {
+    if (!standaloneShot.path.empty()) return;   // one at a time
+    struct timespec ts{};
+    clock_gettime(CLOCK_REALTIME, &ts);
+    struct tm utc{};
+    gmtime_r(&ts.tv_sec, &utc);
+    char stamp[48];
+    const size_t n = std::strftime(stamp, sizeof stamp, "%Y-%m-%d %H-%M-%S", &utc);
+    std::snprintf(stamp + n, sizeof stamp - n, "-%03ld", ts.tv_nsec / 1000000L);
+    std::string base = session.fsStem.empty() ? sanitisedStem(session.title) : session.fsStem;
+    std::replace(base.begin(), base.end(), '/', '_');
+    const std::string dir = storage::screenshotsDir(storage::currentUser()) + "/" +
+                            std::to_string(session.romId);
+    storage::makeDirs(dir);
+    standaloneShot.name = base + " [" + stamp + "].png";
+    standaloneShot.path = dir + "/" + standaloneShot.name;
+    standaloneShot.romId = session.romId;
+    standaloneShot.size = -1;
+    const proc::Result r = proc::run({"gamescopectl", "screenshot", standaloneShot.path}, 5);
+    if (!r.ok()) {
+        std::fprintf(stderr, "[screenshot] gamescopectl: %s\n", proc::trimmed(r.err).c_str());
+        standaloneShot.path.clear();
+        menuNotice.say("Couldn't save the screenshot", Tone::Problem);
+    }
+}
+
+// Twice a second or so: the file is whole when its size stops changing.
+void App::pumpStandaloneShot() {
+    if (standaloneShot.path.empty()) return;
+    struct stat st;
+    if (::stat(standaloneShot.path.c_str(), &st) != 0 || st.st_size <= 0) return;
+    if (st.st_size != standaloneShot.size) {
+        standaloneShot.size = st.st_size;
+        return;
+    }
+    std::vector<uint8_t> png = cab::readBytes(standaloneShot.path);
+    std::fprintf(stderr, "[screenshot] %zu bytes, %s\n", png.size(),
+                 standaloneShot.name.c_str());
+    menuNotice.say("Screenshot saved", Tone::Done);
+    Uploader::Job job;
+    job.romId = standaloneShot.romId;
+    job.emulator = "screenshot";
+    job.fileName = standaloneShot.name;
+    job.data = std::move(png);
+    job.localPath = standaloneShot.path;
+    job.isScreenshot = true;
+    uploader.push(std::move(job));
+    standaloneShot.path.clear();
+}
+
+// A state picked before the game started, loaded once the core runs, and
+// the hold after any load (the frame loop calls this every frame).
+void App::loadPendingStates() {
+    // THE STATE PICKED ON THE LAUNCH SCREEN goes in once the core is
+    // running, the same way Load latest state does, by id.
+    if (pendingStateId && playing && cab::Core::shared().running() &&
+        cab::Core::shared().framesRun() >= 1 && !stateLoad.running.load()) {
+        beginLoadLatestState(stateLoad, session, liveClient, menuNotice, pendingStateId);
+        pendingStateId = 0;
+        if (stateLoad.running.load()) stateHoldWaiting = true;
+    }
+    // ONE OF THIS CONSOLE'S OWN STATES, picked on the game's page (#88):
+    // read off the disk, so there is nothing to wait for.
+    if (!pendingStatePath.empty() && playing && cab::Core::shared().running() &&
+        cab::Core::shared().framesRun() >= 1 && !stateLoad.running.load()) {
+        const std::vector<uint8_t> bytes = cab::readBytes(pendingStatePath);
+        const bool ok = !bytes.empty() && loadStateOnItsDisc(session, pendingStatePath, bytes);
+        std::fprintf(stderr, "[state] picked on the game's page: %s -> %s\n",
+                     pendingStatePath.c_str(), ok ? "restored" : "REFUSED");
+        menuNotice.say(ok ? "State loaded" : stateRefusedText(),
+                       ok ? Tone::Done : Tone::Problem);
+        stateLoad.loaded = ok;   // and it waits on that frame, as any load does
+        pendingStatePath.clear();
+    }
+    if (pendingResume && playing && cab::Core::shared().running() &&
+        cab::Core::shared().framesRun() >= 1 && !stateLoad.running.load()) {
+        pendingResume = false;
+        if (session.snapshots) {
+            std::fprintf(stderr, "[resume] loading the newest state, if there is one\n");
+            beginLoadLatestState(stateLoad, session, liveClient, menuNotice, 0, true);
+            if (stateLoad.running.load()) stateHoldWaiting = true;
+        }
+    }
+    if (stateLoad.loaded) {
+        stateLoad.loaded = false;
+        rewindKeep.reset();   // the history led somewhere else
+        ra::stateLoaded();    // and so did what each achievement was waiting for
+        rewindLastFrame = cab::Core::shared().framesRun();
+        closeOverlay();
+        stateHold = true;
+        stateHoldWaiting = false;
+    }
+    // A launch-screen state that did not load: the game just goes on.
+    if (stateHoldWaiting && !stateLoad.running.load() && !stateLoad.ready.load())
+        stateHoldWaiting = false;
+}
+
+// THE WAIT AFTER A STATE LOADS: the game's frozen picture, a little
+// darker, and the prompt low on it. Not while the pause menu is up.
+void App::drawStateHold(float sc) {
+    if (playing && stateHold && overlayFade.value() < 0.001f) {
+        renderer.draw(ui::Rect{0, 0, ui::kCanvasWidth, ui::kCanvasHeight, 0,
+                               ui::Color::black(0.35f)});
+        drawPressPrompt(renderer, text, sc, "Press", "to continue",
+                        ui::kCanvasHeight * 0.82f, 1.0f);
+    }
+}
+
+// What became of the last state saved, said once the uploader knows.
+void App::sayStateUploaded() {
+    if (const int outcome = uploader.stateOutcome.exchange(0); outcome != 0)
+        menuNotice.say(outcome == 1 ? "Saved to RomM"
+                                    : "Saved. Will upload when RomM is back",
+                       outcome == 1 ? Tone::Done : Tone::Info);
 }

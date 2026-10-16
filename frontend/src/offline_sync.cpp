@@ -11,6 +11,7 @@
 #include <thread>
 #include <vector>
 
+#include "app.h"
 #include "accounts.h"
 #include "cache.h"
 #include "catalog.h"
@@ -173,4 +174,120 @@ void startReconnect(const std::string& address) {
             SDL_Delay(250);
         }
     }).detach();
+}
+
+// ---- Uploads owed, and the server going and coming back (#88, #398) ----
+// Members of the App (app.h), moved out of main.cpp in batch (g).
+
+// The other half of the sentence Save started. Cabinet's own words,
+// because they are better than anything invented here: it either
+// reached the server or it is waiting for signal.
+// WHAT IS OWED IS TRIED AGAIN EVERY FIVE MINUTES while any of it is:
+// the server coming back says nothing, so asking is the only way to
+// find out. A starting value; one line.
+void App::retryOwedUploads(float dt) {
+    owedClock = uploader.owing() ? owedClock + dt : 0.0f;
+    if (owedClock >= 300.0f) {
+        owedClock = 0.0f;
+        uploader.resendOwed();
+    }
+}
+
+// OFFLINE AND BACK (#88). One line going, one coming back. Back, what
+// is owed goes at once rather than at the next five-minute try, and a
+// console that started offline loads its library properly, on Home
+// only and never during a game or a launch, so nothing is replaced
+// under somebody's feet; the shelves come in as an account switch's do.
+void App::followServer(float dt) {
+    if (rommAddress) {
+        const bool away = romm::serverAway();
+        if (away != shownAway) {
+            shownAway = away;
+            if (away) {
+                std::fprintf(stderr, "[offline] can't reach the server; trying in the "
+                                     "background\n");
+            } else {
+                std::fprintf(stderr, "[offline] the server answered after %llds\n",
+                             static_cast<long long>(std::time(nullptr)) -
+                                 romm::serverAwaySince());
+                images.forgetFailed();
+                if (!libFromDrive) {
+                    owedClock = 0.0f;
+                    uploader.resendOwed();
+                }
+            }
+        }
+        onlineAgainClock += dt;
+        // THE SERVER WENT WHILE THE CONSOLE WAS ON: after a minute, so a
+        // blip changes nothing, Home and the Library become the games on
+        // the drive, as at an offline start (MMagTech, 2026-10-05: offline
+        // looks the same however you got there). On Home only, never under
+        // a game, a grid or a game's page; the same arrival as coming back.
+        if (away && !libFromDrive && !playing && here() == Screen::Home && !accountsOpen &&
+            !launchJob.busy() &&
+            static_cast<long long>(std::time(nullptr)) - romm::serverAwaySince() >= 60) {
+            lib = offlineLibrary();
+            libFromDrive = true;
+            libraryScreen.build(platformTiles, collectionTiles);
+            homeFromTheStart();
+            refreshKeeps();
+            tabSince = 0.0f;
+            std::fprintf(stderr, "[offline] the server has been away a minute; Home is the "
+                                 "games on the drive\n");
+        }
+        // THE LIBRARY IS FETCHED OFF THE FRAME THREAD, on a client of its
+        // own, and swapped in here once it is in hand: fetched in place,
+        // the picture froze for the length of the fetch and the fade below
+        // was spent during the freeze, so it read as a flash (MMagTech on
+        // the TV, 2026-10-05).
+        if (!away && libFromDrive && !onlineLoad.running.load() && !onlineLoad.ready &&
+            onlineAgainClock >= 5.0f) {
+            onlineAgainClock = 0.0f;
+            onlineLoad.running = true;
+            onlineLoad.forAccount = accounts::activeId();
+            if (onlineLoad.th.joinable()) onlineLoad.th.join();
+            const std::string address = rommAddress;
+            onlineLoad.th = std::thread([this, address]() {
+                romm::Client c;
+                std::string e;
+                Library fresh;
+                if (c.setAddress(address, &e) && accounts::loadActiveToken(c))
+                    fresh = loadLibrary(c);
+                onlineLoad.lib = std::move(fresh);
+                onlineLoad.ready = true;
+                onlineLoad.running = false;
+            });
+        }
+        if (onlineLoad.ready.load() && !playing && here() == Screen::Home && !accountsOpen &&
+            !launchJob.busy() && uploader.pending() == 0) {
+            onlineLoad.ready = false;
+            if (onlineLoad.th.joinable()) onlineLoad.th.join();
+            std::string e;
+            if (onlineLoad.forAccount != accounts::activeId() ||
+                onlineLoad.lib.platformTiles.empty()) {
+                std::fprintf(stderr, "[offline] library not loaded; trying again\n");
+            } else if (!liveClient.setAddress(rommAddress, &e)) {
+                std::fprintf(stderr, "[offline] the server went again: %s\n", e.c_str());
+            } else {
+                adoptUser(liveClient);
+                lib = std::move(onlineLoad.lib);
+                libraryScreen.build(platformTiles, collectionTiles);
+                startCoverFill();
+                homeFromTheStart();
+                refreshKeeps();
+                libFromDrive = false;
+                images.forgetFailed();
+                // HOME ARRIVES AGAIN, as it does from the bar: the
+                // shelves fade in and rise (#88's agreed sequence, "the
+                // shelves fade in"). The change is the signal.
+                tabSince = 0.0f;
+                std::fprintf(stderr, "[offline] online again: %zu game(s) on Home\n",
+                             cards.size());
+                owedClock = 0.0f;
+                uploader.resendOwed();
+                backfillDrive(rommAddress);
+            }
+            onlineLoad.lib = Library{};
+        }
+    }
 }
