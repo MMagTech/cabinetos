@@ -640,14 +640,14 @@ struct App {
     std::string detailManualTitle;
     screens::SearchScreen searchScreen;
     screens::AccountScreen accountScreen;
-    screens::AddAccountScreen addAccountScreen;
+    screens::QrLinkScreen addAccountScreen;
     // Signing the console in to Tailscale (#286): the same screen, a link to
     // approve on a phone. The one line is the constraint that matters: the
     // account has to be the one the phone uses, or the two never meet.
-    screens::AddAccountScreen tsSignInScreen;
+    screens::QrLinkScreen tsSignInScreen;
     // THE DIAGNOSTIC REPORT (#195): the same screen again, the link this time
     // a download of the report. Its lines are set when it is made.
-    screens::AddAccountScreen reportScreen;
+    screens::QrLinkScreen reportScreen;
     // ABOUT, HOW TO (#314): the controls, in Settings' own shape (a section
     // per row on the left, its lines on the right), so it looks like the
     // console rather than a page of text (MMagTech on the TV, 2026-10-10).

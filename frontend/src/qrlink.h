@@ -23,7 +23,7 @@ namespace screens {
 // IT SHOWS, IT DOES NOT PAIR. The app owns the client, the worker and the
 // polling, for the same reason it owns the switch's refusals: this file does
 // no networking and starts no threads.
-class AddAccountScreen {
+class QrLinkScreen {
 public:
     void open();
 

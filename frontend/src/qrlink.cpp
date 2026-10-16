@@ -10,7 +10,7 @@ namespace screens {
 
 // --- Adding an account ------------------------------------------------------
 
-void AddAccountScreen::open() {
+void QrLinkScreen::open() {
     url_.clear();
     code_.clear();
     error_.clear();
@@ -19,7 +19,7 @@ void AddAccountScreen::open() {
     appear_.retarget(1.0f, 0.3f);
 }
 
-void AddAccountScreen::setPairing(const std::string& url, const std::string& code) {
+void QrLinkScreen::setPairing(const std::string& url, const std::string& code) {
     url_ = url;
     code_ = code;
     busy_ = false;
@@ -32,19 +32,19 @@ void AddAccountScreen::setPairing(const std::string& url, const std::string& cod
     else error_ = err;   // the address and the code below are still usable
 }
 
-void AddAccountScreen::setText(std::string title, std::vector<std::string> lines,
+void QrLinkScreen::setText(std::string title, std::vector<std::string> lines,
                                std::string busy) {
     title_ = std::move(title);
     lines_ = std::move(lines);
     busyLine_ = std::move(busy);
 }
 
-void AddAccountScreen::setBusy(bool on) { busy_ = on; }
-void AddAccountScreen::setError(const std::string& err) { error_ = err; busy_ = false; }
+void QrLinkScreen::setBusy(bool on) { busy_ = on; }
+void QrLinkScreen::setError(const std::string& err) { error_ = err; busy_ = false; }
 
-void AddAccountScreen::tick(float dt) { appear_.tick(dt); }
+void QrLinkScreen::tick(float dt) { appear_.tick(dt); }
 
-Result AddAccountScreen::key(Nav n) {
+Result QrLinkScreen::key(Nav n) {
     // ONE WAY OUT AND IT IS BACK. Nothing here is a choice — it is a code
     // somebody is copying onto a phone — so a focus ring would have nowhere to
     // go and would only invite a press that does nothing.
@@ -52,7 +52,7 @@ Result AddAccountScreen::key(Nav n) {
     return {};
 }
 
-void AddAccountScreen::draw(Ctx& c) {
+void QrLinkScreen::draw(Ctx& c) {
     const float a = appear_.value();
 
     // THE SAME SHAPE AS FIRST RUN'S PAIRING STEP, and the first version of this
