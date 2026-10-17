@@ -279,4 +279,11 @@ void noteTransport(void* curlHandle, int curlCode);
 // construction, and so is anything in the private ranges or .local/.lan.
 bool looksLocal(const std::string& host);
 
+// `--romm-race-test <address> <seconds>`: one client called from many threads
+// while its address and its token are written, against a stand-in server at
+// `address`, never RomM (romm_racetest.cpp says what the stand-in answers).
+// Prints what came back and returns 0 when every request went out whole, 3
+// when some could not reach the server, 1 when one went out wrong.
+int raceTest(const std::string& address, int seconds);
+
 }  // namespace romm
