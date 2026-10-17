@@ -29,7 +29,7 @@
 #include <vector>
 
 #include "coreoptions.h"
-#include "romm.h"
+#include "romm_types.h"
 #include "savetable.h"
 
 namespace catalog {

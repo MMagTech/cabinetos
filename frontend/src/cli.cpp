@@ -307,6 +307,10 @@ std::optional<int> App::parseCommandLine(int argc, char** argv) {
         } else if (SDL_strcmp(argv[i], "--romm-pair") == 0) {
             rommPair = true;
             rommProbeMode = true;   // pairing is inherently a headless errand
+        } else if (SDL_strcmp(argv[i], "--romm-race-test") == 0 && i + 2 < argc) {
+            // The client's thread rule under load, against a stand-in server
+            // (romm_racetest.cpp). Exits.
+            return romm::raceTest(argv[i + 1], SDL_atoi(argv[i + 2]));
         } else if (SDL_strcmp(argv[i], "--rom") == 0 && i + 1 < argc) {
             romPath = argv[++i];
         } else if (SDL_strcmp(argv[i], "--evict-test") == 0) {

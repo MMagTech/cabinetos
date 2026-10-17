@@ -305,8 +305,8 @@ Library loadLibrary(romm::Client& client) {
     //
     // SMART COLLECTIONS BESIDE THE REGULAR ONES (#352), fetched in this same
     // load with this person's token, so an account switch shows the new
-    // person's own and everyone's public ones, as RomM decides (romm.h,
-    // Collection). The order is below.
+    // person's own and everyone's public ones, as RomM decides
+    // (romm_types.h, Collection). The order is below.
     std::vector<romm::Collection> collections;
     std::vector<romm::Collection> smart;
     std::string smartErr;

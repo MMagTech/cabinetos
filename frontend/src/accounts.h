@@ -27,10 +27,10 @@
 // feature was discussed.
 //
 // **IF ONE SERVER PER CONSOLE IS EVER REVERSED, THE FOLDER NAME BREAKS FIRST.**
-// User 1 on two different servers is one directory, and `romm.h` already
-// records the underlying limit: two RomM instances both have a User:1 and RomM
-// exposes no instance identity to tell them apart. Say so out loud before
-// changing this.
+// User 1 on two different servers is one directory, and `romm_types.h`
+// already records the underlying limit: two RomM instances both have a User:1
+// and RomM exposes no instance identity to tell them apart. Say so out loud
+// before changing this.
 //
 // --- WHY THE TOKEN AND THE LIST LIVE IN DIFFERENT PLACES --------------------
 //

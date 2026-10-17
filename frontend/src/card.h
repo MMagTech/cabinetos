@@ -24,17 +24,17 @@ struct Card {
     int id = 0;
     ui::Color art;        // shown until the cover arrives, and if it never does
     std::string title;
-    // RomM's sort key, empty when the server did not give one. See romm.h.
+    // RomM's sort key, empty when the server did not give one (romm_types.h).
     std::string sortKey;
     // A local path in the sample library, a RomM cover path with live data.
     // Empty means there is no art, which is a normal state and not a failure:
     // arcade sets often have none, and Game & Watch has none at all.
     //
     // `cover` is the thumbnail and `coverLarge` is the 810x1080 original —
-    // see romm.h for why both exist and what they measure. They are separate
-    // cache keys, so asking for the large one where it matters does not evict
-    // the shelf's thumbnails. With the sample library and with a game the
-    // server has no art for, the two are the same string.
+    // see romm_types.h for why both exist and what they measure. They are
+    // separate cache keys, so asking for the large one where it matters does
+    // not evict the shelf's thumbnails. With the sample library and with a
+    // game the server has no art for, the two are the same string.
     std::string cover;
     std::string coverLarge;
     // What it runs on, for the one line under a shelf heading that names the
@@ -55,8 +55,8 @@ struct Card {
     // game. A grid shows such a card greyed, and its name says why; it opens
     // onto the game's screen, which says it again and offers no Play.
     std::string unavailable;
-    // RomM's platform id, and RomM's tags joined for the heading (romm.h,
-    // `tagLabel`); empty for a game RomM read no tags for.
+    // RomM's platform id, and RomM's tags joined for the heading
+    // (romm_types.h, `tagLabel`); empty for a game RomM read no tags for.
     int platformId = 0;
     std::string tagLabel;
     Animated focus;
