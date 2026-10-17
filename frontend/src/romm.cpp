@@ -156,10 +156,10 @@ bool parseGame(json_object* o, Game* g) {
         g->multiFile = json_object_get_boolean(m);
     g->titleId = jstr(o, "title_id");
     g->raHash = jstr(o, "ra_hash");
-    // BOTH SIZES, because they are for different jobs. See romm.h: `small` is
-    // a 162x216 thumbnail and `big` is 810x1080. Either may be absent — a game
-    // the server never matched has neither — so each falls back to the other
-    // and a caller can use one field without checking two.
+    // BOTH SIZES, because they are for different jobs. See romm_types.h:
+    // `small` is a 162x216 thumbnail and `big` is 810x1080. Either may be
+    // absent — a game the server never matched has neither — so each falls
+    // back to the other and a caller can use one field without checking two.
     g->coverPath = jstr(o, "path_cover_small");
     g->coverLargePath = jstr(o, "path_cover_large");
     if (g->coverPath.empty()) g->coverPath = g->coverLargePath;

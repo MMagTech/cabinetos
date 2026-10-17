@@ -56,7 +56,8 @@ void App::drawGround(bool gameUp, float dt) {
     // THE LARGE COVER, NOT THE SHELF'S THUMBNAIL. Filling 1920x1080 from a
     // 162x216 PNG is a 12x upscale of an image that was already a
     // thumbnail; the 810x1080 original costs about 1.5x the bytes and is
-    // the only reason this looks like anything. romm.h has the measurement.
+    // the only reason this looks like anything. romm_types.h has the
+    // measurement.
     if (!gameUp && here() != Screen::Detail) {
         // The launch screen is excluded because it already IS this idea,
         // at full strength: a game's cover filled, blurred and scrimmed
