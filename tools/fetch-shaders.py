@@ -9,7 +9,7 @@ resolve. Run from the repository root; needs `gh`.
     tools/fetch-shaders.py                 the presets below, at COMMIT
     tools/fetch-shaders.py crt/foo         one more preset, to try it
 
-The list of what the console OFFERS is frontend/src/screenfx.cpp; this list
+The list of what the console OFFERS is frontend/src/looks.cpp; this list
 is what it ships, and the two must agree.
 """
 
