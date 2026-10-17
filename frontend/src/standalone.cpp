@@ -2,6 +2,7 @@
 
 #include "gpu.h"
 #include "proc.h"
+#include "standalone_internal.h"
 #include "storage.h"
 #include "vpad.h"
 #include "x360profile.h"
@@ -132,6 +133,11 @@ constexpr int64_t kStopGraceMs = 10 * 1000;
 // nobody can make, so its log is watched for this long after a start.
 constexpr int64_t kLoadWatchMs = 60 * 1000;
 
+}  // namespace
+
+// The helpers, declared in standalone_internal.h for the emulators' files.
+namespace detail {
+
 // WHERE AN EMULATOR IN THE IMAGE IS, or, for development only,
 // `CABINETOS_BINARY_<core>` (CABINETOS_BINARY_rpcs3=...), so a build of the
 // frontend can be tried against an emulator before any image carries it. The
@@ -170,6 +176,133 @@ bool writeFile(const std::string& path, const std::string& data) {
     }
     return std::rename(tmp.c_str(), path.c_str()) == 0;
 }
+
+// Copies `from` to `to` unless `to` already holds the same bytes.
+bool placeFile(const std::string& from, const std::string& to) {
+    const std::string bytes = readFile(from);
+    if (bytes.empty()) return false;
+    if (readFile(to) == bytes) return true;
+    return writeFile(to, bytes);
+}
+
+// Sets `key=value` in `[section]` of an INI file, keeping everything else the
+// emulator wrote. Eden rewrites the whole file on exit, so the console's
+// choices are laid over whatever is there before every start rather than
+// written once.
+//
+// AND FOR EDEN EACH ONE NEEDS A `key\default=false` BESIDE IT. Eden reads a
+// setting's value only when that flag says it is not the default; a value on
+// its own is silently ignored (frontend_common/config.cpp,
+// ReadSettingGeneric). `withDefaults` off for anything else (RPCS3's Qt
+// settings file).
+std::string applyIni(const std::string& text, const std::vector<IniSet>& sets,
+                     bool withDefaults) {
+    std::vector<std::string> lines;
+    {
+        std::istringstream in(text);
+        for (std::string l; std::getline(in, l);) {
+            if (!l.empty() && l.back() == '\r') l.pop_back();
+            lines.push_back(l);
+        }
+    }
+    auto sectionOf = [&](size_t upto) {
+        std::string s;
+        for (size_t i = 0; i < upto; ++i)
+            if (!lines[i].empty() && lines[i].front() == '[' && lines[i].back() == ']')
+                s = lines[i].substr(1, lines[i].size() - 2);
+        return s;
+    };
+    auto setOne = [&](const std::string& section, const std::string& key,
+                      const std::string& value) {
+        const std::string prefix = key + "=";
+        for (size_t i = 0; i < lines.size(); ++i) {
+            if (lines[i].compare(0, prefix.size(), prefix) != 0) continue;
+            if (sectionOf(i) != section) continue;
+            lines[i] = prefix + value;
+            return;
+        }
+        // Not there: at the end of its section, or a new section at the end.
+        const std::string header = "[" + section + "]";
+        auto at = std::find(lines.begin(), lines.end(), header);
+        if (at == lines.end()) {
+            if (!lines.empty() && !lines.back().empty()) lines.push_back("");
+            lines.push_back(header);
+            lines.push_back(prefix + value);
+            return;
+        }
+        auto end = at + 1;
+        while (end != lines.end() && !(!end->empty() && end->front() == '[')) ++end;
+        while (end != at + 1 && (end - 1)->empty()) --end;
+        lines.insert(end, prefix + value);
+    };
+    for (const IniSet& s : sets) {
+        if (withDefaults) setOne(s.section, std::string(s.key) + "\\default", "false");
+        setOne(s.section, s.key, s.value);
+    }
+    std::string out;
+    for (const std::string& l : lines) out += l + "\n";
+    return out;
+}
+
+bool isFile(const std::string& p) {
+    struct stat st;
+    return ::stat(p.c_str(), &st) == 0 && S_ISREG(st.st_mode);
+}
+
+bool removeTree(const std::string& path) {
+    struct stat st;
+    if (::lstat(path.c_str(), &st) != 0) return false;
+    if (!S_ISDIR(st.st_mode)) return ::unlink(path.c_str()) == 0;
+    if (DIR* d = opendir(path.c_str())) {
+        while (dirent* e = readdir(d)) {
+            if (std::strcmp(e->d_name, ".") == 0 || std::strcmp(e->d_name, "..") == 0) continue;
+            removeTree(path + "/" + e->d_name);
+        }
+        closedir(d);
+    }
+    return ::rmdir(path.c_str()) == 0;
+}
+
+std::vector<std::string> listDir(const std::string& dir) {
+    std::vector<std::string> names;
+    if (DIR* d = opendir(dir.c_str())) {
+        while (dirent* e = readdir(d)) {
+            if (std::strcmp(e->d_name, ".") == 0 || std::strcmp(e->d_name, "..") == 0) continue;
+            names.push_back(e->d_name);
+        }
+        closedir(d);
+    }
+    std::sort(names.begin(), names.end());
+    return names;
+}
+
+bool endsWithNoCase(const std::string& s, const char* suffix) {
+    const size_t n = std::strlen(suffix);
+    if (s.size() < n) return false;
+    for (size_t i = 0; i < n; ++i)
+        if (std::tolower(static_cast<unsigned char>(s[s.size() - n + i])) !=
+            std::tolower(static_cast<unsigned char>(suffix[i])))
+            return false;
+    return true;
+}
+
+// A YAML scalar that means exactly this string: a path can hold ": " or
+// start with something YAML reads as syntax.
+std::string yamlQuote(const std::string& v) {
+    std::string out = "\"";
+    for (const char c : v) {
+        if (c == '"' || c == '\\') out += '\\';
+        out += c;
+    }
+    return out + "\"";
+}
+
+}  // namespace detail
+
+// What the emulators' files share (standalone_internal.h), used here bare.
+using namespace detail;
+
+namespace {
 
 // The file in `bios/` that RomM serves under `prefix` + anything + `.keys`,
 // with the highest version in its name: `prod-v19.keys` over `prod-v17.keys`,
@@ -304,79 +437,6 @@ bool installFirmware(const std::string& homeDir, const std::string& zip) {
     std::fprintf(stderr, "[standalone] firmware installed from %s (%d files)\n", zip.c_str(),
                  placed);
     return true;
-}
-
-// Copies `from` to `to` unless `to` already holds the same bytes.
-bool placeFile(const std::string& from, const std::string& to) {
-    const std::string bytes = readFile(from);
-    if (bytes.empty()) return false;
-    if (readFile(to) == bytes) return true;
-    return writeFile(to, bytes);
-}
-
-// Sets `key=value` in `[section]` of an INI file, keeping everything else the
-// emulator wrote. Eden rewrites the whole file on exit, so the console's
-// choices are laid over whatever is there before every start rather than
-// written once.
-//
-// AND FOR EDEN EACH ONE NEEDS A `key\default=false` BESIDE IT. Eden reads a
-// setting's value only when that flag says it is not the default; a value on
-// its own is silently ignored (frontend_common/config.cpp,
-// ReadSettingGeneric). `withDefaults` off for anything else (RPCS3's Qt
-// settings file).
-struct IniSet {
-    const char* section;
-    const char* key;
-    const char* value;
-};
-
-std::string applyIni(const std::string& text, const std::vector<IniSet>& sets,
-                     bool withDefaults = true) {
-    std::vector<std::string> lines;
-    {
-        std::istringstream in(text);
-        for (std::string l; std::getline(in, l);) {
-            if (!l.empty() && l.back() == '\r') l.pop_back();
-            lines.push_back(l);
-        }
-    }
-    auto sectionOf = [&](size_t upto) {
-        std::string s;
-        for (size_t i = 0; i < upto; ++i)
-            if (!lines[i].empty() && lines[i].front() == '[' && lines[i].back() == ']')
-                s = lines[i].substr(1, lines[i].size() - 2);
-        return s;
-    };
-    auto setOne = [&](const std::string& section, const std::string& key,
-                      const std::string& value) {
-        const std::string prefix = key + "=";
-        for (size_t i = 0; i < lines.size(); ++i) {
-            if (lines[i].compare(0, prefix.size(), prefix) != 0) continue;
-            if (sectionOf(i) != section) continue;
-            lines[i] = prefix + value;
-            return;
-        }
-        // Not there: at the end of its section, or a new section at the end.
-        const std::string header = "[" + section + "]";
-        auto at = std::find(lines.begin(), lines.end(), header);
-        if (at == lines.end()) {
-            if (!lines.empty() && !lines.back().empty()) lines.push_back("");
-            lines.push_back(header);
-            lines.push_back(prefix + value);
-            return;
-        }
-        auto end = at + 1;
-        while (end != lines.end() && !(!end->empty() && end->front() == '[')) ++end;
-        while (end != at + 1 && (end - 1)->empty()) --end;
-        lines.insert(end, prefix + value);
-    };
-    for (const IniSet& s : sets) {
-        if (withDefaults) setOne(s.section, std::string(s.key) + "\\default", "false");
-        setOne(s.section, s.key, s.value);
-    }
-    std::string out;
-    for (const std::string& l : lines) out += l + "\n";
-    return out;
 }
 
 // THE EMULATOR'S WINDOW TITLE, read from the X server the console and the
@@ -791,63 +851,8 @@ bool prepareEden(const Emulator& e, const std::string& saveDir, const std::strin
 // RPCS3's one user, as it names the folder. The console's people are told
 // apart by whose save folder `hdd0` is, not by PS3 users.
 constexpr const char* kPs3User = "00000001";
-// Where a game's folder records what was installed into it and deleted.
-constexpr const char* kInstalledNote = ".cabinetos-installed";
-// And where an install is built before it is moved into place.
+// Where an install is built before it is moved into place.
 constexpr const char* kStaging = ".install";
-
-bool isFile(const std::string& p) {
-    struct stat st;
-    return ::stat(p.c_str(), &st) == 0 && S_ISREG(st.st_mode);
-}
-
-bool removeTree(const std::string& path) {
-    struct stat st;
-    if (::lstat(path.c_str(), &st) != 0) return false;
-    if (!S_ISDIR(st.st_mode)) return ::unlink(path.c_str()) == 0;
-    if (DIR* d = opendir(path.c_str())) {
-        while (dirent* e = readdir(d)) {
-            if (std::strcmp(e->d_name, ".") == 0 || std::strcmp(e->d_name, "..") == 0) continue;
-            removeTree(path + "/" + e->d_name);
-        }
-        closedir(d);
-    }
-    return ::rmdir(path.c_str()) == 0;
-}
-
-std::vector<std::string> listDir(const std::string& dir) {
-    std::vector<std::string> names;
-    if (DIR* d = opendir(dir.c_str())) {
-        while (dirent* e = readdir(d)) {
-            if (std::strcmp(e->d_name, ".") == 0 || std::strcmp(e->d_name, "..") == 0) continue;
-            names.push_back(e->d_name);
-        }
-        closedir(d);
-    }
-    std::sort(names.begin(), names.end());
-    return names;
-}
-
-bool endsWithNoCase(const std::string& s, const char* suffix) {
-    const size_t n = std::strlen(suffix);
-    if (s.size() < n) return false;
-    for (size_t i = 0; i < n; ++i)
-        if (std::tolower(static_cast<unsigned char>(s[s.size() - n + i])) !=
-            std::tolower(static_cast<unsigned char>(suffix[i])))
-            return false;
-    return true;
-}
-
-// A YAML scalar that means exactly this string: a path can hold ": " or
-// start with something YAML reads as syntax.
-std::string yamlQuote(const std::string& v) {
-    std::string out = "\"";
-    for (const char c : v) {
-        if (c == '"' || c == '\\') out += '\\';
-        out += c;
-    }
-    return out + "\"";
-}
 
 std::string rpcs3Config(const Emulator& e) { return home(e) + "/rpcs3"; }
 std::string rpcs3Flash(const Emulator& e) { return rpcs3Config(e) + "/dev_flash"; }
@@ -1205,7 +1210,6 @@ bool qmpCommand(int fd, const std::string& cmd) {
     }
     return false;
 }
-constexpr const char* kPlayingNote = ".cabinetos-playing";
 
 // What the image carries for xemu: `xbox_hdd.qcow2`, xemu's own blank drive
 // (xemu-project/xemu-dashboard, pinned by build_files/install-xemu-assets.sh),
