@@ -18,9 +18,10 @@
 
 #include "gpu.h"
 #include "libretro_vulkan.h"
+#include "vkhost_state.h"
 
 namespace cab::vk {
-namespace {
+namespace state {
 
 // --- The fourcc the exported image is described by -------------------------
 //
@@ -35,50 +36,6 @@ constexpr uint32_t fourcc(char a, char b, char c, char d) {
 }
 constexpr uint32_t kDrmFormatAbgr8888 = fourcc('A', 'B', '2', '4');
 constexpr uint64_t kDrmModifierLinear = 0;
-
-// Every Vulkan entry point this file uses, resolved through the loader gpu.cpp
-// already opened. Nothing links libvulkan — see gpu.h.
-struct Api {
-    PFN_vkGetInstanceProcAddr getInstanceProcAddr = nullptr;
-    PFN_vkGetDeviceProcAddr getDeviceProcAddr = nullptr;
-
-    PFN_vkCreateInstance createInstance = nullptr;
-    PFN_vkDestroyInstance destroyInstance = nullptr;
-    PFN_vkEnumeratePhysicalDevices enumeratePhysicalDevices = nullptr;
-    PFN_vkGetPhysicalDeviceProperties getPhysicalDeviceProperties = nullptr;
-    PFN_vkGetPhysicalDeviceQueueFamilyProperties getQueueFamilyProperties = nullptr;
-    PFN_vkGetPhysicalDeviceMemoryProperties getMemoryProperties = nullptr;
-    PFN_vkCreateDevice createDevice = nullptr;
-
-    PFN_vkDestroyDevice destroyDevice = nullptr;
-    PFN_vkGetDeviceQueue getDeviceQueue = nullptr;
-    PFN_vkDeviceWaitIdle deviceWaitIdle = nullptr;
-    PFN_vkCreateCommandPool createCommandPool = nullptr;
-    PFN_vkDestroyCommandPool destroyCommandPool = nullptr;
-    PFN_vkAllocateCommandBuffers allocateCommandBuffers = nullptr;
-    PFN_vkBeginCommandBuffer beginCommandBuffer = nullptr;
-    PFN_vkEndCommandBuffer endCommandBuffer = nullptr;
-    PFN_vkResetCommandBuffer resetCommandBuffer = nullptr;
-    PFN_vkCmdPipelineBarrier cmdPipelineBarrier = nullptr;
-    PFN_vkCmdBlitImage cmdBlitImage = nullptr;
-    PFN_vkQueueSubmit queueSubmit = nullptr;
-    PFN_vkCreateFence createFence = nullptr;
-    PFN_vkDestroyFence destroyFence = nullptr;
-    PFN_vkWaitForFences waitForFences = nullptr;
-    PFN_vkResetFences resetFences = nullptr;
-    PFN_vkCreateImage createImage = nullptr;
-    PFN_vkDestroyImage destroyImage = nullptr;
-    PFN_vkGetImageMemoryRequirements getImageMemoryRequirements = nullptr;
-    PFN_vkGetImageSubresourceLayout getImageSubresourceLayout = nullptr;
-    PFN_vkAllocateMemory allocateMemory = nullptr;
-    PFN_vkFreeMemory freeMemory = nullptr;
-    PFN_vkBindImageMemory bindImageMemory = nullptr;
-    PFN_vkGetMemoryFdKHR getMemoryFdKHR = nullptr;
-
-    PFN_vkEnumerateInstanceExtensionProperties enumerateInstanceExtensions = nullptr;
-    PFN_vkCreateHeadlessSurfaceEXT createHeadlessSurface = nullptr;
-    PFN_vkDestroySurfaceKHR destroySurface = nullptr;
-};
 
 Api gApi;
 
@@ -134,10 +91,8 @@ bool gHaveCoreImage = false;
 uint32_t gCoreSrcQueueFamily = VK_QUEUE_FAMILY_IGNORED;
 std::vector<VkSemaphore> gCoreSemaphores;
 
-// Two, not one. The core is told a sync index each frame so it can recycle its
-// own per-frame resources without stalling; with a single index it would have
-// to wait for the GPU every frame, which is the stutter this exists to avoid.
-constexpr uint32_t kSyncIndices = 2;
+// Which of the kSyncIndices (vkhost_state.h) the core is on this frame;
+// present moves it on.
 uint32_t gSyncIndex = 0;
 
 // --- The exported image, and its GL face -----------------------------------
@@ -846,7 +801,9 @@ bool createShared(unsigned width, unsigned height, std::string* err) {
 // does not reallocate the image and re-import it into EGL every frame.
 unsigned bucket(unsigned v) { return ((v + 255u) / 256u) * 256u; }
 
-}  // namespace
+}  // namespace state
+
+using namespace state;
 
 bool available() { return gpu::vulkan().available; }
 
