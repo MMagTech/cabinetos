@@ -1,4 +1,5 @@
 #include "core.h"
+#include "core_state.h"
 #include "cpus.h"
 #include "ps2.h"
 
@@ -38,33 +39,12 @@
 #endif
 
 namespace cab {
-namespace {
+namespace corestate {
 
-// File-static rather than instance state, and deliberately. Libretro's
+// Process-wide rather than instance state, and deliberately. Libretro's
 // callbacks are plain C function pointers with no context argument, so the
 // process holds exactly one core's worth of state however this is shaped.
-struct {
-    unsigned (*api_version)(void) = nullptr;
-    void (*get_system_info)(retro_system_info*) = nullptr;
-    void (*get_system_av_info)(retro_system_av_info*) = nullptr;
-    void (*set_environment)(retro_environment_t) = nullptr;
-    void (*set_video_refresh)(retro_video_refresh_t) = nullptr;
-    void (*set_audio_sample)(retro_audio_sample_t) = nullptr;
-    void (*set_audio_sample_batch)(retro_audio_sample_batch_t) = nullptr;
-    void (*set_input_poll)(retro_input_poll_t) = nullptr;
-    void (*set_input_state)(retro_input_state_t) = nullptr;
-    void (*set_controller_port_device)(unsigned, unsigned) = nullptr;
-    void (*init)(void) = nullptr;
-    void (*deinit)(void) = nullptr;
-    bool (*load_game)(const retro_game_info*) = nullptr;
-    void (*unload_game)(void) = nullptr;
-    void (*run)(void) = nullptr;
-    size_t (*serialize_size)(void) = nullptr;
-    bool (*serialize)(void*, size_t) = nullptr;
-    bool (*unserialize)(const void*, size_t) = nullptr;
-    void* (*get_memory_data)(unsigned) = nullptr;
-    size_t (*get_memory_size)(unsigned) = nullptr;
-} g;
+EntryPoints g;
 
 // THE CORE'S MEMORY MAP, KEPT FOR RETROACHIEVEMENTS (#74). A core hands it
 // over once, inside retro_load_game, and owns the descriptors' storage only
@@ -1132,7 +1112,9 @@ bool environment(unsigned cmd, void* data) {
     }
 }
 
-}  // namespace
+}  // namespace corestate
+
+using namespace corestate;
 
 Core& Core::shared() {
     static Core instance;
@@ -1149,7 +1131,7 @@ void* Core::symbol(const char* name) {
     return s;
 }
 
-namespace {
+namespace corestate {
 // Cores get ABSOLUTE directories, always, and they are created before the core
 // is told about them.
 //
@@ -1176,7 +1158,7 @@ std::string absoluteDir(const std::string& dir) {
     SDL_CreateDirectory(abs.c_str());
     return abs;
 }
-}  // namespace
+}  // namespace corestate
 
 void Core::setDirectories(const std::string& systemDir, const std::string& saveDir) {
     gSystemDir = absoluteDir(systemDir);
@@ -1197,11 +1179,13 @@ void Core::setDirectories(const std::string& systemDir, const std::string& saveD
 // screens have to know about. Everything above this file — the launch screen,
 // the overlay, the save sync, the frame loop in main.cpp — is unchanged and
 // does not learn a new concept. See ps2.h.
-static bool gIsPs2 = false;
-static std::string gPs2ResourcesDir;
-static float gPs2Upscale = 1.0f;
-static int gPs2Anisotropy = 0;
-static bool gPs2Widescreen = true;
+namespace corestate {
+bool gIsPs2 = false;
+std::string gPs2ResourcesDir;
+float gPs2Upscale = 1.0f;
+int gPs2Anisotropy = 0;
+bool gPs2Widescreen = true;
+}  // namespace corestate
 
 bool Core::load(const std::string& soPath) {
     unload();
