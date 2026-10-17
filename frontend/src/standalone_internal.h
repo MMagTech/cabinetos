@@ -1,8 +1,8 @@
 // What the standalone emulators' files share: the helpers, defined in
 // standalone.cpp, and each emulator's own entry points, defined in its file.
-// Internal: only standalone.cpp, standalone_eden.cpp and standalone_rpcs3.cpp
-// include it. Moved out of standalone.cpp's anonymous namespace in the
-// restructure (#398).
+// Internal: only standalone.cpp, standalone_eden.cpp, standalone_rpcs3.cpp and
+// standalone_xenia.cpp include it. Moved out of standalone.cpp's anonymous
+// namespace in the restructure (#398).
 
 #pragma once
 
@@ -55,5 +55,15 @@ bool prepareRpcs3(const Emulator& e, const std::string& entryPath, const std::st
                   std::string* err);
 bool installRpcs3(const Emulator& e, const std::string& entryPath,
                   const std::atomic<bool>& cancel, std::string* romPath, std::string* message);
+
+// Xbox 360 (standalone_xenia.cpp).
+std::string xeniaContent(const std::string& saveDir);
+bool prepareXenia(const Emulator& e, const std::string& saveDir, std::string* err);
+bool xeniaBeforeStart(const std::string& saveDir, const std::string& player, std::string* err);
+// Run::start's arguments for Edge. `full` is Run::start's command so far, the
+// environment entries ending with the program: every environment entry goes in
+// before the program (full.end() - 1), and the game's path is last.
+void xeniaArgs(std::vector<std::string>& full, const std::string& dir, const std::string& saveDir,
+               const std::string& logPath, quality::Level level, const std::string& romPath);
 
 }  // namespace cab::standalone::detail
