@@ -476,6 +476,9 @@ private:
     void* symbol(const char* name);
     // uploadFrame's software path (core_picture.cpp).
     bool uploadSoftwareFrame();
+    // loadGame's PlayStation 2 start (core_ps2.cpp).
+    bool startPs2Game(const std::string& romPath, const std::string& systemDir,
+                      const std::string& saveDir);
 
     void* handle_ = nullptr;
     bool gameLoaded_ = false;
