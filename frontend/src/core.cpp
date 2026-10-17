@@ -46,38 +46,6 @@ namespace corestate {
 // process holds exactly one core's worth of state however this is shaped.
 EntryPoints g;
 
-// THE CORE'S MEMORY MAP, KEPT FOR RETROACHIEVEMENTS (#74). A core hands it
-// over once, inside retro_load_game, and owns the descriptors' storage only
-// for the length of that call; the pointers INTO the emulated machine stay
-// valid until the game is unloaded. So the descriptors are copied, and the
-// address-space names with them. rcheevos' rc_libretro reads this the way
-// RetroArch hands it over. Cleared with the game.
-std::vector<retro_memory_descriptor> gMemDescs;
-std::vector<std::string> gMemNames;
-retro_memory_map gMemMap{nullptr, 0};
-// Counts the maps handed over. Dolphin sends its map from inside the first
-// retro_run, not from retro_load_game, so whoever laid memory out from an
-// earlier one does it again when this moves.
-unsigned gMemMapGeneration = 0;
-
-void keepMemoryMap(const retro_memory_map* mm) {
-    ++gMemMapGeneration;
-    gMemDescs.clear();
-    gMemNames.clear();
-    gMemMap = {nullptr, 0};
-    if (!mm || !mm->descriptors || mm->num_descriptors == 0) return;
-    gMemDescs.assign(mm->descriptors, mm->descriptors + mm->num_descriptors);
-    // Reserved first: the descriptors point at these strings, so the vector
-    // must not move once they do.
-    gMemNames.reserve(gMemDescs.size());
-    for (retro_memory_descriptor& d : gMemDescs) {
-        gMemNames.emplace_back(d.addrspace ? d.addrspace : "");
-        d.addrspace = d.addrspace ? gMemNames.back().c_str() : nullptr;
-    }
-    gMemMap.descriptors = gMemDescs.data();
-    gMemMap.num_descriptors = static_cast<unsigned>(gMemDescs.size());
-}
-
 // Dolphin's id for a real Wii Remote: a subclass of NONE, so never mask it to
 // its base type (DolphinLibretro/Input.cpp, RETRO_DEVICE_REAL_WIIMOTE).
 constexpr unsigned kRealWiiRemote = (6u << 8) | RETRO_DEVICE_NONE;
@@ -451,6 +419,7 @@ bool environment(unsigned cmd, void* data) {
     // (core_state.h); each says nothing to a call that is not its own.
     if (std::optional<bool> answer = environmentOptions(cmd, data)) return *answer;
     if (std::optional<bool> answer = environmentInput(cmd, data)) return *answer;
+    if (std::optional<bool> answer = environmentMemory(cmd, data)) return *answer;
     switch (cmd) {
         case RETRO_ENVIRONMENT_GET_CAN_DUPE:
             // Yes: a core may hand back a null frame meaning "unchanged", and
@@ -486,10 +455,6 @@ bool environment(unsigned cmd, void* data) {
 
         case RETRO_ENVIRONMENT_GET_LOG_INTERFACE:
             static_cast<retro_log_callback*>(data)->log = logCallback;
-            return true;
-
-        case RETRO_ENVIRONMENT_SET_MEMORY_MAPS:
-            keepMemoryMap(static_cast<const retro_memory_map*>(data));
             return true;
 
         // THE DISC DRIVE (#162). Version 1: the extended interface, with the
@@ -1531,82 +1496,6 @@ void Core::setPaused(bool paused) {
 }
 
 bool Core::isPs2() const { return gIsPs2; }
-
-size_t Core::stateSize() const {
-    return (gameLoaded_ && g.serialize_size) ? g.serialize_size() : 0;
-}
-
-bool Core::saveState(std::vector<uint8_t>& out) {
-    if (!gameLoaded_ || !g.serialize_size || !g.serialize) return false;
-    const size_t n = g.serialize_size();
-    if (n == 0) return false;  // some cores genuinely cannot; that is not an error
-    out.resize(n);
-    return g.serialize(out.data(), n);
-}
-
-size_t Core::saveRamSize() const {
-    if (!gameLoaded_ || !g.get_memory_size) return 0;
-    return g.get_memory_size(RETRO_MEMORY_SAVE_RAM);
-}
-
-bool Core::readSaveRam(std::vector<uint8_t>& out) const {
-    out.clear();
-    const size_t n = saveRamSize();
-    if (n == 0 || !g.get_memory_data) return false;   // no battery in this cart
-    const void* p = g.get_memory_data(RETRO_MEMORY_SAVE_RAM);
-    if (!p) return false;
-    out.resize(n);
-    std::memcpy(out.data(), p, n);
-    return true;
-}
-
-bool Core::writeSaveRam(const std::vector<uint8_t>& data) {
-    const size_t n = saveRamSize();
-    if (n == 0 || data.empty() || !g.get_memory_data) return false;
-    void* p = g.get_memory_data(RETRO_MEMORY_SAVE_RAM);
-    if (!p) return false;
-    // Sizes can differ between a save written elsewhere and what this core
-    // exposes. Copy what fits rather than refusing: a short save is a smaller
-    // cart image and the remainder is already zeroed, and a long one is not
-    // ours to truncate silently — but dropping the tail is still better than
-    // losing the save entirely.
-    std::memcpy(p, data.data(), std::min(n, data.size()));
-    return true;
-}
-
-bool Core::loadState(const std::vector<uint8_t>& data) {
-    if (!gameLoaded_ || !g.unserialize || data.empty()) return false;
-    return g.unserialize(data.data(), data.size());
-}
-
-bool Core::saveRAM(std::vector<uint8_t>& out) const {
-    return memoryRegion(RETRO_MEMORY_SAVE_RAM, out);
-}
-
-bool Core::memoryRegion(unsigned id, std::vector<uint8_t>& out) const {
-    if (!gameLoaded_ || !g.get_memory_data || !g.get_memory_size) return false;
-    const size_t n = g.get_memory_size(id);
-    const void* p = g.get_memory_data(id);
-    if (!p || n == 0) return false;
-    out.assign(static_cast<const uint8_t*>(p), static_cast<const uint8_t*>(p) + n);
-    return true;
-}
-
-const retro_memory_map* Core::memoryMap() const {
-    return (gameLoaded_ && !gIsPs2 && gMemMap.num_descriptors > 0) ? &gMemMap : nullptr;
-}
-
-unsigned Core::memoryMapGeneration() const { return gMemMapGeneration; }
-
-uint8_t* Core::memoryPointer(unsigned id, size_t* size) const {
-    *size = 0;
-    if (!gameLoaded_ || gIsPs2 || !g.get_memory_data || !g.get_memory_size) return nullptr;
-    void* p = g.get_memory_data(id);
-    const size_t n = g.get_memory_size(id);
-    if (!p || n == 0) return nullptr;
-    *size = n;
-    return static_cast<uint8_t*>(p);
-}
 
 GLuint Core::texture() const {
     if (gHWVulkan) return vk::texture();

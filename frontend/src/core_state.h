@@ -48,7 +48,6 @@ struct EntryPoints {
 
 // Defined in core.cpp.
 extern EntryPoints g;
-void keepMemoryMap(const retro_memory_map* mm);
 extern retro_disk_control_ext_callback gDisk;
 extern bool gDiskSet;
 extern int gInitialDisc;
@@ -96,5 +95,9 @@ extern bool gInputDescriptorsLogged;
 void inputPoll(void);
 int16_t inputState(unsigned port, unsigned device, unsigned index, unsigned id);
 std::optional<bool> environmentInput(unsigned cmd, void* data);
+
+// Defined in core_memory.cpp.
+void keepMemoryMap(const retro_memory_map* mm);
+std::optional<bool> environmentMemory(unsigned cmd, void* data);
 
 }  // namespace cab::corestate
