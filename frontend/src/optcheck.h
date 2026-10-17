@@ -14,8 +14,8 @@
 //
 // One gap, said plainly: catalog's N64 renderer choice is only made where
 // there is Vulkan, so on a machine without it that line is not checked here.
-// The console's own launch-time check (core.cpp, checkOverrides) covers it on
-// every real console.
+// The console's own launch-time check (core_options.cpp, checkOverrides)
+// covers it on every real console.
 
 #pragma once
 

@@ -78,8 +78,8 @@ enum class Support {
     // framebuffer in its own GLES context, and the first two are measured
     // running real games from the library. What remains is the narrower case
     // the value was always really about: a core that wants desktop GL or
-    // Vulkan, which this context is not and which `core.cpp` turns down by
-    // name. PPSSPP has since been built and PSP plays through the same
+    // Vulkan, which this context is not and which `core_hwrender.cpp` turns
+    // down by name. PPSSPP has since been built and PSP plays through the same
     // framebuffer path, so all three of the original cores are measured
     // running real games and none of them answers this. Nothing is queued
     // behind them — the next core that wants desktop GL will be the first.

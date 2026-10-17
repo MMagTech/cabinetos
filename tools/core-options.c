@@ -9,8 +9,8 @@
 // and this tool is how that commit finds out.
 //
 // It loads the core, answers the environment the way the frontend does
-// (core.cpp: every generation of the options API, US table, version 2), and
-// prints one line per option, sorted:
+// (core_options.cpp: every generation of the options API, US table, version
+// 2), and prints one line per option, sorted:
 //
 //     <key>\t<default>\t<value>|<value>|...
 //
@@ -51,7 +51,7 @@ static int g_count;
 
 static char *dup_or_empty(const char *s) { return strdup(s ? s : ""); }
 
-// A repeat replaces, as core.cpp's declareOption does.
+// A repeat replaces, as core_options.cpp's declareOption does.
 static void declare(const char *key, const char *def, const char *values) {
     if (!key || !*key) return;
     for (int i = 0; i < g_count; ++i) {
