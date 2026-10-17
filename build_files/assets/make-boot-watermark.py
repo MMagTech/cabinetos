@@ -1,5 +1,5 @@
 # The CabinetOS boot watermark (#108): the startup screen's cabinet icon
-# (setup.cpp, drawCabinet, the same shapes and colours in its 1024 space) and
+# (startscreen.cpp, drawCabinet, the same shapes and colours in its 1024 space) and
 # the wordmark in Noto Sans Bold, white, on transparent. Bazzite's is 149x43.
 import sys
 from PIL import Image, ImageDraw, ImageFont

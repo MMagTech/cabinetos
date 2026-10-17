@@ -1,6 +1,6 @@
 #include "settings.h"
 #include "qr.h"
-#include "setup.h"
+#include "startscreen.h"
 #include "wikiqr.h"
 
 #include "sound.h"

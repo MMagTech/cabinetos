@@ -82,7 +82,7 @@ constexpr const char* kRows[kSize] = {{
 
 
 def cabinet(draw, x, y, h):
-    """The cabinet as setup.cpp's drawCabinet draws it, top-left at x,y,
+    """The cabinet as startscreen.cpp's drawCabinet draws it, top-left at x,y,
     `h` tall (its 1024 space spans x 248..775, y 130..850)."""
     s = h / 720.0
     ox, oy = x - 248 * s, y - 130 * s
