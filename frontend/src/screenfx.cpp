@@ -11,7 +11,7 @@
 #include <fstream>
 #include <sstream>
 
-#include "image.h"
+#include "imagecodec.h"
 #include "prefs.h"
 
 namespace screenfx {
