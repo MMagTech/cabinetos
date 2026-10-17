@@ -1,7 +1,7 @@
 // What the standalone emulators' files share: the helpers, defined in
 // standalone.cpp, and each emulator's own entry points, defined in its file.
-// Internal: only standalone.cpp include it. Moved out of standalone.cpp's
-// anonymous namespace in the restructure (#398).
+// Internal: only standalone.cpp and standalone_eden.cpp include it. Moved out
+// of standalone.cpp's anonymous namespace in the restructure (#398).
 
 #pragma once
 
@@ -39,5 +39,10 @@ bool removeTree(const std::string& path);
 std::vector<std::string> listDir(const std::string& dir);
 bool endsWithNoCase(const std::string& s, const char* suffix);
 std::string yamlQuote(const std::string& v);
+
+// Switch (standalone_eden.cpp).
+bool prepareEden(const Emulator& e, const std::string& saveDir, const std::string& player,
+                 int players, quality::Level level, bool* missingKeys, std::string* err);
+std::string edenSaveRoot(const Emulator& e, const std::string& saveDir);
 
 }  // namespace cab::standalone::detail
