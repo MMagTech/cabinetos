@@ -47,7 +47,7 @@ echo "host layer: compiling with $(echo "$FLAGS" | wc -w) flags from PCSX2's own
 
 # -I/src/cabinet-ps2 so the two files find their own header; everything else is
 # PCSX2's.
-for f in CabinetPS2Host CabinetPS2Audio CabinetPS2Bridge CabinetPS2Probe; do
+for f in CabinetPS2Host CabinetPS2HostStubs CabinetPS2Audio CabinetPS2Bridge CabinetPS2Probe; do
     # shellcheck disable=SC2086  # FLAGS is a deliberately word-split flag list
     clang++ $FLAGS -I/src/cabinet-ps2 -DCABINETOS_PS2_VERSION="\"$VERSION\"" \
         -c "/src/cabinet-ps2/$f.cpp" -o "$BUILD/$f.o"
@@ -99,7 +99,8 @@ fi
 
 # shellcheck disable=SC2086  # SYS is a deliberately word-split flag list
 clang++ -o "$BUILD/cabinet-ps2-probe" \
-    "$BUILD/CabinetPS2Host.o" "$BUILD/CabinetPS2Audio.o" "$BUILD/CabinetPS2Probe.o" \
+    "$BUILD/CabinetPS2Host.o" "$BUILD/CabinetPS2HostStubs.o" \
+    "$BUILD/CabinetPS2Audio.o" "$BUILD/CabinetPS2Probe.o" \
     -Wl,--start-group \
     "${PCSX2_LINK[@]}" "$BUILD/common/libcommon.a" \
     "${THIRDPARTY[@]}" \
@@ -150,7 +151,8 @@ echo "host layer: linked $BUILD/cabinet-ps2-probe"
 # CabinetPS2Bridge.cpp says why and what it does instead.
 clang++ -shared -Wl,-z,defs -Wl,-rpath,'$ORIGIN' -Wl,--disable-new-dtags -o "$BUILD/cabinetos-ps2.so" \
     -Wl,--wrap=_ZN12InputManager24SetPadVibrationIntensityEjff \
-    "$BUILD/CabinetPS2Host.o" "$BUILD/CabinetPS2Audio.o" "$BUILD/CabinetPS2Bridge.o" \
+    "$BUILD/CabinetPS2Host.o" "$BUILD/CabinetPS2HostStubs.o" \
+    "$BUILD/CabinetPS2Audio.o" "$BUILD/CabinetPS2Bridge.o" \
     -Wl,--start-group \
     "${PCSX2_LINK[@]}" "$BUILD/common/libcommon.a" \
     "${THIRDPARTY[@]}" \
