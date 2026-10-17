@@ -3,7 +3,7 @@
 // (#398).
 //
 // THREE ANSWERS HERE ARE HALF OF A PAIR, AND CHANGE WITH THE OTHER HALF IN
-// catalog.cpp (saveFiles and firmwareAliases):
+// savetable.cpp (saveFiles and firmwareAliases):
 // opera_nvram_storage=shared is what gives saveFiles the 3DO's one fixed save
 // path (opera/shared/nvram.0.srm); pcsx2_shared_memory_cards disabled is what
 // gives each PS2 game a card of its own for saveFiles to name; and opera_bios

@@ -35,7 +35,7 @@
 // game saved, and everything else is a no-op. That is what keeps a console
 // from filing a row on the server every time somebody looks at a title screen.
 //
-// catalog.h owns the TABLE — which platform writes what, where, and how to
+// savetable.h owns the TABLE — which platform writes what, where, and how to
 // tell a real save from a formatted-empty one. This owns the mechanism.
 
 #pragma once
@@ -44,8 +44,8 @@
 #include <string>
 #include <vector>
 
-#include "catalog.h"
 #include "fileio.h"
+#include "savetable.h"
 
 namespace cab {
 
