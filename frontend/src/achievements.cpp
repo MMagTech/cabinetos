@@ -4,6 +4,7 @@
 #include "core.h"
 #include "covercache.h"
 #include "ps2.h"
+#include "ra_state.h"
 #include "storage.h"
 
 #include <curl/curl.h>
@@ -32,9 +33,17 @@
 #include <thread>
 
 namespace ra {
-namespace {
 
+// rcheevos' client and the sign-in: declared in ra_state.h, defined here.
 rc_client_t* gClient = nullptr;
+
+int gAccount = 0;
+std::string gUser;            // stored username for gAccount; empty when none
+std::string gToken;
+bool gLoginBusy = false;      // a sign-in is in flight
+bool gLoggedIn = false;       // rc_client accepted it
+
+namespace {
 
 // --- The network ----------------------------------------------------------
 //
@@ -181,12 +190,6 @@ void send(const rc_api_request_t& r, std::function<void(int, const std::string&)
 //
 // Every one of these lives under accounts::raDir, 0700, removed with the
 // account.
-
-int gAccount = 0;
-std::string gUser;            // stored username for gAccount; empty when none
-std::string gToken;
-bool gLoginBusy = false;      // a sign-in is in flight
-bool gLoggedIn = false;       // rc_client accepted it
 
 std::string param(const std::string& form, const std::string& key) {
     size_t at = 0;
