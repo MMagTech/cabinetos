@@ -57,18 +57,6 @@ extern size_t gFramePitch;
 extern bool gFrameDirty;
 extern uint64_t gAudioFrames;
 extern uint64_t gFramesRun;
-extern bool gRefuseHWRender;
-extern retro_hw_render_callback gHW;
-extern bool gHWWanted;
-extern bool gHWVulkan;
-extern bool gHWContextLive;
-extern GLuint gHWFBO, gHWColor;
-extern unsigned gHWTargetW, gHWTargetH;
-extern bool gHWFrame;
-extern std::string gHWContextName;
-void destroyHWTarget();
-bool ensureHWTarget(unsigned w, unsigned h);
-void restoreGLState();
 void videoRefresh(const void* data, unsigned width, unsigned height, size_t pitch);
 extern bool gIsPs2;
 extern std::string gPs2ResourcesDir;
@@ -102,5 +90,20 @@ extern bool gDiskSet;
 extern int gInitialDisc;
 extern std::string gInitialDiscPath;
 std::optional<bool> environmentDiscs(unsigned cmd, void* data);
+
+// Defined in core_hwrender.cpp.
+extern bool gRefuseHWRender;
+extern retro_hw_render_callback gHW;
+extern bool gHWWanted;
+extern bool gHWVulkan;
+extern bool gHWContextLive;
+extern GLuint gHWFBO, gHWColor;
+extern unsigned gHWTargetW, gHWTargetH;
+extern bool gHWFrame;
+extern std::string gHWContextName;
+void destroyHWTarget();
+bool ensureHWTarget(unsigned w, unsigned h);
+void restoreGLState();
+std::optional<bool> environmentHWRender(unsigned cmd, void* data);
 
 }  // namespace cab::corestate

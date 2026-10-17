@@ -137,8 +137,8 @@ public:
 
     // The control for the OTHER half of what a core needs from this host: with
     // this set, SET_HW_RENDER is refused however serveable the ask was. See
-    // core.cpp. It tells "this core cannot get a picture out of this host"
-    // apart from "this core cannot run in this host at all".
+    // core_hwrender.cpp. It tells "this core cannot get a picture out of this
+    // host" apart from "this core cannot run in this host at all".
     static void setRefuseHWRender(bool on);
 
     // Deliberate choices, keyed by option. Set BEFORE load(): a core may read

@@ -205,10 +205,10 @@ bool gHaveMemoryObject = false;
 // PlayStation 2 game, made sound, and drew nothing — sixty failed imports a
 // second into the journal.
 //
-// core.cpp already had the rule and this did not follow it: "SDL's, not EGL's:
-// SDL created this context, and on a driver where the two disagree the one
-// that made the context is the one to ask." Same rule, same reason, one file
-// along.
+// core_hwrender.cpp already had the rule and this did not follow it: "SDL's,
+// not EGL's: SDL created this context, and on a driver where the two disagree
+// the one that made the context is the one to ask." Same rule, same reason,
+// one file along.
 EGLDisplay currentDisplay() {
     EGLDisplay fromSdl = reinterpret_cast<EGLDisplay>(SDL_EGL_GetCurrentDisplay());
     EGLDisplay fromEgl = eglGetCurrentDisplay();
@@ -871,8 +871,9 @@ bool createContext(std::string* err) {
         return false;
     }
 
-    // SDL's loader, not EGL's, for the same reason core.cpp gives: SDL made
-    // this context, and on x11 it may not have made it with EGL at all.
+    // SDL's loader, not EGL's, for the same reason core_hwrender.cpp gives:
+    // SDL made this context, and on x11 it may not have made it with EGL at
+    // all.
     auto glProc = [](const char* name) { return SDL_GL_GetProcAddress(name); };
     gGlCreateMemoryObjects =
         reinterpret_cast<PFNGLCREATEMEMORYOBJECTSEXTPROC>(glProc("glCreateMemoryObjectsEXT"));
