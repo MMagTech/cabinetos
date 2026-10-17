@@ -8,42 +8,41 @@ ask them to test, and never claim a fix nobody reproduced.
 
 ## Where things stand
 
-**2026-10-16, late:** `latest` is **2026.10.14.5** (built from 72c0c4b,
-tagged in git). The A9 (Wi-Fi, **192.168.1.109**; Tailscale cabinetos,
-100.67.82.30) is on the testing channel; check `/usr/lib/os-release` for
-what it runs. RomM's documentation together with RomM's behaviour is the
-source of truth for anything on RomM's data.
+**2026-10-17, early morning:** `latest` is **2026.10.14.5** (built from
+72c0c4b, tagged in git). The A9 (Wi-Fi, **192.168.1.109**; Tailscale
+cabinetos, 100.67.82.30) is on the testing channel and runs **2026.10.17.3**,
+the restructure's final image, installed through its own Settings > System
+update; its PIN is OFF until MMagTech's checklist turns it back on. RomM's
+documentation together with RomM's behaviour is the source of truth for
+anything on RomM's data.
 
-**The restructure (#398, "Audit the code and restructure it for
-contributors (main.cpp is 20,000 lines)") runs unattended to the end**
-(MMagTech, 2026-10-16, 8:48 PM: "Unattended to the end, your calls; push to
-testing and merge into restructure yourself"). Moves 1 to 6 are merged into
-the long-lived `restructure` branch; move 6, batch (h1), is #418 ("Restructure
-move 6: batch (h1), screens.cpp into a file per screen and the toolkit's
-pieces into their own files (#398)"). Move 6's session (a side session of
-local_9923e863) goes on to batch (h2), applying the generators four parallel
-prep sessions wrote (`~/Documents/Development/cabinetos-audit/scripts/move7/`
-core, standalone, rest), then batch (i) (`scripts/move7/romm`, the RomM
-client split and the thread rule; it does not wait for Part 5). Each batch
-gets the machine checks (builds, line checks, the headless suite, the loop
-with its sound line) and its own testing image, kept for bisecting, and is
-merged into `restructure` without a TV round of its own.
+**All the restructure's moves are merged into `restructure`** (#398, "Audit
+the code and restructure it for contributors (main.cpp is 20,000 lines)"),
+unattended since 2026-10-16, 8:48 PM on MMagTech's word: move 6, batch (h1),
+#418 (testing 2026.10.17); move 7, batch (h2), #419 (2026.10.17.2); move 8,
+batch (i), #420 (2026.10.17.3), which also fixes the RomM client's thread
+rule. Each batch had the machine checks and its own testing image, installed
+on the A9 and proved from its log; none had a TV round of its own.
 
-**MMagTech gets one checklist at the end**, on the final image: the install
-(Settings > System update asks for his PIN; the assistant never types a PIN
-or a password), the TV items of (h1), (h2) and (i) with Part 6 section 27's
-full list, the PIN back on, then his "merge" of `restructure` into main, the
-only step that reaches players.
+**What is left is MMagTech's:** the one checklist on the final image, in the
+pull request that takes `restructure` to main (its body holds the checklist
+with boxes to tick), then his "merge", which promotes 2026.10.17.3 to
+`latest`, the only step that reaches players; then his go to delete the
+merged move branches (listed in that pull request).
 
 ## Next
 
-- If move 6's session is still at work: nothing; it reports. If it stopped,
-  pick up from `~/Documents/Development/cabinetos-audit/moves-log.md` (the
-  last entry says where), the hand-overs in `scripts/move7/*/HANDOVER.md`,
-  and `move7-prompt.md`.
-- After the merge to main: Parts 4 and 5 of the audit (report only; quote
-  the cost before any agent wave), then the contributor guide, then the
-  faults the moves left as they were, each in its own pull request.
+- If the checklist finds a fault: narrow it down by switching the A9 to each
+  batch's testing image (testing-61e1e84 for (h1), testing-f01296c for (h2),
+  testing-f4aa82c for (i)); fix it in its own pull request into
+  `restructure`, push to testing, install, and run the failed step again.
+- After the merge to main: Parts 4 and 5 of the audit (report only; quote the
+  cost before any agent wave), then the contributor guide, then the faults
+  the moves left as they were (each batch's pull request lists them), each in
+  its own pull request; then features and bug fixes resume.
+- The record of every move, its checks and its scripts is in
+  `~/Documents/Development/cabinetos-audit/moves-log.md` and `scripts/move1/`
+  to `scripts/move7/`.
 
 **What the moves have taught** (testing.md has them in full): run every
 headless test through `tools/romm-readonly-relay.py`; run the base binary
