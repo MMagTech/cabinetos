@@ -19,6 +19,12 @@
 // Switch did not (games that are installed, a close through the window) is a
 // field on the row, so the next emulator that needs it gets it the same way.
 //
+// WHERE THE CODE IS. standalone.cpp is the mechanism and the table; each
+// emulator's own setup is in its file (standalone_eden.cpp,
+// standalone_rpcs3.cpp, standalone_xemu.cpp, standalone_xenia.cpp and
+// standalone_cemu.cpp), and what they share is standalone_internal.h. Since the
+// restructure (#398).
+//
 // WHERE ITS STATE LIVES. Each emulator gets `emulators/<core>/` under the
 // storage root and runs with that as its working directory. Eden treats a
 // `user` folder in its working directory as its whole home (keys, system

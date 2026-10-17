@@ -1,8 +1,8 @@
 // What the standalone emulators' files share: the helpers, defined in
 // standalone.cpp, and each emulator's own entry points, defined in its file.
 // Internal: only standalone.cpp, standalone_eden.cpp, standalone_rpcs3.cpp,
-// standalone_xenia.cpp and standalone_cemu.cpp include it. Moved out of
-// standalone.cpp's anonymous namespace in the restructure (#398).
+// standalone_xenia.cpp, standalone_cemu.cpp and standalone_xemu.cpp include it.
+// Moved out of standalone.cpp's anonymous namespace in the restructure (#398).
 
 #pragma once
 
@@ -72,5 +72,14 @@ bool prepareCemu(const Emulator& e, const std::string& saveDir, int players, std
 // Run::start's arguments for Cemu, as for xeniaArgs: the environment entries
 // before the program, then `-g`, the game's path and `-f` after it.
 void cemuArgs(std::vector<std::string>& full, const std::string& dir, const std::string& romPath);
+
+// Xbox (standalone_xemu.cpp).
+bool prepareXemu(const Emulator& e, const std::string& entryPath, int players,
+                 quality::Level level, bool* missing, std::string* err);
+bool installXbox(const std::string& entryPath, std::string* romPath, std::string* message);
+bool xemuBeforeStart(const Emulator& e, const std::string& entryPath, const std::string& saveDir,
+                     const std::string& note, std::string* err);
+bool xemuAfterEnd(const Emulator& e, const std::string& entryPath, const std::string& saveDir,
+                  std::string* err);
 
 }  // namespace cab::standalone::detail
