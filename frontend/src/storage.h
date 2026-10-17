@@ -70,7 +70,8 @@
 #include <string>
 #include <vector>
 
-namespace romm { class Client; }
+#include "locations.h"
+#include "users.h"
 
 namespace storage {
 
@@ -91,70 +92,8 @@ const std::string& root();
 // which is the one storage fault that is not survivable.
 bool ensureTree(std::string* err);
 
-// --- Storage locations ------------------------------------------------------
-//
-// `roms/` and `cache/` repeat on EVERY location rather than living once at the
-// root, and that is not tidiness. Releasing the last keep on a game demotes it
-// to the cache instead of deleting it, and a demotion has to be a rename inside
-// one filesystem; with kept games on a big drive and one cache at the root, it
-// would mean physically copying gigabytes between disks because somebody
-// changed their mind. A rename cannot cross a filesystem — the kernel returns
-// EXDEV — so this is a fact the layout has to carry, not a preference.
-//
-// PLUG IT IN AND IT IS USED. There is no setup screen and no confirmation,
-// which is the Nintendo Switch's answer and the one open question 14 settled on:
-// put a card in a Switch and it becomes where downloads go, full stop. So this
-// LOOKS for drives every time it is asked rather than being told about them
-// once.
-//
-// AND IT NEVER TAKES OVER A DRIVE. One folder named `CabinetOS/` on it, and
-// nothing outside that folder is read, written or counted. A drive with
-// somebody's films on it works as a games drive too, and unplugging it takes
-// their films back untouched.
-//
-// THE FIRST ENTRY IS ALWAYS THE INTERNAL ROOT and is always present. Everything
-// after it is a drive somebody plugged in, and any of them may vanish between
-// one call and the next — which is fine, because nothing here remembers.
-std::vector<std::string> locations();
-
-// Where the cache lives, and everything that is not a game: saves, keeps,
-// firmware, configuration. The internal disk, always.
-const std::string& primaryLocation();
-
-
-// A drive that was here the last time the console looked and is not here now,
-// or empty.
-//
-// THE ONE THING THAT IS REMEMBERED, and only so the console can say a true
-// sentence out loud. It is never used to decide where a file is — that is
-// always read off the disk — because a remembered list that has gone stale is
-// exactly the fault this design exists to avoid: pull the card out of a Steam
-// Deck and it still shows the games as installed, with a Play button that does
-// nothing.
-//
-// It reports a given drive ONCE. Having said it, the console forgets that drive
-// and stops mentioning it, because a machine that complains about a drive you
-// removed on purpose every time it boots is worse than one that says nothing.
-std::string missingDriveToReport();
-
-// What Settings > Storage shows for each location: how much room, and whether
-// it is a USB drive. Read fresh, like everything else here.
-//
-// USB IS READ FROM WHERE THE KERNEL HUNG THE DEVICE, not from its name: the
-// block device's sysfs path runs through the USB controller when it is on one.
-// A second SATA or NVMe disk is "Internal" and a stick is "External",
-// MMagTech's names, 2026-09-24.
-struct Space {
-    bool ok = false;
-    int64_t freeBytes = 0;
-    int64_t totalBytes = 0;
-};
-Space spaceOf(const std::string& location);
-// A drive that can be unplugged while the console runs: USB, Thunderbolt, an
-// SD card. What Storage calls "External" and offers Eject for.
-bool isExternal(const std::string& location);
-// The same question about a block device, before anything is mounted from it.
-bool isExternalDevice(dev_t device);
+// Where games can be (the internal root and every drive plugged in), the room
+// each has and whether it can be unplugged are in locations.h, included above.
 
 // --- The shared half --------------------------------------------------------
 
@@ -202,45 +141,11 @@ std::string imageAssetsDir();
 // so nothing has to tidy it.
 std::string gamesDir();
 
-// --- The per-user half ------------------------------------------------------
+// --- The per-user paths ------------------------------------------------------
 //
-// WHAT IS NOT PER USER MATTERS AS MUCH AS WHAT IS. Two people on one console
-// must not download the same game twice or hold two copies of the PS2 BIOS, and
-// must never see each other's saves.
-//
-//   per user              shared by the machine
-//   saves, save states    the downloaded game files
-//   screenshots           BIOS and firmware
-//   preferences           cores
-//   the decision to keep  shader caches
-struct User {
-    int id = 0;
-    std::string name;
-    // Where the person's picture is, for the account chip on Home. Empty when
-    // they have not set one, which is a normal state: the chip falls back to a
-    // lettered disc, the way the reference implementation falls back to a
-    // person glyph.
-    std::string avatar;
-    // "1 - MMagTech". The directory name, and the only thing on disk that
-    // encodes both halves of the convention.
-    std::string dirName() const;
-    bool valid() const { return id > 0; }
-};
-
-// Who the console is acting as. One user today; account switching is a session
-// of its own and is deliberately not started here.
-//
-// The id comes from RomM's `/api/users/me` and nowhere else. It is asked for
-// once, at startup, and cached on disk — because a console with no network must
-// still know whose saves it is holding, and "we could not reach the server" is
-// not a reason to start writing into somebody else's directory.
-const User& currentUser();
-void setCurrentUser(const User& u);
-
-// Asks the server who we are, falling back to the cached answer. Returns false
-// when neither is available, which leaves the console with no user — everything
-// below then refuses rather than guessing.
-bool resolveCurrentUser(romm::Client& client, std::string* err);
+// Each person's folders, under users/<id> - <name>/. Who a person is (User),
+// who the console is acting as and everybody with a folder here are in
+// users.h, included above.
 
 std::string userDir(const User& u);
 std::string savesDir(const User& u, const std::string& platform, int romId,
@@ -250,11 +155,6 @@ std::string statesDir(const User& u, const std::string& platform, int romId,
 std::string screenshotsDir(const User& u);
 std::string keepsDir(const User& u);
 std::string pendingDir(const User& u);
-
-// Every user directory on this machine, whether or not anybody has logged in as
-// them recently. `keepers()` in cache.h walks this, which is what makes one
-// person's release safe for everybody else.
-std::vector<User> knownUsers();
 
 // Where a save goes when there is no game and no person — `--core <so> <rom>`,
 // the developer entry point that plays a file off the disk with no RomM behind

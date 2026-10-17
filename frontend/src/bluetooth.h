@@ -34,7 +34,7 @@
 // somebody to type a passkey with a d-pad. A device that demands one is
 // reported as having failed, with its own reason, rather than half-handled.
 // The one piece of agent machinery it does carry is for "just works" itself:
-// a Bluetooth LE pad cannot pair while no agent exists at all (bluetooth.cpp,
+// a Bluetooth LE pad cannot pair while no agent exists at all (btagent.h,
 // PairAgent).
 
 #pragma once

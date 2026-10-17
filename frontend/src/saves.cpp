@@ -68,7 +68,7 @@ void restoreDirSave(romm::Client& client, int romId, const char* tag,
     // unpacking the server's older one would write over it. Found 2026-09-29:
     // an Xbox save recovered after a power cut was queued, the game started
     // again at once, and the server's older zip came down over it. The same
-    // rule the battery save already keeps (cache.h, isPending).
+    // rule the battery save already keeps (pending.h, isPending).
     const std::string name = sanitisedStem(title) + ".zip";
     if (cache::isPending(storage::currentUser(), romId, name)) {
         std::fprintf(stderr, "[save] %s is still on its way up; keeping this console's\n",
@@ -541,7 +541,7 @@ void syncSave(GameSession& sess, Uploader& up) {
 // quit was never read back, so a game started with the server away
 // began with an empty battery, and one started while its upload was
 // still owed got RomM's OLDER copy over the newer one. The same rule
-// restoreFileSaves and restoreDirSave keep (cache.h, isPending), and
+// restoreFileSaves and restoreDirSave keep (pending.h, isPending), and
 // what RetroArch does: the frontend loads the local `.srm`.
 // Stage 8 of a launch (launch.cpp), after the load and before the first frame.
 void restoreBatterySave(cab::Core& core, GameSession& session, const std::string& saveDir,

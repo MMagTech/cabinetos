@@ -1,15 +1,15 @@
 #include "drives.h"
 
+#include "drives_fs.h"
 #include "storage.h"
+#include "udisks.h"
 #include "unit.h"
 
 #include <systemd/sd-bus.h>
 #include <systemd/sd-login.h>
 
 #include <atomic>
-#include <cctype>
 #include <chrono>
-#include <climits>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -17,15 +17,12 @@
 #include <deque>
 #include <dirent.h>
 #include <fcntl.h>
-#include <fstream>
 #include <map>
 #include <mutex>
 #include <set>
-#include <sstream>
 #include <string>
 #include <sys/stat.h>
 #include <sys/statvfs.h>
-#include <sys/sysmacros.h>
 #include <thread>
 #include <unistd.h>
 #include <vector>
@@ -34,16 +31,6 @@ namespace drives {
 
 namespace {
 
-constexpr const char* kUDisks = "org.freedesktop.UDisks2";
-constexpr const char* kRoot = "/org/freedesktop/UDisks2";
-constexpr const char* kManagerPath = "/org/freedesktop/UDisks2/Manager";
-constexpr const char* kManager = "org.freedesktop.UDisks2.Manager";
-constexpr const char* kBlock = "org.freedesktop.UDisks2.Block";
-constexpr const char* kFs = "org.freedesktop.UDisks2.Filesystem";
-constexpr const char* kPartition = "org.freedesktop.UDisks2.Partition";
-constexpr const char* kPartitionTable = "org.freedesktop.UDisks2.PartitionTable";
-constexpr const char* kDrive = "org.freedesktop.UDisks2.Drive";
-constexpr const char* kBlockPrefix = "/org/freedesktop/UDisks2/block_devices/";
 // Linux filesystem data: the GPT type of an ext4 partition.
 constexpr const char* kLinuxData = "0fc63daf-8483-4772-8e79-3d69d8477de4";
 // Where File access shows a drive: a second mount, root's (cabinetos-files).
@@ -101,93 +88,6 @@ bool systemPartitionType(const std::string& t) {
     return false;
 }
 
-bool boolProp(sd_bus* bus, const std::string& path, const char* iface, const char* name,
-              bool* out) {
-    sd_bus_error err = SD_BUS_ERROR_NULL;
-    int v = 0;
-    const int r = sd_bus_get_property_trivial(bus, kUDisks, path.c_str(), iface, name, &err,
-                                              'b', &v);
-    sd_bus_error_free(&err);
-    if (r < 0) return false;
-    *out = v != 0;
-    return true;
-}
-
-bool u64Prop(sd_bus* bus, const std::string& path, const char* iface, const char* name,
-             uint64_t* out) {
-    sd_bus_error err = SD_BUS_ERROR_NULL;
-    const int r = sd_bus_get_property_trivial(bus, kUDisks, path.c_str(), iface, name, &err,
-                                              't', out);
-    sd_bus_error_free(&err);
-    return r >= 0;
-}
-
-// `s` or `o`. False when the object has no such interface, which is how
-// "is this a partition" and "does it have a partition table" are asked.
-bool stringProp(sd_bus* bus, const std::string& path, const char* iface, const char* name,
-                const char* type, std::string* out) {
-    sd_bus_error err = SD_BUS_ERROR_NULL;
-    sd_bus_message* reply = nullptr;
-    const int r = sd_bus_get_property(bus, kUDisks, path.c_str(), iface, name, &err, &reply,
-                                      type);
-    if (r >= 0) {
-        const char* s = nullptr;
-        if (sd_bus_message_read(reply, type, &s) >= 0 && s) *out = s;
-    }
-    sd_bus_error_free(&err);
-    sd_bus_message_unref(reply);
-    return r >= 0;
-}
-
-// An `ay` property that is a path with its NUL: Block.PreferredDevice.
-bool pathBytesProp(sd_bus* bus, const std::string& path, const char* iface, const char* name,
-                   std::string* out) {
-    sd_bus_error err = SD_BUS_ERROR_NULL;
-    sd_bus_message* reply = nullptr;
-    const int r = sd_bus_get_property(bus, kUDisks, path.c_str(), iface, name, &err, &reply,
-                                      "ay");
-    if (r >= 0) {
-        const void* p = nullptr;
-        size_t n = 0;
-        if (sd_bus_message_read_array(reply, 'y', &p, &n) >= 0 && p) {
-            out->assign(static_cast<const char*>(p), n);
-            while (!out->empty() && out->back() == '\0') out->pop_back();
-        }
-    }
-    sd_bus_error_free(&err);
-    sd_bus_message_unref(reply);
-    return r >= 0;
-}
-
-std::string driveOf(sd_bus* bus, const std::string& block) {
-    std::string d;
-    stringProp(bus, block, kBlock, "Drive", "o", &d);
-    return d == "/" ? std::string() : d;
-}
-
-// How many partitions the KERNEL has for a whole disk (/dev/sda: sda1 and
-// on, each a folder with a `partition` file in /sys/class/block/sda). Not
-// udisks' Partitions list: when a drive is plugged in, udisks announces the
-// disk before its partitions, and the list is empty for that moment. The
-// stick read as blank for a tenth of a second on the A9 (2026-10-04). The
-// kernel has read the table before it announces the disk at all. -1 when
-// it cannot tell.
-int kernelPartitions(const std::string& device) {
-    const std::string name = device.substr(device.rfind('/') + 1);
-    if (name.empty()) return -1;
-    const std::string dir = "/sys/class/block/" + name;
-    DIR* d = ::opendir(dir.c_str());
-    if (!d) return -1;
-    int n = 0;
-    while (struct dirent* e = ::readdir(d)) {
-        if (e->d_name[0] == '.') continue;
-        struct stat st;
-        if (::stat((dir + "/" + e->d_name + "/partition").c_str(), &st) == 0) ++n;
-    }
-    ::closedir(d);
-    return n;
-}
-
 bool readable(const std::string& type) {
     return type == "exfat" || type == "ntfs" || type == "ext4";
 }
@@ -204,201 +104,6 @@ bool canWrite(const std::string& dir) {
     ::close(fd);
     ::unlink(probe.c_str());
     return true;
-}
-
-// Every regular file under `dir`, without following links, until `stop`
-// says enough (once it has, it must go on saying so). False when a folder
-// could not be opened or `stop` ended it. ext4's lost+found is root's and
-// empty unless a check put something there; not being able to open it is
-// not a reason to doubt the count.
-template <typename Stop>
-bool walk(const std::string& dir, int64_t* files, int64_t* bytes, Stop stop) {
-    DIR* d = ::opendir(dir.c_str());
-    if (!d) return false;
-    bool whole = true;
-    while (struct dirent* e = ::readdir(d)) {
-        if (!std::strcmp(e->d_name, ".") || !std::strcmp(e->d_name, "..")) continue;
-        if (stop()) {
-            whole = false;
-            break;
-        }
-        const std::string p = dir + "/" + e->d_name;
-        struct stat st;
-        if (::lstat(p.c_str(), &st) != 0) continue;
-        if (S_ISDIR(st.st_mode)) {
-            if (!walk(p, files, bytes, stop) &&
-                (std::strcmp(e->d_name, "lost+found") != 0 || stop()))
-                whole = false;
-        } else if (S_ISREG(st.st_mode)) {
-            ++*files;
-            *bytes += static_cast<int64_t>(st.st_size);
-        }
-    }
-    ::closedir(d);
-    return whole;
-}
-
-// A file anywhere under <mount>/CabinetOS: the drive holds the console's
-// games (or a download on its way there). Its empty folders do not count.
-bool holdsConsoleFiles(const std::string& mount) {
-    const std::string claim = mount + "/CabinetOS";
-    struct stat st;
-    if (::lstat(claim.c_str(), &st) != 0) return false;   // no folder, no games
-    if (!S_ISDIR(st.st_mode)) return true;                // not ours to judge
-    int64_t files = 0, bytes = 0;
-    const bool whole = walk(claim, &files, &bytes, [&] { return files > 0; });
-    // A folder in it that could not be opened may hold games: say it does.
-    return files > 0 || !whole;
-}
-
-// False when the object has no filesystem on it at all.
-bool mountPoints(sd_bus* bus, const std::string& path, std::vector<std::string>* out) {
-    sd_bus_error err = SD_BUS_ERROR_NULL;
-    sd_bus_message* reply = nullptr;
-    const int r = sd_bus_get_property(bus, kUDisks, path.c_str(), kFs, "MountPoints", &err,
-                                      &reply, "aay");
-    sd_bus_error_free(&err);
-    if (r < 0) {
-        sd_bus_message_unref(reply);
-        return false;
-    }
-    if (sd_bus_message_enter_container(reply, 'a', "ay") > 0) {
-        const void* p = nullptr;
-        size_t n = 0;
-        while (sd_bus_message_read_array(reply, 'y', &p, &n) > 0) {
-            // udisks sends the path with its terminating NUL.
-            std::string s(static_cast<const char*>(p), n);
-            while (!s.empty() && s.back() == '\0') s.pop_back();
-            if (!s.empty()) out->push_back(s);
-        }
-        sd_bus_message_exit_container(reply);
-    }
-    sd_bus_message_unref(reply);
-    return true;
-}
-
-std::vector<std::string> blockDevices(sd_bus* bus) {
-    std::vector<std::string> out;
-    sd_bus_error err = SD_BUS_ERROR_NULL;
-    sd_bus_message* reply = nullptr;
-    if (sd_bus_call_method(bus, kUDisks, kManagerPath, kManager, "GetBlockDevices", &err, &reply,
-                           "a{sv}", 0) >= 0) {
-        if (sd_bus_message_enter_container(reply, 'a', "o") > 0) {
-            const char* p = nullptr;
-            while (sd_bus_message_read(reply, "o", &p) > 0)
-                if (p) out.push_back(p);
-            sd_bus_message_exit_container(reply);
-        }
-    } else {
-        std::fprintf(stderr, "[drives] udisks did not answer: %s\n",
-                     err.message ? err.message : "?");
-    }
-    sd_bus_error_free(&err);
-    sd_bus_message_unref(reply);
-    return out;
-}
-
-// udisks' object path for a kernel block device: every byte that is not a
-// letter or a digit becomes _xx.
-std::string blockPathFor(dev_t d) {
-    char link[64];
-    std::snprintf(link, sizeof link, "/sys/dev/block/%u:%u", major(d), minor(d));
-    char resolved[PATH_MAX];
-    if (!::realpath(link, resolved)) return "";
-    const char* name = std::strrchr(resolved, '/');
-    std::string out = kBlockPrefix;
-    for (const char* c = name ? name + 1 : resolved; *c; ++c) {
-        if (std::isalnum(static_cast<unsigned char>(*c))) {
-            out += *c;
-        } else {
-            char esc[4];
-            std::snprintf(esc, sizeof esc, "_%02x", static_cast<unsigned char>(*c));
-            out += esc;
-        }
-    }
-    return out;
-}
-
-// One call that takes only auth.no_user_interaction: a password prompt on a
-// television is the same as a refusal, so it is asked for as one.
-bool callNoPrompt(sd_bus* bus, const std::string& path, const char* iface, const char* method,
-                  std::string* mountedAt, std::string* why) {
-    sd_bus_error err = SD_BUS_ERROR_NULL;
-    sd_bus_message* reply = nullptr;
-    const int r = sd_bus_call_method(bus, kUDisks, path.c_str(), iface, method, &err, &reply,
-                                     "a{sv}", 1, "auth.no_user_interaction", "b", 1);
-    const bool ok = r >= 0;
-    if (ok && mountedAt) {
-        const char* s = nullptr;
-        if (sd_bus_message_read(reply, "s", &s) >= 0 && s) *mountedAt = s;
-    }
-    if (!ok && why) *why = err.message ? err.message : std::strerror(-r);
-    sd_bus_error_free(&err);
-    sd_bus_message_unref(reply);
-    return ok;
-}
-
-// Whether the kernel still has any of these devices mounted anywhere, by
-// device number or by source (a FUSE mount such as ntfs-3g reports an
-// anonymous device number and the real device as its source). Read straight
-// from the mount table rather than from udisks, because "Safe to unplug"
-// must mean NOTHING has it: not udisks' mount, not File access's view of it.
-bool anyMounted(const std::vector<dev_t>& devs, const std::vector<std::string>& nodes) {
-    std::ifstream in("/proc/self/mountinfo");
-    std::string line;
-    while (std::getline(in, line)) {
-        std::istringstream f(line);
-        std::string id, parent, majmin;
-        f >> id >> parent >> majmin;
-        for (dev_t d : devs) {
-            char mm[32];
-            std::snprintf(mm, sizeof mm, "%u:%u", major(d), minor(d));
-            if (majmin == mm) return true;
-        }
-        const size_t dash = line.find(" - ");
-        if (dash == std::string::npos) continue;
-        std::istringstream tail(line.substr(dash + 3));
-        std::string fstype, source;
-        tail >> fstype >> source;
-        for (const std::string& n : nodes)
-            if (!n.empty() && source == n) return true;
-    }
-    return false;
-}
-
-// WAITS FOR A RELOAD OF A UNIT TO FINISH, up to `seconds`. File access
-// takes its view of a drive down in its reload, and the drive's last
-// unmount does not return until everything written to it is out: on the
-// SanDisk stick, 1.5 s after the mount had already gone from the mount table
-// (A9, 2026-10-04). Until then the drive is held, so "Safe to unplug" would
-// be early and Format's wipe is refused ("Device or resource busy").
-void waitReloaded(sd_bus* bus, const char* unitName, int seconds) {
-    sd_bus_error err = SD_BUS_ERROR_NULL;
-    sd_bus_message* reply = nullptr;
-    const char* path = nullptr;
-    std::string unitPath;
-    if (sd_bus_call_method(bus, "org.freedesktop.systemd1", "/org/freedesktop/systemd1",
-                           "org.freedesktop.systemd1.Manager", "GetUnit", &err, &reply, "s",
-                           unitName) >= 0 &&
-        sd_bus_message_read(reply, "o", &path) >= 0 && path)
-        unitPath = path;
-    sd_bus_error_free(&err);
-    sd_bus_message_unref(reply);
-    if (unitPath.empty()) return;
-    for (int i = 0; i < seconds * 10; ++i) {
-        char* state = nullptr;
-        sd_bus_error e = SD_BUS_ERROR_NULL;
-        const int r = sd_bus_get_property_string(bus, "org.freedesktop.systemd1",
-                                                 unitPath.c_str(),
-                                                 "org.freedesktop.systemd1.Unit", "ActiveState",
-                                                 &e, &state);
-        sd_bus_error_free(&e);
-        const bool reloading = r >= 0 && state && std::strcmp(state, "reloading") == 0;
-        std::free(state);
-        if (!reloading) return;
-        usleep(100 * 1000);
-    }
-    std::fprintf(stderr, "[drives] %s still reloading after %d s\n", unitName, seconds);
 }
 
 // What the console knows about one block device it has looked at.
@@ -1101,32 +806,6 @@ bool mayFormat(const Drive& d) {
     for (const std::string& m : d.mounts)
         if (holdsConsoleFiles(m)) return false;
     return true;
-}
-
-Contents contents(const Drive& d) {
-    Contents c;
-    c.otherParts = d.otherParts;
-    const auto until = std::chrono::steady_clock::now() + std::chrono::milliseconds(500);
-    int64_t seen = 0;
-    bool stopped = false;
-    auto stop = [&] {
-        // The clock is read every thousand entries, not every one.
-        if (!stopped && ++seen % 1000 == 0 && std::chrono::steady_clock::now() > until)
-            stopped = true;
-        return stopped;
-    };
-    for (const std::string& m : d.mounts)
-        if (!walk(m, &c.files, &c.bytes, stop)) c.counted = false;
-    if (!c.counted) {
-        c.bytes = 0;
-        for (const std::string& m : d.mounts) {
-            struct statvfs v;
-            if (::statvfs(m.c_str(), &v) == 0)
-                c.bytes += static_cast<int64_t>(v.f_blocks - v.f_bfree) *
-                           static_cast<int64_t>(v.f_frsize);
-        }
-    }
-    return c;
 }
 
 void format(const std::string& driveId) {

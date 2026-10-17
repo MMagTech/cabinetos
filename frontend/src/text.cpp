@@ -300,4 +300,72 @@ void TextRenderer::draw(Renderer& r, std::string_view utf8, float x, float basel
     }
 }
 
+// --- Words that fit --------------------------------------------------------
+//
+// TextRenderer measures and truncates; it does not wrap, because nothing until
+// now needed more than one line. A setup screen is mostly prose, so this is
+// where wrapping lives.
+//
+// It breaks on spaces. A word longer than the whole column is handed to
+// `hardWrap` below rather than being left to overflow.
+std::vector<std::string> hardWrap(ui::TextRenderer& text, const std::string& s,
+                                  ui::TextStyle style, float scale, float maxWidth);
+
+std::vector<std::string> wrap(ui::TextRenderer& text, const std::string& s,
+                              ui::TextStyle style, float scale, float maxWidth) {
+    std::vector<std::string> out;
+    if (s.empty()) return out;
+    std::string line;
+    size_t at = 0;
+    while (at <= s.size()) {
+        const size_t sp = s.find(' ', at);
+        const std::string word = s.substr(at, sp == std::string::npos ? std::string::npos
+                                                                      : sp - at);
+        const std::string candidate = line.empty() ? word : line + " " + word;
+        if (!line.empty() && text.measure(candidate, style, scale) > maxWidth) {
+            out.push_back(line);
+            line = word;
+        } else {
+            line = candidate;
+        }
+        // A SINGLE WORD WIDER THAN THE COLUMN, which is not a hypothetical
+        // here: the pairing URL is one unbroken token and it is the longest
+        // string this flow ever draws. Left alone it runs off the column and
+        // under the panel beside it.
+        if (text.measure(line, style, scale) > maxWidth) {
+            for (const std::string& piece : hardWrap(text, line, style, scale, maxWidth))
+                out.push_back(piece);
+            line.clear();
+        }
+        if (sp == std::string::npos) break;
+        at = sp + 1;
+    }
+    if (!line.empty()) out.push_back(line);
+    return out;
+}
+
+// Breaks anywhere, on codepoint boundaries.
+//
+// UTF-8 AWARE, and that is not pedantry: a break in the middle of a multi-byte
+// character produces a glyph the font cannot resolve, and a console whose
+// library is full of Japanese arcade titles will meet one.
+std::vector<std::string> hardWrap(ui::TextRenderer& text, const std::string& s,
+                                  ui::TextStyle style, float scale, float maxWidth) {
+    std::vector<std::string> out;
+    std::string line;
+    size_t i = 0;
+    while (i < s.size()) {
+        const size_t start = i;
+        ui::nextCodepoint(s, i);                 // advances i past one character
+        const std::string ch = s.substr(start, i - start);
+        if (!line.empty() && text.measure(line + ch, style, scale) > maxWidth) {
+            out.push_back(line);
+            line.clear();
+        }
+        line += ch;
+    }
+    if (!line.empty()) out.push_back(line);
+    return out;
+}
+
 }  // namespace ui

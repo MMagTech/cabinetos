@@ -105,7 +105,7 @@ void App::pressServer() {
         askChoice(addr, "", {"Change address", "Sign out", "Cancel"}, 0,
                   [&, addr](int i) {
             if (i == 0) {
-                // Root's address outranks ours (firstrun.h).
+                // Root's address outranks ours (serveraddress.h).
                 // Only a console set up by hand has one.
                 if (!server::addressIsOurs()) {
                     menuNotice.say("Set in /etc/cabinetos/session.env",

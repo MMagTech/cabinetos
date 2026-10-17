@@ -27,14 +27,14 @@
 //
 // MIIS ON A REMOTE (#275) are kept on the console, not on the Remote: the
 // Remote's memory where a Wii keeps them is answered from one file per player
-// light. See miiRead.
+// light. See miiRead, in mii.cpp.
 //
 // THE REAL REMOTE IS KEPT FROM EVERYONE ELSE by a udev rule
 // (99-cabinetos-wii-remote.rules: cabinet owns its hidraw node, mode 0000);
 // this program makes it readable for the moment it opens it, then closes it
 // again, so Dolphin and Cemu see only the stand-in.
 
-#include "encryption.h"
+#include "bridge.h"
 
 #include <linux/hidraw.h>
 #include <linux/input.h>
@@ -65,13 +65,11 @@
 #include <string>
 #include <vector>
 
+namespace wiibridge {
 namespace {
 
 constexpr const char* kPhys = "cabinetos-wii-bridge";
 
-// Where the Miis sent to a Remote are kept: `player-<light>.bin`, given by the
-// console app as the first argument. Empty: none are kept.
-std::string gMiiDir;
 constexpr const char* kPrefix = "Nintendo RVL-CNT";
 constexpr unsigned kNintendo = 0x057e;
 constexpr unsigned kWiiRemote = 0x0306;
@@ -93,53 +91,6 @@ std::string field(const std::string& uevent, const char* key) {
         if (line.rfind(want, 0) == 0) return line.substr(want.size());
     return {};
 }
-
-struct PendingRead {
-    bool reg;        // register space (0x04), not EEPROM
-    unsigned addr;   // 24-bit start
-    unsigned size;
-    unsigned done = 0;
-};
-
-struct Remote {
-    std::string node, name, uniq;
-    int real = -1;
-    int uhid = -1;
-    uint8_t btn1 = 0, btn2 = 0;
-    bool ext = false;
-    bool plain = false;      // the real extension has had 0x55/0x00 since it connected
-    bool enc = false;        // the game believes encryption is on
-    std::array<uint8_t, 16> keyData{};
-    bool keyDirty = true;
-    WiimoteEmu::EncryptionKey key;
-    std::deque<PendingRead> reads;
-    // ANSWERS TO THE BRIDGE'S OWN COMMANDS, kept from the game, but only for a
-    // second after the last of them. A count that outlived its commands hid the
-    // game's own answers instead, and a Wii game that misses one says
-    // "Communication with the Wii Remote has been interrupted": measured on the
-    // A9 2026-10-03 20:29, Geometry Wars right after a replay in Wild West Guns.
-    // The count can be high because these copies drop commands sent too fast,
-    // and a dropped command is never answered.
-    int swallowAcks = 0;
-    int swallowed = 0;
-    std::chrono::steady_clock::time_point swallowUntil{};
-    // WHEN THE GAME LETS THE REMOTE GO (a Wii game's idle disconnect, about
-    // five minutes untouched). See checkDropped.
-    std::chrono::steady_clock::time_point lastOut{};
-    bool lastOutWasReset = false;   // the last thing sent was Dolphin's 12 00 30
-    bool driven = false;            // a game has asked for more than buttons
-    // The last light and report mode asked for, put back when the Remote
-    // comes back (see reattach).
-    std::vector<uint8_t> lastLed, lastMode;
-    // The Remote's last status report (0x20), answered from while it is off.
-    std::vector<uint8_t> lastStatus;
-    // EVERY OTHER SETUP COMMAND THE GAME SENT, in order: the camera (0x13, 0x1a,
-    // registers 0xB0..), the extension and MotionPlus (0xA4.., 0xA6..). A
-    // Remote switched off forgets all of it; reattach sends it again. The
-    // encryption the bridge answers itself never reached the Remote and is not
-    // here. Nor is the speaker: see isSetup.
-    std::vector<std::vector<uint8_t>> setup;
-};
 
 constexpr size_t kSetupMax = 96;
 
@@ -204,6 +155,9 @@ void toReal(Remote& r, const uint8_t* d, size_t n) {
         std::fprintf(stderr, "[wiibridge] write to %s: %s\n", r.node.c_str(), std::strerror(errno));
 }
 
+}  // namespace
+
+// toGame and ackToGame are mii.cpp's too (bridge.h).
 void toGame(Remote& r, const uint8_t* d, size_t n) {
     uhid_event ev{};
     ev.type = UHID_INPUT2;
@@ -218,111 +172,7 @@ void ackToGame(Remote& r, uint8_t reportId) {
     toGame(r, ack, sizeof ack);
 }
 
-// --- Miis on a Remote (#275) ------------------------------------------------
-//
-// A WII KEEPS UP TO TEN MIIS ON A REMOTE, in its memory (EEPROM) at 0x0FCA to
-// 0x15A9: two copies of one 752-byte block (WiiBrew, "Wiimote", EEPROM Memory).
-// The Mii Channel's "send to Wii Remote" writes them there and games read them.
-// Here they are kept on the console instead, one file per player light, local
-// and not synced (MMagTech, 2026-10-06): reads and writes of that area are
-// answered by the bridge from the file for the light the Remote shows, and the
-// real Remote is never written. So a Mii sent while player 2 is player 2's,
-// whoever holds that Remote next. A file nobody wrote reads as 0xFF, which is
-// what MMagTech's TechKen copies hold there (A9, 2026-10-06).
-constexpr unsigned kMiiStart = 0x0FCA;
-constexpr unsigned kMiiEnd = 0x15AA;   // one past
-constexpr size_t kMiiSize = kMiiEnd - kMiiStart;
-
-// The player light the game gave this Remote (report 0x11: lights in the top
-// four bits), 1 to 4; 0 when none or more than one is lit.
-int playerLight(const Remote& r) {
-    if (r.lastLed.size() < 2) return 0;
-    switch (r.lastLed[1] & 0xf0) {
-        case 0x10: return 1;
-        case 0x20: return 2;
-        case 0x40: return 3;
-        case 0x80: return 4;
-        default: return 0;
-    }
-}
-
-std::string miiPath(int light) { return gMiiDir + "/player-" + std::to_string(light) + ".bin"; }
-
-std::vector<uint8_t> miiLoad(int light) {
-    std::vector<uint8_t> data(kMiiSize, 0xff);
-    if (light == 0 || gMiiDir.empty()) return data;
-    std::ifstream in(miiPath(light), std::ios::binary);
-    in.read(reinterpret_cast<char*>(data.data()), static_cast<std::streamsize>(kMiiSize));
-    return data;
-}
-
-bool miiStore(int light, const std::vector<uint8_t>& data) {
-    if (light == 0 || gMiiDir.empty()) return false;
-    ::mkdir(gMiiDir.c_str(), 0755);
-    const std::string path = miiPath(light);
-    const std::string tmp = path + ".new";
-    {
-        std::ofstream out(tmp, std::ios::binary | std::ios::trunc);
-        out.write(reinterpret_cast<const char*>(data.data()), static_cast<std::streamsize>(data.size()));
-        if (!out) return false;
-    }
-    return std::rename(tmp.c_str(), path.c_str()) == 0;
-}
-
-// A READ OF THE MII AREA (0x17, EEPROM), answered from the file in 16-byte
-// reports as a Remote answers, a little apart: a Remote's own come over
-// Bluetooth about a millisecond apart, and the kernel keeps only 64 reports
-// for a reader that falls behind. Only a read wholly inside the area; one
-// that crosses its edge goes to the Remote and is said in the log.
-bool miiRead(Remote& r, const uint8_t* d, size_t n) {
-    if (n < 7 || d[0] != 0x17 || (d[1] & 0x04)) return false;
-    const unsigned addr = (unsigned(d[2]) << 16) | (unsigned(d[3]) << 8) | d[4];
-    const unsigned size = (unsigned(d[5]) << 8) | d[6];
-    if (size == 0 || addr + size <= kMiiStart || addr >= kMiiEnd) return false;
-    if (addr < kMiiStart || addr + size > kMiiEnd) {
-        std::fprintf(stderr, "[wiibridge] %s: a read of 0x%04x+%u crosses the Mii area; passed to the Remote\n",
-                     r.uniq.c_str(), addr, size);
-        return false;
-    }
-    const int light = playerLight(r);
-    const std::vector<uint8_t> data = miiLoad(light);
-    for (unsigned done = 0; done < size; done += 16) {
-        const unsigned at = addr + done;
-        const unsigned len = std::min(16u, size - done);
-        uint8_t rep[22] = {0x21, r.btn1, r.btn2, static_cast<uint8_t>((len - 1) << 4),
-                           static_cast<uint8_t>(at >> 8), static_cast<uint8_t>(at)};
-        std::memcpy(rep + 6, data.data() + (at - kMiiStart), len);
-        toGame(r, rep, sizeof rep);
-        ::usleep(1000);
-    }
-    std::fprintf(stderr, "[wiibridge] %s: Miis read for player %d (0x%04x+%u), from the console\n",
-                 r.uniq.c_str(), light, addr, size);
-    return true;
-}
-
-// A WRITE TO THE MII AREA (0x16, EEPROM): into the file, acknowledged, and kept
-// from the Remote, whatever part of it falls inside the area.
-bool miiWrite(Remote& r, const uint8_t* d, size_t n) {
-    if (n < 7 || d[0] != 0x16 || (d[1] & 0x04)) return false;
-    const unsigned addr = (unsigned(d[2]) << 16) | (unsigned(d[3]) << 8) | d[4];
-    const unsigned count = std::min<unsigned>(d[5], static_cast<unsigned>(n - 6));
-    if (count == 0 || addr + count <= kMiiStart || addr >= kMiiEnd) return false;
-    const int light = playerLight(r);
-    std::vector<uint8_t> data = miiLoad(light);
-    for (unsigned i = 0; i < count; ++i) {
-        const unsigned at = addr + i;
-        if (at >= kMiiStart && at < kMiiEnd) data[at - kMiiStart] = d[6 + i];
-    }
-    if (!miiStore(light, data))
-        std::fprintf(stderr, "[wiibridge] %s: a Mii write with no player light (or no folder); dropped\n",
-                     r.uniq.c_str());
-    // Said once per block, as its last bytes go in, not per 16 bytes.
-    if (addr + count > kMiiStart && (addr + count - kMiiStart) % 752 == 0)
-        std::fprintf(stderr, "[wiibridge] %s: Miis written for player %d, kept on the console\n",
-                     r.uniq.c_str(), light);
-    ackToGame(r, 0x16);
-    return true;
-}
+namespace {
 
 // The real extension in plain mode, if the game never put it there (an old
 // game's setup writes the key without 0x55/0x00 first).
@@ -716,6 +566,10 @@ void rescan() {
 }
 
 }  // namespace
+}  // namespace wiibridge
+
+// main is outside the bridge's namespace and names what it needs from it.
+using namespace wiibridge;
 
 int main(int argc, char** argv) {
     if (argc > 1) gMiiDir = argv[1];

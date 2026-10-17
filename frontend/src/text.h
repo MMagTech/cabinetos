@@ -117,4 +117,14 @@ private:
 // advance by one, so a malformed name from a server cannot hang the loop.
 uint32_t nextCodepoint(std::string_view s, size_t& i);
 
+// Words that fit a column, for prose longer than one line: `wrap` breaks on
+// spaces and hands a word wider than the whole column to `hardWrap`, which
+// breaks between any two characters. Defined in text.cpp; moved out of
+// setup.cpp in the restructure (#398), when first run's screens were the only
+// prose that needed it.
+std::vector<std::string> wrap(TextRenderer& text, const std::string& s, TextStyle style,
+                              float scale, float maxWidth);
+std::vector<std::string> hardWrap(TextRenderer& text, const std::string& s, TextStyle style,
+                                  float scale, float maxWidth);
+
 }  // namespace ui

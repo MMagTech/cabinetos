@@ -117,8 +117,8 @@ public:
     // core skips the case entirely rather than falling back. So the host
     // captures the table a core declares and answers every key in it.
     //
-    // See core.cpp for the three generations of the declaration API and why we
-    // report version 2.
+    // See core_options.cpp for the three generations of the declaration API
+    // and why we report version 2.
     struct OptionReport {
         std::string key;
         std::string desc;
@@ -137,8 +137,8 @@ public:
 
     // The control for the OTHER half of what a core needs from this host: with
     // this set, SET_HW_RENDER is refused however serveable the ask was. See
-    // core.cpp. It tells "this core cannot get a picture out of this host"
-    // apart from "this core cannot run in this host at all".
+    // core_hwrender.cpp. It tells "this core cannot get a picture out of this
+    // host" apart from "this core cannot run in this host at all".
     static void setRefuseHWRender(bool on);
 
     // Deliberate choices, keyed by option. Set BEFORE load(): a core may read
@@ -474,6 +474,11 @@ public:
 private:
     Core() = default;
     void* symbol(const char* name);
+    // uploadFrame's software path (core_picture.cpp).
+    bool uploadSoftwareFrame();
+    // loadGame's PlayStation 2 start (core_ps2.cpp).
+    bool startPs2Game(const std::string& romPath, const std::string& systemDir,
+                      const std::string& saveDir);
 
     void* handle_ = nullptr;
     bool gameLoaded_ = false;

@@ -49,7 +49,7 @@ bool vmuHoldsAFile(const std::vector<uint8_t>& d) {
 }
 
 // A PlayStation 2 card the console's BIOS has formatted. An untouched one is
-// 8,650,752 bytes of 0xFF with no header at all — see catalog.h.
+// 8,650,752 bytes of 0xFF with no header at all — see savetable.h.
 bool ps2IsFormatted(const std::vector<uint8_t>& d) {
     static const char kMagic[] = "Sony PS2 Memory Card Format";
     const size_t n = sizeof(kMagic) - 1;

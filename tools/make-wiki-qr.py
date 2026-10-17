@@ -31,7 +31,7 @@ URL = "https://mmagtech.github.io/cabinetos/wiki/"
 # alignment patterns.
 PATCH_W, PATCH_H = 13, 15
 # The tile and the cabinet inside the patch, in modules. The console draws
-# them from these (settings.cpp), so the preview is what the TV shows.
+# them from these (wikiqrview.cpp), so the preview is what the TV shows.
 WHITE_RADIUS, TILE_INSET, TILE_RADIUS = 1.2, 0.5, 1.4
 CABINET_TOP, CABINET_SHORT = 1.2, 2.4      # from the patch's top; patch height minus this
 PURPLE = (0x3A, 0x22, 0x68)                # ui::palette::kBackdropTop
@@ -82,7 +82,7 @@ constexpr const char* kRows[kSize] = {{
 
 
 def cabinet(draw, x, y, h):
-    """The cabinet as setup.cpp's drawCabinet draws it, top-left at x,y,
+    """The cabinet as startscreen.cpp's drawCabinet draws it, top-left at x,y,
     `h` tall (its 1024 space spans x 248..775, y 130..850)."""
     s = h / 720.0
     ox, oy = x - 248 * s, y - 130 * s
