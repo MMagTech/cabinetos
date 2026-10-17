@@ -16,8 +16,8 @@
 // three things it asks a frontend for: the network (libcurl, on a worker, in
 // ra_net.cpp), the emulated machine's memory (the core's map through
 // rc_libretro, or PCSX2's memory through the bridge), and somewhere to say
-// what happened (the pop-up queue and the log). What the files share is in
-// ra_state.h.
+// what happened (the pop-up queue and the log). The game's page's list is in
+// ra_list.cpp, and what the files share in ra_state.h.
 //
 // THE GAME IS IDENTIFIED BY RomM's `ra_hash`, which RomM works out when it
 // scans: the fingerprint RetroAchievements knows the game by. The console never

@@ -1,10 +1,11 @@
-// What RetroAchievements' files share: the sign-in, owned by achievements.cpp
-// and the network (ra_net.cpp). Internal: only achievements.cpp and ra_net.cpp
-// include it. Moved out of achievements.cpp's anonymous namespace in the
-// restructure (#398).
+// What RetroAchievements' files share: the sign-in, owned by achievements.cpp,
+// the network (ra_net.cpp) and the game's page's list (ra_list.cpp). Internal:
+// only achievements.cpp, ra_net.cpp and ra_list.cpp include it. Moved out of
+// achievements.cpp's anonymous namespace in the restructure (#398).
 
 #pragma once
 
+#include <cstdint>
 #include <deque>
 #include <functional>
 #include <string>
@@ -43,5 +44,19 @@ void startWorker();
 std::deque<Job> stopWorker();
 void runAnswers();
 void dropAnswers();
+
+// rc_client's own number for its notices, which come as achievements: onEvent
+// logs them, and the game's page leaves them out (RC_CLIENT_ACHIEVEMENT_WARNING_ID,
+// private to rc_client.c).
+constexpr uint32_t kWarningId = 101000001;
+
+// Defined in achievements.cpp.
+std::string str(const char* s);
+void keepAnswer(const std::string& name, const std::string& body);
+GameList sampleList();
+
+// The game's page's list (ra_list.cpp).
+void order(GameList& l);
+void forgetList(const std::string& hash);
 
 }  // namespace ra
