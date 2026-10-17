@@ -12,8 +12,8 @@
 
 #include "covercache.h"
 #include "design.h"
+#include "libraryscreen.h"
 #include "romm.h"
-#include "screens.h"
 
 struct Library {
     std::vector<design::Card> cards;

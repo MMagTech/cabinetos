@@ -1,4 +1,5 @@
 #include "settings.h"
+#include "qr.h"
 #include "setup.h"
 #include "wikiqr.h"
 

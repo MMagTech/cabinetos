@@ -41,6 +41,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "accountpanel.h"
 #include "accounts.h"
 #include "achievements.h"
 #include "achlist.h"
@@ -48,24 +49,30 @@
 #include "bluetooth.h"
 #include "choice.h"
 #include "design.h"
+#include "detailscreen.h"
 #include "disc.h"
 #include "downloads.h"
 #include "drives.h"
 #include "files.h"
+#include "grid.h"
 #include "idle.h"
 #include "image.h"
 #include "keyboard.h"
+#include "libraryscreen.h"
 #include "look.h"
 #include "manualview.h"
 #include "net.h"
+#include "panels.h"
 #include "pin.h"
 #include "players.h"
 #include "playtime.h"
+#include "qrlink.h"
 #include "remoteplay.h"
 #include "report.h"
 #include "rewind.h"
 #include "romm.h"
 #include "screens.h"
+#include "searchscreen.h"
 #include "server.h"
 #include "settings.h"
 #include "setup.h"
@@ -634,14 +641,14 @@ struct App {
     std::string detailManualTitle;
     screens::SearchScreen searchScreen;
     screens::AccountScreen accountScreen;
-    screens::AddAccountScreen addAccountScreen;
+    screens::QrLinkScreen addAccountScreen;
     // Signing the console in to Tailscale (#286): the same screen, a link to
     // approve on a phone. The one line is the constraint that matters: the
     // account has to be the one the phone uses, or the two never meet.
-    screens::AddAccountScreen tsSignInScreen;
+    screens::QrLinkScreen tsSignInScreen;
     // THE DIAGNOSTIC REPORT (#195): the same screen again, the link this time
     // a download of the report. Its lines are set when it is made.
-    screens::AddAccountScreen reportScreen;
+    screens::QrLinkScreen reportScreen;
     // ABOUT, HOW TO (#314): the controls, in Settings' own shape (a section
     // per row on the left, its lines on the right), so it looks like the
     // console rather than a page of text (MMagTech on the TV, 2026-10-10).

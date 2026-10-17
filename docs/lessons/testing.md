@@ -563,6 +563,26 @@ opened once and reused needs a test of two different games in one run.**
   have (move 4 and move 5 both). `rsync --delete` the older tree's sources
   onto the A9 first.
 
+- **TWO SUITE RUNS SIDE BY SIDE NEED THEIR OWN PORTS, AND ONE PATH IS
+  SHARED.** 2026-10-16, move 6 of #398: the binary under test and the base
+  binary's second run went at the same time to save 25 minutes, each with
+  its own relay ports (`suite6p.sh`, `P` the port base), roots, outputs and
+  pid files. The frontend writes one fixed file, `/tmp/cabinetos-manual.pdf`
+  (a game's manual), so the second run starts three minutes after the
+  first. The relay's port is part of any address the console shows, so a
+  QR of the pairing link differs by port alone: compare it on the same
+  port, rerun alone. The two runs under the same load are the
+  like-for-like pair; the first run, alone, shows what the load changes.
+
+- **A CAPTURE TIMED BY `--frames` SHOWS A DIFFERENT FADE WHEN THE MACHINE IS
+  BUSY.** The same move: the 4K Home capture (120 frames) took 6.6 s in one
+  run against 0.8 s in every other, because the run beside it was busy, and
+  caught Home fully faded in where the others caught it half dim: eight
+  million pixels different, from timing alone. Alone, three runs on each
+  binary gave the same picture. The fades follow the clock, not the frame
+  count; rerun a large capture difference alone, and swap the roots, before
+  reading anything into it.
+
 - **A loop deploy restarts gamescope, and every `gamescopectl` setting goes
   with it.** 2026-10-07: `composite_force` was on for a Remote Play stream;
   `tools/ui-loop.sh` restarted the session, the setting was gone, and the

@@ -12,7 +12,7 @@
 #include "discs.h"
 #include "fileio.h"
 #include "app.h"
-#include "image.h"
+#include "imagecodec.h"
 #include "proc.h"
 #include "screenparts.h"
 #include "storage.h"

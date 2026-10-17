@@ -2,6 +2,7 @@
 
 #include <cmath>
 
+#include "panels.h"
 #include "sound.h"
 
 #include <algorithm>

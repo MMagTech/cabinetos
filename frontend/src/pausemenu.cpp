@@ -327,7 +327,7 @@ void App::drawPauseMenu(float sc) {
         // Rises slightly as it arrives rather than only fading: a panel that
         // just materialises reads as a glitch.
         const float py = (ui::kCanvasHeight - panelH) * 0.5f + (1.0f - ovl) * overlayRise;
-        // SOLID, NOT GLASS. See design.h, kOverlayPanelFill, for why — in
+        // SOLID, NOT GLASS. See panels.h, kOverlayPanelFill, for why — in
         // short, glass blurs the console's own scene texture, and on the
         // composited path the game is not in it. A panel that is frosted on
         // one path and flat on the other is the exact difference this
@@ -369,7 +369,7 @@ void App::drawPauseMenu(float sc) {
                              (bh - kOverlayButtonHeight) * 0.5f;
 
             // FOCUS IS A RIM, the same one every card and pill in this
-            // console uses. See design.h — a light-filled bar was tried and
+            // console uses. See panels.h — a light-filled bar was tried and
             // it both shouted and invented a second focus idiom for one
             // screen.
             ui::Rect btn{bx, by, bw, bh, kOverlayButtonRadius,

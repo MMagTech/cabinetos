@@ -12,6 +12,7 @@
 #include "capture.h"
 #include "core.h"
 #include "fileio.h"
+#include "imagecodec.h"
 #include "storage.h"
 
 using namespace design;   // NOLINT, as main.cpp names them

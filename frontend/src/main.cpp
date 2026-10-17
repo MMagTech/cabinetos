@@ -5,9 +5,10 @@
 // and the teardown. The App owns everything a screen is not allowed to: the
 // RomM client, the core, the download worker, the upload worker, the cache,
 // and the navigation between them, each in the file named for it. The
-// screens themselves are in screens.cpp and return an Action rather than
-// doing anything; what an Action costs is decided in actions.cpp, which is
-// why a screen can never start a download by accident.
+// screens themselves are in their own files (what they share is screens.h)
+// and return an Action rather than doing anything; what an Action costs is
+// decided in actions.cpp, which is why a screen can never start a download by
+// accident.
 //
 //   Home       resume-first: the Recent and Favorites shelves. The first Recent
 //              card is what you were playing, focused on arrival, and the one
@@ -44,10 +45,10 @@ void requestCapture(int) { gCaptureRequested = 1; }
 
 namespace {
 
-// The design system's numbers, the animation primitive and the card live in
-// design.h now, because the screens are separate translation units and two
-// copies of a focus scale is how a shelf and a grid end up disagreeing about
-// what focus looks like.
+// The design system's numbers live in design.h, the animation primitive in
+// motion.h and the card in card.h, because the screens are separate
+// translation units and two copies of a focus scale is how a shelf and a grid
+// end up disagreeing about what focus looks like.
 using namespace design;   // NOLINT — every name in it is a design-system value
 
 }  // namespace

@@ -22,6 +22,7 @@
 #include <utility>
 #include <vector>
 
+#include "qrtexture.h"
 #include "screens.h"
 
 namespace screens {
