@@ -3,10 +3,8 @@
 #include <curl/curl.h>
 #include <json-c/json.h>
 
-#include <sys/stat.h>
 #include <unistd.h>
 
-#include <atomic>
 #include <chrono>
 #include <condition_variable>
 #include <cstdio>
@@ -15,6 +13,8 @@
 #include <map>
 #include <mutex>
 #include <thread>
+
+#include "sunshinelog.h"
 
 namespace remoteplay {
 
@@ -25,7 +25,6 @@ constexpr const char* kApi = "https://localhost:47990";
 constexpr const char* kUser = "cabinetos";
 constexpr const char* kLoginFile = "/var/lib/cabinetos/remoteplay/web";
 constexpr const char* kNamesFile = "/var/lib/cabinetos/remoteplay/names.json";
-constexpr const char* kLogFile = "/var/lib/cabinetos/remoteplay/.config/sunshine/sunshine.log";
 constexpr const char* kStateFile =
     "/var/lib/cabinetos/remoteplay/.config/sunshine/sunshine_state.json";
 
@@ -57,63 +56,6 @@ void writeNames() {
     if (json_object_to_file_ext(tmp.c_str(), o, JSON_C_TO_STRING_PRETTY) == 0)
         std::rename(tmp.c_str(), kNamesFile);
     json_object_put(o);
-}
-
-std::atomic<bool> gStreaming{false};
-
-// THE LOG AS IT GROWS. Sunshine starts a new file each time it starts (the
-// old one becomes sunshine.log.1), so a file that is a different one, or
-// shorter than what was read, is read from its start.
-struct Tail {
-    ino_t inode = 0;
-    off_t at = 0;
-} gTail;
-
-void readLog() {
-    struct stat st{};
-    if (::stat(kLogFile, &st) != 0) {
-        gStreaming = false;
-        return;
-    }
-    if (st.st_ino != gTail.inode || st.st_size < gTail.at) {
-        // A NEW FILE IS A NEW SUNSHINE, and a new Sunshine has nobody
-        // streaming: the last one may have been stopped mid-stream, without
-        // writing "CLIENT DISCONNECTED".
-        if (gTail.inode != 0 && gStreaming) {
-            gStreaming = false;
-            std::fprintf(stderr, "[remoteplay] the stream ended (Sunshine started again)\n");
-        }
-        gTail = {st.st_ino, 0};
-    }
-    if (st.st_size == gTail.at) return;
-    std::ifstream f(kLogFile);
-    f.seekg(gTail.at);
-    std::string line;
-    bool any = false, on = gStreaming;
-    while (std::getline(f, line)) {
-        if (f.eof()) break;   // a line still being written is read next time
-        gTail.at += static_cast<off_t>(line.size()) + 1;
-        // A SESSION CLOSED AT SUNSHINE'S END (the console's screen going
-        // out, #294: POST /api/apps/close) ends every stream with "Process
-        // terminated" and no "CLIENT DISCONNECTED". Missed, the console
-        // still counted the phone as there, so the phone joining again was
-        // no change: no press counted, and it streamed the console's black
-        // layer (A9, 2026-10-09 06:31).
-        // AND "Executing Undo Cmd", the session's end step, which Sunshine
-        // runs however a session ends. The console's idle closed one at
-        // 19:38:57 the same day, Sunshine wrote the Undo line and neither of
-        // the other two, and the console counted a phone for an hour after
-        // it had gone: the TV's controllers stayed set aside (#304).
-        if (line.find("CLIENT CONNECTED") != std::string::npos) on = any = true;
-        else if (line.find("CLIENT DISCONNECTED") != std::string::npos ||
-                 line.find("Process terminated") != std::string::npos ||
-                 line.find("Executing Undo Cmd") != std::string::npos)
-            on = false, any = true;
-    }
-    if (any && on != gStreaming) {
-        gStreaming = on;
-        std::fprintf(stderr, "[remoteplay] %s\n", on ? "a device is streaming" : "the stream ended");
-    }
 }
 
 std::mutex gRunM;
@@ -249,27 +191,17 @@ void watch(bool on, bool fresh) {
     }
     gRunCv.notify_all();
     if (on) {
-        // Fresh: what the log holds now was written before this Sunshine
-        // could have taken a device, so it is skipped, whichever Sunshine's
-        // file it is; a newer file is read from its start (readLog).
-        if (fresh) {
-            struct stat st{};
-            gTail = ::stat(kLogFile, &st) == 0 ? Tail{st.st_ino, st.st_size} : Tail{};
-            gStreaming = false;
-        }
+        startReadingLog(fresh);
         gThread = std::thread(loop);
         return;
     }
     if (gThread.joinable()) gThread.join();
-    gStreaming = false;
-    gTail = {};
+    stopReadingLog();
     std::lock_guard<std::mutex> lk(gM);
     gPaired.clear();
     gWaiting.clear();
     ++gGeneration;
 }
-
-bool streaming() { return gStreaming; }
 
 bool sessionOpen() {
     const char* run = std::getenv("XDG_RUNTIME_DIR");
