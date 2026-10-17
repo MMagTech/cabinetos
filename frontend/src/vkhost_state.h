@@ -80,14 +80,17 @@ extern uint32_t gQueueFamily;
 extern VkCommandBuffer gCmd;
 extern VkFence gFence;
 extern std::mutex gQueueLock;
+extern uint32_t gSyncIndex;
+
+// Defined in vkbridge.cpp.
 extern std::mutex gImageLock;
 extern retro_vulkan_image gCoreImage;
 extern bool gHaveCoreImage;
 extern uint32_t gCoreSrcQueueFamily;
 extern std::vector<VkSemaphore> gCoreSemaphores;
-extern uint32_t gSyncIndex;
 extern unsigned gFrameWidth, gFrameHeight;
 extern std::string gDescription;
 void destroyShared();
+bool choosePictureRoute(std::string* err);
 
 }  // namespace cab::vk::state
