@@ -28,22 +28,26 @@ before the restructure is 2026.10.14.5 (git tag on 72c0c4b).
 
 ## Next
 
-Part 4 of the audit (report only; change no code): the scripts, services,
-image build, cores, CI, workflows and tools. Its prompt is
-`~/Documents/Development/cabinetos-audit/part4-prompt.md`; its list of open
-decisions is from 2026-10-14 and out of date (the pace of the moves and the
-backup are decided and done; #398 has the record), and every file's line
-count must be measured again, since the restructure moved most of them.
-Quote the cost before any agent wave and wait for MMagTech's go. Then Part 5
-(the newcomer docs measured against the code, and the refutation of the RomM
-map), then the contributor guide, then the faults the moves left as they
-were (each batch's pull request lists them), each in its own pull request;
-then features and bug fixes resume.
+Part 5 of the audit (report only; change no code): the newcomer docs
+measured against the code, and the refutation of the RomM map. Its prompt is
+`~/Documents/Development/cabinetos-audit/part5-prompt.md`. Four of its agents
+already ran in the Part 4 session and are saved in that folder (the docs
+reader, every stale reference, the two RomM map checks); never rerun them.
+Quote the cost before any agent and wait for MMagTech's go. Then the
+contributor guide, then the faults the moves left as they were and those
+Part 4 recorded (#398, Part 4 section 38), each in its own pull request; then
+features and bug fixes resume.
 
-**Owed by MMagTech:** Part 6 section 29 decisions 2 to 6 (which faults get
-issues, protectRomId 0, folders for the files, the test instruments, the
-names); #408 ("Next session: Part 6 of the #398 audit is posted; the moves
-begin with batch (a)") is still open against main and out of date.
+Part 4 is posted on #398 (three comments, 2026-10-17): the scripts, services,
+image build, cores, CI, workflows and tools. Its record is `part4-log.md`,
+`readers/area-6-system.json` to `area-10-tools.json` and the same names in
+`verifiers/`.
+
+**Owed by MMagTech:** Part 4 section 40 (which faults get issues, whether the
+flatpak retry waits, which splits happen, a workflow to re-point latest, his
+post-refactor cleanup plan); Part 6 section 29 decisions 2 to 6; #408 ("Next
+session: Part 6 of the #398 audit is posted; the moves begin with batch (a)")
+is still open against main and out of date.
 
 The record of every move, its checks and its scripts is in
 `~/Documents/Development/cabinetos-audit/moves-log.md` and `scripts/move1/`
