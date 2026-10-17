@@ -273,6 +273,11 @@ private:
     int64_t qmpCheckMs_ = 0;
     uint32_t xboxTitle_ = 0;   // the game's, once one has run
     uint32_t pollXboxTitle();
+    // Run::start's and Run::poll's pieces for the Xbox (standalone_xemu.cpp,
+    // as is pollXboxTitle).
+    bool startXemu(const Emulator& e, const std::string& romPath, const std::string& dir,
+                   const std::string& gameDir, const std::string& out, std::string* err);
+    void watchDashboard(int64_t now);
     End ended_ = End::None;
 };
 

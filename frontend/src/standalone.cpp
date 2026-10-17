@@ -7,9 +7,7 @@
 
 #include <dirent.h>
 #include <signal.h>
-#include <sys/socket.h>
 #include <sys/stat.h>
-#include <sys/un.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -294,55 +292,6 @@ std::string yamlQuote(const std::string& v) {
 // What the emulators' files share (standalone_internal.h), used here bare.
 using namespace detail;
 
-namespace {
-
-// THE DASHBOARD'S TITLE ID. xemu-dashboard's (FFFF0002, read from
-// C:\xboxdash.xbe on the drive install-xemu-drive.sh pins), and Microsoft's
-// (FFFE0000) should a drive ever carry that instead.
-bool isXboxDashboard(uint32_t title) { return title == 0xFFFF0002 || title == 0xFFFE0000; }
-
-// The title ID in an XBE's header, as it sits in the Xbox's memory at
-// 0x10000: `XBEH`, the base address at 0x104 and the certificate's at 0x118,
-// the title ID eight bytes into the certificate (xemu-xbe.h). Zero when it is
-// not there yet.
-uint32_t xbeTitle(const std::string& h) {
-    auto le = [&](size_t at) {
-        return static_cast<uint32_t>(static_cast<uint8_t>(h[at])) |
-               static_cast<uint32_t>(static_cast<uint8_t>(h[at + 1])) << 8 |
-               static_cast<uint32_t>(static_cast<uint8_t>(h[at + 2])) << 16 |
-               static_cast<uint32_t>(static_cast<uint8_t>(h[at + 3])) << 24;
-    };
-    if (h.size() < 0x120 || h.compare(0, 4, "XBEH") != 0) return 0;
-    const uint32_t base = le(0x104), cert = le(0x118);
-    if (cert < base || cert - base + 12 > h.size()) return 0;
-    return le(cert - base + 8);
-}
-
-// One QMP command and its answer: lines until one says "return" or "error"
-// (events can come first). False on no answer or an error.
-bool qmpCommand(int fd, const std::string& cmd) {
-    const std::string line = cmd + "\n";
-    if (::send(fd, line.data(), line.size(), MSG_NOSIGNAL) != static_cast<ssize_t>(line.size()))
-        return false;
-    std::string got;
-    char buf[4096];
-    for (int reads = 0; reads < 16; ++reads) {
-        const ssize_t n = ::recv(fd, buf, sizeof buf, 0);
-        if (n <= 0) return false;
-        got.append(buf, static_cast<size_t>(n));
-        size_t nl;
-        while ((nl = got.find('\n')) != std::string::npos) {
-            const std::string one = got.substr(0, nl);
-            got.erase(0, nl + 1);
-            if (one.find("\"return\"") != std::string::npos) return true;
-            if (one.find("\"error\"") != std::string::npos) return false;
-        }
-    }
-    return false;
-}
-
-}  // namespace
-
 const Emulator* find(const std::string& core) {
     for (const Emulator& e : kEmulators)
         if (core == e.core) return &e;
@@ -437,39 +386,6 @@ std::string saveRoot(const Emulator& e, const std::string& saveDir) {
         return saveDir + "/hdd0/home/" + kPs3User + "/savedata";
     if (std::strcmp(e.core, "eden") == 0) return edenSaveRoot(e, saveDir);
     return {};
-}
-
-uint32_t Run::pollXboxTitle() {
-    const std::string dir = home(*emu_);
-    if (qmpFd_ < 0) {
-        const std::string path = dir + "/qmp.sock";
-        const int fd = ::socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
-        sockaddr_un addr{};
-        addr.sun_family = AF_UNIX;
-        if (fd < 0 || path.size() >= sizeof addr.sun_path) {
-            if (fd >= 0) ::close(fd);
-            return 0;
-        }
-        std::memcpy(addr.sun_path, path.c_str(), path.size() + 1);
-        if (::connect(fd, reinterpret_cast<sockaddr*>(&addr), sizeof addr) != 0) {
-            ::close(fd);
-            return 0;   // not listening yet
-        }
-        timeval tv{0, 300 * 1000};
-        ::setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv);
-        qmpFd_ = fd;
-        if (!qmpCommand(qmpFd_, "{\"execute\":\"qmp_capabilities\"}")) {
-            ::close(qmpFd_);
-            qmpFd_ = -1;
-            return 0;
-        }
-    }
-    const std::string dump = dir + "/xbe-header.bin";
-    ::unlink(dump.c_str());
-    if (!qmpCommand(qmpFd_, "{\"execute\":\"memsave\",\"arguments\":{\"val\":65536,"
-                            "\"size\":4096,\"filename\":" + yamlQuote(dump) + "}}"))
-        return 0;
-    return xbeTitle(readFile(dump));
 }
 
 bool beforeStart(const Emulator& e, const std::string& entryPath, const std::string& saveDir,
@@ -593,56 +509,7 @@ bool Run::start(const Emulator& e, const std::string& romPath, const std::string
         return true;
     }
 
-    // XBOX. Its home is its XDG data folder, where xemu keeps anything it
-    // writes by itself; the game's folder is writable because the drive is
-    // in it (and a disc on a read-only mount cannot take qemu's lock: xemu
-    // #2958). X11 only: the Flatpak asks SDL for Wayland first.
-    if (std::strcmp(e.core, "xemu") == 0) {
-        const char* xdgCache = std::getenv("XDG_CACHE_HOME");
-        const char* userHome = std::getenv("HOME");
-        const std::string mesaCache = (xdgCache && *xdgCache
-                                           ? std::string(xdgCache)
-                                           : std::string(userHome ? userHome : "") + "/.cache");
-        storage::makeDirs(mesaCache + "/mesa_shader_cache");
-        const std::vector<std::string> args = {
-            "flatpak", "run",
-            "--cwd=" + dir,
-            "--filesystem=" + dir,
-            "--filesystem=" + gameDir,
-            // THE DRIVER'S SHADER MEMORY IS SHARED with the console's, as
-            // RPCS3's is (see below), so its first-run wait is paid once.
-            "--filesystem=" + mesaCache + "/mesa_shader_cache",
-            "--env=MESA_SHADER_CACHE_DIR=" + mesaCache,
-            "--env=XDG_DATA_HOME=" + dir,
-            "--env=SDL_VIDEODRIVER=x11",
-            "--nosocket=wayland",
-            "--env=SDL_JOYSTICK_HIDAPI=0",
-            // ONLY THE VIRTUAL CONTROLLERS, not the real pads too. xemu's own
-            // menu reads every gamepad SDL shows it, bound to a port or not
-            // (ui/xui/input-manager.cc), so a real pad's Guide, or Back and
-            // Start together, opened it over the game (FlatOut, 2026-09-29).
-            // The ID is vpad.cpp's; SDL's own hint, no patch.
-            "--env=SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT=0x1209/0xCAB0",
-            "--env=LC_NUMERIC=C",
-            std::string("--command=") + e.program,
-            e.flatpak,
-            "-config_path", dir + "/xemu.toml",
-            "-dvd_path", romPath,
-            // qemu's control socket, for the dashboard watch.
-            "-qmp", "unix:" + dir + "/qmp.sock,server=on,wait=off",
-        };
-        ::unlink((dir + "/qmp.sock").c_str());
-        root_ = proc::spawn(args, out);
-        if (root_ <= 0) {
-            *err = "could not start flatpak";
-            root_ = -1;
-            return false;
-        }
-        startMs_ = nowMs();
-        std::fprintf(stderr, "[standalone] started %s (pid %d) on %s\n", e.flatpak, root_,
-                     romPath.c_str());
-        return true;
-    }
+    if (std::strcmp(e.core, "xemu") == 0) return startXemu(e, romPath, dir, gameDir, out, err);
 
     const std::vector<std::string> args = {
         "flatpak", "run",
@@ -828,24 +695,7 @@ bool Run::poll() {
     }
 
     // THE XBOX'S DASHBOARD (watchesDashboard): the game quit, or never ran.
-    if (emu_->watchesDashboard && !stopping() && !frozen_ && now - qmpCheckMs_ >= 1000) {
-        qmpCheckMs_ = now;
-        const uint32_t title = pollXboxTitle();
-        if (title != 0 && !isXboxDashboard(title) && title != xboxTitle_) {
-            xboxTitle_ = title;
-            std::fprintf(stderr, "[xbox] running title %08X\n", title);
-        } else if (title != 0 && isXboxDashboard(title)) {
-            if (xboxTitle_ != 0) {
-                std::fprintf(stderr, "[xbox] the game went to the dashboard; closing xemu\n");
-                stop();
-            } else {
-                std::fprintf(stderr, "[xbox] the dashboard came up, not the game\n");
-                failedLoad_ = true;
-                stopAtMs_ = now;
-                kill9();
-            }
-        }
-    }
+    watchDashboard(now);
 
     // A GAME THAT STOPPED, by itself or through the emulator's own exit
     // shortcut, leaves the emulator's window up: its title loses the game.
