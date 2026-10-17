@@ -31,7 +31,7 @@ URL = "https://mmagtech.github.io/cabinetos/wiki/"
 # alignment patterns.
 PATCH_W, PATCH_H = 13, 15
 # The tile and the cabinet inside the patch, in modules. The console draws
-# them from these (settings.cpp), so the preview is what the TV shows.
+# them from these (wikiqrview.cpp), so the preview is what the TV shows.
 WHITE_RADIUS, TILE_INSET, TILE_RADIUS = 1.2, 0.5, 1.4
 CABINET_TOP, CABINET_SHORT = 1.2, 2.4      # from the patch's top; patch height minus this
 PURPLE = (0x3A, 0x22, 0x68)                # ui::palette::kBackdropTop

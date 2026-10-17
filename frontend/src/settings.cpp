@@ -1,7 +1,7 @@
 #include "settings.h"
 #include "qr.h"
-#include "startscreen.h"
 #include "wikiqr.h"
+#include "wikiqrview.h"
 
 #include "sound.h"
 
@@ -439,12 +439,7 @@ void SettingsScreen::drawGlass(Ctx& c) {
         if (qrFor_ != cat.qr) {
             std::string err;
             if (wiki) {
-                qr::Code code;
-                code.size = wikiqr::kSize;
-                for (int y = 0; y < wikiqr::kSize; ++y)
-                    for (int x = 0; x < wikiqr::kSize; ++x)
-                        code.modules.push_back(wikiqr::kRows[y][x] == '#' ? 1 : 0);
-                qr_.set(code);
+                qr_.set(wikiqr::qrCode());
             } else {
                 qr_.set(qr::encode(cat.qr, &err));
             }
@@ -458,19 +453,7 @@ void SettingsScreen::drawGlass(Ctx& c) {
         const float side = std::clamp(itemBottom - qy, 360.0f, std::min(pw, 640.0f));
         const float qx = px + (pw - side) * 0.5f;
         if (qr_.valid()) qr_.draw(c.r, qx, qy, side);
-        if (wiki && qr_.valid()) {
-            // The patch, as the tool drew it in the preview it checked: white,
-            // the startup screen's purple, then the cabinet.
-            const float m = side / static_cast<float>(wikiqr::kSize + 8);   // 4 quiet each side
-            const float X = qx + (4 + wikiqr::kPatchX) * m, Y = qy + (4 + wikiqr::kPatchY) * m;
-            const float W = wikiqr::kPatchW * m, H = wikiqr::kPatchH * m, t = wikiqr::kTileInset * m;
-            c.r.draw(ui::Rect{X, Y, W, H, wikiqr::kWhiteRadius * m, ui::Color::white(1.0f)});
-            c.r.draw(ui::Rect{X + t, Y + t, W - 2 * t, H - 2 * t, wikiqr::kTileRadius * m,
-                              ui::palette::kBackdropTop});
-            const float ch = (wikiqr::kPatchH - wikiqr::kCabinetShort) * m;
-            setup::drawCabinetIcon(c.r, X + (W - ch * 527.0f / 720.0f) * 0.5f,
-                                   Y + wikiqr::kCabinetTop * m, ch, alpha);
-        }
+        if (wiki && qr_.valid()) wikiqr::drawPatch(c.r, qx, qy, side, alpha);
     };
     auto drawPane = [&](int ci, float alpha, int focusRow, float scrollY) {
         drawRows(cats_[ci].rows, alpha, focusRow, scrollY);
