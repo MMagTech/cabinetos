@@ -23,7 +23,10 @@
 // exists. Each call uses its own CURL handle, so concurrent calls are safe.
 //
 // THE DATA IT HANDS BACK IS IN romm_types.h (a platform, a game and the
-// rest), so a header that needs only the types does not take the client.
+// rest), so a header that needs only the types does not take the client. The
+// client's own code is in five files by job: romm_http.cpp (every request),
+// romm_pairing.cpp, romm_library.cpp, romm_playdata.cpp and romm_codes.cpp,
+// with what they share in romm_internal.h.
 
 #pragma once
 
