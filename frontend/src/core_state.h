@@ -48,10 +48,6 @@ struct EntryPoints {
 
 // Defined in core.cpp.
 extern EntryPoints g;
-extern retro_disk_control_ext_callback gDisk;
-extern bool gDiskSet;
-extern int gInitialDisc;
-extern std::string gInitialDiscPath;
 extern unsigned gPixelFormat;
 extern unsigned gRotation;
 extern bool gRotationAnnounced;
@@ -99,5 +95,12 @@ std::optional<bool> environmentInput(unsigned cmd, void* data);
 // Defined in core_memory.cpp.
 void keepMemoryMap(const retro_memory_map* mm);
 std::optional<bool> environmentMemory(unsigned cmd, void* data);
+
+// Defined in core_discs.cpp.
+extern retro_disk_control_ext_callback gDisk;
+extern bool gDiskSet;
+extern int gInitialDisc;
+extern std::string gInitialDiscPath;
+std::optional<bool> environmentDiscs(unsigned cmd, void* data);
 
 }  // namespace cab::corestate
