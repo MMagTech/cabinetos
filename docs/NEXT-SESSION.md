@@ -8,58 +8,46 @@ ask them to test, and never claim a fix nobody reproduced.
 
 ## Where things stand
 
-**2026-10-17, early morning:** `latest` is **2026.10.14.5** (built from
-72c0c4b, tagged in git). The A9 (Wi-Fi, **192.168.1.109**; Tailscale
-cabinetos, 100.67.82.30) is on the testing channel and runs **2026.10.17.3**,
-the restructure's final image, installed through its own Settings > System
-update; its PIN is OFF until MMagTech's checklist turns it back on. RomM's
-documentation together with RomM's behaviour is the source of truth for
-anything on RomM's data.
+**2026-10-17:** `latest` is **2026.10.17.3** (revision f4aa82c, digest
+sha256:f84aa879...dfa8), promoted at 8:48 AM by the merge of #421
+("The restructure: main.cpp's 20,000 lines and the other big files split into
+files named for what they do") into main as 27abe89. The A9 (Wi-Fi,
+**192.168.1.109**; Tailscale cabinetos, 100.67.82.30) is on the testing
+channel, runs 2026.10.17.3, and its PIN is on. testing and latest hold the
+same image and work as they did before the restructure: a branch cut from
+main goes to testing as a plain fast-forward. RomM's documentation together with RomM's behaviour is the
+source of truth for anything on RomM's data.
 
-**All the restructure's moves are merged into `restructure`** (#398, "Audit
-the code and restructure it for contributors (main.cpp is 20,000 lines)"),
-unattended since 2026-10-16, 8:48 PM on MMagTech's word: move 6, batch (h1),
-#418 (testing 2026.10.17); move 7, batch (h2), #419 (2026.10.17.2); move 8,
-batch (i), #420 (2026.10.17.3), which also fixes the RomM client's thread
-rule. Each batch had the machine checks and its own testing image, installed
-on the A9 and proved from its log; none had a TV round of its own.
-
-**What is left is MMagTech's:** the one checklist on the final image, in the
-pull request that takes `restructure` to main (its body holds the checklist
-with boxes to tick), then his "merge", which promotes 2026.10.17.3 to
-`latest`, the only step that reaches players; then his go to delete the
-merged move branches (listed in that pull request).
+**The restructure of #398 ("Audit the code and restructure it for
+contributors (main.cpp is 20,000 lines)") is done and shipped:** moves 1 to
+8 (#409, #410, #413, #414, #415, #418, #419, #420), MMagTech's checklist on
+the final image (all 22 TV steps good), and the move branches deleted. Each
+batch's image keeps its tag for narrowing a fault down on the A9:
+testing-61e1e84 (h1), testing-f01296c (h2), testing-f4aa82c (i); the console
+before the restructure is 2026.10.14.5 (git tag on 72c0c4b).
 
 ## Next
 
-- If the checklist finds a fault: narrow it down by switching the A9 to each
-  batch's testing image (testing-61e1e84 for (h1), testing-f01296c for (h2),
-  testing-f4aa82c for (i)); fix it in its own pull request into
-  `restructure`, push to testing, install, and run the failed step again.
-- After the merge to main: Parts 4 and 5 of the audit (report only; quote the
-  cost before any agent wave), then the contributor guide, then the faults
-  the moves left as they were (each batch's pull request lists them), each in
-  its own pull request; then features and bug fixes resume.
-- The record of every move, its checks and its scripts is in
-  `~/Documents/Development/cabinetos-audit/moves-log.md` and `scripts/move1/`
-  to `scripts/move7/`.
+Part 4 of the audit (report only; change no code): the scripts, services,
+image build, cores, CI, workflows and tools. Its prompt is
+`~/Documents/Development/cabinetos-audit/part4-prompt.md`; its list of open
+decisions is from 2026-10-14 and out of date (the pace of the moves and the
+backup are decided and done; #398 has the record), and every file's line
+count must be measured again, since the restructure moved most of them.
+Quote the cost before any agent wave and wait for MMagTech's go. Then Part 5
+(the newcomer docs measured against the code, and the refutation of the RomM
+map), then the contributor guide, then the faults the moves left as they
+were (each batch's pull request lists them), each in its own pull request;
+then features and bug fixes resume.
 
-**What the moves have taught** (testing.md has them in full): run every
-headless test through `tools/romm-readonly-relay.py`; run the base binary
-twice to show what timing alone changes, and swap the scratch roots before
-blaming a binary; a test game on the console ends inside a minute by
-`--restore`; `rsync --delete` a tree's sources onto the A9 before its loop
-deploy; give podman an absolute folder, never `$PWD`, under `set -e`. New in
-move 6: two suite runs side by side need their own relay ports, and one
-fixed path is shared (`/tmp/cabinetos-manual.pdf`), so start them minutes
-apart; a capture timed by `--frames` shows a different fade when the machine
-is busy, so rerun a large difference alone before reading anything into it.
+**Owed by MMagTech:** Part 6 section 29 decisions 2 to 6 (which faults get
+issues, protectRomId 0, folders for the files, the test instruments, the
+names); #408 ("Next session: Part 6 of the #398 audit is posted; the moves
+begin with batch (a)") is still open against main and out of date.
 
-**Owed by MMagTech, at the checklist or after:** Part 6 section 29 decisions
-2 to 6 (which faults get issues, protectRomId 0, folders for the files, the
-test instruments, the names); #408 ("Next session: Part 6 of the #398 audit
-is posted; the moves begin with batch (a)") is still open against main; the
-merged move branches to delete (listed in the checklist).
+The record of every move, its checks and its scripts is in
+`~/Documents/Development/cabinetos-audit/moves-log.md` and `scripts/move1/`
+to `scripts/move7/`; what the moves taught is in docs/lessons/testing.md.
 
 ## Waiting, not for the next session unless MMagTech raises them
 
@@ -87,6 +75,8 @@ merged move branches to delete (listed in the checklist).
   ("running Beetle Saturn")".
 - #417, "The diagnostic report stops downloading at about 2.5 MB (its ten
   seconds are counted as 250 ms per wait)".
+- #422, "Primal Rage (PS1) will not start: PCSX-ReARMed says its CHD is not
+  a valid CD image": found in the checklist; the file matches RomM's.
 - deletableman (#341, #376): nothing new from him.
 
 **After a console is installed fresh** it has no key: About, press Version
