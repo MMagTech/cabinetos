@@ -1,8 +1,8 @@
 // What the standalone emulators' files share: the helpers, defined in
 // standalone.cpp, and each emulator's own entry points, defined in its file.
-// Internal: only standalone.cpp, standalone_eden.cpp, standalone_rpcs3.cpp and
-// standalone_xenia.cpp include it. Moved out of standalone.cpp's anonymous
-// namespace in the restructure (#398).
+// Internal: only standalone.cpp, standalone_eden.cpp, standalone_rpcs3.cpp,
+// standalone_xenia.cpp and standalone_cemu.cpp include it. Moved out of
+// standalone.cpp's anonymous namespace in the restructure (#398).
 
 #pragma once
 
@@ -65,5 +65,12 @@ bool xeniaBeforeStart(const std::string& saveDir, const std::string& player, std
 // before the program (full.end() - 1), and the game's path is last.
 void xeniaArgs(std::vector<std::string>& full, const std::string& dir, const std::string& saveDir,
                const std::string& logPath, quality::Level level, const std::string& romPath);
+
+// Wii U (standalone_cemu.cpp).
+std::string cemuMlc(const std::string& saveDir);
+bool prepareCemu(const Emulator& e, const std::string& saveDir, int players, std::string* err);
+// Run::start's arguments for Cemu, as for xeniaArgs: the environment entries
+// before the program, then `-g`, the game's path and `-f` after it.
+void cemuArgs(std::vector<std::string>& full, const std::string& dir, const std::string& romPath);
 
 }  // namespace cab::standalone::detail
