@@ -1,7 +1,8 @@
 #include "wii.h"
 
+#include "codecache.h"
+#include "gametdb.h"
 #include "prefs.h"
-#include "storage.h"
 
 #include <cstdint>
 #include <cstdio>
@@ -10,38 +11,15 @@
 #include <cstring>
 #include <fstream>
 #include <iterator>
-#include <map>
-#include <mutex>
-#include <set>
 
 namespace wii {
 namespace {
 
-std::map<std::string, std::string> gControls;
-std::once_flag gLoaded;
-
-// Read once, on first use, from whichever thread asks first: the library pages
-// in on workers and the launch path asks on the main thread.
-void load() {
-    const char* env = std::getenv("CABINETOS_WII_CONTROLS");
-    const std::string path = env && *env ? env : "/usr/share/cabinetos/wii-controls.txt";
-    std::ifstream in(path);
-    if (!in) {
-        // Said, because without it every Wii game reads as needing a Remote,
-        // which looks like a decision rather than a missing file.
-        std::fprintf(stderr, "[wii] no controller list at %s; every Wii game needs a Remote\n",
-                     path.c_str());
-        return;
-    }
-    std::string line;
-    while (std::getline(in, line)) {
-        if (line.empty() || line[0] == '#') continue;
-        const size_t sp = line.find(' ');
-        if (sp == std::string::npos) continue;
-        gControls[line.substr(0, sp)] = line.substr(sp + 1);
-    }
-    std::fprintf(stderr, "[wii] %zu games in the controller list\n", gControls.size());
-}
+// Wii's controller list and the codes read off its files (gametdb.h,
+// codecache.h; wiiu.cpp has its own of each).
+cab::GameTdb gControls("CABINETOS_WII_CONTROLS", "/usr/share/cabinetos/wii-controls.txt", "wii",
+                       "every Wii game needs a Remote");
+cab::CodeCache gCodes("wii-codes.txt");
 
 uint32_t be32(const unsigned char* p) {
     return (uint32_t(p[0]) << 24) | (uint32_t(p[1]) << 16) | (uint32_t(p[2]) << 8) | p[3];
@@ -54,22 +32,6 @@ std::string fourLetters(const unsigned char* p) {
         code.push_back(static_cast<char>(p[i]));
     }
     return code;
-}
-
-std::mutex gCodesLock;
-std::map<int, std::string> gCodes;
-bool gCodesRead = false;
-
-std::string codesPath() { return storage::configDir() + "/wii-codes.txt"; }
-
-// Called with gCodesLock held.
-void readCodes() {
-    if (gCodesRead) return;
-    gCodesRead = true;
-    std::ifstream in(codesPath());
-    int id;
-    std::string code;
-    while (in >> id >> code) gCodes[id] = code == "-" ? std::string() : code;
 }
 
 }  // namespace
@@ -96,21 +58,9 @@ std::string codeFromHeader(const unsigned char* b, size_t n) {
     return fourLetters(b + disc);
 }
 
-std::string rememberedCode(int romId, bool* known) {
-    std::lock_guard<std::mutex> lock(gCodesLock);
-    readCodes();
-    auto it = gCodes.find(romId);
-    *known = it != gCodes.end();
-    return *known ? it->second : std::string();
-}
+std::string rememberedCode(int romId, bool* known) { return gCodes.remembered(romId, known); }
 
-void rememberCode(int romId, const std::string& code) {
-    std::lock_guard<std::mutex> lock(gCodesLock);
-    readCodes();
-    gCodes[romId] = code;
-    std::ofstream out(codesPath(), std::ios::app);
-    out << romId << ' ' << (code.empty() ? "-" : code) << '\n';
-}
+void rememberCode(int romId, const std::string& code) { gCodes.remember(romId, code); }
 
 std::string titleIdOf(const std::string& code) {
     static const char* kHex = "0123456789ABCDEF";
@@ -130,15 +80,7 @@ std::string codeFromTitleId(const std::string& hex) {
     return code;
 }
 
-std::string controls(const std::string& code) {
-    if (code.empty()) return {};
-    std::call_once(gLoaded, load);
-    std::set<char> letters;
-    for (auto it = gControls.lower_bound(code);
-         it != gControls.end() && it->first.compare(0, code.size(), code) == 0; ++it)
-        letters.insert(it->second.begin(), it->second.end());
-    return std::string(letters.begin(), letters.end());
-}
+std::string controls(const std::string& code) { return gControls.controls(code); }
 
 unsigned padDevice(const std::string& code) {
     const std::string c = controls(code);
