@@ -57,7 +57,6 @@ extern size_t gFramePitch;
 extern bool gFrameDirty;
 extern uint64_t gAudioFrames;
 extern uint64_t gFramesRun;
-void videoRefresh(const void* data, unsigned width, unsigned height, size_t pitch);
 extern bool gIsPs2;
 extern std::string gPs2ResourcesDir;
 extern float gPs2Upscale;
@@ -105,5 +104,8 @@ void destroyHWTarget();
 bool ensureHWTarget(unsigned w, unsigned h);
 void restoreGLState();
 std::optional<bool> environmentHWRender(unsigned cmd, void* data);
+
+// Defined in core_picture.cpp.
+void videoRefresh(const void* data, unsigned width, unsigned height, size_t pitch);
 
 }  // namespace cab::corestate

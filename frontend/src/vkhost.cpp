@@ -1161,8 +1161,8 @@ bool present() {
     }
     if (gDevice == VK_NULL_HANDLE || image.image_view == VK_NULL_HANDLE) return false;
 
-    // Size comes from what the core told video_refresh, set by core.cpp before
-    // this is called — see setFrameSize. Guarded rather than assumed: a
+    // Size comes from what the core told video_refresh, set by core_picture.cpp
+    // before this is called — see setFrameSize. Guarded rather than assumed: a
     // zero-sized blit is a validation error and an undefined picture.
     if (gFrameWidth == 0 || gFrameHeight == 0) return false;
 

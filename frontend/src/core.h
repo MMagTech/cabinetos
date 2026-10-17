@@ -474,6 +474,8 @@ public:
 private:
     Core() = default;
     void* symbol(const char* name);
+    // uploadFrame's software path (core_picture.cpp).
+    bool uploadSoftwareFrame();
 
     void* handle_ = nullptr;
     bool gameLoaded_ = false;
