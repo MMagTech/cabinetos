@@ -71,8 +71,7 @@
 #include <vector>
 
 #include "locations.h"
-
-namespace romm { class Client; }
+#include "users.h"
 
 namespace storage {
 
@@ -142,45 +141,11 @@ std::string imageAssetsDir();
 // so nothing has to tidy it.
 std::string gamesDir();
 
-// --- The per-user half ------------------------------------------------------
+// --- The per-user paths ------------------------------------------------------
 //
-// WHAT IS NOT PER USER MATTERS AS MUCH AS WHAT IS. Two people on one console
-// must not download the same game twice or hold two copies of the PS2 BIOS, and
-// must never see each other's saves.
-//
-//   per user              shared by the machine
-//   saves, save states    the downloaded game files
-//   screenshots           BIOS and firmware
-//   preferences           cores
-//   the decision to keep  shader caches
-struct User {
-    int id = 0;
-    std::string name;
-    // Where the person's picture is, for the account chip on Home. Empty when
-    // they have not set one, which is a normal state: the chip falls back to a
-    // lettered disc, the way the reference implementation falls back to a
-    // person glyph.
-    std::string avatar;
-    // "1 - MMagTech". The directory name, and the only thing on disk that
-    // encodes both halves of the convention.
-    std::string dirName() const;
-    bool valid() const { return id > 0; }
-};
-
-// Who the console is acting as. One user today; account switching is a session
-// of its own and is deliberately not started here.
-//
-// The id comes from RomM's `/api/users/me` and nowhere else. It is asked for
-// once, at startup, and cached on disk — because a console with no network must
-// still know whose saves it is holding, and "we could not reach the server" is
-// not a reason to start writing into somebody else's directory.
-const User& currentUser();
-void setCurrentUser(const User& u);
-
-// Asks the server who we are, falling back to the cached answer. Returns false
-// when neither is available, which leaves the console with no user — everything
-// below then refuses rather than guessing.
-bool resolveCurrentUser(romm::Client& client, std::string* err);
+// Each person's folders, under users/<id> - <name>/. Who a person is (User),
+// who the console is acting as and everybody with a folder here are in
+// users.h, included above.
 
 std::string userDir(const User& u);
 std::string savesDir(const User& u, const std::string& platform, int romId,
@@ -190,11 +155,6 @@ std::string statesDir(const User& u, const std::string& platform, int romId,
 std::string screenshotsDir(const User& u);
 std::string keepsDir(const User& u);
 std::string pendingDir(const User& u);
-
-// Every user directory on this machine, whether or not anybody has logged in as
-// them recently. `keepers()` in cache.h walks this, which is what makes one
-// person's release safe for everybody else.
-std::vector<User> knownUsers();
 
 // Where a save goes when there is no game and no person — `--core <so> <rom>`,
 // the developer entry point that plays a file off the disk with no RomM behind
